@@ -2567,13 +2567,16 @@ internal static class GameActionService
             }
 
             var currentScreen = ActiveScreenContext.Instance.GetCurrentScreen();
-            if (!ReferenceEquals(currentScreen, screen))
+            if (!ReferenceEquals(currentScreen, screen) &&
+                GameStateService.ResolveScreen(currentScreen) != "UNKNOWN")
             {
                 return true;
             }
         }
 
-        return !ReferenceEquals(ActiveScreenContext.Instance.GetCurrentScreen(), screen);
+        var finalScreen = ActiveScreenContext.Instance.GetCurrentScreen();
+        return !ReferenceEquals(finalScreen, screen) &&
+               GameStateService.ResolveScreen(finalScreen) != "UNKNOWN";
     }
 
     private static async Task<bool> WaitForMainMenuModalAsync(TimeSpan timeout)
@@ -2709,18 +2712,16 @@ internal static class GameActionService
             }
 
             var currentScreen = ActiveScreenContext.Instance.GetCurrentScreen();
-            if (!ReferenceEquals(currentScreen, screen))
-            {
-                return true;
-            }
-
-            if (screen.Lobby.LocalPlayer.isReady)
+            if (!ReferenceEquals(currentScreen, screen) &&
+                GameStateService.ResolveScreen(currentScreen) != "UNKNOWN")
             {
                 return true;
             }
         }
 
-        return false;
+        var finalScreen = ActiveScreenContext.Instance.GetCurrentScreen();
+        return !ReferenceEquals(finalScreen, screen) &&
+               GameStateService.ResolveScreen(finalScreen) != "UNKNOWN";
     }
 
     private static async Task<bool> WaitForPotionUseTransitionAsync(Player player, int potionIndex, PotionModel potion, TimeSpan timeout)
