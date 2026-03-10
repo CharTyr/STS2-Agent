@@ -3,7 +3,8 @@ param(
     [string]$AppManifestPath = "C:/Program Files (x86)/Steam/steamapps/appmanifest_2868840.acf",
     [string]$AppId = "",
     [int]$Attempts = 15,
-    [int]$DelaySeconds = 2
+    [int]$DelaySeconds = 2,
+    [switch]$DeepCheck
 )
 
 $ErrorActionPreference = "Stop"
@@ -50,10 +51,27 @@ function Get-FailureHint {
     return $null
 }
 
+function Invoke-JsonEndpoint {
+    param(
+        [string]$Uri
+    )
+
+    $response = Invoke-WebRequest -Uri $Uri -UseBasicParsing -TimeoutSec 2
+    $content = $response.Content
+
+    return [pscustomobject]@{
+        StatusCode = $response.StatusCode
+        Content = $content
+        Json = $content | ConvertFrom-Json
+    }
+}
+
 $gameRoot = Split-Path -Path $ExePath -Parent
 $appIdFile = Join-Path $gameRoot "steam_appid.txt"
 $logPath = "C:/Users/chart/AppData/Roaming/SlayTheSpire2/logs/godot.log"
 $resolvedAppId = Resolve-AppId -ExplicitAppId $AppId -ManifestPath $AppManifestPath
+$stateCheck = $null
+$actionsCheck = $null
 
 if (-not (Test-Path $appIdFile)) {
     Set-Content -Path $appIdFile -Value $resolvedAppId -Encoding ascii -NoNewline
@@ -84,6 +102,11 @@ try {
             break
         }
     }
+
+    if ($health -and $DeepCheck) {
+        $stateCheck = Invoke-JsonEndpoint -Uri "http://127.0.0.1:8080/state"
+        $actionsCheck = Invoke-JsonEndpoint -Uri "http://127.0.0.1:8080/actions/available"
+    }
 }
 finally {
     if (-not $proc.HasExited) {
@@ -92,7 +115,17 @@ finally {
 }
 
 if ($health) {
-    $health
+    if ($DeepCheck) {
+        [pscustomobject]@{
+            health_ok = $true
+            state_ok = $stateCheck -ne $null -and $stateCheck.StatusCode -eq 200
+            actions_ok = $actionsCheck -ne $null -and $actionsCheck.StatusCode -eq 200
+            screen = $stateCheck.Json.data.screen
+            available_action_count = @($actionsCheck.Json.data.actions).Count
+        } | ConvertTo-Json -Compress
+    } else {
+        $health
+    }
 } else {
     $hint = Get-FailureHint -LogPath $logPath
 
