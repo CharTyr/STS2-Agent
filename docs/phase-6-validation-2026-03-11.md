@@ -2,7 +2,7 @@
 
 - Validation date: `2026-03-11`
 - Validator: Codex
-- Git commit: `69ed5c2`
+- Git commits: `69ed5c2`, `26cd9b0`
 - Game version: `v0.98.3`
 - Mod build: `Release`
 - MCP mode: local stdio server + local HTTP mod
@@ -29,11 +29,13 @@ test-mod-load.ps1 -DeepCheck: {"health_ok":true,"state_ok":true,"actions_ok":tru
 - `MAIN_MENU -> open_timeline -> close_main_menu_submenu` passed
 - `MAIN_MENU -> open_character_select -> select_character -> embark` passed
 - `embark` now lands in `EVENT` (`NEOW`) rather than dropping to `UNKNOWN`
+- After commit `26cd9b0`, `embark` action payload was revalidated and returned `screen="EVENT"`
 
 ### Continue / resume flow
 
 - `continue_run` successfully restored an in-progress run multiple times
 - Follow-up `GET /state` stabilized to the correct room state (`REWARD`, `MAP`, `SHOP`, etc.)
+- After commit `26cd9b0`, `continue_run` action payload itself was revalidated and returned a stable non-`UNKNOWN` screen
 
 ### Combat and consumables
 
@@ -104,7 +106,6 @@ Result:
 
 | Severity | Area | Issue | Repro |
 | --- | --- | --- | --- |
-| P1 | Resume stabilization | `continue_run` immediate action payload can still report `screen="UNKNOWN"` before a later `GET /state` settles to the correct screen | `MAIN_MENU -> continue_run` |
 | P2 | Start-of-run branch coverage | `deck_transform_select` / `deck_enchant_select` support was added to state recognition, but the final commit was not independently re-smoked on a dedicated transform/enchant branch after the patch landed | start a fresh run and force a transform/enchant card-selection branch |
 
 ## Conclusion
@@ -114,12 +115,12 @@ Result:
 
 Reason:
 
-- The major gameplay chain is now largely covered and the biggest blockers found during real testing were fixed in commit `69ed5c2`
+- The major gameplay chain is now largely covered and the biggest blockers found during real testing were fixed in commits `69ed5c2` and `26cd9b0`
 - Static checks pass and most room chains now pass in live runs
-- A final clean rerun on the latest commit is still needed for the remaining start-of-run selection branches and for the `continue_run` transient `UNKNOWN` stabilization issue
+- A final clean rerun on the latest commit is still needed for the remaining start-of-run transform/enchant selection branches
 
 Recommended next step:
 
-1. Re-run one fresh-run validation on commit `69ed5c2`
+1. Re-run one fresh-run validation on commit `26cd9b0`
 2. Force a transform or enchant deck selection branch and confirm `screen="CARD_SELECTION"` plus `selection.kind`
-3. Either fix `continue_run` stabilization or document it as a known limitation before public release
+3. If those branches also pass, re-evaluate whether the project can move from gray release candidate to formal release
