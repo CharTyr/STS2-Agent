@@ -63,6 +63,7 @@
 - `REST`
 - `REWARD`
 - `CHEST`
+- `CARD_SELECTION`
 - `GAME_OVER`
 
 ## Action Status
@@ -75,8 +76,6 @@
 ## `GET /health`
 
 作用：返回 Mod 基础状态。
-
-示例：
 
 ```json
 {
@@ -96,7 +95,24 @@
 
 作用：返回当前最小状态快照。
 
-示例：
+关键字段：
+
+| 字段 | 类型 | 说明 |
+| --- | --- | --- |
+| `state_version` | number | 状态模型版本 |
+| `run_id` | string | 本局运行标识 |
+| `screen` | string | 当前逻辑界面 |
+| `in_combat` | boolean | 是否处于战斗流程 |
+| `turn` | number or null | 当前回合数 |
+| `available_actions` | string[] | 当前可执行动作名称 |
+| `run.deck` | object[] or null | 当前牌库 |
+| `run.relics` | object[] or null | 当前遗物 |
+| `run.gold` | number or null | 当前金币 |
+| `reward.card_options` | object[] | 卡牌奖励候选 |
+| `reward.alternatives` | object[] | 卡牌奖励替代操作，例如跳过 |
+| `selection.cards` | object[] or null | 牌库选牌界面候选 |
+
+### 战斗示例
 
 ```json
 {
@@ -112,99 +128,109 @@
       "end_turn",
       "play_card"
     ],
-    "combat": {
-      "player": {
-        "current_hp": 72,
-        "max_hp": 80,
-        "block": 0,
-        "energy": 3,
-        "stars": 0
-      },
-      "hand": [
+    "run": {
+      "gold": 99,
+      "deck": [
         {
           "index": 0,
-          "card_id": "Strike",
-          "name": "Strike",
+          "card_id": "STRIKE_IRONCLAD",
+          "name": "打击",
           "upgraded": false,
-          "target_type": "AnyEnemy",
-          "requires_target": true,
-          "costs_x": false,
+          "card_type": "Attack",
+          "rarity": "Starter",
           "energy_cost": 1,
-          "star_cost": 0,
-          "playable": true,
-          "unplayable_reason": null
+          "star_cost": 0
         }
       ],
-      "enemies": [
+      "relics": [
         {
           "index": 0,
-          "enemy_id": "Nibbit",
-          "name": "Nibbit",
-          "current_hp": 12,
-          "max_hp": 12,
-          "block": 0,
-          "is_alive": true,
-          "is_hittable": true,
-          "intent": "ButtMove"
+          "relic_id": "BURNING_BLOOD",
+          "name": "燃烧之血",
+          "is_melted": false
         }
       ]
-    },
-    "map": null,
-    "event": null,
-    "shop": null,
-    "rest": null,
-    "reward": null,
-    "game_over": null
+    }
   }
 }
 ```
 
-关键字段：
+### 奖励示例
 
-| 字段 | 类型 | 说明 |
-| --- | --- | --- |
-| `state_version` | number | 状态模型版本 |
-| `run_id` | string | 本局运行标识 |
-| `screen` | string | 当前逻辑界面 |
-| `in_combat` | boolean | 是否处于战斗流程 |
-| `turn` | number or null | 当前回合数 |
-| `available_actions` | string[] | 当前可执行动作名称 |
-| `combat.player` | object or null | 玩家最小战斗状态 |
-| `combat.hand` | object[] or null | 手牌快照 |
-| `combat.enemies` | object[] or null | 敌人快照 |
+```json
+{
+  "ok": true,
+  "request_id": "req_20260310_0006",
+  "data": {
+    "screen": "REWARD",
+    "available_actions": [
+      "choose_reward_card",
+      "skip_reward_cards"
+    ],
+    "reward": {
+      "pending_card_choice": true,
+      "can_proceed": false,
+      "rewards": [],
+      "card_options": [
+        {
+          "index": 0,
+          "card_id": "POMMEL_STRIKE",
+          "name": "剑柄打击",
+          "upgraded": false
+        }
+      ],
+      "alternatives": [
+        {
+          "index": 0,
+          "label": "跳过"
+        }
+      ]
+    }
+  }
+}
+```
+
+### 删牌界面示例
+
+```json
+{
+  "ok": true,
+  "request_id": "req_20260310_0007",
+  "data": {
+    "screen": "CARD_SELECTION",
+    "available_actions": [
+      "select_deck_card"
+    ],
+    "selection": {
+      "kind": "deck_card_select",
+      "prompt": "选择一张牌移除",
+      "cards": [
+        {
+          "index": 0,
+          "card_id": "STRIKE_IRONCLAD",
+          "name": "打击",
+          "upgraded": false,
+          "card_type": "Attack",
+          "rarity": "Starter"
+        }
+      ]
+    }
+  }
+}
+```
 
 ## `GET /actions/available`
 
 作用：返回当前状态下允许执行的动作描述。
 
-示例：
-
-```json
-{
-  "ok": true,
-  "request_id": "req_20260310_0003",
-  "data": {
-    "screen": "COMBAT",
-    "actions": [
-      {
-        "name": "end_turn",
-        "requires_target": false,
-        "requires_index": false
-      },
-      {
-        "name": "play_card",
-        "requires_target": false,
-        "requires_index": true
-      }
-    ]
-  }
-}
-```
-
 说明：
 
 - `play_card.requires_target` 固定为 `false`，因为是否需要目标取决于具体卡牌
 - 调用方必须结合 `GET /state` 中 `combat.hand[index].requires_target` 决定是否传 `target_index`
+- `choose_map_node` 使用 `option_index` 选择 `map.available_nodes[index]`
+- `choose_reward_card` 使用 `option_index` 选择 `reward.card_options[index]`
+- `claim_reward` 使用 `option_index` 选择 `reward.rewards[index]`
+- `select_deck_card` 使用 `option_index` 选择 `selection.cards[index]`
 
 ## `POST /action`
 
@@ -214,71 +240,63 @@
 
 ```json
 {
-  "action": "play_card",
-  "card_index": 0,
-  "target_index": 0,
-  "option_index": null,
+  "action": "choose_reward_card",
+  "card_index": null,
+  "target_index": null,
+  "option_index": 1,
   "client_context": {
     "source": "mcp",
-    "tool_name": "play_card"
+    "tool_name": "choose_reward_card"
   }
 }
 ```
 
-字段说明：
-
-| 字段 | 类型 | 说明 |
-| --- | --- | --- |
-| `action` | string | 动作名称 |
-| `card_index` | number or null | 手牌索引，`play_card` 必填 |
-| `target_index` | number or null | 目标索引，部分 `play_card` 必填 |
-| `option_index` | number or null | 预留给非战斗场景 |
-| `client_context` | object or null | 调试上下文，不参与游戏逻辑 |
-
-当前已实现动作：
+### 已实现动作
 
 - `end_turn`
 - `play_card`
+- `choose_map_node`
+- `collect_rewards_and_proceed`
+- `claim_reward`
+- `choose_reward_card`
+- `skip_reward_cards`
+- `select_deck_card`
+- `proceed`
 
-`play_card` 规则：
+### `choose_reward_card`
 
-- 卡牌必须来自当前手牌
-- `TargetType.AnyEnemy` 必须传 `target_index`
-- 其他特殊目标类型暂未实现
+- 前提：当前 `screen = "REWARD"` 且 `reward.pending_card_choice = true`
+- 参数：`option_index`
+- 行为：选择指定卡牌奖励
 
-响应示例：
+### `claim_reward`
 
-```json
-{
-  "ok": true,
-  "request_id": "req_20260310_0004",
-  "data": {
-    "action": "play_card",
-    "status": "completed",
-    "stable": true,
-    "message": "Action completed.",
-    "state": {
-      "state_version": 1,
-      "run_id": "WXJVZBQFK2",
-      "screen": "COMBAT",
-      "in_combat": true,
-      "turn": 1,
-      "available_actions": [
-        "end_turn"
-      ]
-    }
-  }
-}
-```
+- 前提：当前 `screen = "REWARD"` 且 `reward.rewards` 非空
+- 参数：`option_index`
+- 行为：领取指定奖励按钮，常用于先进入卡牌奖励子界面
 
-## MCP 映射
+### `skip_reward_cards`
 
-- `get_game_state` -> `GET /state`
-- `get_available_actions` -> `GET /actions/available`
-- 所有动作类工具 -> `POST /action`
+- 前提：当前 `screen = "REWARD"` 且 `reward.alternatives` 非空
+- 参数：无
+- 行为：点击卡牌奖励界面的替代按钮，默认用于跳过拿牌
 
-## 当前已知限制
+### `select_deck_card`
 
-- 动作完成时的 `stable` 语义还会继续收紧
-- 非战斗状态的结构化数据尚未实现
-- `play_card` 目前只覆盖最小可用链路，不追求全目标类型
+- 前提：当前 `screen = "CARD_SELECTION"`
+- 参数：`option_index`
+- 行为：选择指定牌并自动确认
+- 当前目标：优先覆盖删牌场景
+
+### `collect_rewards_and_proceed`
+
+- 前提：当前 `screen = "REWARD"`
+- 参数：无
+- 行为：自动收取奖励，遇到卡牌奖励默认选第一张，并在可继续时点击继续
+- 说明：适合无人值守推进，不适合构筑决策
+
+### `proceed`
+
+- 前提：当前界面存在可用 `ProceedButton`
+- 参数：无
+- 行为：点击继续按钮

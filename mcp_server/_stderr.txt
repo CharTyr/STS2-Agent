@@ -1,0 +1,2 @@
+[03/10/26 18:11:06] INFO     Starting MCP server 'STS2 AI      transport.py:183
+                             Agent' with transport 'stdio'                     
