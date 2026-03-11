@@ -34,6 +34,7 @@ using MegaCrit.Sts2.Core.Models;
 using MegaCrit.Sts2.Core.GameActions.Multiplayer;
 using MegaCrit.Sts2.Core.Map;
 using MegaCrit.Sts2.Core.Logging;
+using MegaCrit.Sts2.Core.Multiplayer.Game;
 using MegaCrit.Sts2.Core.Rooms;
 using MegaCrit.Sts2.Core.Rewards;
 using MegaCrit.Sts2.Core.Timeline;
@@ -78,6 +79,9 @@ internal static class GameActionService
             "remove_card_at_shop" => ExecuteRemoveCardAtShopAsync(),
             "select_character" => ExecuteSelectCharacterAsync(request),
             "embark" => ExecuteEmbarkAsync(),
+            "unready" => ExecuteUnreadyAsync(),
+            "increase_ascension" => ExecuteAdjustAscensionAsync(1, "increase_ascension"),
+            "decrease_ascension" => ExecuteAdjustAscensionAsync(-1, "decrease_ascension"),
             "use_potion" => ExecuteUsePotionAsync(request),
             "discard_potion" => ExecuteDiscardPotionAsync(request),
             "run_console_command" => ExecuteRunConsoleCommandAsync(request),
@@ -2335,6 +2339,64 @@ internal static class GameActionService
         };
     }
 
+    private static async Task<ActionResponsePayload> ExecuteUnreadyAsync()
+    {
+        var currentScreen = ActiveScreenContext.Instance.GetCurrentScreen();
+        var screen = GameStateService.ResolveScreen(currentScreen);
+
+        if (!GameStateService.CanUnready(currentScreen) || currentScreen is not NCharacterSelectScreen characterSelectScreen)
+        {
+            throw new ApiException(409, "invalid_action", "Action is not available in the current state.", new
+            {
+                action = "unready",
+                screen
+            });
+        }
+
+        characterSelectScreen.Lobby.SetReady(ready: false);
+        var stable = await WaitForLobbyReadyTransitionAsync(characterSelectScreen, ready: false, TimeSpan.FromSeconds(5));
+
+        return new ActionResponsePayload
+        {
+            action = "unready",
+            status = stable ? "completed" : "pending",
+            stable = stable,
+            message = stable ? "Action completed." : "Action queued but state is still transitioning.",
+            state = GameStateService.BuildStatePayload()
+        };
+    }
+
+    private static async Task<ActionResponsePayload> ExecuteAdjustAscensionAsync(int delta, string actionName)
+    {
+        var currentScreen = ActiveScreenContext.Instance.GetCurrentScreen();
+        var screen = GameStateService.ResolveScreen(currentScreen);
+        var canAdjust = delta > 0
+            ? GameStateService.CanIncreaseAscension(currentScreen)
+            : GameStateService.CanDecreaseAscension(currentScreen);
+
+        if (!canAdjust || currentScreen is not NCharacterSelectScreen characterSelectScreen)
+        {
+            throw new ApiException(409, "invalid_action", "Action is not available in the current state.", new
+            {
+                action = actionName,
+                screen
+            });
+        }
+
+        var targetAscension = characterSelectScreen.Lobby.Ascension + delta;
+        characterSelectScreen.Lobby.SyncAscensionChange(targetAscension);
+        var stable = await WaitForLobbyAscensionTransitionAsync(characterSelectScreen, targetAscension, TimeSpan.FromSeconds(5));
+
+        return new ActionResponsePayload
+        {
+            action = actionName,
+            status = stable ? "completed" : "pending",
+            stable = stable,
+            message = stable ? "Action completed." : "Action queued but state is still transitioning.",
+            state = GameStateService.BuildStatePayload()
+        };
+    }
+
     private static async Task<ActionResponsePayload> ExecuteUsePotionAsync(ActionRequest request)
     {
         var currentScreen = ActiveScreenContext.Instance.GetCurrentScreen();
@@ -3058,6 +3120,11 @@ internal static class GameActionService
                 return true;
             }
 
+            if (screen.Lobby.NetService.Type.IsMultiplayer() && screen.Lobby.LocalPlayer.isReady)
+            {
+                return true;
+            }
+
             var currentScreen = ActiveScreenContext.Instance.GetCurrentScreen();
             if (!ReferenceEquals(currentScreen, screen) &&
                 GameStateService.ResolveScreen(currentScreen) != "UNKNOWN")
@@ -3067,8 +3134,55 @@ internal static class GameActionService
         }
 
         var finalScreen = ActiveScreenContext.Instance.GetCurrentScreen();
+        if (screen.Lobby.NetService.Type.IsMultiplayer() && screen.Lobby.LocalPlayer.isReady)
+        {
+            return true;
+        }
+
         return !ReferenceEquals(finalScreen, screen) &&
                GameStateService.ResolveScreen(finalScreen) != "UNKNOWN";
+    }
+
+    private static async Task<bool> WaitForLobbyReadyTransitionAsync(NCharacterSelectScreen screen, bool ready, TimeSpan timeout)
+    {
+        var deadline = DateTime.UtcNow + timeout;
+        while (DateTime.UtcNow < deadline)
+        {
+            await WaitForNextFrameAsync();
+
+            if (!GodotObject.IsInstanceValid(screen))
+            {
+                return ready;
+            }
+
+            if (screen.Lobby.LocalPlayer.isReady == ready)
+            {
+                return true;
+            }
+        }
+
+        return GodotObject.IsInstanceValid(screen) && screen.Lobby.LocalPlayer.isReady == ready;
+    }
+
+    private static async Task<bool> WaitForLobbyAscensionTransitionAsync(NCharacterSelectScreen screen, int targetAscension, TimeSpan timeout)
+    {
+        var deadline = DateTime.UtcNow + timeout;
+        while (DateTime.UtcNow < deadline)
+        {
+            await WaitForNextFrameAsync();
+
+            if (!GodotObject.IsInstanceValid(screen))
+            {
+                return false;
+            }
+
+            if (screen.Lobby.Ascension == targetAscension)
+            {
+                return true;
+            }
+        }
+
+        return GodotObject.IsInstanceValid(screen) && screen.Lobby.Ascension == targetAscension;
     }
 
     private static async Task<bool> WaitForPotionUseTransitionAsync(Player player, int potionIndex, PotionModel potion, TimeSpan timeout)

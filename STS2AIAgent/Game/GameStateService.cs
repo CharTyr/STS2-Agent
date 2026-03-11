@@ -5,6 +5,7 @@ using MegaCrit.Sts2.Core.Combat;
 using MegaCrit.Sts2.Core.Entities.Cards;
 using MegaCrit.Sts2.Core.Entities.Creatures;
 using MegaCrit.Sts2.Core.Entities.Merchant;
+using MegaCrit.Sts2.Core.Entities.Multiplayer;
 using MegaCrit.Sts2.Core.Entities.Players;
 using MegaCrit.Sts2.Core.Entities.Potions;
 using MegaCrit.Sts2.Core.Entities.RestSite;
@@ -15,6 +16,7 @@ using MegaCrit.Sts2.Core.Models;
 using MegaCrit.Sts2.Core.Models.Powers;
 using MegaCrit.Sts2.Core.Models.Relics;
 using MegaCrit.Sts2.Core.Logging;
+using MegaCrit.Sts2.Core.Multiplayer.Game;
 using MegaCrit.Sts2.Core.Nodes.Cards.Holders;
 using MegaCrit.Sts2.Core.Nodes.Combat;
 using MegaCrit.Sts2.Core.Nodes.CommonUi;
@@ -62,6 +64,7 @@ internal static class GameStateService
             available_actions = availableActions,
             combat = BuildCombatPayload(combatState),
             run = BuildRunPayload(currentScreen, combatState, runState),
+            multiplayer = BuildMultiplayerPayload(currentScreen, runState),
             map = BuildMapPayload(currentScreen, runState),
             selection = BuildSelectionPayload(currentScreen),
             character_select = BuildCharacterSelectPayload(currentScreen),
@@ -397,6 +400,36 @@ internal static class GameStateService
             descriptors.Add(new ActionDescriptor
             {
                 name = "embark",
+                requires_target = false,
+                requires_index = false
+            });
+        }
+
+        if (CanUnready(currentScreen))
+        {
+            descriptors.Add(new ActionDescriptor
+            {
+                name = "unready",
+                requires_target = false,
+                requires_index = false
+            });
+        }
+
+        if (CanIncreaseAscension(currentScreen))
+        {
+            descriptors.Add(new ActionDescriptor
+            {
+                name = "increase_ascension",
+                requires_target = false,
+                requires_index = false
+            });
+        }
+
+        if (CanDecreaseAscension(currentScreen))
+        {
+            descriptors.Add(new ActionDescriptor
+            {
+                name = "decrease_ascension",
                 requires_target = false,
                 requires_index = false
             });
@@ -749,6 +782,22 @@ internal static class GameStateService
     {
         var embarkButton = GetCharacterEmbarkButton(currentScreen);
         return embarkButton != null && embarkButton.IsEnabled && embarkButton.IsVisibleInTree();
+    }
+
+    public static bool CanUnready(IScreenContext? currentScreen)
+    {
+        var unreadyButton = GetCharacterUnreadyButton(currentScreen);
+        return unreadyButton != null && unreadyButton.IsEnabled && unreadyButton.IsVisibleInTree();
+    }
+
+    public static bool CanIncreaseAscension(IScreenContext? currentScreen)
+    {
+        return CanAdjustAscension(currentScreen, delta: 1);
+    }
+
+    public static bool CanDecreaseAscension(IScreenContext? currentScreen)
+    {
+        return CanAdjustAscension(currentScreen, delta: -1);
     }
 
     public static bool CanChooseTimelineEpoch(IScreenContext? currentScreen)
@@ -1344,6 +1393,21 @@ internal static class GameStateService
             names.Add("embark");
         }
 
+        if (CanUnready(currentScreen))
+        {
+            names.Add("unready");
+        }
+
+        if (CanIncreaseAscension(currentScreen))
+        {
+            names.Add("increase_ascension");
+        }
+
+        if (CanDecreaseAscension(currentScreen))
+        {
+            names.Add("decrease_ascension");
+        }
+
         if (CanUsePotion(currentScreen, combatState, runState))
         {
             names.Add("use_potion");
@@ -1374,6 +1438,7 @@ internal static class GameStateService
         var enemies = combatState.Enemies.ToList();
         var orbQueue = me.PlayerCombatState.OrbQueue;
         var orbs = orbQueue.Orbs.ToList();
+        var connectedPlayerIds = GetConnectedPlayerIds(combatState.RunState as RunState);
 
         return new CombatPayload
         {
@@ -1390,6 +1455,10 @@ internal static class GameStateService
                 empty_orb_slots = Math.Max(0, orbQueue.Capacity - orbs.Count),
                 orbs = orbs.Select((orb, index) => BuildCombatOrbPayload(orb, index)).ToArray()
             },
+            players = combatState.Players
+                .OrderBy(player => combatState.RunState is RunState runState ? runState.GetPlayerSlotIndex(player) : 0)
+                .Select(player => BuildCombatPlayerSummaryPayload(player, combatState, connectedPlayerIds, me.NetId))
+                .ToArray(),
             hand = hand.Select((card, index) => BuildHandCardPayload(card, index)).ToArray(),
             enemies = enemies.Select((enemy, index) => BuildEnemyPayload(enemy, index)).ToArray()
         };
@@ -1402,6 +1471,8 @@ internal static class GameStateService
         {
             return null;
         }
+
+        var connectedPlayerIds = GetConnectedPlayerIds(runState);
 
         return new RunPayload
         {
@@ -1420,8 +1491,55 @@ internal static class GameStateService
                 name = relic.Title.GetFormattedText(),
                 is_melted = relic.IsMelted
             }).ToArray(),
+            players = runState!.Players
+                .OrderBy(runState.GetPlayerSlotIndex)
+                .Select(otherPlayer => BuildRunPlayerSummaryPayload(runState, otherPlayer, connectedPlayerIds, player.NetId))
+                .ToArray(),
             potions = player.PotionSlots.Select((potion, index) =>
                 BuildRunPotionPayload(currentScreen, combatState, player, potion, index)).ToArray()
+        };
+    }
+
+    private static MultiplayerPayload? BuildMultiplayerPayload(IScreenContext? currentScreen, RunState? runState)
+    {
+        var characterSelectScreen = GetCharacterSelectScreen(currentScreen);
+        if (characterSelectScreen != null)
+        {
+            var lobby = characterSelectScreen.Lobby;
+            if (!lobby.NetService.Type.IsMultiplayer())
+            {
+                return null;
+            }
+
+            return new MultiplayerPayload
+            {
+                is_multiplayer = true,
+                net_game_type = lobby.NetService.Type.ToString(),
+                local_player_id = NetIdToString(lobby.LocalPlayer.id),
+                player_count = lobby.Players.Count,
+                connected_player_ids = lobby.Players
+                    .OrderBy(player => player.slotId)
+                    .Select(player => NetIdToString(player.id))
+                    .ToArray()
+            };
+        }
+
+        if (runState == null || !RunManager.Instance.NetService.Type.IsMultiplayer())
+        {
+            return null;
+        }
+
+        var localPlayer = GetLocalPlayer(runState);
+        return new MultiplayerPayload
+        {
+            is_multiplayer = true,
+            net_game_type = RunManager.Instance.NetService.Type.ToString(),
+            local_player_id = localPlayer != null ? NetIdToString(localPlayer.NetId) : null,
+            player_count = runState.Players.Count,
+            connected_player_ids = GetConnectedPlayerIds(runState)
+                .OrderBy(id => runState.GetPlayerSlotIndex(id))
+                .Select(NetIdToString)
+                .ToArray()
         };
     }
 
@@ -1531,11 +1649,24 @@ internal static class GameStateService
             return new CharacterSelectPayload
             {
                 selected_character_id = selectedCharacterId,
+                is_multiplayer = lobby.NetService.Type.IsMultiplayer(),
+                net_game_type = lobby.NetService.Type.ToString(),
                 can_embark = CanEmbark(currentScreen),
+                can_unready = CanUnready(currentScreen),
+                can_increase_ascension = CanIncreaseAscension(currentScreen),
+                can_decrease_ascension = CanDecreaseAscension(currentScreen),
                 local_ready = localPlayer.isReady,
                 is_waiting_for_players = waitingPanel?.Visible ?? false,
+                player_count = lobby.Players.Count,
+                max_players = lobby.MaxPlayers > 0 ? lobby.MaxPlayers : lobby.Players.Count,
                 ascension = lobby.Ascension,
                 max_ascension = lobby.MaxAscension,
+                seed = lobby.Seed,
+                modifier_ids = lobby.Modifiers.Select(modifier => modifier.Id.Entry).ToArray(),
+                players = lobby.Players
+                    .OrderBy(player => player.slotId)
+                    .Select(player => BuildCharacterSelectPlayerPayload(player, localPlayer.id))
+                    .ToArray(),
                 characters = buttons.Select((button, index) => new CharacterSelectOptionPayload
                 {
                     index = index,
@@ -1553,6 +1684,7 @@ internal static class GameStateService
         {
             return new CharacterSelectPayload
             {
+                players = Array.Empty<CharacterSelectPlayerPayload>(),
                 characters = buttons.Select((button, index) => new CharacterSelectOptionPayload
                 {
                     index = index,
@@ -2093,6 +2225,65 @@ internal static class GameStateService
         };
     }
 
+    private static CharacterSelectPlayerPayload BuildCharacterSelectPlayerPayload(LobbyPlayer player, ulong localPlayerId)
+    {
+        return new CharacterSelectPlayerPayload
+        {
+            player_id = NetIdToString(player.id),
+            slot_index = player.slotId,
+            is_local = player.id == localPlayerId,
+            character_id = player.character?.Id.Entry,
+            character_name = player.character?.Title.GetFormattedText(),
+            is_ready = player.isReady,
+            max_multiplayer_ascension_unlocked = player.maxMultiplayerAscensionUnlocked
+        };
+    }
+
+    private static RunPlayerSummaryPayload BuildRunPlayerSummaryPayload(
+        RunState runState,
+        Player player,
+        IReadOnlyCollection<ulong> connectedPlayerIds,
+        ulong localPlayerId)
+    {
+        return new RunPlayerSummaryPayload
+        {
+            player_id = NetIdToString(player.NetId),
+            slot_index = runState.GetPlayerSlotIndex(player),
+            is_local = player.NetId == localPlayerId,
+            is_connected = connectedPlayerIds.Contains(player.NetId),
+            character_id = player.Character.Id.Entry,
+            character_name = player.Character.Title.GetFormattedText(),
+            current_hp = player.Creature.CurrentHp,
+            max_hp = player.Creature.MaxHp,
+            gold = player.Gold,
+            is_alive = player.Creature.IsAlive
+        };
+    }
+
+    private static CombatPlayerSummaryPayload BuildCombatPlayerSummaryPayload(
+        Player player,
+        CombatState combatState,
+        IReadOnlyCollection<ulong> connectedPlayerIds,
+        ulong localPlayerId)
+    {
+        return new CombatPlayerSummaryPayload
+        {
+            player_id = NetIdToString(player.NetId),
+            slot_index = combatState.RunState is RunState runState ? runState.GetPlayerSlotIndex(player) : 0,
+            is_local = player.NetId == localPlayerId,
+            is_connected = connectedPlayerIds.Contains(player.NetId),
+            character_id = player.Character.Id.Entry,
+            character_name = player.Character.Title.GetFormattedText(),
+            current_hp = player.Creature.CurrentHp,
+            max_hp = player.Creature.MaxHp,
+            block = player.Creature.Block,
+            energy = player.PlayerCombatState?.Energy ?? 0,
+            stars = player.PlayerCombatState?.Stars ?? 0,
+            focus = player.Creature.GetPowerAmount<FocusPower>(),
+            is_alive = player.Creature.IsAlive
+        };
+    }
+
     private static ShopCardPayload BuildShopCardPayload(MerchantCardEntry entry, int index, string category)
     {
         var card = entry.CreationResult?.Card;
@@ -2360,6 +2551,11 @@ internal static class GameStateService
         return GetCharacterSelectScreen(currentScreen)?.GetNodeOrNull<NConfirmButton>("ConfirmButton");
     }
 
+    public static NBackButton? GetCharacterUnreadyButton(IScreenContext? currentScreen)
+    {
+        return GetCharacterSelectScreen(currentScreen)?.GetNodeOrNull<NBackButton>("UnreadyButton");
+    }
+
     public static NMainMenuTextButton? GetMainMenuContinueButton(NMainMenu mainMenu)
     {
         return mainMenu.GetNodeOrNull<NMainMenuTextButton>("MainMenuTextButtons/ContinueButton");
@@ -2587,6 +2783,45 @@ internal static class GameStateService
             FindDescendantsRecursive(child, found);
         }
     }
+
+    private static bool CanAdjustAscension(IScreenContext? currentScreen, int delta)
+    {
+        var screen = GetCharacterSelectScreen(currentScreen);
+        if (screen == null)
+        {
+            return false;
+        }
+
+        var lobby = screen.Lobby;
+        if (lobby.NetService.Type == NetGameType.Client || lobby.LocalPlayer.isReady)
+        {
+            return false;
+        }
+
+        var nextAscension = lobby.Ascension + delta;
+        return nextAscension >= 0 && nextAscension <= lobby.MaxAscension;
+    }
+
+    private static IReadOnlyCollection<ulong> GetConnectedPlayerIds(RunState? runState)
+    {
+        if (runState == null)
+        {
+            return Array.Empty<ulong>();
+        }
+
+        var connectedPlayerIds = RunManager.Instance.RunLobby?.ConnectedPlayerIds;
+        if (connectedPlayerIds != null && connectedPlayerIds.Count > 0)
+        {
+            return connectedPlayerIds;
+        }
+
+        return runState.Players.Select(player => player.NetId).ToArray();
+    }
+
+    private static string NetIdToString(ulong netId)
+    {
+        return netId.ToString();
+    }
 }
 
 internal sealed class GameStatePayload
@@ -2606,6 +2841,8 @@ internal sealed class GameStatePayload
     public CombatPayload? combat { get; init; }
 
     public RunPayload? run { get; init; }
+
+    public MultiplayerPayload? multiplayer { get; init; }
 
     public MapPayload? map { get; init; }
 
@@ -2641,6 +2878,8 @@ internal sealed class CombatPayload
 {
     public CombatPlayerPayload player { get; init; } = new();
 
+    public CombatPlayerSummaryPayload[] players { get; init; } = Array.Empty<CombatPlayerSummaryPayload>();
+
     public CombatHandCardPayload[] hand { get; init; } = Array.Empty<CombatHandCardPayload>();
 
     public CombatEnemyPayload[] enemies { get; init; } = Array.Empty<CombatEnemyPayload>();
@@ -2666,7 +2905,22 @@ internal sealed class RunPayload
 
     public RunRelicPayload[] relics { get; init; } = Array.Empty<RunRelicPayload>();
 
+    public RunPlayerSummaryPayload[] players { get; init; } = Array.Empty<RunPlayerSummaryPayload>();
+
     public RunPotionPayload[] potions { get; init; } = Array.Empty<RunPotionPayload>();
+}
+
+internal sealed class MultiplayerPayload
+{
+    public bool is_multiplayer { get; init; }
+
+    public string net_game_type { get; init; } = string.Empty;
+
+    public string? local_player_id { get; init; }
+
+    public int player_count { get; init; }
+
+    public string[] connected_player_ids { get; init; } = Array.Empty<string>();
 }
 
 internal sealed class MapPayload
@@ -2724,17 +2978,54 @@ internal sealed class CharacterSelectPayload
 {
     public string? selected_character_id { get; init; }
 
+    public bool is_multiplayer { get; init; }
+
+    public string net_game_type { get; init; } = string.Empty;
+
     public bool can_embark { get; init; }
+
+    public bool can_unready { get; init; }
+
+    public bool can_increase_ascension { get; init; }
+
+    public bool can_decrease_ascension { get; init; }
 
     public bool local_ready { get; init; }
 
     public bool is_waiting_for_players { get; init; }
 
+    public int player_count { get; init; }
+
+    public int max_players { get; init; }
+
     public int ascension { get; init; }
 
     public int max_ascension { get; init; }
 
+    public string? seed { get; init; }
+
+    public string[] modifier_ids { get; init; } = Array.Empty<string>();
+
+    public CharacterSelectPlayerPayload[] players { get; init; } = Array.Empty<CharacterSelectPlayerPayload>();
+
     public CharacterSelectOptionPayload[] characters { get; init; } = Array.Empty<CharacterSelectOptionPayload>();
+}
+
+internal sealed class CharacterSelectPlayerPayload
+{
+    public string player_id { get; init; } = string.Empty;
+
+    public int slot_index { get; init; }
+
+    public bool is_local { get; init; }
+
+    public string? character_id { get; init; }
+
+    public string? character_name { get; init; }
+
+    public bool is_ready { get; init; }
+
+    public int max_multiplayer_ascension_unlocked { get; init; }
 }
 
 internal sealed class CharacterSelectOptionPayload
@@ -3011,6 +3302,58 @@ internal sealed class CombatPlayerPayload
     public int empty_orb_slots { get; init; }
 
     public CombatOrbPayload[] orbs { get; init; } = Array.Empty<CombatOrbPayload>();
+}
+
+internal sealed class CombatPlayerSummaryPayload
+{
+    public string player_id { get; init; } = string.Empty;
+
+    public int slot_index { get; init; }
+
+    public bool is_local { get; init; }
+
+    public bool is_connected { get; init; }
+
+    public string character_id { get; init; } = string.Empty;
+
+    public string character_name { get; init; } = string.Empty;
+
+    public int current_hp { get; init; }
+
+    public int max_hp { get; init; }
+
+    public int block { get; init; }
+
+    public int energy { get; init; }
+
+    public int stars { get; init; }
+
+    public int focus { get; init; }
+
+    public bool is_alive { get; init; }
+}
+
+internal sealed class RunPlayerSummaryPayload
+{
+    public string player_id { get; init; } = string.Empty;
+
+    public int slot_index { get; init; }
+
+    public bool is_local { get; init; }
+
+    public bool is_connected { get; init; }
+
+    public string character_id { get; init; } = string.Empty;
+
+    public string character_name { get; init; } = string.Empty;
+
+    public int current_hp { get; init; }
+
+    public int max_hp { get; init; }
+
+    public int gold { get; init; }
+
+    public bool is_alive { get; init; }
 }
 
 internal sealed class CombatOrbPayload

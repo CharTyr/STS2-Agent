@@ -40,6 +40,37 @@ function Add-ForbiddenActionFailure {
     }
 }
 
+function Test-PlayerSummaries {
+    param(
+        [System.Collections.Generic.List[string]]$Failures,
+        [object[]]$Players,
+        [string]$Label,
+        [int]$ExpectedCount = -1
+    )
+
+    if ($ExpectedCount -ge 0 -and $Players.Count -ne $ExpectedCount) {
+        $Failures.Add("$Label count should be $ExpectedCount but was $($Players.Count)")
+    }
+
+    if ($Players.Count -eq 0) {
+        $Failures.Add("$Label should not be empty when the payload exists")
+        return
+    }
+
+    $localPlayers = @($Players | Where-Object { $_.is_local })
+    if ($localPlayers.Count -ne 1) {
+        $Failures.Add("$Label should contain exactly one local player entry")
+    }
+
+    $playerIds = @($Players | ForEach-Object { [string]$_.player_id } | Where-Object { -not [string]::IsNullOrWhiteSpace($_) })
+    if ($playerIds.Count -ne $Players.Count) {
+        $Failures.Add("$Label entries must expose non-empty player_id values")
+    }
+    elseif (($playerIds | Select-Object -Unique).Count -ne $playerIds.Count) {
+        $Failures.Add("$Label player_id values must be unique")
+    }
+}
+
 $stateResponse = Invoke-JsonEndpoint -Path "/state"
 $actionsResponse = Invoke-JsonEndpoint -Path "/actions/available"
 
@@ -258,6 +289,38 @@ if ($null -ne $state.character_select) {
     if ($state.character_select.can_embark) {
         Add-MissingActionFailure -Failures $failures -ActionSet $actionSet -ActionName "embark" -Reason "character_select.can_embark=true"
     }
+
+    if ($state.character_select.can_unready) {
+        Add-MissingActionFailure -Failures $failures -ActionSet $actionSet -ActionName "unready" -Reason "character_select.can_unready=true"
+    }
+    else {
+        Add-ForbiddenActionFailure -Failures $failures -ActionSet $actionSet -ActionName "unready" -Reason "character_select.can_unready=false"
+    }
+
+    if ($state.character_select.can_increase_ascension) {
+        Add-MissingActionFailure -Failures $failures -ActionSet $actionSet -ActionName "increase_ascension" -Reason "character_select.can_increase_ascension=true"
+    }
+    else {
+        Add-ForbiddenActionFailure -Failures $failures -ActionSet $actionSet -ActionName "increase_ascension" -Reason "character_select.can_increase_ascension=false"
+    }
+
+    if ($state.character_select.can_decrease_ascension) {
+        Add-MissingActionFailure -Failures $failures -ActionSet $actionSet -ActionName "decrease_ascension" -Reason "character_select.can_decrease_ascension=true"
+    }
+    else {
+        Add-ForbiddenActionFailure -Failures $failures -ActionSet $actionSet -ActionName "decrease_ascension" -Reason "character_select.can_decrease_ascension=false"
+    }
+
+    if ([int]$state.character_select.max_players -gt 0 -and [int]$state.character_select.player_count -gt [int]$state.character_select.max_players) {
+        $failures.Add("character_select.player_count should not exceed character_select.max_players")
+    }
+
+    Test-PlayerSummaries -Failures $failures -Players @($state.character_select.players) -Label "character_select.players" -ExpectedCount ([int]$state.character_select.player_count)
+
+    $localCharacterPlayer = @($state.character_select.players | Where-Object { $_.is_local } | Select-Object -First 1)
+    if ($localCharacterPlayer.Count -eq 1 -and [bool]$state.character_select.local_ready -ne [bool]$localCharacterPlayer[0].is_ready) {
+        $failures.Add("character_select.local_ready should match the local player roster entry")
+    }
 }
 
 if ($null -ne $state.timeline) {
@@ -290,6 +353,10 @@ if ($null -ne $state.game_over -and $state.game_over.can_return_to_main_menu) {
 
 if ($state.in_combat -and $null -ne $state.combat) {
     $combatSelectionActive = ($state.screen -eq "CARD_SELECTION") -and ($null -ne $state.selection)
+
+    if (@($state.combat.players).Count -gt 0) {
+        Test-PlayerSummaries -Failures $failures -Players @($state.combat.players) -Label "combat.players"
+    }
 
     if (@($state.combat.hand | Where-Object { $_.playable }).Count -gt 0) {
         if ($combatSelectionActive) {
@@ -380,6 +447,28 @@ if ($null -ne $state.run) {
 
     if ([int]$state.run.base_orb_slots -lt 0) {
         $failures.Add("run.base_orb_slots should never be negative")
+    }
+
+    if (@($state.run.players).Count -gt 0) {
+        Test-PlayerSummaries -Failures $failures -Players @($state.run.players) -Label "run.players"
+    }
+}
+
+if ($null -ne $state.multiplayer) {
+    if (-not $state.multiplayer.is_multiplayer) {
+        $failures.Add("multiplayer payload should only be present when is_multiplayer=true")
+    }
+
+    if ([string]::IsNullOrWhiteSpace([string]$state.multiplayer.net_game_type)) {
+        $failures.Add("multiplayer.net_game_type should be populated")
+    }
+
+    if ([int]$state.multiplayer.player_count -lt @($state.multiplayer.connected_player_ids).Count) {
+        $failures.Add("multiplayer.connected_player_ids cannot exceed multiplayer.player_count")
+    }
+
+    if ([string]::IsNullOrWhiteSpace([string]$state.multiplayer.local_player_id)) {
+        $failures.Add("multiplayer.local_player_id should be populated")
     }
 }
 

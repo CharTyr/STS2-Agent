@@ -335,6 +335,33 @@ class Sts2Client:
             },
         )
 
+    def unready(self) -> dict[str, Any]:
+        return self.execute_action(
+            "unready",
+            client_context={
+                "source": "mcp",
+                "tool_name": "unready",
+            },
+        )
+
+    def increase_ascension(self) -> dict[str, Any]:
+        return self.execute_action(
+            "increase_ascension",
+            client_context={
+                "source": "mcp",
+                "tool_name": "increase_ascension",
+            },
+        )
+
+    def decrease_ascension(self) -> dict[str, Any]:
+        return self.execute_action(
+            "decrease_ascension",
+            client_context={
+                "source": "mcp",
+                "tool_name": "decrease_ascension",
+            },
+        )
+
     def use_potion(self, option_index: int, target_index: int | None = None) -> dict[str, Any]:
         return self.execute_action(
             "use_potion",
