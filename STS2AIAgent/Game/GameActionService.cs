@@ -70,6 +70,7 @@ internal static class GameActionService
             "choose_reward_card" => ExecuteChooseRewardCardAsync(request),
             "skip_reward_cards" => ExecuteSkipRewardCardsAsync(),
             "select_deck_card" => ExecuteSelectDeckCardAsync(request),
+            "close_cards_view" => ExecuteCloseCardsViewAsync(),
             "confirm_selection" => ExecuteConfirmSelectionAsync(),
             "proceed" => ExecuteProceedAsync(),
             "open_chest" => ExecuteOpenChestAsync(),
@@ -1176,6 +1177,40 @@ internal static class GameActionService
         };
     }
 
+    private static async Task<ActionResponsePayload> ExecuteCloseCardsViewAsync()
+    {
+        var currentScreen = ActiveScreenContext.Instance.GetCurrentScreen();
+        var screen = GameStateService.ResolveScreen(currentScreen);
+
+        if (!GameStateService.CanCloseCardsView(currentScreen))
+        {
+            throw new ApiException(409, "invalid_action", "Action is not available in the current state.", new
+            {
+                action = "close_cards_view",
+                screen
+            });
+        }
+
+        var backButton = GameStateService.GetCardsViewBackButton(currentScreen)
+            ?? throw new ApiException(503, "state_unavailable", "Cards view back button is unavailable.", new
+            {
+                action = "close_cards_view",
+                screen
+            }, retryable: true);
+
+        backButton.ForceClick();
+        var stable = await WaitForCardsViewCloseAsync(TimeSpan.FromSeconds(10));
+
+        return new ActionResponsePayload
+        {
+            action = "close_cards_view",
+            status = stable ? "completed" : "pending",
+            stable = stable,
+            message = stable ? "Action completed." : "Action queued but state is still transitioning.",
+            state = GameStateService.BuildStatePayload()
+        };
+    }
+
     private static async Task<bool> WaitForChooseCardSelectionResolutionAsync(
         NChooseACardSelectionScreen selectionScreen,
         TimeSpan timeout)
@@ -1193,6 +1228,22 @@ internal static class GameActionService
         }
 
         return ActiveScreenContext.Instance.GetCurrentScreen() is not NChooseACardSelectionScreen;
+    }
+
+    private static async Task<bool> WaitForCardsViewCloseAsync(TimeSpan timeout)
+    {
+        var deadline = DateTime.UtcNow + timeout;
+        while (DateTime.UtcNow < deadline)
+        {
+            await WaitForNextFrameAsync();
+
+            if (ActiveScreenContext.Instance.GetCurrentScreen() is not NCardsViewScreen)
+            {
+                return true;
+            }
+        }
+
+        return ActiveScreenContext.Instance.GetCurrentScreen() is not NCardsViewScreen;
     }
 
     private static async Task<bool> WaitForCombatHandSelectionResolutionAsync(TimeSpan timeout)

@@ -312,6 +312,16 @@ internal static class GameStateService
             });
         }
 
+        if (CanCloseCardsView(currentScreen))
+        {
+            descriptors.Add(new ActionDescriptor
+            {
+                name = "close_cards_view",
+                requires_target = false,
+                requires_index = false
+            });
+        }
+
         if (CanConfirmSelection(currentScreen))
         {
             descriptors.Add(new ActionDescriptor
@@ -633,6 +643,11 @@ internal static class GameStateService
     public static bool CanSelectDeckCard(IScreenContext? currentScreen)
     {
         return GetDeckSelectionOptions(currentScreen).Count > 0;
+    }
+
+    public static bool CanCloseCardsView(IScreenContext? currentScreen)
+    {
+        return GetCardsViewBackButton(currentScreen) != null;
     }
 
     public static bool CanConfirmSelection(IScreenContext? currentScreen)
@@ -1070,22 +1085,21 @@ internal static class GameStateService
 
     public static IReadOnlyList<NCardHolder> GetDeckSelectionOptions(IScreenContext? currentScreen)
     {
+        if (currentScreen is NCardsViewScreen)
+        {
+            return Array.Empty<NCardHolder>();
+        }
+
         if (currentScreen is NCardGridSelectionScreen cardSelectScreen)
         {
-            return FindDescendants<NGridCardHolder>(cardSelectScreen)
-                .Where(node => GodotObject.IsInstanceValid(node) && node.CardModel != null)
-                .OrderBy(node => node.GlobalPosition.Y)
-                .ThenBy(node => node.GlobalPosition.X)
+            return GetVisibleGridCardHolders(cardSelectScreen)
                 .Cast<NCardHolder>()
                 .ToArray();
         }
 
         if (currentScreen is NChooseACardSelectionScreen chooseCardScreen)
         {
-            return FindDescendants<NGridCardHolder>(chooseCardScreen)
-                .Where(node => GodotObject.IsInstanceValid(node) && node.CardModel != null)
-                .OrderBy(node => node.GlobalPosition.Y)
-                .ThenBy(node => node.GlobalPosition.X)
+            return GetVisibleGridCardHolders(chooseCardScreen)
                 .Cast<NCardHolder>()
                 .ToArray();
         }
@@ -1099,11 +1113,23 @@ internal static class GameStateService
                 .ToArray();
         }
 
+        if (currentScreen is Node rootNode)
+        {
+            return GetVisibleGridCardHolders(rootNode)
+                .Cast<NCardHolder>()
+                .ToArray();
+        }
+
         return Array.Empty<NCardHolder>();
     }
 
     public static string? GetDeckSelectionPrompt(IScreenContext? currentScreen)
     {
+        if (currentScreen is NCardsViewScreen)
+        {
+            return null;
+        }
+
         if (currentScreen is NCardGridSelectionScreen cardSelectScreen)
         {
             return cardSelectScreen.GetNodeOrNull<MegaRichTextLabel>("%BottomLabel")?.Text;
@@ -1117,6 +1143,14 @@ internal static class GameStateService
         if (TryGetCombatHandSelection(currentScreen, out var hand))
         {
             return SafeReadString(() => hand!.GetNodeOrNull<MegaRichTextLabel>("%SelectionHeader")?.Text);
+        }
+
+        if (currentScreen is Node rootNode)
+        {
+            return SafeReadString(() =>
+                rootNode.GetNodeOrNull<MegaRichTextLabel>("%BottomLabel")?.Text ??
+                FindDescendants<MegaRichTextLabel>(rootNode)
+                    .FirstOrDefault(label => label.IsVisibleInTree() && !string.IsNullOrWhiteSpace(label.Text))?.Text);
         }
 
         return null;
@@ -1245,6 +1279,22 @@ internal static class GameStateService
 
         return FindDescendants<NProceedButton>(rootNode)
             .FirstOrDefault(IsProceedButtonUsable);
+    }
+
+    public static NButton? GetCardsViewBackButton(IScreenContext? currentScreen)
+    {
+        if (currentScreen is not NCardsViewScreen cardsViewScreen)
+        {
+            return null;
+        }
+
+        var backButton = cardsViewScreen.GetNodeOrNull<NButton>("BackButton");
+        return backButton != null &&
+            GodotObject.IsInstanceValid(backButton) &&
+            backButton.IsVisibleInTree() &&
+            backButton.IsEnabled
+            ? backButton
+            : null;
     }
 
     public static Creature? ResolveEnemyTarget(CombatState combatState, int targetIndex)
@@ -1469,6 +1519,11 @@ internal static class GameStateService
         if (CanSelectDeckCard(currentScreen))
         {
             names.Add("select_deck_card");
+        }
+
+        if (CanCloseCardsView(currentScreen))
+        {
+            names.Add("close_cards_view");
         }
 
         if (CanConfirmSelection(currentScreen))
@@ -3102,6 +3157,17 @@ internal static class GameStateService
             return "CARD_SELECTION";
         }
 
+        if (currentScreen is NCardsViewScreen)
+        {
+            return "CARDS_VIEW";
+        }
+
+        if (currentScreen is Node rootNode &&
+            GetVisibleGridCardHolders(rootNode).Count > 0)
+        {
+            return "CARD_SELECTION";
+        }
+
         if (GetMultiplayerTestScene() != null)
         {
             return "MULTIPLAYER_LOBBY";
@@ -3161,6 +3227,15 @@ internal static class GameStateService
         var found = new List<T>();
         FindDescendantsRecursive(root, found);
         return found;
+    }
+
+    private static IReadOnlyList<NGridCardHolder> GetVisibleGridCardHolders(Node root)
+    {
+        return FindDescendants<NGridCardHolder>(root)
+            .Where(node => GodotObject.IsInstanceValid(node) && node.IsVisibleInTree() && node.CardModel != null)
+            .OrderBy(node => node.GlobalPosition.Y)
+            .ThenBy(node => node.GlobalPosition.X)
+            .ToArray();
     }
 
     private static void FindDescendantsRecursive<T>(Node node, List<T> found) where T : Node
