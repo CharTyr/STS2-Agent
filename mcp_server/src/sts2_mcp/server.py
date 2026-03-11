@@ -27,6 +27,7 @@ _LEGACY_ACTION_TOOLS: tuple[ActionToolSpec, ...] = (
     ActionToolSpec("choose_reward_card", "option_index", "Pick a card from a reward screen."),
     ActionToolSpec("skip_reward_cards", "no_args", "Skip the current card reward."),
     ActionToolSpec("select_deck_card", "option_index", "Select a card on a deck selection screen."),
+    ActionToolSpec("confirm_selection", "no_args", "Confirm the current manual card-selection overlay."),
     ActionToolSpec("open_chest", "no_args", "Open the treasure chest in the current room."),
     ActionToolSpec("choose_treasure_relic", "option_index", "Choose a relic from an opened chest."),
     ActionToolSpec("choose_event_option", "option_index", "Choose an option in the current event room."),

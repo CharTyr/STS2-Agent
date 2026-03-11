@@ -15,7 +15,7 @@ import os
 from sts2_mcp.server import create_server
 
 ESSENTIAL_TOOLS = {"health_check", "get_game_state", "get_available_actions", "act"}
-LEGACY_ACTION_TOOLS = {"play_card", "choose_map_node", "claim_reward", "proceed"}
+LEGACY_ACTION_TOOLS = {"play_card", "choose_map_node", "claim_reward", "proceed", "confirm_selection"}
 
 
 async def list_tool_names(server):

@@ -64,6 +64,7 @@ internal static class GameActionService
             "choose_reward_card" => ExecuteChooseRewardCardAsync(request),
             "skip_reward_cards" => ExecuteSkipRewardCardsAsync(),
             "select_deck_card" => ExecuteSelectDeckCardAsync(request),
+            "confirm_selection" => ExecuteConfirmSelectionAsync(),
             "proceed" => ExecuteProceedAsync(),
             "open_chest" => ExecuteOpenChestAsync(),
             "choose_treasure_relic" => ExecuteChooseTreasureRelicAsync(request),
@@ -590,6 +591,11 @@ internal static class GameActionService
             {
                 return true;
             }
+
+            if (IsPlayCardAwaitingPlayerInput())
+            {
+                return false;
+            }
         }
 
         return IsPlayCardStable(card);
@@ -608,6 +614,17 @@ internal static class GameActionService
         }
 
         return ArePlayerDrivenActionsSettled();
+    }
+
+    private static bool IsPlayCardAwaitingPlayerInput()
+    {
+        if (!CombatManager.Instance.IsInProgress)
+        {
+            return false;
+        }
+
+        var currentScreen = ActiveScreenContext.Instance.GetCurrentScreen();
+        return currentScreen != null && GameStateService.ResolveScreen(currentScreen) == "CARD_SELECTION";
     }
 
     private static bool ArePlayerDrivenActionsSettled()
@@ -1053,7 +1070,7 @@ internal static class GameActionService
             });
         }
 
-        var isCombatHandSelection = GameStateService.TryGetCombatHandSelection(currentScreen, out var combatHand);
+        var isCombatHandSelection = GameStateService.TryGetCombatHandSelectionMetadata(currentScreen, out var combatHand, out var combatHandSelection);
         var selected = options[request.option_index.Value];
         if (isCombatHandSelection)
         {
@@ -1082,13 +1099,44 @@ internal static class GameActionService
         {
             NCardGridSelectionScreen cardSelectScreen => await ConfirmDeckSelectionAsync(cardSelectScreen, TimeSpan.FromSeconds(10)),
             NChooseACardSelectionScreen chooseCardScreen => await WaitForChooseCardSelectionResolutionAsync(chooseCardScreen, TimeSpan.FromSeconds(10)),
-            _ when isCombatHandSelection => await WaitForCombatHandSelectionResolutionAsync(TimeSpan.FromSeconds(10)),
+            _ when isCombatHandSelection => await WaitForCombatHandSelectionStepAsync(combatHandSelection, TimeSpan.FromSeconds(10)),
             _ => false
         };
 
         return new ActionResponsePayload
         {
             action = "select_deck_card",
+            status = stable ? "completed" : "pending",
+            stable = stable,
+            message = stable ? "Action completed." : "Action queued but state is still transitioning.",
+            state = GameStateService.BuildStatePayload()
+        };
+    }
+
+    private static async Task<ActionResponsePayload> ExecuteConfirmSelectionAsync()
+    {
+        var currentScreen = ActiveScreenContext.Instance.GetCurrentScreen();
+        var screen = GameStateService.ResolveScreen(currentScreen);
+
+        if (!GameStateService.CanConfirmSelection(currentScreen) ||
+            !GameStateService.TryGetCombatHandSelection(currentScreen, out var combatHand) ||
+            combatHand == null ||
+            !TryGetCombatHandConfirmButton(combatHand, out var confirmButton) ||
+            confirmButton == null)
+        {
+            throw new ApiException(409, "invalid_action", "Action is not available in the current state.", new
+            {
+                action = "confirm_selection",
+                screen
+            });
+        }
+
+        confirmButton.ForceClick();
+        var stable = await WaitForCombatHandSelectionResolutionAsync(TimeSpan.FromSeconds(10));
+
+        return new ActionResponsePayload
+        {
+            action = "confirm_selection",
             status = stable ? "completed" : "pending",
             stable = stable,
             message = stable ? "Action completed." : "Action queued but state is still transitioning.",
@@ -1132,6 +1180,43 @@ internal static class GameActionService
         }
 
         return !GameStateService.TryGetCombatHandSelection(ActiveScreenContext.Instance.GetCurrentScreen(), out _);
+    }
+
+    private static async Task<bool> WaitForCombatHandSelectionStepAsync(
+        CombatHandSelectionMetadata previousSelection,
+        TimeSpan timeout)
+    {
+        var deadline = DateTime.UtcNow + timeout;
+        while (DateTime.UtcNow < deadline)
+        {
+            await WaitForNextFrameAsync();
+
+            var currentScreen = ActiveScreenContext.Instance.GetCurrentScreen();
+            if (!GameStateService.TryGetCombatHandSelectionMetadata(currentScreen, out _, out var currentSelection))
+            {
+                return true;
+            }
+
+            if (currentSelection.SelectedCount != previousSelection.SelectedCount)
+            {
+                if (!currentSelection.RequiresConfirmation &&
+                    currentSelection.SelectedCount >= currentSelection.MaxSelect)
+                {
+                    continue;
+                }
+
+                return false;
+            }
+        }
+
+        return !GameStateService.TryGetCombatHandSelection(ActiveScreenContext.Instance.GetCurrentScreen(), out _);
+    }
+
+    private static bool TryGetCombatHandConfirmButton(NPlayerHand hand, out NConfirmButton? confirmButton)
+    {
+        confirmButton = hand.GetNodeOrNull<NConfirmButton>("%SelectModeConfirmButton")
+            ?? hand.GetNodeOrNull<NConfirmButton>("SelectModeConfirmButton");
+        return confirmButton != null && GodotObject.IsInstanceValid(confirmButton);
     }
 
     private static async Task<bool> DrainRewardFlowAsync(TimeSpan timeout)

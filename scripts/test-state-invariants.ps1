@@ -82,6 +82,49 @@ if ($null -ne $state.selection -and @($state.selection.cards).Count -gt 0) {
     }
 }
 
+if ($null -ne $state.selection) {
+    $minSelect = [int]$state.selection.min_select
+    $maxSelect = [int]$state.selection.max_select
+    $selectedCount = [int]$state.selection.selected_count
+    $requiresConfirmation = [bool]$state.selection.requires_confirmation
+    $canConfirm = [bool]$state.selection.can_confirm
+
+    if ($maxSelect -lt $minSelect) {
+        $failures.Add("selection.max_select should be >= selection.min_select")
+    }
+
+    if ($selectedCount -lt 0) {
+        $failures.Add("selection.selected_count should never be negative")
+    }
+
+    if ($selectedCount -gt $maxSelect) {
+        $failures.Add("selection.selected_count should never exceed selection.max_select")
+    }
+
+    if ($canConfirm -and (-not $requiresConfirmation)) {
+        $failures.Add("selection.can_confirm should only be true when selection.requires_confirmation is true")
+    }
+
+    if ($requiresConfirmation -and $canConfirm -and $selectedCount -lt $minSelect) {
+        $failures.Add("selection.can_confirm should stay false until selection.selected_count reaches selection.min_select")
+    }
+
+    if ($requiresConfirmation) {
+        if ($canConfirm) {
+            Add-MissingActionFailure -Failures $failures -ActionSet $actionSet -ActionName "confirm_selection" -Reason "selection.requires_confirmation=true and selection.can_confirm=true"
+        }
+        else {
+            Add-ForbiddenActionFailure -Failures $failures -ActionSet $actionSet -ActionName "confirm_selection" -Reason "selection.requires_confirmation=true but selection.can_confirm=false"
+        }
+    }
+    else {
+        Add-ForbiddenActionFailure -Failures $failures -ActionSet $actionSet -ActionName "confirm_selection" -Reason "selection does not require manual confirmation"
+    }
+}
+else {
+    Add-ForbiddenActionFailure -Failures $failures -ActionSet $actionSet -ActionName "confirm_selection" -Reason "selection payload is absent"
+}
+
 if ($null -ne $state.reward) {
     Add-MissingActionFailure -Failures $failures -ActionSet $actionSet -ActionName "collect_rewards_and_proceed" -Reason "reward payload is present"
     Add-ForbiddenActionFailure -Failures $failures -ActionSet $actionSet -ActionName "proceed" -Reason "reward flows should use reward-specific actions instead of proceed"

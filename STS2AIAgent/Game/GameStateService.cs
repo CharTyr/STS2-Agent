@@ -262,6 +262,16 @@ internal static class GameStateService
             });
         }
 
+        if (CanConfirmSelection(currentScreen))
+        {
+            descriptors.Add(new ActionDescriptor
+            {
+                name = "confirm_selection",
+                requires_target = false,
+                requires_index = false
+            });
+        }
+
         if (CanProceed(currentScreen))
         {
             descriptors.Add(new ActionDescriptor
@@ -503,6 +513,13 @@ internal static class GameStateService
     public static bool CanSelectDeckCard(IScreenContext? currentScreen)
     {
         return GetDeckSelectionOptions(currentScreen).Count > 0;
+    }
+
+    public static bool CanConfirmSelection(IScreenContext? currentScreen)
+    {
+        return TryGetCombatHandSelectionMetadata(currentScreen, out _, out var metadata) &&
+            metadata.RequiresConfirmation &&
+            metadata.CanConfirm;
     }
 
     public static bool CanProceed(IScreenContext? currentScreen)
@@ -899,7 +916,7 @@ internal static class GameStateService
                 .ToArray();
         }
 
-        if (TryGetCombatHandSelection(currentScreen, out var hand) && SupportsSingleCardCombatHandSelection(hand!))
+        if (TryGetCombatHandSelection(currentScreen, out var hand))
         {
             return hand!.ActiveHolders
                 .Where(node => GodotObject.IsInstanceValid(node) && node.Visible && node.CardModel != null)
@@ -923,7 +940,7 @@ internal static class GameStateService
             return SafeReadString(() => chooseCardScreen.GetNodeOrNull<NCommonBanner>("Banner")?.label.Text);
         }
 
-        if (TryGetCombatHandSelection(currentScreen, out var hand) && SupportsSingleCardCombatHandSelection(hand!))
+        if (TryGetCombatHandSelection(currentScreen, out var hand))
         {
             return SafeReadString(() => hand!.GetNodeOrNull<MegaRichTextLabel>("%SelectionHeader")?.Text);
         }
@@ -947,12 +964,6 @@ internal static class GameStateService
             hand.CurrentMode is NPlayerHand.Mode.SimpleSelect or NPlayerHand.Mode.UpgradeSelect;
     }
 
-    private static bool SupportsSingleCardCombatHandSelection(NPlayerHand hand)
-    {
-        var prefs = TryGetCombatHandSelectionPrefs(hand);
-        return prefs?.MaxSelect == 1;
-    }
-
     private static CardSelectorPrefs? TryGetCombatHandSelectionPrefs(NPlayerHand hand)
     {
         const BindingFlags flags = BindingFlags.Instance | BindingFlags.NonPublic;
@@ -963,6 +974,47 @@ internal static class GameStateService
         }
 
         return null;
+    }
+
+    public static bool TryGetCombatHandSelectionMetadata(
+        IScreenContext? currentScreen,
+        out NPlayerHand? hand,
+        out CombatHandSelectionMetadata metadata)
+    {
+        metadata = default;
+        if (!TryGetCombatHandSelection(currentScreen, out hand) || hand == null)
+        {
+            return false;
+        }
+
+        var prefs = TryGetCombatHandSelectionPrefs(hand);
+        var requiresConfirmation = prefs?.RequireManualConfirmation ?? false;
+        var canConfirm = requiresConfirmation &&
+            TryGetCombatHandConfirmButton(hand, out var confirmButton) &&
+            confirmButton!.Visible &&
+            confirmButton.IsEnabled;
+
+        metadata = new CombatHandSelectionMetadata(
+            prefs?.MinSelect ?? 1,
+            prefs?.MaxSelect ?? 1,
+            GetCombatHandSelectedCount(hand),
+            requiresConfirmation,
+            canConfirm);
+        return true;
+    }
+
+    private static int GetCombatHandSelectedCount(NPlayerHand hand)
+    {
+        const BindingFlags flags = BindingFlags.Instance | BindingFlags.NonPublic;
+        var field = typeof(NPlayerHand).GetField("_selectedCards", flags);
+        return field?.GetValue(hand) is System.Collections.ICollection collection ? collection.Count : 0;
+    }
+
+    private static bool TryGetCombatHandConfirmButton(NPlayerHand hand, out NConfirmButton? confirmButton)
+    {
+        confirmButton = hand.GetNodeOrNull<NConfirmButton>("%SelectModeConfirmButton")
+            ?? hand.GetNodeOrNull<NConfirmButton>("SelectModeConfirmButton");
+        return confirmButton != null && GodotObject.IsInstanceValid(confirmButton);
     }
 
     private static string SafeReadString(Func<string?> getter, string fallback = "")
@@ -1222,6 +1274,11 @@ internal static class GameStateService
             names.Add("select_deck_card");
         }
 
+        if (CanConfirmSelection(currentScreen))
+        {
+            names.Add("confirm_selection");
+        }
+
         if (CanProceed(currentScreen))
         {
             names.Add("proceed");
@@ -1428,6 +1485,10 @@ internal static class GameStateService
             return null;
         }
 
+        var combatHandSelection = TryGetCombatHandSelectionMetadata(currentScreen, out _, out var metadata)
+            ? metadata
+            : default;
+
         return new SelectionPayload
         {
             kind = currentScreen switch
@@ -1442,6 +1503,11 @@ internal static class GameStateService
                 _ => "deck_card_select"
             },
             prompt = GetDeckSelectionPrompt(currentScreen) ?? string.Empty,
+            min_select = combatHandSelection.MinSelect,
+            max_select = combatHandSelection.MaxSelect,
+            selected_count = combatHandSelection.SelectedCount,
+            requires_confirmation = combatHandSelection.RequiresConfirmation,
+            can_confirm = combatHandSelection.CanConfirm,
             cards = cards.Select((holder, index) => BuildSelectionCardPayload(holder.CardModel!, index)).ToArray()
         };
     }
@@ -2443,8 +2509,7 @@ internal static class GameStateService
     private static string ResolveNonModalScreen(IScreenContext? currentScreen)
     {
         if (currentScreen != null &&
-            TryGetCombatHandSelection(currentScreen, out var hand) &&
-            SupportsSingleCardCombatHandSelection(hand!))
+            TryGetCombatHandSelection(currentScreen, out _))
         {
             return "CARD_SELECTION";
         }
@@ -2635,8 +2700,25 @@ internal sealed class SelectionPayload
 
     public string prompt { get; init; } = string.Empty;
 
+    public int min_select { get; init; } = 1;
+
+    public int max_select { get; init; } = 1;
+
+    public int selected_count { get; init; }
+
+    public bool requires_confirmation { get; init; }
+
+    public bool can_confirm { get; init; }
+
     public SelectionCardPayload[] cards { get; init; } = Array.Empty<SelectionCardPayload>();
 }
+
+internal readonly record struct CombatHandSelectionMetadata(
+    int MinSelect,
+    int MaxSelect,
+    int SelectedCount,
+    bool RequiresConfirmation,
+    bool CanConfirm);
 
 internal sealed class CharacterSelectPayload
 {

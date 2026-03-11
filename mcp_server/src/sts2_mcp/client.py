@@ -202,6 +202,15 @@ class Sts2Client:
             },
         )
 
+    def confirm_selection(self) -> dict[str, Any]:
+        return self.execute_action(
+            "confirm_selection",
+            client_context={
+                "source": "mcp",
+                "tool_name": "confirm_selection",
+            },
+        )
+
     def proceed(self) -> dict[str, Any]:
         return self.execute_action(
             "proceed",
