@@ -1,0 +1,7 @@
+interface:
+  display_name: "STS2 MCP Player"
+  short_description: "Play and validate Slay the Spire 2 sessions via MCP"
+  default_prompt: "Use $sts2-mcp-player to drive or validate a live Slay the Spire 2 MCP session with a strict state-first workflow."
+
+policy:
+  allow_implicit_invocation: true
