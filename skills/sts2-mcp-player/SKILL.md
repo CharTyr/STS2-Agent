@@ -7,6 +7,35 @@ description: Play or validate Slay the Spire 2 through the local sts2-ai-agent M
 
 Use this skill when driving the STS2 MCP mod as a gameplay agent or when validating the live MCP contract against the running game.
 
+## Server Names
+
+This skill is transport-agnostic. It only assumes that your host agent exposes one active STS2 MCP server with the standard tool surface.
+
+- Recommended local server name: `sts2-ai-agent`
+- Recommended Tailscale remote server name: `sts2-ai-agent-remote`
+- If your host supports prioritized candidates, prefer local first and remote as fallback.
+
+## Recommended SubAgent Config
+
+Use a conservative SubAgent profile for STS2. The goal is to keep the tool surface small, keep one MCP action per iteration, and avoid polluting the main chat prompt with long-running game state.
+
+- Recommended plugin settings: `max_concurrent = 1`, `auto_discover = false`, `broadcast_iteration_progress = false`, `inject_status_to_main_prompt = false`
+- Recommended retention settings: `inject_completed_for_seconds = 120`, `status_retention_seconds = 900`
+- Recommended skill settings: `allowed_tool_names = ["health_check", "get_game_state", "get_available_actions", "act"]`, `max_mcp_tools_per_iteration = 1`, `share_to_main_chat = false`
+
+### Simplified Config
+
+If your host plugin supports the built-in STS2 shortcut section, prefer this minimal config over a long JSON blob:
+
+```toml
+[sts2]
+enabled = true
+local_server_name = "sts2-ai-agent"
+remote_server_name = "sts2-ai-agent-remote"
+```
+
+For the Windows-side remote wrapper, read [../../mcp_server/REMOTE.md](../../mcp_server/REMOTE.md).
+
 ## Quick Start
 
 1. Call `health_check` once at session start.

@@ -10,6 +10,7 @@ dependencies = [
 
 [project.scripts]
 sts2-mcp-server = "sts2_mcp.server:main"
+sts2-network-mcp-server = "sts2_mcp.network_server:main"
 
 [build-system]
 requires = ["hatchling"]
