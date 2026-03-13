@@ -15,6 +15,16 @@ import os
 from sts2_mcp.server import create_server
 
 ESSENTIAL_TOOLS = {"health_check", "get_game_state", "get_available_actions", "act"}
+LAYERED_TOOLS = {
+    "create_planner_handoff",
+    "create_combat_handoff",
+    "complete_combat_handoff",
+    "complete_event_handoff",
+    "get_planner_context",
+    "get_combat_context",
+    "append_combat_knowledge",
+    "append_event_knowledge",
+}
 GUIDED_DEBUG_TOOLS = ESSENTIAL_TOOLS | {"run_console_command"}
 LEGACY_ACTION_TOOLS = {
     "play_card",
@@ -36,6 +46,7 @@ async def main():
     os.environ.pop("STS2_ENABLE_DEBUG_ACTIONS", None)
 
     guided = await list_tool_names(create_server())
+    layered = await list_tool_names(create_server(tool_profile="layered"))
     full = await list_tool_names(create_server(tool_profile="full"))
 
     os.environ["STS2_ENABLE_DEBUG_ACTIONS"] = "1"
@@ -55,11 +66,17 @@ async def main():
     if "run_console_command" in guided:
         failures.append("guided profile should hide run_console_command while debug actions are disabled")
 
+    if set(layered) != (ESSENTIAL_TOOLS | LAYERED_TOOLS):
+        failures.append(f"layered profile should expose essential tools plus layered helpers, but exposed {layered}")
+
     if set(guided_debug) != GUIDED_DEBUG_TOOLS:
         failures.append(f"guided debug profile should only add run_console_command, but exposed {guided_debug}")
 
     if not LEGACY_ACTION_TOOLS.issubset(set(full)):
         failures.append("full profile should expose legacy action wrappers")
+
+    if not LAYERED_TOOLS.issubset(set(full)):
+        failures.append("full profile should include layered helper tools")
 
     if len(full) <= len(guided):
         failures.append("full profile should expose more tools than guided profile")
@@ -67,6 +84,8 @@ async def main():
     print(json.dumps({
         "guided_count": len(guided),
         "guided_tools": guided,
+        "layered_count": len(layered),
+        "layered_tools": layered,
         "guided_debug_count": len(guided_debug),
         "full_count": len(full),
         "failures": failures,

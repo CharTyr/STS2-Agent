@@ -133,6 +133,95 @@ uv run sts2-mcp-server
 http://127.0.0.1:8765/mcp
 ```
 
+## 2026.3.13 改动
+**改动思路：**增加分层结构，一个主agent用于规划路线，它能获知全局地图（即当前节点的全部可达路线）并根据实际情况规划路线，以及在事件和对局结束的奖励中做出选择，另一个副agent专门负责战斗，战斗开始时唤起，并传递主Agent的留言、遗物、药水、敌人背景知识等战斗开始时状态，战斗结束后清空上下文，如此能够节省token开销；同时，战斗agent能够在知识库中记录某个敌人的出招顺序（单个敌人通常出招固定，多个敌人也遵循一定的规则）、特性（例如死亡时效果等），以及对待某个敌人的处理思路。这就意味着要维护一个很简单的知识库，暂定以分层目录的形式维护，如果是多个怪物的战斗，则排序后命名为怪物名id/*数量+怪物名id/*数量的形式，根据战斗开始时状态而定，战斗agent自动和对应md建立联系，允许在战斗时和战斗结束后写入出招顺序/处理思路等；主agent同样可以维护一个知识库，对于不同的问号房事件记录不同选项的结果，遇到对应房间自动传入上下文
+
+本轮改动重点是给上层 agent 提供“主 Agent 负责路线 / 房间决策，战斗 Agent 负责局内操作”的分层接法，而不是继续扩底层动作。
+
+已完成：
+
+- MCP 新增 `layered` profile，保持 `guided` 紧凑的同时，额外暴露分层编排工具。
+- 新增 planner / combat handoff 工具：
+  - `create_planner_handoff`
+  - `create_combat_handoff`
+  - `complete_combat_handoff`
+  - `complete_event_handoff`
+- 新增运行时知识库支持：
+  - 战斗知识按 `enemy_id_xcount` 聚合落盘
+  - 事件知识按 `event_id` 落盘
+  - 支持战斗中写观察，也支持战斗结束后按 `combat_key` 回写总结
+- `GET /state` 的 `run` payload 新增 `floor` 字段，方便知识归档和上层决策压缩。
+- MCP profile 校验脚本已同步覆盖 `layered`。
+
+当前设计约束：
+
+- 运行时知识库默认写入仓库下的 `agent_knowledge/`
+- 组合怪文件名采用 Windows 可用格式，例如 `cultist_x2+slime_large_x1.md`
+- 当前还没有 chapter / act 字段时，知识先归档到 `global/`
+
+详细工具和交接说明见：
+
+- `mcp_server/README.md`
+
+## 测试状态
+
+### 已完成测试
+
+这些测试是在当前 Linux CLI 环境中完成的：
+
+- Python 侧语法检查通过：
+  - `sts2_mcp/client.py`
+  - `sts2_mcp/server.py`
+  - `sts2_mcp/network_server.py`
+  - `sts2_mcp/knowledge.py`
+  - `sts2_mcp/handoff.py`
+- 在本地虚拟环境中安装 `fastmcp` 后，确认 `guided` profile 仍只暴露：
+  - `health_check`
+  - `get_game_state`
+  - `get_available_actions`
+  - `act`
+- 确认 `layered` profile 额外暴露：
+  - `get_planner_context`
+  - `create_planner_handoff`
+  - `get_combat_context`
+  - `create_combat_handoff`
+  - `complete_combat_handoff`
+  - `append_combat_knowledge`
+  - `append_event_knowledge`
+  - `complete_event_handoff`
+- 用模拟 state 跑通了：
+  - planner handoff 生成
+  - combat handoff 生成
+  - combat result 回写知识库
+  - event result 回写知识库
+- 确认运行时知识文件会正确创建，例如：
+  - `combat/global/groups/cultist_x2.md`
+  - `events/global/cleric.md`
+
+### 未完成测试
+
+这些测试我当前无法在本环境完成，仍需要原作者或有游戏环境的人实机验证：
+
+- `STS2AIAgent` C# Mod 编译
+  - 当前环境没有 `dotnet`
+- 游戏内实机验证 `/state` 新增的 `run.floor`
+- 实机验证 `layered` profile 通过真实 MCP 客户端调用
+- 主 Agent -> 战斗 Agent -> 主 Agent 的完整 live handoff 流程
+- 战斗结束后用真实 `combat_key` 回写知识库，再由下一次 planner handoff 读取压缩总结
+- 事件结束后 `complete_event_handoff` 与真实事件链路对齐
+- Windows 游戏目录下运行时知识库路径、文件命名和权限检查
+
+### 建议原作者优先验证
+
+如果原作者准备接手测试，建议优先按这个顺序验证：
+
+1. `scripts/test-mcp-tool-profile.ps1`
+2. `/health`、`/state`、`/actions/available`
+3. `run.floor` 是否稳定出现在 live state
+4. `layered` profile 下的 `create_combat_handoff`
+5. 一场真实战斗后的 `complete_combat_handoff`
+6. 一个真实事件后的 `complete_event_handoff`
+
 ## 常见问题
 
 ### 看不到 `http://127.0.0.1:8080/health`
