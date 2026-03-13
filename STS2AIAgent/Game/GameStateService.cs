@@ -1700,6 +1700,7 @@ internal static class GameStateService
         {
             character_id = player.Character.Id.Entry,
             character_name = player.Character.Title.GetFormattedText(),
+            floor = runState.TotalFloor,
             current_hp = player.Creature.CurrentHp,
             max_hp = player.Creature.MaxHp,
             gold = player.Gold,
@@ -3375,6 +3376,8 @@ internal sealed class RunPayload
     public string character_id { get; init; } = string.Empty;
 
     public string character_name { get; init; } = string.Empty;
+
+    public int floor { get; init; }
 
     public int current_hp { get; init; }
 

@@ -7,6 +7,8 @@ from typing import Any, Callable
 from fastmcp import FastMCP
 
 from .client import Sts2Client
+from .handoff import Sts2HandoffService
+from .knowledge import Sts2KnowledgeBase
 
 ToolHandler = Callable[..., dict[str, Any]]
 
@@ -71,6 +73,8 @@ def _normalize_tool_profile(tool_profile: str | None) -> str:
     value = (tool_profile or os.getenv("STS2_MCP_TOOL_PROFILE") or "guided").strip().lower()
     if value in {"full", "legacy"}:
         return "full"
+    if value in {"layered", "planner", "multi-agent"}:
+        return "layered"
 
     return "guided"
 
@@ -139,6 +143,8 @@ def _register_legacy_action_tools(mcp: FastMCP, sts2: Sts2Client) -> None:
 
 def create_server(client: Sts2Client | None = None, tool_profile: str | None = None) -> FastMCP:
     sts2 = client or Sts2Client()
+    knowledge = Sts2KnowledgeBase()
+    handoff = Sts2HandoffService(knowledge)
     profile = _normalize_tool_profile(tool_profile)
     mcp = FastMCP("STS2 AI Agent")
 
@@ -173,6 +179,107 @@ def create_server(client: Sts2Client | None = None, tool_profile: str | None = N
     def get_available_actions() -> list[dict[str, Any]]:
         """List currently executable actions with `requires_index` and `requires_target` hints."""
         return sts2.get_available_actions()
+
+    if profile in {"full", "layered"}:
+        @mcp.tool
+        def get_planner_context(planner_note: str | None = None) -> dict[str, Any]:
+            """Build a planner-focused snapshot with route branches and linked event knowledge."""
+            return knowledge.build_planner_context(sts2.get_state(), planner_note=planner_note)
+
+        @mcp.tool
+        def create_planner_handoff(
+            planning_focus: str | None = None,
+            previous_combat_summary: str | None = None,
+        ) -> dict[str, Any]:
+            """Build a clean planner-agent packet for route, reward, event, and shop decisions."""
+            return handoff.create_planner_handoff(
+                sts2.get_state(),
+                planning_focus=planning_focus,
+                previous_combat_summary=previous_combat_summary,
+            )
+
+        @mcp.tool
+        def get_combat_context(
+            planner_note: str | None = None,
+            include_knowledge: bool = True,
+        ) -> dict[str, Any]:
+            """Build a combat-focused snapshot and link it to the canonical combat knowledge entry."""
+            return knowledge.build_combat_context(
+                sts2.get_state(),
+                planner_note=planner_note,
+                include_knowledge=include_knowledge,
+            )
+
+        @mcp.tool
+        def create_combat_handoff(
+            planner_message: str | None = None,
+            combat_objective: str | None = None,
+        ) -> dict[str, Any]:
+            """Build a clean combat-agent packet with linked combat knowledge and planner guidance."""
+            return handoff.create_combat_handoff(
+                sts2.get_state(),
+                planner_message=planner_message,
+                combat_objective=combat_objective,
+            )
+
+        @mcp.tool
+        def complete_combat_handoff(
+            combat_key: str,
+            summary: str,
+            planner_message: str | None = None,
+            pattern_note: str | None = None,
+            trait_note: str | None = None,
+            tactical_note: str | None = None,
+        ) -> dict[str, Any]:
+            """Persist a combat-agent summary and optional enemy-pattern notes, then return a planner-facing brief."""
+            return handoff.complete_combat_handoff(
+                combat_key=combat_key,
+                summary=summary,
+                planner_message=planner_message,
+                pattern_note=pattern_note,
+                trait_note=trait_note,
+                tactical_note=tactical_note,
+            )
+
+        @mcp.tool
+        def append_combat_knowledge(note: str, section: str = "observations") -> dict[str, Any]:
+            """Append a note to the active combat knowledge file."""
+            return knowledge.append_combat_note(
+                sts2.get_state(),
+                note=note,
+                section=section,
+            )
+
+        @mcp.tool
+        def append_event_knowledge(
+            note: str,
+            section: str = "observations",
+            option_index: int | None = None,
+        ) -> dict[str, Any]:
+            """Append a note to the active event knowledge file."""
+            return knowledge.append_event_note(
+                sts2.get_state(),
+                note=note,
+                section=section,
+                option_index=option_index,
+            )
+
+        @mcp.tool
+        def complete_event_handoff(
+            event_id: str,
+            summary: str,
+            option_index: int | None = None,
+            planning_note: str | None = None,
+            outcome_note: str | None = None,
+        ) -> dict[str, Any]:
+            """Persist an event outcome summary and optional event notes, then return a planner-facing brief."""
+            return handoff.complete_event_handoff(
+                event_id=event_id,
+                summary=summary,
+                option_index=option_index,
+                planning_note=planning_note,
+                outcome_note=outcome_note,
+            )
 
     @mcp.tool
     def act(
