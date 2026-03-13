@@ -175,6 +175,60 @@ def create_server(client: Sts2Client | None = None, tool_profile: str | None = N
         return sts2.get_available_actions()
 
     @mcp.tool
+    def wait_for_event(event_names: str = "", timeout_seconds: float = 20.0) -> dict[str, Any]:
+        """Wait for one matching game event from `/events/stream`.
+
+        - `event_names`: comma-separated event names. Empty means accept any event.
+        - `timeout_seconds`: maximum wait time before returning `matched=false`.
+        """
+        timeout = max(0.1, float(timeout_seconds))
+        target_names = [name.strip() for name in event_names.split(",") if name.strip()]
+        event = sts2.wait_for_event(
+            event_names=target_names or None,
+            timeout=timeout,
+        )
+        if event is None:
+            return {
+                "matched": False,
+                "event": None,
+                "event_names": target_names,
+                "timeout_seconds": timeout,
+            }
+
+        return {
+            "matched": True,
+            "event": event,
+            "event_names": target_names,
+            "timeout_seconds": timeout,
+        }
+
+    @mcp.tool
+    def wait_until_actionable(timeout_seconds: float = 20.0) -> dict[str, Any]:
+        """Wait until a new actionable phase is reported, then return fresh state.
+
+        This reduces high-frequency polling between enemy turns, map transitions,
+        and reward animations.
+        """
+        timeout = max(0.1, float(timeout_seconds))
+        actionable_events = {
+            "player_action_window_opened",
+            "route_decision_required",
+            "reward_decision_required",
+            "available_actions_changed",
+            "screen_changed",
+        }
+        event = sts2.wait_for_event(event_names=actionable_events, timeout=timeout)
+        state = sts2.get_state()
+        actions = sts2.get_available_actions()
+        return {
+            "matched": event is not None,
+            "event": event,
+            "state": state,
+            "actions": actions,
+            "timeout_seconds": timeout,
+        }
+
+    @mcp.tool
     def act(
         action: str,
         card_index: int | None = None,
