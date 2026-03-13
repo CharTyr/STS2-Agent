@@ -64,6 +64,42 @@ Modal：
   - 默认关闭
   - 只用于开发和验证，不应成为正式游玩流程的常规依赖
 
+## 事件流回调（SSE）
+
+Mod 侧现在提供 `GET /events/stream`，用于推送阶段变化回调，减少高频轮询。
+
+常见事件：
+
+- `screen_changed`
+- `combat_started`
+- `combat_ended`
+- `combat_turn_changed`
+- `player_action_window_opened`
+- `player_action_window_closed`
+- `route_decision_required`
+- `reward_decision_required`
+- `event_state_changed`
+- `available_actions_changed`
+
+Python 客户端可以直接消费：
+
+```python
+from sts2_mcp.client import Sts2Client
+
+client = Sts2Client()
+
+# 持续监听
+for evt in client.iter_events():
+    print(evt["event"], evt["data"])
+
+# 等待某类事件（例如下一次可操作窗口开启）
+evt = client.wait_for_event(
+    event_names={"player_action_window_opened", "route_decision_required"},
+    timeout=20,
+)
+print(evt)
+```
+
 ## 降低模型误调用的建议
 
 这个 MCP 已经不算小，所以真正影响稳定性的，不只是“工具有没有”，还包括“模型是不是按正确节奏调用”。

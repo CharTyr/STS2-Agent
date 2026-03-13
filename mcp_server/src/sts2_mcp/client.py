@@ -5,7 +5,7 @@ import logging
 import os
 import time
 from dataclasses import dataclass
-from typing import Any
+from typing import Any, Iterable, Iterator
 from urllib import error, request
 
 logger = logging.getLogger("sts2_mcp")
@@ -59,6 +59,115 @@ class Sts2Client:
     def get_available_actions(self) -> list[dict[str, Any]]:
         payload = self._request("GET", "/actions/available")
         return list(payload.get("actions", []))
+
+    def iter_events(
+        self,
+        *,
+        read_timeout: float | None = None,
+        include_comments: bool = False,
+    ) -> Iterator[dict[str, Any]]:
+        timeout = read_timeout or float(os.getenv("STS2_EVENT_READ_TIMEOUT", "90"))
+        http_request = request.Request(
+            url=f"{self._base_url}/events/stream",
+            method="GET",
+            headers={
+                "Accept": "text/event-stream",
+                "Cache-Control": "no-cache",
+            },
+        )
+
+        try:
+            with request.urlopen(http_request, timeout=timeout) as response:
+                event_id: str | None = None
+                event_name: str | None = None
+                data_lines: list[str] = []
+
+                while True:
+                    raw_line = response.readline()
+                    if not raw_line:
+                        return
+
+                    line = raw_line.decode("utf-8", errors="replace").rstrip("\r\n")
+
+                    if not line:
+                        if event_id is None and event_name is None and not data_lines:
+                            continue
+
+                        raw_data = "\n".join(data_lines)
+                        parsed_data: Any = raw_data
+                        if raw_data:
+                            try:
+                                parsed_data = json.loads(raw_data)
+                            except json.JSONDecodeError:
+                                parsed_data = raw_data
+
+                        yield {
+                            "id": event_id,
+                            "event": event_name or "message",
+                            "data": parsed_data,
+                            "raw_data": raw_data,
+                        }
+
+                        event_id = None
+                        event_name = None
+                        data_lines = []
+                        continue
+
+                    if line.startswith(":"):
+                        if include_comments:
+                            yield {"comment": line[1:].strip()}
+                        continue
+
+                    field, _, value = line.partition(":")
+                    if value.startswith(" "):
+                        value = value[1:]
+
+                    if field == "event":
+                        event_name = value
+                    elif field == "id":
+                        event_id = value
+                    elif field == "data":
+                        data_lines.append(value)
+                    elif field == "retry":
+                        continue
+        except error.HTTPError as exc:
+            raise self._build_api_error(exc.code, exc.read()) from exc
+        except error.URLError as exc:
+            raise Sts2ApiError(
+                status_code=0,
+                code="connection_error",
+                message=(
+                    f"Cannot reach STS2 mod event stream at {self._base_url}. "
+                    "Ensure the game is running and the mod is loaded."
+                ),
+                details={"reason": str(exc.reason), "path": "/events/stream"},
+                retryable=True,
+            ) from exc
+
+    def wait_for_event(
+        self,
+        *,
+        event_names: Iterable[str] | None = None,
+        timeout: float = 30.0,
+    ) -> dict[str, Any] | None:
+        target_names = {name for name in (event_names or []) if name}
+        deadline = time.monotonic() + timeout
+
+        while True:
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                return None
+
+            read_timeout = min(max(remaining, 1.0), 30.0)
+            try:
+                for event in self.iter_events(read_timeout=read_timeout):
+                    event_name = str(event.get("event", ""))
+                    if not target_names or event_name in target_names:
+                        return event
+                return None
+            except Sts2ApiError as exc:
+                if exc.code != "connection_error" or time.monotonic() >= deadline:
+                    raise
 
     def end_turn(self) -> dict[str, Any]:
         return self.execute_action(
