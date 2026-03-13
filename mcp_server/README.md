@@ -11,6 +11,8 @@
 - `health_check`
 - `get_game_state`
 - `get_available_actions`
+- `wait_for_event`
+- `wait_until_actionable`
 
 战斗：
 
