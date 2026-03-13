@@ -34,6 +34,8 @@ README.md
 
 ## 快速开始
 
+详细的编译与环境流程请看：[build-and-env.md](/Users/mac46/CodeWorkSpace/STS2-Agent/build-and-env.md)。
+
 ### 1. 安装 Mod
 
 1. 下载并解压 release 压缩包。
