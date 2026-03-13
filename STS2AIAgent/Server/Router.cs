@@ -2,6 +2,7 @@ using System.Net;
 using System.Diagnostics;
 using System.Text;
 using System.Threading;
+using System.IO;
 using MegaCrit.Sts2.Core.Debug;
 using MegaCrit.Sts2.Core.Logging;
 using STS2AIAgent.Game;
@@ -75,6 +76,13 @@ internal static class Router
                     data = payload
                 });
                 statusCode = 200;
+                return;
+            }
+
+            if (request.HttpMethod.Equals("GET", StringComparison.OrdinalIgnoreCase) &&
+                request.Url?.AbsolutePath == "/events/stream")
+            {
+                statusCode = await HandleEventStreamAsync(response, cancellationToken);
                 return;
             }
 
@@ -153,5 +161,94 @@ internal static class Router
         response.ContentLength64 = bytes.LongLength;
 
         await response.OutputStream.WriteAsync(bytes);
+    }
+
+    private static async Task<int> HandleEventStreamAsync(HttpListenerResponse response, CancellationToken cancellationToken)
+    {
+        response.StatusCode = 200;
+        response.ContentType = "text/event-stream";
+        response.ContentEncoding = Encoding.UTF8;
+        response.SendChunked = true;
+        response.Headers["Cache-Control"] = "no-cache";
+        response.Headers["Connection"] = "keep-alive";
+        response.Headers["X-Accel-Buffering"] = "no";
+
+        using var subscription = GameEventService.Instance.Subscribe();
+
+        try
+        {
+            await WriteSseCommentAsync(response, "stream opened");
+
+            while (!cancellationToken.IsCancellationRequested)
+            {
+                var waitForEvent = subscription.Reader.WaitToReadAsync(cancellationToken).AsTask();
+                var heartbeat = Task.Delay(TimeSpan.FromSeconds(15), cancellationToken);
+                var completedTask = await Task.WhenAny(waitForEvent, heartbeat);
+
+                if (completedTask == heartbeat)
+                {
+                    await WriteSseCommentAsync(response, "heartbeat");
+                    continue;
+                }
+
+                if (!await waitForEvent)
+                {
+                    break;
+                }
+
+                while (subscription.Reader.TryRead(out var envelope))
+                {
+                    await WriteSseEventAsync(response, envelope);
+                }
+            }
+
+            return 200;
+        }
+        catch (OperationCanceledException)
+        {
+            return 200;
+        }
+        catch (HttpListenerException)
+        {
+            // Client disconnected.
+            return 200;
+        }
+        catch (IOException)
+        {
+            // Client disconnected.
+            return 200;
+        }
+        catch (ObjectDisposedException)
+        {
+            // Response stream is already closed.
+            return 200;
+        }
+    }
+
+    private static async Task WriteSseEventAsync(HttpListenerResponse response, GameEventEnvelope envelope)
+    {
+        await WriteSseRawAsync(response, $"id: {envelope.event_id}\n");
+        await WriteSseRawAsync(response, $"event: {envelope.type}\n");
+
+        var json = JsonHelper.Serialize(envelope);
+        foreach (var line in json.Replace("\r\n", "\n", StringComparison.Ordinal).Split('\n'))
+        {
+            await WriteSseRawAsync(response, $"data: {line}\n");
+        }
+
+        await WriteSseRawAsync(response, "\n");
+        await response.OutputStream.FlushAsync();
+    }
+
+    private static async Task WriteSseCommentAsync(HttpListenerResponse response, string comment)
+    {
+        await WriteSseRawAsync(response, $": {comment}\n\n");
+        await response.OutputStream.FlushAsync();
+    }
+
+    private static ValueTask WriteSseRawAsync(HttpListenerResponse response, string text)
+    {
+        var bytes = Encoding.UTF8.GetBytes(text);
+        return response.OutputStream.WriteAsync(bytes);
     }
 }

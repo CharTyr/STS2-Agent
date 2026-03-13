@@ -18,6 +18,7 @@ public static class ModEntry
         Log.Info($"{LogPrefix} Initializing");
         RegisterShutdownHooks();
         GameThread.Initialize();
+        GameEventService.Instance.Start();
         HttpServer.Instance.Start();
         Log.Info($"{LogPrefix} Ready");
     }
@@ -37,6 +38,7 @@ public static class ModEntry
     {
         try
         {
+            GameEventService.Instance.Stop();
             HttpServer.Instance.Stop();
         }
         catch (Exception ex)
