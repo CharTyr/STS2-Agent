@@ -9,7 +9,7 @@ source "$script_dir/lib-sts2.sh"
 repo_root="$(sts2_resolve_repo_root "${REPO_ROOT:-}")"
 keep_game_running=0
 configuration="${CONFIGURATION:-Debug}"
-api_port=8080
+api_port="${STS2_API_PORT:-8080}"
 base_url="http://127.0.0.1:$api_port"
 current_pid=""
 failed=0

@@ -141,13 +141,22 @@ sts2_ensure_steam_app_id_file() {
 
 sts2_port_in_use() {
   local port="$1"
-  lsof -nP -iTCP:"$port" -sTCP:LISTEN >/dev/null 2>&1
+  python3 - "$port" <<'PY'
+import socket
+import sys
+
+port = int(sys.argv[1])
+
+with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
+    sock.settimeout(0.25)
+    raise SystemExit(0 if sock.connect_ex(("127.0.0.1", port)) == 0 else 1)
+PY
 }
 
 sts2_wait_for_port_release() {
   local port="$1"
-  local max_attempts="${2:-10}"
-  local sleep_seconds="${3:-1}"
+  local max_attempts="${2:-${STS2_PORT_RELEASE_ATTEMPTS:-10}}"
+  local sleep_seconds="${3:-${STS2_PORT_RELEASE_DELAY_SECONDS:-1}}"
   local attempt
 
   for ((attempt = 0; attempt < max_attempts; attempt++)); do
@@ -158,7 +167,7 @@ sts2_wait_for_port_release() {
     sleep "$sleep_seconds"
   done
 
-  return 1
+  ! sts2_port_in_use "$port"
 }
 
 sts2_stop_pid() {
@@ -186,10 +195,103 @@ sts2_stop_pid() {
   kill -9 "$pid" >/dev/null 2>&1 || true
 }
 
+sts2_running_game_pids() {
+  local exe_path="${1:-${STS2_EXE_PATH:-}}"
+  local game_root="${STS2_GAME_ROOT:-}"
+
+  if [[ -z "$exe_path" && -n "$game_root" ]]; then
+    exe_path="$(sts2_detect_game_executable "$game_root" || true)"
+  fi
+
+  python3 - "$exe_path" <<'PY'
+import pathlib
+import os
+import re
+import subprocess
+import sys
+
+exe_path = sys.argv[1].strip()
+
+
+def executable_variants(path: pathlib.Path) -> set[str]:
+    variants = {str(path)}
+    for name in ("Slay the Spire 2", "SlayTheSpire2"):
+        variants.add(str(path.with_name(name)))
+    return variants
+
+
+def default_candidates() -> set[str]:
+    candidates: set[str] = set()
+    roots = [
+        pathlib.Path.home() / "Library/Application Support/Steam/steamapps/common/Slay the Spire 2",
+        pathlib.Path.home() / ".steam/steam/steamapps/common/Slay the Spire 2",
+    ]
+    bundle_names = ("Slay the Spire 2.app", "SlayTheSpire2.app")
+    binary_names = ("Slay the Spire 2", "SlayTheSpire2")
+
+    for root in roots:
+        for bundle_name in bundle_names:
+            bundle = root / bundle_name / "Contents" / "MacOS"
+            for binary_name in binary_names:
+                candidates.add(str(bundle / binary_name))
+
+        for binary_name in binary_names:
+            candidates.add(str(root / binary_name))
+
+    return candidates
+
+
+if exe_path:
+    targets = executable_variants(pathlib.Path(exe_path))
+else:
+    targets = default_candidates()
+
+try:
+    process_table = subprocess.check_output(["ps", "-axww", "-o", "pid=,command="], text=True)
+except (OSError, subprocess.CalledProcessError):
+    pattern = "|".join(re.escape(target) for target in sorted(targets))
+    if not pattern:
+        raise SystemExit(0)
+
+    try:
+        fallback_output = subprocess.check_output(["pgrep", "-f", pattern], stderr=subprocess.DEVNULL, text=True)
+    except (OSError, subprocess.CalledProcessError):
+        raise SystemExit(0)
+
+    excluded = {os.getpid(), os.getppid()}
+    seen: set[int] = set()
+    for line in fallback_output.splitlines():
+        line = line.strip()
+        if not line.isdigit():
+            continue
+        pid = int(line)
+        if pid in excluded or pid in seen:
+            continue
+        seen.add(pid)
+        print(pid)
+    raise SystemExit(0)
+
+for line in process_table.splitlines():
+    line = line.strip()
+    if not line:
+        continue
+
+    pid_text, _, command = line.partition(" ")
+    pid_text = pid_text.strip()
+    command = command.strip()
+    if not pid_text.isdigit() or not command:
+        continue
+
+    if any(command == target or command.startswith(target + " ") for target in targets):
+        print(pid_text)
+PY
+}
+
 sts2_stop_running_games() {
+  local exe_path="${1:-}"
   local pids=""
 
-  pids="$(pgrep -f 'Slay the Spire 2.app/Contents/MacOS/Slay the Spire 2|SlayTheSpire2.app/Contents/MacOS/SlayTheSpire2|/Slay the Spire 2$|/SlayTheSpire2$' || true)"
+  pids="$(sts2_running_game_pids "$exe_path")"
   if [[ -z "$pids" ]]; then
     return 0
   fi
@@ -210,14 +312,16 @@ sts2_wait_for_health() {
 
   python3 - "$base_url" "$max_attempts" "$sleep_seconds" "$pid" <<'PY'
 import json
+import subprocess
 import sys
 import time
-from urllib import error, request
+from urllib import error, parse, request
 
 base_url = sys.argv[1].rstrip("/")
 max_attempts = int(sys.argv[2])
 sleep_seconds = float(sys.argv[3])
 pid = int(sys.argv[4])
+port = parse.urlparse(base_url).port
 
 
 def process_alive(target_pid: int) -> bool:
@@ -230,19 +334,40 @@ def process_alive(target_pid: int) -> bool:
         return False
 
 
+def port_owned_by_pid(target_port: int | None, target_pid: int) -> bool:
+    if target_port is None:
+        return False
+
+    try:
+        subprocess.check_output(
+            ["lsof", "-nP", "-a", "-p", str(target_pid), f"-iTCP:{target_port}", "-sTCP:LISTEN"],
+            stderr=subprocess.DEVNULL,
+            text=True,
+        )
+    except (OSError, subprocess.CalledProcessError):
+        return False
+
+    return True
+
+
 for _ in range(max_attempts):
     time.sleep(sleep_seconds)
+    if not process_alive(pid):
+        raise SystemExit("Game process exited before /health became ready.")
+
+    if not port_owned_by_pid(port, pid):
+        continue
+
     try:
         with request.urlopen(f"{base_url}/health", timeout=2) as response:
-            if response.status == 200:
+            payload = json.load(response)
+            data = payload.get("data") if isinstance(payload, dict) else {}
+            if response.status == 200 and payload.get("ok") and data.get("status") == "ready":
                 raise SystemExit(0)
     except Exception:
         pass
 
-    if not process_alive(pid):
-        raise SystemExit("Game process exited before /health became ready.")
-
-raise SystemExit("Timed out waiting for /health.")
+raise SystemExit("Timed out waiting for /health from the launched game process.")
 PY
 }
 

@@ -15,6 +15,19 @@ delay_seconds=2
 enable_debug_actions=0
 api_port="${STS2_API_PORT:-8080}"
 keep_existing_processes=0
+port_release_attempts="${STS2_PORT_RELEASE_ATTEMPTS:-10}"
+port_release_delay_seconds="${STS2_PORT_RELEASE_DELAY_SECONDS:-1}"
+pid=""
+start_succeeded=0
+
+cleanup() {
+  if [[ "$start_succeeded" != "1" && -n "$pid" ]]; then
+    sts2_stop_pid "$pid"
+    sts2_wait_for_port_release "$api_port" "$port_release_attempts" "$port_release_delay_seconds" || true
+  fi
+}
+
+trap cleanup EXIT
 
 usage() {
   cat <<'EOF'
@@ -73,6 +86,7 @@ while [[ $# -gt 0 ]]; do
 done
 
 sts2_require_command python3
+sts2_require_command lsof
 
 if [[ -z "$game_root" ]]; then
   game_root="$(sts2_detect_game_root || true)"
@@ -102,8 +116,11 @@ sts2_ensure_steam_app_id_file "$exe_path" "$resolved_app_id"
 base_url="http://127.0.0.1:$api_port"
 
 if [[ "$keep_existing_processes" != "1" ]]; then
-  sts2_stop_running_games
-  sts2_wait_for_port_release "$api_port" 10 1 || true
+  sts2_stop_running_games "$exe_path"
+  if ! sts2_wait_for_port_release "$api_port" "$port_release_attempts" "$port_release_delay_seconds"; then
+    echo "Timed out waiting for port $api_port to be released before starting a new game session." >&2
+    exit 1
+  fi
 fi
 
 launch_dir="$(cd -- "$(dirname -- "$exe_path")" && pwd)"
@@ -121,6 +138,7 @@ launch_dir="$(cd -- "$(dirname -- "$exe_path")" && pwd)"
 pid=$!
 
 sts2_wait_for_health "$base_url" "$attempts" "$delay_seconds" "$pid"
+start_succeeded=1
 
 python3 - "$pid" "$enable_debug_actions" "$api_port" "$base_url" <<'PY'
 import json

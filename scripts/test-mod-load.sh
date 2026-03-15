@@ -14,7 +14,7 @@ app_id="${STS2_APP_ID:-}"
 attempts=15
 delay_seconds=2
 deep_check=0
-api_port=8080
+api_port="${STS2_API_PORT:-8080}"
 pid=""
 
 usage() {

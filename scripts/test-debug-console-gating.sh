@@ -13,7 +13,7 @@ command="help"
 attempts=40
 delay_seconds=2
 enable_debug_actions=0
-api_port=8080
+api_port="${STS2_API_PORT:-8080}"
 pid=""
 
 usage() {
