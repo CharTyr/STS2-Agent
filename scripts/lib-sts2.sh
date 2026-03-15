@@ -99,7 +99,7 @@ sts2_infer_game_root_from_executable() {
   exe_dir="$(cd -- "$(dirname -- "$exe_path")" && pwd)"
   case "$exe_dir" in
     */Contents/MacOS)
-      cd -- "$exe_dir/../.." && pwd
+      cd -- "$exe_dir/../../.." && pwd
       ;;
     *)
       printf '%s\n' "$exe_dir"
@@ -385,11 +385,11 @@ def port_owned_by_pid(target_port: int | None, target_pid: int) -> bool:
 
 
 for _ in range(max_attempts):
-    time.sleep(sleep_seconds)
     if not process_alive(pid):
         raise SystemExit("Game process exited before /health became ready.")
 
     if not port_owned_by_pid(port, pid):
+        time.sleep(sleep_seconds)
         continue
 
     try:
@@ -398,8 +398,12 @@ for _ in range(max_attempts):
             data = payload.get("data") if isinstance(payload, dict) else {}
             if response.status == 200 and payload.get("ok") and data.get("status") == "ready":
                 raise SystemExit(0)
+    except SystemExit:
+        raise
     except Exception:
         pass
+
+    time.sleep(sleep_seconds)
 
 raise SystemExit("Timed out waiting for /health from the launched game process.")
 PY

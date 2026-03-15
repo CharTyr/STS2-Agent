@@ -49,7 +49,7 @@ Predicate = Callable[[dict[str, Any]], bool]
 class ApiClient:
     base_url: str = "http://127.0.0.1:8080"
     timeout: float = 5.0
-    retries: int = 0
+    retries: int = 2
     retry_delay_ms: int = 500
 
     def request(self, method: str, path: str, body: dict[str, Any] | None = None) -> dict[str, Any]:
@@ -318,6 +318,16 @@ def get_invariant_snapshot(
             raise ValidationError(f"Timed out waiting for a readable invariant snapshot. Last retryable error: {last_error}")
         last_state = client.get_state()
         last_state_action_set = {str(action_name) for action_name in list(last_state.get("available_actions") or []) if has_text(action_name)}
+
+    try:
+        final_state = client.get_state()
+        final_actions_payload = client.get_available_actions_payload()
+        final_actions = list(final_actions_payload.get("actions") or [])
+        final_action_set = extract_action_name_set(final_actions)
+        final_state_action_set = {str(action_name) for action_name in list(final_state.get("available_actions") or []) if has_text(action_name)}
+        return final_state, final_actions, final_action_set, final_state_action_set
+    except ApiRequestError:
+        pass
 
     return last_state, last_actions, last_action_set, last_state_action_set
 
@@ -1059,6 +1069,8 @@ def assert_action_available(state: dict[str, Any], action_name: str) -> None:
 def ensure_action_ok(response: dict[str, Any], label: str) -> dict[str, Any]:
     if not response.get("ok"):
         raise ValidationError(f"{label} failed: {json.dumps(response, ensure_ascii=False)}")
+    if "data" not in response or not isinstance(response["data"], dict):
+        raise ValidationError(f"{label} returned ok=true but missing data payload: {json.dumps(response, ensure_ascii=False)}")
     return response
 
 
@@ -1145,10 +1157,17 @@ def suite_mod_load(args: argparse.Namespace) -> dict[str, Any]:
         return health["data"]
 
     startup_attempts = max(10, int(max(args.timeout_sec, 1.0) * 4))
+    state = client.wait_for_state(
+        "stable startup state",
+        lambda current: current.get("screen") not in (None, "", "UNKNOWN")
+        and len(list(current.get("available_actions") or [])) > 0,
+        attempts=startup_attempts,
+        delay_ms=250,
+    )
     state, actions = wait_for_readable_snapshot(
         client,
         "stable startup state snapshot",
-        attempts=startup_attempts,
+        attempts=max(startup_attempts, 6),
         delay_ms=250,
     )
     return {
