@@ -115,7 +115,7 @@
 
 | 字段 | 类型 | 说明 |
 | --- | --- | --- |
-| `state_version` | number | 状态模型版本（当前固定为 4） |
+| `state_version` | number | 状态模型版本（当前固定为 6） |
 | `run_id` | string | 本局运行标识（种子字符串） |
 | `screen` | string | 当前逻辑界面（见 Screen 枚举） |
 | `in_combat` | boolean | 是否处于战斗流程 |
@@ -145,6 +145,17 @@
 | `block` | number | 当前格挡值 |
 | `energy` | number | 当前能量 |
 | `stars` | number | 当前星星数 |
+| `powers` | object[] | 玩家当前持有的 Power / Buff / Debuff 列表 |
+
+#### `combat.player.powers[]`
+
+| 字段 | 类型 | 说明 |
+| --- | --- | --- |
+| `index` | number | Power 在当前列表中的索引 |
+| `power_id` | string | Power 内部 ID |
+| `name` | string | Power 显示名称 |
+| `amount` | number \| null | Power 层数/数值（部分 Power 可能为空） |
+| `is_debuff` | boolean | 是否为 Debuff |
 
 #### `combat.hand[]`
 
@@ -175,9 +186,20 @@
 | `block` | number | 当前格挡值 |
 | `is_alive` | boolean | 是否存活 |
 | `is_hittable` | boolean | 是否可被攻击 |
+| `powers` | object[] | 敌人当前持有的 Power / Buff / Debuff 列表 |
 | `intent` | string \| null | 兼容旧字段，等同于怪物下一招的原始 `move_id` |
 | `move_id` | string \| null | 怪物下一招的内部状态 ID，例如 `PECK_MOVE` |
 | `intents` | object[] | 怪物下一招拆解出的具体意图列表，顺序与游戏 UI 一致 |
+
+#### `combat.enemies[].powers[]`
+
+| 字段 | 类型 | 说明 |
+| --- | --- | --- |
+| `index` | number | Power 在当前列表中的索引 |
+| `power_id` | string | Power 内部 ID |
+| `name` | string | Power 显示名称 |
+| `amount` | number \| null | Power 层数/数值（部分 Power 可能为空） |
+| `is_debuff` | boolean | 是否为 Debuff |
 
 #### `combat.enemies[].intents[]`
 
@@ -225,6 +247,8 @@
 | `index` | number | 遗物索引 |
 | `relic_id` | string | 遗物内部 ID |
 | `name` | string | 遗物名称 |
+| `description` | string \| null | 遗物描述（若可读取） |
+| `stack` | number \| null | 遗物层数/计数（若适用） |
 | `is_melted` | boolean | 是否已熔炼 |
 
 #### `run.potions[]`
@@ -234,6 +258,8 @@
 | `index` | number | 药水槽索引 |
 | `potion_id` | string \| null | 药水 ID（空槽为 null） |
 | `name` | string \| null | 药水名称（空槽为 null） |
+| `description` | string \| null | 药水描述（空槽为 null） |
+| `rarity` | string \| null | 药水稀有度（空槽为 null） |
 | `occupied` | boolean | 是否有药水 |
 | `usage` | string \| null | 药水使用时机（如 `CombatOnly`, `AnyTime`） |
 | `target_type` | string \| null | 药水目标类型 |
@@ -386,6 +412,8 @@
 | `description` | string | 选项描述 |
 | `is_locked` | boolean | 选项是否被锁定（锁定选项不可选） |
 | `is_proceed` | boolean | 是否为继续/离开选项 |
+| `will_kill_player` | boolean | 该选项是否会导致玩家死亡（若模型提供） |
+| `has_relic_preview` | boolean | 该选项是否包含遗物预览（若模型提供） |
 
 ### `rest` 子结构
 
@@ -455,7 +483,7 @@
   "ok": true,
   "request_id": "req_20260310_120000_1234",
   "data": {
-    "state_version": 4,
+    "state_version": 6,
     "run_id": "WXJVZBQFK2",
     "screen": "COMBAT",
     "in_combat": true,
