@@ -11,6 +11,28 @@ from urllib import error, request
 
 logger = logging.getLogger("sts2_mcp")
 
+
+def _set_socket_read_timeout(response: Any, timeout: float) -> None:
+    fp = getattr(response, "fp", None)
+    candidates = [
+        getattr(getattr(fp, "raw", None), "_sock", None),
+        getattr(fp, "_sock", None),
+        getattr(getattr(getattr(fp, "fp", None), "raw", None), "_sock", None),
+        getattr(response, "_sock", None),
+        getattr(response, "sock", None),
+    ]
+
+    for candidate in candidates:
+        if candidate is None or not hasattr(candidate, "settimeout"):
+            continue
+
+        try:
+            candidate.settimeout(timeout)
+            return
+        except OSError:
+            continue
+
+
 _DEFAULT_READ_TIMEOUT = 10.0
 _DEFAULT_ACTION_TIMEOUT = 30.0
 _DEFAULT_MAX_RETRIES = 2
@@ -66,6 +88,7 @@ class Sts2Client:
         *,
         read_timeout: float | None = None,
         include_comments: bool = False,
+        deadline: float | None = None,
     ) -> Iterator[dict[str, Any]]:
         timeout = read_timeout or float(os.getenv("STS2_EVENT_READ_TIMEOUT", "90"))
         http_request = request.Request(
@@ -84,6 +107,12 @@ class Sts2Client:
                 data_lines: list[str] = []
 
                 while True:
+                    if deadline is not None:
+                        remaining = deadline - time.monotonic()
+                        if remaining <= 0:
+                            raise socket.timeout("timed out")
+                        _set_socket_read_timeout(response, max(remaining, 0.05))
+
                     raw_line = response.readline()
                     if not raw_line:
                         return
@@ -171,32 +200,17 @@ class Sts2Client:
                 return None
 
             read_timeout = max(remaining, 0.05)
-            stream = self.iter_events(read_timeout=read_timeout, include_comments=True)
-            restart_stream = False
             try:
-                for event in stream:
-                    if "comment" in event:
-                        if time.monotonic() >= deadline:
-                            return None
-                        restart_stream = True
-                        break
-
+                for event in self.iter_events(read_timeout=read_timeout, deadline=deadline):
                     event_name = str(event.get("event", ""))
                     if not target_names or event_name in target_names:
                         return event
-
-                if restart_stream:
-                    continue
                 return None
             except Sts2ApiError as exc:
                 if exc.code != "connection_error":
                     raise
                 if time.monotonic() >= deadline:
                     return None
-            finally:
-                close = getattr(stream, "close", None)
-                if callable(close):
-                    close()
 
     def end_turn(self) -> dict[str, Any]:
         return self.execute_action(

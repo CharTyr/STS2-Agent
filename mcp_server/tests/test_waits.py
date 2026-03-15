@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import socket
 import unittest
 from unittest.mock import patch
 
@@ -41,38 +42,101 @@ class DummyClient:
         return self._event
 
 
+class FakeSocket:
+    def __init__(self) -> None:
+        self.timeout = None
+        self.timeout_history: list[float] = []
+
+    def settimeout(self, timeout: float) -> None:
+        self.timeout = float(timeout)
+        self.timeout_history.append(float(timeout))
+
+
+class FakeResponse:
+    def __init__(self, clock: FakeClock, schedule: list[tuple[float, bytes]]) -> None:
+        self._clock = clock
+        self._schedule = list(schedule)
+        self._socket = FakeSocket()
+        self.fp = type("FakeFp", (), {"raw": type("FakeRaw", (), {"_sock": self._socket})()})()
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, exc_type, exc, tb) -> bool:
+        return False
+
+    def readline(self) -> bytes:
+        if not self._schedule:
+            return b""
+
+        delay, payload = self._schedule.pop(0)
+        timeout = self._socket.timeout
+        if timeout is None:
+            raise AssertionError("socket timeout was not set before readline")
+        if delay > timeout:
+            self._clock.now += timeout
+            raise socket.timeout("timed out")
+
+        self._clock.now += delay
+        return payload
+
+
 class WaitBehaviorTests(unittest.TestCase):
-    def test_wait_for_event_restarts_on_heartbeat_not_every_second(self) -> None:
+    def test_wait_for_event_keeps_processing_after_comments(self) -> None:
         client = Sts2Client(base_url="http://127.0.0.1:8080")
         clock = FakeClock()
-        observed_timeouts: list[float] = []
-        call_count = 0
+        open_calls = 0
+        response = FakeResponse(
+            clock,
+            [
+                (0.0, b": stream opened\n"),
+                (0.0, b"\n"),
+                (0.0, b"event: target\n"),
+                (0.0, b'data: {"matched": true}\n'),
+                (0.0, b"\n"),
+            ],
+        )
 
-        def fake_iter_events(*, read_timeout=None, include_comments=False):
-            nonlocal call_count
-            call_count += 1
-            observed_timeouts.append(float(read_timeout))
-            if call_count == 1:
-                clock.now += 15.0
-                yield {"comment": "heartbeat"}
-                return
+        def fake_urlopen(http_request, timeout=None):
+            nonlocal open_calls
+            open_calls += 1
+            return response
 
-            clock.now += float(read_timeout)
-            raise Sts2ApiError(
-                status_code=0,
-                code="connection_error",
-                message="timed out",
-                retryable=True,
-            )
-            yield
+        with patch("sts2_mcp.client.request.urlopen", new=fake_urlopen):
+            with patch("sts2_mcp.client.time.monotonic", new=clock.monotonic):
+                event = client.wait_for_event(event_names={"target"}, timeout=20.0)
 
-        client.iter_events = fake_iter_events  # type: ignore[method-assign]
+        self.assertEqual(open_calls, 1)
+        self.assertIsNotNone(event)
+        self.assertEqual(event["event"], "target")
 
-        with patch("sts2_mcp.client.time.monotonic", new=clock.monotonic):
-            event = client.wait_for_event(timeout=20.0)
+    def test_wait_for_event_respects_deadline_without_forcing_reconnects(self) -> None:
+        client = Sts2Client(base_url="http://127.0.0.1:8080")
+        clock = FakeClock()
+        open_calls = 0
+        response = FakeResponse(
+            clock,
+            [
+                (15.0, b": heartbeat\n"),
+                (0.0, b"\n"),
+                (10.0, b"event: never-reached\n"),
+            ],
+        )
+
+        def fake_urlopen(http_request, timeout=None):
+            nonlocal open_calls
+            open_calls += 1
+            return response
+
+        with patch("sts2_mcp.client.request.urlopen", new=fake_urlopen):
+            with patch("sts2_mcp.client.time.monotonic", new=clock.monotonic):
+                event = client.wait_for_event(timeout=20.0)
 
         self.assertIsNone(event)
-        self.assertEqual([round(value, 2) for value in observed_timeouts], [20.0, 5.0])
+        self.assertEqual(open_calls, 1)
+        self.assertGreaterEqual(len(response._socket.timeout_history), 2)
+        self.assertAlmostEqual(response._socket.timeout_history[0], 20.0, places=2)
+        self.assertAlmostEqual(response._socket.timeout_history[-1], 5.0, places=2)
 
     def test_wait_until_actionable_returns_immediately_when_state_is_actionable(self) -> None:
         client = DummyClient(states=[{"available_actions": ["proceed"]}])
