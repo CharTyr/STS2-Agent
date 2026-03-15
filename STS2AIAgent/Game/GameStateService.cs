@@ -2036,7 +2036,7 @@ internal static class GameStateService
                         description = SafeReadString(() => opt.Description?.GetFormattedText()),
                         is_locked = SafeReadBool(() => opt.IsLocked),
                         is_proceed = SafeReadBool(() => opt.IsProceed),
-                        will_kill_player = GetReflectedBoolProperty(opt, "WillKillPlayer"),
+                        will_kill_player = GetEventOptionWillKillPlayer(eventModel, opt),
                         has_relic_preview = GetReflectedProperty(opt, "Relic") != null
                     });
                 }
@@ -2390,8 +2390,11 @@ internal static class GameStateService
             var amount = SafeReadNullableInt(() =>
                 Convert.ToInt32(powerType.GetProperty("Amount")?.GetValue(power) ?? 0));
 
-            var isDebuff = SafeReadBool(() =>
-                Convert.ToBoolean(powerType.GetProperty("IsDebuff")?.GetValue(power) ?? false));
+            var isDebuff = string.Equals(
+                GetReflectedProperty(power, "TypeForCurrentAmount")?.ToString()
+                    ?? GetReflectedProperty(power, "Type")?.ToString(),
+                "Debuff",
+                StringComparison.Ordinal);
 
             result.Add(new CombatPowerPayload
             {
@@ -2643,7 +2646,7 @@ internal static class GameStateService
             index = index,
             relic_id = relic.Id.Entry,
             name = relic.Title.GetFormattedText(),
-            description = GetReflectedFormattedTextProperty(relic, "Description"),
+            description = GetDynamicFormattedTextProperty(relic, "DynamicDescription", "Description"),
             stack = GetReflectedNullableIntProperty(relic, "Amount"),
             is_melted = relic.IsMelted
         };
@@ -2665,7 +2668,7 @@ internal static class GameStateService
             index = index,
             potion_id = potion?.Id.Entry,
             name = potion?.Title.GetFormattedText(),
-            description = potion != null ? GetReflectedFormattedTextProperty(potion, "Description") : null,
+            description = potion != null ? GetDynamicFormattedTextProperty(potion, "DynamicDescription", "Description") : null,
             rarity = potion != null ? GetReflectedStringProperty(potion, "Rarity") : null,
             occupied = potion != null,
             usage = potion?.Usage.ToString(),
@@ -2715,6 +2718,20 @@ internal static class GameStateService
         }
     }
 
+    private static string? GetDynamicFormattedTextProperty(object target, params string[] propertyNames)
+    {
+        foreach (var propertyName in propertyNames)
+        {
+            var value = GetReflectedFormattedTextProperty(target, propertyName);
+            if (!string.IsNullOrWhiteSpace(value))
+            {
+                return value;
+            }
+        }
+
+        return null;
+    }
+
     private static int? GetReflectedNullableIntProperty(object target, string propertyName)
     {
         try
@@ -2734,6 +2751,25 @@ internal static class GameStateService
         {
             var value = GetReflectedProperty(target, propertyName);
             return value != null && Convert.ToBoolean(value);
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
+    private static bool GetEventOptionWillKillPlayer(object eventModel, object option)
+    {
+        try
+        {
+            var owner = GetReflectedProperty(eventModel, "Owner");
+            var willKillPlayer = GetReflectedProperty(option, "WillKillPlayer") as Delegate;
+            if (owner == null || willKillPlayer == null)
+            {
+                return false;
+            }
+
+            return willKillPlayer.DynamicInvoke(owner) as bool? ?? false;
         }
         catch
         {
