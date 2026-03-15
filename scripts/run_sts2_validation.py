@@ -19,6 +19,29 @@ class ValidationError(RuntimeError):
     pass
 
 
+class ApiRequestError(ValidationError):
+    def __init__(
+        self,
+        label: str,
+        *,
+        status_code: int,
+        code: str,
+        message: str,
+        details: Any = None,
+        retryable: bool = False,
+    ) -> None:
+        self.label = label
+        self.status_code = status_code
+        self.code = code
+        self.message = message
+        self.details = details
+        self.retryable = retryable
+        summary = f"{label} failed: {code}: {message}"
+        if details is not None:
+            summary = f"{summary} | details={json.dumps(details, ensure_ascii=False)}"
+        super().__init__(summary)
+
+
 Predicate = Callable[[dict[str, Any]], bool]
 
 
@@ -33,11 +56,12 @@ class ApiClient:
         url = self.base_url.rstrip("/") + path
         headers = {"Accept": "application/json"}
         payload = None
+        label = f"{method} {path}"
         if body is not None:
             payload = json.dumps(body).encode("utf-8")
             headers["Content-Type"] = "application/json; charset=utf-8"
 
-        last_error: Exception | None = None
+        last_error: ValidationError | None = None
         for attempt in range(self.retries + 1):
             if attempt > 0:
                 time.sleep(self.retry_delay_ms / 1000.0)
@@ -45,16 +69,25 @@ class ApiClient:
             http_request = request.Request(url=url, method=method, data=payload, headers=headers)
             try:
                 with request.urlopen(http_request, timeout=self.timeout) as response:
-                    return self._decode_json(response.read(), f"{method} {path}")
+                    return self._decode_json(response.read(), label)
             except error.HTTPError as exc:
-                decoded = self._decode_json(exc.read(), f"{method} {path}")
-                if isinstance(decoded, dict):
-                    return decoded
-                last_error = ValidationError(f"{method} {path} returned HTTP {exc.code}")
+                decoded = self._decode_json(exc.read(), label)
+                last_error = self._build_api_error(decoded, label, status_code=exc.code)
+                if isinstance(last_error, ApiRequestError) and last_error.retryable and attempt < self.retries:
+                    continue
             except error.URLError as exc:
-                last_error = ValidationError(f"{method} {path} failed: {exc}")
+                last_error = ApiRequestError(
+                    label,
+                    status_code=0,
+                    code="connection_error",
+                    message=f"Cannot reach STS2 mod at {self.base_url}.",
+                    details={"reason": str(exc.reason), "path": path},
+                    retryable=True,
+                )
+                if attempt < self.retries:
+                    continue
 
-        raise last_error or ValidationError(f"{method} {path} failed")
+        raise last_error or ValidationError(f"{label} failed")
 
     def get_state(self) -> dict[str, Any]:
         payload = self.request("GET", "/state")
@@ -79,18 +112,29 @@ class ApiClient:
         attempts: int,
         delay_ms: int,
     ) -> dict[str, Any]:
+        last_error: ValidationError | None = None
         for _ in range(attempts):
-            state = self.get_state()
+            try:
+                state = self.get_state()
+            except ApiRequestError as exc:
+                if not exc.retryable:
+                    raise
+                last_error = exc
+                time.sleep(delay_ms / 1000.0)
+                continue
+
             if predicate(state):
                 return state
             time.sleep(delay_ms / 1000.0)
 
+        if last_error is not None:
+            raise ValidationError(f"Timed out waiting for state: {description}. Last retryable error: {last_error}")
         raise ValidationError(f"Timed out waiting for state: {description}")
 
     @staticmethod
     def _require_ok(payload: dict[str, Any], label: str) -> None:
         if not payload.get("ok"):
-            raise ValidationError(f"{label} failed: {json.dumps(payload, ensure_ascii=False)}")
+            raise ApiClient._build_api_error(payload, label, status_code=200)
 
     @staticmethod
     def _decode_json(raw_body: bytes, label: str) -> dict[str, Any]:
@@ -98,6 +142,20 @@ class ApiClient:
             return json.loads(raw_body.decode("utf-8"))
         except json.JSONDecodeError as exc:
             raise ValidationError(f"{label} returned non-JSON content") from exc
+
+    @staticmethod
+    def _build_api_error(payload: dict[str, Any], label: str, *, status_code: int) -> ValidationError:
+        error_payload = payload.get("error")
+        if isinstance(error_payload, dict):
+            return ApiRequestError(
+                label,
+                status_code=status_code,
+                code=str(error_payload.get("code") or "unknown_error"),
+                message=str(error_payload.get("message") or "Request failed."),
+                details=error_payload.get("details"),
+                retryable=bool(error_payload.get("retryable", False)),
+            )
+        return ValidationError(f"{label} failed: {json.dumps(payload, ensure_ascii=False)}")
 
 
 def has_text(value: Any) -> bool:
@@ -985,16 +1043,45 @@ def first_unlocked_character(state: dict[str, Any]) -> dict[str, Any]:
     return characters[0]
 
 
+def wait_for_readable_snapshot(
+    client: ApiClient,
+    description: str,
+    *,
+    attempts: int,
+    delay_ms: int,
+) -> tuple[dict[str, Any], list[dict[str, Any]]]:
+    last_error: ApiRequestError | None = None
+    for _ in range(attempts):
+        try:
+            state = client.get_state()
+            actions = client.get_available_actions()
+            return state, actions
+        except ApiRequestError as exc:
+            if not exc.retryable:
+                raise
+            last_error = exc
+            time.sleep(delay_ms / 1000.0)
+
+    if last_error is not None:
+        raise ValidationError(f"Timed out waiting for {description}. Last retryable error: {last_error}")
+    raise ValidationError(f"Timed out waiting for {description}")
+
+
 def suite_mod_load(args: argparse.Namespace) -> dict[str, Any]:
-    client = ApiClient(base_url=args.base_url, timeout=args.timeout_sec)
+    client = ApiClient(base_url=args.base_url, timeout=args.timeout_sec, retries=2, retry_delay_ms=250)
     health = client.request("GET", "/health")
     client._require_ok(health, "GET /health")
 
     if not args.deep_check:
         return health["data"]
 
-    state = client.get_state()
-    actions = client.get_available_actions()
+    startup_attempts = max(10, int(max(args.timeout_sec, 1.0) * 4))
+    state, actions = wait_for_readable_snapshot(
+        client,
+        "stable startup state snapshot",
+        attempts=startup_attempts,
+        delay_ms=250,
+    )
     return {
         "health_ok": True,
         "state_ok": True,
