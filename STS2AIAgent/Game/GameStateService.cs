@@ -2387,8 +2387,7 @@ internal static class GameStateService
                 return titleValue.GetType().GetMethod("GetFormattedText")?.Invoke(titleValue, null)?.ToString();
             });
 
-            var amount = SafeReadNullableInt(() =>
-                Convert.ToInt32(powerType.GetProperty("Amount")?.GetValue(power) ?? 0));
+            var amount = GetReflectedNullableIntProperty(power, "Amount");
 
             var isDebuff = string.Equals(
                 GetReflectedProperty(power, "TypeForCurrentAmount")?.ToString()
