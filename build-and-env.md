@@ -117,6 +117,17 @@ cd mcp_server
 uv run python -c "from sts2_mcp.client import Sts2Client; import json; print(json.dumps(Sts2Client().get_state(), ensure_ascii=False))"
 ```
 
+5. macOS/Linux 核心回归入口：
+
+```bash
+./scripts/test-full-regression.sh
+```
+
+说明：
+
+- 这条 `bash` 回归链路覆盖构建、Mod 装载、debug gating、MCP tool profile、主菜单生命周期、新局生命周期，以及几条关键战斗 / 药水 / target contract 检查。
+- 更重的多人大厅验证和完整状态不变量脚本目前仍主要保留在 PowerShell 版本。
+
 ## 6. Troubleshooting
 
 - `connection refused`:
