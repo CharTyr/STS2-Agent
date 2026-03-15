@@ -857,7 +857,15 @@ internal static class GameStateService
         }
 
         var singleplayerButton = GetMainMenuSingleplayerButton(mainMenu);
-        return singleplayerButton != null && singleplayerButton.IsVisibleInTree() && singleplayerButton.IsEnabled;
+        if (singleplayerButton != null && singleplayerButton.IsVisibleInTree() && singleplayerButton.IsEnabled)
+        {
+            return true;
+        }
+
+        // Some main-menu states still allow the singleplayer submenu to open even when the
+        // button has not become visible in the scene tree. If there is no active run flow to
+        // continue or abandon, prefer exposing character select instead of hard-blocking.
+        return !CanContinueRun(currentScreen) && !CanAbandonRun(currentScreen);
     }
 
     public static bool CanOpenTimeline(IScreenContext? currentScreen)
