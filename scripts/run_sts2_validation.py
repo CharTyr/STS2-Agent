@@ -19,6 +19,10 @@ class ValidationError(RuntimeError):
     pass
 
 
+class DeadlineExceeded(ValidationError):
+    pass
+
+
 class ApiRequestError(ValidationError):
     def __init__(
         self,
@@ -43,6 +47,25 @@ class ApiRequestError(ValidationError):
 
 
 Predicate = Callable[[dict[str, Any]], bool]
+
+
+def remaining_seconds(deadline: float | None) -> float | None:
+    if deadline is None:
+        return None
+    return deadline - time.monotonic()
+
+
+def sleep_with_deadline(delay_ms: int, deadline: float | None) -> None:
+    delay_seconds = delay_ms / 1000.0
+    if deadline is None:
+        time.sleep(delay_seconds)
+        return
+
+    remaining = remaining_seconds(deadline)
+    if remaining is None or remaining <= 0:
+        return
+
+    time.sleep(min(delay_seconds, remaining))
 
 
 @dataclass(slots=True)
@@ -118,21 +141,24 @@ class ApiClient:
         *,
         attempts: int,
         delay_ms: int,
+        deadline: float | None = None,
     ) -> dict[str, Any]:
         last_error: ValidationError | None = None
         for _ in range(attempts):
             try:
-                state = self.get_state()
+                state = run_with_deadline_budget(self, self.get_state, deadline)
+            except DeadlineExceeded:
+                break
             except ApiRequestError as exc:
                 if not exc.retryable:
                     raise
                 last_error = exc
-                time.sleep(delay_ms / 1000.0)
+                sleep_with_deadline(delay_ms, deadline)
                 continue
 
             if predicate(state):
                 return state
-            time.sleep(delay_ms / 1000.0)
+            sleep_with_deadline(delay_ms, deadline)
 
         if last_error is not None:
             raise ValidationError(f"Timed out waiting for state: {description}. Last retryable error: {last_error}")
@@ -163,6 +189,25 @@ class ApiClient:
                 retryable=bool(error_payload.get("retryable", False)),
             )
         return ValidationError(f"{label} failed: {json.dumps(payload, ensure_ascii=False)}")
+
+
+def run_with_deadline_budget(client: ApiClient, operation: Callable[[], Any], deadline: float | None) -> Any:
+    original_timeout = client.timeout
+    original_retries = client.retries
+
+    try:
+        if deadline is not None:
+            remaining = remaining_seconds(deadline)
+            if remaining is None or remaining <= 0:
+                raise DeadlineExceeded("overall deadline exceeded")
+
+            client.timeout = max(0.1, min(original_timeout, remaining))
+            client.retries = 0
+
+        return operation()
+    finally:
+        client.timeout = original_timeout
+        client.retries = original_retries
 
 
 def has_text(value: Any) -> bool:
@@ -262,6 +307,7 @@ def get_invariant_snapshot(
     *,
     attempts: int = 3,
     delay_ms: int = 50,
+    deadline: float | None = None,
 ) -> tuple[dict[str, Any], list[dict[str, Any]], set[str], set[str]]:
     last_state: dict[str, Any] | None = None
     last_actions: list[dict[str, Any]] = []
@@ -271,14 +317,16 @@ def get_invariant_snapshot(
 
     for attempt in range(attempts):
         try:
-            state_before = client.get_state()
-            actions_payload = client.get_available_actions_payload()
+            state_before = run_with_deadline_budget(client, client.get_state, deadline)
+            actions_payload = run_with_deadline_budget(client, client.get_available_actions_payload, deadline)
+        except DeadlineExceeded:
+            break
         except ApiRequestError as exc:
             if not exc.retryable:
                 raise
             last_error = exc
             if attempt < attempts - 1:
-                time.sleep(delay_ms / 1000.0)
+                sleep_with_deadline(delay_ms, deadline)
             continue
 
         actions = list(actions_payload.get("actions") or [])
@@ -290,13 +338,15 @@ def get_invariant_snapshot(
             return state_before, actions, action_set, before_action_set
 
         try:
-            state_after = client.get_state()
+            state_after = run_with_deadline_budget(client, client.get_state, deadline)
+        except DeadlineExceeded:
+            break
         except ApiRequestError as exc:
             if not exc.retryable:
                 raise
             last_error = exc
             if attempt < attempts - 1:
-                time.sleep(delay_ms / 1000.0)
+                sleep_with_deadline(delay_ms, deadline)
             continue
 
         after_action_set = {
@@ -311,22 +361,22 @@ def get_invariant_snapshot(
         last_state_action_set = after_action_set
 
         if attempt < attempts - 1:
-            time.sleep(delay_ms / 1000.0)
+            sleep_with_deadline(delay_ms, deadline)
 
     if last_state is None:
         if last_error is not None:
             raise ValidationError(f"Timed out waiting for a readable invariant snapshot. Last retryable error: {last_error}")
-        last_state = client.get_state()
+        last_state = run_with_deadline_budget(client, client.get_state, deadline)
         last_state_action_set = {str(action_name) for action_name in list(last_state.get("available_actions") or []) if has_text(action_name)}
 
     try:
-        final_state = client.get_state()
-        final_actions_payload = client.get_available_actions_payload()
+        final_state = run_with_deadline_budget(client, client.get_state, deadline)
+        final_actions_payload = run_with_deadline_budget(client, client.get_available_actions_payload, deadline)
         final_actions = list(final_actions_payload.get("actions") or [])
         final_action_set = extract_action_name_set(final_actions)
         final_state_action_set = {str(action_name) for action_name in list(final_state.get("available_actions") or []) if has_text(action_name)}
         return final_state, final_actions, final_action_set, final_state_action_set
-    except ApiRequestError:
+    except (ApiRequestError, DeadlineExceeded):
         pass
 
     return last_state, last_actions, last_action_set, last_state_action_set
@@ -1134,12 +1184,14 @@ def wait_for_readable_snapshot(
     *,
     attempts: int,
     delay_ms: int,
+    deadline: float | None = None,
 ) -> tuple[dict[str, Any], list[dict[str, Any]]]:
     try:
         state, actions, _action_set, _state_action_set = get_invariant_snapshot(
             client,
             attempts=attempts,
             delay_ms=delay_ms,
+            deadline=deadline,
         )
         return state, actions
     except ApiRequestError:
@@ -1157,18 +1209,21 @@ def suite_mod_load(args: argparse.Namespace) -> dict[str, Any]:
         return health["data"]
 
     startup_attempts = max(10, int(max(args.timeout_sec, 1.0) * 4))
+    deadline = time.monotonic() + max(float(args.timeout_sec), 0.1)
     state = client.wait_for_state(
         "stable startup state",
         lambda current: current.get("screen") not in (None, "", "UNKNOWN")
         and len(list(current.get("available_actions") or [])) > 0,
         attempts=startup_attempts,
         delay_ms=250,
+        deadline=deadline,
     )
     state, actions = wait_for_readable_snapshot(
         client,
         "stable startup state snapshot",
         attempts=max(startup_attempts, 6),
         delay_ms=250,
+        deadline=deadline,
     )
     return {
         "health_ok": True,
