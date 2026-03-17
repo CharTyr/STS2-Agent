@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import os
+import threading
 import time
 from dataclasses import dataclass
 from typing import Any, Callable
@@ -100,6 +101,8 @@ def _debug_tools_enabled() -> bool:
 
 _GAME_DATA_CACHE: dict[str, Any] | None = None
 _GAME_DATA_INDEXES: dict[str, dict[str, Any]] = {}
+_GAME_DATA_CACHE_LOCK = threading.Lock()
+_GAME_DATA_INDEXES_LOCK = threading.Lock()
 
 # Default field sets per scene/context. These are used by `get_relevant_game_data` to
 # minimize token usage by returning only the most relevant fields.
@@ -186,27 +189,40 @@ def _load_game_data() -> dict[str, Any]:
     if _GAME_DATA_CACHE is not None:
         return _GAME_DATA_CACHE
 
-    data_dir = _get_game_data_dir()
-    if not os.path.isdir(data_dir):
-        raise RuntimeError(f"Game data directory not found: {data_dir!r}.")
+    with _GAME_DATA_CACHE_LOCK:
+        if _GAME_DATA_CACHE is not None:
+            return _GAME_DATA_CACHE
 
-    data: dict[str, Any] = {}
-    for filename in sorted(os.listdir(data_dir)):
-        path = os.path.join(data_dir, filename)
-        if os.path.isdir(path):
-            continue
-        if not filename.lower().endswith(JSON_FILE_EXTENSION):
-            continue
+        data_dir = _get_game_data_dir()
+        if not os.path.isdir(data_dir):
+            raise RuntimeError(f"Game data directory not found: {data_dir!r}.")
 
-        key = filename[:-JSON_FILE_EXTENSION_LENGTH]
-        try:
-            with open(path, "r", encoding="utf-8") as f:
-                data[key] = json.load(f)
-        except Exception as exc:
-            raise RuntimeError(f"Failed to load game data file {path!r}: {exc}") from exc
+        data: dict[str, Any] = {}
+        for filename in sorted(os.listdir(data_dir)):
+            path = os.path.join(data_dir, filename)
+            if os.path.isdir(path):
+                continue
+            if not filename.lower().endswith(JSON_FILE_EXTENSION):
+                continue
 
-    _GAME_DATA_CACHE = data
-    return data
+            key = filename[:-JSON_FILE_EXTENSION_LENGTH]
+            try:
+                with open(path, "r", encoding="utf-8") as f:
+                    data[key] = json.load(f)
+            except Exception as exc:
+                raise RuntimeError(f"Failed to load game data file {path!r}: {exc}") from exc
+
+        _GAME_DATA_CACHE = data
+        return data
+
+
+def _add_case_insensitive_item_id(index: dict[str, Any], item_id: str, item: Any) -> None:
+    normalized = item_id.strip()
+    if not normalized:
+        return
+    index[normalized] = item
+    index[normalized.upper()] = item
+    index[normalized.lower()] = item
 
 
 def _ensure_game_data_index(collection: str) -> dict[str, Any]:
@@ -215,44 +231,77 @@ def _ensure_game_data_index(collection: str) -> dict[str, Any]:
     if collection in _GAME_DATA_INDEXES:
         return _GAME_DATA_INDEXES[collection]
 
-    data = _load_game_data()
-    if collection not in data:
-        raise KeyError(f"Unknown game data collection: {collection}")
+    with _GAME_DATA_INDEXES_LOCK:
+        if collection in _GAME_DATA_INDEXES:
+            return _GAME_DATA_INDEXES[collection]
 
-    items = data[collection]
-    if isinstance(items, dict):
-        # Already keyed by id
-        index = items
-    elif isinstance(items, list):
-        index = {}
-        for item in items:
-            item_id = ""
-            for key in KNOWN_ITEM_ID_KEYS:
-                candidate = item.get(key)
-                if candidate:
-                    item_id = str(candidate).strip()
-                    break
-            if not item_id:
-                continue
-            index[item_id] = item
-            index[item_id.upper()] = item
-            index[item_id.lower()] = item
-    else:
-        raise TypeError(f"Unsupported data type for collection {collection!r}: {type(items)}")
+        data = _load_game_data()
+        if collection not in data:
+            raise KeyError(f"Unknown game data collection: {collection}")
 
-    _GAME_DATA_INDEXES[collection] = index
-    return index
+        items = data[collection]
+        if isinstance(items, dict):
+            index = {}
+            for raw_id, item in items.items():
+                _add_case_insensitive_item_id(index=index, item_id=str(raw_id), item=item)
+        elif isinstance(items, list):
+            index = {}
+            for item in items:
+                item_id = ""
+                for key in KNOWN_ITEM_ID_KEYS:
+                    candidate = item.get(key)
+                    if candidate:
+                        item_id = str(candidate).strip()
+                        break
+                if not item_id:
+                    continue
+                _add_case_insensitive_item_id(index=index, item_id=item_id, item=item)
+        else:
+            raise TypeError(f"Unsupported data type for collection {collection!r}: {type(items)}")
+
+        _GAME_DATA_INDEXES[collection] = index
+        return index
 
 
 def _lookup_game_data_item(index: dict[str, Any], item_id: str) -> Any:
     return index.get(item_id) or index.get(item_id.upper()) or index.get(item_id.lower())
 
 
-def get_game_data_items_fields(collection: str, item_ids: str, fields: str) -> dict[str, Any]:
+def _build_game_data_tool_error(collection: str, exc: Exception) -> dict[str, Any]:
+    if isinstance(exc, KeyError):
+        available_collections = sorted(_GAME_DATA_CACHE.keys()) if _GAME_DATA_CACHE else []
+        return {
+            "error": {
+                "type": "unknown_collection",
+                "collection": collection,
+                "message": str(exc),
+                "available_collections": available_collections,
+            }
+        }
+
+    if isinstance(exc, RuntimeError):
+        return {
+            "error": {
+                "type": "game_data_unavailable",
+                "collection": collection,
+                "message": str(exc),
+            }
+        }
+
+    return {
+        "error": {
+            "type": "invalid_game_data",
+            "collection": collection,
+            "message": str(exc),
+        }
+    }
+
+
+def get_game_data_items_fields(collection: str, item_ids: str, fields: str | None) -> dict[str, Any]:
     """Return multiple items with selected top-level fields only.
 
     - `item_ids`: comma-separated ids.
-    - `fields`: comma-separated top-level keys.
+    - `fields`: comma-separated top-level keys. Empty or `None` returns full items.
     """
     if not item_ids:
         return {}
@@ -337,11 +386,12 @@ def _register_legacy_action_tools(mcp: FastMCP, sts2: Sts2Client) -> None:
 
 
 def _detect_scene_from_screen(screen: str) -> str:
-    if any(keyword in screen for keyword in COMBAT_SCREEN_KEYWORDS) or screen in COMBAT_SCREEN_NAMES:
+    normalized = (screen or "").lower()
+    if any(keyword in normalized for keyword in COMBAT_SCREEN_KEYWORDS) or normalized in COMBAT_SCREEN_NAMES:
         return SCENE_COMBAT
-    if any(keyword in screen for keyword in SHOP_SCREEN_KEYWORDS):
+    if any(keyword in normalized for keyword in SHOP_SCREEN_KEYWORDS):
         return SCENE_SHOP
-    if any(keyword in screen for keyword in EVENT_SCREEN_KEYWORDS) or screen in EVENT_SCREEN_NAMES:
+    if any(keyword in normalized for keyword in EVENT_SCREEN_KEYWORDS) or normalized in EVENT_SCREEN_NAMES:
         return SCENE_EVENT
     return SCENE_MENU
 
@@ -460,8 +510,11 @@ def create_server(client: Sts2Client | None = None, tool_profile: str | None = N
         if not item_id:
             return None
 
-        index = _ensure_game_data_index(collection)
-        return _lookup_game_data_item(index=index, item_id=item_id)
+        try:
+            index = _ensure_game_data_index(collection)
+            return _lookup_game_data_item(index=index, item_id=item_id)
+        except (KeyError, RuntimeError, TypeError) as exc:
+            return _build_game_data_tool_error(collection=collection, exc=exc)
 
     @mcp.tool
     def get_game_data_items(collection: str, item_ids: str) -> dict[str, Any]:
@@ -469,12 +522,15 @@ def create_server(client: Sts2Client | None = None, tool_profile: str | None = N
         if not item_ids:
             return {}
 
-        index = _ensure_game_data_index(collection)
-        ids = [s.strip() for s in item_ids.split(ITEM_IDS_SEPARATOR) if s.strip()]
-        result: dict[str, Any] = {}
-        for i in ids:
-            result[i] = _lookup_game_data_item(index=index, item_id=i)
-        return result
+        try:
+            index = _ensure_game_data_index(collection)
+            ids = [s.strip() for s in item_ids.split(ITEM_IDS_SEPARATOR) if s.strip()]
+            result: dict[str, Any] = {}
+            for i in ids:
+                result[i] = _lookup_game_data_item(index=index, item_id=i)
+            return result
+        except (KeyError, RuntimeError, TypeError) as exc:
+            return _build_game_data_tool_error(collection=collection, exc=exc)
 
     @mcp.tool
     def get_relevant_game_data(collection: str, item_ids: str) -> dict[str, Any]:
@@ -490,20 +546,21 @@ def create_server(client: Sts2Client | None = None, tool_profile: str | None = N
         """
         # Auto-detect current scene from game state
         state = sts2.get_state()
-        screen = state.get("screen", "").lower()
-
+        screen = state.get("screen", "")
         scene = _detect_scene_from_screen(screen)
+        try:
+            suggested_fields = _SCENE_FIELD_SETS.get(scene, {}).get(collection)
+            if not suggested_fields:
+                # Fallback to basic query if no scene-specific fields defined
+                return get_game_data_items(collection=collection, item_ids=item_ids)
 
-        suggested_fields = _SCENE_FIELD_SETS.get(scene, {}).get(collection)
-        if not suggested_fields:
-            # Fallback to basic query if no scene-specific fields defined
-            return get_game_data_items(collection=collection, item_ids=item_ids)
-
-        return get_game_data_items_fields(
-            collection=collection,
-            item_ids=item_ids,
-            fields=",".join(suggested_fields),
-        )
+            return get_game_data_items_fields(
+                collection=collection,
+                item_ids=item_ids,
+                fields=",".join(suggested_fields),
+            )
+        except (KeyError, RuntimeError, TypeError) as exc:
+            return _build_game_data_tool_error(collection=collection, exc=exc)
 
     @mcp.tool
     def wait_for_event(event_names: str = "", timeout_seconds: float = 20.0) -> dict[str, Any]:
