@@ -9,6 +9,16 @@ https://github.com/user-attachments/assets/89353468-a299-4315-9516-e520bcbfbd4b
 - `STS2AIAgent` Mod：把游戏状态和操作暴露为本地 HTTP API。
 - `mcp_server`：把本地 HTTP API 包装成 MCP Server，供支持 MCP 的客户端直接调用。
 
+## 分支说明
+
+当前 `master` 是原版主线分支，对应游戏内 Mod 名称 `STS2 AI Agent`。
+
+- Mod 文件名：`STS2AIAgent.dll` / `STS2AIAgent.pck`
+- 默认健康检查地址：`http://127.0.0.1:8080/health`
+- 适合单独安装或作为后续合并基线
+
+如果你想安装可与原版并存的实验版桌面托管台，请切到 `codex/in-game-agent-panel-exp` 分支；该分支使用独立的 Mod 标识、目录和端口。
+
 
 ## 你会下载到什么
 
