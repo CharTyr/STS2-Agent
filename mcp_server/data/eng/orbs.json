@@ -1,0 +1,32 @@
+[
+  {
+    "id": "DARK_ORB",
+    "name": "Dark",
+    "description": "[gold]Passive:[/gold] At the end of turn, increase this Orb's damage by [blue][Passive][/blue].\n[gold]Evoke:[/gold] Deal [blue][Evoke][/blue] damage to the enemy with the lowest HP.",
+    "description_raw": "[gold]Passive:[/gold] At the end of turn, increase this Orb's damage by [blue]{Passive}[/blue].\n[gold]Evoke:[/gold] Deal [blue]{Evoke}[/blue] damage to the enemy with the lowest HP."
+  },
+  {
+    "id": "FROST_ORB",
+    "name": "Frost",
+    "description": "[gold]Passive:[/gold] At the end of turn, gain [blue][Passive][/blue] [gold]Block[/gold].\n[gold]Evoke:[/gold] Gain [blue][Evoke][/blue] [gold]Block[/gold].",
+    "description_raw": "[gold]Passive:[/gold] At the end of turn, gain [blue]{Passive}[/blue] [gold]Block[/gold].\n[gold]Evoke:[/gold] Gain [blue]{Evoke}[/blue] [gold]Block[/gold]."
+  },
+  {
+    "id": "GLASS_ORB",
+    "name": "Glass",
+    "description": "[gold]Passive:[/gold] At the end of turn, deal [blue][Passive][/blue] damage to ALL enemies and reduce this orb's value by [blue]1[/blue].\n[gold]Evoke:[/gold] Deal [blue][Evoke][/blue] damage to ALL enemies.",
+    "description_raw": "[gold]Passive:[/gold] At the end of turn, deal [blue]{Passive}[/blue] damage to ALL enemies and reduce this orb's value by [blue]1[/blue].\n[gold]Evoke:[/gold] Deal [blue]{Evoke}[/blue] damage to ALL enemies."
+  },
+  {
+    "id": "LIGHTNING_ORB",
+    "name": "Lightning",
+    "description": "[gold]Passive:[/gold] At the end of turn, deal [blue][Passive][/blue] damage to a random enemy.\n[gold]Evoke:[/gold] Deal [blue][Evoke][/blue] damage to a random enemy.",
+    "description_raw": "[gold]Passive:[/gold] At the end of turn, deal [blue]{Passive}[/blue] damage to a random enemy.\n[gold]Evoke:[/gold] Deal [blue]{Evoke}[/blue] damage to a random enemy."
+  },
+  {
+    "id": "PLASMA_ORB",
+    "name": "Plasma",
+    "description": "[gold]Passive:[/gold] At the start of turn,\ngain [energy:1].\n[gold]Evoke:[/gold] Gain [energy:2].\nPlasma is unaffected by [gold]Focus[/gold].",
+    "description_raw": "[gold]Passive:[/gold] At the start of turn,\ngain {energyPrefix:energyIcons(1)}.\n[gold]Evoke:[/gold] Gain {energyPrefix:energyIcons(2)}.\nPlasma is unaffected by [gold]Focus[/gold]."
+  }
+]

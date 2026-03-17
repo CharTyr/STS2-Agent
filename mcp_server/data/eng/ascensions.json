@@ -1,0 +1,68 @@
+[
+  {
+    "id": "LEVEL_00",
+    "level": 0,
+    "name": "No Ascension",
+    "description": "Play without any Ascension modifiers."
+  },
+  {
+    "id": "LEVEL_01",
+    "level": 1,
+    "name": "Swarming Elites",
+    "description": "[gold]Elites[/gold] spawn more often."
+  },
+  {
+    "id": "LEVEL_02",
+    "level": 2,
+    "name": "Weary Traveler",
+    "description": "Ancients only heal [blue]80%[/blue] of your missing HP."
+  },
+  {
+    "id": "LEVEL_03",
+    "level": 3,
+    "name": "Poverty",
+    "description": "Enemies and Treasure Chests drop [blue]25%[/blue] less [gold]Gold[/gold]."
+  },
+  {
+    "id": "LEVEL_04",
+    "level": 4,
+    "name": "Tight Belt",
+    "description": "Start each run with 1 less potion slot."
+  },
+  {
+    "id": "LEVEL_05",
+    "level": 5,
+    "name": "Ascender's Bane",
+    "description": "Start each run [red]Cursed[/red]."
+  },
+  {
+    "id": "LEVEL_06",
+    "level": 6,
+    "name": "Gloom",
+    "description": "Less Rest Sites."
+  },
+  {
+    "id": "LEVEL_07",
+    "level": 7,
+    "name": "Scarcity",
+    "description": "Rare and Upgraded cards appear less often."
+  },
+  {
+    "id": "LEVEL_08",
+    "level": 8,
+    "name": "Tough Enemies",
+    "description": "All enemies are harder to kill."
+  },
+  {
+    "id": "LEVEL_09",
+    "level": 9,
+    "name": "Deadly Enemies",
+    "description": "All enemies have deadlier attacks."
+  },
+  {
+    "id": "LEVEL_10",
+    "level": 10,
+    "name": "Double Boss",
+    "description": "Fight two bosses at the end of Act 3."
+  }
+]
