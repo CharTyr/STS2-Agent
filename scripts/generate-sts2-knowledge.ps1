@@ -1,8 +1,16 @@
 param(
-    [string]$ProjectRoot = "C:/Users/chart/Documents/project/sp"
+    [string]$ProjectRoot = ""
 )
 
 $ErrorActionPreference = "Stop"
+$scriptRoot = $PSScriptRoot
+
+if ([string]::IsNullOrWhiteSpace($ProjectRoot)) {
+    $ProjectRoot = (Resolve-Path (Join-Path $scriptRoot "..")).Path
+}
+else {
+    $ProjectRoot = (Resolve-Path $ProjectRoot).Path
+}
 
 $sourceRoot = Join-Path $ProjectRoot "extraction/decompiled"
 $outputRoot = Join-Path $ProjectRoot "docs/game-knowledge"

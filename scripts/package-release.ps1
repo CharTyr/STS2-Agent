@@ -1,15 +1,26 @@
 param(
-    [string]$ProjectRoot = "C:/Users/chart/Documents/project/sp",
+    [string]$ProjectRoot = "",
     [string]$Configuration = "Release",
     [string]$OutputRoot = ""
 )
 
 $ErrorActionPreference = "Stop"
+$scriptRoot = $PSScriptRoot
 
 function Resolve-FullPath {
     param([string]$PathValue)
 
     return [System.IO.Path]::GetFullPath($PathValue)
+}
+
+function Resolve-ProjectRoot {
+    param([string]$InputRoot)
+
+    if ([string]::IsNullOrWhiteSpace($InputRoot)) {
+        return (Resolve-Path (Join-Path $scriptRoot "..")).Path
+    }
+
+    return (Resolve-Path $InputRoot).Path
 }
 
 function Get-UniquePath {
@@ -44,7 +55,7 @@ function Get-UniquePath {
     }
 }
 
-$ProjectRoot = Resolve-FullPath -PathValue $ProjectRoot
+$ProjectRoot = Resolve-ProjectRoot -InputRoot $ProjectRoot
 
 if ([string]::IsNullOrWhiteSpace($OutputRoot)) {
     $OutputRoot = Join-Path $ProjectRoot "build/release"

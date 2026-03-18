@@ -13,8 +13,8 @@ This wrapper lets a remote host reach the local Windows STS2 game through Tailsc
 Use the PowerShell launcher inside `sp/scripts`:
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File "C:/Users/chart/Documents/project/sp/scripts/serve-sts2-network-mcp.ps1" `
-  -SpRepoRoot "C:/Users/chart/Documents/project/sp" `
+powershell -ExecutionPolicy Bypass -File "<repo-root>/scripts/serve-sts2-network-mcp.ps1" `
+  -SpRepoRoot "<repo-root>" `
   -BindHost "0.0.0.0" `
   -Port 8765 `
   -Transport "streamable-http" `
@@ -32,8 +32,8 @@ The wrapper exposes:
 You can also run the server directly:
 
 ```powershell
-cd "C:/Users/chart/Documents/project/sp/mcp_server"
-$env:PYTHONPATH = "C:/Users/chart/Documents/project/sp/mcp_server/src"
+cd "<repo-root>/mcp_server"
+$env:PYTHONPATH = "<repo-root>/mcp_server/src"
 python -m sts2_mcp.network_server --host 0.0.0.0 --port 8765 --transport streamable-http --path /mcp --tool-profile guided --bearer-token "replace-with-a-long-random-token"
 ```
 

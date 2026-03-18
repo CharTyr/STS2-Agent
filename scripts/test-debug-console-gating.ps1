@@ -3,11 +3,19 @@ param(
     [int]$Attempts = 40,
     [int]$DelaySeconds = 2,
     [string]$Command = "help",
-    [string]$ProjectRoot = "C:/Users/chart/Documents/project/sp",
+    [string]$ProjectRoot = "",
     [switch]$EnableDebugActions
 )
 
 $ErrorActionPreference = "Stop"
+$scriptRoot = $PSScriptRoot
+
+if ([string]::IsNullOrWhiteSpace($ProjectRoot)) {
+    $ProjectRoot = (Resolve-Path (Join-Path $scriptRoot "..")).Path
+}
+else {
+    $ProjectRoot = (Resolve-Path $ProjectRoot).Path
+}
 
 function Wait-ForHealth {
     param(

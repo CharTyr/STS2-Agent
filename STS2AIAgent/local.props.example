@@ -1,5 +1,5 @@
 <Project>
   <PropertyGroup>
-    <Sts2DataDir>C:/Program Files (x86)/Steam/steamapps/common/Slay the Spire 2/data_sts2_windows_x86_64</Sts2DataDir>
+    <Sts2DataDir>/absolute/path/to/Slay the Spire 2 data directory</Sts2DataDir>
   </PropertyGroup>
 </Project>

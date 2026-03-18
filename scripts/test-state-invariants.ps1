@@ -543,6 +543,64 @@ if ($state.in_combat -and $null -ne $state.combat) {
     $combatEnemyCount = @($state.combat.enemies).Count
     $combatPlayerCount = @($state.combat.players).Count
 
+    foreach ($enemy in @($state.combat.enemies)) {
+        if ($null -eq $enemy) {
+            continue
+        }
+
+        if (-not [string]::IsNullOrWhiteSpace([string]$enemy.intent) -and
+            -not [string]::IsNullOrWhiteSpace([string]$enemy.move_id) -and
+            [string]$enemy.intent -ne [string]$enemy.move_id) {
+            $failures.Add("combat.enemies[$($enemy.index)] intent should stay aligned with move_id for backward compatibility")
+        }
+
+        if ($null -eq $enemy.intents) {
+            $failures.Add("combat.enemies[$($enemy.index)] should expose intents[]")
+            continue
+        }
+
+        foreach ($intent in @($enemy.intents)) {
+            if ($null -eq $intent) {
+                continue
+            }
+
+            $intentType = [string]$intent.intent_type
+            if ([string]::IsNullOrWhiteSpace($intentType)) {
+                $failures.Add("combat.enemies[$($enemy.index)].intents[] entries must expose intent_type")
+                continue
+            }
+
+            if (@("Attack", "DeathBlow") -contains $intentType) {
+                if ($null -eq $intent.damage -or $null -eq $intent.hits -or $null -eq $intent.total_damage) {
+                    $failures.Add("combat.enemies[$($enemy.index)].intents[] attack payloads must expose damage, hits, and total_damage")
+                    continue
+                }
+
+                $damageValue = [int]$intent.damage
+                $hitsValue = [int]$intent.hits
+                $totalDamageValue = [int]$intent.total_damage
+
+                if ($damageValue -lt 0) {
+                    $failures.Add("combat.enemies[$($enemy.index)].intents[] attack damage must not be negative")
+                }
+
+                if ($hitsValue -lt 1) {
+                    $failures.Add("combat.enemies[$($enemy.index)].intents[] attack hits must be at least 1")
+                }
+
+                if ($totalDamageValue -ne ($damageValue * $hitsValue)) {
+                    $failures.Add("combat.enemies[$($enemy.index)].intents[] attack total_damage must equal damage * hits")
+                }
+            }
+
+            if ($intentType -eq "StatusCard") {
+                if ($null -eq $intent.status_card_count -or [int]$intent.status_card_count -le 0) {
+                    $failures.Add("combat.enemies[$($enemy.index)].intents[] StatusCard payloads must expose a positive status_card_count")
+                }
+            }
+        }
+    }
+
     if (@($state.combat.players).Count -gt 0) {
         Test-PlayerSummaries -Failures $failures -Players @($state.combat.players) -Label "combat.players"
     }

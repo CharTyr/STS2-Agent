@@ -21,6 +21,7 @@ using MegaCrit.Sts2.Core.Models.Relics;
 using MegaCrit.Sts2.Core.Logging;
 using MegaCrit.Sts2.Core.Multiplayer.Game;
 using MegaCrit.Sts2.Core.Multiplayer.Game.Lobby;
+using MegaCrit.Sts2.Core.MonsterMoves.Intents;
 using MegaCrit.Sts2.Core.Nodes;
 using MegaCrit.Sts2.Core.Nodes.Cards.Holders;
 using MegaCrit.Sts2.Core.Nodes.Combat;
@@ -50,7 +51,7 @@ namespace STS2AIAgent.Game;
 
 internal static class GameStateService
 {
-    private const int StateVersion = 5;
+    private const int StateVersion = 6;
     private const int AgentViewVersion = 1;
 
     public static GameStatePayload BuildStatePayload()
@@ -896,7 +897,15 @@ internal static class GameStateService
         }
 
         var singleplayerButton = GetMainMenuSingleplayerButton(mainMenu);
-        return singleplayerButton != null && singleplayerButton.IsVisibleInTree() && singleplayerButton.IsEnabled;
+        if (singleplayerButton != null && singleplayerButton.IsVisibleInTree() && singleplayerButton.IsEnabled)
+        {
+            return true;
+        }
+
+        // Some main-menu states still allow the singleplayer submenu to open even when the
+        // button has not become visible in the scene tree. If there is no active run flow to
+        // continue or abandon, prefer exposing character select instead of hard-blocking.
+        return !CanContinueRun(currentScreen) && !CanAbandonRun(currentScreen);
     }
 
     public static bool CanOpenTimeline(IScreenContext? currentScreen)
@@ -1819,6 +1828,7 @@ internal static class GameStateService
                 energy = me.PlayerCombatState.Energy,
                 stars = me.PlayerCombatState.Stars,
                 focus = me.Creature.GetPowerAmount<FocusPower>(),
+                powers = BuildCreaturePowerPayloads(me.Creature),
                 base_orb_slots = me.BaseOrbSlotCount,
                 orb_capacity = orbQueue.Capacity,
                 empty_orb_slots = Math.Max(0, orbQueue.Capacity - orbs.Count),
@@ -1853,13 +1863,7 @@ internal static class GameStateService
             max_energy = player.MaxEnergy,
             base_orb_slots = player.BaseOrbSlotCount,
             deck = player.Deck.Cards.Select((card, index) => BuildDeckCardPayload(card, index)).ToArray(),
-            relics = player.Relics.Select((relic, index) => new RunRelicPayload
-            {
-                index = index,
-                relic_id = relic.Id.Entry,
-                name = relic.Title.GetFormattedText(),
-                is_melted = relic.IsMelted
-            }).ToArray(),
+            relics = player.Relics.Select((relic, index) => BuildRunRelicPayload(relic, index)).ToArray(),
             players = runState!.Players
                 .OrderBy(runState.GetPlayerSlotIndex)
                 .Select(otherPlayer => BuildRunPlayerSummaryPayload(runState, otherPlayer, connectedPlayerIds, player.NetId))
@@ -3072,7 +3076,9 @@ internal static class GameStateService
                         title = SafeReadString(() => opt.Title?.GetFormattedText()),
                         description = SafeReadString(() => opt.Description?.GetFormattedText()),
                         is_locked = SafeReadBool(() => opt.IsLocked),
-                        is_proceed = SafeReadBool(() => opt.IsProceed)
+                        is_proceed = SafeReadBool(() => opt.IsProceed),
+                        will_kill_player = GetEventOptionWillKillPlayer(eventModel, opt),
+                        has_relic_preview = GetReflectedProperty(opt, "Relic") != null
                     });
                 }
             }
@@ -3362,6 +3368,9 @@ internal static class GameStateService
 
     private static CombatEnemyPayload BuildEnemyPayload(Creature enemy, int index)
     {
+        var moveId = enemy.Monster?.NextMove?.Id;
+        var intents = BuildEnemyIntentPayloads(enemy);
+
         return new CombatEnemyPayload
         {
             index = index,
@@ -3372,8 +3381,140 @@ internal static class GameStateService
             block = enemy.Block,
             is_alive = enemy.IsAlive,
             is_hittable = enemy.IsHittable,
-            intent = enemy.Monster?.NextMove?.Id
+            powers = BuildCreaturePowerPayloads(enemy),
+            intent = moveId,
+            move_id = moveId,
+            intents = intents
         };
+    }
+
+    private static CombatPowerPayload[] BuildCreaturePowerPayloads(Creature creature)
+    {
+        var powersValue = creature.GetType().GetProperty("Powers")?.GetValue(creature);
+        if (powersValue is not System.Collections.IEnumerable powersEnumerable)
+        {
+            return Array.Empty<CombatPowerPayload>();
+        }
+
+        var result = new List<CombatPowerPayload>();
+        var index = 0;
+
+        foreach (var power in powersEnumerable)
+        {
+            if (power == null)
+            {
+                continue;
+            }
+
+            var powerType = power.GetType();
+            var idEntry = SafeReadString(() =>
+            {
+                var idValue = powerType.GetProperty("Id")?.GetValue(power);
+                if (idValue == null)
+                {
+                    return string.Empty;
+                }
+
+                return idValue.GetType().GetProperty("Entry")?.GetValue(idValue)?.ToString();
+            });
+
+            var title = SafeReadString(() =>
+            {
+                var titleValue = powerType.GetProperty("Title")?.GetValue(power);
+                if (titleValue == null)
+                {
+                    return string.Empty;
+                }
+
+                return titleValue.GetType().GetMethod("GetFormattedText")?.Invoke(titleValue, null)?.ToString();
+            });
+
+            var amount = GetReflectedNullableIntProperty(power, "Amount");
+
+            var isDebuff = string.Equals(
+                GetReflectedProperty(power, "TypeForCurrentAmount")?.ToString()
+                    ?? GetReflectedProperty(power, "Type")?.ToString(),
+                "Debuff",
+                StringComparison.Ordinal);
+
+            result.Add(new CombatPowerPayload
+            {
+                index = index,
+                power_id = string.IsNullOrWhiteSpace(idEntry) ? "unknown_power" : idEntry,
+                name = string.IsNullOrWhiteSpace(title) ? idEntry : title,
+                amount = amount,
+                is_debuff = isDebuff
+            });
+            index += 1;
+        }
+
+        return result.ToArray();
+    }
+
+    private static CombatEnemyIntentPayload[] BuildEnemyIntentPayloads(Creature enemy)
+    {
+        var nextMove = enemy.Monster?.NextMove;
+        if (nextMove == null)
+        {
+            return Array.Empty<CombatEnemyIntentPayload>();
+        }
+
+        var targets = enemy.CombatState?.Players
+            .Select(player => player.Creature)
+            .ToArray() ?? Array.Empty<Creature>();
+
+        return nextMove.Intents
+            .Select((intent, index) => BuildEnemyIntentPayload(intent, enemy, targets, index))
+            .ToArray();
+    }
+
+    private static CombatEnemyIntentPayload BuildEnemyIntentPayload(
+        AbstractIntent intent,
+        Creature owner,
+        Creature[] targets,
+        int index)
+    {
+        int? damage = null;
+        int? hits = null;
+        int? totalDamage = null;
+        int? statusCardCount = null;
+
+        if (intent is AttackIntent attackIntent)
+        {
+            damage = SafeReadNullableInt(() => attackIntent.GetSingleDamage(targets, owner));
+            hits = SafeReadNullableInt(() => Math.Max(1, attackIntent.Repeats));
+            totalDamage = SafeReadNullableInt(() => attackIntent.GetTotalDamage(targets, owner));
+        }
+
+        if (intent is StatusIntent statusIntent)
+        {
+            statusCardCount = SafeReadNullableInt(() => statusIntent.CardCount);
+        }
+
+        var label = SafeReadString(() => intent.GetIntentLabel(targets, owner).GetFormattedText(), string.Empty);
+
+        return new CombatEnemyIntentPayload
+        {
+            index = index,
+            intent_type = intent.IntentType.ToString(),
+            label = string.IsNullOrWhiteSpace(label) ? null : label,
+            damage = damage,
+            hits = hits,
+            total_damage = totalDamage,
+            status_card_count = statusCardCount
+        };
+    }
+
+    private static int? SafeReadNullableInt(Func<int> getter)
+    {
+        try
+        {
+            return getter();
+        }
+        catch
+        {
+            return null;
+        }
     }
 
     private static CombatOrbPayload BuildCombatOrbPayload(OrbModel orb, int slotIndex)
@@ -3540,6 +3681,19 @@ internal static class GameStateService
         };
     }
 
+    private static RunRelicPayload BuildRunRelicPayload(RelicModel relic, int index)
+    {
+        return new RunRelicPayload
+        {
+            index = index,
+            relic_id = relic.Id.Entry,
+            name = relic.Title.GetFormattedText(),
+            description = GetDynamicFormattedTextProperty(relic, "DynamicDescription", "Description"),
+            stack = GetReflectedNullableIntProperty(relic, "Amount"),
+            is_melted = relic.IsMelted
+        };
+    }
+
     private static RunPotionPayload BuildRunPotionPayload(
         IScreenContext? currentScreen,
         CombatState? combatState,
@@ -3556,6 +3710,8 @@ internal static class GameStateService
             index = index,
             potion_id = potion?.Id.Entry,
             name = potion?.Title.GetFormattedText(),
+            description = potion != null ? GetDynamicFormattedTextProperty(potion, "DynamicDescription", "Description") : null,
+            rarity = potion != null ? GetReflectedStringProperty(potion, "Rarity") : null,
             occupied = potion != null,
             usage = potion?.Usage.ToString(),
             target_type = potion?.TargetType.ToString(),
@@ -3566,6 +3722,101 @@ internal static class GameStateService
             can_use = IsPotionUsable(currentScreen, combatState, player, potion),
             can_discard = IsPotionDiscardable(player, potion)
         };
+    }
+
+    private static object? GetReflectedProperty(object target, string propertyName)
+    {
+        try
+        {
+            return target.GetType().GetProperty(propertyName)?.GetValue(target);
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
+    private static string? GetReflectedStringProperty(object target, string propertyName)
+    {
+        var value = GetReflectedProperty(target, propertyName);
+        return value?.ToString();
+    }
+
+    private static string? GetReflectedFormattedTextProperty(object target, string propertyName)
+    {
+        var value = GetReflectedProperty(target, propertyName);
+        if (value == null)
+        {
+            return null;
+        }
+
+        try
+        {
+            return value.GetType().GetMethod("GetFormattedText")?.Invoke(value, null)?.ToString();
+        }
+        catch
+        {
+            return value.ToString();
+        }
+    }
+
+    private static string? GetDynamicFormattedTextProperty(object target, params string[] propertyNames)
+    {
+        foreach (var propertyName in propertyNames)
+        {
+            var value = GetReflectedFormattedTextProperty(target, propertyName);
+            if (!string.IsNullOrWhiteSpace(value))
+            {
+                return value;
+            }
+        }
+
+        return null;
+    }
+
+    private static int? GetReflectedNullableIntProperty(object target, string propertyName)
+    {
+        try
+        {
+            var value = GetReflectedProperty(target, propertyName);
+            return value == null ? null : Convert.ToInt32(value);
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
+    private static bool GetReflectedBoolProperty(object target, string propertyName)
+    {
+        try
+        {
+            var value = GetReflectedProperty(target, propertyName);
+            return value != null && Convert.ToBoolean(value);
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
+    private static bool GetEventOptionWillKillPlayer(object eventModel, object option)
+    {
+        try
+        {
+            var owner = GetReflectedProperty(eventModel, "Owner");
+            var willKillPlayer = GetReflectedProperty(option, "WillKillPlayer") as Delegate;
+            if (owner == null || willKillPlayer == null)
+            {
+                return false;
+            }
+
+            return willKillPlayer.DynamicInvoke(owner) as bool? ?? false;
+        }
+        catch
+        {
+            return false;
+        }
     }
 
     private static CharacterSelectPlayerPayload BuildCharacterSelectPlayerPayload(LobbyPlayer player, ulong localPlayerId)
@@ -4691,6 +4942,10 @@ internal sealed class EventOptionPayload
     public bool is_locked { get; init; }
 
     public bool is_proceed { get; init; }
+
+    public bool will_kill_player { get; init; }
+
+    public bool has_relic_preview { get; init; }
 }
 
 internal sealed class RestPayload
@@ -4871,6 +5126,8 @@ internal sealed class CombatPlayerPayload
 
     public int focus { get; init; }
 
+    public CombatPowerPayload[] powers { get; init; } = Array.Empty<CombatPowerPayload>();
+
     public int base_orb_slots { get; init; }
 
     public int orb_capacity { get; init; }
@@ -4998,7 +5255,43 @@ internal sealed class CombatEnemyPayload
 
     public bool is_hittable { get; init; }
 
+    public CombatPowerPayload[] powers { get; init; } = Array.Empty<CombatPowerPayload>();
+
     public string? intent { get; init; }
+
+    public string? move_id { get; init; }
+
+    public CombatEnemyIntentPayload[] intents { get; init; } = Array.Empty<CombatEnemyIntentPayload>();
+}
+
+internal sealed class CombatEnemyIntentPayload
+{
+    public int index { get; init; }
+
+    public string intent_type { get; init; } = string.Empty;
+
+    public string? label { get; init; }
+
+    public int? damage { get; init; }
+
+    public int? hits { get; init; }
+
+    public int? total_damage { get; init; }
+
+    public int? status_card_count { get; init; }
+}
+
+internal sealed class CombatPowerPayload
+{
+    public int index { get; init; }
+
+    public string power_id { get; init; } = string.Empty;
+
+    public string name { get; init; } = string.Empty;
+
+    public int? amount { get; init; }
+
+    public bool is_debuff { get; init; }
 }
 
 internal sealed class RewardPayload
@@ -5133,6 +5426,10 @@ internal sealed class RunRelicPayload
 
     public string name { get; init; } = string.Empty;
 
+    public string? description { get; init; }
+
+    public int? stack { get; init; }
+
     public bool is_melted { get; init; }
 }
 
@@ -5143,6 +5440,10 @@ internal sealed class RunPotionPayload
     public string? potion_id { get; init; }
 
     public string? name { get; init; }
+
+    public string? description { get; init; }
+
+    public string? rarity { get; init; }
 
     public bool occupied { get; init; }
 

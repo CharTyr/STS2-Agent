@@ -1,11 +1,18 @@
 param(
-    [string]$ProjectRoot = "C:/Users/chart/Documents/project/sp",
+    [string]$ProjectRoot = "",
     [int]$HostApiPort = 8080,
     [int]$ClientApiPort = 8081,
     [switch]$KeepGamesRunning
 )
 
 $ErrorActionPreference = "Stop"
+
+if ([string]::IsNullOrWhiteSpace($ProjectRoot)) {
+    $ProjectRoot = (Resolve-Path (Join-Path $PSScriptRoot "..")).Path
+}
+else {
+    $ProjectRoot = (Resolve-Path $ProjectRoot).Path
+}
 
 $scriptRoot = Join-Path $ProjectRoot "scripts"
 $hostBaseUrl = "http://127.0.0.1:$HostApiPort"

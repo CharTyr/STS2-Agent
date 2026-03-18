@@ -2,7 +2,7 @@
 
 更新时间：`2026-03-11`
 
-这份文档只覆盖 Phase 5 新增的能力：角色选择、药水、阻塞弹窗、Game Over 收尾。完整基础协议仍以 [api.md](/C:/Users/chart/Documents/project/sp/docs/api.md) 为准。
+这份文档只覆盖 Phase 5 新增的能力：角色选择、药水、阻塞弹窗、Game Over 收尾。完整基础协议仍以 [api.md](../docs/api.md) 为准。
 
 ---
 

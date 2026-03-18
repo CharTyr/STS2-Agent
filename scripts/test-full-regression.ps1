@@ -1,9 +1,16 @@
 param(
-    [string]$ProjectRoot = "C:/Users/chart/Documents/project/sp",
+    [string]$ProjectRoot = "",
     [switch]$KeepGameRunning
 )
 
 $ErrorActionPreference = "Stop"
+
+if ([string]::IsNullOrWhiteSpace($ProjectRoot)) {
+    $ProjectRoot = (Resolve-Path (Join-Path $PSScriptRoot "..")).Path
+}
+else {
+    $ProjectRoot = (Resolve-Path $ProjectRoot).Path
+}
 
 $scriptRoot = Join-Path $ProjectRoot "scripts"
 $env:UV_CACHE_DIR = Join-Path $ProjectRoot ".uv-cache"
@@ -262,6 +269,11 @@ try {
     Ensure-ActiveRunMainMenu
     Invoke-RepoScript -Name "target index contracts" -FileName "test-target-index-contract.ps1"
     Invoke-RepoScript -Name "state invariants after target index contracts" -FileName "test-state-invariants.ps1"
+
+    Start-DebugSession -StepName "start debug session for enemy intents payload"
+    Ensure-ActiveRunMainMenu
+    Invoke-RepoScript -Name "enemy intents payload" -FileName "test-enemy-intents-payload.ps1"
+    Invoke-RepoScript -Name "state invariants after enemy intents payload" -FileName "test-state-invariants.ps1"
 
     Invoke-RepoScript -Name "multiplayer lobby flow" -FileName "test-multiplayer-lobby-flow.ps1"
 

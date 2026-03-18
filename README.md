@@ -35,12 +35,16 @@ mcp_server/
 scripts/
   start-mcp-stdio.ps1
   start-mcp-network.ps1
+  start-mcp-stdio.sh
+  start-mcp-network.sh
 README.md
 ```
 
 如果你只想安装 Mod，只需要 `mod/` 目录里的两个文件。
 
 ## 快速开始
+
+详细的编译与环境流程请看：[build-and-env.md](./build-and-env.md)。
 
 ### 1. 安装 Mod
 
@@ -93,10 +97,22 @@ http://127.0.0.1:8080/health
 powershell -ExecutionPolicy Bypass -c "irm https://astral.sh/uv/install.ps1 | iex"
 ```
 
+macOS 下可以直接安装：
+
+```bash
+brew install uv
+```
+
 然后在 release 解压目录中运行：
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File ".\scripts\start-mcp-stdio.ps1"
+```
+
+或者在 macOS / Linux 终端中运行：
+
+```bash
+./scripts/start-mcp-stdio.sh
 ```
 
 脚本会自动：
@@ -113,6 +129,14 @@ uv sync
 uv run sts2-mcp-server
 ```
 
+macOS / Linux 手动启动：
+
+```bash
+cd "./mcp_server"
+uv sync
+uv run sts2-mcp-server
+```
+
 #### 可选方式：HTTP MCP
 
 如果你的 MCP 客户端更适合通过网络地址连接，可以启动 HTTP 版本：
@@ -121,11 +145,92 @@ uv run sts2-mcp-server
 powershell -ExecutionPolicy Bypass -File ".\scripts\start-mcp-network.ps1"
 ```
 
+或者在 macOS / Linux 终端中运行：
+
+```bash
+./scripts/start-mcp-network.sh
+```
+
 默认监听地址：
 
 ```text
 http://127.0.0.1:8765/mcp
 ```
+
+常用参数示例：
+
+```bash
+./scripts/start-mcp-network.sh --host 127.0.0.1 --port 8765 --path /mcp --api-base-url http://127.0.0.1:8080
+```
+
+### 4. macOS 现状说明
+
+- `mcp_server` 可以在 macOS 上直接运行，只需要 `Python 3.11+` 和 `uv`。
+- `STS2AIAgent` Mod 现在也提供了一个 macOS / Linux 可用的 `bash` 构建脚本：`./scripts/build-mod.sh`。
+- macOS / Linux 现在也提供了一组对齐 Windows 的 `bash` 验证脚本，包括 `start-game-session.sh`、`test-mod-load.sh`、`test-debug-console-gating.sh`、`test-mcp-tool-profile.sh`、`test-state-invariants.sh`、`test-multiplayer-lobby-flow.sh` 和 `test-full-regression.sh`。
+- `test-full-regression.sh` 现在会串起状态不变量检查和多人大厅流，覆盖单机主流程与双进程联机场景。
+- 这些验证入口支持显式透传 `--exe-path`、`--game-root`、`--app-manifest` 和 `--app-id`，方便在非默认 Steam 安装路径下运行。
+- `start-game-session.sh` 在需要时会临时写入 `steam_appid.txt` 来启动游戏，并在脚本退出时自动恢复；如果不希望脚本管理该文件，可以传 `--skip-steam-app-id-file`。
+- 如果你已经有可用的 Mod 文件（`STS2AIAgent.dll` 和 `STS2AIAgent.pck`），macOS 侧最需要的是把游戏本地 API 跑起来，然后用这里的 `mcp_server` 连接 `http://127.0.0.1:8080`。
+
+### 5. 从源码构建 Mod
+
+#### Windows
+
+```powershell
+powershell -ExecutionPolicy Bypass -File ".\scripts\build-mod.ps1" -Configuration Release
+```
+
+#### macOS / Linux
+
+先准备：
+
+1. 安装 `dotnet` SDK。
+2. 安装 Godot 4.x，并确保命令行可用，或者知道它的可执行文件路径。
+
+macOS 常见安装方式：
+
+```bash
+brew install dotnet
+```
+
+然后运行：
+
+```bash
+./scripts/build-mod.sh --configuration Release
+```
+
+`build-mod.sh` 会自动尝试：
+
+- 解析仓库根目录
+- 探测 Steam 安装目录下的 `Slay the Spire 2`
+- 优先使用游戏自带运行时打包 `.pck`（避免 Godot 版本高于游戏导致包不兼容）
+- 探测游戏数据目录 `data_sts2_*`
+- 探测 Godot 可执行文件
+- 构建 DLL、打包 `.pck`、并复制到游戏的 `mods/` 目录
+
+如果你的本机目录不在默认位置，可以显式传参：
+
+```bash
+./scripts/build-mod.sh \
+  --configuration Release \
+  --game-root "/path/to/Slay the Spire 2" \
+  --data-dir "/path/to/data_sts2_osx_arm64" \
+  --mods-dir "/path/to/mods" \
+  --godot-exe "/Applications/Godot.app/Contents/MacOS/Godot"
+```
+
+也可以使用环境变量：
+
+```bash
+export STS2_GAME_ROOT="/path/to/Slay the Spire 2"
+export STS2_DATA_DIR="/path/to/data_sts2_osx_arm64"
+export STS2_MODS_DIR="/path/to/mods"
+export GODOT_BIN="/Applications/Godot.app/Contents/MacOS/Godot"
+./scripts/build-mod.sh --configuration Release
+```
+
+如果你更喜欢用 `local.props`，也可以从 [local.props.example](./STS2AIAgent/local.props.example) 复制一份到 `STS2AIAgent/local.props`，填入你的 `Sts2DataDir`。现在项目也支持直接读取环境变量 `STS2_DATA_DIR`。
 
 ## MCP 客户端如何接
 
@@ -263,3 +368,9 @@ http://127.0.0.1:8765/mcp
 - `STS2AIAgent/`：游戏 Mod 源码
 - `mcp_server/`：MCP Server 源码
 - `scripts/`：构建、验证和启动脚本
+
+## License
+
+This project is licensed under the GNU Affero General Public License v3.0 only (AGPL-3.0-only).
+
+If you modify this project and distribute it, or run it as a network service, you must provide the complete corresponding source code under the same license.

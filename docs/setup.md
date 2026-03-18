@@ -12,7 +12,7 @@
 
 ### 工作区
 
-- 项目根目录：`C:/Users/chart/Documents/project/sp`
+- 项目根目录：`<repo-root>`
 - 当前仓库已初始化 Git，但尚未有代码骨架
 
 ### 游戏安装
@@ -40,7 +40,7 @@
 |------|------|------|
 | `.NET Runtime` | 已安装 | 主机上存在 `6.0.16` 和 `8.0.14` 运行时 |
 | `.NET SDK` | 已安装 | `9.0.311` |
-| `python` | 已安装 | 解释器位于 `C:/Users/chart/AppData/Local/Programs/Python/Python311/python.exe` |
+| `python` | 已安装 | 解释器位于 `<python-install>/python.exe` |
 | `py` | 已安装 | `py -3.11 --version` 返回 `Python 3.11.9` |
 | `uv` | 已安装 | `0.10.9` |
 | `ilspycmd` | 已安装 | `9.1.0.7988` |
@@ -98,7 +98,7 @@ godot --version
 
 推荐将反编译结果输出到：
 
-`C:/Users/chart/Documents/project/sp/extraction/decompiled`
+`<repo-root>/extraction/decompiled`
 
 ---
 
@@ -110,7 +110,7 @@ godot --version
 - `py -3.11 --version` 能返回 `Python 3.11.9`
 - `uv --version` 能返回 `0.10.9`
 - `ilspycmd --version` 能返回 `9.1.0.7988`
-- `Godot_v4.5.1-stable_mono_win64_console.exe --version` 能返回 `4.5.1`
+- `"<godot-console-exe>" --version` 能返回 `4.5.1`
 
 ### 游戏事实验证
 
@@ -129,16 +129,17 @@ godot --version
 ### 当前可用构建命令
 
 ```powershell
-dotnet build "C:/Users/chart/Documents/project/sp/STS2AIAgent/STS2AIAgent.csproj"
+dotnet build "<repo-root>/STS2AIAgent/STS2AIAgent.csproj"
 ```
 
 ### 当前可用自动化脚本
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File "C:/Users/chart/Documents/project/sp/scripts/build-mod.ps1"
-powershell -ExecutionPolicy Bypass -File "C:/Users/chart/Documents/project/sp/scripts/test-mod-load.ps1"
+powershell -ExecutionPolicy Bypass -File "<repo-root>/scripts/build-mod.ps1"
+powershell -ExecutionPolicy Bypass -File "<repo-root>/scripts/test-mod-load.ps1"
 ```
 
+- 运行 `build-mod.ps1` 前，请先通过 `-GodotExe` 传入 Godot 控制台可执行文件，或设置 `GODOT_BIN` 环境变量
 - `build-mod.ps1` 会构建 DLL、打包最小 `.pck`，并安装到游戏 `mods/` 目录
 - `test-mod-load.ps1` 会短启动游戏并轮询 `http://127.0.0.1:8080/health`
 

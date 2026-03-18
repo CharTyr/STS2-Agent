@@ -9,6 +9,8 @@
     <RootNamespace>STS2AIAgent</RootNamespace>
     <AssemblyName>STS2AIAgent</AssemblyName>
     <GenerateAssemblyInfo>false</GenerateAssemblyInfo>
+    <Sts2DataDirFromEnv>$([System.Environment]::GetEnvironmentVariable('STS2_DATA_DIR'))</Sts2DataDirFromEnv>
+    <Sts2DataDir Condition="'$(Sts2DataDir)' == '' and '$(Sts2DataDirFromEnv)' != ''">$(Sts2DataDirFromEnv)</Sts2DataDir>
     <Sts2DataDir Condition="'$(Sts2DataDir)' == ''">C:/Program Files (x86)/Steam/steamapps/common/Slay the Spire 2/data_sts2_windows_x86_64</Sts2DataDir>
   </PropertyGroup>
 

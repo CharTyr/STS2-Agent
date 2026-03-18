@@ -1,5 +1,10 @@
 {
   "dependencies": {
     "@sammysnake/fast-context-mcp": "^1.2.0"
+  },
+  "overrides": {
+    "@sammysnake/fast-context-mcp": {
+      "yauzl": "3.2.1"
+    }
   }
 }

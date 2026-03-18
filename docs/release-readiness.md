@@ -10,16 +10,16 @@
 以下命令必须全部通过：
 
 ```powershell
-dotnet build "C:/Users/chart/Documents/project/sp/STS2AIAgent/STS2AIAgent.csproj" -c Release
-python -m py_compile "C:/Users/chart/Documents/project/sp/mcp_server/src/sts2_mcp/client.py" "C:/Users/chart/Documents/project/sp/mcp_server/src/sts2_mcp/server.py"
-cd "C:/Users/chart/Documents/project/sp/mcp_server"
+dotnet build "<repo-root>/STS2AIAgent/STS2AIAgent.csproj" -c Release
+python -m py_compile "<repo-root>/mcp_server/src/sts2_mcp/client.py" "<repo-root>/mcp_server/src/sts2_mcp/server.py"
+cd "<repo-root>/mcp_server"
 uv run python -c "from sts2_mcp.server import create_server; create_server(); print('MCP_IMPORT_OK')"
 ```
 
 也可以直接运行：
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File "C:/Users/chart/Documents/project/sp/scripts/preflight-release.ps1"
+powershell -ExecutionPolicy Bypass -File "<repo-root>/scripts/preflight-release.ps1"
 ```
 
 通过标准：
@@ -34,12 +34,13 @@ powershell -ExecutionPolicy Bypass -File "C:/Users/chart/Documents/project/sp/sc
 ### Mod 安装
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File "C:/Users/chart/Documents/project/sp/scripts/build-mod.ps1" -Configuration Release
-powershell -ExecutionPolicy Bypass -File "C:/Users/chart/Documents/project/sp/scripts/test-mod-load.ps1" -DeepCheck
+powershell -ExecutionPolicy Bypass -File "<repo-root>/scripts/build-mod.ps1" -Configuration Release
+powershell -ExecutionPolicy Bypass -File "<repo-root>/scripts/test-mod-load.ps1" -DeepCheck
 ```
 
 通过标准：
 
+- 运行 `build-mod.ps1` 前，已通过 `-GodotExe` 或 `GODOT_BIN` 提供 Godot 控制台可执行文件
 - `STS2AIAgent.dll` 已复制到游戏 `mods/` 目录
 - `STS2AIAgent.pck` 已复制到游戏 `mods/` 目录
 - 启动游戏后 `/health`、`/state`、`/actions/available` 都能成功返回
@@ -47,7 +48,7 @@ powershell -ExecutionPolicy Bypass -File "C:/Users/chart/Documents/project/sp/sc
 ### MCP 启动
 
 ```powershell
-cd "C:/Users/chart/Documents/project/sp/mcp_server"
+cd "<repo-root>/mcp_server"
 uv sync
 uv run sts2-mcp-server
 ```
@@ -65,8 +66,8 @@ uv run sts2-mcp-server
 验证命令：
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File "C:/Users/chart/Documents/project/sp/scripts/test-debug-console-gating.ps1"
-powershell -ExecutionPolicy Bypass -File "C:/Users/chart/Documents/project/sp/scripts/test-debug-console-gating.ps1" -EnableDebugActions
+powershell -ExecutionPolicy Bypass -File "<repo-root>/scripts/test-debug-console-gating.ps1"
+powershell -ExecutionPolicy Bypass -File "<repo-root>/scripts/test-debug-console-gating.ps1" -EnableDebugActions
 ```
 
 通过标准：
@@ -230,13 +231,13 @@ powershell -ExecutionPolicy Bypass -File "C:/Users/chart/Documents/project/sp/sc
 
 以下文档必须与代码一致：
 
-- [api.md](/Users/chart/Documents/project/sp/docs/api.md)
-- [roadmap-current.md](/Users/chart/Documents/project/sp/docs/roadmap-current.md)
-- [phase-4c-shop.md](/Users/chart/Documents/project/sp/docs/phase-4c-shop.md)
-- [phase-5-full-chain.md](/Users/chart/Documents/project/sp/docs/phase-5-full-chain.md)
-- [phase-6-validation-template.md](/Users/chart/Documents/project/sp/docs/phase-6-validation-template.md)
-- [phase-6-validation-2026-03-11.md](/Users/chart/Documents/project/sp/docs/phase-6-validation-2026-03-11.md)
-- [mcp_server/README.md](/Users/chart/Documents/project/sp/mcp_server/README.md)
+- [api.md](../docs/api.md)
+- [roadmap-current.md](../docs/roadmap-current.md)
+- [phase-4c-shop.md](../docs/phase-4c-shop.md)
+- [phase-5-full-chain.md](../docs/phase-5-full-chain.md)
+- [phase-6-validation-template.md](../docs/phase-6-validation-template.md)
+- [phase-6-validation-2026-03-11.md](../docs/phase-6-validation-2026-03-11.md)
+- [mcp_server/README.md](../mcp_server/README.md)
 
 通过标准：
 

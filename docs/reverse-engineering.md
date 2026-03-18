@@ -62,7 +62,7 @@
 
 | 事实 | 说明 |
 |------|------|
-| 设置文件 | `AppData/Roaming/SlayTheSpire2/default/1/settings.save` |
+| 设置文件 | `%APPDATA%/SlayTheSpire2/default/1/settings.save` |
 | 文件格式 | 明文 JSON |
 | 对应字段 | `mod_settings.mods_enabled` |
 | 对应属性 | `ModSettings.PlayerAgreedToModLoading` |
@@ -272,7 +272,7 @@
 1. 执行以下命令：
 
 ```powershell
-ilspycmd -p -o "C:/Users/chart/Documents/project/sp/extraction/decompiled" "C:/Program Files (x86)/Steam/steamapps/common/Slay the Spire 2/data_sts2_windows_x86_64/sts2.dll"
+ilspycmd -p -o "<repo-root>/extraction/decompiled" "C:/Program Files (x86)/Steam/steamapps/common/Slay the Spire 2/data_sts2_windows_x86_64/sts2.dll"
 ```
 
 2. 重点搜索以下关键词：
@@ -294,7 +294,7 @@ ilspycmd -p -o "C:/Users/chart/Documents/project/sp/extraction/decompiled" "C:/P
 在需要快速补充符号时，可使用仓库脚本进行字符串扫描：
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File "C:/Users/chart/Documents/project/sp/scripts/scan-assembly-strings.ps1" -AssemblyPath "C:/Program Files (x86)/Steam/steamapps/common/Slay the Spire 2/data_sts2_windows_x86_64/sts2.dll" -Patterns ModManager,ModInitializerAttribute,CombatManager,RunManager,EnqueueManualPlay,UsePotion
+powershell -ExecutionPolicy Bypass -File "<repo-root>/scripts/scan-assembly-strings.ps1" -AssemblyPath "C:/Program Files (x86)/Steam/steamapps/common/Slay the Spire 2/data_sts2_windows_x86_64/sts2.dll" -Patterns ModManager,ModInitializerAttribute,CombatManager,RunManager,EnqueueManualPlay,UsePotion
 ```
 
 该脚本只能用于快速发现符号，不能替代正式反编译。

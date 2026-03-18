@@ -142,13 +142,13 @@ debug 模式：
 ## 相关文件
 
 - 技能主说明：
-  [SKILL.md](C:/Users/chart/Documents/project/sp/skills/sts2-mcp-player/SKILL.md)
+  [SKILL.md](./SKILL.md)
 - 分 screen 剧本：
-  [screen-playbooks.md](C:/Users/chart/Documents/project/sp/skills/sts2-mcp-player/references/screen-playbooks.md)
+  [screen-playbooks.md](./references/screen-playbooks.md)
 - 调试与验证说明：
-  [debug-and-validation.md](C:/Users/chart/Documents/project/sp/skills/sts2-mcp-player/references/debug-and-validation.md)
+  [debug-and-validation.md](./references/debug-and-validation.md)
 - UI metadata：
-  [openai.yaml](C:/Users/chart/Documents/project/sp/skills/sts2-mcp-player/agents/openai.yaml)
+  [openai.yaml](./agents/openai.yaml)
 
 ## 一句话模板
 

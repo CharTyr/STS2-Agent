@@ -68,7 +68,7 @@ function Invoke-JsonEndpoint {
 
 $gameRoot = Split-Path -Path $ExePath -Parent
 $appIdFile = Join-Path $gameRoot "steam_appid.txt"
-$logPath = "C:/Users/chart/AppData/Roaming/SlayTheSpire2/logs/godot.log"
+$logPath = Join-Path $env:APPDATA "SlayTheSpire2/logs/godot.log"
 $resolvedAppId = Resolve-AppId -ExplicitAppId $AppId -ManifestPath $AppManifestPath
 $stateCheck = $null
 $actionsCheck = $null

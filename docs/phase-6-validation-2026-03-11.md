@@ -10,12 +10,12 @@
 
 ## Static Checks
 
-- `dotnet build "C:/Users/chart/Documents/project/sp/STS2AIAgent/STS2AIAgent.csproj" -c Release` passed
-- `python -m py_compile "C:/Users/chart/Documents/project/sp/mcp_server/src/sts2_mcp/client.py" "C:/Users/chart/Documents/project/sp/mcp_server/src/sts2_mcp/server.py"` passed
-- `powershell -ExecutionPolicy Bypass -File "C:/Users/chart/Documents/project/sp/scripts/preflight-release.ps1"` passed
-- `powershell -ExecutionPolicy Bypass -File "C:/Users/chart/Documents/project/sp/scripts/test-mod-load.ps1" -DeepCheck` passed
-- `powershell -ExecutionPolicy Bypass -File "C:/Users/chart/Documents/project/sp/scripts/test-debug-console-gating.ps1"` passed
-- `powershell -ExecutionPolicy Bypass -File "C:/Users/chart/Documents/project/sp/scripts/test-debug-console-gating.ps1" -EnableDebugActions` passed
+- `dotnet build "<repo-root>/STS2AIAgent/STS2AIAgent.csproj" -c Release` passed
+- `python -m py_compile "<repo-root>/mcp_server/src/sts2_mcp/client.py" "<repo-root>/mcp_server/src/sts2_mcp/server.py"` passed
+- `powershell -ExecutionPolicy Bypass -File "<repo-root>/scripts/preflight-release.ps1"` passed
+- `powershell -ExecutionPolicy Bypass -File "<repo-root>/scripts/test-mod-load.ps1" -DeepCheck` passed
+- `powershell -ExecutionPolicy Bypass -File "<repo-root>/scripts/test-debug-console-gating.ps1"` passed
+- `powershell -ExecutionPolicy Bypass -File "<repo-root>/scripts/test-debug-console-gating.ps1" -EnableDebugActions` passed
 
 Key output summary:
 
