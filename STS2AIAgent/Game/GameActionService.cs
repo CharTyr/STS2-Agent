@@ -2840,7 +2840,10 @@ internal static class GameActionService
                 option_index = request.option_index
             });
 
-        RunManager.Instance.ActionQueueSynchronizer.RequestEnqueue(new DiscardPotionGameAction(player, (uint)request.option_index.Value));
+        RunManager.Instance.ActionQueueSynchronizer.RequestEnqueue(new DiscardPotionGameAction(
+            player,
+            (uint)request.option_index.Value,
+            CombatManager.Instance.IsInProgress));
         var stable = await WaitForPotionDiscardTransitionAsync(player, request.option_index.Value, potion, TimeSpan.FromSeconds(10));
 
         return new ActionResponsePayload
