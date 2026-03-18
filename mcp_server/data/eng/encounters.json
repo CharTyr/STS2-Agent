@@ -1,0 +1,1552 @@
+[
+  {
+    "id": "AXEBOTS_NORMAL",
+    "name": "Bot Buddies",
+    "room_type": "Monster",
+    "is_weak": false,
+    "act": "Act 3 - Glory",
+    "tags": null,
+    "monsters": [
+      {
+        "id": "AXEBOT",
+        "name": "Axebot"
+      }
+    ],
+    "loss_text": "{character} was dismembered by some [gold]{encounter}[/gold]."
+  },
+  {
+    "id": "BATTLEWORN_DUMMY_EVENT_ENCOUNTER",
+    "name": "Battleworn Dummy",
+    "room_type": "Monster",
+    "is_weak": false,
+    "act": null,
+    "tags": null,
+    "monsters": [
+      {
+        "id": "BATTLE_FRIEND_V1",
+        "name": "Battle Friend V1.0"
+      },
+      {
+        "id": "BATTLE_FRIEND_V2",
+        "name": "Battle Friend V2.0"
+      },
+      {
+        "id": "BATTLE_FRIEND_V3",
+        "name": "Battle Friend V3.0"
+      }
+    ],
+    "loss_text": "{character} was somehow killed by [gold]{encounter}[/gold]???"
+  },
+  {
+    "id": "BOWLBUGS_NORMAL",
+    "name": "Bowlbug Swarm",
+    "room_type": "Monster",
+    "is_weak": false,
+    "act": "Act 2 - Hive",
+    "tags": [
+      "Workers"
+    ],
+    "monsters": [
+      {
+        "id": "BOWLBUG_EGG",
+        "name": "Bowlbug (Egg)"
+      },
+      {
+        "id": "BOWLBUG_NECTAR",
+        "name": "Bowlbug (Nectar)"
+      },
+      {
+        "id": "BOWLBUG_ROCK",
+        "name": "Bowlbug (Rock)"
+      },
+      {
+        "id": "BOWLBUG_SILK",
+        "name": "Bowlbug (Silk)"
+      }
+    ],
+    "loss_text": "{character} got in the way of a busy [gold]{encounter}[/gold]."
+  },
+  {
+    "id": "BOWLBUGS_WEAK",
+    "name": "Bowlbugs",
+    "room_type": "Monster",
+    "is_weak": true,
+    "act": "Act 2 - Hive",
+    "tags": [
+      "Workers"
+    ],
+    "monsters": [
+      {
+        "id": "BOWLBUG_EGG",
+        "name": "Bowlbug (Egg)"
+      },
+      {
+        "id": "BOWLBUG_NECTAR",
+        "name": "Bowlbug (Nectar)"
+      },
+      {
+        "id": "BOWLBUG_ROCK",
+        "name": "Bowlbug (Rock)"
+      }
+    ],
+    "loss_text": "{character} got in the way of some busy [gold]{encounter}[/gold]."
+  },
+  {
+    "id": "BYGONE_EFFIGY_ELITE",
+    "name": "Bygone Effigy",
+    "room_type": "Elite",
+    "is_weak": false,
+    "act": "Act 1 - Overgrowth",
+    "tags": null,
+    "monsters": [
+      {
+        "id": "BYGONE_EFFIGY",
+        "name": "Bygone Effigy"
+      }
+    ],
+    "loss_text": "{character} was sliced in half by a [gold]{encounter}[/gold]."
+  },
+  {
+    "id": "BYRDONIS_ELITE",
+    "name": "Byrdonis",
+    "room_type": "Elite",
+    "is_weak": false,
+    "act": "Act 1 - Overgrowth",
+    "tags": null,
+    "monsters": [
+      {
+        "id": "BYRDONIS",
+        "name": "Byrdonis"
+      }
+    ],
+    "loss_text": "[gold]{encounter}[/gold] protected its children from {character}."
+  },
+  {
+    "id": "CEREMONIAL_BEAST_BOSS",
+    "name": "Ceremonial Beast",
+    "room_type": "Boss",
+    "is_weak": false,
+    "act": "Act 1 - Overgrowth",
+    "tags": null,
+    "monsters": [
+      {
+        "id": "CEREMONIAL_BEAST",
+        "name": "Ceremonial Beast"
+      }
+    ],
+    "loss_text": "{character} was put to rest by the [gold]{encounter}[/gold]."
+  },
+  {
+    "id": "CHOMPERS_NORMAL",
+    "name": "An Automaton Pair",
+    "room_type": "Monster",
+    "is_weak": false,
+    "act": "Act 2 - Hive",
+    "tags": [
+      "Chomper"
+    ],
+    "monsters": [
+      {
+        "id": "CHOMPER",
+        "name": "Chomper"
+      }
+    ],
+    "loss_text": "{character} was chomped to death by [gold]{encounter}[/gold]."
+  },
+  {
+    "id": "CONSTRUCT_MENAGERIE_NORMAL",
+    "name": "Construct Menagerie",
+    "room_type": "Monster",
+    "is_weak": false,
+    "act": "Act 3 - Glory",
+    "tags": null,
+    "monsters": [
+      {
+        "id": "CUBEX_CONSTRUCT",
+        "name": "Cubex Construct"
+      },
+      {
+        "id": "PUNCH_CONSTRUCT",
+        "name": "Punch Construct"
+      }
+    ],
+    "loss_text": "The [gold]{encounter}[/gold] crushed {character}."
+  },
+  {
+    "id": "CORPSE_SLUGS_NORMAL",
+    "name": "Many Corpse Slugs",
+    "room_type": "Monster",
+    "is_weak": false,
+    "act": "Underdocks",
+    "tags": [
+      "Slugs"
+    ],
+    "monsters": [
+      {
+        "id": "CORPSE_SLUG",
+        "name": "Corpse Slug"
+      }
+    ],
+    "loss_text": "[gold]{encounter}[/gold] feasted on {character}."
+  },
+  {
+    "id": "CORPSE_SLUGS_WEAK",
+    "name": "Corpse Slugs",
+    "room_type": "Monster",
+    "is_weak": true,
+    "act": "Underdocks",
+    "tags": [
+      "Slugs"
+    ],
+    "monsters": [
+      {
+        "id": "CORPSE_SLUG",
+        "name": "Corpse Slug"
+      }
+    ],
+    "loss_text": "[gold]{encounter}[/gold] feasted on {character}."
+  },
+  {
+    "id": "CUBEX_CONSTRUCT_NORMAL",
+    "name": "Cubex Construct",
+    "room_type": "Monster",
+    "is_weak": false,
+    "act": "Act 1 - Overgrowth",
+    "tags": null,
+    "monsters": [
+      {
+        "id": "CUBEX_CONSTRUCT",
+        "name": "Cubex Construct"
+      }
+    ],
+    "loss_text": "{character} was lasered to death by a [gold]{encounter}[/gold]."
+  },
+  {
+    "id": "CULTISTS_NORMAL",
+    "name": "Cultists",
+    "room_type": "Monster",
+    "is_weak": false,
+    "act": "Underdocks",
+    "tags": null,
+    "monsters": [
+      {
+        "id": "CALCIFIED_CULTIST",
+        "name": "Calcified Cultist"
+      },
+      {
+        "id": "DAMP_CULTIST",
+        "name": "Damp Cultist"
+      }
+    ],
+    "loss_text": "{character} was slain by some [gold]{encounter}[/gold]. [sine]Caaaaw[/sine]..."
+  },
+  {
+    "id": "DECIMILLIPEDE_ELITE",
+    "name": "The Decimillipede",
+    "room_type": "Elite",
+    "is_weak": false,
+    "act": "Act 2 - Hive",
+    "tags": null,
+    "monsters": [
+      {
+        "id": "DECIMILLIPEDE_SEGMENT_BACK",
+        "name": "Decimillipede Segment Back"
+      },
+      {
+        "id": "DECIMILLIPEDE_SEGMENT_FRONT",
+        "name": "Decimillipede Segment Front"
+      },
+      {
+        "id": "DECIMILLIPEDE_SEGMENT_MIDDLE",
+        "name": "Decimillipede Segment Middle"
+      }
+    ],
+    "loss_text": "{character} couldn't survive [gold]{encounter}[/gold]'s domain."
+  },
+  {
+    "id": "DENSE_VEGETATION_EVENT_ENCOUNTER",
+    "name": "Wrigglers",
+    "room_type": "Monster",
+    "is_weak": false,
+    "act": null,
+    "tags": null,
+    "monsters": [
+      {
+        "id": "WRIGGLER",
+        "name": "Wriggler"
+      }
+    ],
+    "loss_text": "{character} was infested by [gold]{encounter}[/gold]."
+  },
+  {
+    "id": "DEVOTED_SCULPTOR_WEAK",
+    "name": "Devoted Sculptor",
+    "room_type": "Monster",
+    "is_weak": true,
+    "act": "Act 3 - Glory",
+    "tags": null,
+    "monsters": [
+      {
+        "id": "DEVOTED_SCULPTOR",
+        "name": "Devoted Sculptor"
+      }
+    ],
+    "loss_text": "{character} was smashed to pieces by [gold]{encounter}[/gold]."
+  },
+  {
+    "id": "DOORMAKER_BOSS",
+    "name": "The Doormaker",
+    "room_type": "Boss",
+    "is_weak": false,
+    "act": "Act 3 - Glory",
+    "tags": null,
+    "monsters": [
+      {
+        "id": "DOOR",
+        "name": "Door"
+      },
+      {
+        "id": "DOORMAKER",
+        "name": "Doormaker"
+      }
+    ],
+    "loss_text": "[gold]{encounter}[/gold] didn't take kindly to {character}'s disturbance."
+  },
+  {
+    "id": "ENTOMANCER_ELITE",
+    "name": "Entomancer",
+    "room_type": "Elite",
+    "is_weak": false,
+    "act": "Act 2 - Hive",
+    "tags": null,
+    "monsters": [
+      {
+        "id": "ENTOMANCER",
+        "name": "Entomancer"
+      }
+    ],
+    "loss_text": "{character} was stung to death by an [gold]{encounter}[/gold]."
+  },
+  {
+    "id": "EXOSKELETONS_NORMAL",
+    "name": "Many Exoskeletons",
+    "room_type": "Monster",
+    "is_weak": false,
+    "act": "Act 2 - Hive",
+    "tags": [
+      "Exoskeletons"
+    ],
+    "monsters": [
+      {
+        "id": "EXOSKELETON",
+        "name": "Exoskeleton"
+      }
+    ],
+    "loss_text": "{character} was eviscerated by [gold]{encounter}[/gold]."
+  },
+  {
+    "id": "EXOSKELETONS_WEAK",
+    "name": "Exoskeletons",
+    "room_type": "Monster",
+    "is_weak": true,
+    "act": "Act 2 - Hive",
+    "tags": [
+      "Exoskeletons"
+    ],
+    "monsters": [
+      {
+        "id": "EXOSKELETON",
+        "name": "Exoskeleton"
+      }
+    ],
+    "loss_text": "{character} was eviscerated by some [gold]{encounter}[/gold]."
+  },
+  {
+    "id": "FABRICATOR_NORMAL",
+    "name": "Fabricator",
+    "room_type": "Monster",
+    "is_weak": false,
+    "act": "Act 3 - Glory",
+    "tags": null,
+    "monsters": [
+      {
+        "id": "FABRICATOR",
+        "name": "Fabricator"
+      }
+    ],
+    "loss_text": "{character} was zapped by a [gold]{encounter}[/gold]'s bots."
+  },
+  {
+    "id": "FAKE_MERCHANT_EVENT_ENCOUNTER",
+    "name": "The Merchant???",
+    "room_type": "Monster",
+    "is_weak": false,
+    "act": null,
+    "tags": null,
+    "monsters": [
+      {
+        "id": "FAKE_MERCHANT_MONSTER",
+        "name": "The Merchant???"
+      }
+    ],
+    "loss_text": "{character} faced the wrath of [gold]{encounter}[/gold]"
+  },
+  {
+    "id": "FLYCONID_NORMAL",
+    "name": "Shroom and Slime",
+    "room_type": "Monster",
+    "is_weak": false,
+    "act": "Act 1 - Overgrowth",
+    "tags": [
+      "Mushroom",
+      "Slimes"
+    ],
+    "monsters": [
+      {
+        "id": "FLYCONID",
+        "name": "Flyconid"
+      },
+      {
+        "id": "LEAF_SLIME_M",
+        "name": "Leaf Slime (M)"
+      },
+      {
+        "id": "TWIG_SLIME_M",
+        "name": "Twig Slime (M)"
+      }
+    ],
+    "loss_text": "{character} was absorbed by a [gold]{encounter}[/gold]."
+  },
+  {
+    "id": "FOGMOG_NORMAL",
+    "name": "Fogmog",
+    "room_type": "Monster",
+    "is_weak": false,
+    "act": "Act 1 - Overgrowth",
+    "tags": null,
+    "monsters": [
+      {
+        "id": "EYE_WITH_TEETH",
+        "name": "Eye With Teeth"
+      },
+      {
+        "id": "FOGMOG",
+        "name": "Fogmog"
+      }
+    ],
+    "loss_text": "{character} was distracted by a [gold]{encounter}[/gold]'s illusions."
+  },
+  {
+    "id": "FOSSIL_STALKER_NORMAL",
+    "name": "Fossil Stalker",
+    "room_type": "Monster",
+    "is_weak": false,
+    "act": "Underdocks",
+    "tags": null,
+    "monsters": [
+      {
+        "id": "FOSSIL_STALKER",
+        "name": "Fossil Stalker"
+      }
+    ],
+    "loss_text": "{character} was ambushed by a [gold]{encounter}[/gold]."
+  },
+  {
+    "id": "FROG_KNIGHT_NORMAL",
+    "name": "Frog Knight",
+    "room_type": "Monster",
+    "is_weak": false,
+    "act": "Act 3 - Glory",
+    "tags": null,
+    "monsters": [
+      {
+        "id": "FROG_KNIGHT",
+        "name": "Frog Knight"
+      }
+    ],
+    "loss_text": "A valiant [gold]{encounter}[/gold] triumphed over {character}."
+  },
+  {
+    "id": "FUZZY_WURM_CRAWLER_WEAK",
+    "name": "Fuzzy Wurm Crawler",
+    "room_type": "Monster",
+    "is_weak": true,
+    "act": "Act 1 - Overgrowth",
+    "tags": [
+      "Crawler"
+    ],
+    "monsters": [
+      {
+        "id": "FUZZY_WURM_CRAWLER",
+        "name": "Fuzzy Wurm Crawler"
+      }
+    ],
+    "loss_text": "A [gold]{encounter}[/gold] spat on {character}."
+  },
+  {
+    "id": "GLOBE_HEAD_NORMAL",
+    "name": "A Lone Globe Head",
+    "room_type": "Monster",
+    "is_weak": false,
+    "act": "Act 3 - Glory",
+    "tags": null,
+    "monsters": [
+      {
+        "id": "GLOBE_HEAD",
+        "name": "Globe Head"
+      }
+    ],
+    "loss_text": "[gold]{encounter}[/gold] zapped {character}."
+  },
+  {
+    "id": "GREMLIN_MERC_NORMAL",
+    "name": "Two Gremlins in a Trenchcoat",
+    "room_type": "Monster",
+    "is_weak": false,
+    "act": "Underdocks",
+    "tags": null,
+    "monsters": [
+      {
+        "id": "FAT_GREMLIN",
+        "name": "Fat Gremlin"
+      },
+      {
+        "id": "GREMLIN_MERC",
+        "name": "Gremlin Merc"
+      },
+      {
+        "id": "SNEAKY_GREMLIN",
+        "name": "Sneaky Gremlin"
+      }
+    ],
+    "loss_text": "{character} got mugged by [gold]{encounter}[/gold]."
+  },
+  {
+    "id": "HAUNTED_SHIP_NORMAL",
+    "name": "Haunted Ship",
+    "room_type": "Monster",
+    "is_weak": false,
+    "act": "Underdocks",
+    "tags": null,
+    "monsters": [
+      {
+        "id": "HAUNTED_SHIP",
+        "name": "Haunted Ship"
+      }
+    ],
+    "loss_text": "A [gold]{encounter}[/gold] stomped all over {character}."
+  },
+  {
+    "id": "HUNTER_KILLER_NORMAL",
+    "name": "Hunter Killer",
+    "room_type": "Monster",
+    "is_weak": false,
+    "act": "Act 2 - Hive",
+    "tags": null,
+    "monsters": [
+      {
+        "id": "HUNTER_KILLER",
+        "name": "Hunter Killer"
+      }
+    ],
+    "loss_text": "{character} was disemboweled by a [gold]{encounter}[/gold]."
+  },
+  {
+    "id": "INFESTED_PRISMS_ELITE",
+    "name": "Infested Prism",
+    "room_type": "Elite",
+    "is_weak": false,
+    "act": "Act 2 - Hive",
+    "tags": null,
+    "monsters": [
+      {
+        "id": "INFESTED_PRISM",
+        "name": "Infested Prism"
+      }
+    ],
+    "loss_text": "{character} was stopped by an [gold]{encounter}[/gold]."
+  },
+  {
+    "id": "INKLETS_NORMAL",
+    "name": "Inklets",
+    "room_type": "Monster",
+    "is_weak": false,
+    "act": "Act 1 - Overgrowth",
+    "tags": null,
+    "monsters": [
+      {
+        "id": "INKLET",
+        "name": "Inklet"
+      }
+    ],
+    "loss_text": "Some [gold]{encounter}[/gold] wouldn't let {character} pass."
+  },
+  {
+    "id": "KAISER_CRAB_BOSS",
+    "name": "Kaiser Crab",
+    "room_type": "Boss",
+    "is_weak": false,
+    "act": "Act 2 - Hive",
+    "tags": null,
+    "monsters": [
+      {
+        "id": "CRUSHER",
+        "name": "Crusher"
+      },
+      {
+        "id": "ROCKET",
+        "name": "Rocket"
+      }
+    ],
+    "loss_text": "The [gold]{encounter}[/gold] struck {character} from all sides."
+  },
+  {
+    "id": "KNIGHTS_ELITE",
+    "name": "Knight Gang",
+    "room_type": "Elite",
+    "is_weak": false,
+    "act": "Act 3 - Glory",
+    "tags": [
+      "Knights"
+    ],
+    "monsters": [
+      {
+        "id": "FLAIL_KNIGHT",
+        "name": "Flail Knight"
+      },
+      {
+        "id": "MAGI_KNIGHT",
+        "name": "Magi Knight"
+      },
+      {
+        "id": "SPECTRAL_KNIGHT",
+        "name": "Spectral Knight"
+      }
+    ],
+    "loss_text": "{character} was slain by a [gold]{encounter}[/gold]."
+  },
+  {
+    "id": "KNOWLEDGE_DEMON_BOSS",
+    "name": "Knowledge Demon",
+    "room_type": "Boss",
+    "is_weak": false,
+    "act": "Act 2 - Hive",
+    "tags": null,
+    "monsters": [
+      {
+        "id": "KNOWLEDGE_DEMON",
+        "name": "Knowledge Demon"
+      }
+    ],
+    "loss_text": "The [gold]{encounter}[/gold] cursed {character} with overwhelming knowledge."
+  },
+  {
+    "id": "LAGAVULIN_MATRIARCH_BOSS",
+    "name": "Lagavulin Matriarch",
+    "room_type": "Boss",
+    "is_weak": false,
+    "act": "Underdocks",
+    "tags": null,
+    "monsters": [
+      {
+        "id": "LAGAVULIN_MATRIARCH",
+        "name": "Lagavulin Matriarch"
+      }
+    ],
+    "loss_text": "{character} was cut in half by the [gold]{encounter}[/gold]."
+  },
+  {
+    "id": "LIVING_FOG_NORMAL",
+    "name": "Evil Gas",
+    "room_type": "Monster",
+    "is_weak": false,
+    "act": "Underdocks",
+    "tags": null,
+    "monsters": [
+      {
+        "id": "GAS_BOMB",
+        "name": "Gas Bomb"
+      },
+      {
+        "id": "LIVING_FOG",
+        "name": "Living Fog"
+      }
+    ],
+    "loss_text": "{character} couldn't bear the stench of some [gold]{encounter}[/gold]."
+  },
+  {
+    "id": "LOUSE_PROGENITOR_NORMAL",
+    "name": "Louse Progenitor",
+    "room_type": "Monster",
+    "is_weak": false,
+    "act": "Act 2 - Hive",
+    "tags": null,
+    "monsters": [
+      {
+        "id": "LOUSE_PROGENITOR",
+        "name": "Louse Progenitor"
+      }
+    ],
+    "loss_text": "{character} was paralyzed by a [gold]{encounter}[/gold]."
+  },
+  {
+    "id": "MAWLER_NORMAL",
+    "name": "Mawler",
+    "room_type": "Monster",
+    "is_weak": false,
+    "act": "Act 1 - Overgrowth",
+    "tags": null,
+    "monsters": [
+      {
+        "id": "MAWLER",
+        "name": "Mawler"
+      }
+    ],
+    "loss_text": "{character} became a delicious meal for a [gold]{encounter}[/gold]."
+  },
+  {
+    "id": "MECHA_KNIGHT_ELITE",
+    "name": "Mecha Knight",
+    "room_type": "Elite",
+    "is_weak": false,
+    "act": "Act 3 - Glory",
+    "tags": null,
+    "monsters": [
+      {
+        "id": "MECHA_KNIGHT",
+        "name": "Mecha Knight"
+      }
+    ],
+    "loss_text": "{character} was stabbed and burned by a [gold]{encounter}[/gold]."
+  },
+  {
+    "id": "MYSTERIOUS_KNIGHT_EVENT_ENCOUNTER",
+    "name": "Mysterious Knight",
+    "room_type": "Monster",
+    "is_weak": false,
+    "act": null,
+    "tags": null,
+    "monsters": [
+      {
+        "id": "MYSTERIOUS_KNIGHT",
+        "name": "Mysterious Knight"
+      }
+    ],
+    "loss_text": "{character} tried to take a [gold]{encounter}[/gold]'s key."
+  },
+  {
+    "id": "MYTES_NORMAL",
+    "name": "Mass of Mytes",
+    "room_type": "Monster",
+    "is_weak": false,
+    "act": "Act 2 - Hive",
+    "tags": null,
+    "monsters": [
+      {
+        "id": "MYTE",
+        "name": "Myte"
+      }
+    ],
+    "loss_text": "{character} was swarmed by a [gold]{encounter}[/gold]."
+  },
+  {
+    "id": "NIBBITS_NORMAL",
+    "name": "A Pair of Nibbits",
+    "room_type": "Monster",
+    "is_weak": false,
+    "act": "Act 1 - Overgrowth",
+    "tags": null,
+    "monsters": [
+      {
+        "id": "NIBBIT",
+        "name": "Nibbit"
+      }
+    ],
+    "loss_text": "[gold]{encounter}[/gold] beat up {character}."
+  },
+  {
+    "id": "NIBBITS_WEAK",
+    "name": "A Lone Nibbit",
+    "room_type": "Monster",
+    "is_weak": true,
+    "act": "Act 1 - Overgrowth",
+    "tags": [
+      "Nibbit"
+    ],
+    "monsters": [
+      {
+        "id": "NIBBIT",
+        "name": "Nibbit"
+      }
+    ],
+    "loss_text": "[gold]{encounter}[/gold] beat up {character}."
+  },
+  {
+    "id": "OVERGROWTH_CRAWLERS",
+    "name": "Overgrowth Crawlers",
+    "room_type": "Monster",
+    "is_weak": false,
+    "act": "Act 1 - Overgrowth",
+    "tags": [
+      "Shrinker",
+      "Crawler"
+    ],
+    "monsters": [
+      {
+        "id": "FUZZY_WURM_CRAWLER",
+        "name": "Fuzzy Wurm Crawler"
+      },
+      {
+        "id": "SHRINKER_BEETLE",
+        "name": "Shrinker Beetle"
+      }
+    ],
+    "loss_text": "Some [gold]{encounter}[/gold] feasted on {character}."
+  },
+  {
+    "id": "OVICOPTER_NORMAL",
+    "name": "Ovicopter",
+    "room_type": "Monster",
+    "is_weak": false,
+    "act": "Act 2 - Hive",
+    "tags": null,
+    "monsters": [
+      {
+        "id": "OVICOPTER",
+        "name": "Ovicopter"
+      },
+      {
+        "id": "TOUGH_EGG",
+        "name": "Tough Egg"
+      }
+    ],
+    "loss_text": "{character} became food for an [gold]{encounter}[/gold]'s children."
+  },
+  {
+    "id": "OWL_MAGISTRATE_NORMAL",
+    "name": "Owl Magistrate",
+    "room_type": "Monster",
+    "is_weak": false,
+    "act": "Act 3 - Glory",
+    "tags": null,
+    "monsters": [
+      {
+        "id": "OWL_MAGISTRATE",
+        "name": "Owl Magistrate"
+      }
+    ],
+    "loss_text": "{character} was sentenced to death by an [gold]{encounter}[/gold]."
+  },
+  {
+    "id": "PHANTASMAL_GARDENERS_ELITE",
+    "name": "Phantasmal Gardeners",
+    "room_type": "Elite",
+    "is_weak": false,
+    "act": "Underdocks",
+    "tags": null,
+    "monsters": [
+      {
+        "id": "PHANTASMAL_GARDENER",
+        "name": "Phantasmal Gardener"
+      }
+    ],
+    "loss_text": "{character} was put to rest by the [gold]{encounter}[/gold]."
+  },
+  {
+    "id": "PHROG_PARASITE_ELITE",
+    "name": "Phrog Parasite",
+    "room_type": "Elite",
+    "is_weak": false,
+    "act": "Act 1 - Overgrowth",
+    "tags": null,
+    "monsters": [
+      {
+        "id": "PHROG_PARASITE",
+        "name": "Phrog Parasite"
+      },
+      {
+        "id": "WRIGGLER",
+        "name": "Wriggler"
+      }
+    ],
+    "loss_text": "A [gold]{encounter}[/gold] spread its colony to {character}."
+  },
+  {
+    "id": "PUNCH_CONSTRUCT_NORMAL",
+    "name": "Punch Construct",
+    "room_type": "Monster",
+    "is_weak": false,
+    "act": "Underdocks",
+    "tags": null,
+    "monsters": [
+      {
+        "id": "PUNCH_CONSTRUCT",
+        "name": "Punch Construct"
+      }
+    ],
+    "loss_text": "{character} engaged in fisticuffs with a [gold]{encounter}[/gold]."
+  },
+  {
+    "id": "PUNCH_OFF_EVENT_ENCOUNTER",
+    "name": "Punch Constructs",
+    "room_type": "Monster",
+    "is_weak": false,
+    "act": null,
+    "tags": null,
+    "monsters": [
+      {
+        "id": "PUNCH_CONSTRUCT",
+        "name": "Punch Construct"
+      }
+    ],
+    "loss_text": "{character} interrupted a bout between two [gold]{encounter}[/gold]."
+  },
+  {
+    "id": "QUEEN_BOSS",
+    "name": "Queen",
+    "room_type": "Boss",
+    "is_weak": false,
+    "act": "Act 3 - Glory",
+    "tags": null,
+    "monsters": [
+      {
+        "id": "QUEEN",
+        "name": "Queen"
+      },
+      {
+        "id": "TORCH_HEAD_AMALGAM",
+        "name": "Torch Head Amalgam"
+      }
+    ],
+    "loss_text": "The [gold]{encounter}[/gold] added a piece of {character} to her collection."
+  },
+  {
+    "id": "RUBY_RAIDERS_NORMAL",
+    "name": "Ruby Raiders",
+    "room_type": "Monster",
+    "is_weak": false,
+    "act": "Act 1 - Overgrowth",
+    "tags": null,
+    "monsters": [
+      {
+        "id": "ASSASSIN_RUBY_RAIDER",
+        "name": "Assassin Raider"
+      },
+      {
+        "id": "AXE_RUBY_RAIDER",
+        "name": "Axe Raider"
+      },
+      {
+        "id": "BRUTE_RUBY_RAIDER",
+        "name": "Brute Raider"
+      },
+      {
+        "id": "CROSSBOW_RUBY_RAIDER",
+        "name": "Crossbow Raider"
+      },
+      {
+        "id": "TRACKER_RUBY_RAIDER",
+        "name": "Tracker Raider"
+      }
+    ],
+    "loss_text": "{character} got jumped by a group of [gold]{encounter}[/gold]."
+  },
+  {
+    "id": "SCROLLS_OF_BITING_NORMAL",
+    "name": "Many Scrolls of Biting",
+    "room_type": "Monster",
+    "is_weak": false,
+    "act": "Act 3 - Glory",
+    "tags": [
+      "Scrolls"
+    ],
+    "monsters": [
+      {
+        "id": "SCROLL_OF_BITING",
+        "name": "Scroll of Biting"
+      }
+    ],
+    "loss_text": "[gold]{encounter}[/gold] tore {character} to shreds."
+  },
+  {
+    "id": "SCROLLS_OF_BITING_WEAK",
+    "name": "Scrolls of Biting",
+    "room_type": "Monster",
+    "is_weak": true,
+    "act": "Act 3 - Glory",
+    "tags": [
+      "Scrolls"
+    ],
+    "monsters": [
+      {
+        "id": "SCROLL_OF_BITING",
+        "name": "Scroll of Biting"
+      }
+    ],
+    "loss_text": "Some [gold]{encounter}[/gold] tore {character} to shreds."
+  },
+  {
+    "id": "SEAPUNK_WEAK",
+    "name": "Seapunk",
+    "room_type": "Monster",
+    "is_weak": true,
+    "act": "Underdocks",
+    "tags": [
+      "Seapunk"
+    ],
+    "monsters": [
+      {
+        "id": "SEAPUNK",
+        "name": "Seapunk"
+      }
+    ],
+    "loss_text": "A [gold]{encounter}[/gold] clobbered {character}."
+  },
+  {
+    "id": "SEWER_CLAM_NORMAL",
+    "name": "Sewer Clam",
+    "room_type": "Monster",
+    "is_weak": false,
+    "act": "Underdocks",
+    "tags": null,
+    "monsters": [
+      {
+        "id": "SEWER_CLAM",
+        "name": "Sewer Clam"
+      }
+    ],
+    "loss_text": "{character} was gobbled up by a [gold]{encounter}[/gold]."
+  },
+  {
+    "id": "SHRINKER_BEETLE_WEAK",
+    "name": "Shrinker Beetle",
+    "room_type": "Monster",
+    "is_weak": true,
+    "act": "Act 1 - Overgrowth",
+    "tags": [
+      "Shrinker"
+    ],
+    "monsters": [
+      {
+        "id": "SHRINKER_BEETLE",
+        "name": "Shrinker Beetle"
+      }
+    ],
+    "loss_text": "A [gold]{encounter}[/gold] snacked on {character}."
+  },
+  {
+    "id": "SKULKING_COLONY_ELITE",
+    "name": "Skulking Colony",
+    "room_type": "Elite",
+    "is_weak": false,
+    "act": "Underdocks",
+    "tags": null,
+    "monsters": [
+      {
+        "id": "SKULKING_COLONY",
+        "name": "Skulking Colony"
+      }
+    ],
+    "loss_text": "{character} was absorbed by a [gold]{encounter}[/gold]"
+  },
+  {
+    "id": "SLIMED_BERSERKER_NORMAL",
+    "name": "Slimed Berserker",
+    "room_type": "Monster",
+    "is_weak": false,
+    "act": "Act 3 - Glory",
+    "tags": null,
+    "monsters": [
+      {
+        "id": "SLIMED_BERSERKER",
+        "name": "Slimed Berserker"
+      }
+    ],
+    "loss_text": "{character} was absorbed into a [gold]{encounter}[/gold]."
+  },
+  {
+    "id": "SLIMES_NORMAL",
+    "name": "Swarm of Slimes",
+    "room_type": "Monster",
+    "is_weak": false,
+    "act": "Act 1 - Overgrowth",
+    "tags": [
+      "Slimes"
+    ],
+    "monsters": [
+      {
+        "id": "LEAF_SLIME_M",
+        "name": "Leaf Slime (M)"
+      },
+      {
+        "id": "LEAF_SLIME_S",
+        "name": "Leaf Slime (S)"
+      },
+      {
+        "id": "TWIG_SLIME_M",
+        "name": "Twig Slime (M)"
+      },
+      {
+        "id": "TWIG_SLIME_S",
+        "name": "Twig Slime (S)"
+      }
+    ],
+    "loss_text": "{character} was felled by a [gold]{encounter}[/gold]."
+  },
+  {
+    "id": "SLIMES_WEAK",
+    "name": "Group of Slimes",
+    "room_type": "Monster",
+    "is_weak": true,
+    "act": "Act 1 - Overgrowth",
+    "tags": [
+      "Slimes"
+    ],
+    "monsters": [
+      {
+        "id": "LEAF_SLIME_M",
+        "name": "Leaf Slime (M)"
+      },
+      {
+        "id": "LEAF_SLIME_S",
+        "name": "Leaf Slime (S)"
+      },
+      {
+        "id": "TWIG_SLIME_M",
+        "name": "Twig Slime (M)"
+      },
+      {
+        "id": "TWIG_SLIME_S",
+        "name": "Twig Slime (S)"
+      }
+    ],
+    "loss_text": "{character} was felled by a [gold]{encounter}[/gold]."
+  },
+  {
+    "id": "SLITHERING_STRANGLER_NORMAL",
+    "name": "Strangler and Friend",
+    "room_type": "Monster",
+    "is_weak": false,
+    "act": "Act 1 - Overgrowth",
+    "tags": null,
+    "monsters": [
+      {
+        "id": "LEAF_SLIME_M",
+        "name": "Leaf Slime (M)"
+      },
+      {
+        "id": "LEAF_SLIME_S",
+        "name": "Leaf Slime (S)"
+      },
+      {
+        "id": "SLITHERING_STRANGLER",
+        "name": "Slithering Strangler"
+      },
+      {
+        "id": "SNAPPING_JAXFRUIT",
+        "name": "Snapping Jaxfruit"
+      },
+      {
+        "id": "TWIG_SLIME_M",
+        "name": "Twig Slime (M)"
+      },
+      {
+        "id": "TWIG_SLIME_S",
+        "name": "Twig Slime (S)"
+      }
+    ],
+    "loss_text": "{character} was suffocated by a [gold]{encounter}[/gold]."
+  },
+  {
+    "id": "SLUDGE_SPINNER_WEAK",
+    "name": "Sludge Spinner",
+    "room_type": "Monster",
+    "is_weak": true,
+    "act": "Underdocks",
+    "tags": null,
+    "monsters": [
+      {
+        "id": "SLUDGE_SPINNER",
+        "name": "Sludge Spinner"
+      }
+    ],
+    "loss_text": "{character} couldn't defeat a [gold]{encounter}[/gold]."
+  },
+  {
+    "id": "SLUMBERING_BEETLE_NORMAL",
+    "name": "Slumber Party",
+    "room_type": "Monster",
+    "is_weak": false,
+    "act": "Act 2 - Hive",
+    "tags": [
+      "Workers"
+    ],
+    "monsters": [
+      {
+        "id": "BOWLBUG_ROCK",
+        "name": "Bowlbug (Rock)"
+      },
+      {
+        "id": "BOWLBUG_SILK",
+        "name": "Bowlbug (Silk)"
+      },
+      {
+        "id": "SLUMBERING_BEETLE",
+        "name": "Slumbering Beetle"
+      }
+    ],
+    "loss_text": "{character} interrupted a [gold]{encounter}[/gold]."
+  },
+  {
+    "id": "SNAPPING_JAXFRUIT_NORMAL",
+    "name": "Overgrowth Flora",
+    "room_type": "Monster",
+    "is_weak": false,
+    "act": "Act 1 - Overgrowth",
+    "tags": [
+      "Mushroom"
+    ],
+    "monsters": [
+      {
+        "id": "FLYCONID",
+        "name": "Flyconid"
+      },
+      {
+        "id": "SNAPPING_JAXFRUIT",
+        "name": "Snapping Jaxfruit"
+      }
+    ],
+    "loss_text": "{character} ran afoul of some [gold]{encounter}[/gold]."
+  },
+  {
+    "id": "SOUL_FYSH_BOSS",
+    "name": "Soul Fysh",
+    "room_type": "Boss",
+    "is_weak": false,
+    "act": "Underdocks",
+    "tags": null,
+    "monsters": [
+      {
+        "id": "SOUL_FYSH",
+        "name": "Soul Fysh"
+      }
+    ],
+    "loss_text": "A [gold]{encounter}[/gold] beckoned {character} to their doom."
+  },
+  {
+    "id": "SOUL_NEXUS_ELITE",
+    "name": "Soul Nexus",
+    "room_type": "Elite",
+    "is_weak": false,
+    "act": "Act 3 - Glory",
+    "tags": null,
+    "monsters": [
+      {
+        "id": "SOUL_NEXUS",
+        "name": "Soul Nexus"
+      }
+    ],
+    "loss_text": "{character} died to a [gold]{encounter}[/gold] on a forgotten battlefield."
+  },
+  {
+    "id": "SPINY_TOAD_NORMAL",
+    "name": "Spiny Toad",
+    "room_type": "Monster",
+    "is_weak": false,
+    "act": "Act 2 - Hive",
+    "tags": null,
+    "monsters": [
+      {
+        "id": "SPINY_TOAD",
+        "name": "Spiny Toad"
+      }
+    ],
+    "loss_text": "{character} couldn't pierce the [gold]{encounter}[/gold]'s spikes."
+  },
+  {
+    "id": "TERROR_EEL_ELITE",
+    "name": "Terror Eel",
+    "room_type": "Elite",
+    "is_weak": false,
+    "act": "Underdocks",
+    "tags": null,
+    "monsters": [
+      {
+        "id": "TERROR_EEL",
+        "name": "Terror Eel"
+      }
+    ],
+    "loss_text": "A [gold]{encounter}[/gold] was too terrifying for {character}."
+  },
+  {
+    "id": "TEST_SUBJECT_BOSS",
+    "name": "Test Subject",
+    "room_type": "Boss",
+    "is_weak": false,
+    "act": "Act 3 - Glory",
+    "tags": null,
+    "monsters": [
+      {
+        "id": "TEST_SUBJECT",
+        "name": "Test Subject #C{Count}"
+      }
+    ],
+    "loss_text": "A [gold]{encounter}[/gold] loyally guarded its masters from {character}."
+  },
+  {
+    "id": "THE_ARCHITECT_EVENT_ENCOUNTER",
+    "name": "The Architect",
+    "room_type": "Monster",
+    "is_weak": false,
+    "act": null,
+    "tags": null,
+    "monsters": [
+      {
+        "id": "ARCHITECT",
+        "name": "The Architect"
+      }
+    ],
+    "loss_text": "You shouldn't be seeing this."
+  },
+  {
+    "id": "THE_INSATIABLE_BOSS",
+    "name": "The Insatiable",
+    "room_type": "Boss",
+    "is_weak": false,
+    "act": "Act 2 - Hive",
+    "tags": null,
+    "monsters": [
+      {
+        "id": "THE_INSATIABLE",
+        "name": "The Insatiable"
+      }
+    ],
+    "loss_text": "[gold]{encounter}[/gold] devoured {character}. And yet, it still hungers..."
+  },
+  {
+    "id": "THE_KIN_BOSS",
+    "name": "The Kin",
+    "room_type": "Boss",
+    "is_weak": false,
+    "act": "Act 1 - Overgrowth",
+    "tags": null,
+    "monsters": [
+      {
+        "id": "KIN_FOLLOWER",
+        "name": "Kin Follower"
+      },
+      {
+        "id": "KIN_PRIEST",
+        "name": "Kin Priest"
+      }
+    ],
+    "loss_text": "{character} was annihilated by [gold]{encounter}[/gold]'s superior strategy."
+  },
+  {
+    "id": "THE_LOST_AND_FORGOTTEN_NORMAL",
+    "name": "Lost and Forgotten",
+    "room_type": "Monster",
+    "is_weak": false,
+    "act": "Act 3 - Glory",
+    "tags": null,
+    "monsters": [
+      {
+        "id": "THE_FORGOTTEN",
+        "name": "The Forgotten"
+      },
+      {
+        "id": "THE_LOST",
+        "name": "The Lost"
+      }
+    ],
+    "loss_text": "The [gold]{encounter}[/gold] stole {character}'s will to live."
+  },
+  {
+    "id": "THE_OBSCURA_NORMAL",
+    "name": "The Obscura",
+    "room_type": "Monster",
+    "is_weak": false,
+    "act": "Act 2 - Hive",
+    "tags": null,
+    "monsters": [
+      {
+        "id": "THE_OBSCURA",
+        "name": "The Obscura"
+      }
+    ],
+    "loss_text": "[gold]{encounter}[/gold] and its illusion smashed {character}."
+  },
+  {
+    "id": "THIEVING_HOPPER_WEAK",
+    "name": "Thieving Hopper",
+    "room_type": "Monster",
+    "is_weak": true,
+    "act": "Act 2 - Hive",
+    "tags": [
+      "Thieves"
+    ],
+    "monsters": [
+      {
+        "id": "THIEVING_HOPPER",
+        "name": "Thieving Hopper"
+      }
+    ],
+    "loss_text": "A [gold]{encounter}[/gold] mugged {character}."
+  },
+  {
+    "id": "TOADPOLES_NORMAL",
+    "name": "Underdocks Wildlife",
+    "room_type": "Monster",
+    "is_weak": false,
+    "act": "Underdocks",
+    "tags": null,
+    "monsters": [
+      {
+        "id": "CALCIFIED_CULTIST",
+        "name": "Calcified Cultist"
+      },
+      {
+        "id": "TOADPOLE",
+        "name": "Toadpole"
+      }
+    ],
+    "loss_text": "{character} was defeated by some [gold]{encounter}[/gold]."
+  },
+  {
+    "id": "TOADPOLES_WEAK",
+    "name": "Toadpoles",
+    "room_type": "Monster",
+    "is_weak": true,
+    "act": "Underdocks",
+    "tags": null,
+    "monsters": [
+      {
+        "id": "TOADPOLE",
+        "name": "Toadpole"
+      }
+    ],
+    "loss_text": "{character} couldn't deal with some [gold]{encounter}[/gold]."
+  },
+  {
+    "id": "TUNNELER_NORMAL",
+    "name": "Tunneling Twosome",
+    "room_type": "Monster",
+    "is_weak": false,
+    "act": "Act 2 - Hive",
+    "tags": [
+      "Burrower",
+      "Workers"
+    ],
+    "monsters": [
+      {
+        "id": "BOWLBUG_EGG",
+        "name": "Bowlbug (Egg)"
+      },
+      {
+        "id": "BOWLBUG_SILK",
+        "name": "Bowlbug (Silk)"
+      },
+      {
+        "id": "TUNNELER",
+        "name": "Tunneler"
+      }
+    ],
+    "loss_text": "A [gold]{encounter}[/gold] finished off {character}."
+  },
+  {
+    "id": "TUNNELER_WEAK",
+    "name": "Tunneler",
+    "room_type": "Monster",
+    "is_weak": true,
+    "act": "Act 2 - Hive",
+    "tags": [
+      "Burrower"
+    ],
+    "monsters": [
+      {
+        "id": "TUNNELER",
+        "name": "Tunneler"
+      }
+    ],
+    "loss_text": "{character} got whacked by a [gold]{encounter}[/gold]."
+  },
+  {
+    "id": "TURRET_OPERATOR_WEAK",
+    "name": "Turret Operator",
+    "room_type": "Monster",
+    "is_weak": true,
+    "act": "Act 3 - Glory",
+    "tags": null,
+    "monsters": [
+      {
+        "id": "LIVING_SHIELD",
+        "name": "Living Shield"
+      },
+      {
+        "id": "TURRET_OPERATOR",
+        "name": "Turret Operator"
+      }
+    ],
+    "loss_text": "A [gold]{encounter}[/gold] riddled {character} full of holes."
+  },
+  {
+    "id": "TWO_TAILED_RATS_NORMAL",
+    "name": "Two-Tailed Rats",
+    "room_type": "Monster",
+    "is_weak": false,
+    "act": "Underdocks",
+    "tags": null,
+    "monsters": [
+      {
+        "id": "TWO_TAILED_RAT",
+        "name": "Two-Tailed Rat"
+      }
+    ],
+    "loss_text": "{character} was swarmed by some [gold]{encounter}[/gold]."
+  },
+  {
+    "id": "VANTOM_BOSS",
+    "name": "Vantom",
+    "room_type": "Boss",
+    "is_weak": false,
+    "act": "Act 1 - Overgrowth",
+    "tags": null,
+    "monsters": [
+      {
+        "id": "VANTOM",
+        "name": "Vantom"
+      }
+    ],
+    "loss_text": "{character} was turned into an Inklet by the [gold]{encounter}[/gold]."
+  },
+  {
+    "id": "VINE_SHAMBLER_NORMAL",
+    "name": "Vine Shambler",
+    "room_type": "Monster",
+    "is_weak": false,
+    "act": "Act 1 - Overgrowth",
+    "tags": null,
+    "monsters": [
+      {
+        "id": "VINE_SHAMBLER",
+        "name": "Vine Shambler"
+      }
+    ],
+    "loss_text": "{character} couldn't escape a [gold]{encounter}[/gold]."
+  },
+  {
+    "id": "WATERFALL_GIANT_BOSS",
+    "name": "Waterfall Giant",
+    "room_type": "Boss",
+    "is_weak": false,
+    "act": "Underdocks",
+    "tags": null,
+    "monsters": [
+      {
+        "id": "WATERFALL_GIANT",
+        "name": "Waterfall Giant"
+      }
+    ],
+    "loss_text": "The [gold]{encounter}[/gold] cleansed the Underdocks of {character}."
+  }
+]

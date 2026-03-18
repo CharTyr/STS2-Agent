@@ -1,0 +1,198 @@
+[
+  {
+    "id": "GLORY",
+    "name": "Glory",
+    "num_rooms": 13,
+    "bosses": [
+      "QUEEN_BOSS",
+      "TEST_SUBJECT_BOSS",
+      "DOORMAKER_BOSS"
+    ],
+    "ancients": [
+      "NONUPEIPE",
+      "TANX",
+      "VAKUU"
+    ],
+    "events": [
+      "BATTLEWORN_DUMMY",
+      "GRAVE_OF_THE_FORGOTTEN",
+      "HUNGRY_FOR_MUSHROOMS",
+      "REFLECTIONS",
+      "ROUND_TEA_PARTY",
+      "TRIAL",
+      "TINKER_TIME"
+    ],
+    "encounters": [
+      "AXEBOTS_NORMAL",
+      "CONSTRUCT_MENAGERIE_NORMAL",
+      "DEVOTED_SCULPTOR_WEAK",
+      "DOORMAKER_BOSS",
+      "FABRICATOR_NORMAL",
+      "FROG_KNIGHT_NORMAL",
+      "GLOBE_HEAD_NORMAL",
+      "KNIGHTS_ELITE",
+      "MECHA_KNIGHT_ELITE",
+      "OWL_MAGISTRATE_NORMAL",
+      "QUEEN_BOSS",
+      "SCROLLS_OF_BITING_NORMAL",
+      "SCROLLS_OF_BITING_WEAK",
+      "SLIMED_BERSERKER_NORMAL",
+      "SOUL_NEXUS_ELITE",
+      "TEST_SUBJECT_BOSS",
+      "THE_LOST_AND_FORGOTTEN_NORMAL",
+      "TURRET_OPERATOR_WEAK"
+    ]
+  },
+  {
+    "id": "HIVE",
+    "name": "Hive",
+    "num_rooms": 14,
+    "bosses": [
+      "THE_INSATIABLE_BOSS",
+      "KNOWLEDGE_DEMON_BOSS",
+      "KAISER_CRAB_BOSS"
+    ],
+    "ancients": [
+      "OROBAS",
+      "PAEL",
+      "TEZCATARA",
+      "OROBAS"
+    ],
+    "events": [
+      "AMALGAMATOR",
+      "BUGSLAYER",
+      "COLORFUL_PHILOSOPHERS",
+      "COLOSSAL_FLOWER",
+      "FIELD_OF_MAN_SIZED_HOLES",
+      "INFESTED_AUTOMATON",
+      "LOST_WISP",
+      "SPIRIT_GRAFTER",
+      "THE_LANTERN_KEY",
+      "ZEN_WEAVER"
+    ],
+    "encounters": [
+      "BOWLBUGS_NORMAL",
+      "BOWLBUGS_WEAK",
+      "CHOMPERS_NORMAL",
+      "DECIMILLIPEDE_ELITE",
+      "ENTOMANCER_ELITE",
+      "EXOSKELETONS_NORMAL",
+      "EXOSKELETONS_WEAK",
+      "HUNTER_KILLER_NORMAL",
+      "KAISER_CRAB_BOSS",
+      "INFESTED_PRISMS_ELITE",
+      "KNOWLEDGE_DEMON_BOSS",
+      "LOUSE_PROGENITOR_NORMAL",
+      "MYTES_NORMAL",
+      "OVICOPTER_NORMAL",
+      "SLUMBERING_BEETLE_NORMAL",
+      "SPINY_TOAD_NORMAL",
+      "THE_INSATIABLE_BOSS",
+      "THE_OBSCURA_NORMAL",
+      "THIEVING_HOPPER_WEAK",
+      "TUNNELER_NORMAL",
+      "TUNNELER_WEAK"
+    ]
+  },
+  {
+    "id": "OVERGROWTH",
+    "name": "Overgrowth",
+    "num_rooms": 15,
+    "bosses": [
+      "VANTOM_BOSS",
+      "CEREMONIAL_BEAST_BOSS",
+      "THE_KIN_BOSS"
+    ],
+    "ancients": [
+      "NEOW",
+      "NEOW"
+    ],
+    "events": [
+      "AROMA_OF_CHAOS",
+      "BYRDONIS_NEST",
+      "DENSE_VEGETATION",
+      "JUNGLE_MAZE_ADVENTURE",
+      "LUMINOUS_CHOIR",
+      "MORPHIC_GROVE",
+      "SAPPHIRE_SEED",
+      "SUNKEN_STATUE",
+      "TABLET_OF_TRUTH",
+      "UNREST_SITE",
+      "WELLSPRING",
+      "WHISPERING_HOLLOW",
+      "WOOD_CARVINGS"
+    ],
+    "encounters": [
+      "BYGONE_EFFIGY_ELITE",
+      "BYRDONIS_ELITE",
+      "CEREMONIAL_BEAST_BOSS",
+      "CUBEX_CONSTRUCT_NORMAL",
+      "FLYCONID_NORMAL",
+      "FOGMOG_NORMAL",
+      "FUZZY_WURM_CRAWLER_WEAK",
+      "INKLETS_NORMAL",
+      "MAWLER_NORMAL",
+      "NIBBITS_NORMAL",
+      "NIBBITS_WEAK",
+      "OVERGROWTH_CRAWLERS",
+      "PHROG_PARASITE_ELITE",
+      "RUBY_RAIDERS_NORMAL",
+      "SHRINKER_BEETLE_WEAK",
+      "SLIMES_NORMAL",
+      "SLIMES_WEAK",
+      "SLITHERING_STRANGLER_NORMAL",
+      "SNAPPING_JAXFRUIT_NORMAL",
+      "THE_KIN_BOSS",
+      "VANTOM_BOSS",
+      "VINE_SHAMBLER_NORMAL"
+    ]
+  },
+  {
+    "id": "UNDERDOCKS",
+    "name": "Underdocks",
+    "num_rooms": 15,
+    "bosses": [
+      "WATERFALL_GIANT_BOSS",
+      "SOUL_FYSH_BOSS",
+      "LAGAVULIN_MATRIARCH_BOSS"
+    ],
+    "ancients": [
+      "NEOW",
+      "NEOW"
+    ],
+    "events": [
+      "ABYSSAL_BATHS",
+      "DROWNING_BEACON",
+      "ENDLESS_CONVEYOR",
+      "PUNCH_OFF",
+      "SPIRALING_WHIRLPOOL",
+      "SUNKEN_STATUE",
+      "SUNKEN_TREASURY",
+      "DOORS_OF_LIGHT_AND_DARK",
+      "TRASH_HEAP",
+      "WATERLOGGED_SCRIPTORIUM"
+    ],
+    "encounters": [
+      "CORPSE_SLUGS_NORMAL",
+      "CORPSE_SLUGS_WEAK",
+      "CULTISTS_NORMAL",
+      "LIVING_FOG_NORMAL",
+      "FOSSIL_STALKER_NORMAL",
+      "GREMLIN_MERC_NORMAL",
+      "HAUNTED_SHIP_NORMAL",
+      "LAGAVULIN_MATRIARCH_BOSS",
+      "SKULKING_COLONY_ELITE",
+      "PHANTASMAL_GARDENERS_ELITE",
+      "PUNCH_CONSTRUCT_NORMAL",
+      "SEAPUNK_WEAK",
+      "SEWER_CLAM_NORMAL",
+      "SLUDGE_SPINNER_WEAK",
+      "SOUL_FYSH_BOSS",
+      "TERROR_EEL_ELITE",
+      "TOADPOLES_NORMAL",
+      "TOADPOLES_WEAK",
+      "TWO_TAILED_RATS_NORMAL",
+      "WATERFALL_GIANT_BOSS"
+    ]
+  }
+]

@@ -1,0 +1,72 @@
+[
+  {
+    "id": "ATTACK",
+    "name": "Aggressive",
+    "description": "This enemy intends to [gold]Attack[/gold] {IsMultiplayer:everyone |}for [blue]{Damage}[/blue] damage{Repeat:plural:| [blue]{}[/blue] times}."
+  },
+  {
+    "id": "BUFF",
+    "name": "Empower",
+    "description": "This enemy intends to use a [gold]Buff[/gold]."
+  },
+  {
+    "id": "CARD_DEBUFF",
+    "name": "Malicious",
+    "description": "This enemy intends to apply [gold]Afflictions[/gold] on your cards."
+  },
+  {
+    "id": "DEATH_BLOW",
+    "name": "Death Blow",
+    "description": "This creature is trying to take you down with it. It will attack you for [blue]{Damage}[/blue] damage before being destroyed."
+  },
+  {
+    "id": "DEBUFF",
+    "name": "Strategic",
+    "description": "This enemy intends to apply a [gold]Debuff[/gold] to you."
+  },
+  {
+    "id": "DEBUFF_STRONG",
+    "name": "Strategic",
+    "description": "This enemy intends to apply a powerful [gold]Debuff[/gold] to you."
+  },
+  {
+    "id": "DEFEND",
+    "name": "Defensive",
+    "description": "This enemy intends to [gold]Block[/gold] on its turn."
+  },
+  {
+    "id": "ESCAPE",
+    "name": "Cowardly",
+    "description": "This enemy intends to [gold]Escape[/gold]."
+  },
+  {
+    "id": "HEAL",
+    "name": "Heal",
+    "description": "This enemy intends to [gold]Heal[/gold]."
+  },
+  {
+    "id": "SLEEP",
+    "name": "Sleeping",
+    "description": "This enemy is doing nothing this turn."
+  },
+  {
+    "id": "STATUS",
+    "name": "Strategic",
+    "description": "This enemy intends to give you [blue]{CardCount}[/blue] [gold]Status[/gold] {CardCount:plural:card|cards}."
+  },
+  {
+    "id": "STUN",
+    "name": "Stunned",
+    "description": "This enemy can't act on its next turn."
+  },
+  {
+    "id": "SUMMON",
+    "name": "Summon",
+    "description": "This enemy intends to summon [gold]Monsters[/gold]."
+  },
+  {
+    "id": "UNKNOWN",
+    "name": "Unknown",
+    "description": "This enemy's intentions are [gold]Unknown[/gold]."
+  }
+]

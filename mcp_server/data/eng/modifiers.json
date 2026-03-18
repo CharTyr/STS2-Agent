@@ -1,0 +1,82 @@
+[
+  {
+    "id": "ALL_STAR",
+    "name": "All Star",
+    "description": "Start with [blue]5[/blue] [gold]colorless cards[/gold]."
+  },
+  {
+    "id": "BIG_GAME_HUNTER",
+    "name": "Big Game Hunter",
+    "description": "Elite enemies swarm the Spire and drop better rewards."
+  },
+  {
+    "id": "BINARY",
+    "name": "Binary",
+    "description": "[gold]Card rewards[/gold] now contain only [blue]2[/blue] cards."
+  },
+  {
+    "id": "CURSED_RUN",
+    "name": "Cursed Run",
+    "description": "At the start of each Act, add a random [red]Curse[/red] to your deck."
+  },
+  {
+    "id": "DEADLY_EVENTS",
+    "name": "Deadly Events",
+    "description": "Unknown rooms can now contain Elites, but are also more likely to contain Treasure rooms."
+  },
+  {
+    "id": "DRAFT",
+    "name": "Draft",
+    "description": "Choose [blue]10[/blue] [gold]card rewards[/gold] to replace your starting deck."
+  },
+  {
+    "id": "FLIGHT",
+    "name": "Flight",
+    "description": "You may ignore paths when choosing the next room to travel to."
+  },
+  {
+    "id": "HOARDER",
+    "name": "Hoarder",
+    "description": "Whenever you add a card to your deck, add [blue]2[/blue] additional copies. You can no longer remove cards from your deck at the Merchant."
+  },
+  {
+    "id": "INSANITY",
+    "name": "Insanity",
+    "description": "Start with a random deck of [blue]30[/blue] cards."
+  },
+  {
+    "id": "MIDAS",
+    "name": "Midas",
+    "description": "Enemies drop [blue]200%[/blue] more gold, but you can no longer Smith at [gold]Rest Sites[/gold]."
+  },
+  {
+    "id": "MURDEROUS",
+    "name": "Murderous",
+    "description": "You start each combat with [blue]3[/blue] [gold]Strength[/gold]. All enemies start combat with [blue]3[/blue] [gold]Strength[/gold]."
+  },
+  {
+    "id": "NIGHT_TERRORS",
+    "name": "Night Terrors",
+    "description": "Resting at [gold]Rest Sites[/gold] heals all of your HP, but costs [red]5[/red] Max HP."
+  },
+  {
+    "id": "SEALED_DECK",
+    "name": "Sealed Deck",
+    "description": "Choose [blue]10[/blue] out of [blue]30[/blue] cards to replace your starting deck."
+  },
+  {
+    "id": "SPECIALIZED",
+    "name": "Specialized",
+    "description": "Start with [blue]5[/blue] copies of a single card."
+  },
+  {
+    "id": "TERMINAL",
+    "name": "Terminal",
+    "description": "Whenever you enter a new room, lose [red]1[/red] Max HP. Start each combat with [blue]5[/blue] [gold]Plating[/gold]."
+  },
+  {
+    "id": "VINTAGE",
+    "name": "Vintage",
+    "description": "Normal enemies drop relics instead of cards."
+  }
+]

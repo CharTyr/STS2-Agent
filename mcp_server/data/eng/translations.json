@@ -1,0 +1,74 @@
+{
+  "card_types": {
+    "Attack": "Attack",
+    "Skill": "Skill",
+    "Power": "Power",
+    "Status": "Status",
+    "Curse": "Curse",
+    "Quest": "Quest"
+  },
+  "card_rarities": {
+    "Basic": "Basic",
+    "Common": "Common",
+    "Uncommon": "Uncommon",
+    "Rare": "Rare",
+    "Ancient": "Ancient",
+    "Event": "Event",
+    "Token": "Token",
+    "Status": "Status",
+    "Curse": "Curse",
+    "Quest": "Quest"
+  },
+  "relic_rarities": {
+    "Starter": "Starter Relic",
+    "Common": "Common Relic",
+    "Uncommon": "Uncommon Relic",
+    "Rare": "Rare Relic",
+    "Ancient": "Ancient Relic",
+    "Event": "Event Relic",
+    "Shop": "Shop Relic"
+  },
+  "potion_rarities": {
+    "Common": "Common",
+    "Uncommon": "Uncommon",
+    "Rare": "Rare",
+    "Event": "Event",
+    "Token": "Token"
+  },
+  "keywords": {
+    "ETERNAL": "Eternal",
+    "ETHEREAL": "Ethereal",
+    "EXHAUST": "Exhaust",
+    "INNATE": "Innate",
+    "RETAIN": "Retain",
+    "SLY": "Sly",
+    "UNPLAYABLE": "Unplayable"
+  },
+  "sections": {
+    "cards": "Card Library",
+    "characters": "Characters",
+    "relics": "Relic Collection",
+    "monsters": "Bestiary",
+    "potions": "Potion Lab",
+    "enchantments": "Enchantments",
+    "encounters": "Encounters",
+    "events": "Events",
+    "powers": "Powers",
+    "timeline": "Timeline",
+    "images": "Images",
+    "reference": "Reference"
+  },
+  "section_descs": {
+    "cards": "View all of the cards you have encountered throughout the Spire.",
+    "relics": "Examine the various trinkets and artifacts obtained throughout your runs.",
+    "monsters": "View all of the enemies you have encountered throughout the Spire.",
+    "potions": "Observe the numerous potions found climbing the Spire."
+  },
+  "character_names": {
+    "ironclad": "Ironclad",
+    "silent": "Silent",
+    "defect": "Defect",
+    "necrobinder": "Necrobinder",
+    "regent": "Regent"
+  }
+}

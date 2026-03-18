@@ -19,5 +19,11 @@ build-backend = "hatchling.build"
 [tool.hatch.build.targets.wheel]
 packages = ["src/sts2_mcp"]
 
+[tool.hatch.build.targets.wheel.force-include]
+"data/eng" = "data/eng"
+
+[tool.hatch.build.targets.sdist.force-include]
+"data/eng" = "data/eng"
+
 [tool.uv]
 package = true

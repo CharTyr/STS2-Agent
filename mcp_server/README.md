@@ -4,6 +4,26 @@
 
 它的目标不是“把所有底层按钮都暴露出去”，而是给 agent 一套足够完整、但仍然有状态约束的游玩接口。
 
+## Tool Profile
+
+- `guided`
+  - 默认 profile
+  - 只暴露 `health_check`、`get_game_state`、`get_available_actions`、`act`
+- `layered`
+  - 面向主 / 副 Agent 分层编排
+  - 在 guided 基础上额外暴露：
+    - `get_planner_context`
+    - `create_planner_handoff`
+    - `get_combat_context`
+    - `create_combat_handoff`
+    - `complete_combat_handoff`
+    - `append_combat_knowledge`
+    - `append_event_knowledge`
+    - `complete_event_handoff`
+- `full`
+  - 包含 layered 工具
+  - 另外继续暴露 legacy per-action tools，适合验证和兼容性测试
+
 ## 当前工具
 
 基础状态：
@@ -11,8 +31,20 @@
 - `health_check`
 - `get_game_state`
 - `get_available_actions`
+- `act`
+- `get_game_data_item`
+- `get_game_data_items`
+- `get_relevant_game_data`
 - `wait_for_event`
 - `wait_until_actionable`
+- `get_planner_context`（layered / full）
+- `create_planner_handoff`（layered / full）
+- `get_combat_context`（layered / full）
+- `create_combat_handoff`（layered / full）
+- `complete_combat_handoff`（layered / full）
+- `append_combat_knowledge`（layered / full）
+- `append_event_knowledge`（layered / full）
+- `complete_event_handoff`（layered / full）
 
 战斗：
 
@@ -66,42 +98,6 @@ Modal：
   - 默认关闭
   - 只用于开发和验证，不应成为正式游玩流程的常规依赖
 
-## 事件流回调（SSE）
-
-Mod 侧现在提供 `GET /events/stream`，用于推送阶段变化回调，减少高频轮询。
-
-常见事件：
-
-- `screen_changed`
-- `combat_started`
-- `combat_ended`
-- `combat_turn_changed`
-- `player_action_window_opened`
-- `player_action_window_closed`
-- `route_decision_required`
-- `reward_decision_required`
-- `event_state_changed`
-- `available_actions_changed`
-
-Python 客户端可以直接消费：
-
-```python
-from sts2_mcp.client import Sts2Client
-
-client = Sts2Client()
-
-# 持续监听
-for evt in client.iter_events():
-    print(evt["event"], evt["data"])
-
-# 等待某类事件（例如下一次可操作窗口开启）
-evt = client.wait_for_event(
-    event_names={"player_action_window_opened", "route_decision_required"},
-    timeout=20,
-)
-print(evt)
-```
-
 ## 降低模型误调用的建议
 
 这个 MCP 已经不算小，所以真正影响稳定性的，不只是“工具有没有”，还包括“模型是不是按正确节奏调用”。
@@ -152,12 +148,53 @@ print(evt)
 
 - `STS2_API_BASE_URL`
   - 默认：`http://127.0.0.1:8080`
+- `STS2_AGENT_KNOWLEDGE_DIR`
+  - 默认：仓库根目录下的 `agent_knowledge/`
+  - 作用：保存 combat / event 的运行时知识文件
 - `STS2_API_TIMEOUT_SECONDS`
   - 默认：`10`
 - `STS2_ENABLE_DEBUG_ACTIONS`
   - 默认：未设置 / `0`
   - 作用：启用开发期 debug 工具，例如 `run_console_command`
   - 发布建议：保持关闭
+
+## 运行时知识库
+
+`layered` / `full` profile 会按稳定 id 自动维护一个简单知识库：
+
+```text
+agent_knowledge/
+  combat/
+    global/
+      solo/
+        cultist_x1.md
+      groups/
+        cultist_x2+slime_large_x1.md
+  events/
+    global/
+      cleric.md
+```
+
+约束：
+
+- 战斗文件按 `enemy_id_xcount` 聚合并排序，不依赖本地化名字
+- 事件文件按 `event_id` 命名
+- 当前还没有 chapter 字段时，目录先落在 `global/`
+- 追加内容时会自动带上 `run_id`、`floor`、`screen`、UTC 时间戳
+
+## 主 / 副 Agent 交接
+
+如果你采用“主 Agent 负责路线和房间决策，副 Agent 专管战斗”的结构，推荐这样接：
+
+1. 主 Agent 每次非战斗决策前调用 `create_planner_handoff`
+2. 当 `screen=COMBAT` 时，主 Agent 调用 `create_combat_handoff`，并把返回包整体交给战斗 Agent
+3. 战斗 Agent 在战斗结束后调用 `complete_combat_handoff`
+4. 主 Agent 把 `planner_summary` 当作上一场战斗的压缩记忆，再继续下一次 `create_planner_handoff`
+
+事件也可以用类似方式：
+
+1. 主 Agent 根据 `create_planner_handoff` 中的 `event` 和 `event_knowledge` 决策
+2. 事件结算后调用 `complete_event_handoff` 写回结果
 
 ## 本地启动
 

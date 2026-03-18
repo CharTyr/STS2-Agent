@@ -1,0 +1,167 @@
+[
+  {
+    "id": "ALL_CARDS_UPGRADED",
+    "name": "The Perfect Deck",
+    "description": "Win a Run with a fully-upgraded deck."
+  },
+  {
+    "id": "ALL_OTHER_ACHIEVEMENTS",
+    "name": "Eternal One",
+    "description": "Complete all other Achievements."
+  },
+  {
+    "id": "CHARACTER_SKILL_IRONCLAD1",
+    "name": "Pact Fulfilled",
+    "description": "Exhaust 20 cards in a single combat."
+  },
+  {
+    "id": "CHARACTER_SKILL_IRONCLAD2",
+    "name": "Heaviest Blade",
+    "description": "Deal 999 Damage in a single blow."
+  },
+  {
+    "id": "CHARACTER_SKILL_NECROBINDER1",
+    "name": "Already Dead",
+    "description": "Apply 999 Doom to a single enemy."
+  },
+  {
+    "id": "CHARACTER_SKILL_NECROBINDER2",
+    "name": "Milk",
+    "description": "Apply 50 Strength to Osty."
+  },
+  {
+    "id": "CHARACTER_SKILL_REGENT1",
+    "name": "Blade Fit for a Monarch",
+    "description": "Forge a Sovereign Blade that does at least 999 damage."
+  },
+  {
+    "id": "CHARACTER_SKILL_REGENT2",
+    "name": "Suns in the Sky",
+    "description": "Have 20 Stars at once."
+  },
+  {
+    "id": "CHARACTER_SKILL_SILENT1",
+    "name": "Sneaky Sly",
+    "description": "Play 5 cards using Sly off a single card."
+  },
+  {
+    "id": "CHARACTER_SKILL_SILENT2",
+    "name": "A Few Drops",
+    "description": "Apply 99 Poison to a single enemy."
+  },
+  {
+    "id": "COMPLETE_ACT4",
+    "name": "True Ending",
+    "description": "Complete Act 4."
+  },
+  {
+    "id": "COMPLETE_TIMELINE",
+    "name": "Historian",
+    "description": "Complete the Timeline."
+  },
+  {
+    "id": "DEFEAT_GLORY_ENEMIES",
+    "name": "The Glory",
+    "description": "Defeat every enemy in the Glory."
+  },
+  {
+    "id": "DEFEAT_HIVE_ENEMIES",
+    "name": "The Hive",
+    "description": "Defeat every enemy in the Hive."
+  },
+  {
+    "id": "DEFEAT_ONE_BOSS",
+    "name": "First of Many",
+    "description": "Defeat a Boss."
+  },
+  {
+    "id": "DEFEAT_OVERGROWTH_ENEMIES",
+    "name": "The Overgrowth",
+    "description": "Defeat every enemy in the Overgrowth."
+  },
+  {
+    "id": "DEFEAT_UNDERDOCKS_ENEMIES",
+    "name": "The Underdocks",
+    "description": "Defeat every enemy in the Underdocks."
+  },
+  {
+    "id": "DEFECT_ASCENSION10",
+    "name": "Echo",
+    "description": "Beat Ascension 10 as the Defect."
+  },
+  {
+    "id": "DEFECT_WIN",
+    "name": "The Defect",
+    "description": "Win as the Defect."
+  },
+  {
+    "id": "DISCOVER_ALL_CARDS",
+    "name": "Collector",
+    "description": "Discover all Cards."
+  },
+  {
+    "id": "DISCOVER_ALL_EVENTS",
+    "name": "Explorer",
+    "description": "Encounter all Events."
+  },
+  {
+    "id": "DISCOVER_ALL_RELICS",
+    "name": "Archaeologist",
+    "description": "Discover all Relics."
+  },
+  {
+    "id": "FLOOR_TEN_THOUSAND",
+    "name": "A Lot of Stairs",
+    "description": "Climb 10,000 floors."
+  },
+  {
+    "id": "IRONCLAD_ASCENSION10",
+    "name": "Demon",
+    "description": "Beat Ascension 10 as the Ironclad."
+  },
+  {
+    "id": "IRONCLAD_WIN",
+    "name": "The Ironclad",
+    "description": "Win as the Ironclad."
+  },
+  {
+    "id": "NECROBINDER_ASCENSION10",
+    "name": "Lich",
+    "description": "Beat Ascension 10 as the Necrobinder."
+  },
+  {
+    "id": "NECROBINDER_WIN",
+    "name": "The Necrobinder",
+    "description": "Win as the Necrobinder."
+  },
+  {
+    "id": "NO_RELIC_WIN",
+    "name": "Unnecessary Clutter",
+    "description": "Win a Run without obtaining any relics."
+  },
+  {
+    "id": "PLAY20_CARDS_SINGLE_TURN",
+    "name": "Playing Cards Is Fun",
+    "description": "Play 20 cards in a single turn."
+  },
+  {
+    "id": "REGENT_ASCENSION10",
+    "name": "Monarch",
+    "description": "Beat Ascension 10 as the Regent."
+  },
+  {
+    "id": "REGENT_WIN",
+    "name": "The Regent",
+    "description": "Win as the Regent."
+  },
+  {
+    "id": "SILENT_ASCENSION10",
+    "name": "Wraith",
+    "description": "Beat Ascension 10 as the Silent."
+  },
+  {
+    "id": "SILENT_WIN",
+    "name": "The Silent",
+    "description": "Win as the Silent."
+  }
+]

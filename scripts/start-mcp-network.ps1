@@ -1,6 +1,7 @@
 param(
     [string]$RepoRoot = "",
-    [string]$Host = "127.0.0.1",
+    [Alias("Host")]
+    [string]$BindHost = "127.0.0.1",
     [int]$Port = 8765,
     [string]$Path = "/mcp",
     [string]$ApiBaseUrl = "http://127.0.0.1:8080"
@@ -35,8 +36,8 @@ try {
     Write-Host "[start-mcp-network] Syncing dependencies..."
     uv sync | Out-Host
 
-    Write-Host "[start-mcp-network] Starting MCP server on http://$Host`:$Port$Path"
-    uv run sts2-network-mcp-server --host $Host --port $Port --path $Path --api-base-url $ApiBaseUrl
+    Write-Host "[start-mcp-network] Starting MCP server on http://$BindHost`:$Port$Path"
+    uv run sts2-network-mcp-server --host $BindHost --port $Port --path $Path --api-base-url $ApiBaseUrl
 }
 finally {
     Pop-Location

@@ -77,6 +77,7 @@ $zipPath = Get-UniquePath -BasePath (Join-Path $OutputRoot $releaseBaseName) -Ex
 $modOutputDir = Join-Path $releaseDir "mod"
 $mcpOutputDir = Join-Path $releaseDir "mcp_server"
 $scriptOutputDir = Join-Path $releaseDir "scripts"
+$docsOutputDir = Join-Path $releaseDir "docs"
 $mcpSourceDir = Join-Path $ProjectRoot "mcp_server"
 
 Write-Host "[package-release] Building release mod artifacts..."
@@ -100,6 +101,7 @@ New-Item -ItemType Directory -Force -Path $releaseDir | Out-Null
 New-Item -ItemType Directory -Force -Path $modOutputDir | Out-Null
 New-Item -ItemType Directory -Force -Path $mcpOutputDir | Out-Null
 New-Item -ItemType Directory -Force -Path $scriptOutputDir | Out-Null
+New-Item -ItemType Directory -Force -Path $docsOutputDir | Out-Null
 New-Item -ItemType Directory -Force -Path (Join-Path $mcpOutputDir "src") | Out-Null
 
 Copy-Item -Path (Join-Path $stagingModDir "STS2AIAgent.dll") -Destination (Join-Path $modOutputDir "STS2AIAgent.dll") -Force
@@ -111,6 +113,7 @@ Copy-Item -Path (Join-Path $ProjectRoot "README.md") -Destination (Join-Path $re
 Copy-Item -Path (Join-Path $mcpSourceDir "README.md") -Destination (Join-Path $mcpOutputDir "README.md") -Force
 Copy-Item -Path (Join-Path $mcpSourceDir "pyproject.toml") -Destination (Join-Path $mcpOutputDir "pyproject.toml") -Force
 Copy-Item -Path (Join-Path $mcpSourceDir "uv.lock") -Destination (Join-Path $mcpOutputDir "uv.lock") -Force
+Copy-Item -Path (Join-Path $mcpSourceDir "data") -Destination (Join-Path $mcpOutputDir "data") -Recurse -Force
 Get-ChildItem -Path (Join-Path $mcpSourceDir "src/sts2_mcp") -Recurse -File |
     Where-Object { $_.FullName -notmatch "\\__pycache__\\" } |
     ForEach-Object {
@@ -121,6 +124,9 @@ Get-ChildItem -Path (Join-Path $mcpSourceDir "src/sts2_mcp") -Recurse -File |
         New-Item -ItemType Directory -Force -Path $destinationDir | Out-Null
         Copy-Item -Path $_.FullName -Destination $destinationPath -Force
     }
+
+Copy-Item -Path (Join-Path $ProjectRoot "docs/game-knowledge") -Destination (Join-Path $docsOutputDir "game-knowledge") -Recurse -Force
+Copy-Item -Path (Join-Path $ProjectRoot "docs/release-readiness.md") -Destination (Join-Path $docsOutputDir "release-readiness.md") -Force
 
 Copy-Item -Path (Join-Path $ProjectRoot "scripts/start-mcp-stdio.ps1") -Destination (Join-Path $scriptOutputDir "start-mcp-stdio.ps1") -Force
 Copy-Item -Path (Join-Path $ProjectRoot "scripts/start-mcp-network.ps1") -Destination (Join-Path $scriptOutputDir "start-mcp-network.ps1") -Force

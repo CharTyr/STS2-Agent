@@ -1,0 +1,105 @@
+[
+  {
+    "id": "DEFECT",
+    "name": "The Defect",
+    "epochs": [
+      "DEFECT6_EPOCH",
+      "DEFECT3_EPOCH",
+      "DEFECT4_EPOCH",
+      "DEFECT5_EPOCH",
+      "DEFECT1_EPOCH",
+      "DEFECT2_EPOCH",
+      "DEFECT7_EPOCH"
+    ]
+  },
+  {
+    "id": "IRONCLAD",
+    "name": "The Ironclad",
+    "epochs": [
+      "IRONCLAD4_EPOCH",
+      "IRONCLAD3_EPOCH",
+      "IRONCLAD2_EPOCH",
+      "IRONCLAD5_EPOCH",
+      "IRONCLAD6_EPOCH",
+      "IRONCLAD7_EPOCH"
+    ]
+  },
+  {
+    "id": "MAGNUM_OPUS",
+    "name": "Magnum Opus",
+    "epochs": [
+      "COLORLESS1_EPOCH",
+      "RELIC1_EPOCH",
+      "COLORLESS2_EPOCH",
+      "CUSTOM_AND_SEEDS_EPOCH",
+      "RELIC2_EPOCH",
+      "COLORLESS3_EPOCH",
+      "COLORLESS4_EPOCH",
+      "RELIC4_EPOCH",
+      "EVENT3_EPOCH"
+    ]
+  },
+  {
+    "id": "NECROBINDER",
+    "name": "The Necrobinder",
+    "epochs": [
+      "NECROBINDER2_EPOCH",
+      "NECROBINDER3_EPOCH",
+      "NECROBINDER4_EPOCH",
+      "NECROBINDER5_EPOCH",
+      "NECROBINDER6_EPOCH",
+      "NECROBINDER1_EPOCH",
+      "NECROBINDER7_EPOCH"
+    ]
+  },
+  {
+    "id": "REGENT",
+    "name": "The Regent",
+    "epochs": [
+      "REGENT6_EPOCH",
+      "REGENT1_EPOCH",
+      "REGENT5_EPOCH",
+      "REGENT2_EPOCH",
+      "REGENT3_EPOCH",
+      "REGENT4_EPOCH",
+      "REGENT7_EPOCH"
+    ]
+  },
+  {
+    "id": "SILENT",
+    "name": "The Silent",
+    "epochs": [
+      "SILENT6_EPOCH",
+      "SILENT4_EPOCH",
+      "SILENT5_EPOCH",
+      "SILENT2_EPOCH",
+      "SILENT3_EPOCH",
+      "SILENT1_EPOCH",
+      "SILENT7_EPOCH"
+    ]
+  },
+  {
+    "id": "TALES_FROM_THE_SPIRE",
+    "name": "Tales from the Spire",
+    "epochs": [
+      "COLORLESS5_EPOCH",
+      "OROBAS_EPOCH",
+      "EVENT1_EPOCH",
+      "UNDERDOCKS_EPOCH",
+      "DARV_EPOCH",
+      "DAILY_RUN_EPOCH"
+    ]
+  },
+  {
+    "id": "REOPENING",
+    "name": "The Reopening",
+    "epochs": [
+      "POTION2_EPOCH",
+      "RELIC5_EPOCH",
+      "RELIC3_EPOCH",
+      "POTION1_EPOCH",
+      "NEOW_EPOCH",
+      "EVENT2_EPOCH"
+    ]
+  }
+]

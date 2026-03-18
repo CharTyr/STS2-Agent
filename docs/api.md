@@ -217,6 +217,7 @@
 
 | 字段 | 类型 | 说明 |
 | --- | --- | --- |
+| `floor` | number | 当前楼层 |
 | `current_hp` | number | 当前生命值 |
 | `max_hp` | number | 最大生命值 |
 | `gold` | number | 当前金币 |
