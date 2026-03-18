@@ -1,55 +1,33 @@
-
+# STS2 AI Agent
 
 https://github.com/user-attachments/assets/89353468-a299-4315-9516-e520bcbfbd4b
 
-# STS2 AI Agent
+`STS2 AI Agent` 是一个给《Slay the Spire 2》用的游戏 Mod + MCP Server 组合：
 
-`STS2 AI Agent` 由两部分组成：
-
-- `STS2AIAgent` Mod：把游戏状态和操作暴露为本地 HTTP API。
-- `mcp_server`：把本地 HTTP API 包装成 MCP Server，供支持 MCP 的客户端直接调用。
+- `STS2AIAgent`：把游戏状态和操作暴露为本地 HTTP API
+- `mcp_server`：把这套本地 API 包装成 MCP Server，方便接入支持 MCP 的 AI 客户端
 
 
-## 你会下载到什么
 
-发布包内通常包含这些目录：
-
-```text
-mod/
-  STS2AIAgent.dll
-  STS2AIAgent.pck
-mcp_server/
-  pyproject.toml
-  uv.lock
-  src/sts2_mcp/...
-scripts/
-  start-mcp-stdio.ps1
-  start-mcp-network.ps1
-  start-mcp-stdio.sh
-  start-mcp-network.sh
-README.md
-```
-
-如果你只想安装 Mod，只需要 `mod/` 目录里的两个文件。
 
 ## 快速开始
 
-详细的编译与环境流程请看：[build-and-env.md](./build-and-env.md)。
-
 ### 1. 安装 Mod
 
-1. 下载并解压 release 压缩包。
-2. 打开你的游戏目录。
-   Steam 默认路径通常是：
+下载并解压 release 后，把下面两个文件复制到你的游戏目录 `mods/` 下：
 
-   ```text
-   C:\Program Files (x86)\Steam\steamapps\common\Slay the Spire 2
-   ```
+```text
+STS2AIAgent.dll
+STS2AIAgent.pck
+```
 
-3. 如果游戏目录下没有 `mods` 文件夹，就新建一个。
-4. 把 `mod/STS2AIAgent.dll` 和 `mod/STS2AIAgent.pck` 复制到游戏目录的 `mods/` 中。
+Steam 默认游戏目录通常是：
 
-最终结构应当类似：
+```text
+C:\Program Files (x86)\Steam\steamapps\common\Slay the Spire 2
+```
+
+最终目录结构应当类似：
 
 ```text
 Slay the Spire 2/
@@ -58,220 +36,146 @@ Slay the Spire 2/
     STS2AIAgent.pck
 ```
 
-### 2. 启动游戏
+### 2. 启动游戏并确认 Mod 生效
 
 先正常启动一次游戏，让 Mod 随游戏一起加载。
 
-如果你想确认 Mod 是否已经生效，可以在浏览器里打开：
+然后在浏览器打开：
 
 ```text
 http://127.0.0.1:8080/health
 ```
 
-能看到返回结果，就说明 Mod 已成功启动。
+只要能看到返回结果，就说明 Mod 已经跑起来了。
 
-### 3. 启动 MCP
+### 3. 启动 MCP Server
 
-#### 推荐方式：stdio MCP
+先准备运行环境：
 
-这是最适合接入桌面 AI 客户端的方式。
+1. 安装 `Python 3.11+`
+2. 安装 `uv`
 
-先准备环境：
-
-1. 安装 Python 3.11 或更高版本。
-2. 安装 `uv`。
-
-安装 `uv` 的常见方式：
+Windows 安装 `uv`：
 
 ```powershell
 powershell -ExecutionPolicy Bypass -c "irm https://astral.sh/uv/install.ps1 | iex"
 ```
 
-macOS 下可以直接安装：
+macOS：
 
 ```bash
 brew install uv
 ```
 
-然后在 release 解压目录中运行：
+然后直接启动 `stdio` MCP。
+
+Windows：
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File ".\scripts\start-mcp-stdio.ps1"
 ```
 
-或者在 macOS / Linux 终端中运行：
+macOS / Linux：
 
 ```bash
 ./scripts/start-mcp-stdio.sh
 ```
 
-脚本会自动：
+这就是默认推荐用法。大多数桌面 AI 客户端接 MCP，都优先用 `stdio`。
 
-- 进入 `mcp_server/`
-- 执行 `uv sync`
-- 启动 `sts2-mcp-server`
+### 4. 连接你的 MCP 客户端
 
-如果你更喜欢手动启动，也可以执行：
+如果客户端支持命令式启动，把工作目录指向 `mcp_server/`，启动命令填：
 
-```powershell
-cd ".\mcp_server"
-uv sync
+```text
 uv run sts2-mcp-server
 ```
 
-macOS / Linux 手动启动：
+如果你的客户端更适合连 HTTP，再启动网络版：
 
-```bash
-cd "./mcp_server"
-uv sync
-uv run sts2-mcp-server
-```
-
-#### 可选方式：HTTP MCP
-
-如果你的 MCP 客户端更适合通过网络地址连接，可以启动 HTTP 版本：
+Windows：
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File ".\scripts\start-mcp-network.ps1"
 ```
 
-或者在 macOS / Linux 终端中运行：
+macOS / Linux：
 
 ```bash
 ./scripts/start-mcp-network.sh
 ```
 
-默认监听地址：
+默认 MCP 地址：
 
 ```text
 http://127.0.0.1:8765/mcp
 ```
 
-常用参数示例：
+## 这个项目现在能做什么
 
-```bash
-./scripts/start-mcp-network.sh --host 127.0.0.1 --port 8765 --path /mcp --api-base-url http://127.0.0.1:8080
-```
+当前 `main` 分支提供的是一套可直接游玩的基础能力：
 
-### 4. macOS 现状说明
+- 读取游戏状态
+- 获取当前可执行动作
+- 执行战斗、奖励、商店、地图、事件等常见操作
+- 通过 SSE 事件减少高频轮询
+- 以 `stdio` 或 HTTP 方式暴露 MCP
 
-- `mcp_server` 可以在 macOS 上直接运行，只需要 `Python 3.11+` 和 `uv`。
-- `STS2AIAgent` Mod 现在也提供了一个 macOS / Linux 可用的 `bash` 构建脚本：`./scripts/build-mod.sh`。
-- macOS / Linux 现在也提供了一组对齐 Windows 的 `bash` 验证脚本，包括 `start-game-session.sh`、`test-mod-load.sh`、`test-debug-console-gating.sh`、`test-mcp-tool-profile.sh`、`test-state-invariants.sh`、`test-multiplayer-lobby-flow.sh` 和 `test-full-regression.sh`。
-- `test-full-regression.sh` 现在会串起状态不变量检查和多人大厅流，覆盖单机主流程与双进程联机场景。
-- 这些验证入口支持显式透传 `--exe-path`、`--game-root`、`--app-manifest` 和 `--app-id`，方便在非默认 Steam 安装路径下运行。
-- `start-game-session.sh` 在需要时会临时写入 `steam_appid.txt` 来启动游戏，并在脚本退出时自动恢复；如果不希望脚本管理该文件，可以传 `--skip-steam-app-id-file`。
-- 如果你已经有可用的 Mod 文件（`STS2AIAgent.dll` 和 `STS2AIAgent.pck`），macOS 侧最需要的是把游戏本地 API 跑起来，然后用这里的 `mcp_server` 连接 `http://127.0.0.1:8080`。
+更细的工具说明在 [mcp_server/README.md](./mcp_server/README.md)。
 
-### 5. 从源码构建 Mod
+## 常见问题
 
-#### Windows
+### `http://127.0.0.1:8080/health` 打不开
+
+优先检查这几件事：
+
+1. 游戏是否真的已经启动
+2. `STS2AIAgent.dll` 和 `STS2AIAgent.pck` 是否都放进了游戏目录的 `mods/`
+3. 文件名有没有被系统自动改成副本，比如带 `(1)`
+4. 你放的是 Steam 游戏目录，不是仓库目录
+
+### MCP 能启动，但读不到游戏状态
+
+这通常表示 `mcp_server` 启动了，但游戏里的 Mod 没连上。先确认：
+
+1. 游戏正在运行
+2. `http://127.0.0.1:8080/health` 可访问
+3. MCP 仍然在连默认地址 `http://127.0.0.1:8080`
+
+### 要不要开 debug 动作
+
+正常使用不需要。
+
+像 `run_console_command` 这种开发期调试工具默认关闭，发布和日常使用都建议保持关闭。
+
+## 从源码构建
+
+
+
+如果你不是单纯使用 release，而是要自己构建：
+
+Windows：
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File ".\scripts\build-mod.ps1" -Configuration Release
 ```
 
-#### macOS / Linux
-
-先准备：
-
-1. 安装 `dotnet` SDK。
-2. 安装 Godot 4.x，并确保命令行可用，或者知道它的可执行文件路径。
-
-macOS 常见安装方式：
-
-```bash
-brew install dotnet
-```
-
-然后运行：
+macOS / Linux：
 
 ```bash
 ./scripts/build-mod.sh --configuration Release
 ```
 
-`build-mod.sh` 会自动尝试：
+更完整的环境变量、路径探测和验证流程见 [build-and-env.md](./build-and-env.md)。
 
-- 解析仓库根目录
-- 探测 Steam 安装目录下的 `Slay the Spire 2`
-- 优先使用游戏自带运行时打包 `.pck`（避免 Godot 版本高于游戏导致包不兼容）
-- 探测游戏数据目录 `data_sts2_*`
-- 探测 Godot 可执行文件
-- 构建 DLL、打包 `.pck`、并复制到游戏的 `mods/` 目录
-
-如果你的本机目录不在默认位置，可以显式传参：
-
-```bash
-./scripts/build-mod.sh \
-  --configuration Release \
-  --game-root "/path/to/Slay the Spire 2" \
-  --data-dir "/path/to/data_sts2_osx_arm64" \
-  --mods-dir "/path/to/mods" \
-  --godot-exe "/Applications/Godot.app/Contents/MacOS/Godot"
-```
-
-也可以使用环境变量：
-
-```bash
-export STS2_GAME_ROOT="/path/to/Slay the Spire 2"
-export STS2_DATA_DIR="/path/to/data_sts2_osx_arm64"
-export STS2_MODS_DIR="/path/to/mods"
-export GODOT_BIN="/Applications/Godot.app/Contents/MacOS/Godot"
-./scripts/build-mod.sh --configuration Release
-```
-
-如果你更喜欢用 `local.props`，也可以从 [local.props.example](./STS2AIAgent/local.props.example) 复制一份到 `STS2AIAgent/local.props`，填入你的 `Sts2DataDir`。现在项目也支持直接读取环境变量 `STS2_DATA_DIR`。
-
-## MCP 客户端如何接
-
-如果你的客户端支持 `stdio` MCP，一般只需要把启动命令指向：
-
-```text
-uv run sts2-mcp-server
-```
-
-工作目录设置为 release 包中的 `mcp_server/` 即可。
-
-如果你的客户端支持 HTTP MCP，地址填：
-
-```text
-http://127.0.0.1:8765/mcp
-```
-
-## 常见问题
-
-### 看不到 `http://127.0.0.1:8080/health`
-
-优先检查：
-
-1. 游戏是否已经启动。
-2. `STS2AIAgent.dll` 和 `STS2AIAgent.pck` 是否都放进了 `mods/`。
-3. 文件名是否被系统自动改成了带 `(1)` 的副本。
-4. 游戏目录是否放错了，例如放进了仓库目录而不是 Steam 游戏目录。
-
-### MCP 能启动，但读不到游戏状态
-
-这通常表示 MCP 正常，但游戏里的 Mod 没有连上。请先确认：
-
-1. 游戏正在运行。
-2. `http://127.0.0.1:8080/health` 可访问。
-3. MCP 使用的接口地址仍然是默认值 `http://127.0.0.1:8080`。
-
-### 要不要开启 debug 动作
-
-正式使用不需要。
-
-`run_console_command` 这类调试工具默认关闭，发布建议保持关闭。
-
-
-## 相关目录
+## 仓库结构
 
 - `STS2AIAgent/`：游戏 Mod 源码
 - `mcp_server/`：MCP Server 源码
-- `scripts/`：构建、验证和启动脚本
+- `scripts/`：启动、构建、验证脚本
+- `docs/`：补充文档
+- `skills/`：配套 Skill
 
 ## License
 
 This project is licensed under the GNU Affero General Public License v3.0 only (AGPL-3.0-only).
-
-If you modify this project and distribute it, or run it as a network service, you must provide the complete corresponding source code under the same license.
