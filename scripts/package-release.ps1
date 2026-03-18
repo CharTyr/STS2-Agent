@@ -107,7 +107,6 @@ New-Item -ItemType Directory -Force -Path (Join-Path $mcpOutputDir "src") | Out-
 Copy-Item -Path (Join-Path $stagingModDir "STS2AIAgent.dll") -Destination (Join-Path $modOutputDir "STS2AIAgent.dll") -Force
 Copy-Item -Path (Join-Path $stagingModDir "STS2AIAgent.pck") -Destination (Join-Path $modOutputDir "STS2AIAgent.pck") -Force
 Copy-Item -Path (Join-Path $stagingModDir "mod_id.json") -Destination (Join-Path $modOutputDir "mod_id.json") -Force
-Copy-Item -Path (Join-Path $stagingModDir "STS2AIAgent.json") -Destination (Join-Path $modOutputDir "STS2AIAgent.json") -Force
 
 Copy-Item -Path (Join-Path $ProjectRoot "README.md") -Destination (Join-Path $releaseDir "README.md") -Force
 Copy-Item -Path (Join-Path $mcpSourceDir "README.md") -Destination (Join-Path $mcpOutputDir "README.md") -Force

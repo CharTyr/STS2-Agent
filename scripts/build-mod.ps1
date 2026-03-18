@@ -102,7 +102,7 @@ $dllSource = Join-Path $buildOutputDir "$modName.dll"
 $pckOutput = Join-Path $stagingDir "$modName.pck"
 $dllTarget = Join-Path $stagingDir "$modName.dll"
 $modIdManifestTarget = Join-Path $stagingDir "mod_id.json"
-$modIdManifestTargetForName = Join-Path $stagingDir "$modName.json"
+$legacyManifestTarget = Join-Path $stagingDir "$modName.json"
 $builderProjectDir = Join-Path $ProjectRoot "tools/pck_builder"
 $builderScript = Join-Path $builderProjectDir "build_pck.gd"
 
@@ -136,14 +136,21 @@ if (-not (Test-Path $pckOutput)) {
     throw "PCK output not found: $pckOutput"
 }
 Copy-Item -Force $modIdManifestSource $modIdManifestTarget
-Copy-Item -Force $modIdManifestSource $modIdManifestTargetForName
+
+if (Test-Path $legacyManifestTarget) {
+    Remove-Item -Force $legacyManifestTarget
+}
 
 Write-Host "[build-mod] Preparing game mods directory..."
 New-Item -ItemType Directory -Force -Path $modsDir | Out-Null
 Copy-Item -Force $dllTarget (Join-Path $modsDir "$modName.dll")
 Copy-Item -Force $pckOutput (Join-Path $modsDir "$modName.pck")
 Copy-Item -Force $modIdManifestTarget (Join-Path $modsDir "mod_id.json")
-Copy-Item -Force $modIdManifestTargetForName (Join-Path $modsDir "$modName.json")
+
+$legacyManifestInModsDir = Join-Path $modsDir "$modName.json"
+if (Test-Path $legacyManifestInModsDir) {
+    Remove-Item -Force $legacyManifestInModsDir
+}
 
 Write-Host "[build-mod] Done."
 Write-Host "[build-mod] Using Godot: $GodotExe"
