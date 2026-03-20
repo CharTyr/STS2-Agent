@@ -400,6 +400,270 @@ def _detect_scene_from_screen(screen: str) -> str:
     return SCENE_MENU
 
 
+def _get_power_amount(powers: list[dict[str, Any]], power_id: str) -> int:
+    """Get stacked amount for a power by id (case-insensitive partial match)."""
+    needle = power_id.upper()
+    for p in powers:
+        pid = (p.get("power_id") or "").upper()
+        if pid == needle or pid == f"{needle}_POWER":
+            return int(p.get("amount", 0))
+    return 0
+
+
+def _compute_card_damage(base_damage: int, strength: int, is_weak: bool, target_vulnerable: bool, hits: int = 1) -> int:
+    """Compute actual damage for a single card play."""
+    per_hit = base_damage + strength
+    if is_weak:
+        per_hit = int(per_hit * 0.75)
+    if target_vulnerable:
+        per_hit = int(per_hit * 1.5)
+    return max(0, per_hit) * max(1, hits)
+
+
+def _compute_card_block(base_block: int, dexterity: int, is_frail: bool) -> int:
+    """Compute actual block for a single card play."""
+    value = base_block + dexterity
+    if is_frail:
+        value = int(value * 0.75)
+    return max(0, value)
+
+
+def _compute_combat_analysis(state: dict[str, Any]) -> dict[str, Any]:
+    """Analyze current combat: compute effective card values and tactical summary."""
+    combat = state.get("combat")
+    if not combat:
+        return {"error": "not_in_combat", "message": "Combat analysis is only available during combat."}
+
+    # --- Extract player info ---
+    player = combat.get("player", {})
+    energy = player.get("energy", 0)
+    player_block = player.get("block", 0)
+    player_powers = player.get("powers", [])
+    strength = _get_power_amount(player_powers, "STRENGTH")
+    dexterity = _get_power_amount(player_powers, "DEXTERITY")
+    is_weak = _get_power_amount(player_powers, "WEAK") > 0
+    is_frail = _get_power_amount(player_powers, "FRAIL") > 0
+
+    # --- Extract enemy info ---
+    enemies_raw = combat.get("enemies", [])
+    enemies = []
+    total_incoming = 0
+    for e in enemies_raw:
+        if not e.get("is_alive", True):
+            continue
+        hp = e.get("current_hp", 0)
+        block = e.get("block", 0)
+        e_powers = e.get("powers", [])
+        vulnerable = _get_power_amount(e_powers, "VULNERABLE") > 0
+        intents = e.get("intents", [])
+        intent_damage = 0
+        for intent in intents:
+            if intent.get("intent_type") == "Attack":
+                intent_damage += intent.get("total_damage") or intent.get("damage", 0)
+        total_incoming += intent_damage
+        enemies.append({
+            "index": e.get("index"),
+            "name": e.get("name"),
+            "hp": hp,
+            "block": block,
+            "vulnerable": vulnerable,
+            "intent_damage": intent_damage,
+        })
+
+    # --- Build card index from static data ---
+    card_data_index = _ensure_game_data_index("cards")
+
+    # --- Analyze hand ---
+    hand = combat.get("hand", [])
+    analyzed_cards: list[dict[str, Any]] = []
+    for card in hand:
+        card_id = card.get("card_id", "")
+        static = _lookup_game_data_item(index=card_data_index, item_id=card_id)
+        base_dmg = (static or {}).get("damage") if isinstance(static, dict) else None
+        base_blk = (static or {}).get("block") if isinstance(static, dict) else None
+        hit_count = (static or {}).get("hit_count") if isinstance(static, dict) else None
+        card_cost = card.get("energy_cost", 0)
+        is_playable = card.get("playable", False)
+
+        computed_damage = None
+        computed_block = None
+        damage_per_energy = None
+
+        if base_dmg is not None:
+            # For targeted cards, compute vs first alive vulnerable enemy; otherwise use non-vulnerable
+            any_vulnerable = any(e["vulnerable"] for e in enemies)
+            computed_damage = _compute_card_damage(
+                base_dmg, strength, is_weak,
+                target_vulnerable=any_vulnerable,
+                hits=hit_count or 1,
+            )
+            if card_cost and card_cost > 0:
+                damage_per_energy = round(computed_damage / card_cost, 1)
+
+        if base_blk is not None:
+            computed_block = _compute_card_block(base_blk, dexterity, is_frail)
+
+        entry: dict[str, Any] = {
+            "index": card.get("index"),
+            "card_id": card_id,
+            "name": card.get("name", ""),
+            "energy_cost": card_cost,
+            "playable": is_playable,
+        }
+        if computed_damage is not None:
+            entry["computed_damage"] = computed_damage
+            if damage_per_energy is not None:
+                entry["damage_per_energy"] = damage_per_energy
+        if computed_block is not None:
+            entry["computed_block"] = computed_block
+
+        analyzed_cards.append(entry)
+
+    # --- Compute tactical summary ---
+    # Greedy: play cards by damage_per_energy descending until energy exhausted
+    attacks = sorted(
+        [c for c in analyzed_cards if c.get("computed_damage") and c.get("playable")],
+        key=lambda c: c.get("damage_per_energy", 0),
+        reverse=True,
+    )
+    blocks = sorted(
+        [c for c in analyzed_cards if c.get("computed_block") and c.get("playable")],
+        key=lambda c: c.get("computed_block", 0),
+        reverse=True,
+    )
+
+    remaining_energy = energy
+    max_damage = 0
+    for c in attacks:
+        cost = c.get("energy_cost", 1) or 1
+        if cost <= remaining_energy:
+            max_damage += c["computed_damage"]
+            remaining_energy -= cost
+
+    remaining_energy_for_block = energy
+    max_block = 0
+    for c in blocks:
+        cost = c.get("energy_cost", 1) or 1
+        if cost <= remaining_energy_for_block:
+            max_block += c["computed_block"]
+            remaining_energy_for_block -= cost
+
+    # Per-enemy lethal check
+    enemy_analysis = []
+    for e in enemies:
+        effective_hp = e["hp"] + e["block"]
+        enemy_analysis.append({
+            "index": e["index"],
+            "name": e["name"],
+            "effective_hp": effective_hp,
+            "lethal": max_damage >= effective_hp,
+            "intent_damage": e["intent_damage"],
+            "vulnerable": e["vulnerable"],
+        })
+
+    net_damage_taken = max(0, total_incoming - player_block - max_block)
+
+    return {
+        "hand": analyzed_cards,
+        "energy": energy,
+        "player_powers": {
+            "strength": strength,
+            "dexterity": dexterity,
+            "weak": is_weak,
+            "frail": is_frail,
+        },
+        "summary": {
+            "max_damage_all_attacks": max_damage,
+            "max_block_all_defense": max_block,
+            "total_incoming_damage": total_incoming,
+            "current_block": player_block,
+            "net_damage_if_all_block": net_damage_taken,
+        },
+        "enemies": enemy_analysis,
+    }
+
+
+def _score_card_for_deck(
+    card_id: str,
+    card_data: dict[str, Any],
+    current_deck: list[dict[str, Any]],
+    deck_size: int,
+) -> dict[str, Any]:
+    """Score a card reward option against the current deck composition."""
+    score = 50  # baseline
+    reasons: list[str] = []
+
+    # Count deck composition
+    attack_count = sum(1 for c in current_deck if c.get("type") == "ATTACK" or c.get("damage"))
+    skill_count = sum(1 for c in current_deck if c.get("type") == "SKILL" or (c.get("block") and not c.get("damage")))
+    power_count = sum(1 for c in current_deck if c.get("type") == "POWER")
+
+    card_type = card_data.get("type", "")
+    base_dmg = card_data.get("damage", 0)
+    base_blk = card_data.get("block", 0)
+    energy_cost = card_data.get("energy_cost", 1)
+    has_draw = "draw" in str(card_data.get("powers_applied", "")).lower() or "draw" in str(card_data.get("description", "")).lower()
+
+    # Deck size penalty — bigger decks need stronger cards to justify adding
+    if deck_size > 18:
+        score -= 10
+        reasons.append("deck already large (>18)")
+    elif deck_size < 12:
+        score += 5
+        reasons.append("deck is small, card adds consistency")
+
+    # Value damage cards if deck is defense-heavy
+    if attack_count < skill_count and base_dmg > 0:
+        score += 10
+        reasons.append("deck needs more damage")
+
+    # Value block cards if deck is attack-heavy
+    if skill_count < attack_count and base_blk > 0:
+        score += 10
+        reasons.append("deck needs more block")
+
+    # Powers are generally valuable (one-time play, permanent effect)
+    if card_type == "POWER":
+        score += 15
+        reasons.append("powers provide lasting value")
+
+    # Draw is always valuable
+    if has_draw:
+        score += 12
+        reasons.append("draw improves deck cycling")
+
+    # Efficiency: damage/energy or block/energy
+    if base_dmg and energy_cost:
+        eff = base_dmg / max(1, energy_cost)
+        if eff >= 8:
+            score += 10
+            reasons.append(f"high damage efficiency ({eff:.0f}/energy)")
+    if base_blk and energy_cost:
+        eff = base_blk / max(1, energy_cost)
+        if eff >= 6:
+            score += 8
+            reasons.append(f"high block efficiency ({eff:.0f}/energy)")
+
+    # AoE bonus — check for multi-target or "ALL" in description
+    desc = str(card_data.get("description", "")).upper()
+    if "ALL ENEM" in desc or "AOE" in desc:
+        aoe_count = sum(1 for c in current_deck if "ALL ENEM" in str(c.get("description", "")).upper())
+        if aoe_count == 0:
+            score += 15
+            reasons.append("deck has no AoE — this fills a critical gap")
+
+    # 0-cost cards are almost always good
+    if energy_cost == 0:
+        score += 10
+        reasons.append("0-cost = free value")
+
+    return {
+        "card_id": card_id,
+        "score": min(100, max(0, score)),
+        "reasons": reasons,
+    }
+
+
 def create_server(client: Sts2Client | None = None, tool_profile: str | None = None) -> FastMCP:
     sts2 = client or Sts2Client()
     knowledge = Sts2KnowledgeBase()
@@ -760,6 +1024,69 @@ def create_server(client: Sts2Client | None = None, tool_profile: str | None = N
 
     if profile == "full":
         _register_legacy_action_tools(mcp, sts2)
+
+    @mcp.tool
+    def get_combat_analysis() -> dict[str, Any]:
+        """Compute effective damage/block values for every card in hand, considering all active powers.
+
+        Returns per-card computed values and a tactical summary including:
+        - Each hand card with `computed_damage`, `computed_block`, and `damage_per_energy`
+        - Total available damage/block this turn (energy-limited)
+        - Per-enemy lethal check (can this enemy be killed this turn?)
+        - Incoming damage (total enemy intent damage vs available block)
+
+        Call this at the start of each combat turn for informed decision-making.
+        """
+        state = sts2.get_state()
+        return _compute_combat_analysis(state)
+
+    @mcp.tool
+    def evaluate_card_rewards() -> dict[str, Any]:
+        """Score card reward options against your current deck composition.
+
+        Call this when presented with card rewards after combat.
+        Returns each reward card with a score (0-100) and reasons for/against picking it.
+        Higher score = better fit for your current deck.
+        """
+        state = sts2.get_state()
+        agent_view = state.get("agent_view", state)
+
+        # Get current deck
+        deck_cards = agent_view.get("deck", [])
+        deck_size = len(deck_cards)
+
+        # Get reward card options from available actions or state
+        reward = agent_view.get("reward", {})
+        card_rewards = reward.get("card_rewards", [])
+
+        if not card_rewards:
+            # Try to find cards in available actions
+            actions = agent_view.get("available_actions", [])
+            for action in actions:
+                if action.get("action_name") in ("select_reward_card", "choose_reward_card"):
+                    card_rewards = action.get("options", [])
+                    break
+
+        if not card_rewards:
+            return {"error": "no_card_rewards", "message": "No card rewards currently available."}
+
+        card_data_index = _ensure_game_data_index("cards")
+        results = []
+        for card in card_rewards:
+            cid = card.get("card_id", "")
+            static = _lookup_game_data_item(index=card_data_index, item_id=cid)
+            if not isinstance(static, dict):
+                static = {}
+            scored = _score_card_for_deck(cid, static, deck_cards, deck_size)
+            scored["name"] = card.get("name", cid)
+            results.append(scored)
+
+        results.sort(key=lambda x: x["score"], reverse=True)
+        return {
+            "deck_size": deck_size,
+            "recommendations": results,
+            "advice": "Pick the highest-scored card, or skip all if no card scores above 60.",
+        }
 
     if _debug_tools_enabled():
         @mcp.tool
