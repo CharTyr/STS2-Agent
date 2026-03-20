@@ -583,6 +583,194 @@ def _compute_combat_analysis(state: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def _assess_elite_risk(state: dict[str, Any]) -> dict[str, Any]:
+    """Assess whether the player should take an elite fight or avoid it."""
+    agent_view = state.get("agent_view", state)
+    deck_cards = agent_view.get("deck", [])
+    deck_size = len(deck_cards)
+
+    player = agent_view.get("player", {})
+    current_hp = player.get("current_hp", 0)
+    max_hp = player.get("max_hp", 80)
+    potions = agent_view.get("potions", [])
+    potion_count = len([p for p in potions if p.get("potion_id")])
+
+    hp_ratio = current_hp / max(1, max_hp)
+
+    risk_factors: list[str] = []
+    reward_factors: list[str] = []
+
+    # HP assessment
+    if hp_ratio < 0.4:
+        risk_factors.append(f"HP critically low ({current_hp}/{max_hp})")
+    elif hp_ratio < 0.55:
+        risk_factors.append(f"HP below comfort zone ({current_hp}/{max_hp})")
+    else:
+        reward_factors.append(f"HP healthy ({current_hp}/{max_hp})")
+
+    # Deck readiness
+    if deck_size < 12:
+        risk_factors.append(f"Deck too thin ({deck_size} cards) — less margin for error")
+    elif deck_size > 20:
+        risk_factors.append(f"Deck bloated ({deck_size} cards) — inconsistent draws")
+    else:
+        reward_factors.append(f"Good deck size ({deck_size} cards)")
+
+    # Potions
+    if potion_count >= 2:
+        reward_factors.append(f"{potion_count} potions available for emergency")
+    elif potion_count == 1:
+        reward_factors.append("1 potion as safety net")
+    else:
+        risk_factors.append("No potions — no safety net")
+
+    # Reward value: elites give relics
+    reward_factors.append("Elite rewards: relic + higher gold + better card rewards")
+
+    # Decision
+    risk_score = len(risk_factors)
+    reward_score = len(reward_factors)
+    recommendation = "TAKE" if risk_score <= 1 and hp_ratio >= 0.5 else "AVOID"
+
+    return {
+        "recommendation": recommendation,
+        "risk_factors": risk_factors,
+        "reward_factors": reward_factors,
+        "hp_ratio": round(hp_ratio, 2),
+        "summary": f"{'Take the elite — rewards outweigh risk.' if recommendation == 'TAKE' else 'Avoid — too risky with current state. Heal or improve deck first.'}",
+    }
+
+
+def _check_boss_readiness(state: dict[str, Any]) -> dict[str, Any]:
+    """Evaluate whether the current deck and HP are ready for the Act 1 boss."""
+    agent_view = state.get("agent_view", state)
+    deck_cards = agent_view.get("deck", [])
+    deck_size = len(deck_cards)
+
+    player = agent_view.get("player", {})
+    current_hp = player.get("current_hp", 0)
+    max_hp = player.get("max_hp", 80)
+    potions = agent_view.get("potions", [])
+
+    card_data_index = _ensure_game_data_index("cards")
+
+    # Analyze deck composition
+    attack_count = 0
+    block_count = 0
+    draw_count = 0
+    aoe_count = 0
+    vulnerable_sources = 0
+    strength_sources = 0
+    total_base_damage = 0
+    total_base_block = 0
+
+    for card in deck_cards:
+        cid = card.get("card_id", "")
+        static = _lookup_game_data_item(index=card_data_index, item_id=cid)
+        if not isinstance(static, dict):
+            continue
+
+        dmg = static.get("damage", 0)
+        blk = static.get("block", 0)
+        desc = str(static.get("description", "")).upper()
+
+        if dmg:
+            attack_count += 1
+            total_base_damage += dmg
+        if blk:
+            block_count += 1
+            total_base_block += blk
+        if "DRAW" in desc:
+            draw_count += 1
+        if "ALL ENEM" in desc:
+            aoe_count += 1
+        if "VULNERABLE" in desc:
+            vulnerable_sources += 1
+        if "STRENGTH" in desc:
+            strength_sources += 1
+
+    # Generate readiness checks
+    checks: list[dict[str, Any]] = []
+
+    # HP check
+    hp_ok = current_hp >= max_hp * 0.6
+    checks.append({
+        "check": "hp",
+        "pass": hp_ok,
+        "detail": f"{current_hp}/{max_hp} HP" + (" — consider resting" if not hp_ok else " — healthy"),
+    })
+
+    # Deck size check
+    size_ok = 12 <= deck_size <= 20
+    checks.append({
+        "check": "deck_size",
+        "pass": size_ok,
+        "detail": f"{deck_size} cards" + (" — too thin" if deck_size < 12 else " — too bloated" if deck_size > 20 else " — good range"),
+    })
+
+    # Damage output
+    avg_damage_per_draw = total_base_damage / max(1, deck_size) * 5  # ~5 card hand
+    dmg_ok = avg_damage_per_draw >= 25
+    checks.append({
+        "check": "damage_output",
+        "pass": dmg_ok,
+        "detail": f"~{avg_damage_per_draw:.0f} base damage/turn" + (" — need more damage cards" if not dmg_ok else " — sufficient"),
+    })
+
+    # Block coverage
+    avg_block_per_draw = total_base_block / max(1, deck_size) * 5
+    blk_ok = avg_block_per_draw >= 15
+    checks.append({
+        "check": "block_output",
+        "pass": blk_ok,
+        "detail": f"~{avg_block_per_draw:.0f} base block/turn" + (" — need more block cards" if not blk_ok else " — sufficient"),
+    })
+
+    # Vulnerable source
+    vuln_ok = vulnerable_sources >= 1
+    checks.append({
+        "check": "vulnerable_source",
+        "pass": vuln_ok,
+        "detail": f"{vulnerable_sources} source(s)" + (" — Bash alone may not be enough" if vulnerable_sources < 2 else ""),
+    })
+
+    # Draw cards
+    draw_ok = draw_count >= 1
+    checks.append({
+        "check": "draw_cards",
+        "pass": draw_ok,
+        "detail": f"{draw_count} draw card(s)" + (" — deck cycling will be slow" if not draw_ok else ""),
+    })
+
+    # Potions
+    potion_count = len([p for p in potions if p.get("potion_id")])
+    checks.append({
+        "check": "potions",
+        "pass": potion_count >= 1,
+        "detail": f"{potion_count} potion(s) — {'save for boss' if potion_count >= 1 else 'try to acquire one before boss'}",
+    })
+
+    passed = sum(1 for c in checks if c["pass"])
+    total = len(checks)
+    ready = passed >= total - 1  # allow 1 failed check
+
+    return {
+        "ready": ready,
+        "score": f"{passed}/{total}",
+        "checks": checks,
+        "summary": "Deck is boss-ready." if ready else "Deck has gaps — prioritize fixing failed checks before boss.",
+        "deck_stats": {
+            "size": deck_size,
+            "attacks": attack_count,
+            "blocks": block_count,
+            "draw": draw_count,
+            "aoe": aoe_count,
+            "vulnerable_sources": vulnerable_sources,
+            "strength_sources": strength_sources,
+        },
+    }
+
+
 def _score_card_for_deck(
     card_id: str,
     card_data: dict[str, Any],
@@ -1087,6 +1275,27 @@ def create_server(client: Sts2Client | None = None, tool_profile: str | None = N
             "recommendations": results,
             "advice": "Pick the highest-scored card, or skip all if no card scores above 60.",
         }
+
+    @mcp.tool
+    def check_boss_readiness() -> dict[str, Any]:
+        """Check if your current deck, HP, and potions are ready for the boss fight.
+
+        Call this before entering a boss node on the map.
+        Returns pass/fail checks for HP, deck size, damage output, block coverage,
+        vulnerable sources, draw cards, and potions.
+        """
+        state = sts2.get_state()
+        return _check_boss_readiness(state)
+
+    @mcp.tool
+    def assess_elite_risk() -> dict[str, Any]:
+        """Assess whether to take an elite fight based on current HP, deck, and potions.
+
+        Call this when choosing a map path that includes an elite node.
+        Returns TAKE or AVOID recommendation with risk/reward factors.
+        """
+        state = sts2.get_state()
+        return _assess_elite_risk(state)
 
     if _debug_tools_enabled():
         @mcp.tool

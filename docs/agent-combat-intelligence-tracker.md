@@ -30,7 +30,7 @@
 |---|------|---------|--------|-------|
 | 3.1 | Run-level strategy context persistence | `server.py`, `handoff.py` | TODO | Track build direction |
 | 3.2 | Card pick recommendation tool | `server.py` | ✅ DONE | `evaluate_card_rewards` tool |
-| 3.3 | Boss preparation check tool | `server.py` | TODO | Deck capability analysis |
+| 3.3 | Boss preparation check tool | `server.py` | ✅ DONE | `check_boss_readiness` tool |
 | 3.4 | Economy management rules | `SKILL.md` | ✅ DONE | Gold priority, saving rules, skip rules |
 
 ## Phase 4: Polish (Priority: Low)
@@ -38,7 +38,7 @@
 | # | Task | File(s) | Status | Notes |
 |---|------|---------|--------|-------|
 | 4.1 | Cross-run knowledge learning | `knowledge.py` | TODO | What works vs what Boss |
-| 4.2 | Elite fight risk assessment | `server.py` | TODO | HP threshold heuristics |
+| 4.2 | Elite fight risk assessment | `server.py` | ✅ DONE | `assess_elite_risk` tool |
 | 4.3 | Potion timing optimization | `SKILL.md` | ✅ DONE | Boss/elite/lethal timing rules |
 | 4.4 | Full character coverage | `SKILL.md`, `docs/` | TODO | Silent, Regent, etc. |
 
@@ -67,3 +67,8 @@
   - Scores cards by deck composition balance, efficiency, draw, AoE gap-filling
 - **Phase 3.4 DONE**: Economy management rules added to SKILL.md
   - Gold spending priority, saving rules, skip reward heuristics
+- **Phase 3.3 DONE**: Added `check_boss_readiness` MCP tool + `_check_boss_readiness` function
+  - Checks: HP, deck size, damage output, block coverage, vulnerable sources, draw, potions
+  - Returns pass/fail per check + overall readiness score
+- **Phase 4.2 DONE**: Added `assess_elite_risk` MCP tool + `_assess_elite_risk` function
+  - TAKE/AVOID recommendation based on HP ratio, deck size, potion count
