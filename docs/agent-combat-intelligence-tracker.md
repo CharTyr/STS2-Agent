@@ -10,16 +10,16 @@
 
 | # | Task | File(s) | Status | Notes |
 |---|------|---------|--------|-------|
-| 1.1 | Expose computed damage/block on hand cards | `GameStateService.cs` | TODO | Most impactful single change |
+| 1.1 | Expose computed damage/block on hand cards | `GameStateService.cs` | ✅ DONE | Via TryExtractCardValues reflection |
 | 1.2 | Ensure draw/discard/exhaust piles always exposed | `GameStateService.cs` | ✅ DONE | Already in BuildAgentCombatPayload |
 | 1.3 | Add combat_analysis pre-computation in MCP | `server.py` | ✅ DONE | Lethal calc, max damage/block |
-| 1.4 | Replace template strings with actual values in agent_view | `GameStateService.cs` | TODO | `{Damage:diff()}` → `9` |
+| 1.4 | Replace template strings with actual values in agent_view | `GameStateService.cs` | ✅ DONE | GetCardFormattedDescription + resolved_text |
 
 ## Phase 2: Let the Agent "Plan Ahead" (Priority: High)
 
 | # | Task | File(s) | Status | Notes |
 |---|------|---------|--------|-------|
-| 2.1 | Expose enemy move rotation + current index | `GameStateService.cs` | TODO | Deterministic enemy patterns |
+| 2.1 | Expose enemy move rotation + current index | `GameStateService.cs` | ✅ DONE | move_history + turn_count via reflection |
 | 2.2 | Add deck-building strategy to SKILL.md | `SKILL.md` | ✅ DONE | Ironclad archetypes + combat heuristics |
 | 2.3 | Add route planning heuristics | `SKILL.md`, `server.py` | ✅ DONE | HP thresholds, elite/shop/rest rules |
 | 2.4 | Add Boss-specific strategy guide | `docs/game-knowledge/` | ✅ DONE | Queen, Lagavulin, MechaKnight, OwlMagistrate |
@@ -72,3 +72,13 @@
   - Returns pass/fail per check + overall readiness score
 - **Phase 4.2 DONE**: Added `assess_elite_risk` MCP tool + `_assess_elite_risk` function
   - TAKE/AVOID recommendation based on HP ratio, deck size, potion count
+- **Phase 1.1 DONE**: C# mod — `TryExtractCardValues` reflection extracts Damage/Block/HitCount from CardModel
+  - Added `computed_damage`, `computed_block`, `hit_count`, `card_type` to CombatHandCardPayload
+  - Agent view now includes `dmg`, `blk`, `hits`, `type` fields per hand card
+- **Phase 1.4 DONE**: C# mod — `GetCardFormattedDescription` resolves template strings via GetFormattedText()
+  - `resolved_text` field added to CombatHandCardPayload (actual numbers instead of `{Damage:diff()}`)
+  - Agent view `line` now uses resolved text when available
+- **Phase 2.1 DONE**: C# mod — `TryExtractMoveHistory` reflection extracts move history from Monster
+  - Added `move_history` (string[]) and `turn_count` to CombatEnemyPayload
+  - Python combat analysis updated to prefer C#-computed values over static data fallback
+- **All C# changes need game testing** — reflection-based extraction depends on actual game class structure

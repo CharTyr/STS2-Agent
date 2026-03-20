@@ -479,9 +479,15 @@ def _compute_combat_analysis(state: dict[str, Any]) -> dict[str, Any]:
     for card in hand:
         card_id = card.get("card_id", "")
         static = _lookup_game_data_item(index=card_data_index, item_id=card_id)
+
+        # Prefer C#-computed values (from mod) over static data + Python calculation
+        cs_dmg = card.get("dmg") or card.get("computed_damage")
+        cs_blk = card.get("blk") or card.get("computed_block")
+        cs_hits = card.get("hits") or card.get("hit_count")
+
         base_dmg = (static or {}).get("damage") if isinstance(static, dict) else None
         base_blk = (static or {}).get("block") if isinstance(static, dict) else None
-        hit_count = (static or {}).get("hit_count") if isinstance(static, dict) else None
+        hit_count = cs_hits or ((static or {}).get("hit_count") if isinstance(static, dict) else None)
         card_cost = card.get("energy_cost", 0)
         is_playable = card.get("playable", False)
 
@@ -489,18 +495,25 @@ def _compute_combat_analysis(state: dict[str, Any]) -> dict[str, Any]:
         computed_block = None
         damage_per_energy = None
 
-        if base_dmg is not None:
-            # For targeted cards, compute vs first alive vulnerable enemy; otherwise use non-vulnerable
+        if cs_dmg is not None:
+            # Use C#-computed value directly (already accounts for powers)
+            computed_damage = int(cs_dmg) * max(1, int(hit_count or 1))
+            if card_cost and card_cost > 0:
+                damage_per_energy = round(computed_damage / card_cost, 1)
+        elif base_dmg is not None:
+            # Fallback: compute from static data + Python power calculation
             any_vulnerable = any(e["vulnerable"] for e in enemies)
             computed_damage = _compute_card_damage(
                 base_dmg, strength, is_weak,
                 target_vulnerable=any_vulnerable,
-                hits=hit_count or 1,
+                hits=int(hit_count or 1),
             )
             if card_cost and card_cost > 0:
                 damage_per_energy = round(computed_damage / card_cost, 1)
 
-        if base_blk is not None:
+        if cs_blk is not None:
+            computed_block = int(cs_blk)
+        elif base_blk is not None:
             computed_block = _compute_card_block(base_blk, dexterity, is_frail)
 
         entry: dict[str, Any] = {
