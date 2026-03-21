@@ -1393,6 +1393,125 @@ internal static class GameStateService
         return value.ToString() ?? string.Empty;
     }
 
+    /// <summary>
+    /// Attempt to get the formatted (resolved) card description with actual computed values
+    /// instead of template strings like {Damage:diff()}.
+    /// </summary>
+    private static string? GetCardFormattedDescription(CardModel? card)
+    {
+        if (card == null) return null;
+
+        const BindingFlags flags = BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic;
+
+        try
+        {
+            // Try Description property — in many card implementations this is a rich text object
+            var descProp = card.GetType().GetProperty("Description", flags);
+            if (descProp != null)
+            {
+                var descValue = descProp.GetValue(card);
+                if (descValue != null && descValue is not string)
+                {
+                    // It's a rich text object — call GetFormattedText() to resolve templates
+                    var fmt = descValue.GetType().GetMethod("GetFormattedText", flags, null, Type.EmptyTypes, null);
+                    if (fmt != null)
+                    {
+                        var resolved = fmt.Invoke(descValue, null) as string;
+                        if (!string.IsNullOrWhiteSpace(resolved))
+                        {
+                            return NormalizeCardRulesText(resolved);
+                        }
+                    }
+                }
+            }
+        }
+        catch { }
+
+        return null;
+    }
+
+    /// <summary>
+    /// Extract computed damage/block values from a CardModel via reflection.
+    /// Returns (damage, block, hitCount) — any may be null if not applicable.
+    /// </summary>
+    private static (int? damage, int? block, int? hitCount) TryExtractCardValues(CardModel? card)
+    {
+        if (card == null) return (null, null, null);
+
+        const BindingFlags flags = BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic;
+        int? damage = null;
+        int? block = null;
+        int? hitCount = null;
+
+        try
+        {
+            // Try common property names for damage
+            foreach (var name in new[] { "Damage", "BaseDamage", "AttackDamage", "DamageAmount" })
+            {
+                var prop = card.GetType().GetProperty(name, flags);
+                if (prop != null && (prop.PropertyType == typeof(int) || prop.PropertyType == typeof(int?)))
+                {
+                    var val = prop.GetValue(card);
+                    if (val is int d && d > 0) { damage = d; break; }
+                }
+
+                var field = card.GetType().GetField(name, flags);
+                if (field != null && (field.FieldType == typeof(int) || field.FieldType == typeof(int?)))
+                {
+                    var val = field.GetValue(card);
+                    if (val is int d && d > 0) { damage = d; break; }
+                }
+            }
+        }
+        catch { }
+
+        try
+        {
+            // Try common property names for block
+            foreach (var name in new[] { "Block", "BaseBlock", "BlockAmount", "DefenseBlock" })
+            {
+                var prop = card.GetType().GetProperty(name, flags);
+                if (prop != null && (prop.PropertyType == typeof(int) || prop.PropertyType == typeof(int?)))
+                {
+                    var val = prop.GetValue(card);
+                    if (val is int b && b > 0) { block = b; break; }
+                }
+
+                var field = card.GetType().GetField(name, flags);
+                if (field != null && (field.FieldType == typeof(int) || field.FieldType == typeof(int?)))
+                {
+                    var val = field.GetValue(card);
+                    if (val is int b && b > 0) { block = b; break; }
+                }
+            }
+        }
+        catch { }
+
+        try
+        {
+            // Try to extract hit count / repeats
+            foreach (var name in new[] { "HitCount", "Repeats", "AttackCount", "MultiHit" })
+            {
+                var prop = card.GetType().GetProperty(name, flags);
+                if (prop != null && (prop.PropertyType == typeof(int) || prop.PropertyType == typeof(int?)))
+                {
+                    var val = prop.GetValue(card);
+                    if (val is int h && h > 1) { hitCount = h; break; }
+                }
+
+                var field = card.GetType().GetField(name, flags);
+                if (field != null && (field.FieldType == typeof(int) || field.FieldType == typeof(int?)))
+                {
+                    var val = field.GetValue(card);
+                    if (val is int h && h > 1) { hitCount = h; break; }
+                }
+            }
+        }
+        catch { }
+
+        return (damage, block, hitCount);
+    }
+
     private static string NormalizeCardRulesText(string value)
     {
         if (string.IsNullOrWhiteSpace(value))
@@ -2283,16 +2402,23 @@ internal static class GameStateService
         var keywords = GetGlossaryMatches(card.rules_text, mods);
         CollectGlossaryTerms(glossaryTerms, card.rules_text, mods);
 
+        // Use resolved_text (actual numbers) in the line if available, fallback to rules_text (templates)
+        var displayText = card.resolved_text ?? card.rules_text;
+
         return new
         {
             i = card.index,
-            line = FormatCardLine(card.name, card.upgraded, 1, card.energy_cost, card.star_cost, card.costs_x, card.star_costs_x, card.rules_text),
+            line = FormatCardLine(card.name, card.upgraded, 1, card.energy_cost, card.star_cost, card.costs_x, card.star_costs_x, displayText),
             playable = card.playable,
             target = card.requires_target ? NormalizeTargetHint(card.target_index_space ?? card.target_type) : null,
             targets = card.requires_target ? card.valid_target_indices : Array.Empty<int>(),
             why = card.playable ? null : card.unplayable_reason,
             keywords,
-            mods
+            mods,
+            dmg = card.computed_damage,
+            blk = card.computed_block,
+            hits = card.hit_count,
+            type = string.IsNullOrEmpty(card.card_type) ? null : card.card_type
         };
     }
 
@@ -3354,6 +3480,8 @@ internal static class GameStateService
         var targetSupported = IsCardTargetSupported(card);
         var targetIndexSpace = GetCardTargetIndexSpace(card);
         var validTargetIndices = GetCardTargetIndices(combatState, card);
+        var (computedDamage, computedBlock, hitCount) = TryExtractCardValues(card);
+        var resolvedText = GetCardFormattedDescription(card);
 
         return new CombatHandCardPayload
         {
@@ -3370,10 +3498,15 @@ internal static class GameStateService
             energy_cost = card.EnergyCost.GetWithModifiers(CostModifiers.All),
             star_cost = Math.Max(0, card.GetStarCostWithModifiers()),
             rules_text = GetCardRulesText(card),
+            resolved_text = resolvedText,
             playable = targetSupported && reason == UnplayableReason.None,
             unplayable_reason = targetSupported
                 ? GetUnplayableReasonCode(reason)
-                : "unsupported_target_type"
+                : "unsupported_target_type",
+            computed_damage = computedDamage,
+            computed_block = computedBlock,
+            hit_count = hitCount,
+            card_type = card.Type.ToString()
         };
     }
 
@@ -3381,6 +3514,7 @@ internal static class GameStateService
     {
         var moveId = enemy.Monster?.NextMove?.Id;
         var intents = BuildEnemyIntentPayloads(enemy);
+        var (moveHistory, turnCount) = TryExtractMoveHistory(enemy);
 
         return new CombatEnemyPayload
         {
@@ -3395,8 +3529,89 @@ internal static class GameStateService
             powers = BuildCreaturePowerPayloads(enemy),
             intent = moveId,
             move_id = moveId,
-            intents = intents
+            intents = intents,
+            move_history = moveHistory,
+            turn_count = turnCount
         };
+    }
+
+    /// <summary>
+    /// Try to extract the enemy's move history and turn count via reflection.
+    /// This helps the agent predict future moves based on patterns.
+    /// </summary>
+    private static (string[]? moveHistory, int? turnCount) TryExtractMoveHistory(Creature enemy)
+    {
+        const BindingFlags flags = BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic;
+
+        try
+        {
+            var monster = enemy.Monster;
+            if (monster == null) return (null, null);
+
+            var monsterType = monster.GetType();
+
+            // Try to get move history
+            string[]? history = null;
+            foreach (var name in new[] { "MoveHistory", "PreviousMoves", "UsedMoves", "MoveLog" })
+            {
+                var prop = monsterType.GetProperty(name, flags);
+                if (prop != null)
+                {
+                    var val = prop.GetValue(monster);
+                    if (val is System.Collections.IEnumerable enumerable)
+                    {
+                        var moves = new System.Collections.Generic.List<string>();
+                        foreach (var item in enumerable)
+                        {
+                            var str = item?.ToString();
+                            if (!string.IsNullOrEmpty(str)) moves.Add(str);
+                        }
+                        if (moves.Count > 0) { history = moves.ToArray(); break; }
+                    }
+                }
+
+                var field = monsterType.GetField(name, flags);
+                if (field != null)
+                {
+                    var val = field.GetValue(monster);
+                    if (val is System.Collections.IEnumerable enumerable)
+                    {
+                        var moves = new System.Collections.Generic.List<string>();
+                        foreach (var item in enumerable)
+                        {
+                            var str = item?.ToString();
+                            if (!string.IsNullOrEmpty(str)) moves.Add(str);
+                        }
+                        if (moves.Count > 0) { history = moves.ToArray(); break; }
+                    }
+                }
+            }
+
+            // Try to get turn count
+            int? turnCount = null;
+            foreach (var name in new[] { "TurnCount", "MoveIndex", "CurrentTurn", "Turn" })
+            {
+                var prop = monsterType.GetProperty(name, flags);
+                if (prop != null && (prop.PropertyType == typeof(int) || prop.PropertyType == typeof(int?)))
+                {
+                    var val = prop.GetValue(monster);
+                    if (val is int t) { turnCount = t; break; }
+                }
+
+                var field = monsterType.GetField(name, flags);
+                if (field != null && (field.FieldType == typeof(int) || field.FieldType == typeof(int?)))
+                {
+                    var val = field.GetValue(monster);
+                    if (val is int t) { turnCount = t; break; }
+                }
+            }
+
+            return (history, turnCount);
+        }
+        catch
+        {
+            return (null, null);
+        }
     }
 
     private static CombatPowerPayload[] BuildCreaturePowerPayloads(Creature creature)
@@ -5243,9 +5458,19 @@ internal sealed class CombatHandCardPayload
 
     public string rules_text { get; init; } = string.Empty;
 
+    public string? resolved_text { get; init; }
+
     public bool playable { get; init; }
 
     public string? unplayable_reason { get; init; }
+
+    public int? computed_damage { get; init; }
+
+    public int? computed_block { get; init; }
+
+    public int? hit_count { get; init; }
+
+    public string card_type { get; init; } = string.Empty;
 }
 
 internal sealed class CombatEnemyPayload
@@ -5273,6 +5498,10 @@ internal sealed class CombatEnemyPayload
     public string? move_id { get; init; }
 
     public CombatEnemyIntentPayload[] intents { get; init; } = Array.Empty<CombatEnemyIntentPayload>();
+
+    public string[]? move_history { get; init; }
+
+    public int? turn_count { get; init; }
 }
 
 internal sealed class CombatEnemyIntentPayload
