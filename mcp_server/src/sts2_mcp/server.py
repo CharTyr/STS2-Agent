@@ -401,7 +401,7 @@ def _detect_scene_from_screen(screen: str) -> str:
 
 
 def _get_power_amount(powers: list[dict[str, Any]], power_id: str) -> int:
-    """Get stacked amount for a power by id (case-insensitive partial match)."""
+    """Get stacked amount for a power by id (case-insensitive exact match)."""
     needle = power_id.upper()
     for p in powers:
         pid = (p.get("power_id") or "").upper()
@@ -426,6 +426,115 @@ def _compute_card_block(base_block: int, dexterity: int, is_frail: bool) -> int:
     if is_frail:
         value = int(value * 0.75)
     return max(0, value)
+
+
+def _coerce_int(value: Any, default: int = 0) -> int:
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return default
+
+
+def _extract_agent_view(state: dict[str, Any]) -> dict[str, Any]:
+    agent_view = state.get("agent_view")
+    return agent_view if isinstance(agent_view, dict) else {}
+
+
+def _extract_run_payload(state: dict[str, Any]) -> dict[str, Any]:
+    run = state.get("run")
+    if isinstance(run, dict):
+        return run
+
+    run = _extract_agent_view(state).get("run")
+    return run if isinstance(run, dict) else {}
+
+
+def _extract_reward_payload(state: dict[str, Any]) -> dict[str, Any]:
+    reward = state.get("reward")
+    if isinstance(reward, dict):
+        return reward
+
+    reward = _extract_agent_view(state).get("reward")
+    return reward if isinstance(reward, dict) else {}
+
+
+def _extract_run_deck(state: dict[str, Any]) -> list[dict[str, Any]]:
+    deck = _extract_run_payload(state).get("deck")
+    if not isinstance(deck, list):
+        return []
+    return [card for card in deck if isinstance(card, dict)]
+
+
+def _extract_run_potions(state: dict[str, Any]) -> list[dict[str, Any]]:
+    potions = _extract_run_payload(state).get("potions")
+    if not isinstance(potions, list):
+        return []
+    return [potion for potion in potions if isinstance(potion, dict)]
+
+
+def _extract_reward_card_options(state: dict[str, Any]) -> list[dict[str, Any]]:
+    reward = _extract_reward_payload(state)
+    raw_options = reward.get("card_options")
+    if isinstance(raw_options, list):
+        return [card for card in raw_options if isinstance(card, dict)]
+
+    compact_options = reward.get("cards")
+    if isinstance(compact_options, list):
+        return [
+            card for card in compact_options
+            if isinstance(card, dict) and card.get("card_id")
+        ]
+
+    return []
+
+
+def _extract_run_hp(state: dict[str, Any]) -> tuple[int, int]:
+    run = _extract_run_payload(state)
+    if run:
+        current_hp = run.get("current_hp")
+        max_hp = run.get("max_hp")
+        if current_hp is not None or max_hp is not None:
+            return _coerce_int(current_hp), _coerce_int(max_hp)
+
+        hp_value = run.get("hp")
+        if isinstance(hp_value, str):
+            current_text, sep, max_text = hp_value.partition("/")
+            if sep:
+                return _coerce_int(current_text.strip()), _coerce_int(max_text.strip())
+
+    return 0, 0
+
+
+def _count_occupied_potions(potions: list[dict[str, Any]]) -> int:
+    count = 0
+    for potion in potions:
+        if potion.get("occupied") is True or potion.get("potion_id") or potion.get("name"):
+            count += 1
+            continue
+
+        line = potion.get("line")
+        if isinstance(line, str):
+            normalized = line.strip()
+            if normalized and not normalized.startswith("空"):
+                count += 1
+
+    return count
+
+
+def _get_card_type_name(card: dict[str, Any]) -> str:
+    return str(card.get("card_type") or card.get("type") or "").upper()
+
+
+def _get_card_text(card: dict[str, Any]) -> str:
+    return str(card.get("rules_text") or card.get("description") or card.get("line") or "")
+
+
+def _get_energy_cost(card_data: dict[str, Any], default: int = 1) -> int:
+    for key in ("energy_cost", "cost"):
+        value = card_data.get(key)
+        if value is not None:
+            return _coerce_int(value, default)
+    return default
 
 
 def _compute_combat_analysis(state: dict[str, Any]) -> dict[str, Any]:
@@ -548,7 +657,8 @@ def _compute_combat_analysis(state: dict[str, Any]) -> dict[str, Any]:
     remaining_energy = energy
     max_damage = 0
     for c in attacks:
-        cost = c.get("energy_cost", 1) or 1
+        cost = c.get("energy_cost")
+        cost = 1 if cost is None else _coerce_int(cost, 1)
         if cost <= remaining_energy:
             max_damage += c["computed_damage"]
             remaining_energy -= cost
@@ -556,7 +666,8 @@ def _compute_combat_analysis(state: dict[str, Any]) -> dict[str, Any]:
     remaining_energy_for_block = energy
     max_block = 0
     for c in blocks:
-        cost = c.get("energy_cost", 1) or 1
+        cost = c.get("energy_cost")
+        cost = 1 if cost is None else _coerce_int(cost, 1)
         if cost <= remaining_energy_for_block:
             max_block += c["computed_block"]
             remaining_energy_for_block -= cost
@@ -598,15 +709,11 @@ def _compute_combat_analysis(state: dict[str, Any]) -> dict[str, Any]:
 
 def _assess_elite_risk(state: dict[str, Any]) -> dict[str, Any]:
     """Assess whether the player should take an elite fight or avoid it."""
-    agent_view = state.get("agent_view", state)
-    deck_cards = agent_view.get("deck", [])
+    deck_cards = _extract_run_deck(state)
     deck_size = len(deck_cards)
-
-    player = agent_view.get("player", {})
-    current_hp = player.get("current_hp", 0)
-    max_hp = player.get("max_hp", 80)
-    potions = agent_view.get("potions", [])
-    potion_count = len([p for p in potions if p.get("potion_id")])
+    current_hp, max_hp = _extract_run_hp(state)
+    potions = _extract_run_potions(state)
+    potion_count = _count_occupied_potions(potions)
 
     hp_ratio = current_hp / max(1, max_hp)
 
@@ -656,14 +763,10 @@ def _assess_elite_risk(state: dict[str, Any]) -> dict[str, Any]:
 
 def _check_boss_readiness(state: dict[str, Any]) -> dict[str, Any]:
     """Evaluate whether the current deck and HP are ready for the Act 1 boss."""
-    agent_view = state.get("agent_view", state)
-    deck_cards = agent_view.get("deck", [])
+    deck_cards = _extract_run_deck(state)
     deck_size = len(deck_cards)
-
-    player = agent_view.get("player", {})
-    current_hp = player.get("current_hp", 0)
-    max_hp = player.get("max_hp", 80)
-    potions = agent_view.get("potions", [])
+    current_hp, max_hp = _extract_run_hp(state)
+    potions = _extract_run_potions(state)
 
     card_data_index = _ensure_game_data_index("cards")
 
@@ -756,7 +859,7 @@ def _check_boss_readiness(state: dict[str, Any]) -> dict[str, Any]:
     })
 
     # Potions
-    potion_count = len([p for p in potions if p.get("potion_id")])
+    potion_count = _count_occupied_potions(potions)
     checks.append({
         "check": "potions",
         "pass": potion_count >= 1,
@@ -795,14 +898,14 @@ def _score_card_for_deck(
     reasons: list[str] = []
 
     # Count deck composition
-    attack_count = sum(1 for c in current_deck if c.get("type") == "ATTACK" or c.get("damage"))
-    skill_count = sum(1 for c in current_deck if c.get("type") == "SKILL" or (c.get("block") and not c.get("damage")))
-    power_count = sum(1 for c in current_deck if c.get("type") == "POWER")
+    attack_count = sum(1 for c in current_deck if _get_card_type_name(c) == "ATTACK")
+    skill_count = sum(1 for c in current_deck if _get_card_type_name(c) == "SKILL")
+    power_count = sum(1 for c in current_deck if _get_card_type_name(c) == "POWER")
 
-    card_type = card_data.get("type", "")
-    base_dmg = card_data.get("damage", 0)
-    base_blk = card_data.get("block", 0)
-    energy_cost = card_data.get("energy_cost", 1)
+    card_type = str(card_data.get("type", "")).upper()
+    base_dmg = _coerce_int(card_data.get("damage"))
+    base_blk = _coerce_int(card_data.get("block"))
+    energy_cost = _get_energy_cost(card_data)
     has_draw = "draw" in str(card_data.get("powers_applied", "")).lower() or "draw" in str(card_data.get("description", "")).lower()
 
     # Deck size penalty — bigger decks need stronger cards to justify adding
@@ -848,7 +951,7 @@ def _score_card_for_deck(
     # AoE bonus — check for multi-target or "ALL" in description
     desc = str(card_data.get("description", "")).upper()
     if "ALL ENEM" in desc or "AOE" in desc:
-        aoe_count = sum(1 for c in current_deck if "ALL ENEM" in str(c.get("description", "")).upper())
+        aoe_count = sum(1 for c in current_deck if "ALL ENEM" in _get_card_text(c).upper())
         if aoe_count == 0:
             score += 15
             reasons.append("deck has no AoE — this fills a critical gap")
@@ -1250,23 +1353,9 @@ def create_server(client: Sts2Client | None = None, tool_profile: str | None = N
         Higher score = better fit for your current deck.
         """
         state = sts2.get_state()
-        agent_view = state.get("agent_view", state)
-
-        # Get current deck
-        deck_cards = agent_view.get("deck", [])
+        deck_cards = _extract_run_deck(state)
         deck_size = len(deck_cards)
-
-        # Get reward card options from available actions or state
-        reward = agent_view.get("reward", {})
-        card_rewards = reward.get("card_rewards", [])
-
-        if not card_rewards:
-            # Try to find cards in available actions
-            actions = agent_view.get("available_actions", [])
-            for action in actions:
-                if action.get("action_name") in ("select_reward_card", "choose_reward_card"):
-                    card_rewards = action.get("options", [])
-                    break
+        card_rewards = _extract_reward_card_options(state)
 
         if not card_rewards:
             return {"error": "no_card_rewards", "message": "No card rewards currently available."}
