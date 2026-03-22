@@ -1941,13 +1941,42 @@ internal static class GameStateService
         {
             player = new
             {
+                current_hp = combat.player.current_hp,
+                max_hp = combat.player.max_hp,
                 hp = $"{combat.player.current_hp}/{combat.player.max_hp}",
                 block = combat.player.block,
                 energy = combat.player.energy,
                 stars = combat.player.stars,
                 focus = combat.player.focus,
+                powers = combat.player.powers.Select(power => new
+                {
+                    i = power.index,
+                    power_id = power.power_id,
+                    name = power.name,
+                    amount = power.amount,
+                    debuff = power.is_debuff
+                }).ToArray(),
+                base_orb_slots = combat.player.base_orb_slots,
+                orb_capacity = combat.player.orb_capacity,
+                empty_orb_slots = combat.player.empty_orb_slots,
                 orbs = combat.player.orbs.Select(orb => FormatOrbLine(orb)).ToArray()
             },
+            players = combat.players.Select(player => new
+            {
+                player_id = player.player_id,
+                slot = player.slot_index,
+                local = player.is_local,
+                connected = player.is_connected,
+                character_id = player.character_id,
+                character = player.character_name,
+                current_hp = player.current_hp,
+                max_hp = player.max_hp,
+                block = player.block,
+                energy = player.energy,
+                stars = player.stars,
+                focus = player.focus,
+                alive = player.is_alive
+            }).ToArray(),
             hand = combat.hand.Select(card =>
                 BuildAgentHandCardPayload(
                     card,
@@ -1959,10 +1988,32 @@ internal static class GameStateService
             enemies = combat.enemies.Select(enemy => new
             {
                 i = enemy.index,
+                enemy_id = enemy.enemy_id,
                 name = enemy.name,
+                current_hp = enemy.current_hp,
+                max_hp = enemy.max_hp,
                 hp = $"{enemy.current_hp}/{enemy.max_hp}",
                 block = enemy.block,
                 intent = enemy.intent,
+                move_id = enemy.move_id,
+                powers = enemy.powers.Select(power => new
+                {
+                    i = power.index,
+                    power_id = power.power_id,
+                    name = power.name,
+                    amount = power.amount,
+                    debuff = power.is_debuff
+                }).ToArray(),
+                intents = enemy.intents.Select(intent => new
+                {
+                    i = intent.index,
+                    type = intent.intent_type,
+                    label = intent.label,
+                    damage = intent.damage,
+                    hits = intent.hits,
+                    total_damage = intent.total_damage,
+                    status_card_count = intent.status_card_count
+                }).ToArray(),
                 alive = enemy.is_alive,
                 hittable = enemy.is_hittable
             }).ToArray()
@@ -1986,24 +2037,42 @@ internal static class GameStateService
 
         return new
         {
+            character_id = run.character_id,
             character = run.character_name,
             floor = run.floor,
+            current_hp = run.current_hp,
+            max_hp = run.max_hp,
             hp = $"{run.current_hp}/{run.max_hp}",
             gold = run.gold,
             max_energy = run.max_energy,
             base_orb_slots = run.base_orb_slots,
+            deck_size = deckCards.Length > 0 ? deckCards.Length : run.deck.Length,
             deck = deckCards.Length > 0
                 ? BuildAgentCardStacks(deckCards, glossaryTerms)
                 : BuildAgentCardStacks(run.deck, glossaryTerms),
             relics = run.relics
                 .Select(relic => relic.is_melted ? $"{relic.name} (熔毁)" : relic.name)
                 .ToArray(),
+            relic_items = run.relics.Select(relic => new
+            {
+                i = relic.index,
+                relic_id = relic.relic_id,
+                name = relic.name,
+                description = relic.description,
+                stack = relic.stack,
+                melted = relic.is_melted
+            }).ToArray(),
             potions = run.potions.Select(potion => new
             {
                 i = potion.index,
+                potion_id = potion.potion_id,
+                name = potion.name,
+                rarity = potion.rarity,
+                occupied = potion.occupied,
                 line = FormatPotionLine(potion),
                 usable = potion.can_use,
                 discard = potion.can_discard,
+                requires_target = potion.requires_target,
                 target = NormalizeTargetHint(potion.target_type),
                 targets = potion.valid_target_indices
             }).ToArray(),
@@ -2033,7 +2102,7 @@ internal static class GameStateService
             max = selection.max_select,
             selected = selection.selected_count,
             confirm = selection.can_confirm,
-            cards = selection.cards.Select(card => BuildAgentChoiceCardPayload(card.index, card.name, card.upgraded, card.energy_cost, card.star_cost, card.costs_x, card.star_costs_x, card.rules_text, glossaryTerms)).ToArray()
+            cards = selection.cards.Select(card => BuildAgentChoiceCardPayload(card.index, card.card_id, card.name, card.upgraded, card.energy_cost, card.star_cost, card.costs_x, card.star_costs_x, card.rules_text, glossaryTerms)).ToArray()
         };
     }
 
@@ -2056,10 +2125,12 @@ internal static class GameStateService
             rewards = reward.rewards.Select(option => new
             {
                 i = option.index,
+                reward_type = option.reward_type,
+                description = option.description,
                 line = $"{option.reward_type}: {option.description}",
                 claimable = option.claimable
             }).ToArray(),
-            cards = reward.card_options.Select(card => BuildAgentChoiceCardPayload(card.index, card.name, card.upgraded, null, null, false, false, card.rules_text, glossaryTerms)).ToArray(),
+            cards = reward.card_options.Select(card => BuildAgentChoiceCardPayload(card.index, card.card_id, card.name, card.upgraded, null, null, false, false, card.rules_text, glossaryTerms)).ToArray(),
             alternatives = reward.alternatives.Select(option => new
             {
                 i = option.index,
@@ -2079,13 +2150,17 @@ internal static class GameStateService
         {
             id = eventPayload.event_id,
             title = eventPayload.title,
+            description = eventPayload.description,
             finished = eventPayload.is_finished,
             options = eventPayload.options.Select(option => new
             {
                 i = option.index,
+                text_key = option.text_key,
                 line = FormatEventOptionLine(option),
                 locked = option.is_locked,
-                proceed = option.is_proceed
+                proceed = option.is_proceed,
+                lethal = option.will_kill_player,
+                relic_preview = option.has_relic_preview
             }).ToArray()
         };
     }
@@ -2105,8 +2180,11 @@ internal static class GameStateService
             cards = shop.cards.Select(card =>
                 BuildAgentPricedCardPayload(
                     card.index,
+                    card.card_id,
                     card.name,
                     card.upgraded,
+                    card.card_type,
+                    card.rarity,
                     card.energy_cost,
                     card.star_cost,
                     card.costs_x,
@@ -2118,14 +2196,23 @@ internal static class GameStateService
             relics = shop.relics.Select(relic => new
             {
                 i = relic.index,
+                relic_id = relic.relic_id,
+                name = relic.name,
+                rarity = relic.rarity,
                 line = $"{relic.name} [{relic.rarity}] | {relic.price}g",
+                price = relic.price,
                 affordable = relic.enough_gold,
                 stocked = relic.is_stocked
             }).ToArray(),
             potions = shop.potions.Select(potion => new
             {
                 i = potion.index,
+                potion_id = potion.potion_id,
+                name = potion.name,
+                rarity = potion.rarity,
+                usage = potion.usage,
                 line = $"{potion.name ?? "空"}{(string.IsNullOrWhiteSpace(potion.usage) ? string.Empty : $"：{potion.usage}")} | {potion.price}g",
+                price = potion.price,
                 affordable = potion.enough_gold,
                 stocked = potion.is_stocked
             }).ToArray(),
@@ -2153,6 +2240,7 @@ internal static class GameStateService
             options = rest.options.Select(option => new
             {
                 i = option.index,
+                option_id = option.option_id,
                 line = string.IsNullOrWhiteSpace(option.description)
                     ? option.title
                     : $"{option.title}: {option.description}",
@@ -2171,10 +2259,33 @@ internal static class GameStateService
         return new
         {
             current = map.current_node == null ? null : $"{map.current_node.row},{map.current_node.col}",
+            rows = map.rows,
+            cols = map.cols,
+            boss = map.boss_node == null ? null : $"{map.boss_node.row},{map.boss_node.col}",
+            second_boss = map.second_boss_node == null ? null : $"{map.second_boss_node.row},{map.second_boss_node.col}",
             options = map.available_nodes.Select(node => new
             {
                 i = node.index,
+                row = node.row,
+                col = node.col,
+                type = node.node_type,
+                state = node.state,
                 line = $"{node.node_type} ({node.row},{node.col})"
+            }).ToArray(),
+            nodes = map.nodes.Select(node => new
+            {
+                row = node.row,
+                col = node.col,
+                type = node.node_type,
+                state = node.state,
+                visited = node.visited,
+                current = node.is_current,
+                available = node.is_available,
+                start = node.is_start,
+                boss = node.is_boss,
+                second_boss = node.is_second_boss,
+                parents = node.parents.Select(parent => $"{parent.row},{parent.col}").ToArray(),
+                children = node.children.Select(child => $"{child.row},{child.col}").ToArray()
             }).ToArray()
         };
     }
@@ -2286,11 +2397,21 @@ internal static class GameStateService
         return new
         {
             i = card.index,
+            card_id = card.card_id,
+            name = card.name,
+            upgraded = card.upgraded,
+            energy_cost = card.energy_cost,
+            star_cost = card.star_cost,
+            costs_x = card.costs_x,
+            star_costs_x = card.star_costs_x,
             line = FormatCardLine(card.name, card.upgraded, 1, card.energy_cost, card.star_cost, card.costs_x, card.star_costs_x, card.rules_text),
             playable = card.playable,
+            requires_target = card.requires_target,
+            target_type = card.target_type,
             target = card.requires_target ? NormalizeTargetHint(card.target_index_space ?? card.target_type) : null,
             targets = card.requires_target ? card.valid_target_indices : Array.Empty<int>(),
             why = card.playable ? null : card.unplayable_reason,
+            rules_text = card.rules_text,
             keywords,
             mods
         };
@@ -2298,6 +2419,7 @@ internal static class GameStateService
 
     private static object BuildAgentChoiceCardPayload(
         int index,
+        string cardId,
         string name,
         bool upgraded,
         int? energyCost,
@@ -2313,7 +2435,15 @@ internal static class GameStateService
         return new
         {
             i = index,
+            card_id = cardId,
+            name,
+            upgraded,
+            energy_cost = energyCost,
+            star_cost = starCost,
+            costs_x = costsX,
+            star_costs_x = starCostsX,
             line = FormatCardLine(name, upgraded, 1, energyCost, starCost, costsX, starCostsX, rulesText),
+            rules_text = rulesText,
             keywords,
             mods = Array.Empty<string>()
         };
@@ -2321,8 +2451,11 @@ internal static class GameStateService
 
     private static object BuildAgentPricedCardPayload(
         int index,
+        string cardId,
         string name,
         bool upgraded,
+        string cardType,
+        string rarity,
         int energyCost,
         int starCost,
         bool costsX,
@@ -2338,7 +2471,18 @@ internal static class GameStateService
         return new
         {
             i = index,
+            card_id = cardId,
+            name,
+            upgraded,
+            card_type = cardType,
+            rarity,
+            energy_cost = energyCost,
+            star_cost = starCost,
+            costs_x = costsX,
+            star_costs_x = starCostsX,
             line = $"{FormatCardLine(name, upgraded, 1, energyCost, starCost, costsX, starCostsX, rulesText)} | {price}g",
+            rules_text = rulesText,
+            price,
             affordable = enoughGold,
             keywords,
             mods = Array.Empty<string>()
@@ -2374,7 +2518,16 @@ internal static class GameStateService
 
                 return new
                 {
+                    card_id = first.card_id,
+                    name = first.name,
+                    upgraded = first.upgraded,
+                    count = group.Count(),
+                    energy_cost = first.energy_cost,
+                    star_cost = first.star_cost,
+                    costs_x = first.costs_x,
+                    star_costs_x = first.star_costs_x,
                     line,
+                    rules_text = first.rules_text,
                     keywords = first.keywords,
                     mods = first.mods
                 };
@@ -2392,6 +2545,7 @@ internal static class GameStateService
         CollectGlossaryTerms(glossaryTerms, rulesText, mods);
 
         return new AgentCardDescriptor(
+            card.Id.Entry,
             card.Title,
             card.IsUpgraded,
             card.EnergyCost.GetWithModifiers(CostModifiers.All),
@@ -2409,6 +2563,7 @@ internal static class GameStateService
         CollectGlossaryTerms(glossaryTerms, card.rules_text);
 
         return new AgentCardDescriptor(
+            card.card_id,
             card.name,
             card.upgraded,
             card.energy_cost,
@@ -5476,6 +5631,7 @@ internal sealed class RunPotionPayload
 }
 
 internal readonly record struct AgentCardDescriptor(
+    string card_id,
     string name,
     bool upgraded,
     int energy_cost,
@@ -5489,6 +5645,7 @@ internal readonly record struct AgentCardDescriptor(
     public string GroupKey =>
         string.Join(
             "\u001f",
+            card_id,
             name,
             upgraded ? "1" : "0",
             energy_cost.ToString(),

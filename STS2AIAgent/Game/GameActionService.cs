@@ -1397,6 +1397,24 @@ internal static class GameActionService
             await WaitForNextFrameAsync();
         }
 
+        var alternatives = GameStateService.GetCardRewardAlternativeButtons(cardRewardScreen);
+        var skipButton = alternatives.FirstOrDefault();
+        if (skipButton != null)
+        {
+            skipButton.ForceClick();
+
+            while (DateTime.UtcNow < deadline)
+            {
+                await WaitForNextFrameAsync();
+
+                if (!GodotObject.IsInstanceValid(cardRewardScreen) ||
+                    ActiveScreenContext.Instance.GetCurrentScreen() is not NCardRewardSelectionScreen)
+                {
+                    return true;
+                }
+            }
+        }
+
         var options = GameStateService.GetCardRewardOptions(cardRewardScreen);
         var selected = options.FirstOrDefault();
         if (selected == null)
