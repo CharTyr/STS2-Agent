@@ -13,6 +13,7 @@ from fastmcp import FastMCP
 from .client import Sts2Client
 from .handoff import Sts2HandoffService
 from .knowledge import Sts2KnowledgeBase
+from .run_logger import Sts2RunLogger
 
 ToolHandler = Callable[..., dict[str, Any]]
 
@@ -383,23 +384,53 @@ def _register_option_target_tool(mcp: FastMCP, name: str, description: str, hand
     mcp.tool(name=name, description=description)(tool)
 
 
-def _register_legacy_action_tools(mcp: FastMCP, sts2: Sts2Client) -> None:
+def _register_legacy_action_tools(
+    mcp: FastMCP,
+    action_runner: Callable[..., dict[str, Any]],
+) -> None:
     for spec in _LEGACY_ACTION_TOOLS:
-        handler = getattr(sts2, spec.name)
         if spec.kind == "no_args":
-            _register_no_arg_tool(mcp, spec.name, spec.description, handler)
+            _register_no_arg_tool(
+                mcp,
+                spec.name,
+                spec.description,
+                lambda spec_name=spec.name: action_runner(spec_name),
+            )
             continue
 
         if spec.kind == "option_index":
-            _register_option_index_tool(mcp, spec.name, spec.description, handler)
+            _register_option_index_tool(
+                mcp,
+                spec.name,
+                spec.description,
+                lambda option_index, spec_name=spec.name: action_runner(spec_name, option_index=option_index),
+            )
             continue
 
         if spec.kind == "card_target":
-            _register_card_target_tool(mcp, spec.name, spec.description, handler)
+            _register_card_target_tool(
+                mcp,
+                spec.name,
+                spec.description,
+                lambda card_index, target_index=None, spec_name=spec.name: action_runner(
+                    spec_name,
+                    card_index=card_index,
+                    target_index=target_index,
+                ),
+            )
             continue
 
         if spec.kind == "option_target":
-            _register_option_target_tool(mcp, spec.name, spec.description, handler)
+            _register_option_target_tool(
+                mcp,
+                spec.name,
+                spec.description,
+                lambda option_index, target_index=None, spec_name=spec.name: action_runner(
+                    spec_name,
+                    option_index=option_index,
+                    target_index=target_index,
+                ),
+            )
             continue
 
         raise RuntimeError(f"Unsupported action tool kind: {spec.kind}")
@@ -1889,12 +1920,71 @@ def create_server(client: Sts2Client | None = None, tool_profile: str | None = N
     sts2 = client or Sts2Client()
     knowledge = Sts2KnowledgeBase()
     handoff = Sts2HandoffService(knowledge)
+    run_logger = Sts2RunLogger(knowledge.root_dir)
     profile = _normalize_tool_profile(tool_profile)
     mcp = FastMCP("STS2 AI Agent")
 
-    def _agent_state() -> dict[str, Any]:
+    def _record_state(
+        state: dict[str, Any],
+        *,
+        reason: str,
+        event: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        run_logger.record_state(state, reason=reason, event=event)
+        return state
+
+    def _raw_state(reason: str) -> dict[str, Any]:
         state = sts2.get_state()
+        return _record_state(state, reason=reason)
+
+    def _agent_state(reason: str = "get_game_state") -> dict[str, Any]:
+        state = _raw_state(reason)
         return _build_agent_state_payload(state, knowledge)
+
+    def _execute_logged_action(
+        action: str,
+        *,
+        card_index: int | None = None,
+        target_index: int | None = None,
+        option_index: int | None = None,
+        command: str | None = None,
+        client_context: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        params = {
+            "card_index": card_index,
+            "target_index": target_index,
+            "option_index": option_index,
+            "command": command,
+        }
+        try:
+            response = sts2.execute_action(
+                action,
+                card_index=card_index,
+                target_index=target_index,
+                option_index=option_index,
+                command=command,
+                client_context=client_context,
+            )
+        except Exception as exc:
+            run_logger.record_action(
+                action=action,
+                params=params,
+                client_context=client_context,
+                error=exc,
+            )
+            raise
+
+        run_logger.record_action(
+            action=action,
+            params=params,
+            response=response,
+            client_context=client_context,
+        )
+        post_state = response.get("state")
+        if isinstance(post_state, dict):
+            run_logger.record_action_state(action, post_state)
+
+        return response
 
     def _is_actionable_state(state: dict[str, Any]) -> bool:
         actions = state.get("available_actions")
@@ -1919,6 +2009,7 @@ def create_server(client: Sts2Client | None = None, tool_profile: str | None = N
 
         state = sts2.get_state()
         if _is_actionable_state(state):
+            _record_state(state, reason="wait_until_actionable")
             return {
                 "matched": False,
                 "event": None,
@@ -1957,6 +2048,8 @@ def create_server(client: Sts2Client | None = None, tool_profile: str | None = N
                 if signature != baseline_signature:
                     break
 
+        _record_state(state, reason="wait_until_actionable", event=event)
+
         return {
             "matched": event is not None,
             "event": event,
@@ -1974,12 +2067,12 @@ def create_server(client: Sts2Client | None = None, tool_profile: str | None = N
     @mcp.tool
     def get_game_state() -> dict[str, Any]:
         """Read the compact agent-facing game state snapshot."""
-        return _agent_state()
+        return _agent_state("get_game_state")
 
     @mcp.tool
     def get_raw_game_state() -> dict[str, Any]:
         """Read the full raw `/state` snapshot for debugging or schema inspection."""
-        return sts2.get_state()
+        return _raw_state("get_raw_game_state")
 
     @mcp.tool
     def get_available_actions() -> list[dict[str, Any]]:
@@ -1990,7 +2083,7 @@ def create_server(client: Sts2Client | None = None, tool_profile: str | None = N
         @mcp.tool
         def get_planner_context(planner_note: str | None = None) -> dict[str, Any]:
             """Build a planner-focused snapshot with route branches and linked event knowledge."""
-            return knowledge.build_planner_context(sts2.get_state(), planner_note=planner_note)
+            return knowledge.build_planner_context(_raw_state("get_planner_context"), planner_note=planner_note)
 
         @mcp.tool
         def create_planner_handoff(
@@ -1999,7 +2092,7 @@ def create_server(client: Sts2Client | None = None, tool_profile: str | None = N
         ) -> dict[str, Any]:
             """Build a clean planner-agent packet for route, reward, event, and shop decisions."""
             return handoff.create_planner_handoff(
-                sts2.get_state(),
+                _raw_state("create_planner_handoff"),
                 planning_focus=planning_focus,
                 previous_combat_summary=previous_combat_summary,
             )
@@ -2011,7 +2104,7 @@ def create_server(client: Sts2Client | None = None, tool_profile: str | None = N
         ) -> dict[str, Any]:
             """Build a combat-focused snapshot and link it to the canonical combat knowledge entry."""
             return knowledge.build_combat_context(
-                sts2.get_state(),
+                _raw_state("get_combat_context"),
                 planner_note=planner_note,
                 include_knowledge=include_knowledge,
             )
@@ -2023,7 +2116,7 @@ def create_server(client: Sts2Client | None = None, tool_profile: str | None = N
         ) -> dict[str, Any]:
             """Build a clean combat-agent packet with linked combat knowledge and planner guidance."""
             return handoff.create_combat_handoff(
-                sts2.get_state(),
+                _raw_state("create_combat_handoff"),
                 planner_message=planner_message,
                 combat_objective=combat_objective,
             )
@@ -2051,7 +2144,7 @@ def create_server(client: Sts2Client | None = None, tool_profile: str | None = N
         def append_combat_knowledge(note: str, section: str = "observations") -> dict[str, Any]:
             """Append a note to the active combat knowledge file."""
             return knowledge.append_combat_note(
-                sts2.get_state(),
+                _raw_state("append_combat_knowledge"),
                 note=note,
                 section=section,
             )
@@ -2064,7 +2157,7 @@ def create_server(client: Sts2Client | None = None, tool_profile: str | None = N
         ) -> dict[str, Any]:
             """Append a note to the active event knowledge file."""
             return knowledge.append_event_note(
-                sts2.get_state(),
+                _raw_state("append_event_knowledge"),
                 note=note,
                 section=section,
                 option_index=option_index,
@@ -2131,7 +2224,7 @@ def create_server(client: Sts2Client | None = None, tool_profile: str | None = N
         Recommended for most queries to save tokens and reduce uncertainty.
         """
         # Auto-detect current scene from game state
-        state = sts2.get_state()
+        state = _raw_state("get_relevant_game_data")
         screen = state.get("screen", "")
         scene = _detect_scene_from_screen(screen)
         try:
@@ -2155,32 +2248,32 @@ def create_server(client: Sts2Client | None = None, tool_profile: str | None = N
         Returns each reward card with a score (0-100) and reasons for/against picking it.
         Higher score = better fit for the current deck.
         """
-        return _evaluate_card_rewards_for_state(_build_agent_state_payload(sts2.get_state(), knowledge))
+        return _evaluate_card_rewards_for_state(_build_agent_state_payload(_raw_state("evaluate_card_rewards"), knowledge))
 
     @mcp.tool
     def assess_elite_risk() -> dict[str, Any]:
         """Assess whether to take an elite fight based on current HP, deck, and potions."""
-        return _assess_elite_risk_for_state(_build_agent_state_payload(sts2.get_state(), knowledge))
+        return _assess_elite_risk_for_state(_build_agent_state_payload(_raw_state("assess_elite_risk"), knowledge))
 
     @mcp.tool
     def check_boss_readiness() -> dict[str, Any]:
         """Check whether the current deck, HP, and potions are ready for the next boss fight."""
-        return _check_boss_readiness_for_state(_build_agent_state_payload(sts2.get_state(), knowledge))
+        return _check_boss_readiness_for_state(_build_agent_state_payload(_raw_state("check_boss_readiness"), knowledge))
 
     @mcp.tool
     def evaluate_shop_options() -> dict[str, Any]:
         """Score shop cards, relics, potions, and card removal against the current run state."""
-        return _evaluate_shop_options_for_state(_build_agent_state_payload(sts2.get_state(), knowledge))
+        return _evaluate_shop_options_for_state(_build_agent_state_payload(_raw_state("evaluate_shop_options"), knowledge))
 
     @mcp.tool
     def assess_rest_site() -> dict[str, Any]:
         """Score rest-site options using HP, upgrade targets, and upcoming risk signals."""
-        return _assess_rest_site_for_state(_build_agent_state_payload(sts2.get_state(), knowledge))
+        return _assess_rest_site_for_state(_build_agent_state_payload(_raw_state("assess_rest_site"), knowledge))
 
     @mcp.tool
     def evaluate_potions() -> dict[str, Any]:
         """Evaluate current belt potions and any visible shop potions, including replacement suggestions."""
-        return _evaluate_potions_for_state(_build_agent_state_payload(sts2.get_state(), knowledge))
+        return _evaluate_potions_for_state(_build_agent_state_payload(_raw_state("evaluate_potions"), knowledge))
 
     @mcp.tool
     def wait_for_event(event_names: str = "", timeout_seconds: float = 20.0) -> dict[str, Any]:
@@ -2257,7 +2350,7 @@ def create_server(client: Sts2Client | None = None, tool_profile: str | None = N
         if normalized == "run_console_command":
             raise RuntimeError("run_console_command is gated separately and must use its own tool when enabled.")
 
-        return sts2.execute_action(
+        return _execute_logged_action(
             normalized,
             card_index=card_index,
             target_index=target_index,
@@ -2270,13 +2363,32 @@ def create_server(client: Sts2Client | None = None, tool_profile: str | None = N
         )
 
     if profile == "full":
-        _register_legacy_action_tools(mcp, sts2)
+        _register_legacy_action_tools(
+            mcp,
+            lambda action_name, **params: _execute_logged_action(
+                action_name,
+                **params,
+                client_context={
+                    "source": "mcp",
+                    "tool_name": action_name,
+                    "tool_profile": profile,
+                },
+            ),
+        )
 
     if _debug_tools_enabled():
         @mcp.tool
         def run_console_command(command: str) -> dict[str, Any]:
             """Run a game dev-console command for local validation or debugging."""
-            return sts2.run_console_command(command=command)
+            return _execute_logged_action(
+                "run_console_command",
+                command=command,
+                client_context={
+                    "source": "mcp",
+                    "tool_name": "run_console_command",
+                    "tool_profile": profile,
+                },
+            )
 
     return mcp
 

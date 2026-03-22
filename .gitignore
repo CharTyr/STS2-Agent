@@ -24,3 +24,6 @@ _bmad-output/
 .claude/
 .serena/
 node_modules/
+
+# Runtime artifacts
+agent_knowledge/logs/
