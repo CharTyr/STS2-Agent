@@ -454,9 +454,18 @@ def _build_agent_state_payload(state: dict[str, Any], knowledge: Sts2KnowledgeBa
 
     enriched = dict(agent_view)
     for key in _AGENT_VIEW_BACKFILL_KEYS:
+        raw_value = state.get(key)
+        compact_value = enriched.get(key)
+        if isinstance(compact_value, dict) and isinstance(raw_value, dict):
+            merged = dict(compact_value)
+            for child_key, child_value in raw_value.items():
+                existing = merged.get(child_key)
+                if child_key not in merged or existing in (None, "", [], {}):
+                    merged[child_key] = child_value
+            enriched[key] = merged
+            continue
         if key in enriched:
             continue
-        raw_value = state.get(key)
         if isinstance(raw_value, (dict, list)):
             enriched[key] = raw_value
 
@@ -631,6 +640,299 @@ def _extract_hp_values(run: dict[str, Any]) -> tuple[int | None, int | None]:
         return current_hp, max_hp
 
     return current_hp if current_hp is not None else parsed_current, max_hp if max_hp is not None else parsed_max
+
+
+def _coerce_int(value: Any, default: int = 0) -> int:
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return default
+
+
+def _get_power_amount(powers: list[dict[str, Any]], power_id: str) -> int:
+    needle = power_id.upper()
+    for power in powers:
+        pid = str(power.get("power_id") or "").upper()
+        if pid == needle or pid == f"{needle}_POWER":
+            return _coerce_int(power.get("amount"))
+    return 0
+
+
+def _compute_card_damage(base_damage: int, strength: int, is_weak: bool, target_vulnerable: bool, hits: int = 1) -> int:
+    per_hit = base_damage + strength
+    if is_weak:
+        per_hit = int(per_hit * 0.75)
+    if target_vulnerable:
+        per_hit = int(per_hit * 1.5)
+    return max(0, per_hit) * max(1, hits)
+
+
+def _compute_card_block(base_block: int, dexterity: int, is_frail: bool) -> int:
+    value = base_block + dexterity
+    if is_frail:
+        value = int(value * 0.75)
+    return max(0, value)
+
+
+def _compute_combat_analysis(state: dict[str, Any]) -> dict[str, Any]:
+    combat = state.get("combat")
+    if not isinstance(combat, dict):
+        return {"error": "not_in_combat", "message": "Combat analysis is only available during combat."}
+
+    player = combat.get("player") if isinstance(combat.get("player"), dict) else {}
+    energy = _coerce_int(player.get("energy"))
+    player_block = _coerce_int(player.get("block"))
+    player_powers = player.get("powers") if isinstance(player.get("powers"), list) else []
+    strength = _get_power_amount(player_powers, "STRENGTH")
+    dexterity = _get_power_amount(player_powers, "DEXTERITY")
+    is_weak = _get_power_amount(player_powers, "WEAK") > 0
+    is_frail = _get_power_amount(player_powers, "FRAIL") > 0
+
+    enemies_raw = combat.get("enemies") if isinstance(combat.get("enemies"), list) else []
+    enemies: list[dict[str, Any]] = []
+    total_incoming = 0
+    for enemy in enemies_raw:
+        if not isinstance(enemy, dict) or enemy.get("is_alive") is False:
+            continue
+
+        powers = enemy.get("powers") if isinstance(enemy.get("powers"), list) else []
+        vulnerable = _get_power_amount(powers, "VULNERABLE") > 0
+        intents = enemy.get("intents") if isinstance(enemy.get("intents"), list) else []
+        intent_damage = 0
+        for intent in intents:
+            if not isinstance(intent, dict):
+                continue
+            if intent.get("intent_type") == "Attack":
+                intent_damage += _coerce_int(intent.get("total_damage"), _coerce_int(intent.get("damage")))
+
+        total_incoming += intent_damage
+        enemies.append(
+            {
+                "index": _coerce_int(enemy.get("index")),
+                "name": enemy.get("name"),
+                "hp": _coerce_int(enemy.get("current_hp")),
+                "block": _coerce_int(enemy.get("block")),
+                "vulnerable": vulnerable,
+                "intent_damage": intent_damage,
+            }
+        )
+
+    card_data_index = _ensure_game_data_index("cards")
+    hand = combat.get("hand") if isinstance(combat.get("hand"), list) else []
+    analyzed_cards: list[dict[str, Any]] = []
+    for card in hand:
+        if not isinstance(card, dict):
+            continue
+
+        card_id = str(card.get("card_id") or "")
+        static = _lookup_game_data_item(index=card_data_index, item_id=card_id)
+        if not isinstance(static, dict):
+            static = {}
+
+        cs_dmg = card.get("dmg") or card.get("computed_damage")
+        cs_blk = card.get("blk") or card.get("computed_block")
+        cs_hits = card.get("hits") or card.get("hit_count")
+
+        base_dmg = _safe_int(static.get("damage"))
+        base_blk = _safe_int(static.get("block"))
+        hit_count = _safe_int(cs_hits) or _safe_int(static.get("hit_count")) or (1 if base_dmg else 0)
+        card_cost = _safe_int(card.get("energy_cost"))
+        if card_cost is None:
+            card_cost = _safe_int(static.get("cost"))
+        if card_cost is None:
+            card_cost = 1
+        is_playable = bool(card.get("playable", False))
+
+        computed_damage: int | None = None
+        computed_block: int | None = None
+        damage_per_energy: float | None = None
+
+        if cs_dmg is not None:
+            computed_damage = _coerce_int(cs_dmg) * max(1, hit_count)
+            if card_cost > 0:
+                damage_per_energy = round(computed_damage / card_cost, 1)
+        elif base_dmg is not None:
+            any_vulnerable = any(enemy["vulnerable"] for enemy in enemies)
+            computed_damage = _compute_card_damage(
+                base_dmg,
+                strength,
+                is_weak,
+                target_vulnerable=any_vulnerable,
+                hits=max(1, hit_count),
+            )
+            if card_cost > 0:
+                damage_per_energy = round(computed_damage / card_cost, 1)
+
+        if cs_blk is not None:
+            computed_block = _coerce_int(cs_blk)
+        elif base_blk is not None:
+            computed_block = _compute_card_block(base_blk, dexterity, is_frail)
+
+        entry: dict[str, Any] = {
+            "index": _coerce_int(card.get("index")),
+            "card_id": card_id,
+            "name": card.get("name", ""),
+            "energy_cost": card_cost,
+            "playable": is_playable,
+        }
+        if computed_damage is not None:
+            entry["computed_damage"] = computed_damage
+            if damage_per_energy is not None:
+                entry["damage_per_energy"] = damage_per_energy
+        if computed_block is not None:
+            entry["computed_block"] = computed_block
+
+        analyzed_cards.append(entry)
+
+    attacks = sorted(
+        [card for card in analyzed_cards if card.get("computed_damage") and card.get("playable")],
+        key=lambda card: (card.get("damage_per_energy", 0), card.get("computed_damage", 0)),
+        reverse=True,
+    )
+    blocks = sorted(
+        [card for card in analyzed_cards if card.get("computed_block") and card.get("playable")],
+        key=lambda card: (card.get("computed_block", 0), -(card.get("energy_cost", 99))),
+        reverse=True,
+    )
+
+    remaining_energy = energy
+    max_damage = 0
+    for card in attacks:
+        cost = _coerce_int(card.get("energy_cost"), 1)
+        if cost <= remaining_energy:
+            max_damage += _coerce_int(card.get("computed_damage"))
+            remaining_energy -= cost
+
+    remaining_energy_for_block = energy
+    max_block = 0
+    for card in blocks:
+        cost = _coerce_int(card.get("energy_cost"), 1)
+        if cost <= remaining_energy_for_block:
+            max_block += _coerce_int(card.get("computed_block"))
+            remaining_energy_for_block -= cost
+
+    enemy_analysis: list[dict[str, Any]] = []
+    for enemy in enemies:
+        effective_hp = enemy["hp"] + enemy["block"]
+        enemy_analysis.append(
+            {
+                "index": enemy["index"],
+                "name": enemy["name"],
+                "effective_hp": effective_hp,
+                "lethal": max_damage >= effective_hp,
+                "intent_damage": enemy["intent_damage"],
+                "vulnerable": enemy["vulnerable"],
+            }
+        )
+
+    net_damage_taken = max(0, total_incoming - player_block - max_block)
+
+    return {
+        "hand": analyzed_cards,
+        "energy": energy,
+        "player_powers": {
+            "strength": strength,
+            "dexterity": dexterity,
+            "weak": is_weak,
+            "frail": is_frail,
+        },
+        "summary": {
+            "max_damage_all_attacks": max_damage,
+            "max_block_all_defense": max_block,
+            "total_incoming_damage": total_incoming,
+            "current_block": player_block,
+            "net_damage_if_all_block": net_damage_taken,
+        },
+        "enemies": enemy_analysis,
+    }
+
+
+def _get_card_type_name(card: dict[str, Any]) -> str:
+    return str(card.get("card_type") or card.get("type") or "").upper()
+
+
+def _get_card_text(card: dict[str, Any]) -> str:
+    return str(card.get("rules_text") or card.get("description") or card.get("line") or "")
+
+
+def _get_energy_cost(card_data: dict[str, Any], default: int = 1) -> int:
+    for key in ("energy_cost", "cost"):
+        value = card_data.get(key)
+        if value is not None:
+            return _coerce_int(value, default)
+    return default
+
+
+def _score_card_for_deck(
+    card_id: str,
+    card_data: dict[str, Any],
+    current_deck: list[dict[str, Any]],
+    deck_size: int,
+) -> dict[str, Any]:
+    score = 50
+    reasons: list[str] = []
+
+    attack_count = sum(1 for card in current_deck if _get_card_type_name(card) == "ATTACK")
+    skill_count = sum(1 for card in current_deck if _get_card_type_name(card) == "SKILL")
+
+    card_type = str(card_data.get("type", "")).upper()
+    base_dmg = _coerce_int(card_data.get("damage"))
+    base_blk = _coerce_int(card_data.get("block"))
+    energy_cost = _get_energy_cost(card_data)
+    description = str(card_data.get("description", ""))
+    powers_applied = str(card_data.get("powers_applied", "")).lower()
+    has_draw = "draw" in powers_applied or "draw" in description.lower()
+
+    if deck_size > 18:
+        score -= 10
+        reasons.append("deck already large (>18)")
+    elif deck_size < 12:
+        score += 5
+        reasons.append("deck is small, card adds consistency")
+
+    if attack_count < skill_count and base_dmg > 0:
+        score += 10
+        reasons.append("deck needs more damage")
+
+    if skill_count < attack_count and base_blk > 0:
+        score += 10
+        reasons.append("deck needs more block")
+
+    if card_type == "POWER":
+        score += 15
+        reasons.append("powers provide lasting value")
+
+    if has_draw:
+        score += 12
+        reasons.append("draw improves deck cycling")
+
+    if base_dmg and energy_cost:
+        efficiency = base_dmg / max(1, energy_cost)
+        if efficiency >= 8:
+            score += 10
+            reasons.append(f"high damage efficiency ({efficiency:.0f}/energy)")
+    if base_blk and energy_cost:
+        efficiency = base_blk / max(1, energy_cost)
+        if efficiency >= 6:
+            score += 8
+            reasons.append(f"high block efficiency ({efficiency:.0f}/energy)")
+
+    desc_upper = description.upper()
+    if "ALL ENEM" in desc_upper or "AOE" in desc_upper:
+        aoe_count = sum(1 for card in current_deck if "ALL ENEM" in _get_card_text(card).upper())
+        if aoe_count == 0:
+            score += 15
+            reasons.append("deck has no AoE — this fills a critical gap")
+
+    if energy_cost == 0:
+        score += 10
+        reasons.append("0-cost = free value")
+
+    return {
+        "card_id": card_id,
+        "score": _clamp(score, 0, 100),
+        "reasons": reasons,
+    }
 
 
 def _card_profile(card: dict[str, Any], meta: dict[str, Any]) -> dict[str, Any]:
@@ -871,20 +1173,26 @@ def _score_reward_card(card: dict[str, Any], deck_summary: dict[str, Any], profi
 def _evaluate_card_rewards_for_state(state: dict[str, Any]) -> dict[str, Any]:
     cards_index = _safe_collection_index("cards")
     reward = _reward_payload(state)
-    reward_cards = _extract_card_entries(
-        reward.get("cards") or reward.get("card_options") or reward.get("card_rewards")
-    )
+    reward_cards = _extract_card_entries(reward.get("cards"))
+    if not reward_cards or not any(card.get("card_id") for card in reward_cards):
+        reward_cards = _extract_card_entries(
+            reward.get("card_options") or reward.get("card_rewards") or reward.get("cards")
+        )
+    current_deck = _extract_card_entries(_run_payload(state).get("deck"))
     deck_summary = _summarize_deck(state, cards_index)
 
     if not reward_cards:
         return {
             "best_index": None,
             "reward_cards": [],
+            "deck_size": deck_summary["deck_size"],
+            "recommendations": [],
             "deck_summary": _public_deck_summary(deck_summary),
             "message": "当前状态没有待选卡牌奖励。",
         }
 
     evaluated: list[dict[str, Any]] = []
+    compatibility_recommendations: list[dict[str, Any]] = []
     for entry in reward_cards:
         meta = _lookup_item_meta(cards_index, entry.get("card_id"))
         profile = _card_profile(entry, meta)
@@ -899,11 +1207,22 @@ def _evaluate_card_rewards_for_state(state: dict[str, Any]) -> dict[str, Any]:
                 "reasons": reasons,
             }
         )
+        compatibility = _score_card_for_deck(
+            card_id=str(entry.get("card_id") or ""),
+            card_data=meta,
+            current_deck=current_deck,
+            deck_size=deck_summary["deck_size"],
+        )
+        compatibility["name"] = profile["name"]
+        compatibility_recommendations.append(compatibility)
 
     best = max(evaluated, key=lambda item: (item["score"], -(item["index"] or 0)))
+    compatibility_recommendations.sort(key=lambda item: item["score"], reverse=True)
     return {
         "best_index": best["index"],
         "reward_cards": evaluated,
+        "deck_size": deck_summary["deck_size"],
+        "recommendations": compatibility_recommendations,
         "deck_summary": _public_deck_summary(deck_summary),
     }
 
@@ -983,6 +1302,8 @@ def _assess_elite_risk_for_state(state: dict[str, Any]) -> dict[str, Any]:
     deck_summary = _summarize_deck(state, cards_index)
     route_previews = _build_elite_route_previews(_map_payload(state).get("route_options"))
     best_route = route_previews[0] if route_previews else None
+    known_card_count = sum(deck_summary["type_counts"].values())
+    sparse_deck_info = known_card_count < max(3, deck_summary["deck_size"] // 3)
 
     risk_score = 50
     positive: list[str] = []
@@ -1013,48 +1334,52 @@ def _assess_elite_risk_for_state(state: dict[str, Any]) -> dict[str, Any]:
         risk_score -= 3
         positive.append("有药水可应急")
 
-    if deck_summary["aoe_cards"] == 0:
-        risk_score += 12 if act2_or_later else 8
-        negative.append("缺范围伤害")
+    if sparse_deck_info:
+        positive.append("牌组明细信息不足，按基础资源项评估")
     else:
-        risk_score -= 5
-        positive.append("有范围伤害处理多目标")
+        if deck_summary["aoe_cards"] == 0:
+            risk_score += 12 if act2_or_later else 8
+            negative.append("缺范围伤害")
+        else:
+            risk_score -= 5
+            positive.append("有范围伤害处理多目标")
 
-    if deck_summary["frontload_cards"] < 5:
-        risk_score += 10
-        negative.append("前台输出不足")
-    elif deck_summary["frontload_cards"] >= 7:
-        risk_score -= 6
-        positive.append("前台输出足够")
+        if deck_summary["frontload_cards"] < 5:
+            risk_score += 10
+            negative.append("前台输出不足")
+        elif deck_summary["frontload_cards"] >= 7:
+            risk_score -= 6
+            positive.append("前台输出足够")
 
-    if deck_summary["block_cards"] < 4 and deck_summary["weak_sources"] == 0:
-        risk_score += 10
-        negative.append("防御覆盖偏弱")
-    else:
-        risk_score -= 5
-        positive.append("有一定防御与减伤")
+        if deck_summary["block_cards"] < 4 and deck_summary["weak_sources"] == 0:
+            risk_score += 10
+            negative.append("防御覆盖偏弱")
+        else:
+            risk_score -= 5
+            positive.append("有一定防御与减伤")
 
-    if deck_summary["scaling_cards"] == 0:
-        risk_score += 6
-        negative.append("缺持续成长")
-    else:
-        risk_score -= 3
-        positive.append("有成长手段")
+        if deck_summary["scaling_cards"] == 0:
+            risk_score += 6
+            negative.append("缺持续成长")
+        else:
+            risk_score -= 3
+            positive.append("有成长手段")
 
-    if deck_summary["draw_cards"] < 2:
-        risk_score += 4
-        negative.append("过牌偏少")
-    elif deck_summary["draw_cards"] >= 3:
-        risk_score -= 2
-        positive.append("过牌稳定性尚可")
+        if deck_summary["draw_cards"] < 2:
+            risk_score += 4
+            negative.append("过牌偏少")
+        elif deck_summary["draw_cards"] >= 3:
+            risk_score -= 2
+            positive.append("过牌稳定性尚可")
 
     if deck_summary["max_energy"] >= 4:
         risk_score -= 3
         positive.append("能量上限较高")
 
     if best_route is None:
-        risk_score += 4
-        negative.append("当前路线缺少精英前缓冲信息")
+        if _map_payload(state):
+            risk_score += 4
+            negative.append("当前路线缺少精英前缓冲信息")
     else:
         if best_route["rest_before_elite"]:
             risk_score -= 10
@@ -1063,7 +1388,7 @@ def _assess_elite_risk_for_state(state: dict[str, Any]) -> dict[str, Any]:
             risk_score -= 6
             positive.append("可先商店补强再打精英")
         if best_route["elite_distance"] <= 2 and not best_route["rest_before_elite"]:
-            risk_score += 8
+            risk_score += 4
             negative.append("精英过近，缺少缓冲节点")
         if best_route["elite_count"] > 1:
             risk_score += 4
@@ -1095,13 +1420,25 @@ def _build_check(status: str, value: Any, target: str, reason: str) -> dict[str,
     }
 
 
+class _CheckCollection(dict):
+    def __init__(self, checks_by_key: dict[str, Any], ordered_checks: list[dict[str, Any]]) -> None:
+        super().__init__(checks_by_key)
+        self._ordered_checks = ordered_checks
+
+    def __getitem__(self, key: Any) -> Any:
+        if isinstance(key, int):
+            return self._ordered_checks[key]
+        return super().__getitem__(key)
+
+
 def _check_boss_readiness_for_state(state: dict[str, Any]) -> dict[str, Any]:
     cards_index = _safe_collection_index("cards")
     deck_summary = _summarize_deck(state, cards_index)
     hp_ratio = deck_summary["hp_ratio"]
     current_hp = deck_summary["current_hp"]
+    max_hp = deck_summary["max_hp"]
     deck_size = deck_summary["deck_size"]
-    checks = {
+    checks_by_key = {
         "hp": _build_check(
             "pass" if hp_ratio >= 0.6 or current_hp >= 45 else "borderline" if hp_ratio >= 0.45 or current_hp >= 30 else "fail",
             current_hp,
@@ -1179,10 +1516,10 @@ def _check_boss_readiness_for_state(state: dict[str, Any]) -> dict[str, Any]:
         ),
     }
 
-    status_counts = Counter(check["status"] for check in checks.values())
+    status_counts = Counter(check["status"] for check in checks_by_key.values())
     if status_counts["fail"] >= 3 or (
-        checks["hp"]["status"] == "fail"
-        and (checks["damage"]["status"] == "fail" or checks["block"]["status"] == "fail")
+        checks_by_key["hp"]["status"] == "fail"
+        and (checks_by_key["damage"]["status"] == "fail" or checks_by_key["block"]["status"] == "fail")
     ):
         recommendation = "NOT_READY"
     elif status_counts["fail"] == 0 and status_counts["borderline"] <= 2:
@@ -1190,10 +1527,60 @@ def _check_boss_readiness_for_state(state: dict[str, Any]) -> dict[str, Any]:
     else:
         recommendation = "BORDERLINE"
 
+    legacy_checks = [
+        {
+            "check": "hp",
+            "pass": checks_by_key["hp"]["status"] != "fail",
+            "detail": f"{current_hp}/{max_hp} HP" + (" — healthy" if checks_by_key["hp"]["status"] == "pass" else " — consider resting"),
+        },
+        {
+            "check": "deck_size",
+            "pass": checks_by_key["deck_size"]["status"] != "fail",
+            "detail": f"{deck_size} cards"
+            + (" — too thin" if deck_size < 10 else " — too bloated" if deck_size > 30 else " — good range"),
+        },
+        {
+            "check": "damage_output",
+            "pass": checks_by_key["damage"]["status"] != "fail",
+            "detail": "frontload/vulnerable/energy mix evaluated",
+        },
+        {
+            "check": "block_output",
+            "pass": checks_by_key["block"]["status"] != "fail",
+            "detail": "block/weak coverage evaluated",
+        },
+        {
+            "check": "vulnerable_source",
+            "pass": checks_by_key["vulnerable"]["status"] != "fail",
+            "detail": f"{deck_summary['vulnerable_sources']} source(s)",
+        },
+        {
+            "check": "draw_cards",
+            "pass": checks_by_key["draw"]["status"] != "fail",
+            "detail": f"{deck_summary['draw_cards']} draw card(s)",
+        },
+        {
+            "check": "potions",
+            "pass": checks_by_key["potions"]["status"] != "fail",
+            "detail": f"{deck_summary['potion_count']} potion(s) — {'save for boss' if deck_summary['potion_count'] >= 1 else 'try to acquire one before boss'}",
+        },
+    ]
+
     return {
         "recommendation": recommendation,
         "deck_summary": _public_deck_summary(deck_summary),
-        "checks": checks,
+        "deck_stats": {
+            "size": deck_size,
+            "attacks": deck_summary["type_counts"].get("attack", 0),
+            "blocks": deck_summary["block_cards"],
+            "draw": deck_summary["draw_cards"],
+            "aoe": deck_summary["aoe_cards"],
+            "vulnerable_sources": deck_summary["vulnerable_sources"],
+            "strength_sources": 0,
+        },
+        "checks": _CheckCollection(checks_by_key, legacy_checks),
+        "check_list": legacy_checks,
+        "checks_by_key": checks_by_key,
         "passed_checks": status_counts["pass"],
         "borderline_checks": status_counts["borderline"],
         "failed_checks": status_counts["fail"],
@@ -1841,7 +2228,7 @@ def _assess_rest_site_for_state(state: dict[str, Any]) -> dict[str, Any]:
                 score -= 4
                 reasons.append("血量尚可，补血收益下降")
 
-            if boss_readiness["checks"]["hp"]["status"] == "fail":
+            if boss_readiness["checks_by_key"]["hp"]["status"] == "fail":
                 score += 12
                 reasons.append("Boss readiness 的血量检查未过")
             if elite_risk["recommendation"] != "TAKE" and deck_summary["hp_ratio"] < 0.6:
@@ -2240,6 +2627,11 @@ def create_server(client: Sts2Client | None = None, tool_profile: str | None = N
             )
         except (KeyError, RuntimeError, TypeError) as exc:
             return _build_game_data_tool_error(collection=collection, exc=exc)
+
+    @mcp.tool
+    def get_combat_analysis() -> dict[str, Any]:
+        """Compute effective damage/block values for every card in hand, considering all active powers."""
+        return _compute_combat_analysis(_build_agent_state_payload(_raw_state("get_combat_analysis"), knowledge))
 
     @mcp.tool
     def evaluate_card_rewards() -> dict[str, Any]:
