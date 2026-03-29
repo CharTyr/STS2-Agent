@@ -152,6 +152,12 @@ Modal：
 - `STS2_AGENT_KNOWLEDGE_DIR`
   - 默认：仓库根目录下的 `agent_knowledge/`
   - 作用：保存 combat / event 的运行时知识文件
+- `STS2_ENABLE_RUN_LOGS`
+  - 默认：`1`
+  - 作用：自动记录每回合状态、动作和奖励变更到 JSONL 对局日志
+- `STS2_AGENT_RUN_LOG_DIR`
+  - 默认：`<STS2_AGENT_KNOWLEDGE_DIR>/logs/runs/`
+  - 作用：覆盖自动对局日志的输出目录
 - `STS2_API_TIMEOUT_SECONDS`
   - 默认：`10`
 - `STS2_ENABLE_DEBUG_ACTIONS`
@@ -174,6 +180,9 @@ agent_knowledge/
   events/
     global/
       cleric.md
+  logs/
+    runs/
+      JHH9GQ9FR0.jsonl
 ```
 
 约束：
@@ -182,6 +191,21 @@ agent_knowledge/
 - 事件文件按 `event_id` 命名
 - 当前还没有 chapter 字段时，目录先落在 `global/`
 - 追加内容时会自动带上 `run_id`、`floor`、`screen`、UTC 时间戳
+
+## 自动对局日志
+
+默认会自动把 run 过程写到：
+
+```text
+agent_knowledge/logs/runs/<run_id>.jsonl
+```
+
+日志特点：
+
+- 按 `run_id` 一局一个文件
+- 自动记录 `run_started`、`state`、`action`
+- `state` 会做去重，只在回合变化、屏幕变化、奖励变化、地图选项变化等情况下新增
+- `action` 会记录参数、动作结果，以及动作前后的状态摘要
 
 ## 主 / 副 Agent 交接
 

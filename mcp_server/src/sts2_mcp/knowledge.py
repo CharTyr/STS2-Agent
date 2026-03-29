@@ -339,6 +339,9 @@ class Sts2KnowledgeBase:
             },
         }
 
+    def build_route_options(self, state: dict[str, Any]) -> list[dict[str, Any]]:
+        return self._build_route_options(state)
+
     def build_combat_context(
         self,
         state: dict[str, Any],

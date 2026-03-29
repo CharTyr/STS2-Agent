@@ -988,7 +988,7 @@
 - **参数**：无
 - **行为**：
   1. 逐个领取可领取的奖励（跳过无空位的药水）
-  2. 遇到卡牌选择时**自动选择第一张**
+  2. 遇到卡牌选择时优先关闭当前卡牌奖励覆盖层，不再默认选择第一张
   3. 点击继续按钮
 - **超时**：20 秒
 - **注意**：适合无人值守推进。如需精确控制构筑决策，请用 `claim_reward` + `choose_reward_card` / `skip_reward_cards` 组合
@@ -1301,6 +1301,17 @@
 | 游戏结束 | `game_over` / `return_to_main_menu` | 已实现，待实机验证 |
 
 新增字段与动作的详细说明见 [phase-5-full-chain.md](../docs/phase-5-full-chain.md)。
+
+### 只读启发式工具
+
+以下 MCP 工具不执行动作，只返回结构化评估结果，适合给 planner / guided agent 在 Act 2 及以后阶段直接调用：
+
+- `evaluate_card_rewards`：结合当前 deck、血量、能量曲线与 reward 卡，给每张卡打分并返回推荐顺位。
+- `assess_elite_risk`：结合当前血线、药水、deck 缺口与地图路线，评估当前是否适合走精英。
+- `check_boss_readiness`：按血量、deck size、输出、防御、成长、过牌、易伤与药水做 Boss 战 readiness 检查。
+- `evaluate_shop_options`：统一评估商店里的删牌、卡、relic、potion，并返回当前最值得花钱的动作。
+- `assess_rest_site`：结合血量、升级目标、精英风险与 Boss readiness，对营火选项做优先级排序。
+- `evaluate_potions`：评估当前药水腰带和商店药水，支持给出购买 / 替换建议。
 
 ### Debug 动作
 

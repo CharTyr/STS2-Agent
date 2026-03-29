@@ -113,9 +113,85 @@ For detailed per-screen sequences and pitfalls, read [references/screen-playbook
 - `shop.is_open = true` means inner inventory, not room completion.
 - Timeline gates can block run start until the overlay is confirmed or the submenu is closed.
 
-## Minimal Decision Heuristics
+## Combat Decision Heuristics
 
-- In combat, spend energy efficiently and avoid ending turn with obvious free value unused.
-- In rewards, take cards only when the upgrade is clear; otherwise skip.
+### Pre-Turn Analysis
+- **Always call `get_combat_analysis` at the start of each combat turn.** This gives you computed damage/block per card (accounting for Strength, Dexterity, Weak, Frail, Vulnerable), max available damage/block, and per-enemy lethal checks.
+- Use the tactical summary to decide: attack vs defend vs setup.
+
+### Turn Priority (in order)
+1. **Lethal check** — if `summary.enemies[].lethal == true`, play attacks to kill that enemy.
+2. **Survive check** — if `summary.net_damage_if_all_block > 0` and HP is low, prioritize block.
+3. **Apply Vulnerable** — Bash a high-HP target for +50% damage over 3 turns.
+4. **Spend remaining energy** — prefer `damage_per_energy` to find efficient cards.
+5. **Never end turn with unspent energy** if playable cards remain.
+
+### Block Decision
+- Block if incoming damage > 30% of current HP.
+- Block if incoming damage is multi-attack (multi-attacks bypass small block).
+- Skip block if enemy is buffing/debuffing (free damage turn).
+
+### Card Reward Decisions
+- Take cards that fill gaps: no AoE → take AoE; no draw → take draw.
+- Skip cards that don't improve your average turn.
+- Refer to `docs/game-knowledge/ironclad-strategy.md` for card tier lists.
+
+### Route Planning
+- Rest if HP < 40%. Upgrade if HP > 60%.
+- Shop with 75+ gold for card removal or relics.
+- Avoid elites if HP < 50% or deck < 12 cards.
+- Take elites if HP > 70% and deck is solid.
+
+### Boss Preparation
+- Refer to `docs/game-knowledge/act1-boss-guide.md` before boss fights.
+- Use potions during boss fights, not before.
+- Enter boss with 60+ HP if possible.
+
+## Card Reward Heuristics
+
+- **Call `evaluate_card_rewards`** when card rewards appear after combat.
+- Pick the highest-scored card; skip all if no card scores above 60.
+- Prefer cards that fill gaps (no AoE → take AoE, no draw → take draw).
+- Never bloat deck past 20 cards unless the card is exceptional.
+
+## Economy Management
+
+### Gold Spending Priority
+1. **Card removal (75g)** — most valuable early buy. Remove Strikes first.
+2. **Strong relics (150-300g)** — permanent power. Check before buying cards.
+3. **Cards from shop** — only if they fill a critical deck gap.
+4. **Potions** — buy before boss fights if you have spare gold.
+
+### Gold Saving Rules
+- **Always keep 75g reserve** for card removal at next shop.
+- Don't buy cards in shop if deck > 18 cards.
+- Don't buy relics if gold < 150 and next shop is 2+ floors away.
+- Spending all gold before boss is fine — gold doesn't help in combat.
+
+### When to Skip Rewards
+- Skip card rewards if deck > 18 cards and no card fills a gap.
+- Skip gold in favor of max HP if HP < 50%.
+- Never skip relics — relics are always valuable.
+
+## Potion Timing
+
+### When to Use Potions
+- **Boss fights** — use offensive potions (Strength, Fire, Explosive) on turn 1-2 for max value.
+- **Elite fights** — use defensive potions if HP < 50% going in.
+- **Lethal prevention** — use Block/Fairy potions to survive a killing blow.
+- **Lethal enable** — use damage potions to secure a kill this turn when close.
+
+### When NOT to Use Potions
+- Normal combat you're winning comfortably — save for harder fights.
+- Turn 1 of normal combat — wait to see if you actually need it.
+- Healing potions outside combat when HP > 70% — save for emergencies.
+
+### Potion Slot Management
+- If all slots full and approaching a fight, use the weakest potion first.
+- Prioritize keeping: Fairy in a Bottle > Strength Potion > Block Potion > other.
+
+## General Decision Heuristics
+
+- In rewards, use `evaluate_card_rewards` to decide.
 - In shops, check relics and removal before committing all gold.
 - In events, prefer unlocked options and re-read state after every branch.
