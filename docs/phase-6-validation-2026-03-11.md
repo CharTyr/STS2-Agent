@@ -177,3 +177,18 @@ Recommended next step:
 2. Use `docs/mechanic-coverage-matrix.md` to drive future breadth-oriented mechanic probes
 3. Run `scripts/test-state-invariants.ps1` before broad manual playtesting to catch payload/action drift early
 4. When STS2 receives a content patch, re-run the same Phase 6 checklist and spot-check reward, event, and card-selection branches first
+
+## 2026-03-30 Addendum: Dynamic Card Values
+
+- Revalidated on game version `v0.99.1`, mod version `0.5.2`, commit `ffeb0e7`
+- The protocol now exposes runtime card metadata through `resolved_rules_text` and `dynamic_values[]`
+- `scripts/test-state-invariants.ps1` and `scripts/run_sts2_validation.py state-invariants` were both updated to assert these fields on:
+  - `combat.hand[]`
+  - `run.deck[]`
+  - `selection.cards[]`
+  - `reward.card_options[]`
+  - `shop.cards[]`
+- Live combat probe used `BODY_SLAM` (`全身撞击`) as the dynamic-value sample:
+  - at `12` block, the payload returned `resolved_rules_text = "造成你当前格挡值的伤害。 （造成12点伤害）"` and `dynamic_values[CalculatedDamage].current_value = 12`
+  - after raising block to `17`, the same payload returned `resolved_rules_text = "造成你当前格挡值的伤害。 （造成17点伤害）"` and `dynamic_values[CalculatedDamage].current_value = 17`
+- Conclusion: dynamic card values are now exposed as live runtime state rather than only as unresolved text

@@ -9,16 +9,14 @@ https://github.com/user-attachments/assets/89353468-a299-4315-9516-e520bcbfbd4b
 - `STS2AIAgent`: exposes game state and actions through a local HTTP API
 - `mcp_server`: wraps that local API as an MCP server for AI clients
 
-## What's New In `v0.5.2`
+## What's New In `v0.5.3`
 
-This release adds the new MCP feature set:
+This release builds on the `v0.5.2` MCP feature set and adds:
 
-- `guided` / `layered` / `full` tool profiles
-- game-data lookup tools: `get_game_data_item`, `get_game_data_items`, `get_relevant_game_data`
-- raw state inspection with `get_raw_game_state`
-- planner / combat handoff helpers for multi-agent workflows
-- runtime knowledge capture for combat and event flows
-- packaged `mcp_server/data` and `docs/game-knowledge` resources in the release zip
+- runtime-resolved card text with `resolved_rules_text`
+- structured card dynamic values through `dynamic_values[]`
+- live protocol coverage for dynamic card state in `combat.hand[]`, `run.deck[]`, `selection.cards[]`, `reward.card_options[]`, and `shop.cards[]`
+- regression checks in both `scripts/test-state-invariants.ps1` and `scripts/run_sts2_validation.py state-invariants`
 
 Detailed MCP tool documentation lives in [mcp_server/README.md](./mcp_server/README.md). If you want an agent workflow on top of it, start with [skills/sts2-mcp-player/SKILL.md](./skills/sts2-mcp-player/SKILL.md).
 

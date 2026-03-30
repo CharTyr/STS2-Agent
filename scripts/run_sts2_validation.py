@@ -231,6 +231,53 @@ def add_forbidden_action_failure(failures: list[str], action_set: set[str], acti
         failures.append(f"unexpected action '{action_name}': {reason}")
 
 
+def test_card_runtime_metadata(failures: list[str], card: Any, label: str) -> None:
+    if not isinstance(card, dict):
+        failures.append(f"{label} should be an object")
+        return
+
+    for field_name in ("rules_text", "resolved_rules_text", "dynamic_values"):
+        if field_name not in card:
+            failures.append(f"{label} should expose {field_name}")
+
+    rules_text = card.get("rules_text")
+    if rules_text is not None and not isinstance(rules_text, str):
+        failures.append(f"{label} rules_text should be a string when populated")
+
+    resolved_rules_text = card.get("resolved_rules_text")
+    if resolved_rules_text is not None and not isinstance(resolved_rules_text, str):
+        failures.append(f"{label} resolved_rules_text should be a string when populated")
+
+    dynamic_values = card.get("dynamic_values")
+    if dynamic_values is None:
+        return
+
+    if not isinstance(dynamic_values, list):
+        failures.append(f"{label} dynamic_values should be an array")
+        return
+
+    for index, dynamic_value in enumerate(dynamic_values):
+        if not isinstance(dynamic_value, dict):
+            failures.append(f"{label} dynamic_values[{index}] should be an object")
+            continue
+
+        for field_name in ("name", "base_value", "current_value", "enchanted_value", "is_modified", "was_just_upgraded"):
+            if field_name not in dynamic_value:
+                failures.append(f"{label} dynamic_values[{index}] should expose {field_name}")
+
+        if not has_text(dynamic_value.get("name")):
+            failures.append(f"{label} dynamic_values[{index}].name should be populated")
+
+        for field_name in ("base_value", "current_value", "enchanted_value"):
+            value = dynamic_value.get(field_name)
+            if isinstance(value, bool) or not isinstance(value, int):
+                failures.append(f"{label} dynamic_values[{index}].{field_name} should be an integer")
+
+        for field_name in ("is_modified", "was_just_upgraded"):
+            if not isinstance(dynamic_value.get(field_name), bool):
+                failures.append(f"{label} dynamic_values[{index}].{field_name} should be a boolean")
+
+
 def test_player_summaries(
     failures: list[str],
     players: list[dict[str, Any]],
@@ -424,6 +471,9 @@ def evaluate_state_invariants(client: ApiClient) -> dict[str, Any]:
                 f"selection.cards[] is populated but state.screen is '{state.get('screen')}' instead of 'CARD_SELECTION'"
             )
 
+    for card in list((selection or {}).get("cards") or []):
+        test_card_runtime_metadata(failures, card, f"selection.cards[{to_int(card.get('index'), 0)}]")
+
     if selection is not None:
         min_select = to_int(selection.get("min_select"), 0)
         max_select = to_int(selection.get("max_select"), 0)
@@ -491,6 +541,9 @@ def evaluate_state_invariants(client: ApiClient) -> dict[str, Any]:
                 "claim_reward",
                 "reward.rewards[] still contains claimable items",
             )
+
+    for card in list((reward or {}).get("card_options") or []):
+        test_card_runtime_metadata(failures, card, f"reward.card_options[{to_int(card.get('index'), 0)}]")
 
     map_payload = state.get("map")
     if map_payload is not None and list(map_payload.get("available_nodes") or []):
@@ -629,6 +682,9 @@ def evaluate_state_invariants(client: ApiClient) -> dict[str, Any]:
             add_forbidden_action_failure(failures, action_set, "buy_relic", "shop inventory is closed")
             add_forbidden_action_failure(failures, action_set, "buy_potion", "shop inventory is closed")
             add_forbidden_action_failure(failures, action_set, "remove_card_at_shop", "shop inventory is closed")
+
+    for card in list((shop or {}).get("cards") or []):
+        test_card_runtime_metadata(failures, card, f"shop.cards[{to_int(card.get('index'), 0)}]")
 
     character_select = state.get("character_select")
     if character_select is not None:
@@ -982,6 +1038,8 @@ def evaluate_state_invariants(client: ApiClient) -> dict[str, Any]:
             if card is None:
                 continue
 
+            test_card_runtime_metadata(failures, card, f"combat.hand[{to_int(card.get('index'), 0)}]")
+
             test_indexed_target_contract(
                 failures,
                 card,
@@ -1076,6 +1134,9 @@ def evaluate_state_invariants(client: ApiClient) -> dict[str, Any]:
         run_players = list(run_payload.get("players") or [])
         if run_players:
             test_player_summaries(failures, run_players, "run.players")
+
+        for card in list(run_payload.get("deck") or []):
+            test_card_runtime_metadata(failures, card, f"run.deck[{to_int(card.get('index'), 0)}]")
 
     multiplayer = state.get("multiplayer")
     if multiplayer is not None:

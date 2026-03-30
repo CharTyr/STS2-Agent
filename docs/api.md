@@ -171,8 +171,22 @@
 | `star_costs_x` | boolean | 是否为星星 X 费卡 |
 | `energy_cost` | number | 能量消耗（含修正） |
 | `star_cost` | number | 星星消耗（含修正） |
+| `rules_text` | string | 原始兼容规则文本 |
+| `resolved_rules_text` | string | 按当前实例动态变量展开后的规则文本 |
+| `dynamic_values` | object[] | 当前实例的动态变量列表 |
 | `playable` | boolean | **当前是否可打出** |
 | `unplayable_reason` | string \| null | 不可打出原因（`not_enough_energy`, `not_enough_stars`, `no_living_allies`, `blocked_by_hook`, `unplayable`） |
+
+#### `*.dynamic_values[]`（适用于 `combat.hand[]`、`run.deck[]`、`selection.cards[]`、`reward.card_options[]`、`shop.cards[]`）
+
+| 字段 | 类型 | 说明 |
+| --- | --- | --- |
+| `name` | string | 动态变量名（如 `Damage`、`Block`、`CalculatedDamage`、`Repeat`） |
+| `base_value` | number | 该变量的基础值 |
+| `current_value` | number | 当前预览值，通常对应 UI 正在显示的数值 |
+| `enchanted_value` | number | 附魔/永久修正后的值，不含本次预览变化时通常与基础值相同 |
+| `is_modified` | boolean | 当前值或附魔值是否相对基础值发生变化 |
+| `was_just_upgraded` | boolean | 该变量是否刚因升级变化 |
 
 #### `combat.enemies[]`
 
@@ -240,6 +254,9 @@
 | `star_costs_x` | boolean | 是否为星星 X 费卡 |
 | `energy_cost` | number | 能量消耗 |
 | `star_cost` | number | 星星消耗 |
+| `rules_text` | string | 原始兼容规则文本 |
+| `resolved_rules_text` | string | 按当前实例动态变量展开后的规则文本 |
+| `dynamic_values` | object[] | 当前实例的动态变量列表 |
 
 #### `run.relics[]`
 
@@ -341,6 +358,9 @@
 | `card_id` | string | 卡牌 ID |
 | `name` | string | 卡牌名称 |
 | `upgraded` | boolean | 是否已升级 |
+| `rules_text` | string | 原始兼容规则文本 |
+| `resolved_rules_text` | string | 按当前实例动态变量展开后的规则文本 |
+| `dynamic_values` | object[] | 当前实例的动态变量列表 |
 
 #### `reward.alternatives[]`
 
@@ -371,6 +391,9 @@
 | `star_costs_x` | boolean | 是否为星星 X 费卡 |
 | `energy_cost` | number | 能量消耗（含修正） |
 | `star_cost` | number | 星星消耗（含修正） |
+| `rules_text` | string | 原始兼容规则文本 |
+| `resolved_rules_text` | string | 按当前实例动态变量展开后的规则文本 |
+| `dynamic_values` | object[] | 当前实例的动态变量列表 |
 
 ### `chest` 子结构
 
@@ -469,6 +492,9 @@
 | `star_costs_x` | boolean | 是否为星星 X 费卡 |
 | `energy_cost` | number | 能量消耗（含修正） |
 | `star_cost` | number | 星星消耗（含修正） |
+| `rules_text` | string | 原始兼容规则文本 |
+| `resolved_rules_text` | string | 按当前实例动态变量展开后的规则文本 |
+| `dynamic_values` | object[] | 当前实例的动态变量列表 |
 
 #### `shop.card_removal`
 

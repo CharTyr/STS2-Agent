@@ -51,7 +51,7 @@ namespace STS2AIAgent.Game;
 
 internal static class GameStateService
 {
-    private const int StateVersion = 6;
+    private const int StateVersion = 7;
     private const int AgentViewVersion = 1;
 
     public static GameStatePayload BuildStatePayload()
@@ -1326,6 +1326,67 @@ internal static class GameStateService
         return string.Empty;
     }
 
+    private static string GetResolvedCardRulesText(CardModel? card)
+    {
+        if (card == null)
+        {
+            return string.Empty;
+        }
+
+        try
+        {
+            card.UpdateDynamicVarPreview(CardPreviewMode.Normal, card.CurrentTarget, card.DynamicVars);
+            var pileType = card.Pile?.Type ?? PileType.None;
+            var resolved = card.GetDescriptionForPile(pileType, card.CurrentTarget);
+            if (!string.IsNullOrWhiteSpace(resolved))
+            {
+                return NormalizeCardRulesText(resolved);
+            }
+        }
+        catch
+        {
+        }
+
+        return GetCardRulesText(card);
+    }
+
+    private static CardDynamicValuePayload[] BuildCardDynamicValuePayloads(CardModel? card)
+    {
+        if (card == null)
+        {
+            return Array.Empty<CardDynamicValuePayload>();
+        }
+
+        try
+        {
+            var previewSet = card.DynamicVars.Clone(card);
+            card.UpdateDynamicVarPreview(CardPreviewMode.Normal, card.CurrentTarget, previewSet);
+
+            return previewSet.Values
+                .Select(dynamicVar => new CardDynamicValuePayload
+                {
+                    name = dynamicVar.Name,
+                    base_value = (int)dynamicVar.BaseValue,
+                    current_value = (int)dynamicVar.PreviewValue,
+                    enchanted_value = (int)dynamicVar.EnchantedValue,
+                    is_modified = (int)dynamicVar.PreviewValue != (int)dynamicVar.BaseValue
+                        || (int)dynamicVar.EnchantedValue != (int)dynamicVar.BaseValue,
+                    was_just_upgraded = dynamicVar.WasJustUpgraded
+                })
+                .OrderBy(payload => payload.name, StringComparer.Ordinal)
+                .ToArray();
+        }
+        catch
+        {
+            return Array.Empty<CardDynamicValuePayload>();
+        }
+    }
+
+    private static string GetPreferredCardRulesText(string rulesText, string? resolvedRulesText)
+    {
+        return string.IsNullOrWhiteSpace(resolvedRulesText) ? rulesText : resolvedRulesText;
+    }
+
     private static string TryReadCardTextMember(object instance, string memberName)
     {
         const BindingFlags flags = BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic;
@@ -2033,7 +2094,7 @@ internal static class GameStateService
             max = selection.max_select,
             selected = selection.selected_count,
             confirm = selection.can_confirm,
-            cards = selection.cards.Select(card => BuildAgentChoiceCardPayload(card.index, card.name, card.upgraded, card.energy_cost, card.star_cost, card.costs_x, card.star_costs_x, card.rules_text, glossaryTerms)).ToArray()
+            cards = selection.cards.Select(card => BuildAgentChoiceCardPayload(card.index, card.name, card.upgraded, card.energy_cost, card.star_cost, card.costs_x, card.star_costs_x, GetPreferredCardRulesText(card.rules_text, card.resolved_rules_text), glossaryTerms)).ToArray()
         };
     }
 
@@ -2059,7 +2120,7 @@ internal static class GameStateService
                 line = $"{option.reward_type}: {option.description}",
                 claimable = option.claimable
             }).ToArray(),
-            cards = reward.card_options.Select(card => BuildAgentChoiceCardPayload(card.index, card.name, card.upgraded, null, null, false, false, card.rules_text, glossaryTerms)).ToArray(),
+            cards = reward.card_options.Select(card => BuildAgentChoiceCardPayload(card.index, card.name, card.upgraded, null, null, false, false, GetPreferredCardRulesText(card.rules_text, card.resolved_rules_text), glossaryTerms)).ToArray(),
             alternatives = reward.alternatives.Select(option => new
             {
                 i = option.index,
@@ -2111,7 +2172,7 @@ internal static class GameStateService
                     card.star_cost,
                     card.costs_x,
                     card.star_costs_x,
-                    card.rules_text,
+                    GetPreferredCardRulesText(card.rules_text, card.resolved_rules_text),
                     card.price,
                     card.enough_gold,
                     glossaryTerms)).ToArray(),
@@ -2279,14 +2340,15 @@ internal static class GameStateService
         CardModel? liveCard,
         HashSet<string> glossaryTerms)
     {
+        var displayRulesText = GetPreferredCardRulesText(card.rules_text, card.resolved_rules_text);
         var mods = GetCardModifierTags(liveCard);
-        var keywords = GetGlossaryMatches(card.rules_text, mods);
-        CollectGlossaryTerms(glossaryTerms, card.rules_text, mods);
+        var keywords = GetGlossaryMatches(displayRulesText, mods);
+        CollectGlossaryTerms(glossaryTerms, displayRulesText, mods);
 
         return new
         {
             i = card.index,
-            line = FormatCardLine(card.name, card.upgraded, 1, card.energy_cost, card.star_cost, card.costs_x, card.star_costs_x, card.rules_text),
+            line = FormatCardLine(card.name, card.upgraded, 1, card.energy_cost, card.star_cost, card.costs_x, card.star_costs_x, displayRulesText),
             playable = card.playable,
             target = card.requires_target ? NormalizeTargetHint(card.target_index_space ?? card.target_type) : null,
             targets = card.requires_target ? card.valid_target_indices : Array.Empty<int>(),
@@ -2386,7 +2448,7 @@ internal static class GameStateService
 
     private static AgentCardDescriptor BuildAgentCardDescriptor(CardModel card, HashSet<string> glossaryTerms)
     {
-        var rulesText = GetCardRulesText(card);
+        var rulesText = GetResolvedCardRulesText(card);
         var mods = GetCardModifierTags(card);
         var keywords = GetGlossaryMatches(rulesText, mods);
         CollectGlossaryTerms(glossaryTerms, rulesText, mods);
@@ -2405,8 +2467,9 @@ internal static class GameStateService
 
     private static AgentCardDescriptor BuildAgentCardDescriptor(DeckCardPayload card, HashSet<string> glossaryTerms)
     {
-        var keywords = GetGlossaryMatches(card.rules_text);
-        CollectGlossaryTerms(glossaryTerms, card.rules_text);
+        var rulesText = GetPreferredCardRulesText(card.rules_text, card.resolved_rules_text);
+        var keywords = GetGlossaryMatches(rulesText);
+        CollectGlossaryTerms(glossaryTerms, rulesText);
 
         return new AgentCardDescriptor(
             card.name,
@@ -2415,7 +2478,7 @@ internal static class GameStateService
             card.star_cost,
             card.costs_x,
             card.star_costs_x,
-            card.rules_text,
+            rulesText,
             keywords,
             Array.Empty<string>());
     }
@@ -3354,6 +3417,8 @@ internal static class GameStateService
         var targetSupported = IsCardTargetSupported(card);
         var targetIndexSpace = GetCardTargetIndexSpace(card);
         var validTargetIndices = GetCardTargetIndices(combatState, card);
+        var resolvedRulesText = GetResolvedCardRulesText(card);
+        var dynamicValues = BuildCardDynamicValuePayloads(card);
 
         return new CombatHandCardPayload
         {
@@ -3370,6 +3435,8 @@ internal static class GameStateService
             energy_cost = card.EnergyCost.GetWithModifiers(CostModifiers.All),
             star_cost = Math.Max(0, card.GetStarCostWithModifiers()),
             rules_text = GetCardRulesText(card),
+            resolved_rules_text = resolvedRulesText,
+            dynamic_values = dynamicValues,
             playable = targetSupported && reason == UnplayableReason.None,
             unplayable_reason = targetSupported
                 ? GetUnplayableReasonCode(reason)
@@ -3672,6 +3739,8 @@ internal static class GameStateService
     private static RewardCardOptionPayload BuildRewardCardOptionPayload(NCardHolder holder, int index)
     {
         var card = holder.CardModel;
+        var resolvedRulesText = GetResolvedCardRulesText(card);
+        var dynamicValues = BuildCardDynamicValuePayloads(card);
 
         return new RewardCardOptionPayload
         {
@@ -3679,7 +3748,9 @@ internal static class GameStateService
             card_id = card?.Id.Entry ?? string.Empty,
             name = card?.Title ?? string.Empty,
             upgraded = card?.IsUpgraded ?? false,
-            rules_text = GetCardRulesText(card)
+            rules_text = GetCardRulesText(card),
+            resolved_rules_text = resolvedRulesText,
+            dynamic_values = dynamicValues
         };
     }
 
@@ -3939,6 +4010,8 @@ internal static class GameStateService
     private static ShopCardPayload BuildShopCardPayload(MerchantCardEntry entry, int index, string category)
     {
         var card = entry.CreationResult?.Card;
+        var resolvedRulesText = GetResolvedCardRulesText(card);
+        var dynamicValues = BuildCardDynamicValuePayloads(card);
         return new ShopCardPayload
         {
             index = index,
@@ -3953,6 +4026,8 @@ internal static class GameStateService
             energy_cost = card?.EnergyCost.GetWithModifiers(CostModifiers.All) ?? 0,
             star_cost = card != null ? Math.Max(0, card.GetStarCostWithModifiers()) : 0,
             rules_text = GetCardRulesText(card),
+            resolved_rules_text = resolvedRulesText,
+            dynamic_values = dynamicValues,
             price = entry.IsStocked ? entry.Cost : 0,
             on_sale = entry.IsOnSale,
             is_stocked = entry.IsStocked,
@@ -4016,6 +4091,8 @@ internal static class GameStateService
 
     private static DeckCardPayload BuildDeckCardPayload(CardModel card, int index)
     {
+        var resolvedRulesText = GetResolvedCardRulesText(card);
+        var dynamicValues = BuildCardDynamicValuePayloads(card);
         return new DeckCardPayload
         {
             index = index,
@@ -4028,12 +4105,16 @@ internal static class GameStateService
             star_costs_x = card.HasStarCostX,
             energy_cost = card.EnergyCost.GetWithModifiers(CostModifiers.All),
             star_cost = Math.Max(0, card.GetStarCostWithModifiers()),
-            rules_text = GetCardRulesText(card)
+            rules_text = GetCardRulesText(card),
+            resolved_rules_text = resolvedRulesText,
+            dynamic_values = dynamicValues
         };
     }
 
     private static SelectionCardPayload BuildSelectionCardPayload(CardModel card, int index)
     {
+        var resolvedRulesText = GetResolvedCardRulesText(card);
+        var dynamicValues = BuildCardDynamicValuePayloads(card);
         return new SelectionCardPayload
         {
             index = index,
@@ -4046,7 +4127,9 @@ internal static class GameStateService
             star_costs_x = card.HasStarCostX,
             energy_cost = card.EnergyCost.GetWithModifiers(CostModifiers.All),
             star_cost = Math.Max(0, card.GetStarCostWithModifiers()),
-            rules_text = GetCardRulesText(card)
+            rules_text = GetCardRulesText(card),
+            resolved_rules_text = resolvedRulesText,
+            dynamic_values = dynamicValues
         };
     }
 
@@ -5020,6 +5103,10 @@ internal sealed class ShopCardPayload
 
     public string rules_text { get; init; } = string.Empty;
 
+    public string resolved_rules_text { get; init; } = string.Empty;
+
+    public CardDynamicValuePayload[] dynamic_values { get; init; } = Array.Empty<CardDynamicValuePayload>();
+
     public int price { get; init; }
 
     public bool on_sale { get; init; }
@@ -5243,6 +5330,10 @@ internal sealed class CombatHandCardPayload
 
     public string rules_text { get; init; } = string.Empty;
 
+    public string resolved_rules_text { get; init; } = string.Empty;
+
+    public CardDynamicValuePayload[] dynamic_values { get; init; } = Array.Empty<CardDynamicValuePayload>();
+
     public bool playable { get; init; }
 
     public string? unplayable_reason { get; init; }
@@ -5370,6 +5461,10 @@ internal sealed class RewardCardOptionPayload
     public bool upgraded { get; init; }
 
     public string rules_text { get; init; } = string.Empty;
+
+    public string resolved_rules_text { get; init; } = string.Empty;
+
+    public CardDynamicValuePayload[] dynamic_values { get; init; } = Array.Empty<CardDynamicValuePayload>();
 }
 
 internal sealed class RewardAlternativePayload
@@ -5402,6 +5497,10 @@ internal sealed class DeckCardPayload
     public int star_cost { get; init; }
 
     public string rules_text { get; init; } = string.Empty;
+
+    public string resolved_rules_text { get; init; } = string.Empty;
+
+    public CardDynamicValuePayload[] dynamic_values { get; init; } = Array.Empty<CardDynamicValuePayload>();
 }
 
 internal sealed class SelectionCardPayload
@@ -5427,6 +5526,25 @@ internal sealed class SelectionCardPayload
     public int star_cost { get; init; }
 
     public string rules_text { get; init; } = string.Empty;
+
+    public string resolved_rules_text { get; init; } = string.Empty;
+
+    public CardDynamicValuePayload[] dynamic_values { get; init; } = Array.Empty<CardDynamicValuePayload>();
+}
+
+internal sealed class CardDynamicValuePayload
+{
+    public string name { get; init; } = string.Empty;
+
+    public int base_value { get; init; }
+
+    public int current_value { get; init; }
+
+    public int enchanted_value { get; init; }
+
+    public bool is_modified { get; init; }
+
+    public bool was_just_upgraded { get; init; }
 }
 
 internal sealed class RunRelicPayload
