@@ -77,6 +77,7 @@ internal static class GameActionService
             "choose_treasure_relic" => ExecuteChooseTreasureRelicAsync(request),
             "choose_event_option" => ExecuteChooseEventOptionAsync(request),
             "choose_capstone_option" => ExecuteChooseCapstoneOptionAsync(request),
+            "choose_bundle" => ExecuteChooseBundleAsync(request),
             "choose_rest_option" => ExecuteChooseRestOptionAsync(request),
             "open_shop_inventory" => ExecuteOpenShopInventoryAsync(),
             "close_shop_inventory" => ExecuteCloseShopInventoryAsync(),
@@ -1948,6 +1949,66 @@ internal static class GameActionService
         return new ActionResponsePayload
         {
             action = "choose_capstone_option",
+            status = stable ? "completed" : "pending",
+            stable = stable,
+            message = stable ? "Action completed." : "Action queued but state is still transitioning.",
+            state = GameStateService.BuildStatePayload()
+        };
+    }
+
+    private static async Task<ActionResponsePayload> ExecuteChooseBundleAsync(ActionRequest request)
+    {
+        var currentScreen = ActiveScreenContext.Instance.GetCurrentScreen();
+        var screen = GameStateService.ResolveScreen(currentScreen);
+
+        if (!GameStateService.CanChooseBundle(currentScreen))
+        {
+            throw new ApiException(409, "invalid_action", "Action is not available in the current state.", new
+            {
+                action = "choose_bundle",
+                screen
+            });
+        }
+
+        if (request.option_index == null)
+        {
+            throw new ApiException(400, "invalid_request", "choose_bundle requires option_index.", new
+            {
+                action = "choose_bundle"
+            });
+        }
+
+        var bundles = GameStateService.GetBundleOptions(currentScreen);
+        if (request.option_index < 0 || request.option_index >= bundles.Count)
+        {
+            throw new ApiException(409, "invalid_target", "option_index is out of range.", new
+            {
+                action = "choose_bundle",
+                option_index = request.option_index,
+                bundle_count = bundles.Count
+            });
+        }
+
+        var bundle = bundles[request.option_index.Value];
+        bundle.EmitSignal("BundleClicked", bundle);
+
+        // Wait for screen transition
+        var deadline = DateTime.UtcNow + TimeSpan.FromSeconds(10);
+        var stable = false;
+        while (DateTime.UtcNow < deadline)
+        {
+            await WaitForNextFrameAsync();
+            var newScreen = ActiveScreenContext.Instance.GetCurrentScreen();
+            if (newScreen is not NChooseABundleSelectionScreen)
+            {
+                stable = true;
+                break;
+            }
+        }
+
+        return new ActionResponsePayload
+        {
+            action = "choose_bundle",
             status = stable ? "completed" : "pending",
             stable = stable,
             message = stable ? "Action completed." : "Action queued but state is still transitioning.",

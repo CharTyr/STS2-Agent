@@ -423,6 +423,16 @@ internal static class GameStateService
             });
         }
 
+        if (CanChooseBundle(currentScreen))
+        {
+            descriptors.Add(new ActionDescriptor
+            {
+                name = "choose_bundle",
+                requires_target = false,
+                requires_index = true
+            });
+        }
+
         if (CanChooseRestOption(currentScreen))
         {
             descriptors.Add(new ActionDescriptor
@@ -805,6 +815,24 @@ internal static class GameStateService
 
         return FindDescendants<NButton>((Node)capstoneScreen)
             .Where(b => GodotObject.IsInstanceValid(b) && b.IsVisibleInTree() && b.IsEnabled)
+            .ToArray();
+    }
+
+    public static bool CanChooseBundle(IScreenContext? currentScreen)
+    {
+        return GetBundleOptions(currentScreen).Count > 0;
+    }
+
+    public static IReadOnlyList<Control> GetBundleOptions(IScreenContext? currentScreen)
+    {
+        if (currentScreen is not NChooseABundleSelectionScreen bundleScreen)
+        {
+            return Array.Empty<Control>();
+        }
+
+        // NCardBundle nodes represent the selectable card packs
+        return FindDescendants<Control>((Node)bundleScreen)
+            .Where(n => GodotObject.IsInstanceValid(n) && n.IsVisibleInTree() && n.GetType().Name == "NCardBundle")
             .ToArray();
     }
 
@@ -1797,6 +1825,11 @@ internal static class GameStateService
         if (CanChooseCapstoneOption(currentScreen))
         {
             names.Add("choose_capstone_option");
+        }
+
+        if (CanChooseBundle(currentScreen))
+        {
+            names.Add("choose_bundle");
         }
 
         if (CanChooseRestOption(currentScreen))
@@ -4586,6 +4619,7 @@ internal static class GameStateService
         }
 
         if (currentScreen is Node rootNode &&
+            currentScreen is not NChooseABundleSelectionScreen &&
             GetVisibleGridCardHolders(rootNode).Count > 0)
         {
             return "CARD_SELECTION";
@@ -4611,6 +4645,7 @@ internal static class GameStateService
             NCombatRoom => "COMBAT",
             NMapScreen or NMapRoom => "MAP",
             NCharacterSelectScreen => "CHARACTER_SELECT",
+            NChooseABundleSelectionScreen => "BUNDLE_SELECTION",
             NCapstoneSubmenuStack => "CAPSTONE_SELECTION",
             NPatchNotesScreen => "MAIN_MENU",
             NSubmenu => "MAIN_MENU",
