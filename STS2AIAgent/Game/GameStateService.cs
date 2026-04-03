@@ -413,6 +413,16 @@ internal static class GameStateService
             });
         }
 
+        if (CanChooseCapstoneOption(currentScreen))
+        {
+            descriptors.Add(new ActionDescriptor
+            {
+                name = "choose_capstone_option",
+                requires_target = false,
+                requires_index = true
+            });
+        }
+
         if (CanChooseRestOption(currentScreen))
         {
             descriptors.Add(new ActionDescriptor
@@ -779,6 +789,23 @@ internal static class GameStateService
         {
             return false;
         }
+    }
+
+    public static bool CanChooseCapstoneOption(IScreenContext? currentScreen)
+    {
+        return GetCapstoneButtons(currentScreen).Count > 0;
+    }
+
+    public static IReadOnlyList<NButton> GetCapstoneButtons(IScreenContext? currentScreen)
+    {
+        if (currentScreen is not NCapstoneSubmenuStack capstoneScreen)
+        {
+            return Array.Empty<NButton>();
+        }
+
+        return FindDescendants<NButton>((Node)capstoneScreen)
+            .Where(b => GodotObject.IsInstanceValid(b) && b.IsVisibleInTree() && b.IsEnabled)
+            .ToArray();
     }
 
     public static bool CanChooseRestOption(IScreenContext? currentScreen)
@@ -1765,6 +1792,11 @@ internal static class GameStateService
         if (CanChooseEventOption(currentScreen))
         {
             names.Add("choose_event_option");
+        }
+
+        if (CanChooseCapstoneOption(currentScreen))
+        {
+            names.Add("choose_capstone_option");
         }
 
         if (CanChooseRestOption(currentScreen))
@@ -4579,6 +4611,7 @@ internal static class GameStateService
             NCombatRoom => "COMBAT",
             NMapScreen or NMapRoom => "MAP",
             NCharacterSelectScreen => "CHARACTER_SELECT",
+            NCapstoneSubmenuStack => "CAPSTONE_SELECTION",
             NPatchNotesScreen => "MAIN_MENU",
             NSubmenu => "MAIN_MENU",
             NLogoAnimation => "MAIN_MENU",

@@ -76,6 +76,7 @@ internal static class GameActionService
             "open_chest" => ExecuteOpenChestAsync(),
             "choose_treasure_relic" => ExecuteChooseTreasureRelicAsync(request),
             "choose_event_option" => ExecuteChooseEventOptionAsync(request),
+            "choose_capstone_option" => ExecuteChooseCapstoneOptionAsync(request),
             "choose_rest_option" => ExecuteChooseRestOptionAsync(request),
             "open_shop_inventory" => ExecuteOpenShopInventoryAsync(),
             "close_shop_inventory" => ExecuteCloseShopInventoryAsync(),
@@ -1892,6 +1893,66 @@ internal static class GameActionService
         }
 
         return false;
+    }
+
+    private static async Task<ActionResponsePayload> ExecuteChooseCapstoneOptionAsync(ActionRequest request)
+    {
+        var currentScreen = ActiveScreenContext.Instance.GetCurrentScreen();
+        var screen = GameStateService.ResolveScreen(currentScreen);
+
+        if (!GameStateService.CanChooseCapstoneOption(currentScreen))
+        {
+            throw new ApiException(409, "invalid_action", "Action is not available in the current state.", new
+            {
+                action = "choose_capstone_option",
+                screen
+            });
+        }
+
+        if (request.option_index == null)
+        {
+            throw new ApiException(400, "invalid_request", "choose_capstone_option requires option_index.", new
+            {
+                action = "choose_capstone_option"
+            });
+        }
+
+        var buttons = GameStateService.GetCapstoneButtons(currentScreen);
+        if (request.option_index < 0 || request.option_index >= buttons.Count)
+        {
+            throw new ApiException(409, "invalid_target", "option_index is out of range.", new
+            {
+                action = "choose_capstone_option",
+                option_index = request.option_index,
+                button_count = buttons.Count
+            });
+        }
+
+        var button = buttons[request.option_index.Value];
+        button.EmitSignal(BaseButton.SignalName.Pressed);
+
+        // Wait for screen transition
+        var deadline = DateTime.UtcNow + TimeSpan.FromSeconds(10);
+        var stable = false;
+        while (DateTime.UtcNow < deadline)
+        {
+            await WaitForNextFrameAsync();
+            var newScreen = ActiveScreenContext.Instance.GetCurrentScreen();
+            if (newScreen is not NCapstoneSubmenuStack)
+            {
+                stable = true;
+                break;
+            }
+        }
+
+        return new ActionResponsePayload
+        {
+            action = "choose_capstone_option",
+            status = stable ? "completed" : "pending",
+            stable = stable,
+            message = stable ? "Action completed." : "Action queued but state is still transitioning.",
+            state = GameStateService.BuildStatePayload()
+        };
     }
 
     private static async Task<ActionResponsePayload> ExecuteChooseRestOptionAsync(ActionRequest request)
