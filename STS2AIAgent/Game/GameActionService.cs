@@ -1990,7 +1990,11 @@ internal static class GameActionService
         }
 
         var bundle = bundles[request.option_index.Value];
-        bundle.EmitSignal("BundleClicked", bundle);
+        // Call the screen's OnBundleClicked method directly
+        if (currentScreen is NChooseABundleSelectionScreen bundleScreen)
+        {
+            ((Node)bundleScreen).Call("OnBundleClicked", bundle);
+        }
 
         // Wait for screen transition
         var deadline = DateTime.UtcNow + TimeSpan.FromSeconds(10);
