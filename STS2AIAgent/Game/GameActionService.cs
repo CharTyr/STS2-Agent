@@ -78,6 +78,7 @@ internal static class GameActionService
             "choose_event_option" => ExecuteChooseEventOptionAsync(request),
             "choose_capstone_option" => ExecuteChooseCapstoneOptionAsync(request),
             "choose_bundle" => ExecuteChooseBundleAsync(request),
+            "confirm_bundle" => ExecuteConfirmBundleAsync(),
             "choose_rest_option" => ExecuteChooseRestOptionAsync(request),
             "open_shop_inventory" => ExecuteOpenShopInventoryAsync(),
             "close_shop_inventory" => ExecuteCloseShopInventoryAsync(),
@@ -2013,6 +2014,56 @@ internal static class GameActionService
         return new ActionResponsePayload
         {
             action = "choose_bundle",
+            status = stable ? "completed" : "pending",
+            stable = stable,
+            message = stable ? "Action completed." : "Action queued but state is still transitioning.",
+            state = GameStateService.BuildStatePayload()
+        };
+    }
+
+    private static async Task<ActionResponsePayload> ExecuteConfirmBundleAsync()
+    {
+        var currentScreen = ActiveScreenContext.Instance.GetCurrentScreen();
+        var screen = GameStateService.ResolveScreen(currentScreen);
+
+        if (!GameStateService.CanConfirmBundle(currentScreen))
+        {
+            throw new ApiException(409, "invalid_action", "Action is not available in the current state.", new
+            {
+                action = "confirm_bundle",
+                screen
+            });
+        }
+
+        var buttons = GameStateService.GetBundleConfirmButtons(currentScreen);
+        if (buttons.Count == 0)
+        {
+            throw new ApiException(409, "invalid_action", "No confirm button found.", new
+            {
+                action = "confirm_bundle",
+                screen
+            });
+        }
+
+        // Click the first enabled button (should be the confirm button)
+        buttons[0].EmitSignal(BaseButton.SignalName.Pressed);
+
+        var deadline = DateTime.UtcNow + TimeSpan.FromSeconds(10);
+        var stable = false;
+        while (DateTime.UtcNow < deadline)
+        {
+            await WaitForNextFrameAsync();
+            var newScreen = ActiveScreenContext.Instance.GetCurrentScreen();
+            if (newScreen is not NChooseABundleSelectionScreen)
+            {
+                stable = true;
+                break;
+            }
+        }
+
+        return new ActionResponsePayload
+        {
+            action = "confirm_bundle",
             status = stable ? "completed" : "pending",
             stable = stable,
             message = stable ? "Action completed." : "Action queued but state is still transitioning.",

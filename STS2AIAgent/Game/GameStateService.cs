@@ -433,6 +433,16 @@ internal static class GameStateService
             });
         }
 
+        if (CanConfirmBundle(currentScreen))
+        {
+            descriptors.Add(new ActionDescriptor
+            {
+                name = "confirm_bundle",
+                requires_target = false,
+                requires_index = false
+            });
+        }
+
         if (CanChooseRestOption(currentScreen))
         {
             descriptors.Add(new ActionDescriptor
@@ -821,6 +831,24 @@ internal static class GameStateService
     public static bool CanChooseBundle(IScreenContext? currentScreen)
     {
         return GetBundleOptions(currentScreen).Count > 0;
+    }
+
+    public static bool CanConfirmBundle(IScreenContext? currentScreen)
+    {
+        return GetBundleConfirmButtons(currentScreen).Count > 0;
+    }
+
+    public static IReadOnlyList<NButton> GetBundleConfirmButtons(IScreenContext? currentScreen)
+    {
+        if (currentScreen is not NChooseABundleSelectionScreen bundleScreen)
+        {
+            return Array.Empty<NButton>();
+        }
+
+        // After selecting a bundle, a confirm button appears
+        return FindDescendants<NButton>((Node)bundleScreen)
+            .Where(b => GodotObject.IsInstanceValid(b) && b.IsVisibleInTree() && b.IsEnabled)
+            .ToArray();
     }
 
     public static IReadOnlyList<Control> GetBundleOptions(IScreenContext? currentScreen)
@@ -1830,6 +1858,11 @@ internal static class GameStateService
         if (CanChooseBundle(currentScreen))
         {
             names.Add("choose_bundle");
+        }
+
+        if (CanConfirmBundle(currentScreen))
+        {
+            names.Add("confirm_bundle");
         }
 
         if (CanChooseRestOption(currentScreen))
