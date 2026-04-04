@@ -845,9 +845,10 @@ internal static class GameStateService
             return Array.Empty<NButton>();
         }
 
-        // After selecting a bundle, a confirm button appears
+        // Look specifically for NConfirmButton or button named "Confirm"
         return FindDescendants<NButton>((Node)bundleScreen)
-            .Where(b => GodotObject.IsInstanceValid(b) && b.IsVisibleInTree() && b.IsEnabled)
+            .Where(b => GodotObject.IsInstanceValid(b) && b.IsVisibleInTree() && b.IsEnabled
+                && (b.GetType().Name == "NConfirmButton" || b.Name == "Confirm"))
             .ToArray();
     }
 

@@ -2011,13 +2011,16 @@ internal static class GameActionService
             }
         }
 
+        GameStatePayload? bundleState = null;
+        try { bundleState = GameStateService.BuildStatePayload(); } catch { }
+
         return new ActionResponsePayload
         {
             action = "choose_bundle",
             status = stable ? "completed" : "pending",
             stable = stable,
             message = stable ? "Action completed." : "Action queued but state is still transitioning.",
-            state = GameStateService.BuildStatePayload()
+            state = bundleState
         };
     }
 
@@ -2045,21 +2048,45 @@ internal static class GameActionService
             });
         }
 
-        // Click the first enabled button (should be the confirm button)
-        buttons[0].EmitSignal(BaseButton.SignalName.Pressed);
+        var confirmBtn = buttons[0];
+        Log.Info($"[STS2AIAgent] confirm_bundle: clicking {confirmBtn.GetType().Name} '{confirmBtn.Name}'");
 
-        var deadline = DateTime.UtcNow + TimeSpan.FromSeconds(10);
+        // Try ForceClick first
+        confirmBtn.ForceClick();
+        await WaitForNextFrameAsync();
+
+        // If still on bundle screen, try calling OnConfirmPressed on the screen
         var stable = false;
-        while (DateTime.UtcNow < deadline)
+        if (ActiveScreenContext.Instance.GetCurrentScreen() is NChooseABundleSelectionScreen bundleScreen2)
+        {
+            try
+            {
+                Log.Info("[STS2AIAgent] confirm_bundle: trying OnConfirmPressed");
+                ((Node)bundleScreen2).Call("OnConfirmPressed");
+            }
+            catch { }
+
+            // Also try emitting the button's signal with no args
+            try
+            {
+                confirmBtn.EmitSignal("pressed");
+            }
+            catch { }
+        }
+
+        var deadline = DateTime.UtcNow + TimeSpan.FromSeconds(5);
+        while (!stable && DateTime.UtcNow < deadline)
         {
             await WaitForNextFrameAsync();
             var newScreen = ActiveScreenContext.Instance.GetCurrentScreen();
             if (newScreen is not NChooseABundleSelectionScreen)
             {
                 stable = true;
-                break;
             }
         }
+
+        GameStatePayload? state = null;
+        try { state = GameStateService.BuildStatePayload(); } catch { }
 
         return new ActionResponsePayload
         {
@@ -2067,7 +2094,7 @@ internal static class GameActionService
             status = stable ? "completed" : "pending",
             stable = stable,
             message = stable ? "Action completed." : "Action queued but state is still transitioning.",
-            state = GameStateService.BuildStatePayload()
+            state = state
         };
     }
 
