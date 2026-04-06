@@ -2010,7 +2010,10 @@ internal static class GameStateService
                 base_orb_slots = me.BaseOrbSlotCount,
                 orb_capacity = orbQueue.Capacity,
                 empty_orb_slots = Math.Max(0, orbQueue.Capacity - orbs.Count),
-                orbs = orbs.Select((orb, index) => BuildCombatOrbPayload(orb, index)).ToArray()
+                orbs = orbs.Select((orb, index) => BuildCombatOrbPayload(orb, index)).ToArray(),
+                cards_played_this_turn = (int)(TryGetMemberValue(me.PlayerCombatState, "CardsPlayedThisTurn") ?? 0),
+                attacks_played_this_turn = (int)(TryGetMemberValue(me.PlayerCombatState, "AttacksPlayedThisTurn") ?? 0),
+                skills_played_this_turn = (int)(TryGetMemberValue(me.PlayerCombatState, "SkillsPlayedThisTurn") ?? 0)
             },
             players = GetOrderedCombatPlayers(combatState)
                 .Select(player => BuildCombatPlayerSummaryPayload(player, combatState, connectedPlayerIds, me.NetId))
@@ -2126,7 +2129,10 @@ internal static class GameStateService
                 energy = combat.player.energy,
                 stars = combat.player.stars,
                 focus = combat.player.focus,
-                orbs = combat.player.orbs.Select(orb => FormatOrbLine(orb)).ToArray()
+                orbs = combat.player.orbs.Select(orb => FormatOrbLine(orb)).ToArray(),
+                cards_played_this_turn = combat.player.cards_played_this_turn,
+                attacks_played_this_turn = combat.player.attacks_played_this_turn,
+                skills_played_this_turn = combat.player.skills_played_this_turn
             },
             hand = combat.hand.Select(card =>
                 BuildAgentHandCardPayload(
@@ -2136,6 +2142,9 @@ internal static class GameStateService
             draw = BuildAgentCardStacks(ReadCombatPileCards(playerCombatState, "DrawPile", "DrawDeck"), glossaryTerms),
             discard = BuildAgentCardStacks(ReadCombatPileCards(playerCombatState, "DiscardPile"), glossaryTerms),
             exhaust = BuildAgentCardStacks(ReadCombatPileCards(playerCombatState, "ExhaustPile"), glossaryTerms),
+            draw_cards = BuildStructuredPileCards(ReadCombatPileCards(playerCombatState, "DrawPile", "DrawDeck")),
+            discard_cards = BuildStructuredPileCards(ReadCombatPileCards(playerCombatState, "DiscardPile")),
+            exhaust_cards = BuildStructuredPileCards(ReadCombatPileCards(playerCombatState, "ExhaustPile")),
             enemies = combat.enemies.Select(enemy => new
             {
                 i = enemy.index,
@@ -2189,6 +2198,7 @@ internal static class GameStateService
             potions = run.potions.Select(potion => new
             {
                 i = potion.index,
+                potion_id = potion.potion_id,
                 line = FormatPotionLine(potion),
                 usable = potion.can_use,
                 discard = potion.can_discard,
@@ -2199,7 +2209,10 @@ internal static class GameStateService
             {
                 draw = BuildAgentCardStacks(ReadCombatPileCards(combatPlayer, "DrawPile", "DrawDeck"), glossaryTerms),
                 discard = BuildAgentCardStacks(ReadCombatPileCards(combatPlayer, "DiscardPile"), glossaryTerms),
-                exhaust = BuildAgentCardStacks(ReadCombatPileCards(combatPlayer, "ExhaustPile"), glossaryTerms)
+                exhaust = BuildAgentCardStacks(ReadCombatPileCards(combatPlayer, "ExhaustPile"), glossaryTerms),
+                draw_cards = BuildStructuredPileCards(ReadCombatPileCards(combatPlayer, "DrawPile", "DrawDeck")),
+                discard_cards = BuildStructuredPileCards(ReadCombatPileCards(combatPlayer, "DiscardPile")),
+                exhaust_cards = BuildStructuredPileCards(ReadCombatPileCards(combatPlayer, "ExhaustPile"))
             }
         };
     }
@@ -2692,6 +2705,16 @@ internal static class GameStateService
         }
 
         return string.Join(" | ", segments);
+    }
+
+    private static object[] BuildStructuredPileCards(CardModel[] cards)
+    {
+        return cards.Select(card => new
+        {
+            card_id = card.Id.Entry,
+            upgraded = card.IsUpgraded,
+            card_type = card.Type.ToString()
+        }).ToArray();
     }
 
     private static CardModel[] ReadCombatPileCards(object? playerCombatState, params string[] memberNames)
@@ -3875,6 +3898,9 @@ internal static class GameStateService
             card_id = card?.Id.Entry ?? string.Empty,
             name = card?.Title ?? string.Empty,
             upgraded = card?.IsUpgraded ?? false,
+            card_type = card?.Type.ToString() ?? string.Empty,
+            rarity = card?.Rarity.ToString() ?? string.Empty,
+            energy_cost = card?.EnergyCost.GetWithModifiers(CostModifiers.All) ?? 0,
             rules_text = GetCardRulesText(card),
             resolved_rules_text = resolvedRulesText,
             dynamic_values = dynamicValues
@@ -5381,6 +5407,12 @@ internal sealed class CombatPlayerPayload
     public int empty_orb_slots { get; init; }
 
     public CombatOrbPayload[] orbs { get; init; } = Array.Empty<CombatOrbPayload>();
+
+    public int cards_played_this_turn { get; init; }
+
+    public int attacks_played_this_turn { get; init; }
+
+    public int skills_played_this_turn { get; init; }
 }
 
 internal sealed class CombatPlayerSummaryPayload
@@ -5607,6 +5639,12 @@ internal sealed class RewardCardOptionPayload
     public string name { get; init; } = string.Empty;
 
     public bool upgraded { get; init; }
+
+    public string card_type { get; init; } = string.Empty;
+
+    public string rarity { get; init; } = string.Empty;
+
+    public int energy_cost { get; init; }
 
     public string rules_text { get; init; } = string.Empty;
 
