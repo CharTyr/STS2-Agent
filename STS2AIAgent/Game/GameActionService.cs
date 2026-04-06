@@ -66,12 +66,20 @@ internal static class GameActionService
     internal static int SkillsPlayedThisTurn { get; private set; }
     internal static int LastTurnNumber { get; private set; }
 
+    /// <summary>
+    /// When set by resolve_rewards, TryResolveCardRewardAsync picks this
+    /// card index instead of the first option. Null means skip.
+    /// -1 means no pending choice (use default behavior).
+    /// </summary>
+    private static int _pendingCardRewardChoice = -1;
+
     public static Task<ActionResponsePayload> ExecuteAsync(ActionRequest request)
     {
         var actionName = request.action?.Trim().ToLowerInvariant();
 
         return actionName switch
         {
+            "resolve_rewards" => ExecuteResolveRewardsAsync(request),
             "end_turn" => ExecuteEndTurnAsync(),
             "play_card" => ExecutePlayCardAsync(request),
             "continue_run" => ExecuteContinueRunAsync(),
@@ -943,6 +951,45 @@ internal static class GameActionService
         return IsStableScreenState(currentScreen, allowMapScreen: true);
     }
 
+    private static async Task<ActionResponsePayload> ExecuteResolveRewardsAsync(ActionRequest request)
+    {
+        var currentScreen = ActiveScreenContext.Instance.GetCurrentScreen();
+        var screen = GameStateService.ResolveScreen(currentScreen);
+
+        if (!GameStateService.CanCollectRewardsAndProceed(currentScreen))
+        {
+            throw new ApiException(409, "invalid_action", "Not on reward screen.", new
+            {
+                action = "resolve_rewards",
+                screen
+            });
+        }
+
+        // card_index: null = skip card, 0/1/2 = pick that card, absent = auto (first card)
+        if (request.card_index.HasValue)
+        {
+            _pendingCardRewardChoice = request.card_index.Value;
+            _cardRewardSkipped = false;
+        }
+        else
+        {
+            // null means skip
+            _pendingCardRewardChoice = -2; // sentinel for "skip"
+            _cardRewardSkipped = true;
+        }
+
+        var stable = await DrainRewardFlowAsync(TimeSpan.FromSeconds(20));
+
+        return new ActionResponsePayload
+        {
+            action = "resolve_rewards",
+            status = stable ? "completed" : "pending",
+            stable = stable,
+            message = stable ? "All rewards resolved." : "Reward flow still transitioning.",
+            state = GameStateService.BuildStatePayload()
+        };
+    }
+
     private static async Task<ActionResponsePayload> ExecuteCollectRewardsAndProceedAsync()
     {
         var currentScreen = ActiveScreenContext.Instance.GetCurrentScreen();
@@ -1435,8 +1482,39 @@ internal static class GameActionService
             await WaitForNextFrameAsync();
         }
 
+        // If resolve_rewards requested a skip, click the skip alternative
+        if (_pendingCardRewardChoice == -2)
+        {
+            _pendingCardRewardChoice = -1;
+            var alternatives = GameStateService.GetCardRewardAlternativeButtons(cardRewardScreen);
+            if (alternatives.Count > 0)
+            {
+                alternatives.First().ForceClick();
+                _cardRewardSkipped = true;
+            }
+            while (DateTime.UtcNow < deadline)
+            {
+                await WaitForNextFrameAsync();
+                if (!GodotObject.IsInstanceValid(cardRewardScreen) ||
+                    ActiveScreenContext.Instance.GetCurrentScreen() is not NCardRewardSelectionScreen)
+                    return true;
+            }
+            return false;
+        }
+
         var options = GameStateService.GetCardRewardOptions(cardRewardScreen);
-        var selected = options.FirstOrDefault();
+
+        // If resolve_rewards specified a card index, use it
+        NCardHolder? selected;
+        if (_pendingCardRewardChoice >= 0 && _pendingCardRewardChoice < options.Count)
+        {
+            selected = options[_pendingCardRewardChoice];
+            _pendingCardRewardChoice = -1;
+        }
+        else
+        {
+            selected = options.FirstOrDefault();
+        }
         if (selected == null)
         {
             return false;
