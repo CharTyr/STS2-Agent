@@ -2045,6 +2045,9 @@ internal static class GameStateService
             gold = player.Gold,
             max_energy = player.MaxEnergy,
             base_orb_slots = player.BaseOrbSlotCount,
+            act_id = TryGetMemberValue(runState, "CurrentActIndex")?.ToString()
+                ?? TryGetMemberValue(runState, "ActId")?.ToString(),
+            boss_id = TryGetMemberValue(runState, "BossId")?.ToString(),
             deck = player.Deck.Cards.Select((card, index) => BuildDeckCardPayload(card, index)).ToArray(),
             relics = player.Relics.Select((relic, index) => BuildRunRelicPayload(relic, index)).ToArray(),
             players = runState!.Players
@@ -2148,10 +2151,12 @@ internal static class GameStateService
             enemies = combat.enemies.Select(enemy => new
             {
                 i = enemy.index,
+                enemy_id = enemy.enemy_id,
                 name = enemy.name,
                 hp = $"{enemy.current_hp}/{enemy.max_hp}",
                 block = enemy.block,
                 intent = enemy.intent,
+                move_id = enemy.move_id,
                 alive = enemy.is_alive,
                 hittable = enemy.is_hittable
             }).ToArray()
@@ -2185,6 +2190,8 @@ internal static class GameStateService
             ascension = run.ascension,
             ascension_effects = run.ascension_effects,
             floor = run.floor,
+            act_id = run.act_id,
+            boss_id = run.boss_id,
             hp = $"{run.current_hp}/{run.max_hp}",
             gold = run.gold,
             max_energy = run.max_energy,
@@ -4945,6 +4952,10 @@ internal sealed class RunPayload
     public int max_energy { get; init; }
 
     public int base_orb_slots { get; init; }
+
+    public string? act_id { get; init; }
+
+    public string? boss_id { get; init; }
 
     public DeckCardPayload[] deck { get; init; } = Array.Empty<DeckCardPayload>();
 
