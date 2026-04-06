@@ -9,14 +9,14 @@ https://github.com/user-attachments/assets/89353468-a299-4315-9516-e520bcbfbd4b
 - `STS2AIAgent`: exposes game state and actions through a local HTTP API
 - `mcp_server`: wraps that local API as an MCP server for AI clients
 
-## What's New In `v0.5.3`
+## What's New In `v0.5.4`
 
-This release builds on the `v0.5.2` MCP feature set and adds:
+This release adds:
 
-- runtime-resolved card text with `resolved_rules_text`
-- structured card dynamic values through `dynamic_values[]`
-- live protocol coverage for dynamic card state in `combat.hand[]`, `run.deck[]`, `selection.cards[]`, `reward.card_options[]`, and `shop.cards[]`
-- regression checks in both `scripts/test-state-invariants.ps1` and `scripts/run_sts2_validation.py state-invariants`
+- run-time Ascension data in `RunPayload` via `run.ascension` and `run.ascension_effects[]`
+- compact agent-view Ascension visibility through `agent_view.run.ascension`
+- a fix for reward-screen potion discard exposure: `discard_potion` is no longer exposed on reward / card-reward screens
+- updated regression checks covering both Ascension payloads and reward-screen potion discard gating
 
 Detailed MCP tool documentation lives in [mcp_server/README.md](./mcp_server/README.md). If you want an agent workflow on top of it, start with [skills/sts2-mcp-player/SKILL.md](./skills/sts2-mcp-player/SKILL.md).
 

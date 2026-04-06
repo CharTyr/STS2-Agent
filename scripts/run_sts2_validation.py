@@ -528,6 +528,12 @@ def evaluate_state_invariants(client: ApiClient) -> dict[str, Any]:
             "proceed",
             "reward flows should use reward-specific actions instead of proceed",
         )
+        add_forbidden_action_failure(
+            failures,
+            action_set,
+            "discard_potion",
+            "reward screens should not expose discard_potion",
+        )
 
         if reward.get("pending_card_choice"):
             if list(reward.get("card_options") or []):
@@ -1128,6 +1134,30 @@ def evaluate_state_invariants(client: ApiClient) -> dict[str, Any]:
             failures.append("run.character_id should always be populated when run payload exists")
         if not has_text(run_payload.get("character_name")):
             failures.append("run.character_name should always be populated when run payload exists")
+        ascension = run_payload.get("ascension")
+        if isinstance(ascension, bool) or not isinstance(ascension, int):
+            failures.append("run.ascension should be an integer")
+        elif ascension < 0:
+            failures.append("run.ascension should never be negative")
+
+        ascension_effects = run_payload.get("ascension_effects")
+        if not isinstance(ascension_effects, list):
+            failures.append("run.ascension_effects should always be populated")
+            ascension_effects = []
+        elif isinstance(ascension, int) and not isinstance(ascension, bool) and len(ascension_effects) != ascension:
+            failures.append("run.ascension_effects count should match run.ascension")
+
+        for index, effect in enumerate(ascension_effects):
+            if not isinstance(effect, dict):
+                failures.append(f"run.ascension_effects[{index}] should be an object")
+                continue
+            if not has_text(effect.get("id")):
+                failures.append(f"run.ascension_effects[{index}].id should be populated")
+            if not has_text(effect.get("name")):
+                failures.append(f"run.ascension_effects[{index}].name should be populated")
+            if not has_text(effect.get("description")):
+                failures.append(f"run.ascension_effects[{index}].description should be populated")
+
         if to_int(run_payload.get("base_orb_slots"), 0) < 0:
             failures.append("run.base_orb_slots should never be negative")
 

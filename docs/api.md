@@ -240,6 +240,17 @@
 | `relics[]` | object[] | 当前遗物 |
 | `potions[]` | object[] | 当前药水槽 |
 
+| `ascension` | number | 当前 run 的 Ascension 等级 |
+| `ascension_effects[]` | object[] | 当前 Ascension 等级已生效的累计效果列表 |
+
+#### `run.ascension_effects[]`
+
+| 字段 | 类型 | 说明 |
+| --- | --- | --- |
+| `id` | string | Ascension 效果 ID，例如 `LEVEL_08` |
+| `name` | string | Ascension 效果名称 |
+| `description` | string | Ascension 效果描述 |
+
 #### `run.deck[]`
 
 | 字段 | 类型 | 说明 |

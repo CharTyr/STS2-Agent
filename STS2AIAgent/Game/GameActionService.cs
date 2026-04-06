@@ -3021,7 +3021,7 @@ internal static class GameActionService
             });
         }
 
-        if (!GameStateService.CanDiscardPotionAtIndex(runState, request.option_index.Value))
+        if (!GameStateService.CanDiscardPotionAtIndex(currentScreen, runState, request.option_index.Value))
         {
             throw new ApiException(409, "invalid_action", "The selected potion cannot be discarded in the current state.", new
             {

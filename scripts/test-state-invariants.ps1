@@ -308,6 +308,7 @@ else {
 if ($null -ne $state.reward) {
     Add-MissingActionFailure -Failures $failures -ActionSet $actionSet -ActionName "collect_rewards_and_proceed" -Reason "reward payload is present"
     Add-ForbiddenActionFailure -Failures $failures -ActionSet $actionSet -ActionName "proceed" -Reason "reward flows should use reward-specific actions instead of proceed"
+    Add-ForbiddenActionFailure -Failures $failures -ActionSet $actionSet -ActionName "discard_potion" -Reason "reward screens should not expose discard_potion"
 
     if ($state.reward.pending_card_choice) {
         if (@($state.reward.card_options).Count -gt 0) {
@@ -836,6 +837,41 @@ if ($null -ne $state.run) {
 
     if ([string]::IsNullOrWhiteSpace([string]$state.run.character_name)) {
         $failures.Add("run.character_name should always be populated when run payload exists")
+    }
+
+    if ($state.run.ascension -isnot [int] -and $state.run.ascension -isnot [long]) {
+        $failures.Add("run.ascension should be an integer")
+    }
+    elseif ([int]$state.run.ascension -lt 0) {
+        $failures.Add("run.ascension should never be negative")
+    }
+
+    $ascensionEffects = @($state.run.ascension_effects)
+    if ($null -eq $state.run.ascension_effects) {
+        $failures.Add("run.ascension_effects should always be populated")
+    }
+    elseif ([int]$state.run.ascension -ne $ascensionEffects.Count) {
+        $failures.Add("run.ascension_effects count should match run.ascension")
+    }
+
+    for ($i = 0; $i -lt $ascensionEffects.Count; $i++) {
+        $effect = $ascensionEffects[$i]
+        if ($null -eq $effect) {
+            $failures.Add("run.ascension_effects[$i] should not be null")
+            continue
+        }
+
+        if ([string]::IsNullOrWhiteSpace([string]$effect.id)) {
+            $failures.Add("run.ascension_effects[$i].id should be populated")
+        }
+
+        if ([string]::IsNullOrWhiteSpace([string]$effect.name)) {
+            $failures.Add("run.ascension_effects[$i].name should be populated")
+        }
+
+        if ([string]::IsNullOrWhiteSpace([string]$effect.description)) {
+            $failures.Add("run.ascension_effects[$i].description should be populated")
+        }
     }
 
     if ([int]$state.run.base_orb_slots -lt 0) {

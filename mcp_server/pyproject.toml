@@ -1,6 +1,6 @@
 [project]
 name = "sts2-ai-agent-mcp"
-version = "0.5.3"
+version = "0.5.4"
 description = "FastMCP wrapper for the local STS2 AI Agent mod"
 readme = "README.md"
 requires-python = ">=3.11"

@@ -13,6 +13,7 @@ using MegaCrit.Sts2.Core.Entities.Potions;
 using MegaCrit.Sts2.Core.Entities.RestSite;
 using MegaCrit.Sts2.Core.Events;
 using MegaCrit.Sts2.Core.Context;
+using MegaCrit.Sts2.Core.Helpers;
 using MegaCrit.Sts2.Core.Map;
 using MegaCrit.Sts2.Core.Models;
 using MegaCrit.Sts2.Core.Models.Characters;
@@ -51,8 +52,8 @@ namespace STS2AIAgent.Game;
 
 internal static class GameStateService
 {
-    private const int StateVersion = 7;
-    private const int AgentViewVersion = 1;
+    private const int StateVersion = 8;
+    private const int AgentViewVersion = 2;
 
     public static GameStatePayload BuildStatePayload()
     {
@@ -613,7 +614,7 @@ internal static class GameStateService
             });
         }
 
-        if (CanDiscardPotion(runState))
+        if (CanDiscardPotion(currentScreen, runState))
         {
             descriptors.Add(new ActionDescriptor
             {
@@ -1112,10 +1113,10 @@ internal static class GameStateService
         return IsPotionUsable(currentScreen, combatState, player, player.PotionSlots[optionIndex]);
     }
 
-    public static bool CanDiscardPotion(RunState? runState)
+    public static bool CanDiscardPotion(IScreenContext? currentScreen, RunState? runState)
     {
         var player = GetLocalPlayer(runState);
-        if (player == null)
+        if (player == null || !CanDiscardPotionsInCurrentScreen(currentScreen))
         {
             return false;
         }
@@ -1123,10 +1124,10 @@ internal static class GameStateService
         return player.PotionSlots.Any(potion => IsPotionDiscardable(player, potion));
     }
 
-    public static bool CanDiscardPotionAtIndex(RunState? runState, int optionIndex)
+    public static bool CanDiscardPotionAtIndex(IScreenContext? currentScreen, RunState? runState, int optionIndex)
     {
         var player = GetLocalPlayer(runState);
-        if (player == null || optionIndex < 0 || optionIndex >= player.PotionSlots.Count)
+        if (player == null || !CanDiscardPotionsInCurrentScreen(currentScreen) || optionIndex < 0 || optionIndex >= player.PotionSlots.Count)
         {
             return false;
         }
@@ -1469,6 +1470,23 @@ internal static class GameStateService
     private static string GetPreferredCardRulesText(string rulesText, string? resolvedRulesText)
     {
         return string.IsNullOrWhiteSpace(resolvedRulesText) ? rulesText : resolvedRulesText;
+    }
+
+    private static AscensionEffectPayload[] BuildAscensionEffectPayloads(int ascensionLevel)
+    {
+        if (ascensionLevel <= 0)
+        {
+            return Array.Empty<AscensionEffectPayload>();
+        }
+
+        return Enumerable.Range(1, ascensionLevel)
+            .Select(level => new AscensionEffectPayload
+            {
+                id = $"LEVEL_{level:D2}",
+                name = AscensionHelper.GetTitle(level).GetFormattedText(),
+                description = AscensionHelper.GetDescription(level).GetFormattedText()
+            })
+            .ToArray();
     }
 
     private static string TryReadCardTextMember(object instance, string memberName)
@@ -1951,7 +1969,7 @@ internal static class GameStateService
             names.Add("use_potion");
         }
 
-        if (CanDiscardPotion(runState))
+        if (CanDiscardPotion(currentScreen, runState))
         {
             names.Add("discard_potion");
         }
@@ -2016,6 +2034,8 @@ internal static class GameStateService
         {
             character_id = player.Character.Id.Entry,
             character_name = player.Character.Title.GetFormattedText(),
+            ascension = runState.AscensionLevel,
+            ascension_effects = BuildAscensionEffectPayloads(runState.AscensionLevel),
             floor = runState.TotalFloor,
             current_hp = player.Creature.CurrentHp,
             max_hp = player.Creature.MaxHp,
@@ -2144,9 +2164,17 @@ internal static class GameStateService
         var deckCards = player?.Deck.Cards.ToArray() ?? Array.Empty<CardModel>();
         var combatPlayer = LocalContext.GetMe(combatState)?.PlayerCombatState;
 
+        foreach (var effect in run.ascension_effects)
+        {
+            CollectGlossaryTerms(glossaryTerms, effect.name);
+            CollectGlossaryTerms(glossaryTerms, effect.description);
+        }
+
         return new
         {
             character = run.character_name,
+            ascension = run.ascension,
+            ascension_effects = run.ascension_effects,
             floor = run.floor,
             hp = $"{run.current_hp}/{run.max_hp}",
             gold = run.gold,
@@ -3901,7 +3929,7 @@ internal static class GameStateService
             target_index_space = targetIndexSpace,
             valid_target_indices = validTargetIndices,
             can_use = IsPotionUsable(currentScreen, combatState, player, potion),
-            can_discard = IsPotionDiscardable(player, potion)
+            can_discard = CanDiscardPotionsInCurrentScreen(currentScreen) && IsPotionDiscardable(player, potion)
         };
     }
 
@@ -4274,6 +4302,11 @@ internal static class GameStateService
             PotionUsage.CombatOnly => CanUseCombatActions(currentScreen, combatState, out _, out _),
             _ => false
         };
+    }
+
+    private static bool CanDiscardPotionsInCurrentScreen(IScreenContext? currentScreen)
+    {
+        return currentScreen is not (NRewardsScreen or NCardRewardSelectionScreen);
     }
 
     private static bool IsPotionDiscardable(Player player, PotionModel? potion)
@@ -4871,6 +4904,10 @@ internal sealed class RunPayload
 
     public string character_name { get; init; } = string.Empty;
 
+    public int ascension { get; init; }
+
+    public AscensionEffectPayload[] ascension_effects { get; init; } = Array.Empty<AscensionEffectPayload>();
+
     public int floor { get; init; }
 
     public int current_hp { get; init; }
@@ -4890,6 +4927,15 @@ internal sealed class RunPayload
     public RunPlayerSummaryPayload[] players { get; init; } = Array.Empty<RunPlayerSummaryPayload>();
 
     public RunPotionPayload[] potions { get; init; } = Array.Empty<RunPotionPayload>();
+}
+
+internal sealed class AscensionEffectPayload
+{
+    public string id { get; init; } = string.Empty;
+
+    public string name { get; init; } = string.Empty;
+
+    public string description { get; init; } = string.Empty;
 }
 
 internal sealed class MultiplayerPayload
