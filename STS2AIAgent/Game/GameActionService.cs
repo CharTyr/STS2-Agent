@@ -56,6 +56,16 @@ internal static class GameActionService
     /// </summary>
     private static bool _cardRewardSkipped;
 
+    /// <summary>
+    /// Mid-turn card play counters. Maintained by the mod since the game's
+    /// internal counters are not accessible via reflection. Reset at turn
+    /// start (end_turn action) and incremented by play_card.
+    /// </summary>
+    internal static int CardsPlayedThisTurn { get; private set; }
+    internal static int AttacksPlayedThisTurn { get; private set; }
+    internal static int SkillsPlayedThisTurn { get; private set; }
+    internal static int LastTurnNumber { get; private set; }
+
     public static Task<ActionResponsePayload> ExecuteAsync(ActionRequest request)
     {
         var actionName = request.action?.Trim().ToLowerInvariant();
@@ -280,6 +290,20 @@ internal static class GameActionService
                 screen
             });
         }
+
+        // Track mid-turn counters — reset if turn changed since last play
+        var currentTurn = combatState?.RoundNumber ?? 0;
+        if (currentTurn != LastTurnNumber)
+        {
+            CardsPlayedThisTurn = 0;
+            AttacksPlayedThisTurn = 0;
+            SkillsPlayedThisTurn = 0;
+            LastTurnNumber = currentTurn;
+        }
+        CardsPlayedThisTurn++;
+        var cardType = card.Type.ToString();
+        if (cardType == "Attack") AttacksPlayedThisTurn++;
+        else if (cardType == "Skill") SkillsPlayedThisTurn++;
 
         var stable = await WaitForPlayCardTransitionAsync(card, TimeSpan.FromSeconds(5));
 

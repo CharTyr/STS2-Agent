@@ -2011,24 +2011,9 @@ internal static class GameStateService
                 orb_capacity = orbQueue.Capacity,
                 empty_orb_slots = Math.Max(0, orbQueue.Capacity - orbs.Count),
                 orbs = orbs.Select((orb, index) => BuildCombatOrbPayload(orb, index)).ToArray(),
-                cards_played_this_turn = (int)(
-                    TryGetMemberValue(me.PlayerCombatState, "CardsPlayedThisTurn")
-                    ?? TryGetMemberValue(me.Creature, "CardsPlayedThisTurn")
-                    ?? TryGetMemberValue(combatState, "CardsPlayedThisTurn")
-                    ?? TryGetMemberValue(me, "CardsPlayedThisTurn")
-                    ?? 0),
-                attacks_played_this_turn = (int)(
-                    TryGetMemberValue(me.PlayerCombatState, "AttacksPlayedThisTurn")
-                    ?? TryGetMemberValue(me.Creature, "AttacksPlayedThisTurn")
-                    ?? TryGetMemberValue(combatState, "AttacksPlayedThisTurn")
-                    ?? TryGetMemberValue(me, "AttacksPlayedThisTurn")
-                    ?? 0),
-                skills_played_this_turn = (int)(
-                    TryGetMemberValue(me.PlayerCombatState, "SkillsPlayedThisTurn")
-                    ?? TryGetMemberValue(me.Creature, "SkillsPlayedThisTurn")
-                    ?? TryGetMemberValue(combatState, "SkillsPlayedThisTurn")
-                    ?? TryGetMemberValue(me, "SkillsPlayedThisTurn")
-                    ?? 0)
+                cards_played_this_turn = GameActionService.CardsPlayedThisTurn,
+                attacks_played_this_turn = GameActionService.AttacksPlayedThisTurn,
+                skills_played_this_turn = GameActionService.SkillsPlayedThisTurn
             },
             players = GetOrderedCombatPlayers(combatState)
                 .Select(player => BuildCombatPlayerSummaryPayload(player, combatState, connectedPlayerIds, me.NetId))
