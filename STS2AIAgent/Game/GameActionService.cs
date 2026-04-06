@@ -49,6 +49,13 @@ namespace STS2AIAgent.Game;
 
 internal static class GameActionService
 {
+    /// <summary>
+    /// Tracks whether the agent explicitly skipped the card reward via skip_reward_cards.
+    /// When set, DrainRewardFlowAsync will not auto-claim card rewards.
+    /// Reset when leaving the reward screen.
+    /// </summary>
+    private static bool _cardRewardSkipped;
+
     public static Task<ActionResponsePayload> ExecuteAsync(ActionRequest request)
     {
         var actionName = request.action?.Trim().ToLowerInvariant();
@@ -1032,6 +1039,7 @@ internal static class GameActionService
         var selected = options[request.option_index.Value];
         var previousOptionCount = options.Count;
         selected.EmitSignal(NCardHolder.SignalName.Pressed, selected);
+        _cardRewardSkipped = false; // Card was taken, clear any prior skip
         var stable = await WaitForRewardCardResolutionAsync(currentScreen, previousOptionCount, TimeSpan.FromSeconds(10));
 
         return new ActionResponsePayload
@@ -1061,6 +1069,7 @@ internal static class GameActionService
         var alternatives = GameStateService.GetCardRewardAlternativeButtons(currentScreen);
         var selected = alternatives.First();
         selected.ForceClick();
+        _cardRewardSkipped = true;
         var stable = await WaitForRewardCardResolutionAsync(currentScreen, GameStateService.GetCardRewardOptions(currentScreen).Count, TimeSpan.FromSeconds(10));
 
         return new ActionResponsePayload
@@ -1331,6 +1340,7 @@ internal static class GameActionService
 
             if (currentScreen is not NRewardsScreen rewardsScreen)
             {
+                _cardRewardSkipped = false;
                 return true;
             }
 
@@ -1365,7 +1375,8 @@ internal static class GameActionService
             .FirstOrDefault(button =>
                 button.IsEnabled &&
                 !attemptedRewardButtons.Contains(button.GetInstanceId()) &&
-                (button.Reward is not PotionReward || hasPotionSlots));
+                (button.Reward is not PotionReward || hasPotionSlots) &&
+                (!_cardRewardSkipped || button.Reward is not CardReward));
 
         return rewardButton != null;
     }
