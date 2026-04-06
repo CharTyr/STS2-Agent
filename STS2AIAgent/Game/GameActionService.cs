@@ -956,7 +956,8 @@ internal static class GameActionService
         var currentScreen = ActiveScreenContext.Instance.GetCurrentScreen();
         var screen = GameStateService.ResolveScreen(currentScreen);
 
-        if (!GameStateService.CanCollectRewardsAndProceed(currentScreen))
+        if (!GameStateService.CanCollectRewardsAndProceed(currentScreen) &&
+            currentScreen is not NCardRewardSelectionScreen)
         {
             throw new ApiException(409, "invalid_action", "Not on reward screen.", new
             {
