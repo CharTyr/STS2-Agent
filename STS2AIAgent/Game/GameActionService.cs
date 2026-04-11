@@ -49,12 +49,37 @@ namespace STS2AIAgent.Game;
 
 internal static class GameActionService
 {
+    /// <summary>
+    /// Tracks whether the agent explicitly skipped the card reward via skip_reward_cards.
+    /// When set, DrainRewardFlowAsync will not auto-claim card rewards.
+    /// Reset when leaving the reward screen.
+    /// </summary>
+    private static bool _cardRewardSkipped;
+
+    /// <summary>
+    /// Mid-turn card play counters. Maintained by the mod since the game's
+    /// internal counters are not accessible via reflection. Reset at turn
+    /// start (end_turn action) and incremented by play_card.
+    /// </summary>
+    internal static int CardsPlayedThisTurn { get; private set; }
+    internal static int AttacksPlayedThisTurn { get; private set; }
+    internal static int SkillsPlayedThisTurn { get; private set; }
+    internal static int LastTurnNumber { get; private set; }
+
+    /// <summary>
+    /// When set by resolve_rewards, TryResolveCardRewardAsync picks this
+    /// card index instead of the first option. Null means skip.
+    /// -1 means no pending choice (use default behavior).
+    /// </summary>
+    private static int _pendingCardRewardChoice = -1;
+
     public static Task<ActionResponsePayload> ExecuteAsync(ActionRequest request)
     {
         var actionName = request.action?.Trim().ToLowerInvariant();
 
         return actionName switch
         {
+            "resolve_rewards" => ExecuteResolveRewardsAsync(request),
             "end_turn" => ExecuteEndTurnAsync(),
             "play_card" => ExecutePlayCardAsync(request),
             "continue_run" => ExecuteContinueRunAsync(),
@@ -76,6 +101,9 @@ internal static class GameActionService
             "open_chest" => ExecuteOpenChestAsync(),
             "choose_treasure_relic" => ExecuteChooseTreasureRelicAsync(request),
             "choose_event_option" => ExecuteChooseEventOptionAsync(request),
+            "choose_capstone_option" => ExecuteChooseCapstoneOptionAsync(request),
+            "choose_bundle" => ExecuteChooseBundleAsync(request),
+            "confirm_bundle" => ExecuteConfirmBundleAsync(),
             "choose_rest_option" => ExecuteChooseRestOptionAsync(request),
             "open_shop_inventory" => ExecuteOpenShopInventoryAsync(),
             "close_shop_inventory" => ExecuteCloseShopInventoryAsync(),
@@ -270,6 +298,20 @@ internal static class GameActionService
                 screen
             });
         }
+
+        // Track mid-turn counters — reset if turn changed since last play
+        var currentTurn = combatState?.RoundNumber ?? 0;
+        if (currentTurn != LastTurnNumber)
+        {
+            CardsPlayedThisTurn = 0;
+            AttacksPlayedThisTurn = 0;
+            SkillsPlayedThisTurn = 0;
+            LastTurnNumber = currentTurn;
+        }
+        CardsPlayedThisTurn++;
+        var cardType = card.Type.ToString();
+        if (cardType == "Attack") AttacksPlayedThisTurn++;
+        else if (cardType == "Skill") SkillsPlayedThisTurn++;
 
         var stable = await WaitForPlayCardTransitionAsync(card, TimeSpan.FromSeconds(5));
 
@@ -909,6 +951,46 @@ internal static class GameActionService
         return IsStableScreenState(currentScreen, allowMapScreen: true);
     }
 
+    private static async Task<ActionResponsePayload> ExecuteResolveRewardsAsync(ActionRequest request)
+    {
+        var currentScreen = ActiveScreenContext.Instance.GetCurrentScreen();
+        var screen = GameStateService.ResolveScreen(currentScreen);
+
+        if (!GameStateService.CanCollectRewardsAndProceed(currentScreen) &&
+            currentScreen is not NCardRewardSelectionScreen)
+        {
+            throw new ApiException(409, "invalid_action", "Not on reward screen.", new
+            {
+                action = "resolve_rewards",
+                screen
+            });
+        }
+
+        // card_index: null = skip card, 0/1/2 = pick that card, absent = auto (first card)
+        if (request.card_index.HasValue)
+        {
+            _pendingCardRewardChoice = request.card_index.Value;
+            _cardRewardSkipped = false;
+        }
+        else
+        {
+            // null means skip
+            _pendingCardRewardChoice = -2; // sentinel for "skip"
+            _cardRewardSkipped = true;
+        }
+
+        var stable = await DrainRewardFlowAsync(TimeSpan.FromSeconds(20));
+
+        return new ActionResponsePayload
+        {
+            action = "resolve_rewards",
+            status = stable ? "completed" : "pending",
+            stable = stable,
+            message = stable ? "All rewards resolved." : "Reward flow still transitioning.",
+            state = GameStateService.BuildStatePayload()
+        };
+    }
+
     private static async Task<ActionResponsePayload> ExecuteCollectRewardsAndProceedAsync()
     {
         var currentScreen = ActiveScreenContext.Instance.GetCurrentScreen();
@@ -1029,6 +1111,7 @@ internal static class GameActionService
         var selected = options[request.option_index.Value];
         var previousOptionCount = options.Count;
         selected.EmitSignal(NCardHolder.SignalName.Pressed, selected);
+        _cardRewardSkipped = false; // Card was taken, clear any prior skip
         var stable = await WaitForRewardCardResolutionAsync(currentScreen, previousOptionCount, TimeSpan.FromSeconds(10));
 
         return new ActionResponsePayload
@@ -1058,6 +1141,7 @@ internal static class GameActionService
         var alternatives = GameStateService.GetCardRewardAlternativeButtons(currentScreen);
         var selected = alternatives.First();
         selected.ForceClick();
+        _cardRewardSkipped = true;
         var stable = await WaitForRewardCardResolutionAsync(currentScreen, GameStateService.GetCardRewardOptions(currentScreen).Count, TimeSpan.FromSeconds(10));
 
         return new ActionResponsePayload
@@ -1328,6 +1412,7 @@ internal static class GameActionService
 
             if (currentScreen is not NRewardsScreen rewardsScreen)
             {
+                _cardRewardSkipped = false;
                 return true;
             }
 
@@ -1362,7 +1447,8 @@ internal static class GameActionService
             .FirstOrDefault(button =>
                 button.IsEnabled &&
                 !attemptedRewardButtons.Contains(button.GetInstanceId()) &&
-                (button.Reward is not PotionReward || hasPotionSlots));
+                (button.Reward is not PotionReward || hasPotionSlots) &&
+                (!_cardRewardSkipped || button.Reward is not CardReward));
 
         return rewardButton != null;
     }
@@ -1397,8 +1483,39 @@ internal static class GameActionService
             await WaitForNextFrameAsync();
         }
 
+        // If resolve_rewards requested a skip, click the skip alternative
+        if (_pendingCardRewardChoice == -2)
+        {
+            _pendingCardRewardChoice = -1;
+            var alternatives = GameStateService.GetCardRewardAlternativeButtons(cardRewardScreen);
+            if (alternatives.Count > 0)
+            {
+                alternatives.First().ForceClick();
+                _cardRewardSkipped = true;
+            }
+            while (DateTime.UtcNow < deadline)
+            {
+                await WaitForNextFrameAsync();
+                if (!GodotObject.IsInstanceValid(cardRewardScreen) ||
+                    ActiveScreenContext.Instance.GetCurrentScreen() is not NCardRewardSelectionScreen)
+                    return true;
+            }
+            return false;
+        }
+
         var options = GameStateService.GetCardRewardOptions(cardRewardScreen);
-        var selected = options.FirstOrDefault();
+
+        // If resolve_rewards specified a card index, use it
+        NCardHolder? selected;
+        if (_pendingCardRewardChoice >= 0 && _pendingCardRewardChoice < options.Count)
+        {
+            selected = options[_pendingCardRewardChoice];
+            _pendingCardRewardChoice = -1;
+        }
+        else
+        {
+            selected = options.FirstOrDefault();
+        }
         if (selected == null)
         {
             return false;
@@ -1892,6 +2009,207 @@ internal static class GameActionService
         }
 
         return false;
+    }
+
+    private static async Task<ActionResponsePayload> ExecuteChooseCapstoneOptionAsync(ActionRequest request)
+    {
+        var currentScreen = ActiveScreenContext.Instance.GetCurrentScreen();
+        var screen = GameStateService.ResolveScreen(currentScreen);
+
+        if (!GameStateService.CanChooseCapstoneOption(currentScreen))
+        {
+            throw new ApiException(409, "invalid_action", "Action is not available in the current state.", new
+            {
+                action = "choose_capstone_option",
+                screen
+            });
+        }
+
+        if (request.option_index == null)
+        {
+            throw new ApiException(400, "invalid_request", "choose_capstone_option requires option_index.", new
+            {
+                action = "choose_capstone_option"
+            });
+        }
+
+        var buttons = GameStateService.GetCapstoneButtons(currentScreen);
+        if (request.option_index < 0 || request.option_index >= buttons.Count)
+        {
+            throw new ApiException(409, "invalid_target", "option_index is out of range.", new
+            {
+                action = "choose_capstone_option",
+                option_index = request.option_index,
+                button_count = buttons.Count
+            });
+        }
+
+        var button = buttons[request.option_index.Value];
+        button.EmitSignal(BaseButton.SignalName.Pressed);
+
+        // Wait for screen transition
+        var deadline = DateTime.UtcNow + TimeSpan.FromSeconds(10);
+        var stable = false;
+        while (DateTime.UtcNow < deadline)
+        {
+            await WaitForNextFrameAsync();
+            var newScreen = ActiveScreenContext.Instance.GetCurrentScreen();
+            if (newScreen is not NCapstoneSubmenuStack)
+            {
+                stable = true;
+                break;
+            }
+        }
+
+        return new ActionResponsePayload
+        {
+            action = "choose_capstone_option",
+            status = stable ? "completed" : "pending",
+            stable = stable,
+            message = stable ? "Action completed." : "Action queued but state is still transitioning.",
+            state = GameStateService.BuildStatePayload()
+        };
+    }
+
+    private static async Task<ActionResponsePayload> ExecuteChooseBundleAsync(ActionRequest request)
+    {
+        var currentScreen = ActiveScreenContext.Instance.GetCurrentScreen();
+        var screen = GameStateService.ResolveScreen(currentScreen);
+
+        if (!GameStateService.CanChooseBundle(currentScreen))
+        {
+            throw new ApiException(409, "invalid_action", "Action is not available in the current state.", new
+            {
+                action = "choose_bundle",
+                screen
+            });
+        }
+
+        if (request.option_index == null)
+        {
+            throw new ApiException(400, "invalid_request", "choose_bundle requires option_index.", new
+            {
+                action = "choose_bundle"
+            });
+        }
+
+        var bundles = GameStateService.GetBundleOptions(currentScreen);
+        if (request.option_index < 0 || request.option_index >= bundles.Count)
+        {
+            throw new ApiException(409, "invalid_target", "option_index is out of range.", new
+            {
+                action = "choose_bundle",
+                option_index = request.option_index,
+                bundle_count = bundles.Count
+            });
+        }
+
+        var bundle = bundles[request.option_index.Value];
+        // Call the screen's OnBundleClicked method directly
+        if (currentScreen is NChooseABundleSelectionScreen bundleScreen)
+        {
+            ((Node)bundleScreen).Call("OnBundleClicked", bundle);
+        }
+
+        // Wait for screen transition
+        var deadline = DateTime.UtcNow + TimeSpan.FromSeconds(10);
+        var stable = false;
+        while (DateTime.UtcNow < deadline)
+        {
+            await WaitForNextFrameAsync();
+            var newScreen = ActiveScreenContext.Instance.GetCurrentScreen();
+            if (newScreen is not NChooseABundleSelectionScreen)
+            {
+                stable = true;
+                break;
+            }
+        }
+
+        GameStatePayload? bundleState = null;
+        try { bundleState = GameStateService.BuildStatePayload(); } catch { }
+
+        return new ActionResponsePayload
+        {
+            action = "choose_bundle",
+            status = stable ? "completed" : "pending",
+            stable = stable,
+            message = stable ? "Action completed." : "Action queued but state is still transitioning.",
+            state = bundleState
+        };
+    }
+
+    private static async Task<ActionResponsePayload> ExecuteConfirmBundleAsync()
+    {
+        var currentScreen = ActiveScreenContext.Instance.GetCurrentScreen();
+        var screen = GameStateService.ResolveScreen(currentScreen);
+
+        if (!GameStateService.CanConfirmBundle(currentScreen))
+        {
+            throw new ApiException(409, "invalid_action", "Action is not available in the current state.", new
+            {
+                action = "confirm_bundle",
+                screen
+            });
+        }
+
+        var buttons = GameStateService.GetBundleConfirmButtons(currentScreen);
+        if (buttons.Count == 0)
+        {
+            throw new ApiException(409, "invalid_action", "No confirm button found.", new
+            {
+                action = "confirm_bundle",
+                screen
+            });
+        }
+
+        var confirmBtn = buttons[0];
+        Log.Info($"[STS2AIAgent] confirm_bundle: clicking {confirmBtn.GetType().Name} '{confirmBtn.Name}'");
+
+        // Try ForceClick first
+        confirmBtn.ForceClick();
+        await WaitForNextFrameAsync();
+
+        // If still on bundle screen, try calling OnConfirmPressed on the screen
+        var stable = false;
+        if (ActiveScreenContext.Instance.GetCurrentScreen() is NChooseABundleSelectionScreen bundleScreen2)
+        {
+            try
+            {
+                Log.Info("[STS2AIAgent] confirm_bundle: trying OnConfirmPressed");
+                ((Node)bundleScreen2).Call("OnConfirmPressed");
+            }
+            catch { }
+
+            // Also try emitting the button's signal with no args
+            try
+            {
+                confirmBtn.EmitSignal("pressed");
+            }
+            catch { }
+        }
+
+        var deadline = DateTime.UtcNow + TimeSpan.FromSeconds(5);
+        while (!stable && DateTime.UtcNow < deadline)
+        {
+            await WaitForNextFrameAsync();
+            var newScreen = ActiveScreenContext.Instance.GetCurrentScreen();
+            if (newScreen is not NChooseABundleSelectionScreen)
+            {
+                stable = true;
+            }
+        }
+
+        GameStatePayload? state = null;
+        try { state = GameStateService.BuildStatePayload(); } catch { }
+
+        return new ActionResponsePayload
+        {
+            action = "confirm_bundle",
+            status = stable ? "completed" : "pending",
+            stable = stable,
+            message = stable ? "Action completed." : "Action queued but state is still transitioning.",
+            state = state
+        };
     }
 
     private static async Task<ActionResponsePayload> ExecuteChooseRestOptionAsync(ActionRequest request)

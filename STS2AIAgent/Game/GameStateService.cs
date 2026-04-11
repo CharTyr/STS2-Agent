@@ -76,6 +76,7 @@ internal static class GameStateService
         var shop = BuildShopPayload(currentScreen);
         var rest = BuildRestPayload(currentScreen);
         var reward = BuildRewardPayload(currentScreen);
+        var bundles = BuildBundlePayload(currentScreen);
         var modal = BuildModalPayload(currentScreen);
         var gameOver = BuildGameOverPayload(currentScreen, runState);
 
@@ -101,6 +102,7 @@ internal static class GameStateService
             shop = shop,
             rest = rest,
             reward = reward,
+            bundles = bundles,
             modal = modal,
             game_over = gameOver,
             agent_view = BuildAgentViewPayload(
@@ -122,6 +124,7 @@ internal static class GameStateService
                 shop,
                 rest,
                 reward,
+                bundles,
                 modal,
                 gameOver)
         };
@@ -411,6 +414,36 @@ internal static class GameStateService
                 name = "choose_event_option",
                 requires_target = false,
                 requires_index = true
+            });
+        }
+
+        if (CanChooseCapstoneOption(currentScreen))
+        {
+            descriptors.Add(new ActionDescriptor
+            {
+                name = "choose_capstone_option",
+                requires_target = false,
+                requires_index = true
+            });
+        }
+
+        if (CanChooseBundle(currentScreen))
+        {
+            descriptors.Add(new ActionDescriptor
+            {
+                name = "choose_bundle",
+                requires_target = false,
+                requires_index = true
+            });
+        }
+
+        if (CanConfirmBundle(currentScreen))
+        {
+            descriptors.Add(new ActionDescriptor
+            {
+                name = "confirm_bundle",
+                requires_target = false,
+                requires_index = false
             });
         }
 
@@ -780,6 +813,60 @@ internal static class GameStateService
         {
             return false;
         }
+    }
+
+    public static bool CanChooseCapstoneOption(IScreenContext? currentScreen)
+    {
+        return GetCapstoneButtons(currentScreen).Count > 0;
+    }
+
+    public static IReadOnlyList<NButton> GetCapstoneButtons(IScreenContext? currentScreen)
+    {
+        if (currentScreen is not NCapstoneSubmenuStack capstoneScreen)
+        {
+            return Array.Empty<NButton>();
+        }
+
+        return FindDescendants<NButton>((Node)capstoneScreen)
+            .Where(b => GodotObject.IsInstanceValid(b) && b.IsVisibleInTree() && b.IsEnabled)
+            .ToArray();
+    }
+
+    public static bool CanChooseBundle(IScreenContext? currentScreen)
+    {
+        return GetBundleOptions(currentScreen).Count > 0;
+    }
+
+    public static bool CanConfirmBundle(IScreenContext? currentScreen)
+    {
+        return GetBundleConfirmButtons(currentScreen).Count > 0;
+    }
+
+    public static IReadOnlyList<NButton> GetBundleConfirmButtons(IScreenContext? currentScreen)
+    {
+        if (currentScreen is not NChooseABundleSelectionScreen bundleScreen)
+        {
+            return Array.Empty<NButton>();
+        }
+
+        // Look specifically for NConfirmButton or button named "Confirm"
+        return FindDescendants<NButton>((Node)bundleScreen)
+            .Where(b => GodotObject.IsInstanceValid(b) && b.IsVisibleInTree() && b.IsEnabled
+                && (b.GetType().Name == "NConfirmButton" || b.Name == "Confirm"))
+            .ToArray();
+    }
+
+    public static IReadOnlyList<Control> GetBundleOptions(IScreenContext? currentScreen)
+    {
+        if (currentScreen is not NChooseABundleSelectionScreen bundleScreen)
+        {
+            return Array.Empty<Control>();
+        }
+
+        // NCardBundle nodes represent the selectable card packs
+        return FindDescendants<Control>((Node)bundleScreen)
+            .Where(n => GodotObject.IsInstanceValid(n) && n.IsVisibleInTree() && n.GetType().Name == "NCardBundle")
+            .ToArray();
     }
 
     public static bool CanChooseRestOption(IScreenContext? currentScreen)
@@ -1785,6 +1872,21 @@ internal static class GameStateService
             names.Add("choose_event_option");
         }
 
+        if (CanChooseCapstoneOption(currentScreen))
+        {
+            names.Add("choose_capstone_option");
+        }
+
+        if (CanChooseBundle(currentScreen))
+        {
+            names.Add("choose_bundle");
+        }
+
+        if (CanConfirmBundle(currentScreen))
+        {
+            names.Add("confirm_bundle");
+        }
+
         if (CanChooseRestOption(currentScreen))
         {
             names.Add("choose_rest_option");
@@ -1911,7 +2013,10 @@ internal static class GameStateService
                 base_orb_slots = me.BaseOrbSlotCount,
                 orb_capacity = orbQueue.Capacity,
                 empty_orb_slots = Math.Max(0, orbQueue.Capacity - orbs.Count),
-                orbs = orbs.Select((orb, index) => BuildCombatOrbPayload(orb, index)).ToArray()
+                orbs = orbs.Select((orb, index) => BuildCombatOrbPayload(orb, index)).ToArray(),
+                cards_played_this_turn = GameActionService.CardsPlayedThisTurn,
+                attacks_played_this_turn = GameActionService.AttacksPlayedThisTurn,
+                skills_played_this_turn = GameActionService.SkillsPlayedThisTurn
             },
             players = GetOrderedCombatPlayers(combatState)
                 .Select(player => BuildCombatPlayerSummaryPayload(player, combatState, connectedPlayerIds, me.NetId))
@@ -1943,6 +2048,9 @@ internal static class GameStateService
             gold = player.Gold,
             max_energy = player.MaxEnergy,
             base_orb_slots = player.BaseOrbSlotCount,
+            act_id = TryGetMemberValue(runState, "CurrentActIndex")?.ToString()
+                ?? TryGetMemberValue(runState, "ActId")?.ToString(),
+            boss_id = TryGetMemberValue(runState, "BossId")?.ToString(),
             deck = player.Deck.Cards.Select((card, index) => BuildDeckCardPayload(card, index)).ToArray(),
             relics = player.Relics.Select((relic, index) => BuildRunRelicPayload(relic, index)).ToArray(),
             players = runState!.Players
@@ -1973,6 +2081,7 @@ internal static class GameStateService
         ShopPayload? shop,
         RestPayload? rest,
         RewardPayload? reward,
+        BundlePayload[]? bundles,
         ModalPayload? modal,
         GameOverPayload? gameOver)
     {
@@ -1998,6 +2107,7 @@ internal static class GameStateService
             shop = BuildAgentShopPayload(shop, glossaryTerms),
             rest = BuildAgentRestPayload(rest),
             reward = BuildAgentRewardPayload(reward, glossaryTerms),
+            bundles = BuildAgentBundlePayload(bundles, glossaryTerms),
             modal = BuildAgentModalPayload(modal),
             game_over = BuildAgentGameOverPayload(gameOver),
             glossary = BuildAgentGlossary(glossaryTerms)
@@ -2027,7 +2137,10 @@ internal static class GameStateService
                 energy = combat.player.energy,
                 stars = combat.player.stars,
                 focus = combat.player.focus,
-                orbs = combat.player.orbs.Select(orb => FormatOrbLine(orb)).ToArray()
+                orbs = combat.player.orbs.Select(orb => FormatOrbLine(orb)).ToArray(),
+                cards_played_this_turn = combat.player.cards_played_this_turn,
+                attacks_played_this_turn = combat.player.attacks_played_this_turn,
+                skills_played_this_turn = combat.player.skills_played_this_turn
             },
             hand = combat.hand.Select(card =>
                 BuildAgentHandCardPayload(
@@ -2037,13 +2150,18 @@ internal static class GameStateService
             draw = BuildAgentCardStacks(ReadCombatPileCards(playerCombatState, "DrawPile", "DrawDeck"), glossaryTerms),
             discard = BuildAgentCardStacks(ReadCombatPileCards(playerCombatState, "DiscardPile"), glossaryTerms),
             exhaust = BuildAgentCardStacks(ReadCombatPileCards(playerCombatState, "ExhaustPile"), glossaryTerms),
+            draw_cards = BuildStructuredPileCards(ReadCombatPileCards(playerCombatState, "DrawPile", "DrawDeck")),
+            discard_cards = BuildStructuredPileCards(ReadCombatPileCards(playerCombatState, "DiscardPile")),
+            exhaust_cards = BuildStructuredPileCards(ReadCombatPileCards(playerCombatState, "ExhaustPile")),
             enemies = combat.enemies.Select(enemy => new
             {
                 i = enemy.index,
+                enemy_id = enemy.enemy_id,
                 name = enemy.name,
                 hp = $"{enemy.current_hp}/{enemy.max_hp}",
                 block = enemy.block,
                 intent = enemy.intent,
+                move_id = enemy.move_id,
                 alive = enemy.is_alive,
                 hittable = enemy.is_hittable
             }).ToArray()
@@ -2077,6 +2195,8 @@ internal static class GameStateService
             ascension = run.ascension,
             ascension_effects = run.ascension_effects,
             floor = run.floor,
+            act_id = run.act_id,
+            boss_id = run.boss_id,
             hp = $"{run.current_hp}/{run.max_hp}",
             gold = run.gold,
             max_energy = run.max_energy,
@@ -2090,6 +2210,7 @@ internal static class GameStateService
             potions = run.potions.Select(potion => new
             {
                 i = potion.index,
+                potion_id = potion.potion_id,
                 line = FormatPotionLine(potion),
                 usable = potion.can_use,
                 discard = potion.can_discard,
@@ -2100,7 +2221,10 @@ internal static class GameStateService
             {
                 draw = BuildAgentCardStacks(ReadCombatPileCards(combatPlayer, "DrawPile", "DrawDeck"), glossaryTerms),
                 discard = BuildAgentCardStacks(ReadCombatPileCards(combatPlayer, "DiscardPile"), glossaryTerms),
-                exhaust = BuildAgentCardStacks(ReadCombatPileCards(combatPlayer, "ExhaustPile"), glossaryTerms)
+                exhaust = BuildAgentCardStacks(ReadCombatPileCards(combatPlayer, "ExhaustPile"), glossaryTerms),
+                draw_cards = BuildStructuredPileCards(ReadCombatPileCards(combatPlayer, "DrawPile", "DrawDeck")),
+                discard_cards = BuildStructuredPileCards(ReadCombatPileCards(combatPlayer, "DiscardPile")),
+                exhaust_cards = BuildStructuredPileCards(ReadCombatPileCards(combatPlayer, "ExhaustPile"))
             }
         };
     }
@@ -2155,6 +2279,25 @@ internal static class GameStateService
                 line = option.label
             }).ToArray()
         };
+    }
+
+    private static object? BuildAgentBundlePayload(BundlePayload[]? bundles, HashSet<string> glossaryTerms)
+    {
+        if (bundles == null || bundles.Length == 0)
+        {
+            return null;
+        }
+
+        return bundles.Select(bundle => new
+        {
+            i = bundle.index,
+            cards = bundle.cards.Select(card =>
+                BuildAgentChoiceCardPayload(
+                    card.index, card.name, card.upgraded,
+                    card.energy_cost, null, false, false,
+                    GetPreferredCardRulesText(card.rules_text, card.resolved_rules_text),
+                    glossaryTerms)).ToArray()
+        }).ToArray();
     }
 
     private static object? BuildAgentEventPayload(EventPayload? eventPayload)
@@ -2593,6 +2736,16 @@ internal static class GameStateService
         }
 
         return string.Join(" | ", segments);
+    }
+
+    private static object[] BuildStructuredPileCards(CardModel[] cards)
+    {
+        return cards.Select(card => new
+        {
+            card_id = card.Id.Entry,
+            upgraded = card.IsUpgraded,
+            card_type = card.Type.ToString()
+        }).ToArray();
     }
 
     private static CardModel[] ReadCombatPileCards(object? playerCombatState, params string[] memberNames)
@@ -3392,6 +3545,38 @@ internal static class GameStateService
         return null;
     }
 
+    private static BundlePayload[]? BuildBundlePayload(IScreenContext? currentScreen)
+    {
+        if (currentScreen is not NChooseABundleSelectionScreen bundleScreen)
+        {
+            return null;
+        }
+
+        var bundleNodes = GetBundleOptions(currentScreen);
+        if (bundleNodes.Count == 0)
+        {
+            return null;
+        }
+
+        return bundleNodes.Select((bundleNode, bundleIndex) =>
+        {
+            // NCardBundle contains NCard children (not NCardHolder).
+            // NCard exposes CardModel via the .Model property.
+            var cards = FindDescendants<Node>((Node)bundleNode)
+                .Where(n => GodotObject.IsInstanceValid(n) && n.GetType().Name == "NCard")
+                .Select(n => n.GetType().GetProperty("Model")?.GetValue(n) as CardModel)
+                .Where(cm => cm != null)
+                .Select((card, cardIndex) => BuildBundleCardPayload(card!, cardIndex))
+                .ToArray();
+
+            return new BundlePayload
+            {
+                index = bundleIndex,
+                cards = cards
+            };
+        }).ToArray();
+    }
+
     private static ModalPayload? BuildModalPayload(IScreenContext? currentScreen)
     {
         var modal = GetOpenModal();
@@ -3767,6 +3952,11 @@ internal static class GameStateService
     private static RewardCardOptionPayload BuildRewardCardOptionPayload(NCardHolder holder, int index)
     {
         var card = holder.CardModel;
+        return BuildBundleCardPayload(card, index);
+    }
+
+    private static RewardCardOptionPayload BuildBundleCardPayload(CardModel? card, int index)
+    {
         var resolvedRulesText = GetResolvedCardRulesText(card);
         var dynamicValues = BuildCardDynamicValuePayloads(card);
 
@@ -3776,6 +3966,9 @@ internal static class GameStateService
             card_id = card?.Id.Entry ?? string.Empty,
             name = card?.Title ?? string.Empty,
             upgraded = card?.IsUpgraded ?? false,
+            card_type = card?.Type.ToString() ?? string.Empty,
+            rarity = card?.Rarity.ToString() ?? string.Empty,
+            energy_cost = card?.EnergyCost.GetWithModifiers(CostModifiers.All) ?? 0,
             rules_text = GetCardRulesText(card),
             resolved_rules_text = resolvedRulesText,
             dynamic_values = dynamicValues
@@ -4587,6 +4780,7 @@ internal static class GameStateService
         }
 
         if (currentScreen is Node rootNode &&
+            currentScreen is not NChooseABundleSelectionScreen &&
             GetVisibleGridCardHolders(rootNode).Count > 0)
         {
             return "CARD_SELECTION";
@@ -4612,6 +4806,8 @@ internal static class GameStateService
             NCombatRoom => "COMBAT",
             NMapScreen or NMapRoom => "MAP",
             NCharacterSelectScreen => "CHARACTER_SELECT",
+            NChooseABundleSelectionScreen => "BUNDLE_SELECTION",
+            NCapstoneSubmenuStack => "CAPSTONE_SELECTION",
             NPatchNotesScreen => "MAIN_MENU",
             NSubmenu => "MAIN_MENU",
             NLogoAnimation => "MAIN_MENU",
@@ -4762,6 +4958,8 @@ internal sealed class GameStatePayload
 
     public RewardPayload? reward { get; init; }
 
+    public BundlePayload[]? bundles { get; init; }
+
     public ModalPayload? modal { get; init; }
 
     public GameOverPayload? game_over { get; init; }
@@ -4817,6 +5015,10 @@ internal sealed class RunPayload
     public int max_energy { get; init; }
 
     public int base_orb_slots { get; init; }
+
+    public string? act_id { get; init; }
+
+    public string? boss_id { get; init; }
 
     public DeckCardPayload[] deck { get; init; } = Array.Empty<DeckCardPayload>();
 
@@ -5279,6 +5481,12 @@ internal sealed class CombatPlayerPayload
     public int empty_orb_slots { get; init; }
 
     public CombatOrbPayload[] orbs { get; init; } = Array.Empty<CombatOrbPayload>();
+
+    public int cards_played_this_turn { get; init; }
+
+    public int attacks_played_this_turn { get; init; }
+
+    public int skills_played_this_turn { get; init; }
 }
 
 internal sealed class CombatPlayerSummaryPayload
@@ -5506,6 +5714,12 @@ internal sealed class RewardCardOptionPayload
 
     public bool upgraded { get; init; }
 
+    public string card_type { get; init; } = string.Empty;
+
+    public string rarity { get; init; } = string.Empty;
+
+    public int energy_cost { get; init; }
+
     public string rules_text { get; init; } = string.Empty;
 
     public string resolved_rules_text { get; init; } = string.Empty;
@@ -5518,6 +5732,13 @@ internal sealed class RewardAlternativePayload
     public int index { get; init; }
 
     public string label { get; init; } = string.Empty;
+}
+
+internal sealed class BundlePayload
+{
+    public int index { get; init; }
+
+    public RewardCardOptionPayload[] cards { get; init; } = Array.Empty<RewardCardOptionPayload>();
 }
 
 internal sealed class DeckCardPayload
