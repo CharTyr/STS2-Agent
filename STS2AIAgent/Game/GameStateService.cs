@@ -76,6 +76,7 @@ internal static class GameStateService
         var shop = BuildShopPayload(currentScreen);
         var rest = BuildRestPayload(currentScreen);
         var reward = BuildRewardPayload(currentScreen);
+        var bundles = BuildBundlePayload(currentScreen);
         var modal = BuildModalPayload(currentScreen);
         var gameOver = BuildGameOverPayload(currentScreen, runState);
 
@@ -101,6 +102,7 @@ internal static class GameStateService
             shop = shop,
             rest = rest,
             reward = reward,
+            bundles = bundles,
             modal = modal,
             game_over = gameOver,
             agent_view = BuildAgentViewPayload(
@@ -122,6 +124,7 @@ internal static class GameStateService
                 shop,
                 rest,
                 reward,
+                bundles,
                 modal,
                 gameOver)
         };
@@ -2078,6 +2081,7 @@ internal static class GameStateService
         ShopPayload? shop,
         RestPayload? rest,
         RewardPayload? reward,
+        BundlePayload[]? bundles,
         ModalPayload? modal,
         GameOverPayload? gameOver)
     {
@@ -2103,6 +2107,7 @@ internal static class GameStateService
             shop = BuildAgentShopPayload(shop, glossaryTerms),
             rest = BuildAgentRestPayload(rest),
             reward = BuildAgentRewardPayload(reward, glossaryTerms),
+            bundles = BuildAgentBundlePayload(bundles, glossaryTerms),
             modal = BuildAgentModalPayload(modal),
             game_over = BuildAgentGameOverPayload(gameOver),
             glossary = BuildAgentGlossary(glossaryTerms)
@@ -2274,6 +2279,25 @@ internal static class GameStateService
                 line = option.label
             }).ToArray()
         };
+    }
+
+    private static object? BuildAgentBundlePayload(BundlePayload[]? bundles, HashSet<string> glossaryTerms)
+    {
+        if (bundles == null || bundles.Length == 0)
+        {
+            return null;
+        }
+
+        return bundles.Select(bundle => new
+        {
+            i = bundle.index,
+            cards = bundle.cards.Select(card =>
+                BuildAgentChoiceCardPayload(
+                    card.index, card.name, card.upgraded,
+                    card.energy_cost, null, false, false,
+                    GetPreferredCardRulesText(card.rules_text, card.resolved_rules_text),
+                    glossaryTerms)).ToArray()
+        }).ToArray();
     }
 
     private static object? BuildAgentEventPayload(EventPayload? eventPayload)
@@ -3521,6 +3545,38 @@ internal static class GameStateService
         return null;
     }
 
+    private static BundlePayload[]? BuildBundlePayload(IScreenContext? currentScreen)
+    {
+        if (currentScreen is not NChooseABundleSelectionScreen bundleScreen)
+        {
+            return null;
+        }
+
+        var bundleNodes = GetBundleOptions(currentScreen);
+        if (bundleNodes.Count == 0)
+        {
+            return null;
+        }
+
+        return bundleNodes.Select((bundleNode, bundleIndex) =>
+        {
+            // NCardBundle contains NCard children (not NCardHolder).
+            // NCard exposes CardModel via the .Model property.
+            var cards = FindDescendants<Node>((Node)bundleNode)
+                .Where(n => GodotObject.IsInstanceValid(n) && n.GetType().Name == "NCard")
+                .Select(n => n.GetType().GetProperty("Model")?.GetValue(n) as CardModel)
+                .Where(cm => cm != null)
+                .Select((card, cardIndex) => BuildBundleCardPayload(card!, cardIndex))
+                .ToArray();
+
+            return new BundlePayload
+            {
+                index = bundleIndex,
+                cards = cards
+            };
+        }).ToArray();
+    }
+
     private static ModalPayload? BuildModalPayload(IScreenContext? currentScreen)
     {
         var modal = GetOpenModal();
@@ -3896,6 +3952,11 @@ internal static class GameStateService
     private static RewardCardOptionPayload BuildRewardCardOptionPayload(NCardHolder holder, int index)
     {
         var card = holder.CardModel;
+        return BuildBundleCardPayload(card, index);
+    }
+
+    private static RewardCardOptionPayload BuildBundleCardPayload(CardModel? card, int index)
+    {
         var resolvedRulesText = GetResolvedCardRulesText(card);
         var dynamicValues = BuildCardDynamicValuePayloads(card);
 
@@ -4897,6 +4958,8 @@ internal sealed class GameStatePayload
 
     public RewardPayload? reward { get; init; }
 
+    public BundlePayload[]? bundles { get; init; }
+
     public ModalPayload? modal { get; init; }
 
     public GameOverPayload? game_over { get; init; }
@@ -5669,6 +5732,13 @@ internal sealed class RewardAlternativePayload
     public int index { get; init; }
 
     public string label { get; init; } = string.Empty;
+}
+
+internal sealed class BundlePayload
+{
+    public int index { get; init; }
+
+    public RewardCardOptionPayload[] cards { get; init; } = Array.Empty<RewardCardOptionPayload>();
 }
 
 internal sealed class DeckCardPayload
