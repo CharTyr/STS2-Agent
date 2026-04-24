@@ -9,34 +9,6 @@ English README: [README.md](./README.md)
 - `STS2AIAgent`：把游戏状态和操作暴露为本地 HTTP API
 - `mcp_server`：把这套本地 API 包装成 MCP Server，方便接入支持 MCP 的 AI 客户端
 
-## `v0.6.0` 新增
-
-本次发布带来了为 AlphaZero 训练服务的增强 API 载荷、新的 `resolve_rewards` 原子动作，以及尖塔选择和 Bundle 选择屏幕支持（来自 @dbyrne 的 PR #35）。
-
-### Phase 1：增强 API 载荷
-
-- `run.ascension` 和 `run.ascension_effects[]` — 运行时 Ascension 数据
-- `run.act_id` / `run.boss_id` — 当前 Act 和 Boss 标识
-- 战斗中 `enemy_id` / `move_id` — 敌人和招式标识
-- `agent_view.run.ascension` — compact agent 视图同步 Ascension
-
-### Phase 2：resolve_rewards + 增强奖励处理
-
-- 新增 `resolve_rewards` 原子动作，支持从 `CARD_SELECTION` 界面开始
-- 修复 `collect_rewards_and_proceed` 自动领取跳过卡牌奖励的问题
-
-### 尖塔与 Bundle 选择 (PR #35)
-
-- 新增 `choose_capstone_option` 尖塔选择屏幕动作
-- 新增 `choose_bundle` / `confirm_bundle` 卡牌包 / Bundle 选择动作
-- 为 `NChooseABundleSelectionScreen` 暴露 Bundle 卡牌数据
-
-### 修复
-
-- Bundle 确认使用 `OnConfirmPressed` 而非 signal
-- Bundle 选择使用 `OnBundleClicked` 而非 signal
-- Reward / Counter 回归修复
-
 更细的工具说明在 [mcp_server/README.md](./mcp_server/README.md)，如果你要搭配 agent 工作流，优先看 [skills/sts2-mcp-player/SKILL.md](./skills/sts2-mcp-player/SKILL.md)。
 
 ## 快速开始
