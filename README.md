@@ -9,14 +9,33 @@ https://github.com/user-attachments/assets/89353468-a299-4315-9516-e520bcbfbd4b
 - `STS2AIAgent`: exposes game state and actions through a local HTTP API
 - `mcp_server`: wraps that local API as an MCP server for AI clients
 
-## What's New In `v0.5.4`
+## What's New In `v0.6.0`
 
-This release adds:
+This release brings enriched API payloads for AlphaZero training, a new `resolve_rewards` atomic action, and capstone / bundle selection screen support (from PR #35 by @dbyrne).
 
-- run-time Ascension data in `RunPayload` via `run.ascension` and `run.ascension_effects[]`
-- compact agent-view Ascension visibility through `agent_view.run.ascension`
-- a fix for reward-screen potion discard exposure: `discard_potion` is no longer exposed on reward / card-reward screens
-- updated regression checks covering both Ascension payloads and reward-screen potion discard gating
+### Phase 1: Enriched API Payloads
+
+- `run.ascension` and `run.ascension_effects[]` — run-time Ascension data
+- `run.act_id` / `run.boss_id` — current Act and Boss identifiers
+- Combat `enemy_id` / `move_id` — enemy and move identifiers in combat payload
+- `agent_view.run.ascension` — compact agent-view Ascension visibility
+
+### Phase 2: resolve_rewards + Enhanced Reward Handling
+
+- New `resolve_rewards` atomic action, supports starting from `CARD_SELECTION` screen
+- Fix `collect_rewards_and_proceed` auto-claiming skipped card rewards
+
+### Capstone & Bundle Selection (PR #35)
+
+- New `choose_capstone_option` action for capstone selection screen
+- New `choose_bundle` / `confirm_bundle` actions for card pack / bundle selection
+- Expose bundle card data for `NChooseABundleSelectionScreen`
+
+### Fixes
+
+- Bundle confirmation uses `OnConfirmPressed` on screen instead of signal
+- Bundle selection uses `OnBundleClicked` on screen instead of signal
+- Reward and counter regression fixes
 
 Detailed MCP tool documentation lives in [mcp_server/README.md](./mcp_server/README.md). If you want an agent workflow on top of it, start with [skills/sts2-mcp-player/SKILL.md](./skills/sts2-mcp-player/SKILL.md).
 
@@ -129,11 +148,14 @@ The current `main` branch provides a playable MCP integration for STS2, includin
 
 - reading live game state
 - listing currently legal actions
-- driving combat, rewards, shops, map routing, events, rest sites, and chests
+- driving combat, rewards, shops, map routing, events, rest sites, chests, capstone selection, and bundle selection
+- enriched combat and run payloads (Ascension, act/boss ID, enemy/move ID) for AlphaZero training
+- `resolve_rewards` atomic action for controlled reward resolution
 - reducing polling through SSE events
 - exposing MCP over `stdio` or HTTP
 - serving bundled game metadata for cards, relics, monsters, potions, and events
 - supporting layered planner / combat agent handoff flows
+- `increase_ascension` / `decrease_ascension` controls in character select
 
 See [mcp_server/README.md](./mcp_server/README.md) for the detailed tool surface.
 

@@ -9,16 +9,33 @@ English README: [README.md](./README.md)
 - `STS2AIAgent`：把游戏状态和操作暴露为本地 HTTP API
 - `mcp_server`：把这套本地 API 包装成 MCP Server，方便接入支持 MCP 的 AI 客户端
 
-## `v0.5.4` 新增
+## `v0.6.0` 新增
 
-这次发布把新的 MCP 能力一起带上来了：
+本次发布带来了为 AlphaZero 训练服务的增强 API 载荷、新的 `resolve_rewards` 原子动作，以及尖塔选择和 Bundle 选择屏幕支持（来自 @dbyrne 的 PR #35）。
 
-- `guided` / `layered` / `full` 三种 tool profile
-- 游戏数据查询工具：`get_game_data_item`、`get_game_data_items`、`get_relevant_game_data`
-- 原始状态读取：`get_raw_game_state`
-- 主 / 副 Agent 交接：`create_planner_handoff`、`create_combat_handoff`、`complete_combat_handoff`
-- 运行时知识：`append_combat_knowledge`、`append_event_knowledge`、`complete_event_handoff`
-- 发布包内补齐了 `mcp_server/data` 和 `docs/game-knowledge`
+### Phase 1：增强 API 载荷
+
+- `run.ascension` 和 `run.ascension_effects[]` — 运行时 Ascension 数据
+- `run.act_id` / `run.boss_id` — 当前 Act 和 Boss 标识
+- 战斗中 `enemy_id` / `move_id` — 敌人和招式标识
+- `agent_view.run.ascension` — compact agent 视图同步 Ascension
+
+### Phase 2：resolve_rewards + 增强奖励处理
+
+- 新增 `resolve_rewards` 原子动作，支持从 `CARD_SELECTION` 界面开始
+- 修复 `collect_rewards_and_proceed` 自动领取跳过卡牌奖励的问题
+
+### 尖塔与 Bundle 选择 (PR #35)
+
+- 新增 `choose_capstone_option` 尖塔选择屏幕动作
+- 新增 `choose_bundle` / `confirm_bundle` 卡牌包 / Bundle 选择动作
+- 为 `NChooseABundleSelectionScreen` 暴露 Bundle 卡牌数据
+
+### 修复
+
+- Bundle 确认使用 `OnConfirmPressed` 而非 signal
+- Bundle 选择使用 `OnBundleClicked` 而非 signal
+- Reward / Counter 回归修复
 
 更细的工具说明在 [mcp_server/README.md](./mcp_server/README.md)，如果你要搭配 agent 工作流，优先看 [skills/sts2-mcp-player/SKILL.md](./skills/sts2-mcp-player/SKILL.md)。
 
@@ -127,15 +144,18 @@ http://127.0.0.1:8765/mcp
 
 ## 这个项目现在能做什么
 
-当前 `main` 分支提供的是一套可直接游玩的基础能力，并且在 `v0.5.4` 继续补齐了运行中 Ascension 数据与 reward 界面药水交互边界：
+当前 `main` 分支提供的是一套可直接游玩的完整能力：
 
 - 读取游戏状态
 - 获取当前可执行动作
-- 执行战斗、奖励、商店、地图、事件等常见操作
+- 执行战斗、奖励、商店、地图、事件、休息点、宝箱、尖塔选择、Bundle 选择等操作
+- 增强的战斗和运行载荷（Ascension、act/boss ID、enemy/move ID），支持 AlphaZero 训练
+- `resolve_rewards` 原子动作，精确控制奖励领取
 - 通过 SSE 事件减少高频轮询
 - 以 `stdio` 或 HTTP 方式暴露 MCP
 - 提供卡牌、遗物、敌人、药水、事件等打包元数据查询
 - 支持 planner / combat 分层 handoff 流程
+- 角色选择界面 `increase_ascension` / `decrease_ascension` 控制
 
 更细的工具说明在 [mcp_server/README.md](./mcp_server/README.md)。
 
