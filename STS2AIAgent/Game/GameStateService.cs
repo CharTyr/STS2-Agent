@@ -1998,6 +1998,7 @@ internal static class GameStateService
         var orbQueue = me.PlayerCombatState.OrbQueue;
         var orbs = orbQueue.Orbs.ToList();
         var connectedPlayerIds = GetConnectedPlayerIds(combatState.RunState as RunState);
+        GameActionService.SyncCardPlayCounters(combatState.RoundNumber);
 
         return new CombatPayload
         {

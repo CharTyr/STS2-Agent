@@ -58,8 +58,8 @@ internal static class GameActionService
 
     /// <summary>
     /// Mid-turn card play counters. Maintained by the mod since the game's
-    /// internal counters are not accessible via reflection. Reset at turn
-    /// start (end_turn action) and incremented by play_card.
+    /// internal counters are not accessible via reflection. Synchronized to
+    /// the current combat round when state is read and incremented by play_card.
     /// </summary>
     internal static int CardsPlayedThisTurn { get; private set; }
     internal static int AttacksPlayedThisTurn { get; private set; }
@@ -68,10 +68,23 @@ internal static class GameActionService
 
     /// <summary>
     /// When set by resolve_rewards, TryResolveCardRewardAsync picks this
-    /// card index instead of the first option. Null means skip.
+    /// card index instead of the first option. -2 means skip.
     /// -1 means no pending choice (use default behavior).
     /// </summary>
     private static int _pendingCardRewardChoice = -1;
+
+    internal static void SyncCardPlayCounters(int currentTurn)
+    {
+        if (currentTurn == LastTurnNumber)
+        {
+            return;
+        }
+
+        CardsPlayedThisTurn = 0;
+        AttacksPlayedThisTurn = 0;
+        SkillsPlayedThisTurn = 0;
+        LastTurnNumber = currentTurn;
+    }
 
     public static Task<ActionResponsePayload> ExecuteAsync(ActionRequest request)
     {
@@ -299,15 +312,8 @@ internal static class GameActionService
             });
         }
 
-        // Track mid-turn counters — reset if turn changed since last play
         var currentTurn = combatState?.RoundNumber ?? 0;
-        if (currentTurn != LastTurnNumber)
-        {
-            CardsPlayedThisTurn = 0;
-            AttacksPlayedThisTurn = 0;
-            SkillsPlayedThisTurn = 0;
-            LastTurnNumber = currentTurn;
-        }
+        SyncCardPlayCounters(currentTurn);
         CardsPlayedThisTurn++;
         var cardType = card.Type.ToString();
         if (cardType == "Attack") AttacksPlayedThisTurn++;
@@ -966,17 +972,30 @@ internal static class GameActionService
             });
         }
 
-        // card_index: null = skip card, 0/1/2 = pick that card, absent = auto (first card)
-        if (request.card_index.HasValue)
+        // option_index: -1 = skip card, 0/1/2 = pick that card, absent = auto (first card)
+        // card_index is accepted as a backwards-compatible alias for picking a card.
+        if (request.option_index.HasValue)
+        {
+            if (request.option_index.Value == -1)
+            {
+                _pendingCardRewardChoice = -2;
+                _cardRewardSkipped = true;
+            }
+            else
+            {
+                _pendingCardRewardChoice = request.option_index.Value;
+                _cardRewardSkipped = false;
+            }
+        }
+        else if (request.card_index.HasValue)
         {
             _pendingCardRewardChoice = request.card_index.Value;
             _cardRewardSkipped = false;
         }
         else
         {
-            // null means skip
-            _pendingCardRewardChoice = -2; // sentinel for "skip"
-            _cardRewardSkipped = true;
+            _pendingCardRewardChoice = -1;
+            _cardRewardSkipped = false;
         }
 
         var stable = await DrainRewardFlowAsync(TimeSpan.FromSeconds(20));
