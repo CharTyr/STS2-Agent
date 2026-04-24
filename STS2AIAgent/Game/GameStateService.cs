@@ -311,6 +311,13 @@ internal static class GameStateService
         {
             descriptors.Add(new ActionDescriptor
             {
+                name = "resolve_rewards",
+                requires_target = false,
+                requires_index = true
+            });
+
+            descriptors.Add(new ActionDescriptor
+            {
                 name = "collect_rewards_and_proceed",
                 requires_target = false,
                 requires_index = false
@@ -1819,6 +1826,7 @@ internal static class GameStateService
 
         if (CanCollectRewardsAndProceed(currentScreen))
         {
+            names.Add("resolve_rewards");
             names.Add("collect_rewards_and_proceed");
         }
 
