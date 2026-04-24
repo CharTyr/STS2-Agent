@@ -85,7 +85,11 @@
 - `choose_reward_card`
 - `skip_reward_cards`
 - `collect_rewards_and_proceed`
+- `resolve_rewards`
 - `select_deck_card`
+- `choose_capstone_option`
+- `choose_bundle`
+- `confirm_bundle`
 
 Modal：
 

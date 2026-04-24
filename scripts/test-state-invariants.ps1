@@ -131,6 +131,70 @@ function Test-IndexedTargetContract {
     }
 }
 
+function Test-CardRuntimeMetadata {
+    param(
+        [System.Collections.Generic.List[string]]$Failures,
+        [object]$Card,
+        [string]$Label
+    )
+
+    if ($null -eq $Card) {
+        return
+    }
+
+    $propertyNames = @($Card.PSObject.Properties.Name)
+    foreach ($requiredProperty in @("rules_text", "resolved_rules_text", "dynamic_values")) {
+        if ($propertyNames -notcontains $requiredProperty) {
+            $Failures.Add("$Label should expose $requiredProperty")
+        }
+    }
+
+    if (($propertyNames -contains "rules_text") -and $null -ne $Card.rules_text -and $Card.rules_text -isnot [string]) {
+        $Failures.Add("$Label rules_text should be a string when populated")
+    }
+
+    if (($propertyNames -contains "resolved_rules_text") -and $null -ne $Card.resolved_rules_text -and $Card.resolved_rules_text -isnot [string]) {
+        $Failures.Add("$Label resolved_rules_text should be a string when populated")
+    }
+
+    if ($propertyNames -notcontains "dynamic_values") {
+        return
+    }
+
+    $dynamicValues = @($Card.dynamic_values)
+    for ($index = 0; $index -lt $dynamicValues.Count; $index++) {
+        $dynamicValue = $dynamicValues[$index]
+        if ($null -eq $dynamicValue) {
+            $Failures.Add("$Label dynamic_values[$index] should not be null")
+            continue
+        }
+
+        $dynamicPropertyNames = @($dynamicValue.PSObject.Properties.Name)
+        foreach ($requiredProperty in @("name", "base_value", "current_value", "enchanted_value", "is_modified", "was_just_upgraded")) {
+            if ($dynamicPropertyNames -notcontains $requiredProperty) {
+                $Failures.Add("$Label dynamic_values[$index] should expose $requiredProperty")
+            }
+        }
+
+        if ([string]::IsNullOrWhiteSpace([string]$dynamicValue.name)) {
+            $Failures.Add("$Label dynamic_values[$index].name should be populated")
+        }
+
+        foreach ($numericProperty in @("base_value", "current_value", "enchanted_value")) {
+            $parsedNumber = 0
+            if (-not [int]::TryParse([string]$dynamicValue.$numericProperty, [ref]$parsedNumber)) {
+                $Failures.Add("$Label dynamic_values[$index].$numericProperty should be an integer")
+            }
+        }
+
+        foreach ($booleanProperty in @("is_modified", "was_just_upgraded")) {
+            if ($dynamicValue.$booleanProperty -isnot [bool]) {
+                $Failures.Add("$Label dynamic_values[$index].$booleanProperty should be a boolean")
+            }
+        }
+    }
+}
+
 $stateResponse = Invoke-JsonEndpoint -Path "/state"
 $actionsResponse = Invoke-JsonEndpoint -Path "/actions/available"
 
@@ -194,6 +258,10 @@ if ($null -ne $state.selection -and @($state.selection.cards).Count -gt 0) {
     }
 }
 
+foreach ($card in @($state.selection.cards)) {
+    Test-CardRuntimeMetadata -Failures $failures -Card $card -Label "selection.cards[$($card.index)]"
+}
+
 if ($null -ne $state.selection) {
     $minSelect = [int]$state.selection.min_select
     $maxSelect = [int]$state.selection.max_select
@@ -240,6 +308,7 @@ else {
 if ($null -ne $state.reward) {
     Add-MissingActionFailure -Failures $failures -ActionSet $actionSet -ActionName "collect_rewards_and_proceed" -Reason "reward payload is present"
     Add-ForbiddenActionFailure -Failures $failures -ActionSet $actionSet -ActionName "proceed" -Reason "reward flows should use reward-specific actions instead of proceed"
+    Add-ForbiddenActionFailure -Failures $failures -ActionSet $actionSet -ActionName "discard_potion" -Reason "reward screens should not expose discard_potion"
 
     if ($state.reward.pending_card_choice) {
         if (@($state.reward.card_options).Count -gt 0) {
@@ -255,6 +324,10 @@ if ($null -ne $state.reward) {
             Add-MissingActionFailure -Failures $failures -ActionSet $actionSet -ActionName "claim_reward" -Reason "reward.rewards[] still contains claimable items"
         }
     }
+}
+
+foreach ($card in @($state.reward.card_options)) {
+    Test-CardRuntimeMetadata -Failures $failures -Card $card -Label "reward.card_options[$($card.index)]"
 }
 
 if ($null -ne $state.map -and @($state.map.available_nodes).Count -gt 0) {
@@ -360,6 +433,10 @@ if ($null -ne $state.shop) {
         Add-ForbiddenActionFailure -Failures $failures -ActionSet $actionSet -ActionName "buy_potion" -Reason "shop inventory is closed"
         Add-ForbiddenActionFailure -Failures $failures -ActionSet $actionSet -ActionName "remove_card_at_shop" -Reason "shop inventory is closed"
     }
+}
+
+foreach ($card in @($state.shop.cards)) {
+    Test-CardRuntimeMetadata -Failures $failures -Card $card -Label "shop.cards[$($card.index)]"
 }
 
 if ($null -ne $state.character_select) {
@@ -662,6 +739,8 @@ if ($state.in_combat -and $null -ne $state.combat) {
             continue
         }
 
+        Test-CardRuntimeMetadata -Failures $failures -Card $card -Label "combat.hand[$($card.index)]"
+
         Test-IndexedTargetContract `
             -Failures $failures `
             -Payload $card `
@@ -760,12 +839,51 @@ if ($null -ne $state.run) {
         $failures.Add("run.character_name should always be populated when run payload exists")
     }
 
+    if ($state.run.ascension -isnot [int] -and $state.run.ascension -isnot [long]) {
+        $failures.Add("run.ascension should be an integer")
+    }
+    elseif ([int]$state.run.ascension -lt 0) {
+        $failures.Add("run.ascension should never be negative")
+    }
+
+    $ascensionEffects = @($state.run.ascension_effects)
+    if ($null -eq $state.run.ascension_effects) {
+        $failures.Add("run.ascension_effects should always be populated")
+    }
+    elseif ([int]$state.run.ascension -ne $ascensionEffects.Count) {
+        $failures.Add("run.ascension_effects count should match run.ascension")
+    }
+
+    for ($i = 0; $i -lt $ascensionEffects.Count; $i++) {
+        $effect = $ascensionEffects[$i]
+        if ($null -eq $effect) {
+            $failures.Add("run.ascension_effects[$i] should not be null")
+            continue
+        }
+
+        if ([string]::IsNullOrWhiteSpace([string]$effect.id)) {
+            $failures.Add("run.ascension_effects[$i].id should be populated")
+        }
+
+        if ([string]::IsNullOrWhiteSpace([string]$effect.name)) {
+            $failures.Add("run.ascension_effects[$i].name should be populated")
+        }
+
+        if ([string]::IsNullOrWhiteSpace([string]$effect.description)) {
+            $failures.Add("run.ascension_effects[$i].description should be populated")
+        }
+    }
+
     if ([int]$state.run.base_orb_slots -lt 0) {
         $failures.Add("run.base_orb_slots should never be negative")
     }
 
     if (@($state.run.players).Count -gt 0) {
         Test-PlayerSummaries -Failures $failures -Players @($state.run.players) -Label "run.players"
+    }
+
+    foreach ($card in @($state.run.deck)) {
+        Test-CardRuntimeMetadata -Failures $failures -Card $card -Label "run.deck[$($card.index)]"
     }
 }
 

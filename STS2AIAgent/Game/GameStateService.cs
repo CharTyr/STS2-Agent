@@ -13,6 +13,7 @@ using MegaCrit.Sts2.Core.Entities.Potions;
 using MegaCrit.Sts2.Core.Entities.RestSite;
 using MegaCrit.Sts2.Core.Events;
 using MegaCrit.Sts2.Core.Context;
+using MegaCrit.Sts2.Core.Helpers;
 using MegaCrit.Sts2.Core.Map;
 using MegaCrit.Sts2.Core.Models;
 using MegaCrit.Sts2.Core.Models.Characters;
@@ -51,8 +52,8 @@ namespace STS2AIAgent.Game;
 
 internal static class GameStateService
 {
-    private const int StateVersion = 6;
-    private const int AgentViewVersion = 1;
+    private const int StateVersion = 8;
+    private const int AgentViewVersion = 2;
 
     public static GameStatePayload BuildStatePayload()
     {
@@ -75,6 +76,7 @@ internal static class GameStateService
         var shop = BuildShopPayload(currentScreen);
         var rest = BuildRestPayload(currentScreen);
         var reward = BuildRewardPayload(currentScreen);
+        var bundles = BuildBundlePayload(currentScreen);
         var modal = BuildModalPayload(currentScreen);
         var gameOver = BuildGameOverPayload(currentScreen, runState);
 
@@ -100,6 +102,7 @@ internal static class GameStateService
             shop = shop,
             rest = rest,
             reward = reward,
+            bundles = bundles,
             modal = modal,
             game_over = gameOver,
             agent_view = BuildAgentViewPayload(
@@ -121,6 +124,7 @@ internal static class GameStateService
                 shop,
                 rest,
                 reward,
+                bundles,
                 modal,
                 gameOver)
         };
@@ -307,6 +311,13 @@ internal static class GameStateService
         {
             descriptors.Add(new ActionDescriptor
             {
+                name = "resolve_rewards",
+                requires_target = false,
+                requires_index = true
+            });
+
+            descriptors.Add(new ActionDescriptor
+            {
                 name = "collect_rewards_and_proceed",
                 requires_target = false,
                 requires_index = false
@@ -410,6 +421,36 @@ internal static class GameStateService
                 name = "choose_event_option",
                 requires_target = false,
                 requires_index = true
+            });
+        }
+
+        if (CanChooseCapstoneOption(currentScreen))
+        {
+            descriptors.Add(new ActionDescriptor
+            {
+                name = "choose_capstone_option",
+                requires_target = false,
+                requires_index = true
+            });
+        }
+
+        if (CanChooseBundle(currentScreen))
+        {
+            descriptors.Add(new ActionDescriptor
+            {
+                name = "choose_bundle",
+                requires_target = false,
+                requires_index = true
+            });
+        }
+
+        if (CanConfirmBundle(currentScreen))
+        {
+            descriptors.Add(new ActionDescriptor
+            {
+                name = "confirm_bundle",
+                requires_target = false,
+                requires_index = false
             });
         }
 
@@ -583,7 +624,7 @@ internal static class GameStateService
             });
         }
 
-        if (CanDiscardPotion(runState))
+        if (CanDiscardPotion(currentScreen, runState))
         {
             descriptors.Add(new ActionDescriptor
             {
@@ -779,6 +820,60 @@ internal static class GameStateService
         {
             return false;
         }
+    }
+
+    public static bool CanChooseCapstoneOption(IScreenContext? currentScreen)
+    {
+        return GetCapstoneButtons(currentScreen).Count > 0;
+    }
+
+    public static IReadOnlyList<NButton> GetCapstoneButtons(IScreenContext? currentScreen)
+    {
+        if (currentScreen is not NCapstoneSubmenuStack capstoneScreen)
+        {
+            return Array.Empty<NButton>();
+        }
+
+        return FindDescendants<NButton>((Node)capstoneScreen)
+            .Where(b => GodotObject.IsInstanceValid(b) && b.IsVisibleInTree() && b.IsEnabled)
+            .ToArray();
+    }
+
+    public static bool CanChooseBundle(IScreenContext? currentScreen)
+    {
+        return GetBundleOptions(currentScreen).Count > 0;
+    }
+
+    public static bool CanConfirmBundle(IScreenContext? currentScreen)
+    {
+        return GetBundleConfirmButtons(currentScreen).Count > 0;
+    }
+
+    public static IReadOnlyList<NButton> GetBundleConfirmButtons(IScreenContext? currentScreen)
+    {
+        if (currentScreen is not NChooseABundleSelectionScreen bundleScreen)
+        {
+            return Array.Empty<NButton>();
+        }
+
+        // Look specifically for NConfirmButton or button named "Confirm"
+        return FindDescendants<NButton>((Node)bundleScreen)
+            .Where(b => GodotObject.IsInstanceValid(b) && b.IsVisibleInTree() && b.IsEnabled
+                && (b.GetType().Name == "NConfirmButton" || b.Name == "Confirm"))
+            .ToArray();
+    }
+
+    public static IReadOnlyList<Control> GetBundleOptions(IScreenContext? currentScreen)
+    {
+        if (currentScreen is not NChooseABundleSelectionScreen bundleScreen)
+        {
+            return Array.Empty<Control>();
+        }
+
+        // NCardBundle nodes represent the selectable card packs
+        return FindDescendants<Control>((Node)bundleScreen)
+            .Where(n => GodotObject.IsInstanceValid(n) && n.IsVisibleInTree() && n.GetType().Name == "NCardBundle")
+            .ToArray();
     }
 
     public static bool CanChooseRestOption(IScreenContext? currentScreen)
@@ -1028,10 +1123,10 @@ internal static class GameStateService
         return IsPotionUsable(currentScreen, combatState, player, player.PotionSlots[optionIndex]);
     }
 
-    public static bool CanDiscardPotion(RunState? runState)
+    public static bool CanDiscardPotion(IScreenContext? currentScreen, RunState? runState)
     {
         var player = GetLocalPlayer(runState);
-        if (player == null)
+        if (player == null || !CanDiscardPotionsInCurrentScreen(currentScreen))
         {
             return false;
         }
@@ -1039,10 +1134,10 @@ internal static class GameStateService
         return player.PotionSlots.Any(potion => IsPotionDiscardable(player, potion));
     }
 
-    public static bool CanDiscardPotionAtIndex(RunState? runState, int optionIndex)
+    public static bool CanDiscardPotionAtIndex(IScreenContext? currentScreen, RunState? runState, int optionIndex)
     {
         var player = GetLocalPlayer(runState);
-        if (player == null || optionIndex < 0 || optionIndex >= player.PotionSlots.Count)
+        if (player == null || !CanDiscardPotionsInCurrentScreen(currentScreen) || optionIndex < 0 || optionIndex >= player.PotionSlots.Count)
         {
             return false;
         }
@@ -1324,6 +1419,84 @@ internal static class GameStateService
         }
 
         return string.Empty;
+    }
+
+    private static string GetResolvedCardRulesText(CardModel? card)
+    {
+        if (card == null)
+        {
+            return string.Empty;
+        }
+
+        try
+        {
+            card.UpdateDynamicVarPreview(CardPreviewMode.Normal, card.CurrentTarget, card.DynamicVars);
+            var pileType = card.Pile?.Type ?? PileType.None;
+            var resolved = card.GetDescriptionForPile(pileType, card.CurrentTarget);
+            if (!string.IsNullOrWhiteSpace(resolved))
+            {
+                return NormalizeCardRulesText(resolved);
+            }
+        }
+        catch
+        {
+        }
+
+        return GetCardRulesText(card);
+    }
+
+    private static CardDynamicValuePayload[] BuildCardDynamicValuePayloads(CardModel? card)
+    {
+        if (card == null)
+        {
+            return Array.Empty<CardDynamicValuePayload>();
+        }
+
+        try
+        {
+            var previewSet = card.DynamicVars.Clone(card);
+            card.UpdateDynamicVarPreview(CardPreviewMode.Normal, card.CurrentTarget, previewSet);
+
+            return previewSet.Values
+                .Select(dynamicVar => new CardDynamicValuePayload
+                {
+                    name = dynamicVar.Name,
+                    base_value = (int)dynamicVar.BaseValue,
+                    current_value = (int)dynamicVar.PreviewValue,
+                    enchanted_value = (int)dynamicVar.EnchantedValue,
+                    is_modified = (int)dynamicVar.PreviewValue != (int)dynamicVar.BaseValue
+                        || (int)dynamicVar.EnchantedValue != (int)dynamicVar.BaseValue,
+                    was_just_upgraded = dynamicVar.WasJustUpgraded
+                })
+                .OrderBy(payload => payload.name, StringComparer.Ordinal)
+                .ToArray();
+        }
+        catch
+        {
+            return Array.Empty<CardDynamicValuePayload>();
+        }
+    }
+
+    private static string GetPreferredCardRulesText(string rulesText, string? resolvedRulesText)
+    {
+        return string.IsNullOrWhiteSpace(resolvedRulesText) ? rulesText : resolvedRulesText;
+    }
+
+    private static AscensionEffectPayload[] BuildAscensionEffectPayloads(int ascensionLevel)
+    {
+        if (ascensionLevel <= 0)
+        {
+            return Array.Empty<AscensionEffectPayload>();
+        }
+
+        return Enumerable.Range(1, ascensionLevel)
+            .Select(level => new AscensionEffectPayload
+            {
+                id = $"LEVEL_{level:D2}",
+                name = AscensionHelper.GetTitle(level).GetFormattedText(),
+                description = AscensionHelper.GetDescription(level).GetFormattedText()
+            })
+            .ToArray();
     }
 
     private static string TryReadCardTextMember(object instance, string memberName)
@@ -1653,6 +1826,7 @@ internal static class GameStateService
 
         if (CanCollectRewardsAndProceed(currentScreen))
         {
+            names.Add("resolve_rewards");
             names.Add("collect_rewards_and_proceed");
         }
 
@@ -1704,6 +1878,21 @@ internal static class GameStateService
         if (CanChooseEventOption(currentScreen))
         {
             names.Add("choose_event_option");
+        }
+
+        if (CanChooseCapstoneOption(currentScreen))
+        {
+            names.Add("choose_capstone_option");
+        }
+
+        if (CanChooseBundle(currentScreen))
+        {
+            names.Add("choose_bundle");
+        }
+
+        if (CanConfirmBundle(currentScreen))
+        {
+            names.Add("confirm_bundle");
         }
 
         if (CanChooseRestOption(currentScreen))
@@ -1791,7 +1980,7 @@ internal static class GameStateService
             names.Add("use_potion");
         }
 
-        if (CanDiscardPotion(runState))
+        if (CanDiscardPotion(currentScreen, runState))
         {
             names.Add("discard_potion");
         }
@@ -1817,6 +2006,7 @@ internal static class GameStateService
         var orbQueue = me.PlayerCombatState.OrbQueue;
         var orbs = orbQueue.Orbs.ToList();
         var connectedPlayerIds = GetConnectedPlayerIds(combatState.RunState as RunState);
+        GameActionService.SyncCardPlayCounters(combatState.RoundNumber);
 
         return new CombatPayload
         {
@@ -1832,7 +2022,10 @@ internal static class GameStateService
                 base_orb_slots = me.BaseOrbSlotCount,
                 orb_capacity = orbQueue.Capacity,
                 empty_orb_slots = Math.Max(0, orbQueue.Capacity - orbs.Count),
-                orbs = orbs.Select((orb, index) => BuildCombatOrbPayload(orb, index)).ToArray()
+                orbs = orbs.Select((orb, index) => BuildCombatOrbPayload(orb, index)).ToArray(),
+                cards_played_this_turn = GameActionService.CardsPlayedThisTurn,
+                attacks_played_this_turn = GameActionService.AttacksPlayedThisTurn,
+                skills_played_this_turn = GameActionService.SkillsPlayedThisTurn
             },
             players = GetOrderedCombatPlayers(combatState)
                 .Select(player => BuildCombatPlayerSummaryPayload(player, combatState, connectedPlayerIds, me.NetId))
@@ -1856,12 +2049,17 @@ internal static class GameStateService
         {
             character_id = player.Character.Id.Entry,
             character_name = player.Character.Title.GetFormattedText(),
+            ascension = runState.AscensionLevel,
+            ascension_effects = BuildAscensionEffectPayloads(runState.AscensionLevel),
             floor = runState.TotalFloor,
             current_hp = player.Creature.CurrentHp,
             max_hp = player.Creature.MaxHp,
             gold = player.Gold,
             max_energy = player.MaxEnergy,
             base_orb_slots = player.BaseOrbSlotCount,
+            act_id = TryGetMemberValue(runState, "CurrentActIndex")?.ToString()
+                ?? TryGetMemberValue(runState, "ActId")?.ToString(),
+            boss_id = TryGetMemberValue(runState, "BossId")?.ToString(),
             deck = player.Deck.Cards.Select((card, index) => BuildDeckCardPayload(card, index)).ToArray(),
             relics = player.Relics.Select((relic, index) => BuildRunRelicPayload(relic, index)).ToArray(),
             players = runState!.Players
@@ -1892,6 +2090,7 @@ internal static class GameStateService
         ShopPayload? shop,
         RestPayload? rest,
         RewardPayload? reward,
+        BundlePayload[]? bundles,
         ModalPayload? modal,
         GameOverPayload? gameOver)
     {
@@ -1917,6 +2116,7 @@ internal static class GameStateService
             shop = BuildAgentShopPayload(shop, glossaryTerms),
             rest = BuildAgentRestPayload(rest),
             reward = BuildAgentRewardPayload(reward, glossaryTerms),
+            bundles = BuildAgentBundlePayload(bundles, glossaryTerms),
             modal = BuildAgentModalPayload(modal),
             game_over = BuildAgentGameOverPayload(gameOver),
             glossary = BuildAgentGlossary(glossaryTerms)
@@ -1946,7 +2146,10 @@ internal static class GameStateService
                 energy = combat.player.energy,
                 stars = combat.player.stars,
                 focus = combat.player.focus,
-                orbs = combat.player.orbs.Select(orb => FormatOrbLine(orb)).ToArray()
+                orbs = combat.player.orbs.Select(orb => FormatOrbLine(orb)).ToArray(),
+                cards_played_this_turn = combat.player.cards_played_this_turn,
+                attacks_played_this_turn = combat.player.attacks_played_this_turn,
+                skills_played_this_turn = combat.player.skills_played_this_turn
             },
             hand = combat.hand.Select(card =>
                 BuildAgentHandCardPayload(
@@ -1956,13 +2159,18 @@ internal static class GameStateService
             draw = BuildAgentCardStacks(ReadCombatPileCards(playerCombatState, "DrawPile", "DrawDeck"), glossaryTerms),
             discard = BuildAgentCardStacks(ReadCombatPileCards(playerCombatState, "DiscardPile"), glossaryTerms),
             exhaust = BuildAgentCardStacks(ReadCombatPileCards(playerCombatState, "ExhaustPile"), glossaryTerms),
+            draw_cards = BuildStructuredPileCards(ReadCombatPileCards(playerCombatState, "DrawPile", "DrawDeck")),
+            discard_cards = BuildStructuredPileCards(ReadCombatPileCards(playerCombatState, "DiscardPile")),
+            exhaust_cards = BuildStructuredPileCards(ReadCombatPileCards(playerCombatState, "ExhaustPile")),
             enemies = combat.enemies.Select(enemy => new
             {
                 i = enemy.index,
+                enemy_id = enemy.enemy_id,
                 name = enemy.name,
                 hp = $"{enemy.current_hp}/{enemy.max_hp}",
                 block = enemy.block,
                 intent = enemy.intent,
+                move_id = enemy.move_id,
                 alive = enemy.is_alive,
                 hittable = enemy.is_hittable
             }).ToArray()
@@ -1984,10 +2192,20 @@ internal static class GameStateService
         var deckCards = player?.Deck.Cards.ToArray() ?? Array.Empty<CardModel>();
         var combatPlayer = LocalContext.GetMe(combatState)?.PlayerCombatState;
 
+        foreach (var effect in run.ascension_effects)
+        {
+            CollectGlossaryTerms(glossaryTerms, effect.name);
+            CollectGlossaryTerms(glossaryTerms, effect.description);
+        }
+
         return new
         {
             character = run.character_name,
+            ascension = run.ascension,
+            ascension_effects = run.ascension_effects,
             floor = run.floor,
+            act_id = run.act_id,
+            boss_id = run.boss_id,
             hp = $"{run.current_hp}/{run.max_hp}",
             gold = run.gold,
             max_energy = run.max_energy,
@@ -2001,6 +2219,7 @@ internal static class GameStateService
             potions = run.potions.Select(potion => new
             {
                 i = potion.index,
+                potion_id = potion.potion_id,
                 line = FormatPotionLine(potion),
                 usable = potion.can_use,
                 discard = potion.can_discard,
@@ -2011,7 +2230,10 @@ internal static class GameStateService
             {
                 draw = BuildAgentCardStacks(ReadCombatPileCards(combatPlayer, "DrawPile", "DrawDeck"), glossaryTerms),
                 discard = BuildAgentCardStacks(ReadCombatPileCards(combatPlayer, "DiscardPile"), glossaryTerms),
-                exhaust = BuildAgentCardStacks(ReadCombatPileCards(combatPlayer, "ExhaustPile"), glossaryTerms)
+                exhaust = BuildAgentCardStacks(ReadCombatPileCards(combatPlayer, "ExhaustPile"), glossaryTerms),
+                draw_cards = BuildStructuredPileCards(ReadCombatPileCards(combatPlayer, "DrawPile", "DrawDeck")),
+                discard_cards = BuildStructuredPileCards(ReadCombatPileCards(combatPlayer, "DiscardPile")),
+                exhaust_cards = BuildStructuredPileCards(ReadCombatPileCards(combatPlayer, "ExhaustPile"))
             }
         };
     }
@@ -2033,7 +2255,7 @@ internal static class GameStateService
             max = selection.max_select,
             selected = selection.selected_count,
             confirm = selection.can_confirm,
-            cards = selection.cards.Select(card => BuildAgentChoiceCardPayload(card.index, card.name, card.upgraded, card.energy_cost, card.star_cost, card.costs_x, card.star_costs_x, card.rules_text, glossaryTerms)).ToArray()
+            cards = selection.cards.Select(card => BuildAgentChoiceCardPayload(card.index, card.name, card.upgraded, card.energy_cost, card.star_cost, card.costs_x, card.star_costs_x, GetPreferredCardRulesText(card.rules_text, card.resolved_rules_text), glossaryTerms)).ToArray()
         };
     }
 
@@ -2059,13 +2281,32 @@ internal static class GameStateService
                 line = $"{option.reward_type}: {option.description}",
                 claimable = option.claimable
             }).ToArray(),
-            cards = reward.card_options.Select(card => BuildAgentChoiceCardPayload(card.index, card.name, card.upgraded, null, null, false, false, card.rules_text, glossaryTerms)).ToArray(),
+            cards = reward.card_options.Select(card => BuildAgentChoiceCardPayload(card.index, card.name, card.upgraded, null, null, false, false, GetPreferredCardRulesText(card.rules_text, card.resolved_rules_text), glossaryTerms)).ToArray(),
             alternatives = reward.alternatives.Select(option => new
             {
                 i = option.index,
                 line = option.label
             }).ToArray()
         };
+    }
+
+    private static object? BuildAgentBundlePayload(BundlePayload[]? bundles, HashSet<string> glossaryTerms)
+    {
+        if (bundles == null || bundles.Length == 0)
+        {
+            return null;
+        }
+
+        return bundles.Select(bundle => new
+        {
+            i = bundle.index,
+            cards = bundle.cards.Select(card =>
+                BuildAgentChoiceCardPayload(
+                    card.index, card.name, card.upgraded,
+                    card.energy_cost, null, false, false,
+                    GetPreferredCardRulesText(card.rules_text, card.resolved_rules_text),
+                    glossaryTerms)).ToArray()
+        }).ToArray();
     }
 
     private static object? BuildAgentEventPayload(EventPayload? eventPayload)
@@ -2111,7 +2352,7 @@ internal static class GameStateService
                     card.star_cost,
                     card.costs_x,
                     card.star_costs_x,
-                    card.rules_text,
+                    GetPreferredCardRulesText(card.rules_text, card.resolved_rules_text),
                     card.price,
                     card.enough_gold,
                     glossaryTerms)).ToArray(),
@@ -2279,14 +2520,15 @@ internal static class GameStateService
         CardModel? liveCard,
         HashSet<string> glossaryTerms)
     {
+        var displayRulesText = GetPreferredCardRulesText(card.rules_text, card.resolved_rules_text);
         var mods = GetCardModifierTags(liveCard);
-        var keywords = GetGlossaryMatches(card.rules_text, mods);
-        CollectGlossaryTerms(glossaryTerms, card.rules_text, mods);
+        var keywords = GetGlossaryMatches(displayRulesText, mods);
+        CollectGlossaryTerms(glossaryTerms, displayRulesText, mods);
 
         return new
         {
             i = card.index,
-            line = FormatCardLine(card.name, card.upgraded, 1, card.energy_cost, card.star_cost, card.costs_x, card.star_costs_x, card.rules_text),
+            line = FormatCardLine(card.name, card.upgraded, 1, card.energy_cost, card.star_cost, card.costs_x, card.star_costs_x, displayRulesText),
             playable = card.playable,
             target = card.requires_target ? NormalizeTargetHint(card.target_index_space ?? card.target_type) : null,
             targets = card.requires_target ? card.valid_target_indices : Array.Empty<int>(),
@@ -2386,7 +2628,7 @@ internal static class GameStateService
 
     private static AgentCardDescriptor BuildAgentCardDescriptor(CardModel card, HashSet<string> glossaryTerms)
     {
-        var rulesText = GetCardRulesText(card);
+        var rulesText = GetResolvedCardRulesText(card);
         var mods = GetCardModifierTags(card);
         var keywords = GetGlossaryMatches(rulesText, mods);
         CollectGlossaryTerms(glossaryTerms, rulesText, mods);
@@ -2405,8 +2647,9 @@ internal static class GameStateService
 
     private static AgentCardDescriptor BuildAgentCardDescriptor(DeckCardPayload card, HashSet<string> glossaryTerms)
     {
-        var keywords = GetGlossaryMatches(card.rules_text);
-        CollectGlossaryTerms(glossaryTerms, card.rules_text);
+        var rulesText = GetPreferredCardRulesText(card.rules_text, card.resolved_rules_text);
+        var keywords = GetGlossaryMatches(rulesText);
+        CollectGlossaryTerms(glossaryTerms, rulesText);
 
         return new AgentCardDescriptor(
             card.name,
@@ -2415,7 +2658,7 @@ internal static class GameStateService
             card.star_cost,
             card.costs_x,
             card.star_costs_x,
-            card.rules_text,
+            rulesText,
             keywords,
             Array.Empty<string>());
     }
@@ -2502,6 +2745,16 @@ internal static class GameStateService
         }
 
         return string.Join(" | ", segments);
+    }
+
+    private static object[] BuildStructuredPileCards(CardModel[] cards)
+    {
+        return cards.Select(card => new
+        {
+            card_id = card.Id.Entry,
+            upgraded = card.IsUpgraded,
+            card_type = card.Type.ToString()
+        }).ToArray();
     }
 
     private static CardModel[] ReadCombatPileCards(object? playerCombatState, params string[] memberNames)
@@ -3301,6 +3554,38 @@ internal static class GameStateService
         return null;
     }
 
+    private static BundlePayload[]? BuildBundlePayload(IScreenContext? currentScreen)
+    {
+        if (currentScreen is not NChooseABundleSelectionScreen bundleScreen)
+        {
+            return null;
+        }
+
+        var bundleNodes = GetBundleOptions(currentScreen);
+        if (bundleNodes.Count == 0)
+        {
+            return null;
+        }
+
+        return bundleNodes.Select((bundleNode, bundleIndex) =>
+        {
+            // NCardBundle contains NCard children (not NCardHolder).
+            // NCard exposes CardModel via the .Model property.
+            var cards = FindDescendants<Node>((Node)bundleNode)
+                .Where(n => GodotObject.IsInstanceValid(n) && n.GetType().Name == "NCard")
+                .Select(n => n.GetType().GetProperty("Model")?.GetValue(n) as CardModel)
+                .Where(cm => cm != null)
+                .Select((card, cardIndex) => BuildBundleCardPayload(card!, cardIndex))
+                .ToArray();
+
+            return new BundlePayload
+            {
+                index = bundleIndex,
+                cards = cards
+            };
+        }).ToArray();
+    }
+
     private static ModalPayload? BuildModalPayload(IScreenContext? currentScreen)
     {
         var modal = GetOpenModal();
@@ -3354,6 +3639,8 @@ internal static class GameStateService
         var targetSupported = IsCardTargetSupported(card);
         var targetIndexSpace = GetCardTargetIndexSpace(card);
         var validTargetIndices = GetCardTargetIndices(combatState, card);
+        var resolvedRulesText = GetResolvedCardRulesText(card);
+        var dynamicValues = BuildCardDynamicValuePayloads(card);
 
         return new CombatHandCardPayload
         {
@@ -3370,6 +3657,8 @@ internal static class GameStateService
             energy_cost = card.EnergyCost.GetWithModifiers(CostModifiers.All),
             star_cost = Math.Max(0, card.GetStarCostWithModifiers()),
             rules_text = GetCardRulesText(card),
+            resolved_rules_text = resolvedRulesText,
+            dynamic_values = dynamicValues,
             playable = targetSupported && reason == UnplayableReason.None,
             unplayable_reason = targetSupported
                 ? GetUnplayableReasonCode(reason)
@@ -3672,6 +3961,13 @@ internal static class GameStateService
     private static RewardCardOptionPayload BuildRewardCardOptionPayload(NCardHolder holder, int index)
     {
         var card = holder.CardModel;
+        return BuildBundleCardPayload(card, index);
+    }
+
+    private static RewardCardOptionPayload BuildBundleCardPayload(CardModel? card, int index)
+    {
+        var resolvedRulesText = GetResolvedCardRulesText(card);
+        var dynamicValues = BuildCardDynamicValuePayloads(card);
 
         return new RewardCardOptionPayload
         {
@@ -3679,7 +3975,12 @@ internal static class GameStateService
             card_id = card?.Id.Entry ?? string.Empty,
             name = card?.Title ?? string.Empty,
             upgraded = card?.IsUpgraded ?? false,
-            rules_text = GetCardRulesText(card)
+            card_type = card?.Type.ToString() ?? string.Empty,
+            rarity = card?.Rarity.ToString() ?? string.Empty,
+            energy_cost = card?.EnergyCost.GetWithModifiers(CostModifiers.All) ?? 0,
+            rules_text = GetCardRulesText(card),
+            resolved_rules_text = resolvedRulesText,
+            dynamic_values = dynamicValues
         };
     }
 
@@ -3731,7 +4032,7 @@ internal static class GameStateService
             target_index_space = targetIndexSpace,
             valid_target_indices = validTargetIndices,
             can_use = IsPotionUsable(currentScreen, combatState, player, potion),
-            can_discard = IsPotionDiscardable(player, potion)
+            can_discard = CanDiscardPotionsInCurrentScreen(currentScreen) && IsPotionDiscardable(player, potion)
         };
     }
 
@@ -3939,6 +4240,8 @@ internal static class GameStateService
     private static ShopCardPayload BuildShopCardPayload(MerchantCardEntry entry, int index, string category)
     {
         var card = entry.CreationResult?.Card;
+        var resolvedRulesText = GetResolvedCardRulesText(card);
+        var dynamicValues = BuildCardDynamicValuePayloads(card);
         return new ShopCardPayload
         {
             index = index,
@@ -3953,6 +4256,8 @@ internal static class GameStateService
             energy_cost = card?.EnergyCost.GetWithModifiers(CostModifiers.All) ?? 0,
             star_cost = card != null ? Math.Max(0, card.GetStarCostWithModifiers()) : 0,
             rules_text = GetCardRulesText(card),
+            resolved_rules_text = resolvedRulesText,
+            dynamic_values = dynamicValues,
             price = entry.IsStocked ? entry.Cost : 0,
             on_sale = entry.IsOnSale,
             is_stocked = entry.IsStocked,
@@ -4016,6 +4321,8 @@ internal static class GameStateService
 
     private static DeckCardPayload BuildDeckCardPayload(CardModel card, int index)
     {
+        var resolvedRulesText = GetResolvedCardRulesText(card);
+        var dynamicValues = BuildCardDynamicValuePayloads(card);
         return new DeckCardPayload
         {
             index = index,
@@ -4028,12 +4335,16 @@ internal static class GameStateService
             star_costs_x = card.HasStarCostX,
             energy_cost = card.EnergyCost.GetWithModifiers(CostModifiers.All),
             star_cost = Math.Max(0, card.GetStarCostWithModifiers()),
-            rules_text = GetCardRulesText(card)
+            rules_text = GetCardRulesText(card),
+            resolved_rules_text = resolvedRulesText,
+            dynamic_values = dynamicValues
         };
     }
 
     private static SelectionCardPayload BuildSelectionCardPayload(CardModel card, int index)
     {
+        var resolvedRulesText = GetResolvedCardRulesText(card);
+        var dynamicValues = BuildCardDynamicValuePayloads(card);
         return new SelectionCardPayload
         {
             index = index,
@@ -4046,7 +4357,9 @@ internal static class GameStateService
             star_costs_x = card.HasStarCostX,
             energy_cost = card.EnergyCost.GetWithModifiers(CostModifiers.All),
             star_cost = Math.Max(0, card.GetStarCostWithModifiers()),
-            rules_text = GetCardRulesText(card)
+            rules_text = GetCardRulesText(card),
+            resolved_rules_text = resolvedRulesText,
+            dynamic_values = dynamicValues
         };
     }
 
@@ -4092,6 +4405,11 @@ internal static class GameStateService
             PotionUsage.CombatOnly => CanUseCombatActions(currentScreen, combatState, out _, out _),
             _ => false
         };
+    }
+
+    private static bool CanDiscardPotionsInCurrentScreen(IScreenContext? currentScreen)
+    {
+        return currentScreen is not (NRewardsScreen or NCardRewardSelectionScreen);
     }
 
     private static bool IsPotionDiscardable(Player player, PotionModel? potion)
@@ -4471,6 +4789,7 @@ internal static class GameStateService
         }
 
         if (currentScreen is Node rootNode &&
+            currentScreen is not NChooseABundleSelectionScreen &&
             GetVisibleGridCardHolders(rootNode).Count > 0)
         {
             return "CARD_SELECTION";
@@ -4496,6 +4815,8 @@ internal static class GameStateService
             NCombatRoom => "COMBAT",
             NMapScreen or NMapRoom => "MAP",
             NCharacterSelectScreen => "CHARACTER_SELECT",
+            NChooseABundleSelectionScreen => "BUNDLE_SELECTION",
+            NCapstoneSubmenuStack => "CAPSTONE_SELECTION",
             NPatchNotesScreen => "MAIN_MENU",
             NSubmenu => "MAIN_MENU",
             NLogoAnimation => "MAIN_MENU",
@@ -4646,6 +4967,8 @@ internal sealed class GameStatePayload
 
     public RewardPayload? reward { get; init; }
 
+    public BundlePayload[]? bundles { get; init; }
+
     public ModalPayload? modal { get; init; }
 
     public GameOverPayload? game_over { get; init; }
@@ -4686,6 +5009,10 @@ internal sealed class RunPayload
 
     public string character_name { get; init; } = string.Empty;
 
+    public int ascension { get; init; }
+
+    public AscensionEffectPayload[] ascension_effects { get; init; } = Array.Empty<AscensionEffectPayload>();
+
     public int floor { get; init; }
 
     public int current_hp { get; init; }
@@ -4698,6 +5025,10 @@ internal sealed class RunPayload
 
     public int base_orb_slots { get; init; }
 
+    public string? act_id { get; init; }
+
+    public string? boss_id { get; init; }
+
     public DeckCardPayload[] deck { get; init; } = Array.Empty<DeckCardPayload>();
 
     public RunRelicPayload[] relics { get; init; } = Array.Empty<RunRelicPayload>();
@@ -4705,6 +5036,15 @@ internal sealed class RunPayload
     public RunPlayerSummaryPayload[] players { get; init; } = Array.Empty<RunPlayerSummaryPayload>();
 
     public RunPotionPayload[] potions { get; init; } = Array.Empty<RunPotionPayload>();
+}
+
+internal sealed class AscensionEffectPayload
+{
+    public string id { get; init; } = string.Empty;
+
+    public string name { get; init; } = string.Empty;
+
+    public string description { get; init; } = string.Empty;
 }
 
 internal sealed class MultiplayerPayload
@@ -5020,6 +5360,10 @@ internal sealed class ShopCardPayload
 
     public string rules_text { get; init; } = string.Empty;
 
+    public string resolved_rules_text { get; init; } = string.Empty;
+
+    public CardDynamicValuePayload[] dynamic_values { get; init; } = Array.Empty<CardDynamicValuePayload>();
+
     public int price { get; init; }
 
     public bool on_sale { get; init; }
@@ -5146,6 +5490,12 @@ internal sealed class CombatPlayerPayload
     public int empty_orb_slots { get; init; }
 
     public CombatOrbPayload[] orbs { get; init; } = Array.Empty<CombatOrbPayload>();
+
+    public int cards_played_this_turn { get; init; }
+
+    public int attacks_played_this_turn { get; init; }
+
+    public int skills_played_this_turn { get; init; }
 }
 
 internal sealed class CombatPlayerSummaryPayload
@@ -5242,6 +5592,10 @@ internal sealed class CombatHandCardPayload
     public int star_cost { get; init; }
 
     public string rules_text { get; init; } = string.Empty;
+
+    public string resolved_rules_text { get; init; } = string.Empty;
+
+    public CardDynamicValuePayload[] dynamic_values { get; init; } = Array.Empty<CardDynamicValuePayload>();
 
     public bool playable { get; init; }
 
@@ -5369,7 +5723,17 @@ internal sealed class RewardCardOptionPayload
 
     public bool upgraded { get; init; }
 
+    public string card_type { get; init; } = string.Empty;
+
+    public string rarity { get; init; } = string.Empty;
+
+    public int energy_cost { get; init; }
+
     public string rules_text { get; init; } = string.Empty;
+
+    public string resolved_rules_text { get; init; } = string.Empty;
+
+    public CardDynamicValuePayload[] dynamic_values { get; init; } = Array.Empty<CardDynamicValuePayload>();
 }
 
 internal sealed class RewardAlternativePayload
@@ -5377,6 +5741,13 @@ internal sealed class RewardAlternativePayload
     public int index { get; init; }
 
     public string label { get; init; } = string.Empty;
+}
+
+internal sealed class BundlePayload
+{
+    public int index { get; init; }
+
+    public RewardCardOptionPayload[] cards { get; init; } = Array.Empty<RewardCardOptionPayload>();
 }
 
 internal sealed class DeckCardPayload
@@ -5402,6 +5773,10 @@ internal sealed class DeckCardPayload
     public int star_cost { get; init; }
 
     public string rules_text { get; init; } = string.Empty;
+
+    public string resolved_rules_text { get; init; } = string.Empty;
+
+    public CardDynamicValuePayload[] dynamic_values { get; init; } = Array.Empty<CardDynamicValuePayload>();
 }
 
 internal sealed class SelectionCardPayload
@@ -5427,6 +5802,25 @@ internal sealed class SelectionCardPayload
     public int star_cost { get; init; }
 
     public string rules_text { get; init; } = string.Empty;
+
+    public string resolved_rules_text { get; init; } = string.Empty;
+
+    public CardDynamicValuePayload[] dynamic_values { get; init; } = Array.Empty<CardDynamicValuePayload>();
+}
+
+internal sealed class CardDynamicValuePayload
+{
+    public string name { get; init; } = string.Empty;
+
+    public int base_value { get; init; }
+
+    public int current_value { get; init; }
+
+    public int enchanted_value { get; init; }
+
+    public bool is_modified { get; init; }
+
+    public bool was_just_upgraded { get; init; }
 }
 
 internal sealed class RunRelicPayload

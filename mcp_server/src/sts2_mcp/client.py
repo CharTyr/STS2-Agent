@@ -315,6 +315,16 @@ class Sts2Client:
             },
         )
 
+    def resolve_rewards(self, option_index: int | None = None) -> dict[str, Any]:
+        return self.execute_action(
+            "resolve_rewards",
+            option_index=option_index,
+            client_context={
+                "source": "mcp",
+                "tool_name": "resolve_rewards",
+            },
+        )
+
     def claim_reward(self, option_index: int) -> dict[str, Any]:
         return self.execute_action(
             "claim_reward",
@@ -398,6 +408,35 @@ class Sts2Client:
             client_context={
                 "source": "mcp",
                 "tool_name": "choose_event_option",
+            },
+        )
+
+    def choose_capstone_option(self, option_index: int) -> dict[str, Any]:
+        return self.execute_action(
+            "choose_capstone_option",
+            option_index=option_index,
+            client_context={
+                "source": "mcp",
+                "tool_name": "choose_capstone_option",
+            },
+        )
+
+    def choose_bundle(self, option_index: int) -> dict[str, Any]:
+        return self.execute_action(
+            "choose_bundle",
+            option_index=option_index,
+            client_context={
+                "source": "mcp",
+                "tool_name": "choose_bundle",
+            },
+        )
+
+    def confirm_bundle(self) -> dict[str, Any]:
+        return self.execute_action(
+            "confirm_bundle",
+            client_context={
+                "source": "mcp",
+                "tool_name": "confirm_bundle",
             },
         )
 
