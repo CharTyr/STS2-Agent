@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import json
 import os
 import threading
 import time
@@ -9,17 +8,15 @@ from typing import Any, Callable
 
 from fastmcp import FastMCP
 
-from .client import Sts2Client
+from .client import Sts2ApiError, Sts2Client
 from .handoff import Sts2HandoffService
 from .knowledge import Sts2KnowledgeBase
 
 ToolHandler = Callable[..., dict[str, Any]]
 
-JSON_FILE_EXTENSION = ".json"
-JSON_FILE_EXTENSION_LENGTH = len(JSON_FILE_EXTENSION)
-GAME_DATA_RELATIVE_PATH = ("..", "..", "data", "eng")
 KNOWN_ITEM_ID_KEYS = ("id", "ID", "Id")
 ITEM_IDS_SEPARATOR = ","
+KNOWN_GAME_DATA_COLLECTIONS = ("cards", "relics", "monsters", "potions", "events", "powers", "characters")
 
 SCENE_MENU = "menu"
 SCENE_COMBAT = "combat"
@@ -107,10 +104,10 @@ def _debug_tools_enabled() -> bool:
     return _env_flag("STS2_ENABLE_DEBUG_ACTIONS")
 
 
-_GAME_DATA_CACHE: dict[str, Any] | None = None
+_GAME_DATA_COLLECTIONS: dict[str, Any] = {}
 _GAME_DATA_INDEXES: dict[str, dict[str, Any]] = {}
-_GAME_DATA_CACHE_LOCK = threading.Lock()
-_GAME_DATA_INDEXES_LOCK = threading.Lock()
+_GAME_DATA_LOADER: Callable[[str], Any] | None = None
+_GAME_DATA_LOCK = threading.RLock()
 
 # Default field sets per scene/context. These are used by `get_relevant_game_data` to
 # minimize token usage by returning only the most relevant fields.
@@ -186,42 +183,47 @@ _SCENE_FIELD_SETS: dict[str, dict[str, list[str]]] = {
 }
 
 
-def _get_game_data_dir() -> str:
-    # Always use bundled English metadata.
-    here = os.path.dirname(__file__)
-    return os.path.abspath(os.path.join(here, *GAME_DATA_RELATIVE_PATH))
+def _configure_game_data_loader(loader: Callable[[str], Any]) -> None:
+    global _GAME_DATA_LOADER
+    with _GAME_DATA_LOCK:
+        _GAME_DATA_LOADER = loader
 
 
-def _load_game_data() -> dict[str, Any]:
-    global _GAME_DATA_CACHE
-    if _GAME_DATA_CACHE is not None:
-        return _GAME_DATA_CACHE
+def _reset_game_data_cache() -> None:
+    with _GAME_DATA_LOCK:
+        _GAME_DATA_COLLECTIONS.clear()
+        _GAME_DATA_INDEXES.clear()
 
-    with _GAME_DATA_CACHE_LOCK:
-        if _GAME_DATA_CACHE is not None:
-            return _GAME_DATA_CACHE
 
-        data_dir = _get_game_data_dir()
-        if not os.path.isdir(data_dir):
-            raise RuntimeError(f"Game data directory not found: {data_dir!r}.")
+def _load_game_data_collection(collection: str) -> Any:
+    normalized = collection.strip()
+    if not normalized:
+        raise KeyError("Unknown game data collection: ''")
 
-        data: dict[str, Any] = {}
-        for filename in sorted(os.listdir(data_dir)):
-            path = os.path.join(data_dir, filename)
-            if os.path.isdir(path):
-                continue
-            if not filename.lower().endswith(JSON_FILE_EXTENSION):
-                continue
+    with _GAME_DATA_LOCK:
+        if normalized in _GAME_DATA_COLLECTIONS:
+            return _GAME_DATA_COLLECTIONS[normalized]
+        loader = _GAME_DATA_LOADER
 
-            key = filename[:-JSON_FILE_EXTENSION_LENGTH]
-            try:
-                with open(path, "r", encoding="utf-8") as f:
-                    data[key] = json.load(f)
-            except Exception as exc:
-                raise RuntimeError(f"Failed to load game data file {path!r}: {exc}") from exc
+    if loader is None:
+        raise RuntimeError("Game data loader is not configured.")
 
-        _GAME_DATA_CACHE = data
-        return data
+    try:
+        data = loader(normalized)
+    except Sts2ApiError as exc:
+        if exc.status_code == 404 or exc.code == "collection_not_found":
+            raise KeyError(f"Unknown game data collection: {normalized}") from exc
+        raise RuntimeError(str(exc)) from exc
+    except Exception as exc:
+        raise RuntimeError(f"Failed to load game data collection {normalized!r}: {exc}") from exc
+
+    if not isinstance(data, (dict, list)):
+        raise TypeError(f"Unsupported data type for collection {normalized!r}: {type(data)}")
+
+    with _GAME_DATA_LOCK:
+        _GAME_DATA_COLLECTIONS[normalized] = data
+
+    return data
 
 
 def _add_case_insensitive_item_id(index: dict[str, Any], item_id: str, item: Any) -> None:
@@ -235,38 +237,35 @@ def _add_case_insensitive_item_id(index: dict[str, Any], item_id: str, item: Any
 
 def _ensure_game_data_index(collection: str) -> dict[str, Any]:
     """Return a map of id -> item for a collection (builds index on first use)."""
-    global _GAME_DATA_INDEXES
-    if collection in _GAME_DATA_INDEXES:
-        return _GAME_DATA_INDEXES[collection]
+    with _GAME_DATA_LOCK:
+        cached_index = _GAME_DATA_INDEXES.get(collection)
+        if cached_index is not None:
+            return cached_index
 
-    with _GAME_DATA_INDEXES_LOCK:
-        if collection in _GAME_DATA_INDEXES:
-            return _GAME_DATA_INDEXES[collection]
+    items = _load_game_data_collection(collection)
+    if isinstance(items, dict):
+        index = {}
+        for raw_id, item in items.items():
+            _add_case_insensitive_item_id(index=index, item_id=str(raw_id), item=item)
+    elif isinstance(items, list):
+        index = {}
+        for item in items:
+            item_id = ""
+            for key in KNOWN_ITEM_ID_KEYS:
+                candidate = item.get(key)
+                if candidate:
+                    item_id = str(candidate).strip()
+                    break
+            if not item_id:
+                continue
+            _add_case_insensitive_item_id(index=index, item_id=item_id, item=item)
+    else:
+        raise TypeError(f"Unsupported data type for collection {collection!r}: {type(items)}")
 
-        data = _load_game_data()
-        if collection not in data:
-            raise KeyError(f"Unknown game data collection: {collection}")
-
-        items = data[collection]
-        if isinstance(items, dict):
-            index = {}
-            for raw_id, item in items.items():
-                _add_case_insensitive_item_id(index=index, item_id=str(raw_id), item=item)
-        elif isinstance(items, list):
-            index = {}
-            for item in items:
-                item_id = ""
-                for key in KNOWN_ITEM_ID_KEYS:
-                    candidate = item.get(key)
-                    if candidate:
-                        item_id = str(candidate).strip()
-                        break
-                if not item_id:
-                    continue
-                _add_case_insensitive_item_id(index=index, item_id=item_id, item=item)
-        else:
-            raise TypeError(f"Unsupported data type for collection {collection!r}: {type(items)}")
-
+    with _GAME_DATA_LOCK:
+        cached_index = _GAME_DATA_INDEXES.get(collection)
+        if cached_index is not None:
+            return cached_index
         _GAME_DATA_INDEXES[collection] = index
         return index
 
@@ -277,13 +276,12 @@ def _lookup_game_data_item(index: dict[str, Any], item_id: str) -> Any:
 
 def _build_game_data_tool_error(collection: str, exc: Exception) -> dict[str, Any]:
     if isinstance(exc, KeyError):
-        available_collections = sorted(_GAME_DATA_CACHE.keys()) if _GAME_DATA_CACHE else []
         return {
             "error": {
                 "type": "unknown_collection",
                 "collection": collection,
                 "message": str(exc),
-                "available_collections": available_collections,
+                "available_collections": list(KNOWN_GAME_DATA_COLLECTIONS),
             }
         }
 
@@ -409,6 +407,17 @@ def create_server(client: Sts2Client | None = None, tool_profile: str | None = N
     knowledge = Sts2KnowledgeBase()
     handoff = Sts2HandoffService(knowledge)
     profile = _normalize_tool_profile(tool_profile)
+
+    game_data_loader = getattr(sts2, "get_game_data_collection", None)
+    if callable(game_data_loader):
+        _configure_game_data_loader(game_data_loader)
+    else:
+        def _missing_game_data_loader(_: str) -> Any:
+            raise RuntimeError("Game data loader is not available on this client.")
+
+        _configure_game_data_loader(_missing_game_data_loader)
+
+    _reset_game_data_cache()
     mcp = FastMCP("STS2 AI Agent")
 
     def _agent_state() -> dict[str, Any]:

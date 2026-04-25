@@ -125,7 +125,7 @@ The current `main` branch provides a playable MCP integration for STS2, includin
 - `resolve_rewards` atomic action for controlled reward resolution
 - reducing polling through SSE events
 - exposing MCP over `stdio` or HTTP
-- serving bundled game metadata for cards, relics, monsters, potions, and events
+- serving live game metadata for cards, relics, monsters, potions, and events via the Mod API
 - supporting layered planner / combat agent handoff flows
 - `increase_ascension` / `decrease_ascension` controls in character select
 

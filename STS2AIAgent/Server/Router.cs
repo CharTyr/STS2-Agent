@@ -2,7 +2,6 @@ using System.Net;
 using System.Diagnostics;
 using System.Text;
 using System.Threading;
-using System.IO;
 using MegaCrit.Sts2.Core.Debug;
 using MegaCrit.Sts2.Core.Logging;
 using STS2AIAgent.Game;
@@ -13,7 +12,7 @@ internal static class Router
 {
     private const string ServiceName = "sts2-ai-agent";
     private const string ProtocolVersion = "2026-03-11-v1";
-private const string ModVersion = "0.6.0";
+    private const string ModVersion = "0.6.1";
     private const string LogPrefix = "[STS2AIAgent.Router]";
 
     private static long _requestCounter;
@@ -77,6 +76,38 @@ private const string ModVersion = "0.6.0";
                 });
                 statusCode = 200;
                 return;
+            }
+
+            if (request.HttpMethod.Equals("GET", StringComparison.OrdinalIgnoreCase) &&
+                request.Url?.AbsolutePath is string dataPath &&
+                dataPath.StartsWith("/data/", StringComparison.OrdinalIgnoreCase))
+            {
+                var collectionPath = dataPath.Substring("/data/".Length);
+
+                try
+                {
+                    var data = await GameThread.InvokeAsync(() => GameDataExportService.ExportCollection(collectionPath));
+                    await WriteJsonAsync(response, 200, new
+                    {
+                        ok = true,
+                        request_id = requestId,
+                        data = data
+                    });
+                    statusCode = 200;
+                    return;
+                }
+                catch (KeyNotFoundException)
+                {
+                    statusCode = 404;
+                    await WriteErrorAsync(response, 404, "collection_not_found", $"Unknown data collection: {collectionPath}", requestId);
+                    return;
+                }
+                catch (Exception ex)
+                {
+                    statusCode = 500;
+                    await WriteErrorAsync(response, 500, "export_error", $"Failed to export {collectionPath}: {ex.Message}", requestId);
+                    return;
+                }
             }
 
             if (request.HttpMethod.Equals("GET", StringComparison.OrdinalIgnoreCase) &&

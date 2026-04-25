@@ -1,6 +1,6 @@
 ---
 name: sts2-mcp-player
-description: Play or validate Slay the Spire 2 through the local sts2-ai-agent MCP tools, including access to bundled game metadata (cards/relics/monsters/etc.) for richer decision-making. Use when navigating the main menu, timeline, map, combat, rewards, shops, rest sites, events, chests, card selections, potions, or debug-enabled test flows, and when another agent needs a strict state-first workflow that avoids stale indexes, invalid room actions, and tool-profile confusion.
+description: Play or validate Slay the Spire 2 through the local sts2-ai-agent MCP tools, including access to live game metadata from the Mod API (cards/relics/monsters/etc.) for richer decision-making. Use when navigating the main menu, timeline, map, combat, rewards, shops, rest sites, events, chests, card selections, potions, or debug-enabled test flows, and when another agent needs a strict state-first workflow that avoids stale indexes, invalid room actions, and tool-profile confusion.
 ---
 
 # STS2 MCP Player

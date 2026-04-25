@@ -83,6 +83,9 @@ class Sts2Client:
         payload = self._request("GET", "/actions/available")
         return list(payload.get("actions", []))
 
+    def get_game_data_collection(self, collection: str) -> Any:
+        return self._request("GET", f"/data/{collection}", expect_object_data=False)
+
     def iter_events(
         self,
         *,
@@ -642,7 +645,8 @@ class Sts2Client:
         payload: dict[str, Any] | None = None,
         *,
         is_action: bool = False,
-    ) -> dict[str, Any]:
+        expect_object_data: bool = True,
+    ) -> Any:
         timeout = self._action_timeout if is_action else self._read_timeout
         raw_payload = None
         headers: dict[str, str] = {
@@ -671,7 +675,7 @@ class Sts2Client:
 
             try:
                 with request.urlopen(http_request, timeout=timeout) as response:
-                    return self._decode_success(response.read())
+                    return self._decode_success(response.read(), expect_object_data=expect_object_data)
             except error.HTTPError as exc:
                 last_error = self._build_api_error(exc.code, exc.read())
                 if not last_error.retryable or attempt >= self._max_retries:
@@ -693,7 +697,7 @@ class Sts2Client:
         raise last_error or AssertionError("unreachable")
 
     @staticmethod
-    def _decode_success(response_body: bytes) -> dict[str, Any]:
+    def _decode_success(response_body: bytes, *, expect_object_data: bool = True) -> Any:
         payload = json.loads(response_body.decode("utf-8"))
         if not payload.get("ok", False):
             error_payload = payload.get("error", {})
@@ -706,7 +710,7 @@ class Sts2Client:
             )
 
         data = payload.get("data")
-        if not isinstance(data, dict):
+        if expect_object_data and not isinstance(data, dict):
             raise Sts2ApiError(
                 status_code=200,
                 code="invalid_response",

@@ -125,7 +125,7 @@ http://127.0.0.1:8765/mcp
 - `resolve_rewards` 原子动作，精确控制奖励领取
 - 通过 SSE 事件减少高频轮询
 - 以 `stdio` 或 HTTP 方式暴露 MCP
-- 提供卡牌、遗物、敌人、药水、事件等打包元数据查询
+- 通过 Mod API 提供卡牌、遗物、敌人、药水、事件等实时元数据查询
 - 支持 planner / combat 分层 handoff 流程
 - 角色选择界面 `increase_ascension` / `decrease_ascension` 控制
 

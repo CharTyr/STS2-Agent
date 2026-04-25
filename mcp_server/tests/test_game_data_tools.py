@@ -5,12 +5,15 @@ import unittest
 from unittest.mock import patch
 
 import sts2_mcp.server as server_module
+from sts2_mcp.client import Sts2ApiError
 from sts2_mcp.server import _SCENE_FIELD_SETS, create_server, get_game_data_items_fields
 
 
 class DummyClient:
-    def __init__(self, screen: str = "MAIN_MENU") -> None:
+    def __init__(self, screen: str = "MAIN_MENU", game_data: dict[str, object] | None = None) -> None:
         self._screen = screen
+        self._game_data = game_data or {}
+        self.game_data_calls: list[str] = []
 
     def get_health(self) -> dict:
         return {"ok": True}
@@ -26,6 +29,12 @@ class DummyClient:
 
     def execute_action(self, *args, **kwargs) -> dict:
         return {"ok": True}
+
+    def get_game_data_collection(self, collection: str) -> object:
+        self.game_data_calls.append(collection)
+        if collection not in self._game_data:
+            raise Sts2ApiError(status_code=404, code="collection_not_found", message=f"Unknown collection: {collection}")
+        return self._game_data[collection]
 
 
 class GameDataToolsTests(unittest.TestCase):
@@ -251,11 +260,43 @@ class GameDataToolsTests(unittest.TestCase):
         self.assertEqual(result_with_empty_fields["ABRASIVE"], payload["ABRASIVE"])
         self.assertEqual(result_with_none_fields["ABRASIVE"], payload["ABRASIVE"])
 
+    def test_get_game_data_item_loads_collection_once(self) -> None:
+        client = DummyClient(
+            game_data={
+                "cards": [
+                    {"id": "ABRASIVE", "name": "Abrasive"},
+                ]
+            }
+        )
+        server = create_server(client=client)
+        tool = asyncio.run(server.get_tool("get_game_data_item"))
+
+        first = tool.fn(collection="cards", item_id="ABRASIVE")
+        second = tool.fn(collection="cards", item_id="abrasive")
+
+        self.assertEqual(first["id"], "ABRASIVE")
+        self.assertEqual(second["id"], "ABRASIVE")
+        self.assertEqual(client.game_data_calls, ["cards"])
+
+    def test_get_game_data_item_returns_structured_error_when_mod_data_unavailable(self) -> None:
+        client = DummyClient()
+        server = create_server(client=client)
+        tool = asyncio.run(server.get_tool("get_game_data_item"))
+
+        with patch(
+            "sts2_mcp.server._ensure_game_data_index",
+            side_effect=RuntimeError("connection_error: Cannot reach STS2 mod"),
+        ):
+            result = tool.fn(collection="cards", item_id="ABRASIVE")
+
+        self.assertEqual(result["error"]["type"], "game_data_unavailable")
+        self.assertEqual(result["error"]["collection"], "cards")
+
     def test_ensure_game_data_index_supports_case_insensitive_lookup_for_dict_collection(self) -> None:
-        with patch.object(server_module, "_GAME_DATA_INDEXES", {}):
+        with patch.object(server_module, "_GAME_DATA_COLLECTIONS", {}), patch.object(server_module, "_GAME_DATA_INDEXES", {}):
             with patch(
-                "sts2_mcp.server._load_game_data",
-                return_value={"cards": {"ABRASIVE": {"id": "ABRASIVE", "name": "Abrasive"}}},
+                "sts2_mcp.server._load_game_data_collection",
+                return_value={"ABRASIVE": {"id": "ABRASIVE", "name": "Abrasive"}},
             ):
                 index = server_module._ensure_game_data_index("cards")
 
