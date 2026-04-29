@@ -1,22 +1,18 @@
 # 发布验收清单
 
-- 更新时间：`2026-03-18`
-- 目标版本：`v0.5.4`
-- 目标：让这个 STS2 MCP Mod 达到“可正式发布、可完整使用、可稳定验证”的状态
+- 更新时间：`2026-04-30`
+- 目标版本：`v0.7.0`
+- 目标：确认 `STS2 AI Agent` 已达到“多人主流程可发布、验证脚本可复跑、发布包可直接分发”的发布标准。
 
-本次发布重点是把 `v0.5.4` 的运行中 Ascension 数据与 reward 界面药水交互修复一起带出去：
+本次发布重点：
 
-- `guided` / `layered` / `full` tool profile
-- 游戏数据查询工具
-- 原始状态读取工具
-- 主 / 副 Agent handoff / knowledge
-- 打包资源补齐：`mcp_server/data`、`docs/game-knowledge`
-
-发布前必须同时满足静态门槛、安装门槛、MCP 可用性门槛，以及完整实机链路门槛。
+- 多人地图投票可由本地 AI 正确提交，不再丢失主机端首票。
+- 多人休息点 `MEND` 已补齐目标元数据与 `target_index` 执行链路。
+- 启动脚本、多人验证脚本、release 打包流程都已做成可重复执行的封版流程。
 
 ## 1. 静态门槛
 
-以下命令必须全部通过：
+以下命令必须通过：
 
 ```powershell
 dotnet build "<repo-root>/STS2AIAgent/STS2AIAgent.csproj" -c Release
@@ -33,10 +29,10 @@ powershell -ExecutionPolicy Bypass -File "<repo-root>/scripts/preflight-release.
 
 通过标准：
 
-- Mod C# 项目可在 `Release` 配置下编译
-- MCP Python 源码可编译
-- MCP server 包可导入并创建 `FastMCP` 实例
-- 发布相关文档齐全且与代码一致
+- Mod C# 项目可在 `Release` 配置下编译。
+- MCP Python 源码可编译。
+- MCP server 可成功导入并创建服务实例。
+- `CHANGELOG.md` 与发布文档齐全，且版本信息已同步到 `0.7.0`。
 
 ## 2. 安装门槛
 
@@ -49,10 +45,9 @@ powershell -ExecutionPolicy Bypass -File "<repo-root>/scripts/test-mod-load.ps1"
 
 通过标准：
 
-- 运行 `build-mod.ps1` 前，已通过 `-GodotExe` 或 `GODOT_BIN` 提供 Godot 控制台可执行文件
-- `STS2AIAgent.dll` 已复制到游戏 `mods/` 目录
-- `STS2AIAgent.pck` 已复制到游戏 `mods/` 目录
-- 启动游戏后 `/health`、`/state`、`/actions/available` 都能成功返回
+- `STS2AIAgent.dll` 已复制到游戏 `mods/` 目录。
+- `STS2AIAgent.pck` 已复制到游戏 `mods/` 目录。
+- 游戏启动后，`/health`、`/state`、`/actions/available` 都能正常返回。
 
 ### MCP 启动
 
@@ -64,15 +59,13 @@ uv run sts2-mcp-server
 
 通过标准：
 
-- MCP server 可正常启动
-- MCP 客户端可调用 `health_check`
-- Mod 未启动时返回的错误可理解，不是崩溃
+- MCP server 可正常启动。
+- MCP 客户端可成功调用 `health_check`。
+- Mod 未启动时返回的错误信息可理解，不是异常崩溃。
 
-## 3. Debug 门槛
+## 3. 调试门槛
 
-调试控制台必须是“开发时可选开启，发布默认关闭”。
-
-验证命令：
+调试控制台必须保持“默认关闭，显式开启后才可用”：
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File "<repo-root>/scripts/test-debug-console-gating.ps1"
@@ -81,194 +74,83 @@ powershell -ExecutionPolicy Bypass -File "<repo-root>/scripts/test-debug-console
 
 通过标准：
 
-- 默认情况下 `run_console_command` 返回 `invalid_action`
-- 显式启用 `STS2_ENABLE_DEBUG_ACTIONS=1` 后，`run_console_command` 可用
-- MCP server 仅在启用该环境变量时注册 `run_console_command`
+- 默认情况下，`run_console_command` 返回 `invalid_action`。
+- 显式启用 `STS2_ENABLE_DEBUG_ACTIONS=1` 后，`run_console_command` 可用。
+- MCP server 仅在启用对应环境变量时注册调试工具。
 
-## 4. 实机链路门槛
+## 4. 单机主流程门槛
 
-### A. 主菜单与开局链路
-
-必须覆盖：
+至少覆盖以下流程：
 
 1. `MAIN_MENU -> open_character_select`
-2. 有存档时：`continue_run` 和 `abandon_run -> confirm_modal`
-3. 如有时间线门控：`open_timeline -> choose_timeline_epoch -> confirm_timeline_overlay -> close_main_menu_submenu`
-4. `select_character`
-5. `embark`
-6. 如出现 `MODAL` / FTUE：`confirm_modal` 或 `dismiss_modal`
-7. 成功进入 `MAP` 或 `EVENT`
+2. `select_character`
+3. `embark`
+4. 处理开局 `MODAL` / FTUE
+5. `MAP -> choose_map_node`
+6. `COMBAT -> play_card -> end_turn`
+7. 战斗结束后进入奖励或回到地图
 
 通过标准：
 
-- `character_select.selected_character_id` 与实际选择一致
-- `available_actions` 在不同主菜单阶段暴露正确
-- 时间线门控出现时可完整闭环
-- Modal 出现时普通动作会被正确拦截
+- `available_actions` 在各阶段暴露正确。
+- 动作执行后状态转换稳定，不出现挂起请求。
+- `state-invariants` 验证通过。
 
-### B. 地图与普通战斗链路
+## 5. 多人主流程门槛
+
+必须运行：
+
+```powershell
+powershell -ExecutionPolicy Bypass -File "<repo-root>/scripts/test-multiplayer-lobby-flow.ps1"
+```
 
 必须覆盖：
 
-1. `MAP -> choose_map_node`
-2. 进入 `COMBAT`
-3. `play_card`
-4. `end_turn`
-5. 至少一次 `use_potion` 或 `discard_potion`
-6. 战斗结束后进入奖励或地图
+1. Host 建房、Client 加入。
+2. 双端选角与 ready。
+3. 进入 run 后自动越过开场过场并到达地图。
+4. 双端地图投票与投票状态回显。
+5. 首场战斗中的出牌、回合推进、奖励结算。
+6. 休息点 `MEND` 目标元数据暴露。
+7. 未传 `target_index` 时返回 `invalid_target`。
+8. 传入 `target_index` 后多人 `MEND` 在单次请求内完成。
 
 通过标准：
 
-- 卡牌索引与敌人索引稳定
-- 药水使用 / 丢弃后状态正确变化
-- `available_actions` 与真实 UI 一致
+- 脚本整体退出码为 `0`。
+- Host 与 Client 都能推进到战斗后地图或休息点后的稳定状态。
+- `map.local_vote`、`map.player_votes`、节点投票信息可见。
+- `rest.options[*]` 对 `MEND` 暴露 `requires_target` 与有效目标索引。
 
-### C. 动态战斗状态门槛
+## 6. 已知限制
 
-这是正式发布前必须额外补验的一类高风险点。
+以下限制已确认存在，但不阻塞 `v0.7.0` 作为发布版本：
 
-必须覆盖：
+- 在多人奖励结算后，Host 侧调试命令 `run_console_command: room RestSite` 仍可能因为游戏本体同步状态触发内部错误。
+- 该问题只影响 debug 跳房验证，不影响正常 AI 接管下的多人主流程游玩。
 
-1. 战斗中临时费用变化
-2. 星星资源变化
-3. 星星 X 费卡
-4. 不可打出原因变化
+## 7. 打包门槛
 
-推荐样本：
+生成发布包：
 
-- `Bullet Time`
-- `Falling Star`
-- `Stardust`
-- 储君（`Regent`）开局
+```powershell
+powershell -ExecutionPolicy Bypass -File "<repo-root>/scripts/package-release.ps1" -Configuration Release
+```
 
-通过标准：
+发布目录与 zip 至少应包含：
 
-- `energy_cost` 能反映战斗中的临时修正
-- `star_cost` 能反映战斗中的临时修正
-- `costs_x` 只表示能量 X 费
-- `star_costs_x` 正确标记星星 X 费卡
-- `unplayable_reason` 会随星数 / 能量变化而刷新，例如 `not_enough_stars`
-
-### D. 奖励链路
-
-必须覆盖：
-
-1. `claim_reward`
-2. `choose_reward_card`
-3. `skip_reward_cards`
-4. `collect_rewards_and_proceed`
+- `mod/STS2AIAgent.dll`
+- `mod/STS2AIAgent.pck`
+- `mod/mod_id.json`
+- `mcp_server/`
+- `scripts/start-mcp-stdio.ps1`
+- `scripts/start-mcp-network.ps1`
+- `README.md`
+- `CHANGELOG.md`
+- `docs/release-readiness.md`
 
 通过标准：
 
-- 奖励列表与实际 UI 一致
-- 跳过卡牌不会卡死
-- 自动收集不会停在半中间状态
-
-### E. 宝箱链路
-
-必须覆盖：
-
-1. `open_chest`
-2. `choose_treasure_relic`
-3. `proceed`
-
-通过标准：
-
-- 选 relic 后状态变化正确
-- 不会把“已开箱但未选 relic”误判成可直接离开
-
-### F. 事件链路
-
-必须覆盖：
-
-1. 普通事件选项
-2. `event.is_finished = true` 后的 proceed 选项
-3. 至少一个“事件 -> 战斗 -> 事件 / 地图”的嵌套流程
-
-通过标准：
-
-- 事件选项列表会随事件推进刷新
-- 嵌套战斗时不会保留旧事件引用
-
-### G. 休息点链路
-
-必须覆盖：
-
-1. `choose_rest_option` 走 `HEAL`
-2. `choose_rest_option` 走 `SMITH`
-3. `select_deck_card` 选择升级牌
-4. `proceed`
-
-通过标准：
-
-- `SMITH` 不会让 HTTP 调用卡死
-- 选牌后可回到 `REST` 并继续离开
-
-### H. 商店链路
-
-必须覆盖：
-
-1. `open_shop_inventory`
-2. `buy_card`
-3. `buy_relic`
-4. `buy_potion`
-5. `remove_card_at_shop`
-6. `select_deck_card`
-7. `close_shop_inventory`
-8. `proceed`
-
-通过标准：
-
-- 外层房间与内层库存状态切换准确
-- 删牌链路不会卡在中间
-- 购买后价格、金币、库存状态同步
-
-### I. 收尾链路
-
-必须覆盖：
-
-1. 进入 `GAME_OVER`
-2. 读取 `game_over`
-3. `return_to_main_menu`
-
-通过标准：
-
-- `game_over` 字段不为 `null`
-- 可以稳定回到主菜单
-
-## 5. 文档与易用性门槛
-
-以下文档必须与代码一致：
-
-- [api.md](../docs/api.md)
-- [roadmap-current.md](../docs/roadmap-current.md)
-- [phase-4c-shop.md](../docs/phase-4c-shop.md)
-- [phase-5-full-chain.md](../docs/phase-5-full-chain.md)
-- [phase-6-validation-template.md](../docs/phase-6-validation-template.md)
-- [phase-6-validation-2026-03-11.md](../docs/phase-6-validation-2026-03-11.md)
-- [mcp_server/README.md](../mcp_server/README.md)
-
-通过标准：
-
-- 不再出现“代码已实现，但文档仍写未实现 / null”
-- debug 工具默认关闭的策略写清
-- 动态费用与星星 X 费字段写清
-- 推荐 skill 和状态优先调用策略写清
-
-## 6. 发布前最后确认
-
-全部满足后，才算进入“可正式发布”状态：
-
-- [ ] 静态检查通过
-- [ ] Release 构建可安装
-- [ ] MCP server 可启动
-- [ ] debug 工具默认关闭 / 显式开启均已验证
-- [ ] 关键房间与战斗全链路实机通过
-- [ ] 动态费用 / 星星费 / 星星 X 费已专项验证
-- [ ] Modal / FTUE 不再阻塞自动流程
-- [ ] Game Over 可正确收尾
-- [ ] 文档已同步
-- [ ] 已产出完整的 Phase 6 实机记录
-- [ ] 已记录已知限制与剩余风险
-
-如果其中任意一项失败，就还不能叫“正式发布完成”，笨蛋。
+- release 目录生成成功。
+- zip 生成成功。
+- 根目录文档与脚本齐全，可直接交付给最终用户。

@@ -1,18 +1,47 @@
-# 更新日志
+# Changelog
 
-本文档记录 `STS2 AI Agent` 的重要发布变更。
+## v0.7.0 - 2026-04-30
+
+### Highlights
+
+- Multiplayer AI control is now release-ready for the main play loop.
+- Rest-site `MEND` now works in multiplayer without hanging the HTTP request.
+- Multiplayer validation and startup scripts were hardened for repeatable release testing.
+
+### Added
+
+- Rest-site options now expose `requires_target`, `target_index_space`, and `valid_target_indices` so AI clients can resolve multiplayer-only targets correctly.
+- Map payloads now expose local and remote vote state, including per-node vote counts and voter IDs.
+- Multiplayer validation now covers lobby setup, intro resolution, combat progression, rewards, and multiplayer `MEND` target handling.
+
+### Changed
+
+- `choose_rest_option` now accepts `target_index` for targetable rest actions such as multiplayer `MEND`.
+- The PowerShell startup flow now waits for both `/health` and `/state` and prints progress while the game boots.
+- Release packaging now includes the changelog alongside the packaged mod and MCP server files.
+
+### Fixed
+
+- Fixed host multiplayer map voting so local votes register correctly instead of being lost on the first click.
+- Fixed multiplayer map state visibility so both sides can inspect local votes, remote votes, and node vote counts.
+- Fixed multiplayer `MEND` so missing `target_index` returns an immediate structured `invalid_target` error instead of timing out.
+- Fixed multiplayer validation timing issues around lobby modals, intro transitions, combat readiness, and turn rollover.
+- Fixed the PowerShell multiplayer test harness so it no longer relies on brittle redirected child shells to start game sessions.
+
+### Compatibility
+
+- Verified against Slay the Spire 2 `v0.103.2`.
+- Mod health endpoint reports protocol version `2026-03-11-v1`.
+
+### Known limitations
+
+- A host-side debug `room RestSite` jump can still fail after multiplayer reward resolution because of the base game's combat sync state. This does not block normal AI-driven multiplayer play and is treated as a debug-only limitation during release validation.
 
 ## v0.6.1 - 2026-04-25
 
-### 中文更新日志
-- 新增 Mod `/data/*` 实时元数据导出接口，覆盖卡牌、遗物、敌人、药水、事件、能力与角色数据。
-- MCP Server 改为通过 Mod API 按 collection 懒加载元数据，并在进程内缓存，避免运行时读取本地 fallback JSON。
-- 修复游戏数据工具的错误处理与索引逻辑，未知 collection 和数据不可用时会返回结构化错误。
-- 补充并通过相关单元测试、工具 profile 校验、Mod 加载验证、状态不变量验证与实机联调验证。
+### Highlights
 
-### 兼容性说明
-- 已适配当前验证通过的最新游戏版本：`v0.103.2`。
-
-### 完整变更
-- [Full Changelog](https://github.com/CharTyr/STS2-Agent/compare/v0.6.0...v0.6.1)
+- Added live `/data/*` export endpoints for cards, relics, monsters, potions, events, powers, and characters.
+- Switched MCP game-data lookup to the live Mod API with in-process caching.
+- Improved error handling for game-data tools and synchronized the MCP tool profile coverage.
 

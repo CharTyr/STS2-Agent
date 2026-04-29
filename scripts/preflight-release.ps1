@@ -37,8 +37,11 @@ $buildScript = Join-Path $ProjectRoot "scripts/build-mod.ps1"
 $testScript = Join-Path $ProjectRoot "scripts/test-mod-load.ps1"
 $stateInvariantScript = Join-Path $ProjectRoot "scripts/test-state-invariants.ps1"
 $mcpToolProfileScript = Join-Path $ProjectRoot "scripts/test-mcp-tool-profile.ps1"
+$multiplayerFlowScript = Join-Path $ProjectRoot "scripts/test-multiplayer-lobby-flow.ps1"
+$changelogPath = Join-Path $ProjectRoot "CHANGELOG.md"
 $releaseDoc = Join-Path $ProjectRoot "docs/release-readiness.md"
 $requiredDocs = @(
+    $changelogPath,
     (Join-Path $ProjectRoot "docs/api.md"),
     (Join-Path $ProjectRoot "docs/roadmap-current.md"),
     (Join-Path $ProjectRoot "docs/phase-4c-shop.md"),
@@ -89,4 +92,5 @@ Write-Host "  1. powershell -ExecutionPolicy Bypass -File `"$buildScript`" -Conf
 Write-Host "  2. powershell -ExecutionPolicy Bypass -File `"$testScript`" -DeepCheck"
 Write-Host "  3. powershell -ExecutionPolicy Bypass -File `"$stateInvariantScript`""
 Write-Host "  4. powershell -ExecutionPolicy Bypass -File `"$mcpToolProfileScript`" -RepoRoot `"$ProjectRoot`""
-Write-Host "  5. Follow the manual checklist in `"$releaseDoc`""
+Write-Host "  5. powershell -ExecutionPolicy Bypass -File `"$multiplayerFlowScript`""
+Write-Host "  6. Follow the manual checklist in `"$releaseDoc`""

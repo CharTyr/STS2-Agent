@@ -443,10 +443,11 @@ class Sts2Client:
             },
         )
 
-    def choose_rest_option(self, option_index: int) -> dict[str, Any]:
+    def choose_rest_option(self, option_index: int, target_index: int | None = None) -> dict[str, Any]:
         return self.execute_action(
             "choose_rest_option",
             option_index=option_index,
+            target_index=target_index,
             client_context={
                 "source": "mcp",
                 "tool_name": "choose_rest_option",

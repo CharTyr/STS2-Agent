@@ -7,6 +7,7 @@ using MegaCrit.Sts2.Core.Entities.Merchant;
 using MegaCrit.Sts2.Core.Entities.Multiplayer;
 using MegaCrit.Sts2.Core.Entities.Players;
 using MegaCrit.Sts2.Core.Entities.Potions;
+using MegaCrit.Sts2.Core.Entities.RestSite;
 using MegaCrit.Sts2.Core.Context;
 using MegaCrit.Sts2.Core.DevConsole;
 using MegaCrit.Sts2.Core.GameActions;
@@ -761,6 +762,7 @@ internal static class GameActionService
 
         var selectedNode = availableNodes[request.option_index.Value];
         var roomEntered = false;
+        var isMultiplayerVote = runState != null && RunManager.Instance.NetService.Type.IsMultiplayer() && runState.Players.Count > 1;
 
         void OnRoomEntered()
         {
@@ -770,15 +772,38 @@ internal static class GameActionService
         RunManager.Instance.RoomEntered += OnRoomEntered;
         try
         {
-            selectedNode.ForceClick();
-            var stable = await WaitForMapTransitionAsync(TimeSpan.FromSeconds(10), () => roomEntered);
+            if (isMultiplayerVote)
+            {
+                var mapScreen = NMapScreen.Instance
+                    ?? currentScreen as NMapScreen
+                    ?? throw new ApiException(503, "state_unavailable", "Map screen is unavailable.", new
+                    {
+                        action = "choose_map_node",
+                        screen
+                    }, retryable: true);
+
+                mapScreen.OnMapPointSelectedLocally(selectedNode);
+            }
+            else
+            {
+                selectedNode.ForceClick();
+            }
+
+            var stable = isMultiplayerVote
+                ? await WaitForMultiplayerMapVoteOrTransitionAsync(selectedNode.Point.coord, TimeSpan.FromSeconds(10), () => roomEntered)
+                : await WaitForMapTransitionAsync(TimeSpan.FromSeconds(10), () => roomEntered);
+            var roomStarted = HasEnteredMapDestination(() => roomEntered);
 
             return new ActionResponsePayload
             {
                 action = "choose_map_node",
                 status = stable ? "completed" : "pending",
                 stable = stable,
-                message = stable ? "Action completed." : "Action queued but state is still transitioning.",
+                message = stable
+                    ? roomStarted
+                        ? "Action completed."
+                        : "Map vote submitted. Waiting for other players to finish choosing."
+                    : "Action queued but state is still transitioning.",
                 state = GameStateService.BuildStatePayload()
             };
         }
@@ -786,6 +811,30 @@ internal static class GameActionService
         {
             RunManager.Instance.RoomEntered -= OnRoomEntered;
         }
+    }
+
+    private static async Task<bool> WaitForMultiplayerMapVoteOrTransitionAsync(
+        MapCoord targetCoord,
+        TimeSpan timeout,
+        Func<bool> roomEntered)
+    {
+        if (NGame.Instance == null)
+        {
+            return false;
+        }
+
+        var deadline = DateTime.UtcNow + timeout;
+        while (DateTime.UtcNow < deadline)
+        {
+            await NGame.Instance.ToSignal(NGame.Instance.GetTree(), SceneTree.SignalName.ProcessFrame);
+
+            if (HasEnteredMapDestination(roomEntered) || IsLocalMapVoteRegistered(targetCoord))
+            {
+                return true;
+            }
+        }
+
+        return HasEnteredMapDestination(roomEntered) || IsLocalMapVoteRegistered(targetCoord);
     }
 
     private static async Task<bool> WaitForMapTransitionAsync(TimeSpan timeout, Func<bool> roomEntered)
@@ -835,6 +884,21 @@ internal static class GameActionService
 
         var runState = RunManager.Instance.DebugOnlyGetState();
         return runState?.CurrentRoom is not null && runState.CurrentRoom is not MapRoom;
+    }
+
+    private static bool IsLocalMapVoteRegistered(MapCoord targetCoord)
+    {
+        var runState = RunManager.Instance.DebugOnlyGetState();
+        var localPlayer = GameStateService.GetLocalPlayer(runState);
+        if (runState == null || localPlayer == null)
+        {
+            return false;
+        }
+
+        var vote = RunManager.Instance.MapSelectionSynchronizer.GetVote(localPlayer);
+        return vote.HasValue &&
+            vote.Value.coord.row == targetCoord.row &&
+            vote.Value.coord.col == targetCoord.col;
     }
 
     private static bool DoesScreenMatchCurrentRoom(IScreenContext? currentScreen, AbstractRoom? currentRoom)
@@ -2153,7 +2217,7 @@ internal static class GameActionService
             status = stable ? "completed" : "pending",
             stable = stable,
             message = stable ? "Action completed." : "Action queued but state is still transitioning.",
-            state = bundleState
+            state = bundleState ?? new GameStatePayload()
         };
     }
 
@@ -2227,7 +2291,7 @@ internal static class GameActionService
             status = stable ? "completed" : "pending",
             stable = stable,
             message = stable ? "Action completed." : "Action queued but state is still transitioning.",
-            state = state
+            state = state ?? new GameStatePayload()
         };
     }
 
@@ -2273,14 +2337,39 @@ internal static class GameActionService
             });
         }
 
-        // Fire-and-forget: ChooseLocalOption returns Task<bool> which for SMITH
-        // blocks until card selection completes. We must not await it, otherwise
-        // the HTTP response would be stuck waiting for the AI to interact with
-        // the card selection screen.
-        ObserveBackgroundResult(
-            RunManager.Instance.RestSiteSynchronizer.ChooseLocalOption(request.option_index.Value),
-            "choose_rest_option");
-        var stable = await WaitForRestOptionTransitionAsync(TimeSpan.FromSeconds(10));
+        var selectedOption = options[request.option_index.Value];
+        var selectedOptionId = selectedOption.OptionId ?? string.Empty;
+        var runState = RunManager.Instance.DebugOnlyGetState();
+        var localPlayer = GameStateService.GetLocalPlayer(runState);
+        var requiresTarget = GameStateService.RestOptionRequiresTarget(selectedOption, runState, localPlayer);
+        Player? targetPlayer = null;
+        if (requiresTarget)
+        {
+            targetPlayer = ResolveRestOptionTarget(request, runState, localPlayer, selectedOption);
+        }
+
+        var chooseTask = RunManager.Instance.RestSiteSynchronizer.ChooseLocalOption(request.option_index.Value);
+
+        bool stable;
+        if (requiresTarget)
+        {
+            stable = await CompleteRestOptionTargetSelectionAsync(chooseTask, targetPlayer!, TimeSpan.FromSeconds(10));
+        }
+        else if (selectedOptionId.Equals("SMITH", StringComparison.OrdinalIgnoreCase))
+        {
+            // SMITH keeps the task open until the follow-up card selection
+            // completes. Return as soon as the transition into that screen is visible.
+            ObserveBackgroundResult(chooseTask, "choose_rest_option");
+            stable = await WaitForRestOptionTransitionAsync(TimeSpan.FromSeconds(10));
+        }
+        else
+        {
+            stable = await chooseTask;
+            if (!stable)
+            {
+                stable = await WaitForRestOptionTransitionAsync(TimeSpan.FromSeconds(2));
+            }
+        }
 
         return new ActionResponsePayload
         {
@@ -2290,6 +2379,131 @@ internal static class GameActionService
             message = stable ? "Action completed." : "Action queued but state is still transitioning.",
             state = GameStateService.BuildStatePayload()
         };
+    }
+
+    private static Player ResolveRestOptionTarget(
+        ActionRequest request,
+        RunState? runState,
+        Player? localPlayer,
+        RestSiteOption selectedOption)
+    {
+        var targetIndexSpace = GameStateService.GetRestOptionTargetIndexSpace(selectedOption, runState, localPlayer) ?? "run.players";
+        var validTargetIndices = GameStateService.GetRestOptionTargetIndices(runState, localPlayer, allowSelf: false);
+        if (request.target_index == null)
+        {
+            throw new ApiException(409, "invalid_target", "This rest option requires target_index.", new
+            {
+                action = "choose_rest_option",
+                option_index = request.option_index,
+                option_id = selectedOption.OptionId,
+                target_index_space = targetIndexSpace,
+                valid_target_indices = validTargetIndices
+            });
+        }
+
+        if (!validTargetIndices.Contains(request.target_index.Value))
+        {
+            throw new ApiException(409, "invalid_target", "target_index is out of range for run.players[].", new
+            {
+                action = "choose_rest_option",
+                option_index = request.option_index,
+                option_id = selectedOption.OptionId,
+                target_index = request.target_index,
+                target_index_space = targetIndexSpace,
+                valid_target_indices = validTargetIndices
+            });
+        }
+
+        return GameStateService.ResolveRunPlayerTarget(runState, request.target_index.Value)
+            ?? throw new ApiException(409, "invalid_target", "target_index is out of range for run.players[].", new
+            {
+                action = "choose_rest_option",
+                option_index = request.option_index,
+                option_id = selectedOption.OptionId,
+                target_index = request.target_index,
+                target_index_space = targetIndexSpace,
+                valid_target_indices = validTargetIndices
+            });
+    }
+
+    private static async Task<bool> CompleteRestOptionTargetSelectionAsync(
+        Task<bool> chooseTask,
+        Player targetPlayer,
+        TimeSpan timeout)
+    {
+        var targetManager = await WaitForTargetManagerSelectionAsync(timeout);
+        if (targetManager == null)
+        {
+            ObserveBackgroundResult(chooseTask, "choose_rest_option");
+            return false;
+        }
+
+        var targetNode = ResolveRestSiteTargetNode(targetPlayer)
+            ?? throw new ApiException(503, "state_unavailable", "Rest-site target node is unavailable.", new
+            {
+                action = "choose_rest_option",
+                target_player_id = targetPlayer.NetId.ToString()
+            }, retryable: true);
+
+        targetManager.OnNodeHovered(targetNode);
+        targetManager.Call(NTargetManager.MethodName.FinishTargeting, false);
+
+        var result = await WaitForTaskResultAsync(chooseTask, timeout);
+        if (result != true)
+        {
+            if (result == null)
+            {
+                ObserveBackgroundResult(chooseTask, "choose_rest_option");
+            }
+
+            return false;
+        }
+
+        return await WaitForRestOptionTransitionAsync(TimeSpan.FromSeconds(2)) || result.Value;
+    }
+
+    private static async Task<NTargetManager?> WaitForTargetManagerSelectionAsync(TimeSpan timeout)
+    {
+        var deadline = DateTime.UtcNow + timeout;
+        while (DateTime.UtcNow < deadline)
+        {
+            var targetManager = NTargetManager.Instance;
+            if (targetManager != null && GodotObject.IsInstanceValid(targetManager) && targetManager.IsInSelection)
+            {
+                return targetManager;
+            }
+
+            await WaitForNextFrameAsync();
+        }
+
+        var finalTargetManager = NTargetManager.Instance;
+        return finalTargetManager != null && GodotObject.IsInstanceValid(finalTargetManager) && finalTargetManager.IsInSelection
+            ? finalTargetManager
+            : null;
+    }
+
+    private static Node? ResolveRestSiteTargetNode(Player targetPlayer)
+    {
+        var restSiteRoom = NRestSiteRoom.Instance;
+        if (restSiteRoom == null || !GodotObject.IsInstanceValid(restSiteRoom))
+        {
+            return null;
+        }
+
+        var character = restSiteRoom.GetCharacterForPlayer(targetPlayer)
+            ?? restSiteRoom.Characters.FirstOrDefault(candidate => candidate.Player.NetId == targetPlayer.NetId);
+        return character != null && GodotObject.IsInstanceValid(character) ? character : null;
+    }
+
+    private static async Task<bool?> WaitForTaskResultAsync(Task<bool> task, TimeSpan timeout)
+    {
+        var completedTask = await Task.WhenAny(task, Task.Delay(timeout));
+        if (completedTask != task)
+        {
+            return null;
+        }
+
+        return await task;
     }
 
     /// <summary>

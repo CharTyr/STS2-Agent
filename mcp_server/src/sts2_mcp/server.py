@@ -54,7 +54,7 @@ _LEGACY_ACTION_TOOLS: tuple[ActionToolSpec, ...] = (
     ActionToolSpec("choose_capstone_option", "option_index", "Choose an option on the capstone selection screen."),
     ActionToolSpec("choose_bundle", "option_index", "Choose a card bundle on the bundle selection screen."),
     ActionToolSpec("confirm_bundle", "no_args", "Confirm the selected card bundle."),
-    ActionToolSpec("choose_rest_option", "option_index", "Choose a rest-site option."),
+    ActionToolSpec("choose_rest_option", "option_target", "Choose a rest-site option. Some multiplayer rest options also require target_index."),
     ActionToolSpec("open_shop_inventory", "no_args", "Open the merchant inventory."),
     ActionToolSpec("close_shop_inventory", "no_args", "Close the merchant inventory."),
     ActionToolSpec("buy_card", "option_index", "Buy a card from the open merchant inventory."),
@@ -750,9 +750,9 @@ def create_server(client: Sts2Client | None = None, tool_profile: str | None = N
             - Use `card_index` for `play_card`.
             - Use `option_index` for map, reward, shop, event, rest, selection,
               and multiplayer-lobby actions.
-            - Use `target_index` only when the latest state marks a card or potion as `requires_target=true`.
+            - Use `target_index` when the latest state marks a card, potion, or rest option as `requires_target=true`.
             - Read `target_index_space` and `valid_target_indices` from state to know whether `target_index`
-              refers to `combat.enemies[]` or `combat.players[]`.
+              refers to `combat.enemies[]`, `combat.players[]`, or `run.players[]`.
             - `run_console_command` is intentionally excluded from this compact tool.
         """
         normalized = action.strip().lower()

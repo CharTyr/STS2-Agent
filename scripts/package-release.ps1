@@ -109,6 +109,7 @@ Copy-Item -Path (Join-Path $stagingModDir "STS2AIAgent.pck") -Destination (Join-
 Copy-Item -Path (Join-Path $stagingModDir "mod_id.json") -Destination (Join-Path $modOutputDir "mod_id.json") -Force
 
 Copy-Item -Path (Join-Path $ProjectRoot "README.md") -Destination (Join-Path $releaseDir "README.md") -Force
+Copy-Item -Path (Join-Path $ProjectRoot "CHANGELOG.md") -Destination (Join-Path $releaseDir "CHANGELOG.md") -Force
 Copy-Item -Path (Join-Path $mcpSourceDir "README.md") -Destination (Join-Path $mcpOutputDir "README.md") -Force
 Copy-Item -Path (Join-Path $mcpSourceDir "pyproject.toml") -Destination (Join-Path $mcpOutputDir "pyproject.toml") -Force
 Copy-Item -Path (Join-Path $mcpSourceDir "uv.lock") -Destination (Join-Path $mcpOutputDir "uv.lock") -Force

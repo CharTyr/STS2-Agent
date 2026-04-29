@@ -52,8 +52,8 @@ namespace STS2AIAgent.Game;
 
 internal static class GameStateService
 {
-    private const int StateVersion = 8;
-    private const int AgentViewVersion = 2;
+    private const int StateVersion = 9;
+    private const int AgentViewVersion = 3;
 
     public static GameStatePayload BuildStatePayload()
     {
@@ -74,7 +74,7 @@ internal static class GameStateService
         var chest = BuildChestPayload(currentScreen);
         var eventPayload = BuildEventPayload(currentScreen);
         var shop = BuildShopPayload(currentScreen);
-        var rest = BuildRestPayload(currentScreen);
+        var rest = BuildRestPayload(currentScreen, runState);
         var reward = BuildRewardPayload(currentScreen);
         var bundles = BuildBundlePayload(currentScreen);
         var modal = BuildModalPayload(currentScreen);
@@ -1654,6 +1654,53 @@ internal static class GameStateService
         return RequiresIndexedCardTarget(card.TargetType);
     }
 
+    public static bool RestOptionRequiresTarget(RestSiteOption option, RunState? runState, Player? localPlayer)
+    {
+        return runState != null &&
+            localPlayer != null &&
+            string.Equals(option.OptionId, "MEND", StringComparison.OrdinalIgnoreCase) &&
+            GetRestOptionTargetIndices(runState, localPlayer, allowSelf: false).Length > 0;
+    }
+
+    public static string? GetRestOptionTargetIndexSpace(RestSiteOption option, RunState? runState, Player? localPlayer)
+    {
+        return RestOptionRequiresTarget(option, runState, localPlayer) ? "run.players" : null;
+    }
+
+    public static int[] GetRestOptionTargetIndices(RunState? runState, Player? localPlayer, bool allowSelf)
+    {
+        if (runState == null || localPlayer == null)
+        {
+            return Array.Empty<int>();
+        }
+
+        return runState.Players
+            .OrderBy(runState.GetPlayerSlotIndex)
+            .Select((player, index) => new { player, index })
+            .Where(entry => entry.player.Creature.IsAlive && (allowSelf || entry.player.NetId != localPlayer.NetId))
+            .Select(entry => entry.index)
+            .ToArray();
+    }
+
+    public static Player? ResolveRunPlayerTarget(RunState? runState, int targetIndex)
+    {
+        if (runState == null || targetIndex < 0)
+        {
+            return null;
+        }
+
+        var players = runState.Players
+            .OrderBy(runState.GetPlayerSlotIndex)
+            .ToArray();
+        if (targetIndex >= players.Length)
+        {
+            return null;
+        }
+
+        var player = players[targetIndex];
+        return player.Creature.IsAlive ? player : null;
+    }
+
     public static bool IsCardPlayable(CardModel card)
     {
         return card.CanPlay(out _, out _) && IsCardTargetSupported(card);
@@ -2037,6 +2084,11 @@ internal static class GameStateService
 
     private static RunPayload? BuildRunPayload(IScreenContext? currentScreen, CombatState? combatState, RunState? runState)
     {
+        if (runState == null)
+        {
+            return null;
+        }
+
         var player = LocalContext.GetMe(runState);
         if (player == null)
         {
@@ -2394,9 +2446,15 @@ internal static class GameStateService
             options = rest.options.Select(option => new
             {
                 i = option.index,
-                line = string.IsNullOrWhiteSpace(option.description)
+                line = (string.IsNullOrWhiteSpace(option.description)
                     ? option.title
-                    : $"{option.title}: {option.description}",
+                    : $"{option.title}: {option.description}") +
+                    (option.requires_target
+                        ? $" [target {option.target_index_space}: {string.Join(",", option.valid_target_indices)}]"
+                        : string.Empty),
+                requires_target = option.requires_target,
+                target_index_space = option.target_index_space,
+                valid_target_indices = option.valid_target_indices,
                 enabled = option.is_enabled
             }).ToArray()
         };
@@ -2412,10 +2470,24 @@ internal static class GameStateService
         return new
         {
             current = map.current_node == null ? null : $"{map.current_node.row},{map.current_node.col}",
+            local_vote = map.local_vote == null ? null : $"{map.local_vote.row},{map.local_vote.col}",
+            votes = map.player_votes
+                .Where(vote => vote.coord != null)
+                .Select(vote => new
+                {
+                    player_id = vote.player_id,
+                    local = vote.is_local,
+                    coord = $"{vote.coord!.row},{vote.coord.col}"
+                }).ToArray(),
             options = map.available_nodes.Select(node => new
             {
                 i = node.index,
-                line = $"{node.node_type} ({node.row},{node.col})"
+                line = $"{node.node_type} ({node.row},{node.col})" +
+                    (node.has_local_vote
+                        ? " [local vote]"
+                        : node.vote_count > 0
+                            ? $" [votes:{node.vote_count}]"
+                            : string.Empty)
             }).ToArray()
         };
     }
@@ -3167,6 +3239,12 @@ internal static class GameStateService
         var availableCoords = new HashSet<MapCoord>(availableNodes.Select(node => node.Point.coord));
         var visitedCoords = new HashSet<MapCoord>(runState!.VisitedMapCoords);
         var allMapPoints = GetAllMapPoints(runState.Map);
+        var playerVotes = BuildMapPlayerVotePayloads(runState);
+        var localVote = playerVotes.FirstOrDefault(vote => vote.is_local)?.coord;
+        var votesByCoord = playerVotes
+            .Where(vote => vote.coord != null)
+            .GroupBy(vote => $"{vote.coord!.row},{vote.coord.col}")
+            .ToDictionary(group => group.Key, group => group.ToArray());
 
         return new MapPayload
         {
@@ -3190,7 +3268,9 @@ internal static class GameStateService
                     runState.Map.BossMapPoint.coord,
                     runState.Map.SecondBossMapPoint?.coord))
                 .ToArray(),
-            available_nodes = availableNodes.Select((node, index) => BuildMapNodePayload(node, index)).ToArray()
+            available_nodes = availableNodes.Select((node, index) => BuildMapNodePayload(node, index, votesByCoord)).ToArray(),
+            local_vote = localVote,
+            player_votes = playerVotes
         };
     }
 
@@ -3363,7 +3443,7 @@ internal static class GameStateService
         }
     }
 
-    private static RestPayload? BuildRestPayload(IScreenContext? currentScreen)
+    private static RestPayload? BuildRestPayload(IScreenContext? currentScreen, RunState? runState)
     {
         if (currentScreen is not NRestSiteRoom)
         {
@@ -3373,6 +3453,7 @@ internal static class GameStateService
         try
         {
             var options = RunManager.Instance.RestSiteSynchronizer.GetLocalOptions();
+            var localPlayer = GetLocalPlayer(runState);
             if (options == null)
             {
                 return new RestPayload
@@ -3383,13 +3464,33 @@ internal static class GameStateService
 
             return new RestPayload
             {
-                options = options.Select((opt, i) => new RestOptionPayload
+                options = options.Select((opt, i) =>
                 {
-                    index = i,
-                    option_id = opt.OptionId ?? "unknown",
-                    title = opt.Title?.GetFormattedText() ?? "",
-                    description = opt.Description?.GetFormattedText() ?? "",
-                    is_enabled = opt.IsEnabled
+                    var requiresTarget = RestOptionRequiresTarget(opt, runState, localPlayer);
+                    var validTargetIndices = requiresTarget
+                        ? GetRestOptionTargetIndices(runState, localPlayer, allowSelf: false)
+                        : Array.Empty<int>();
+
+                    return new RestOptionPayload
+                    {
+                        index = i,
+                        option_id = opt.OptionId ?? "unknown",
+                        title = opt.Title?.GetFormattedText() ?? "",
+                        description = opt.Description?.GetFormattedText() ?? "",
+                        is_enabled = opt.IsEnabled,
+                        requires_target = requiresTarget,
+                        target_index_space = requiresTarget
+                            ? GetRestOptionTargetIndexSpace(opt, runState, localPlayer)
+                            : null,
+                        valid_target_indices = validTargetIndices,
+                        valid_target_player_ids = requiresTarget
+                            ? validTargetIndices
+                                .Select(index => ResolveRunPlayerTarget(runState, index))
+                                .Where(player => player != null)
+                                .Select(player => NetIdToString(player!.NetId))
+                                .ToArray()
+                            : Array.Empty<string>()
+                    };
                 }).ToArray()
             };
         }
@@ -3830,15 +3931,26 @@ internal static class GameStateService
         };
     }
 
-    private static MapNodePayload BuildMapNodePayload(NMapPoint node, int index)
+    private static MapNodePayload BuildMapNodePayload(
+        NMapPoint node,
+        int index,
+        IReadOnlyDictionary<string, MapPlayerVotePayload[]>? votesByCoord = null)
     {
+        var voteKey = $"{node.Point.coord.row},{node.Point.coord.col}";
+        votesByCoord ??= new Dictionary<string, MapPlayerVotePayload[]>();
+        votesByCoord.TryGetValue(voteKey, out var voters);
+        voters ??= Array.Empty<MapPlayerVotePayload>();
+
         return new MapNodePayload
         {
             index = index,
             row = node.Point.coord.row,
             col = node.Point.coord.col,
             node_type = node.Point.PointType.ToString(),
-            state = node.State.ToString()
+            state = node.State.ToString(),
+            vote_count = voters.Length,
+            has_local_vote = voters.Any(voter => voter.is_local),
+            voted_player_ids = voters.Select(voter => voter.player_id).ToArray()
         };
     }
 
@@ -3889,6 +4001,25 @@ internal static class GameStateService
             row = coord.Value.row,
             col = coord.Value.col
         };
+    }
+
+    private static MapPlayerVotePayload[] BuildMapPlayerVotePayloads(RunState runState)
+    {
+        var localPlayer = GetLocalPlayer(runState);
+        return runState.Players
+            .Select(player =>
+            {
+                var vote = RunManager.Instance.MapSelectionSynchronizer.GetVote(player);
+                return new MapPlayerVotePayload
+                {
+                    player_id = NetIdToString(player.NetId),
+                    slot_index = runState.GetPlayerSlotIndex(player),
+                    is_local = localPlayer != null && player.NetId == localPlayer.NetId,
+                    coord = BuildMapCoordPayload(vote?.coord)
+                };
+            })
+            .OrderBy(vote => vote.slot_index)
+            .ToArray();
     }
 
     private static IReadOnlyList<MapPoint> GetAllMapPoints(ActMap map)
@@ -5122,6 +5253,10 @@ internal sealed class MapPayload
     public MapGraphNodePayload[] nodes { get; init; } = Array.Empty<MapGraphNodePayload>();
 
     public MapNodePayload[] available_nodes { get; init; } = Array.Empty<MapNodePayload>();
+
+    public MapCoordPayload? local_vote { get; init; }
+
+    public MapPlayerVotePayload[] player_votes { get; init; } = Array.Empty<MapPlayerVotePayload>();
 }
 
 internal sealed class SelectionPayload
@@ -5315,6 +5450,14 @@ internal sealed class RestOptionPayload
     public string description { get; init; } = string.Empty;
 
     public bool is_enabled { get; init; }
+
+    public bool requires_target { get; init; }
+
+    public string? target_index_space { get; init; }
+
+    public int[] valid_target_indices { get; init; } = Array.Empty<int>();
+
+    public string[] valid_target_player_ids { get; init; } = Array.Empty<string>();
 }
 
 internal sealed class ShopPayload
@@ -5438,6 +5581,23 @@ internal sealed class MapNodePayload
     public string node_type { get; init; } = string.Empty;
 
     public string state { get; init; } = string.Empty;
+
+    public int vote_count { get; init; }
+
+    public bool has_local_vote { get; init; }
+
+    public string[] voted_player_ids { get; init; } = Array.Empty<string>();
+}
+
+internal sealed class MapPlayerVotePayload
+{
+    public string player_id { get; init; } = string.Empty;
+
+    public int slot_index { get; init; }
+
+    public bool is_local { get; init; }
+
+    public MapCoordPayload? coord { get; init; }
 }
 
 internal sealed class MapGraphNodePayload

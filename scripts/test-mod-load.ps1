@@ -2,9 +2,11 @@ param(
     [string]$ExePath = "C:/Program Files (x86)/Steam/steamapps/common/Slay the Spire 2/SlayTheSpire2.exe",
     [string]$AppManifestPath = "C:/Program Files (x86)/Steam/steamapps/appmanifest_2868840.acf",
     [string]$AppId = "",
-    [int]$Attempts = 15,
-    [int]$DelaySeconds = 2,
-    [switch]$DeepCheck
+    [int]$Attempts = 180,
+    [int]$DelaySeconds = 1,
+    [switch]$DeepCheck,
+    [switch]$EnableDebugActions,
+    [int]$ApiPort = 8080
 )
 
 $ErrorActionPreference = "Stop"
@@ -56,13 +58,9 @@ function Invoke-JsonEndpoint {
         [string]$Uri
     )
 
-    $response = Invoke-WebRequest -Uri $Uri -UseBasicParsing -TimeoutSec 2
-    $content = $response.Content
-
     return [pscustomobject]@{
-        StatusCode = $response.StatusCode
-        Content = $content
-        Json = $content | ConvertFrom-Json
+        StatusCode = 200
+        Json = Invoke-RestMethod -Uri $Uri -TimeoutSec 2
     }
 }
 
@@ -72,6 +70,9 @@ $logPath = Join-Path $env:APPDATA "SlayTheSpire2/logs/godot.log"
 $resolvedAppId = Resolve-AppId -ExplicitAppId $AppId -ManifestPath $AppManifestPath
 $stateCheck = $null
 $actionsCheck = $null
+$proc = $null
+$baseUrl = "http://127.0.0.1:$ApiPort"
+$startSessionScript = Join-Path $PSScriptRoot "start-game-session.ps1"
 
 if (-not (Test-Path $appIdFile)) {
     Set-Content -Path $appIdFile -Value $resolvedAppId -Encoding ascii -NoNewline
@@ -84,32 +85,35 @@ if (-not (Test-Path $appIdFile)) {
     }
 }
 
-$proc = Start-Process -FilePath $ExePath -PassThru
 $health = $null
 
 try {
-    for ($i = 0; $i -lt $Attempts; $i++) {
-        Start-Sleep -Seconds $DelaySeconds
+    $startArgs = @(
+        "-ExecutionPolicy", "Bypass",
+        "-File", $startSessionScript,
+        "-ExePath", $ExePath,
+        "-Attempts", $Attempts,
+        "-DelaySeconds", $DelaySeconds,
+        "-ApiPort", $ApiPort
+    )
 
-        try {
-            $resp = Invoke-WebRequest -Uri "http://127.0.0.1:8080/health" -UseBasicParsing -TimeoutSec 2
-            $health = $resp.Content
-            break
-        } catch {
-        }
-
-        if ($proc.HasExited) {
-            break
-        }
+    if ($EnableDebugActions) {
+        $startArgs += "-EnableDebugActions"
     }
 
-    if ($health -and $DeepCheck) {
-        $stateCheck = Invoke-JsonEndpoint -Uri "http://127.0.0.1:8080/state"
-        $actionsCheck = Invoke-JsonEndpoint -Uri "http://127.0.0.1:8080/actions/available"
+    $sessionOutput = @(powershell @startArgs)
+    $sessionJson = $sessionOutput | Select-Object -Last 1
+    $session = $sessionJson | ConvertFrom-Json
+    $proc = Get-Process -Id $session.pid -ErrorAction Stop
+    $health = $session.health
+
+    if ($DeepCheck) {
+        $stateCheck = Invoke-JsonEndpoint -Uri ($baseUrl + "/state")
+        $actionsCheck = Invoke-JsonEndpoint -Uri ($baseUrl + "/actions/available")
     }
 }
 finally {
-    if (-not $proc.HasExited) {
+    if ($null -ne $proc -and -not $proc.HasExited) {
         Stop-Process -Id $proc.Id -Force
     }
 }
