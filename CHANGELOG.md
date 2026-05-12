@@ -1,5 +1,12 @@
 # Changelog
 
+## v0.7.1 - 2026-05-12
+
+### Fixed
+
+- Fixed `run.boss_id` in the Mod `/state` payload so active runs now expose the current act boss ID instead of returning `null`.
+- Switched boss resolution to `RunState.Act.BossEncounter.Id.Entry` with a compatibility fallback for older runtime layouts.
+
 ## v0.7.0 - 2026-04-30
 
 ### Highlights
@@ -44,4 +51,3 @@
 - Added live `/data/*` export endpoints for cards, relics, monsters, potions, events, powers, and characters.
 - Switched MCP game-data lookup to the live Mod API with in-process caching.
 - Improved error handling for game-data tools and synchronized the MCP tool profile coverage.
-

@@ -2111,7 +2111,7 @@ internal static class GameStateService
             base_orb_slots = player.BaseOrbSlotCount,
             act_id = TryGetMemberValue(runState, "CurrentActIndex")?.ToString()
                 ?? TryGetMemberValue(runState, "ActId")?.ToString(),
-            boss_id = TryGetMemberValue(runState, "BossId")?.ToString(),
+            boss_id = ResolveBossId(runState),
             deck = player.Deck.Cards.Select((card, index) => BuildDeckCardPayload(card, index)).ToArray(),
             relics = player.Relics.Select((relic, index) => BuildRunRelicPayload(relic, index)).ToArray(),
             players = runState!.Players
@@ -2121,6 +2121,16 @@ internal static class GameStateService
             potions = player.PotionSlots.Select((potion, index) =>
                 BuildRunPotionPayload(currentScreen, combatState, player, potion, index)).ToArray()
         };
+    }
+
+    private static string? ResolveBossId(RunState runState)
+    {
+        if (runState.Act?.BossEncounter?.Id.Entry is { Length: > 0 } bossId)
+        {
+            return bossId;
+        }
+
+        return TryGetMemberValue(runState, "BossId")?.ToString();
     }
 
     private static object BuildAgentViewPayload(
