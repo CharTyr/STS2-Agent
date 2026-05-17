@@ -2365,9 +2365,14 @@ internal static class GameActionService
         else
         {
             stable = await chooseTask;
+            var transitionStable = await WaitForRestOptionTransitionAsync(TimeSpan.FromSeconds(stable ? 2 : 10));
             if (!stable)
             {
-                stable = await WaitForRestOptionTransitionAsync(TimeSpan.FromSeconds(2));
+                stable = transitionStable;
+            }
+            else
+            {
+                stable = transitionStable || stable;
             }
         }
 
@@ -2533,11 +2538,15 @@ internal static class GameActionService
                 return true;
             }
 
-            if (RunManager.Instance.RestSiteSynchronizer.GetLocalOptions().Count == 0)
+            var options = RunManager.Instance.RestSiteSynchronizer.GetLocalOptions();
+            if (options.Count == 0 || options.All(static option => !option.IsEnabled))
             {
                 restSiteRoom.Call(NRestSiteRoom.MethodName.ShowProceedButton);
                 ActiveScreenContext.Instance.Update();
-                return true;
+
+                await WaitForNextFrameAsync();
+                proceedButton = restSiteRoom.ProceedButton;
+                return proceedButton != null && GodotObject.IsInstanceValid(proceedButton) && proceedButton.IsEnabled;
             }
         }
 
