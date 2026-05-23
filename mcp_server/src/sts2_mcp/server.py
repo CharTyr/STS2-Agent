@@ -379,8 +379,10 @@ def _enrich_combat_intent_damage(state: dict[str, Any]) -> dict[str, Any]:
 
 
 def _enrich_enemy_intent_damage(enemy: dict[str, Any]) -> dict[str, Any]:
-    if _first_int(enemy, ("intent_damage", "incoming_damage", "intent_damage_total")) is not None:
-        return enemy
+    existing_damage = _first_int(
+        enemy,
+        ("intent_damage", "incoming_damage", "intent_damage_total"),
+    )
 
     move_id = _monster_move_id(enemy)
     monster_data = _monster_data_for_enemy(enemy)
@@ -392,6 +394,20 @@ def _enrich_enemy_intent_damage(enemy: dict[str, Any]) -> dict[str, Any]:
         return enemy
 
     kind, amount = resolved
+    if existing_damage is not None:
+        if (
+            existing_damage == 0
+            and kind == "damage"
+            and isinstance(amount, int)
+            and amount > 0
+        ):
+            enriched = dict(enemy)
+            enriched["intent_damage"] = amount
+            enriched["intent_damage_known"] = True
+            enriched["intent_damage_source"] = "monster_data"
+            return enriched
+        return enemy
+
     enriched = dict(enemy)
     if kind in {"damage", "non_attack"}:
         enriched["intent_damage"] = amount
@@ -466,8 +482,6 @@ def _resolve_monster_move_damage(
     known_move_keys = _monster_move_keys(monster_data)
     known_non_attack_keys = _KNOWN_NON_ATTACK_MOVE_KEYS_BY_MONSTER_ID.get(monster_id, set())
     if any(move_key in known_non_attack_keys for move_key in move_keys):
-        return ("non_attack", 0)
-    if not damage_values and any(move_key in known_move_keys for move_key in move_keys):
         return ("non_attack", 0)
     if any(move_key in known_move_keys for move_key in move_keys):
         return ("unknown_monster_move_damage", None)
