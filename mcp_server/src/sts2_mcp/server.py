@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+import re
 import threading
 import time
 from dataclasses import dataclass
@@ -182,6 +183,20 @@ _SCENE_FIELD_SETS: dict[str, dict[str, list[str]]] = {
     },
 }
 
+_MOVE_DAMAGE_KEY_ALIASES_BY_MONSTER_ID: dict[str, dict[str, str]] = {
+    # The source data has a few historical move/damage spelling mismatches.
+    "BOWLBUG_SILK": {"trash": "thrash"},
+    "LEAF_SLIME_S": {"butt": "tackle"},
+    "SLITHERING_STRANGLER": {"twack": "thwack"},
+    "THIEVING_HOPPER": {"thievery": "theft"},
+    "TWIG_SLIME_S": {"butt": "tackle"},
+}
+
+_KNOWN_NON_ATTACK_MOVE_KEYS_BY_MONSTER_ID: dict[str, set[str]] = {
+    "CORPSE_SLUG": {"goop"},
+    "PUNCH_CONSTRUCT": {"ready"},
+}
+
 
 def _configure_game_data_loader(loader: Callable[[str], Any]) -> None:
     global _GAME_DATA_LOADER
@@ -333,6 +348,213 @@ def get_game_data_items_fields(collection: str, item_ids: str, fields: str | Non
     return result
 
 
+def _enrich_combat_intent_damage(state: dict[str, Any]) -> dict[str, Any]:
+    combat = state.get("combat")
+    if not isinstance(combat, dict):
+        return state
+
+    enemy_key = "enemies" if isinstance(combat.get("enemies"), list) else "monsters"
+    enemies = combat.get(enemy_key)
+    if not isinstance(enemies, list):
+        return state
+
+    enriched_enemies: list[Any] = []
+    changed = False
+    for enemy in enemies:
+        if not isinstance(enemy, dict):
+            enriched_enemies.append(enemy)
+            continue
+        enriched = _enrich_enemy_intent_damage(enemy)
+        changed = changed or enriched is not enemy
+        enriched_enemies.append(enriched)
+
+    if not changed:
+        return state
+
+    enriched_combat = dict(combat)
+    enriched_combat[enemy_key] = enriched_enemies
+    enriched_state = dict(state)
+    enriched_state["combat"] = enriched_combat
+    return enriched_state
+
+
+def _enrich_enemy_intent_damage(enemy: dict[str, Any]) -> dict[str, Any]:
+    if _first_int(enemy, ("intent_damage", "incoming_damage", "intent_damage_total")) is not None:
+        return enemy
+
+    move_id = _monster_move_id(enemy)
+    monster_data = _monster_data_for_enemy(enemy)
+    if not move_id or not isinstance(monster_data, dict):
+        return enemy
+
+    resolved = _resolve_monster_move_damage(monster_data, move_id)
+    if resolved is None:
+        return enemy
+
+    kind, amount = resolved
+    enriched = dict(enemy)
+    if kind in {"damage", "non_attack"}:
+        enriched["intent_damage"] = amount
+        enriched["intent_damage_known"] = True
+        enriched["intent_damage_source"] = (
+            "monster_data" if kind == "damage" else "known_non_attack_move"
+        )
+        return enriched
+
+    enriched["intent_damage_known"] = False
+    enriched["intent_damage_source"] = kind
+    return enriched
+
+
+def _monster_data_for_enemy(enemy: dict[str, Any]) -> Any | None:
+    try:
+        index = _ensure_game_data_index("monsters")
+    except Exception:
+        return None
+
+    enemy_id = enemy.get("enemy_id") or enemy.get("id")
+    if isinstance(enemy_id, str) and enemy_id.strip():
+        item = _lookup_game_data_item(index=index, item_id=enemy_id.strip())
+        if item is not None:
+            return item
+
+    enemy_name = enemy.get("name")
+    if not isinstance(enemy_name, str) or not enemy_name.strip():
+        return None
+
+    normalized_name = _lookup_key(enemy_name)
+    seen: set[int] = set()
+    for item in index.values():
+        if not isinstance(item, dict):
+            continue
+        item_id = id(item)
+        if item_id in seen:
+            continue
+        seen.add(item_id)
+        if _lookup_key(str(item.get("name") or "")) == normalized_name:
+            return item
+    return None
+
+
+def _resolve_monster_move_damage(
+    monster_data: dict[str, Any],
+    move_id: str,
+) -> tuple[str, int | None] | None:
+    damage_values = _monster_damage_values(monster_data)
+    move_keys = _move_lookup_keys(move_id)
+    monster_id = str(monster_data.get("id") or "").strip().upper()
+    aliases = _MOVE_DAMAGE_KEY_ALIASES_BY_MONSTER_ID.get(monster_id, {})
+
+    for move_key in move_keys:
+        alias = aliases.get(move_key)
+        if alias and alias in damage_values:
+            return ("damage", damage_values[alias])
+        if move_key in damage_values:
+            return ("damage", damage_values[move_key])
+
+    related_amounts = {
+        amount
+        for move_key in move_keys
+        for damage_key, amount in damage_values.items()
+        if move_key and damage_key and (move_key in damage_key or damage_key in move_key)
+    }
+    if len(related_amounts) == 1:
+        return ("damage", related_amounts.pop())
+    if len(related_amounts) > 1:
+        return ("ambiguous_monster_data", None)
+
+    known_move_keys = _monster_move_keys(monster_data)
+    known_non_attack_keys = _KNOWN_NON_ATTACK_MOVE_KEYS_BY_MONSTER_ID.get(monster_id, set())
+    if any(move_key in known_non_attack_keys for move_key in move_keys):
+        return ("non_attack", 0)
+    if not damage_values and any(move_key in known_move_keys for move_key in move_keys):
+        return ("non_attack", 0)
+    if any(move_key in known_move_keys for move_key in move_keys):
+        return ("unknown_monster_move_damage", None)
+    return ("unknown_monster_move", None)
+
+
+def _monster_damage_values(monster_data: dict[str, Any]) -> dict[str, int]:
+    raw = monster_data.get("damage_values")
+    if not isinstance(raw, dict):
+        return {}
+    values: dict[str, int] = {}
+    for key, value in raw.items():
+        amount = _damage_amount(value)
+        if amount is not None:
+            values[_lookup_key(str(key))] = amount
+    return values
+
+
+def _damage_amount(value: Any) -> int | None:
+    if isinstance(value, bool):
+        return None
+    if isinstance(value, int):
+        return value
+    if not isinstance(value, dict):
+        return None
+    for key in ("normal", "base", "damage", "amount", "ascension"):
+        amount = value.get(key)
+        if isinstance(amount, int) and not isinstance(amount, bool):
+            return amount
+    return None
+
+
+def _monster_move_keys(monster_data: dict[str, Any]) -> set[str]:
+    raw = monster_data.get("moves")
+    if not isinstance(raw, list):
+        return set()
+    keys: set[str] = set()
+    for move in raw:
+        if not isinstance(move, dict):
+            continue
+        for key in ("id", "name"):
+            normalized = _lookup_key(str(move.get(key) or ""))
+            if normalized:
+                keys.add(normalized)
+    return keys
+
+
+def _monster_move_id(enemy: dict[str, Any]) -> str | None:
+    raw = enemy.get("move_id") or enemy.get("intent_id") or enemy.get("intent")
+    if not isinstance(raw, str):
+        return None
+    value = raw.strip()
+    return value or None
+
+
+def _move_lookup_keys(move_id: str) -> tuple[str, ...]:
+    raw = move_id.strip()
+    variants = {
+        raw,
+        re.sub(r"(?i)_move$", "", raw),
+        re.sub(r"(?i)(?:_move)?_\d+$", "", raw),
+    }
+    normalized = {_lookup_key(variant) for variant in variants}
+    for key in tuple(normalized):
+        if key.endswith("move"):
+            normalized.add(key[:-4])
+        without_trailing_number = re.sub(r"\d+$", "", key)
+        if without_trailing_number:
+            normalized.add(without_trailing_number)
+            if without_trailing_number.endswith("move"):
+                normalized.add(without_trailing_number[:-4])
+    normalized.discard("")
+    return tuple(dict.fromkeys(sorted(normalized, key=len)))
+
+
+def _first_int(value: dict[str, Any], keys: tuple[str, ...]) -> int | None:
+    for key in keys:
+        item = value.get(key)
+        if isinstance(item, int) and not isinstance(item, bool):
+            return item
+    return None
+
+
+def _lookup_key(value: str) -> str:
+    return re.sub(r"[^a-z0-9]+", "", value.strip().lower())
+
+
 def _register_no_arg_tool(mcp: FastMCP, name: str, description: str, handler: ToolHandler) -> None:
     def tool() -> dict[str, Any]:
         return handler()
@@ -425,12 +647,12 @@ def create_server(client: Sts2Client | None = None, tool_profile: str | None = N
         agent_view = state.get("agent_view")
         if isinstance(agent_view, dict):
             if "available_actions" not in agent_view and isinstance(agent_view.get("actions"), list):
-                return {
+                return _enrich_combat_intent_damage({
                     **agent_view,
                     "available_actions": agent_view["actions"],
-                }
-            return agent_view
-        return state
+                })
+            return _enrich_combat_intent_damage(agent_view)
+        return _enrich_combat_intent_damage(state)
 
     def _is_actionable_state(state: dict[str, Any]) -> bool:
         actions = state.get("available_actions")
