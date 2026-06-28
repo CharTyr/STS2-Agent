@@ -28,6 +28,7 @@ COMBAT_SCREEN_NAMES = {"combat_reward", "combat_victory"}
 SHOP_SCREEN_KEYWORDS = ("shop", "merchant")
 EVENT_SCREEN_KEYWORDS = ("event",)
 EVENT_SCREEN_NAMES = {"event_room", "ancient_event"}
+PASSIVE_ACTIONS = {"discard_potion", "save_and_quit"}
 
 
 @dataclass(frozen=True, slots=True)
@@ -63,6 +64,7 @@ _LEGACY_ACTION_TOOLS: tuple[ActionToolSpec, ...] = (
     ActionToolSpec("remove_card_at_shop", "no_args", "Use the merchant card-removal service."),
     ActionToolSpec("continue_run", "no_args", "Continue the current run from the main menu."),
     ActionToolSpec("abandon_run", "no_args", "Open the abandon-run confirmation from the main menu."),
+    ActionToolSpec("save_and_quit", "no_args", "Save the active singleplayer run and return to the main menu."),
     ActionToolSpec("open_character_select", "no_args", "Open the character select screen."),
     ActionToolSpec("open_timeline", "no_args", "Open the timeline screen."),
     ActionToolSpec("close_main_menu_submenu", "no_args", "Close the current main-menu submenu."),
@@ -436,7 +438,10 @@ def create_server(client: Sts2Client | None = None, tool_profile: str | None = N
         actions = state.get("available_actions")
         if not isinstance(actions, list):
             actions = state.get("actions")
-        return isinstance(actions, list) and len(actions) > 0
+        if not isinstance(actions, list):
+            return False
+
+        return any(str(action) not in PASSIVE_ACTIONS for action in actions)
 
     def _wait_until_actionable_impl(
         timeout_seconds: float,
@@ -477,7 +482,7 @@ def create_server(client: Sts2Client | None = None, tool_profile: str | None = N
         remaining = max(0.0, timeout - (monotonic() - started_at))
         state = sts2.get_state()
 
-        if event is None and not _is_actionable_state(state) and remaining > 0:
+        if not _is_actionable_state(state) and remaining > 0:
             source = "polling"
             interval = max(0.05, float(os.getenv("STS2_MCP_FALLBACK_POLL_SECONDS", "0.25")))
             deadline = monotonic() + remaining

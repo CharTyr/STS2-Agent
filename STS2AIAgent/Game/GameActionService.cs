@@ -27,11 +27,13 @@ using MegaCrit.Sts2.Core.Nodes.Screens.GameOverScreen;
 using MegaCrit.Sts2.Core.Nodes.Screens.MainMenu;
 using MegaCrit.Sts2.Core.Nodes.Screens.Map;
 using MegaCrit.Sts2.Core.Nodes.Screens.Overlays;
+using MegaCrit.Sts2.Core.Nodes.Screens.PauseMenu;
 using MegaCrit.Sts2.Core.Nodes.Screens.ScreenContext;
 using MegaCrit.Sts2.Core.Nodes.Screens.Shops;
 using MegaCrit.Sts2.Core.Nodes.Screens.Timeline;
 using MegaCrit.Sts2.Core.Nodes.Screens.Timeline.UnlockScreens;
 using MegaCrit.Sts2.Core.Nodes.Screens.TreasureRoomRelic;
+using MegaCrit.Sts2.Core.Nodes.TopBar;
 using MegaCrit.Sts2.Core.Nodes.Rooms;
 using MegaCrit.Sts2.Core.Runs;
 using MegaCrit.Sts2.Core.Models;
@@ -98,6 +100,7 @@ internal static class GameActionService
             "play_card" => ExecutePlayCardAsync(request),
             "continue_run" => ExecuteContinueRunAsync(),
             "abandon_run" => ExecuteAbandonRunAsync(),
+            "save_and_quit" => ExecuteSaveAndQuitAsync(),
             "open_character_select" => ExecuteOpenCharacterSelectAsync(),
             "open_timeline" => ExecuteOpenTimelineAsync(),
             "close_main_menu_submenu" => ExecuteCloseMainMenuSubmenuAsync(),
@@ -153,7 +156,7 @@ internal static class GameActionService
         var combatState = CombatManager.Instance.DebugOnlyGetState();
         var screen = GameStateService.ResolveScreen(currentScreen);
 
-        if (!GameStateService.CanEndTurn(currentScreen, combatState))
+        if (!GameStateService.CanEndTurn(currentScreen, combatState, requireButtonReady: false))
         {
             throw new ApiException(409, "invalid_action", "Action is not available in the current state.", new
             {
@@ -162,7 +165,7 @@ internal static class GameActionService
             });
         }
 
-        var me = LocalContext.GetMe(combatState)
+        var me = GameStateService.GetLocalPlayer(combatState)
             ?? throw new ApiException(503, "state_unavailable", "Local player is unavailable.", new
             {
                 action = "end_turn",
@@ -176,8 +179,18 @@ internal static class GameActionService
                 screen
             }, retryable: true);
 
+        var endTurnButton = GameStateService.GetEndTurnButton(currentScreen as NCombatRoom);
+        if (!GameStateService.IsEndTurnButtonReady(endTurnButton))
+        {
+            throw new ApiException(503, "state_unavailable", "End turn button is unavailable.", new
+            {
+                action = "end_turn",
+                screen
+            }, retryable: true);
+        }
+
         var roundNumber = playerCombatState.RoundNumber;
-        RunManager.Instance.ActionQueueSynchronizer.RequestEnqueue(new EndPlayerTurnAction(me, roundNumber));
+        endTurnButton!.ForceClick();
 
         var stable = await WaitForEndTurnTransitionAsync(roundNumber, TimeSpan.FromSeconds(5));
 
@@ -236,7 +249,7 @@ internal static class GameActionService
             return true;
         }
 
-        return !CombatManager.Instance.IsPlayPhase;
+        return !GameStateService.IsPlayerActionPhase(combatState);
     }
 
     private static async Task<ActionResponsePayload> ExecutePlayCardAsync(ActionRequest request)
@@ -580,6 +593,79 @@ internal static class GameActionService
         return new ActionResponsePayload
         {
             action = "abandon_run",
+            status = stable ? "completed" : "pending",
+            stable = stable,
+            message = stable ? "Action completed." : "Action queued but state is still transitioning.",
+            state = GameStateService.BuildStatePayload()
+        };
+    }
+
+    private static async Task<ActionResponsePayload> ExecuteSaveAndQuitAsync()
+    {
+        var currentScreen = ActiveScreenContext.Instance.GetCurrentScreen();
+        var runState = RunManager.Instance.DebugOnlyGetState();
+        var screen = GameStateService.ResolveScreen(currentScreen);
+
+        if (!GameStateService.CanSaveAndQuit(currentScreen, runState))
+        {
+            throw new ApiException(409, "invalid_action", "Action is not available in the current state.", new
+            {
+                action = "save_and_quit",
+                screen
+            });
+        }
+
+        var pauseMenu = FindPauseMenu();
+        if (pauseMenu == null)
+        {
+            var pauseButton = FindFirstInGame<NTopBarPauseButton>();
+            if (pauseButton == null || !pauseButton.IsVisibleInTree())
+            {
+                throw new ApiException(503, "state_unavailable", "Pause button is unavailable.", new
+                {
+                    action = "save_and_quit",
+                    screen
+                }, retryable: true);
+            }
+
+            pauseButton.ForceClick();
+            pauseMenu = await WaitForPauseMenuAsync(TimeSpan.FromSeconds(5));
+        }
+
+        if (pauseMenu == null)
+        {
+            throw new ApiException(503, "state_unavailable", "Pause menu did not open.", new
+            {
+                action = "save_and_quit",
+                screen
+            }, retryable: true);
+        }
+
+        var closeTask = InvokePrivateTask(pauseMenu, "CloseToMenu");
+        if (closeTask != null)
+        {
+            await closeTask;
+        }
+        else
+        {
+            var saveAndQuitButton = GetPrivateField<NButton>(pauseMenu, "_saveAndQuitButton");
+            if (saveAndQuitButton == null || !saveAndQuitButton.IsVisibleInTree() || !saveAndQuitButton.IsEnabled)
+            {
+                throw new ApiException(503, "state_unavailable", "Save and Quit button is unavailable.", new
+                {
+                    action = "save_and_quit",
+                    screen
+                }, retryable: true);
+            }
+
+            saveAndQuitButton.ForceClick();
+        }
+
+        var stable = await WaitForMainMenuAfterSaveAndQuitAsync(TimeSpan.FromSeconds(20));
+
+        return new ActionResponsePayload
+        {
+            action = "save_and_quit",
             status = stable ? "completed" : "pending",
             stable = stable,
             message = stable ? "Action completed." : "Action queued but state is still transitioning.",
@@ -935,7 +1021,7 @@ internal static class GameActionService
                 combatRoom.Mode == CombatRoomMode.ActiveCombat &&
                 CombatManager.Instance.IsInProgress &&
                 !CombatManager.Instance.IsOverOrEnding &&
-                CombatManager.Instance.IsPlayPhase &&
+                GameStateService.IsPlayerActionPhase(CombatManager.Instance.DebugOnlyGetState()) &&
                 !CombatManager.Instance.PlayerActionsDisabled &&
                 CombatManager.Instance.DebugOnlyGetState() != null;
         }
@@ -1524,7 +1610,7 @@ internal static class GameActionService
         HashSet<ulong> attemptedRewardButtons,
         out NRewardButton? rewardButton)
     {
-        var hasPotionSlots = LocalContext.GetMe(RunManager.Instance.DebugOnlyGetState())?.HasOpenPotionSlots ?? false;
+        var hasPotionSlots = GameStateService.GetLocalPlayer(RunManager.Instance.DebugOnlyGetState())?.HasOpenPotionSlots ?? false;
         rewardButton = GameStateService
             .GetRewardButtons(rewardsScreen)
             .FirstOrDefault(button =>
@@ -3457,7 +3543,7 @@ internal static class GameActionService
             }, retryable: true);
 
         var runState = RunManager.Instance.DebugOnlyGetState();
-        var player = LocalContext.GetMe(runState);
+        var player = GameStateService.GetLocalPlayer(runState);
         var result = devConsole.ProcessNetCommand(player, command);
         if (!result.success)
         {
@@ -4406,6 +4492,82 @@ internal static class GameActionService
         return ActiveScreenContext.Instance.GetCurrentScreen() is not NGameOverScreen;
     }
 
+    private static async Task<NPauseMenu?> WaitForPauseMenuAsync(TimeSpan timeout)
+    {
+        var deadline = DateTime.UtcNow + timeout;
+        while (DateTime.UtcNow < deadline)
+        {
+            await WaitForNextFrameAsync();
+
+            var pauseMenu = FindPauseMenu();
+            if (pauseMenu != null && pauseMenu.IsVisibleInTree())
+            {
+                return pauseMenu;
+            }
+        }
+
+        return FindPauseMenu();
+    }
+
+    private static async Task<bool> WaitForMainMenuAfterSaveAndQuitAsync(TimeSpan timeout)
+    {
+        var deadline = DateTime.UtcNow + timeout;
+        while (DateTime.UtcNow < deadline)
+        {
+            await WaitForNextFrameAsync();
+
+            var currentScreen = ActiveScreenContext.Instance.GetCurrentScreen();
+            if (currentScreen is NMainMenu)
+            {
+                return true;
+            }
+        }
+
+        return ActiveScreenContext.Instance.GetCurrentScreen() is NMainMenu;
+    }
+
+    private static NPauseMenu? FindPauseMenu()
+    {
+        return FindFirstInGame<NPauseMenu>();
+    }
+
+    private static T? FindFirstInGame<T>() where T : Node
+    {
+        var game = NGame.Instance;
+        if (game == null || !GodotObject.IsInstanceValid(game))
+        {
+            return null;
+        }
+
+        Node? root = game.GetTree()?.Root;
+        root ??= game;
+        return FindFirstDescendant<T>(root);
+    }
+
+    private static T? FindFirstDescendant<T>(Node? node) where T : Node
+    {
+        if (node == null || !GodotObject.IsInstanceValid(node))
+        {
+            return null;
+        }
+
+        if (node is T typedNode)
+        {
+            return typedNode;
+        }
+
+        foreach (var child in node.GetChildren())
+        {
+            var found = FindFirstDescendant<T>(child);
+            if (found != null)
+            {
+                return found;
+            }
+        }
+
+        return null;
+    }
+
     private static string BuildEventOptionSignature(EventModel eventModel)
     {
         return string.Join(
@@ -4424,6 +4586,20 @@ internal static class GameActionService
         const BindingFlags flags = BindingFlags.Instance | BindingFlags.NonPublic;
         var method = target.GetType().GetMethod(methodName, flags);
         return method?.Invoke(target, args) as Task<T>;
+    }
+
+    private static Task? InvokePrivateTask(object target, string methodName, params object?[] args)
+    {
+        const BindingFlags flags = BindingFlags.Instance | BindingFlags.NonPublic;
+        var method = target.GetType().GetMethod(methodName, flags);
+        return method?.Invoke(target, args) as Task;
+    }
+
+    private static T? GetPrivateField<T>(object target, string fieldName) where T : class
+    {
+        const BindingFlags flags = BindingFlags.Instance | BindingFlags.NonPublic;
+        var field = target.GetType().GetField(fieldName, flags);
+        return field?.GetValue(target) as T;
     }
 
     private static void InvokePrivateVoid(object target, string methodName, params object?[] args)

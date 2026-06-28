@@ -58,6 +58,7 @@
 
 - `continue_run`
 - `abandon_run`
+- `save_and_quit`
 - `open_character_select`
 - `open_timeline`
 - `close_main_menu_submenu`

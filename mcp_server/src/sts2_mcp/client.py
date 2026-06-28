@@ -253,6 +253,15 @@ class Sts2Client:
             },
         )
 
+    def save_and_quit(self) -> dict[str, Any]:
+        return self.execute_action(
+            "save_and_quit",
+            client_context={
+                "source": "mcp",
+                "tool_name": "save_and_quit",
+            },
+        )
+
     def open_character_select(self) -> dict[str, Any]:
         return self.execute_action(
             "open_character_select",

@@ -1,3 +1,4 @@
+using System.Collections;
 using System.Reflection;
 using System.Text.RegularExpressions;
 using MegaCrit.Sts2.Core.CardSelection;
@@ -209,13 +210,43 @@ internal static class GameDataExportService
     private static object[] BuildMonsterMoves(MonsterModel monster)
     {
         var prefix = $"{monster.Id.Entry}.moves.";
-        return monster.MoveNames
+        var moveNamesProperty = monster.GetType().GetProperty("MoveNames", BindingFlags.Public | BindingFlags.Instance);
+        if (moveNamesProperty?.GetValue(monster) is not IEnumerable moveNames)
+        {
+            return Array.Empty<object>();
+        }
+
+        return moveNames
+            .Cast<object>()
             .Select(locString => new
             {
-                id = ExtractKeySegment(locString.LocEntryKey, prefix),
-                name = locString.GetFormattedText()
+                id = ExtractKeySegment(GetLocEntryKey(locString), prefix),
+                name = GetFormattedLocString(locString)
             })
             .ToArray<object>();
+    }
+
+    private static string GetLocEntryKey(object value)
+    {
+        if (value is LocString locString)
+        {
+            return locString.LocEntryKey;
+        }
+
+        return value.GetType().GetProperty("LocEntryKey", BindingFlags.Public | BindingFlags.Instance)?.GetValue(value) as string
+            ?? string.Empty;
+    }
+
+    private static string GetFormattedLocString(object value)
+    {
+        if (value is LocString locString)
+        {
+            return locString.GetFormattedText();
+        }
+
+        return value.GetType().GetMethod("GetFormattedText", BindingFlags.Public | BindingFlags.Instance, Type.EmptyTypes)
+            ?.Invoke(value, Array.Empty<object>()) as string
+            ?? string.Empty;
     }
 
     private static object[] BuildEventOptions(EventModel eventModel)
