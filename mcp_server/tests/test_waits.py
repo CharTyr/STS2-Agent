@@ -168,6 +168,50 @@ class WaitBehaviorTests(unittest.TestCase):
         self.assertEqual(result["source"], "polling")
         self.assertEqual(result["state"]["available_actions"], ["save_and_quit", "play_card"])
 
+    def test_wait_until_actionable_ignores_structured_passive_actions(self) -> None:
+        clock = FakeClock()
+        client = DummyClient(
+            states=[
+                {"available_actions": [{"name": "save_and_quit"}]},
+                {"available_actions": [{"name": "save_and_quit"}]},
+                {"available_actions": [{"name": "save_and_quit"}, {"name": "play_card"}]},
+            ]
+        )
+        server = create_server(client=client)
+        tool = asyncio.run(server.get_tool("wait_until_actionable"))
+
+        with patch("sts2_mcp.server.time.monotonic", new=clock.monotonic):
+            with patch("sts2_mcp.server.time.sleep", new=clock.sleep):
+                result = tool.fn(timeout_seconds=2.0)
+
+        self.assertEqual(result["source"], "polling")
+        self.assertEqual(
+            result["state"]["available_actions"],
+            [{"name": "save_and_quit"}, {"name": "play_card"}],
+        )
+
+    def test_wait_until_actionable_supports_structured_actions_fallback(self) -> None:
+        clock = FakeClock()
+        client = DummyClient(
+            states=[
+                {"actions": [{"name": "save_and_quit"}]},
+                {"actions": [{"name": "save_and_quit"}]},
+                {"actions": [{"name": "save_and_quit"}, {"name": "play_card"}]},
+            ]
+        )
+        server = create_server(client=client)
+        tool = asyncio.run(server.get_tool("wait_until_actionable"))
+
+        with patch("sts2_mcp.server.time.monotonic", new=clock.monotonic):
+            with patch("sts2_mcp.server.time.sleep", new=clock.sleep):
+                result = tool.fn(timeout_seconds=2.0)
+
+        self.assertEqual(result["source"], "polling")
+        self.assertEqual(
+            result["state"]["actions"],
+            [{"name": "save_and_quit"}, {"name": "play_card"}],
+        )
+
     def test_wait_until_actionable_polls_after_passive_action_event(self) -> None:
         clock = FakeClock()
         client = DummyClient(

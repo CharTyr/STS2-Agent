@@ -31,6 +31,22 @@ EVENT_SCREEN_NAMES = {"event_room", "ancient_event"}
 PASSIVE_ACTIONS = {"discard_potion", "save_and_quit"}
 
 
+def _action_name(action: Any) -> str | None:
+    if isinstance(action, str):
+        return action
+    if isinstance(action, dict):
+        name = action.get("name")
+        return name if isinstance(name, str) else None
+    name = getattr(action, "name", None)
+    return name if isinstance(name, str) else None
+
+
+def _action_signature(actions: Any) -> str:
+    if not isinstance(actions, list):
+        return ""
+    return "|".join(sorted(name for action in actions if (name := _action_name(action))))
+
+
 @dataclass(frozen=True, slots=True)
 class ActionToolSpec:
     name: str
@@ -434,14 +450,22 @@ def create_server(client: Sts2Client | None = None, tool_profile: str | None = N
             return agent_view
         return state
 
-    def _is_actionable_state(state: dict[str, Any]) -> bool:
+    def _state_actions(state: dict[str, Any]) -> list[Any] | None:
         actions = state.get("available_actions")
         if not isinstance(actions, list):
             actions = state.get("actions")
-        if not isinstance(actions, list):
+        return actions if isinstance(actions, list) else None
+
+    def _is_actionable_state(state: dict[str, Any]) -> bool:
+        actions = _state_actions(state)
+        if actions is None:
             return False
 
-        return any(str(action) not in PASSIVE_ACTIONS for action in actions)
+        return any(
+            name not in PASSIVE_ACTIONS
+            for action in actions
+            if (name := _action_name(action))
+        )
 
     def _wait_until_actionable_impl(
         timeout_seconds: float,
@@ -486,7 +510,7 @@ def create_server(client: Sts2Client | None = None, tool_profile: str | None = N
             source = "polling"
             interval = max(0.05, float(os.getenv("STS2_MCP_FALLBACK_POLL_SECONDS", "0.25")))
             deadline = monotonic() + remaining
-            baseline_signature = "|".join(sorted(str(name) for name in (state.get("available_actions") or [])))
+            baseline_signature = _action_signature(_state_actions(state))
 
             while monotonic() < deadline:
                 sleep(interval)
@@ -494,7 +518,7 @@ def create_server(client: Sts2Client | None = None, tool_profile: str | None = N
                 if _is_actionable_state(state):
                     break
 
-                signature = "|".join(sorted(str(name) for name in (state.get("available_actions") or [])))
+                signature = _action_signature(_state_actions(state))
                 if signature != baseline_signature:
                     break
 

@@ -244,8 +244,8 @@ internal static class GameDataExportService
             return locString.GetFormattedText();
         }
 
-        return value.GetType().GetMethod("GetFormattedText", BindingFlags.Public | BindingFlags.Instance, Type.EmptyTypes)
-            ?.Invoke(value, Array.Empty<object>()) as string
+        return value.GetType().GetMethod("GetFormattedText", BindingFlags.Public | BindingFlags.Instance, null, Type.EmptyTypes, null)
+            ?.Invoke(value, null) as string
             ?? string.Empty;
     }
 
