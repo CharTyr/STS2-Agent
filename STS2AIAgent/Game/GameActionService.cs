@@ -812,6 +812,16 @@ internal static class GameActionService
         return true;
     }
 
+    internal static bool AreGameActionsSettled()
+    {
+        if (RunManager.Instance.ActionExecutor.CurrentlyRunningAction != null)
+        {
+            return false;
+        }
+
+        return RunManager.Instance.ActionQueueSet.GetReadyAction() == null;
+    }
+
     private static async Task<ActionResponsePayload> ExecuteChooseMapNodeAsync(ActionRequest request)
     {
         var currentScreen = ActiveScreenContext.Instance.GetCurrentScreen();

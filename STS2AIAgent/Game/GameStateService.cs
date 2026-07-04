@@ -54,6 +54,9 @@ internal static class GameStateService
 {
     private const int StateVersion = 10;
     private const int AgentViewVersion = 4;
+    private static readonly TimeSpan CombatActionSnapshotStableDelay = TimeSpan.FromMilliseconds(200);
+    private static string? _lastCombatActionReadinessSignature;
+    private static DateTime _lastCombatActionReadinessSinceUtc = DateTime.MinValue;
 
     public static GameStatePayload BuildStatePayload()
     {
@@ -1822,6 +1825,7 @@ internal static class GameStateService
 
         if (combatState == null || currentScreen is not NCombatRoom room)
         {
+            ResetCombatActionReadiness();
             return false;
         }
 
@@ -1831,33 +1835,49 @@ internal static class GameStateService
             CombatManager.Instance.IsOverOrEnding ||
             CombatManager.Instance.PlayerActionsDisabled)
         {
+            ResetCombatActionReadiness();
             return false;
         }
 
         if (combatRoom.Mode != CombatRoomMode.ActiveCombat)
         {
+            ResetCombatActionReadiness();
             return false;
         }
 
         var hand = combatRoom.Ui?.Hand;
         if (hand == null || hand.InCardPlay || hand.IsInCardSelection || hand.CurrentMode != MegaCrit.Sts2.Core.Nodes.Combat.NPlayerHand.Mode.Play)
         {
+            ResetCombatActionReadiness();
             return false;
         }
 
         me = GetLocalPlayer(combatState);
         if (me == null || !me.Creature.IsAlive)
         {
+            ResetCombatActionReadiness();
             return false;
         }
 
         GameActionService.SyncCardPlayCounters(combatState.RoundNumber);
         if (!IsLocalCombatTurnReady(me))
         {
+            ResetCombatActionReadiness();
             return false;
         }
 
-        return IsPlayerActionPhase(combatState, me);
+        if (!IsCombatActionSnapshotStable(combatState, me))
+        {
+            return false;
+        }
+
+        if (!IsPlayerActionPhase(combatState, me))
+        {
+            ResetCombatActionReadiness();
+            return false;
+        }
+
+        return true;
     }
 
     private static bool IsLocalCombatTurnReady(Player me)
@@ -1875,6 +1895,51 @@ internal static class GameStateService
         }
 
         return true;
+    }
+
+    private static bool IsCombatActionSnapshotStable(CombatState combatState, Player me)
+    {
+        if (!GameActionService.AreGameActionsSettled())
+        {
+            ResetCombatActionReadiness();
+            return false;
+        }
+
+        var signature = BuildCombatActionReadinessSignature(combatState, me);
+        var now = DateTime.UtcNow;
+
+        if (!string.Equals(signature, _lastCombatActionReadinessSignature, StringComparison.Ordinal))
+        {
+            _lastCombatActionReadinessSignature = signature;
+            _lastCombatActionReadinessSinceUtc = now;
+            return false;
+        }
+
+        return now - _lastCombatActionReadinessSinceUtc >= CombatActionSnapshotStableDelay;
+    }
+
+    private static string BuildCombatActionReadinessSignature(CombatState combatState, Player me)
+    {
+        var playerCombatState = me.PlayerCombatState;
+        var handCards = playerCombatState?.Hand.Cards.ToList() ?? new List<CardModel>();
+        var handSignature = string.Join(
+            ",",
+            handCards.Select(card => $"{card.Id.Entry}:{card.Pile?.Type.ToString() ?? "Unknown"}"));
+
+        return string.Join(
+            "|",
+            combatState.RoundNumber,
+            playerCombatState?.TurnNumber ?? 0,
+            playerCombatState?.Energy ?? 0,
+            playerCombatState?.Stars ?? 0,
+            handCards.Count,
+            handSignature);
+    }
+
+    private static void ResetCombatActionReadiness()
+    {
+        _lastCombatActionReadinessSignature = null;
+        _lastCombatActionReadinessSinceUtc = DateTime.MinValue;
     }
 
     public static NEndTurnButton? GetEndTurnButton(NCombatRoom? combatRoom)
