@@ -60,8 +60,17 @@ For an optional skill-local remote checklist, read [references/remote-connection
 7. After every action, inspect the returned `state`; if needed, fetch fresh state again before the next step.
 8. Treat multiplayer as local-player control only. Never invent teammate actions that are not present in the latest state.
 9. Recompute indexes from fresh payloads every time. Never reuse stale hand, node, reward, or selection indexes.
+10. For user-facing play, maintain a run decision log under `agent_knowledge/run_logs/` using the repository template. Record seed, character, route choices, stage decisions, and concise reasons as the run progresses.
 
 Do not trust memory over the current payload. The game mutates screens in place, overlays replace rooms, and some actions complete only after a follow-up state transition.
+
+## Run Decision Logs
+
+- Create one markdown log per played or continued run under `agent_knowledge/run_logs/`.
+- Use `YYYYMMDD-HHMM_<character>_<seed>.md` when possible; use `unknown-character` or `unknown-seed` until the state exposes the missing value.
+- Record route choices, card/relic/potion rewards, shop buys/removes, event branches, rest choices, key combat turns, potion use, lethal planning, and MCP/action anomalies.
+- Keep entries short so logging does not block play. If needed, execute the legal action first and flush the note after the returned state stabilizes.
+- Use the template in `agent_knowledge/run_logs/README.md` for the header and decision table.
 
 ## Game Data Priority Rules
 

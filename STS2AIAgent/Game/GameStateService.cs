@@ -52,8 +52,11 @@ namespace STS2AIAgent.Game;
 
 internal static class GameStateService
 {
-    private const int StateVersion = 9;
-    private const int AgentViewVersion = 3;
+    private const int StateVersion = 10;
+    private const int AgentViewVersion = 4;
+    private static readonly TimeSpan CombatActionSnapshotStableDelay = TimeSpan.FromMilliseconds(200);
+    private static string? _lastCombatActionReadinessSignature;
+    private static DateTime _lastCombatActionReadinessSinceUtc = DateTime.MinValue;
 
     public static GameStatePayload BuildStatePayload()
     {
@@ -242,6 +245,16 @@ internal static class GameStateService
             descriptors.Add(new ActionDescriptor
             {
                 name = "abandon_run",
+                requires_target = false,
+                requires_index = false
+            });
+        }
+
+        if (CanSaveAndQuit(currentScreen, runState))
+        {
+            descriptors.Add(new ActionDescriptor
+            {
+                name = "save_and_quit",
                 requires_target = false,
                 requires_index = false
             });
@@ -667,14 +680,19 @@ internal static class GameStateService
         return screen;
     }
 
-    public static bool CanEndTurn(IScreenContext? currentScreen, CombatState? combatState)
+    public static bool CanEndTurn(IScreenContext? currentScreen, CombatState? combatState, bool requireButtonReady = true)
     {
-        if (!CanUseCombatActions(currentScreen, combatState, out _, out _))
+        if (!CanUseCombatActions(currentScreen, combatState, out _, out var combatRoom))
         {
             return false;
         }
 
-        return !CombatManager.Instance.IsPlayerReadyToEndTurn(LocalContext.GetMe(combatState)!);
+        if (CombatManager.Instance.IsPlayerReadyToEndTurn(GetLocalPlayer(combatState)!))
+        {
+            return false;
+        }
+
+        return !requireButtonReady || IsEndTurnButtonReady(GetEndTurnButton(combatRoom));
     }
 
     public static bool CanPlayAnyCard(IScreenContext? currentScreen, CombatState? combatState)
@@ -689,12 +707,30 @@ internal static class GameStateService
 
     public static Player? GetLocalPlayer(CombatState? combatState)
     {
-        return LocalContext.GetMe(combatState);
+        return combatState == null ? null : LocalContext.GetMe((ICombatState)combatState);
     }
 
     public static Player? GetLocalPlayer(RunState? runState)
     {
-        return LocalContext.GetMe(runState);
+        return runState == null ? null : LocalContext.GetMe((IPlayerCollection)runState);
+    }
+
+    public static bool IsPlayerActionPhase(CombatState? combatState)
+    {
+        var me = GetLocalPlayer(combatState);
+        return IsPlayerActionPhase(combatState, me);
+    }
+
+    private static bool IsPlayerActionPhase(CombatState? combatState, Player? me)
+    {
+        if (combatState == null ||
+            me == null ||
+            combatState.CurrentSide != CombatSide.Player)
+        {
+            return false;
+        }
+
+        return CombatManager.Instance.IsPartOfPlayerTurn(me);
     }
 
     public static bool CanChooseMapNode(IScreenContext? currentScreen, RunState? runState)
@@ -977,6 +1013,26 @@ internal static class GameStateService
 
         var abandonButton = GetMainMenuAbandonRunButton(mainMenu);
         return abandonButton != null && abandonButton.IsVisibleInTree() && abandonButton.IsEnabled;
+    }
+
+    public static bool CanSaveAndQuit(IScreenContext? currentScreen, RunState? runState)
+    {
+        if (currentScreen == null || runState == null)
+        {
+            return false;
+        }
+
+        if (NGame.Instance == null || !GodotObject.IsInstanceValid(NGame.Instance))
+        {
+            return false;
+        }
+
+        if (RunManager.Instance.NetService.Type.IsMultiplayer())
+        {
+            return false;
+        }
+
+        return currentScreen is not (NMainMenu or NGameOverScreen or NCharacterSelectScreen or NMultiplayerTest);
     }
 
     public static bool CanOpenCharacterSelect(IScreenContext? currentScreen)
@@ -1769,6 +1825,7 @@ internal static class GameStateService
 
         if (combatState == null || currentScreen is not NCombatRoom room)
         {
+            ResetCombatActionReadiness();
             return false;
         }
 
@@ -1776,30 +1833,136 @@ internal static class GameStateService
 
         if (!CombatManager.Instance.IsInProgress ||
             CombatManager.Instance.IsOverOrEnding ||
-            !CombatManager.Instance.IsPlayPhase ||
             CombatManager.Instance.PlayerActionsDisabled)
         {
+            ResetCombatActionReadiness();
             return false;
         }
 
         if (combatRoom.Mode != CombatRoomMode.ActiveCombat)
         {
+            ResetCombatActionReadiness();
             return false;
         }
 
         var hand = combatRoom.Ui?.Hand;
         if (hand == null || hand.InCardPlay || hand.IsInCardSelection || hand.CurrentMode != MegaCrit.Sts2.Core.Nodes.Combat.NPlayerHand.Mode.Play)
         {
+            ResetCombatActionReadiness();
             return false;
         }
 
-        me = LocalContext.GetMe(combatState);
+        me = GetLocalPlayer(combatState);
         if (me == null || !me.Creature.IsAlive)
+        {
+            ResetCombatActionReadiness();
+            return false;
+        }
+
+        GameActionService.SyncCardPlayCounters(combatState.RoundNumber);
+        if (!IsLocalCombatTurnReady(me))
+        {
+            ResetCombatActionReadiness();
+            return false;
+        }
+
+        if (!IsCombatActionSnapshotStable(combatState, me))
+        {
+            return false;
+        }
+
+        if (!IsPlayerActionPhase(combatState, me))
+        {
+            ResetCombatActionReadiness();
+            return false;
+        }
+
+        return true;
+    }
+
+    private static bool IsLocalCombatTurnReady(Player me)
+    {
+        var playerCombatState = me.PlayerCombatState;
+        if (playerCombatState == null || playerCombatState.TurnNumber <= 0)
+        {
+            return false;
+        }
+
+        if (playerCombatState.Hand.Cards.Count == 0 &&
+            GameActionService.CardsPlayedThisTurn == 0)
         {
             return false;
         }
 
         return true;
+    }
+
+    private static bool IsCombatActionSnapshotStable(CombatState combatState, Player me)
+    {
+        if (!GameActionService.AreGameActionsSettled())
+        {
+            ResetCombatActionReadiness();
+            return false;
+        }
+
+        var signature = BuildCombatActionReadinessSignature(combatState, me);
+        var now = DateTime.UtcNow;
+
+        if (!string.Equals(signature, _lastCombatActionReadinessSignature, StringComparison.Ordinal))
+        {
+            _lastCombatActionReadinessSignature = signature;
+            _lastCombatActionReadinessSinceUtc = now;
+            return false;
+        }
+
+        return now - _lastCombatActionReadinessSinceUtc >= CombatActionSnapshotStableDelay;
+    }
+
+    private static string BuildCombatActionReadinessSignature(CombatState combatState, Player me)
+    {
+        var playerCombatState = me.PlayerCombatState;
+        var handCards = playerCombatState?.Hand.Cards.ToList() ?? new List<CardModel>();
+        var handSignature = string.Join(
+            ",",
+            handCards.Select(card => $"{card.Id.Entry}:{card.Pile?.Type.ToString() ?? "Unknown"}"));
+
+        return string.Join(
+            "|",
+            combatState.RoundNumber,
+            playerCombatState?.TurnNumber ?? 0,
+            playerCombatState?.Energy ?? 0,
+            playerCombatState?.Stars ?? 0,
+            handCards.Count,
+            handSignature);
+    }
+
+    private static void ResetCombatActionReadiness()
+    {
+        _lastCombatActionReadinessSignature = null;
+        _lastCombatActionReadinessSinceUtc = DateTime.MinValue;
+    }
+
+    public static NEndTurnButton? GetEndTurnButton(NCombatRoom? combatRoom)
+    {
+        if (combatRoom == null || !GodotObject.IsInstanceValid(combatRoom))
+        {
+            return null;
+        }
+
+        return combatRoom.Ui?.EndTurnButton
+            ?? FindDescendants<NEndTurnButton>(combatRoom).FirstOrDefault(GodotObject.IsInstanceValid);
+    }
+
+    public static bool IsEndTurnButtonReady(NEndTurnButton? button)
+    {
+        if (button == null || !GodotObject.IsInstanceValid(button) || !button.IsVisibleInTree() || !button.IsEnabled)
+        {
+            return false;
+        }
+
+        const BindingFlags flags = BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic;
+        var property = button.GetType().GetProperty("CanTurnBeEnded", flags);
+        return property?.GetValue(button) is not bool canTurnBeEnded || canTurnBeEnded;
     }
 
     private static string[] BuildAvailableActionNames(IScreenContext? currentScreen, CombatState? combatState, RunState? runState)
@@ -1839,6 +2002,11 @@ internal static class GameStateService
         if (CanAbandonRun(currentScreen))
         {
             names.Add("abandon_run");
+        }
+
+        if (CanSaveAndQuit(currentScreen, runState))
+        {
+            names.Add("save_and_quit");
         }
 
         if (CanOpenCharacterSelect(currentScreen))
@@ -2042,7 +2210,7 @@ internal static class GameStateService
 
     private static CombatPayload? BuildCombatPayload(CombatState? combatState)
     {
-        var me = LocalContext.GetMe(combatState);
+        var me = GetLocalPlayer(combatState);
         if (combatState == null || me?.PlayerCombatState == null)
         {
             return null;
@@ -2055,31 +2223,96 @@ internal static class GameStateService
         var connectedPlayerIds = GetConnectedPlayerIds(combatState.RunState as RunState);
         GameActionService.SyncCardPlayCounters(combatState.RoundNumber);
 
+        var playerPayload = new CombatPlayerPayload
+        {
+            current_hp = me.Creature.CurrentHp,
+            max_hp = me.Creature.MaxHp,
+            block = me.Creature.Block,
+            energy = me.PlayerCombatState.Energy,
+            stars = me.PlayerCombatState.Stars,
+            focus = me.Creature.GetPowerAmount<FocusPower>(),
+            powers = BuildCreaturePowerPayloads(me.Creature),
+            base_orb_slots = me.BaseOrbSlotCount,
+            orb_capacity = orbQueue.Capacity,
+            empty_orb_slots = Math.Max(0, orbQueue.Capacity - orbs.Count),
+            orbs = orbs.Select((orb, index) => BuildCombatOrbPayload(orb, index)).ToArray(),
+            cards_played_this_turn = GameActionService.CardsPlayedThisTurn,
+            attacks_played_this_turn = GameActionService.AttacksPlayedThisTurn,
+            skills_played_this_turn = GameActionService.SkillsPlayedThisTurn
+        };
+        var enemyPayloads = enemies.Select((enemy, index) => BuildEnemyPayload(enemy, index)).ToArray();
+        var lethalRisks = BuildCombatLethalRiskPayloads(playerPayload, enemyPayloads);
+
         return new CombatPayload
         {
-            player = new CombatPlayerPayload
-            {
-                current_hp = me.Creature.CurrentHp,
-                max_hp = me.Creature.MaxHp,
-                block = me.Creature.Block,
-                energy = me.PlayerCombatState.Energy,
-                stars = me.PlayerCombatState.Stars,
-                focus = me.Creature.GetPowerAmount<FocusPower>(),
-                powers = BuildCreaturePowerPayloads(me.Creature),
-                base_orb_slots = me.BaseOrbSlotCount,
-                orb_capacity = orbQueue.Capacity,
-                empty_orb_slots = Math.Max(0, orbQueue.Capacity - orbs.Count),
-                orbs = orbs.Select((orb, index) => BuildCombatOrbPayload(orb, index)).ToArray(),
-                cards_played_this_turn = GameActionService.CardsPlayedThisTurn,
-                attacks_played_this_turn = GameActionService.AttacksPlayedThisTurn,
-                skills_played_this_turn = GameActionService.SkillsPlayedThisTurn
-            },
+            player = playerPayload,
             players = GetOrderedCombatPlayers(combatState)
                 .Select(player => BuildCombatPlayerSummaryPayload(player, combatState, connectedPlayerIds, me.NetId))
                 .ToArray(),
             hand = hand.Select((card, index) => BuildHandCardPayload(combatState, card, index)).ToArray(),
-            enemies = enemies.Select((enemy, index) => BuildEnemyPayload(enemy, index)).ToArray()
+            enemies = enemyPayloads,
+            end_turn_will_kill_player = lethalRisks.Any(risk => risk.will_kill_player),
+            lethal_risks = lethalRisks
         };
+    }
+
+    private static CombatLethalRiskPayload[] BuildCombatLethalRiskPayloads(
+        CombatPlayerPayload player,
+        CombatEnemyPayload[] enemies)
+    {
+        var risks = new List<CombatLethalRiskPayload>();
+        var incomingDamage = enemies
+            .Where(enemy => enemy.is_alive)
+            .SelectMany(enemy => enemy.intents)
+            .Sum(intent => Math.Max(0, intent.total_damage.GetValueOrDefault()));
+
+        if (incomingDamage > 0)
+        {
+            var damageAfterBlock = Math.Max(0, incomingDamage - Math.Max(0, player.block));
+            if (damageAfterBlock >= player.current_hp)
+            {
+                risks.Add(new CombatLethalRiskPayload
+                {
+                    risk_id = "incoming_damage",
+                    source = "enemy_intents",
+                    will_kill_player = true,
+                    reason = "Enemy intent damage after current block is at least current HP.",
+                    incoming_damage = incomingDamage,
+                    damage_after_block = damageAfterBlock,
+                    player_hp = player.current_hp,
+                    player_block = player.block
+                });
+            }
+        }
+
+        foreach (var power in player.powers)
+        {
+            if (!IsSandpitPower(power) || power.amount is not int amount || amount > 1)
+            {
+                continue;
+            }
+
+            risks.Add(new CombatLethalRiskPayload
+            {
+                risk_id = "sandpit_countdown",
+                source = "player_power",
+                will_kill_player = true,
+                reason = "SANDPIT_POWER is at or below 1; ending turn is treated as lethal unless the boss dies first or Frantic Escape has already raised the counter.",
+                player_hp = player.current_hp,
+                player_block = player.block,
+                power_id = power.power_id,
+                power_amount = amount
+            });
+        }
+
+        return risks.ToArray();
+    }
+
+    private static bool IsSandpitPower(CombatPowerPayload power)
+    {
+        return string.Equals(power.power_id, "SANDPIT_POWER", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(power.name, "Sandpit", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(power.name, "沙坑", StringComparison.OrdinalIgnoreCase);
     }
 
     private static RunPayload? BuildRunPayload(IScreenContext? currentScreen, CombatState? combatState, RunState? runState)
@@ -2089,7 +2322,7 @@ internal static class GameStateService
             return null;
         }
 
-        var player = LocalContext.GetMe(runState);
+        var player = GetLocalPlayer(runState);
         if (player == null)
         {
             return null;
@@ -2195,9 +2428,9 @@ internal static class GameStateService
             return null;
         }
 
-        var liveHand = LocalContext.GetMe(combatState)?.PlayerCombatState?.Hand.Cards.ToList()
+        var liveHand = GetLocalPlayer(combatState)?.PlayerCombatState?.Hand.Cards.ToList()
             ?? new List<CardModel>();
-        var playerCombatState = LocalContext.GetMe(combatState)?.PlayerCombatState;
+        var playerCombatState = GetLocalPlayer(combatState)?.PlayerCombatState;
 
         return new
         {
@@ -2213,6 +2446,20 @@ internal static class GameStateService
                 attacks_played_this_turn = combat.player.attacks_played_this_turn,
                 skills_played_this_turn = combat.player.skills_played_this_turn
             },
+            end_turn_will_kill_player = combat.end_turn_will_kill_player,
+            lethal_risks = combat.lethal_risks.Select(risk => new
+            {
+                risk_id = risk.risk_id,
+                source = risk.source,
+                will_kill_player = risk.will_kill_player,
+                reason = risk.reason,
+                incoming_damage = risk.incoming_damage,
+                damage_after_block = risk.damage_after_block,
+                player_hp = risk.player_hp,
+                player_block = risk.player_block,
+                power_id = risk.power_id,
+                power_amount = risk.power_amount
+            }).ToArray(),
             hand = combat.hand.Select(card =>
                 BuildAgentHandCardPayload(
                     card,
@@ -2250,9 +2497,9 @@ internal static class GameStateService
             return null;
         }
 
-        var player = LocalContext.GetMe(runState);
+        var player = GetLocalPlayer(runState);
         var deckCards = player?.Deck.Cards.ToArray() ?? Array.Empty<CardModel>();
-        var combatPlayer = LocalContext.GetMe(combatState)?.PlayerCombatState;
+        var combatPlayer = GetLocalPlayer(combatState)?.PlayerCombatState;
 
         foreach (var effect in run.ascension_effects)
         {
@@ -3728,7 +3975,7 @@ internal static class GameStateService
             return null;
         }
 
-        var player = LocalContext.GetMe(runState);
+        var player = GetLocalPlayer(runState);
         var continueButton = screen.GetNodeOrNull<NButton>("%ContinueButton");
         var mainMenuButton = screen.GetNodeOrNull<NButton>("%MainMenuButton");
         var history = RunManager.Instance.History;
@@ -5142,6 +5389,10 @@ internal sealed class CombatPayload
     public CombatHandCardPayload[] hand { get; init; } = Array.Empty<CombatHandCardPayload>();
 
     public CombatEnemyPayload[] enemies { get; init; } = Array.Empty<CombatEnemyPayload>();
+
+    public bool end_turn_will_kill_player { get; init; }
+
+    public CombatLethalRiskPayload[] lethal_risks { get; init; } = Array.Empty<CombatLethalRiskPayload>();
 }
 
 internal sealed class RunPayload
@@ -5814,6 +6065,29 @@ internal sealed class CombatEnemyIntentPayload
     public int? total_damage { get; init; }
 
     public int? status_card_count { get; init; }
+}
+
+internal sealed class CombatLethalRiskPayload
+{
+    public string risk_id { get; init; } = string.Empty;
+
+    public string source { get; init; } = string.Empty;
+
+    public bool will_kill_player { get; init; }
+
+    public string reason { get; init; } = string.Empty;
+
+    public int? incoming_damage { get; init; }
+
+    public int? damage_after_block { get; init; }
+
+    public int? player_hp { get; init; }
+
+    public int? player_block { get; init; }
+
+    public string? power_id { get; init; }
+
+    public int? power_amount { get; init; }
 }
 
 internal sealed class CombatPowerPayload

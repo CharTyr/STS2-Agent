@@ -8,6 +8,7 @@
 - 不误用 `proceed`、旧索引、过期 screen 信息
 - 区分普通游玩、全量验证、debug 注入三种场景
 - 优先使用精简的 guided 工具集，减少 AI 被过多 MCP 工具干扰
+- 普通游玩时把每一步有意义决策写入 `agent_knowledge/run_logs/`，便于后续复盘
 
 ## 适用场景
 
@@ -107,6 +108,7 @@ debug 模式：
 3. 只调用 `available_actions` 里真实存在的动作
 4. 动作后重新读取状态
 5. 所有索引都从最新 payload 重新计算
+6. 按 `agent_knowledge/run_logs/README.md` 模板维护单局决策日志，记录种子号、角色、路线、阶段选择和理由
 
 这意味着它特别适合处理这些容易出错的情况：
 
