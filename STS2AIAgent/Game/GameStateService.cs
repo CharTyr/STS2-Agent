@@ -4805,7 +4805,7 @@ internal static class GameStateService
         return potion != null &&
             !potion.IsQueued &&
             !potion.Owner.Creature.IsDead &&
-            player.CanRemovePotions;
+            player.CanUseOrRemovePotions;
     }
 
     public static bool PotionRequiresTarget(CombatState? combatState, PotionModel potion)
