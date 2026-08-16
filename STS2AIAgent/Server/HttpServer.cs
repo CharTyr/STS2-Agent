@@ -1,4 +1,5 @@
 using System.Net;
+using System.Net.Sockets;
 using System.Threading;
 using MegaCrit.Sts2.Core.Logging;
 
@@ -8,6 +9,7 @@ public sealed class HttpServer
 {
     private const string DefaultHost = "127.0.0.1";
     private const int DefaultPort = 8080;
+    private const int AutoIncrementSpan = 32;
     private const string LogPrefix = "[STS2AIAgent.HttpServer]";
     private const int StartRetryCount = 20;
     private static readonly TimeSpan StartRetryDelay = TimeSpan.FromMilliseconds(250);
@@ -21,6 +23,14 @@ public sealed class HttpServer
 
     public static HttpServer Instance => LazyInstance.Value;
 
+    public string Host => DefaultHost;
+
+    public int Port { get; private set; } = DefaultPort;
+
+    public string Prefix { get; private set; } = $"http://{DefaultHost}:{DefaultPort}/";
+
+    public bool PortWasAutoIncremented { get; private set; }
+
     private HttpServer()
     {
     }
@@ -31,17 +41,46 @@ public sealed class HttpServer
         {
             if (_listener != null)
             {
-                Log.Info($"{LogPrefix} Already started");
+                Log.Info($"{LogPrefix} Already started on {Prefix}");
                 return;
             }
 
-            var prefix = ResolvePrefix();
-            _listener = StartListenerWithRetry(prefix);
+            var preferredPort = ResolvePreferredPort();
+            var allowIncrement = !IsExplicitPortConfigured();
+            var started = StartListener(preferredPort, allowIncrement);
+            _listener = started.Listener;
+            Port = started.Port;
+            PortWasAutoIncremented = started.Port != preferredPort;
+            Prefix = $"http://{DefaultHost}:{Port}/";
 
             _cts = new CancellationTokenSource();
             _listenLoopTask = Task.Run(() => ListenLoopAsync(_listener, _cts.Token));
-            Log.Info($"{LogPrefix} Listening on {prefix}");
+            Log.Info($"{LogPrefix} Listening on {Prefix}");
         }
+    }
+
+    public static int FindFreePort(int startPort)
+    {
+        var port = startPort is > 0 and <= 65535 ? startPort : DefaultPort;
+        for (var candidate = port; candidate <= Math.Min(65535, port + AutoIncrementSpan); candidate++)
+        {
+            TcpListener? listener = null;
+            try
+            {
+                listener = new TcpListener(IPAddress.Loopback, candidate);
+                listener.Start();
+                return candidate;
+            }
+            catch (SocketException)
+            {
+            }
+            finally
+            {
+                listener?.Stop();
+            }
+        }
+
+        throw new InvalidOperationException($"No free loopback port found in {startPort}..{startPort + AutoIncrementSpan}.");
     }
 
     public void Stop()
@@ -142,38 +181,73 @@ public sealed class HttpServer
         }
     }
 
-    private static HttpListener StartListenerWithRetry(string prefix)
+    private static (HttpListener Listener, int Port) StartListener(int preferredPort, bool allowIncrement)
     {
-        for (var attempt = 1; ; attempt++)
-        {
-            var listener = new HttpListener();
-            listener.Prefixes.Add(prefix);
+        HttpListenerException? lastConflict = null;
+        var maxPort = allowIncrement
+            ? Math.Min(65535, preferredPort + AutoIncrementSpan)
+            : preferredPort;
 
-            try
+        for (var port = preferredPort; port <= maxPort; port++)
+        {
+            var prefix = $"http://{DefaultHost}:{port}/";
+            var attempts = allowIncrement ? 2 : StartRetryCount;
+            for (var attempt = 1; attempt <= attempts; attempt++)
             {
-                listener.Start();
-                return listener;
-            }
-            catch (HttpListenerException ex) when (IsPrefixConflict(ex) && attempt < StartRetryCount)
-            {
-                listener.Close();
-                Log.Warn($"{LogPrefix} Prefix still busy, retrying start ({attempt}/{StartRetryCount - 1})...");
-                Thread.Sleep(StartRetryDelay);
+                var listener = new HttpListener();
+                listener.Prefixes.Add(prefix);
+
+                try
+                {
+                    listener.Start();
+                    if (port != preferredPort)
+                    {
+                        Log.Info($"{LogPrefix} Preferred port {preferredPort} was busy; bound {prefix}");
+                    }
+
+                    return (listener, port);
+                }
+                catch (HttpListenerException ex) when (IsPrefixConflict(ex))
+                {
+                    listener.Close();
+                    lastConflict = ex;
+                    if (attempt < attempts)
+                    {
+                        Log.Warn($"{LogPrefix} Prefix still busy, retrying start ({attempt}/{attempts - 1})...");
+                        Thread.Sleep(StartRetryDelay);
+                    }
+                }
             }
         }
+
+        if (lastConflict != null)
+        {
+            throw lastConflict;
+        }
+
+        throw new InvalidOperationException(
+            $"Failed to bind STS2 AI Agent HTTP API starting at port {preferredPort}.");
     }
 
-    private static string ResolvePrefix()
+    private static bool IsExplicitPortConfigured()
+    {
+        var rawPort = Environment.GetEnvironmentVariable("STS2_API_PORT");
+        return !string.IsNullOrWhiteSpace(rawPort) &&
+            int.TryParse(rawPort.Trim(), out var port) &&
+            port is > 0 and <= 65535;
+    }
+
+    private static int ResolvePreferredPort()
     {
         var rawPort = Environment.GetEnvironmentVariable("STS2_API_PORT");
         if (!string.IsNullOrWhiteSpace(rawPort) &&
             int.TryParse(rawPort.Trim(), out var port) &&
             port is > 0 and <= 65535)
         {
-            return $"http://{DefaultHost}:{port}/";
+            return port;
         }
 
-        return $"http://{DefaultHost}:{DefaultPort}/";
+        return DefaultPort;
     }
 
     private static bool IsPrefixConflict(HttpListenerException ex)

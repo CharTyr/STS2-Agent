@@ -1,5 +1,8 @@
 using System.Threading;
+using Godot;
 using MegaCrit.Sts2.Core.Logging;
+using MegaCrit.Sts2.Core.Nodes;
+using Environment = System.Environment;
 
 namespace STS2AIAgent.Game;
 
@@ -63,6 +66,24 @@ internal static class GameThread
         return completionSource.Task;
     }
 
+    public static Task InvokeAsync(Action action)
+    {
+        return InvokeAsync(() =>
+        {
+            action();
+            return true;
+        });
+    }
+
+    public static Task InvokeAsync(Func<Task> action)
+    {
+        return InvokeAsync(async () =>
+        {
+            await action();
+            return true;
+        });
+    }
+
     public static Task<T> InvokeAsync<T>(Func<Task<T>> action)
     {
         if (_syncContext == null)
@@ -98,5 +119,39 @@ internal static class GameThread
                 Log.Warn($"{LogPrefix} Failed to propagate InvokeAsync async exception because the completion source was already completed: {ex}");
             }
         }
+    }
+
+    public static Task WaitForNextFrameAsync()
+    {
+        if (_syncContext == null)
+        {
+            return Task.Delay(16);
+        }
+
+        if (Environment.CurrentManagedThreadId == _threadId)
+        {
+            return WaitForNextFrameCoreAsync();
+        }
+
+        return InvokeAsync(WaitForNextFrameCoreAsync);
+    }
+
+    private static async Task WaitForNextFrameCoreAsync()
+    {
+        var game = NGame.Instance;
+        if (game == null || !GodotObject.IsInstanceValid(game))
+        {
+            await Task.Delay(TimeSpan.FromMilliseconds(16));
+            return;
+        }
+
+        var tree = game.GetTree();
+        if (tree == null || !GodotObject.IsInstanceValid(tree))
+        {
+            await Task.Delay(TimeSpan.FromMilliseconds(16));
+            return;
+        }
+
+        await game.ToSignal(tree, SceneTree.SignalName.ProcessFrame);
     }
 }

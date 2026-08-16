@@ -54,7 +54,7 @@ namespace STS2AIAgent.Game;
 internal static class GameStateService
 {
     private const int StateVersion = 10;
-    private const int AgentViewVersion = 4;
+    private const int AgentViewVersion = 5;
     private static readonly TimeSpan CombatActionSnapshotStableDelay = TimeSpan.FromMilliseconds(200);
     private static string? _lastCombatActionReadinessSignature;
     private static DateTime _lastCombatActionReadinessSinceUtc = DateTime.MinValue;
@@ -121,6 +121,8 @@ internal static class GameStateService
                 runState,
                 combat,
                 run,
+                multiplayer,
+                multiplayerLobby,
                 map,
                 selection,
                 characterSelect,
@@ -2396,6 +2398,8 @@ internal static class GameStateService
         RunState? runState,
         CombatPayload? combat,
         RunPayload? run,
+        MultiplayerPayload? multiplayer,
+        MultiplayerLobbyPayload? multiplayerLobby,
         MapPayload? map,
         SelectionPayload? selection,
         CharacterSelectPayload? characterSelect,
@@ -2422,6 +2426,8 @@ internal static class GameStateService
             available_actions = availableActions,
             combat = BuildAgentCombatPayload(combatState, combat, glossaryTerms),
             run = BuildAgentRunPayload(combatState, runState, run, glossaryTerms),
+            multiplayer = BuildAgentMultiplayerPayload(multiplayer),
+            multiplayer_lobby = BuildAgentMultiplayerLobbyPayload(multiplayerLobby),
             map = BuildAgentMapPayload(map),
             selection = BuildAgentSelectionPayload(selection, glossaryTerms),
             character_select = BuildAgentCharacterSelectPayload(characterSelect),
@@ -2435,6 +2441,63 @@ internal static class GameStateService
             modal = BuildAgentModalPayload(modal),
             game_over = BuildAgentGameOverPayload(gameOver),
             glossary = BuildAgentGlossary(glossaryTerms)
+        };
+    }
+
+    private static object? BuildAgentMultiplayerPayload(MultiplayerPayload? multiplayer)
+    {
+        if (multiplayer == null)
+        {
+            return null;
+        }
+
+        return new
+        {
+            is_multiplayer = multiplayer.is_multiplayer,
+            net_game_type = multiplayer.net_game_type,
+            local_player_id = multiplayer.local_player_id,
+            player_count = multiplayer.player_count,
+            connected_player_ids = multiplayer.connected_player_ids
+        };
+    }
+
+    private static object? BuildAgentMultiplayerLobbyPayload(MultiplayerLobbyPayload? lobby)
+    {
+        if (lobby == null)
+        {
+            return null;
+        }
+
+        return new
+        {
+            has_lobby = lobby.has_lobby,
+            is_host = lobby.is_host,
+            is_client = lobby.is_client,
+            local_ready = lobby.local_ready,
+            can_host = lobby.can_host,
+            can_join = lobby.can_join,
+            can_ready = lobby.can_ready,
+            can_disconnect = lobby.can_disconnect,
+            join_host = lobby.join_host,
+            join_port = lobby.join_port,
+            selected_character_id = lobby.selected_character_id,
+            player_count = lobby.player_count,
+            max_players = lobby.max_players,
+            players = lobby.players.Select((player, index) => new
+            {
+                i = index,
+                player_id = player.player_id,
+                is_local = player.is_local,
+                character = player.character_name ?? player.character_id,
+                ready = player.is_ready
+            }).ToArray(),
+            characters = lobby.characters.Select(character => new
+            {
+                i = character.index,
+                line = character.name,
+                locked = character.is_locked,
+                selected = character.is_selected
+            }).ToArray()
         };
     }
 

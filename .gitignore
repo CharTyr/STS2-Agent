@@ -1,5 +1,8 @@
 STS2AIAgent/bin/
 STS2AIAgent/obj/
+STS2AIAgent.Tests/bin/
+STS2AIAgent.Tests/obj/
+STS2AIAgent.Tests/TestResults/
 STS2AIAgent/_scratch/
 STS2AIAgent/local.props
 build/

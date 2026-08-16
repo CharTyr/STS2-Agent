@@ -3,7 +3,7 @@
   "pck_name": "STS2AIAgent",
   "name": "STS2 AI Agent",
   "author": "chart",
-  "description": "Minimal HTTP bootstrap mod for STS2 AI Agent.",
+  "description": "In-game AI agent overlay plus local HTTP API for Slay the Spire 2.",
   "version": "0.8.1",
   "has_pck": true,
   "has_dll": true,

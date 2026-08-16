@@ -4,6 +4,7 @@ using System.Text;
 using System.Threading;
 using MegaCrit.Sts2.Core.Debug;
 using MegaCrit.Sts2.Core.Logging;
+using STS2AIAgent.Config;
 using STS2AIAgent.Game;
 
 namespace STS2AIAgent.Server;
@@ -43,7 +44,10 @@ internal static class Router
                         mod_version = ModVersion,
                         protocol_version = ProtocolVersion,
                         game_version = ReleaseInfoManager.Instance.ReleaseInfo?.Version ?? "unknown",
-                        status = "ready"
+                        status = "ready",
+                        api_host = HttpServer.Instance.Host,
+                        api_port = HttpServer.Instance.Port,
+                        instance_role = InstanceRole.Current
                     }
                 });
                 statusCode = 200;

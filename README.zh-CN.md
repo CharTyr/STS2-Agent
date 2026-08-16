@@ -4,18 +4,20 @@ https://github.com/user-attachments/assets/89353468-a299-4315-9516-e520bcbfbd4b
 
 English README: [README.md](./README.md)
 
-`STS2 AI Agent` 是一个给《Slay the Spire 2》用的游戏 Mod + MCP Server 组合：
+`STS2 AI Agent` 是《Slay the Spire 2》的游戏内 AI Agent Mod。安装后即可在可视化窗口里配置模型端点、对话、调整思考强度、让模型自动游玩；有视觉能力的模型可以直接看画面，没有视觉的模型可以另配一个视觉模型当外挂。也可以从窗口拉起本地第二实例，和模型一起联机。
 
-- `STS2AIAgent`：把游戏状态和操作暴露为本地 HTTP API
-- `mcp_server`：把这套本地 API 包装成 MCP Server，方便接入支持 MCP 的 AI 客户端
+本地 HTTP API 与 MCP Server 仍然保留，给开发者和外部客户端用。
 
-更细的工具说明在 [mcp_server/README.md](./mcp_server/README.md)，如果你要搭配 agent 工作流，优先看 [skills/sts2-mcp-player/SKILL.md](./skills/sts2-mcp-player/SKILL.md)。
+- `STS2AIAgent`：游戏内窗口 + 本地 HTTP API（默认 `http://127.0.0.1:8080`）
+- `mcp_server`：可选的 MCP 封装
 
-## 快速开始
+MCP 工具说明见 [mcp_server/README.md](./mcp_server/README.md)。游戏内自动游玩沿用 [skills/sts2-mcp-player/SKILL.md](./skills/sts2-mcp-player/SKILL.md) 的状态优先规则。
+
+## 快速开始（玩家）
 
 ### 1. 安装 Mod
 
-下载并解压 release 后，把下面这些文件复制到你的游戏目录 `mods/` 下：
+下载并解压 release 后，把下面这些文件复制到游戏目录 `mods/` 下：
 
 ```text
 STS2AIAgent.dll
@@ -39,21 +41,36 @@ Slay the Spire 2/
     mod_id.json
 ```
 
-### 2. 启动游戏并确认 Mod 生效
+### 2. 打开游戏内 Agent 窗口
 
-先正常启动一次游戏，让 Mod 随游戏一起加载。
+正常启动游戏。按 **F8**（可改）或点屏幕右侧的 **AI** 标签。
 
-然后在浏览器打开：
+窗口里可以：
+
+1. **设置**：添加多个 OpenAI 兼容端点（OpenAI / DeepSeek / 硅基流动 / OpenRouter / Ollama / LM Studio 等）和模型，选择主对话模型；可选游玩模型、外挂视觉模型。
+2. **对话**：和模型聊天。可勾选「附带当前状态」或「附带截图」。
+3. **游玩**：开始/暂停自动游玩，或单步。思考强度为 Off / Low / Medium / High。
+4. **双开**：启动第二个本地游戏进程，本机开大厅，同伴实例由模型自动加入并游玩。
+
+配置保存在 `%AppData%/STS2AIAgent/settings.json`，两个本地实例共用。
+
+如果主模型没有视觉，把另一个有视觉的模型设为视觉角色。自动游玩会先截图让视觉模型描述，再把文字观察交给主模型。
+
+本地双开目前走游戏 debug 的 `multiplayer test` 大厅。Steam 可能阻止第二进程。启动器不会杀掉当前游戏。
+
+### 3. 可选：确认 HTTP API
+
+玩家不必打开浏览器。开发者仍可访问：
 
 ```text
 http://127.0.0.1:8080/health
 ```
 
-只要能看到返回结果，就说明 Mod 已经跑起来了。
+`/health` 现在会返回 `api_port` 和 `instance_role`。8080 被占用时会自动改绑 8081、8082……（除非设置了 `STS2_API_PORT`）。
 
-### 3. 启动 MCP Server
+## 可选：MCP Server（开发者）
 
-先准备运行环境：
+游戏内 Agent 不依赖 MCP。如果你要用 Cursor / Codex 或其他 MCP 客户端驱动 HTTP API，再启动它。
 
 1. 安装 `Python 3.11+`
 2. 安装 `uv`
@@ -70,7 +87,7 @@ macOS：
 brew install uv
 ```
 
-然后直接启动 `stdio` MCP。
+然后启动 `stdio` MCP。
 
 Windows：
 
@@ -84,81 +101,49 @@ macOS / Linux：
 ./scripts/start-mcp-stdio.sh
 ```
 
-这就是默认推荐用法。大多数桌面 AI 客户端接 MCP，都优先用 `stdio`。
-
-### 4. 连接你的 MCP 客户端
-
-如果客户端支持命令式启动，把工作目录指向 `mcp_server/`，启动命令填：
-
-```text
-uv run sts2-mcp-server
-```
-
-如果你的客户端更适合连 HTTP，再启动网络版：
-
-Windows：
+如果客户端更适合 HTTP：
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File ".\scripts\start-mcp-network.ps1"
 ```
 
-macOS / Linux：
-
-```bash
-./scripts/start-mcp-network.sh
-```
-
-默认 MCP 地址：
-
-```text
-http://127.0.0.1:8765/mcp
-```
+默认 MCP 地址：`http://127.0.0.1:8765/mcp`
 
 ## 这个项目现在能做什么
 
-当前 `main` 分支提供的是一套可直接游玩的完整能力：
-
-- 读取游戏状态
+- 游戏内窗口：多端点/多模型、对话、思考强度、自动游玩、截图视觉、本地双开联机
+- 读取游戏状态（compact `agent_view` 现含多人大厅摘要）
 - 获取当前可执行动作
 - 执行战斗、奖励、商店、地图、事件、休息点、宝箱、尖塔选择、Bundle 选择等操作
-- 增强的战斗和运行载荷（Ascension、act/boss ID、enemy/move ID），支持 AlphaZero 训练
-- `resolve_rewards` 原子动作，精确控制奖励领取
-- 通过 SSE 事件减少高频轮询
-- 以 `stdio` 或 HTTP 方式暴露 MCP
-- 通过 Mod API 提供卡牌、遗物、敌人、药水、事件等实时元数据查询
-- 支持 planner / combat 分层 handoff 流程
-- 角色选择界面 `increase_ascension` / `decrease_ascension` 控制
+- 可选 MCP（`stdio` 或 HTTP）给外部 Agent
+- 通过 Mod API 提供卡牌、遗物、敌人、药水、事件等实时元数据
 
-更细的工具说明在 [mcp_server/README.md](./mcp_server/README.md)。
+更细的 MCP 工具说明在 [mcp_server/README.md](./mcp_server/README.md)。
 
 ## 常见问题
 
+### 装了 Mod 但看不到窗口
+
+按 **F8**，或点右侧 **AI** 标签。确认三个文件都在 Steam 游戏目录的 `mods/` 下。
+
 ### `http://127.0.0.1:8080/health` 打不开
 
-优先检查这几件事：
+优先检查：
 
 1. 游戏是否真的已经启动
-2. `STS2AIAgent.dll`、`STS2AIAgent.pck` 和 `mod_id.json` 是否都放进了游戏目录的 `mods/`
-3. 文件名有没有被系统自动改名或重复
+2. 三个 Mod 文件是否都在游戏 `mods/` 目录
+3. 8080 是否已被另一实例占用，试 `http://127.0.0.1:8081/health`
 4. 你放的是 Steam 游戏目录，不是仓库目录
 
 ### MCP 能启动，但读不到游戏状态
 
-这通常表示 `mcp_server` 启动了，但游戏里的 Mod 没连上。先确认：
-
-1. 游戏正在运行
-2. `http://127.0.0.1:8080/health` 可访问
-3. MCP 仍然在连默认地址 `http://127.0.0.1:8080`
+这通常表示 `mcp_server` 启动了，但游戏里的 Mod 没连上。请确认实际 `api_port` 上的 `/health`。
 
 ### 要不要开 debug 动作
 
-正常使用不需要。
-
-像 `run_console_command` 这种开发期调试工具默认关闭，发布和日常使用都建议保持关闭。
+正常使用不需要。窗口内双开会在内部打开 debug 多人大厅，不必把 `run_console_command` 暴露给 MCP。
 
 ## 从源码构建
-
-如果你不是单纯使用 release，而是要自己构建：
 
 Windows：
 
@@ -172,15 +157,22 @@ macOS / Linux：
 ./scripts/build-mod.sh --configuration Release
 ```
 
+不依赖游戏的核心单测：
+
+```powershell
+dotnet run --project STS2AIAgent.Tests/STS2AIAgent.Tests.csproj
+```
+
 更完整的环境变量、路径探测和验证流程见 [build-and-env.md](./build-and-env.md)。
 
 ## 仓库结构
 
-- `STS2AIAgent/`：游戏 Mod 源码
-- `mcp_server/`：MCP Server 源码
+- `STS2AIAgent/`：游戏 Mod 源码（窗口、LLM 客户端、Agent 循环、HTTP API）
+- `STS2AIAgent.Tests/`：设置、LLM JSON、Agent 循环单测
+- `mcp_server/`：可选 MCP Server 源码
 - `scripts/`：启动、构建、验证脚本
 - `docs/`：补充文档
-- `skills/`：配套 Skill
+- `skills/`：给 MCP 客户端用的配套 Skill
 
 ## License
 

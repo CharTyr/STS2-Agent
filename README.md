@@ -4,14 +4,16 @@ https://github.com/user-attachments/assets/89353468-a299-4315-9516-e520bcbfbd4b
 
 中文版说明请见 [README.zh-CN.md](./README.zh-CN.md).
 
-`STS2 AI Agent` is a Slay the Spire 2 mod + MCP server bundle:
+`STS2 AI Agent` is a Slay the Spire 2 mod with an in-game AI overlay. After you install the mod, you can configure model endpoints, chat, set thinking intensity, let the model play, optionally attach vision, and launch a local second instance for co-op with the model.
 
-- `STS2AIAgent`: exposes game state and actions through a local HTTP API
-- `mcp_server`: wraps that local API as an MCP server for AI clients
+The local HTTP API and MCP server remain available for developers and external clients.
 
-Detailed MCP tool documentation lives in [mcp_server/README.md](./mcp_server/README.md). If you want an agent workflow on top of it, start with [skills/sts2-mcp-player/SKILL.md](./skills/sts2-mcp-player/SKILL.md).
+- `STS2AIAgent`: in-game overlay + local HTTP API (`http://127.0.0.1:8080` by default)
+- `mcp_server`: optional MCP wrapper around that API
 
-## Quick Start
+Detailed MCP tool documentation lives in [mcp_server/README.md](./mcp_server/README.md). The in-game play loop follows the same state-first rules as [skills/sts2-mcp-player/SKILL.md](./skills/sts2-mcp-player/SKILL.md).
+
+## Quick Start (Players)
 
 ### 1. Install The Mod
 
@@ -39,21 +41,36 @@ Slay the Spire 2/
     mod_id.json
 ```
 
-### 2. Start The Game And Confirm The Mod Is Loaded
+### 2. Open The In-Game Agent Window
 
-Launch the game normally so the mod can load with it.
+Launch the game normally. Press **F8** (configurable) or the **AI** tab on the right edge.
 
-Then open:
+In the overlay:
+
+1. **Settings**: add one or more OpenAI-compatible endpoints (OpenAI, DeepSeek, SiliconFlow, OpenRouter, Ollama, LM Studio, …), add models, then pick the conversation model. Optionally pick a play model and a vision model.
+2. **Chat**: talk to the model. Enable “attach current state” or “attach screenshot” as needed.
+3. **Play**: start auto-play or step once. Thinking intensity is Off / Low / Medium / High.
+4. **Dual instance**: launch a second local game process, host a lobby here, and let the companion instance join and play.
+
+Settings are stored in `%AppData%/STS2AIAgent/settings.json` and are shared by both local instances.
+
+If the conversation model has no vision, assign another vision-capable model as the vision role. Auto-play will then send a screenshot to that model and inject a text caption.
+
+Local dual-instance currently uses the game debug `multiplayer test` lobby. Steam may block a second process. The launcher does not kill your current game.
+
+### 3. Optional: Confirm The HTTP API
+
+The overlay does not need a browser. Developers can still open:
 
 ```text
 http://127.0.0.1:8080/health
 ```
 
-If the endpoint responds, the mod is running.
+`/health` now also reports `api_port` and `instance_role`. If 8080 is busy, the mod binds 8081, 8082, … unless `STS2_API_PORT` is set.
 
-### 3. Start The MCP Server
+## Optional: MCP Server (Developers)
 
-Prepare the environment first:
+MCP is not required for the in-game agent. Keep using it if you want Cursor / Codex or another MCP client to drive the HTTP API.
 
 1. Install `Python 3.11+`
 2. Install `uv`
@@ -84,81 +101,49 @@ macOS / Linux:
 ./scripts/start-mcp-stdio.sh
 ```
 
-This is the recommended default. Most desktop AI clients prefer `stdio` MCP integration.
-
-### 4. Connect Your MCP Client
-
-If your client supports command-based MCP startup, point its working directory at `mcp_server/` and use:
-
-```text
-uv run sts2-mcp-server
-```
-
-If your client works better over HTTP, start the network server instead.
-
-Windows:
+If your client works better over HTTP:
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File ".\scripts\start-mcp-network.ps1"
 ```
 
-macOS / Linux:
-
-```bash
-./scripts/start-mcp-network.sh
-```
-
-Default MCP endpoint:
-
-```text
-http://127.0.0.1:8765/mcp
-```
+Default MCP endpoint: `http://127.0.0.1:8765/mcp`
 
 ## What The Project Can Do
 
-The current `main` branch provides a playable MCP integration for STS2, including:
+- In-game overlay: multi-endpoint / multi-model config, chat, thinking intensity, auto-play, screenshot vision, local dual-instance co-op
+- Reading live game state (compact `agent_view` now includes multiplayer lobby summaries)
+- Listing currently legal actions
+- Driving combat, rewards, shops, map routing, events, rest sites, chests, capstone selection, and bundle selection
+- Optional MCP over `stdio` or HTTP for external agents
+- Live game metadata for cards, relics, monsters, potions, and events via the Mod API
 
-- reading live game state
-- listing currently legal actions
-- driving combat, rewards, shops, map routing, events, rest sites, chests, capstone selection, and bundle selection
-- enriched combat and run payloads (Ascension, act/boss ID, enemy/move ID) for AlphaZero training
-- `resolve_rewards` atomic action for controlled reward resolution
-- reducing polling through SSE events
-- exposing MCP over `stdio` or HTTP
-- serving live game metadata for cards, relics, monsters, potions, and events via the Mod API
-- supporting layered planner / combat agent handoff flows
-- `increase_ascension` / `decrease_ascension` controls in character select
-
-See [mcp_server/README.md](./mcp_server/README.md) for the detailed tool surface.
+See [mcp_server/README.md](./mcp_server/README.md) for the MCP tool surface.
 
 ## FAQ
+
+### I installed the mod but there is no window
+
+Press **F8** or click the **AI** tab on the right edge. Confirm `STS2AIAgent.dll`, `STS2AIAgent.pck`, and `mod_id.json` are in the Steam game `mods/` directory.
 
 ### `http://127.0.0.1:8080/health` Does Not Open
 
 Check these first:
 
 1. The game is actually running
-2. `STS2AIAgent.dll`, `STS2AIAgent.pck`, and `mod_id.json` are all inside the game's `mods/` directory
-3. The files were not duplicated or renamed by the OS
+2. The three mod files are inside the game's `mods/` directory
+3. Another instance already took 8080 — try `http://127.0.0.1:8081/health`
 4. You copied them into the Steam game directory, not the repository directory
 
 ### The MCP Server Starts But Cannot Read Game State
 
-That usually means `mcp_server` is running, but the in-game mod is not connected. Confirm:
-
-1. The game is running
-2. `http://127.0.0.1:8080/health` is reachable
-3. The MCP server is still pointing at `http://127.0.0.1:8080`
+That usually means `mcp_server` is running, but the in-game mod is not connected. Confirm `/health` on the actual `api_port`.
 
 ### Should I Enable Debug Actions?
 
-Usually no.
-
-Developer-only actions such as `run_console_command` are disabled by default and should stay disabled in normal use and releases.
+Usually no. Dual-instance from the overlay opens the debug multiplayer test scene internally and does not require you to expose `run_console_command` to MCP.
 
 ## Building From Source
-
-If you are building from source instead of using a release package:
 
 Windows:
 
@@ -172,15 +157,22 @@ macOS / Linux:
 ./scripts/build-mod.sh --configuration Release
 ```
 
+Core unit tests (no game required):
+
+```powershell
+dotnet run --project STS2AIAgent.Tests/STS2AIAgent.Tests.csproj
+```
+
 More complete environment, path-discovery, and validation notes are in [build-and-env.md](./build-and-env.md).
 
 ## Repository Layout
 
-- `STS2AIAgent/`: game mod source
-- `mcp_server/`: MCP server source
+- `STS2AIAgent/`: game mod source (overlay, LLM client, agent loop, HTTP API)
+- `STS2AIAgent.Tests/`: unit tests for settings, LLM JSON, and the agent loop
+- `mcp_server/`: optional MCP server source
 - `scripts/`: startup, build, and validation scripts
 - `docs/`: supporting documentation
-- `skills/`: companion skills
+- `skills/`: companion skills for MCP clients
 
 ## License
 

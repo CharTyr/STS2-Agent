@@ -3538,7 +3538,7 @@ internal static class GameActionService
         };
     }
 
-    private static async Task<ActionResponsePayload> ExecuteRunConsoleCommandAsync(ActionRequest request)
+    private static Task<ActionResponsePayload> ExecuteRunConsoleCommandAsync(ActionRequest request)
     {
         if (!AreDebugActionsEnabled())
         {
@@ -3548,7 +3548,17 @@ internal static class GameActionService
             });
         }
 
-        var command = request.command?.Trim();
+        return ExecuteConsoleCommandCoreAsync(request.command);
+    }
+
+    internal static Task<ActionResponsePayload> ExecuteInternalConsoleCommandAsync(string command)
+    {
+        return ExecuteConsoleCommandCoreAsync(command);
+    }
+
+    private static async Task<ActionResponsePayload> ExecuteConsoleCommandCoreAsync(string? rawCommand)
+    {
+        var command = rawCommand?.Trim();
         if (string.IsNullOrWhiteSpace(command))
         {
             throw new ApiException(400, "invalid_request", "command is required.", new
@@ -4716,28 +4726,13 @@ internal static class GameActionService
     /// <summary>
     /// Waits for the next game frame via Godot's ProcessFrame signal.
     /// When NGame or SceneTree is unavailable (e.g. during shutdown),
-    /// falls back to Task.Delay WITHOUT ConfigureAwait(false) to preserve
-    /// the game thread's SynchronizationContext. This is critical 闂?using
-    /// ConfigureAwait(false) would cause subsequent loop iterations to run
-    /// on a thread-pool thread, breaking Godot object access safety.
+    /// falls back to Task.Delay without ConfigureAwait(false) to preserve
+    /// the game thread SynchronizationContext. Using ConfigureAwait(false)
+    /// would resume on a thread-pool thread and break Godot object access.
     /// </summary>
-    private static async Task WaitForNextFrameAsync()
+    private static Task WaitForNextFrameAsync()
     {
-        var game = NGame.Instance;
-        if (game == null || !GodotObject.IsInstanceValid(game))
-        {
-            await Task.Delay(TimeSpan.FromMilliseconds(16));
-            return;
-        }
-
-        var tree = game.GetTree();
-        if (tree == null || !GodotObject.IsInstanceValid(tree))
-        {
-            await Task.Delay(TimeSpan.FromMilliseconds(16));
-            return;
-        }
-
-        await game.ToSignal(tree, SceneTree.SignalName.ProcessFrame);
+        return GameThread.WaitForNextFrameAsync();
     }
 }
 

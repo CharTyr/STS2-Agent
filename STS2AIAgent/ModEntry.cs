@@ -1,8 +1,10 @@
 using System.Threading;
 using MegaCrit.Sts2.Core.Logging;
 using MegaCrit.Sts2.Core.Modding;
+using STS2AIAgent.Agent;
 using STS2AIAgent.Game;
 using STS2AIAgent.Server;
+using STS2AIAgent.Ui;
 
 namespace STS2AIAgent;
 
@@ -20,7 +22,9 @@ public static class ModEntry
         GameThread.Initialize();
         GameEventService.Instance.Start();
         HttpServer.Instance.Start();
-        Log.Info($"{LogPrefix} Ready");
+        AgentRuntime.Instance.Initialize();
+        AgentOverlayHost.Install();
+        Log.Info($"{LogPrefix} Ready on {HttpServer.Instance.Prefix}");
     }
 
     private static void RegisterShutdownHooks()
@@ -38,6 +42,8 @@ public static class ModEntry
     {
         try
         {
+            AgentRuntime.Instance.Shutdown();
+            AgentOverlayHost.Uninstall();
             GameEventService.Instance.Stop();
             HttpServer.Instance.Stop();
         }

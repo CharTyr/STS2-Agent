@@ -1,5 +1,19 @@
 # Changelog
 
+## Unreleased
+
+### Added
+
+- In-game agent overlay (F8 / right-edge AI tab): multi-endpoint and multi-model settings, chat, thinking intensity, auto-play, screenshot vision, and local dual-instance launch.
+- OpenAI-compatible LLM client with tool calling; optional vision model can caption screenshots for non-vision play models.
+- HTTP API auto-binds the next port when 8080 is taken. `/health` reports `api_port` and `instance_role`.
+- Compact `agent_view` now includes `multiplayer` and `multiplayer_lobby` summaries.
+
+### Notes
+
+- Overlay starts hidden (F8 / AI tab to open). Chat is read-only unless the player asks the model to play or checks “允许代打”.
+- Companion dual-instance no longer sets `STS2_ENABLE_DEBUG_ACTIONS`; lobby setup uses the internal console path only.
+
 ## v0.8.1 - 2026-08-16
 
 ### Highlights

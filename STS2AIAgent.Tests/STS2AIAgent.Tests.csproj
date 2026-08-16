@@ -1,0 +1,22 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net9.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <RootNamespace>STS2AIAgent.Tests</RootNamespace>
+    <AssemblyName>STS2AIAgent.Tests</AssemblyName>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Compile Include="..\STS2AIAgent\Config\*.cs" Link="Config\%(Filename)%(Extension)" />
+    <Compile Include="..\STS2AIAgent\Llm\*.cs" Link="Llm\%(Filename)%(Extension)" />
+    <Compile Include="..\STS2AIAgent\Agent\AgentLoop.cs" Link="Agent\AgentLoop.cs" />
+    <Compile Include="..\STS2AIAgent\Agent\AgentTools.cs" Link="Agent\AgentTools.cs" />
+    <Compile Include="..\STS2AIAgent\Agent\ActIndexValidator.cs" Link="Agent\ActIndexValidator.cs" />
+    <Compile Include="..\STS2AIAgent\Agent\PlayIntent.cs" Link="Agent\PlayIntent.cs" />
+    <Compile Include="..\STS2AIAgent\Agent\GameDataFilter.cs" Link="Agent\GameDataFilter.cs" />
+    <Compile Include="..\STS2AIAgent\Agent\IGameBridge.cs" Link="Agent\IGameBridge.cs" />
+    <Compile Include="..\STS2AIAgent\Agent\PlayPrompt.cs" Link="Agent\PlayPrompt.cs" />
+  </ItemGroup>
+</Project>
