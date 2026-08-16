@@ -1,5 +1,48 @@
 # Changelog
 
+## v0.8.1 - 2026-08-16
+
+### Highlights
+
+- Compatible with Slay the Spire 2 `v0.111.0`.
+- Standard singleplayer new runs work again through the 0.111 character-select submenu and FTUE confirm flow.
+- Card rules text in `/state` no longer triggers mega-text localization errors.
+
+### Fixed
+
+- Restored mod load on 0.111 after `LobbyPlayer` was split into `StartRunLobbyPlayer`. JSON field names are unchanged.
+- Read `StartRunLobby` max players from `_maxPlayers` and `RunLobby` connections from `PlayerIds`.
+- `open_character_select` now opens `NSingleplayerSubmenu` and clicks Standard instead of calling `OpenCharacterSelect`.
+- Confirm/dismiss modal lookup now covers `NVerticalPopup` Yes/No buttons, `NFtueConfirmButton`, and single-button FTUE prompts such as `NAscensionSingleplayerFtue`.
+- Card rules text uses `GetRawText()` so `{Damage}` / `{Block}` placeholders no longer spam localization errors.
+- Combat and multiplayer tests wait for real progression actions instead of treating animation-only `save_and_quit` as failure.
+
+### Added
+
+- `scripts/test-natural-room-chain.ps1` walks event → map → destination without debug room jumps, and is included in full regression.
+
+### Compatibility
+
+- Verified against Slay the Spire 2 `v0.111.0`.
+- Mod health endpoint reports protocol version `2026-03-11-v1`.
+
+### Known limitations
+
+- `open_character_select` starts Standard mode only; Daily and Custom are not clicked.
+- A host-side debug `room RestSite` jump can still fail after multiplayer reward resolution. Normal AI-driven multiplayer play is unaffected.
+
+## v0.8.0 - 2026-07-06
+
+### Highlights
+
+- Compatible with Slay the Spire 2 `v0.107.1` / `v0.108.0`.
+- Added `save_and_quit` and tighter combat action readiness.
+
+### Compatibility
+
+- Verified against Slay the Spire 2 `v0.107.1` / `v0.108.0`.
+- Mod health endpoint reports protocol version `2026-03-11-v1`.
+
 ## v0.7.1 - 2026-05-12
 
 ### Fixed

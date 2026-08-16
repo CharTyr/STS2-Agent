@@ -6,6 +6,7 @@ using MegaCrit.Sts2.Core.Entities.Cards;
 using MegaCrit.Sts2.Core.Localization;
 using MegaCrit.Sts2.Core.Models;
 using MegaCrit.Sts2.Core.Rooms;
+using MegaCrit.Sts2.addons.mega_text;
 
 namespace STS2AIAgent.Game;
 
@@ -363,6 +364,18 @@ internal static class GameDataExportService
             return string.Empty;
         }
 
+        try
+        {
+            var rawDescription = card.Description?.GetRawText();
+            if (!string.IsNullOrWhiteSpace(rawDescription))
+            {
+                return NormalizeCardRulesText(rawDescription);
+            }
+        }
+        catch
+        {
+        }
+
         foreach (var memberName in new[]
         {
             "Description",
@@ -446,18 +459,6 @@ internal static class GameDataExportService
 
         const BindingFlags flags = BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic;
         var valueType = value.GetType();
-
-        try
-        {
-            var getFormattedText = valueType.GetMethod("GetFormattedText", flags, null, Type.EmptyTypes, null);
-            if (getFormattedText != null && getFormattedText.ReturnType == typeof(string))
-            {
-                return getFormattedText.Invoke(value, null) as string ?? string.Empty;
-            }
-        }
-        catch
-        {
-        }
 
         try
         {

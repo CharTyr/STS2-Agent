@@ -350,7 +350,7 @@ internal static class GameActionService
         var currentScreen = ActiveScreenContext.Instance.GetCurrentScreen();
         var screen = GameStateService.ResolveScreen(currentScreen);
 
-        if (currentScreen is not NMainMenu mainMenu || !GameStateService.CanOpenCharacterSelect(currentScreen))
+        if (!GameStateService.CanOpenCharacterSelect(currentScreen))
         {
             throw new ApiException(409, "invalid_action", "Action is not available in the current state.", new
             {
@@ -359,10 +359,36 @@ internal static class GameActionService
             });
         }
 
-        var characterSelectScreen = mainMenu.SubmenuStack.GetSubmenuType<NCharacterSelectScreen>();
-        characterSelectScreen.InitializeSingleplayer();
-        mainMenu.SubmenuStack.Push(characterSelectScreen);
-        var stable = await WaitForCharacterSelectOpenAsync(mainMenu, TimeSpan.FromSeconds(10));
+        if (currentScreen is NSingleplayerSubmenu openSubmenu)
+        {
+            ClickSingleplayerStandardButton(openSubmenu);
+        }
+        else if (currentScreen is NMainMenu mainMenu)
+        {
+            var singleplayerSubmenu = mainMenu.SubmenuStack.GetSubmenuType<NSingleplayerSubmenu>();
+            if (singleplayerSubmenu != null)
+            {
+                mainMenu.SubmenuStack.Push(singleplayerSubmenu);
+                await WaitForMainMenuSubmenuOpenAsync<NSingleplayerSubmenu>(mainMenu, TimeSpan.FromSeconds(5));
+                ClickSingleplayerStandardButton(singleplayerSubmenu);
+            }
+            else
+            {
+                var characterSelectScreen = mainMenu.SubmenuStack.GetSubmenuType<NCharacterSelectScreen>();
+                characterSelectScreen.InitializeSingleplayer();
+                mainMenu.SubmenuStack.Push(characterSelectScreen);
+            }
+        }
+        else
+        {
+            throw new ApiException(409, "invalid_action", "Action is not available in the current state.", new
+            {
+                action = "open_character_select",
+                screen
+            });
+        }
+
+        var stable = await WaitForCharacterSelectOpenAsync(TimeSpan.FromSeconds(10));
 
         return new ActionResponsePayload
         {
@@ -3919,27 +3945,42 @@ internal static class GameActionService
         return slots[optionIndex];
     }
 
-    private static async Task<bool> WaitForCharacterSelectOpenAsync(NMainMenu screen, TimeSpan timeout)
+    private static async Task<bool> WaitForCharacterSelectOpenAsync(TimeSpan timeout)
     {
         var deadline = DateTime.UtcNow + timeout;
         while (DateTime.UtcNow < deadline)
         {
             await WaitForNextFrameAsync();
-
-            var currentScreen = ActiveScreenContext.Instance.GetCurrentScreen();
-            if (currentScreen is NCharacterSelectScreen)
-            {
-                return true;
-            }
-
-            if (!GodotObject.IsInstanceValid(screen))
+            if (IsCharacterSelectOpenOrActionableModal())
             {
                 return true;
             }
         }
 
-        var finalScreen = ActiveScreenContext.Instance.GetCurrentScreen();
-        return finalScreen is NCharacterSelectScreen;
+        return IsCharacterSelectOpenOrActionableModal();
+    }
+
+    private static bool IsCharacterSelectOpenOrActionableModal()
+    {
+        var currentScreen = ActiveScreenContext.Instance.GetCurrentScreen();
+        if (currentScreen is NCharacterSelectScreen)
+        {
+            return true;
+        }
+
+        return GameStateService.CanConfirmModal(currentScreen) || GameStateService.CanDismissModal(currentScreen);
+    }
+
+    private static void ClickSingleplayerStandardButton(NSingleplayerSubmenu submenu)
+    {
+        var standardButton = GameStateService.GetSingleplayerStandardButton(submenu);
+        if (standardButton != null)
+        {
+            standardButton.ForceClick();
+            return;
+        }
+
+        submenu.Call(NSingleplayerSubmenu.MethodName.OpenCharacterSelect);
     }
 
     private static async Task<bool> WaitForTimelineEpochTransitionAsync(

@@ -223,6 +223,60 @@ function Get-FirstPlayableCardPayload {
     throw "No playable combat card found."
 }
 
+function Test-CombatHasPlayableCard {
+    param([object]$State)
+
+    if ($null -eq $State.combat) {
+        return $false
+    }
+
+    foreach ($card in @($State.combat.hand)) {
+        if (-not $card.playable) {
+            continue
+        }
+
+        if ($card.requires_target -and @($card.valid_target_indices).Count -eq 0) {
+            continue
+        }
+
+        return $true
+    }
+
+    return $false
+}
+
+function Wait-ForCombatPlayable {
+    param(
+        [string]$BaseUrl,
+        [string]$Description
+    )
+
+    return Wait-ForState -BaseUrl $BaseUrl -Description $Description -Condition {
+        param($CurrentState)
+        $CurrentState.screen -eq "COMBAT" -and
+        $CurrentState.in_combat -and
+        $null -ne $CurrentState.combat -and
+        @($CurrentState.combat.enemies).Count -ge 1 -and
+        @($CurrentState.available_actions) -contains "play_card" -and
+        (Test-CombatHasPlayableCard -State $CurrentState)
+    }
+}
+
+function Wait-ForCombatAction {
+    param(
+        [string]$BaseUrl,
+        [string]$ActionName,
+        [string]$Description
+    )
+
+    return Wait-ForState -BaseUrl $BaseUrl -Description $Description -Condition {
+        param($CurrentState)
+        $CurrentState.screen -eq "COMBAT" -and
+        $CurrentState.in_combat -and
+        @($CurrentState.available_actions) -contains $ActionName
+    }
+}
+
 function Invoke-LocalRunProgressionStep {
     param(
         [string]$BaseUrl,
@@ -388,11 +442,23 @@ function Start-DebugSession {
         Sort-Object StartTime -Descending |
         Select-Object -First 1
 
-    [void](Wait-ForState -BaseUrl ("http://127.0.0.1:$ApiPort") -Description "API state ready on port $ApiPort" -Condition {
+    $baseUrl = "http://127.0.0.1:$ApiPort"
+    [void](Wait-ForState -BaseUrl $baseUrl -Description "MAIN_MENU or startup modal on port $ApiPort" -Condition {
             param($CurrentState)
-            $null -ne $CurrentState.screen
-        } -PollAttempts 40 -PollDelayMs 500)
-    Start-Sleep -Seconds 2
+            $actions = @($CurrentState.available_actions)
+            (
+                $CurrentState.screen -eq "MAIN_MENU" -and $actions.Count -gt 0
+            ) -or (
+                $CurrentState.screen -eq "MODAL" -and (
+                    $actions -contains "confirm_modal" -or $actions -contains "dismiss_modal"
+                )
+            )
+        } -PollAttempts 120 -PollDelayMs 500)
+    [void](Resolve-BlockingModal -BaseUrl $baseUrl)
+    [void](Wait-ForState -BaseUrl $baseUrl -Description "MAIN_MENU ready for debug commands on port $ApiPort" -Condition {
+            param($CurrentState)
+            $CurrentState.screen -eq "MAIN_MENU" -and @($CurrentState.available_actions).Count -gt 0
+        } -PollAttempts 80 -PollDelayMs 250)
 
     return [pscustomobject]@{
         pid = $latestProcess?.Id
@@ -628,35 +694,14 @@ try {
         throw "Client choose_map_node failed: $($clientVoteResponse | ConvertTo-Json -Depth 8 -Compress)"
     }
 
-    $hostCombatState = Wait-ForState -BaseUrl $hostBaseUrl -Description "host combat ready" -Condition {
-        param($CurrentState)
-        $CurrentState.screen -eq "COMBAT" -and
-        $CurrentState.in_combat -and
-        $null -ne $CurrentState.combat -and
-        @($CurrentState.combat.enemies).Count -ge 1 -and
-        @($CurrentState.combat.hand).Count -ge 1 -and
-        (
-            @($CurrentState.available_actions) -contains "play_card" -or
-            @($CurrentState.available_actions) -contains "end_turn"
-        )
-    }
-    $clientCombatState = Wait-ForState -BaseUrl $clientBaseUrl -Description "client combat ready" -Condition {
-        param($CurrentState)
-        $CurrentState.screen -eq "COMBAT" -and
-        $CurrentState.in_combat -and
-        $null -ne $CurrentState.combat -and
-        @($CurrentState.combat.enemies).Count -ge 1 -and
-        @($CurrentState.combat.hand).Count -ge 1 -and
-        (
-            @($CurrentState.available_actions) -contains "play_card" -or
-            @($CurrentState.available_actions) -contains "end_turn"
-        )
-    }
+    $hostCombatState = Wait-ForCombatPlayable -BaseUrl $hostBaseUrl -Description "host combat ready"
+    $clientCombatState = Wait-ForCombatPlayable -BaseUrl $clientBaseUrl -Description "client combat ready"
 
     Invoke-StateInvariantScript -BaseUrl $hostBaseUrl
     Invoke-StateInvariantScript -BaseUrl $clientBaseUrl
 
     Write-Host "==> host plays a combat card"
+    $hostCombatState = Wait-ForCombatPlayable -BaseUrl $hostBaseUrl -Description "host can play a card"
     $hostPlayPayload = Get-FirstPlayableCardPayload -State $hostCombatState
     $hostPlayResponse = Invoke-Action -BaseUrl $hostBaseUrl -Payload $hostPlayPayload
     if (-not $hostPlayResponse.ok) {
@@ -671,6 +716,7 @@ try {
     }
 
     Write-Host "==> client plays a combat card"
+    $clientCombatState = Wait-ForCombatPlayable -BaseUrl $clientBaseUrl -Description "client can play a card after host play"
     $clientPlayPayload = Get-FirstPlayableCardPayload -State $clientCombatState
     $clientPlayResponse = Invoke-Action -BaseUrl $clientBaseUrl -Payload $clientPlayPayload
     if (-not $clientPlayResponse.ok) {
@@ -685,11 +731,13 @@ try {
     }
 
     Write-Host "==> host and client end turn"
+    [void](Wait-ForCombatAction -BaseUrl $hostBaseUrl -ActionName "end_turn" -Description "host can end turn")
     $hostEndTurnResponse = Invoke-Action -BaseUrl $hostBaseUrl -Payload @{ action = "end_turn" }
     if (-not $hostEndTurnResponse.ok) {
         throw "Host end_turn failed: $($hostEndTurnResponse | ConvertTo-Json -Depth 8 -Compress)"
     }
 
+    [void](Wait-ForCombatAction -BaseUrl $clientBaseUrl -ActionName "end_turn" -Description "client can end turn")
     $clientEndTurnResponse = Invoke-Action -BaseUrl $clientBaseUrl -Payload @{ action = "end_turn" }
     if (-not $clientEndTurnResponse.ok) {
         throw "Client end_turn failed: $($clientEndTurnResponse | ConvertTo-Json -Depth 8 -Compress)"

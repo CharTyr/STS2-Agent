@@ -147,7 +147,13 @@ Invoke-DebugCommand -Command "card STRIKE_DEFECT discard" | Out-Null
 Invoke-DebugCommand -Command "card DEFEND_DEFECT discard" | Out-Null
 Invoke-DebugCommand -Command "potion LIQUID_MEMORIES" | Out-Null
 
-$state = Get-State
+$state = Wait-ForState -Description "LIQUID_MEMORIES usable with use_potion available" -Condition {
+    param($CurrentState)
+    $CurrentState.in_combat -and
+    $CurrentState.screen -eq "COMBAT" -and
+    (@($CurrentState.available_actions) -contains "use_potion") -and
+    (@($CurrentState.run.potions | Where-Object { $_.occupied -and $_.potion_id -eq "LIQUID_MEMORIES" -and $_.can_use }).Count -gt 0)
+}
 $liquidMemoriesPotion = @($state.run.potions | Where-Object { $_.occupied -and $_.potion_id -eq "LIQUID_MEMORIES" } | Select-Object -First 1)
 if ($null -eq $liquidMemoriesPotion) {
     throw "Failed to inject LIQUID_MEMORIES potion into the current run state."

@@ -18,7 +18,7 @@ Use this reference when the active screen is clear and you need the exact action
 - Use the first unlocked character unless the task specifies otherwise.
 - After `select_character`, wait for `character_select.can_embark = true`.
 - `embark` can be a heavy transition. Prefer a longer request timeout and tolerate a short retry window.
-- If a post-embark `MODAL` appears, resolve it before making any gameplay decision.
+- If a `MODAL` appears after `open_character_select` or `embark`, resolve it before making any gameplay decision.
 
 ## MAP
 

@@ -145,7 +145,13 @@ if (-not $state.in_combat) {
 Invoke-DebugCommand -Command "card CLAW hand" | Out-Null
 Invoke-DebugCommand -Command "card PURITY hand" | Out-Null
 
-$state = Get-State
+$state = Wait-ForState -Description "PURITY playable with play_card available" -Condition {
+    param($CurrentState)
+    $CurrentState.in_combat -and
+    $CurrentState.screen -eq "COMBAT" -and
+    (@($CurrentState.available_actions) -contains "play_card") -and
+    (@($CurrentState.combat.hand | Where-Object { $_.card_id -eq "PURITY" }).Count -gt 0)
+}
 $purityCard = @($state.combat.hand | Where-Object { $_.card_id -eq "PURITY" } | Select-Object -First 1)
 if ($null -eq $purityCard) {
     throw "Failed to inject PURITY into the current combat hand."

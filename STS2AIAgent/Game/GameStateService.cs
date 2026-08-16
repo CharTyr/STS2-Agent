@@ -28,6 +28,7 @@ using MegaCrit.Sts2.Core.Nodes.Cards.Holders;
 using MegaCrit.Sts2.Core.Nodes.Combat;
 using MegaCrit.Sts2.Core.Nodes.CommonUi;
 using MegaCrit.Sts2.Core.Nodes.Debug.Multiplayer;
+using MegaCrit.Sts2.Core.Nodes.Ftue;
 using MegaCrit.Sts2.Core.Nodes.GodotExtensions;
 using MegaCrit.Sts2.Core.Nodes.Rewards;
 using MegaCrit.Sts2.Core.Nodes.Rooms;
@@ -57,6 +58,8 @@ internal static class GameStateService
     private static readonly TimeSpan CombatActionSnapshotStableDelay = TimeSpan.FromMilliseconds(200);
     private static string? _lastCombatActionReadinessSignature;
     private static DateTime _lastCombatActionReadinessSinceUtc = DateTime.MinValue;
+    private static readonly FieldInfo? StartRunLobbyMaxPlayersField =
+        typeof(StartRunLobby).GetField("_maxPlayers", BindingFlags.Instance | BindingFlags.NonPublic);
 
     public static GameStatePayload BuildStatePayload()
     {
@@ -1037,6 +1040,11 @@ internal static class GameStateService
 
     public static bool CanOpenCharacterSelect(IScreenContext? currentScreen)
     {
+        if (currentScreen is NSingleplayerSubmenu singleplayerSubmenu && singleplayerSubmenu.IsVisibleInTree())
+        {
+            return true;
+        }
+
         if (currentScreen is not NMainMenu mainMenu || !mainMenu.IsVisibleInTree())
         {
             return false;
@@ -1457,6 +1465,18 @@ internal static class GameStateService
             return string.Empty;
         }
 
+        try
+        {
+            var rawDescription = card.Description?.GetRawText();
+            if (!string.IsNullOrWhiteSpace(rawDescription))
+            {
+                return NormalizeCardRulesText(rawDescription);
+            }
+        }
+        catch
+        {
+        }
+
         foreach (var memberName in new[]
         {
             "Description",
@@ -1597,10 +1617,10 @@ internal static class GameStateService
 
         try
         {
-            var getFormattedText = valueType.GetMethod("GetFormattedText", flags, null, Type.EmptyTypes, null);
-            if (getFormattedText != null && getFormattedText.ReturnType == typeof(string))
+            var getRawText = valueType.GetMethod("GetRawText", flags, null, Type.EmptyTypes, null);
+            if (getRawText != null && getRawText.ReturnType == typeof(string))
             {
-                return getFormattedText.Invoke(value, null) as string ?? string.Empty;
+                return getRawText.Invoke(value, null) as string ?? string.Empty;
             }
         }
         catch
@@ -3451,7 +3471,7 @@ internal static class GameStateService
             selected_character_id = selectedCharacterId,
             player_count = lobby?.Players.Count ?? 0,
             max_players = lobby != null
-                ? lobby.MaxPlayers > 0 ? lobby.MaxPlayers : lobby.Players.Count
+                ? GetStartRunLobbyMaxPlayers(lobby)
                 : 4,
             players = lobby?.Players
                 .OrderBy(player => player.slotId)
@@ -3594,7 +3614,7 @@ internal static class GameStateService
                 local_ready = localPlayer.isReady,
                 is_waiting_for_players = waitingPanel?.Visible ?? false,
                 player_count = lobby.Players.Count,
-                max_players = lobby.MaxPlayers > 0 ? lobby.MaxPlayers : lobby.Players.Count,
+                max_players = GetStartRunLobbyMaxPlayers(lobby),
                 ascension = lobby.Ascension,
                 max_ascension = lobby.MaxAscension,
                 seed = lobby.Seed,
@@ -4452,6 +4472,12 @@ internal static class GameStateService
 
         try
         {
+            var getRawText = value.GetType().GetMethod("GetRawText", Type.EmptyTypes);
+            if (getRawText != null)
+            {
+                return getRawText.Invoke(value, null)?.ToString();
+            }
+
             return value.GetType().GetMethod("GetFormattedText")?.Invoke(value, null)?.ToString();
         }
         catch
@@ -4519,7 +4545,7 @@ internal static class GameStateService
         }
     }
 
-    private static CharacterSelectPlayerPayload BuildCharacterSelectPlayerPayload(LobbyPlayer player, ulong localPlayerId)
+    private static CharacterSelectPlayerPayload BuildCharacterSelectPlayerPayload(StartRunLobbyPlayer player, ulong localPlayerId)
     {
         return new CharacterSelectPlayerPayload
         {
@@ -4953,6 +4979,12 @@ internal static class GameStateService
         return field?.GetValue(scene) as StartRunLobby;
     }
 
+    private static int GetStartRunLobbyMaxPlayers(StartRunLobby lobby)
+    {
+        var maxPlayers = StartRunLobbyMaxPlayersField?.GetValue(lobby) is int parsed ? parsed : 0;
+        return maxPlayers > 0 ? maxPlayers : lobby.Players.Count;
+    }
+
     public static NMultiplayerTestCharacterPaginator? GetMultiplayerTestCharacterPaginator(NMultiplayerTest scene)
     {
         return scene.GetNodeOrNull<NMultiplayerTestCharacterPaginator>("CharacterChooser");
@@ -5030,6 +5062,30 @@ internal static class GameStateService
     public static NMainMenuTextButton? GetMainMenuSingleplayerButton(NMainMenu mainMenu)
     {
         return mainMenu.GetNodeOrNull<NMainMenuTextButton>("MainMenuTextButtons/SingleplayerButton");
+    }
+
+    public static NButton? GetSingleplayerStandardButton(NSingleplayerSubmenu submenu)
+    {
+        const BindingFlags flags = BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic;
+        if (submenu.GetType().GetField("_standardButton", flags)?.GetValue(submenu) is NButton fieldButton &&
+            IsUsableModalButton(fieldButton))
+        {
+            return fieldButton;
+        }
+
+        foreach (var path in new[] { "%StandardButton", "StandardButton", "Buttons/StandardButton" })
+        {
+            var button = submenu.GetNodeOrNull<NButton>(path);
+            if (IsUsableModalButton(button))
+            {
+                return button;
+            }
+        }
+
+        return FindDescendants<NButton>(submenu).FirstOrDefault(button =>
+            IsUsableModalButton(button) &&
+            ModalButtonNameContains(button, "Standard") &&
+            !ModalButtonNameContains(button, "Daily", "Custom"));
     }
 
     public static NMainMenuTextButton? GetMainMenuTimelineButton(NMainMenu mainMenu)
@@ -5119,32 +5175,112 @@ internal static class GameStateService
 
     public static NButton? GetModalConfirmButton(IScreenContext? currentScreen)
     {
-        return FindModalButton("VerticalPopup/YesButton", "ConfirmButton", "%ConfirmButton", "%Confirm", "%AcknowledgeButton");
+        return FindModalButton(
+            isConfirm: true,
+            "VerticalPopup/YesButton",
+            "YesButton",
+            "%YesButton",
+            "ConfirmButton",
+            "%ConfirmButton",
+            "%Confirm",
+            "%AcknowledgeButton",
+            "OkButton",
+            "%OkButton",
+            "OKButton");
     }
 
     public static NButton? GetModalCancelButton(IScreenContext? currentScreen)
     {
-        return FindModalButton("VerticalPopup/NoButton", "CancelButton", "%CancelButton", "%BackButton");
+        return FindModalButton(
+            isConfirm: false,
+            "VerticalPopup/NoButton",
+            "NoButton",
+            "%NoButton",
+            "CancelButton",
+            "%CancelButton",
+            "%BackButton",
+            "BackButton");
     }
 
-    private static NButton? FindModalButton(params string[] paths)
+    private static NButton? FindModalButton(bool isConfirm, params string[] paths)
     {
-        var modal = GetOpenModal();
-        if (modal is not Node modalNode)
+        if (GetOpenModal() is not Node modalNode)
         {
             return null;
+        }
+
+        if (modalNode is NVerticalPopup verticalPopup)
+        {
+            var typedButton = isConfirm ? verticalPopup.YesButton : verticalPopup.NoButton;
+            if (IsUsableModalButton(typedButton))
+            {
+                return typedButton;
+            }
         }
 
         foreach (var path in paths)
         {
             var button = modalNode.GetNodeOrNull<NButton>(path);
-            if (button != null && GodotObject.IsInstanceValid(button) && button.IsEnabled && button.IsVisibleInTree())
+            if (IsUsableModalButton(button))
             {
                 return button;
             }
         }
 
+        var usableButtons = FindDescendants<NButton>(modalNode).Where(IsUsableModalButton).ToArray();
+        if (isConfirm)
+        {
+            var ftueConfirm = usableButtons.OfType<NFtueConfirmButton>().FirstOrDefault();
+            if (ftueConfirm != null)
+            {
+                return ftueConfirm;
+            }
+
+            var namedConfirm = usableButtons.FirstOrDefault(IsConfirmNamedModalButton);
+            if (namedConfirm != null)
+            {
+                return namedConfirm;
+            }
+
+            if (usableButtons.Length == 1 && !IsDismissNamedModalButton(usableButtons[0]))
+            {
+                return usableButtons[0];
+            }
+        }
+        else
+        {
+            var namedDismiss = usableButtons.FirstOrDefault(IsDismissNamedModalButton);
+            if (namedDismiss != null)
+            {
+                return namedDismiss;
+            }
+        }
+
         return null;
+    }
+
+    private static bool IsUsableModalButton(NButton? button)
+    {
+        return button != null &&
+               GodotObject.IsInstanceValid(button) &&
+               button.IsEnabled &&
+               button.IsVisibleInTree();
+    }
+
+    private static bool IsConfirmNamedModalButton(NButton button)
+    {
+        return ModalButtonNameContains(button, "Yes", "Confirm", "Acknowledge", "Ok", "Okay", "Continue", "Accept");
+    }
+
+    private static bool IsDismissNamedModalButton(NButton button)
+    {
+        return ModalButtonNameContains(button, "No", "Cancel", "Back", "Dismiss", "Close");
+    }
+
+    private static bool ModalButtonNameContains(NButton button, params string[] tokens)
+    {
+        var name = button.Name.ToString();
+        return tokens.Any(token => name.Contains(token, StringComparison.OrdinalIgnoreCase));
     }
 
     private static string? ResolveUnderlyingScreen(Node modalNode)
@@ -5298,8 +5434,8 @@ internal static class GameStateService
             return Array.Empty<ulong>();
         }
 
-        var connectedPlayerIds = RunManager.Instance.RunLobby?.ConnectedPlayerIds;
-        if (connectedPlayerIds != null && connectedPlayerIds.Count > 0)
+        var connectedPlayerIds = RunManager.Instance.RunLobby?.PlayerIds?.ToArray();
+        if (connectedPlayerIds != null && connectedPlayerIds.Length > 0)
         {
             return connectedPlayerIds;
         }

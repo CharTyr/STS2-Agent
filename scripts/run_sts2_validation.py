@@ -1249,6 +1249,70 @@ def run_debug_command(client: ApiClient, command: str) -> dict[str, Any]:
     return ensure_action_ok(response, f"run_console_command({command})")
 
 
+def resolve_modals(client: ApiClient, state: dict[str, Any], *, attempts: int, delay_ms: int, description: str = "leave modal") -> dict[str, Any]:
+    current = state
+    for _ in range(8):
+        if current.get("screen") != "MODAL":
+            return current
+
+        available_actions = list(current.get("available_actions") or [])
+        modal_action = "confirm_modal" if "confirm_modal" in available_actions else "dismiss_modal"
+        if modal_action not in available_actions:
+            raise ValidationError(f"MODAL has no confirm/dismiss action: {json.dumps(current, ensure_ascii=False)}")
+
+        ensure_action_ok(client.action(modal_action), modal_action)
+        current = client.wait_for_state(
+            description,
+            lambda candidate: candidate.get("screen") != "MODAL",
+            attempts=attempts,
+            delay_ms=delay_ms,
+        )
+
+    if current.get("screen") == "MODAL":
+        raise ValidationError(f"Too many stacked modals: {json.dumps(current, ensure_ascii=False)}")
+    return current
+
+
+def wait_for_character_select(client: ApiClient, state: dict[str, Any], *, attempts: int, delay_ms: int, description: str) -> dict[str, Any]:
+    current = resolve_modals(client, state, attempts=attempts, delay_ms=delay_ms, description=f"{description} modal")
+    if current.get("screen") == "CHARACTER_SELECT" and current.get("character_select") is not None:
+        return current
+
+    return client.wait_for_state(
+        description,
+        lambda candidate: candidate.get("screen") == "CHARACTER_SELECT" and candidate.get("character_select") is not None,
+        attempts=attempts,
+        delay_ms=delay_ms,
+    )
+
+
+def wait_until_main_menu_ready(client: ApiClient, *, attempts: int, delay_ms: int) -> dict[str, Any]:
+    state = client.wait_for_state(
+        "MAIN_MENU or startup modal",
+        lambda current: (
+            current.get("screen") == "MAIN_MENU" and len(list(current.get("available_actions") or [])) > 0
+        )
+        or (
+            current.get("screen") == "MODAL"
+            and (
+                "confirm_modal" in list(current.get("available_actions") or [])
+                or "dismiss_modal" in list(current.get("available_actions") or [])
+            )
+        ),
+        attempts=attempts,
+        delay_ms=delay_ms,
+    )
+    state = resolve_modals(client, state, attempts=attempts, delay_ms=delay_ms, description="startup modal")
+    if state.get("screen") == "MAIN_MENU" and list(state.get("available_actions") or []):
+        return state
+    return client.wait_for_state(
+        "MAIN_MENU ready for debug commands",
+        lambda current: current.get("screen") == "MAIN_MENU" and len(list(current.get("available_actions") or [])) > 0,
+        attempts=attempts,
+        delay_ms=delay_ms,
+    )
+
+
 def ensure_combat(client: ApiClient, state: dict[str, Any], *, attempts: int, delay_ms: int) -> dict[str, Any]:
     if state.get("in_combat") and state.get("screen") == "COMBAT":
         return state
@@ -1376,12 +1440,13 @@ def suite_bootstrap_active_run(args: argparse.Namespace) -> dict[str, Any]:
     if state.get("screen") != "MAIN_MENU" or "open_character_select" not in list(state.get("available_actions") or []):
         raise ValidationError(f"Unable to bootstrap active run from state: {json.dumps(state, ensure_ascii=False)}")
 
-    ensure_action_ok(client.action("open_character_select"), "open_character_select")
-    character_select_state = client.wait_for_state(
-        "CHARACTER_SELECT while bootstrapping active run",
-        lambda current: current.get("screen") == "CHARACTER_SELECT" and current.get("character_select") is not None,
+    open_response = ensure_action_ok(client.action("open_character_select"), "open_character_select")
+    character_select_state = wait_for_character_select(
+        client,
+        open_response["data"]["state"],
         attempts=args.poll_attempts,
         delay_ms=args.poll_delay_ms,
+        description="CHARACTER_SELECT while bootstrapping active run",
     )
 
     selected_character = first_unlocked_character(character_select_state)
@@ -1697,12 +1762,13 @@ def suite_new_run_lifecycle(args: argparse.Namespace) -> dict[str, Any]:
         delay_ms=args.poll_delay_ms,
     )
 
-    ensure_action_ok(client.action("open_character_select"), "open_character_select")
-    character_select_state = client.wait_for_state(
-        "CHARACTER_SELECT",
-        lambda current: current.get("screen") == "CHARACTER_SELECT" and current.get("character_select") is not None,
+    open_response = ensure_action_ok(client.action("open_character_select"), "open_character_select")
+    character_select_state = wait_for_character_select(
+        client,
+        open_response["data"]["state"],
         attempts=args.poll_attempts,
         delay_ms=args.poll_delay_ms,
+        description="CHARACTER_SELECT",
     )
 
     selected_character = first_unlocked_character(character_select_state)
@@ -1777,7 +1843,15 @@ def suite_combat_hand_confirm_flow(args: argparse.Namespace) -> dict[str, Any]:
     run_debug_command(client, "card CLAW hand")
     run_debug_command(client, "card PURITY hand")
 
-    state = client.get_state()
+    state = client.wait_for_state(
+        "PURITY playable with play_card available",
+        lambda current: bool(current.get("in_combat"))
+        and current.get("screen") == "COMBAT"
+        and "play_card" in list(current.get("available_actions") or [])
+        and any(card.get("card_id") == "PURITY" for card in list((current.get("combat") or {}).get("hand") or [])),
+        attempts=args.poll_attempts,
+        delay_ms=args.poll_delay_ms,
+    )
     purity_card = next((card for card in list(state["combat"]["hand"]) if card.get("card_id") == "PURITY"), None)
     if purity_card is None:
         raise ValidationError("Failed to inject PURITY into the current combat hand.")
@@ -1863,7 +1937,18 @@ def suite_deferred_potion_flow(args: argparse.Namespace) -> dict[str, Any]:
     run_debug_command(client, "card DEFEND_DEFECT discard")
     run_debug_command(client, "potion LIQUID_MEMORIES")
 
-    state = client.get_state()
+    state = client.wait_for_state(
+        "LIQUID_MEMORIES usable with use_potion available",
+        lambda current: bool(current.get("in_combat"))
+        and current.get("screen") == "COMBAT"
+        and "use_potion" in list(current.get("available_actions") or [])
+        and any(
+            potion.get("occupied") and potion.get("potion_id") == "LIQUID_MEMORIES" and potion.get("can_use")
+            for potion in list((current.get("run") or {}).get("potions") or [])
+        ),
+        attempts=args.poll_attempts,
+        delay_ms=args.poll_delay_ms,
+    )
     liquid_memories = next((p for p in list(state["run"]["potions"]) if p.get("occupied") and p.get("potion_id") == "LIQUID_MEMORIES"), None)
     if liquid_memories is None:
         raise ValidationError("Failed to inject LIQUID_MEMORIES potion into the current run state.")
@@ -2260,6 +2345,7 @@ def suite_multiplayer_lobby_flow(args: argparse.Namespace) -> dict[str, Any]:
             retry_delay_ms=args.retry_delay_ms,
         )
         host_client.request("GET", "/health")
+        wait_until_main_menu_ready(host_client, attempts=args.poll_attempts, delay_ms=args.poll_delay_ms)
 
         run_debug_command(host_client, "multiplayer test")
         host_open_state = host_client.wait_for_state(
@@ -2324,6 +2410,7 @@ def suite_multiplayer_lobby_flow(args: argparse.Namespace) -> dict[str, Any]:
             retry_delay_ms=args.retry_delay_ms,
         )
         client_client.request("GET", "/health")
+        wait_until_main_menu_ready(client_client, attempts=args.poll_attempts, delay_ms=args.poll_delay_ms)
 
         run_debug_command(client_client, "multiplayer test")
         client_open_state = client_client.wait_for_state(

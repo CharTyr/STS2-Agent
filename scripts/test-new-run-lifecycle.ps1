@@ -135,9 +135,38 @@ if (-not $openCharacterSelectResponse.ok) {
     throw "open_character_select failed: $($openCharacterSelectResponse | ConvertTo-Json -Depth 8 -Compress)"
 }
 
-$characterSelectState = Wait-ForState -Description "CHARACTER_SELECT" -Condition {
-    param($CurrentState)
-    $CurrentState.screen -eq "CHARACTER_SELECT" -and $null -ne $CurrentState.character_select
+$characterSelectState = $openCharacterSelectResponse.data.state
+$modalAttempts = 0
+while ($characterSelectState.screen -eq "MODAL") {
+    $modalAttempts += 1
+    if ($modalAttempts -gt 8) {
+        throw "Too many modals after open_character_select: $($characterSelectState | ConvertTo-Json -Depth 8 -Compress)"
+    }
+
+    $modalAction = if (@($characterSelectState.available_actions) -contains "confirm_modal") { "confirm_modal" } else { "dismiss_modal" }
+    if (-not (@($characterSelectState.available_actions) -contains $modalAction)) {
+        throw "MODAL after open_character_select has no confirm/dismiss action: $($characterSelectState | ConvertTo-Json -Depth 8 -Compress)"
+    }
+
+    $modalResponse = Invoke-Action -Payload @{ action = $modalAction }
+    if (-not $modalResponse.ok) {
+        throw "$modalAction failed after open_character_select: $($modalResponse | ConvertTo-Json -Depth 8 -Compress)"
+    }
+
+    $characterSelectState = $modalResponse.data.state
+    if ($characterSelectState.screen -eq "MODAL") {
+        $characterSelectState = Wait-ForState -Description "leave open_character_select modal or reach CHARACTER_SELECT" -Condition {
+            param($CurrentState)
+            $CurrentState.screen -ne "MODAL" -or (@($CurrentState.available_actions) -contains "confirm_modal") -or (@($CurrentState.available_actions) -contains "dismiss_modal")
+        }
+    }
+}
+
+if ($characterSelectState.screen -ne "CHARACTER_SELECT" -or $null -eq $characterSelectState.character_select) {
+    $characterSelectState = Wait-ForState -Description "CHARACTER_SELECT" -Condition {
+        param($CurrentState)
+        $CurrentState.screen -eq "CHARACTER_SELECT" -and $null -ne $CurrentState.character_select
+    }
 }
 
 $characters = @($characterSelectState.character_select.characters | Where-Object { -not $_.is_locked })

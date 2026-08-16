@@ -148,9 +148,32 @@ function Ensure-ActiveRunMainMenu {
                 throw "open_character_select failed while bootstrapping active run: $($openCharacterSelect | ConvertTo-Json -Depth 8 -Compress)"
             }
 
-            $characterSelectState = Wait-ForState -Description "CHARACTER_SELECT while bootstrapping active run" -Condition {
-                param($CurrentState)
-                $CurrentState.screen -eq "CHARACTER_SELECT" -and $null -ne $CurrentState.character_select
+            $characterSelectState = $openCharacterSelect.data.state
+            $modalAttempts = 0
+            while ($characterSelectState.screen -eq "MODAL") {
+                $modalAttempts += 1
+                if ($modalAttempts -gt 8) {
+                    throw "Too many modals after open_character_select while bootstrapping active run: $($characterSelectState | ConvertTo-Json -Depth 8 -Compress)"
+                }
+
+                $modalAction = if (@($characterSelectState.available_actions) -contains "confirm_modal") { "confirm_modal" } else { "dismiss_modal" }
+                if (-not (@($characterSelectState.available_actions) -contains $modalAction)) {
+                    throw "MODAL after open_character_select has no confirm/dismiss action while bootstrapping: $($characterSelectState | ConvertTo-Json -Depth 8 -Compress)"
+                }
+
+                $modalResponse = Invoke-Action -Payload @{ action = $modalAction }
+                if (-not $modalResponse.ok) {
+                    throw "$modalAction failed after open_character_select while bootstrapping: $($modalResponse | ConvertTo-Json -Depth 8 -Compress)"
+                }
+
+                $characterSelectState = $modalResponse.data.state
+            }
+
+            if ($characterSelectState.screen -ne "CHARACTER_SELECT" -or $null -eq $characterSelectState.character_select) {
+                $characterSelectState = Wait-ForState -Description "CHARACTER_SELECT while bootstrapping active run" -Condition {
+                    param($CurrentState)
+                    $CurrentState.screen -eq "CHARACTER_SELECT" -and $null -ne $CurrentState.character_select
+                }
             }
 
             $characters = @($characterSelectState.character_select.characters | Where-Object { -not $_.is_locked })
@@ -275,6 +298,10 @@ try {
     Ensure-ActiveRunMainMenu
     Invoke-RepoScript -Name "enemy intents payload" -FileName "test-enemy-intents-payload.ps1"
     Invoke-RepoScript -Name "state invariants after enemy intents payload" -FileName "test-state-invariants.ps1"
+
+    Start-DebugSession -StepName "start debug session for natural room chain"
+    Invoke-RepoScript -Name "natural room chain" -FileName "test-natural-room-chain.ps1"
+    Invoke-RepoScript -Name "state invariants after natural room chain" -FileName "test-state-invariants.ps1"
 
     Invoke-RepoScript -Name "multiplayer lobby flow" -FileName "test-multiplayer-lobby-flow.ps1"
 
