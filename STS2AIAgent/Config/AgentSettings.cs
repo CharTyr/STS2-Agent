@@ -22,10 +22,13 @@ internal sealed class AgentSettings
 
     public bool OverlayVisibleOnStart { get; set; }
 
-    public ThinkingIntensity GetThinkingIntensity()
-    {
-        return ThinkingIntensityMap.Parse(ThinkingIntensity);
-    }
+    public float? OverlayLeft { get; set; }
+
+    public float? OverlayTop { get; set; }
+
+    public string McpServerPath { get; set; } = string.Empty;
+
+    public int McpPort { get; set; } = 8765;
 
     public LlmModelConfig? FindModel(string? modelId)
     {
@@ -87,9 +90,10 @@ internal sealed class AgentSettings
             EndpointId = endpoint.Id,
             Model = "gpt-4o",
             DisplayName = "gpt-4o",
-            SupportsVision = true,
+            SupportsVision = false,
             SupportsTools = true,
-            ThinkingMode = "auto"
+            ThinkingMode = "auto",
+            ThinkingIntensity = "medium"
         };
 
         return new AgentSettings
@@ -129,12 +133,41 @@ internal sealed class AgentSettings
             {
                 model.Id = Guid.NewGuid().ToString("N")[..8];
             }
+
+            if (string.IsNullOrWhiteSpace(model.ThinkingIntensity))
+            {
+                model.ThinkingIntensity = string.IsNullOrWhiteSpace(ThinkingIntensity)
+                    ? "medium"
+                    : ThinkingIntensity;
+            }
+        }
+
+        if (string.IsNullOrWhiteSpace(ThinkingIntensity))
+        {
+            ThinkingIntensity = "medium";
         }
 
         if (string.IsNullOrWhiteSpace(Hotkey))
         {
             Hotkey = "F8";
         }
+
+        if (OverlayLeft is float left && (float.IsNaN(left) || float.IsInfinity(left)))
+        {
+            OverlayLeft = null;
+        }
+
+        if (OverlayTop is float top && (float.IsNaN(top) || float.IsInfinity(top)))
+        {
+            OverlayTop = null;
+        }
+
+        if (McpPort is < 1 or > 65535)
+        {
+            McpPort = 8765;
+        }
+
+        McpServerPath = McpServerPath?.Trim() ?? string.Empty;
     }
 
     private ResolvedModel ResolveRoleModel(string? modelId, bool required, string roleName)
@@ -200,7 +233,14 @@ internal sealed class LlmModelConfig
 
     public string ThinkingMode { get; set; } = "auto";
 
+    public string ThinkingIntensity { get; set; } = string.Empty;
+
     public string Label => string.IsNullOrWhiteSpace(DisplayName) ? Model : DisplayName;
+
+    public ThinkingIntensity GetThinkingIntensity()
+    {
+        return ThinkingIntensityMap.Parse(ThinkingIntensity);
+    }
 }
 
 internal sealed record ResolvedModel(LlmEndpoint Endpoint, LlmModelConfig Model);

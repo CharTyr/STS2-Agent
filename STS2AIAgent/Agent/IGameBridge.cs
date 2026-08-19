@@ -4,6 +4,8 @@ internal interface IGameBridge
 {
     Task<string> GetCompactStateJsonAsync(CancellationToken cancellationToken);
 
+    Task<string> GetRawStateJsonAsync(CancellationToken cancellationToken);
+
     Task<string> GetAvailableActionsJsonAsync(CancellationToken cancellationToken);
 
     Task<IReadOnlyList<string>> GetAvailableActionNamesAsync(CancellationToken cancellationToken);

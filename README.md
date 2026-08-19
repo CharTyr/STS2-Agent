@@ -4,7 +4,7 @@ https://github.com/user-attachments/assets/89353468-a299-4315-9516-e520bcbfbd4b
 
 中文版说明请见 [README.zh-CN.md](./README.zh-CN.md).
 
-`STS2 AI Agent` is a Slay the Spire 2 mod with an in-game AI overlay. After you install the mod, you can configure model endpoints, chat, set thinking intensity, let the model play, optionally attach vision, and launch a local second instance for co-op with the model.
+`STS2 AI Agent` is a Slay the Spire 2 mod with an in-game AI overlay. After you install the mod, you can configure model endpoints, chat, set per-model thinking intensity, let the model play, optionally attach vision, and launch a local second instance for co-op with the model.
 
 The local HTTP API and MCP server remain available for developers and external clients.
 
@@ -47,14 +47,15 @@ Launch the game normally. Press **F8** (configurable) or the **AI** tab on the r
 
 In the overlay:
 
-1. **Settings**: add one or more OpenAI-compatible endpoints (OpenAI, DeepSeek, SiliconFlow, OpenRouter, Ollama, LM Studio, …), add models, then pick the conversation model. Optionally pick a play model and a vision model.
+1. **Settings**: add one or more OpenAI-compatible endpoints (OpenAI, DeepSeek, SiliconFlow, OpenRouter, Ollama, LM Studio, …), add models, then pick the conversation model. Optionally pick a play model and a vision model. Each model has its own thinking intensity (Off / Low / Medium / High).
 2. **Chat**: talk to the model. Enable “attach current state” or “attach screenshot” as needed.
-3. **Play**: start auto-play or step once. Thinking intensity is Off / Low / Medium / High.
+3. **Play**: start auto-play or step once. This uses compact live state and tools, the same contract as MCP. Vision is optional and not required to finish a run.
 4. **Dual instance**: launch a second local game process, host a lobby here, and let the companion instance join and play.
+5. **Connect**: start the optional HTTP MCP server with one click and copy the API / MCP URLs for Cursor, Claude, Codex, or a custom client.
 
 Settings are stored in `%AppData%/STS2AIAgent/settings.json` and are shared by both local instances.
 
-If the conversation model has no vision, assign another vision-capable model as the vision role. Auto-play will then send a screenshot to that model and inject a text caption.
+Vision is optional extra context. Auto-play works with text-only models: compact `agent_view`, `get_game_state` / `get_available_actions` / `get_game_data_*` / `wait_until_actionable` / `act`. If you assign a vision-capable play model or a vision sidecar, screenshots are attached as supporting context only.
 
 Local dual-instance currently uses the game debug `multiplayer test` lobby. Steam may block a second process. The launcher does not kill your current game.
 
@@ -70,7 +71,7 @@ http://127.0.0.1:8080/health
 
 ## Optional: MCP Server (Developers)
 
-MCP is not required for the in-game agent. Keep using it if you want Cursor / Codex or another MCP client to drive the HTTP API.
+MCP is not required for the in-game agent. The overlay **Connect** tab can start HTTP MCP (`http://127.0.0.1:8765/mcp`) if `uv` and the release `mcp_server` folder are present. You can also start it from these scripts:
 
 1. Install `Python 3.11+`
 2. Install `uv`
@@ -111,7 +112,7 @@ Default MCP endpoint: `http://127.0.0.1:8765/mcp`
 
 ## What The Project Can Do
 
-- In-game overlay: multi-endpoint / multi-model config, chat, thinking intensity, auto-play, screenshot vision, local dual-instance co-op
+- In-game overlay: multi-endpoint / multi-model config, chat, per-model thinking intensity, auto-play, optional screenshot vision, local dual-instance co-op, one-click MCP for external agents
 - Reading live game state (compact `agent_view` now includes multiplayer lobby summaries)
 - Listing currently legal actions
 - Driving combat, rewards, shops, map routing, events, rest sites, chests, capstone selection, and bundle selection

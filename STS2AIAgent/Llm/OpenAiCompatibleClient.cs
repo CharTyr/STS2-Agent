@@ -148,6 +148,10 @@ internal sealed class OpenAiCompatibleClient : ILlmClient
                 : HttpCompletionOption.ResponseContentRead;
             response = await _http.SendAsync(request, completionOption, cancellationToken);
         }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            throw;
+        }
         catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException)
         {
             throw new LlmException($"LLM request failed: {ex.Message}", ex);

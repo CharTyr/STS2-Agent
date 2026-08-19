@@ -62,10 +62,10 @@ internal sealed class AgentLoop
         messages.Add(LlmMessage.User(userText, screenshot));
 
         var allowAct = options.AllowAct || PlayIntent.Detect(userText);
+        AppendJsonActFallbackIfNeeded(messages, resolved, allowAct);
         var tools = allowAct ? AgentTools.Play : AgentTools.ReadOnly;
         return await CompleteWithToolsAsync(
             resolved,
-            settings,
             messages,
             tools,
             allowAct,
@@ -105,11 +105,11 @@ internal sealed class AgentLoop
             messages.Add(LlmMessage.User("Screenshot of the current game view is attached. Use it as supporting context only.", visionNote.Jpeg));
         }
 
-        messages.Add(LlmMessage.User("Choose the next legal action. Call get_game_state if needed, then act exactly once."));
+        messages.Add(LlmMessage.User("Choose the next legal action from compact state. Vision is optional and not required. Call get_game_state if needed, then act exactly once."));
+        AppendJsonActFallbackIfNeeded(messages, resolved, allowAct: true);
 
         return await CompleteWithToolsAsync(
             resolved,
-            settings,
             messages,
             AgentTools.Play,
             allowAct: true,
@@ -127,7 +127,6 @@ internal sealed class AgentLoop
 
     private async Task<AgentTurnResult> CompleteWithToolsAsync(
         ResolvedModel resolved,
-        AgentSettings settings,
         List<LlmMessage> messages,
         IReadOnlyList<LlmTool> tools,
         bool allowAct,
@@ -139,6 +138,7 @@ internal sealed class AgentLoop
         string? lastReasoning = null;
         string? acted = null;
         string? actResult = null;
+        string? lastActError = null;
         var rounds = 0;
 
         for (var round = 0; round < MaxToolRounds; round++)
@@ -149,7 +149,7 @@ internal sealed class AgentLoop
                 Model = resolved.Model.Model,
                 Messages = messages.ToArray(),
                 Tools = resolved.Model.SupportsTools ? tools : null,
-                Thinking = settings.GetThinkingIntensity(),
+                Thinking = resolved.Model.GetThinkingIntensity(),
                 ThinkingMode = resolved.Model.ThinkingMode
             };
 
@@ -157,6 +157,10 @@ internal sealed class AgentLoop
             try
             {
                 completion = await client.CompleteAsync(request, cancellationToken);
+            }
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+            {
+                throw;
             }
             catch (Exception ex) when (ex is LlmException or HttpRequestException or TaskCanceledException)
             {
@@ -175,12 +179,46 @@ internal sealed class AgentLoop
             lastReasoning = completion.Reasoning ?? lastReasoning;
             if (completion.ToolCalls.Count == 0)
             {
+                if (allowAct &&
+                    acted == null &&
+                    !resolved.Model.SupportsTools &&
+                    ActJsonParser.TryParse(completion.Content, out var actJson))
+                {
+                    var parsedAct = await ExecuteActAsync(actJson, cancellationToken);
+                    if (parsedAct.Error == null)
+                    {
+                        acted = parsedAct.Action;
+                        actResult = parsedAct.ResultJson;
+                        lastActError = null;
+                        if (stopAfterAct)
+                        {
+                            return new AgentTurnResult
+                            {
+                                AssistantText = completion.Content,
+                                Reasoning = lastReasoning,
+                                Acted = acted,
+                                ActResultJson = actResult,
+                                ToolRounds = rounds
+                            };
+                        }
+                    }
+                    else
+                    {
+                        lastActError = parsedAct.Error;
+                    }
+
+                    messages.Add(LlmMessage.Assistant(completion.Content));
+                    messages.Add(LlmMessage.User("Act result:\n" + parsedAct.ResultJson));
+                    continue;
+                }
+
                 return new AgentTurnResult
                 {
                     AssistantText = completion.Content,
                     Reasoning = lastReasoning,
                     Acted = acted,
                     ActResultJson = actResult,
+                    Error = acted == null ? lastActError : null,
                     ToolRounds = rounds
                 };
             }
@@ -203,20 +241,27 @@ internal sealed class AgentLoop
                     }
 
                     var actOutcome = await ExecuteActAsync(call.ArgumentsJson, cancellationToken);
-                    acted = actOutcome.Action;
-                    actResult = actOutcome.ResultJson;
                     messages.Add(LlmMessage.Tool(call.Id, actOutcome.ResultJson));
-                    if (stopAfterAct)
+                    if (actOutcome.Error == null)
                     {
-                        return new AgentTurnResult
+                        acted = actOutcome.Action;
+                        actResult = actOutcome.ResultJson;
+                        lastActError = null;
+                        if (stopAfterAct)
                         {
-                            AssistantText = completion.Content,
-                            Reasoning = lastReasoning,
-                            Acted = acted,
-                            ActResultJson = actResult,
-                            Error = actOutcome.Error,
-                            ToolRounds = rounds
-                        };
+                            return new AgentTurnResult
+                            {
+                                AssistantText = completion.Content,
+                                Reasoning = lastReasoning,
+                                Acted = acted,
+                                ActResultJson = actResult,
+                                ToolRounds = rounds
+                            };
+                        }
+                    }
+                    else
+                    {
+                        lastActError = actOutcome.Error;
                     }
 
                     continue;
@@ -233,7 +278,9 @@ internal sealed class AgentLoop
             Reasoning = lastReasoning,
             Acted = acted,
             ActResultJson = actResult,
-            Error = "Reached the tool-call round limit without a final answer.",
+            Error = acted == null && lastActError != null
+                ? lastActError
+                : "Reached the tool-call round limit without a final answer.",
             ToolRounds = rounds
         };
     }
@@ -291,8 +338,8 @@ internal sealed class AgentLoop
                     LlmMessage.System("Describe this Slay the Spire 2 screenshot for a non-vision gameplay model. Focus on screen type, visible cards, enemies, rewards, and UI prompts. Be concise."),
                     LlmMessage.User("Describe the current game view.", jpeg)
                 },
-                Thinking = ThinkingIntensity.Off,
-                ThinkingMode = "prompt"
+                Thinking = vision.Model.GetThinkingIntensity(),
+                ThinkingMode = vision.Model.ThinkingMode
             }, cancellationToken);
 
             var caption = string.IsNullOrWhiteSpace(completion.Content)
@@ -314,7 +361,9 @@ internal sealed class AgentLoop
             return name switch
             {
                 "get_game_state" => await _bridge.GetCompactStateJsonAsync(cancellationToken),
+                "get_raw_game_state" => await _bridge.GetRawStateJsonAsync(cancellationToken),
                 "get_available_actions" => await _bridge.GetAvailableActionsJsonAsync(cancellationToken),
+                "wait_until_actionable" => await WaitUntilActionableJsonAsync(args, cancellationToken),
                 "get_game_data_item" => await _bridge.GetGameDataItemJsonAsync(
                     ReadString(args, "collection") ?? string.Empty,
                     ReadString(args, "item_id") ?? string.Empty,
@@ -334,6 +383,21 @@ internal sealed class AgentLoop
         {
             return JsonSerializer.Serialize(new { error = ex.Message }, JsonOptions);
         }
+    }
+
+    private async Task<string> WaitUntilActionableJsonAsync(JsonDocument args, CancellationToken cancellationToken)
+    {
+        var timeout = TimeSpan.FromSeconds(ReadTimeoutSeconds(args));
+        var actionable = await _bridge.WaitUntilActionableAsync(timeout, cancellationToken);
+        var stateJson = await _bridge.GetCompactStateJsonAsync(cancellationToken);
+        var actionsJson = await _bridge.GetAvailableActionsJsonAsync(cancellationToken);
+        return JsonSerializer.Serialize(new
+        {
+            actionable,
+            timeout_seconds = timeout.TotalSeconds,
+            state = JsonSerializer.Deserialize<JsonElement>(string.IsNullOrWhiteSpace(stateJson) ? "{}" : stateJson),
+            actions = JsonSerializer.Deserialize<JsonElement>(string.IsNullOrWhiteSpace(actionsJson) ? "[]" : actionsJson)
+        }, JsonOptions);
     }
 
     private async Task<(string? Action, string ResultJson, string? Error)> ExecuteActAsync(
@@ -358,7 +422,7 @@ internal sealed class AgentLoop
                     action,
                     available_actions = legal
                 }, JsonOptions);
-                return (action, json, "illegal action");
+                return (null, json, "illegal action");
             }
 
             var cardIndex = ReadInt(args, "card_index");
@@ -383,7 +447,7 @@ internal sealed class AgentLoop
                     target_index = targetIndex,
                     option_index = optionIndex
                 }, JsonOptions);
-                return (action, json, indexError);
+                return (null, json, indexError);
             }
 
             var result = await _bridge.ActAsync(
@@ -416,6 +480,16 @@ internal sealed class AgentLoop
         {
             return (null, JsonSerializer.Serialize(new { error = ex.Message }, JsonOptions), ex.Message);
         }
+    }
+
+    private static void AppendJsonActFallbackIfNeeded(List<LlmMessage> messages, ResolvedModel resolved, bool allowAct)
+    {
+        if (resolved.Model.SupportsTools || !allowAct || messages.Count == 0 || messages[0].Role != "system")
+        {
+            return;
+        }
+
+        messages[0] = LlmMessage.System((messages[0].Content ?? string.Empty) + "\n\n" + PlayPrompt.JsonActFallback);
     }
 
     private static JsonDocument ParseArgs(string? argumentsJson)
@@ -461,5 +535,22 @@ internal sealed class AgentLoop
         }
 
         return null;
+    }
+
+    private static double ReadTimeoutSeconds(JsonDocument document)
+    {
+        if (!document.RootElement.TryGetProperty("timeout_seconds", out var value))
+        {
+            return 20;
+        }
+
+        var seconds = value.ValueKind switch
+        {
+            JsonValueKind.Number when value.TryGetDouble(out var number) => number,
+            JsonValueKind.String when double.TryParse(value.GetString(), out var parsed) => parsed,
+            _ => 20
+        };
+
+        return Math.Clamp(seconds, 1, 120);
     }
 }

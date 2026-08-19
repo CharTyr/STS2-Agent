@@ -2,17 +2,46 @@
 
 ## Unreleased
 
+### Notes
+
+- None yet.
+
+## v0.9.0 - 2026-08-19
+
+### Highlights
+
+- Players can configure models and auto-play inside the game. MCP is optional and can be started from the overlay for external agents.
+- Compatible with Slay the Spire 2 `v0.111.0`.
+
 ### Added
 
-- In-game agent overlay (F8 / right-edge AI tab): multi-endpoint and multi-model settings, chat, thinking intensity, auto-play, screenshot vision, and local dual-instance launch.
+- In-game agent overlay (F8 / right-edge AI tab): multi-endpoint and multi-model settings, chat, per-model thinking intensity, auto-play, optional screenshot vision, and local dual-instance launch.
+- Overlay **接入** tab: one-click HTTP MCP start/stop, copy API/MCP URLs, and connection notes for Cursor / Claude / Codex / raw HTTP.
 - OpenAI-compatible LLM client with tool calling; optional vision model can caption screenshots for non-vision play models.
 - HTTP API auto-binds the next port when 8080 is taken. `/health` reports `api_port` and `instance_role`.
-- Compact `agent_view` now includes `multiplayer` and `multiplayer_lobby` summaries.
+- Compact `agent_view` now includes `multiplayer`, `multiplayer_lobby`, and `capstone` summaries.
+- Models without tool calling can emit a single JSON `act` object. `get_raw_game_state` and `wait_until_actionable` are available in the in-game tool loop.
+
+### Fixed
+
+- Advice questions such as “Should I play a card?” no longer unlock chat `act`.
+- Auto-play and chat no longer mutate the game at the same time; pausing no longer looks like an LLM failure.
+- Chat attach-state / screenshot checkboxes are restored from settings.
+- Timeline `option_index` validation uses compact `timeline.slots`.
+- JSON act fallback only runs for models that do not support tools. Failed acts can be retried in the same turn.
 
 ### Notes
 
-- Overlay starts hidden (F8 / AI tab to open). Chat is read-only unless the player asks the model to play or checks “允许代打”.
+- Overlay starts hidden (F8 / AI tab to open). Drag the title bar to move it; the position is saved.
+- Chat is read-only unless the player checks “允许代打” or clearly asks the model to play (`帮我打` / `play for me`).
 - Companion dual-instance no longer sets `STS2_ENABLE_DEBUG_ACTIONS`; lobby setup uses the internal console path only.
+- Auto-play uses compact state and tools (same contract as MCP) and does not require vision.
+- One-click MCP needs `uv` plus the `mcp_server` folder from the release zip (or a repo checkout).
+
+### Compatibility
+
+- Verified against Slay the Spire 2 `v0.111.0`.
+- Mod health endpoint reports protocol version `2026-03-11-v1`.
 
 ## v0.8.1 - 2026-08-16
 

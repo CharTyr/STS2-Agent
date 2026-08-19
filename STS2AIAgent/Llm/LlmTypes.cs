@@ -16,9 +16,14 @@ internal interface ILlmClientFactory
 
 internal sealed class DefaultLlmClientFactory : ILlmClientFactory
 {
+    private static readonly HttpClient SharedHttp = new()
+    {
+        Timeout = TimeSpan.FromMinutes(3)
+    };
+
     public ILlmClient Create(LlmEndpoint endpoint)
     {
-        return new OpenAiCompatibleClient(endpoint);
+        return new OpenAiCompatibleClient(endpoint, httpClient: SharedHttp);
     }
 }
 

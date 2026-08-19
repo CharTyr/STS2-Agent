@@ -21,7 +21,7 @@ internal static class ActIndexValidator
         ["choose_treasure_relic"] = new[] { new[] { "chest", "relics" }, new[] { "chest", "options" } },
         ["choose_capstone_option"] = new[] { new[] { "capstone", "options" } },
         ["choose_bundle"] = new[] { new[] { "bundles" } },
-        ["choose_timeline_epoch"] = new[] { new[] { "timeline", "epochs" }, new[] { "timeline", "options" } },
+        ["choose_timeline_epoch"] = new[] { new[] { "timeline", "slots" }, new[] { "timeline", "epochs" }, new[] { "timeline", "options" } },
         ["use_potion"] = new[] { new[] { "run", "potions" } },
         ["discard_potion"] = new[] { new[] { "run", "potions" } }
     };

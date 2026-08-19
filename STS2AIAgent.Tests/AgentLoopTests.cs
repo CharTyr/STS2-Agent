@@ -36,7 +36,9 @@ internal static class PlayIntentTests
     public static void DetectsPlayPhrasesAndIgnoresQuestions()
     {
         Assert.True(PlayIntent.Detect("帮我出牌"));
-        Assert.True(PlayIntent.Detect("Please play a card"));
+        Assert.True(PlayIntent.Detect("play for me"));
+        Assert.False(PlayIntent.Detect("Please play a card"));
+        Assert.False(PlayIntent.Detect("Should I play a card?"));
         Assert.False(PlayIntent.Detect("这张牌怎么样"));
         Assert.False(PlayIntent.Detect(""));
     }
@@ -51,6 +53,11 @@ internal static class ActIndexValidatorTests
         Assert.NotNull(ActIndexValidator.Validate("play_card", null, null, null, actions, state));
         Assert.NotNull(ActIndexValidator.Validate("play_card", 9, null, null, actions, state));
         Assert.Null(ActIndexValidator.Validate("play_card", 0, null, null, actions, state));
+
+        const string timelineActions = """[{"name":"choose_timeline_epoch","requires_index":true}]""";
+        const string timelineState = """{"timeline":{"slots":[{"i":1,"line":"Epoch 1"}]}}""";
+        Assert.NotNull(ActIndexValidator.Validate("choose_timeline_epoch", null, null, 9, timelineActions, timelineState));
+        Assert.Null(ActIndexValidator.Validate("choose_timeline_epoch", null, null, 1, timelineActions, timelineState));
     }
 
     public static void DetectsUnsettledActResults()
@@ -218,6 +225,92 @@ internal static class AgentLoopTests
         Assert.Contains("will not press buttons", result.AssistantText, StringComparison.OrdinalIgnoreCase);
     }
 
+    public static async Task PlayOnce_UsesPerModelThinkingIntensity()
+    {
+        var bridge = new FakeBridge();
+        var factory = new ScriptedClientFactory(new[]
+        {
+            new LlmCompletion { Content = "end the turn" }
+        });
+        var settings = AgentSettings.CreateDefault();
+        settings.ThinkingIntensity = "low";
+        settings.Models[0].ThinkingIntensity = "high";
+        settings.Models[0].SupportsVision = false;
+        var loop = new AgentLoop(bridge, factory, () => settings);
+
+        await loop.PlayOnceAsync(CancellationToken.None);
+
+        Assert.Equal(ThinkingIntensity.High, factory.LastRequest?.Thinking);
+    }
+
+    public static async Task PlayOnce_TextOnlyJsonActWithoutTools()
+    {
+        var bridge = new FakeBridge();
+        var factory = new ScriptedClientFactory(new[]
+        {
+            new LlmCompletion { Content = """{"action":"end_turn"}""" }
+        });
+        var settings = AgentSettings.CreateDefault();
+        settings.Models[0].SupportsVision = false;
+        settings.Models[0].SupportsTools = false;
+        settings.VisionModelId = null;
+        var loop = new AgentLoop(bridge, factory, () => settings);
+
+        var result = await loop.PlayOnceAsync(CancellationToken.None);
+
+        Assert.Equal("end_turn", result.Acted);
+        Assert.Equal(1, bridge.ActCalls);
+        Assert.Null(result.Error);
+        Assert.Equal(0, bridge.CaptureCalls);
+        Assert.Null(factory.LastRequest?.Tools);
+    }
+
+    public static async Task PlayOnce_WaitUntilActionableTool()
+    {
+        var bridge = new FakeBridge();
+        var factory = new ScriptedClientFactory(new[]
+        {
+            new LlmCompletion
+            {
+                ToolCalls = new[]
+                {
+                    new LlmToolCall
+                    {
+                        Id = "call_wait",
+                        Name = "wait_until_actionable",
+                        ArgumentsJson = """{"timeout_seconds":5}"""
+                    }
+                }
+            },
+            new LlmCompletion
+            {
+                ToolCalls = new[]
+                {
+                    new LlmToolCall
+                    {
+                        Id = "call_act",
+                        Name = "act",
+                        ArgumentsJson = """{"action":"play_card","card_index":0}"""
+                    }
+                }
+            }
+        });
+        var loop = new AgentLoop(bridge, factory, AgentSettings.CreateDefault);
+
+        var result = await loop.PlayOnceAsync(CancellationToken.None);
+
+        Assert.Equal("play_card", result.Acted);
+        Assert.True(bridge.WaitCalls >= 2, "expected wait_until_actionable in addition to the pre-step wait");
+        Assert.Null(result.Error);
+    }
+
+    public static void ParsesActJsonFromMarkdownFence()
+    {
+        Assert.True(ActJsonParser.TryParse("```json\n{\"action\":\"proceed\"}\n```", out var json));
+        Assert.Contains("proceed", json, StringComparison.OrdinalIgnoreCase);
+        Assert.False(ActJsonParser.TryParse("I would play a card.", out _));
+    }
+
     public static async Task Chat_AllowsActWhenUserAsks()
     {
         var bridge = new FakeBridge();
@@ -250,6 +343,127 @@ internal static class AgentLoopTests
         Assert.Contains("Played strike", result.AssistantText);
     }
 
+    public static async Task Chat_IgnoresPlayACardAdviceQuestion()
+    {
+        var bridge = new FakeBridge();
+        var factory = new ScriptedClientFactory(new[]
+        {
+            new LlmCompletion
+            {
+                ToolCalls = new[]
+                {
+                    new LlmToolCall
+                    {
+                        Id = "call_act",
+                        Name = "act",
+                        ArgumentsJson = """{"action":"play_card","card_index":0}"""
+                    }
+                }
+            },
+            new LlmCompletion { Content = "I will not press buttons in chat." }
+        });
+        var loop = new AgentLoop(bridge, factory, AgentSettings.CreateDefault);
+
+        var result = await loop.ChatAsync(
+            "Should I play a card?",
+            Array.Empty<ChatTurn>(),
+            new ChatOptions { AttachState = false, AttachScreenshot = false, AllowAct = false },
+            CancellationToken.None);
+
+        Assert.Equal(0, bridge.ActCalls);
+        Assert.Null(result.Acted);
+    }
+
+    public static async Task PlayOnce_IgnoresJsonWhenToolsEnabled()
+    {
+        var bridge = new FakeBridge();
+        var factory = new ScriptedClientFactory(new[]
+        {
+            new LlmCompletion { Content = """Advice: {"action":"end_turn"} is fine.""" }
+        });
+        var settings = AgentSettings.CreateDefault();
+        settings.Models[0].SupportsTools = true;
+        settings.Models[0].SupportsVision = false;
+        var loop = new AgentLoop(bridge, factory, () => settings);
+
+        var result = await loop.PlayOnceAsync(CancellationToken.None);
+
+        Assert.Equal(0, bridge.ActCalls);
+        Assert.Null(result.Acted);
+    }
+
+    public static async Task PlayOnce_RetriesAfterFailedAct()
+    {
+        var bridge = new FakeBridge();
+        var factory = new ScriptedClientFactory(new[]
+        {
+            new LlmCompletion
+            {
+                ToolCalls = new[]
+                {
+                    new LlmToolCall
+                    {
+                        Id = "bad",
+                        Name = "act",
+                        ArgumentsJson = """{"action":"play_card","card_index":9}"""
+                    }
+                }
+            },
+            new LlmCompletion
+            {
+                ToolCalls = new[]
+                {
+                    new LlmToolCall
+                    {
+                        Id = "good",
+                        Name = "act",
+                        ArgumentsJson = """{"action":"play_card","card_index":0}"""
+                    }
+                }
+            }
+        });
+        var loop = new AgentLoop(bridge, factory, AgentSettings.CreateDefault);
+
+        var result = await loop.PlayOnceAsync(CancellationToken.None);
+
+        Assert.Equal(1, bridge.ActCalls);
+        Assert.Equal("play_card", result.Acted);
+        Assert.Null(result.Error);
+    }
+
+    public static async Task PlayOnce_PropagatesCancellation()
+    {
+        var bridge = new FakeBridge { HonorCancelOnWait = false };
+        var factory = new ScriptedClientFactory(Array.Empty<LlmCompletion>()) { CancelCompletions = true };
+        var loop = new AgentLoop(bridge, factory, AgentSettings.CreateDefault);
+        using var cts = new CancellationTokenSource();
+        cts.Cancel();
+
+        var threw = false;
+        try
+        {
+            await loop.PlayOnceAsync(cts.Token);
+        }
+        catch (OperationCanceledException)
+        {
+            threw = true;
+        }
+
+        Assert.True(threw, "expected cancellation to propagate");
+        Assert.Equal(0, bridge.ActCalls);
+    }
+
+    public static void McpRoot_DetectsValidLayout()
+    {
+        var root = Path.Combine(Path.GetTempPath(), "sts2-agent-tests", Guid.NewGuid().ToString("N"), "mcp_server");
+        Directory.CreateDirectory(Path.Combine(root, "src", "sts2_mcp"));
+        File.WriteAllText(Path.Combine(root, "pyproject.toml"), "name='x'");
+        File.WriteAllText(Path.Combine(root, "src", "sts2_mcp", "server.py"), "pass");
+        Assert.True(McpProcessLauncher.IsMcpRoot(root));
+        Assert.Equal(Path.GetFullPath(root), McpProcessLauncher.FindMcpRoot(root));
+        Assert.False(McpProcessLauncher.IsMcpRoot(Path.GetTempPath()));
+    }
+
     private sealed class FakeBridge : IGameBridge
     {
         public int ActCalls { get; private set; }
@@ -260,12 +474,19 @@ internal static class AgentLoopTests
 
         public bool Actionable { get; set; } = true;
 
+        public bool HonorCancelOnWait { get; set; } = true;
+
         public string ActResultJson { get; set; } = """{"action":"play_card","status":"completed","stable":true}""";
 
         public Task<string> GetCompactStateJsonAsync(CancellationToken cancellationToken)
         {
             return Task.FromResult(
                 """{"screen":"COMBAT","available_actions":["play_card","end_turn"],"combat":{"hand":[{"i":0,"line":"Strike","targets":[]}],"enemies":[{"i":0}]}}""");
+        }
+
+        public Task<string> GetRawStateJsonAsync(CancellationToken cancellationToken)
+        {
+            return Task.FromResult("""{"screen":"COMBAT","raw":true}""");
         }
 
         public Task<string> GetAvailableActionsJsonAsync(CancellationToken cancellationToken)
@@ -303,6 +524,11 @@ internal static class AgentLoopTests
 
         public Task<bool> WaitUntilActionableAsync(TimeSpan timeout, CancellationToken cancellationToken)
         {
+            if (HonorCancelOnWait)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+            }
+
             WaitCalls++;
             return Task.FromResult(Actionable);
         }
@@ -323,20 +549,35 @@ internal static class AgentLoopTests
             _completions = new Queue<LlmCompletion>(completions);
         }
 
-        public ILlmClient Create(LlmEndpoint endpoint) => new ScriptedClient(_completions);
+        public LlmRequest? LastRequest { get; private set; }
+
+        public bool CancelCompletions { get; set; }
+
+        public ILlmClient Create(LlmEndpoint endpoint) =>
+            new ScriptedClient(_completions, request => LastRequest = request, CancelCompletions);
     }
 
     private sealed class ScriptedClient : ILlmClient
     {
         private readonly Queue<LlmCompletion> _completions;
+        private readonly Action<LlmRequest> _onRequest;
+        private readonly bool _cancelCompletions;
 
-        public ScriptedClient(Queue<LlmCompletion> completions)
+        public ScriptedClient(Queue<LlmCompletion> completions, Action<LlmRequest> onRequest, bool cancelCompletions)
         {
             _completions = completions;
+            _onRequest = onRequest;
+            _cancelCompletions = cancelCompletions;
         }
 
         public Task<LlmCompletion> CompleteAsync(LlmRequest request, CancellationToken cancellationToken)
         {
+            if (_cancelCompletions && cancellationToken.IsCancellationRequested)
+            {
+                return Task.FromCanceled<LlmCompletion>(cancellationToken);
+            }
+
+            _onRequest(request);
             if (_completions.Count == 0)
             {
                 return Task.FromResult(new LlmCompletion { Content = "done" });

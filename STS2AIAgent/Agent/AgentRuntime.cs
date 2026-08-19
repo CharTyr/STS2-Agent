@@ -1,7 +1,9 @@
+using System.Diagnostics;
 using MegaCrit.Sts2.Core.Logging;
 using STS2AIAgent.Config;
 using STS2AIAgent.Llm;
 using STS2AIAgent.Multiplayer;
+using STS2AIAgent.Server;
 
 namespace STS2AIAgent.Agent;
 
@@ -12,10 +14,12 @@ internal sealed class AgentRuntime
     private static readonly Lazy<AgentRuntime> LazyInstance = new(() => new AgentRuntime());
 
     private readonly object _gate = new();
+    private readonly SemaphoreSlim _turnGate = new(1, 1);
     private readonly SettingsStore _store = new();
     private readonly List<ChatTurn> _history = new();
     private CancellationTokenSource _lifetime = new();
     private CancellationTokenSource? _playCts;
+    private Task? _playTask;
     private AgentSettings _settings;
     private readonly AgentLoop _loop;
     private bool _playRunning;
@@ -23,6 +27,9 @@ internal sealed class AgentRuntime
     private string _lastAction = "-";
     private string _lastThought = "-";
     private string _dualStatus = "尚未启动双开。";
+    private string _mcpStatus = "MCP 未启动。外部 Agent 可走下方接入说明。";
+    private string? _mcpUrl;
+    private Process? _mcpProcess;
 
     public static AgentRuntime Instance => LazyInstance.Value;
 
@@ -61,6 +68,25 @@ internal sealed class AgentRuntime
 
     public string DualStatus => _dualStatus;
 
+    public string McpStatus => _mcpStatus;
+
+    public string? McpUrl => _mcpUrl;
+
+    public bool McpRunning
+    {
+        get
+        {
+            try
+            {
+                return _mcpProcess is { HasExited: false };
+            }
+            catch
+            {
+                return false;
+            }
+        }
+    }
+
     public string SettingsPath => _store.Path;
 
     public IReadOnlyList<ChatTurn> History
@@ -87,6 +113,7 @@ internal sealed class AgentRuntime
     public void Shutdown()
     {
         StopAutoPlay();
+        StopMcp();
         try
         {
             _lifetime.Cancel();
@@ -107,6 +134,26 @@ internal sealed class AgentRuntime
         _store.Save(settings);
         SetStatus("设置已保存");
         RaiseChanged();
+    }
+
+    public void PersistOverlayPlacement(float? left, float? top)
+    {
+        lock (_gate)
+        {
+            _settings.OverlayLeft = left;
+            _settings.OverlayTop = top;
+            _store.Save(_settings);
+        }
+    }
+
+    public void PersistChatAttachFlags(bool attachState, bool attachScreenshot)
+    {
+        lock (_gate)
+        {
+            _settings.AttachStateInChat = attachState;
+            _settings.AttachScreenshotInChat = attachScreenshot;
+            _store.Save(_settings);
+        }
     }
 
     public AgentSettings ReloadSettings()
@@ -143,10 +190,10 @@ internal sealed class AgentRuntime
             return;
         }
 
-        _playCts = CancellationTokenSource.CreateLinkedTokenSource(_lifetime.Token);
         _playRunning = true;
         SetStatus("自动游玩中");
-        _ = Task.Run(() => AutoPlayLoopAsync(_playCts.Token));
+        var previous = _playTask;
+        _playTask = Task.Run(() => RestartPlayLoopAsync(previous));
     }
 
     public void StopAutoPlay()
@@ -161,6 +208,20 @@ internal sealed class AgentRuntime
         }
 
         SetStatus("已暂停自动游玩");
+    }
+
+    public Task StartMcpAsync(CancellationToken cancellationToken)
+    {
+        return Task.Run(() => StartMcpCoreAsync(cancellationToken), cancellationToken);
+    }
+
+    public void StopMcp()
+    {
+        McpProcessLauncher.TryStop(_mcpProcess);
+        _mcpProcess = null;
+        _mcpUrl = null;
+        _mcpStatus = "MCP 已停止。";
+        RaiseChanged();
     }
 
     public Task StepOnceAsync(CancellationToken cancellationToken)
@@ -196,12 +257,22 @@ internal sealed class AgentRuntime
             return;
         }
 
+        if (_playRunning)
+        {
+            AddHistory("assistant", "自动游玩进行中。请先暂停，再对话或代打。");
+            return;
+        }
+
         var prior = History;
         AddHistory("user", text);
         SetStatus("正在请求模型…");
         try
         {
-            var result = await _loop.ChatAsync(
+            await _turnGate.WaitAsync(cancellationToken);
+            AgentTurnResult result;
+            try
+            {
+                result = await _loop.ChatAsync(
                 text,
                 prior,
                 new ChatOptions
@@ -211,6 +282,11 @@ internal sealed class AgentRuntime
                     AllowAct = allowAct
                 },
                 cancellationToken);
+            }
+            finally
+            {
+                _turnGate.Release();
+            }
 
             var reply = result.Error != null
                 ? result.Error
@@ -223,6 +299,10 @@ internal sealed class AgentRuntime
             }
 
             SetStatus(result.Error == null ? "对话完成" : "对话出错");
+        }
+        catch (OperationCanceledException)
+        {
+            SetStatus("对话已取消");
         }
         catch (Exception ex)
         {
@@ -238,6 +318,7 @@ internal sealed class AgentRuntime
         {
             var reply = await _loop.TestConnectionAsync(cancellationToken);
             SetStatus("连通正常");
+            AddHistory("assistant", "连通测试：" + reply);
             return reply;
         }
         catch (Exception ex)
@@ -249,11 +330,31 @@ internal sealed class AgentRuntime
 
     private async Task StepOnceCoreAsync(CancellationToken cancellationToken)
     {
+        if (_playRunning)
+        {
+            SetStatus("自动游玩中，请先暂停再单步");
+            return;
+        }
+
         SetStatus("单步决策中");
         try
         {
-            var result = await _loop.PlayOnceAsync(cancellationToken);
+            await _turnGate.WaitAsync(cancellationToken);
+            AgentTurnResult result;
+            try
+            {
+                result = await _loop.PlayOnceAsync(cancellationToken);
+            }
+            finally
+            {
+                _turnGate.Release();
+            }
+
             ApplyPlayResult(result);
+        }
+        catch (OperationCanceledException)
+        {
+            SetStatus("单步已取消");
         }
         catch (Exception ex)
         {
@@ -301,13 +402,62 @@ internal sealed class AgentRuntime
         }
     }
 
+    private async Task RestartPlayLoopAsync(Task? previous)
+    {
+        try
+        {
+            _playCts?.Cancel();
+        }
+        catch
+        {
+        }
+
+        if (previous != null)
+        {
+            try
+            {
+                await previous;
+            }
+            catch (OperationCanceledException)
+            {
+            }
+            catch (Exception ex)
+            {
+                Log.Warn($"{LogPrefix} Previous auto-play loop ended with: {ex.Message}");
+            }
+        }
+
+        if (!_playRunning)
+        {
+            return;
+        }
+
+        _playCts = CancellationTokenSource.CreateLinkedTokenSource(_lifetime.Token);
+        await AutoPlayLoopAsync(_playCts.Token);
+    }
+
     private async Task AutoPlayLoopAsync(CancellationToken cancellationToken)
     {
         while (!cancellationToken.IsCancellationRequested && _playRunning)
         {
             try
             {
-                var result = await _loop.PlayOnceAsync(cancellationToken);
+                await _turnGate.WaitAsync(cancellationToken);
+                AgentTurnResult result;
+                try
+                {
+                    result = await _loop.PlayOnceAsync(cancellationToken);
+                }
+                finally
+                {
+                    _turnGate.Release();
+                }
+
+                if (cancellationToken.IsCancellationRequested || !_playRunning)
+                {
+                    break;
+                }
+
                 ApplyPlayResult(result);
                 if (result.Error != null)
                 {
@@ -327,6 +477,66 @@ internal sealed class AgentRuntime
         }
 
         _playRunning = false;
+        RaiseChanged();
+    }
+
+    private async Task StartMcpCoreAsync(CancellationToken cancellationToken)
+    {
+        if (McpRunning)
+        {
+            _mcpStatus = "MCP 已在运行：" + (_mcpUrl ?? "");
+            RaiseChanged();
+            return;
+        }
+
+        string configured;
+        int preferredPort;
+        lock (_gate)
+        {
+            configured = _settings.McpServerPath;
+            preferredPort = _settings.McpPort;
+        }
+
+        var root = McpProcessLauncher.FindMcpRoot(configured);
+        if (root == null)
+        {
+            _mcpStatus = "未找到 mcp_server。把 release 包里的 mcp_server 放到游戏目录旁，或在接入页填写路径。";
+            RaiseChanged();
+            return;
+        }
+
+        lock (_gate)
+        {
+            _settings.McpServerPath = root;
+            _store.Save(_settings);
+        }
+
+        _mcpStatus = "正在启动 MCP…";
+        RaiseChanged();
+        try
+        {
+            var api = HttpServer.Instance.Prefix.TrimEnd('/');
+            var launched = await McpProcessLauncher.StartAsync(root, api, preferredPort, cancellationToken);
+            if (!launched.Ok)
+            {
+                _mcpStatus = launched.Message;
+                RaiseChanged();
+                return;
+            }
+
+            _mcpProcess = launched.Process;
+            _mcpUrl = launched.Url;
+            _mcpStatus = launched.Message;
+        }
+        catch (OperationCanceledException)
+        {
+            _mcpStatus = "MCP 启动已取消。";
+        }
+        catch (Exception ex)
+        {
+            _mcpStatus = "MCP 启动失败：" + ex.Message;
+        }
+
         RaiseChanged();
     }
 

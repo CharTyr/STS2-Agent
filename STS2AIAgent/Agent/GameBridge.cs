@@ -28,6 +28,15 @@ internal sealed class GameBridge : IGameBridge
         });
     }
 
+    public Task<string> GetRawStateJsonAsync(CancellationToken cancellationToken)
+    {
+        return GameThread.InvokeAsync(() =>
+        {
+            var state = GameStateService.BuildStatePayload();
+            return JsonSerializer.Serialize(state, JsonOptions);
+        });
+    }
+
     public Task<string> GetAvailableActionsJsonAsync(CancellationToken cancellationToken)
     {
         return GameThread.InvokeAsync(() =>
@@ -146,7 +155,20 @@ internal sealed class GameBridge : IGameBridge
 
     public Task<byte[]?> CaptureScreenshotJpegAsync(CancellationToken cancellationToken)
     {
-        return GameThread.InvokeAsync(() => ScreenshotService.CaptureJpeg());
+        return GameThread.InvokeAsync(async () =>
+        {
+            ScreenshotService.BeginCapture?.Invoke();
+            try
+            {
+                await GameThread.WaitForNextFrameAsync();
+                cancellationToken.ThrowIfCancellationRequested();
+                return ScreenshotService.CaptureJpeg();
+            }
+            finally
+            {
+                ScreenshotService.EndCapture?.Invoke();
+            }
+        });
     }
 
     private static bool TryExportCollection(string collection, out JsonElement element, out string errorJson)

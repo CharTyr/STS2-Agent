@@ -4,6 +4,22 @@
 
 它的目标不是“把所有底层按钮都暴露出去”，而是给 agent 一套足够完整、但仍然有状态约束的游玩接口。
 
+游戏内 overlay 的 **接入** 页可以一键启动本目录对应的 HTTP MCP（`http://127.0.0.1:8765/mcp`），并把当前 Mod API 端口传给它。玩家只装 DLL/PCK 时需要把 release 包里的 `mcp_server` 放到游戏目录旁，并安装 `uv`。
+
+外部客户端最小配置：
+
+```json
+{
+  "mcpServers": {
+    "sts2-ai-agent": {
+      "url": "http://127.0.0.1:8765/mcp"
+    }
+  }
+}
+```
+
+不走 overlay 时仍可用 `scripts/start-mcp-stdio.ps1` 或 `scripts/start-mcp-network.ps1`。
+
 ## Tool Profile
 
 - `guided`

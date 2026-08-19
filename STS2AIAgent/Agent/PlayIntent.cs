@@ -20,7 +20,6 @@ internal static class PlayIntent
         "take a turn",
         "take the turn",
         "make a move",
-        "play a card",
         "act for me"
     };
 

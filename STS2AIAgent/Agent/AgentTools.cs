@@ -39,13 +39,24 @@ internal static class AgentTools
         required = new[] { "collection", "item_ids" }
     };
 
+    private static readonly object WaitParameters = new
+    {
+        type = "object",
+        properties = new
+        {
+            timeout_seconds = new { type = "number", description = "Maximum wait in seconds. Default 20." }
+        }
+    };
+
     public static readonly IReadOnlyList<LlmTool> ReadOnly = new[]
     {
-        Tool("get_game_state", "Read the compact live game state. Always prefer this over memory."),
+        Tool("get_game_state", "Read the compact live game state. Always prefer this over memory. This is sufficient to play every screen without vision."),
+        Tool("get_raw_game_state", "Read the full raw /state snapshot when compact agent_view is missing a field."),
         Tool("get_available_actions", "List currently legal actions with requires_index / requires_target hints."),
         Tool("get_game_data_item", "Look up one card/relic/monster/potion/event/power/character by id.", CollectionItemParameters),
         Tool("get_game_data_items", "Look up several metadata entities by comma-separated ids.", CollectionItemsParameters),
-        Tool("get_relevant_game_data", "Look up metadata with fields trimmed for the current screen.", CollectionItemsParameters)
+        Tool("get_relevant_game_data", "Look up metadata with fields trimmed for the current screen.", CollectionItemsParameters),
+        Tool("wait_until_actionable", "Wait until a non-passive action is available, then return fresh compact state. Use during animations and screen transitions.", WaitParameters)
     };
 
     public static readonly IReadOnlyList<LlmTool> Play = ReadOnly.Concat(new[]

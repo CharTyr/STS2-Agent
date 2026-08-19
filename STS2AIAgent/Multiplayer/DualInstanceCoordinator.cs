@@ -47,6 +47,7 @@ internal static class DualInstanceCoordinator
             }
 
             await WaitForScreenAsync(new[] { "MULTIPLAYER_LOBBY" }, TimeSpan.FromSeconds(30), cancellationToken);
+            await WaitForAnyActionAsync(new[] { "join_multiplayer_lobby" }, TimeSpan.FromSeconds(30), cancellationToken);
             await ExecuteActionAsync("join_multiplayer_lobby", cancellationToken);
             var next = await WaitForAnyActionAsync(
                 new[] { "select_character", "ready_multiplayer_lobby" },

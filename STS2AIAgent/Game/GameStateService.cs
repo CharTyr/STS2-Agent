@@ -83,6 +83,7 @@ internal static class GameStateService
         var rest = BuildRestPayload(currentScreen, runState);
         var reward = BuildRewardPayload(currentScreen);
         var bundles = BuildBundlePayload(currentScreen);
+        var capstone = BuildCapstonePayload(currentScreen);
         var modal = BuildModalPayload(currentScreen);
         var gameOver = BuildGameOverPayload(currentScreen, runState);
 
@@ -109,6 +110,7 @@ internal static class GameStateService
             rest = rest,
             reward = reward,
             bundles = bundles,
+            capstone = capstone,
             modal = modal,
             game_over = gameOver,
             agent_view = BuildAgentViewPayload(
@@ -133,6 +135,7 @@ internal static class GameStateService
                 rest,
                 reward,
                 bundles,
+                capstone,
                 modal,
                 gameOver)
         };
@@ -878,6 +881,25 @@ internal static class GameStateService
         return FindDescendants<NButton>((Node)capstoneScreen)
             .Where(b => GodotObject.IsInstanceValid(b) && b.IsVisibleInTree() && b.IsEnabled)
             .ToArray();
+    }
+
+    private static object? BuildCapstonePayload(IScreenContext? currentScreen)
+    {
+        var buttons = GetCapstoneButtons(currentScreen);
+        if (buttons.Count == 0)
+        {
+            return null;
+        }
+
+        return new
+        {
+            options = buttons.Select((button, index) => new
+            {
+                i = index,
+                index,
+                line = GetButtonLabel(button) ?? $"option {index}"
+            }).ToArray()
+        };
     }
 
     public static bool CanChooseBundle(IScreenContext? currentScreen)
@@ -2410,6 +2432,7 @@ internal static class GameStateService
         RestPayload? rest,
         RewardPayload? reward,
         BundlePayload[]? bundles,
+        object? capstone,
         ModalPayload? modal,
         GameOverPayload? gameOver)
     {
@@ -2438,6 +2461,7 @@ internal static class GameStateService
             rest = BuildAgentRestPayload(rest),
             reward = BuildAgentRewardPayload(reward, glossaryTerms),
             bundles = BuildAgentBundlePayload(bundles, glossaryTerms),
+            capstone,
             modal = BuildAgentModalPayload(modal),
             game_over = BuildAgentGameOverPayload(gameOver),
             glossary = BuildAgentGlossary(glossaryTerms)
@@ -5555,6 +5579,8 @@ internal sealed class GameStatePayload
     public RewardPayload? reward { get; init; }
 
     public BundlePayload[]? bundles { get; init; }
+
+    public object? capstone { get; init; }
 
     public ModalPayload? modal { get; init; }
 

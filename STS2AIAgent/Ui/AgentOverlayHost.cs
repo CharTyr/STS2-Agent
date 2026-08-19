@@ -5,6 +5,7 @@ using STS2AIAgent.Agent;
 using STS2AIAgent.Config;
 using STS2AIAgent.Game;
 using STS2AIAgent.Server;
+using STS2AIAgent.Vision;
 
 namespace STS2AIAgent.Ui;
 
@@ -16,10 +17,14 @@ internal sealed class AgentOverlayHost
     private static AgentOverlayHost? _instance;
 
     private CanvasLayer? _layer;
+    private Control? _host;
     private Control? _panel;
+    private Control? _dragHandle;
     private Button? _edgeTab;
     private SceneTree? _tree;
     private bool _hotkeyWasDown;
+    private bool _dragging;
+    private Vector2 _lastViewportSize;
     private ulong _lastRefreshMs;
     private string _tab = "chat";
 
@@ -35,18 +40,27 @@ internal sealed class AgentOverlayHost
     private Label? _apiLabel;
     private Label? _dualStatus;
     private Button? _playToggle;
+    private Button? _stepButton;
+    private Button? _sendButton;
+    private Button? _mcpToggle;
+    private Label? _mcpStatus;
+    private LineEdit? _mcpPathEdit;
+    private Control? _pageHost;
+    private Control? _chatFooter;
     private Control? _chatPage;
     private Control? _settingsPage;
     private Control? _playPage;
     private Control? _dualPage;
+    private Control? _connectPage;
     private VBoxContainer? _settingsBody;
+    private int _buildAttempts;
+    private bool _captureHidden;
 
     private readonly List<EndpointEditors> _endpointEditors = new();
     private readonly List<ModelEditors> _modelEditors = new();
     private OptionButton? _conversationCombo;
     private OptionButton? _playCombo;
     private OptionButton? _visionCombo;
-    private OptionButton? _thinkingCombo;
     private LineEdit? _hotkeyEdit;
 
     public static void Install()
@@ -57,8 +71,10 @@ internal sealed class AgentOverlayHost
         }
 
         _instance = new AgentOverlayHost();
-        _instance.Build();
         AgentRuntime.Instance.Changed += _instance.OnRuntimeChanged;
+        ScreenshotService.BeginCapture = HideForCapture;
+        ScreenshotService.EndCapture = RestoreAfterCapture;
+        _instance.TryBuildOrRetry();
     }
 
     public static void Uninstall()
@@ -68,9 +84,67 @@ internal sealed class AgentOverlayHost
             return;
         }
 
+        ScreenshotService.BeginCapture = null;
+        ScreenshotService.EndCapture = null;
         AgentRuntime.Instance.Changed -= _instance.OnRuntimeChanged;
         _instance.TearDown();
         _instance = null;
+    }
+
+    private static void HideForCapture()
+    {
+        if (_instance?._panel == null || !_instance._panel.Visible)
+        {
+            return;
+        }
+
+        _instance._captureHidden = true;
+        _instance._panel.Visible = false;
+        if (_instance._edgeTab != null)
+        {
+            _instance._edgeTab.Visible = false;
+        }
+    }
+
+    private static void RestoreAfterCapture()
+    {
+        if (_instance == null || !_instance._captureHidden)
+        {
+            return;
+        }
+
+        _instance._captureHidden = false;
+        if (_instance._panel != null)
+        {
+            _instance._panel.Visible = true;
+        }
+
+        if (_instance._edgeTab != null)
+        {
+            _instance._edgeTab.Visible = true;
+        }
+    }
+
+    private void TryBuildOrRetry()
+    {
+        if (_layer != null)
+        {
+            return;
+        }
+
+        if (NGame.Instance != null)
+        {
+            Build();
+            return;
+        }
+
+        if (_buildAttempts++ > 180)
+        {
+            Log.Warn($"{LogPrefix} NGame never became ready; overlay unavailable this session");
+            return;
+        }
+
+        Callable.From(TryBuildOrRetry).CallDeferred();
     }
 
     private void Build()
@@ -78,7 +152,8 @@ internal sealed class AgentOverlayHost
         var game = NGame.Instance;
         if (game == null)
         {
-            Log.Warn($"{LogPrefix} NGame is not ready; overlay skipped");
+            Log.Warn($"{LogPrefix} NGame is not ready; overlay retry scheduled");
+            TryBuildOrRetry();
             return;
         }
 
@@ -98,60 +173,111 @@ internal sealed class AgentOverlayHost
         };
         host.SetAnchorsAndOffsetsPreset(Control.LayoutPreset.FullRect);
 
+        _host = host;
+
         _edgeTab = UiFactory.Button("AI", ToggleVisible);
         _edgeTab.CustomMinimumSize = new Vector2(36, 72);
-        _edgeTab.SetAnchorsPreset(Control.LayoutPreset.CenterRight);
-        _edgeTab.OffsetLeft = -40;
-        _edgeTab.OffsetRight = -4;
-        _edgeTab.OffsetTop = -36;
-        _edgeTab.OffsetBottom = 36;
+        _edgeTab.SetAnchorsPreset(Control.LayoutPreset.TopLeft);
+        _edgeTab.Position = new Vector2(-80, 0);
 
-        _panel = new PanelContainer
+        _panel = new Control
         {
             Name = "AgentPanel",
+            MouseFilter = Control.MouseFilterEnum.Stop,
+            ClipContents = true
+        };
+        _panel.SetAnchorsPreset(Control.LayoutPreset.TopLeft);
+        _panel.CustomMinimumSize = new Vector2(PanelWidth, 360);
+
+        var chrome = new PanelContainer
+        {
             MouseFilter = Control.MouseFilterEnum.Stop
         };
-        _panel.AddThemeStyleboxOverride("panel", UiFactory.PanelStyle());
-        _panel.SetAnchorsPreset(Control.LayoutPreset.RightWide);
-        _panel.OffsetLeft = -PanelWidth - 12;
-        _panel.OffsetRight = -12;
-        _panel.OffsetTop = 40;
-        _panel.OffsetBottom = -40;
-        _panel.Visible = AgentRuntime.Instance.Settings.OverlayVisibleOnStart;
+        chrome.SetAnchorsAndOffsetsPreset(Control.LayoutPreset.FullRect);
+        chrome.AddThemeStyleboxOverride("panel", UiFactory.PanelStyle());
 
         var layout = UiFactory.Column();
         layout.AddChild(BuildHeader());
         layout.AddChild(BuildTabs());
+
+        _pageHost = new Control
+        {
+            MouseFilter = Control.MouseFilterEnum.Ignore,
+            ClipContents = true,
+            SizeFlagsHorizontal = Control.SizeFlags.ExpandFill,
+            SizeFlagsVertical = Control.SizeFlags.ExpandFill
+        };
         _chatPage = BuildChatPage();
         _settingsPage = BuildSettingsPage();
         _playPage = BuildPlayPage();
         _dualPage = BuildDualPage();
-        layout.AddChild(_chatPage);
-        layout.AddChild(_settingsPage);
-        layout.AddChild(_playPage);
-        layout.AddChild(_dualPage);
-        _panel.AddChild(layout);
+        _connectPage = BuildConnectPage();
+        foreach (var page in new Control[] { _chatPage, _settingsPage, _playPage, _dualPage, _connectPage })
+        {
+            page.SetAnchorsAndOffsetsPreset(Control.LayoutPreset.FullRect);
+            _pageHost.AddChild(page);
+        }
+
+        layout.AddChild(_pageHost);
+        _chatFooter = BuildChatFooter();
+        layout.AddChild(_chatFooter);
+        chrome.AddChild(layout);
+        _panel.AddChild(chrome);
+        _panel.Visible = AgentRuntime.Instance.Settings.OverlayVisibleOnStart;
 
         host.AddChild(_edgeTab);
         host.AddChild(_panel);
         _layer.AddChild(host);
-        root.AddChild(_layer);
+        _layer.TreeEntered += OnOverlayEnteredTree;
+        root.CallDeferred(Node.MethodName.AddChild, _layer);
         _tree.ProcessFrame += OnProcessFrame;
         ShowTab("chat");
         RefreshDynamic();
+        Log.Info($"{LogPrefix} Attach scheduled");
+    }
+
+    private void OnOverlayEnteredTree()
+    {
+        if (_layer != null)
+        {
+            _layer.TreeEntered -= OnOverlayEnteredTree;
+        }
+
         Log.Info($"{LogPrefix} Installed");
+        Callable.From(() => ApplyPlacement()).CallDeferred();
     }
 
     private Control BuildHeader()
     {
+        _dragHandle = new PanelContainer
+        {
+            MouseFilter = Control.MouseFilterEnum.Stop,
+            MouseDefaultCursorShape = Control.CursorShape.Move,
+            SizeFlagsHorizontal = Control.SizeFlags.ExpandFill
+        };
+        _dragHandle.AddThemeStyleboxOverride("panel", UiFactory.PanelStyle(UiFactory.BgRaised, 6));
+        _dragHandle.GuiInput += OnDragHandleGuiInput;
         var title = UiFactory.Label("STS2 AI Agent", 16);
+        title.MouseFilter = Control.MouseFilterEnum.Ignore;
+        var hint = UiFactory.Label("拖动移动", 11, muted: true);
+        hint.MouseFilter = Control.MouseFilterEnum.Ignore;
+        var handleColumn = UiFactory.Column();
+        handleColumn.MouseFilter = Control.MouseFilterEnum.Ignore;
+        handleColumn.SizeFlagsVertical = Control.SizeFlags.ShrinkBegin;
+        handleColumn.AddChild(title);
+        handleColumn.AddChild(hint);
+        _dragHandle.AddChild(handleColumn);
+
         var hide = UiFactory.Button("隐藏", ToggleVisible);
         hide.CustomMinimumSize = new Vector2(64, 0);
         hide.SizeFlagsHorizontal = Control.SizeFlags.ShrinkEnd;
         _apiLabel = UiFactory.Label("", 12, muted: true);
         var column = UiFactory.Column();
         column.SizeFlagsVertical = Control.SizeFlags.ShrinkBegin;
-        column.AddChild(UiFactory.Row(title, hide));
+        var row = new HBoxContainer { MouseFilter = Control.MouseFilterEnum.Ignore };
+        row.AddChild(_dragHandle);
+        row.AddChild(hide);
+        column.AddChild(row);
         column.AddChild(_apiLabel);
         return column;
     }
@@ -162,8 +288,9 @@ internal sealed class AgentOverlayHost
         var settings = UiFactory.Button("设置", () => ShowTab("settings"));
         var play = UiFactory.Button("游玩", () => ShowTab("play"));
         var dual = UiFactory.Button("双开", () => ShowTab("dual"));
+        var connect = UiFactory.Button("接入", () => ShowTab("connect"));
         var row = new HBoxContainer { MouseFilter = Control.MouseFilterEnum.Ignore };
-        foreach (var button in new[] { chat, settings, play, dual })
+        foreach (var button in new[] { chat, settings, play, dual, connect })
         {
             button.SizeFlagsHorizontal = Control.SizeFlags.ExpandFill;
             row.AddChild(button);
@@ -174,27 +301,42 @@ internal sealed class AgentOverlayHost
 
     private Control BuildChatPage()
     {
-        var page = UiFactory.Column();
+        var page = new Control { MouseFilter = Control.MouseFilterEnum.Ignore };
         _chatLog = UiFactory.Rich();
-        page.AddChild(UiFactory.Scroll(_chatLog));
-        _attachState = UiFactory.Check("附带当前状态", true);
-        _attachShot = UiFactory.Check("附带截图（视觉）", false);
-        _allowAct = UiFactory.Check("允许代打", false);
-        page.AddChild(UiFactory.Row(_attachState, _attachShot));
-        page.AddChild(_allowAct);
-        _chatInput = UiFactory.Multiline("", 70);
-        page.AddChild(_chatInput);
-        var send = UiFactory.Button("发送", () => _ = SendChatAsync());
-        var clear = UiFactory.Button("清空", () => AgentRuntime.Instance.ClearChat());
-        page.AddChild(UiFactory.Row(send, clear));
+        _chatLog.FitContent = false;
+        _chatLog.SizeFlagsHorizontal = Control.SizeFlags.ExpandFill;
+        _chatLog.SizeFlagsVertical = Control.SizeFlags.ExpandFill;
+        var scroll = UiFactory.Scroll(_chatLog, 120);
+        scroll.SetAnchorsAndOffsetsPreset(Control.LayoutPreset.FullRect);
+        page.AddChild(scroll);
         return page;
+    }
+
+    private Control BuildChatFooter()
+    {
+        var footer = UiFactory.Column();
+        footer.SizeFlagsVertical = Control.SizeFlags.ShrinkBegin;
+        var settings = AgentRuntime.Instance.Settings;
+        _attachState = UiFactory.Check("附带当前状态", settings.AttachStateInChat);
+        _attachShot = UiFactory.Check("附带截图（视觉）", settings.AttachScreenshotInChat);
+        _allowAct = UiFactory.Check("允许代打", false);
+        _attachState.Toggled += _ => PersistChatFlags();
+        _attachShot.Toggled += _ => PersistChatFlags();
+        footer.AddChild(UiFactory.Row(_attachState, _attachShot));
+        footer.AddChild(_allowAct);
+        _chatInput = UiFactory.Multiline("", 70);
+        footer.AddChild(_chatInput);
+        _sendButton = UiFactory.Button("发送", () => _ = SendChatAsync());
+        var clear = UiFactory.Button("清空", () => AgentRuntime.Instance.ClearChat());
+        footer.AddChild(UiFactory.Row(_sendButton, clear));
+        return footer;
     }
 
     private Control BuildSettingsPage()
     {
         var page = UiFactory.Column();
         _settingsBody = UiFactory.Column();
-        page.AddChild(UiFactory.Scroll(_settingsBody));
+        page.AddChild(UiFactory.Scroll(_settingsBody, 80));
         var addEndpoint = UiFactory.Button("添加端点", AddEndpoint);
         var addModel = UiFactory.Button("添加模型", AddModel);
         var save = UiFactory.Button("保存设置", SaveSettingsFromUi);
@@ -213,13 +355,13 @@ internal sealed class AgentOverlayHost
         _playAction = UiFactory.Label("最近动作：-");
         _playThought = UiFactory.Label("思考：-", 13, muted: true);
         _playToggle = UiFactory.Button("开始自动游玩", TogglePlay);
-        var step = UiFactory.Button("单步", () => _ = AgentRuntime.Instance.StepOnceAsync(CancellationToken.None));
+        _stepButton = UiFactory.Button("单步", () => _ = AgentRuntime.Instance.StepOnceAsync(CancellationToken.None));
         page.AddChild(_playStatus);
         page.AddChild(_playScreen);
         page.AddChild(_playAction);
         page.AddChild(_playThought);
-        page.AddChild(UiFactory.Row(_playToggle, step));
-        page.AddChild(UiFactory.Label("自动游玩会按 compact 状态调用工具并执行一个动作。对话默认只读；勾选「允许代打」或明确说「帮我打」才会执行动作。", 12, muted: true));
+        page.AddChild(UiFactory.Row(_playToggle, _stepButton));
+        page.AddChild(UiFactory.Label("自动游玩走 compact 状态和工具，与 MCP 相同，不需要视觉即可打完全部流程。对话默认只读；勾选「允许代打」或明确说「帮我打」才会执行动作。", 12, muted: true));
         return page;
     }
 
@@ -232,6 +374,37 @@ internal sealed class AgentOverlayHost
         page.AddChild(launch);
         _dualStatus = UiFactory.Label("尚未启动双开。", 13, muted: true);
         page.AddChild(_dualStatus);
+        return page;
+    }
+
+    private Control BuildConnectPage()
+    {
+        var page = UiFactory.Column();
+        var settings = AgentRuntime.Instance.Settings;
+        page.AddChild(UiFactory.Label("外部 Agent 接入", 15));
+        page.AddChild(UiFactory.Label("游戏内自动打不需要 MCP。只有 Cursor / Claude / Codex 等外部客户端才需要启动 MCP。", 12, muted: true));
+
+        var detected = McpProcessLauncher.FindMcpRoot(settings.McpServerPath) ?? settings.McpServerPath;
+        _mcpPathEdit = UiFactory.Line(detected, "mcp_server 目录");
+        page.AddChild(Labeled("mcp_server 路径", _mcpPathEdit));
+        _mcpToggle = UiFactory.Button(AgentRuntime.Instance.McpRunning ? "停止 MCP" : "一键启动 MCP", ToggleMcp);
+        var copyApi = UiFactory.Button("复制 API", () => CopyText(HttpServer.Instance.Prefix));
+        var copyMcp = UiFactory.Button("复制 MCP", () => CopyText(AgentRuntime.Instance.McpUrl ?? "http://127.0.0.1:8765/mcp"));
+        page.AddChild(UiFactory.Row(_mcpToggle, copyApi, copyMcp));
+        _mcpStatus = UiFactory.Label(AgentRuntime.Instance.McpStatus, 12, muted: true);
+        page.AddChild(_mcpStatus);
+
+        page.AddChild(UiFactory.Label("1) 本机 HTTP API（无需 MCP）", 14));
+        page.AddChild(UiFactory.Label("GET /health  /state  /actions/available    POST /action    SSE /events/stream", 12, muted: true));
+        page.AddChild(UiFactory.Label("默认 http://127.0.0.1:8080 ，被占用会自动改绑。外部脚本可直接调这些接口。", 12, muted: true));
+
+        page.AddChild(UiFactory.Label("2) Cursor / Claude / Codex（推荐点上面的按钮）", 14));
+        page.AddChild(UiFactory.Label("启动后把 MCP URL 配进客户端，例如：", 12, muted: true));
+        page.AddChild(UiFactory.Label("{\"mcpServers\":{\"sts2-ai-agent\":{\"url\":\"http://127.0.0.1:8765/mcp\"}}}", 11, muted: true));
+        page.AddChild(UiFactory.Label("并设置环境变量 STS2_API_BASE_URL 为当前 API 地址。需要 uv + 本机 mcp_server 目录。", 12, muted: true));
+
+        page.AddChild(UiFactory.Label("3) 命令行 stdio（不点按钮时）", 14));
+        page.AddChild(UiFactory.Label("scripts/start-mcp-stdio.ps1  或  cd mcp_server && uv run sts2-mcp-server", 12, muted: true));
         return page;
     }
 
@@ -271,17 +444,11 @@ internal sealed class AgentOverlayHost
         _settingsBody.AddChild(Labeled("主对话模型", _conversationCombo));
         _settingsBody.AddChild(Labeled("游玩模型（可空=主对话）", _playCombo));
         _settingsBody.AddChild(Labeled("外挂视觉模型（可空）", _visionCombo));
-
-        _thinkingCombo = UiFactory.Combo();
-        foreach (var item in new[] { "off", "low", "medium", "high" })
-        {
-            _thinkingCombo.AddItem(item);
-        }
-
-        SelectByText(_thinkingCombo, settings.ThinkingIntensity);
-        _settingsBody.AddChild(Labeled("思考强度", _thinkingCombo));
+        _settingsBody.AddChild(UiFactory.Label("视觉可选。不勾选「视觉」、不配外挂视觉时，仍用 compact 状态与工具打完全部内容。", 11, muted: true));
         _hotkeyEdit = UiFactory.Line(settings.Hotkey, "F8");
         _settingsBody.AddChild(Labeled("开关热键", _hotkeyEdit));
+        _settingsBody.AddChild(UiFactory.Button("重置窗口位置", ResetPlacement));
+        _settingsBody.AddChild(UiFactory.Label("拖动标题栏可移动窗口，位置会保存。", 11, muted: true));
         _settingsBody.AddChild(UiFactory.Label("配置文件：" + AgentRuntime.Instance.SettingsPath, 11, muted: true));
     }
 
@@ -324,19 +491,28 @@ internal sealed class AgentOverlayHost
 
         var vision = UiFactory.Check("视觉", model.SupportsVision);
         var tools = UiFactory.Check("工具调用", model.SupportsTools);
-        var thinking = UiFactory.Combo();
+        var thinkingMode = UiFactory.Combo();
         foreach (var item in new[] { "auto", "reasoning_effort", "deepseek", "prompt" })
         {
-            thinking.AddItem(item);
+            thinkingMode.AddItem(item);
         }
 
-        SelectByText(thinking, model.ThinkingMode);
+        SelectByText(thinkingMode, model.ThinkingMode);
+        var thinkingIntensity = UiFactory.Combo();
+        foreach (var item in new[] { "off", "low", "medium", "high" })
+        {
+            thinkingIntensity.AddItem(item);
+        }
+
+        SelectByText(thinkingIntensity, model.ThinkingIntensity);
         var remove = UiFactory.Button("删除", () => RemoveModel(index));
         column.AddChild(UiFactory.Row(display, remove));
         column.AddChild(UiFactory.Row(modelName, endpointCombo));
-        column.AddChild(UiFactory.Row(vision, tools, thinking));
+        column.AddChild(UiFactory.Row(vision, tools));
+        column.AddChild(Labeled("思考方式", thinkingMode));
+        column.AddChild(Labeled("思考强度", thinkingIntensity));
         box.AddChild(column);
-        _modelEditors.Add(new ModelEditors(model.Id, display, modelName, endpointCombo, vision, tools, thinking));
+        _modelEditors.Add(new ModelEditors(model.Id, display, modelName, endpointCombo, vision, tools, thinkingMode, thinkingIntensity));
         return box;
     }
 
@@ -397,7 +573,8 @@ internal sealed class AgentOverlayHost
         {
             EndpointId = settings.Endpoints.FirstOrDefault()?.Id ?? string.Empty,
             Model = "gpt-4o",
-            DisplayName = "新模型"
+            DisplayName = "新模型",
+            ThinkingIntensity = "medium"
         });
         AgentRuntime.Instance.SaveSettings(settings);
         RebuildSettingsForm();
@@ -454,7 +631,8 @@ internal sealed class AgentOverlayHost
             model.Model = editor.ModelName.Text.Trim();
             model.SupportsVision = editor.Vision.ButtonPressed;
             model.SupportsTools = editor.Tools.ButtonPressed;
-            model.ThinkingMode = SelectedText(editor.Thinking);
+            model.ThinkingMode = SelectedText(editor.ThinkingMode);
+            model.ThinkingIntensity = SelectedText(editor.ThinkingIntensity);
             if (editor.Endpoint.Selected >= 0)
             {
                 model.EndpointId = editor.Endpoint.GetItemMetadata(editor.Endpoint.Selected).AsString();
@@ -464,10 +642,12 @@ internal sealed class AgentOverlayHost
         current.ConversationModelId = SelectedMetadata(_conversationCombo);
         current.PlayModelId = EmptyToNull(SelectedMetadata(_playCombo));
         current.VisionModelId = EmptyToNull(SelectedMetadata(_visionCombo));
-        current.ThinkingIntensity = SelectedText(_thinkingCombo);
+        current.ThinkingIntensity = current.FindModel(current.ConversationModelId)?.ThinkingIntensity
+            ?? current.ThinkingIntensity;
         current.Hotkey = _hotkeyEdit?.Text.Trim() is { Length: > 0 } hotkey ? hotkey : "F8";
         current.AttachStateInChat = _attachState?.ButtonPressed ?? true;
         current.AttachScreenshotInChat = _attachShot?.ButtonPressed ?? false;
+        current.McpServerPath = _mcpPathEdit?.Text.Trim() ?? current.McpServerPath;
         return current;
     }
 
@@ -492,7 +672,8 @@ internal sealed class AgentOverlayHost
                 DisplayName = model.DisplayName,
                 SupportsVision = model.SupportsVision,
                 SupportsTools = model.SupportsTools,
-                ThinkingMode = model.ThinkingMode
+                ThinkingMode = model.ThinkingMode,
+                ThinkingIntensity = model.ThinkingIntensity
             }).ToList(),
             ConversationModelId = source.ConversationModelId,
             PlayModelId = source.PlayModelId,
@@ -501,7 +682,11 @@ internal sealed class AgentOverlayHost
             Hotkey = source.Hotkey,
             AttachStateInChat = source.AttachStateInChat,
             AttachScreenshotInChat = source.AttachScreenshotInChat,
-            OverlayVisibleOnStart = source.OverlayVisibleOnStart
+            OverlayVisibleOnStart = source.OverlayVisibleOnStart,
+            OverlayLeft = source.OverlayLeft,
+            OverlayTop = source.OverlayTop,
+            McpServerPath = source.McpServerPath,
+            McpPort = source.McpPort
         };
     }
 
@@ -512,6 +697,8 @@ internal sealed class AgentOverlayHost
         if (_settingsPage != null) _settingsPage.Visible = tab == "settings";
         if (_playPage != null) _playPage.Visible = tab == "play";
         if (_dualPage != null) _dualPage.Visible = tab == "dual";
+        if (_connectPage != null) _connectPage.Visible = tab == "connect";
+        if (_chatFooter != null) _chatFooter.Visible = tab == "chat";
     }
 
     private void ToggleVisible()
@@ -546,6 +733,7 @@ internal sealed class AgentOverlayHost
             _chatInput.Text = string.Empty;
         }
 
+        PersistChatFlags();
         await AgentRuntime.Instance.SendChatAsync(
             text,
             _attachState?.ButtonPressed ?? true,
@@ -557,13 +745,34 @@ internal sealed class AgentOverlayHost
     private async Task TestConnectionAsync()
     {
         SaveSettingsFromUi();
-        var result = await AgentRuntime.Instance.TestConnectionAsync(CancellationToken.None);
-        if (_chatLog != null)
+        await AgentRuntime.Instance.TestConnectionAsync(CancellationToken.None);
+        ShowTab("chat");
+    }
+
+    private void PersistChatFlags()
+    {
+        AgentRuntime.Instance.PersistChatAttachFlags(
+            _attachState?.ButtonPressed ?? true,
+            _attachShot?.ButtonPressed ?? false);
+    }
+
+    private void ToggleMcp()
+    {
+        if (AgentRuntime.Instance.McpRunning)
         {
-            _chatLog.AppendText($"[b]连通测试[/b]\n{Escape(result)}\n\n");
+            AgentRuntime.Instance.StopMcp();
+            RefreshDynamic();
+            return;
         }
 
-        ShowTab("chat");
+        var settings = HarvestSettings();
+        AgentRuntime.Instance.SaveSettings(settings);
+        _ = AgentRuntime.Instance.StartMcpAsync(CancellationToken.None);
+    }
+
+    private static void CopyText(string text)
+    {
+        DisplayServer.ClipboardSet(text);
     }
 
     private async Task LaunchDualAsync()
@@ -616,18 +825,46 @@ internal sealed class AgentOverlayHost
             _playToggle.Text = AgentRuntime.Instance.PlayRunning ? "暂停自动游玩" : "开始自动游玩";
         }
 
+        if (_stepButton != null)
+        {
+            _stepButton.Disabled = AgentRuntime.Instance.PlayRunning;
+        }
+
+        if (_sendButton != null)
+        {
+            _sendButton.Disabled = AgentRuntime.Instance.PlayRunning;
+        }
+
         if (_dualStatus != null)
         {
             _dualStatus.Text = AgentRuntime.Instance.DualStatus;
         }
 
+        if (_mcpStatus != null)
+        {
+            _mcpStatus.Text = AgentRuntime.Instance.McpStatus;
+        }
+
+        if (_mcpToggle != null)
+        {
+            _mcpToggle.Text = AgentRuntime.Instance.McpRunning ? "停止 MCP" : "一键启动 MCP";
+        }
+
         if (_chatLog != null)
         {
             _chatLog.Clear();
-            foreach (var turn in AgentRuntime.Instance.History)
+            var history = AgentRuntime.Instance.History;
+            if (history.Count == 0)
             {
-                var who = turn.Role == "user" ? "你" : "助手";
-                _chatLog.AppendText($"[b]{who}[/b]\n{Escape(turn.Text)}\n\n");
+                _chatLog.AppendText("[color=#b3b3ad]在下方输入后点发送。[/color]\n");
+            }
+            else
+            {
+                foreach (var turn in history)
+                {
+                    var who = turn.Role == "user" ? "你" : "助手";
+                    _chatLog.AppendText($"[b]{who}[/b]\n{Escape(turn.Text)}\n\n");
+                }
             }
         }
     }
@@ -643,6 +880,11 @@ internal sealed class AgentOverlayHost
         }
 
         _hotkeyWasDown = down;
+
+        if (_host != null && _host.Size != _lastViewportSize)
+        {
+            ApplyPlacement(keepCurrent: _lastViewportSize != Vector2.Zero);
+        }
 
         var now = Time.GetTicksMsec();
         if (now - _lastRefreshMs > 800)
@@ -672,6 +914,16 @@ internal sealed class AgentOverlayHost
 
     private void TearDown()
     {
+        if (_dragHandle != null)
+        {
+            _dragHandle.GuiInput -= OnDragHandleGuiInput;
+        }
+
+        if (_layer != null)
+        {
+            _layer.TreeEntered -= OnOverlayEnteredTree;
+        }
+
         if (_tree != null)
         {
             _tree.ProcessFrame -= OnProcessFrame;
@@ -679,8 +931,160 @@ internal sealed class AgentOverlayHost
 
         _layer?.QueueFree();
         _layer = null;
+        _host = null;
         _panel = null;
+        _dragHandle = null;
         _tree = null;
+    }
+
+    private void OnDragHandleGuiInput(InputEvent evt)
+    {
+        if (_panel == null || _dragHandle == null)
+        {
+            return;
+        }
+
+        if (evt is InputEventMouseButton button && button.ButtonIndex == MouseButton.Left)
+        {
+            _dragging = button.Pressed;
+            _dragHandle.AcceptEvent();
+            if (!button.Pressed)
+            {
+                PersistCurrentPlacement();
+            }
+
+            return;
+        }
+
+        if (evt is InputEventMouseMotion motion && _dragging)
+        {
+            MovePanel(_panel.Position + motion.Relative);
+            _dragHandle.AcceptEvent();
+        }
+    }
+
+    private void ResetPlacement()
+    {
+        AgentRuntime.Instance.PersistOverlayPlacement(null, null);
+        _lastViewportSize = Vector2.Zero;
+        ApplyPlacement();
+    }
+
+    private void ApplyPlacement(bool keepCurrent = false)
+    {
+        if (_panel == null || _host == null || !_panel.IsInsideTree())
+        {
+            return;
+        }
+
+        var viewport = ReadViewportSize();
+        if (viewport.X < 32 || viewport.Y < 32)
+        {
+            return;
+        }
+
+        var size = PanelSizeFor(viewport);
+        Vector2 position;
+        if (keepCurrent)
+        {
+            position = _panel.Position;
+        }
+        else
+        {
+            var settings = AgentRuntime.Instance.Settings;
+            var defaultX = viewport.X - size.X - 12;
+            var defaultY = 40f;
+            position = new Vector2(settings.OverlayLeft ?? defaultX, settings.OverlayTop ?? defaultY);
+        }
+
+        _panel.Size = size;
+        _panel.CustomMinimumSize = new Vector2(PanelWidth, Math.Min(size.Y, 360));
+        MovePanel(position, persist: false);
+        _lastViewportSize = viewport;
+    }
+
+    private void MovePanel(Vector2 position, bool persist = false)
+    {
+        if (_panel == null || _host == null)
+        {
+            return;
+        }
+
+        var viewport = ReadViewportSize();
+        if (viewport.X < 32 || viewport.Y < 32)
+        {
+            return;
+        }
+
+        var size = _panel.Size;
+        if (size.X < 32 || size.Y < 32)
+        {
+            size = PanelSizeFor(viewport);
+            _panel.Size = size;
+        }
+
+        var maxX = Math.Max(8, viewport.X - size.X - 8);
+        var maxY = Math.Max(8, viewport.Y - size.Y - 8);
+        var clamped = new Vector2(
+            Math.Clamp(position.X, 8, maxX),
+            Math.Clamp(position.Y, 8, maxY));
+        _panel.Position = clamped;
+        PlaceEdgeTab(viewport);
+        if (persist)
+        {
+            PersistCurrentPlacement();
+        }
+    }
+
+    private void PlaceEdgeTab(Vector2 viewport)
+    {
+        if (_edgeTab == null || _panel == null)
+        {
+            return;
+        }
+
+        var tabSize = _edgeTab.CustomMinimumSize;
+        var onLeft = _panel.Position.X + _panel.Size.X * 0.5f < viewport.X * 0.5f;
+        var y = Math.Clamp(_panel.Position.Y + 16, 8, Math.Max(8, viewport.Y - tabSize.Y - 8));
+        _edgeTab.Position = onLeft
+            ? new Vector2(4, y)
+            : new Vector2(viewport.X - tabSize.X - 4, y);
+    }
+
+    private void PersistCurrentPlacement()
+    {
+        if (_panel == null)
+        {
+            return;
+        }
+
+        AgentRuntime.Instance.PersistOverlayPlacement(_panel.Position.X, _panel.Position.Y);
+    }
+
+    private Vector2 ReadViewportSize()
+    {
+        if (_host == null)
+        {
+            return Vector2.Zero;
+        }
+
+        if (_host.Size.X >= 32 && _host.Size.Y >= 32)
+        {
+            return _host.Size;
+        }
+
+        if (!_host.IsInsideTree())
+        {
+            return Vector2.Zero;
+        }
+
+        return _host.GetViewportRect().Size;
+    }
+
+    private static Vector2 PanelSizeFor(Vector2 viewport)
+    {
+        var height = Math.Clamp(viewport.Y * 0.72f, 520f, Math.Max(520f, viewport.Y - 80f));
+        return new Vector2(PanelWidth, height);
     }
 
     private static string SelectedText(OptionButton? combo)
@@ -747,5 +1151,6 @@ internal sealed class AgentOverlayHost
         OptionButton Endpoint,
         CheckBox Vision,
         CheckBox Tools,
-        OptionButton Thinking);
+        OptionButton ThinkingMode,
+        OptionButton ThinkingIntensity);
 }

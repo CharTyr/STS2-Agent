@@ -7,6 +7,10 @@ internal static class ScreenshotService
 {
     public const int DefaultMaxEdge = 1280;
 
+    internal static Action? BeginCapture;
+
+    internal static Action? EndCapture;
+
     public static byte[]? CaptureJpeg(int maxEdge = DefaultMaxEdge, float quality = 0.72f)
     {
         var game = NGame.Instance;
@@ -30,20 +34,24 @@ internal static class ScreenshotService
         var image = texture.GetImage();
         if (image == null || image.IsEmpty())
         {
+            image?.Dispose();
             return null;
         }
 
-        var width = image.GetWidth();
-        var height = image.GetHeight();
-        var longest = Math.Max(width, height);
-        if (longest > maxEdge && longest > 0)
+        using (image)
         {
-            var scale = maxEdge / (float)longest;
-            var nextWidth = Math.Max(1, (int)Math.Round(width * scale));
-            var nextHeight = Math.Max(1, (int)Math.Round(height * scale));
-            image.Resize(nextWidth, nextHeight, Image.Interpolation.Lanczos);
-        }
+            var width = image.GetWidth();
+            var height = image.GetHeight();
+            var longest = Math.Max(width, height);
+            if (longest > maxEdge && longest > 0)
+            {
+                var scale = maxEdge / (float)longest;
+                var nextWidth = Math.Max(1, (int)Math.Round(width * scale));
+                var nextHeight = Math.Max(1, (int)Math.Round(height * scale));
+                image.Resize(nextWidth, nextHeight, Image.Interpolation.Lanczos);
+            }
 
-        return image.SaveJpgToBuffer(quality);
+            return image.SaveJpgToBuffer(quality);
+        }
     }
 }

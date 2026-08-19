@@ -140,7 +140,7 @@ internal static class UiFactory
         };
     }
 
-    public static ScrollContainer Scroll(Control child)
+    public static ScrollContainer Scroll(Control child, float minHeight = 0)
     {
         var scroll = new ScrollContainer
         {
@@ -148,7 +148,13 @@ internal static class UiFactory
             SizeFlagsVertical = Control.SizeFlags.ExpandFill,
             MouseFilter = Control.MouseFilterEnum.Stop
         };
+        if (minHeight > 0)
+        {
+            scroll.CustomMinimumSize = new Vector2(0, minHeight);
+        }
+
         child.SizeFlagsHorizontal = Control.SizeFlags.ExpandFill;
+        child.SizeFlagsVertical = Control.SizeFlags.ExpandFill;
         scroll.AddChild(child);
         return scroll;
     }
