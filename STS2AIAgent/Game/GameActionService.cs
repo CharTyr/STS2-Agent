@@ -3852,6 +3852,12 @@ internal static class GameActionService
             TargetType.AnyEnemy => ResolvePotionEnemyTarget(request, combatState, potion),
             TargetType.AnyPlayer when GameStateService.PotionRequiresTarget(combatState, potion) => ResolvePotionPlayerTarget(request, combatState, potion),
             TargetType.TargetedNoCreature => null,
+            // AoE / random-target potions resolve their targets inside the game.
+            // Passing Owner.Creature here makes the game silently discard the use
+            // (invalid target), so use_potion stays pending forever.
+            TargetType.AllEnemies => null,
+            TargetType.AllAllies => null,
+            TargetType.RandomEnemy => null,
             _ => potion.Owner.Creature
         };
     }
