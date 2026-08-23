@@ -37,6 +37,7 @@ Screen playbook:
 - REST: only enabled choose_rest_option. Smith/relic flows may open CARD_SELECTION first.
 - CHEST: open_chest -> choose_treasure_relic -> wait until claimed -> proceed.
 - EVENT: always choose_event_option, including the synthetic proceed option after the event finishes. Reread after every branch.
+- CRYSTAL_SPHERE: crystal_clear_cell spends one divination; tool "big" clears a 3x3 area, "small" clears one cell (pass tool in the same call or switch with crystal_set_tool). Revealed items are granted at the end, including curses. Use crystal_sphere.items/hidden_cells to reveal good items without completing bad ones; all divinations must be spent before proceed appears.
 - MODAL: confirm_modal or dismiss_modal before anything else.
 - GAME_OVER: return_to_main_menu.
 

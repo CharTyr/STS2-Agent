@@ -13,6 +13,7 @@ using MegaCrit.Sts2.Core.Entities.Potions;
 using MegaCrit.Sts2.Core.Entities.RestSite;
 using MegaCrit.Sts2.Core.Events;
 using MegaCrit.Sts2.Core.Context;
+using MegaCrit.Sts2.Core.Events.Custom.CrystalSphereEvent;
 using MegaCrit.Sts2.Core.Helpers;
 using MegaCrit.Sts2.Core.Map;
 using MegaCrit.Sts2.Core.Models;
@@ -28,6 +29,7 @@ using MegaCrit.Sts2.Core.Nodes.Cards.Holders;
 using MegaCrit.Sts2.Core.Nodes.Combat;
 using MegaCrit.Sts2.Core.Nodes.CommonUi;
 using MegaCrit.Sts2.Core.Nodes.Debug.Multiplayer;
+using MegaCrit.Sts2.Core.Nodes.Events.Custom.CrystalSphere;
 using MegaCrit.Sts2.Core.Nodes.Ftue;
 using MegaCrit.Sts2.Core.Nodes.GodotExtensions;
 using MegaCrit.Sts2.Core.Nodes.Rewards;
@@ -80,6 +82,7 @@ internal static class GameStateService
         var unlock = BuildUnlockPayload(currentScreen);
         var chest = BuildChestPayload(currentScreen);
         var eventPayload = BuildEventPayload(currentScreen);
+        var crystalSphere = BuildCrystalSpherePayload(currentScreen);
         var shop = BuildShopPayload(currentScreen);
         var rest = BuildRestPayload(currentScreen, runState);
         var reward = BuildRewardPayload(currentScreen);
@@ -108,6 +111,7 @@ internal static class GameStateService
             unlock = unlock,
             chest = chest,
             @event = eventPayload,
+            crystal_sphere = crystalSphere,
             shop = shop,
             rest = rest,
             reward = reward,
@@ -454,6 +458,22 @@ internal static class GameStateService
                 name = "choose_capstone_option",
                 requires_target = false,
                 requires_index = true
+            });
+        }
+
+        if (CanPlayCrystalSphere(currentScreen))
+        {
+            descriptors.Add(new ActionDescriptor
+            {
+                name = "crystal_set_tool",
+                requires_target = false,
+                requires_index = false
+            });
+            descriptors.Add(new ActionDescriptor
+            {
+                name = "crystal_clear_cell",
+                requires_target = false,
+                requires_index = false
             });
         }
 
@@ -871,6 +891,32 @@ internal static class GameStateService
     public static bool CanChooseCapstoneOption(IScreenContext? currentScreen)
     {
         return GetCapstoneButtons(currentScreen).Count > 0;
+    }
+
+    private static readonly FieldInfo? CrystalSphereEntityField =
+        typeof(NCrystalSphereScreen).GetField("_entity", BindingFlags.NonPublic | BindingFlags.Instance);
+
+    public static CrystalSphereMinigame? GetCrystalSphereMinigame(IScreenContext? currentScreen)
+    {
+        if (currentScreen is not NCrystalSphereScreen crystalSphereScreen)
+        {
+            return null;
+        }
+
+        try
+        {
+            return CrystalSphereEntityField?.GetValue(crystalSphereScreen) as CrystalSphereMinigame;
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
+    public static bool CanPlayCrystalSphere(IScreenContext? currentScreen)
+    {
+        var minigame = GetCrystalSphereMinigame(currentScreen);
+        return minigame is { IsFinished: false };
     }
 
     public static IReadOnlyList<NButton> GetCapstoneButtons(IScreenContext? currentScreen)
@@ -2129,6 +2175,12 @@ internal static class GameStateService
         if (CanProceed(currentScreen))
         {
             names.Add("proceed");
+        }
+
+        if (CanPlayCrystalSphere(currentScreen))
+        {
+            names.Add("crystal_set_tool");
+            names.Add("crystal_clear_cell");
         }
 
         if (CanOpenChest(currentScreen))
@@ -3810,6 +3862,85 @@ internal static class GameStateService
         catch (Exception ex)
         {
             Log.Warn($"[STS2AIAgent] Failed to build event payload on screen {currentScreen.GetType().FullName}: {ex}");
+            return null;
+        }
+    }
+
+    private static CrystalSpherePayload? BuildCrystalSpherePayload(IScreenContext? currentScreen)
+    {
+        var minigame = GetCrystalSphereMinigame(currentScreen);
+        if (minigame == null)
+        {
+            return null;
+        }
+
+        try
+        {
+            var grid = minigame.GridSize;
+            var cells = minigame.cells;
+            var hiddenCells = new List<int[]>();
+            var items = new List<CrystalSphereItemPayload>();
+
+            for (var x = 0; x < grid.X; x++)
+            {
+                for (var y = 0; y < grid.Y; y++)
+                {
+                    if (cells[x, y].IsHidden)
+                    {
+                        hiddenCells.Add(new[] { x, y });
+                    }
+                }
+            }
+
+            foreach (var item in minigame.Items)
+            {
+                // Occupied cells are the source of truth: items that failed to
+                // place occupy no cells, can never be revealed, and are omitted.
+                var occupied = new List<CrystalSphereCell>();
+                for (var x = 0; x < grid.X; x++)
+                {
+                    for (var y = 0; y < grid.Y; y++)
+                    {
+                        if (ReferenceEquals(cells[x, y].Item, item))
+                        {
+                            occupied.Add(cells[x, y]);
+                        }
+                    }
+                }
+
+                if (occupied.Count == 0)
+                {
+                    continue;
+                }
+
+                items.Add(new CrystalSphereItemPayload
+                {
+                    kind = item.GetType().Name.Replace("CrystalSphere", string.Empty),
+                    is_good = SafeReadBool(() => item.IsGood),
+                    x = occupied.Min(c => c.X),
+                    y = occupied.Min(c => c.Y),
+                    width = item.Size.X,
+                    height = item.Size.Y,
+                    revealed = occupied.All(c => !c.IsHidden),
+                    cells = occupied.Select(c => new[] { c.X, c.Y }).ToArray(),
+                    hidden_cells = occupied.Where(c => c.IsHidden).Select(c => new[] { c.X, c.Y }).ToArray()
+                });
+            }
+
+            return new CrystalSpherePayload
+            {
+                divinations_left = minigame.DivinationCount,
+                tool = minigame.CrystalSphereTool.ToString().ToLowerInvariant(),
+                is_finished = minigame.IsFinished,
+                grid_width = grid.X,
+                grid_height = grid.Y,
+                hidden_cells = hiddenCells.ToArray(),
+                items = items.ToArray()
+            };
+        }
+        catch (Exception ex)
+        {
+            Log.Warn($"[STS2AIAgent] Failed to build crystal sphere payload: {ex}");
             return null;
         }
     }
@@ -5540,6 +5671,7 @@ internal static class GameStateService
             NCharacterSelectScreen => "CHARACTER_SELECT",
             NChooseABundleSelectionScreen => "BUNDLE_SELECTION",
             NCapstoneSubmenuStack => "CAPSTONE_SELECTION",
+            NCrystalSphereScreen => "CRYSTAL_SPHERE",
             NPatchNotesScreen => "MAIN_MENU",
             NSubmenu => "MAIN_MENU",
             NLogoAnimation => "MAIN_MENU",
@@ -5685,6 +5817,8 @@ internal sealed class GameStatePayload
     public ChestPayload? chest { get; init; }
 
     public EventPayload? @event { get; init; }
+
+    public CrystalSpherePayload? crystal_sphere { get; init; }
 
     public ShopPayload? shop { get; init; }
 
@@ -6060,10 +6194,47 @@ internal sealed class RestOptionPayload
     public string[] valid_target_player_ids { get; init; } = Array.Empty<string>();
 }
 
+internal sealed class CrystalSpherePayload
+{
+    public int divinations_left { get; init; }
+
+    public string tool { get; init; } = "none";
+
+    public bool is_finished { get; init; }
+
+    public int grid_width { get; init; }
+
+    public int grid_height { get; init; }
+
+    public int[][] hidden_cells { get; init; } = Array.Empty<int[]>();
+
+    public CrystalSphereItemPayload[] items { get; init; } = Array.Empty<CrystalSphereItemPayload>();
+}
+
+internal sealed class CrystalSphereItemPayload
+{
+    public string kind { get; init; } = string.Empty;
+
+    public bool is_good { get; init; }
+
+    public int x { get; init; }
+
+    public int y { get; init; }
+
+    public int width { get; init; }
+
+    public int height { get; init; }
+
+    public bool revealed { get; init; }
+
+    public int[][] cells { get; init; } = Array.Empty<int[]>();
+
+    public int[][] hidden_cells { get; init; } = Array.Empty<int[]>();
+}
+
 internal sealed class ShopPayload
 {
     public bool is_open { get; init; }
-
     public bool can_open { get; init; }
 
     public bool can_close { get; init; }
