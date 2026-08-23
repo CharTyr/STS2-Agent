@@ -77,6 +77,7 @@ internal static class GameStateService
         var selection = BuildSelectionPayload(currentScreen);
         var characterSelect = BuildCharacterSelectPayload(currentScreen);
         var timeline = BuildTimelinePayload(currentScreen);
+        var unlock = BuildUnlockPayload(currentScreen);
         var chest = BuildChestPayload(currentScreen);
         var eventPayload = BuildEventPayload(currentScreen);
         var shop = BuildShopPayload(currentScreen);
@@ -104,6 +105,7 @@ internal static class GameStateService
             selection = selection,
             character_select = characterSelect,
             timeline = timeline,
+            unlock = unlock,
             chest = chest,
             @event = eventPayload,
             shop = shop,
@@ -2028,6 +2030,11 @@ internal static class GameStateService
             return names.ToArray();
         }
 
+        if (CanConfirmUnlock(currentScreen))
+        {
+            names.Add("confirm_unlock");
+        }
+
         if (CanEndTurn(currentScreen, combatState))
         {
             names.Add("end_turn");
@@ -3937,6 +3944,22 @@ internal static class GameStateService
         };
     }
 
+    private static UnlockPayload? BuildUnlockPayload(IScreenContext? currentScreen)
+    {
+        var unlockScreen = GetActiveUnlockScreen(currentScreen);
+        if (unlockScreen == null)
+        {
+            return null;
+        }
+
+        return new UnlockPayload
+        {
+            unlock_type = unlockScreen.GetType().Name,
+            items = GetUnlockItemNames(unlockScreen),
+            can_confirm = CanConfirmUnlock(currentScreen),
+        };
+    }
+
     private static ChestPayload? BuildChestPayload(IScreenContext? currentScreen)
     {
         var relicCollection = GetTreasureRelicCollection(currentScreen);
@@ -5224,6 +5247,94 @@ internal static class GameStateService
             .FirstOrDefault(screen => screen.IsVisibleInTree());
     }
 
+    /// <summary>
+    /// The post-run / milestone unlock showcase (e.g. "Relic unlocked!") takes over the
+    /// screen context itself (not nested under the timeline screen), so it needs its own path.
+    /// </summary>
+    public static NUnlockScreen? GetActiveUnlockScreen(IScreenContext? currentScreen)
+    {
+        var unlockScreen = currentScreen as NUnlockScreen;
+        return unlockScreen != null && unlockScreen.IsVisibleInTree() ? unlockScreen : null;
+    }
+
+    public static NButton? GetUnlockConfirmButton(IScreenContext? currentScreen)
+    {
+        var unlockScreen = GetActiveUnlockScreen(currentScreen);
+        if (unlockScreen == null)
+        {
+            return null;
+        }
+
+        var button = TryGetMemberValue(unlockScreen, "_unlockConfirmButton") as NButton;
+        return button != null && button.IsVisibleInTree() && button.IsEnabled ? button : null;
+    }
+
+    public static bool CanConfirmUnlock(IScreenContext? currentScreen)
+    {
+        return GetUnlockConfirmButton(currentScreen) != null;
+    }
+
+    private static readonly string[] UnlockItemFieldNames =
+        { "_relics", "_cards", "_potions", "_unlockedEpochs", "_character", "_epoch" };
+
+    private static string[] GetUnlockItemNames(NUnlockScreen unlockScreen)
+    {
+        var names = new List<string>();
+        foreach (var fieldName in UnlockItemFieldNames)
+        {
+            var value = TryGetMemberValue(unlockScreen, fieldName);
+            switch (value)
+            {
+                case null:
+                    continue;
+                case AbstractModel model:
+                    names.Add(SafeModelTitle(model));
+                    break;
+                case System.Collections.IEnumerable items:
+                    foreach (var item in items)
+                    {
+                        if (item is AbstractModel itemModel)
+                        {
+                            names.Add(SafeModelTitle(itemModel));
+                        }
+                        else if (item != null)
+                        {
+                            names.Add(item.ToString() ?? "");
+                        }
+                    }
+                    break;
+            }
+        }
+
+        return names.Where(name => !string.IsNullOrWhiteSpace(name)).ToArray();
+    }
+
+    private static string SafeModelTitle(AbstractModel model)
+    {
+        try
+        {
+            var title = TryGetMemberValue(model, "Title");
+            switch (title)
+            {
+                case string s when !string.IsNullOrWhiteSpace(s):
+                    return s;
+                case MegaCrit.Sts2.Core.Localization.LocString loc:
+                    var text = loc.GetFormattedText();
+                    if (!string.IsNullOrWhiteSpace(text))
+                    {
+                        return text;
+                    }
+                    break;
+            }
+        }
+        catch (Exception)
+        {
+            // fall through to id
+        }
+
+        return model.Id.Entry;
+    }
+
     public static NButton? GetTimelineBackButton(IScreenContext? currentScreen)
     {
         return GetTimelineScreen(currentScreen)?.GetNodeOrNull<NButton>("BackButton");
@@ -5414,6 +5525,7 @@ internal static class GameStateService
         return currentScreen switch
         {
             NGameOverScreen => "GAME_OVER",
+            NUnlockScreen => "UNLOCK",
             NCardRewardSelectionScreen => "REWARD",
             NChooseACardSelectionScreen => "CARD_SELECTION",
             NDeckCardSelectScreen or NDeckUpgradeSelectScreen or NDeckTransformSelectScreen or NDeckEnchantSelectScreen => "CARD_SELECTION",
@@ -5567,6 +5679,8 @@ internal sealed class GameStatePayload
     public CharacterSelectPayload? character_select { get; init; }
 
     public TimelinePayload? timeline { get; init; }
+
+    public UnlockPayload? unlock { get; init; }
 
     public ChestPayload? chest { get; init; }
 
@@ -6354,6 +6468,15 @@ internal sealed class ModalPayload
     public string? confirm_label { get; init; }
 
     public string? dismiss_label { get; init; }
+}
+
+internal sealed class UnlockPayload
+{
+    public string unlock_type { get; init; } = string.Empty;
+
+    public string[] items { get; init; } = Array.Empty<string>();
+
+    public bool can_confirm { get; init; }
 }
 
 internal sealed class GameOverPayload

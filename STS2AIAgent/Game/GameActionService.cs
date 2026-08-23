@@ -103,6 +103,7 @@ internal static class GameActionService
             "save_and_quit" => ExecuteSaveAndQuitAsync(),
             "open_character_select" => ExecuteOpenCharacterSelectAsync(),
             "open_timeline" => ExecuteOpenTimelineAsync(),
+            "confirm_unlock" => ExecuteConfirmUnlockAsync(),
             "close_main_menu_submenu" => ExecuteCloseMainMenuSubmenuAsync(),
             "choose_timeline_epoch" => ExecuteChooseTimelineEpochAsync(request),
             "confirm_timeline_overlay" => ExecuteConfirmTimelineOverlayAsync(),
@@ -556,6 +557,56 @@ internal static class GameActionService
             message = stableInspect ? "Action completed." : "Action queued but state is still transitioning.",
             state = GameStateService.BuildStatePayload()
         };
+    }
+
+    private static async Task<ActionResponsePayload> ExecuteConfirmUnlockAsync()
+    {
+        var currentScreen = ActiveScreenContext.Instance.GetCurrentScreen();
+        var screen = GameStateService.ResolveScreen(currentScreen);
+
+        var unlockScreen = GameStateService.GetActiveUnlockScreen(currentScreen);
+        if (unlockScreen == null)
+        {
+            throw new ApiException(409, "invalid_action", "Action is not available in the current state.", new
+            {
+                action = "confirm_unlock",
+                screen
+            });
+        }
+
+        var confirmButton = GameStateService.GetUnlockConfirmButton(currentScreen)
+            ?? throw new ApiException(503, "state_unavailable", "Unlock confirm button is unavailable.", new
+            {
+                action = "confirm_unlock",
+                screen
+            }, retryable: true);
+
+        confirmButton.ForceClick();
+        var stable = await WaitForUnlockScreenClosedAsync(unlockScreen, TimeSpan.FromSeconds(10));
+
+        return new ActionResponsePayload
+        {
+            action = "confirm_unlock",
+            status = stable ? "completed" : "pending",
+            stable = stable,
+            message = stable ? "Action completed." : "Action queued but state is still transitioning.",
+            state = GameStateService.BuildStatePayload()
+        };
+    }
+
+    private static async Task<bool> WaitForUnlockScreenClosedAsync(NUnlockScreen unlockScreen, TimeSpan timeout)
+    {
+        var deadline = DateTime.UtcNow + timeout;
+        while (DateTime.UtcNow < deadline)
+        {
+            await WaitForNextFrameAsync();
+            if (!GodotObject.IsInstanceValid(unlockScreen) || !unlockScreen.IsVisibleInTree())
+            {
+                return true;
+            }
+        }
+
+        return !GodotObject.IsInstanceValid(unlockScreen) || !unlockScreen.IsVisibleInTree();
     }
 
     private static async Task<ActionResponsePayload> ExecuteContinueRunAsync()
