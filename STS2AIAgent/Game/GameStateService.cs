@@ -5249,32 +5249,59 @@ internal static class GameStateService
 
         var reflected = ReflectionMemberAccessor.TryGetValue(
             unlockScreen, "_unlockConfirmButton", out var declaringType) as NButton;
-        if (reflected != null && GodotObject.IsInstanceValid(reflected))
+        var memberSource = $"member:{declaringType?.FullName ?? "unknown"}";
+        var reflectedValid = reflected != null && GodotObject.IsInstanceValid(reflected);
+        var memberStatus = reflectedValid ? "unusable" : "unavailable";
+
+        // Keep an exact-type node-tree fallback in case a future game build renames the field
+        // or leaves a stale, non-actionable backing-field node behind.
+        var descendants = FindDescendants<NUnlockConfirmButton>(unlockScreen);
+        var selected = UnlockConfirmResolutionPolicy.SelectUsable(
+            reflected, descendants, IsUnlockConfirmButtonUsable);
+        if (selected != null)
         {
-            LogUnlockConfirmProbe(
-                currentScreen, reflected, $"member:{declaringType?.FullName ?? "unknown"}");
-            return reflected.IsVisibleInTree() && reflected.IsEnabled ? reflected : null;
+            var source = ReferenceEquals(selected, reflected)
+                ? memberSource
+                : $"descendant:NUnlockConfirmButton;{memberSource}:{memberStatus}";
+            LogUnlockConfirmProbe(unlockScreen, selected, source);
+            return selected;
         }
 
-        // Keep an exact-type node-tree fallback in case a future game build renames the field.
-        var descendant = FindDescendants<NUnlockConfirmButton>(unlockScreen)
-            .FirstOrDefault(GodotObject.IsInstanceValid);
-        LogUnlockConfirmProbe(currentScreen, descendant, "descendant:NUnlockConfirmButton");
-        return descendant != null && descendant.IsVisibleInTree() && descendant.IsEnabled
-            ? descendant
-            : null;
+        // Emit one final-resolution probe per state instead of logging both the unusable
+        // reflected candidate and the failed fallback, which would alternate signatures
+        // and defeat deduplication on every state poll.
+        var validDiagnosticDescendant = descendants.FirstOrDefault(GodotObject.IsInstanceValid);
+        var diagnosticButton = reflectedValid ? reflected : validDiagnosticDescendant;
+        var descendantStatus = descendants.Count == 0 ? "none" : "no-usable";
+        var diagnosticSource = reflectedValid
+            ? $"{memberSource}:unusable;descendant:{descendantStatus}"
+            : validDiagnosticDescendant != null
+                ? $"descendant:NUnlockConfirmButton:unusable;{memberSource}:{memberStatus}"
+                : $"{memberSource}:{memberStatus};descendant:{descendantStatus}";
+        LogUnlockConfirmProbe(unlockScreen, diagnosticButton, diagnosticSource);
+        return null;
+    }
+
+    private static bool IsUnlockConfirmButtonUsable(NButton? button)
+    {
+        return button != null &&
+               GodotObject.IsInstanceValid(button) &&
+               button.IsVisibleInTree() &&
+               button.IsEnabled;
     }
 
     private static void LogUnlockConfirmProbe(
-        IScreenContext? currentScreen, NButton? button, string source)
+        NUnlockScreen unlockScreen, NButton? button, string source)
     {
         var valid = button != null && GodotObject.IsInstanceValid(button);
         var visible = valid && button!.IsVisibleInTree();
         var enabled = valid && button!.IsEnabled;
-        var screenType = currentScreen?.GetType().FullName ?? "null";
+        var screenType = unlockScreen.GetType().FullName ?? unlockScreen.GetType().Name;
+        var screenInstanceId = unlockScreen.GetInstanceId();
         var buttonType = valid ? button!.GetType().FullName ?? button.GetType().Name : "null";
         var buttonPath = valid ? button!.GetPath().ToString() : "null";
-        var signature = $"{screenType}|{source}|{buttonType}|{buttonPath}|{visible}|{enabled}";
+        var signature = UnlockConfirmResolutionPolicy.BuildProbeSignature(
+            screenType, screenInstanceId, source, buttonType, buttonPath, visible, enabled);
         if (signature == _lastUnlockConfirmProbeSignature)
         {
             return;
@@ -5282,7 +5309,8 @@ internal static class GameStateService
 
         _lastUnlockConfirmProbeSignature = signature;
         Log.Info(
-            $"[STS2AIAgent] Unlock confirm probe: screen={screenType}, source={source}, " +
+            $"[STS2AIAgent] Unlock confirm probe: screen={screenType}, instance={screenInstanceId}, " +
+            $"source={source}, " +
             $"button={buttonType}, path={buttonPath}, visible={visible}, enabled={enabled}");
     }
 

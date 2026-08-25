@@ -21,5 +21,6 @@
     <Compile Include="..\STS2AIAgent\Agent\PlayPrompt.cs" Link="Agent\PlayPrompt.cs" />
     <Compile Include="..\STS2AIAgent\Agent\McpProcessLauncher.cs" Link="Agent\McpProcessLauncher.cs" />
     <Compile Include="..\STS2AIAgent\Game\ReflectionMemberAccessor.cs" Link="Game\ReflectionMemberAccessor.cs" />
+    <Compile Include="..\STS2AIAgent\Game\UnlockConfirmResolutionPolicy.cs" Link="Game\UnlockConfirmResolutionPolicy.cs" />
   </ItemGroup>
 </Project>
