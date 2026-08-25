@@ -129,6 +129,9 @@ internal static class TestRunner
         yield return ("PlayIntent.Detect", () => Task.Run(PlayIntentTests.DetectsPlayPhrasesAndIgnoresQuestions));
         yield return ("ActIndex.Validate", () => Task.Run(ActIndexValidatorTests.RejectsMissingAndStaleIndexes));
         yield return ("ActIndex.Unsettled", () => Task.Run(ActIndexValidatorTests.DetectsUnsettledActResults));
+        yield return ("Reflection.PrivateBaseField", () => Task.Run(ReflectionMemberAccessorTests.ReadsPrivateBaseFieldFromDerivedInstance));
+        yield return ("Reflection.PrivateBaseProperty", () => Task.Run(ReflectionMemberAccessorTests.ReadsPrivateBasePropertyFromDerivedInstance));
+        yield return ("Reflection.DerivedPrecedence", () => Task.Run(ReflectionMemberAccessorTests.PrefersDerivedMemberWithSameName));
         yield return ("AgentLoop.PlayOnce", AgentLoopTests.PlayOnce_ExecutesSingleValidatedAct);
         yield return ("AgentLoop.NotActionable", AgentLoopTests.PlayOnce_SkipsWhenNotActionable);
         yield return ("AgentLoop.RejectStaleIndex", AgentLoopTests.PlayOnce_RejectsIndexNotInLatestPayload);
