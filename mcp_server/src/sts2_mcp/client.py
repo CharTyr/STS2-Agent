@@ -423,6 +423,28 @@ class Sts2Client:
             },
         )
 
+    def crystal_set_tool(self, tool: str) -> dict[str, Any]:
+        return self.execute_action(
+            "crystal_set_tool",
+            tool=tool,
+            client_context={
+                "source": "mcp",
+                "tool_name": "crystal_set_tool",
+            },
+        )
+
+    def crystal_clear_cell(self, x: int, y: int, tool: str | None = None) -> dict[str, Any]:
+        return self.execute_action(
+            "crystal_clear_cell",
+            x=x,
+            y=y,
+            tool=tool,
+            client_context={
+                "source": "mcp",
+                "tool_name": "crystal_clear_cell",
+            },
+        )
+
     def choose_capstone_option(self, option_index: int) -> dict[str, Any]:
         return self.execute_action(
             "choose_capstone_option",
@@ -631,6 +653,9 @@ class Sts2Client:
         card_index: int | None = None,
         target_index: int | None = None,
         option_index: int | None = None,
+        x: int | None = None,
+        y: int | None = None,
+        tool: str | None = None,
         command: str | None = None,
         client_context: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
@@ -642,6 +667,9 @@ class Sts2Client:
                 "card_index": card_index,
                 "target_index": target_index,
                 "option_index": option_index,
+                "x": x,
+                "y": y,
+                "tool": tool,
                 "command": command,
                 "client_context": client_context,
             },

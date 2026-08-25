@@ -12,7 +12,15 @@ internal static class AgentTools
             action = new { type = "string", description = "Action name from available_actions." },
             card_index = new { type = "integer", description = "Hand card index for play_card." },
             target_index = new { type = "integer", description = "Target index when the card or potion requires a target." },
-            option_index = new { type = "integer", description = "Option index for map/reward/shop/event/rest/lobby choices." }
+            option_index = new { type = "integer", description = "Option index for map/reward/shop/event/rest/lobby choices." },
+            x = new { type = "integer", description = "Crystal Sphere grid x-coordinate for crystal_clear_cell." },
+            y = new { type = "integer", description = "Crystal Sphere grid y-coordinate for crystal_clear_cell." },
+            tool = new
+            {
+                type = "string",
+                @enum = new[] { "big", "small" },
+                description = "Crystal Sphere tool."
+            }
         },
         required = new[] { "action" }
     };

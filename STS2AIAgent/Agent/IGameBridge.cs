@@ -12,7 +12,15 @@ internal interface IGameBridge
 
     Task<string> GetScreenAsync(CancellationToken cancellationToken);
 
-    Task<string> ActAsync(string action, int? cardIndex, int? targetIndex, int? optionIndex, CancellationToken cancellationToken);
+    Task<string> ActAsync(
+        string action,
+        int? cardIndex,
+        int? targetIndex,
+        int? optionIndex,
+        int? x,
+        int? y,
+        string? tool,
+        CancellationToken cancellationToken);
 
     Task<string> GetGameDataItemJsonAsync(string collection, string itemId, CancellationToken cancellationToken);
 

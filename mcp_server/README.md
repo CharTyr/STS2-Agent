@@ -87,6 +87,8 @@
 - `open_chest`
 - `choose_treasure_relic`
 - `choose_event_option`
+- `crystal_set_tool`
+- `crystal_clear_cell`
 - `choose_rest_option`
 - `open_shop_inventory`
 - `close_shop_inventory`
@@ -131,6 +133,11 @@ Modal：
 3. 只调用当前 `available_actions` 里出现的动作。
 4. 每次动作后重新读取状态，不复用旧索引。
 5. 优先用高层动作，不要把可合并流程拆碎。
+
+`guided` / `layered` profile 使用统一 `act` 工具时，水晶球动作额外接受
+`x`、`y`、`tool`：`crystal_clear_cell` 必须传坐标，可选在同一调用传
+`tool="big"|"small"`；`crystal_set_tool` 只传 `tool`。完整棋盘来自
+`get_game_state().crystal_sphere`。
 
 高层动作优先级：
 

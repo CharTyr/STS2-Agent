@@ -29,6 +29,7 @@ using MegaCrit.Sts2.Core.Nodes.Cards.Holders;
 using MegaCrit.Sts2.Core.Nodes.Combat;
 using MegaCrit.Sts2.Core.Nodes.CommonUi;
 using MegaCrit.Sts2.Core.Nodes.Debug.Multiplayer;
+using MegaCrit.Sts2.Core.Nodes.Events;
 using MegaCrit.Sts2.Core.Nodes.Events.Custom.CrystalSphere;
 using MegaCrit.Sts2.Core.Nodes.Ftue;
 using MegaCrit.Sts2.Core.Nodes.GodotExtensions;
@@ -55,11 +56,13 @@ namespace STS2AIAgent.Game;
 
 internal static class GameStateService
 {
-    private const int StateVersion = 10;
-    private const int AgentViewVersion = 5;
+    private const int StateVersion = 11;
+    private const int AgentViewVersion = 6;
     private static readonly TimeSpan CombatActionSnapshotStableDelay = TimeSpan.FromMilliseconds(200);
     private static string? _lastCombatActionReadinessSignature;
     private static DateTime _lastCombatActionReadinessSinceUtc = DateTime.MinValue;
+    private static bool _crystalSphereEntityLookupWarningLogged;
+    private static bool _crystalSphereButtonLookupWarningLogged;
     private static readonly FieldInfo? StartRunLobbyMaxPlayersField =
         typeof(StartRunLobby).GetField("_maxPlayers", BindingFlags.Instance | BindingFlags.NonPublic);
 
@@ -137,6 +140,7 @@ internal static class GameStateService
                 timeline,
                 chest,
                 eventPayload,
+                crystalSphere,
                 shop,
                 rest,
                 reward,
@@ -903,20 +907,106 @@ internal static class GameStateService
             return null;
         }
 
-        try
+        if (CrystalSphereEntityField == null)
         {
-            return CrystalSphereEntityField?.GetValue(crystalSphereScreen) as CrystalSphereMinigame;
-        }
-        catch
-        {
+            LogCrystalSphereEntityLookupFailure(
+                "private field NCrystalSphereScreen._entity was not found");
             return null;
         }
+
+        try
+        {
+            var minigame = CrystalSphereEntityField.GetValue(crystalSphereScreen) as CrystalSphereMinigame;
+            if (minigame == null)
+            {
+                LogCrystalSphereEntityLookupFailure(
+                    "private field NCrystalSphereScreen._entity did not contain a CrystalSphereMinigame");
+            }
+
+            return minigame;
+        }
+        catch (Exception ex)
+        {
+            LogCrystalSphereEntityLookupFailure(
+                $"reading NCrystalSphereScreen._entity threw {ex.GetType().Name}: {ex.Message}");
+            return null;
+        }
+    }
+
+    private static void LogCrystalSphereEntityLookupFailure(string reason)
+    {
+        if (_crystalSphereEntityLookupWarningLogged)
+        {
+            return;
+        }
+
+        _crystalSphereEntityLookupWarningLogged = true;
+        Log.Warn($"[STS2AIAgent] Crystal Sphere state is unavailable: {reason}.");
     }
 
     public static bool CanPlayCrystalSphere(IScreenContext? currentScreen)
     {
         var minigame = GetCrystalSphereMinigame(currentScreen);
         return minigame is { IsFinished: false };
+    }
+
+    public static bool TrySetCrystalSphereTool(
+        IScreenContext? currentScreen,
+        CrystalSphereMinigame.CrystalSphereToolType tool)
+    {
+        var minigame = GetCrystalSphereMinigame(currentScreen);
+        if (minigame == null || minigame.IsFinished)
+        {
+            return false;
+        }
+
+        minigame.SetTool(tool);
+
+        if (currentScreen is not NCrystalSphereScreen crystalSphereScreen)
+        {
+            return true;
+        }
+
+        try
+        {
+            var bigButton = crystalSphereScreen.GetNodeOrNull<NDivinationButton>("%BigDivinationButton");
+            var smallButton = crystalSphereScreen.GetNodeOrNull<NDivinationButton>("%SmallDivinationButton");
+            if (bigButton == null || smallButton == null)
+            {
+                LogCrystalSphereButtonLookupFailure(
+                    $"missing button node(s): big={bigButton != null}, small={smallButton != null}");
+            }
+
+            if (bigButton != null && GodotObject.IsInstanceValid(bigButton))
+            {
+                bigButton.SetActive(tool == CrystalSphereMinigame.CrystalSphereToolType.Big);
+            }
+
+            if (smallButton != null && GodotObject.IsInstanceValid(smallButton))
+            {
+                smallButton.SetActive(tool == CrystalSphereMinigame.CrystalSphereToolType.Small);
+            }
+        }
+        catch (Exception ex)
+        {
+            // The model state is authoritative; keep the action valid even if a
+            // future UI scene revision prevents the visual active-state update.
+            LogCrystalSphereButtonLookupFailure(
+                $"button synchronization threw {ex.GetType().Name}: {ex.Message}");
+        }
+
+        return true;
+    }
+
+    private static void LogCrystalSphereButtonLookupFailure(string reason)
+    {
+        if (_crystalSphereButtonLookupWarningLogged)
+        {
+            return;
+        }
+
+        _crystalSphereButtonLookupWarningLogged = true;
+        Log.Warn($"[STS2AIAgent] Crystal Sphere tool button state could not be synchronized: {reason}.");
     }
 
     public static IReadOnlyList<NButton> GetCapstoneButtons(IScreenContext? currentScreen)
@@ -2487,6 +2577,7 @@ internal static class GameStateService
         TimelinePayload? timeline,
         ChestPayload? chest,
         EventPayload? eventPayload,
+        CrystalSpherePayload? crystalSphere,
         ShopPayload? shop,
         RestPayload? rest,
         RewardPayload? reward,
@@ -2516,6 +2607,7 @@ internal static class GameStateService
             timeline = BuildAgentTimelinePayload(timeline),
             chest = BuildAgentChestPayload(chest),
             @event = BuildAgentEventPayload(eventPayload),
+            crystal_sphere = crystalSphere,
             shop = BuildAgentShopPayload(shop, glossaryTerms),
             rest = BuildAgentRestPayload(rest),
             reward = BuildAgentRewardPayload(reward, glossaryTerms),
@@ -6235,6 +6327,7 @@ internal sealed class CrystalSphereItemPayload
 internal sealed class ShopPayload
 {
     public bool is_open { get; init; }
+
     public bool can_open { get; init; }
 
     public bool can_close { get; init; }

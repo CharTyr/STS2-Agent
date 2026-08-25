@@ -48,7 +48,7 @@ If a screenshot or vision caption is present, treat it as supporting context; le
 
     public const string JsonActFallback = """
 If you cannot call tools, reply with a single JSON object and nothing else:
-{"action":"<name from available_actions>","card_index":0,"target_index":0,"option_index":0}
-Omit unused indexes. Do not wrap the JSON in markdown.
+{"action":"<name from available_actions>","card_index":0,"target_index":0,"option_index":0,"x":0,"y":0,"tool":"big"}
+Omit unused parameters. Do not wrap the JSON in markdown.
 """;
 }

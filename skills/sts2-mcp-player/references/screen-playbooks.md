@@ -74,6 +74,21 @@ Use this reference when the active screen is clear and you need the exact action
 - Expect event flows like `EVENT -> COMBAT -> EVENT` or `EVENT -> COMBAT -> MAP`.
 - Re-read state after every branch because events mutate in place.
 
+## CRYSTAL_SPHERE
+
+- Read `crystal_sphere.items` and `crystal_sphere.hidden_cells` from compact
+  `get_game_state`; vision is not required.
+- `crystal_clear_cell` requires `x` and `y`. Pass `tool="big"` for a
+  3×3 clear or `tool="small"` for one cell; the tool can be switched atomically
+  in the same `act` call.
+- An item is revealed when all of its occupied cells are clear. Revealed bad
+  items, including curses, are granted when the minigame ends, so do not complete
+  their remaining hidden cells.
+- Every divination must be spent. If no safe reward remains, spend a small
+  divination on an already clear cell.
+- After the last divination, resolve any reward child screens, then use
+  `proceed` when it reappears.
+
 ## MODAL and GAME_OVER
 
 - Resolve `MODAL` before anything else with `confirm_modal` or `dismiss_modal`.
