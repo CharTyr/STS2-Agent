@@ -65,6 +65,7 @@
 | `MAP` | 地图界面 |
 | `COMBAT` | 战斗中 |
 | `EVENT` | 事件交互 |
+| `CRYSTAL_SPHERE` | 水晶球占卜小游戏 |
 | `SHOP` | 商店 |
 | `REST` | 休息点 |
 | `REWARD` | 奖励结算 / 卡牌奖励选择 |
@@ -115,7 +116,7 @@
 
 | 字段 | 类型 | 说明 |
 | --- | --- | --- |
-| `state_version` | number | 状态模型版本（当前固定为 6） |
+| `state_version` | number | 状态模型版本（当前固定为 11） |
 | `run_id` | string | 本局运行标识（种子字符串） |
 | `screen` | string | 当前逻辑界面（见 Screen 枚举） |
 | `in_combat` | boolean | 是否处于战斗流程 |
@@ -128,6 +129,7 @@
 | `selection` | object \| null | 选牌状态（仅选牌界面存在） |
 | `chest` | object \| null | 宝箱状态（仅宝箱房存在） |
 | `event` | object \| null | 事件状态（仅事件房存在） |
+| `crystal_sphere` | object \| null | 水晶球棋盘状态（仅占卜小游戏存在） |
 | `shop` | object \| null | 商店状态（仅商店房存在） |
 | `rest` | object \| null | 休息点状态（仅休息点存在） |
 | `character_select` | object \| null | 角色选择状态（仅角色选择界面存在） |
@@ -450,6 +452,24 @@
 | `will_kill_player` | boolean | 该选项是否会导致玩家死亡（若模型提供） |
 | `has_relic_preview` | boolean | 该选项是否包含遗物预览（若模型提供） |
 
+### `crystal_sphere` 子结构
+
+当 `screen` 为 `CRYSTAL_SPHERE` 时存在。完整 `/state` 与 compact
+`agent_view` 都包含同一棋盘信息，因此默认 MCP `get_game_state` 可以直接规划点击。
+
+| 字段 | 类型 | 说明 |
+| --- | --- | --- |
+| `divinations_left` | number | 剩余占卜次数；必须用完才会出现 `proceed` |
+| `tool` | string | 当前工具：`big`（3×3）或 `small`（单格） |
+| `is_finished` | boolean | 是否已用完占卜次数 |
+| `grid_width` / `grid_height` | number | 棋盘尺寸 |
+| `hidden_cells` | number[][] | 尚未清开的 `[x,y]` 坐标 |
+| `items[]` | object[] | 已成功放置的奖励/诅咒及其占格信息 |
+
+`items[]` 包含 `kind`、`is_good`、`x/y/width/height`、`revealed`、
+`cells` 和 `hidden_cells`。物品的全部占格被清开后才会揭示；结束时所有已揭示物品都会发放，
+包括诅咒。
+
 ### `rest` 子结构
 
 当 `screen` 为 `REST` 时存在。
@@ -521,7 +541,7 @@
   "ok": true,
   "request_id": "req_20260310_120000_1234",
   "data": {
-    "state_version": 6,
+    "state_version": 11,
     "run_id": "WXJVZBQFK2",
     "screen": "COMBAT",
     "in_combat": true,
@@ -877,6 +897,9 @@
 | `card_index` | number \| null | 手牌索引（`play_card` 时使用） |
 | `target_index` | number \| null | 目标索引（需要指定目标的卡牌使用） |
 | `option_index` | number \| null | 选项索引（地图/奖励/选牌等使用） |
+| `x` | number \| null | 水晶球格子的 X 坐标（`crystal_clear_cell`） |
+| `y` | number \| null | 水晶球格子的 Y 坐标（`crystal_clear_cell`） |
+| `tool` | string \| null | 水晶球工具：`big` 或 `small` |
 | `client_context` | object \| null | 可选的客户端上下文（如调用来源标识） |
 
 ### 通用响应结构（ActionResponsePayload）
@@ -1106,6 +1129,30 @@
 请求: { "action": "choose_event_option", "option_index": 0 }
 ```
 
+### `crystal_set_tool`
+
+切换水晶球占卜工具，并同步游戏画面中大小占卜按钮的 active 状态。
+
+- **前提**：`screen = "CRYSTAL_SPHERE"` 且 `is_finished = false`
+- **参数**：`tool`（必填），只能是 `big` 或 `small`
+
+```json
+{ "action": "crystal_set_tool", "tool": "small" }
+```
+
+### `crystal_clear_cell`
+
+在指定坐标消耗一次占卜。可以在同一请求中原子切换工具，避免“先切工具、后点格子”之间读取到
+过期状态。
+
+- **前提**：`screen = "CRYSTAL_SPHERE"` 且 `is_finished = false`
+- **参数**：`x`、`y` 必填；`tool` 可选（`big` 或 `small`）
+- **稳定条件**：剩余次数实际下降、奖励子屏接管，或最后一次占卜后 `proceed` 可用
+
+```json
+{ "action": "crystal_clear_cell", "x": 5, "y": 6, "tool": "big" }
+```
+
 ### `choose_rest_option`
 
 选择休息点的一个操作。
@@ -1272,6 +1319,16 @@
 4. GET /state                          → 事件可能更新选项或完成
 5. 若 event.is_finished=true，选项仅剩 proceed（index=0）
 6. POST /action { choose_event_option, option_index=0 }  → 离开事件，返回地图
+```
+
+### 水晶球占卜
+
+```
+1. GET /state                          → screen=CRYSTAL_SPHERE
+2. 读取 crystal_sphere.items / hidden_cells，规划不完整揭示坏物品的坐标
+3. POST /action { crystal_clear_cell, x, y, tool="big" }
+4. 重复 1-3，直到 divinations_left=0
+5. 处理可能出现的奖励子屏；回到占卜屏后 POST /action { proceed }
 ```
 
 ### 休息点（恢复 HP）

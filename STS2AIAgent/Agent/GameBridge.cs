@@ -60,7 +60,15 @@ internal sealed class GameBridge : IGameBridge
         return GameThread.InvokeAsync(() => GameStateService.BuildStatePayload().screen);
     }
 
-    public Task<string> ActAsync(string action, int? cardIndex, int? targetIndex, int? optionIndex, CancellationToken cancellationToken)
+    public Task<string> ActAsync(
+        string action,
+        int? cardIndex,
+        int? targetIndex,
+        int? optionIndex,
+        int? x,
+        int? y,
+        string? tool,
+        CancellationToken cancellationToken)
     {
         return GameThread.InvokeAsync(async () =>
         {
@@ -70,6 +78,9 @@ internal sealed class GameBridge : IGameBridge
                 card_index = cardIndex,
                 target_index = targetIndex,
                 option_index = optionIndex,
+                x = x,
+                y = y,
+                tool = tool,
                 client_context = new
                 {
                     source = "in_game_agent",

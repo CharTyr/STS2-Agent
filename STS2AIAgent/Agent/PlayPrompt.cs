@@ -37,6 +37,7 @@ Screen playbook:
 - REST: only enabled choose_rest_option. Smith/relic flows may open CARD_SELECTION first.
 - CHEST: open_chest -> choose_treasure_relic -> wait until claimed -> proceed.
 - EVENT: always choose_event_option, including the synthetic proceed option after the event finishes. Reread after every branch.
+- CRYSTAL_SPHERE: crystal_clear_cell spends one divination; tool "big" clears a 3x3 area, "small" clears one cell (pass tool in the same call or switch with crystal_set_tool). Revealed items are granted at the end, including curses. Use crystal_sphere.items/hidden_cells to reveal good items without completing bad ones; all divinations must be spent before proceed appears.
 - MODAL: confirm_modal or dismiss_modal before anything else.
 - GAME_OVER: return_to_main_menu.
 
@@ -47,7 +48,7 @@ If a screenshot or vision caption is present, treat it as supporting context; le
 
     public const string JsonActFallback = """
 If you cannot call tools, reply with a single JSON object and nothing else:
-{"action":"<name from available_actions>","card_index":0,"target_index":0,"option_index":0}
-Omit unused indexes. Do not wrap the JSON in markdown.
+{"action":"<name from available_actions>","card_index":0,"target_index":0,"option_index":0,"x":0,"y":0,"tool":"big"}
+Omit unused parameters. Do not wrap the JSON in markdown.
 """;
 }

@@ -428,6 +428,9 @@ internal sealed class AgentLoop
             var cardIndex = ReadInt(args, "card_index");
             var targetIndex = ReadInt(args, "target_index");
             var optionIndex = ReadInt(args, "option_index");
+            var x = ReadInt(args, "x");
+            var y = ReadInt(args, "y");
+            var tool = ReadString(args, "tool");
             var actionsJson = await _bridge.GetAvailableActionsJsonAsync(cancellationToken);
             var compactJson = await _bridge.GetCompactStateJsonAsync(cancellationToken);
             var indexError = ActIndexValidator.Validate(
@@ -445,7 +448,10 @@ internal sealed class AgentLoop
                     action,
                     card_index = cardIndex,
                     target_index = targetIndex,
-                    option_index = optionIndex
+                    option_index = optionIndex,
+                    x,
+                    y,
+                    tool
                 }, JsonOptions);
                 return (null, json, indexError);
             }
@@ -455,6 +461,9 @@ internal sealed class AgentLoop
                 cardIndex,
                 targetIndex,
                 optionIndex,
+                x,
+                y,
+                tool,
                 cancellationToken);
             if (ActIndexValidator.IsUnsettled(result))
             {
@@ -513,6 +522,7 @@ internal sealed class AgentLoop
         {
             JsonValueKind.String => value.GetString(),
             JsonValueKind.Number => value.ToString(),
+            JsonValueKind.Null or JsonValueKind.Undefined => null,
             _ => value.GetRawText()
         };
     }

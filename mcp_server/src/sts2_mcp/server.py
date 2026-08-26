@@ -4,7 +4,7 @@ import os
 import threading
 import time
 from dataclasses import dataclass
-from typing import Any, Callable
+from typing import Any, Callable, Literal
 
 from fastmcp import FastMCP
 
@@ -13,6 +13,7 @@ from .handoff import Sts2HandoffService
 from .knowledge import Sts2KnowledgeBase
 
 ToolHandler = Callable[..., dict[str, Any]]
+CrystalSphereTool = Literal["big", "small"]
 
 KNOWN_ITEM_ID_KEYS = ("id", "ID", "Id")
 ITEM_IDS_SEPARATOR = ","
@@ -68,6 +69,8 @@ _LEGACY_ACTION_TOOLS: tuple[ActionToolSpec, ...] = (
     ActionToolSpec("open_chest", "no_args", "Open the treasure chest in the current room."),
     ActionToolSpec("choose_treasure_relic", "option_index", "Choose a relic from an opened chest."),
     ActionToolSpec("choose_event_option", "option_index", "Choose an option in the current event room."),
+    ActionToolSpec("crystal_set_tool", "crystal_tool", "Choose the big or small Crystal Sphere divination tool."),
+    ActionToolSpec("crystal_clear_cell", "crystal_cell", "Spend one divination at a Crystal Sphere grid coordinate."),
     ActionToolSpec("choose_capstone_option", "option_index", "Choose an option on the capstone selection screen."),
     ActionToolSpec("choose_bundle", "option_index", "Choose a card bundle on the bundle selection screen."),
     ActionToolSpec("confirm_bundle", "no_args", "Confirm the selected card bundle."),
@@ -387,6 +390,24 @@ def _register_option_target_tool(mcp: FastMCP, name: str, description: str, hand
     mcp.tool(name=name, description=description)(tool)
 
 
+def _register_crystal_tool(mcp: FastMCP, name: str, description: str, handler: ToolHandler) -> None:
+    def action_tool(tool: CrystalSphereTool) -> dict[str, Any]:
+        return handler(tool=tool)
+
+    action_tool.__name__ = name
+    action_tool.__doc__ = description
+    mcp.tool(name=name, description=description)(action_tool)
+
+
+def _register_crystal_cell_tool(mcp: FastMCP, name: str, description: str, handler: ToolHandler) -> None:
+    def action_tool(x: int, y: int, tool: CrystalSphereTool | None = None) -> dict[str, Any]:
+        return handler(x=x, y=y, tool=tool)
+
+    action_tool.__name__ = name
+    action_tool.__doc__ = description
+    mcp.tool(name=name, description=description)(action_tool)
+
+
 def _register_legacy_action_tools(mcp: FastMCP, sts2: Sts2Client) -> None:
     for spec in _LEGACY_ACTION_TOOLS:
         handler = getattr(sts2, spec.name)
@@ -404,6 +425,14 @@ def _register_legacy_action_tools(mcp: FastMCP, sts2: Sts2Client) -> None:
 
         if spec.kind == "option_target":
             _register_option_target_tool(mcp, spec.name, spec.description, handler)
+            continue
+
+        if spec.kind == "crystal_tool":
+            _register_crystal_tool(mcp, spec.name, spec.description, handler)
+            continue
+
+        if spec.kind == "crystal_cell":
+            _register_crystal_cell_tool(mcp, spec.name, spec.description, handler)
             continue
 
         raise RuntimeError(f"Unsupported action tool kind: {spec.kind}")
@@ -757,6 +786,9 @@ def create_server(client: Sts2Client | None = None, tool_profile: str | None = N
         card_index: int | None = None,
         target_index: int | None = None,
         option_index: int | None = None,
+        x: int | None = None,
+        y: int | None = None,
+        tool: CrystalSphereTool | None = None,
     ) -> dict[str, Any]:
         """Execute one currently available game action through the compact tool surface.
 
@@ -764,7 +796,8 @@ def create_server(client: Sts2Client | None = None, tool_profile: str | None = N
             1. Call `get_game_state()` or `get_available_actions()`.
             2. Branch on `state.session.mode` and `state.session.phase`.
             3. Pick an action that is currently available.
-            4. Pass only the indices required by that action from the latest state.
+            4. Pass only the indexes or Crystal Sphere coordinates required by
+               that action from the latest state.
             5. Read state again after the action completes.
 
         Compact-tool rules:
@@ -780,6 +813,9 @@ def create_server(client: Sts2Client | None = None, tool_profile: str | None = N
             - Use `option_index` for map, reward, shop, event, rest, selection,
               and multiplayer-lobby actions.
             - Use `target_index` when the latest state marks a card, potion, or rest option as `requires_target=true`.
+            - Use `x` and `y` for `crystal_clear_cell`; optionally pass
+              `tool="big"` or `tool="small"` atomically. Use `tool` alone
+              with `crystal_set_tool`.
             - Read `target_index_space` and `valid_target_indices` from state to know whether `target_index`
               refers to `combat.enemies[]`, `combat.players[]`, or `run.players[]`.
             - `run_console_command` is intentionally excluded from this compact tool.
@@ -793,6 +829,9 @@ def create_server(client: Sts2Client | None = None, tool_profile: str | None = N
             card_index=card_index,
             target_index=target_index,
             option_index=option_index,
+            x=x,
+            y=y,
+            tool=tool,
             client_context={
                 "source": "mcp",
                 "tool_name": "act",

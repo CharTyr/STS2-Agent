@@ -10,6 +10,7 @@ using MegaCrit.Sts2.Core.Entities.Potions;
 using MegaCrit.Sts2.Core.Entities.RestSite;
 using MegaCrit.Sts2.Core.Context;
 using MegaCrit.Sts2.Core.DevConsole;
+using MegaCrit.Sts2.Core.Events.Custom.CrystalSphereEvent;
 using MegaCrit.Sts2.Core.GameActions;
 using MegaCrit.Sts2.Core.Helpers;
 using MegaCrit.Sts2.Core.Nodes;
@@ -119,6 +120,8 @@ internal static class GameActionService
             "open_chest" => ExecuteOpenChestAsync(),
             "choose_treasure_relic" => ExecuteChooseTreasureRelicAsync(request),
             "choose_event_option" => ExecuteChooseEventOptionAsync(request),
+            "crystal_set_tool" => ExecuteCrystalSetToolAsync(request),
+            "crystal_clear_cell" => ExecuteCrystalClearCellAsync(request),
             "choose_capstone_option" => ExecuteChooseCapstoneOptionAsync(request),
             "choose_bundle" => ExecuteChooseBundleAsync(request),
             "confirm_bundle" => ExecuteConfirmBundleAsync(),
@@ -1192,6 +1195,151 @@ internal static class GameActionService
         }
 
         return IsStableScreenState(currentScreen, allowMapScreen: true);
+    }
+
+    private static async Task<ActionResponsePayload> ExecuteCrystalSetToolAsync(ActionRequest request)
+    {
+        var currentScreen = ActiveScreenContext.Instance.GetCurrentScreen();
+        var screen = GameStateService.ResolveScreen(currentScreen);
+        var minigame = GameStateService.GetCrystalSphereMinigame(currentScreen);
+        if (minigame == null || minigame.IsFinished)
+        {
+            throw new ApiException(409, "invalid_action", "Action is not available in the current state.", new
+            {
+                action = "crystal_set_tool",
+                screen
+            });
+        }
+
+        var tool = ParseCrystalSphereTool(request.tool, "crystal_set_tool");
+        if (!GameStateService.TrySetCrystalSphereTool(currentScreen, tool))
+        {
+            throw new ApiException(503, "state_unavailable", "Crystal Sphere tool controls are unavailable.", new
+            {
+                action = "crystal_set_tool",
+                screen
+            }, retryable: true);
+        }
+
+        await WaitForNextFrameAsync();
+
+        return new ActionResponsePayload
+        {
+            action = "crystal_set_tool",
+            status = "completed",
+            stable = true,
+            message = $"Crystal sphere tool set to {tool.ToString().ToLowerInvariant()}.",
+            state = GameStateService.BuildStatePayload()
+        };
+    }
+
+    private static async Task<ActionResponsePayload> ExecuteCrystalClearCellAsync(ActionRequest request)
+    {
+        var currentScreen = ActiveScreenContext.Instance.GetCurrentScreen();
+        var screen = GameStateService.ResolveScreen(currentScreen);
+        var minigame = GameStateService.GetCrystalSphereMinigame(currentScreen);
+        if (minigame == null || minigame.IsFinished)
+        {
+            throw new ApiException(409, "invalid_action", "Action is not available in the current state.", new
+            {
+                action = "crystal_clear_cell",
+                screen
+            });
+        }
+
+        if (request.x is not int x || request.y is not int y)
+        {
+            throw new ApiException(400, "invalid_request", "Parameters 'x' and 'y' are required.", new
+            {
+                action = "crystal_clear_cell",
+                screen
+            });
+        }
+
+        var grid = minigame.GridSize;
+        if (x < 0 || x >= grid.X || y < 0 || y >= grid.Y)
+        {
+            throw new ApiException(400, "invalid_request",
+                $"Cell ({x},{y}) is outside the {grid.X}x{grid.Y} crystal sphere grid.", new
+                {
+                    action = "crystal_clear_cell",
+                    screen,
+                    x,
+                    y
+                });
+        }
+
+        // Optional atomic tool switch so agents can play one divination per call.
+        if (request.tool != null)
+        {
+            var tool = ParseCrystalSphereTool(request.tool, "crystal_clear_cell");
+            if (!GameStateService.TrySetCrystalSphereTool(currentScreen, tool))
+            {
+                throw new ApiException(503, "state_unavailable", "Crystal Sphere tool controls are unavailable.", new
+                {
+                    action = "crystal_clear_cell",
+                    screen
+                }, retryable: true);
+            }
+        }
+
+        var divinationsBefore = minigame.DivinationCount;
+        await minigame.CellClicked(minigame.cells[x, y]);
+        var stable = await WaitForCrystalSphereSettleAsync(
+            currentScreen, divinationsBefore, TimeSpan.FromSeconds(10));
+
+        return new ActionResponsePayload
+        {
+            action = "crystal_clear_cell",
+            status = stable ? "completed" : "pending",
+            stable = stable,
+            message = stable ? "Action completed." : "Action queued but state is still transitioning.",
+            state = GameStateService.BuildStatePayload()
+        };
+    }
+
+    private static CrystalSphereMinigame.CrystalSphereToolType ParseCrystalSphereTool(
+        string? rawTool,
+        string action)
+    {
+        return rawTool?.Trim().ToLowerInvariant() switch
+        {
+            "big" => CrystalSphereMinigame.CrystalSphereToolType.Big,
+            "small" => CrystalSphereMinigame.CrystalSphereToolType.Small,
+            _ => throw new ApiException(
+                400,
+                "invalid_request",
+                "Parameter 'tool' must be \"big\" or \"small\".",
+                new { action, tool = rawTool })
+        };
+    }
+
+    private static async Task<bool> WaitForCrystalSphereSettleAsync(
+        IScreenContext? screenContext,
+        int divinationsBefore,
+        TimeSpan timeout)
+    {
+        var deadline = DateTime.UtcNow + timeout;
+        while (DateTime.UtcNow < deadline)
+        {
+            await WaitForNextFrameAsync();
+
+            var currentScreen = ActiveScreenContext.Instance.GetCurrentScreen();
+            var screenChanged = !ReferenceEquals(currentScreen, screenContext);
+            var minigame = GameStateService.GetCrystalSphereMinigame(currentScreen);
+            if (CrystalSphereSettlePolicy.IsSettled(
+                    screenChanged,
+                    minigame != null,
+                    divinationsBefore,
+                    minigame?.DivinationCount ?? divinationsBefore,
+                    minigame?.IsFinished ?? false,
+                    GameStateService.CanProceed(currentScreen)))
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     private static async Task<ActionResponsePayload> ExecuteResolveRewardsAsync(ActionRequest request)
@@ -4802,6 +4950,12 @@ internal sealed class ActionRequest
     public int? target_index { get; init; }
 
     public int? option_index { get; init; }
+
+    public int? x { get; init; }
+
+    public int? y { get; init; }
+
+    public string? tool { get; init; }
 
     public string? command { get; init; }
 
