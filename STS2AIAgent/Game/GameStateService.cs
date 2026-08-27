@@ -61,6 +61,7 @@ internal static class GameStateService
     private static readonly TimeSpan CombatActionSnapshotStableDelay = TimeSpan.FromMilliseconds(200);
     private static string? _lastCombatActionReadinessSignature;
     private static DateTime _lastCombatActionReadinessSinceUtc = DateTime.MinValue;
+    private static string? _lastUnlockConfirmProbeSignature;
     private static bool _crystalSphereEntityLookupWarningLogged;
     private static bool _crystalSphereButtonLookupWarningLogged;
     private static readonly FieldInfo? StartRunLobbyMaxPlayersField =
@@ -3418,27 +3419,7 @@ internal static class GameStateService
 
     private static object? TryGetMemberValue(object instance, string memberName)
     {
-        const BindingFlags flags = BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic;
-
-        try
-        {
-            var property = instance.GetType().GetProperty(memberName, flags);
-            if (property != null)
-            {
-                return property.GetValue(instance);
-            }
-
-            var field = instance.GetType().GetField(memberName, flags);
-            if (field != null)
-            {
-                return field.GetValue(instance);
-            }
-        }
-        catch
-        {
-        }
-
-        return null;
+        return ReflectionMemberAccessor.TryGetValue(instance, memberName);
     }
 
     private static string[] GetCardModifierTags(CardModel? card)
@@ -5485,11 +5466,75 @@ internal static class GameStateService
         var unlockScreen = GetActiveUnlockScreen(currentScreen);
         if (unlockScreen == null)
         {
+            _lastUnlockConfirmProbeSignature = null;
             return null;
         }
 
-        var button = TryGetMemberValue(unlockScreen, "_unlockConfirmButton") as NButton;
-        return button != null && button.IsVisibleInTree() && button.IsEnabled ? button : null;
+        var reflected = ReflectionMemberAccessor.TryGetValue(
+            unlockScreen, "_unlockConfirmButton", out var declaringType) as NButton;
+        var memberSource = $"member:{declaringType?.FullName ?? "unknown"}";
+        var reflectedValid = reflected != null && GodotObject.IsInstanceValid(reflected);
+        var memberStatus = reflectedValid ? "unusable" : "unavailable";
+
+        // Keep an exact-type node-tree fallback in case a future game build renames the field
+        // or leaves a stale, non-actionable backing-field node behind.
+        var descendants = FindDescendants<NUnlockConfirmButton>(unlockScreen);
+        var selected = UnlockConfirmResolutionPolicy.SelectUsable(
+            reflected, descendants, IsUnlockConfirmButtonUsable);
+        if (selected != null)
+        {
+            var source = ReferenceEquals(selected, reflected)
+                ? memberSource
+                : $"descendant:NUnlockConfirmButton;{memberSource}:{memberStatus}";
+            LogUnlockConfirmProbe(unlockScreen, selected, source);
+            return selected;
+        }
+
+        // Emit one final-resolution probe per state instead of logging both the unusable
+        // reflected candidate and the failed fallback, which would alternate signatures
+        // and defeat deduplication on every state poll.
+        var validDiagnosticDescendant = descendants.FirstOrDefault(GodotObject.IsInstanceValid);
+        var diagnosticButton = reflectedValid ? reflected : validDiagnosticDescendant;
+        var descendantStatus = descendants.Count == 0 ? "none" : "no-usable";
+        var diagnosticSource = reflectedValid
+            ? $"{memberSource}:unusable;descendant:{descendantStatus}"
+            : validDiagnosticDescendant != null
+                ? $"descendant:NUnlockConfirmButton:unusable;{memberSource}:{memberStatus}"
+                : $"{memberSource}:{memberStatus};descendant:{descendantStatus}";
+        LogUnlockConfirmProbe(unlockScreen, diagnosticButton, diagnosticSource);
+        return null;
+    }
+
+    private static bool IsUnlockConfirmButtonUsable(NButton? button)
+    {
+        return button != null &&
+               GodotObject.IsInstanceValid(button) &&
+               button.IsVisibleInTree() &&
+               button.IsEnabled;
+    }
+
+    private static void LogUnlockConfirmProbe(
+        NUnlockScreen unlockScreen, NButton? button, string source)
+    {
+        var valid = button != null && GodotObject.IsInstanceValid(button);
+        var visible = valid && button!.IsVisibleInTree();
+        var enabled = valid && button!.IsEnabled;
+        var screenType = unlockScreen.GetType().FullName ?? unlockScreen.GetType().Name;
+        var screenInstanceId = unlockScreen.GetInstanceId();
+        var buttonType = valid ? button!.GetType().FullName ?? button.GetType().Name : "null";
+        var buttonPath = valid ? button!.GetPath().ToString() : "null";
+        var signature = UnlockConfirmResolutionPolicy.BuildProbeSignature(
+            screenType, screenInstanceId, source, buttonType, buttonPath, visible, enabled);
+        if (signature == _lastUnlockConfirmProbeSignature)
+        {
+            return;
+        }
+
+        _lastUnlockConfirmProbeSignature = signature;
+        Log.Info(
+            $"[STS2AIAgent] Unlock confirm probe: screen={screenType}, instance={screenInstanceId}, " +
+            $"source={source}, " +
+            $"button={buttonType}, path={buttonPath}, visible={visible}, enabled={enabled}");
     }
 
     public static bool CanConfirmUnlock(IScreenContext? currentScreen)
