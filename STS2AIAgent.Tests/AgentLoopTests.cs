@@ -105,6 +105,55 @@ internal static class AgentLoopTests
         Assert.Null(result.Error);
     }
 
+    public static async Task PlayOnce_ForwardsCrystalSphereArguments()
+    {
+        var bridge = new FakeBridge
+        {
+            CompactStateJson =
+                """{"screen":"CRYSTAL_SPHERE","available_actions":["crystal_clear_cell"],"crystal_sphere":{"grid_width":11,"grid_height":11}}""",
+            AvailableActionsJson =
+                """[{"name":"crystal_clear_cell","requires_index":false,"requires_target":false}]""",
+            AvailableActionNames = new[] { "crystal_clear_cell" },
+            Screen = "CRYSTAL_SPHERE"
+        };
+        var factory = new ScriptedClientFactory(new[]
+        {
+            new LlmCompletion
+            {
+                ToolCalls = new[]
+                {
+                    new LlmToolCall
+                    {
+                        Id = "call_act",
+                        Name = "act",
+                        ArgumentsJson =
+                            """{"action":"crystal_clear_cell","x":4,"y":7,"tool":"small"}"""
+                    }
+                }
+            }
+        });
+        var loop = new AgentLoop(bridge, factory, AgentSettings.CreateDefault);
+
+        var result = await loop.PlayOnceAsync(CancellationToken.None);
+
+        Assert.Equal("crystal_clear_cell", result.Acted);
+        Assert.Equal("crystal_clear_cell", bridge.LastAction);
+        Assert.Equal(4, bridge.LastX);
+        Assert.Equal(7, bridge.LastY);
+        Assert.Equal("small", bridge.LastTool);
+        Assert.Null(result.Error);
+    }
+
+    public static void ActToolSchema_IncludesCrystalSphereArguments()
+    {
+        var act = AgentTools.Play.Single(tool => tool.Name == "act");
+        var schema = JsonSerializer.Serialize(act.Parameters);
+
+        Assert.Contains("\"x\"", schema);
+        Assert.Contains("\"y\"", schema);
+        Assert.Contains("\"tool\"", schema);
+    }
+
     public static async Task PlayOnce_SkipsWhenNotActionable()
     {
         var bridge = new FakeBridge { Actionable = false };
@@ -263,6 +312,40 @@ internal static class AgentLoopTests
         Assert.Null(result.Error);
         Assert.Equal(0, bridge.CaptureCalls);
         Assert.Null(factory.LastRequest?.Tools);
+    }
+
+    public static async Task PlayOnce_TextOnlyCrystalJsonForwardsCoordinatesAndNullTool()
+    {
+        var bridge = new FakeBridge
+        {
+            CompactStateJson =
+                """{"screen":"CRYSTAL_SPHERE","available_actions":["crystal_clear_cell"],"crystal_sphere":{"grid_width":11,"grid_height":11}}""",
+            AvailableActionsJson =
+                """[{"name":"crystal_clear_cell","requires_index":false,"requires_target":false}]""",
+            AvailableActionNames = new[] { "crystal_clear_cell" },
+            Screen = "CRYSTAL_SPHERE"
+        };
+        var factory = new ScriptedClientFactory(new[]
+        {
+            new LlmCompletion
+            {
+                Content =
+                    """{"action":"crystal_clear_cell","x":2,"y":9,"tool":null}"""
+            }
+        });
+        var settings = AgentSettings.CreateDefault();
+        settings.Models[0].SupportsVision = false;
+        settings.Models[0].SupportsTools = false;
+        settings.VisionModelId = null;
+        var loop = new AgentLoop(bridge, factory, () => settings);
+
+        var result = await loop.PlayOnceAsync(CancellationToken.None);
+
+        Assert.Equal("crystal_clear_cell", result.Acted);
+        Assert.Equal(2, bridge.LastX);
+        Assert.Equal(9, bridge.LastY);
+        Assert.Null(bridge.LastTool);
+        Assert.Null(result.Error);
     }
 
     public static async Task PlayOnce_WaitUntilActionableTool()
@@ -472,16 +555,34 @@ internal static class AgentLoopTests
 
         public int CaptureCalls { get; private set; }
 
+        public string? LastAction { get; private set; }
+
+        public int? LastX { get; private set; }
+
+        public int? LastY { get; private set; }
+
+        public string? LastTool { get; private set; }
+
         public bool Actionable { get; set; } = true;
 
         public bool HonorCancelOnWait { get; set; } = true;
 
         public string ActResultJson { get; set; } = """{"action":"play_card","status":"completed","stable":true}""";
 
+        public string CompactStateJson { get; set; } =
+            """{"screen":"COMBAT","available_actions":["play_card","end_turn"],"combat":{"hand":[{"i":0,"line":"Strike","targets":[]}],"enemies":[{"i":0}]}}""";
+
+        public string AvailableActionsJson { get; set; } =
+            """[{"name":"play_card","requires_index":true,"requires_target":false}]""";
+
+        public IReadOnlyList<string> AvailableActionNames { get; set; } =
+            new[] { "play_card", "end_turn" };
+
+        public string Screen { get; set; } = "COMBAT";
+
         public Task<string> GetCompactStateJsonAsync(CancellationToken cancellationToken)
         {
-            return Task.FromResult(
-                """{"screen":"COMBAT","available_actions":["play_card","end_turn"],"combat":{"hand":[{"i":0,"line":"Strike","targets":[]}],"enemies":[{"i":0}]}}""");
+            return Task.FromResult(CompactStateJson);
         }
 
         public Task<string> GetRawStateJsonAsync(CancellationToken cancellationToken)
@@ -491,19 +592,31 @@ internal static class AgentLoopTests
 
         public Task<string> GetAvailableActionsJsonAsync(CancellationToken cancellationToken)
         {
-            return Task.FromResult("""[{"name":"play_card","requires_index":true,"requires_target":false}]""");
+            return Task.FromResult(AvailableActionsJson);
         }
 
         public Task<IReadOnlyList<string>> GetAvailableActionNamesAsync(CancellationToken cancellationToken)
         {
-            return Task.FromResult<IReadOnlyList<string>>(new[] { "play_card", "end_turn" });
+            return Task.FromResult(AvailableActionNames);
         }
 
-        public Task<string> GetScreenAsync(CancellationToken cancellationToken) => Task.FromResult("COMBAT");
+        public Task<string> GetScreenAsync(CancellationToken cancellationToken) => Task.FromResult(Screen);
 
-        public Task<string> ActAsync(string action, int? cardIndex, int? targetIndex, int? optionIndex, CancellationToken cancellationToken)
+        public Task<string> ActAsync(
+            string action,
+            int? cardIndex,
+            int? targetIndex,
+            int? optionIndex,
+            int? x,
+            int? y,
+            string? tool,
+            CancellationToken cancellationToken)
         {
             ActCalls++;
+            LastAction = action;
+            LastX = x;
+            LastY = y;
+            LastTool = tool;
             return Task.FromResult(ActResultJson);
         }
 

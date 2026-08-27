@@ -22,5 +22,6 @@
     <Compile Include="..\STS2AIAgent\Agent\McpProcessLauncher.cs" Link="Agent\McpProcessLauncher.cs" />
     <Compile Include="..\STS2AIAgent\Game\ReflectionMemberAccessor.cs" Link="Game\ReflectionMemberAccessor.cs" />
     <Compile Include="..\STS2AIAgent\Game\UnlockConfirmResolutionPolicy.cs" Link="Game\UnlockConfirmResolutionPolicy.cs" />
+    <Compile Include="..\STS2AIAgent\Game\CrystalSphereSettlePolicy.cs" Link="Game\CrystalSphereSettlePolicy.cs" />
   </ItemGroup>
 </Project>
