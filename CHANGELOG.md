@@ -6,6 +6,23 @@
 
 - None yet.
 
+## v0.9.1 - 2026-08-27
+
+### Added
+
+- Added `CRYSTAL_SPHERE` state and actions for the Crystal Sphere divination minigame.
+- Added `UNLOCK` state payloads and `confirm_unlock` for post-run unlock showcases.
+
+### Fixed
+
+- Fixed AoE and random-target potion actions that could remain pending indefinitely.
+- Fixed `confirm_unlock` for derived unlock screens whose private confirm button is declared on a base class.
+- Updated the multiplayer release regression to resolve bundle selection during run intro.
+
+### Compatibility
+
+- Verified against Slay the Spire 2 `v0.111.0`.
+
 ## v0.9.0 - 2026-08-19
 
 ### Highlights

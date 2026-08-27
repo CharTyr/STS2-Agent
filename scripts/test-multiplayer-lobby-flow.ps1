@@ -298,6 +298,18 @@ function Invoke-LocalRunProgressionStep {
     }
 
     switch ($State.screen) {
+        "BUNDLE_SELECTION" {
+            if ($actions -contains "confirm_bundle") {
+                return Invoke-Action -BaseUrl $BaseUrl -Payload @{ action = "confirm_bundle" }
+            }
+
+            if ($actions -contains "choose_bundle") {
+                return Invoke-Action -BaseUrl $BaseUrl -Payload @{
+                    action = "choose_bundle"
+                    option_index = 0
+                }
+            }
+        }
         "EVENT" {
             if (($actions -contains "choose_event_option") -and $null -ne $State.event -and @($State.event.options).Count -ge 1) {
                 $optionIndex = if ($State.event.is_finished -or @($State.event.options).Count -eq 1) { 0 } else { 1 }

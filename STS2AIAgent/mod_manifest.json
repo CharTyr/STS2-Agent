@@ -4,7 +4,7 @@
   "name": "STS2 AI Agent",
   "author": "chart",
   "description": "In-game AI agent overlay plus local HTTP API for Slay the Spire 2.",
-  "version": "0.9.0",
+  "version": "0.9.1",
   "has_pck": true,
   "has_dll": true,
   "dependencies": []
