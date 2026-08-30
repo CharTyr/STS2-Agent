@@ -244,6 +244,15 @@ class Sts2Client:
             },
         )
 
+    def continue_game_over(self) -> dict[str, Any]:
+        return self.execute_action(
+            "continue_game_over",
+            client_context={
+                "source": "mcp",
+                "tool_name": "continue_game_over",
+            },
+        )
+
     def abandon_run(self) -> dict[str, Any]:
         return self.execute_action(
             "abandon_run",

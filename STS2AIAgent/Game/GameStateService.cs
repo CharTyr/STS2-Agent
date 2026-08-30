@@ -56,8 +56,8 @@ namespace STS2AIAgent.Game;
 
 internal static class GameStateService
 {
-    private const int StateVersion = 11;
-    private const int AgentViewVersion = 6;
+    private const int StateVersion = 12;
+    private const int AgentViewVersion = 7;
     private static readonly TimeSpan CombatActionSnapshotStableDelay = TimeSpan.FromMilliseconds(200);
     private static string? _lastCombatActionReadinessSignature;
     private static DateTime _lastCombatActionReadinessSinceUtc = DateTime.MinValue;
@@ -682,7 +682,18 @@ internal static class GameStateService
             });
         }
 
-        if (CanReturnToMainMenu(currentScreen))
+        var gameOver = BuildGameOverPayload(currentScreen, runState) ?? new GameOverPayload();
+        if (gameOver.can_continue)
+        {
+            descriptors.Add(new ActionDescriptor
+            {
+                name = "continue_game_over",
+                requires_target = false,
+                requires_index = false
+            });
+        }
+
+        if (gameOver.can_return_to_main_menu)
         {
             descriptors.Add(new ActionDescriptor
             {
@@ -1384,7 +1395,13 @@ internal static class GameStateService
 
     public static bool CanReturnToMainMenu(IScreenContext? currentScreen)
     {
-        return currentScreen is NGameOverScreen;
+        return IsGameOverButtonReady(GetGameOverMainMenuButton(currentScreen));
+    }
+
+    public static bool CanContinueGameOver(IScreenContext? currentScreen)
+    {
+        return IsGameOverButtonReady(GetGameOverContinueButton(currentScreen))
+            && !CanReturnToMainMenu(currentScreen);
     }
 
     public static IReadOnlyList<NMapPoint> GetAvailableMapNodes(IScreenContext? currentScreen, RunState? runState)
@@ -2394,7 +2411,13 @@ internal static class GameStateService
             names.Add("discard_potion");
         }
 
-        if (CanReturnToMainMenu(currentScreen))
+        var gameOver = BuildGameOverPayload(currentScreen, runState) ?? new GameOverPayload();
+        if (gameOver.can_continue)
+        {
+            names.Add("continue_game_over");
+        }
+
+        if (gameOver.can_return_to_main_menu)
         {
             names.Add("return_to_main_menu");
         }
@@ -3098,6 +3121,7 @@ internal static class GameStateService
             victory = gameOver.is_victory,
             floor = gameOver.floor,
             character = gameOver.character_id,
+            phase = gameOver.phase,
             can_continue = gameOver.can_continue,
             can_return = gameOver.can_return_to_main_menu
         };
@@ -4304,14 +4328,22 @@ internal static class GameStateService
 
     private static GameOverPayload? BuildGameOverPayload(IScreenContext? currentScreen, RunState? runState)
     {
-        if (currentScreen is not NGameOverScreen screen)
+        if (currentScreen is not NGameOverScreen)
         {
             return null;
         }
 
         var player = GetLocalPlayer(runState);
-        var continueButton = screen.GetNodeOrNull<NButton>("%ContinueButton");
-        var mainMenuButton = screen.GetNodeOrNull<NButton>("%MainMenuButton");
+        var continueButton = GetGameOverContinueButton(currentScreen);
+        var mainMenuButton = GetGameOverMainMenuButton(currentScreen);
+        var canContinue = IsGameOverButtonReady(continueButton)
+            && !IsGameOverButtonReady(mainMenuButton);
+        var canReturnToMainMenu = IsGameOverButtonReady(mainMenuButton);
+        var phase = canReturnToMainMenu
+            ? "summary_ready"
+            : canContinue
+                ? "intro"
+                : "summary_animating";
         var history = RunManager.Instance.History;
 
         return new GameOverPayload
@@ -4319,9 +4351,15 @@ internal static class GameStateService
             is_victory = history?.Win ?? (runState?.CurrentRoom?.IsVictoryRoom ?? false),
             floor = runState?.TotalFloor,
             character_id = player?.Character.Id.Entry,
-            can_continue = continueButton?.IsEnabled ?? false,
-            can_return_to_main_menu = true,
-            showing_summary = mainMenuButton?.Visible == true || mainMenuButton?.IsEnabled == true
+            phase = phase,
+            can_continue = continueButton?.Visible == true
+                && continueButton?.IsEnabled == true
+                && continueButton?.IsVisibleInTree() == true
+                && !canReturnToMainMenu,
+            can_return_to_main_menu = mainMenuButton?.Visible == true
+                && mainMenuButton?.IsEnabled == true
+                && mainMenuButton?.IsVisibleInTree() == true,
+            showing_summary = mainMenuButton?.Visible == true
         };
     }
 
@@ -5366,6 +5404,26 @@ internal static class GameStateService
     public static NMainMenuTextButton? GetMainMenuContinueButton(NMainMenu mainMenu)
     {
         return mainMenu.GetNodeOrNull<NMainMenuTextButton>("MainMenuTextButtons/ContinueButton");
+    }
+
+    public static NGameOverContinueButton? GetGameOverContinueButton(IScreenContext? currentScreen)
+    {
+        return (currentScreen as NGameOverScreen)?
+            .GetNodeOrNull<NGameOverContinueButton>("%ContinueButton");
+    }
+
+    public static NReturnToMainMenuButton? GetGameOverMainMenuButton(IScreenContext? currentScreen)
+    {
+        return (currentScreen as NGameOverScreen)?
+            .GetNodeOrNull<NReturnToMainMenuButton>("%MainMenuButton");
+    }
+
+    private static bool IsGameOverButtonReady(NButton? button)
+    {
+        return button != null
+            && GodotObject.IsInstanceValid(button)
+            && button.IsVisibleInTree()
+            && button.IsEnabled;
     }
 
     public static NMainMenuTextButton? GetMainMenuAbandonRunButton(NMainMenu mainMenu)
@@ -6795,6 +6853,8 @@ internal sealed class GameOverPayload
     public int? floor { get; init; }
 
     public string? character_id { get; init; }
+
+    public string phase { get; init; } = "intro";
 
     public bool can_continue { get; init; }
 

@@ -100,6 +100,7 @@ internal static class GameActionService
             "end_turn" => ExecuteEndTurnAsync(),
             "play_card" => ExecutePlayCardAsync(request),
             "continue_run" => ExecuteContinueRunAsync(),
+            "continue_game_over" => ExecuteContinueGameOverAsync(),
             "abandon_run" => ExecuteAbandonRunAsync(),
             "save_and_quit" => ExecuteSaveAndQuitAsync(),
             "open_character_select" => ExecuteOpenCharacterSelectAsync(),
@@ -3901,7 +3902,7 @@ internal static class GameActionService
         var currentScreen = ActiveScreenContext.Instance.GetCurrentScreen();
         var screen = GameStateService.ResolveScreen(currentScreen);
 
-        if (currentScreen is not NGameOverScreen gameOverScreen || !GameStateService.CanReturnToMainMenu(currentScreen))
+        if (currentScreen is not NGameOverScreen || !GameStateService.CanReturnToMainMenu(currentScreen))
         {
             throw new ApiException(409, "invalid_action", "Action is not available in the current state.", new
             {
@@ -3910,12 +3911,54 @@ internal static class GameActionService
             });
         }
 
-        gameOverScreen.Call(NGameOverScreen.MethodName.ReturnToMainMenu);
-        var stable = await WaitForGameOverExitAsync(TimeSpan.FromSeconds(15));
+        NReturnToMainMenuButton mainMenuButton = GameStateService.GetGameOverMainMenuButton(currentScreen)
+            ?? throw new ApiException(503, "state_unavailable", "Game-over main-menu button is unavailable.", new
+            {
+                action = "return_to_main_menu",
+                screen
+            }, retryable: true);
+
+        mainMenuButton.ForceClick();
+        var stable = await WaitForGameOverExitAsync(TimeSpan.FromSeconds(30));
 
         return new ActionResponsePayload
         {
             action = "return_to_main_menu",
+            status = stable ? "completed" : "pending",
+            stable = stable,
+            message = stable ? "Action completed." : "Action queued but state is still transitioning.",
+            state = GameStateService.BuildStatePayload()
+        };
+    }
+
+    private static async Task<ActionResponsePayload> ExecuteContinueGameOverAsync()
+    {
+        var currentScreen = ActiveScreenContext.Instance.GetCurrentScreen();
+        var screen = GameStateService.ResolveScreen(currentScreen);
+
+        if (currentScreen is not NGameOverScreen gameOverScreen
+            || !GameStateService.CanContinueGameOver(currentScreen))
+        {
+            throw new ApiException(409, "invalid_action", "Action is not available in the current state.", new
+            {
+                action = "continue_game_over",
+                screen
+            });
+        }
+
+        NGameOverContinueButton continueButton = GameStateService.GetGameOverContinueButton(currentScreen)
+            ?? throw new ApiException(503, "state_unavailable", "Game-over continue button is unavailable.", new
+            {
+                action = "continue_game_over",
+                screen
+            }, retryable: true);
+
+        continueButton.ForceClick();
+        var stable = await WaitForGameOverSummaryStartAsync(gameOverScreen, TimeSpan.FromSeconds(15));
+
+        return new ActionResponsePayload
+        {
+            action = "continue_game_over",
             status = stable ? "completed" : "pending",
             stable = stable,
             message = stable ? "Action completed." : "Action queued but state is still transitioning.",
@@ -4756,6 +4799,29 @@ internal static class GameActionService
         }
 
         return ActiveScreenContext.Instance.GetCurrentScreen() is not NGameOverScreen;
+    }
+
+    private static async Task<bool> WaitForGameOverSummaryStartAsync(
+        NGameOverScreen gameOverScreen,
+        TimeSpan timeout)
+    {
+        var deadline = DateTime.UtcNow + timeout;
+        while (DateTime.UtcNow < deadline)
+        {
+            await WaitForNextFrameAsync();
+
+            var currentScreen = ActiveScreenContext.Instance.GetCurrentScreen();
+            if (!GodotObject.IsInstanceValid(gameOverScreen)
+                || !ReferenceEquals(currentScreen, gameOverScreen)
+                || !GameStateService.CanContinueGameOver(currentScreen))
+            {
+                return true;
+            }
+        }
+
+        return !GodotObject.IsInstanceValid(gameOverScreen)
+            || !ReferenceEquals(ActiveScreenContext.Instance.GetCurrentScreen(), gameOverScreen)
+            || !GameStateService.CanContinueGameOver(gameOverScreen);
     }
 
     private static async Task<NPauseMenu?> WaitForPauseMenuAsync(TimeSpan timeout)
