@@ -63,6 +63,19 @@ internal static class EventOptionLocalizationTests
         Assert.False(formatCalled);
     }
 
+    public static void FormatsSignatureFieldsWithEventVariables()
+    {
+        var title = new FakeLocString("Gain {Gold} Gold");
+        var description = new FakeLocString("Lose {HpLoss} HP");
+
+        var signature = string.Join(
+            ":",
+            EventOptionLocalization.Format(title, AddEventVariables, FormatOrThrowForMissingVariable),
+            EventOptionLocalization.Format(description, AddEventVariables, FormatOrThrowForMissingVariable));
+
+        Assert.Equal("Gain 75 Gold:Lose 12 HP", signature);
+    }
+
     private static void AddEventVariables(FakeLocString locString)
     {
         foreach (var (name, value) in EventVariables)
