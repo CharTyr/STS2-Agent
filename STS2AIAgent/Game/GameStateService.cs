@@ -4391,7 +4391,12 @@ internal static class GameStateService
             expectedProgress.SchemaVersion = saveManager.GetLatestSchemaVersion<SerializableProgress>();
             var expectedJson = SaveManager.ToJson(expectedProgress);
             var relativePath = Path.Combine(UserDataPathProvider.SavesDir, ProgressSaveManager.fileName);
-            var persistedPath = saveManager.GetProfileScopedPath(relativePath);
+            var profileScopedPath = saveManager.GetProfileScopedPath(relativePath);
+            // SaveManager returns a Godot virtual path (for example
+            // user://steam/.../saves/progress.save). System.IO cannot resolve
+            // that scheme, so verification must globalize it before opening the
+            // file. The native save itself has already completed at this point.
+            var persistedPath = ProjectSettings.GlobalizePath(profileScopedPath);
             return ProgressSaveVerification.Verify(expectedJson, persistedPath);
         }
         catch (Exception exception)

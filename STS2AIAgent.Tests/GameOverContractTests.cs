@@ -125,7 +125,8 @@ internal static class GameOverContractTests
         Assert.Contains("saveManager.Progress.ToSerializable()", verificationBody, StringComparison.Ordinal);
         Assert.Contains("SaveManager.ToJson(expectedProgress)", verificationBody, StringComparison.Ordinal);
         Assert.Contains("ProgressSaveManager.fileName", verificationBody, StringComparison.Ordinal);
-        Assert.Contains("saveManager.GetProfileScopedPath(relativePath)", verificationBody, StringComparison.Ordinal);
+        Assert.Contains("profileScopedPath=saveManager.GetProfileScopedPath(relativePath)", verificationBody, StringComparison.Ordinal);
+        Assert.Contains("persistedPath=ProjectSettings.GlobalizePath(profileScopedPath)", verificationBody, StringComparison.Ordinal);
         Assert.Contains("ProgressSaveVerification.Verify(expectedJson,persistedPath)", verificationBody, StringComparison.Ordinal);
         Assert.False(
             verificationBody.Contains("SaveProgressFile", StringComparison.Ordinal),
