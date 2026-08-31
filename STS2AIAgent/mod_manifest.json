@@ -2,10 +2,12 @@
   "id": "STS2AIAgent",
   "pck_name": "STS2AIAgent",
   "name": "STS2 AI Agent",
-  "author": "chart",
-  "description": "In-game AI agent overlay plus local HTTP API for Slay the Spire 2.",
-  "version": "0.9.1",
+  "author": "CharTyr",
+  "description": "In-game AI agent overlay with optional local HTTP API and MCP integration for Slay the Spire 2.",
+  "version": "0.9.2",
+  "min_game_version": "0.111.0",
   "has_pck": true,
   "has_dll": true,
-  "dependencies": []
+  "dependencies": [],
+  "affects_gameplay": false
 }

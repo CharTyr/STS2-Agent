@@ -2,7 +2,8 @@ param(
     [string]$Configuration = "Debug",
     [string]$ProjectRoot = "",
     [string]$GameRoot = "C:/Program Files (x86)/Steam/steamapps/common/Slay the Spire 2",
-    [string]$GodotExe = ""
+    [string]$GodotExe = "",
+    [switch]$SkipInstall
 )
 
 $ErrorActionPreference = "Stop"
@@ -141,19 +142,26 @@ if (Test-Path $legacyManifestTarget) {
     Remove-Item -Force $legacyManifestTarget
 }
 
-Write-Host "[build-mod] Preparing game mods directory..."
-New-Item -ItemType Directory -Force -Path $modsDir | Out-Null
-Copy-Item -Force $dllTarget (Join-Path $modsDir "$modName.dll")
-Copy-Item -Force $pckOutput (Join-Path $modsDir "$modName.pck")
-Copy-Item -Force $modIdManifestTarget (Join-Path $modsDir "mod_id.json")
+if (-not $SkipInstall) {
+    Write-Host "[build-mod] Preparing game mods directory..."
+    New-Item -ItemType Directory -Force -Path $modsDir | Out-Null
+    Copy-Item -Force $dllTarget (Join-Path $modsDir "$modName.dll")
+    Copy-Item -Force $pckOutput (Join-Path $modsDir "$modName.pck")
+    Copy-Item -Force $modIdManifestTarget (Join-Path $modsDir "mod_id.json")
 
-$legacyManifestInModsDir = Join-Path $modsDir "$modName.json"
-if (Test-Path $legacyManifestInModsDir) {
-    Remove-Item -Force $legacyManifestInModsDir
+    $legacyManifestInModsDir = Join-Path $modsDir "$modName.json"
+    if (Test-Path $legacyManifestInModsDir) {
+        Remove-Item -Force $legacyManifestInModsDir
+    }
 }
 
 Write-Host "[build-mod] Done."
 Write-Host "[build-mod] Using Godot: $GodotExe"
-Write-Host "[build-mod] Installed files:"
-Write-Host "  $(Join-Path $modsDir "$modName.dll")"
-Write-Host "  $(Join-Path $modsDir "$modName.pck")"
+if ($SkipInstall) {
+    Write-Host "[build-mod] Skipped installation; staged files are in: $stagingDir"
+}
+else {
+    Write-Host "[build-mod] Installed files:"
+    Write-Host "  $(Join-Path $modsDir "$modName.dll")"
+    Write-Host "  $(Join-Path $modsDir "$modName.pck")"
+}

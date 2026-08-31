@@ -1,0 +1,20 @@
+STS2 AI Agent adds an in-game AI assistant overlay to Slay the Spire 2. Configure your own OpenAI-compatible endpoint, chat with the agent, ask it to inspect the current run, or let it take legal game actions through the built-in overlay.
+
+Features
+- In-game chat, model configuration, per-model thinking intensity, and optional screenshot context
+- Automatic or step-by-step play across combat, rewards, map routing, events, shops, rest sites, chests, and other supported screens
+- Optional local HTTP API and MCP integration for developers, available from the GitHub release
+- No bundled API key, account, or hosted model service: you choose and control your own provider
+
+How to use
+1. Subscribe and start Slay the Spire 2.
+2. Press F8 or select the AI tab on the right edge of the game.
+3. Add an OpenAI-compatible endpoint and model in Settings, then use Chat or Play.
+
+Compatibility
+- Requires Slay the Spire 2 v0.111.0 or later.
+- This mod adds an overlay and automation controls; it does not add cards, relics, balance changes, or save-data changes.
+- Local dual-instance co-op currently uses the game's debug multiplayer-test flow. Steam may prevent a second local game process.
+
+Support and source: https://github.com/CharTyr/STS2-Agent
+License: AGPL-3.0-only

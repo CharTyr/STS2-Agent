@@ -6,6 +6,21 @@
 
 - None yet.
 
+## v0.9.2 - 2026-08-31
+
+### Added
+
+- Added reproducible Steam Workshop packaging, SteamCMD VDF generation, bilingual listing copy, and an upload-ready preview image.
+
+### Fixed
+
+- Aligned the player-facing mod manifest version and description with the release metadata.
+- Added release-preflight checks that keep the mod, API, MCP package, and lockfile versions synchronized.
+
+### Compatibility
+
+- Verified against Slay the Spire 2 v0.111.0.
+
 ## v0.9.1 - 2026-08-27
 
 ### Added

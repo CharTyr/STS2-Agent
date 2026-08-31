@@ -40,6 +40,11 @@ $mcpToolProfileScript = Join-Path $ProjectRoot "scripts/test-mcp-tool-profile.ps
 $multiplayerFlowScript = Join-Path $ProjectRoot "scripts/test-multiplayer-lobby-flow.ps1"
 $changelogPath = Join-Path $ProjectRoot "CHANGELOG.md"
 $releaseDoc = Join-Path $ProjectRoot "docs/release-readiness.md"
+$modManifestPath = Join-Path $ProjectRoot "STS2AIAgent/mod_manifest.json"
+$modIdManifestPath = Join-Path $ProjectRoot "STS2AIAgent/mod_id.json"
+$routerPath = Join-Path $ProjectRoot "STS2AIAgent/Server/Router.cs"
+$mcpProjectPath = Join-Path $mcpRoot "pyproject.toml"
+$mcpLockPath = Join-Path $mcpRoot "uv.lock"
 $requiredDocs = @(
     $changelogPath,
     (Join-Path $ProjectRoot "docs/api.md"),
@@ -71,6 +76,38 @@ Invoke-Step -Name "Import MCP server package" -Action {
 
 Invoke-Step -Name "Validate MCP tool profiles" -Action {
     powershell -ExecutionPolicy Bypass -File $mcpToolProfileScript -RepoRoot $ProjectRoot | Out-Host
+}
+
+Invoke-Step -Name "Validate release version metadata" -Action {
+    $modManifest = Get-Content -LiteralPath $modManifestPath -Raw | ConvertFrom-Json
+    $modIdManifest = Get-Content -LiteralPath $modIdManifestPath -Raw | ConvertFrom-Json
+    $releaseVersion = [string]$modManifest.version
+
+    if ([string]::IsNullOrWhiteSpace($releaseVersion)) {
+        throw "mod_manifest.json must declare a release version."
+    }
+    if ($modIdManifest.version -ne $releaseVersion) {
+        throw "mod_id.json version '$($modIdManifest.version)' does not match mod_manifest.json version '$releaseVersion'."
+    }
+
+    $routerContents = Get-Content -LiteralPath $routerPath -Raw
+    $expectedRouterVersion = 'private const string ModVersion = "' + $releaseVersion + '";'
+    if (-not $routerContents.Contains($expectedRouterVersion, [StringComparison]::Ordinal)) {
+        throw "Router ModVersion does not match release version '$releaseVersion'."
+    }
+
+    $mcpProjectContents = Get-Content -LiteralPath $mcpProjectPath -Raw
+    $mcpVersion = [regex]::Match($mcpProjectContents, '(?m)^version = "([^"]+)"$').Groups[1].Value
+    if ($mcpVersion -ne $releaseVersion) {
+        throw "mcp_server pyproject version '$mcpVersion' does not match release version '$releaseVersion'."
+    }
+
+    $mcpLockContents = Get-Content -LiteralPath $mcpLockPath -Raw
+    $lockPattern = '(?ms)^\[\[package\]\]\r?\nname = "sts2-ai-agent-mcp"\r?\nversion = "' +
+        [regex]::Escape($releaseVersion) + '"'
+    if (-not [regex]::IsMatch($mcpLockContents, $lockPattern)) {
+        throw "mcp_server uv.lock does not contain release version '$releaseVersion'. Run 'uv lock' from mcp_server."
+    }
 }
 
 Invoke-Step -Name "Check release documents" -Action {
