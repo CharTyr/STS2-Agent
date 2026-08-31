@@ -86,6 +86,23 @@ internal static class ProgressSaveVerification
                 $"progress_save_read_failed:{exception.GetType().Name}");
         }
 
+        return VerifyJson(expectedJson, persistedJson);
+    }
+
+    internal static ProgressSaveVerificationResult VerifyJson(
+        string expectedJson,
+        string persistedJson)
+    {
+        if (string.IsNullOrWhiteSpace(expectedJson))
+        {
+            return ProgressSaveVerificationResult.Failure("progress_snapshot_empty");
+        }
+
+        if (string.IsNullOrEmpty(persistedJson))
+        {
+            return ProgressSaveVerificationResult.Failure("progress_save_empty");
+        }
+
         JsonDocument expectedDocument;
         try
         {

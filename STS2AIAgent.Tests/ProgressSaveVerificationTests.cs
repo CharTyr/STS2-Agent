@@ -47,6 +47,21 @@ internal static class ProgressSaveVerificationTests
             });
     }
 
+    public static void MatchingPersistedJsonIsVerifiedWithoutPhysicalReopen()
+    {
+        var result = ProgressSaveVerification.VerifyJson(
+            """
+            {"current_score":17,"epochs":[{"id":"EPOCH.ONE","state":3}]}
+            """,
+            """
+            {"epochs":[{"state":3,"id":"EPOCH.ONE"}],"current_score":17}
+            """);
+
+        Assert.Equal("verified", result.Status);
+        Assert.True(result.Verified);
+        Assert.Null(result.Error);
+    }
+
     public static void MismatchedScoreOrUnlockStateCannotReportSuccess()
     {
         WithTemporaryFile(

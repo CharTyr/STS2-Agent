@@ -126,8 +126,11 @@ internal static class GameOverContractTests
         Assert.Contains("SaveManager.ToJson(expectedProgress)", verificationBody, StringComparison.Ordinal);
         Assert.Contains("ProgressSaveManager.fileName", verificationBody, StringComparison.Ordinal);
         Assert.Contains("profileScopedPath=saveManager.GetProfileScopedPath(relativePath)", verificationBody, StringComparison.Ordinal);
-        Assert.Contains("persistedPath=ProjectSettings.GlobalizePath(profileScopedPath)", verificationBody, StringComparison.Ordinal);
-        Assert.Contains("ProgressSaveVerification.Verify(expectedJson,persistedPath)", verificationBody, StringComparison.Ordinal);
+        Assert.Contains("Godot.FileAccess.Open(profileScopedPath,Godot.FileAccess.ModeFlags.Read)", verificationBody, StringComparison.Ordinal);
+        Assert.Contains("ProgressSaveVerification.VerifyJson(expectedJson,persistedFile.GetAsText())", verificationBody, StringComparison.Ordinal);
+        Assert.False(
+            verificationBody.Contains("ProjectSettings.GlobalizePath", StringComparison.Ordinal),
+            "Verification must stay on the same Godot user:// filesystem as SaveManager.");
         Assert.False(
             verificationBody.Contains("SaveProgressFile", StringComparison.Ordinal),
             "Verification must observe the native save result and must not perform a replacement save.");

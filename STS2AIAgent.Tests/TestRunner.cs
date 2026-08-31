@@ -143,6 +143,7 @@ internal static class TestRunner
         yield return ("GameOver.SaveContract", () => Task.Run(GameOverContractTests.GameOverPayloadReportsPhysicalProgressSaveVerification));
         yield return ("GameOver.SaveVerified", () => Task.Run(ProgressSaveVerificationTests.MatchingPhysicalFileIsVerified));
         yield return ("GameOver.SaveEquivalentJson", () => Task.Run(ProgressSaveVerificationTests.EquivalentJsonWithDifferentFormattingAndPropertyOrderIsVerified));
+        yield return ("GameOver.SavePersistedJson", () => Task.Run(ProgressSaveVerificationTests.MatchingPersistedJsonIsVerifiedWithoutPhysicalReopen));
         yield return ("GameOver.SaveMismatch", () => Task.Run(ProgressSaveVerificationTests.MismatchedScoreOrUnlockStateCannotReportSuccess));
         yield return ("GameOver.SaveMissingMalformed", () => Task.Run(ProgressSaveVerificationTests.MissingOrMalformedFileCannotReportSuccess));
         yield return ("GameOver.SaveReadFailure", () => Task.Run(ProgressSaveVerificationTests.ReadFailureCannotReportSuccess));

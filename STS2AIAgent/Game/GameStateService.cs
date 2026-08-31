@@ -4392,12 +4392,35 @@ internal static class GameStateService
             var expectedJson = SaveManager.ToJson(expectedProgress);
             var relativePath = Path.Combine(UserDataPathProvider.SavesDir, ProgressSaveManager.fileName);
             var profileScopedPath = saveManager.GetProfileScopedPath(relativePath);
-            // SaveManager returns a Godot virtual path (for example
-            // user://steam/.../saves/progress.save). System.IO cannot resolve
-            // that scheme, so verification must globalize it before opening the
-            // file. The native save itself has already completed at this point.
-            var persistedPath = ProjectSettings.GlobalizePath(profileScopedPath);
-            return ProgressSaveVerification.Verify(expectedJson, persistedPath);
+            // Use the same Godot user:// filesystem that SaveManager writes.
+            // Globalizing and reopening through System.IO can fail while the
+            // engine/Steam backend still owns the file even though the native
+            // save has completed and Godot can read it normally.
+            try
+            {
+                if (!Godot.FileAccess.FileExists(profileScopedPath))
+                {
+                    return ProgressSaveVerificationResult.Failure("progress_save_missing");
+                }
+
+                using var persistedFile = Godot.FileAccess.Open(
+                    profileScopedPath,
+                    Godot.FileAccess.ModeFlags.Read);
+                if (persistedFile is null)
+                {
+                    return ProgressSaveVerificationResult.Failure(
+                        $"progress_save_read_failed:Godot:{Godot.FileAccess.GetOpenError()}");
+                }
+
+                return ProgressSaveVerification.VerifyJson(
+                    expectedJson,
+                    persistedFile.GetAsText());
+            }
+            catch (Exception exception)
+            {
+                return ProgressSaveVerificationResult.Failure(
+                    $"progress_save_read_failed:{exception.GetType().Name}");
+            }
         }
         catch (Exception exception)
         {
