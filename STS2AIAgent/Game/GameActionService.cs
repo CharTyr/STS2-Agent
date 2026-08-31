@@ -3954,7 +3954,7 @@ internal static class GameActionService
             }, retryable: true);
 
         continueButton.ForceClick();
-        var stable = await WaitForGameOverSummaryStartAsync(gameOverScreen, TimeSpan.FromSeconds(15));
+        var stable = await WaitForGameOverSummaryReadyAsync(gameOverScreen, TimeSpan.FromSeconds(15));
 
         return new ActionResponsePayload
         {
@@ -4801,7 +4801,7 @@ internal static class GameActionService
         return ActiveScreenContext.Instance.GetCurrentScreen() is not NGameOverScreen;
     }
 
-    private static async Task<bool> WaitForGameOverSummaryStartAsync(
+    private static async Task<bool> WaitForGameOverSummaryReadyAsync(
         NGameOverScreen gameOverScreen,
         TimeSpan timeout)
     {
@@ -4812,8 +4812,12 @@ internal static class GameActionService
 
             var currentScreen = ActiveScreenContext.Instance.GetCurrentScreen();
             if (!GodotObject.IsInstanceValid(gameOverScreen)
-                || !ReferenceEquals(currentScreen, gameOverScreen)
-                || !GameStateService.CanContinueGameOver(currentScreen))
+                || !ReferenceEquals(currentScreen, gameOverScreen))
+            {
+                return true;
+            }
+
+            if (GameStateService.CanReturnToMainMenu(currentScreen))
             {
                 return true;
             }
@@ -4821,7 +4825,7 @@ internal static class GameActionService
 
         return !GodotObject.IsInstanceValid(gameOverScreen)
             || !ReferenceEquals(ActiveScreenContext.Instance.GetCurrentScreen(), gameOverScreen)
-            || !GameStateService.CanContinueGameOver(gameOverScreen);
+            || GameStateService.CanReturnToMainMenu(gameOverScreen);
     }
 
     private static async Task<NPauseMenu?> WaitForPauseMenuAsync(TimeSpan timeout)

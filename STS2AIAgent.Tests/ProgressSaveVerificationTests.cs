@@ -62,6 +62,21 @@ internal static class ProgressSaveVerificationTests
         Assert.Null(result.Error);
     }
 
+    public static void EquivalentNumericRepresentationsAreVerified()
+    {
+        var result = ProgressSaveVerification.VerifyJson(
+            """
+            {"integer":1,"decimal":1.0,"exponent":1e0}
+            """,
+            """
+            {"integer":1.0,"decimal":1e0,"exponent":1.00}
+            """);
+
+        Assert.Equal("verified", result.Status);
+        Assert.True(result.Verified);
+        Assert.Null(result.Error);
+    }
+
     public static void MismatchedScoreOrUnlockStateCannotReportSuccess()
     {
         WithTemporaryFile(

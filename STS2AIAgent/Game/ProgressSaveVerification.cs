@@ -185,7 +185,17 @@ internal static class ProgressSaveVerification
             case JsonValueKind.String:
                 return string.Equals(expected.GetString(), actual.GetString(), StringComparison.Ordinal);
             case JsonValueKind.Number:
-                return string.Equals(expected.GetRawText(), actual.GetRawText(), StringComparison.Ordinal);
+                if (expected.TryGetDecimal(out var expectedDecimal)
+                    && actual.TryGetDecimal(out var actualDecimal))
+                {
+                    return expectedDecimal == actualDecimal;
+                }
+
+                return expected.TryGetDouble(out var expectedDouble)
+                    && actual.TryGetDouble(out var actualDouble)
+                    && double.IsFinite(expectedDouble)
+                    && double.IsFinite(actualDouble)
+                    && expectedDouble == actualDouble;
             case JsonValueKind.True:
             case JsonValueKind.False:
             case JsonValueKind.Null:

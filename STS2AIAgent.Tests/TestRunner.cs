@@ -140,10 +140,12 @@ internal static class TestRunner
         yield return ("GameOver.ContinueAction", () => Task.Run(GameOverContractTests.DedicatedContinueActionIsWiredEndToEnd));
         yield return ("GameOver.ReturnGate", () => Task.Run(GameOverContractTests.ReturnActionRequiresVisibleAndEnabledMainMenuButton));
         yield return ("GameOver.NativeButtons", () => Task.Run(GameOverContractTests.ContinueAndReturnUseNativeButtonsWithoutSkippingSummary));
+        yield return ("GameOver.SummaryReady", () => Task.Run(GameOverContractTests.ContinueWaitsForNativeSummaryReadiness));
         yield return ("GameOver.Phases", () => Task.Run(GameOverContractTests.GameOverPayloadKeepsContinueSummaryAndReturnAsDistinctPhases));
         yield return ("GameOver.SaveContract", () => Task.Run(GameOverContractTests.GameOverPayloadReportsPhysicalProgressSaveVerification));
         yield return ("GameOver.SaveVerified", () => Task.Run(ProgressSaveVerificationTests.MatchingPhysicalFileIsVerified));
         yield return ("GameOver.SaveEquivalentJson", () => Task.Run(ProgressSaveVerificationTests.EquivalentJsonWithDifferentFormattingAndPropertyOrderIsVerified));
+        yield return ("GameOver.SaveEquivalentNumbers", () => Task.Run(ProgressSaveVerificationTests.EquivalentNumericRepresentationsAreVerified));
         yield return ("GameOver.SavePersistedJson", () => Task.Run(ProgressSaveVerificationTests.MatchingPersistedJsonIsVerifiedWithoutPhysicalReopen));
         yield return ("GameOver.SaveMismatch", () => Task.Run(ProgressSaveVerificationTests.MismatchedScoreOrUnlockStateCannotReportSuccess));
         yield return ("GameOver.SaveMissingMalformed", () => Task.Run(ProgressSaveVerificationTests.MissingOrMalformedFileCannotReportSuccess));

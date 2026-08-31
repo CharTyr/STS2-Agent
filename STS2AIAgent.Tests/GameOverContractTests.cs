@@ -66,7 +66,7 @@ internal static class GameOverContractTests
         Assert.Contains("ExecuteContinueGameOverAsync", actionSource, StringComparison.Ordinal);
         Assert.Contains("NGameOverContinueButton", continueBody, StringComparison.Ordinal);
         Assert.Contains("ForceClick", continueBody, StringComparison.Ordinal);
-        Assert.Contains("WaitForGameOverSummaryStartAsync", continueBody, StringComparison.Ordinal);
+        Assert.Contains("WaitForGameOverSummaryReadyAsync", continueBody, StringComparison.Ordinal);
         Assert.Contains("NReturnToMainMenuButton", returnBody, StringComparison.Ordinal);
         Assert.Contains("ForceClick", returnBody, StringComparison.Ordinal);
         Assert.Contains("WaitForGameOverExitAsync", returnBody, StringComparison.Ordinal);
@@ -81,6 +81,21 @@ internal static class GameOverContractTests
         Assert.False(
             continueBody.Contains("GetProceedButton", StringComparison.Ordinal),
             "continue_game_over must resolve NGameOverContinueButton directly, not reuse the generic proceed-button path.");
+    }
+
+    public static void ContinueWaitsForNativeSummaryReadiness()
+    {
+        var rawActionSource = AgentSourceFixture.Read("STS2AIAgent/Game/GameActionService.cs");
+        var waitBody = AgentSourceFixture.WithoutWhitespace(
+            AgentSourceFixture.MethodBody(rawActionSource, "WaitForGameOverSummaryReadyAsync"));
+
+        Assert.Contains(
+            "GameStateService.CanReturnToMainMenu(currentScreen)",
+            waitBody,
+            StringComparison.Ordinal);
+        Assert.False(
+            waitBody.Contains("CanContinueGameOver", StringComparison.Ordinal),
+            "Disabling Continue starts the native summary animation; it must not complete the action before the summary button is ready.");
     }
 
     public static void GameOverPayloadKeepsContinueSummaryAndReturnAsDistinctPhases()
