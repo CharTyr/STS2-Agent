@@ -3913,8 +3913,14 @@ internal static class GameStateService
                     {
                         index = i,
                         text_key = SafeReadString(() => opt.TextKey),
-                        title = SafeReadString(() => opt.Title?.GetFormattedText()),
-                        description = SafeReadString(() => opt.Description?.GetFormattedText()),
+                        title = SafeReadString(() => EventOptionLocalization.Format(
+                            opt.Title,
+                            locString => eventModel.DynamicVars.AddTo(locString),
+                            locString => locString.GetFormattedText())),
+                        description = SafeReadString(() => EventOptionLocalization.Format(
+                            opt.Description,
+                            locString => eventModel.DynamicVars.AddTo(locString),
+                            locString => locString.GetFormattedText())),
                         is_locked = SafeReadBool(() => opt.IsLocked),
                         is_proceed = SafeReadBool(() => opt.IsProceed),
                         will_kill_player = GetEventOptionWillKillPlayer(eventModel, opt),
