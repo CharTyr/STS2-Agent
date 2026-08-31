@@ -231,6 +231,25 @@ internal static class GameStateService
             };
         }
 
+        if (currentScreen is NUnlockScreen)
+        {
+            if (CanConfirmUnlock(currentScreen))
+            {
+                descriptors.Add(new ActionDescriptor
+                {
+                    name = "confirm_unlock",
+                    requires_target = false,
+                    requires_index = false
+                });
+            }
+
+            return new AvailableActionsPayload
+            {
+                screen = ResolveScreen(currentScreen),
+                actions = descriptors.ToArray()
+            };
+        }
+
         if (CanEndTurn(currentScreen, combatState))
         {
             descriptors.Add(new ActionDescriptor
@@ -808,6 +827,11 @@ internal static class GameStateService
 
     public static bool CanSelectDeckCard(IScreenContext? currentScreen)
     {
+        if (currentScreen is NUnlockScreen)
+        {
+            return false;
+        }
+
         return GetDeckSelectionOptions(currentScreen).Count > 0;
     }
 
@@ -2186,9 +2210,14 @@ internal static class GameStateService
             return names.ToArray();
         }
 
-        if (CanConfirmUnlock(currentScreen))
+        if (currentScreen is NUnlockScreen)
         {
-            names.Add("confirm_unlock");
+            if (CanConfirmUnlock(currentScreen))
+            {
+                names.Add("confirm_unlock");
+            }
+
+            return names.ToArray();
         }
 
         if (CanEndTurn(currentScreen, combatState))
@@ -5891,6 +5920,11 @@ internal static class GameStateService
 
     private static string ResolveNonModalScreen(IScreenContext? currentScreen)
     {
+        if (currentScreen is NUnlockScreen)
+        {
+            return "UNLOCK";
+        }
+
         if (currentScreen != null &&
             TryGetCombatHandSelection(currentScreen, out _))
         {
@@ -5917,7 +5951,6 @@ internal static class GameStateService
         return currentScreen switch
         {
             NGameOverScreen => "GAME_OVER",
-            NUnlockScreen => "UNLOCK",
             NCardRewardSelectionScreen => "REWARD",
             NChooseACardSelectionScreen => "CARD_SELECTION",
             NDeckCardSelectScreen or NDeckUpgradeSelectScreen or NDeckTransformSelectScreen or NDeckEnchantSelectScreen => "CARD_SELECTION",
