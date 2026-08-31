@@ -105,4 +105,30 @@ internal static class GameOverContractTests
             stateSource,
             StringComparison.Ordinal);
     }
+
+    public static void GameOverPayloadReportsPhysicalProgressSaveVerification()
+    {
+        var rawStateSource = AgentSourceFixture.Read("STS2AIAgent/Game/GameStateService.cs");
+        var stateSource = AgentSourceFixture.WithoutWhitespace(rawStateSource);
+        var verificationBody = AgentSourceFixture.WithoutWhitespace(
+            AgentSourceFixture.MethodBody(rawStateSource, "VerifyGameOverProgressSave"));
+
+        Assert.Contains("privateconstintStateVersion=13", stateSource, StringComparison.Ordinal);
+        Assert.Contains("privateconstintAgentViewVersion=8", stateSource, StringComparison.Ordinal);
+        Assert.Contains("save_status=saveVerification.Status", stateSource, StringComparison.Ordinal);
+        Assert.Contains("save_verified=saveVerification.Verified", stateSource, StringComparison.Ordinal);
+        Assert.Contains("save_error=saveVerification.Error", stateSource, StringComparison.Ordinal);
+        Assert.Contains("save_status=gameOver.save_status", stateSource, StringComparison.Ordinal);
+        Assert.Contains("save_verified=gameOver.save_verified", stateSource, StringComparison.Ordinal);
+        Assert.Contains("save_error=gameOver.save_error", stateSource, StringComparison.Ordinal);
+        Assert.Contains("if(!summaryReady)", verificationBody, StringComparison.Ordinal);
+        Assert.Contains("saveManager.Progress.ToSerializable()", verificationBody, StringComparison.Ordinal);
+        Assert.Contains("SaveManager.ToJson(expectedProgress)", verificationBody, StringComparison.Ordinal);
+        Assert.Contains("ProgressSaveManager.fileName", verificationBody, StringComparison.Ordinal);
+        Assert.Contains("saveManager.GetProfileScopedPath(relativePath)", verificationBody, StringComparison.Ordinal);
+        Assert.Contains("ProgressSaveVerification.Verify(expectedJson,persistedPath)", verificationBody, StringComparison.Ordinal);
+        Assert.False(
+            verificationBody.Contains("SaveProgressFile", StringComparison.Ordinal),
+            "Verification must observe the native save result and must not perform a replacement save.");
+    }
 }

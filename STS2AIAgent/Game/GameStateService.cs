@@ -49,6 +49,8 @@ using MegaCrit.Sts2.Core.Nodes.Screens.TreasureRoomRelic;
 using MegaCrit.Sts2.Core.Rooms;
 using MegaCrit.Sts2.Core.Rewards;
 using MegaCrit.Sts2.Core.Runs;
+using MegaCrit.Sts2.Core.Saves;
+using MegaCrit.Sts2.Core.Saves.Managers;
 using MegaCrit.Sts2.Core.Timeline;
 using MegaCrit.Sts2.addons.mega_text;
 
@@ -56,8 +58,8 @@ namespace STS2AIAgent.Game;
 
 internal static class GameStateService
 {
-    private const int StateVersion = 12;
-    private const int AgentViewVersion = 7;
+    private const int StateVersion = 13;
+    private const int AgentViewVersion = 8;
     private static readonly TimeSpan CombatActionSnapshotStableDelay = TimeSpan.FromMilliseconds(200);
     private static string? _lastCombatActionReadinessSignature;
     private static DateTime _lastCombatActionReadinessSinceUtc = DateTime.MinValue;
@@ -3123,7 +3125,10 @@ internal static class GameStateService
             character = gameOver.character_id,
             phase = gameOver.phase,
             can_continue = gameOver.can_continue,
-            can_return = gameOver.can_return_to_main_menu
+            can_return = gameOver.can_return_to_main_menu,
+            save_status = gameOver.save_status,
+            save_verified = gameOver.save_verified,
+            save_error = gameOver.save_error
         };
     }
 
@@ -4344,6 +4349,7 @@ internal static class GameStateService
             : canContinue
                 ? "intro"
                 : "summary_animating";
+        var saveVerification = VerifyGameOverProgressSave(canReturnToMainMenu);
         var history = RunManager.Instance.History;
 
         return new GameOverPayload
@@ -4359,8 +4365,40 @@ internal static class GameStateService
             can_return_to_main_menu = mainMenuButton?.Visible == true
                 && mainMenuButton?.IsEnabled == true
                 && mainMenuButton?.IsVisibleInTree() == true,
-            showing_summary = mainMenuButton?.Visible == true
+            showing_summary = mainMenuButton?.Visible == true,
+            save_status = saveVerification.Status,
+            save_verified = saveVerification.Verified,
+            save_error = saveVerification.Error
         };
+    }
+
+    private static ProgressSaveVerificationResult VerifyGameOverProgressSave(bool summaryReady)
+    {
+        if (!summaryReady)
+        {
+            return ProgressSaveVerificationResult.Pending();
+        }
+
+        try
+        {
+            var saveManager = SaveManager.Instance;
+            if (!saveManager.IsProfileInitialized)
+            {
+                return ProgressSaveVerificationResult.Failure("progress_profile_not_initialized");
+            }
+
+            var expectedProgress = saveManager.Progress.ToSerializable();
+            expectedProgress.SchemaVersion = saveManager.GetLatestSchemaVersion<SerializableProgress>();
+            var expectedJson = SaveManager.ToJson(expectedProgress);
+            var relativePath = Path.Combine(UserDataPathProvider.SavesDir, ProgressSaveManager.fileName);
+            var persistedPath = saveManager.GetProfileScopedPath(relativePath);
+            return ProgressSaveVerification.Verify(expectedJson, persistedPath);
+        }
+        catch (Exception exception)
+        {
+            return ProgressSaveVerificationResult.Failure(
+                $"progress_snapshot_failed:{exception.GetType().Name}");
+        }
     }
 
     private static CombatHandCardPayload BuildHandCardPayload(CombatState combatState, CardModel card, int index)
@@ -6861,6 +6899,12 @@ internal sealed class GameOverPayload
     public bool can_return_to_main_menu { get; init; }
 
     public bool showing_summary { get; init; }
+
+    public string save_status { get; init; } = "pending";
+
+    public bool save_verified { get; init; }
+
+    public string? save_error { get; init; }
 }
 
 internal sealed class RewardOptionPayload
