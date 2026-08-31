@@ -92,7 +92,7 @@ Invoke-Step -Name "Validate release version metadata" -Action {
 
     $routerContents = Get-Content -LiteralPath $routerPath -Raw
     $expectedRouterVersion = 'private const string ModVersion = "' + $releaseVersion + '";'
-    if (-not $routerContents.Contains($expectedRouterVersion, [StringComparison]::Ordinal)) {
+    if ($routerContents.IndexOf($expectedRouterVersion, [StringComparison]::Ordinal) -lt 0) {
         throw "Router ModVersion does not match release version '$releaseVersion'."
     }
 
