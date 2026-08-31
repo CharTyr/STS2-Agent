@@ -1537,6 +1537,33 @@ internal static class GameStateService
         return Array.Empty<NCardHolder>();
     }
 
+    public static bool TryGetDeckCardSelectionMetadata(
+        IScreenContext? currentScreen,
+        out DeckCardSelectionMetadata metadata)
+    {
+        metadata = default;
+        if (currentScreen is not NDeckCardSelectScreen deckCardScreen ||
+            ReflectionMemberAccessor.TryGetValue(deckCardScreen, "_prefs") is not CardSelectorPrefs prefs ||
+            ReflectionMemberAccessor.TryGetValue(deckCardScreen, "_selectedCards") is not IEnumerable selectedCards)
+        {
+            return false;
+        }
+
+        var selectedCount = 0;
+        foreach (var _ in selectedCards)
+        {
+            selectedCount++;
+        }
+
+        metadata = new DeckCardSelectionMetadata(
+            prefs.MinSelect,
+            prefs.MaxSelect,
+            selectedCount,
+            prefs.RequireManualConfirmation,
+            selectedCount >= prefs.MinSelect && selectedCount <= prefs.MaxSelect);
+        return true;
+    }
+
     public static string? GetDeckSelectionPrompt(IScreenContext? currentScreen)
     {
         if (currentScreen is NCardsViewScreen)
@@ -3836,9 +3863,10 @@ internal static class GameStateService
             return null;
         }
 
-        var combatHandSelection = TryGetCombatHandSelectionMetadata(currentScreen, out _, out var metadata)
-            ? metadata
-            : default;
+        var hasCombatHandSelection = TryGetCombatHandSelectionMetadata(
+            currentScreen, out _, out var combatHandSelection);
+        var hasDeckCardSelection = TryGetDeckCardSelectionMetadata(
+            currentScreen, out var deckCardSelection);
 
         return new SelectionPayload
         {
@@ -3854,11 +3882,21 @@ internal static class GameStateService
                 _ => "deck_card_select"
             },
             prompt = GetDeckSelectionPrompt(currentScreen) ?? string.Empty,
-            min_select = combatHandSelection.MinSelect,
-            max_select = combatHandSelection.MaxSelect,
-            selected_count = combatHandSelection.SelectedCount,
-            requires_confirmation = combatHandSelection.RequiresConfirmation,
-            can_confirm = combatHandSelection.CanConfirm,
+            min_select = hasCombatHandSelection
+                ? combatHandSelection.MinSelect
+                : hasDeckCardSelection ? deckCardSelection.MinSelect : 1,
+            max_select = hasCombatHandSelection
+                ? combatHandSelection.MaxSelect
+                : hasDeckCardSelection ? deckCardSelection.MaxSelect : 1,
+            selected_count = hasCombatHandSelection
+                ? combatHandSelection.SelectedCount
+                : hasDeckCardSelection ? deckCardSelection.SelectedCount : 0,
+            requires_confirmation = hasCombatHandSelection
+                ? combatHandSelection.RequiresConfirmation
+                : hasDeckCardSelection && deckCardSelection.RequiresConfirmation,
+            can_confirm = hasCombatHandSelection
+                ? combatHandSelection.CanConfirm
+                : hasDeckCardSelection && deckCardSelection.CanConfirm,
             cards = cards.Select((holder, index) => BuildSelectionCardPayload(holder.CardModel!, index)).ToArray()
         };
     }
@@ -6307,6 +6345,13 @@ internal sealed class SelectionPayload
 }
 
 internal readonly record struct CombatHandSelectionMetadata(
+    int MinSelect,
+    int MaxSelect,
+    int SelectedCount,
+    bool RequiresConfirmation,
+    bool CanConfirm);
+
+internal readonly record struct DeckCardSelectionMetadata(
     int MinSelect,
     int MaxSelect,
     int SelectedCount,
