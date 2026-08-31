@@ -12,7 +12,6 @@ namespace STS2AIAgent.Server;
 internal static class Router
 {
     private const string ServiceName = "sts2-ai-agent";
-    private const string ProtocolVersion = "2026-03-11-v1";
     private const string ModVersion = "0.9.1";
     private const string LogPrefix = "[STS2AIAgent.Router]";
 
@@ -42,7 +41,8 @@ internal static class Router
                     {
                         service = ServiceName,
                         mod_version = ModVersion,
-                        protocol_version = ProtocolVersion,
+                        protocol_version = ProtocolContract.Version,
+                        schema_version = ProtocolContract.Version,
                         game_version = ReleaseInfoManager.Instance.ReleaseInfo?.Version ?? "unknown",
                         status = "ready",
                         api_host = HttpServer.Instance.Host,
@@ -77,6 +77,46 @@ internal static class Router
                     ok = true,
                     request_id = requestId,
                     data = payload
+                });
+                statusCode = 200;
+                return;
+            }
+
+            if (request.HttpMethod.Equals("GET", StringComparison.OrdinalIgnoreCase) &&
+                request.Url?.AbsolutePath == "/schemas")
+            {
+                await WriteJsonAsync(response, 200, new
+                {
+                    ok = true,
+                    request_id = requestId,
+                    data = new
+                    {
+                        protocol_version = ProtocolContract.Version,
+                        json_schema_draft = ProtocolContract.SchemaDraft,
+                        schemas = ProtocolSchemaService.Names
+                    }
+                });
+                statusCode = 200;
+                return;
+            }
+
+            if (request.HttpMethod.Equals("GET", StringComparison.OrdinalIgnoreCase) &&
+                request.Url?.AbsolutePath is string schemaPath &&
+                schemaPath.StartsWith("/schemas/", StringComparison.OrdinalIgnoreCase))
+            {
+                var schemaName = schemaPath.Substring("/schemas/".Length);
+                if (!ProtocolSchemaService.TryGet(schemaName, out var schema))
+                {
+                    statusCode = 404;
+                    await WriteErrorAsync(response, 404, "schema_not_found", $"Unknown protocol schema: {schemaName}", requestId);
+                    return;
+                }
+
+                await WriteJsonAsync(response, 200, new
+                {
+                    ok = true,
+                    request_id = requestId,
+                    data = schema
                 });
                 statusCode = 200;
                 return;

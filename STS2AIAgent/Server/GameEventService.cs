@@ -49,12 +49,14 @@ internal sealed class GameEventService
 
             _cts = new CancellationTokenSource();
             _loopTask = Task.Run(() => PollLoopAsync(_cts.Token));
+            GameFactEventSource.Instance.Start();
             Log.Info($"{LogPrefix} Started with poll interval {_pollInterval.TotalMilliseconds:0}ms");
         }
     }
 
     public void Stop()
     {
+        GameFactEventSource.Instance.Stop();
         CancellationTokenSource? cts;
         Task? loopTask;
         List<Channel<GameEventEnvelope>> channels;
@@ -101,31 +103,42 @@ internal sealed class GameEventService
     {
         var channel = Channel.CreateBounded<GameEventEnvelope>(new BoundedChannelOptions(SubscriberQueueCapacity)
         {
-            FullMode = BoundedChannelFullMode.DropOldest,
+            // Never silently discard fact events. A lagging subscriber is closed so its client can
+            // observe the interruption and reconnect instead of persisting a plausible but incomplete timeline.
+            FullMode = BoundedChannelFullMode.Wait,
             SingleReader = true,
             SingleWriter = false
         });
 
         long subscriberId;
-        StateDigest? snapshot;
         lock (_gate)
         {
             subscriberId = ++_nextSubscriberId;
             _subscribers[subscriberId] = channel;
-            snapshot = _lastState;
-        }
-
-        if (snapshot != null)
-        {
-            var streamReady = BuildEnvelope("stream_ready", new
+            if (_lastState is { } snapshot)
             {
-                run_id = snapshot.RunId,
-                screen = snapshot.Screen,
-                in_combat = snapshot.InCombat,
-                turn = snapshot.Turn,
-                action_window_open = snapshot.PlayerActionWindowOpen
-            });
-            channel.Writer.TryWrite(streamReady);
+                // stream_ready is a subscription cursor, not a new global fact. Reusing the latest
+                // sequence keeps existing subscribers gap-free and guarantees that the next envelope
+                // observed by this subscriber has a greater sequence.
+                var cursor = Volatile.Read(ref _nextEventId);
+                channel.Writer.TryWrite(new GameEventEnvelope
+                {
+                    event_id = cursor,
+                    sequence = cursor,
+                    protocol_version = ProtocolContract.Version,
+                    type = "stream_ready",
+                    timestamp_utc = DateTime.UtcNow.ToString("O"),
+                    data = new
+                    {
+                        latest_sequence = cursor,
+                        run_id = snapshot.RunId,
+                        screen = snapshot.Screen,
+                        in_combat = snapshot.InCombat,
+                        turn = snapshot.Turn,
+                        action_window_open = snapshot.PlayerActionWindowOpen
+                    }
+                });
+            }
         }
 
         return new GameEventSubscription(subscriberId, channel.Reader, Unsubscribe);
@@ -172,18 +185,25 @@ internal sealed class GameEventService
 
     private void ProcessState(GameStatePayload state)
     {
-        var current = StateDigest.FromState(state);
+        lock (_gate)
+        {
+            ProcessStateLocked(StateDigest.FromState(state));
+        }
+    }
+
+    private void ProcessStateLocked(StateDigest current)
+    {
         var previous = _lastState;
 
         if (previous == null)
         {
+            _lastState = current;
             Publish("session_started", new
             {
                 run_id = current.RunId,
                 screen = current.Screen,
                 session_phase = current.SessionPhase
             });
-            _lastState = current;
             return;
         }
 
@@ -194,31 +214,6 @@ internal sealed class GameEventService
                 from = previous.Screen,
                 to = current.Screen,
                 run_id = current.RunId
-            });
-        }
-
-        if (!previous.InCombat && current.InCombat)
-        {
-            Publish("combat_started", new
-            {
-                run_id = current.RunId,
-                turn = current.Turn
-            });
-        }
-        else if (previous.InCombat && !current.InCombat)
-        {
-            Publish("combat_ended", new
-            {
-                run_id = current.RunId
-            });
-        }
-        else if (current.InCombat && previous.Turn != current.Turn)
-        {
-            Publish("combat_turn_changed", new
-            {
-                run_id = current.RunId,
-                from = previous.Turn,
-                to = current.Turn
             });
         }
 
@@ -282,13 +277,24 @@ internal sealed class GameEventService
         _lastState = current;
     }
 
-    private void Publish(string eventType, object data)
+    internal void RecordDamageFact(DamageFact fact) => GameFactEventSource.Instance.RecordDamage(fact);
+
+    internal void RecordAiDecisionFact(AiDecisionFact fact) => GameFactEventSource.Instance.RecordAiDecision(fact);
+
+    internal void Publish(
+        string eventType,
+        object data,
+        string? correlationId = null,
+        string? runId = null,
+        string? combatId = null)
     {
-        var envelope = BuildEnvelope(eventType, data);
         List<long> staleSubscriberIds = new();
 
         lock (_gate)
         {
+            // Allocate the sequence while holding the same lock used for channel writes so concurrent
+            // AI-decision and combat callbacks cannot appear out of sequence on the wire.
+            var envelope = BuildEnvelope(eventType, data, correlationId, runId, combatId);
             foreach (var (subscriberId, channel) in _subscribers)
             {
                 if (!channel.Writer.TryWrite(envelope))
@@ -307,12 +313,22 @@ internal sealed class GameEventService
         }
     }
 
-    private GameEventEnvelope BuildEnvelope(string eventType, object data)
+    private GameEventEnvelope BuildEnvelope(
+        string eventType,
+        object data,
+        string? correlationId = null,
+        string? runId = null,
+        string? combatId = null)
     {
         var eventId = Interlocked.Increment(ref _nextEventId);
         return new GameEventEnvelope
         {
             event_id = eventId,
+            sequence = eventId,
+            protocol_version = ProtocolContract.Version,
+            correlation_id = correlationId,
+            run_id = runId,
+            combat_id = combatId,
             type = eventType,
             timestamp_utc = DateTime.UtcNow.ToString("O"),
             data = data
@@ -408,6 +424,16 @@ internal sealed class GameEventSubscription : IDisposable
 internal sealed class GameEventEnvelope
 {
     public long event_id { get; init; }
+
+    public long sequence { get; init; }
+
+    public string protocol_version { get; init; } = ProtocolContract.Version;
+
+    public string? correlation_id { get; init; }
+
+    public string? run_id { get; init; }
+
+    public string? combat_id { get; init; }
 
     public string type { get; init; } = string.Empty;
 

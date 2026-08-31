@@ -158,5 +158,12 @@ internal static class TestRunner
         yield return ("CrystalSettle.Progress", () => Task.Run(CrystalSphereSettlePolicyTests.RequiresObservedProgressOnSameScreen));
         yield return ("CrystalSettle.FinalProceed", () => Task.Run(CrystalSphereSettlePolicyTests.WaitsForProceedAfterFinalDivination));
         yield return ("CrystalSettle.ScreenChange", () => Task.Run(CrystalSphereSettlePolicyTests.AcceptsChildScreenButNotMissingMinigame));
+        yield return ("ProtocolSchemas.Catalog", () => Task.Run(ProtocolSchemaTests.Catalog_EmbedsEveryPublishedSchema));
+        yield return ("ProtocolSchemas.StateScenes", () => Task.Run(ProtocolSchemaTests.StateSchema_CoversEveryTopLevelScene));
+        yield return ("ProtocolSchemas.FactEvents", () => Task.Run(ProtocolSchemaTests.EventSchema_CoversFactEventsAndCorrelationFields));
+#if STS2_RUNTIME_TESTS
+        yield return ("FactInstrumentation.ActualGameAssembly", () => Task.Run(GameFactInstrumentationTests.Install_FindsActualDamageSinkAndEffectSources));
+        yield return ("FactInstrumentation.OptionalAiTeammate", () => Task.Run(GameFactInstrumentationTests.OptionalAiTelemetry_PatchesActualWorkshopAssemblyWhenProvided));
+#endif
     }
 }

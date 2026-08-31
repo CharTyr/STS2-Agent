@@ -118,8 +118,9 @@ powershell -ExecutionPolicy Bypass -File ".\scripts\start-mcp-network.ps1"
 - 执行战斗、奖励、商店、地图、事件、休息点、宝箱、尖塔选择、Bundle 选择等操作
 - 可选 MCP（`stdio` 或 HTTP）给外部 Agent
 - 通过 Mod API 提供卡牌、遗物、敌人、药水、事件等实时元数据
+- 提供逐卡牌/逐伤害/AI 决策事实、明确战斗胜负和遭遇类型、完整多人库存及正式 JSON Schema
 
-更细的 MCP 工具说明在 [mcp_server/README.md](./mcp_server/README.md)。
+事件与 Schema 格式见 [Protocol v2 事实事件](./docs/fact-events-v2.md)，更细的 MCP 工具说明在 [mcp_server/README.md](./mcp_server/README.md)。
 
 ## 常见问题
 

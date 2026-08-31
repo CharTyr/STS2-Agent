@@ -1,0 +1,463 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/CharTyr/STS2-Agent/schemas/2026-08-31-v2/state.schema.json",
+  "title": "STS2-Agent complete game state",
+  "type": "object",
+  "required": [
+    "state_version", "run_id", "screen", "session", "in_combat", "turn", "available_actions",
+    "combat", "run", "multiplayer", "multiplayer_lobby", "map", "selection", "character_select",
+    "timeline", "unlock", "chest", "event", "crystal_sphere", "shop", "rest", "reward", "bundles",
+    "capstone", "modal", "game_over", "agent_view"
+  ],
+  "properties": {
+    "state_version": { "const": 12 },
+    "run_id": { "type": "string", "minLength": 1 },
+    "screen": {
+      "enum": [
+        "MAIN_MENU", "MULTIPLAYER_LOBBY", "CHARACTER_SELECT", "MAP", "COMBAT", "CARD_SELECTION",
+        "CARDS_VIEW", "REWARD", "CHEST", "REST", "SHOP", "EVENT", "BUNDLE_SELECTION",
+        "CAPSTONE_SELECTION", "CRYSTAL_SPHERE", "MODAL", "UNLOCK", "GAME_OVER", "UNKNOWN"
+      ]
+    },
+    "session": { "$ref": "#/$defs/session" },
+    "in_combat": { "type": "boolean" },
+    "turn": { "type": ["integer", "null"], "minimum": 0 },
+    "available_actions": { "type": "array", "items": { "type": "string", "minLength": 1 }, "uniqueItems": true },
+    "combat": { "oneOf": [{ "$ref": "#/$defs/combat" }, { "type": "null" }] },
+    "run": { "oneOf": [{ "$ref": "#/$defs/run" }, { "type": "null" }] },
+    "multiplayer": { "oneOf": [{ "$ref": "#/$defs/multiplayer" }, { "type": "null" }] },
+    "multiplayer_lobby": { "oneOf": [{ "$ref": "#/$defs/multiplayerLobby" }, { "type": "null" }] },
+    "map": { "oneOf": [{ "$ref": "#/$defs/map" }, { "type": "null" }] },
+    "selection": { "oneOf": [{ "$ref": "#/$defs/selection" }, { "type": "null" }] },
+    "character_select": { "oneOf": [{ "$ref": "#/$defs/characterSelect" }, { "type": "null" }] },
+    "timeline": { "oneOf": [{ "$ref": "#/$defs/timeline" }, { "type": "null" }] },
+    "unlock": { "oneOf": [{ "$ref": "#/$defs/unlock" }, { "type": "null" }] },
+    "chest": { "oneOf": [{ "$ref": "#/$defs/chest" }, { "type": "null" }] },
+    "event": { "oneOf": [{ "$ref": "#/$defs/gameEvent" }, { "type": "null" }] },
+    "crystal_sphere": { "oneOf": [{ "$ref": "#/$defs/crystalSphere" }, { "type": "null" }] },
+    "shop": { "oneOf": [{ "$ref": "#/$defs/shop" }, { "type": "null" }] },
+    "rest": { "oneOf": [{ "$ref": "#/$defs/rest" }, { "type": "null" }] },
+    "reward": { "oneOf": [{ "$ref": "#/$defs/reward" }, { "type": "null" }] },
+    "bundles": { "type": ["array", "null"], "items": { "$ref": "#/$defs/bundle" } },
+    "capstone": { "oneOf": [{ "$ref": "#/$defs/capstone" }, { "type": "null" }] },
+    "modal": { "oneOf": [{ "$ref": "#/$defs/modal" }, { "type": "null" }] },
+    "game_over": { "oneOf": [{ "$ref": "#/$defs/gameOver" }, { "type": "null" }] },
+    "agent_view": { "type": ["object", "null"], "additionalProperties": true }
+  },
+  "allOf": [
+    { "if": { "properties": { "screen": { "const": "COMBAT" } } }, "then": { "properties": { "combat": { "$ref": "#/$defs/combat" } } } },
+    { "if": { "properties": { "screen": { "const": "MAP" } } }, "then": { "properties": { "map": { "type": "object" } } } },
+    { "if": { "properties": { "screen": { "const": "CARD_SELECTION" } } }, "then": { "properties": { "selection": { "type": "object" } } } },
+    { "if": { "properties": { "screen": { "const": "CHARACTER_SELECT" } } }, "then": { "properties": { "character_select": { "type": "object" } } } },
+    { "if": { "properties": { "screen": { "const": "MULTIPLAYER_LOBBY" } } }, "then": { "properties": { "multiplayer_lobby": { "type": "object" } } } },
+    { "if": { "properties": { "screen": { "const": "REWARD" } } }, "then": { "properties": { "reward": { "type": "object" } } } },
+    { "if": { "properties": { "screen": { "const": "CHEST" } } }, "then": { "properties": { "chest": { "type": "object" } } } },
+    { "if": { "properties": { "screen": { "const": "REST" } } }, "then": { "properties": { "rest": { "type": "object" } } } },
+    { "if": { "properties": { "screen": { "const": "SHOP" } } }, "then": { "properties": { "shop": { "type": "object" } } } },
+    { "if": { "properties": { "screen": { "const": "EVENT" } } }, "then": { "properties": { "event": { "type": "object" } } } },
+    { "if": { "properties": { "screen": { "const": "BUNDLE_SELECTION" } } }, "then": { "properties": { "bundles": { "type": "array" } } } },
+    { "if": { "properties": { "screen": { "const": "CAPSTONE_SELECTION" } } }, "then": { "properties": { "capstone": { "type": "object" } } } },
+    { "if": { "properties": { "screen": { "const": "CRYSTAL_SPHERE" } } }, "then": { "properties": { "crystal_sphere": { "type": "object" } } } },
+    { "if": { "properties": { "screen": { "const": "MODAL" } } }, "then": { "properties": { "modal": { "type": "object" } } } },
+    { "if": { "properties": { "screen": { "const": "UNLOCK" } } }, "then": { "properties": { "unlock": { "type": "object" } } } },
+    { "if": { "properties": { "screen": { "const": "GAME_OVER" } } }, "then": { "properties": { "game_over": { "type": "object" } } } }
+  ],
+  "additionalProperties": false,
+  "$defs": {
+    "session": {
+      "type": "object",
+      "required": ["mode", "phase", "control_scope"],
+      "properties": {
+        "mode": { "enum": ["singleplayer", "multiplayer"] },
+        "phase": { "enum": ["menu", "multiplayer_lobby", "character_select", "run"] },
+        "control_scope": { "const": "local_player" }
+      },
+      "additionalProperties": false
+    },
+    "multiplayer": {
+      "type": "object",
+      "required": ["is_multiplayer", "net_game_type", "local_player_id", "player_count", "connected_player_ids"],
+      "properties": {
+        "is_multiplayer": { "type": "boolean" },
+        "net_game_type": { "type": "string" },
+        "local_player_id": { "type": ["string", "null"] },
+        "player_count": { "type": "integer", "minimum": 0 },
+        "connected_player_ids": { "type": "array", "items": { "type": "string" }, "uniqueItems": true }
+      },
+      "additionalProperties": false
+    },
+    "multiplayerLobby": {
+      "type": "object",
+      "required": [
+        "net_game_type", "join_host", "join_port", "local_net_id_hint", "has_lobby", "is_host", "is_client",
+        "local_ready", "can_host", "can_join", "can_ready", "can_disconnect", "can_unready",
+        "selected_character_id", "player_count", "max_players", "players", "characters"
+      ],
+      "properties": {
+        "net_game_type": { "type": "string" },
+        "join_host": { "type": "string" },
+        "join_port": { "type": "integer", "minimum": 0, "maximum": 65535 },
+        "local_net_id_hint": { "type": ["string", "null"] },
+        "has_lobby": { "type": "boolean" },
+        "is_host": { "type": "boolean" },
+        "is_client": { "type": "boolean" },
+        "local_ready": { "type": "boolean" },
+        "can_host": { "type": "boolean" },
+        "can_join": { "type": "boolean" },
+        "can_ready": { "type": "boolean" },
+        "can_disconnect": { "type": "boolean" },
+        "can_unready": { "type": "boolean" },
+        "selected_character_id": { "type": ["string", "null"] },
+        "player_count": { "type": "integer", "minimum": 0 },
+        "max_players": { "type": "integer", "minimum": 0 },
+        "players": { "type": "array", "items": { "type": "object", "additionalProperties": true } },
+        "characters": { "type": "array", "items": { "type": "object", "additionalProperties": true } }
+      },
+      "additionalProperties": false
+    },
+    "coordinate": {
+      "type": ["object", "null"],
+      "required": ["row", "col"],
+      "properties": { "row": { "type": "integer" }, "col": { "type": "integer" } },
+      "additionalProperties": false
+    },
+    "map": {
+      "type": "object",
+      "required": [
+        "current_node", "is_travel_enabled", "is_traveling", "map_generation_count", "rows", "cols",
+        "starting_node", "boss_node", "second_boss_node", "nodes", "available_nodes", "local_vote", "player_votes"
+      ],
+      "properties": {
+        "current_node": { "$ref": "#/$defs/coordinate" },
+        "is_travel_enabled": { "type": "boolean" },
+        "is_traveling": { "type": "boolean" },
+        "map_generation_count": { "type": "integer", "minimum": 0 },
+        "rows": { "type": "integer", "minimum": 0 },
+        "cols": { "type": "integer", "minimum": 0 },
+        "starting_node": { "$ref": "#/$defs/coordinate" },
+        "boss_node": { "$ref": "#/$defs/coordinate" },
+        "second_boss_node": { "$ref": "#/$defs/coordinate" },
+        "nodes": { "type": "array", "items": { "type": "object", "additionalProperties": true } },
+        "available_nodes": { "type": "array", "items": { "type": "object", "additionalProperties": true } },
+        "local_vote": { "$ref": "#/$defs/coordinate" },
+        "player_votes": { "type": "array", "items": { "type": "object", "additionalProperties": true } }
+      },
+      "additionalProperties": false
+    },
+    "selection": {
+      "type": "object",
+      "required": ["kind", "prompt", "min_select", "max_select", "selected_count", "requires_confirmation", "can_confirm", "cards"],
+      "properties": {
+        "kind": { "type": "string" }, "prompt": { "type": "string" },
+        "min_select": { "type": "integer", "minimum": 0 }, "max_select": { "type": "integer", "minimum": 0 },
+        "selected_count": { "type": "integer", "minimum": 0 },
+        "requires_confirmation": { "type": "boolean" }, "can_confirm": { "type": "boolean" },
+        "cards": { "type": "array", "items": { "$ref": "#/$defs/card" } }
+      },
+      "additionalProperties": false
+    },
+    "characterSelect": {
+      "type": "object",
+      "required": [
+        "selected_character_id", "is_multiplayer", "net_game_type", "can_embark", "can_unready",
+        "can_increase_ascension", "can_decrease_ascension", "local_ready", "is_waiting_for_players",
+        "player_count", "max_players", "ascension", "max_ascension", "seed", "modifier_ids", "players", "characters"
+      ],
+      "properties": {
+        "selected_character_id": { "type": ["string", "null"] }, "is_multiplayer": { "type": "boolean" },
+        "net_game_type": { "type": "string" }, "can_embark": { "type": "boolean" }, "can_unready": { "type": "boolean" },
+        "can_increase_ascension": { "type": "boolean" }, "can_decrease_ascension": { "type": "boolean" },
+        "local_ready": { "type": "boolean" }, "is_waiting_for_players": { "type": "boolean" },
+        "player_count": { "type": "integer", "minimum": 0 }, "max_players": { "type": "integer", "minimum": 0 },
+        "ascension": { "type": "integer", "minimum": 0 }, "max_ascension": { "type": "integer", "minimum": 0 },
+        "seed": { "type": ["string", "null"] },
+        "modifier_ids": { "type": "array", "items": { "type": "string" } },
+        "players": { "type": "array", "items": { "type": "object", "additionalProperties": true } },
+        "characters": { "type": "array", "items": { "type": "object", "additionalProperties": true } }
+      },
+      "additionalProperties": false
+    },
+    "timeline": {
+      "type": "object",
+      "required": ["back_enabled", "inspect_open", "unlock_screen_open", "can_choose_epoch", "can_confirm_overlay", "slots"],
+      "properties": {
+        "back_enabled": { "type": "boolean" }, "inspect_open": { "type": "boolean" },
+        "unlock_screen_open": { "type": "boolean" }, "can_choose_epoch": { "type": "boolean" },
+        "can_confirm_overlay": { "type": "boolean" },
+        "slots": { "type": "array", "items": { "type": "object", "additionalProperties": true } }
+      },
+      "additionalProperties": false
+    },
+    "unlock": {
+      "type": "object",
+      "required": ["unlock_type", "items", "can_confirm"],
+      "properties": {
+        "unlock_type": { "type": "string" }, "items": { "type": "array", "items": { "type": "string" } },
+        "can_confirm": { "type": "boolean" }
+      },
+      "additionalProperties": false
+    },
+    "chest": {
+      "type": "object",
+      "required": ["is_opened", "has_relic_been_claimed", "relic_options"],
+      "properties": {
+        "is_opened": { "type": "boolean" }, "has_relic_been_claimed": { "type": "boolean" },
+        "relic_options": { "type": "array", "items": { "type": "object", "additionalProperties": true } }
+      },
+      "additionalProperties": false
+    },
+    "gameEvent": {
+      "type": "object",
+      "required": ["event_id", "title", "description", "is_finished", "options"],
+      "properties": {
+        "event_id": { "type": "string" }, "title": { "type": "string" }, "description": { "type": "string" },
+        "is_finished": { "type": "boolean" },
+        "options": { "type": "array", "items": { "type": "object", "additionalProperties": true } }
+      },
+      "additionalProperties": false
+    },
+    "crystalSphere": {
+      "type": "object",
+      "required": ["divinations_left", "tool", "is_finished", "grid_width", "grid_height", "hidden_cells", "items"],
+      "properties": {
+        "divinations_left": { "type": "integer", "minimum": 0 }, "tool": { "type": "string" },
+        "is_finished": { "type": "boolean" }, "grid_width": { "type": "integer", "minimum": 0 },
+        "grid_height": { "type": "integer", "minimum": 0 },
+        "hidden_cells": { "type": "array", "items": { "type": "array", "items": { "type": "integer" }, "minItems": 2, "maxItems": 2 } },
+        "items": { "type": "array", "items": { "type": "object", "additionalProperties": true } }
+      },
+      "additionalProperties": false
+    },
+    "shop": {
+      "type": "object",
+      "required": ["is_open", "can_open", "can_close", "cards", "relics", "potions", "card_removal"],
+      "properties": {
+        "is_open": { "type": "boolean" }, "can_open": { "type": "boolean" }, "can_close": { "type": "boolean" },
+        "cards": { "type": "array", "items": { "type": "object", "additionalProperties": true } },
+        "relics": { "type": "array", "items": { "type": "object", "additionalProperties": true } },
+        "potions": { "type": "array", "items": { "type": "object", "additionalProperties": true } },
+        "card_removal": { "type": ["object", "null"], "additionalProperties": true }
+      },
+      "additionalProperties": false
+    },
+    "rest": {
+      "type": "object", "required": ["options"],
+      "properties": { "options": { "type": "array", "items": { "type": "object", "additionalProperties": true } } },
+      "additionalProperties": false
+    },
+    "reward": {
+      "type": "object",
+      "required": ["pending_card_choice", "can_proceed", "rewards", "card_options", "alternatives"],
+      "properties": {
+        "pending_card_choice": { "type": "boolean" }, "can_proceed": { "type": "boolean" },
+        "rewards": { "type": "array", "items": { "type": "object", "additionalProperties": true } },
+        "card_options": { "type": "array", "items": { "type": "object", "additionalProperties": true } },
+        "alternatives": { "type": "array", "items": { "type": "object", "additionalProperties": true } }
+      },
+      "additionalProperties": false
+    },
+    "bundle": {
+      "type": "object", "required": ["index", "cards"],
+      "properties": {
+        "index": { "type": "integer", "minimum": 0 },
+        "cards": { "type": "array", "items": { "type": "object", "additionalProperties": true } }
+      },
+      "additionalProperties": false
+    },
+    "capstone": {
+      "type": "object", "required": ["options"],
+      "properties": { "options": { "type": "array", "items": { "type": "object", "additionalProperties": true } } },
+      "additionalProperties": false
+    },
+    "modal": {
+      "type": "object",
+      "required": ["type_name", "underlying_screen", "can_confirm", "can_dismiss", "confirm_label", "dismiss_label"],
+      "properties": {
+        "type_name": { "type": "string" }, "underlying_screen": { "type": ["string", "null"] },
+        "can_confirm": { "type": "boolean" }, "can_dismiss": { "type": "boolean" },
+        "confirm_label": { "type": ["string", "null"] }, "dismiss_label": { "type": ["string", "null"] }
+      },
+      "additionalProperties": false
+    },
+    "gameOver": {
+      "type": "object",
+      "required": ["is_victory", "floor", "character_id", "can_continue", "can_return_to_main_menu", "showing_summary"],
+      "properties": {
+        "is_victory": { "type": "boolean" }, "floor": { "type": ["integer", "null"] },
+        "character_id": { "type": ["string", "null"] }, "can_continue": { "type": "boolean" },
+        "can_return_to_main_menu": { "type": "boolean" }, "showing_summary": { "type": "boolean" }
+      },
+      "additionalProperties": false
+    },
+    "card": {
+      "type": "object",
+      "required": ["index", "card_id", "name", "upgraded"],
+      "properties": {
+        "index": { "type": "integer", "minimum": 0 },
+        "card_id": { "type": "string", "minLength": 1 },
+        "name": { "type": "string" },
+        "upgraded": { "type": "boolean" }
+      },
+      "additionalProperties": true
+    },
+    "relic": {
+      "type": "object",
+      "required": ["index", "relic_id", "name", "is_melted"],
+      "properties": {
+        "index": { "type": "integer", "minimum": 0 },
+        "relic_id": { "type": "string", "minLength": 1 },
+        "name": { "type": "string" },
+        "is_melted": { "type": "boolean" }
+      },
+      "additionalProperties": true
+    },
+    "potion": {
+      "type": "object",
+      "required": ["index", "occupied"],
+      "properties": {
+        "index": { "type": "integer", "minimum": 0 },
+        "potion_id": { "type": ["string", "null"] },
+        "name": { "type": ["string", "null"] },
+        "occupied": { "type": "boolean" }
+      },
+      "additionalProperties": true
+    },
+    "combatPlayer": {
+      "type": "object",
+      "required": [
+        "player_id", "slot_index", "is_local", "character_id", "character_name", "current_hp", "max_hp",
+        "is_connected", "block", "energy", "stars", "focus", "is_alive", "powers", "base_orb_slots",
+        "orb_capacity", "empty_orb_slots", "orbs", "hand", "draw_pile", "discard_pile", "exhaust_pile",
+        "play_pile", "deck", "relics", "potions"
+      ],
+      "properties": {
+        "player_id": { "type": "string" },
+        "slot_index": { "type": "integer", "minimum": 0 },
+        "is_local": { "type": "boolean" },
+        "character_id": { "type": "string" },
+        "character_name": { "type": "string" },
+        "is_connected": { "type": "boolean" },
+        "current_hp": { "type": "integer" },
+        "max_hp": { "type": "integer", "minimum": 0 },
+        "block": { "type": "integer", "minimum": 0 },
+        "energy": { "type": "integer", "minimum": 0 },
+        "stars": { "type": "integer", "minimum": 0 },
+        "focus": { "type": "integer" },
+        "is_alive": { "type": "boolean" },
+        "powers": { "type": "array", "items": { "type": "object", "additionalProperties": true } },
+        "base_orb_slots": { "type": "integer", "minimum": 0 },
+        "orb_capacity": { "type": "integer", "minimum": 0 },
+        "empty_orb_slots": { "type": "integer", "minimum": 0 },
+        "orbs": { "type": "array", "items": { "type": "object", "additionalProperties": true } },
+        "hand": { "type": "array", "items": { "$ref": "#/$defs/card" } },
+        "draw_pile": { "type": "array", "items": { "$ref": "#/$defs/card" } },
+        "discard_pile": { "type": "array", "items": { "$ref": "#/$defs/card" } },
+        "exhaust_pile": { "type": "array", "items": { "$ref": "#/$defs/card" } },
+        "play_pile": { "type": "array", "items": { "$ref": "#/$defs/card" } },
+        "deck": { "type": "array", "items": { "$ref": "#/$defs/card" } },
+        "relics": { "type": "array", "items": { "$ref": "#/$defs/relic" } },
+        "potions": { "type": "array", "items": { "$ref": "#/$defs/potion" } }
+      },
+      "additionalProperties": true
+    },
+    "combat": {
+      "type": "object",
+      "required": ["combat_id", "encounter_id", "encounter_type", "player", "players", "hand", "enemies", "end_turn_will_kill_player", "lethal_risks"],
+      "properties": {
+        "combat_id": { "type": ["string", "null"] },
+        "encounter_id": { "type": ["string", "null"] },
+        "encounter_type": { "enum": ["normal", "elite", "boss", "unassigned", "treasure", "shop", "event", "restsite", "map"] },
+        "player": { "type": "object", "additionalProperties": true },
+        "players": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/combatPlayer" } },
+        "hand": { "type": "array", "items": { "$ref": "#/$defs/card" } },
+        "enemies": { "type": "array", "items": { "type": "object", "additionalProperties": true } },
+        "end_turn_will_kill_player": { "type": "boolean" },
+        "lethal_risks": { "type": "array", "items": { "type": "object", "additionalProperties": true } }
+      },
+      "additionalProperties": false
+    },
+    "runPlayer": {
+      "type": "object",
+      "required": [
+        "player_id", "slot_index", "is_local", "is_connected", "character_id", "character_name",
+        "current_hp", "max_hp", "gold", "max_energy", "base_orb_slots", "is_alive", "deck", "relics", "potions"
+      ],
+      "properties": {
+        "player_id": { "type": "string" },
+        "slot_index": { "type": "integer", "minimum": 0 },
+        "is_local": { "type": "boolean" },
+        "is_connected": { "type": "boolean" },
+        "character_id": { "type": "string" },
+        "character_name": { "type": "string" },
+        "current_hp": { "type": "integer" },
+        "max_hp": { "type": "integer", "minimum": 0 },
+        "gold": { "type": "integer", "minimum": 0 },
+        "max_energy": { "type": "integer", "minimum": 0 },
+        "base_orb_slots": { "type": "integer", "minimum": 0 },
+        "is_alive": { "type": "boolean" },
+        "deck": { "type": "array", "items": { "$ref": "#/$defs/card" } },
+        "relics": { "type": "array", "items": { "$ref": "#/$defs/relic" } },
+        "potions": { "type": "array", "items": { "$ref": "#/$defs/potion" } }
+      },
+      "additionalProperties": true
+    },
+    "run": {
+      "type": "object",
+      "required": [
+        "character_id", "character_name", "ascension", "ascension_effects", "floor", "current_hp", "max_hp",
+        "gold", "max_energy", "base_orb_slots", "act_id", "boss_id", "deck", "relics", "players", "potions"
+      ],
+      "properties": {
+        "character_id": { "type": "string" },
+        "character_name": { "type": "string" },
+        "ascension": { "type": "integer", "minimum": 0 },
+        "ascension_effects": { "type": "array", "items": { "type": "object", "additionalProperties": true } },
+        "floor": { "type": "integer", "minimum": 0 },
+        "current_hp": { "type": "integer" },
+        "max_hp": { "type": "integer", "minimum": 0 },
+        "gold": { "type": "integer", "minimum": 0 },
+        "max_energy": { "type": "integer", "minimum": 0 },
+        "base_orb_slots": { "type": "integer", "minimum": 0 },
+        "act_id": { "type": ["string", "null"] },
+        "boss_id": { "type": ["string", "null"] },
+        "deck": { "type": "array", "items": { "$ref": "#/$defs/card" } },
+        "relics": { "type": "array", "items": { "$ref": "#/$defs/relic" } },
+        "players": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/runPlayer" } },
+        "potions": { "type": "array", "items": { "$ref": "#/$defs/potion" } }
+      },
+      "additionalProperties": true
+    }
+  },
+  "examples": [
+    {
+      "state_version": 12,
+      "run_id": "ABC123",
+      "screen": "COMBAT",
+      "session": { "mode": "multiplayer", "phase": "run", "control_scope": "local_player" },
+      "in_combat": true,
+      "turn": 2,
+      "available_actions": ["play_card", "end_turn"],
+      "combat": {
+        "combat_id": "combat_4",
+        "encounter_id": "CULTIST_ENCOUNTER",
+        "encounter_type": "normal",
+        "player": {},
+        "players": [
+          {
+            "player_id": "1", "slot_index": 0, "is_local": true, "is_connected": true,
+            "character_id": "IRONCLAD", "character_name": "Ironclad",
+            "current_hp": 70, "max_hp": 80, "block": 5, "energy": 2, "stars": 0, "focus": 0, "is_alive": true,
+            "base_orb_slots": 0, "orb_capacity": 0, "empty_orb_slots": 0,
+            "powers": [], "orbs": [], "hand": [], "draw_pile": [], "discard_pile": [], "exhaust_pile": [], "play_pile": [],
+            "deck": [], "relics": [], "potions": []
+          }
+        ],
+        "hand": [], "enemies": [], "end_turn_will_kill_player": false, "lethal_risks": []
+      },
+      "run": null, "multiplayer": null, "multiplayer_lobby": null, "map": null, "selection": null,
+      "character_select": null, "timeline": null, "unlock": null, "chest": null, "event": null,
+      "crystal_sphere": null, "shop": null, "rest": null, "reward": null, "bundles": null,
+      "capstone": null, "modal": null, "game_over": null, "agent_view": null
+    }
+  ]
+}

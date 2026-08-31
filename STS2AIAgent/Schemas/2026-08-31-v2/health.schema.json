@@ -1,0 +1,32 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/CharTyr/STS2-Agent/schemas/2026-08-31-v2/health.schema.json",
+  "title": "STS2-Agent health payload",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["service", "mod_version", "protocol_version", "schema_version", "game_version", "status", "api_host", "api_port", "instance_role"],
+  "properties": {
+    "service": { "const": "sts2-ai-agent" },
+    "mod_version": { "type": "string", "minLength": 1 },
+    "protocol_version": { "const": "2026-08-31-v2" },
+    "schema_version": { "const": "2026-08-31-v2" },
+    "game_version": { "type": "string", "minLength": 1 },
+    "status": { "const": "ready" },
+    "api_host": { "type": "string", "minLength": 1 },
+    "api_port": { "type": "integer", "minimum": 1, "maximum": 65535 },
+    "instance_role": { "enum": ["human", "companion"] }
+  },
+  "examples": [
+    {
+      "service": "sts2-ai-agent",
+      "mod_version": "0.9.1",
+      "protocol_version": "2026-08-31-v2",
+      "schema_version": "2026-08-31-v2",
+      "game_version": "0.111.0",
+      "status": "ready",
+      "api_host": "127.0.0.1",
+      "api_port": 8080,
+      "instance_role": "human"
+    }
+  ]
+}

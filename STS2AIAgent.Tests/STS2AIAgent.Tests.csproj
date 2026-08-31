@@ -6,7 +6,28 @@
     <Nullable>enable</Nullable>
     <RootNamespace>STS2AIAgent.Tests</RootNamespace>
     <AssemblyName>STS2AIAgent.Tests</AssemblyName>
+    <Sts2DataDirFromEnv>$([System.Environment]::GetEnvironmentVariable('STS2_DATA_DIR'))</Sts2DataDirFromEnv>
+    <Sts2DataDir Condition="'$(Sts2DataDir)' == '' and '$(Sts2DataDirFromEnv)' != ''">$(Sts2DataDirFromEnv)</Sts2DataDir>
+    <Sts2DataDir Condition="'$(Sts2DataDir)' == ''">C:/Program Files (x86)/Steam/steamapps/common/Slay the Spire 2/data_sts2_windows_x86_64</Sts2DataDir>
+    <HasSts2TestAssemblies>false</HasSts2TestAssemblies>
+    <HasSts2TestAssemblies Condition="Exists('$(Sts2DataDir)/sts2.dll') and Exists('$(Sts2DataDir)/0Harmony.dll') and Exists('$(Sts2DataDir)/GodotSharp.dll')">true</HasSts2TestAssemblies>
+    <DefineConstants Condition="'$(HasSts2TestAssemblies)' == 'true'">$(DefineConstants);STS2_RUNTIME_TESTS</DefineConstants>
   </PropertyGroup>
+
+  <ItemGroup Condition="'$(HasSts2TestAssemblies)' == 'true'">
+    <Reference Include="sts2">
+      <HintPath>$(Sts2DataDir)/sts2.dll</HintPath>
+      <Private>true</Private>
+    </Reference>
+    <Reference Include="0Harmony">
+      <HintPath>$(Sts2DataDir)/0Harmony.dll</HintPath>
+      <Private>true</Private>
+    </Reference>
+    <Reference Include="GodotSharp">
+      <HintPath>$(Sts2DataDir)/GodotSharp.dll</HintPath>
+      <Private>true</Private>
+    </Reference>
+  </ItemGroup>
 
   <ItemGroup>
     <Compile Include="..\STS2AIAgent\Config\*.cs" Link="Config\%(Filename)%(Extension)" />
@@ -23,5 +44,15 @@
     <Compile Include="..\STS2AIAgent\Game\ReflectionMemberAccessor.cs" Link="Game\ReflectionMemberAccessor.cs" />
     <Compile Include="..\STS2AIAgent\Game\UnlockConfirmResolutionPolicy.cs" Link="Game\UnlockConfirmResolutionPolicy.cs" />
     <Compile Include="..\STS2AIAgent\Game\CrystalSphereSettlePolicy.cs" Link="Game\CrystalSphereSettlePolicy.cs" />
+    <Compile Include="..\STS2AIAgent\Server\ProtocolContract.cs" Link="Server\ProtocolContract.cs" />
+    <Compile Include="..\STS2AIAgent\Server\ProtocolSchemaService.cs" Link="Server\ProtocolSchemaService.cs" />
+    <EmbeddedResource Include="..\STS2AIAgent\Schemas\2026-08-31-v2\*.schema.json">
+      <LogicalName>STS2AIAgent.Schemas.2026-08-31-v2.%(Filename)%(Extension)</LogicalName>
+    </EmbeddedResource>
+  </ItemGroup>
+
+  <ItemGroup Condition="'$(HasSts2TestAssemblies)' == 'true'">
+    <Compile Include="..\STS2AIAgent\Game\GameFactInstrumentation.cs" Link="Game\GameFactInstrumentation.cs" />
+    <Compile Include="..\STS2AIAgent\Game\OptionalAiTeammateTelemetry.cs" Link="Game\OptionalAiTeammateTelemetry.cs" />
   </ItemGroup>
 </Project>

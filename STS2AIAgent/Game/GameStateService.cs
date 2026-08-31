@@ -51,13 +51,14 @@ using MegaCrit.Sts2.Core.Rewards;
 using MegaCrit.Sts2.Core.Runs;
 using MegaCrit.Sts2.Core.Timeline;
 using MegaCrit.Sts2.addons.mega_text;
+using STS2AIAgent.Server;
 
 namespace STS2AIAgent.Game;
 
 internal static class GameStateService
 {
-    private const int StateVersion = 11;
-    private const int AgentViewVersion = 6;
+    private const int StateVersion = ProtocolContract.StateVersion;
+    private const int AgentViewVersion = ProtocolContract.AgentViewVersion;
     private static readonly TimeSpan CombatActionSnapshotStableDelay = TimeSpan.FromMilliseconds(200);
     private static string? _lastCombatActionReadinessSignature;
     private static DateTime _lastCombatActionReadinessSinceUtc = DateTime.MinValue;
@@ -75,7 +76,7 @@ internal static class GameStateService
         var screen = ResolveScreen(currentScreen);
         var session = BuildSessionPayload(currentScreen, runState);
         var availableActions = BuildAvailableActionNames(currentScreen, combatState, runState);
-        var combat = BuildCombatPayload(combatState);
+        var combat = BuildCombatPayload(currentScreen, combatState);
         var run = BuildRunPayload(currentScreen, combatState, runState);
         var multiplayer = BuildMultiplayerPayload(currentScreen, runState);
         var multiplayerLobby = BuildMultiplayerLobbyPayload(currentScreen);
@@ -2402,7 +2403,7 @@ internal static class GameStateService
         return names.ToArray();
     }
 
-    private static CombatPayload? BuildCombatPayload(CombatState? combatState)
+    private static CombatPayload? BuildCombatPayload(IScreenContext? currentScreen, CombatState? combatState)
     {
         var me = GetLocalPlayer(combatState);
         if (combatState == null || me?.PlayerCombatState == null)
@@ -2439,9 +2440,17 @@ internal static class GameStateService
 
         return new CombatPayload
         {
+            combat_id = CombatManager.Instance.CurrentCombatId is { } combatId ? $"combat_{combatId.Value}" : null,
+            encounter_id = combatState.Encounter?.Id.Entry,
+            encounter_type = GameFactEventSource.ResolveEncounterType(combatState.Encounter?.RoomType ?? RoomType.Unassigned),
             player = playerPayload,
             players = GetOrderedCombatPlayers(combatState)
-                .Select(player => BuildCombatPlayerSummaryPayload(player, combatState, connectedPlayerIds, me.NetId))
+                .Select(player => BuildCombatPlayerSummaryPayload(
+                    currentScreen,
+                    player,
+                    combatState,
+                    connectedPlayerIds,
+                    me.NetId))
                 .ToArray(),
             hand = hand.Select((card, index) => BuildHandCardPayload(combatState, card, index)).ToArray(),
             enemies = enemyPayloads,
@@ -2543,7 +2552,13 @@ internal static class GameStateService
             relics = player.Relics.Select((relic, index) => BuildRunRelicPayload(relic, index)).ToArray(),
             players = runState!.Players
                 .OrderBy(runState.GetPlayerSlotIndex)
-                .Select(otherPlayer => BuildRunPlayerSummaryPayload(runState, otherPlayer, connectedPlayerIds, player.NetId))
+                .Select(otherPlayer => BuildRunPlayerSummaryPayload(
+                    currentScreen,
+                    combatState,
+                    runState,
+                    otherPlayer,
+                    connectedPlayerIds,
+                    player.NetId))
                 .ToArray(),
             potions = player.PotionSlots.Select((potion, index) =>
                 BuildRunPotionPayload(currentScreen, combatState, player, potion, index)).ToArray()
@@ -4874,6 +4889,8 @@ internal static class GameStateService
     }
 
     private static RunPlayerSummaryPayload BuildRunPlayerSummaryPayload(
+        IScreenContext? currentScreen,
+        CombatState? combatState,
         RunState runState,
         Player player,
         IReadOnlyCollection<ulong> connectedPlayerIds,
@@ -4890,16 +4907,26 @@ internal static class GameStateService
             current_hp = player.Creature.CurrentHp,
             max_hp = player.Creature.MaxHp,
             gold = player.Gold,
-            is_alive = player.Creature.IsAlive
+            max_energy = player.MaxEnergy,
+            base_orb_slots = player.BaseOrbSlotCount,
+            is_alive = player.Creature.IsAlive,
+            deck = player.Deck.Cards.Select((card, index) => BuildDeckCardPayload(card, index)).ToArray(),
+            relics = player.Relics.Select((relic, index) => BuildRunRelicPayload(relic, index)).ToArray(),
+            potions = player.PotionSlots.Select((potion, index) =>
+                BuildRunPotionPayload(currentScreen, combatState, player, potion, index)).ToArray()
         };
     }
 
     private static CombatPlayerSummaryPayload BuildCombatPlayerSummaryPayload(
+        IScreenContext? currentScreen,
         Player player,
         CombatState combatState,
         IReadOnlyCollection<ulong> connectedPlayerIds,
         ulong localPlayerId)
     {
+        var playerCombatState = player.PlayerCombatState;
+        var orbQueue = playerCombatState?.OrbQueue;
+        var orbs = orbQueue?.Orbs.ToList() ?? new List<OrbModel>();
         return new CombatPlayerSummaryPayload
         {
             player_id = NetIdToString(player.NetId),
@@ -4914,9 +4941,29 @@ internal static class GameStateService
             energy = player.PlayerCombatState?.Energy ?? 0,
             stars = player.PlayerCombatState?.Stars ?? 0,
             focus = player.Creature.GetPowerAmount<FocusPower>(),
-            is_alive = player.Creature.IsAlive
+            is_alive = player.Creature.IsAlive,
+            powers = BuildCreaturePowerPayloads(player.Creature),
+            base_orb_slots = player.BaseOrbSlotCount,
+            orb_capacity = orbQueue?.Capacity ?? 0,
+            empty_orb_slots = Math.Max(0, (orbQueue?.Capacity ?? 0) - orbs.Count),
+            orbs = orbs.Select((orb, index) => BuildCombatOrbPayload(orb, index)).ToArray(),
+            hand = playerCombatState?.Hand.Cards
+                .Select((card, index) => BuildHandCardPayload(combatState, card, index)).ToArray()
+                ?? Array.Empty<CombatHandCardPayload>(),
+            draw_pile = BuildPilePayload(playerCombatState?.DrawPile.Cards),
+            discard_pile = BuildPilePayload(playerCombatState?.DiscardPile.Cards),
+            exhaust_pile = BuildPilePayload(playerCombatState?.ExhaustPile.Cards),
+            play_pile = BuildPilePayload(playerCombatState?.PlayPile.Cards),
+            deck = player.Deck.Cards.Select((card, index) => BuildDeckCardPayload(card, index)).ToArray(),
+            relics = player.Relics.Select((relic, index) => BuildRunRelicPayload(relic, index)).ToArray(),
+            potions = player.PotionSlots.Select((potion, index) =>
+                BuildRunPotionPayload(currentScreen, combatState, player, potion, index)).ToArray()
         };
     }
+
+    private static DeckCardPayload[] BuildPilePayload(IEnumerable<CardModel>? cards) =>
+        cards?.Select((card, index) => BuildDeckCardPayload(card, index)).ToArray()
+        ?? Array.Empty<DeckCardPayload>();
 
     private static string? GetCardTargetIndexSpace(CardModel card)
     {
@@ -5992,6 +6039,12 @@ internal sealed class AvailableActionsPayload
 
 internal sealed class CombatPayload
 {
+    public string? combat_id { get; init; }
+
+    public string? encounter_id { get; init; }
+
+    public string encounter_type { get; init; } = "unassigned";
+
     public CombatPlayerPayload player { get; init; } = new();
 
     public CombatPlayerSummaryPayload[] players { get; init; } = Array.Empty<CombatPlayerSummaryPayload>();
@@ -6594,6 +6647,32 @@ internal sealed class CombatPlayerSummaryPayload
     public int focus { get; init; }
 
     public bool is_alive { get; init; }
+
+    public CombatPowerPayload[] powers { get; init; } = Array.Empty<CombatPowerPayload>();
+
+    public int base_orb_slots { get; init; }
+
+    public int orb_capacity { get; init; }
+
+    public int empty_orb_slots { get; init; }
+
+    public CombatOrbPayload[] orbs { get; init; } = Array.Empty<CombatOrbPayload>();
+
+    public CombatHandCardPayload[] hand { get; init; } = Array.Empty<CombatHandCardPayload>();
+
+    public DeckCardPayload[] draw_pile { get; init; } = Array.Empty<DeckCardPayload>();
+
+    public DeckCardPayload[] discard_pile { get; init; } = Array.Empty<DeckCardPayload>();
+
+    public DeckCardPayload[] exhaust_pile { get; init; } = Array.Empty<DeckCardPayload>();
+
+    public DeckCardPayload[] play_pile { get; init; } = Array.Empty<DeckCardPayload>();
+
+    public DeckCardPayload[] deck { get; init; } = Array.Empty<DeckCardPayload>();
+
+    public RunRelicPayload[] relics { get; init; } = Array.Empty<RunRelicPayload>();
+
+    public RunPotionPayload[] potions { get; init; } = Array.Empty<RunPotionPayload>();
 }
 
 internal sealed class RunPlayerSummaryPayload
@@ -6616,7 +6695,17 @@ internal sealed class RunPlayerSummaryPayload
 
     public int gold { get; init; }
 
+    public int max_energy { get; init; }
+
+    public int base_orb_slots { get; init; }
+
     public bool is_alive { get; init; }
+
+    public DeckCardPayload[] deck { get; init; } = Array.Empty<DeckCardPayload>();
+
+    public RunRelicPayload[] relics { get; init; } = Array.Empty<RunRelicPayload>();
+
+    public RunPotionPayload[] potions { get; init; } = Array.Empty<RunPotionPayload>();
 }
 
 internal sealed class CombatOrbPayload

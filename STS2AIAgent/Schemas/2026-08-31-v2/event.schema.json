@@ -1,0 +1,263 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/CharTyr/STS2-Agent/schemas/2026-08-31-v2/event.schema.json",
+  "title": "STS2-Agent SSE event envelope",
+  "type": "object",
+  "required": ["event_id", "sequence", "protocol_version", "correlation_id", "run_id", "combat_id", "type", "timestamp_utc", "data"],
+  "properties": {
+    "event_id": { "type": "integer", "minimum": 1 },
+    "sequence": { "type": "integer", "minimum": 1 },
+    "protocol_version": { "const": "2026-08-31-v2" },
+    "correlation_id": { "type": ["string", "null"] },
+    "run_id": { "type": ["string", "null"] },
+    "combat_id": { "type": ["string", "null"] },
+    "type": {
+      "enum": [
+        "session_started", "stream_ready", "screen_changed", "combat_started", "combat_turn_changed", "combat_ended",
+        "action_started", "damage_resolved", "action_finished", "ai_decision", "player_action_window_opened",
+        "player_action_window_closed", "route_decision_required", "reward_decision_required", "event_state_changed",
+        "available_actions_changed"
+      ]
+    },
+    "timestamp_utc": { "type": "string", "format": "date-time" },
+    "data": { "type": "object" }
+  },
+  "allOf": [
+    {
+      "if": { "properties": { "type": { "const": "combat_started" } } },
+      "then": { "properties": { "data": { "$ref": "#/$defs/combatStarted" } }, "required": ["correlation_id", "run_id", "combat_id"] }
+    },
+    {
+      "if": { "properties": { "type": { "const": "combat_ended" } } },
+      "then": { "properties": { "data": { "$ref": "#/$defs/combatEnded" } }, "required": ["correlation_id", "run_id", "combat_id"] }
+    },
+    {
+      "if": { "properties": { "type": { "const": "action_started" } } },
+      "then": { "properties": { "data": { "$ref": "#/$defs/cardAction" } }, "required": ["correlation_id"] }
+    },
+    {
+      "if": { "properties": { "type": { "const": "action_finished" } } },
+      "then": { "properties": { "data": { "$ref": "#/$defs/cardActionFinished" } }, "required": ["correlation_id"] }
+    },
+    {
+      "if": { "properties": { "type": { "const": "damage_resolved" } } },
+      "then": { "properties": { "data": { "$ref": "#/$defs/damageResolved" } }, "required": ["correlation_id"] }
+    },
+    {
+      "if": { "properties": { "type": { "const": "ai_decision" } } },
+      "then": { "properties": { "data": { "$ref": "#/$defs/aiDecision" } }, "required": ["correlation_id"] }
+    }
+  ],
+  "additionalProperties": false,
+  "$defs": {
+    "encounter": {
+      "type": "object",
+      "required": ["encounter_id", "encounter_type"],
+      "properties": {
+        "encounter_id": { "type": "string" },
+        "encounter_type": { "enum": ["normal", "elite", "boss", "unassigned", "treasure", "shop", "event", "restsite", "map"] }
+      },
+      "additionalProperties": false
+    },
+    "entity": {
+      "type": ["object", "null"],
+      "required": ["entity_id", "entity_type", "model_id", "name", "player_id", "is_local"],
+      "properties": {
+        "entity_id": { "type": "string" },
+        "entity_type": { "enum": ["player", "enemy"] },
+        "model_id": { "type": "string" },
+        "name": { "type": "string" },
+        "player_id": { "type": ["string", "null"] },
+        "is_local": { "type": "boolean" }
+      },
+      "additionalProperties": false
+    },
+    "source": {
+      "type": ["object", "null"],
+      "required": ["source_type", "source_id", "source_name", "card_instance_id"],
+      "properties": {
+        "source_type": { "enum": ["card", "power", "relic", "potion", "orb", "monster", "unknown"] },
+        "source_id": { "type": "string" },
+        "source_name": { "type": "string" },
+        "card_instance_id": { "type": ["string", "null"] }
+      },
+      "additionalProperties": false
+    },
+    "card": {
+      "type": "object",
+      "required": ["card_id", "card_instance_id", "name", "upgraded", "auto_play", "play_index", "play_count"],
+      "properties": {
+        "card_id": { "type": "string" },
+        "card_instance_id": { "type": ["string", "null"] },
+        "name": { "type": "string" },
+        "upgraded": { "type": "boolean" },
+        "auto_play": { "type": "boolean" },
+        "play_index": { "type": "integer", "minimum": 0 },
+        "play_count": { "type": "integer", "minimum": 1 }
+      },
+      "additionalProperties": false
+    },
+    "combatStarted": {
+      "type": "object",
+      "required": ["run_id", "combat_id", "turn", "encounter"],
+      "properties": {
+        "run_id": { "type": "string" },
+        "combat_id": { "type": "string" },
+        "turn": { "type": "integer" },
+        "encounter": { "$ref": "#/$defs/encounter" }
+      },
+      "additionalProperties": false
+    },
+    "combatEnded": {
+      "type": "object",
+      "required": ["run_id", "combat_id", "outcome", "victory", "outcome_source", "encounter"],
+      "properties": {
+        "run_id": { "type": "string" },
+        "combat_id": { "type": "string" },
+        "outcome": { "enum": ["victory", "defeat"] },
+        "victory": { "type": "boolean" },
+        "outcome_source": { "enum": ["combat_manager.combat_won", "combat_manager.combat_ended_without_combat_won"] },
+        "encounter": { "$ref": "#/$defs/encounter" }
+      },
+      "additionalProperties": false
+    },
+    "cardAction": {
+      "type": "object",
+      "required": ["action_type", "actor", "source", "target", "card"],
+      "properties": {
+        "action_type": { "const": "card_play" },
+        "actor": { "$ref": "#/$defs/entity" },
+        "source": { "$ref": "#/$defs/source" },
+        "target": { "$ref": "#/$defs/entity" },
+        "card": { "$ref": "#/$defs/card" }
+      },
+      "additionalProperties": true
+    },
+    "targetTotal": {
+      "type": "object",
+      "required": ["target_id", "target_name", "blocked_damage", "hp_loss", "overkill_damage", "hit_count"],
+      "properties": {
+        "target_id": { "type": "string" },
+        "target_name": { "type": "string" },
+        "blocked_damage": { "type": "integer", "minimum": 0 },
+        "hp_loss": { "type": "integer", "minimum": 0 },
+        "overkill_damage": { "type": "integer", "minimum": 0 },
+        "hit_count": { "type": "integer", "minimum": 0 }
+      },
+      "additionalProperties": false
+    },
+    "cardActionFinished": {
+      "allOf": [
+        { "$ref": "#/$defs/cardAction" },
+        {
+          "type": "object",
+          "required": ["damage"],
+          "properties": {
+            "damage": {
+              "type": "object",
+              "required": ["targets", "total_blocked_damage", "total_hp_loss", "total_overkill_damage", "hit_count"],
+              "properties": {
+                "targets": { "type": "array", "items": { "$ref": "#/$defs/targetTotal" } },
+                "total_blocked_damage": { "type": "integer", "minimum": 0 },
+                "total_hp_loss": { "type": "integer", "minimum": 0 },
+                "total_overkill_damage": { "type": "integer", "minimum": 0 },
+                "hit_count": { "type": "integer", "minimum": 0 }
+              },
+              "additionalProperties": false
+            }
+          }
+        }
+      ]
+    },
+    "damageTarget": {
+      "type": "object",
+      "required": ["target", "blocked_damage", "hp_loss", "overkill_damage", "total_damage", "was_block_broken", "was_fully_blocked", "was_target_killed"],
+      "properties": {
+        "target": { "$ref": "#/$defs/entity" },
+        "blocked_damage": { "type": "integer", "minimum": 0 },
+        "hp_loss": { "type": "integer", "minimum": 0 },
+        "overkill_damage": { "type": "integer", "minimum": 0 },
+        "total_damage": { "type": "integer", "minimum": 0 },
+        "was_block_broken": { "type": "boolean" },
+        "was_fully_blocked": { "type": "boolean" },
+        "was_target_killed": { "type": "boolean" }
+      },
+      "additionalProperties": false
+    },
+    "damageResolved": {
+      "type": "object",
+      "required": ["action_type", "requested_amount", "value_props", "source_attribution", "source", "actor", "targets", "total_blocked_damage", "total_hp_loss", "total_overkill_damage"],
+      "properties": {
+        "action_type": { "enum": ["card_play", "effect"] },
+        "requested_amount": { "type": "number" },
+        "value_props": { "type": "array", "items": { "enum": ["unblockable", "unpowered", "move", "skiphurtanim"] } },
+        "source_attribution": { "enum": ["exact", "unavailable"] },
+        "source": { "$ref": "#/$defs/source" },
+        "actor": { "$ref": "#/$defs/entity" },
+        "targets": { "type": "array", "items": { "$ref": "#/$defs/damageTarget" } },
+        "total_blocked_damage": { "type": "integer", "minimum": 0 },
+        "total_hp_loss": { "type": "integer", "minimum": 0 },
+        "total_overkill_damage": { "type": "integer", "minimum": 0 }
+      },
+      "additionalProperties": false
+    },
+    "aiDecision": {
+      "type": "object",
+      "required": ["request_id", "snapshot_id", "actor_id", "actor_role", "chosen_action_id", "ranked_action_ids", "reason", "chosen_action", "provenance"],
+      "properties": {
+        "request_id": { "type": "string" },
+        "snapshot_id": { "type": ["string", "null"] },
+        "actor_id": { "type": ["string", "null"] },
+        "actor_role": { "const": "ai_teammate" },
+        "chosen_action_id": { "type": "string" },
+        "ranked_action_ids": { "type": "array", "items": { "type": "string" } },
+        "reason": { "type": ["string", "null"] },
+        "chosen_action": {
+          "type": ["object", "null"],
+          "properties": {
+            "action_id": { "type": "string" },
+            "action_type": { "type": ["string", "null"] },
+            "card_id": { "type": ["string", "null"] },
+            "card_instance_id": { "type": ["string", "null"] },
+            "target_id": { "type": ["string", "null"] },
+            "target_label": { "type": ["string", "null"] },
+            "energy_cost": { "type": ["integer", "null"] }
+          },
+          "additionalProperties": true
+        },
+        "provenance": { "const": "optional_ai_teammate_decision_backend" }
+      },
+      "additionalProperties": false
+    }
+  },
+  "examples": [
+    {
+      "event_id": 42,
+      "sequence": 42,
+      "protocol_version": "2026-08-31-v2",
+      "correlation_id": "combat_4_card_12",
+      "run_id": "ABC123",
+      "combat_id": "combat_4",
+      "type": "damage_resolved",
+      "timestamp_utc": "2026-08-31T10:00:00.0000000Z",
+      "data": {
+        "action_type": "card_play",
+        "requested_amount": 9,
+        "value_props": ["move"],
+        "source_attribution": "exact",
+        "source": { "source_type": "card", "source_id": "STRIKE_IRONCLAD", "source_name": "Strike", "card_instance_id": "combat_17" },
+        "actor": { "entity_id": "player_2", "entity_type": "player", "model_id": "IRONCLAD", "name": "Chiba", "player_id": "2", "is_local": false },
+        "targets": [
+          {
+            "target": { "entity_id": "creature_8", "entity_type": "enemy", "model_id": "CULTIST", "name": "Cultist", "player_id": null, "is_local": false },
+            "blocked_damage": 3, "hp_loss": 6, "overkill_damage": 0, "total_damage": 9,
+            "was_block_broken": true, "was_fully_blocked": false, "was_target_killed": false
+          }
+        ],
+        "total_blocked_damage": 3,
+        "total_hp_loss": 6,
+        "total_overkill_damage": 0
+      }
+    }
+  ]
+}

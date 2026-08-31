@@ -1,0 +1,22 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/CharTyr/STS2-Agent/schemas/2026-08-31-v2/data-collection.schema.json",
+  "title": "STS2-Agent static game-data collection",
+  "description": "The data field returned by GET /data/cards, /data/relics, /data/monsters, /data/potions, /data/events, /data/powers, or /data/characters.",
+  "type": "array",
+  "items": {
+    "type": "object",
+    "required": ["id"],
+    "properties": {
+      "id": { "type": "string", "minLength": 1 },
+      "name": { "type": ["string", "null"] },
+      "description": { "type": ["string", "null"] }
+    },
+    "additionalProperties": true
+  },
+  "examples": [
+    [
+      { "id": "STRIKE_IRONCLAD", "name": "Strike", "type": "Attack", "rarity": "Basic" }
+    ]
+  ]
+}

@@ -1,7 +1,9 @@
 # STS2 AI Agent Mod — HTTP API
 
-状态：可实现
-协议版本：`2026-03-10-v0`
+状态：已实现
+协议版本：`2026-08-31-v2`
+
+逐动作事件、关联 ID 与正式 JSON Schema 见 [fact-events-v2.md](./fact-events-v2.md)。
 
 ---
 
@@ -98,9 +100,10 @@
   "request_id": "req_20260310_120000_1234",
   "data": {
     "service": "sts2-ai-agent",
-    "mod_version": "0.4.0",
-    "protocol_version": "2026-03-11-v1",
-    "game_version": "v0.98.2",
+    "mod_version": "0.9.1",
+    "protocol_version": "2026-08-31-v2",
+    "schema_version": "2026-08-31-v2",
+    "game_version": "v0.111.0",
     "status": "ready"
   }
 }
@@ -116,7 +119,7 @@
 
 | 字段 | 类型 | 说明 |
 | --- | --- | --- |
-| `state_version` | number | 状态模型版本（当前固定为 11） |
+| `state_version` | number | 状态模型版本（当前固定为 12） |
 | `run_id` | string | 本局运行标识（种子字符串） |
 | `screen` | string | 当前逻辑界面（见 Screen 枚举） |
 | `in_combat` | boolean | 是否处于战斗流程 |

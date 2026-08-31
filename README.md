@@ -118,8 +118,9 @@ Default MCP endpoint: `http://127.0.0.1:8765/mcp`
 - Driving combat, rewards, shops, map routing, events, rest sites, chests, capstone selection, and bundle selection
 - Optional MCP over `stdio` or HTTP for external agents
 - Live game metadata for cards, relics, monsters, potions, and events via the Mod API
+- Authoritative card/damage/AI-decision events, exact combat outcome and encounter tier, complete multiplayer inventories, and published JSON Schemas
 
-See [mcp_server/README.md](./mcp_server/README.md) for the MCP tool surface.
+See [Protocol v2 fact events](./docs/fact-events-v2.md) for the event and schema formats, and [mcp_server/README.md](./mcp_server/README.md) for the MCP tool surface.
 
 ## FAQ
 

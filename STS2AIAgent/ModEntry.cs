@@ -21,6 +21,8 @@ public static class ModEntry
         RegisterShutdownHooks();
         GameThread.Initialize();
         GameEventService.Instance.Start();
+        GameFactInstrumentation.Install();
+        OptionalAiTeammateTelemetry.Install();
         HttpServer.Instance.Start();
         AgentRuntime.Instance.Initialize();
         AgentOverlayHost.Install();
@@ -44,6 +46,8 @@ public static class ModEntry
         {
             AgentRuntime.Instance.Shutdown();
             AgentOverlayHost.Uninstall();
+            OptionalAiTeammateTelemetry.Uninstall();
+            GameFactInstrumentation.Uninstall();
             GameEventService.Instance.Stop();
             HttpServer.Instance.Stop();
         }

@@ -28,4 +28,10 @@
       <Private>false</Private>
     </Reference>
   </ItemGroup>
+
+  <ItemGroup>
+    <EmbeddedResource Include="Schemas\2026-08-31-v2\*.schema.json">
+      <LogicalName>STS2AIAgent.Schemas.2026-08-31-v2.%(Filename)%(Extension)</LogicalName>
+    </EmbeddedResource>
+  </ItemGroup>
 </Project>

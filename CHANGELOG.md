@@ -4,7 +4,15 @@
 
 ### Notes
 
-- None yet.
+- Protocol `2026-08-31-v2` publishes Draft 2020-12 schemas for health, all state scenes, events, and static data collections.
+
+### Added
+
+- Added authoritative `action_started`, `damage_resolved`, `action_finished`, and optional `ai_decision` events with run/combat/correlation IDs.
+- Added exact damage settlement values and model source attribution for cards, powers, relics, potions, orbs, and monsters.
+- Added explicit `normal` / `elite` / `boss` encounter types and `victory` / `defeat` combat outcomes.
+- Added complete hand, piles, deck, relic, potion, power, and orb data for every multiplayer combat player, plus complete run inventories.
+- Added `GET /schemas` and `GET /schemas/{name}`.
 
 ## v0.9.1 - 2026-08-27
 
