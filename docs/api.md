@@ -994,6 +994,8 @@
 
 > Note (`2026-03-11`): when the claimed reward is a card reward, `skip_reward_cards` only closes the current card-selection overlay. The underlying reward may still remain in `reward.rewards[]`, so callers should always re-read state after skipping.
 
+> Note (`2026-03-11`): a potion reward with `claimable = false` means the potion slots are full — the button is disabled and `claim_reward` will reject it. To still obtain the potion: claim a relic that adds potion slots first if one is offered, or free a slot with `discard_potion` (now allowed on the main reward screen), then `claim_reward` the potion again.
+
 在奖励主界面领取一个奖励。
 
 - **前提**：`screen = "REWARD"`，`reward.rewards[]` 中有 `claimable = true` 的项
@@ -1055,6 +1057,22 @@
 
 ```
 请求: { "action": "collect_rewards_and_proceed" }
+```
+
+### `leave_rewards`
+
+手动逐项领取完毕后，点击奖励页自身的"继续"按钮离开奖励界面。
+
+- **前提**：`screen = "REWARD"`（主奖励界面），且满足其一：
+  - `reward.rewards[]` 中没有 `claimable = true` 的项，且奖励页"继续"按钮可用；
+  - 仅剩的 `claimable = true` 项都是**已被 `skip_reward_cards` 跳过**的卡牌奖励（跳过只关闭选牌子界面，底层奖励可能仍可领），此时视为已解决
+- **参数**：无
+- **行为**：点击奖励页的继续按钮并等待界面离开（回到 `MAP` 等）
+- **超时**：10 秒
+- **与 `collect_rewards_and_proceed` 的区别**：本动作**不做任何领取**，只负责离开；适合"手工逐个领取 + 选卡"流程的收尾
+
+```
+请求: { "action": "leave_rewards" }
 ```
 
 ### `select_deck_card`
@@ -1261,7 +1279,7 @@
 
 - **前提**：界面存在可用的 `ProceedButton`（宝箱房、休息点结束后等）
 - **参数**：无
-- **不适用于**：奖励界面（应使用 `collect_rewards_and_proceed` 或手动流程）
+- **不适用于**：奖励界面（应使用 `collect_rewards_and_proceed`，或 `claim_reward` / `choose_reward_card` / `skip_reward_cards` 手动流程后以 `leave_rewards` 收尾）
 - **稳定条件**：界面切换 或 按钮消失/禁用
 - **超时**：10 秒
 
@@ -1293,8 +1311,9 @@
 2b. POST /action { claim_reward, option_index=0 }  → 手动领取金币
     POST /action { claim_reward, option_index=1 }  → 点击卡牌奖励
     GET /state                                     → 确认 pending_card_choice=true
-    POST /action { choose_reward_card, option_index=2 }  → 选卡
-    POST /action { proceed }                       → 继续（如果有按钮）
+    POST /action { choose_reward_card, option_index=2 }  → 选卡（或 skip_reward_cards 跳过）
+    重复直到所有想领的都领完 / 想跳过的都跳过
+    POST /action { leave_rewards }                 → 点击奖励页"继续"离开（取代直接 proceed）
 3. GET /state                          → screen=MAP
 4. POST /action { choose_map_node, option_index=0 }  → 选路
 ```

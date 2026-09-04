@@ -2,9 +2,20 @@
 
 ## Unreleased
 
-### Notes
+### Added
 
-- None yet.
+- Added a `leave_rewards` action that clicks the reward screen's own "continue" button, so callers can exit after claiming rewards one-by-one with `claim_reward` + `choose_reward_card` / `skip_reward_cards`.
+- Reward-bulk cleanup (`collect_rewards_and_proceed` / `resolve_rewards`) now claims non-potion rewards before potion rewards, giving relics that add potion slots a chance to be taken first.
+- The built-in agent compact state now ships each potion's authoritative effect text (`run.potions[].effect`), and the glossary / play prompt ground card, potion, relic, and block rules in live payload text instead of the model's memory.
+
+### Changed
+
+- `discard_potion` is now usable on the main reward screen (still blocked on the card-reward sub-screen), enabling "drop one potion, claim another".
+- Play prompt now instructs the in-game agent to prefer manual reward claims over `collect_rewards_and_proceed` / `resolve_rewards` (which auto-pick the first card), and to resolve full-slot potions by claiming a slot relic first or discarding a potion first.
+
+### Compatibility
+
+- Rewards, potion-full handling, and the new `leave_rewards` exit flow require a live-game verification pass (see `docs/phase-*` validation templates).
 
 ## v0.9.2 - 2026-08-31
 

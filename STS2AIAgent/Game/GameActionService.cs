@@ -61,6 +61,13 @@ internal static class GameActionService
     private static bool _cardRewardSkipped;
 
     /// <summary>
+    /// Whether the current reward session has an explicit card-reward skip in
+    /// effect. Lets the state layer expose leave_rewards when the only rewards
+    /// still enabled underneath are card rewards the agent already skipped.
+    /// </summary>
+    internal static bool IsCardRewardSkipActive => _cardRewardSkipped;
+
+    /// <summary>
     /// Mid-turn card play counters. Maintained by the mod since the game's
     /// internal counters are not accessible via reflection. Synchronized to
     /// the current combat round when state is read and incremented by play_card.
@@ -113,6 +120,7 @@ internal static class GameActionService
             "claim_reward" => ExecuteClaimRewardAsync(request),
             "choose_reward_card" => ExecuteChooseRewardCardAsync(request),
             "skip_reward_cards" => ExecuteSkipRewardCardsAsync(),
+            "leave_rewards" => ExecuteLeaveRewardsAsync(),
             "select_deck_card" => ExecuteSelectDeckCardAsync(request),
             "close_cards_view" => ExecuteCloseCardsViewAsync(),
             "confirm_selection" => ExecuteConfirmSelectionAsync(),
@@ -1558,6 +1566,40 @@ internal static class GameActionService
         };
     }
 
+    private static async Task<ActionResponsePayload> ExecuteLeaveRewardsAsync()
+    {
+        var currentScreen = ActiveScreenContext.Instance.GetCurrentScreen();
+        var screen = GameStateService.ResolveScreen(currentScreen);
+
+        if (!GameStateService.CanLeaveRewards(currentScreen))
+        {
+            throw new ApiException(409, "invalid_action", "Action is not available in the current state.", new
+            {
+                action = "leave_rewards",
+                screen
+            });
+        }
+
+        var rewardsScreen = (NRewardsScreen)currentScreen;
+        var proceedButton = GameStateService.GetRewardProceedButton(rewardsScreen);
+        proceedButton!.ForceClick();
+        var stable = await WaitForRewardFlowExitAsync(rewardsScreen, DateTime.UtcNow + TimeSpan.FromSeconds(10));
+        if (stable)
+        {
+            _cardRewardSkipped = false;
+            _pendingCardRewardChoice = -1;
+        }
+
+        return new ActionResponsePayload
+        {
+            action = "leave_rewards",
+            status = stable ? "completed" : "pending",
+            stable = stable,
+            message = stable ? "Left the reward screen." : "Reward screen is still transitioning.",
+            state = GameStateService.BuildStatePayload()
+        };
+    }
+
     private static async Task<ActionResponsePayload> ExecuteSelectDeckCardAsync(ActionRequest request)
     {
         var currentScreen = ActiveScreenContext.Instance.GetCurrentScreen();
@@ -1846,13 +1888,24 @@ internal static class GameActionService
         out NRewardButton? rewardButton)
     {
         var hasPotionSlots = GameStateService.GetLocalPlayer(RunManager.Instance.DebugOnlyGetState())?.HasOpenPotionSlots ?? false;
-        rewardButton = GameStateService
+        var eligible = GameStateService
             .GetRewardButtons(rewardsScreen)
-            .FirstOrDefault(button =>
+            .Where(button =>
                 button.IsEnabled &&
                 !attemptedRewardButtons.Contains(button.GetInstanceId()) &&
-                (button.Reward is not PotionReward || hasPotionSlots) &&
-                (!_cardRewardSkipped || button.Reward is not CardReward));
+                (!_cardRewardSkipped || button.Reward is not CardReward))
+            .ToArray();
+
+        // Claim non-potion rewards first so that relics that increase potion
+        // capacity (for example a potion belt) are taken before potion rewards;
+        // potions are only considered once no other reward is claimable and an
+        // open potion slot exists. Full-slot potions stay unclaimed on purpose:
+        // bulk cleanup never discards a potion the player might value.
+        rewardButton = eligible.FirstOrDefault(button => button.Reward is not PotionReward);
+        if (rewardButton == null && hasPotionSlots)
+        {
+            rewardButton = eligible.FirstOrDefault(button => button.Reward is PotionReward);
+        }
 
         return rewardButton != null;
     }

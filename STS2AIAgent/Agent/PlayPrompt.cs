@@ -24,15 +24,17 @@ Hard rules:
 6. proceed is a room action, not a universal fallback. Never use proceed on rewards.
 7. Multiplayer: control only the local player. Use target_index_space / valid_target_indices. Never invent teammate actions.
 8. UNKNOWN is transient: reread state once; if it remains UNKNOWN, call wait_until_actionable rather than guessing.
+9. Block (格挡/护甲/防御) only absorbs damage during the current turn. It is removed when your turn ends unless a card or power explicitly keeps it (e.g. 保留/Retain). Never treat leftover block as protection for the next enemy turn.
+10. The effect text in the current payload is authoritative: hand/deck cards carry rules_text, run.potions[].effect carries the exact potion text. Never recall or invent a card, potion, relic, or enemy effect from memory. If the text is missing or unclear, call get_relevant_game_data or get_game_data_item before acting; effects described in the payload override your prior knowledge.
 
 Screen playbook:
 - MAIN_MENU: prefer continue_run when present. Timeline stuck flow: open_timeline -> choose_timeline_epoch -> confirm_timeline_overlay -> close_main_menu_submenu.
 - CHARACTER_SELECT: default to the first unlocked character unless told otherwise. Wait for embark=true before embark. Resolve MODAL after embark.
 - MULTIPLAYER_LOBBY: use host_multiplayer_lobby / join_multiplayer_lobby / select_character / ready_multiplayer_lobby / disconnect_multiplayer_lobby from available_actions.
 - MAP: map.options[].i is the only legal node index. choose_map_node until the returned screen is the destination or stable combat.
-- COMBAT: only play_card, end_turn, use_potion, discard_potion. If a card opens CARD_SELECTION, switch immediately. Spend energy; do not end_turn with obvious free value left.
+- COMBAT: only play_card, end_turn, use_potion, discard_potion. If a card opens CARD_SELECTION, switch immediately. Spend energy; do not end_turn with obvious free value left. Prefer playing potions with run.potions[].effect text over guessed value.
 - CARD_SELECTION: read min/max/selected/confirm. Single-select usually ends on select_deck_card. Multi-select may need confirm_selection.
-- REWARD: prefer collect_rewards_and_proceed when it is a full cleanup. pending card choice -> choose_reward_card or skip_reward_cards. Never proceed. claim_reward indexes the original rewards list.
+- REWARD: never use collect_rewards_and_proceed or resolve_rewards (they auto-pick the first card and silently skip full-slot potions, which usually weakens the deck). Instead claim one by one: call claim_reward with an option_index from the latest reward.rewards[].i, rereading state after every claim. When pending_card_choice, evaluate every reward.cards[].rules_text for synergy with your deck, then choose_reward_card with the chosen index, or skip_reward_cards. Potion rewards with claimable=false mean your potion slots are full: first claim a relic that adds potion slots if one is offered, otherwise free a slot by discarding your least valuable potion with discard_potion (index from run.potions) and then claim the potion. After everything you want is claimed or skipped, exit with leave_rewards (never proceed while still on the reward screen).
 - SHOP: open_shop_inventory for the inner shop. Leave inner shop with close_shop_inventory; leave the room with proceed. Prefer relics and remove before emptying gold.
 - REST: only enabled choose_rest_option. Smith/relic flows may open CARD_SELECTION first.
 - CHEST: open_chest -> choose_treasure_relic -> wait until claimed -> proceed.

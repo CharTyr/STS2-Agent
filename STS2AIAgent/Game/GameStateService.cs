@@ -386,6 +386,16 @@ internal static class GameStateService
             });
         }
 
+        if (CanLeaveRewards(currentScreen))
+        {
+            descriptors.Add(new ActionDescriptor
+            {
+                name = "leave_rewards",
+                requires_target = false,
+                requires_index = false
+            });
+        }
+
         if (CanSelectDeckCard(currentScreen))
         {
             descriptors.Add(new ActionDescriptor
@@ -791,6 +801,32 @@ internal static class GameStateService
     public static bool CanSkipRewardCards(IScreenContext? currentScreen)
     {
         return GetCardRewardAlternativeButtons(currentScreen).Count > 0;
+    }
+
+    public static bool CanLeaveRewards(IScreenContext? currentScreen)
+    {
+        if (currentScreen is not NRewardsScreen rewardsScreen)
+        {
+            return false;
+        }
+
+        var proceedButton = GetRewardProceedButton(rewardsScreen);
+        if (proceedButton == null || !proceedButton.IsEnabled)
+        {
+            return false;
+        }
+
+        var enabledButtons = GetRewardButtons(rewardsScreen).Where(button => button.IsEnabled).ToArray();
+        if (enabledButtons.Length == 0)
+        {
+            return true;
+        }
+
+        // A card reward the agent already skipped via skip_reward_cards may
+        // still be claimable underneath the closed overlay; treat it as resolved
+        // so leave_rewards can finish the flow. Everything else must be claimed first.
+        return GameActionService.IsCardRewardSkipActive &&
+            enabledButtons.All(button => button.Reward is CardReward);
     }
 
     public static bool CanSelectDeckCard(IScreenContext? currentScreen)
@@ -2248,6 +2284,11 @@ internal static class GameStateService
             names.Add("skip_reward_cards");
         }
 
+        if (CanLeaveRewards(currentScreen))
+        {
+            names.Add("leave_rewards");
+        }
+
         if (CanSelectDeckCard(currentScreen))
         {
             names.Add("select_deck_card");
@@ -2766,6 +2807,14 @@ internal static class GameStateService
             CollectGlossaryTerms(glossaryTerms, effect.description);
         }
 
+        foreach (var potion in run.potions)
+        {
+            if (potion.occupied)
+            {
+                CollectGlossaryTerms(glossaryTerms, potion.description);
+            }
+        }
+
         return new
         {
             character = run.character_name,
@@ -2789,6 +2838,7 @@ internal static class GameStateService
                 i = potion.index,
                 potion_id = potion.potion_id,
                 line = FormatPotionLine(potion),
+                effect = potion.occupied ? potion.description : null,
                 usable = potion.can_use,
                 discard = potion.can_discard,
                 target = NormalizeTargetHint(potion.target_type),
@@ -3584,7 +3634,9 @@ internal static class GameStateService
         ("易伤", "易伤单位会承受更多攻击伤害。"),
         ("虚弱", "虚弱单位造成的攻击伤害会降低。"),
         ("脆弱", "脆弱单位获得的格挡会减少。"),
-        ("格挡", "格挡会优先抵消即将受到的伤害。"),
+        ("格挡", "格挡会抵消即将受到的伤害；回合结束时全部清空，不会留到下一回合，除非牌或能力明确说明保留。"),
+        ("防御", "防御即格挡：抵消本回合受到的伤害，回合结束时清空，不会带到下一回合。"),
+        ("护甲", "护甲即格挡：抵消本回合受到的伤害，回合结束时清空，不会带到下一回合。"),
         ("消耗", "消耗牌打出后会移出本场战斗。"),
         ("保留", "保留牌在回合结束时不会被弃掉。"),
         ("中毒", "中毒会在回合结束时造成等量生命损失，然后层数减少。"),
@@ -5137,7 +5189,10 @@ internal static class GameStateService
 
     private static bool CanDiscardPotionsInCurrentScreen(IScreenContext? currentScreen)
     {
-        return currentScreen is not (NRewardsScreen or NCardRewardSelectionScreen);
+        // Potions may be discarded from the main reward screen so a player can
+        // free a slot before claiming a potion reward ("drop one, take another").
+        // The card-reward selection sub-screen still forbids it.
+        return currentScreen is not NCardRewardSelectionScreen;
     }
 
     private static bool IsPotionDiscardable(Player player, PotionModel? potion)
