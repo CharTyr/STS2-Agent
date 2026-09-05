@@ -19,7 +19,21 @@ internal static class ProfileSelectionContractTests
         Assert.Contains("SaveManager.Instance.InitPrefsData()", actionSource, StringComparison.Ordinal);
         Assert.Contains("SaveManager.Instance.InitProgressData()", actionSource, StringComparison.Ordinal);
         Assert.Contains("game.ReloadMainMenu()", actionSource, StringComparison.Ordinal);
-        Assert.Contains("WaitForProfileSwitchAsync", actionSource, StringComparison.Ordinal);
+        Assert.Contains("initialMainMenu=currentScreenasNMainMenu", actionSource, StringComparison.Ordinal);
+        Assert.Contains(
+            "WaitForProfileSwitchAsync(initialMainMenu,profileId,TimeSpan.FromSeconds(15))",
+            actionSource,
+            StringComparison.Ordinal);
+        Assert.Contains(
+            "initialMainMenu==null||mainMenu!=initialMainMenu",
+            actionSource,
+            StringComparison.Ordinal);
+        Assert.Contains("GodotObject.IsInstanceValid(mainMenu)", actionSource, StringComparison.Ordinal);
+        Assert.Contains("mainMenu.IsInsideTree()", actionSource, StringComparison.Ordinal);
+        Assert.True(
+            actionSource.IndexOf("initialMainMenu=currentScreenasNMainMenu", StringComparison.Ordinal) <
+            actionSource.IndexOf("game.ReloadMainMenu()", StringComparison.Ordinal),
+            "The old main-menu instance must be captured before ReloadMainMenu starts its asynchronous replacement.");
     }
 
     private static string ReadSource(string relativePath)

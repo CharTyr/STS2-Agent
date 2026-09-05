@@ -647,8 +647,10 @@ internal static class GameActionService
             }, retryable: true);
         }
 
+        NMainMenu? initialMainMenu = null;
         if (SaveManager.Instance.CurrentProfileId != profileId)
         {
+            initialMainMenu = currentScreen as NMainMenu;
             SaveManager.Instance.SwitchProfileId(profileId);
             var prefsReadResult = SaveManager.Instance.InitPrefsData();
             var progressReadResult = SaveManager.Instance.InitProgressData();
@@ -659,7 +661,7 @@ internal static class GameActionService
                 new ReadSaveResult<SettingsSave>(new SettingsSave()));
         }
 
-        var stable = await WaitForProfileSwitchAsync(profileId, TimeSpan.FromSeconds(15));
+        var stable = await WaitForProfileSwitchAsync(initialMainMenu, profileId, TimeSpan.FromSeconds(15));
         return new ActionResponsePayload
         {
             action = "switch_profile",
@@ -670,7 +672,10 @@ internal static class GameActionService
         };
     }
 
-    private static async Task<bool> WaitForProfileSwitchAsync(int profileId, TimeSpan timeout)
+    private static async Task<bool> WaitForProfileSwitchAsync(
+        NMainMenu? initialMainMenu,
+        int profileId,
+        TimeSpan timeout)
     {
         var deadline = DateTime.UtcNow + timeout;
         while (DateTime.UtcNow < deadline)
@@ -679,6 +684,9 @@ internal static class GameActionService
             var currentScreen = ActiveScreenContext.Instance.GetCurrentScreen();
             if (SaveManager.Instance.CurrentProfileId == profileId &&
                 currentScreen is NMainMenu mainMenu &&
+                (initialMainMenu == null || mainMenu != initialMainMenu) &&
+                GodotObject.IsInstanceValid(mainMenu) &&
+                mainMenu.IsInsideTree() &&
                 mainMenu.IsVisibleInTree() &&
                 mainMenu.SubmenuStack?.SubmenusOpen != true)
             {
