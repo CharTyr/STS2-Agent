@@ -32,7 +32,7 @@
 | [#54](https://github.com/CharTyr/STS2-Agent/pull/54) | 事件选项本地化变量 | 多事件、中英文和缺失字段回归 |
 | [#57](https://github.com/CharTyr/STS2-Agent/pull/57) | 卡组多选动作确认语义 | 选择、取消、确认及等待状态的场景回归 |
 | [#58](https://github.com/CharTyr/STS2-Agent/pull/58) | 战斗 CanPlay 就绪诊断 | 将等待原因转为玩家能理解的状态；验证真实战斗 |
-| [#59](https://github.com/CharTyr/STS2-Agent/pull/59) / `24d3244` | 队友身份绑定、会话通信、历史进入决策、只读聊天、暂停/恢复、动作队列与结算等待修正 | 双开完整旅程、断线恢复、真实模型策略效果；PR 正文及 COOP_DELIVERY 的“暂停待实现”已落后于代码 |
+| [#59](https://github.com/CharTyr/STS2-Agent/pull/59) / `24d3244` | 队友身份绑定、会话通信、历史进入决策、只读聊天、暂停/恢复、动作队列与结算等待修正 | 双开完整旅程、断线恢复、真实模型策略效果；已同步更正 COOP_DELIVERY 旅程状态为“接口已合入主线，实机端到端待验收” |
 | [#60](https://github.com/CharTyr/STS2-Agent/pull/60) | Windows 保留端口的有界动态后备与绑定测试 | 合并后的测试项目修复、真实环境启动验收 |
 
 ### 本次复验
@@ -45,7 +45,7 @@
 | `uv run --locked python -m unittest discover -s tests -v`（mcp_server） | **48 项通过**，退出码 0 |
 | `uv run --locked python ../scripts/run_sts2_validation.py mcp-tool-profile` | **通过**，guided 10、guided debug 11、full 63，failures 为空 |
 
-以上是当前集成主线的结果。旧文档的 48/57/63 项 C# 通过、profile 失败，以及各 PR 合并前的通过数量，均不能替代本次基线。没有进行完整 Mod 构建、实机整局或用户测试。
+以上是当前集成主线（remote main 27f2b70）的结果。各候选分支（PR #61~#64）的单测和功能通过证据属于分支证据，在 PR 合并入 main 并重新跑通集成验证前，不能视为主线已交付基线。没有进行完整 Mod 构建、实机整局或用户测试。
 
 ## 3. 当前最重要的缺口
 
@@ -74,14 +74,14 @@
 
 | 顺序 | 任务 | 主要范围 | 实施 PR 与状态 | 验收/依赖 |
 | --- | --- | --- | --- | --- |
-| 1 / P0 | 去掉测试项目重复引用并复跑集成测试 | `STS2AIAgent.Tests.csproj` | [PR #61](https://github.com/CharTyr/STS2-Agent/pull/61) (已就绪) | 修复 NETSDK1022，100% 保留所有测试；全量核心测试通过 |
-| 2 / P0 | 合入可信 CI 与预检 | `.github/workflows`、`scripts` | [PR #61](https://github.com/CharTyr/STS2-Agent/pull/61) (已就绪) | 新增 GitHub Actions 工作流，加固 Invoke-CheckedNative 原生退出码传播与失败注入 |
-| 3 / P0 | 对齐开发基线及交付文档 | Git 分支、PRODUCT/COOP 文档 | [PR #65](https://github.com/CharTyr/STS2-Agent/pull/65) (就绪) | 梳理规范 PR 链条 (#61~#64)，同步测试基准与交付指标 |
+| 1 / P0 | 去掉测试项目重复引用并复跑集成测试 | `STS2AIAgent.Tests.csproj` | [PR #61](https://github.com/CharTyr/STS2-Agent/pull/61) (待合并) | 修复 NETSDK1022，100% 保留所有测试；全量核心测试通过 |
+| 2 / P0 | 合入可信 CI 与预检 | `.github/workflows`、`scripts` | [PR #61](https://github.com/CharTyr/STS2-Agent/pull/61) (待合并) | 新增 GitHub Actions 工作流，加固 Invoke-CheckedNative 原生退出码传播与失败注入 |
+| 3 / P0 | 对齐开发基线及交付文档 | Git 分支、PRODUCT/COOP 文档 | [PR #65](https://github.com/CharTyr/STS2-Agent/pull/65) (当前 PR，待合并) | 梳理规范 PR 链条 (#61~#64)，澄清主线基线与分支证据边界 |
 | 4 / P0 | 双开主旅程实机验收包 | Multiplayer、验证脚本 | 本地实机在线 | 不污染日常存档；邀请、入厅、准备、消息、暂停、战斗、结算实测 |
-| 5 / P1 | 运行恢复策略 | AgentRuntime、AutoPlayRecovery | [PR #62](https://github.com/CharTyr/STS2-Agent/pull/62) (已就绪) | 连续 3 次失败停止、2/4s 指数退避、正常等待不误扣预算、保留 HTTP 状态与配置错误退出 |
-| 6 / P1 | 战局边界与离线账号作用域 | CurrentRunBoundary、CoopLaunchPolicy | [PR #62](https://github.com/CharTyr/STS2-Agent/pull/62) & [PR #63](https://github.com/CharTyr/STS2-Agent/pull/63) | 战局边界离开回菜单停止；离线双开自动递增 --clientId，隔离两窗口账号与存档 |
-| 7 / P1 | 配置与凭据多实例隔离 | SettingsStore、环境变量 | [PR #63](https://github.com/CharTyr/STS2-Agent/pull/63) (已就绪) | 支持 STS2_AGENT_SETTINGS_PATH 隔离双实例配置并发写入，单测覆盖隔离与回退 |
-| 8 / P1 | 会话诊断与预算基础 | LlmTypes、SessionBudgetGuard、UI | [PR #64](https://github.com/CharTyr/STS2-Agent/pull/64) (已就绪) | 提取 SSE/JSON Usage；统一游玩/视觉/对话计入；支持 MaxTokens/MaxRequests 硬上限；UI 实时展示 |
+| 5 / P1 | 运行恢复策略 | AgentRuntime、AutoPlayRecovery | [PR #62](https://github.com/CharTyr/STS2-Agent/pull/62) (已合并) | 连续 3 次失败停止、2/4s 指数退避、正常等待不误扣预算、保留 HTTP 状态与配置错误退出 |
+| 6 / P1 | 战局边界与离线账号作用域 | CurrentRunBoundary、CoopLaunchPolicy | [PR #62](https://github.com/CharTyr/STS2-Agent/pull/62) & [PR #63](https://github.com/CharTyr/STS2-Agent/pull/63) (已合并) | 战局边界离开回菜单停止；离线双开自动递增 --clientId，隔离两窗口账号与存档 |
+| 7 / P1 | 配置与凭据多实例隔离 | SettingsStore、环境变量 | [PR #63](https://github.com/CharTyr/STS2-Agent/pull/63) (已合并) | 支持 STS2_AGENT_SETTINGS_PATH 隔离双实例配置并发写入，单测覆盖隔离与回退 |
+| 8 / P1 | 会话诊断与预算基础 | LlmTypes、SessionBudgetGuard、UI | [PR #64](https://github.com/CharTyr/STS2-Agent/pull/64) (待合并) | 提取 SSE/JSON Usage；统一游玩/视觉/对话计入；支持 MaxTokens/MaxRequests 硬上限；UI 实时展示 |
 | 9 / P1 | 核实依赖报告 | #50/#51、锁文件、发布包 | 待后续跟进 | 确定实际暴露范围与修复版本，再运行回归 |
 
 第一迭代集中完成 1–4 并启动 5；第二迭代完成 5–8，9 根据核查结果插入。不要同时启动全部大型功能，也不要重做 #59 的通信与暂停。
