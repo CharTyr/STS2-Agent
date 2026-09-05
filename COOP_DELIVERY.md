@@ -1,5 +1,37 @@
 # AI 队友交付跟踪
 
+## PR 系列与成熟能力交付进展（2026-09-05）
+
+根据 `PRODUCT_PLAN_CURRENT.md`，核心未完成工作已系统规范拆分为连续 PR 链并全部就绪：
+
+1. **[PR #61](https://github.com/CharTyr/STS2-Agent/pull/61) (`codex/integration-validation`, commit `accd605`)**
+   - 修复 `STS2AIAgent.Tests.csproj` 中的 NETSDK1022 重复编译引用，100% 保留全部单测。
+   - 新增 `.github/workflows/validate.yml` CI 工作流。
+   - 在 `scripts/lib-checked-native.ps1` 实现 `Invoke-CheckedNative`，加固预检脚本的退出码传播与失败注入验证。
+2. **[PR #62](https://github.com/CharTyr/STS2-Agent/pull/62) (`codex/autoplay-recovery`, commits `577953d` + `a280799`)**
+   - 实现 `AutoPlayRecovery.cs`（连续 3 次失败停止、2/4s 指数退避、正常等待不消耗重试预算、保留 HTTP 状态与配置错误即时退出）。
+   - 实现 `CurrentRunBoundary.cs` 战局边界保护（防止离开游戏、回主菜单或大厅后误打/换局）。
+   - 核心单测扩充至 107 项全部通过。
+3. **[PR #63](https://github.com/CharTyr/STS2-Agent/pull/63) (`feat/coop-offline-and-settings-isolation`, commit `b0d1197`)**
+   - 离线双开账号隔离：副窗口继承 `--force-steam off` 并自动递增 `--clientId {id + 1}`，杜绝存档冲突。
+   - 配置隔离：`SettingsStore.DefaultPath()` 支持 `STS2_AGENT_SETTINGS_PATH` 环境变量，防止双开实例并发写入相互覆盖。
+   - 核心单测扩充至 109 项全部通过。
+4. **[PR #64](https://github.com/CharTyr/STS2-Agent/pull/64) (`feat/agent-token-usage-and-budget`, commit `41aa191`)**
+   - LLM Token 使用量统计：在非流式 JSON 与流式 SSE（`stream_options.include_usage`）中解析 `prompt_tokens`, `completion_tokens`, `total_tokens`。
+   - 统一度量：将主模型多轮工具执行与外挂视觉模型调用消耗汇总至 `AgentTurnResult`。
+   - 会话预算硬护栏：实现 `SessionBudgetGuard.cs`，支持配置 `MaxSessionTokens` 与 `MaxSessionRequests`，超限时优雅停止自动游玩并保留具体超限原因。
+   - 游戏内 UI 实时显示会话消耗并在设置界面提供预算阈值配置。
+   - 核心单测扩充至 116 项全部通过。
+5. **[PR #65](https://github.com/CharTyr/STS2-Agent/pull/65) (`docs/roadmap-and-delivery-alignment`)**
+   - 统一收拢规划文档与交付状态，全量回归与真机验证。
+
+**当前全量测试基准**：
+- **C# 核心测试套件**：116 / 116 项 100% PASS
+- **Python MCP 测试套件**：48 / 48 项 100% PASS
+- **Mod Release 编译**：0 警告 0 错误
+
+---
+
 ## 自动运行恢复（2026-09-05，后续分支）
 
 - 基于集成修复提交 `accd605`，独立分支 `codex/autoplay-recovery`。
