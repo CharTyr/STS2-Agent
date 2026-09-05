@@ -200,5 +200,12 @@ internal static class TestRunner
         yield return ("EventOptionLocalization.DynamicVars", () => Task.Run(EventOptionLocalizationTests.AddsEventVariablesBeforeFormatting));
         yield return ("EventOptionLocalization.Null", () => Task.Run(EventOptionLocalizationTests.MissingLocStringReturnsEmpty));
         yield return ("EventOptionLocalization.Signature", () => Task.Run(EventOptionLocalizationTests.FormatsSignatureFieldsWithEventVariables));
+        yield return ("LoopbackListener.ExcludedRangeUsesDynamicPort", () => Task.Run(LoopbackListenerTests.ExcludedRangeUsesDynamicPort));
+        yield return ("LoopbackListener.BindRaceReselectsDynamicPort", () => Task.Run(LoopbackListenerTests.BindRaceReselectsDynamicPort));
+        yield return ("LoopbackListener.ExplicitPortNeverChanges", () => Task.Run(LoopbackListenerTests.ExplicitPortNeverChanges));
+        yield return ("LoopbackListener.ExplicitReservedPortFailsClearly", () => Task.Run(LoopbackListenerTests.ExplicitReservedPortFailsClearly));
+        yield return ("LoopbackListener.ExhaustionIsBounded", () => Task.Run(LoopbackListenerTests.ExhaustionIsBounded));
+        yield return ("LoopbackListener.UnexpectedFailureIsNotHidden", () => Task.Run(LoopbackListenerTests.UnexpectedFailureIsNotHidden));
+        yield return ("LoopbackListener.RealLoopbackListenerResponds", LoopbackListenerTests.RealLoopbackListenerResponds);
     }
 }
