@@ -6,6 +6,8 @@ using MegaCrit.Sts2.Core.Debug;
 using MegaCrit.Sts2.Core.Logging;
 using STS2AIAgent.Config;
 using STS2AIAgent.Game;
+using STS2AIAgent.Agent;
+using STS2AIAgent.Multiplayer;
 
 namespace STS2AIAgent.Server;
 
@@ -31,6 +33,38 @@ internal static class Router
         {
             Log.Info($"{LogPrefix} {requestId} {request.HttpMethod} {request.Url?.AbsolutePath}");
 
+            if (request.HttpMethod == "POST" && request.Url?.AbsolutePath is "/companion/message" or "/companion/control")
+            {
+                if (!InstanceRole.IsCompanion || !request.IsLocal || !CompanionConnection.IsAuthorized(
+                    Environment.GetEnvironmentVariable(CompanionConnection.TokenEnvironment), request.Headers[CompanionConnection.TokenHeader]))
+                    throw new ApiException(403, "companion_session_required", "This endpoint requires the active local companion session.");
+                if (request.ContentLength64 < 0 || request.ContentLength64 > 16000)
+                    throw new ApiException(400, "invalid_request", "A bounded JSON body is required.");
+                using var body = await ReadCompanionBodyAsync(request, cancellationToken);
+                if (request.Url.AbsolutePath == "/companion/control")
+                {
+                    if (body.RootElement.ValueKind != System.Text.Json.JsonValueKind.Object ||
+                        !body.RootElement.TryGetProperty("running", out var running) ||
+                        running.ValueKind is not (System.Text.Json.JsonValueKind.True or System.Text.Json.JsonValueKind.False))
+                        throw new ApiException(400, "invalid_request", "running must be a boolean.");
+                    string phase;
+                    try { phase = await AgentRuntime.Instance.SetCompanionRunningAsync(running.GetBoolean(), cancellationToken); }
+                    catch (TimeoutException) { throw new ApiException(409, "pause_pending", "Pause requested but the current task has not finished yet."); }
+                    catch (InvalidOperationException ex) { throw new ApiException(409, "companion_not_ready", ex.Message); }
+                    await WriteJsonAsync(response, 200, new { ok = true, request_id = requestId, data = new { phase } });
+                    statusCode = 200;
+                    return;
+                }
+                if (body.RootElement.ValueKind != System.Text.Json.JsonValueKind.Object ||
+                    !body.RootElement.TryGetProperty("message", out var message) || message.ValueKind != System.Text.Json.JsonValueKind.String ||
+                    string.IsNullOrWhiteSpace(message.GetString()) || message.GetString()!.Length > TeamConversation.MaxMessageLength)
+                    throw new ApiException(400, "invalid_request", "message must contain 1–2000 characters.");
+                var reply = await AgentRuntime.Instance.ReplyToTeammateAsync(message.GetString()!, cancellationToken);
+                await WriteJsonAsync(response, 200, new { ok = true, request_id = requestId, data = new { reply } });
+                statusCode = 200;
+                return;
+            }
+
             if (request.HttpMethod.Equals("GET", StringComparison.OrdinalIgnoreCase) &&
                 request.Url?.AbsolutePath == "/health")
             {
@@ -47,6 +81,7 @@ internal static class Router
                         status = "ready",
                         api_host = HttpServer.Instance.Host,
                         api_port = HttpServer.Instance.Port,
+                        process_id = Environment.ProcessId,
                         instance_role = InstanceRole.Current
                     }
                 });
@@ -183,6 +218,12 @@ internal static class Router
                 retryable
             }
         });
+    }
+
+    private static async Task<System.Text.Json.JsonDocument> ReadCompanionBodyAsync(HttpListenerRequest request, CancellationToken cancellationToken)
+    {
+        try { return await System.Text.Json.JsonDocument.ParseAsync(request.InputStream, cancellationToken: cancellationToken); }
+        catch (System.Text.Json.JsonException) { throw new ApiException(400, "invalid_request", "Body must be valid JSON."); }
     }
 
     private static async Task WriteJsonAsync(HttpListenerResponse response, int statusCode, object payload)

@@ -2071,6 +2071,13 @@ internal static class GameStateService
         return reason.ToString();
     }
 
+    internal static bool IsCombatActionReady()
+    {
+        var currentScreen = ActiveScreenContext.Instance.GetCurrentScreen();
+        var combatState = CombatManager.Instance.IsInProgress ? CombatManager.Instance.DebugOnlyGetState() : null;
+        return CanUseCombatActions(currentScreen, combatState, out _, out _);
+    }
+
     private static bool CanUseCombatActions(IScreenContext? currentScreen, CombatState? combatState, out Player? me, out NCombatRoom? combatRoom)
     {
         me = null;
@@ -2192,8 +2199,18 @@ internal static class GameStateService
         var room = currentScreen as NCombatRoom;
         var hand = room?.Ui?.Hand;
         var runningAction = RunManager.Instance.ActionExecutor.CurrentlyRunningAction;
-        var readyAction = RunManager.Instance.ActionQueueSet.GetReadyAction();
-        var actionsSettled = runningAction == null && readyAction == null;
+        MegaCrit.Sts2.Core.GameActions.GameAction? readyAction = null;
+        var actionQueueHasExecutingAction = false;
+        try
+        {
+            readyAction = RunManager.Instance.ActionQueueSet.GetReadyAction();
+        }
+        catch (InvalidOperationException)
+        {
+            actionQueueHasExecutingAction = true;
+        }
+
+        var actionsSettled = !actionQueueHasExecutingAction && runningAction == null && readyAction == null;
         var localTurnReady = IsLocalCombatTurnReady(me);
         var snapshotStable = actionsSettled && IsCombatActionSnapshotCurrentlyStable(combatState, me);
         var playerActionPhase = IsPlayerActionPhase(combatState, me);

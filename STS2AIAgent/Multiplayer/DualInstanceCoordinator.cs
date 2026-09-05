@@ -10,6 +10,11 @@ internal static class DualInstanceCoordinator
 
     public static async Task<string> HostLocalCoopAsync(CancellationToken cancellationToken)
     {
+        if (await GetScreenAsync() != "MAIN_MENU")
+        {
+            return "请先回到主菜单，再邀请 AI 队友组队。";
+        }
+
         var launch = await LocalDualInstanceLauncher.LaunchCompanionAsync(cancellationToken);
         if (!launch.Ok)
         {
@@ -18,9 +23,18 @@ internal static class DualInstanceCoordinator
 
         try
         {
+            if (await GetScreenAsync() != "MAIN_MENU")
+            {
+                return launch.Message + "。主窗口已经离开主菜单，组队已停止。请先关闭队友窗口，回到主菜单后重试。";
+            }
+
             await OpenMultiplayerTestAsync(cancellationToken);
             await ExecuteActionAsync("host_multiplayer_lobby", cancellationToken);
             return launch.Message + "。本机已创建大厅，请选角色后 Ready。同伴实例会自动加入并开始游玩。";
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            throw;
         }
         catch (Exception ex)
         {
@@ -72,19 +86,32 @@ internal static class DualInstanceCoordinator
 
     private static async Task OpenMultiplayerTestAsync(CancellationToken cancellationToken)
     {
-        await GameThread.InvokeAsync(() => GameActionService.ExecuteInternalConsoleCommandAsync("multiplayer test"));
+        await GameThread.InvokeAsync(() =>
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            if (GameStateService.BuildStatePayload().screen != "MAIN_MENU")
+            {
+                throw new InvalidOperationException("请先回到主菜单，再邀请 AI 队友组队。");
+            }
+
+            return GameActionService.ExecuteInternalConsoleCommandAsync("multiplayer test");
+        });
         await WaitForScreenAsync(new[] { "MULTIPLAYER_LOBBY" }, TimeSpan.FromSeconds(20), cancellationToken);
     }
 
     private static Task ExecuteActionAsync(string action, CancellationToken cancellationToken, int? optionIndex = null)
     {
-        _ = cancellationToken;
-        return GameThread.InvokeAsync(() => GameActionService.ExecuteAsync(new ActionRequest
+        cancellationToken.ThrowIfCancellationRequested();
+        return GameThread.InvokeAsync(() =>
         {
-            action = action,
-            option_index = optionIndex,
-            client_context = new { source = "dual_instance", instance_role = InstanceRole.Current }
-        }));
+            cancellationToken.ThrowIfCancellationRequested();
+            return GameActionService.ExecuteAsync(new ActionRequest
+            {
+                action = action,
+                option_index = optionIndex,
+                client_context = new { source = "dual_instance", instance_role = InstanceRole.Current }
+            });
+        });
     }
 
     private static Task<string> GetScreenAsync()

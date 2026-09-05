@@ -50,7 +50,7 @@ In the overlay:
 1. **Settings**: add one or more OpenAI-compatible endpoints (OpenAI, DeepSeek, SiliconFlow, OpenRouter, Ollama, LM Studio, …), add models, then pick the conversation model. Optionally pick a play model and a vision model. Each model has its own thinking intensity (Off / Low / Medium / High).
 2. **Chat**: talk to the model. Enable “attach current state” or “attach screenshot” as needed.
 3. **Play**: start auto-play or step once. This uses compact live state and tools, the same contract as MCP. Vision is optional and not required to finish a run.
-4. **Dual instance**: launch a second local game process, host a lobby here, and let the companion instance join and play.
+4. **AI teammate**: invite an AI companion from the main menu. You control your character while the model joins and plays in a second game window. Inviting saves the current model settings; repeated clicks do not launch another companion process.
 5. **Connect**: start the optional HTTP MCP server with one click and copy the API / MCP URLs for Cursor, Claude, Codex, or a custom client.
 
 Settings are stored in `%AppData%/STS2AIAgent/settings.json` and are shared by both local instances.
@@ -58,6 +58,8 @@ Settings are stored in `%AppData%/STS2AIAgent/settings.json` and are shared by b
 Vision is optional extra context. Auto-play works with text-only models: compact `agent_view`, `get_game_state` / `get_available_actions` / `get_game_data_*` / `wait_until_actionable` / `act`. If you assign a vision-capable play model or a vision sidecar, screenshots are attached as supporting context only.
 
 Local dual-instance currently uses the game debug `multiplayer test` lobby. Steam may block a second process. The launcher does not kill your current game.
+
+After inviting a companion, use **AI teammate → Team conversation** in the human window to discuss targets, routes, or the teammate's choices. Replies use the companion's play model, and recent conversation informs future play decisions. Chat is read-only: it never plays the human's cards or resumes a paused companion. Messages wait for an in-progress action to finish and incur additional model requests.
 
 ### 3. Optional: Confirm The HTTP API
 
@@ -67,7 +69,7 @@ The overlay does not need a browser. Developers can still open:
 http://127.0.0.1:8080/health
 ```
 
-`/health` now also reports `api_port` and `instance_role`. If 8080 is busy, the mod binds 8081, 8082, … unless `STS2_API_PORT` is set.
+`/health` reports `api_port`, `instance_role`, and `process_id`. If 8080 and nearby ports are unavailable, the mod tries dynamically allocated loopback ports. Use the actual address shown in the overlay. An explicit `STS2_API_PORT` stays fixed and fails clearly if unavailable.
 
 ## Optional: MCP Server (Developers)
 
@@ -133,7 +135,7 @@ Check these first:
 
 1. The game is actually running
 2. The three mod files are inside the game's `mods/` directory
-3. Another instance already took 8080 — try `http://127.0.0.1:8081/health`
+3. Check the actual API address in the overlay; port conflicts or Windows reserved ranges may require a different port
 4. You copied them into the Steam game directory, not the repository directory
 
 ### The MCP Server Starts But Cannot Read Game State

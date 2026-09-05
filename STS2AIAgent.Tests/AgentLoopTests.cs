@@ -70,6 +70,56 @@ internal static class ActIndexValidatorTests
 
 internal static class AgentLoopTests
 {
+    public static async Task PauseAfterModelResponseDoesNotDispatchAct()
+    {
+        using var cancellation = new CancellationTokenSource();
+        var bridge = new FakeBridge();
+        var factory = new ScriptedClientFactory(new[]
+        {
+            new LlmCompletion { ToolCalls = new[] { new LlmToolCall
+            {
+                Id = "late", Name = "act", ArgumentsJson = "{\"action\":\"play_card\",\"card_index\":0}"
+            } } }
+        }) { OnRequest = () => cancellation.Cancel() };
+        var loop = new AgentLoop(bridge, factory, AgentSettings.CreateDefault);
+        var canceled = false;
+        try { await loop.PlayOnceAsync(cancellation.Token); }
+        catch (OperationCanceledException) { canceled = true; }
+        Assert.True(canceled);
+        Assert.Equal(0, bridge.ActCalls);
+    }
+    public static async Task TeamChat_CannotActEvenWithPlayIntent()
+    {
+        var bridge = new FakeBridge();
+        var factory = new ScriptedClientFactory(new[]
+        {
+            new LlmCompletion { ToolCalls = new[] { new LlmToolCall { Id = "forbidden", Name = "act", ArgumentsJson = "{\"action\":\"end_turn\"}" } } },
+            new LlmCompletion { Content = "我会在下一步考虑集火。" }
+        });
+        var settings = AgentSettings.CreateDefault();
+        var loop = new AgentLoop(bridge, factory, () => settings);
+        var result = await loop.ChatAsync("帮我出牌", Array.Empty<ChatTurn>(),
+            new ChatOptions { TeammateConversation = true, AllowAct = true }, CancellationToken.None);
+        Assert.Equal(0, bridge.ActCalls);
+        Assert.Null(result.Acted);
+        Assert.False(factory.LastRequest!.Tools!.Any(tool => tool.Name == "act"));
+        Assert.Contains("read-only", factory.LastRequest.Messages[0].Content);
+    }
+
+    public static async Task TeamSuggestion_ReachesNextPlayDecision()
+    {
+        var conversation = new STS2AIAgent.Multiplayer.TeamConversation();
+        var factory = new ScriptedClientFactory(Array.Empty<LlmCompletion>());
+        var loop = new AgentLoop(new FakeBridge(), factory, AgentSettings.CreateDefault, conversation.BuildDecisionContext);
+        conversation.Add("user", "focus left");
+        await loop.PlayOnceAsync(CancellationToken.None);
+        Assert.True(factory.LastRequest!.Messages.Any(message => message.Content?.Contains("focus left") == true));
+        Assert.True(factory.LastRequest.Messages.Any(message => message.Content?.Contains("historical context") == true));
+        conversation.Clear();
+        await loop.PlayOnceAsync(CancellationToken.None);
+        Assert.False(factory.LastRequest!.Messages.Any(message => message.Content?.Contains("focus left") == true));
+    }
+
     public static async Task PlayOnce_ExecutesSingleValidatedAct()
     {
         var bridge = new FakeBridge();
@@ -665,9 +715,10 @@ internal static class AgentLoopTests
         public LlmRequest? LastRequest { get; private set; }
 
         public bool CancelCompletions { get; set; }
+        public Action? OnRequest { get; set; }
 
         public ILlmClient Create(LlmEndpoint endpoint) =>
-            new ScriptedClient(_completions, request => LastRequest = request, CancelCompletions);
+            new ScriptedClient(_completions, request => { LastRequest = request; OnRequest?.Invoke(); }, CancelCompletions);
     }
 
     private sealed class ScriptedClient : ILlmClient

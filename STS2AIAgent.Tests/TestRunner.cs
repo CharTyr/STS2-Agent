@@ -110,6 +110,27 @@ internal static class TestRunner
 
     private static IEnumerable<(string Name, Func<Task> Body)> AllTests()
     {
+        yield return ("TeamControl.WaitForCommittedWork", AutoPlaySessionTests.PauseWaitsForCommittedWorkAndBlocksRestart);
+        yield return ("TeamControl.CancelModel", AutoPlaySessionTests.PauseCancelsWaitingModel);
+        yield return ("TeamControl.NoOverlappingLoops", AutoPlaySessionTests.ImmediatePauseNeverOverlapsGenerations);
+        yield return ("TeamControl.Lifetime", () => Task.Run(AutoPlaySessionTests.CanceledLifetimeCannotStart));
+        yield return ("TeamControl.NoLateAct", AgentLoopTests.PauseAfterModelResponseDoesNotDispatchAct);
+        yield return ("TeamControl.TransportAck", TeamConversationTests.PauseControlHasExplicitAcknowledgement);
+        yield return ("TeamChat.ReadOnly", AgentLoopTests.TeamChat_CannotActEvenWithPlayIntent);
+        yield return ("TeamChat.NextDecision", AgentLoopTests.TeamSuggestion_ReachesNextPlayDecision);
+        yield return ("TeamChat.BoundedHistory", () => Task.Run(TeamConversationTests.HistoryIsBoundedAndCleared));
+        yield return ("TeamChat.SessionAuthorization", () => Task.Run(TeamConversationTests.SessionTokensAreRequiredAndDistinct));
+        yield return ("TeamChat.Transport", TeamConversationTests.TransportChecksIdentityAndSendsBoundedBody);
+        yield return ("TeamChat.ReusedPort", TeamConversationTests.ReusedPortDoesNotReceiveMessage);
+        yield return ("CoopStartup.ExcludedRange", () => Task.Run(CompanionStartupTests.ExcludedRangeUsesDynamicPort));
+        yield return ("CoopStartup.BindRace", () => Task.Run(CompanionStartupTests.BindRaceReselectsDynamicPort));
+        yield return ("CoopStartup.ExplicitPort", () => Task.Run(CompanionStartupTests.ExplicitPortNeverChanges));
+        yield return ("CoopStartup.ExplicitReserved", () => Task.Run(CompanionStartupTests.ExplicitReservedPortFailsClearly));
+        yield return ("CoopStartup.BoundedFailure", () => Task.Run(CompanionStartupTests.ExhaustionIsBounded));
+        yield return ("CoopStartup.UnexpectedFailure", () => Task.Run(CompanionStartupTests.UnexpectedFailureIsNotHidden));
+        yield return ("CoopStartup.RealHttp", CompanionStartupTests.RealLoopbackListenerResponds);
+        yield return ("CoopStartup.Identity", () => Task.Run(CompanionStartupTests.HealthRequiresExactCompanionIdentity));
+        yield return ("CoopStartup.Preconditions", () => Task.Run(CompanionStartupTests.LaunchPreconditionsProtectHumanRun));
         yield return ("SettingsStore.RoundTrip", () => Task.Run(SettingsStoreTests.RoundTrip_PreservesEndpointsModelsAndRoles));
         yield return ("SettingsStore.MissingFile", () => Task.Run(SettingsStoreTests.Load_MissingFile_CreatesDefaults));
         yield return ("SettingsStore.MigrateThinking", () => Task.Run(SettingsStoreTests.Load_MigratesGlobalThinkingIntensityOntoModels));

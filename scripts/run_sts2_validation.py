@@ -1502,7 +1502,11 @@ def suite_mcp_tool_profile(_: argparse.Namespace) -> dict[str, Any]:
     essential_tools = {
         "health_check",
         "get_game_state",
+        "get_raw_game_state",
         "get_available_actions",
+        "get_game_data_item",
+        "get_game_data_items",
+        "get_relevant_game_data",
         "wait_for_event",
         "wait_until_actionable",
         "act",
@@ -1744,23 +1748,28 @@ def suite_new_run_lifecycle(args: argparse.Namespace) -> dict[str, Any]:
     client.request("GET", "/health")
 
     state = client.wait_for_state(
-        "active-run MAIN_MENU",
-        lambda current: current.get("screen") == "MAIN_MENU" and "abandon_run" in list(current.get("available_actions") or []),
+        "MAIN_MENU",
+        lambda current: current.get("screen") == "MAIN_MENU"
+        and (
+            "abandon_run" in list(current.get("available_actions") or [])
+            or "open_character_select" in list(current.get("available_actions") or [])
+        ),
         attempts=args.poll_attempts,
         delay_ms=args.poll_delay_ms,
     )
 
-    abandon_response = ensure_action_ok(client.action("abandon_run"), "abandon_run")
-    modal_state = abandon_response["data"]["state"]
-    assert_action_available(modal_state, "confirm_modal")
-    ensure_action_ok(client.action("confirm_modal"), "confirm_modal")
+    if "abandon_run" in list(state.get("available_actions") or []):
+        abandon_response = ensure_action_ok(client.action("abandon_run"), "abandon_run")
+        modal_state = abandon_response["data"]["state"]
+        assert_action_available(modal_state, "confirm_modal")
+        ensure_action_ok(client.action("confirm_modal"), "confirm_modal")
 
-    client.wait_for_state(
-        "MAIN_MENU without active run",
-        lambda current: current.get("screen") == "MAIN_MENU" and "open_character_select" in list(current.get("available_actions") or []),
-        attempts=args.poll_attempts,
-        delay_ms=args.poll_delay_ms,
-    )
+        client.wait_for_state(
+            "MAIN_MENU without active run",
+            lambda current: current.get("screen") == "MAIN_MENU" and "open_character_select" in list(current.get("available_actions") or []),
+            attempts=args.poll_attempts,
+            delay_ms=args.poll_delay_ms,
+        )
 
     open_response = ensure_action_ok(client.action("open_character_select"), "open_character_select")
     character_select_state = wait_for_character_select(
@@ -1804,13 +1813,26 @@ def suite_new_run_lifecycle(args: argparse.Namespace) -> dict[str, Any]:
 
     run_debug_command(client, "die")
     game_over_state = client.wait_for_state(
-        "GAME_OVER",
+        "GAME_OVER actionable",
         lambda current: current.get("screen") == "GAME_OVER"
         and current.get("game_over") is not None
-        and bool(current["game_over"].get("can_return_to_main_menu")),
+        and (
+            "continue_game_over" in list(current.get("available_actions") or [])
+            or bool(current["game_over"].get("can_return_to_main_menu"))
+        ),
         attempts=args.poll_attempts,
         delay_ms=args.poll_delay_ms,
     )
+    if "continue_game_over" in list(game_over_state.get("available_actions") or []):
+        ensure_action_ok(client.action("continue_game_over"), "continue_game_over")
+        game_over_state = client.wait_for_state(
+            "GAME_OVER summary",
+            lambda current: current.get("screen") == "GAME_OVER"
+            and current.get("game_over") is not None
+            and bool(current["game_over"].get("can_return_to_main_menu")),
+            attempts=args.poll_attempts,
+            delay_ms=args.poll_delay_ms,
+        )
 
     ensure_action_ok(client.action("return_to_main_menu"), "return_to_main_menu")
     final_menu_state = client.wait_for_state(
@@ -1980,7 +2002,7 @@ def suite_deferred_potion_flow(args: argparse.Namespace) -> dict[str, Any]:
 
     zero_cost_matches = [
         card for card in list(final_state["combat"]["hand"])
-        if card.get("card_id") == selected_card.get("card_id") and int(card.get("energy_cost") or -1) == 0
+        if card.get("card_id") == selected_card.get("card_id") and (card.get("energy_cost") is not None and int(card.get("energy_cost")) == 0)
     ]
     if not zero_cost_matches:
         raise ValidationError(

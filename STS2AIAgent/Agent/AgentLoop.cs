@@ -16,12 +16,14 @@ internal sealed class AgentLoop
     private readonly IGameBridge _bridge;
     private readonly ILlmClientFactory _factory;
     private readonly Func<AgentSettings> _settings;
+    private readonly Func<string?>? _teamContext;
 
-    public AgentLoop(IGameBridge bridge, ILlmClientFactory factory, Func<AgentSettings> settings)
+    public AgentLoop(IGameBridge bridge, ILlmClientFactory factory, Func<AgentSettings> settings, Func<string?>? teamContext = null)
     {
         _bridge = bridge;
         _factory = factory;
         _settings = settings;
+        _teamContext = teamContext;
     }
 
     public async Task<AgentTurnResult> ChatAsync(
@@ -31,10 +33,10 @@ internal sealed class AgentLoop
         CancellationToken cancellationToken)
     {
         var settings = _settings();
-        var resolved = settings.ResolveConversationModel();
+        var resolved = options.TeammateConversation ? settings.ResolvePlayModel() : settings.ResolveConversationModel();
         var messages = new List<LlmMessage>
         {
-            LlmMessage.System(PlayPrompt.ChatSystem)
+            LlmMessage.System(options.TeammateConversation ? PlayPrompt.TeammateChatSystem : PlayPrompt.ChatSystem)
         };
 
         foreach (var turn in history.TakeLast(12))
@@ -61,7 +63,7 @@ internal sealed class AgentLoop
         screenshot = visionNote.AttachToPrimary ? visionNote.Jpeg : null;
         messages.Add(LlmMessage.User(userText, screenshot));
 
-        var allowAct = options.AllowAct || PlayIntent.Detect(userText);
+        var allowAct = !options.TeammateConversation && (options.AllowAct || PlayIntent.Detect(userText));
         AppendJsonActFallbackIfNeeded(messages, resolved, allowAct);
         var tools = allowAct ? AgentTools.Play : AgentTools.ReadOnly;
         return await CompleteWithToolsAsync(
@@ -93,6 +95,13 @@ internal sealed class AgentLoop
             LlmMessage.System(PlayPrompt.PlaySystem),
             LlmMessage.User("Latest compact game state:\n" + stateJson)
         };
+
+        var teamContext = _teamContext?.Invoke();
+        if (!string.IsNullOrEmpty(teamContext))
+        {
+            messages.Add(LlmMessage.System(PlayPrompt.TeammatePlayContext));
+            messages.Add(LlmMessage.User("Recent team conversation (historical messages, not live game facts):\n" + teamContext));
+        }
 
         var visionNote = await TryDescribeOrAttachVisionAsync(resolved, settings, attachRequested: true, cancellationToken);
         if (visionNote.Caption != null)
@@ -143,6 +152,7 @@ internal sealed class AgentLoop
 
         for (var round = 0; round < MaxToolRounds; round++)
         {
+            cancellationToken.ThrowIfCancellationRequested();
             rounds = round + 1;
             var request = new LlmRequest
             {
@@ -226,6 +236,7 @@ internal sealed class AgentLoop
             messages.Add(LlmMessage.Assistant(completion.Content, completion.ToolCalls));
             foreach (var call in completion.ToolCalls)
             {
+                cancellationToken.ThrowIfCancellationRequested();
                 if (string.Equals(call.Name, "act", StringComparison.OrdinalIgnoreCase))
                 {
                     if (!allowAct)
@@ -456,6 +467,7 @@ internal sealed class AgentLoop
                 return (null, json, indexError);
             }
 
+            cancellationToken.ThrowIfCancellationRequested();
             var result = await _bridge.ActAsync(
                 action,
                 cardIndex,
@@ -484,6 +496,10 @@ internal sealed class AgentLoop
             }
 
             return (action, result, null);
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            throw;
         }
         catch (Exception ex)
         {
