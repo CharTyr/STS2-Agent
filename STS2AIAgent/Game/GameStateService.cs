@@ -58,7 +58,7 @@ namespace STS2AIAgent.Game;
 
 internal static class GameStateService
 {
-    private const int StateVersion = 14;
+    private const int StateVersion = 15;
     private const int AgentViewVersion = 9;
     private static readonly TimeSpan CombatActionSnapshotStableDelay = TimeSpan.FromMilliseconds(200);
     private static string? _lastCombatActionReadinessSignature;
@@ -100,6 +100,7 @@ internal static class GameStateService
         return new GameStatePayload
         {
             state_version = StateVersion,
+            native_profile_id = SaveManager.Instance.CurrentProfileId,
             run_id = runState?.Rng.StringSeed ?? "run_unknown",
             screen = screen,
             session = session,
@@ -265,6 +266,16 @@ internal static class GameStateService
             descriptors.Add(new ActionDescriptor
             {
                 name = "play_card",
+                requires_target = false,
+                requires_index = true
+            });
+        }
+
+        if (CanSwitchProfile(currentScreen))
+        {
+            descriptors.Add(new ActionDescriptor
+            {
+                name = "switch_profile",
                 requires_target = false,
                 requires_index = true
             });
@@ -1184,6 +1195,13 @@ internal static class GameStateService
 
         return GetCharacterSelectButtons(currentScreen)
             .Any(button => !button.IsLocked && button.IsEnabled && button.IsVisibleInTree());
+    }
+
+    public static bool CanSwitchProfile(IScreenContext? currentScreen)
+    {
+        return currentScreen is NMainMenu mainMenu &&
+            mainMenu.IsVisibleInTree() &&
+            mainMenu.SubmenuStack?.SubmenusOpen != true;
     }
 
     public static bool CanContinueRun(IScreenContext? currentScreen)
@@ -2357,6 +2375,11 @@ internal static class GameStateService
         if (CanPlayAnyCard(currentScreen, combatState))
         {
             names.Add("play_card");
+        }
+
+        if (CanSwitchProfile(currentScreen))
+        {
+            names.Add("switch_profile");
         }
 
         if (CanContinueRun(currentScreen))
@@ -6249,6 +6272,8 @@ internal static class GameStateService
 internal sealed class GameStatePayload
 {
     public int state_version { get; init; }
+
+    public int native_profile_id { get; init; }
 
     public string run_id { get; init; } = "run_unknown";
 
