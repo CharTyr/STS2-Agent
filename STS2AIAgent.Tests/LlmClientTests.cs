@@ -149,6 +149,68 @@ internal static class OpenAiCompatibleClientTests
         Assert.Contains("play_card", completion.ToolCalls[0].ArgumentsJson);
     }
 
+    public static void ParseCompletion_ReadsUsage()
+    {
+        const string payload = """
+        {
+          "choices": [
+            {
+              "message": {
+                "role": "assistant",
+                "content": "ok"
+              }
+            }
+          ],
+          "usage": {
+            "prompt_tokens": 120,
+            "completion_tokens": 30,
+            "total_tokens": 150
+          }
+        }
+        """;
+
+        var completion = OpenAiCompatibleClient.ParseCompletion(payload);
+        Assert.NotNull(completion.Usage);
+        Assert.Equal(120, completion.Usage!.PromptTokens);
+        Assert.Equal(30, completion.Usage.CompletionTokens);
+        Assert.Equal(150, completion.Usage.TotalTokens);
+    }
+
+    public static void ParseSse_ReadsUsageFromEndChunk()
+    {
+        const string payload = """
+        data: {"choices":[{"delta":{"content":"hello"}}]}
+
+        data: {"choices":[],"usage":{"prompt_tokens":50,"completion_tokens":10,"total_tokens":60}}
+
+        data: [DONE]
+        """;
+
+        var completion = OpenAiCompatibleClient.ParseSsePayload(payload);
+        Assert.Equal("hello", completion.Content);
+        Assert.NotNull(completion.Usage);
+        Assert.Equal(50, completion.Usage!.PromptTokens);
+        Assert.Equal(10, completion.Usage.CompletionTokens);
+        Assert.Equal(60, completion.Usage.TotalTokens);
+    }
+
+    public static void LlmUsage_CombineAndAdd()
+    {
+        var u1 = new LlmUsage { PromptTokens = 10, CompletionTokens = 5, TotalTokens = 15 };
+        var u2 = new LlmUsage { PromptTokens = 20, CompletionTokens = 8, TotalTokens = 28 };
+
+        var sum = u1 + u2;
+        Assert.Equal(30, sum.PromptTokens);
+        Assert.Equal(13, sum.CompletionTokens);
+        Assert.Equal(43, sum.TotalTokens);
+
+        var combinedWithNull = LlmUsage.Combine(u1, null);
+        Assert.Equal(15, combinedWithNull!.TotalTokens);
+
+        var combinedBoth = LlmUsage.Combine(u1, u2);
+        Assert.Equal(43, combinedBoth!.TotalTokens);
+    }
+
     private sealed class RecordingHandler : HttpMessageHandler
     {
         private readonly string _response;

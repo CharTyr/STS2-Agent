@@ -53,7 +53,7 @@ In the overlay:
 4. **AI teammate**: invite an AI companion from the main menu. You control your character while the model joins and plays in a second game window. Inviting saves the current model settings; repeated clicks do not launch another companion process.
 5. **Connect**: start the optional HTTP MCP server with one click and copy the API / MCP URLs for Cursor, Claude, Codex, or a custom client.
 
-Settings are stored in `%AppData%/STS2AIAgent/settings.json` and are shared by both local instances.
+Settings default to `%AppData%/STS2AIAgent/settings.json`. When launching a local companion via the in-game UI, the launcher automatically isolates configuration by deriving and provisioning a companion-specific file (`settings.companion.json` seeded from the main instance) so concurrent settings writes never collide. You can also explicitly assign an isolated configuration file path to any instance by setting the `STS2_AGENT_SETTINGS_PATH` environment variable to an absolute path (or `STS2_COMPANION_SETTINGS_PATH` for the launcher companion override).
 
 Vision is optional extra context. Auto-play works with text-only models: compact `agent_view`, `get_game_state` / `get_available_actions` / `get_game_data_*` / `wait_until_actionable` / `act`. If you assign a vision-capable play model or a vision sidecar, screenshots are attached as supporting context only.
 

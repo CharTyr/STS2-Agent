@@ -40,6 +40,8 @@ internal sealed class AgentRuntime
     private string _mcpStatus = "MCP 未启动。外部 Agent 可走下方接入说明。";
     private string? _mcpUrl;
     private Process? _mcpProcess;
+    private LlmUsage _sessionUsage = LlmUsage.Empty;
+    private int _sessionRequests;
 
     public static AgentRuntime Instance => LazyInstance.Value;
 
@@ -133,6 +135,26 @@ internal sealed class AgentRuntime
 
     public string LastThought => _lastThought;
 
+    public LlmUsage SessionUsage
+    {
+        get { lock (_gate) return _sessionUsage; }
+    }
+
+    public int SessionRequests
+    {
+        get { lock (_gate) return _sessionRequests; }
+    }
+
+    public void ResetSessionStats()
+    {
+        lock (_gate)
+        {
+            _sessionUsage = LlmUsage.Empty;
+            _sessionRequests = 0;
+        }
+        RaiseChanged();
+    }
+
     public string DualStatus => _dualStatus;
     public bool DualLaunching => _dualLaunching;
     public bool TeamMessagePending => _teamMessagePending;
@@ -191,6 +213,14 @@ internal sealed class AgentRuntime
             var reply = result.AssistantText;
             if (reply.Length > TeamConversation.MaxMessageLength) reply = reply[..TeamConversation.MaxMessageLength];
             _teamConversation.Add("assistant", reply);
+            lock (_gate)
+            {
+                if (result.Usage != null)
+                {
+                    _sessionUsage = LlmUsage.Combine(_sessionUsage, result.Usage) ?? LlmUsage.Empty;
+                }
+                _sessionRequests += result.RequestsSpent > 0 ? result.RequestsSpent : 1;
+            }
             RaiseChanged();
             return reply;
         }
@@ -394,6 +424,20 @@ internal sealed class AgentRuntime
             return;
         }
 
+        string? budgetBlocked = null;
+        lock (_gate)
+        {
+            var guard = _settings.CreateBudgetGuard(_sessionUsage.TotalTokens, _sessionRequests);
+            budgetBlocked = guard.CheckBudget();
+        }
+
+        if (budgetBlocked != null)
+        {
+            AddHistory("user", text);
+            AddHistory("assistant", budgetBlocked);
+            return;
+        }
+
         var prior = History;
         AddHistory("user", text);
         SetStatus("正在请求模型…");
@@ -417,6 +461,15 @@ internal sealed class AgentRuntime
             finally
             {
                 _turnGate.Release();
+            }
+
+            lock (_gate)
+            {
+                if (result.Usage != null)
+                {
+                    _sessionUsage = LlmUsage.Combine(_sessionUsage, result.Usage) ?? LlmUsage.Empty;
+                }
+                _sessionRequests += result.RequestsSpent > 0 ? result.RequestsSpent : 1;
             }
 
             var reply = result.Error != null
@@ -587,45 +640,30 @@ internal sealed class AgentRuntime
 
     private async Task AutoPlayLoopAsync(CancellationToken cancellationToken)
     {
-        while (!cancellationToken.IsCancellationRequested)
+        var boundary = new CurrentRunBoundary();
+        SessionBudgetGuard? budgetGuard;
+        lock (_gate)
         {
-            try
+            budgetGuard = _settings.CreateBudgetGuard(_sessionUsage.TotalTokens, _sessionRequests);
+        }
+
+        try
+        {
+            await AutoPlayRecovery.RunAsync(async token =>
             {
-                await _turnGate.WaitAsync(cancellationToken);
-                AgentTurnResult result;
+                await _turnGate.WaitAsync(token);
                 try
                 {
-                    result = await _loop.PlayOnceAsync(cancellationToken);
+                    return await _loop.PlayOnceAsync(token, boundary.Check);
                 }
                 finally
                 {
                     _turnGate.Release();
                 }
 
-                if (cancellationToken.IsCancellationRequested)
-                {
-                    break;
-                }
-
-                ApplyPlayResult(result);
-                if (result.Error != null)
-                {
-                    await Task.Delay(1200, cancellationToken);
-                }
-            }
-            catch (OperationCanceledException)
-            {
-                break;
-            }
-            catch (Exception ex)
-            {
-                Log.Warn($"{LogPrefix} Auto-play step failed: {ex.Message}");
-                SetStatus("自动游玩出错：" + ex.Message);
-                await Task.Delay(1500, cancellationToken);
-            }
+            }, ApplyPlayResult, cancellationToken, delay: null, budgetGuard: budgetGuard);
         }
-
-        RaiseChanged();
+        finally { RaiseChanged(); }
     }
 
     private async Task StartMcpCoreAsync(CancellationToken cancellationToken)
@@ -690,6 +728,15 @@ internal sealed class AgentRuntime
 
     private void ApplyPlayResult(AgentTurnResult result)
     {
+        lock (_gate)
+        {
+            if (result.Usage != null)
+            {
+                _sessionUsage = LlmUsage.Combine(_sessionUsage, result.Usage) ?? LlmUsage.Empty;
+            }
+            _sessionRequests += result.RequestsSpent > 0 ? result.RequestsSpent : (result.WaitingForGame ? 0 : 1);
+        }
+
         if (!string.IsNullOrWhiteSpace(result.Acted))
         {
             _lastAction = result.Acted;

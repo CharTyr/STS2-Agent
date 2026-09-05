@@ -72,11 +72,14 @@ internal sealed class AgentLoop
             tools,
             allowAct,
             stopAfterAct: false,
-            cancellationToken);
+            cancellationToken,
+            initialUsage: visionNote.Usage,
+            initialRequests: visionNote.RequestsSpent);
     }
 
-    public async Task<AgentTurnResult> PlayOnceAsync(CancellationToken cancellationToken)
+    public async Task<AgentTurnResult> PlayOnceAsync(CancellationToken cancellationToken, Action<string>? checkState = null)
     {
+        if (checkState != null) checkState(await _bridge.GetCompactStateJsonAsync(cancellationToken));
         var settings = _settings();
         var resolved = settings.ResolvePlayModel();
         var actionable = await _bridge.WaitUntilActionableAsync(TimeSpan.FromSeconds(20), cancellationToken);
@@ -85,11 +88,14 @@ internal sealed class AgentLoop
             return new AgentTurnResult
             {
                 Error = "Timed out waiting for an actionable state.",
-                ToolRounds = 0
+                WaitingForGame = true,
+                ToolRounds = 0,
+                RequestsSpent = 0
             };
         }
 
         var stateJson = await _bridge.GetCompactStateJsonAsync(cancellationToken);
+        checkState?.Invoke(stateJson);
         var messages = new List<LlmMessage>
         {
             LlmMessage.System(PlayPrompt.PlaySystem),
@@ -123,7 +129,10 @@ internal sealed class AgentLoop
             AgentTools.Play,
             allowAct: true,
             stopAfterAct: true,
-            cancellationToken);
+            cancellationToken,
+            checkState,
+            initialUsage: visionNote.Usage,
+            initialRequests: visionNote.RequestsSpent);
     }
 
     public async Task<string> TestConnectionAsync(CancellationToken cancellationToken)
@@ -140,7 +149,10 @@ internal sealed class AgentLoop
         IReadOnlyList<LlmTool> tools,
         bool allowAct,
         bool stopAfterAct,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        Action<string>? checkState = null,
+        LlmUsage? initialUsage = null,
+        int initialRequests = 0)
     {
         var client = _factory.Create(resolved.Endpoint);
         string? lastText = null;
@@ -149,6 +161,8 @@ internal sealed class AgentLoop
         string? actResult = null;
         string? lastActError = null;
         var rounds = 0;
+        var accumulatedUsage = initialUsage;
+        var requestsSpent = initialRequests;
 
         for (var round = 0; round < MaxToolRounds; round++)
         {
@@ -166,7 +180,12 @@ internal sealed class AgentLoop
             LlmCompletion completion;
             try
             {
+                requestsSpent++;
                 completion = await client.CompleteAsync(request, cancellationToken);
+                if (completion.Usage != null)
+                {
+                    accumulatedUsage = LlmUsage.Combine(accumulatedUsage, completion.Usage);
+                }
             }
             catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
             {
@@ -181,7 +200,10 @@ internal sealed class AgentLoop
                     Acted = acted,
                     ActResultJson = actResult,
                     Error = ex.Message,
-                    ToolRounds = rounds
+                    RequiresConfiguration = ex is LlmException { StatusCode: >= 400 and < 500 and not 408 and not 429 },
+                    ToolRounds = rounds,
+                    Usage = accumulatedUsage,
+                    RequestsSpent = requestsSpent
                 };
             }
 
@@ -194,7 +216,7 @@ internal sealed class AgentLoop
                     !resolved.Model.SupportsTools &&
                     ActJsonParser.TryParse(completion.Content, out var actJson))
                 {
-                    var parsedAct = await ExecuteActAsync(actJson, cancellationToken);
+                    var parsedAct = await ExecuteActAsync(actJson, cancellationToken, checkState);
                     if (parsedAct.Error == null)
                     {
                         acted = parsedAct.Action;
@@ -208,7 +230,9 @@ internal sealed class AgentLoop
                                 Reasoning = lastReasoning,
                                 Acted = acted,
                                 ActResultJson = actResult,
-                                ToolRounds = rounds
+                                ToolRounds = rounds,
+                                Usage = accumulatedUsage,
+                                RequestsSpent = requestsSpent
                             };
                         }
                     }
@@ -229,7 +253,9 @@ internal sealed class AgentLoop
                     Acted = acted,
                     ActResultJson = actResult,
                     Error = acted == null ? lastActError : null,
-                    ToolRounds = rounds
+                    ToolRounds = rounds,
+                    Usage = accumulatedUsage,
+                    RequestsSpent = requestsSpent
                 };
             }
 
@@ -251,7 +277,7 @@ internal sealed class AgentLoop
                         continue;
                     }
 
-                    var actOutcome = await ExecuteActAsync(call.ArgumentsJson, cancellationToken);
+                    var actOutcome = await ExecuteActAsync(call.ArgumentsJson, cancellationToken, checkState);
                     messages.Add(LlmMessage.Tool(call.Id, actOutcome.ResultJson));
                     if (actOutcome.Error == null)
                     {
@@ -266,7 +292,9 @@ internal sealed class AgentLoop
                                 Reasoning = lastReasoning,
                                 Acted = acted,
                                 ActResultJson = actResult,
-                                ToolRounds = rounds
+                                ToolRounds = rounds,
+                                Usage = accumulatedUsage,
+                                RequestsSpent = requestsSpent
                             };
                         }
                     }
@@ -292,11 +320,13 @@ internal sealed class AgentLoop
             Error = acted == null && lastActError != null
                 ? lastActError
                 : "Reached the tool-call round limit without a final answer.",
-            ToolRounds = rounds
+            ToolRounds = rounds,
+            Usage = accumulatedUsage,
+            RequestsSpent = requestsSpent
         };
     }
 
-    private async Task<(string? Caption, byte[]? Jpeg, bool AttachToPrimary)> TryDescribeOrAttachVisionAsync(
+    private async Task<(string? Caption, byte[]? Jpeg, bool AttachToPrimary, LlmUsage? Usage, int RequestsSpent)> TryDescribeOrAttachVisionAsync(
         ResolvedModel primary,
         AgentSettings settings,
         bool attachRequested,
@@ -304,13 +334,13 @@ internal sealed class AgentLoop
     {
         if (!attachRequested)
         {
-            return (null, null, false);
+            return (null, null, false, null, 0);
         }
 
         var vision = settings.TryResolveVisionModel();
         if (!primary.Model.SupportsVision && vision == null)
         {
-            return (null, null, false);
+            return (null, null, false, null, 0);
         }
 
         byte[]? jpeg;
@@ -325,17 +355,17 @@ internal sealed class AgentLoop
 
         if (jpeg == null || jpeg.Length == 0)
         {
-            return (null, null, false);
+            return (null, null, false, null, 0);
         }
 
         if (primary.Model.SupportsVision)
         {
-            return (null, jpeg, true);
+            return (null, jpeg, true, null, 0);
         }
 
         if (vision == null)
         {
-            return (null, null, false);
+            return (null, null, false, null, 0);
         }
 
         try
@@ -356,11 +386,11 @@ internal sealed class AgentLoop
             var caption = string.IsNullOrWhiteSpace(completion.Content)
                 ? "Vision model returned an empty description."
                 : "Vision observation:\n" + completion.Content;
-            return (caption, jpeg, false);
+            return (caption, jpeg, false, completion.Usage, 1);
         }
         catch (Exception ex)
         {
-            return ("Vision model failed: " + ex.Message, jpeg, false);
+            return ("Vision model failed: " + ex.Message, jpeg, false, null, 1);
         }
     }
 
@@ -413,7 +443,8 @@ internal sealed class AgentLoop
 
     private async Task<(string? Action, string ResultJson, string? Error)> ExecuteActAsync(
         string argumentsJson,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        Action<string>? checkState = null)
     {
         try
         {
@@ -444,6 +475,7 @@ internal sealed class AgentLoop
             var tool = ReadString(args, "tool");
             var actionsJson = await _bridge.GetAvailableActionsJsonAsync(cancellationToken);
             var compactJson = await _bridge.GetCompactStateJsonAsync(cancellationToken);
+            checkState?.Invoke(compactJson);
             var indexError = ActIndexValidator.Validate(
                 action,
                 cardIndex,
@@ -481,6 +513,7 @@ internal sealed class AgentLoop
             {
                 var settled = await _bridge.WaitUntilActionableAsync(TimeSpan.FromSeconds(20), cancellationToken);
                 var latest = await _bridge.GetCompactStateJsonAsync(cancellationToken);
+                checkState?.Invoke(latest);
                 result = JsonSerializer.Serialize(new
                 {
                     action,

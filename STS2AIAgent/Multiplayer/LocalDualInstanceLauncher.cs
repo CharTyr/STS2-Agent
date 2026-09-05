@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using Godot;
 using MegaCrit.Sts2.Core.Logging;
+using MegaCrit.Sts2.Core.Helpers;
 using STS2AIAgent.Config;
 using STS2AIAgent.Server;
 
@@ -114,6 +115,36 @@ internal static class LocalDualInstanceLauncher
             return new DualLaunchResult { Ok = false, Message = "找不到空闲 API 端口：" + ex.Message };
         }
 
+        if (!CoopLaunchPolicy.TryGetCompanionArguments(
+                CommandLineHelper.GetValue("force-steam"),
+                CommandLineHelper.GetValue("clientId"),
+                out var companionArguments,
+                out var argumentError))
+        {
+            return new DualLaunchResult
+            {
+                Ok = false,
+                Message = "无法计算队友启动参数：" + argumentError
+            };
+        }
+
+        string companionSettingsPath;
+        try
+        {
+            var mainPath = SettingsStore.DefaultPath();
+            var explicitCompanion = System.Environment.GetEnvironmentVariable("STS2_COMPANION_SETTINGS_PATH");
+            companionSettingsPath = CoopLaunchPolicy.CompanionSettingsPath(mainPath, explicitCompanion);
+            CoopLaunchPolicy.SeedCompanionSettings(mainPath, companionSettingsPath);
+        }
+        catch (Exception ex)
+        {
+            return new DualLaunchResult
+            {
+                Ok = false,
+                Message = "无法配置队友设置文件路径：" + ex.Message
+            };
+        }
+
         try
         {
             EnsureSteamAppIdFile(exe);
@@ -127,7 +158,7 @@ internal static class LocalDualInstanceLauncher
         {
             FileName = exe,
             WorkingDirectory = Path.GetDirectoryName(exe) ?? System.Environment.CurrentDirectory,
-            Arguments = "--windowed",
+            Arguments = companionArguments,
             UseShellExecute = false
         };
 
@@ -135,6 +166,7 @@ internal static class LocalDualInstanceLauncher
         startInfo.Environment["STS2_AGENT_ROLE"] = InstanceRole.Companion;
         startInfo.Environment["STS2_MULTIPLAYER_HOST_IP"] = "127.0.0.1";
         startInfo.Environment["STS2_AGENT_AUTOPLAY"] = "1";
+        startInfo.Environment["STS2_AGENT_SETTINGS_PATH"] = companionSettingsPath;
         var sessionToken = CompanionConnection.CreateToken();
         startInfo.Environment[CompanionConnection.TokenEnvironment] = sessionToken;
 

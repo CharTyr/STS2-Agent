@@ -53,7 +53,7 @@ Slay the Spire 2/
 4. **AI 队友**：在主菜单邀请 AI 一起爬塔。你操作自己的角色，模型在第二个游戏窗口中自动加入大厅并游玩。邀请前会保存当前模型设置；重复点击不会再启动一个队友进程。
 5. **接入**：一键启动 HTTP MCP，复制 API / MCP 地址，给 Cursor、Claude、Codex 或自写客户端用。
 
-配置保存在 `%AppData%/STS2AIAgent/settings.json`，两个本地实例共用。
+配置默认保存在 `%AppData%/STS2AIAgent/settings.json`。通过游戏内 UI 启动本地 AI 队友时，启动器会自动为队友派生并同步初始化独立的配置文件（`settings.companion.json`），避免双实例并发写入冲突。若需为特定实例自定义配置文件位置，可设置环境变量 `STS2_AGENT_SETTINGS_PATH` 为绝对路径（亦可通过 `STS2_COMPANION_SETTINGS_PATH` 显式指定队友配置）。
 
 视觉是可选的额外上下文。纯文本模型可以直接游玩：compact `agent_view` + `get_game_state` / `get_available_actions` / `get_game_data_*` / `wait_until_actionable` / `act`。如果给游玩模型勾了「视觉」，或另外配了外挂视觉模型，截图才会作为辅助信息附上。
 

@@ -110,6 +110,16 @@ internal static class TestRunner
 
     private static IEnumerable<(string Name, Func<Task> Body)> AllTests()
     {
+        yield return ("CurrentRun.AllowsLobbyBeforeRun", () => Task.Run(CurrentRunBoundaryTests.AllowsLobbyBeforeRun));
+        yield return ("CurrentRun.StopsWhenLeavingRunToMainMenu", () => Task.Run(CurrentRunBoundaryTests.StopsWhenLeavingRunToMainMenu));
+        yield return ("CurrentRun.StopsWhenLeavingRunToLobby", () => Task.Run(CurrentRunBoundaryTests.StopsWhenLeavingRunToLobby));
+        yield return ("CurrentRun.StopsWhenRunIdChanges", () => Task.Run(CurrentRunBoundaryTests.StopsWhenRunIdChanges));
+        yield return ("CurrentRun.AllowsGameOverAndUnlock", () => Task.Run(CurrentRunBoundaryTests.AllowsGameOverAndUnlock));
+        yield return ("Recovery.NoActionStops", AutoPlayRecoveryTests.RepeatedNoActionStops);
+        yield return ("Recovery.HttpStatus", AutoPlayRecoveryTests.HttpFailuresKeepStatusWithoutStreamReplay);
+        yield return ("Recovery.Waiting", AutoPlayRecoveryTests.WaitingDoesNotHideFailures);
+        yield return ("Recovery.SuccessResets", AutoPlayRecoveryTests.SuccessfulActionResetsFailures);
+        yield return ("Recovery.CancelBackoff", AutoPlayRecoveryTests.CancelDuringBackoffPreventsNextTurn);
         yield return ("TeamControl.WaitForCommittedWork", AutoPlaySessionTests.PauseWaitsForCommittedWorkAndBlocksRestart);
         yield return ("TeamControl.CancelModel", AutoPlaySessionTests.PauseCancelsWaitingModel);
         yield return ("TeamControl.NoOverlappingLoops", AutoPlaySessionTests.ImmediatePauseNeverOverlapsGenerations);
@@ -122,6 +132,8 @@ internal static class TestRunner
         yield return ("TeamChat.SessionAuthorization", () => Task.Run(TeamConversationTests.SessionTokensAreRequiredAndDistinct));
         yield return ("TeamChat.Transport", TeamConversationTests.TransportChecksIdentityAndSendsBoundedBody);
         yield return ("TeamChat.ReusedPort", TeamConversationTests.ReusedPortDoesNotReceiveMessage);
+        yield return ("CoopStartup.OfflineIsolation", () => Task.Run(CompanionStartupTests.OfflineLaunchKeepsAccountsIsolated));
+        yield return ("CoopStartup.SettingsIsolation", () => Task.Run(CompanionStartupTests.SettingsPathCanBeIsolated));
         yield return ("CoopStartup.ExcludedRange", () => Task.Run(CompanionStartupTests.ExcludedRangeUsesDynamicPort));
         yield return ("CoopStartup.BindRace", () => Task.Run(CompanionStartupTests.BindRaceReselectsDynamicPort));
         yield return ("CoopStartup.ExplicitPort", () => Task.Run(CompanionStartupTests.ExplicitPortNeverChanges));
@@ -145,6 +157,17 @@ internal static class TestRunner
         yield return ("OpenAI.PostBody", OpenAiCompatibleClientTests.CompleteAsync_PostsOpenAiCompatibleBody);
         yield return ("OpenAI.DeepSeekExtraBody", OpenAiCompatibleClientTests.CompleteAsync_PostsDeepSeekThinkingInExtraBody);
         yield return ("OpenAI.ParseSse", () => Task.Run(OpenAiCompatibleClientTests.ParseSse_AccumulatesContentAndToolCalls));
+        yield return ("OpenAI.ParseCompletionUsage", () => Task.Run(OpenAiCompatibleClientTests.ParseCompletion_ReadsUsage));
+        yield return ("OpenAI.ParseSseUsage", () => Task.Run(OpenAiCompatibleClientTests.ParseSse_ReadsUsageFromEndChunk));
+        yield return ("OpenAI.LlmUsageMath", () => Task.Run(OpenAiCompatibleClientTests.LlmUsage_CombineAndAdd));
+        yield return ("Budget.NoLimit", () => Task.Run(SessionBudgetGuardTests.NoLimit_NeverStops));
+        yield return ("Budget.MaxTokens", () => Task.Run(SessionBudgetGuardTests.MaxTokens_StopsWhenExceeded));
+        yield return ("Budget.MaxRequests", () => Task.Run(SessionBudgetGuardTests.MaxRequests_StopsEvenWithoutUsage));
+        yield return ("Budget.RecoveryStops", SessionBudgetGuardTests.Recovery_AutoPlayStopsOnBudgetExceeded);
+        yield return ("Budget.ResumePreservesCumulativeUsage", () => Task.Run(SessionBudgetGuardTests.InitialCounters_ResumePreservesCumulativeUsage));
+        yield return ("Budget.ExceededRequestsStopsImmediately", SessionBudgetGuardTests.InitialCounters_AlreadyExceeded_RunAsyncStopsImmediately);
+        yield return ("Budget.ExceededTokensStopsImmediately", SessionBudgetGuardTests.InitialTokens_AlreadyExceeded_RunAsyncStopsImmediately);
+        yield return ("Budget.SettingsCarriesInitialCounters", () => Task.Run(SessionBudgetGuardTests.Settings_CreateBudgetGuard_CarriesInitialCounters));
         yield return ("GameData.DetectScene", () => Task.Run(GameDataFilterTests.DetectScene_MatchesGuidedMcpRules));
         yield return ("GameData.ProjectRelevant", () => Task.Run(GameDataFilterTests.ProjectRelevant_KeepsCombatCardFields));
         yield return ("PlayIntent.Detect", () => Task.Run(PlayIntentTests.DetectsPlayPhrasesAndIgnoresQuestions));

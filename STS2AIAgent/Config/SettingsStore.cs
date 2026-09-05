@@ -25,6 +25,14 @@ internal sealed class SettingsStore
 
     public static string DefaultPath()
     {
+        var configured = Environment.GetEnvironmentVariable("STS2_AGENT_SETTINGS_PATH");
+        if (!string.IsNullOrWhiteSpace(configured))
+        {
+            if (!System.IO.Path.IsPathFullyQualified(configured))
+                throw new InvalidOperationException("STS2_AGENT_SETTINGS_PATH must be an absolute file path.");
+            return System.IO.Path.GetFullPath(configured);
+        }
+
         var root = Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData);
         if (string.IsNullOrWhiteSpace(root))
         {
