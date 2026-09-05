@@ -1593,6 +1593,8 @@ internal static class GameActionService
         }
 
         var isCombatHandSelection = GameStateService.TryGetCombatHandSelectionMetadata(currentScreen, out var combatHand, out var combatHandSelection);
+        var isDeckCardSelection = GameStateService.TryGetDeckCardSelectionMetadata(
+            currentScreen, out var deckCardSelection);
         var selected = options[request.option_index.Value];
         if (isCombatHandSelection)
         {
@@ -1619,6 +1621,10 @@ internal static class GameActionService
 
         var stable = currentScreen switch
         {
+            NDeckCardSelectScreen deckCardScreen
+                when isDeckCardSelection =>
+                await SettleDeckCardSelectionClickAsync(
+                    deckCardScreen, deckCardSelection.SelectedCount, TimeSpan.FromSeconds(10)),
             NCardGridSelectionScreen cardSelectScreen => await ConfirmDeckSelectionAsync(cardSelectScreen, TimeSpan.FromSeconds(10)),
             NChooseACardSelectionScreen chooseCardScreen => await WaitForChooseCardSelectionResolutionAsync(chooseCardScreen, TimeSpan.FromSeconds(10)),
             _ when isCombatHandSelection => await WaitForCombatHandSelectionStepAsync(combatHandSelection, TimeSpan.FromSeconds(10)),
@@ -2073,6 +2079,42 @@ internal static class GameActionService
             {
                 confirmButton.ForceClick();
             }
+        }
+
+        return false;
+    }
+
+    private static async Task<bool> SettleDeckCardSelectionClickAsync(
+        NDeckCardSelectScreen screen,
+        int previousSelectedCount,
+        TimeSpan timeout)
+    {
+        var deadline = DateTime.UtcNow + timeout;
+        while (DateTime.UtcNow < deadline)
+        {
+            await WaitForNextFrameAsync();
+
+            if (!GodotObject.IsInstanceValid(screen) ||
+                !ReferenceEquals(ActiveScreenContext.Instance.GetCurrentScreen(), screen))
+            {
+                return true;
+            }
+
+            if (!GameStateService.TryGetDeckCardSelectionMetadata(screen, out var metadata) ||
+                metadata.SelectedCount == previousSelectedCount)
+            {
+                continue;
+            }
+
+            if (metadata.SelectedCount < previousSelectedCount ||
+                metadata.SelectedCount < metadata.MinSelect)
+            {
+                return true;
+            }
+
+            var remaining = deadline - DateTime.UtcNow;
+            return remaining > TimeSpan.Zero &&
+                await ConfirmDeckSelectionAsync(screen, remaining);
         }
 
         return false;
