@@ -4951,7 +4951,13 @@ internal static class GameActionService
         return string.Join(
             "|",
             eventModel.CurrentOptions.Select(option =>
-                $"{option.TextKey}:{option.IsLocked}:{option.IsProceed}:{option.Title?.GetFormattedText()}:{option.Description?.GetFormattedText()}"));
+                $"{option.TextKey}:{option.IsLocked}:{option.IsProceed}:{EventOptionLocalization.Format(
+                    option.Title,
+                    locString => eventModel.DynamicVars.AddTo(locString),
+                    locString => locString.GetFormattedText())}:{EventOptionLocalization.Format(
+                    option.Description,
+                    locString => eventModel.DynamicVars.AddTo(locString),
+                    locString => locString.GetFormattedText())}"));
     }
 
     private static void ObserveBackgroundResult(Task<bool> task, string actionName)

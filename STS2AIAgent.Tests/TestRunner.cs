@@ -152,6 +152,8 @@ internal static class TestRunner
         yield return ("GameOver.SaveReadFailure", () => Task.Run(ProgressSaveVerificationTests.ReadFailureCannotReportSuccess));
         yield return ("DeckSelection.PayloadProgress", () => Task.Run(DeckSelectionContractTests.DeckGridPayloadReportsNativeSelectionProgress));
         yield return ("DeckSelection.ClickSettle", () => Task.Run(DeckSelectionContractTests.DeckGridClickSettlesInEitherDirectionBeforeConfirming));
+        yield return ("CombatDiagnostics.CanPlay", () => Task.Run(CombatDiagnosticsContractTests.HandPayloadKeepsNativeCanPlayEvidence));
+        yield return ("CombatDiagnostics.Readiness", () => Task.Run(CombatDiagnosticsContractTests.CombatPayloadDistinguishesQueueModalAndSnapshotLocks));
         yield return ("AgentLoop.PlayOnce", AgentLoopTests.PlayOnce_ExecutesSingleValidatedAct);
         yield return ("AgentLoop.CrystalArgs", AgentLoopTests.PlayOnce_ForwardsCrystalSphereArguments);
         yield return ("AgentTools.CrystalSchema", () => Task.Run(AgentLoopTests.ActToolSchema_IncludesCrystalSphereArguments));
@@ -174,5 +176,8 @@ internal static class TestRunner
         yield return ("CrystalSettle.Progress", () => Task.Run(CrystalSphereSettlePolicyTests.RequiresObservedProgressOnSameScreen));
         yield return ("CrystalSettle.FinalProceed", () => Task.Run(CrystalSphereSettlePolicyTests.WaitsForProceedAfterFinalDivination));
         yield return ("CrystalSettle.ScreenChange", () => Task.Run(CrystalSphereSettlePolicyTests.AcceptsChildScreenButNotMissingMinigame));
+        yield return ("EventOptionLocalization.DynamicVars", () => Task.Run(EventOptionLocalizationTests.AddsEventVariablesBeforeFormatting));
+        yield return ("EventOptionLocalization.Null", () => Task.Run(EventOptionLocalizationTests.MissingLocStringReturnsEmpty));
+        yield return ("EventOptionLocalization.Signature", () => Task.Run(EventOptionLocalizationTests.FormatsSignatureFieldsWithEventVariables));
     }
 }
