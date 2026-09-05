@@ -1,182 +1,243 @@
 # STS2 AI Agent
 
+<div align="center">
+
 https://github.com/user-attachments/assets/89353468-a299-4315-9516-e520bcbfbd4b
 
-中文版说明请见 [README.zh-CN.md](./README.zh-CN.md).
+**In-Game AI Companion & Autonomous Gameplay Mod for Slay the Spire 2**
 
-`STS2 AI Agent` is a Slay the Spire 2 mod with an in-game AI overlay. After you install the mod, you can configure model endpoints, chat, set per-model thinking intensity, let the model play, optionally attach vision, and launch a local second instance for co-op with the model.
+[中文说明 (README.zh-CN)](./README.zh-CN.md) • [Product Plan](./PRODUCT_PLAN_CURRENT.md) • [Co-op Delivery Tracker](./COOP_DELIVERY.md) • [API Docs](./docs/api.md) • [MCP Tools Guide](./mcp_server/README.md)
 
-The local HTTP API and MCP server remain available for developers and external clients.
+</div>
 
-- `STS2AIAgent`: in-game overlay + local HTTP API (`http://127.0.0.1:8080` by default)
-- `mcp_server`: optional MCP wrapper around that API
+---
 
-Detailed MCP tool documentation lives in [mcp_server/README.md](./mcp_server/README.md). The in-game play loop follows the same state-first rules as [skills/sts2-mcp-player/SKILL.md](./skills/sts2-mcp-player/SKILL.md).
+## 🌟 Key Highlights
 
-## Quick Start (Players)
+- 🎮 **In-Game Overlay UI**: Press **F8** at any time to open the configuration and control window directly inside the game—no external browser required.
+- 🤖 **Any OpenAI-Compatible Model**: Works seamlessly with official OpenAI, DeepSeek, SiliconFlow, OpenRouter, Ollama, LM Studio, vLLM, and more. Features per-model configurable thinking intensity.
+- 🃏 **Autonomous Auto-Play**: Text-only models can complete full runs (combat, card drafting, shops, events, pathing, capstones). Optional vision model support for screenshot context.
+- 👥 **Local Co-op AI Teammate**: One-click launch from the main menu spins up an isolated second game instance. You play your character; the AI teammate plays its own character in co-op mode.
+- 💬 **Live Team Conversation**: Talk to your AI teammate in natural language from the human window (e.g., "focus the right cultist", "let's take the shop path"). The AI replies and uses recent context in subsequent decisions.
+- 🛡️ **Session Budget Guards & Fault Recovery**: Accurate Token accounting with hard cutoff thresholds prevents runaway API bills. Autoplay automatically breaks after 3 consecutive failures with exponential backoff; halts when leaving the run.
+- 🔌 **Developer-Ready**: Built-in local HTTP API (`:8080`) and FastMCP server (`:8765`) allow external AI agents (Cursor, Claude Desktop, Codex) to interface directly with the game.
 
-### 1. Install The Mod
+---
 
-After downloading and extracting the release package, copy these files into your game's `mods/` directory:
+## 🚀 3-Minute Quick Start (Players)
+
+### Step 1: Install The Mod
+1. Download the latest release `.zip` from [GitHub Releases](https://github.com/CharTyr/STS2-Agent/releases).
+2. Extract the files into your game's `mods/` directory (create the folder if it does not exist):
+   ```text
+   STS2AIAgent.dll
+   STS2AIAgent.pck
+   mod_id.json
+   ```
+   > 💡 **Default Steam Directory**: `C:\Program Files (x86)\Steam\steamapps\common\Slay the Spire 2\mods\`
+
+### Step 2: Launch The Game & Open The Overlay
+1. Start *Slay the Spire 2* normally.
+2. Press **`F8`** (configurable) or click the grey **`AI`** tab on the right edge of the screen to open the Agent window.
+
+### Step 3: Configure Your LLM Endpoint
+1. In the overlay, navigate to the **Settings** tab.
+2. Click **Add Endpoint**:
+   - **Name**: e.g., `SiliconFlow` or `DeepSeek`
+   - **Base URL**: e.g., `https://api.siliconflow.cn/v1` or `https://api.deepseek.com/v1`
+   - **API Key**: Enter your API key (leave blank or enter dummy string for local Ollama/LM Studio).
+3. Select your added endpoint and assign models for **Chat Model** and **Play Model** (e.g., `deepseek-chat`).
+4. (Optional) Adjust the thinking intensity (**Off / Low / Medium / High**).
+5. *Cost Protection*: The built-in `SessionBudgetGuard` is active by default. You can adjust `Max Tokens` and `Max Requests` in Settings to protect your wallet.
+
+### Step 4: Play!
+
+#### Option A: Auto-Play
+- Start a standard single-player run.
+- Switch to the **Play** tab and click **Start Auto-Play** (or **Step Once**).
+- The model evaluates live state and dispatches cards, rewards, and route decisions autonomously.
+
+#### Option B: Co-op With An AI Teammate (Recommended!)
+- Go to the game's **Main Menu**.
+- Switch to the **AI Teammate** tab and click **Invite AI Teammate**.
+- A second game window will launch automatically and join the co-op lobby. You play your character; the AI controls its character!
+- Use the **Team Conversation** tab to coordinate strategy with your teammate in plain English or Chinese.
+
+---
+
+## 🎮 Core Features
+
+### 1. Autonomous Gameplay (Auto-Play)
+- **Compact State Engine**: Highly compressed, actionable representation covering cards, energy, intents, relics, HP, and potion slots. Text-only models can clear full runs.
+- **Optional Vision Augmentation**: When using a vision-capable model, screenshots are captured on demand to provide rich visual context.
+- **Real-Time Counters**: The overlay displays prompt, completion, total tokens, and request counts live.
+
+### 2. Dual-Instance Local Co-op
+- **Zero-Collision Isolation**: Propagates `--force-steam off` and increments `clientId` in offline mode. Automatically derives and clones `settings.companion.json` so both instances never write over each other's configurations or save slots.
+- **Team Conversation**:
+  - Chat directly with the AI teammate during multiplayer runs.
+  - Teammate replies using its play model, and recent discussions inform subsequent play decisions.
+  - Read-only safety: The chat interface never plays cards for the human or unpauses a paused companion.
+
+### 3. Interactive In-Game Advisor
+- Use the **Chat** tab to ask strategic advice.
+- Enable "Attach State" to pass full live game context (deck, relics, route) to the model for tactical guidance.
+
+---
+
+## 🛡️ Reliability & Safety Guards
+
+| Mechanism | Description | Player Benefit |
+|---|---|---|
+| **Session Budget Guard (`SessionBudgetGuard`)** | Accurate accounting across JSON and streaming SSE; hard configurable caps | Immediate cutoff with visual alerts when budget is reached—no runaway bills |
+| **Autoplay Circuit Breaker (`AutoPlayRecovery`)** | Automatic halt after 3 consecutive failures with 2s/4s exponential backoff | Prevents spin loops on unrecognized game dialogs or invalid choices |
+| **Immediate Config Error Exit** | Halts immediately upon receiving HTTP 401, 403, or 404 responses | Stops wasted token calls when API keys expire or are mistyped |
+| **Run Boundary Protection (`CurrentRunBoundary`)** | Scoped strictly to the active run's unique `runId` | Exiting a run, surrendering, or returning to lobby immediately stops autoplay |
+| **Process & Settings Isolation (`CoopLaunchPolicy`)** | Dedicated companion settings file and safe `clientId` stepping | Complete segregation between main and companion instances |
+
+---
+
+## 🛠️ Advanced Users & Developers Guide
+
+### System Architecture
 
 ```text
-STS2AIAgent.dll
-STS2AIAgent.pck
-mod_id.json
+┌───────────────────────────────────────────────────────────┐
+│                    Slay the Spire 2                       │
+│  ┌─────────────────────────────────────────────────────┐  │
+│  │             STS2AIAgent (C# Mod)                    │  │
+│  │  - Godot In-Game Overlay UI (F8)                    │  │
+│  │  - OpenAI-compatible Client & Budget Guard          │  │
+│  │  - Autoplay Decision Loop & Recovery Controller     │  │
+│  │  - GameThread Action / State Synchronizer           │  │
+│  │  - Local Dual-Instance Process Launcher             │  │
+│  └───────────────────────┬─────────────────────────────┘  │
+└──────────────────────────┼────────────────────────────────┘
+                           │ Local HTTP API (:8080)
+                           ▼
+┌───────────────────────────────────────────────────────────┐
+│              mcp_server (Python FastMCP)                  │
+│  - stdio / HTTP (:8765) Adapters                          │
+│  - Tool Profiles: guided / layered / full                 │
+│  - Bundled Metadata Lookups (Cards/Relics/Monsters/Events)│
+└──────────────────────────┬────────────────────────────────┘
+                           │ MCP Protocol
+                           ▼
+        External Agents (Cursor / Claude Desktop / Codex)
 ```
 
-The default Steam install path is usually:
+### Local HTTP API
 
-```text
-C:\Program Files (x86)\Steam\steamapps\common\Slay the Spire 2
-```
+The mod runs an embedded HTTP server on `http://127.0.0.1:8080` (with dynamic fallback on port contention):
 
-Your final layout should look like this:
+- `GET /health`: Health check, returns `api_port`, `instance_role`, and process PID.
+- `GET /state`: Full raw game state JSON.
+- `GET /actions/available`: Currently available legal actions and schema.
+- `GET /events/stream`: Real-time SSE stream for game events.
+- `POST /action`: Dispatch an action (e.g., `play_card`, `choose_map_node`, `proceed`).
 
-```text
-Slay the Spire 2/
-  mods/
-    STS2AIAgent.dll
-    STS2AIAgent.pck
-    mod_id.json
-```
+### FastMCP Server Integration
 
-### 2. Open The In-Game Agent Window
+To connect external agent IDEs (e.g. Cursor, Claude Desktop, Codex):
 
-Launch the game normally. Press **F8** (configurable) or the **AI** tab on the right edge.
+1. **Prerequisites**: Python 3.11+ and [uv](https://astral.sh/uv).
+2. **Run Server**:
+   - In-game: Click the one-click launch button on the **Connect** tab.
+   - Or run script:
+     ```powershell
+     # Windows (HTTP Mode, default http://127.0.0.1:8765/mcp)
+     powershell -ExecutionPolicy Bypass -File ".\scripts\start-mcp-network.ps1"
+     ```
+3. **Configure External Client** (e.g. `claude_desktop_config.json`):
+   ```json
+   {
+     "mcpServers": {
+       "sts2-ai-agent": {
+         "url": "http://127.0.0.1:8765/mcp"
+       }
+     }
+   }
+   ```
+4. **Tool Profiles**:
+   - `guided` (Default): Streamlined autonomous play tools (`health_check`, `get_game_state`, `get_available_actions`, `act`, `get_game_data_*`, `wait_until_actionable`).
+   - `layered`: Handoff and knowledge tracking tools for multi-agent planner/combat tiers.
+   - `full`: Complete legacy per-action tool surface.
 
-In the overlay:
+---
 
-1. **Settings**: add one or more OpenAI-compatible endpoints (OpenAI, DeepSeek, SiliconFlow, OpenRouter, Ollama, LM Studio, …), add models, then pick the conversation model. Optionally pick a play model and a vision model. Each model has its own thinking intensity (Off / Low / Medium / High).
-2. **Chat**: talk to the model. Enable “attach current state” or “attach screenshot” as needed.
-3. **Play**: start auto-play or step once. This uses compact live state and tools, the same contract as MCP. Vision is optional and not required to finish a run.
-4. **AI teammate**: invite an AI companion from the main menu. You control your character while the model joins and plays in a second game window. Inviting saves the current model settings; repeated clicks do not launch another companion process.
-5. **Connect**: start the optional HTTP MCP server with one click and copy the API / MCP URLs for Cursor, Claude, Codex, or a custom client.
+## 🧪 Building From Source & Automated Testing
 
-Settings default to `%AppData%/STS2AIAgent/settings.json`. When launching a local companion via the in-game UI, the launcher automatically isolates configuration by deriving and provisioning a companion-specific file (`settings.companion.json` seeded from the main instance) so concurrent settings writes never collide. You can also explicitly assign an isolated configuration file path to any instance by setting the `STS2_AGENT_SETTINGS_PATH` environment variable to an absolute path (or `STS2_COMPANION_SETTINGS_PATH` for the launcher companion override).
+All core logic can be verified **without running the game client**:
 
-Vision is optional extra context. Auto-play works with text-only models: compact `agent_view`, `get_game_state` / `get_available_actions` / `get_game_data_*` / `wait_until_actionable` / `act`. If you assign a vision-capable play model or a vision sidecar, screenshots are attached as supporting context only.
+### Build Mod
 
-Local dual-instance currently uses the game debug `multiplayer test` lobby. Steam may block a second process. The launcher does not kill your current game.
-
-After inviting a companion, use **AI teammate → Team conversation** in the human window to discuss targets, routes, or the teammate's choices. Replies use the companion's play model, and recent conversation informs future play decisions. Chat is read-only: it never plays the human's cards or resumes a paused companion. Messages wait for an in-progress action to finish and incur additional model requests.
-
-### 3. Optional: Confirm The HTTP API
-
-The overlay does not need a browser. Developers can still open:
-
-```text
-http://127.0.0.1:8080/health
-```
-
-`/health` reports `api_port`, `instance_role`, and `process_id`. If 8080 and nearby ports are unavailable, the mod tries dynamically allocated loopback ports. Use the actual address shown in the overlay. An explicit `STS2_API_PORT` stays fixed and fails clearly if unavailable.
-
-## Optional: MCP Server (Developers)
-
-MCP is not required for the in-game agent. The overlay **Connect** tab can start HTTP MCP (`http://127.0.0.1:8765/mcp`) if `uv` and the release `mcp_server` folder are present. You can also start it from these scripts:
-
-1. Install `Python 3.11+`
-2. Install `uv`
-
-Install `uv` on Windows:
+> ⚠️ **Close the game first** so the DLL file is not locked by the OS.
 
 ```powershell
-powershell -ExecutionPolicy Bypass -c "irm https://astral.sh/uv/install.ps1 | iex"
-```
-
-On macOS:
-
-```bash
-brew install uv
-```
-
-Then start the default `stdio` MCP server.
-
-Windows:
-
-```powershell
-powershell -ExecutionPolicy Bypass -File ".\scripts\start-mcp-stdio.ps1"
-```
-
-macOS / Linux:
-
-```bash
-./scripts/start-mcp-stdio.sh
-```
-
-If your client works better over HTTP:
-
-```powershell
-powershell -ExecutionPolicy Bypass -File ".\scripts\start-mcp-network.ps1"
-```
-
-Default MCP endpoint: `http://127.0.0.1:8765/mcp`
-
-## What The Project Can Do
-
-- In-game overlay: multi-endpoint / multi-model config, chat, per-model thinking intensity, auto-play, optional screenshot vision, local dual-instance co-op, one-click MCP for external agents
-- Reading live game state (compact `agent_view` now includes multiplayer lobby summaries)
-- Listing currently legal actions
-- Driving combat, rewards, shops, map routing, events, rest sites, chests, capstone selection, and bundle selection
-- Optional MCP over `stdio` or HTTP for external agents
-- Live game metadata for cards, relics, monsters, potions, and events via the Mod API
-
-See [mcp_server/README.md](./mcp_server/README.md) for the MCP tool surface.
-
-## FAQ
-
-### I installed the mod but there is no window
-
-Press **F8** or click the **AI** tab on the right edge. Confirm `STS2AIAgent.dll`, `STS2AIAgent.pck`, and `mod_id.json` are in the Steam game `mods/` directory.
-
-### `http://127.0.0.1:8080/health` Does Not Open
-
-Check these first:
-
-1. The game is actually running
-2. The three mod files are inside the game's `mods/` directory
-3. Check the actual API address in the overlay; port conflicts or Windows reserved ranges may require a different port
-4. You copied them into the Steam game directory, not the repository directory
-
-### The MCP Server Starts But Cannot Read Game State
-
-That usually means `mcp_server` is running, but the in-game mod is not connected. Confirm `/health` on the actual `api_port`.
-
-### Should I Enable Debug Actions?
-
-Usually no. Dual-instance from the overlay opens the debug multiplayer test scene internally and does not require you to expose `run_console_command` to MCP.
-
-## Building From Source
-
-Windows:
-
-```powershell
+# Windows
 powershell -ExecutionPolicy Bypass -File ".\scripts\build-mod.ps1" -Configuration Release
-```
 
-macOS / Linux:
-
-```bash
+# Linux / macOS
 ./scripts/build-mod.sh --configuration Release
 ```
 
-Core unit tests (no game required):
+### Run Tests
 
-```powershell
-dotnet run --project STS2AIAgent.Tests/STS2AIAgent.Tests.csproj
+- **C# Core Unit Tests (121 / 121 PASS)**:
+  ```powershell
+  dotnet run --project STS2AIAgent.Tests/STS2AIAgent.Tests.csproj
+  ```
+- **Python MCP Contract Tests (48 / 48 PASS)**:
+  ```powershell
+  cd mcp_server
+  uv run python -m unittest discover -s tests -v
+  ```
+- **Full Release Preflight Check**:
+  ```powershell
+  powershell -ExecutionPolicy Bypass -File ".\scripts\preflight-release.ps1"
+  ```
+
+---
+
+## ❓ FAQ
+
+### Q1: Pressing F8 does not open the overlay.
+1. Ensure `STS2AIAgent.dll`, `STS2AIAgent.pck`, and `mod_id.json` are inside `Slay the Spire 2/mods/`.
+2. Confirm files were copied into the Steam game installation directory, not the repository directory.
+3. Look for the grey **AI** tab on the right screen edge and click it directly.
+
+### Q2: Autoplay stopped unexpectedly. How do I resume?
+1. **Check Budget**: A notification will indicate if `MaxSessionTokens` or `MaxSessionRequests` was reached. Increase the limits in Settings or reset stats to continue.
+2. **Check API Status**: If your API key expired or network failed, the 3-failure circuit breaker safely halts the loop.
+3. **Check Game State**: Did you exit to the main menu? The run boundary protection stops autoplay upon leaving an active run.
+
+### Q3: Dual-instance companion window fails to start.
+1. Local co-op runs through the internal multiplayer test lobby.
+2. The launcher sets `--force-steam off` and steps `clientId` automatically. Check if third-party antivirus software blocked launching the child process.
+3. If ports are in use, the mod automatically selects an available fallback port.
+
+### Q4: Which models are recommended?
+- **Cloud Models**: DeepSeek-V3 / DeepSeek-R1, OpenAI GPT-4o / o3-mini, Claude 3.5 Sonnet.
+- **Local Models**: 7B~14B+ models with strong structured JSON tool-call abilities (e.g. Qwen2.5-7B/14B, Llama-3-8B) via Ollama or LM Studio.
+
+---
+
+## 📁 Repository Layout
+
+```text
+STS2-Agent/
+├── STS2AIAgent/          # C# In-Game Mod (Overlay UI, LLM Client, Decision Loop, Budget Guard)
+├── STS2AIAgent.Tests/    # Standalone C# Tests (121 tests, no game client required)
+├── mcp_server/           # FastMCP Server implementation and offline game data
+├── scripts/              # Build, packaging, startup, and preflight scripts
+├── skills/               # State-first gameplay skill specifications
+├── docs/                 # Developer reference and API documentation
+├── PRODUCT_PLAN_CURRENT.md # Official product plan & remote baseline assessment
+└── COOP_DELIVERY.md      # Co-op companion full delivery tracking
 ```
 
-More complete environment, path-discovery, and validation notes are in [build-and-env.md](./build-and-env.md).
-
-## Repository Layout
-
-- `STS2AIAgent/`: game mod source (overlay, LLM client, agent loop, HTTP API)
-- `STS2AIAgent.Tests/`: unit tests for settings, LLM JSON, and the agent loop
-- `mcp_server/`: optional MCP server source
-- `scripts/`: startup, build, and validation scripts
-- `docs/`: supporting documentation
-- `skills/`: companion skills for MCP clients
+---
 
 ## License
 
-This project is licensed under the GNU Affero General Public License v3.0 only (AGPL-3.0-only).
+This project is licensed under the [GNU Affero General Public License v3.0 (AGPL-3.0)](./LICENSE).
