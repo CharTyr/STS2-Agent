@@ -58,8 +58,8 @@ namespace STS2AIAgent.Game;
 
 internal static class GameStateService
 {
-    private const int StateVersion = 13;
-    private const int AgentViewVersion = 8;
+    private const int StateVersion = 14;
+    private const int AgentViewVersion = 9;
     private static readonly TimeSpan CombatActionSnapshotStableDelay = TimeSpan.FromMilliseconds(200);
     private static string? _lastCombatActionReadinessSignature;
     private static DateTime _lastCombatActionReadinessSinceUtc = DateTime.MinValue;
@@ -77,7 +77,7 @@ internal static class GameStateService
         var screen = ResolveScreen(currentScreen);
         var session = BuildSessionPayload(currentScreen, runState);
         var availableActions = BuildAvailableActionNames(currentScreen, combatState, runState);
-        var combat = BuildCombatPayload(combatState);
+        var combat = BuildCombatPayload(currentScreen, combatState);
         var run = BuildRunPayload(currentScreen, combatState, runState);
         var multiplayer = BuildMultiplayerPayload(currentScreen, runState);
         var multiplayerLobby = BuildMultiplayerLobbyPayload(currentScreen);
@@ -2144,6 +2144,91 @@ internal static class GameStateService
         return now - _lastCombatActionReadinessSinceUtc >= CombatActionSnapshotStableDelay;
     }
 
+    private static bool IsCombatActionSnapshotCurrentlyStable(CombatState combatState, Player me)
+    {
+        if (!GameActionService.AreGameActionsSettled())
+        {
+            return false;
+        }
+
+        var signature = BuildCombatActionReadinessSignature(combatState, me);
+        return string.Equals(signature, _lastCombatActionReadinessSignature, StringComparison.Ordinal) &&
+            DateTime.UtcNow - _lastCombatActionReadinessSinceUtc >= CombatActionSnapshotStableDelay;
+    }
+
+    private static CombatActionReadinessPayload BuildCombatActionReadinessPayload(
+        IScreenContext? currentScreen,
+        CombatState combatState,
+        Player me)
+    {
+        var modal = GetOpenModal();
+        var room = currentScreen as NCombatRoom;
+        var hand = room?.Ui?.Hand;
+        var runningAction = RunManager.Instance.ActionExecutor.CurrentlyRunningAction;
+        var readyAction = RunManager.Instance.ActionQueueSet.GetReadyAction();
+        var actionsSettled = runningAction == null && readyAction == null;
+        var localTurnReady = IsLocalCombatTurnReady(me);
+        var snapshotStable = actionsSettled && IsCombatActionSnapshotCurrentlyStable(combatState, me);
+        var playerActionPhase = IsPlayerActionPhase(combatState, me);
+
+        var reason = modal != null
+            ? "modal_open"
+            : room == null
+                ? "combat_screen_unavailable"
+                : !CombatManager.Instance.IsInProgress
+                    ? "combat_not_in_progress"
+                    : CombatManager.Instance.IsOverOrEnding
+                        ? "combat_over_or_ending"
+                        : CombatManager.Instance.PlayerActionsDisabled
+                            ? "player_actions_disabled"
+                            : room.Mode != CombatRoomMode.ActiveCombat
+                                ? "combat_room_not_active"
+                                : hand == null
+                                    ? "hand_unavailable"
+                                    : hand.InCardPlay
+                                        ? "hand_in_card_play"
+                                        : hand.IsInCardSelection
+                                            ? "hand_in_card_selection"
+                                            : hand.CurrentMode != MegaCrit.Sts2.Core.Nodes.Combat.NPlayerHand.Mode.Play
+                                                ? "hand_mode_not_play"
+                                                : !me.Creature.IsAlive
+                                                    ? "local_player_dead"
+                                                    : !localTurnReady
+                                                        ? "local_turn_not_ready"
+                                                        : runningAction != null
+                                                            ? "game_action_running"
+                                                            : readyAction != null
+                                                                ? "game_action_queued"
+                                                                : !actionsSettled
+                                                                    ? "action_queue_unsettled"
+                                                                    : !playerActionPhase
+                                                                        ? "not_player_action_phase"
+                                                                        : !snapshotStable
+                                                                            ? "snapshot_stabilizing"
+                                                                            : "ready";
+
+        return new CombatActionReadinessPayload
+        {
+            can_use_combat_actions = reason == "ready",
+            reason = reason,
+            actions_settled = actionsSettled,
+            running_action_type = runningAction?.GetType().FullName,
+            ready_action_type = readyAction?.GetType().FullName,
+            modal_open = modal != null,
+            modal_type = modal?.GetType().FullName,
+            player_actions_disabled = CombatManager.Instance.PlayerActionsDisabled,
+            combat_in_progress = CombatManager.Instance.IsInProgress,
+            combat_over_or_ending = CombatManager.Instance.IsOverOrEnding,
+            combat_room_mode = room?.Mode.ToString(),
+            hand_in_card_play = hand?.InCardPlay,
+            hand_in_card_selection = hand?.IsInCardSelection,
+            hand_mode = hand?.CurrentMode.ToString(),
+            local_turn_ready = localTurnReady,
+            snapshot_stable = snapshotStable,
+            player_action_phase = playerActionPhase
+        };
+    }
+
     private static string BuildCombatActionReadinessSignature(CombatState combatState, Player me)
     {
         var playerCombatState = me.PlayerCombatState;
@@ -2456,7 +2541,7 @@ internal static class GameStateService
         return names.ToArray();
     }
 
-    private static CombatPayload? BuildCombatPayload(CombatState? combatState)
+    private static CombatPayload? BuildCombatPayload(IScreenContext? currentScreen, CombatState? combatState)
     {
         var me = GetLocalPlayer(combatState);
         if (combatState == null || me?.PlayerCombatState == null)
@@ -2493,6 +2578,7 @@ internal static class GameStateService
 
         return new CombatPayload
         {
+            action_readiness = BuildCombatActionReadinessPayload(currentScreen, combatState, me),
             player = playerPayload,
             players = GetOrderedCombatPlayers(combatState)
                 .Select(player => BuildCombatPlayerSummaryPayload(player, combatState, connectedPlayerIds, me.NetId))
@@ -2747,6 +2833,7 @@ internal static class GameStateService
 
         return new
         {
+            action_readiness = combat.action_readiness,
             player = new
             {
                 hp = $"{combat.player.current_hp}/{combat.player.max_hp}",
@@ -3176,9 +3263,14 @@ internal static class GameStateService
             i = card.index,
             line = FormatCardLine(card.name, card.upgraded, 1, card.energy_cost, card.star_cost, card.costs_x, card.star_costs_x, displayRulesText),
             playable = card.playable,
+            can_play_result = card.can_play_result,
             target = card.requires_target ? NormalizeTargetHint(card.target_index_space ?? card.target_type) : null,
             targets = card.requires_target ? card.valid_target_indices : Array.Empty<int>(),
             why = card.playable ? null : card.unplayable_reason,
+            unplayable_reason = card.unplayable_reason,
+            unplayable_reason_raw = card.unplayable_reason_raw,
+            unplayable_preventer_id = card.unplayable_preventer_id,
+            unplayable_preventer_type = card.unplayable_preventer_type,
             keywords,
             mods
         };
@@ -4460,7 +4552,7 @@ internal static class GameStateService
 
     private static CombatHandCardPayload BuildHandCardPayload(CombatState combatState, CardModel card, int index)
     {
-        card.CanPlay(out var reason, out _);
+        var canPlay = card.CanPlay(out var reason, out var preventer);
         var targetSupported = IsCardTargetSupported(card);
         var targetIndexSpace = GetCardTargetIndexSpace(card);
         var validTargetIndices = GetCardTargetIndices(combatState, card);
@@ -4484,11 +4576,30 @@ internal static class GameStateService
             rules_text = GetCardRulesText(card),
             resolved_rules_text = resolvedRulesText,
             dynamic_values = dynamicValues,
-            playable = targetSupported && reason == UnplayableReason.None,
+            playable = targetSupported && canPlay,
+            can_play_result = canPlay,
             unplayable_reason = targetSupported
                 ? GetUnplayableReasonCode(reason)
-                : "unsupported_target_type"
+                : "unsupported_target_type",
+            unplayable_reason_raw = reason == UnplayableReason.None ? null : reason.ToString(),
+            unplayable_preventer_id = GetModelIdEntry(preventer),
+            unplayable_preventer_type = preventer?.GetType().FullName
         };
+    }
+
+    private static string? GetModelIdEntry(AbstractModel? model)
+    {
+        if (model == null)
+        {
+            return null;
+        }
+
+        var value = SafeReadString(() =>
+        {
+            var id = model.GetType().GetProperty("Id")?.GetValue(model);
+            return id?.GetType().GetProperty("Entry")?.GetValue(id)?.ToString();
+        });
+        return string.IsNullOrWhiteSpace(value) ? null : value;
     }
 
     private static CombatEnemyPayload BuildEnemyPayload(Creature enemy, int index)
@@ -6149,6 +6260,8 @@ internal sealed class AvailableActionsPayload
 
 internal sealed class CombatPayload
 {
+    public CombatActionReadinessPayload action_readiness { get; init; } = new();
+
     public CombatPlayerPayload player { get; init; } = new();
 
     public CombatPlayerSummaryPayload[] players { get; init; } = Array.Empty<CombatPlayerSummaryPayload>();
@@ -6160,6 +6273,43 @@ internal sealed class CombatPayload
     public bool end_turn_will_kill_player { get; init; }
 
     public CombatLethalRiskPayload[] lethal_risks { get; init; } = Array.Empty<CombatLethalRiskPayload>();
+}
+
+internal sealed class CombatActionReadinessPayload
+{
+    public bool can_use_combat_actions { get; init; }
+
+    public string reason { get; init; } = string.Empty;
+
+    public bool actions_settled { get; init; }
+
+    public string? running_action_type { get; init; }
+
+    public string? ready_action_type { get; init; }
+
+    public bool modal_open { get; init; }
+
+    public string? modal_type { get; init; }
+
+    public bool player_actions_disabled { get; init; }
+
+    public bool combat_in_progress { get; init; }
+
+    public bool combat_over_or_ending { get; init; }
+
+    public string? combat_room_mode { get; init; }
+
+    public bool? hand_in_card_play { get; init; }
+
+    public bool? hand_in_card_selection { get; init; }
+
+    public string? hand_mode { get; init; }
+
+    public bool local_turn_ready { get; init; }
+
+    public bool snapshot_stable { get; init; }
+
+    public bool player_action_phase { get; init; }
 }
 
 internal sealed class RunPayload
@@ -6825,7 +6975,15 @@ internal sealed class CombatHandCardPayload
 
     public bool playable { get; init; }
 
+    public bool can_play_result { get; init; }
+
     public string? unplayable_reason { get; init; }
+
+    public string? unplayable_reason_raw { get; init; }
+
+    public string? unplayable_preventer_id { get; init; }
+
+    public string? unplayable_preventer_type { get; init; }
 }
 
 internal sealed class CombatEnemyPayload
