@@ -13,20 +13,55 @@ internal static class CompanionStartupTests
         Assert.Equal("--windowed", CoopLaunchPolicy.CompanionArguments(null, "901"));
         Assert.Equal("--windowed --force-steam off --clientId 902", CoopLaunchPolicy.CompanionArguments("off", "901"));
         Assert.Equal("--windowed --force-steam off", CoopLaunchPolicy.CompanionArguments("off", null));
+
+        Expect<InvalidOperationException>(() => CoopLaunchPolicy.CompanionArguments("off", ulong.MaxValue.ToString()));
+
+        Assert.True(CoopLaunchPolicy.TryGetCompanionArguments("off", "901", out var args, out var err));
+        Assert.Equal("--windowed --force-steam off --clientId 902", args);
+        Assert.True(err == null);
+
+        Assert.False(CoopLaunchPolicy.TryGetCompanionArguments("off", ulong.MaxValue.ToString(), out var badArgs, out var badErr));
+        Assert.Equal(string.Empty, badArgs);
+        Assert.True(badErr != null && badErr.Contains("adjacent companion ID"));
     }
 
     public static void SettingsPathCanBeIsolated()
     {
         var previous = Environment.GetEnvironmentVariable("STS2_AGENT_SETTINGS_PATH");
+        var tempDir = Path.Combine(Path.GetTempPath(), "sts2-coop-test-" + Guid.NewGuid().ToString("N"));
         try
         {
-            var isolated = Path.Combine(Path.GetTempPath(), "sts2-coop-test", "settings.json");
+            Directory.CreateDirectory(tempDir);
+            var isolated = Path.Combine(tempDir, "settings.json");
             Environment.SetEnvironmentVariable("STS2_AGENT_SETTINGS_PATH", isolated);
             Assert.Equal(Path.GetFullPath(isolated), new SettingsStore().Path);
             Environment.SetEnvironmentVariable("STS2_AGENT_SETTINGS_PATH", "relative.json");
             Expect<InvalidOperationException>(() => new SettingsStore());
+
+            var derived = CoopLaunchPolicy.CompanionSettingsPath(isolated);
+            Assert.Equal(Path.Combine(tempDir, "settings.companion.json"), derived);
+
+            var explicitCustom = Path.Combine(tempDir, "custom.companion.json");
+            Assert.Equal(explicitCustom, CoopLaunchPolicy.CompanionSettingsPath(isolated, explicitCustom));
+            Expect<InvalidOperationException>(() => CoopLaunchPolicy.CompanionSettingsPath(isolated, "relative.companion.json"));
+            Expect<ArgumentException>(() => CoopLaunchPolicy.CompanionSettingsPath(""));
+
+            File.WriteAllText(isolated, "{\"main\":true}");
+            Assert.False(File.Exists(derived));
+            CoopLaunchPolicy.SeedCompanionSettings(isolated, derived);
+            Assert.True(File.Exists(derived));
+            Assert.Equal("{\"main\":true}", File.ReadAllText(derived));
+
+            File.WriteAllText(derived, "{\"companion\":true}");
+            File.WriteAllText(isolated, "{\"main\":updated}");
+            CoopLaunchPolicy.SeedCompanionSettings(isolated, derived);
+            Assert.Equal("{\"companion\":true}", File.ReadAllText(derived));
         }
-        finally { Environment.SetEnvironmentVariable("STS2_AGENT_SETTINGS_PATH", previous); }
+        finally
+        {
+            Environment.SetEnvironmentVariable("STS2_AGENT_SETTINGS_PATH", previous);
+            try { if (Directory.Exists(tempDir)) Directory.Delete(tempDir, true); } catch { }
+        }
     }
 
     public static void ExcludedRangeUsesDynamicPort()

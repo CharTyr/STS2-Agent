@@ -16,6 +16,57 @@ internal static class CoopLaunchPolicy
         return arguments;
     }
 
+    public static bool TryGetCompanionArguments(string? forceSteam, string? clientId, out string arguments, out string? error)
+    {
+        try
+        {
+            arguments = CompanionArguments(forceSteam, clientId);
+            error = null;
+            return true;
+        }
+        catch (Exception ex)
+        {
+            arguments = string.Empty;
+            error = ex.Message;
+            return false;
+        }
+    }
+
+    public static string CompanionSettingsPath(string mainSettingsPath, string? explicitCompanionPath = null)
+    {
+        if (!string.IsNullOrWhiteSpace(explicitCompanionPath))
+        {
+            if (!System.IO.Path.IsPathFullyQualified(explicitCompanionPath))
+                throw new InvalidOperationException("Companion settings path must be an absolute file path.");
+            return System.IO.Path.GetFullPath(explicitCompanionPath);
+        }
+
+        if (string.IsNullOrWhiteSpace(mainSettingsPath))
+            throw new ArgumentException("Main settings path must not be empty.", nameof(mainSettingsPath));
+
+        var fullMain = System.IO.Path.GetFullPath(mainSettingsPath);
+        var dir = System.IO.Path.GetDirectoryName(fullMain) ?? string.Empty;
+        var nameWithoutExt = System.IO.Path.GetFileNameWithoutExtension(fullMain);
+        var ext = System.IO.Path.GetExtension(fullMain);
+        return System.IO.Path.Combine(dir, $"{nameWithoutExt}.companion{ext}");
+    }
+
+    public static void SeedCompanionSettings(string mainSettingsPath, string companionSettingsPath)
+    {
+        if (string.IsNullOrWhiteSpace(mainSettingsPath) || string.IsNullOrWhiteSpace(companionSettingsPath))
+            return;
+
+        if (string.Equals(System.IO.Path.GetFullPath(mainSettingsPath), System.IO.Path.GetFullPath(companionSettingsPath), StringComparison.OrdinalIgnoreCase))
+            return;
+
+        var dir = System.IO.Path.GetDirectoryName(companionSettingsPath);
+        if (!string.IsNullOrEmpty(dir))
+            System.IO.Directory.CreateDirectory(dir);
+
+        if (System.IO.File.Exists(mainSettingsPath) && !System.IO.File.Exists(companionSettingsPath))
+            System.IO.File.Copy(mainSettingsPath, companionSettingsPath, overwrite: false);
+    }
+
     public static string? GetError(bool isCompanion, bool autoPlayRunning, string screen, ResolvedModel? model)
     {
         if (isCompanion) return "当前窗口已是 AI 队友。请在你的主窗口邀请队友。";
