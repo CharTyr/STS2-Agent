@@ -34,9 +34,9 @@ internal sealed class AgentSettings
 
     public int? MaxSessionRequests { get; set; }
 
-    public STS2AIAgent.Agent.SessionBudgetGuard CreateBudgetGuard()
+    public STS2AIAgent.Agent.SessionBudgetGuard CreateBudgetGuard(int initialTokens = 0, int initialRequests = 0)
     {
-        return new STS2AIAgent.Agent.SessionBudgetGuard(MaxSessionTokens, MaxSessionRequests);
+        return new STS2AIAgent.Agent.SessionBudgetGuard(MaxSessionTokens, MaxSessionRequests, initialTokens, initialRequests);
     }
 
     public LlmModelConfig? FindModel(string? modelId)

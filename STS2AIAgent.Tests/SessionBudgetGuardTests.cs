@@ -103,4 +103,89 @@ internal static class SessionBudgetGuardTests
             Assert.Equal(2, reported.Count);
         }
     }
+
+    public static void InitialCounters_ResumePreservesCumulativeUsage()
+    {
+        var guard = new SessionBudgetGuard(maxTokens: 1000, maxRequests: 3, initialTokens: 600, initialRequests: 2);
+        Assert.Equal(600, guard.ConsumedTokens);
+        Assert.Equal(2, guard.RequestCount);
+        Assert.Null(guard.CheckBudget());
+
+        var res = new AgentTurnResult
+        {
+            Acted = "play_card",
+            Usage = new LlmUsage { TotalTokens = 500 },
+            RequestsSpent = 1
+        };
+        var stop = guard.Observe(res);
+        Assert.NotNull(stop);
+        Assert.Equal(1100, guard.ConsumedTokens);
+        Assert.Equal(3, guard.RequestCount);
+    }
+
+    public static async Task InitialCounters_AlreadyExceeded_RunAsyncStopsImmediately()
+    {
+        var guard = new SessionBudgetGuard(maxRequests: 2, initialRequests: 2);
+        var calls = 0;
+        try
+        {
+            await AutoPlayRecovery.RunAsync(
+                turn: token =>
+                {
+                    calls++;
+                    return Task.FromResult(new AgentTurnResult { Acted = "play_card", RequestsSpent = 1 });
+                },
+                report: _ => { },
+                cancellationToken: CancellationToken.None,
+                delay: (ts, token) => Task.CompletedTask,
+                budgetGuard: guard);
+
+            Assert.True(false, "Expected AutoPlayStoppedException was not thrown.");
+        }
+        catch (AutoPlayStoppedException ex)
+        {
+            Assert.Contains("请求次数上限", ex.Message);
+            Assert.Equal(0, calls);
+        }
+    }
+
+    public static async Task InitialTokens_AlreadyExceeded_RunAsyncStopsImmediately()
+    {
+        var guard = new SessionBudgetGuard(maxTokens: 500, initialTokens: 600);
+        var calls = 0;
+        try
+        {
+            await AutoPlayRecovery.RunAsync(
+                turn: token =>
+                {
+                    calls++;
+                    return Task.FromResult(new AgentTurnResult { Acted = "play_card", RequestsSpent = 1 });
+                },
+                report: _ => { },
+                cancellationToken: CancellationToken.None,
+                delay: (ts, token) => Task.CompletedTask,
+                budgetGuard: guard);
+
+            Assert.True(false, "Expected AutoPlayStoppedException was not thrown.");
+        }
+        catch (AutoPlayStoppedException ex)
+        {
+            Assert.Contains("Token 预算上限", ex.Message);
+            Assert.Equal(0, calls);
+        }
+    }
+
+    public static void Settings_CreateBudgetGuard_CarriesInitialCounters()
+    {
+        var settings = new Config.AgentSettings
+        {
+            MaxSessionTokens = 2000,
+            MaxSessionRequests = 5
+        };
+        var guard = settings.CreateBudgetGuard(initialTokens: 350, initialRequests: 2);
+        Assert.Equal(2000, guard.MaxTokens);
+        Assert.Equal(5, guard.MaxRequests);
+        Assert.Equal(350, guard.ConsumedTokens);
+        Assert.Equal(2, guard.RequestCount);
+    }
 }

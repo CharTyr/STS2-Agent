@@ -37,6 +37,14 @@ internal sealed class AutoPlayRecovery
     {
         var recovery = new AutoPlayRecovery();
         delay ??= Task.Delay;
+        if (budgetGuard != null)
+        {
+            var initialExceeded = budgetGuard.CheckBudget();
+            if (initialExceeded != null)
+            {
+                throw new AutoPlayStoppedException(initialExceeded);
+            }
+        }
         while (true)
         {
             cancellationToken.ThrowIfCancellationRequested();

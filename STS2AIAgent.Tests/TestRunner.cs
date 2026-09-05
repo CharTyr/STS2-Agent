@@ -164,6 +164,10 @@ internal static class TestRunner
         yield return ("Budget.MaxTokens", () => Task.Run(SessionBudgetGuardTests.MaxTokens_StopsWhenExceeded));
         yield return ("Budget.MaxRequests", () => Task.Run(SessionBudgetGuardTests.MaxRequests_StopsEvenWithoutUsage));
         yield return ("Budget.RecoveryStops", SessionBudgetGuardTests.Recovery_AutoPlayStopsOnBudgetExceeded);
+        yield return ("Budget.ResumePreservesCumulativeUsage", () => Task.Run(SessionBudgetGuardTests.InitialCounters_ResumePreservesCumulativeUsage));
+        yield return ("Budget.ExceededRequestsStopsImmediately", SessionBudgetGuardTests.InitialCounters_AlreadyExceeded_RunAsyncStopsImmediately);
+        yield return ("Budget.ExceededTokensStopsImmediately", SessionBudgetGuardTests.InitialTokens_AlreadyExceeded_RunAsyncStopsImmediately);
+        yield return ("Budget.SettingsCarriesInitialCounters", () => Task.Run(SessionBudgetGuardTests.Settings_CreateBudgetGuard_CarriesInitialCounters));
         yield return ("GameData.DetectScene", () => Task.Run(GameDataFilterTests.DetectScene_MatchesGuidedMcpRules));
         yield return ("GameData.ProjectRelevant", () => Task.Run(GameDataFilterTests.ProjectRelevant_KeepsCombatCardFields));
         yield return ("PlayIntent.Detect", () => Task.Run(PlayIntentTests.DetectsPlayPhrasesAndIgnoresQuestions));

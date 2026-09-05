@@ -213,6 +213,14 @@ internal sealed class AgentRuntime
             var reply = result.AssistantText;
             if (reply.Length > TeamConversation.MaxMessageLength) reply = reply[..TeamConversation.MaxMessageLength];
             _teamConversation.Add("assistant", reply);
+            lock (_gate)
+            {
+                if (result.Usage != null)
+                {
+                    _sessionUsage = LlmUsage.Combine(_sessionUsage, result.Usage) ?? LlmUsage.Empty;
+                }
+                _sessionRequests += result.RequestsSpent > 0 ? result.RequestsSpent : 1;
+            }
             RaiseChanged();
             return reply;
         }
@@ -416,6 +424,20 @@ internal sealed class AgentRuntime
             return;
         }
 
+        string? budgetBlocked = null;
+        lock (_gate)
+        {
+            var guard = _settings.CreateBudgetGuard(_sessionUsage.TotalTokens, _sessionRequests);
+            budgetBlocked = guard.CheckBudget();
+        }
+
+        if (budgetBlocked != null)
+        {
+            AddHistory("user", text);
+            AddHistory("assistant", budgetBlocked);
+            return;
+        }
+
         var prior = History;
         AddHistory("user", text);
         SetStatus("正在请求模型…");
@@ -447,7 +469,7 @@ internal sealed class AgentRuntime
                 {
                     _sessionUsage = LlmUsage.Combine(_sessionUsage, result.Usage) ?? LlmUsage.Empty;
                 }
-                _sessionRequests += result.RequestsSpent;
+                _sessionRequests += result.RequestsSpent > 0 ? result.RequestsSpent : 1;
             }
 
             var reply = result.Error != null
@@ -622,7 +644,7 @@ internal sealed class AgentRuntime
         SessionBudgetGuard? budgetGuard;
         lock (_gate)
         {
-            budgetGuard = _settings.CreateBudgetGuard();
+            budgetGuard = _settings.CreateBudgetGuard(_sessionUsage.TotalTokens, _sessionRequests);
         }
 
         try
@@ -712,7 +734,7 @@ internal sealed class AgentRuntime
             {
                 _sessionUsage = LlmUsage.Combine(_sessionUsage, result.Usage) ?? LlmUsage.Empty;
             }
-            _sessionRequests += result.RequestsSpent;
+            _sessionRequests += result.RequestsSpent > 0 ? result.RequestsSpent : (result.WaitingForGame ? 0 : 1);
         }
 
         if (!string.IsNullOrWhiteSpace(result.Acted))
