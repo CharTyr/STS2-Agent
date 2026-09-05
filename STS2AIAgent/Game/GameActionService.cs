@@ -884,8 +884,15 @@ internal static class GameActionService
             return false;
         }
 
-        var readyAction = RunManager.Instance.ActionQueueSet.GetReadyAction();
-        if (readyAction != null && ActionQueueSet.IsGameActionPlayerDriven(readyAction))
+        try
+        {
+            var readyAction = RunManager.Instance.ActionQueueSet.GetReadyAction();
+            if (readyAction != null && ActionQueueSet.IsGameActionPlayerDriven(readyAction))
+            {
+                return false;
+            }
+        }
+        catch (InvalidOperationException)
         {
             return false;
         }
@@ -900,7 +907,19 @@ internal static class GameActionService
             return false;
         }
 
-        return RunManager.Instance.ActionQueueSet.GetReadyAction() == null;
+        try
+        {
+            if (!RunManager.Instance.ActionQueueSet.IsEmpty)
+            {
+                return false;
+            }
+
+            return RunManager.Instance.ActionQueueSet.GetReadyAction() == null;
+        }
+        catch (InvalidOperationException)
+        {
+            return false;
+        }
     }
 
     private static async Task<ActionResponsePayload> ExecuteChooseMapNodeAsync(ActionRequest request)
@@ -1716,13 +1735,38 @@ internal static class GameActionService
             await WaitForNextFrameAsync();
 
             var currentScreen = ActiveScreenContext.Instance.GetCurrentScreen();
-            if (currentScreen is not NChooseACardSelectionScreen || !GodotObject.IsInstanceValid(selectionScreen))
+            var screenClosed = currentScreen is not NChooseACardSelectionScreen || !GodotObject.IsInstanceValid(selectionScreen);
+            if (screenClosed)
             {
-                return true;
+                if (CombatManager.Instance.IsInProgress)
+                {
+                    if (CombatManager.Instance.IsOverOrEnding || GameStateService.IsCombatActionReady())
+                    {
+                        return true;
+                    }
+                }
+                else
+                {
+                    for (var i = 0; i < 5; i++)
+                    {
+                        await WaitForNextFrameAsync();
+                    }
+
+                    if (ArePlayerDrivenActionsSettled())
+                    {
+                        return true;
+                    }
+                }
             }
         }
 
-        return ActiveScreenContext.Instance.GetCurrentScreen() is not NChooseACardSelectionScreen;
+        var isClosed = ActiveScreenContext.Instance.GetCurrentScreen() is not NChooseACardSelectionScreen || !GodotObject.IsInstanceValid(selectionScreen);
+        if (CombatManager.Instance.IsInProgress)
+        {
+            return isClosed && (CombatManager.Instance.IsOverOrEnding || GameStateService.IsCombatActionReady() || ArePlayerDrivenActionsSettled());
+        }
+
+        return isClosed && ArePlayerDrivenActionsSettled();
     }
 
     private static async Task<bool> WaitForCardsViewCloseAsync(TimeSpan timeout)
@@ -1749,15 +1793,32 @@ internal static class GameActionService
             await WaitForNextFrameAsync();
 
             var currentScreen = ActiveScreenContext.Instance.GetCurrentScreen();
-            if (!GameStateService.TryGetCombatHandSelection(currentScreen, out var currentHand) ||
+            var selectionClosed = !GameStateService.TryGetCombatHandSelection(currentScreen, out var currentHand) ||
                 currentHand == null ||
-                !GodotObject.IsInstanceValid(currentHand))
+                !GodotObject.IsInstanceValid(currentHand);
+            if (selectionClosed)
             {
-                return true;
+                if (CombatManager.Instance.IsInProgress)
+                {
+                    if (CombatManager.Instance.IsOverOrEnding || GameStateService.IsCombatActionReady())
+                    {
+                        return true;
+                    }
+                }
+                else if (ArePlayerDrivenActionsSettled())
+                {
+                    return true;
+                }
             }
         }
 
-        return !GameStateService.TryGetCombatHandSelection(ActiveScreenContext.Instance.GetCurrentScreen(), out _);
+        var isClosed = !GameStateService.TryGetCombatHandSelection(ActiveScreenContext.Instance.GetCurrentScreen(), out _);
+        if (CombatManager.Instance.IsInProgress)
+        {
+            return isClosed && (CombatManager.Instance.IsOverOrEnding || GameStateService.IsCombatActionReady() || ArePlayerDrivenActionsSettled());
+        }
+
+        return isClosed && ArePlayerDrivenActionsSettled();
     }
 
     private static async Task<bool> WaitForCombatHandSelectionStepAsync(
@@ -2038,9 +2099,10 @@ internal static class GameActionService
         {
             await WaitForNextFrameAsync();
 
-            if (!GodotObject.IsInstanceValid(screen))
+            if (!GodotObject.IsInstanceValid(screen) ||
+                ActiveScreenContext.Instance.GetCurrentScreen() is not NCardGridSelectionScreen)
             {
-                return true;
+                return await WaitForDeckSelectionResolutionAsync(screen, deadline);
             }
 
             var previewContainer = screen.GetNodeOrNull<Control>("%PreviewContainer");
@@ -2078,6 +2140,7 @@ internal static class GameActionService
             if (confirmButton?.IsEnabled == true)
             {
                 confirmButton.ForceClick();
+                return await WaitForDeckSelectionResolutionAsync(screen, deadline);
             }
         }
 
@@ -2097,7 +2160,7 @@ internal static class GameActionService
             if (!GodotObject.IsInstanceValid(screen) ||
                 !ReferenceEquals(ActiveScreenContext.Instance.GetCurrentScreen(), screen))
             {
-                return true;
+                return await WaitForDeckSelectionResolutionAsync(screen, deadline);
             }
 
             if (!GameStateService.TryGetDeckCardSelectionMetadata(screen, out var metadata) ||
@@ -2185,14 +2248,41 @@ internal static class GameActionService
         {
             await WaitForNextFrameAsync();
 
-            if (!GodotObject.IsInstanceValid(screen) ||
-                ActiveScreenContext.Instance.GetCurrentScreen() is not NCardGridSelectionScreen)
+            var currentScreen = ActiveScreenContext.Instance.GetCurrentScreen();
+            var screenClosed = !GodotObject.IsInstanceValid(screen) || currentScreen is not NCardGridSelectionScreen;
+
+            if (screenClosed)
             {
-                return true;
+                if (CombatManager.Instance.IsInProgress)
+                {
+                    if (CombatManager.Instance.IsOverOrEnding || GameStateService.IsCombatActionReady())
+                    {
+                        return true;
+                    }
+                }
+                else
+                {
+                    for (var i = 0; i < 5; i++)
+                    {
+                        await WaitForNextFrameAsync();
+                    }
+
+                    if (ArePlayerDrivenActionsSettled())
+                    {
+                        return true;
+                    }
+                }
             }
         }
 
-        return false;
+        var finalScreen = ActiveScreenContext.Instance.GetCurrentScreen();
+        var isClosed = !GodotObject.IsInstanceValid(screen) || finalScreen is not NCardGridSelectionScreen;
+        if (CombatManager.Instance.IsInProgress)
+        {
+            return isClosed && (CombatManager.Instance.IsOverOrEnding || GameStateService.IsCombatActionReady() || ArePlayerDrivenActionsSettled());
+        }
+
+        return isClosed && ArePlayerDrivenActionsSettled();
     }
 
     private static async Task<ActionResponsePayload> ExecuteOpenChestAsync()
