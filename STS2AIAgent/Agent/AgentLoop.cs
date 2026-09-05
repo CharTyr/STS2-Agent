@@ -85,6 +85,7 @@ internal sealed class AgentLoop
             return new AgentTurnResult
             {
                 Error = "Timed out waiting for an actionable state.",
+                WaitingForGame = true,
                 ToolRounds = 0
             };
         }
@@ -181,6 +182,7 @@ internal sealed class AgentLoop
                     Acted = acted,
                     ActResultJson = actResult,
                     Error = ex.Message,
+                    RequiresConfiguration = ex is LlmException { StatusCode: >= 400 and < 500 and not 408 and not 429 },
                     ToolRounds = rounds
                 };
             }

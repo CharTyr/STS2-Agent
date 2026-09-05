@@ -587,45 +587,23 @@ internal sealed class AgentRuntime
 
     private async Task AutoPlayLoopAsync(CancellationToken cancellationToken)
     {
-        while (!cancellationToken.IsCancellationRequested)
+        try
         {
-            try
+            await AutoPlayRecovery.RunAsync(async token =>
             {
-                await _turnGate.WaitAsync(cancellationToken);
-                AgentTurnResult result;
+                await _turnGate.WaitAsync(token);
                 try
                 {
-                    result = await _loop.PlayOnceAsync(cancellationToken);
+                    return await _loop.PlayOnceAsync(token);
                 }
                 finally
                 {
                     _turnGate.Release();
                 }
 
-                if (cancellationToken.IsCancellationRequested)
-                {
-                    break;
-                }
-
-                ApplyPlayResult(result);
-                if (result.Error != null)
-                {
-                    await Task.Delay(1200, cancellationToken);
-                }
-            }
-            catch (OperationCanceledException)
-            {
-                break;
-            }
-            catch (Exception ex)
-            {
-                Log.Warn($"{LogPrefix} Auto-play step failed: {ex.Message}");
-                SetStatus("自动游玩出错：" + ex.Message);
-                await Task.Delay(1500, cancellationToken);
-            }
+            }, ApplyPlayResult, cancellationToken);
         }
-
-        RaiseChanged();
+        finally { RaiseChanged(); }
     }
 
     private async Task StartMcpCoreAsync(CancellationToken cancellationToken)

@@ -95,6 +95,13 @@ internal sealed class LlmCompletion
 
 internal sealed class LlmException : Exception
 {
+    public int? StatusCode { get; }
+
+    public LlmException(string message, int statusCode) : base(message)
+    {
+        StatusCode = statusCode;
+    }
+
     public LlmException(string message) : base(message)
     {
     }

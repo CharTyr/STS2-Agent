@@ -45,6 +45,10 @@ internal sealed class AgentTurnResult
 
     public string? Error { get; init; }
 
+    public bool WaitingForGame { get; init; }
+
+    public bool RequiresConfiguration { get; init; }
+
     public int ToolRounds { get; init; }
 }
 

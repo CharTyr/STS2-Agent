@@ -110,6 +110,11 @@ internal static class TestRunner
 
     private static IEnumerable<(string Name, Func<Task> Body)> AllTests()
     {
+        yield return ("Recovery.NoActionStops", AutoPlayRecoveryTests.RepeatedNoActionStops);
+        yield return ("Recovery.HttpStatus", AutoPlayRecoveryTests.HttpFailuresKeepStatusWithoutStreamReplay);
+        yield return ("Recovery.Waiting", AutoPlayRecoveryTests.WaitingDoesNotHideFailures);
+        yield return ("Recovery.SuccessResets", AutoPlayRecoveryTests.SuccessfulActionResetsFailures);
+        yield return ("Recovery.CancelBackoff", AutoPlayRecoveryTests.CancelDuringBackoffPreventsNextTurn);
         yield return ("TeamControl.WaitForCommittedWork", AutoPlaySessionTests.PauseWaitsForCommittedWorkAndBlocksRestart);
         yield return ("TeamControl.CancelModel", AutoPlaySessionTests.PauseCancelsWaitingModel);
         yield return ("TeamControl.NoOverlappingLoops", AutoPlaySessionTests.ImmediatePauseNeverOverlapsGenerations);

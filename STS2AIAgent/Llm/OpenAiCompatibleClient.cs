@@ -162,7 +162,7 @@ internal sealed class OpenAiCompatibleClient : ILlmClient
             var payload = await response.Content.ReadAsStringAsync(cancellationToken);
             if (!response.IsSuccessStatusCode)
             {
-                throw new LlmException(FormatError((int)response.StatusCode, payload));
+                throw new LlmException(FormatError((int)response.StatusCode, payload), (int)response.StatusCode);
             }
 
             if (stream && LooksLikeSse(payload))
@@ -324,6 +324,7 @@ internal sealed class OpenAiCompatibleClient : ILlmClient
 
     private static bool ShouldRetryWithoutStream(LlmException ex)
     {
+        if (ex.StatusCode is not null and not 400 and not 415 and not 422) return false;
         var message = ex.Message;
         return message.Contains("HTTP 400", StringComparison.Ordinal) ||
                message.Contains("HTTP 415", StringComparison.Ordinal) ||
