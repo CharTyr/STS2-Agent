@@ -46,6 +46,7 @@ using MegaCrit.Sts2.Core.Multiplayer.Game;
 using MegaCrit.Sts2.Core.Multiplayer.Game.Lobby;
 using MegaCrit.Sts2.Core.Rooms;
 using MegaCrit.Sts2.Core.Rewards;
+using MegaCrit.Sts2.Core.Saves;
 using MegaCrit.Sts2.Core.Timeline;
 using STS2AIAgent.Server;
 
@@ -99,6 +100,7 @@ internal static class GameActionService
             "resolve_rewards" => ExecuteResolveRewardsAsync(request),
             "end_turn" => ExecuteEndTurnAsync(),
             "play_card" => ExecutePlayCardAsync(request),
+            "switch_profile" => ExecuteSwitchProfileAsync(request),
             "continue_run" => ExecuteContinueRunAsync(),
             "continue_game_over" => ExecuteContinueGameOverAsync(),
             "abandon_run" => ExecuteAbandonRunAsync(),
@@ -611,6 +613,88 @@ internal static class GameActionService
         }
 
         return !GodotObject.IsInstanceValid(unlockScreen) || !unlockScreen.IsVisibleInTree();
+    }
+
+    private static async Task<ActionResponsePayload> ExecuteSwitchProfileAsync(ActionRequest request)
+    {
+        var currentScreen = ActiveScreenContext.Instance.GetCurrentScreen();
+        var screen = GameStateService.ResolveScreen(currentScreen);
+
+        if (!GameStateService.CanSwitchProfile(currentScreen))
+        {
+            throw new ApiException(409, "invalid_action", "Action is not available in the current state.", new
+            {
+                action = "switch_profile",
+                screen
+            });
+        }
+
+        if (request.option_index is not int profileId || profileId is < 1 or > 3)
+        {
+            throw new ApiException(400, "invalid_request", "switch_profile requires option_index in the range 1..3.", new
+            {
+                action = "switch_profile"
+            });
+        }
+
+        var game = NGame.Instance;
+        if (game == null || !GodotObject.IsInstanceValid(game))
+        {
+            throw new ApiException(503, "state_unavailable", "Game instance is unavailable.", new
+            {
+                action = "switch_profile",
+                screen
+            }, retryable: true);
+        }
+
+        NMainMenu? initialMainMenu = null;
+        if (SaveManager.Instance.CurrentProfileId != profileId)
+        {
+            initialMainMenu = currentScreen as NMainMenu;
+            SaveManager.Instance.SwitchProfileId(profileId);
+            var prefsReadResult = SaveManager.Instance.InitPrefsData();
+            var progressReadResult = SaveManager.Instance.InitProgressData();
+            game.ReloadMainMenu();
+            game.CheckShowSaveFileError(
+                progressReadResult,
+                prefsReadResult,
+                new ReadSaveResult<SettingsSave>(new SettingsSave()));
+        }
+
+        var stable = await WaitForProfileSwitchAsync(initialMainMenu, profileId, TimeSpan.FromSeconds(15));
+        return new ActionResponsePayload
+        {
+            action = "switch_profile",
+            status = stable ? "completed" : "pending",
+            stable = stable,
+            message = stable ? "Action completed." : "Action queued but state is still transitioning.",
+            state = GameStateService.BuildStatePayload()
+        };
+    }
+
+    private static async Task<bool> WaitForProfileSwitchAsync(
+        NMainMenu? initialMainMenu,
+        int profileId,
+        TimeSpan timeout)
+    {
+        var deadline = DateTime.UtcNow + timeout;
+        while (DateTime.UtcNow < deadline)
+        {
+            await WaitForNextFrameAsync();
+            var currentScreen = ActiveScreenContext.Instance.GetCurrentScreen();
+            if (SaveManager.Instance.CurrentProfileId == profileId &&
+                currentScreen is NMainMenu mainMenu &&
+                (initialMainMenu == null || mainMenu != initialMainMenu) &&
+                GodotObject.IsInstanceValid(mainMenu) &&
+                mainMenu.IsInsideTree() &&
+                mainMenu.IsVisibleInTree() &&
+                mainMenu.SubmenuStack?.SubmenusOpen != true)
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     private static async Task<ActionResponsePayload> ExecuteContinueRunAsync()
