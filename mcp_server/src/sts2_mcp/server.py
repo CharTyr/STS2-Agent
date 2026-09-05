@@ -82,6 +82,7 @@ _LEGACY_ACTION_TOOLS: tuple[ActionToolSpec, ...] = (
     ActionToolSpec("buy_potion", "option_index", "Buy a potion from the open merchant inventory."),
     ActionToolSpec("remove_card_at_shop", "no_args", "Use the merchant card-removal service."),
     ActionToolSpec("continue_run", "no_args", "Continue the current run from the main menu."),
+    ActionToolSpec("continue_game_over", "no_args", "Confirm the game-over intro and run the native score, unlock, and save summary."),
     ActionToolSpec("abandon_run", "no_args", "Open the abandon-run confirmation from the main menu."),
     ActionToolSpec("save_and_quit", "no_args", "Save the active singleplayer run and return to the main menu."),
     ActionToolSpec("open_character_select", "no_args", "Open the character select screen."),

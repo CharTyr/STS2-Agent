@@ -49,6 +49,8 @@ using MegaCrit.Sts2.Core.Nodes.Screens.TreasureRoomRelic;
 using MegaCrit.Sts2.Core.Rooms;
 using MegaCrit.Sts2.Core.Rewards;
 using MegaCrit.Sts2.Core.Runs;
+using MegaCrit.Sts2.Core.Saves;
+using MegaCrit.Sts2.Core.Saves.Managers;
 using MegaCrit.Sts2.Core.Timeline;
 using MegaCrit.Sts2.addons.mega_text;
 
@@ -56,8 +58,8 @@ namespace STS2AIAgent.Game;
 
 internal static class GameStateService
 {
-    private const int StateVersion = 11;
-    private const int AgentViewVersion = 6;
+    private const int StateVersion = 13;
+    private const int AgentViewVersion = 8;
     private static readonly TimeSpan CombatActionSnapshotStableDelay = TimeSpan.FromMilliseconds(200);
     private static string? _lastCombatActionReadinessSignature;
     private static DateTime _lastCombatActionReadinessSinceUtc = DateTime.MinValue;
@@ -217,6 +219,25 @@ internal static class GameStateService
                 descriptors.Add(new ActionDescriptor
                 {
                     name = "dismiss_modal",
+                    requires_target = false,
+                    requires_index = false
+                });
+            }
+
+            return new AvailableActionsPayload
+            {
+                screen = ResolveScreen(currentScreen),
+                actions = descriptors.ToArray()
+            };
+        }
+
+        if (currentScreen is NUnlockScreen)
+        {
+            if (CanConfirmUnlock(currentScreen))
+            {
+                descriptors.Add(new ActionDescriptor
+                {
+                    name = "confirm_unlock",
                     requires_target = false,
                     requires_index = false
                 });
@@ -682,7 +703,18 @@ internal static class GameStateService
             });
         }
 
-        if (CanReturnToMainMenu(currentScreen))
+        var gameOver = BuildGameOverPayload(currentScreen, runState) ?? new GameOverPayload();
+        if (gameOver.can_continue)
+        {
+            descriptors.Add(new ActionDescriptor
+            {
+                name = "continue_game_over",
+                requires_target = false,
+                requires_index = false
+            });
+        }
+
+        if (gameOver.can_return_to_main_menu)
         {
             descriptors.Add(new ActionDescriptor
             {
@@ -795,6 +827,11 @@ internal static class GameStateService
 
     public static bool CanSelectDeckCard(IScreenContext? currentScreen)
     {
+        if (currentScreen is NUnlockScreen)
+        {
+            return false;
+        }
+
         return GetDeckSelectionOptions(currentScreen).Count > 0;
     }
 
@@ -1384,7 +1421,13 @@ internal static class GameStateService
 
     public static bool CanReturnToMainMenu(IScreenContext? currentScreen)
     {
-        return currentScreen is NGameOverScreen;
+        return IsGameOverButtonReady(GetGameOverMainMenuButton(currentScreen));
+    }
+
+    public static bool CanContinueGameOver(IScreenContext? currentScreen)
+    {
+        return IsGameOverButtonReady(GetGameOverContinueButton(currentScreen))
+            && !CanReturnToMainMenu(currentScreen);
     }
 
     public static IReadOnlyList<NMapPoint> GetAvailableMapNodes(IScreenContext? currentScreen, RunState? runState)
@@ -2167,9 +2210,14 @@ internal static class GameStateService
             return names.ToArray();
         }
 
-        if (CanConfirmUnlock(currentScreen))
+        if (currentScreen is NUnlockScreen)
         {
-            names.Add("confirm_unlock");
+            if (CanConfirmUnlock(currentScreen))
+            {
+                names.Add("confirm_unlock");
+            }
+
+            return names.ToArray();
         }
 
         if (CanEndTurn(currentScreen, combatState))
@@ -2394,7 +2442,13 @@ internal static class GameStateService
             names.Add("discard_potion");
         }
 
-        if (CanReturnToMainMenu(currentScreen))
+        var gameOver = BuildGameOverPayload(currentScreen, runState) ?? new GameOverPayload();
+        if (gameOver.can_continue)
+        {
+            names.Add("continue_game_over");
+        }
+
+        if (gameOver.can_return_to_main_menu)
         {
             names.Add("return_to_main_menu");
         }
@@ -3098,8 +3152,12 @@ internal static class GameStateService
             victory = gameOver.is_victory,
             floor = gameOver.floor,
             character = gameOver.character_id,
+            phase = gameOver.phase,
             can_continue = gameOver.can_continue,
-            can_return = gameOver.can_return_to_main_menu
+            can_return = gameOver.can_return_to_main_menu,
+            save_status = gameOver.save_status,
+            save_verified = gameOver.save_verified,
+            save_error = gameOver.save_error
         };
     }
 
@@ -4304,14 +4362,23 @@ internal static class GameStateService
 
     private static GameOverPayload? BuildGameOverPayload(IScreenContext? currentScreen, RunState? runState)
     {
-        if (currentScreen is not NGameOverScreen screen)
+        if (currentScreen is not NGameOverScreen)
         {
             return null;
         }
 
         var player = GetLocalPlayer(runState);
-        var continueButton = screen.GetNodeOrNull<NButton>("%ContinueButton");
-        var mainMenuButton = screen.GetNodeOrNull<NButton>("%MainMenuButton");
+        var continueButton = GetGameOverContinueButton(currentScreen);
+        var mainMenuButton = GetGameOverMainMenuButton(currentScreen);
+        var canContinue = IsGameOverButtonReady(continueButton)
+            && !IsGameOverButtonReady(mainMenuButton);
+        var canReturnToMainMenu = IsGameOverButtonReady(mainMenuButton);
+        var phase = canReturnToMainMenu
+            ? "summary_ready"
+            : canContinue
+                ? "intro"
+                : "summary_animating";
+        var saveVerification = VerifyGameOverProgressSave(canReturnToMainMenu);
         var history = RunManager.Instance.History;
 
         return new GameOverPayload
@@ -4319,10 +4386,76 @@ internal static class GameStateService
             is_victory = history?.Win ?? (runState?.CurrentRoom?.IsVictoryRoom ?? false),
             floor = runState?.TotalFloor,
             character_id = player?.Character.Id.Entry,
-            can_continue = continueButton?.IsEnabled ?? false,
-            can_return_to_main_menu = true,
-            showing_summary = mainMenuButton?.Visible == true || mainMenuButton?.IsEnabled == true
+            phase = phase,
+            can_continue = continueButton?.Visible == true
+                && continueButton?.IsEnabled == true
+                && continueButton?.IsVisibleInTree() == true
+                && !canReturnToMainMenu,
+            can_return_to_main_menu = mainMenuButton?.Visible == true
+                && mainMenuButton?.IsEnabled == true
+                && mainMenuButton?.IsVisibleInTree() == true,
+            showing_summary = mainMenuButton?.Visible == true,
+            save_status = saveVerification.Status,
+            save_verified = saveVerification.Verified,
+            save_error = saveVerification.Error
         };
+    }
+
+    private static ProgressSaveVerificationResult VerifyGameOverProgressSave(bool summaryReady)
+    {
+        if (!summaryReady)
+        {
+            return ProgressSaveVerificationResult.Pending();
+        }
+
+        try
+        {
+            var saveManager = SaveManager.Instance;
+            if (!saveManager.IsProfileInitialized)
+            {
+                return ProgressSaveVerificationResult.Failure("progress_profile_not_initialized");
+            }
+
+            var expectedProgress = saveManager.Progress.ToSerializable();
+            expectedProgress.SchemaVersion = saveManager.GetLatestSchemaVersion<SerializableProgress>();
+            var expectedJson = SaveManager.ToJson(expectedProgress);
+            var relativePath = Path.Combine(UserDataPathProvider.SavesDir, ProgressSaveManager.fileName);
+            var profileScopedPath = saveManager.GetProfileScopedPath(relativePath);
+            // Use the same Godot user:// filesystem that SaveManager writes.
+            // Globalizing and reopening through System.IO can fail while the
+            // engine/Steam backend still owns the file even though the native
+            // save has completed and Godot can read it normally.
+            try
+            {
+                if (!Godot.FileAccess.FileExists(profileScopedPath))
+                {
+                    return ProgressSaveVerificationResult.Failure("progress_save_missing");
+                }
+
+                using var persistedFile = Godot.FileAccess.Open(
+                    profileScopedPath,
+                    Godot.FileAccess.ModeFlags.Read);
+                if (persistedFile is null)
+                {
+                    return ProgressSaveVerificationResult.Failure(
+                        $"progress_save_read_failed:Godot:{Godot.FileAccess.GetOpenError()}");
+                }
+
+                return ProgressSaveVerification.VerifyJson(
+                    expectedJson,
+                    persistedFile.GetAsText());
+            }
+            catch (Exception exception)
+            {
+                return ProgressSaveVerificationResult.Failure(
+                    $"progress_save_read_failed:{exception.GetType().Name}");
+            }
+        }
+        catch (Exception exception)
+        {
+            return ProgressSaveVerificationResult.Failure(
+                $"progress_snapshot_failed:{exception.GetType().Name}");
+        }
     }
 
     private static CombatHandCardPayload BuildHandCardPayload(CombatState combatState, CardModel card, int index)
@@ -5368,6 +5501,26 @@ internal static class GameStateService
         return mainMenu.GetNodeOrNull<NMainMenuTextButton>("MainMenuTextButtons/ContinueButton");
     }
 
+    public static NGameOverContinueButton? GetGameOverContinueButton(IScreenContext? currentScreen)
+    {
+        return (currentScreen as NGameOverScreen)?
+            .GetNodeOrNull<NGameOverContinueButton>("%ContinueButton");
+    }
+
+    public static NReturnToMainMenuButton? GetGameOverMainMenuButton(IScreenContext? currentScreen)
+    {
+        return (currentScreen as NGameOverScreen)?
+            .GetNodeOrNull<NReturnToMainMenuButton>("%MainMenuButton");
+    }
+
+    private static bool IsGameOverButtonReady(NButton? button)
+    {
+        return button != null
+            && GodotObject.IsInstanceValid(button)
+            && button.IsVisibleInTree()
+            && button.IsEnabled;
+    }
+
     public static NMainMenuTextButton? GetMainMenuAbandonRunButton(NMainMenu mainMenu)
     {
         return mainMenu.GetNodeOrNull<NMainMenuTextButton>("MainMenuTextButtons/AbandonRunButton");
@@ -5767,6 +5920,11 @@ internal static class GameStateService
 
     private static string ResolveNonModalScreen(IScreenContext? currentScreen)
     {
+        if (currentScreen is NUnlockScreen)
+        {
+            return "UNLOCK";
+        }
+
         if (currentScreen != null &&
             TryGetCombatHandSelection(currentScreen, out _))
         {
@@ -5793,7 +5951,6 @@ internal static class GameStateService
         return currentScreen switch
         {
             NGameOverScreen => "GAME_OVER",
-            NUnlockScreen => "UNLOCK",
             NCardRewardSelectionScreen => "REWARD",
             NChooseACardSelectionScreen => "CARD_SELECTION",
             NDeckCardSelectScreen or NDeckUpgradeSelectScreen or NDeckTransformSelectScreen or NDeckEnchantSelectScreen => "CARD_SELECTION",
@@ -6796,11 +6953,19 @@ internal sealed class GameOverPayload
 
     public string? character_id { get; init; }
 
+    public string phase { get; init; } = "intro";
+
     public bool can_continue { get; init; }
 
     public bool can_return_to_main_menu { get; init; }
 
     public bool showing_summary { get; init; }
+
+    public string save_status { get; init; } = "pending";
+
+    public bool save_verified { get; init; }
+
+    public string? save_error { get; init; }
 }
 
 internal sealed class RewardOptionPayload
