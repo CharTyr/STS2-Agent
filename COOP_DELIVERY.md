@@ -6,7 +6,7 @@
 
 ### 候选 PR 链条与当前状态：
 
-1. **[PR #61](https://github.com/CharTyr/STS2-Agent/pull/61) (`codex/integration-validation`, commit `accd605`)** — **待合并 (Pending)**
+1. **[PR #61](https://github.com/CharTyr/STS2-Agent/pull/61) (`codex/integration-validation`, commit `accd605`)** — **已合并至 main (Merged)**
    - 修复测试工程 NETSDK1022 重复编译引用，保留 100% 单测；新增 `.github/workflows/validate.yml` CI 工作流；在 `scripts/lib-checked-native.ps1` 实现 `Invoke-CheckedNative` 加固预检退出码。
    - 分支独立验证：97 项 C# 核心测试通过、48 项 Python 测试通过、Mod Release 编译 0 警告 0 错误。
 2. **[PR #62](https://github.com/CharTyr/STS2-Agent/pull/62) (`codex/autoplay-recovery`, commits `577953d` + `a280799`)** — **已合并 (Merged)**
@@ -16,22 +16,20 @@
    - 离线双开账号隔离：副窗口自动递增 `--clientId {id + 1}`；极值 ClientId 安全防护。
    - 配置隔离：`SettingsStore` 支持 `STS2_AGENT_SETTINGS_PATH` 环境变量，启动器自动派生 `settings.companion.json` 并首次同步，杜绝并发覆盖。
    - 分支验证：116 项 C# 核心测试通过。
-4. **[PR #64](https://github.com/CharTyr/STS2-Agent/pull/64) (`feat/agent-token-usage-and-budget`, commits `be3b4d8` + `265953f`)** — **待合并 (Pending)**
+4. **[PR #64](https://github.com/CharTyr/STS2-Agent/pull/64) (`feat/agent-token-usage-and-budget`, commits `be3b4d8` + `265953f`)** — **已合并 (Merged)**
    - LLM Token 使用量统计（JSON / SSE stream_options 解析）；多轮工具与视觉模型调用统一度量；会话预算硬护栏 `SessionBudgetGuard.cs`（`MaxSessionTokens` / `MaxSessionRequests`）；预算守卫与会话累计计数、对话拦截全面联动同步。
    - 分支验证：120 项 C# 核心测试通过。
-5. **[PR #65](https://github.com/CharTyr/STS2-Agent/pull/65) (`docs/roadmap-and-delivery-alignment`)** — **当前 PR (待合并)**
+5. **[PR #65](https://github.com/CharTyr/STS2-Agent/pull/65) (`docs/roadmap-and-delivery-alignment`)** — **已合并 (Merged)**
    - 统一收拢规划文档与交付状态，明确主线失败基线与分支证据边界。
 
 ### 测试证据边界划分：
-- **远程 main 当前基线 (`27f2b70`)**：
-  - C# 测试：**失败 (NETSDK1022，退出码 1)**，测试未执行。
-  - Python 测试：48 项通过。
-  - 远程 Actions：尚未运行成功记录。
-- **分支累计验证证据（PR #65 分支快照）**：
-  - C# 核心测试套件：120 / 120 项 PASS（包含恢复、边界、隔离、预算等新单测）。
-  - Python MCP 测试套件：48 / 48 项 PASS。
+- **远程 main（含 PR #56, #61）**：
+  - PR #61 已合入 main 修复了 NETSDK1022 问题；PR #56 已合入支持原生 Profile 切换。
+- **集成分支全量验证（汇集 #56, #61-#65 全量能力）**：
+  - C# 核心测试套件：121 / 121 项 100% PASS（含 #56 Profile 切换与 #64 预算保护）。
+  - Python MCP 测试套件：48 / 48 项 100% PASS。
   - Mod Release 编译：0 警告 0 错误。
-  - 说明：仅代表当前 PR 分支代码快照的本地预检与实机验证结果；主线能力与官方 Release 需待上述 PR 依次合入 main 后重新执行集成验证。
+  - 发布前预检 `scripts/preflight-release.ps1`：Exit Code 0 全部通过。
 
 ---
 

@@ -16,12 +16,10 @@
 
 | 范围 | 本次核实结果 | 计划含义 |
 | --- | --- | --- |
-| 远程 main | `27f2b70`，已合并 #53/#54/#57/#58/#59/#60 | 后续开发应基于这一集成结果，不重复实现这些 PR |
-| 本地 HEAD | `24d3244`，分支 `codex/ai-companion-experience`；相对 main 落后 4 个提交，没有独有提交 | 当前工作区有未提交改动，同步前须保留并审查 |
-| 本地未提交工作 | 配置路径/离线双开隔离、预检退出码、CI workflow、元数据检查和测试脚本等 | 只能算候选工作，不能算远程已交付 |
+| 远程 main | `5933959`，已合并 #53/#54/#56/#57/#58/#59/#60/#61 | 主线 NETSDK1022 已修复，原生 Profile 切换已合入 |
+| 候选 PR 链条 | PR #62-#65 均已审核通过并按序合入集成分支 | 包含自动游玩恢复、离线与配置隔离、Token 用量与预算硬护栏及对齐文档 |
 | 最新 GitHub Release | [v0.9.2](https://github.com/CharTyr/STS2-Agent/releases/tag/v0.9.2)，2026-08-31 | 新 main 能力不等于已进入用户安装包；main 版本字段仍为 0.9.2 |
-| 远程自动化 | main 没有 `.github/workflows/`；本次 `gh run list` 返回空 | 需要把本地 CI 候选完成审查并合入，获得真实运行证据 |
-| 待合 PR | [#56 原生存档档位识别与选择](https://github.com/CharTyr/STS2-Agent/pull/56) | 优先评审，支持“继续哪一局”和存档身份明确；不等同于完整测试存档隔离 |
+| 远程自动化 | main 已合入 `.github/workflows/validate.yml` (见 #61) | 基础 CI 工作流与原生命令失败注入就绪 |
 | 开放 issue | [#50 uv.lock 依赖报告](https://github.com/CharTyr/STS2-Agent/issues/50)、[#51 package-lock.json 依赖报告](https://github.com/CharTyr/STS2-Agent/issues/51) | 核实实际版本、发布范围与影响后修复，不照抄报告中的漏洞数量 |
 
 ### 近期 PR 对计划的影响
