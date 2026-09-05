@@ -75,8 +75,9 @@ internal sealed class AgentLoop
             cancellationToken);
     }
 
-    public async Task<AgentTurnResult> PlayOnceAsync(CancellationToken cancellationToken)
+    public async Task<AgentTurnResult> PlayOnceAsync(CancellationToken cancellationToken, Action<string>? checkState = null)
     {
+        if (checkState != null) checkState(await _bridge.GetCompactStateJsonAsync(cancellationToken));
         var settings = _settings();
         var resolved = settings.ResolvePlayModel();
         var actionable = await _bridge.WaitUntilActionableAsync(TimeSpan.FromSeconds(20), cancellationToken);
@@ -91,6 +92,7 @@ internal sealed class AgentLoop
         }
 
         var stateJson = await _bridge.GetCompactStateJsonAsync(cancellationToken);
+        checkState?.Invoke(stateJson);
         var messages = new List<LlmMessage>
         {
             LlmMessage.System(PlayPrompt.PlaySystem),
@@ -124,7 +126,8 @@ internal sealed class AgentLoop
             AgentTools.Play,
             allowAct: true,
             stopAfterAct: true,
-            cancellationToken);
+            cancellationToken,
+            checkState);
     }
 
     public async Task<string> TestConnectionAsync(CancellationToken cancellationToken)
@@ -141,7 +144,8 @@ internal sealed class AgentLoop
         IReadOnlyList<LlmTool> tools,
         bool allowAct,
         bool stopAfterAct,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        Action<string>? checkState = null)
     {
         var client = _factory.Create(resolved.Endpoint);
         string? lastText = null;
@@ -196,7 +200,7 @@ internal sealed class AgentLoop
                     !resolved.Model.SupportsTools &&
                     ActJsonParser.TryParse(completion.Content, out var actJson))
                 {
-                    var parsedAct = await ExecuteActAsync(actJson, cancellationToken);
+                    var parsedAct = await ExecuteActAsync(actJson, cancellationToken, checkState);
                     if (parsedAct.Error == null)
                     {
                         acted = parsedAct.Action;
@@ -253,7 +257,7 @@ internal sealed class AgentLoop
                         continue;
                     }
 
-                    var actOutcome = await ExecuteActAsync(call.ArgumentsJson, cancellationToken);
+                    var actOutcome = await ExecuteActAsync(call.ArgumentsJson, cancellationToken, checkState);
                     messages.Add(LlmMessage.Tool(call.Id, actOutcome.ResultJson));
                     if (actOutcome.Error == null)
                     {
@@ -415,7 +419,8 @@ internal sealed class AgentLoop
 
     private async Task<(string? Action, string ResultJson, string? Error)> ExecuteActAsync(
         string argumentsJson,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        Action<string>? checkState = null)
     {
         try
         {
@@ -446,6 +451,7 @@ internal sealed class AgentLoop
             var tool = ReadString(args, "tool");
             var actionsJson = await _bridge.GetAvailableActionsJsonAsync(cancellationToken);
             var compactJson = await _bridge.GetCompactStateJsonAsync(cancellationToken);
+            checkState?.Invoke(compactJson);
             var indexError = ActIndexValidator.Validate(
                 action,
                 cardIndex,
@@ -483,6 +489,7 @@ internal sealed class AgentLoop
             {
                 var settled = await _bridge.WaitUntilActionableAsync(TimeSpan.FromSeconds(20), cancellationToken);
                 var latest = await _bridge.GetCompactStateJsonAsync(cancellationToken);
+                checkState?.Invoke(latest);
                 result = JsonSerializer.Serialize(new
                 {
                     action,

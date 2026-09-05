@@ -41,6 +41,7 @@ internal sealed class AutoPlayRecovery
             cancellationToken.ThrowIfCancellationRequested();
             AgentTurnResult result;
             try { result = await turn(cancellationToken); }
+            catch (AutoPlayStoppedException) { throw; }
             catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) { throw; }
             catch (Exception ex) { result = new AgentTurnResult { Error = ex.Message }; }
             cancellationToken.ThrowIfCancellationRequested();

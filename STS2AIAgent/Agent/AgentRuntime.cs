@@ -587,6 +587,7 @@ internal sealed class AgentRuntime
 
     private async Task AutoPlayLoopAsync(CancellationToken cancellationToken)
     {
+        var boundary = new CurrentRunBoundary();
         try
         {
             await AutoPlayRecovery.RunAsync(async token =>
@@ -594,7 +595,7 @@ internal sealed class AgentRuntime
                 await _turnGate.WaitAsync(token);
                 try
                 {
-                    return await _loop.PlayOnceAsync(token);
+                    return await _loop.PlayOnceAsync(token, boundary.Check);
                 }
                 finally
                 {

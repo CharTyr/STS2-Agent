@@ -110,6 +110,11 @@ internal static class TestRunner
 
     private static IEnumerable<(string Name, Func<Task> Body)> AllTests()
     {
+        yield return ("CurrentRun.AllowsLobbyBeforeRun", () => Task.Run(CurrentRunBoundaryTests.AllowsLobbyBeforeRun));
+        yield return ("CurrentRun.StopsWhenLeavingRunToMainMenu", () => Task.Run(CurrentRunBoundaryTests.StopsWhenLeavingRunToMainMenu));
+        yield return ("CurrentRun.StopsWhenLeavingRunToLobby", () => Task.Run(CurrentRunBoundaryTests.StopsWhenLeavingRunToLobby));
+        yield return ("CurrentRun.StopsWhenRunIdChanges", () => Task.Run(CurrentRunBoundaryTests.StopsWhenRunIdChanges));
+        yield return ("CurrentRun.AllowsGameOverAndUnlock", () => Task.Run(CurrentRunBoundaryTests.AllowsGameOverAndUnlock));
         yield return ("Recovery.NoActionStops", AutoPlayRecoveryTests.RepeatedNoActionStops);
         yield return ("Recovery.HttpStatus", AutoPlayRecoveryTests.HttpFailuresKeepStatusWithoutStreamReplay);
         yield return ("Recovery.Waiting", AutoPlayRecoveryTests.WaitingDoesNotHideFailures);
