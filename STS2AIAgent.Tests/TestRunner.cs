@@ -152,6 +152,7 @@ internal static class TestRunner
         yield return ("GameOver.SaveReadFailure", () => Task.Run(ProgressSaveVerificationTests.ReadFailureCannotReportSuccess));
         yield return ("CombatDiagnostics.CanPlay", () => Task.Run(CombatDiagnosticsContractTests.HandPayloadKeepsNativeCanPlayEvidence));
         yield return ("CombatDiagnostics.Readiness", () => Task.Run(CombatDiagnosticsContractTests.CombatPayloadDistinguishesQueueModalAndSnapshotLocks));
+        yield return ("ProfileSelection.NativeSwitch", () => Task.Run(ProfileSelectionContractTests.NativeProfileIdentityAndSwitchAreWiredEndToEnd));
         yield return ("AgentLoop.PlayOnce", AgentLoopTests.PlayOnce_ExecutesSingleValidatedAct);
         yield return ("AgentLoop.CrystalArgs", AgentLoopTests.PlayOnce_ForwardsCrystalSphereArguments);
         yield return ("AgentTools.CrystalSchema", () => Task.Run(AgentLoopTests.ActToolSchema_IncludesCrystalSphereArguments));
