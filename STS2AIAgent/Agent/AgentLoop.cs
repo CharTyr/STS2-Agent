@@ -17,13 +17,20 @@ internal sealed class AgentLoop
     private readonly ILlmClientFactory _factory;
     private readonly Func<AgentSettings> _settings;
     private readonly Func<string?>? _teamContext;
+    private readonly Func<SessionBudgetGuard?>? _budgetGuard;
 
-    public AgentLoop(IGameBridge bridge, ILlmClientFactory factory, Func<AgentSettings> settings, Func<string?>? teamContext = null)
+    public AgentLoop(
+        IGameBridge bridge,
+        ILlmClientFactory factory,
+        Func<AgentSettings> settings,
+        Func<string?>? teamContext = null,
+        Func<SessionBudgetGuard?>? budgetGuard = null)
     {
         _bridge = bridge;
         _factory = factory;
         _settings = settings;
         _teamContext = teamContext;
+        _budgetGuard = budgetGuard;
     }
 
     public async Task<AgentTurnResult> ChatAsync(
@@ -85,6 +92,7 @@ internal sealed class AgentLoop
         var actionable = await _bridge.WaitUntilActionableAsync(TimeSpan.FromSeconds(20), cancellationToken);
         if (!actionable)
         {
+            checkState?.Invoke(await _bridge.GetCompactStateJsonAsync(cancellationToken));
             return new AgentTurnResult
             {
                 Error = "Timed out waiting for an actionable state.",
@@ -176,6 +184,22 @@ internal sealed class AgentLoop
                 Thinking = resolved.Model.GetThinkingIntensity(),
                 ThinkingMode = resolved.Model.ThinkingMode
             };
+
+            var budgetReason = _budgetGuard?.Invoke()?.CheckBudget(requestsSpent);
+            if (budgetReason != null)
+            {
+                return new AgentTurnResult
+                {
+                    AssistantText = lastText,
+                    Reasoning = lastReasoning,
+                    Acted = acted,
+                    ActResultJson = actResult,
+                    Error = budgetReason,
+                    ToolRounds = rounds,
+                    Usage = accumulatedUsage,
+                    RequestsSpent = requestsSpent
+                };
+            }
 
             LlmCompletion completion;
             try
@@ -306,7 +330,7 @@ internal sealed class AgentLoop
                     continue;
                 }
 
-                var toolJson = await ExecuteReadToolAsync(call.Name, call.ArgumentsJson, cancellationToken);
+                var toolJson = await ExecuteReadToolAsync(call.Name, call.ArgumentsJson, cancellationToken, checkState);
                 messages.Add(LlmMessage.Tool(call.Id, toolJson));
             }
         }
@@ -368,6 +392,12 @@ internal sealed class AgentLoop
             return (null, null, false, null, 0);
         }
 
+        var visionBudget = _budgetGuard?.Invoke()?.CheckBudget();
+        if (visionBudget != null)
+        {
+            return (visionBudget, jpeg, false, null, 0);
+        }
+
         try
         {
             var client = _factory.Create(vision.Endpoint);
@@ -394,17 +424,21 @@ internal sealed class AgentLoop
         }
     }
 
-    private async Task<string> ExecuteReadToolAsync(string name, string argumentsJson, CancellationToken cancellationToken)
+    private async Task<string> ExecuteReadToolAsync(
+        string name,
+        string argumentsJson,
+        CancellationToken cancellationToken,
+        Action<string>? checkState = null)
     {
         try
         {
             using var args = ParseArgs(argumentsJson);
             return name switch
             {
-                "get_game_state" => await _bridge.GetCompactStateJsonAsync(cancellationToken),
+                "get_game_state" => InvokeCheckState(await _bridge.GetCompactStateJsonAsync(cancellationToken), checkState),
                 "get_raw_game_state" => await _bridge.GetRawStateJsonAsync(cancellationToken),
                 "get_available_actions" => await _bridge.GetAvailableActionsJsonAsync(cancellationToken),
-                "wait_until_actionable" => await WaitUntilActionableJsonAsync(args, cancellationToken),
+                "wait_until_actionable" => await WaitUntilActionableJsonAsync(args, cancellationToken, checkState),
                 "get_game_data_item" => await _bridge.GetGameDataItemJsonAsync(
                     ReadString(args, "collection") ?? string.Empty,
                     ReadString(args, "item_id") ?? string.Empty,
@@ -420,17 +454,25 @@ internal sealed class AgentLoop
                 _ => JsonSerializer.Serialize(new { error = $"Unknown tool '{name}'" }, JsonOptions)
             };
         }
+        catch (AutoPlayStoppedException)
+        {
+            throw;
+        }
         catch (Exception ex)
         {
             return JsonSerializer.Serialize(new { error = ex.Message }, JsonOptions);
         }
     }
 
-    private async Task<string> WaitUntilActionableJsonAsync(JsonDocument args, CancellationToken cancellationToken)
+    private async Task<string> WaitUntilActionableJsonAsync(
+        JsonDocument args,
+        CancellationToken cancellationToken,
+        Action<string>? checkState = null)
     {
         var timeout = TimeSpan.FromSeconds(ReadTimeoutSeconds(args));
         var actionable = await _bridge.WaitUntilActionableAsync(timeout, cancellationToken);
         var stateJson = await _bridge.GetCompactStateJsonAsync(cancellationToken);
+        checkState?.Invoke(stateJson);
         var actionsJson = await _bridge.GetAvailableActionsJsonAsync(cancellationToken);
         return JsonSerializer.Serialize(new
         {
@@ -526,9 +568,16 @@ internal sealed class AgentLoop
                 {
                     return (action, result, "Timed out waiting for a stable state after act.");
                 }
+
+                return (action, result, null);
             }
 
+            checkState?.Invoke(await _bridge.GetCompactStateJsonAsync(cancellationToken));
             return (action, result, null);
+        }
+        catch (AutoPlayStoppedException)
+        {
+            throw;
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
@@ -538,6 +587,12 @@ internal sealed class AgentLoop
         {
             return (null, JsonSerializer.Serialize(new { error = ex.Message }, JsonOptions), ex.Message);
         }
+    }
+
+    private static string InvokeCheckState(string json, Action<string>? checkState)
+    {
+        checkState?.Invoke(json);
+        return json;
     }
 
     private static void AppendJsonActFallbackIfNeeded(List<LlmMessage> messages, ResolvedModel resolved, bool allowAct)

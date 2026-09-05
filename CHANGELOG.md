@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+### Fixed
+
+- Autoplay now rethrows run-boundary stops from `act` and re-checks compact state after `get_game_state` / `wait_until_actionable`, so leaving a run no longer burns extra model rounds.
+- Session request budgets are checked before each LLM round and shared with chat/teammate replies, not only after a finished autoplay turn.
+- Deck multi-select no longer confirms at `min_select`; cards report `selected`, and `confirm_selection` works on deck-grid screens.
+- Combat selection waits for action-queue readiness; settle timeouts return pending instead of a weaker `stable=true`.
+- Companion HTTP ports may fall back and are rediscovered by pid/port file; settings are recopied on every invite; offline launches always get a distinct `clientId`.
+- Companion bootstrap joins the host lobby and no longer runs `multiplayer test` itself.
+- Compact state now includes `native_profile_id` / `profiles[]`; the playbook tells the agent not to `switch_profile` unless asked.
+
 ### Added
 
 - Added session-scoped team chat from the human overlay to the launched AI companion. Team replies use the play model; recent conversation informs future play decisions without granting chat permission to execute actions.
@@ -16,7 +26,7 @@
 
 ### Validation
 
-- 63 core tests passed, including team-chat authorization, read-only behavior, context propagation, loopback HTTP and simulated excluded-range/bind-race cases; Release mod build passed. In-game co-op and visual verification remain pending for these changes.
+- Core tests cover run-boundary rethrow, in-flight request budgets, companion port-file discovery, settings reseed, and deck selected-card contracts. Live co-op and in-game selection still need a game session.
 
 ## v0.9.2 - 2026-08-31
 

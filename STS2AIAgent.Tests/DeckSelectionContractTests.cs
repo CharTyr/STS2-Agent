@@ -57,9 +57,16 @@ internal static class DeckSelectionContractTests
             settleBody,
             StringComparison.Ordinal);
         Assert.Contains(
+            "metadata.SelectedCount<metadata.MaxSelect",
+            settleBody,
+            StringComparison.Ordinal);
+        Assert.Contains(
             "ConfirmDeckSelectionAsync(screen,remaining)",
             settleBody,
             StringComparison.Ordinal);
+        var stateSource = WithoutWhitespace(ReadSource("STS2AIAgent/Game/GameStateService.cs"));
+        Assert.Contains("IsCardSelected(currentScreen,holder.CardModel!)", stateSource, StringComparison.Ordinal);
+        Assert.Contains("selected=selected", stateSource, StringComparison.Ordinal);
     }
 
     private static string ReadSource(string relativePath)

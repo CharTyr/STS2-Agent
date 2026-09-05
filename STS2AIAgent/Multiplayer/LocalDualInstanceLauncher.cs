@@ -105,15 +105,8 @@ internal static class LocalDualInstanceLauncher
             return new DualLaunchResult { Ok = false, Message = "找不到游戏可执行文件。" };
         }
 
-        int companionPort;
-        try
-        {
-            companionPort = HttpServer.FindFreePort(HttpServer.Instance.Port + 1);
-        }
-        catch (Exception ex)
-        {
-            return new DualLaunchResult { Ok = false, Message = "找不到空闲 API 端口：" + ex.Message };
-        }
+        var hostPort = HttpServer.Instance.Port;
+        var companionPort = hostPort is > 0 and < 65535 ? hostPort + 1 : 8081;
 
         if (!CoopLaunchPolicy.TryGetCompanionArguments(
                 CommandLineHelper.GetValue("force-steam"),
@@ -163,6 +156,7 @@ internal static class LocalDualInstanceLauncher
         };
 
         startInfo.Environment["STS2_API_PORT"] = companionPort.ToString();
+        startInfo.Environment["STS2_API_ALLOW_FALLBACK"] = "1";
         startInfo.Environment["STS2_AGENT_ROLE"] = InstanceRole.Companion;
         startInfo.Environment["STS2_MULTIPLAYER_HOST_IP"] = "127.0.0.1";
         startInfo.Environment["STS2_AGENT_AUTOPLAY"] = "1";
@@ -193,10 +187,10 @@ internal static class LocalDualInstanceLauncher
         // Retain the process handle after timeout/cancellation too. Retrying the
         // invite must not start a third game while this child is still alive.
         _companionProcess = process;
-        Connection = new CompanionConnection(companionPort, process.Id, sessionToken);
-        var ready = await WaitForHealthAsync(companionPort, process, TimeSpan.FromSeconds(90), cancellationToken);
-        if (!ready)
+        var readyPort = await WaitForHealthAsync(companionPort, process, TimeSpan.FromSeconds(90), cancellationToken);
+        if (readyPort == null)
         {
+            Connection = null;
             return new DualLaunchResult
             {
                 Ok = false,
@@ -208,47 +202,50 @@ internal static class LocalDualInstanceLauncher
             };
         }
 
+        Connection = new CompanionConnection(readyPort.Value, process.Id, sessionToken);
         return new DualLaunchResult
         {
             Ok = true,
-            CompanionPort = companionPort,
+            CompanionPort = readyPort.Value,
             CompanionPid = process.Id,
-            Message = $"第二实例已就绪：PID {process.Id}，API {companionPort}"
+            Message = $"第二实例已就绪：PID {process.Id}，API {readyPort.Value}"
         };
     }
 
-    private static async Task<bool> WaitForHealthAsync(int port, Process process, TimeSpan timeout, CancellationToken cancellationToken)
+    private static async Task<int?> WaitForHealthAsync(int preferredPort, Process process, TimeSpan timeout, CancellationToken cancellationToken)
     {
         using var http = new System.Net.Http.HttpClient { Timeout = TimeSpan.FromSeconds(2) };
         var deadline = DateTime.UtcNow + timeout;
-        var url = $"http://127.0.0.1:{port}/health";
         while (DateTime.UtcNow < deadline)
         {
             cancellationToken.ThrowIfCancellationRequested();
             if (process.HasExited)
             {
-                return false;
+                return null;
             }
 
-            try
+            foreach (var port in CompanionPortFile.EnumerateCandidates(preferredPort, process.Id))
             {
-                var json = await http.GetStringAsync(url, cancellationToken);
-                if (CompanionHealth.IsExpectedProcess(json, port, process.Id))
+                try
                 {
-                    return true;
+                    var json = await http.GetStringAsync($"http://127.0.0.1:{port}/health", cancellationToken);
+                    if (CompanionHealth.IsExpectedProcess(json, port, process.Id))
+                    {
+                        return port;
+                    }
                 }
-            }
-            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
-            {
-                throw;
-            }
-            catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException)
-            {
+                catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+                {
+                    throw;
+                }
+                catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException)
+                {
+                }
             }
 
             await Task.Delay(1000, cancellationToken);
         }
 
-        return false;
+        return null;
     }
 }

@@ -52,6 +52,16 @@ internal static class SessionBudgetGuardTests
         Assert.Contains("1,050/1,000", stop);
     }
 
+    public static void CheckBudget_CountsInFlightRequests()
+    {
+        var guard = new SessionBudgetGuard(maxRequests: 2);
+        Assert.Null(guard.CheckBudget());
+        Assert.Null(guard.CheckBudget(extraRequests: 1));
+        Assert.NotNull(guard.CheckBudget(extraRequests: 2));
+        guard.Record(0, 1);
+        Assert.NotNull(guard.CheckBudget(extraRequests: 1));
+    }
+
     public static void MaxRequests_StopsEvenWithoutUsage()
     {
         var guard = new SessionBudgetGuard(maxRequests: 3);

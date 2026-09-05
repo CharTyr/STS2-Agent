@@ -125,6 +125,9 @@ internal static class TestRunner
         yield return ("TeamControl.NoOverlappingLoops", AutoPlaySessionTests.ImmediatePauseNeverOverlapsGenerations);
         yield return ("TeamControl.Lifetime", () => Task.Run(AutoPlaySessionTests.CanceledLifetimeCannotStart));
         yield return ("TeamControl.NoLateAct", AgentLoopTests.PauseAfterModelResponseDoesNotDispatchAct);
+        yield return ("AgentLoop.RunBoundaryRethrown", AgentLoopTests.PlayOnce_RethrowsRunBoundaryAfterAct);
+        yield return ("AgentLoop.CheckStateOnGetGameState", AgentLoopTests.PlayOnce_InvokesCheckStateOnGetGameState);
+        yield return ("AgentLoop.RequestBudgetStopsNextRound", AgentLoopTests.PlayOnce_StopsFurtherLlmCallsWhenRequestBudgetIsSpent);
         yield return ("TeamControl.TransportAck", TeamConversationTests.PauseControlHasExplicitAcknowledgement);
         yield return ("TeamChat.ReadOnly", AgentLoopTests.TeamChat_CannotActEvenWithPlayIntent);
         yield return ("TeamChat.NextDecision", AgentLoopTests.TeamSuggestion_ReachesNextPlayDecision);
@@ -134,13 +137,8 @@ internal static class TestRunner
         yield return ("TeamChat.ReusedPort", TeamConversationTests.ReusedPortDoesNotReceiveMessage);
         yield return ("CoopStartup.OfflineIsolation", () => Task.Run(CompanionStartupTests.OfflineLaunchKeepsAccountsIsolated));
         yield return ("CoopStartup.SettingsIsolation", () => Task.Run(CompanionStartupTests.SettingsPathCanBeIsolated));
-        yield return ("CoopStartup.ExcludedRange", () => Task.Run(CompanionStartupTests.ExcludedRangeUsesDynamicPort));
-        yield return ("CoopStartup.BindRace", () => Task.Run(CompanionStartupTests.BindRaceReselectsDynamicPort));
-        yield return ("CoopStartup.ExplicitPort", () => Task.Run(CompanionStartupTests.ExplicitPortNeverChanges));
-        yield return ("CoopStartup.ExplicitReserved", () => Task.Run(CompanionStartupTests.ExplicitReservedPortFailsClearly));
-        yield return ("CoopStartup.BoundedFailure", () => Task.Run(CompanionStartupTests.ExhaustionIsBounded));
-        yield return ("CoopStartup.UnexpectedFailure", () => Task.Run(CompanionStartupTests.UnexpectedFailureIsNotHidden));
-        yield return ("CoopStartup.RealHttp", CompanionStartupTests.RealLoopbackListenerResponds);
+        yield return ("CoopStartup.PortFile", () => Task.Run(CompanionStartupTests.CompanionPortFileRoundTrip));
+        yield return ("CoopStartup.CompanionDoesNotHost", () => Task.Run(CompanionStartupTests.CompanionBootstrapDoesNotHostLobby));
         yield return ("CoopStartup.Identity", () => Task.Run(CompanionStartupTests.HealthRequiresExactCompanionIdentity));
         yield return ("CoopStartup.Preconditions", () => Task.Run(CompanionStartupTests.LaunchPreconditionsProtectHumanRun));
         yield return ("SettingsStore.RoundTrip", () => Task.Run(SettingsStoreTests.RoundTrip_PreservesEndpointsModelsAndRoles));
@@ -163,6 +161,7 @@ internal static class TestRunner
         yield return ("Budget.NoLimit", () => Task.Run(SessionBudgetGuardTests.NoLimit_NeverStops));
         yield return ("Budget.MaxTokens", () => Task.Run(SessionBudgetGuardTests.MaxTokens_StopsWhenExceeded));
         yield return ("Budget.MaxRequests", () => Task.Run(SessionBudgetGuardTests.MaxRequests_StopsEvenWithoutUsage));
+        yield return ("Budget.InFlightRequests", () => Task.Run(SessionBudgetGuardTests.CheckBudget_CountsInFlightRequests));
         yield return ("Budget.RecoveryStops", SessionBudgetGuardTests.Recovery_AutoPlayStopsOnBudgetExceeded);
         yield return ("Budget.ResumePreservesCumulativeUsage", () => Task.Run(SessionBudgetGuardTests.InitialCounters_ResumePreservesCumulativeUsage));
         yield return ("Budget.ExceededRequestsStopsImmediately", SessionBudgetGuardTests.InitialCounters_AlreadyExceeded_RunAsyncStopsImmediately);

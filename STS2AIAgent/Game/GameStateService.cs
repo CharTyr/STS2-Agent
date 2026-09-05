@@ -58,8 +58,8 @@ namespace STS2AIAgent.Game;
 
 internal static class GameStateService
 {
-    private const int StateVersion = 15;
-    private const int AgentViewVersion = 9;
+    private const int StateVersion = 16;
+    private const int AgentViewVersion = 10;
     private static readonly TimeSpan CombatActionSnapshotStableDelay = TimeSpan.FromMilliseconds(200);
     private static string? _lastCombatActionReadinessSignature;
     private static DateTime _lastCombatActionReadinessSinceUtc = DateTime.MinValue;
@@ -129,6 +129,7 @@ internal static class GameStateService
             agent_view = BuildAgentViewPayload(
                 screen,
                 session,
+                SaveManager.Instance.CurrentProfileId,
                 runState?.Rng.StringSeed ?? "run_unknown",
                 combatState?.RoundNumber,
                 availableActions,
@@ -853,9 +854,16 @@ internal static class GameStateService
 
     public static bool CanConfirmSelection(IScreenContext? currentScreen)
     {
-        return TryGetCombatHandSelectionMetadata(currentScreen, out _, out var metadata) &&
-            metadata.RequiresConfirmation &&
-            metadata.CanConfirm;
+        if (TryGetCombatHandSelectionMetadata(currentScreen, out _, out var combatMetadata) &&
+            combatMetadata.RequiresConfirmation &&
+            combatMetadata.CanConfirm)
+        {
+            return true;
+        }
+
+        return TryGetDeckCardSelectionMetadata(currentScreen, out var deckMetadata) &&
+            deckMetadata.CanConfirm &&
+            (deckMetadata.RequiresConfirmation || deckMetadata.MinSelect < deckMetadata.MaxSelect);
     }
 
     public static bool CanProceed(IScreenContext? currentScreen)
@@ -2770,6 +2778,7 @@ internal static class GameStateService
     private static object BuildAgentViewPayload(
         string screen,
         SessionPayload session,
+        int nativeProfileId,
         string runId,
         int? turn,
         string[] availableActions,
@@ -2800,6 +2809,13 @@ internal static class GameStateService
         {
             version = AgentViewVersion,
             screen,
+            native_profile_id = nativeProfileId,
+            profiles = new[]
+            {
+                new { id = 1, current = nativeProfileId == 1 },
+                new { id = 2, current = nativeProfileId == 2 },
+                new { id = 3, current = nativeProfileId == 3 }
+            },
             run_id = runId,
             session,
             turn,
@@ -3031,7 +3047,7 @@ internal static class GameStateService
             max = selection.max_select,
             selected = selection.selected_count,
             confirm = selection.can_confirm,
-            cards = selection.cards.Select(card => BuildAgentChoiceCardPayload(card.index, card.name, card.upgraded, card.energy_cost, card.star_cost, card.costs_x, card.star_costs_x, GetPreferredCardRulesText(card.rules_text, card.resolved_rules_text), glossaryTerms)).ToArray()
+            cards = selection.cards.Select(card => BuildAgentChoiceCardPayload(card.index, card.name, card.upgraded, card.energy_cost, card.star_cost, card.costs_x, card.star_costs_x, GetPreferredCardRulesText(card.rules_text, card.resolved_rules_text), glossaryTerms, card.selected)).ToArray()
         };
     }
 
@@ -3352,7 +3368,8 @@ internal static class GameStateService
         bool costsX,
         bool starCostsX,
         string rulesText,
-        HashSet<string> glossaryTerms)
+        HashSet<string> glossaryTerms,
+        bool selected = false)
     {
         var keywords = GetGlossaryMatches(rulesText);
         CollectGlossaryTerms(glossaryTerms, rulesText);
@@ -3361,9 +3378,42 @@ internal static class GameStateService
         {
             i = index,
             line = FormatCardLine(name, upgraded, 1, energyCost, starCost, costsX, starCostsX, rulesText),
+            selected,
             keywords,
             mods = Array.Empty<string>()
         };
+    }
+
+    private static bool IsCardSelected(IScreenContext? currentScreen, CardModel card)
+    {
+        if (currentScreen is NDeckCardSelectScreen deckCardScreen &&
+            ReflectionMemberAccessor.TryGetValue(deckCardScreen, "_selectedCards") is IEnumerable selectedDeckCards)
+        {
+            foreach (var item in selectedDeckCards)
+            {
+                if (ReferenceEquals(item, card))
+                {
+                    return true;
+                }
+            }
+        }
+
+        if (TryGetCombatHandSelection(currentScreen, out var hand) && hand != null)
+        {
+            const BindingFlags flags = BindingFlags.Instance | BindingFlags.NonPublic;
+            if (typeof(NPlayerHand).GetField("_selectedCards", flags)?.GetValue(hand) is IEnumerable selectedHandCards)
+            {
+                foreach (var item in selectedHandCards)
+                {
+                    if (ReferenceEquals(item, card))
+                    {
+                        return true;
+                    }
+                }
+            }
+        }
+
+        return false;
     }
 
     private static object BuildAgentPricedCardPayload(
@@ -4029,7 +4079,10 @@ internal static class GameStateService
             can_confirm = hasCombatHandSelection
                 ? combatHandSelection.CanConfirm
                 : hasDeckCardSelection && deckCardSelection.CanConfirm,
-            cards = cards.Select((holder, index) => BuildSelectionCardPayload(holder.CardModel!, index)).ToArray()
+            cards = cards.Select((holder, index) => BuildSelectionCardPayload(
+                holder.CardModel!,
+                index,
+                IsCardSelected(currentScreen, holder.CardModel!))).ToArray()
         };
     }
 
@@ -5397,13 +5450,14 @@ internal static class GameStateService
         };
     }
 
-    private static SelectionCardPayload BuildSelectionCardPayload(CardModel card, int index)
+    private static SelectionCardPayload BuildSelectionCardPayload(CardModel card, int index, bool selected)
     {
         var resolvedRulesText = GetResolvedCardRulesText(card);
         var dynamicValues = BuildCardDynamicValuePayloads(card);
         return new SelectionCardPayload
         {
             index = index,
+            selected = selected,
             card_id = card.Id.Entry,
             name = card.Title,
             upgraded = card.IsUpgraded,
@@ -7299,6 +7353,8 @@ internal sealed class DeckCardPayload
 internal sealed class SelectionCardPayload
 {
     public int index { get; init; }
+
+    public bool selected { get; init; }
 
     public string card_id { get; init; } = string.Empty;
 

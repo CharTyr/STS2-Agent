@@ -12,6 +12,8 @@ internal static class ProfileSelectionContractTests
         var stateSource = WithoutWhitespace(ReadSource("STS2AIAgent/Game/GameStateService.cs"));
 
         Assert.Contains("native_profile_id=SaveManager.Instance.CurrentProfileId", stateSource, StringComparison.Ordinal);
+        Assert.Contains("native_profile_id=nativeProfileId", stateSource, StringComparison.Ordinal);
+        Assert.Contains("profiles=new[]", stateSource, StringComparison.Ordinal);
         Assert.Contains("names.Add(\"switch_profile\")", stateSource, StringComparison.Ordinal);
         Assert.Contains("\"switch_profile\"=>ExecuteSwitchProfileAsync(request)", actionSource, StringComparison.Ordinal);
         Assert.Contains("profileIdis<1or>3", actionSource, StringComparison.Ordinal);

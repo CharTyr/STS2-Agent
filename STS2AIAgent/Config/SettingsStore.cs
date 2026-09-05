@@ -91,7 +91,13 @@ internal sealed class SettingsStore
         var json = JsonSerializer.Serialize(settings, JsonOptions);
         var tempPath = _path + ".tmp";
         File.WriteAllText(tempPath, json);
-        File.Copy(tempPath, _path, overwrite: true);
-        File.Delete(tempPath);
+        if (File.Exists(_path))
+        {
+            File.Replace(tempPath, _path, destinationBackupFileName: null);
+        }
+        else
+        {
+            File.Move(tempPath, _path);
+        }
     }
 }

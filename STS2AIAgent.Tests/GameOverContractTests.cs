@@ -128,8 +128,8 @@ internal static class GameOverContractTests
         var verificationBody = AgentSourceFixture.WithoutWhitespace(
             AgentSourceFixture.MethodBody(rawStateSource, "VerifyGameOverProgressSave"));
 
-        Assert.Contains("privateconstintStateVersion=15", stateSource, StringComparison.Ordinal);
-        Assert.Contains("privateconstintAgentViewVersion=9", stateSource, StringComparison.Ordinal);
+        Assert.Contains("privateconstintStateVersion=16", stateSource, StringComparison.Ordinal);
+        Assert.Contains("privateconstintAgentViewVersion=10", stateSource, StringComparison.Ordinal);
         Assert.Contains("save_status=saveVerification.Status", stateSource, StringComparison.Ordinal);
         Assert.Contains("save_verified=saveVerification.Verified", stateSource, StringComparison.Ordinal);
         Assert.Contains("save_error=saveVerification.Error", stateSource, StringComparison.Ordinal);

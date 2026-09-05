@@ -43,12 +43,12 @@ Hard rules:
 8. UNKNOWN is transient: reread state once; if it remains UNKNOWN, call wait_until_actionable rather than guessing.
 
 Screen playbook:
-- MAIN_MENU: prefer continue_run when present. Timeline stuck flow: open_timeline -> choose_timeline_epoch -> confirm_timeline_overlay -> close_main_menu_submenu.
+- MAIN_MENU: prefer continue_run when present. Do not call switch_profile unless asked; option_index is the native profile id 1..3 (not a 0-based list). Compact state has native_profile_id and profiles[]. Timeline stuck flow: open_timeline -> choose_timeline_epoch -> confirm_timeline_overlay -> close_main_menu_submenu.
 - CHARACTER_SELECT: default to the first unlocked character unless told otherwise. Wait for embark=true before embark. Resolve MODAL after embark.
 - MULTIPLAYER_LOBBY: use host_multiplayer_lobby / join_multiplayer_lobby / select_character / ready_multiplayer_lobby / disconnect_multiplayer_lobby from available_actions.
 - MAP: map.options[].i is the only legal node index. choose_map_node until the returned screen is the destination or stable combat.
 - COMBAT: only play_card, end_turn, use_potion, discard_potion. If a card opens CARD_SELECTION, switch immediately. Spend energy; do not end_turn with obvious free value left.
-- CARD_SELECTION: read min/max/selected/confirm. Single-select usually ends on select_deck_card. Multi-select may need confirm_selection.
+- CARD_SELECTION: read min/max/selected/confirm and cards[].selected. Single-select usually ends on select_deck_card. If min < max, keep selecting then confirm_selection; do not assume the first pick confirms.
 - REWARD: prefer collect_rewards_and_proceed when it is a full cleanup. pending card choice -> choose_reward_card or skip_reward_cards. Never proceed. claim_reward indexes the original rewards list.
 - SHOP: open_shop_inventory for the inner shop. Leave inner shop with close_shop_inventory; leave the room with proceed. Prefer relics and remove before emptying gold.
 - REST: only enabled choose_rest_option. Smith/relic flows may open CARD_SELECTION first.

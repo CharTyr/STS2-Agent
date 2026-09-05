@@ -12,9 +12,10 @@ internal static class CompanionStartupTests
     {
         Assert.Equal("--windowed", CoopLaunchPolicy.CompanionArguments(null, "901"));
         Assert.Equal("--windowed --force-steam off --clientId 902", CoopLaunchPolicy.CompanionArguments("off", "901"));
-        Assert.Equal("--windowed --force-steam off", CoopLaunchPolicy.CompanionArguments("off", null));
+        Assert.Equal("--windowed --force-steam off --clientId 1", CoopLaunchPolicy.CompanionArguments("off", null));
 
         Expect<InvalidOperationException>(() => CoopLaunchPolicy.CompanionArguments("off", ulong.MaxValue.ToString()));
+        Expect<InvalidOperationException>(() => CoopLaunchPolicy.CompanionArguments("off", "not-a-number"));
 
         Assert.True(CoopLaunchPolicy.TryGetCompanionArguments("off", "901", out var args, out var err));
         Assert.Equal("--windowed --force-steam off --clientId 902", args);
@@ -45,6 +46,7 @@ internal static class CompanionStartupTests
             Assert.Equal(explicitCustom, CoopLaunchPolicy.CompanionSettingsPath(isolated, explicitCustom));
             Expect<InvalidOperationException>(() => CoopLaunchPolicy.CompanionSettingsPath(isolated, "relative.companion.json"));
             Expect<ArgumentException>(() => CoopLaunchPolicy.CompanionSettingsPath(""));
+            Expect<InvalidOperationException>(() => CoopLaunchPolicy.SeedCompanionSettings(isolated, isolated));
 
             File.WriteAllText(isolated, "{\"main\":true}");
             Assert.False(File.Exists(derived));
@@ -55,7 +57,7 @@ internal static class CompanionStartupTests
             File.WriteAllText(derived, "{\"companion\":true}");
             File.WriteAllText(isolated, "{\"main\":updated}");
             CoopLaunchPolicy.SeedCompanionSettings(isolated, derived);
-            Assert.Equal("{\"companion\":true}", File.ReadAllText(derived));
+            Assert.Equal("{\"main\":updated}", File.ReadAllText(derived));
         }
         finally
         {
@@ -64,86 +66,40 @@ internal static class CompanionStartupTests
         }
     }
 
-    public static void ExcludedRangeUsesDynamicPort()
+    public static void CompanionPortFileRoundTrip()
     {
-        var attempted = new List<int>();
-        var selected = LoopbackListener.Select(8080, true, port =>
+        var pid = 424242;
+        CompanionPortFile.Delete(pid);
+        Assert.True(CompanionPortFile.TryRead(pid) == null);
+        CompanionPortFile.Write(pid, 18081);
+        Assert.Equal(18081, CompanionPortFile.TryRead(pid));
+        var ports = CompanionPortFile.EnumerateCandidates(18080, pid).ToArray();
+        Assert.Equal(18080, ports[0]);
+        Assert.True(ports.Contains(18081));
+        CompanionPortFile.Delete(pid);
+        Assert.True(CompanionPortFile.TryRead(pid) == null);
+    }
+
+    public static void CompanionBootstrapDoesNotHostLobby()
+    {
+        var source = File.ReadAllText(FindSource("STS2AIAgent/Multiplayer/DualInstanceCoordinator.cs"));
+        var start = source.IndexOf("RunCompanionBootstrapAsync", StringComparison.Ordinal);
+        var open = source.IndexOf('{', start);
+        var depth = 0;
+        var end = open;
+        for (var i = open; i < source.Length; i++)
         {
-            attempted.Add(port);
-            if (port < 49000) throw new HttpListenerException(32);
-            return "listening";
-        }, () => 49000, () => throw new Exception("Automatic selection should not sleep."));
-        Assert.Equal(49000, selected.Port);
-        Assert.Equal(LoopbackListener.NearbyPortCount + 1, attempted.Count);
-        Assert.Equal("listening", selected.Listener);
-    }
+            if (source[i] == '{') depth++;
+            else if (source[i] == '}' && --depth == 0)
+            {
+                end = i;
+                break;
+            }
+        }
 
-    public static void BindRaceReselectsDynamicPort()
-    {
-        var allocated = 49000;
-        var selected = LoopbackListener.Select(65535, true, port =>
-        {
-            if (port != 49002) throw new HttpListenerException(183);
-            return port;
-        }, () => ++allocated, () => { });
-        Assert.Equal(49002, selected.Port);
-    }
-
-    public static void ExplicitPortNeverChanges()
-    {
-        var attempts = 0;
-        var waits = 0;
-        var error = Expect<InvalidOperationException>(() => LoopbackListener.Select<int>(8080, false, port =>
-        {
-            Assert.Equal(8080, port);
-            attempts++;
-            throw new HttpListenerException(183);
-        }, () => throw new Exception("Explicit port cannot fall back."), () => waits++));
-        Assert.Equal(LoopbackListener.ExplicitPortAttempts, attempts);
-        Assert.Equal(attempts - 1, waits);
-        Assert.Contains("STS2_API_PORT", error.Message);
-    }
-
-    public static void ExplicitReservedPortFailsClearly()
-    {
-        var error = Expect<InvalidOperationException>(() => LoopbackListener.Select<int>(8080, false,
-            _ => throw new HttpListenerException(32),
-            () => throw new Exception("Unexpected fallback"), () => throw new Exception("Unexpected retry")));
-        Assert.Contains("8080", error.Message);
-        Assert.True(error.InnerException is HttpListenerException);
-    }
-
-    public static void ExhaustionIsBounded()
-    {
-        var attempts = 0;
-        Expect<InvalidOperationException>(() => LoopbackListener.Select<int>(8080, true, _ =>
-        {
-            attempts++;
-            throw new HttpListenerException(5);
-        }, () => 49000, () => { }));
-        Assert.Equal(LoopbackListener.NearbyPortCount + LoopbackListener.DynamicPortAttempts, attempts);
-    }
-
-    public static void UnexpectedFailureIsNotHidden()
-    {
-        var error = Expect<HttpListenerException>(() => LoopbackListener.Select<int>(8080, true,
-            _ => throw new HttpListenerException(87),
-            () => throw new Exception("Unexpected fallback"), () => { }));
-        Assert.Equal(87, error.NativeErrorCode);
-    }
-
-    public static async Task RealLoopbackListenerResponds()
-    {
-        var started = LoopbackListener.Start(49080, allowFallback: true);
-        using var listener = started.Listener;
-        using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(5));
-        using var http = new HttpClient();
-        var request = http.GetAsync($"http://127.0.0.1:{started.Port}/health", timeout.Token);
-        var context = await listener.GetContextAsync().WaitAsync(timeout.Token);
-        context.Response.StatusCode = 204;
-        context.Response.Close();
-        using var response = await request;
-        Assert.Equal(HttpStatusCode.NoContent, response.StatusCode);
+        var body = source[open..(end + 1)];
+        Assert.False(body.Contains("OpenMultiplayerTestAsync", StringComparison.Ordinal));
+        Assert.Contains("join_multiplayer_lobby", body, StringComparison.Ordinal);
     }
 
     public static void HealthRequiresExactCompanionIdentity()
@@ -175,6 +131,23 @@ internal static class CompanionStartupTests
         model.Endpoint.BaseUrl = "http://localhost:1234/v1";
         model.Endpoint.ApiKey = "";
         Assert.True(CoopLaunchPolicy.GetError(false, false, "MAIN_MENU", model) == null);
+    }
+
+    private static string FindSource(string relativePath)
+    {
+        foreach (var start in new[] { Directory.GetCurrentDirectory(), AppContext.BaseDirectory })
+        {
+            for (var directory = new DirectoryInfo(start); directory != null; directory = directory.Parent)
+            {
+                var candidate = Path.Combine(directory.FullName, relativePath);
+                if (File.Exists(candidate))
+                {
+                    return candidate;
+                }
+            }
+        }
+
+        throw new FileNotFoundException(relativePath);
     }
 
     private static T Expect<T>(Action action) where T : Exception

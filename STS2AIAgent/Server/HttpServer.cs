@@ -42,12 +42,13 @@ public sealed class HttpServer
             }
 
             var preferredPort = ResolvePreferredPort();
-            var allowIncrement = !IsExplicitPortConfigured();
+            var allowIncrement = !IsExplicitPortConfigured() || AllowFallback();
             var started = LoopbackListener.Start(preferredPort, allowIncrement);
             _listener = started.Listener;
             Port = started.Port;
             PortWasAutoIncremented = started.Port != preferredPort;
             Prefix = $"http://{DefaultHost}:{Port}/";
+            PublishCompanionPort(Port);
 
             _cts = new CancellationTokenSource();
             _listenLoopTask = Task.Run(() => ListenLoopAsync(_listener, _cts.Token));
@@ -127,6 +128,7 @@ public sealed class HttpServer
             cts?.Dispose();
         }
 
+        ClearCompanionPort();
         Log.Info($"{LogPrefix} Stopped");
     }
 
@@ -161,12 +163,48 @@ public sealed class HttpServer
         }
     }
 
+    internal static bool AllowFallback()
+    {
+        var raw = Environment.GetEnvironmentVariable("STS2_API_ALLOW_FALLBACK");
+        return string.Equals(raw, "1", StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(raw, "true", StringComparison.OrdinalIgnoreCase);
+    }
+
     private static bool IsExplicitPortConfigured()
     {
         var rawPort = Environment.GetEnvironmentVariable("STS2_API_PORT");
         return !string.IsNullOrWhiteSpace(rawPort) &&
             int.TryParse(rawPort.Trim(), out var port) &&
             port is > 0 and <= 65535;
+    }
+
+    private static void PublishCompanionPort(int port)
+    {
+        var role = Environment.GetEnvironmentVariable("STS2_AGENT_ROLE");
+        if (!string.Equals(role, "companion", StringComparison.OrdinalIgnoreCase))
+        {
+            return;
+        }
+
+        try
+        {
+            CompanionPortFile.Write(Environment.ProcessId, port);
+        }
+        catch (Exception ex)
+        {
+            Log.Warn($"{LogPrefix} Failed to publish companion port: {ex.Message}");
+        }
+    }
+
+    private static void ClearCompanionPort()
+    {
+        try
+        {
+            CompanionPortFile.Delete(Environment.ProcessId);
+        }
+        catch
+        {
+        }
     }
 
     private static int ResolvePreferredPort()

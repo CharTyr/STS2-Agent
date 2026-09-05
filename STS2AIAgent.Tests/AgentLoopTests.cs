@@ -120,6 +120,95 @@ internal static class AgentLoopTests
         Assert.False(factory.LastRequest!.Messages.Any(message => message.Content?.Contains("focus left") == true));
     }
 
+    public static async Task PlayOnce_RethrowsRunBoundaryAfterAct()
+    {
+        var bridge = new FakeBridge
+        {
+            CompactStateJson =
+                """{"screen":"COMBAT","run_id":"run_1","session":{"phase":"run"},"available_actions":["play_card","end_turn"],"combat":{"hand":[{"i":0,"targets":[]}]}}""",
+            AfterActCompactStateJson =
+                """{"screen":"MAIN_MENU","run_id":"run_unknown","session":{"phase":"menu"},"available_actions":["switch_profile"]}"""
+        };
+        var factory = new ScriptedClientFactory(new[]
+        {
+            new LlmCompletion
+            {
+                ToolCalls = new[]
+                {
+                    new LlmToolCall
+                    {
+                        Id = "call_act",
+                        Name = "act",
+                        ArgumentsJson = """{"action":"play_card","card_index":0}"""
+                    }
+                }
+            }
+        });
+        var loop = new AgentLoop(bridge, factory, AgentSettings.CreateDefault);
+        var stopped = false;
+        try
+        {
+            await loop.PlayOnceAsync(CancellationToken.None, new CurrentRunBoundary().Check);
+        }
+        catch (AutoPlayStoppedException)
+        {
+            stopped = true;
+        }
+
+        Assert.True(stopped);
+        Assert.Equal(1, bridge.ActCalls);
+    }
+
+    public static async Task PlayOnce_InvokesCheckStateOnGetGameState()
+    {
+        var checks = 0;
+        var bridge = new FakeBridge();
+        var factory = new ScriptedClientFactory(new[]
+        {
+            new LlmCompletion
+            {
+                ToolCalls = new[]
+                {
+                    new LlmToolCall { Id = "call_state", Name = "get_game_state", ArgumentsJson = "{}" },
+                    new LlmToolCall
+                    {
+                        Id = "call_act",
+                        Name = "act",
+                        ArgumentsJson = """{"action":"play_card","card_index":0}"""
+                    }
+                }
+            }
+        });
+        var loop = new AgentLoop(bridge, factory, AgentSettings.CreateDefault);
+        await loop.PlayOnceAsync(CancellationToken.None, _ => checks++);
+        Assert.True(checks >= 3, "expected checkState on start, get_game_state, and act");
+        Assert.Equal(1, bridge.ActCalls);
+    }
+
+    public static async Task PlayOnce_StopsFurtherLlmCallsWhenRequestBudgetIsSpent()
+    {
+        var calls = 0;
+        var guard = new SessionBudgetGuard(maxRequests: 1);
+        var factory = new ScriptedClientFactory(new[]
+        {
+            new LlmCompletion
+            {
+                ToolCalls = new[]
+                {
+                    new LlmToolCall { Id = "call_state", Name = "get_game_state", ArgumentsJson = "{}" }
+                }
+            },
+            new LlmCompletion { Content = "should not be requested" }
+        })
+        {
+            OnRequest = () => calls++
+        };
+        var loop = new AgentLoop(new FakeBridge(), factory, AgentSettings.CreateDefault, budgetGuard: () => guard);
+        var result = await loop.PlayOnceAsync(CancellationToken.None);
+        Assert.Equal(1, calls);
+        Assert.Contains("请求次数上限", result.Error);
+    }
+
     public static async Task PlayOnce_ExecutesSingleValidatedAct()
     {
         var bridge = new FakeBridge();
@@ -622,6 +711,8 @@ internal static class AgentLoopTests
         public string CompactStateJson { get; set; } =
             """{"screen":"COMBAT","available_actions":["play_card","end_turn"],"combat":{"hand":[{"i":0,"line":"Strike","targets":[]}],"enemies":[{"i":0}]}}""";
 
+        public string? AfterActCompactStateJson { get; set; }
+
         public string AvailableActionsJson { get; set; } =
             """[{"name":"play_card","requires_index":true,"requires_target":false}]""";
 
@@ -667,6 +758,11 @@ internal static class AgentLoopTests
             LastX = x;
             LastY = y;
             LastTool = tool;
+            if (AfterActCompactStateJson != null)
+            {
+                CompactStateJson = AfterActCompactStateJson;
+            }
+
             return Task.FromResult(ActResultJson);
         }
 

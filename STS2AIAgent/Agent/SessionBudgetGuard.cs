@@ -22,11 +22,13 @@ internal sealed class SessionBudgetGuard
 
     public bool HasLimit => MaxTokens.HasValue || MaxRequests.HasValue;
 
-    public string? CheckBudget()
+    public string? CheckBudget(int extraRequests = 0)
     {
-        if (MaxRequests.HasValue && RequestCount >= MaxRequests.Value)
+        extraRequests = Math.Max(0, extraRequests);
+        var requests = RequestCount + extraRequests;
+        if (MaxRequests.HasValue && requests >= MaxRequests.Value)
         {
-            return $"已达到会话请求次数上限（{RequestCount}/{MaxRequests.Value} 次），已自动停止游玩。";
+            return $"已达到会话请求次数上限（{requests}/{MaxRequests.Value} 次），已自动停止游玩。";
         }
 
         if (MaxTokens.HasValue && ConsumedTokens >= MaxTokens.Value)
