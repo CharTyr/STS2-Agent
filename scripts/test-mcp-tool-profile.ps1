@@ -116,7 +116,10 @@ async def main():
 raise SystemExit(asyncio.run(main()))
 '@
 
-    $pythonScript | uv run python - | Out-Host
+    $pythonScript | uv run --locked python - | Out-Host
+    if ($LASTEXITCODE -ne 0) {
+        throw "MCP tool profile verification failed with exit code $LASTEXITCODE."
+    }
 }
 finally {
     Pop-Location

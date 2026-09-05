@@ -1,0 +1,34 @@
+name: Validate
+
+on:
+  pull_request:
+  push:
+    branches: [main, dev, 'codex/**']
+
+permissions:
+  contents: read
+
+jobs:
+  contracts:
+    runs-on: windows-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '9.0.x'
+      - uses: astral-sh/setup-uv@v6
+        with:
+          python-version: '3.12'
+      - name: Core tests (no game installation required)
+        run: dotnet run --project STS2AIAgent.Tests/STS2AIAgent.Tests.csproj -c Release
+      - name: MCP tests
+        working-directory: mcp_server
+        run: uv run --locked python -m unittest discover -s tests -v
+      - name: MCP tool contracts
+        run: powershell -NoProfile -ExecutionPolicy Bypass -File scripts/test-mcp-tool-profile.ps1
+      - name: Release metadata
+        working-directory: mcp_server
+        run: uv run --locked python ../scripts/check_release_metadata.py
+      - name: Windows PowerShell failure propagation
+        run: powershell -NoProfile -ExecutionPolicy Bypass -File scripts/test-native-exit-propagation.ps1
