@@ -151,7 +151,7 @@ internal static class TestRunner
         yield return ("GameOver.SaveMissingMalformed", () => Task.Run(ProgressSaveVerificationTests.MissingOrMalformedFileCannotReportSuccess));
         yield return ("GameOver.SaveReadFailure", () => Task.Run(ProgressSaveVerificationTests.ReadFailureCannotReportSuccess));
         yield return ("DeckSelection.PayloadProgress", () => Task.Run(DeckSelectionContractTests.DeckGridPayloadReportsNativeSelectionProgress));
-        yield return ("DeckSelection.IntermediateSettle", () => Task.Run(DeckSelectionContractTests.IntermediateRequiredPickSettlesOnSelectionProgress));
+        yield return ("DeckSelection.ClickSettle", () => Task.Run(DeckSelectionContractTests.DeckGridClickSettlesInEitherDirectionBeforeConfirming));
         yield return ("AgentLoop.PlayOnce", AgentLoopTests.PlayOnce_ExecutesSingleValidatedAct);
         yield return ("AgentLoop.CrystalArgs", AgentLoopTests.PlayOnce_ForwardsCrystalSphereArguments);
         yield return ("AgentTools.CrystalSchema", () => Task.Run(AgentLoopTests.ActToolSchema_IncludesCrystalSphereArguments));

@@ -1622,9 +1622,8 @@ internal static class GameActionService
         var stable = currentScreen switch
         {
             NDeckCardSelectScreen deckCardScreen
-                when isDeckCardSelection &&
-                     deckCardSelection.SelectedCount + 1 < deckCardSelection.MinSelect =>
-                await WaitForDeckSelectionProgressAsync(
+                when isDeckCardSelection =>
+                await SettleDeckCardSelectionClickAsync(
                     deckCardScreen, deckCardSelection.SelectedCount, TimeSpan.FromSeconds(10)),
             NCardGridSelectionScreen cardSelectScreen => await ConfirmDeckSelectionAsync(cardSelectScreen, TimeSpan.FromSeconds(10)),
             NChooseACardSelectionScreen chooseCardScreen => await WaitForChooseCardSelectionResolutionAsync(chooseCardScreen, TimeSpan.FromSeconds(10)),
@@ -2085,7 +2084,7 @@ internal static class GameActionService
         return false;
     }
 
-    private static async Task<bool> WaitForDeckSelectionProgressAsync(
+    private static async Task<bool> SettleDeckCardSelectionClickAsync(
         NDeckCardSelectScreen screen,
         int previousSelectedCount,
         TimeSpan timeout)
@@ -2101,11 +2100,21 @@ internal static class GameActionService
                 return true;
             }
 
-            if (GameStateService.TryGetDeckCardSelectionMetadata(screen, out var metadata) &&
-                metadata.SelectedCount > previousSelectedCount)
+            if (!GameStateService.TryGetDeckCardSelectionMetadata(screen, out var metadata) ||
+                metadata.SelectedCount == previousSelectedCount)
+            {
+                continue;
+            }
+
+            if (metadata.SelectedCount < previousSelectedCount ||
+                metadata.SelectedCount < metadata.MinSelect)
             {
                 return true;
             }
+
+            var remaining = deadline - DateTime.UtcNow;
+            return remaining > TimeSpan.Zero &&
+                await ConfirmDeckSelectionAsync(screen, remaining);
         }
 
         return false;

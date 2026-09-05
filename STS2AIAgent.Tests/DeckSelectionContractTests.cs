@@ -29,29 +29,36 @@ internal static class DeckSelectionContractTests
             StringComparison.Ordinal);
     }
 
-    public static void IntermediateRequiredPickSettlesOnSelectionProgress()
+    public static void DeckGridClickSettlesInEitherDirectionBeforeConfirming()
     {
         var rawActionSource = ReadSource(
             "STS2AIAgent/Game/GameActionService.cs");
         var selectBody = WithoutWhitespace(
             MethodBody(rawActionSource, "ExecuteSelectDeckCardAsync"));
-        var progressBody = WithoutWhitespace(
+        var settleBody = WithoutWhitespace(
             MethodBody(
-                rawActionSource, "WaitForDeckSelectionProgressAsync"));
+                rawActionSource, "SettleDeckCardSelectionClickAsync"));
 
+        Assert.Contains("SettleDeckCardSelectionClickAsync", selectBody, StringComparison.Ordinal);
         Assert.Contains(
-            "deckCardSelection.SelectedCount+1<deckCardSelection.MinSelect",
-            selectBody,
-            StringComparison.Ordinal);
-        Assert.Contains("WaitForDeckSelectionProgressAsync", selectBody, StringComparison.Ordinal);
-        Assert.Contains("ConfirmDeckSelectionAsync", selectBody, StringComparison.Ordinal);
-        Assert.Contains(
-            "metadata.SelectedCount>previousSelectedCount",
-            progressBody,
+            "metadata.SelectedCount==previousSelectedCount",
+            settleBody,
             StringComparison.Ordinal);
         Assert.Contains(
             "ReferenceEquals(ActiveScreenContext.Instance.GetCurrentScreen(),screen)",
-            progressBody,
+            settleBody,
+            StringComparison.Ordinal);
+        Assert.Contains(
+            "metadata.SelectedCount<previousSelectedCount",
+            settleBody,
+            StringComparison.Ordinal);
+        Assert.Contains(
+            "metadata.SelectedCount<metadata.MinSelect",
+            settleBody,
+            StringComparison.Ordinal);
+        Assert.Contains(
+            "ConfirmDeckSelectionAsync(screen,remaining)",
+            settleBody,
             StringComparison.Ordinal);
     }
 
