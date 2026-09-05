@@ -50,7 +50,7 @@ Slay the Spire 2/
 1. **设置**：添加多个 OpenAI 兼容端点（OpenAI / DeepSeek / 硅基流动 / OpenRouter / Ollama / LM Studio 等）和模型，选择主对话模型；可选游玩模型、外挂视觉模型。思考强度在每个模型上单独设置（Off / Low / Medium / High）。
 2. **对话**：和模型聊天。可勾选「附带当前状态」或「附带截图」。
 3. **游玩**：开始/暂停自动游玩，或单步。走 compact 状态和工具，与 MCP 相同；不需要视觉也能打完全部流程。
-4. **双开**：启动第二个本地游戏进程，本机开大厅，同伴实例由模型自动加入并游玩。
+4. **AI 队友**：在主菜单邀请 AI 一起爬塔。你操作自己的角色，模型在第二个游戏窗口中自动加入大厅并游玩。邀请前会保存当前模型设置；重复点击不会再启动一个队友进程。
 5. **接入**：一键启动 HTTP MCP，复制 API / MCP 地址，给 Cursor、Claude、Codex 或自写客户端用。
 
 配置保存在 `%AppData%/STS2AIAgent/settings.json`，两个本地实例共用。
@@ -58,6 +58,8 @@ Slay the Spire 2/
 视觉是可选的额外上下文。纯文本模型可以直接游玩：compact `agent_view` + `get_game_state` / `get_available_actions` / `get_game_data_*` / `wait_until_actionable` / `act`。如果给游玩模型勾了「视觉」，或另外配了外挂视觉模型，截图才会作为辅助信息附上。
 
 本地双开目前走游戏 debug 的 `multiplayer test` 大厅。Steam 可能阻止第二进程。启动器不会杀掉当前游戏。
+
+组队后可在主窗口 **AI 队友 → 队伍交流** 中商量目标、路线或询问队友的选择。回复来自队友使用的游玩模型；最近对话会进入后续游玩上下文。聊天只读，不会替人类玩家出牌，也不会恢复已暂停的队友。若队友正在行动，消息会等本次行动完成后处理。交流会产生额外模型请求。
 
 ### 3. 可选：确认 HTTP API
 
@@ -67,7 +69,7 @@ Slay the Spire 2/
 http://127.0.0.1:8080/health
 ```
 
-`/health` 现在会返回 `api_port` 和 `instance_role`。8080 被占用时会自动改绑 8081、8082……（除非设置了 `STS2_API_PORT`）。
+`/health` 会返回 `api_port`、`instance_role` 和 `process_id`。8080 及附近端口不可用时会尝试系统分配的动态端口；实际地址显示在窗口中。显式设置 `STS2_API_PORT` 时保持固定端口，失败会给出错误。
 
 ## 可选：MCP Server（开发者）
 
@@ -133,7 +135,7 @@ powershell -ExecutionPolicy Bypass -File ".\scripts\start-mcp-network.ps1"
 
 1. 游戏是否真的已经启动
 2. 三个 Mod 文件是否都在游戏 `mods/` 目录
-3. 8080 是否已被另一实例占用，试 `http://127.0.0.1:8081/health`
+3. 窗口中显示的实际 API 地址；端口占用或 Windows 保留端口可能使其与 8080 不同
 4. 你放的是 Steam 游戏目录，不是仓库目录
 
 ### MCP 能启动，但读不到游戏状态

@@ -72,6 +72,7 @@ internal sealed class GameBridge : IGameBridge
     {
         return GameThread.InvokeAsync(async () =>
         {
+            cancellationToken.ThrowIfCancellationRequested();
             var response = await GameActionService.ExecuteAsync(new ActionRequest
             {
                 action = action,

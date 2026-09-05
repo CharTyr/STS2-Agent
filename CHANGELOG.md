@@ -2,9 +2,21 @@
 
 ## Unreleased
 
-### Notes
+### Added
 
-- None yet.
+- Added session-scoped team chat from the human overlay to the launched AI companion. Team replies use the play model; recent conversation informs future play decisions without granting chat permission to execute actions.
+- Made the AI teammate page the default entry for the human window, with an invite flow that saves model settings and checks the main-menu and autoplay preconditions.
+- Added `process_id` to `/health` and verify service, role, port, and process identity before accepting a companion connection.
+
+### Fixed
+
+- HTTP startup now falls back to bounded dynamic port selection when Windows excludes the default and nearby ports. Explicitly configured ports remain fixed.
+- Companion port discovery checks an actual HTTP bind. Repeated invitations retain the existing child process instead of starting additional games, including after connection timeout.
+- Companion startup detects early process exit and propagates cancellation while waiting for health.
+
+### Validation
+
+- 63 core tests passed, including team-chat authorization, read-only behavior, context propagation, loopback HTTP and simulated excluded-range/bind-race cases; Release mod build passed. In-game co-op and visual verification remain pending for these changes.
 
 ## v0.9.2 - 2026-08-31
 

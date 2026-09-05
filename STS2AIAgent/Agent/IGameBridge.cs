@@ -57,6 +57,8 @@ internal sealed class ChatTurn
 
 internal sealed class ChatOptions
 {
+    // Team conversation must stay read-only even when its text asks to play.
+    public bool TeammateConversation { get; init; }
     public bool AttachState { get; init; } = true;
 
     public bool AttachScreenshot { get; init; }

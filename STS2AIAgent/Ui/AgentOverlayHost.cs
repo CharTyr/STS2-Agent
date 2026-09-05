@@ -39,6 +39,14 @@ internal sealed class AgentOverlayHost
     private Label? _playThought;
     private Label? _apiLabel;
     private Label? _dualStatus;
+    private Button? _dualLaunchButton;
+    private RichTextLabel? _teamChat;
+    private TextEdit? _teamInput;
+    private Button? _teamSend;
+    private Label? _teamStatus;
+    private Label? _teamControlStatus;
+    private Button? _teamPause;
+    private Button? _teamResume;
     private Button? _playToggle;
     private Button? _stepButton;
     private Button? _sendButton;
@@ -231,7 +239,7 @@ internal sealed class AgentOverlayHost
         _layer.TreeEntered += OnOverlayEnteredTree;
         root.CallDeferred(Node.MethodName.AddChild, _layer);
         _tree.ProcessFrame += OnProcessFrame;
-        ShowTab("chat");
+        ShowTab(InstanceRole.IsCompanion ? "play" : "dual");
         RefreshDynamic();
         Log.Info($"{LogPrefix} Attach scheduled");
     }
@@ -287,10 +295,10 @@ internal sealed class AgentOverlayHost
         var chat = UiFactory.Button("对话", () => ShowTab("chat"));
         var settings = UiFactory.Button("设置", () => ShowTab("settings"));
         var play = UiFactory.Button("游玩", () => ShowTab("play"));
-        var dual = UiFactory.Button("双开", () => ShowTab("dual"));
+        var dual = UiFactory.Button("AI 队友", () => ShowTab("dual"));
         var connect = UiFactory.Button("接入", () => ShowTab("connect"));
         var row = new HBoxContainer { MouseFilter = Control.MouseFilterEnum.Ignore };
-        foreach (var button in new[] { chat, settings, play, dual, connect })
+        foreach (var button in new[] { dual, chat, play, settings, connect })
         {
             button.SizeFlagsHorizontal = Control.SizeFlags.ExpandFill;
             row.AddChild(button);
@@ -368,12 +376,32 @@ internal sealed class AgentOverlayHost
     private Control BuildDualPage()
     {
         var page = UiFactory.Column();
-        page.AddChild(UiFactory.Label("从当前窗口启动第二个游戏进程，本机主持大厅，同伴实例由模型自动加入并游玩。", 13));
-        page.AddChild(UiFactory.Label("限制：走游戏 debug「multiplayer test」大厅；Steam 可能阻止双开；不要用会杀掉已有进程的启动脚本。", 12, muted: true));
-        var launch = UiFactory.Button("启动本地双实例与模型联机", () => _ = LaunchDualAsync());
-        page.AddChild(launch);
-        _dualStatus = UiFactory.Label("尚未启动双开。", 13, muted: true);
+        page.AddChild(UiFactory.Label("和 AI 一起爬塔", 18));
+        page.AddChild(UiFactory.Label("你操作自己的角色，AI 作为队友加入冒险。先在设置中选好游玩模型，再从主菜单邀请它组队。", 13));
+        page.AddChild(UiFactory.Label("邀请后会打开队友的游戏窗口。等待它加入大厅，选择你的角色并准备，就能一起出发。", 12, muted: true));
+        _dualLaunchButton = UiFactory.Button("邀请 AI 队友", () => _ = LaunchDualAsync());
+        page.AddChild(_dualLaunchButton);
+        _dualStatus = UiFactory.Label("队友尚未加入。", 13, muted: true);
         page.AddChild(_dualStatus);
+        _teamPause = UiFactory.Button("暂停队友", () => _ = AgentRuntime.Instance.ControlTeammateAsync(false, CancellationToken.None));
+        _teamResume = UiFactory.Button("继续游玩", () => _ = AgentRuntime.Instance.ControlTeammateAsync(true, CancellationToken.None));
+        page.AddChild(UiFactory.Row(_teamPause, _teamResume));
+        _teamControlStatus = UiFactory.Label(AgentRuntime.Instance.TeamControlStatus, 12, muted: true);
+        page.AddChild(_teamControlStatus);
+        page.AddChild(UiFactory.Label("队伍交流", 15));
+        _teamChat = UiFactory.Rich();
+        _teamChat.FitContent = false;
+        _teamChat.CustomMinimumSize = new Vector2(0, 130);
+        page.AddChild(_teamChat);
+        _teamInput = UiFactory.Multiline("", 56);
+        _teamInput.PlaceholderText = "一起集火哪个敌人？这条路线你怎么看？";
+        page.AddChild(_teamInput);
+        _teamSend = UiFactory.Button("和队友说", () => _ = SendTeamMessageAsync());
+        page.AddChild(_teamSend);
+        _teamStatus = UiFactory.Label(AgentRuntime.Instance.TeamStatus, 12, muted: true);
+        page.AddChild(_teamStatus);
+        page.AddChild(UiFactory.Label("聊天不会替你出牌，也不会恢复已暂停的队友。建议会供队友下一次决策参考。", 12, muted: true));
+        page.AddChild(UiFactory.Label("如果队友窗口未能连接，请检查游戏日志和 Steam 双开限制。", 12, muted: true));
         return page;
     }
 
@@ -777,8 +805,17 @@ internal sealed class AgentOverlayHost
 
     private async Task LaunchDualAsync()
     {
-        await AgentRuntime.Instance.LaunchDualInstanceAsync(CancellationToken.None);
+        await AgentRuntime.Instance.LaunchDualInstanceAsync(HarvestSettings(), CancellationToken.None);
         RefreshDynamic();
+    }
+
+    private async Task SendTeamMessageAsync()
+    {
+        var text = _teamInput?.Text.Trim() ?? "";
+        if (text.Length == 0 || AgentRuntime.Instance.TeamMessagePending) return;
+        if (_teamInput != null) _teamInput.Text = "";
+        await AgentRuntime.Instance.SendTeamMessageAsync(text, CancellationToken.None);
+        await GameThread.InvokeAsync(RefreshDynamic);
     }
 
     private void OnRuntimeChanged()
@@ -822,6 +859,7 @@ internal sealed class AgentOverlayHost
 
         if (_playToggle != null)
         {
+            _playToggle.Disabled = AgentRuntime.Instance.DualLaunching;
             _playToggle.Text = AgentRuntime.Instance.PlayRunning ? "暂停自动游玩" : "开始自动游玩";
         }
 
@@ -838,6 +876,32 @@ internal sealed class AgentOverlayHost
         if (_dualStatus != null)
         {
             _dualStatus.Text = AgentRuntime.Instance.DualStatus;
+        }
+
+        if (_dualLaunchButton != null)
+        {
+            _dualLaunchButton.Disabled = AgentRuntime.Instance.DualLaunching || InstanceRole.IsCompanion;
+            _dualLaunchButton.Text = AgentRuntime.Instance.DualLaunching ? "正在邀请队友…" : "邀请 AI 队友";
+        }
+
+        if (_teamSend != null)
+        {
+            _teamSend.Disabled = AgentRuntime.Instance.TeamMessagePending || AgentRuntime.Instance.DualLaunching || InstanceRole.IsCompanion;
+            _teamSend.Text = AgentRuntime.Instance.TeamMessagePending ? "等待队友回复…" : "和队友说";
+        }
+        if (_teamStatus != null) _teamStatus.Text = AgentRuntime.Instance.TeamStatus;
+        if (_teamControlStatus != null) _teamControlStatus.Text = AgentRuntime.Instance.TeamControlStatus;
+        var controlDisabled = InstanceRole.IsCompanion || AgentRuntime.Instance.DualLaunching || AgentRuntime.Instance.TeamControlPending;
+        if (_teamPause != null) _teamPause.Disabled = controlDisabled;
+        if (_teamResume != null) _teamResume.Disabled = controlDisabled;
+        if (_teamChat != null)
+        {
+            _teamChat.Clear();
+            foreach (var turn in AgentRuntime.Instance.TeamHistory)
+            {
+                var who = turn.Role == "user" ? "你" : "AI 队友";
+                _teamChat.AppendText($"[b]{who}[/b]\n{Escape(turn.Text)}\n\n");
+            }
         }
 
         if (_mcpStatus != null)

@@ -1,5 +1,4 @@
 using System.Net;
-using System.Net.Sockets;
 using System.Threading;
 using MegaCrit.Sts2.Core.Logging;
 
@@ -9,10 +8,7 @@ public sealed class HttpServer
 {
     private const string DefaultHost = "127.0.0.1";
     private const int DefaultPort = 8080;
-    private const int AutoIncrementSpan = 32;
     private const string LogPrefix = "[STS2AIAgent.HttpServer]";
-    private const int StartRetryCount = 20;
-    private static readonly TimeSpan StartRetryDelay = TimeSpan.FromMilliseconds(250);
 
     private static readonly Lazy<HttpServer> LazyInstance = new(() => new HttpServer());
 
@@ -47,7 +43,7 @@ public sealed class HttpServer
 
             var preferredPort = ResolvePreferredPort();
             var allowIncrement = !IsExplicitPortConfigured();
-            var started = StartListener(preferredPort, allowIncrement);
+            var started = LoopbackListener.Start(preferredPort, allowIncrement);
             _listener = started.Listener;
             Port = started.Port;
             PortWasAutoIncremented = started.Port != preferredPort;
@@ -62,25 +58,9 @@ public sealed class HttpServer
     public static int FindFreePort(int startPort)
     {
         var port = startPort is > 0 and <= 65535 ? startPort : DefaultPort;
-        for (var candidate = port; candidate <= Math.Min(65535, port + AutoIncrementSpan); candidate++)
-        {
-            TcpListener? listener = null;
-            try
-            {
-                listener = new TcpListener(IPAddress.Loopback, candidate);
-                listener.Start();
-                return candidate;
-            }
-            catch (SocketException)
-            {
-            }
-            finally
-            {
-                listener?.Stop();
-            }
-        }
-
-        throw new InvalidOperationException($"No free loopback port found in {startPort}..{startPort + AutoIncrementSpan}.");
+        var selected = LoopbackListener.Start(port, allowFallback: true);
+        selected.Listener.Close();
+        return selected.Port;
     }
 
     public void Stop()
@@ -181,54 +161,6 @@ public sealed class HttpServer
         }
     }
 
-    private static (HttpListener Listener, int Port) StartListener(int preferredPort, bool allowIncrement)
-    {
-        HttpListenerException? lastConflict = null;
-        var maxPort = allowIncrement
-            ? Math.Min(65535, preferredPort + AutoIncrementSpan)
-            : preferredPort;
-
-        for (var port = preferredPort; port <= maxPort; port++)
-        {
-            var prefix = $"http://{DefaultHost}:{port}/";
-            var attempts = allowIncrement ? 2 : StartRetryCount;
-            for (var attempt = 1; attempt <= attempts; attempt++)
-            {
-                var listener = new HttpListener();
-                listener.Prefixes.Add(prefix);
-
-                try
-                {
-                    listener.Start();
-                    if (port != preferredPort)
-                    {
-                        Log.Info($"{LogPrefix} Preferred port {preferredPort} was busy; bound {prefix}");
-                    }
-
-                    return (listener, port);
-                }
-                catch (HttpListenerException ex) when (IsPrefixConflict(ex))
-                {
-                    listener.Close();
-                    lastConflict = ex;
-                    if (attempt < attempts)
-                    {
-                        Log.Warn($"{LogPrefix} Prefix still busy, retrying start ({attempt}/{attempts - 1})...");
-                        Thread.Sleep(StartRetryDelay);
-                    }
-                }
-            }
-        }
-
-        if (lastConflict != null)
-        {
-            throw lastConflict;
-        }
-
-        throw new InvalidOperationException(
-            $"Failed to bind STS2 AI Agent HTTP API starting at port {preferredPort}.");
-    }
-
     private static bool IsExplicitPortConfigured()
     {
         var rawPort = Environment.GetEnvironmentVariable("STS2_API_PORT");
@@ -250,10 +182,4 @@ public sealed class HttpServer
         return DefaultPort;
     }
 
-    private static bool IsPrefixConflict(HttpListenerException ex)
-    {
-        return ex.ErrorCode == 183 ||
-            ex.NativeErrorCode == 183 ||
-            ex.Message.Contains("conflicts with an existing registration", StringComparison.OrdinalIgnoreCase);
-    }
 }
