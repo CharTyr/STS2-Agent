@@ -5,6 +5,7 @@ param(
 
 $ErrorActionPreference = "Stop"
 $scriptRoot = $PSScriptRoot
+. (Join-Path $scriptRoot "lib-checked-native.ps1")
 
 function Resolve-ProjectRoot {
     param([string]$InputRoot)
@@ -57,17 +58,17 @@ $requiredDocs = @(
 )
 
 Invoke-Step -Name "Build mod project ($Configuration)" -Action {
-    dotnet build $modProject -c $Configuration | Out-Host
+    Invoke-CheckedNative -FilePath "dotnet" -Arguments @("build", $modProject, "-c", $Configuration)
 }
 
 Invoke-Step -Name "Compile Python sources" -Action {
-    python -m py_compile $clientPy $serverPy
+    Invoke-CheckedNative -FilePath "python" -Arguments @("-m", "py_compile", $clientPy, $serverPy)
 }
 
 Invoke-Step -Name "Import MCP server package" -Action {
     Push-Location $mcpRoot
     try {
-        uv run python -c "from sts2_mcp.server import create_server; create_server(); print('MCP_IMPORT_OK')" | Out-Host
+        Invoke-CheckedNative -FilePath "uv" -Arguments @("run", "--locked", "python", "-c", "from sts2_mcp.server import create_server; create_server(); print('MCP_IMPORT_OK')")
     }
     finally {
         Pop-Location
@@ -75,7 +76,17 @@ Invoke-Step -Name "Import MCP server package" -Action {
 }
 
 Invoke-Step -Name "Validate MCP tool profiles" -Action {
-    powershell -ExecutionPolicy Bypass -File $mcpToolProfileScript -RepoRoot $ProjectRoot | Out-Host
+    Invoke-CheckedNative -FilePath "powershell" -Arguments @("-ExecutionPolicy", "Bypass", "-File", $mcpToolProfileScript, "-RepoRoot", $ProjectRoot)
+}
+
+Invoke-Step -Name "Core unit tests" -Action {
+    Invoke-CheckedNative -FilePath "dotnet" -Arguments @("run", "--project", (Join-Path $ProjectRoot "STS2AIAgent.Tests/STS2AIAgent.Tests.csproj"), "-c", $Configuration)
+}
+
+Invoke-Step -Name "MCP unit tests" -Action {
+    Push-Location $mcpRoot
+    try { Invoke-CheckedNative -FilePath "uv" -Arguments @("run", "--locked", "python", "-m", "unittest", "discover", "-s", "tests", "-v") }
+    finally { Pop-Location }
 }
 
 Invoke-Step -Name "Validate release version metadata" -Action {
