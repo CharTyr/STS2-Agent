@@ -39,7 +39,8 @@ Screen playbook:
 - EVENT: always choose_event_option, including the synthetic proceed option after the event finishes. Reread after every branch.
 - CRYSTAL_SPHERE: crystal_clear_cell spends one divination; tool "big" clears a 3x3 area, "small" clears one cell (pass tool in the same call or switch with crystal_set_tool). Revealed items are granted at the end, including curses. Use crystal_sphere.items/hidden_cells to reveal good items without completing bad ones; all divinations must be spent before proceed appears.
 - MODAL: confirm_modal or dismiss_modal before anything else.
-- GAME_OVER: return_to_main_menu.
+- GAME_OVER: use continue_game_over first so the native summary, score, unlock, and save flow runs. Wait while game_over.phase=summary_animating; use return_to_main_menu only when it is exposed after the real MainMenuButton becomes visible and enabled.
+- UNLOCK: use confirm_unlock repeatedly until the unlock screen closes; never bypass it with a menu-return action.
 
 Each play step: inspect state (and metadata if needed), then call act exactly once. Prefer get_relevant_game_data for card/monster/relic/event text.
 Use wait_until_actionable across animations and screen changes. Use get_raw_game_state only if compact state is missing a needed field.

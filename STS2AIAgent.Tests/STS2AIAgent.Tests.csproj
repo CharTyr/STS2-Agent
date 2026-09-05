@@ -7,7 +7,6 @@
     <RootNamespace>STS2AIAgent.Tests</RootNamespace>
     <AssemblyName>STS2AIAgent.Tests</AssemblyName>
   </PropertyGroup>
-
   <ItemGroup>
     <Compile Include="..\STS2AIAgent\Config\*.cs" Link="Config\%(Filename)%(Extension)" />
     <Compile Include="..\STS2AIAgent\Llm\*.cs" Link="Llm\%(Filename)%(Extension)" />
@@ -23,6 +22,7 @@
     <Compile Include="..\STS2AIAgent\Game\ReflectionMemberAccessor.cs" Link="Game\ReflectionMemberAccessor.cs" />
     <Compile Include="..\STS2AIAgent\Game\UnlockConfirmResolutionPolicy.cs" Link="Game\UnlockConfirmResolutionPolicy.cs" />
     <Compile Include="..\STS2AIAgent\Game\CrystalSphereSettlePolicy.cs" Link="Game\CrystalSphereSettlePolicy.cs" />
+    <Compile Include="..\STS2AIAgent\Game\ProgressSaveVerification.cs" Link="Game\ProgressSaveVerification.cs" />
     <Compile Include="..\STS2AIAgent\Game\EventOptionLocalization.cs" Link="Game\EventOptionLocalization.cs" />
   </ItemGroup>
 </Project>
