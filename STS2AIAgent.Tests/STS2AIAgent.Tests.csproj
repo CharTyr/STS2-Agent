@@ -11,6 +11,7 @@
     <Compile Include="..\STS2AIAgent\Agent\AutoPlaySession.cs" Link="Agent\AutoPlaySession.cs" />
     <Compile Include="..\STS2AIAgent\Agent\AutoPlayRecovery.cs" Link="Agent\AutoPlayRecovery.cs" />
     <Compile Include="..\STS2AIAgent\Agent\CurrentRunBoundary.cs" Link="Agent\CurrentRunBoundary.cs" />
+    <Compile Include="..\STS2AIAgent\Agent\SessionBudgetGuard.cs" Link="Agent\SessionBudgetGuard.cs" />
     <Compile Include="..\STS2AIAgent\Server\LoopbackListener.cs" Link="Server\LoopbackListener.cs" />
     <Compile Include="..\STS2AIAgent\Multiplayer\CompanionHealth.cs" Link="Multiplayer\CompanionHealth.cs" />
     <Compile Include="..\STS2AIAgent\Multiplayer\CoopLaunchPolicy.cs" Link="Multiplayer\CoopLaunchPolicy.cs" />

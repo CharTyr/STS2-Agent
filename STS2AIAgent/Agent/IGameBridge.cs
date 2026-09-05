@@ -1,3 +1,5 @@
+using STS2AIAgent.Llm;
+
 namespace STS2AIAgent.Agent;
 
 internal interface IGameBridge
@@ -50,6 +52,10 @@ internal sealed class AgentTurnResult
     public bool RequiresConfiguration { get; init; }
 
     public int ToolRounds { get; init; }
+
+    public LlmUsage? Usage { get; init; }
+
+    public int RequestsSpent { get; init; }
 }
 
 internal sealed class ChatTurn

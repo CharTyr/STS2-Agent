@@ -40,6 +40,8 @@ internal sealed class AgentRuntime
     private string _mcpStatus = "MCP 未启动。外部 Agent 可走下方接入说明。";
     private string? _mcpUrl;
     private Process? _mcpProcess;
+    private LlmUsage _sessionUsage = LlmUsage.Empty;
+    private int _sessionRequests;
 
     public static AgentRuntime Instance => LazyInstance.Value;
 
@@ -132,6 +134,26 @@ internal sealed class AgentRuntime
     public string LastAction => _lastAction;
 
     public string LastThought => _lastThought;
+
+    public LlmUsage SessionUsage
+    {
+        get { lock (_gate) return _sessionUsage; }
+    }
+
+    public int SessionRequests
+    {
+        get { lock (_gate) return _sessionRequests; }
+    }
+
+    public void ResetSessionStats()
+    {
+        lock (_gate)
+        {
+            _sessionUsage = LlmUsage.Empty;
+            _sessionRequests = 0;
+        }
+        RaiseChanged();
+    }
 
     public string DualStatus => _dualStatus;
     public bool DualLaunching => _dualLaunching;
@@ -419,6 +441,15 @@ internal sealed class AgentRuntime
                 _turnGate.Release();
             }
 
+            lock (_gate)
+            {
+                if (result.Usage != null)
+                {
+                    _sessionUsage = LlmUsage.Combine(_sessionUsage, result.Usage) ?? LlmUsage.Empty;
+                }
+                _sessionRequests += result.RequestsSpent;
+            }
+
             var reply = result.Error != null
                 ? result.Error
                 : string.IsNullOrWhiteSpace(result.AssistantText) ? "(无文本回复)" : result.AssistantText;
@@ -588,6 +619,12 @@ internal sealed class AgentRuntime
     private async Task AutoPlayLoopAsync(CancellationToken cancellationToken)
     {
         var boundary = new CurrentRunBoundary();
+        SessionBudgetGuard? budgetGuard;
+        lock (_gate)
+        {
+            budgetGuard = _settings.CreateBudgetGuard();
+        }
+
         try
         {
             await AutoPlayRecovery.RunAsync(async token =>
@@ -602,7 +639,7 @@ internal sealed class AgentRuntime
                     _turnGate.Release();
                 }
 
-            }, ApplyPlayResult, cancellationToken);
+            }, ApplyPlayResult, cancellationToken, delay: null, budgetGuard: budgetGuard);
         }
         finally { RaiseChanged(); }
     }
@@ -669,6 +706,15 @@ internal sealed class AgentRuntime
 
     private void ApplyPlayResult(AgentTurnResult result)
     {
+        lock (_gate)
+        {
+            if (result.Usage != null)
+            {
+                _sessionUsage = LlmUsage.Combine(_sessionUsage, result.Usage) ?? LlmUsage.Empty;
+            }
+            _sessionRequests += result.RequestsSpent;
+        }
+
         if (!string.IsNullOrWhiteSpace(result.Acted))
         {
             _lastAction = result.Acted;

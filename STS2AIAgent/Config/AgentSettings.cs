@@ -30,6 +30,15 @@ internal sealed class AgentSettings
 
     public int McpPort { get; set; } = 8765;
 
+    public int? MaxSessionTokens { get; set; }
+
+    public int? MaxSessionRequests { get; set; }
+
+    public STS2AIAgent.Agent.SessionBudgetGuard CreateBudgetGuard()
+    {
+        return new STS2AIAgent.Agent.SessionBudgetGuard(MaxSessionTokens, MaxSessionRequests);
+    }
+
     public LlmModelConfig? FindModel(string? modelId)
     {
         if (string.IsNullOrWhiteSpace(modelId))
@@ -168,6 +177,16 @@ internal sealed class AgentSettings
         }
 
         McpServerPath = McpServerPath?.Trim() ?? string.Empty;
+
+        if (MaxSessionTokens is <= 0)
+        {
+            MaxSessionTokens = null;
+        }
+
+        if (MaxSessionRequests is <= 0)
+        {
+            MaxSessionRequests = null;
+        }
     }
 
     private ResolvedModel ResolveRoleModel(string? modelId, bool required, string roleName)

@@ -72,7 +72,9 @@ internal sealed class AgentLoop
             tools,
             allowAct,
             stopAfterAct: false,
-            cancellationToken);
+            cancellationToken,
+            initialUsage: visionNote.Usage,
+            initialRequests: visionNote.RequestsSpent);
     }
 
     public async Task<AgentTurnResult> PlayOnceAsync(CancellationToken cancellationToken, Action<string>? checkState = null)
@@ -87,7 +89,8 @@ internal sealed class AgentLoop
             {
                 Error = "Timed out waiting for an actionable state.",
                 WaitingForGame = true,
-                ToolRounds = 0
+                ToolRounds = 0,
+                RequestsSpent = 0
             };
         }
 
@@ -127,7 +130,9 @@ internal sealed class AgentLoop
             allowAct: true,
             stopAfterAct: true,
             cancellationToken,
-            checkState);
+            checkState,
+            initialUsage: visionNote.Usage,
+            initialRequests: visionNote.RequestsSpent);
     }
 
     public async Task<string> TestConnectionAsync(CancellationToken cancellationToken)
@@ -145,7 +150,9 @@ internal sealed class AgentLoop
         bool allowAct,
         bool stopAfterAct,
         CancellationToken cancellationToken,
-        Action<string>? checkState = null)
+        Action<string>? checkState = null,
+        LlmUsage? initialUsage = null,
+        int initialRequests = 0)
     {
         var client = _factory.Create(resolved.Endpoint);
         string? lastText = null;
@@ -154,6 +161,8 @@ internal sealed class AgentLoop
         string? actResult = null;
         string? lastActError = null;
         var rounds = 0;
+        var accumulatedUsage = initialUsage;
+        var requestsSpent = initialRequests;
 
         for (var round = 0; round < MaxToolRounds; round++)
         {
@@ -171,7 +180,12 @@ internal sealed class AgentLoop
             LlmCompletion completion;
             try
             {
+                requestsSpent++;
                 completion = await client.CompleteAsync(request, cancellationToken);
+                if (completion.Usage != null)
+                {
+                    accumulatedUsage = LlmUsage.Combine(accumulatedUsage, completion.Usage);
+                }
             }
             catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
             {
@@ -187,7 +201,9 @@ internal sealed class AgentLoop
                     ActResultJson = actResult,
                     Error = ex.Message,
                     RequiresConfiguration = ex is LlmException { StatusCode: >= 400 and < 500 and not 408 and not 429 },
-                    ToolRounds = rounds
+                    ToolRounds = rounds,
+                    Usage = accumulatedUsage,
+                    RequestsSpent = requestsSpent
                 };
             }
 
@@ -214,7 +230,9 @@ internal sealed class AgentLoop
                                 Reasoning = lastReasoning,
                                 Acted = acted,
                                 ActResultJson = actResult,
-                                ToolRounds = rounds
+                                ToolRounds = rounds,
+                                Usage = accumulatedUsage,
+                                RequestsSpent = requestsSpent
                             };
                         }
                     }
@@ -235,7 +253,9 @@ internal sealed class AgentLoop
                     Acted = acted,
                     ActResultJson = actResult,
                     Error = acted == null ? lastActError : null,
-                    ToolRounds = rounds
+                    ToolRounds = rounds,
+                    Usage = accumulatedUsage,
+                    RequestsSpent = requestsSpent
                 };
             }
 
@@ -272,7 +292,9 @@ internal sealed class AgentLoop
                                 Reasoning = lastReasoning,
                                 Acted = acted,
                                 ActResultJson = actResult,
-                                ToolRounds = rounds
+                                ToolRounds = rounds,
+                                Usage = accumulatedUsage,
+                                RequestsSpent = requestsSpent
                             };
                         }
                     }
@@ -298,11 +320,13 @@ internal sealed class AgentLoop
             Error = acted == null && lastActError != null
                 ? lastActError
                 : "Reached the tool-call round limit without a final answer.",
-            ToolRounds = rounds
+            ToolRounds = rounds,
+            Usage = accumulatedUsage,
+            RequestsSpent = requestsSpent
         };
     }
 
-    private async Task<(string? Caption, byte[]? Jpeg, bool AttachToPrimary)> TryDescribeOrAttachVisionAsync(
+    private async Task<(string? Caption, byte[]? Jpeg, bool AttachToPrimary, LlmUsage? Usage, int RequestsSpent)> TryDescribeOrAttachVisionAsync(
         ResolvedModel primary,
         AgentSettings settings,
         bool attachRequested,
@@ -310,13 +334,13 @@ internal sealed class AgentLoop
     {
         if (!attachRequested)
         {
-            return (null, null, false);
+            return (null, null, false, null, 0);
         }
 
         var vision = settings.TryResolveVisionModel();
         if (!primary.Model.SupportsVision && vision == null)
         {
-            return (null, null, false);
+            return (null, null, false, null, 0);
         }
 
         byte[]? jpeg;
@@ -331,17 +355,17 @@ internal sealed class AgentLoop
 
         if (jpeg == null || jpeg.Length == 0)
         {
-            return (null, null, false);
+            return (null, null, false, null, 0);
         }
 
         if (primary.Model.SupportsVision)
         {
-            return (null, jpeg, true);
+            return (null, jpeg, true, null, 0);
         }
 
         if (vision == null)
         {
-            return (null, null, false);
+            return (null, null, false, null, 0);
         }
 
         try
@@ -362,11 +386,11 @@ internal sealed class AgentLoop
             var caption = string.IsNullOrWhiteSpace(completion.Content)
                 ? "Vision model returned an empty description."
                 : "Vision observation:\n" + completion.Content;
-            return (caption, jpeg, false);
+            return (caption, jpeg, false, completion.Usage, 1);
         }
         catch (Exception ex)
         {
-            return ("Vision model failed: " + ex.Message, jpeg, false);
+            return ("Vision model failed: " + ex.Message, jpeg, false, null, 1);
         }
     }
 

@@ -157,6 +157,13 @@ internal static class TestRunner
         yield return ("OpenAI.PostBody", OpenAiCompatibleClientTests.CompleteAsync_PostsOpenAiCompatibleBody);
         yield return ("OpenAI.DeepSeekExtraBody", OpenAiCompatibleClientTests.CompleteAsync_PostsDeepSeekThinkingInExtraBody);
         yield return ("OpenAI.ParseSse", () => Task.Run(OpenAiCompatibleClientTests.ParseSse_AccumulatesContentAndToolCalls));
+        yield return ("OpenAI.ParseCompletionUsage", () => Task.Run(OpenAiCompatibleClientTests.ParseCompletion_ReadsUsage));
+        yield return ("OpenAI.ParseSseUsage", () => Task.Run(OpenAiCompatibleClientTests.ParseSse_ReadsUsageFromEndChunk));
+        yield return ("OpenAI.LlmUsageMath", () => Task.Run(OpenAiCompatibleClientTests.LlmUsage_CombineAndAdd));
+        yield return ("Budget.NoLimit", () => Task.Run(SessionBudgetGuardTests.NoLimit_NeverStops));
+        yield return ("Budget.MaxTokens", () => Task.Run(SessionBudgetGuardTests.MaxTokens_StopsWhenExceeded));
+        yield return ("Budget.MaxRequests", () => Task.Run(SessionBudgetGuardTests.MaxRequests_StopsEvenWithoutUsage));
+        yield return ("Budget.RecoveryStops", SessionBudgetGuardTests.Recovery_AutoPlayStopsOnBudgetExceeded);
         yield return ("GameData.DetectScene", () => Task.Run(GameDataFilterTests.DetectScene_MatchesGuidedMcpRules));
         yield return ("GameData.ProjectRelevant", () => Task.Run(GameDataFilterTests.ProjectRelevant_KeepsCombatCardFields));
         yield return ("PlayIntent.Detect", () => Task.Run(PlayIntentTests.DetectsPlayPhrasesAndIgnoresQuestions));

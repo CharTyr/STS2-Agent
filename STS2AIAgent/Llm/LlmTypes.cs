@@ -84,6 +84,38 @@ internal sealed class LlmToolCall
     public required string ArgumentsJson { get; init; }
 }
 
+internal sealed class LlmUsage
+{
+    public int PromptTokens { get; init; }
+
+    public int CompletionTokens { get; init; }
+
+    public int TotalTokens { get; init; }
+
+    public static LlmUsage Empty => new();
+
+    public static LlmUsage operator +(LlmUsage left, LlmUsage right)
+    {
+        return new LlmUsage
+        {
+            PromptTokens = left.PromptTokens + right.PromptTokens,
+            CompletionTokens = left.CompletionTokens + right.CompletionTokens,
+            TotalTokens = (left.TotalTokens > 0 || right.TotalTokens > 0)
+                ? (left.TotalTokens + right.TotalTokens)
+                : (left.PromptTokens + right.PromptTokens + left.CompletionTokens + right.CompletionTokens)
+        };
+    }
+
+    public static LlmUsage? Combine(LlmUsage? left, LlmUsage? right)
+    {
+        if (left == null) return right;
+        if (right == null) return left;
+        return left + right;
+    }
+
+    public override string ToString() => $"Total: {TotalTokens} (Prompt: {PromptTokens}, Completion: {CompletionTokens})";
+}
+
 internal sealed class LlmCompletion
 {
     public string? Content { get; init; }
@@ -91,6 +123,8 @@ internal sealed class LlmCompletion
     public string? Reasoning { get; init; }
 
     public IReadOnlyList<LlmToolCall> ToolCalls { get; init; } = Array.Empty<LlmToolCall>();
+
+    public LlmUsage? Usage { get; init; }
 }
 
 internal sealed class LlmException : Exception

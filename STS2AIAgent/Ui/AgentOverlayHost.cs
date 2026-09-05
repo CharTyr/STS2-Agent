@@ -37,6 +37,9 @@ internal sealed class AgentOverlayHost
     private Label? _playScreen;
     private Label? _playAction;
     private Label? _playThought;
+    private Label? _playUsage;
+    private LineEdit? _maxTokensEdit;
+    private LineEdit? _maxRequestsEdit;
     private Label? _apiLabel;
     private Label? _dualStatus;
     private Button? _dualLaunchButton;
@@ -368,6 +371,8 @@ internal sealed class AgentOverlayHost
         page.AddChild(_playScreen);
         page.AddChild(_playAction);
         page.AddChild(_playThought);
+        _playUsage = UiFactory.Label("Token 消耗：-", 13, muted: true);
+        page.AddChild(_playUsage);
         page.AddChild(UiFactory.Row(_playToggle, _stepButton));
         page.AddChild(UiFactory.Label("自动游玩走 compact 状态和工具，与 MCP 相同，不需要视觉即可打完全部流程。对话默认只读；勾选「允许代打」或明确说「帮我打」才会执行动作。", 12, muted: true));
         return page;
@@ -475,6 +480,11 @@ internal sealed class AgentOverlayHost
         _settingsBody.AddChild(UiFactory.Label("视觉可选。不勾选「视觉」、不配外挂视觉时，仍用 compact 状态与工具打完全部内容。", 11, muted: true));
         _hotkeyEdit = UiFactory.Line(settings.Hotkey, "F8");
         _settingsBody.AddChild(Labeled("开关热键", _hotkeyEdit));
+        _maxTokensEdit = UiFactory.Line(settings.MaxSessionTokens?.ToString() ?? "", "不限（留空或0）");
+        _maxRequestsEdit = UiFactory.Line(settings.MaxSessionRequests?.ToString() ?? "", "不限（留空或0）");
+        _settingsBody.AddChild(Labeled("会话 Token 上限", _maxTokensEdit));
+        _settingsBody.AddChild(Labeled("会话请求上限", _maxRequestsEdit));
+        _settingsBody.AddChild(UiFactory.Label("预算护栏：达到上限时优雅停止自动游玩并提示，避免意外耗尽额度。", 11, muted: true));
         _settingsBody.AddChild(UiFactory.Button("重置窗口位置", ResetPlacement));
         _settingsBody.AddChild(UiFactory.Label("拖动标题栏可移动窗口，位置会保存。", 11, muted: true));
         _settingsBody.AddChild(UiFactory.Label("配置文件：" + AgentRuntime.Instance.SettingsPath, 11, muted: true));
@@ -676,6 +686,23 @@ internal sealed class AgentOverlayHost
         current.AttachStateInChat = _attachState?.ButtonPressed ?? true;
         current.AttachScreenshotInChat = _attachShot?.ButtonPressed ?? false;
         current.McpServerPath = _mcpPathEdit?.Text.Trim() ?? current.McpServerPath;
+        if (int.TryParse(_maxTokensEdit?.Text.Trim(), out var maxTokens) && maxTokens > 0)
+        {
+            current.MaxSessionTokens = maxTokens;
+        }
+        else
+        {
+            current.MaxSessionTokens = null;
+        }
+
+        if (int.TryParse(_maxRequestsEdit?.Text.Trim(), out var maxReqs) && maxReqs > 0)
+        {
+            current.MaxSessionRequests = maxReqs;
+        }
+        else
+        {
+            current.MaxSessionRequests = null;
+        }
         return current;
     }
 
@@ -714,7 +741,9 @@ internal sealed class AgentOverlayHost
             OverlayLeft = source.OverlayLeft,
             OverlayTop = source.OverlayTop,
             McpServerPath = source.McpServerPath,
-            McpPort = source.McpPort
+            McpPort = source.McpPort,
+            MaxSessionTokens = source.MaxSessionTokens,
+            MaxSessionRequests = source.MaxSessionRequests
         };
     }
 
@@ -855,6 +884,13 @@ internal sealed class AgentOverlayHost
         if (_playThought != null)
         {
             _playThought.Text = "思考：" + Trim(AgentRuntime.Instance.LastThought, 240);
+        }
+
+        if (_playUsage != null)
+        {
+            var usage = AgentRuntime.Instance.SessionUsage;
+            var reqs = AgentRuntime.Instance.SessionRequests;
+            _playUsage.Text = $"Token 消耗：{usage.TotalTokens:N0} (Prompt: {usage.PromptTokens:N0}, Completion: {usage.CompletionTokens:N0}) | 请求：{reqs} 次";
         }
 
         if (_playToggle != null)

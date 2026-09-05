@@ -32,7 +32,8 @@ internal sealed class AutoPlayRecovery
         Func<CancellationToken, Task<AgentTurnResult>> turn,
         Action<AgentTurnResult> report,
         CancellationToken cancellationToken,
-        Func<TimeSpan, CancellationToken, Task>? delay = null)
+        Func<TimeSpan, CancellationToken, Task>? delay = null,
+        SessionBudgetGuard? budgetGuard = null)
     {
         var recovery = new AutoPlayRecovery();
         delay ??= Task.Delay;
@@ -46,6 +47,11 @@ internal sealed class AutoPlayRecovery
             catch (Exception ex) { result = new AgentTurnResult { Error = ex.Message }; }
             cancellationToken.ThrowIfCancellationRequested();
             report(result);
+            if (budgetGuard != null)
+            {
+                var budgetReason = budgetGuard.Observe(result);
+                if (budgetReason != null) throw new AutoPlayStoppedException(budgetReason);
+            }
             var next = recovery.Observe(result);
             if (next.StopReason != null) throw new AutoPlayStoppedException(next.StopReason);
             if (next.Delay > TimeSpan.Zero) await delay(next.Delay, cancellationToken);

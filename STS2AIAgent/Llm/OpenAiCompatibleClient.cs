@@ -74,6 +74,10 @@ internal sealed class OpenAiCompatibleClient : ILlmClient
         if (request.Stream)
         {
             body["stream"] = true;
+            body["stream_options"] = new Dictionary<string, object?>
+            {
+                ["include_usage"] = true
+            };
         }
 
         return await SendCompletionAsync(body, request.Stream, cancellationToken);
@@ -123,6 +127,7 @@ internal sealed class OpenAiCompatibleClient : ILlmClient
         catch (LlmException ex) when (stream && ShouldRetryWithoutStream(ex))
         {
             body["stream"] = false;
+            body.Remove("stream_options");
             return await SendOnceAsync(body, stream: false, cancellationToken);
         }
     }
@@ -185,6 +190,7 @@ internal sealed class OpenAiCompatibleClient : ILlmClient
         var content = new StringBuilder();
         var reasoning = new StringBuilder();
         var toolCalls = new SortedDictionary<int, SseToolCall>();
+        LlmUsage? usage = null;
 
         foreach (var rawLine in payload.Split('\n'))
         {
@@ -212,6 +218,11 @@ internal sealed class OpenAiCompatibleClient : ILlmClient
 
             using (document)
             {
+                if (ReadUsage(document.RootElement) is { } chunkUsage)
+                {
+                    usage = chunkUsage;
+                }
+
                 if (!document.RootElement.TryGetProperty("choices", out var choices) ||
                     choices.ValueKind != JsonValueKind.Array ||
                     choices.GetArrayLength() == 0)
@@ -260,7 +271,8 @@ internal sealed class OpenAiCompatibleClient : ILlmClient
                 Id = call.Id ?? string.Empty,
                 Name = call.Name ?? string.Empty,
                 ArgumentsJson = call.Arguments.Length == 0 ? "{}" : call.Arguments.ToString()
-            }).Where(call => !string.IsNullOrWhiteSpace(call.Id) && !string.IsNullOrWhiteSpace(call.Name)).ToArray()
+            }).Where(call => !string.IsNullOrWhiteSpace(call.Id) && !string.IsNullOrWhiteSpace(call.Name)).ToArray(),
+            Usage = usage
         };
     }
 
@@ -359,11 +371,13 @@ internal sealed class OpenAiCompatibleClient : ILlmClient
         var content = ReadContent(message);
         var reasoning = ReadOptionalString(message, "reasoning_content") ?? ReadOptionalString(message, "reasoning");
         var toolCalls = ReadToolCalls(message);
+        var usage = ReadUsage(root);
         return new LlmCompletion
         {
             Content = content,
             Reasoning = reasoning,
-            ToolCalls = toolCalls
+            ToolCalls = toolCalls,
+            Usage = usage
         };
     }
 
@@ -439,6 +453,39 @@ internal sealed class OpenAiCompatibleClient : ILlmClient
         }
 
         return content;
+    }
+
+    internal static LlmUsage? ReadUsage(JsonElement root)
+    {
+        if (!root.TryGetProperty("usage", out var usageElement) || usageElement.ValueKind != JsonValueKind.Object)
+        {
+            return null;
+        }
+
+        var prompt = ReadIntProperty(usageElement, "prompt_tokens");
+        var completion = ReadIntProperty(usageElement, "completion_tokens");
+        var total = ReadIntProperty(usageElement, "total_tokens");
+
+        if (prompt == 0 && completion == 0 && total == 0)
+        {
+            return null;
+        }
+
+        return new LlmUsage
+        {
+            PromptTokens = prompt,
+            CompletionTokens = completion,
+            TotalTokens = total > 0 ? total : (prompt + completion)
+        };
+    }
+
+    private static int ReadIntProperty(JsonElement element, string propertyName)
+    {
+        if (element.TryGetProperty(propertyName, out var prop) && prop.TryGetInt32(out var val))
+        {
+            return val;
+        }
+        return 0;
     }
 
     private static string FormatError(int statusCode, string payload)
