@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using Godot;
 using MegaCrit.Sts2.Core.Logging;
+using MegaCrit.Sts2.Core.Helpers;
 using STS2AIAgent.Config;
 using STS2AIAgent.Server;
 
@@ -127,7 +128,7 @@ internal static class LocalDualInstanceLauncher
         {
             FileName = exe,
             WorkingDirectory = Path.GetDirectoryName(exe) ?? System.Environment.CurrentDirectory,
-            Arguments = "--windowed",
+            Arguments = CoopLaunchPolicy.CompanionArguments(CommandLineHelper.GetValue("force-steam"), CommandLineHelper.GetValue("clientId")),
             UseShellExecute = false
         };
 

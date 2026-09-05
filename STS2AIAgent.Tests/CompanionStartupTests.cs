@@ -8,6 +8,27 @@ namespace STS2AIAgent.Tests;
 
 internal static class CompanionStartupTests
 {
+    public static void OfflineLaunchKeepsAccountsIsolated()
+    {
+        Assert.Equal("--windowed", CoopLaunchPolicy.CompanionArguments(null, "901"));
+        Assert.Equal("--windowed --force-steam off --clientId 902", CoopLaunchPolicy.CompanionArguments("off", "901"));
+        Assert.Equal("--windowed --force-steam off", CoopLaunchPolicy.CompanionArguments("off", null));
+    }
+
+    public static void SettingsPathCanBeIsolated()
+    {
+        var previous = Environment.GetEnvironmentVariable("STS2_AGENT_SETTINGS_PATH");
+        try
+        {
+            var isolated = Path.Combine(Path.GetTempPath(), "sts2-coop-test", "settings.json");
+            Environment.SetEnvironmentVariable("STS2_AGENT_SETTINGS_PATH", isolated);
+            Assert.Equal(Path.GetFullPath(isolated), new SettingsStore().Path);
+            Environment.SetEnvironmentVariable("STS2_AGENT_SETTINGS_PATH", "relative.json");
+            Expect<InvalidOperationException>(() => new SettingsStore());
+        }
+        finally { Environment.SetEnvironmentVariable("STS2_AGENT_SETTINGS_PATH", previous); }
+    }
+
     public static void ExcludedRangeUsesDynamicPort()
     {
         var attempted = new List<int>();

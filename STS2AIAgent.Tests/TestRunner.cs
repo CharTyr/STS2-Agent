@@ -132,6 +132,8 @@ internal static class TestRunner
         yield return ("TeamChat.SessionAuthorization", () => Task.Run(TeamConversationTests.SessionTokensAreRequiredAndDistinct));
         yield return ("TeamChat.Transport", TeamConversationTests.TransportChecksIdentityAndSendsBoundedBody);
         yield return ("TeamChat.ReusedPort", TeamConversationTests.ReusedPortDoesNotReceiveMessage);
+        yield return ("CoopStartup.OfflineIsolation", () => Task.Run(CompanionStartupTests.OfflineLaunchKeepsAccountsIsolated));
+        yield return ("CoopStartup.SettingsIsolation", () => Task.Run(CompanionStartupTests.SettingsPathCanBeIsolated));
         yield return ("CoopStartup.ExcludedRange", () => Task.Run(CompanionStartupTests.ExcludedRangeUsesDynamicPort));
         yield return ("CoopStartup.BindRace", () => Task.Run(CompanionStartupTests.BindRaceReselectsDynamicPort));
         yield return ("CoopStartup.ExplicitPort", () => Task.Run(CompanionStartupTests.ExplicitPortNeverChanges));

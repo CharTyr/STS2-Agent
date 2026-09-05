@@ -4,6 +4,18 @@ namespace STS2AIAgent.Multiplayer;
 
 internal static class CoopLaunchPolicy
 {
+    public static string CompanionArguments(string? forceSteam, string? clientId)
+    {
+        if (!string.Equals(forceSteam, "off", StringComparison.OrdinalIgnoreCase)) return "--windowed";
+        var arguments = "--windowed --force-steam off";
+        if (ulong.TryParse(clientId, out var id))
+        {
+            if (id == ulong.MaxValue) throw new InvalidOperationException("Offline clientId leaves no adjacent companion ID.");
+            arguments += " --clientId " + (id + 1).ToString(System.Globalization.CultureInfo.InvariantCulture);
+        }
+        return arguments;
+    }
+
     public static string? GetError(bool isCompanion, bool autoPlayRunning, string screen, ResolvedModel? model)
     {
         if (isCompanion) return "当前窗口已是 AI 队友。请在你的主窗口邀请队友。";
