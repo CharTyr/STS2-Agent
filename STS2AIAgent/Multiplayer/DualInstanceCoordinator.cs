@@ -54,13 +54,10 @@ internal static class DualInstanceCoordinator
         {
             Log.Info($"{LogPrefix} Companion bootstrap starting");
             await WaitForScreenAsync(new[] { "MAIN_MENU", "MULTIPLAYER_LOBBY" }, TimeSpan.FromSeconds(90), cancellationToken);
-            var screen = await GetScreenAsync();
-            if (!string.Equals(screen, "MULTIPLAYER_LOBBY", StringComparison.Ordinal))
+            if (await GetScreenAsync() != "MULTIPLAYER_LOBBY")
             {
-                await OpenMultiplayerTestAsync(cancellationToken);
+                await WaitForScreenAsync(new[] { "MULTIPLAYER_LOBBY" }, TimeSpan.FromSeconds(60), cancellationToken);
             }
-
-            await WaitForScreenAsync(new[] { "MULTIPLAYER_LOBBY" }, TimeSpan.FromSeconds(30), cancellationToken);
             await WaitForAnyActionAsync(new[] { "join_multiplayer_lobby" }, TimeSpan.FromSeconds(30), cancellationToken);
             await ExecuteActionAsync("join_multiplayer_lobby", cancellationToken);
             var next = await WaitForAnyActionAsync(

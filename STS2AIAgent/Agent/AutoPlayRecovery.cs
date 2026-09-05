@@ -57,7 +57,8 @@ internal sealed class AutoPlayRecovery
             report(result);
             if (budgetGuard != null)
             {
-                var budgetReason = budgetGuard.Observe(result);
+                // Record the finished turn, then stop before starting another.
+                var budgetReason = budgetGuard.Observe(result) ?? budgetGuard.CheckBudget();
                 if (budgetReason != null) throw new AutoPlayStoppedException(budgetReason);
             }
             var next = recovery.Observe(result);

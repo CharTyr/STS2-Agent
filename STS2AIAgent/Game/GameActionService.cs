@@ -1749,8 +1749,29 @@ internal static class GameActionService
         var currentScreen = ActiveScreenContext.Instance.GetCurrentScreen();
         var screen = GameStateService.ResolveScreen(currentScreen);
 
-        if (!GameStateService.CanConfirmSelection(currentScreen) ||
-            !GameStateService.TryGetCombatHandSelection(currentScreen, out var combatHand) ||
+        if (!GameStateService.CanConfirmSelection(currentScreen))
+        {
+            throw new ApiException(409, "invalid_action", "Action is not available in the current state.", new
+            {
+                action = "confirm_selection",
+                screen
+            });
+        }
+
+        if (currentScreen is NDeckCardSelectScreen deckScreen)
+        {
+            var stableDeck = await ConfirmDeckSelectionAsync(deckScreen, TimeSpan.FromSeconds(10));
+            return new ActionResponsePayload
+            {
+                action = "confirm_selection",
+                status = stableDeck ? "completed" : "pending",
+                stable = stableDeck,
+                message = stableDeck ? "Action completed." : "Action queued but state is still transitioning.",
+                state = GameStateService.BuildStatePayload()
+            };
+        }
+
+        if (!GameStateService.TryGetCombatHandSelection(currentScreen, out var combatHand) ||
             combatHand == null ||
             !TryGetCombatHandConfirmButton(combatHand, out var confirmButton) ||
             confirmButton == null)
@@ -1844,13 +1865,7 @@ internal static class GameActionService
             }
         }
 
-        var isClosed = ActiveScreenContext.Instance.GetCurrentScreen() is not NChooseACardSelectionScreen || !GodotObject.IsInstanceValid(selectionScreen);
-        if (CombatManager.Instance.IsInProgress)
-        {
-            return isClosed && (CombatManager.Instance.IsOverOrEnding || GameStateService.IsCombatActionReady() || ArePlayerDrivenActionsSettled());
-        }
-
-        return isClosed && ArePlayerDrivenActionsSettled();
+        return false;
     }
 
     private static async Task<bool> WaitForCardsViewCloseAsync(TimeSpan timeout)
@@ -1896,13 +1911,7 @@ internal static class GameActionService
             }
         }
 
-        var isClosed = !GameStateService.TryGetCombatHandSelection(ActiveScreenContext.Instance.GetCurrentScreen(), out _);
-        if (CombatManager.Instance.IsInProgress)
-        {
-            return isClosed && (CombatManager.Instance.IsOverOrEnding || GameStateService.IsCombatActionReady() || ArePlayerDrivenActionsSettled());
-        }
-
-        return isClosed && ArePlayerDrivenActionsSettled();
+        return false;
     }
 
     private static async Task<bool> WaitForCombatHandSelectionStepAsync(
@@ -1917,7 +1926,17 @@ internal static class GameActionService
             var currentScreen = ActiveScreenContext.Instance.GetCurrentScreen();
             if (!GameStateService.TryGetCombatHandSelectionMetadata(currentScreen, out _, out var currentSelection))
             {
-                return true;
+                if (!CombatManager.Instance.IsInProgress)
+                {
+                    return ArePlayerDrivenActionsSettled();
+                }
+
+                if (CombatManager.Instance.IsOverOrEnding || GameStateService.IsCombatActionReady())
+                {
+                    return true;
+                }
+
+                continue;
             }
 
             if (currentSelection.SelectedCount != previousSelection.SelectedCount)
@@ -1928,11 +1947,17 @@ internal static class GameActionService
                     continue;
                 }
 
-                return false;
+                return true;
             }
         }
 
-        return !GameStateService.TryGetCombatHandSelection(ActiveScreenContext.Instance.GetCurrentScreen(), out _);
+        if (!GameStateService.TryGetCombatHandSelection(ActiveScreenContext.Instance.GetCurrentScreen(), out _) &&
+            CombatManager.Instance.IsInProgress)
+        {
+            return CombatManager.Instance.IsOverOrEnding || GameStateService.IsCombatActionReady();
+        }
+
+        return false;
     }
 
     private static bool TryGetCombatHandConfirmButton(NPlayerHand hand, out NConfirmButton? confirmButton)
@@ -2254,7 +2279,8 @@ internal static class GameActionService
             }
 
             if (metadata.SelectedCount < previousSelectedCount ||
-                metadata.SelectedCount < metadata.MinSelect)
+                metadata.SelectedCount < metadata.MinSelect ||
+                metadata.SelectedCount < metadata.MaxSelect)
             {
                 return true;
             }
@@ -2359,14 +2385,7 @@ internal static class GameActionService
             }
         }
 
-        var finalScreen = ActiveScreenContext.Instance.GetCurrentScreen();
-        var isClosed = !GodotObject.IsInstanceValid(screen) || finalScreen is not NCardGridSelectionScreen;
-        if (CombatManager.Instance.IsInProgress)
-        {
-            return isClosed && (CombatManager.Instance.IsOverOrEnding || GameStateService.IsCombatActionReady() || ArePlayerDrivenActionsSettled());
-        }
-
-        return isClosed && ArePlayerDrivenActionsSettled();
+        return false;
     }
 
     private static async Task<ActionResponsePayload> ExecuteOpenChestAsync()

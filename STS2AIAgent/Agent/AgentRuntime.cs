@@ -42,6 +42,7 @@ internal sealed class AgentRuntime
     private Process? _mcpProcess;
     private LlmUsage _sessionUsage = LlmUsage.Empty;
     private int _sessionRequests;
+    private SessionBudgetGuard _budgetGuard;
 
     public static AgentRuntime Instance => LazyInstance.Value;
 
@@ -50,13 +51,21 @@ internal sealed class AgentRuntime
     private AgentRuntime()
     {
         _settings = _store.Load();
+        _budgetGuard = _settings.CreateBudgetGuard();
         _loop = new AgentLoop(new GameBridge(), new DefaultLlmClientFactory(), () =>
         {
             lock (_gate)
             {
                 return _settings;
             }
-        }, InstanceRole.IsCompanion ? () => _teamConversation.BuildDecisionContext() : null);
+        }, InstanceRole.IsCompanion ? () => _teamConversation.BuildDecisionContext() : null,
+            () =>
+            {
+                lock (_gate)
+                {
+                    return _budgetGuard;
+                }
+            });
     }
 
     public AgentSettings Settings
@@ -151,6 +160,7 @@ internal sealed class AgentRuntime
         {
             _sessionUsage = LlmUsage.Empty;
             _sessionRequests = 0;
+            _budgetGuard = _settings.CreateBudgetGuard();
         }
         RaiseChanged();
     }
@@ -197,6 +207,17 @@ internal sealed class AgentRuntime
         cancellationToken = deadline.Token;
         // Share the turn gate with gameplay, but do not require autoplay to be
         // stopped: this request only reads state and adds conversational context.
+        string? budgetBlocked;
+        lock (_gate)
+        {
+            budgetBlocked = _budgetGuard.CheckBudget();
+        }
+
+        if (budgetBlocked != null)
+        {
+            throw new InvalidOperationException(budgetBlocked);
+        }
+
         await _turnGate.WaitAsync(cancellationToken);
         try
         {
@@ -213,14 +234,7 @@ internal sealed class AgentRuntime
             var reply = result.AssistantText;
             if (reply.Length > TeamConversation.MaxMessageLength) reply = reply[..TeamConversation.MaxMessageLength];
             _teamConversation.Add("assistant", reply);
-            lock (_gate)
-            {
-                if (result.Usage != null)
-                {
-                    _sessionUsage = LlmUsage.Combine(_sessionUsage, result.Usage) ?? LlmUsage.Empty;
-                }
-                _sessionRequests += result.RequestsSpent > 0 ? result.RequestsSpent : 1;
-            }
+            AccountTurn(result, recordBudget: true);
             RaiseChanged();
             return reply;
         }
@@ -291,6 +305,7 @@ internal sealed class AgentRuntime
         lock (_gate)
         {
             _settings = settings;
+            _budgetGuard = settings.CreateBudgetGuard(_sessionUsage.TotalTokens, _sessionRequests);
         }
 
         _store.Save(settings);
@@ -324,6 +339,7 @@ internal sealed class AgentRuntime
         lock (_gate)
         {
             _settings = loaded;
+            _budgetGuard = loaded.CreateBudgetGuard(_sessionUsage.TotalTokens, _sessionRequests);
         }
 
         RaiseChanged();
@@ -427,8 +443,7 @@ internal sealed class AgentRuntime
         string? budgetBlocked = null;
         lock (_gate)
         {
-            var guard = _settings.CreateBudgetGuard(_sessionUsage.TotalTokens, _sessionRequests);
-            budgetBlocked = guard.CheckBudget();
+            budgetBlocked = _budgetGuard.CheckBudget();
         }
 
         if (budgetBlocked != null)
@@ -463,14 +478,7 @@ internal sealed class AgentRuntime
                 _turnGate.Release();
             }
 
-            lock (_gate)
-            {
-                if (result.Usage != null)
-                {
-                    _sessionUsage = LlmUsage.Combine(_sessionUsage, result.Usage) ?? LlmUsage.Empty;
-                }
-                _sessionRequests += result.RequestsSpent > 0 ? result.RequestsSpent : 1;
-            }
+            AccountTurn(result, recordBudget: true);
 
             var reply = result.Error != null
                 ? result.Error
@@ -641,10 +649,10 @@ internal sealed class AgentRuntime
     private async Task AutoPlayLoopAsync(CancellationToken cancellationToken)
     {
         var boundary = new CurrentRunBoundary();
-        SessionBudgetGuard? budgetGuard;
+        SessionBudgetGuard budgetGuard;
         lock (_gate)
         {
-            budgetGuard = _settings.CreateBudgetGuard(_sessionUsage.TotalTokens, _sessionRequests);
+            budgetGuard = _budgetGuard;
         }
 
         try
@@ -726,7 +734,7 @@ internal sealed class AgentRuntime
         RaiseChanged();
     }
 
-    private void ApplyPlayResult(AgentTurnResult result)
+    private void AccountTurn(AgentTurnResult result, bool recordBudget = false)
     {
         lock (_gate)
         {
@@ -734,8 +742,18 @@ internal sealed class AgentRuntime
             {
                 _sessionUsage = LlmUsage.Combine(_sessionUsage, result.Usage) ?? LlmUsage.Empty;
             }
-            _sessionRequests += result.RequestsSpent > 0 ? result.RequestsSpent : (result.WaitingForGame ? 0 : 1);
+
+            _sessionRequests += Math.Max(0, result.RequestsSpent);
+            if (recordBudget)
+            {
+                _budgetGuard.Observe(result);
+            }
         }
+    }
+
+    private void ApplyPlayResult(AgentTurnResult result)
+    {
+        AccountTurn(result);
 
         if (!string.IsNullOrWhiteSpace(result.Acted))
         {

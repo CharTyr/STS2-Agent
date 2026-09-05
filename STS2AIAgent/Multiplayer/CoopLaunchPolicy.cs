@@ -7,13 +7,26 @@ internal static class CoopLaunchPolicy
     public static string CompanionArguments(string? forceSteam, string? clientId)
     {
         if (!string.Equals(forceSteam, "off", StringComparison.OrdinalIgnoreCase)) return "--windowed";
-        var arguments = "--windowed --force-steam off";
-        if (ulong.TryParse(clientId, out var id))
+        ulong companionId;
+        if (string.IsNullOrWhiteSpace(clientId))
         {
-            if (id == ulong.MaxValue) throw new InvalidOperationException("Offline clientId leaves no adjacent companion ID.");
-            arguments += " --clientId " + (id + 1).ToString(System.Globalization.CultureInfo.InvariantCulture);
+            companionId = 1;
         }
-        return arguments;
+        else if (!ulong.TryParse(clientId, out var id))
+        {
+            throw new InvalidOperationException("Offline clientId must be a non-negative integer.");
+        }
+        else if (id == ulong.MaxValue)
+        {
+            throw new InvalidOperationException("Offline clientId leaves no adjacent companion ID.");
+        }
+        else
+        {
+            companionId = id + 1;
+        }
+
+        return "--windowed --force-steam off --clientId " +
+            companionId.ToString(System.Globalization.CultureInfo.InvariantCulture);
     }
 
     public static bool TryGetCompanionArguments(string? forceSteam, string? clientId, out string arguments, out string? error)
@@ -57,14 +70,14 @@ internal static class CoopLaunchPolicy
             return;
 
         if (string.Equals(System.IO.Path.GetFullPath(mainSettingsPath), System.IO.Path.GetFullPath(companionSettingsPath), StringComparison.OrdinalIgnoreCase))
-            return;
+            throw new InvalidOperationException("Companion settings path must be different from the host settings path.");
 
         var dir = System.IO.Path.GetDirectoryName(companionSettingsPath);
         if (!string.IsNullOrEmpty(dir))
             System.IO.Directory.CreateDirectory(dir);
 
-        if (System.IO.File.Exists(mainSettingsPath) && !System.IO.File.Exists(companionSettingsPath))
-            System.IO.File.Copy(mainSettingsPath, companionSettingsPath, overwrite: false);
+        if (System.IO.File.Exists(mainSettingsPath))
+            System.IO.File.Copy(mainSettingsPath, companionSettingsPath, overwrite: true);
     }
 
     public static string? GetError(bool isCompanion, bool autoPlayRunning, string screen, ResolvedModel? model)
