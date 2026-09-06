@@ -26,13 +26,13 @@ https://github.com/user-attachments/assets/89353468-a299-4315-9516-e520bcbfbd4b
 
 ## 🚀 新手 3 分钟极速上手
 
-玩家最省事的方式是订阅 [Steam 创意工坊](https://steamcommunity.com/sharedfiles/filedetails/?id=3796486050)，然后 Steam → **带 Mod 启动 / Play with Mods**。工坊页面是给玩家看的短说明；这份 README 写得更细，需要时再来看。
+订阅 [Steam 创意工坊](https://steamcommunity.com/sharedfiles/filedetails/?id=3796486050)，然后 Steam → **带 Mod 启动 / Play with Mods**。
 
 这个 Mod 还在开发中。有的功能可能不完整，也可能出错。欢迎把建议和遇到的问题发到 [GitHub Issues](https://github.com/CharTyr/STS2-Agent/issues)。
 
 ### 第 1 步：安装 Mod
-1. 在 [Steam 创意工坊](https://steamcommunity.com/sharedfiles/filedetails/?id=3796486050) 订阅，**或**前往 [GitHub Releases](https://github.com/CharTyr/STS2-Agent/releases) 下载最新的发布包（zip）。
-2. 解压后将以下三个文件复制到游戏的 `mods/` 文件夹中（若没有 `mods` 文件夹可新建）：
+1. 在 [Steam 创意工坊](https://steamcommunity.com/sharedfiles/filedetails/?id=3796486050) 订阅直接开启游戏使用，**或**前往 [GitHub Releases](https://github.com/CharTyr/STS2-Agent/releases) 下载最新的发布包（zip）。
+2. 如果是从github下载，则解压后将以下三个文件复制到游戏的 `mods/` 文件夹中（若没有 `mods` 文件夹可新建）：
    ```text
    STS2AIAgent.dll
    STS2AIAgent.pck
@@ -52,7 +52,7 @@ https://github.com/user-attachments/assets/89353468-a299-4315-9516-e520bcbfbd4b
    - **API Key**：填入你的模型 API 密钥（使用本地 Ollama/LM Studio 可留空或填任意值）
 3. 在下方选择你刚刚添加的端点，并在「对话模型」与「游玩模型」中选定对应模型（例如 `deepseek-chat` 或 `deepseek-ai/DeepSeek-V3`）。
 4. （可选）为模型设置思考强度（**Off / Low / Medium / High**）。
-5. *新手安心保障*：默认开启了「会话预算守卫」，在设置页面可看到 `Max Tokens` 与 `Max Requests`，防止产生意料外的模型调用费用。
+5. 默认开启了「会话预算守卫」，在设置页面可看到 `Max Tokens` 与 `Max Requests`，防止产生意料外的模型调用费用。
 
 ### 第 4 步：开始体验！
 
