@@ -50,6 +50,81 @@ internal static class LocalDualInstanceLauncher
         return File.Exists(steam) ? steam : null;
     }
 
+    internal static void StageWorkshopModForOfflineCompanion(string exePath)
+    {
+        var gameDir = Path.GetDirectoryName(exePath);
+        if (string.IsNullOrWhiteSpace(gameDir))
+        {
+            return;
+        }
+
+        var destDir = Path.Combine(gameDir, "mods", "STS2AIAgent");
+        var destDll = Path.Combine(destDir, "STS2AIAgent.dll");
+        var sourceDir = FindSubscribedWorkshopModDir();
+        if (sourceDir == null)
+        {
+            if (File.Exists(destDll))
+            {
+                return;
+            }
+
+            Log.Warn($"{LogPrefix} No subscribed Workshop copy of STS2AIAgent found for the offline companion.");
+            return;
+        }
+
+        Directory.CreateDirectory(destDir);
+        foreach (var fileName in new[] { "STS2AIAgent.dll", "STS2AIAgent.pck", "STS2AIAgent.json" })
+        {
+            var from = Path.Combine(sourceDir, fileName);
+            if (File.Exists(from))
+            {
+                File.Copy(from, Path.Combine(destDir, fileName), overwrite: true);
+            }
+        }
+
+        Log.Info($"{LogPrefix} Staged Workshop mod into {destDir} so the offline companion can load it.");
+    }
+
+    private static string? FindSubscribedWorkshopModDir()
+    {
+        var roots = new[]
+        {
+            Path.Combine(
+                System.Environment.GetFolderPath(System.Environment.SpecialFolder.ProgramFilesX86),
+                "Steam",
+                "steamapps",
+                "workshop",
+                "content",
+                "2868840"),
+            Path.Combine(
+                System.Environment.GetFolderPath(System.Environment.SpecialFolder.ProgramFiles),
+                "Steam",
+                "steamapps",
+                "workshop",
+                "content",
+                "2868840")
+        };
+
+        foreach (var root in roots)
+        {
+            if (!Directory.Exists(root))
+            {
+                continue;
+            }
+
+            foreach (var dir in Directory.EnumerateDirectories(root))
+            {
+                if (File.Exists(Path.Combine(dir, "STS2AIAgent.json")) &&
+                    File.Exists(Path.Combine(dir, "STS2AIAgent.dll")))
+                {
+                    return dir;
+                }
+            }
+        }
+
+        return null;
+    }
+
     public static void EnsureSteamAppIdFile(string exePath)
     {
         var directory = Path.GetDirectoryName(exePath);
@@ -103,6 +178,15 @@ internal static class LocalDualInstanceLauncher
         if (exe == null)
         {
             return new DualLaunchResult { Ok = false, Message = "找不到游戏可执行文件。" };
+        }
+
+        try
+        {
+            StageWorkshopModForOfflineCompanion(exe);
+        }
+        catch (Exception ex)
+        {
+            Log.Warn($"{LogPrefix} workshop staging for companion: {ex.Message}");
         }
 
         var hostPort = HttpServer.Instance.Port;

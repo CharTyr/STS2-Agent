@@ -26,7 +26,7 @@ https://github.com/user-attachments/assets/89353468-a299-4315-9516-e520bcbfbd4b
 
 ## 🚀 3-Minute Quick Start (Players)
 
-The easiest way to play is the [Steam Workshop](https://steamcommunity.com/sharedfiles/filedetails/?id=3796486050) page. Subscribe, then Steam → **Play with Mods**. That page is a short player guide; this README has extra detail if you need it.
+The easiest way to play is the [Steam Workshop](https://steamcommunity.com/sharedfiles/filedetails/?id=3796486050) page. Subscribe, wait for the download, then Steam → **Play with Mods**. You do not copy any files. That page is a short player guide; this README has extra detail if you need it.
 
 This mod is still in development. Some things may be unfinished or break. Please send suggestions and issues here: [GitHub Issues](https://github.com/CharTyr/STS2-Agent/issues).
 

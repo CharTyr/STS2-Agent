@@ -91,8 +91,8 @@ else {
 
 $manifestPath = Join-Path $ProjectRoot "STS2AIAgent/mod_manifest.json"
 $modIdPath = Join-Path $ProjectRoot "STS2AIAgent/mod_id.json"
-$manifest = Get-Content -LiteralPath $manifestPath -Raw | ConvertFrom-Json
-$modId = Get-Content -LiteralPath $modIdPath -Raw | ConvertFrom-Json
+$manifest = Get-Content -LiteralPath $manifestPath -Raw -Encoding UTF8 | ConvertFrom-Json
+$modId = Get-Content -LiteralPath $modIdPath -Raw -Encoding UTF8 | ConvertFrom-Json
 
 Assert-EqualValue -Name "Mod ID" -Expected $manifest.id -Actual $modId.id
 Assert-EqualValue -Name "Mod version" -Expected $manifest.version -Actual $modId.version
@@ -153,7 +153,7 @@ Copy-Item -LiteralPath (Join-Path $stagingDirectory "mod_id.json") -Destination 
 Copy-Item -LiteralPath $playerReadmePath -Destination (Join-Path $contentDirectory "README.md") -Force
 Copy-Item -LiteralPath (Join-Path $ProjectRoot "LICENSE") -Destination (Join-Path $contentDirectory "LICENSE") -Force
 
-$workshopManifest = Get-Content -LiteralPath (Join-Path $contentDirectory "$($manifest.id).json") -Raw | ConvertFrom-Json
+$workshopManifest = Get-Content -LiteralPath (Join-Path $contentDirectory "$($manifest.id).json") -Raw -Encoding UTF8 | ConvertFrom-Json
 Assert-EqualValue -Name "Workshop manifest ID" -Expected $manifest.id -Actual $workshopManifest.id
 Assert-EqualValue -Name "Workshop manifest version" -Expected $manifest.version -Actual $workshopManifest.version
 

@@ -6,8 +6,10 @@ More detail:
 [url=https://github.com/CharTyr/STS2-Agent]https://github.com/CharTyr/STS2-Agent[/url]
 
 [h2]How to start[/h2]
+After you subscribe, you do not copy any files.
 [olist]
-[*]Subscribe, then in Steam click Play and choose [b]Play with Mods[/b].
+[*]Subscribe and wait for Steam to finish downloading.
+[*]In Steam click Play and choose [b]Play with Mods[/b]. Launching the exe directly skips mods.
 [*]The first launch may warn that the code is untrusted. Accept it, then fully quit the game and start it again.
 [*]In Mods, turn on [b]STS2 AI Agent[/b] and restart once more.
 [*]In game, press [b]F8[/b] or the [b]AI[/b] tab on the right.
@@ -16,7 +18,7 @@ More detail:
 [*]Want a teammate? Go back to the [b]main menu[/b], open [b]AI teammate[/b], and invite. A second window appears. The room has 4 seats; you two take two of them, so friends can still join. The AI only plays its own character.
 [/olist]
 
-If you used to copy this mod into the game folder by hand, delete those files first so it does not show up twice.
+If you used to copy this mod into the game folder by hand, delete those files and keep only the Workshop subscription so it does not show up twice.
 
 [h2]What you get[/h2]
 [list]

@@ -6,8 +6,10 @@
 [url=https://github.com/CharTyr/STS2-Agent]https://github.com/CharTyr/STS2-Agent[/url]
 
 [h2]怎么开始[/h2]
+订阅后不用拷任何文件。
 [olist]
-[*]点订阅。回 Steam 点开始游戏，选 [b]带 Mod 启动 / Play with Mods[/b]。
+[*]点订阅，等 Steam 下载完。
+[*]回 Steam 点开始游戏，选 [b]带 Mod 启动 / Play with Mods[/b]。直接点 exe 会看不到 Mod。
 [*]第一次会提示代码不受信任，点接受，然后把游戏完全关掉再开。
 [*]进 Mods，打开 [b]STS2 AI Agent[/b]，再重启一次。
 [*]进游戏后按 [b]F8[/b]，或点屏幕右边的 [b]AI[/b]。
@@ -16,7 +18,7 @@
 [*]想组队：先回到 [b]主菜单[/b]，打开 [b]AI 队友[/b] 点邀请。会再弹出一个窗口。房间是 4 人位，你们占两个，还可以再叫朋友。AI 只打它自己那份。
 [/olist]
 
-以前如果手动拷过这个 Mod 进游戏文件夹，先删掉，不然会看到两份。
+如果以前把这个 Mod 手动放进过游戏文件夹，请删掉那些文件，只保留工坊订阅，不然会看到两份。
 
 [h2]这个 Mod 能做什么[/h2]
 [list]

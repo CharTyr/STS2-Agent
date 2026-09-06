@@ -40,10 +40,7 @@ internal static class CompanionProfileBootstrap
                 string.Equals(obj["id"]?.GetValue<string>(), "STS2AIAgent", StringComparison.OrdinalIgnoreCase))
             {
                 obj["is_enabled"] = true;
-                if (obj["source"] is null)
-                {
-                    obj["source"] = "mods_directory";
-                }
+                obj["source"] = "mods_directory";
 
                 found = true;
             }

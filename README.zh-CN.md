@@ -26,7 +26,7 @@ https://github.com/user-attachments/assets/89353468-a299-4315-9516-e520bcbfbd4b
 
 ## 🚀 新手 3 分钟极速上手
 
-订阅 [Steam 创意工坊](https://steamcommunity.com/sharedfiles/filedetails/?id=3796486050)，然后 Steam → **带 Mod 启动 / Play with Mods**。
+订阅 [Steam 创意工坊](https://steamcommunity.com/sharedfiles/filedetails/?id=3796486050)，等下载完成，然后 Steam → **带 Mod 启动 / Play with Mods**。不用拷任何文件。工坊页面是给玩家看的短说明；这份 README 写得更细，需要时再来看。
 
 这个 Mod 还在开发中。有的功能可能不完整，也可能出错。欢迎把建议和遇到的问题发到 [GitHub Issues](https://github.com/CharTyr/STS2-Agent/issues)。
 
