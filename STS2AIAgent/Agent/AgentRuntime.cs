@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using MegaCrit.Sts2.Core.Logging;
 using STS2AIAgent.Config;
+using STS2AIAgent.Game;
 using STS2AIAgent.Llm;
 using STS2AIAgent.Multiplayer;
 using STS2AIAgent.Server;
@@ -662,7 +663,8 @@ internal sealed class AgentRuntime
                 await _turnGate.WaitAsync(token);
                 try
                 {
-                    return await _loop.PlayOnceAsync(token, boundary.Check);
+                    var immediate = await TryCompanionImmediateAsync(token);
+                    return immediate ?? await _loop.PlayOnceAsync(token, boundary.Check);
                 }
                 finally
                 {
@@ -672,6 +674,59 @@ internal sealed class AgentRuntime
             }, ApplyPlayResult, cancellationToken, delay: null, budgetGuard: budgetGuard);
         }
         finally { RaiseChanged(); }
+    }
+
+    private async Task<AgentTurnResult?> TryCompanionImmediateAsync(CancellationToken cancellationToken)
+    {
+        if (!InstanceRole.IsCompanion)
+        {
+            return null;
+        }
+
+        var decision = await GameThread.InvokeAsync(() =>
+        {
+            var payload = GameStateService.BuildStatePayload();
+            var mapOptions = payload.map?.available_nodes
+                .Select(node => new CompanionMapOption(node.index, node.vote_count, node.has_local_vote))
+                .ToArray();
+            return CompanionPlayPolicy.DecideMapVote(payload.screen, payload.available_actions, mapOptions);
+        });
+
+        if (decision.Kind == CompanionImmediateDecision.Wait)
+        {
+            await Task.Delay(400, cancellationToken);
+            return new AgentTurnResult
+            {
+                Reasoning = "等待你选择地图节点，随后投同一格。",
+                ToolRounds = 0
+            };
+        }
+
+        if (decision.Kind != CompanionImmediateDecision.Act || string.IsNullOrWhiteSpace(decision.Action))
+        {
+            return null;
+        }
+
+        var acted = decision.Action;
+        var json = await GameThread.InvokeAsync(async () =>
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            var response = await GameActionService.ExecuteAsync(new ActionRequest
+            {
+                action = acted,
+                option_index = decision.OptionIndex,
+                client_context = new { source = "companion_follow", instance_role = InstanceRole.Current }
+            });
+            return response.message ?? response.action;
+        });
+
+        return new AgentTurnResult
+        {
+            Acted = acted,
+            ActResultJson = json,
+            Reasoning = "跟随你的地图选择。",
+            ToolRounds = 0
+        };
     }
 
     private async Task StartMcpCoreAsync(CancellationToken cancellationToken)

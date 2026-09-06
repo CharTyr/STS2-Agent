@@ -15,7 +15,7 @@ After you subscribe, you do not copy any files.
 [*]In game, press [b]F8[/b] or the [b]AI[/b] tab on the right.
 [*]Open Settings and fill in three things: the model web address, the model name, and your key. If you use Ollama or LM Studio on this PC, the key can stay empty.
 [*]Want the AI to help with [b]your[/b] character? Use Chat or Play.
-[*]Want a teammate? Go back to the [b]main menu[/b], open [b]AI teammate[/b], and invite. A second window appears. The room has 4 seats; you two take two of them, so friends can still join. The AI only plays its own character.
+[*]Want a teammate? Go back to the [b]main menu[/b], open [b]AI teammate[/b], and invite. A second window appears. The room has 4 seats; you two take two of them, so friends can still join. After you both ready and embark, you play your character; the AI handles its own opening event, follows your map vote, and plays its combat turns.
 [/olist]
 
 If you used to copy this mod into the game folder by hand, delete those files and keep only the Workshop subscription so it does not show up twice.

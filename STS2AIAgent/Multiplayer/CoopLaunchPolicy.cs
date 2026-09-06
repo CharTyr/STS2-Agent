@@ -163,6 +163,45 @@ internal static class CoopLaunchPolicy
             return null;
         }
 
+        if (string.Equals(screen, "BUNDLE_SELECTION", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(screen, "BUNDLES", StringComparison.OrdinalIgnoreCase))
+        {
+            if (Contains(actions, "confirm_bundle")) return "confirm_bundle";
+            if (Contains(actions, "choose_bundle")) return "choose_bundle";
+            return null;
+        }
+
+        if (string.Equals(screen, "CARD_SELECTION", StringComparison.OrdinalIgnoreCase))
+        {
+            if (Contains(actions, "confirm_selection")) return "confirm_selection";
+            if (Contains(actions, "select_deck_card")) return "select_deck_card";
+            return null;
+        }
+
+        if (string.Equals(screen, "CAPSTONE_SELECTION", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(screen, "CAPSTONE", StringComparison.OrdinalIgnoreCase))
+        {
+            if (Contains(actions, "choose_capstone_option")) return "choose_capstone_option";
+            return null;
+        }
+
+        if (string.Equals(screen, "EVENT", StringComparison.OrdinalIgnoreCase))
+        {
+            if (Contains(actions, "choose_event_option")) return "choose_event_option";
+            if (Contains(actions, "proceed")) return "proceed";
+            return null;
+        }
+
+        if (string.Equals(screen, "REWARD", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(screen, "CARD_REWARD", StringComparison.OrdinalIgnoreCase))
+        {
+            if (Contains(actions, "claim_reward")) return "claim_reward";
+            if (Contains(actions, "choose_reward_card")) return "choose_reward_card";
+            if (Contains(actions, "skip_reward_cards")) return "skip_reward_cards";
+            if (Contains(actions, "proceed")) return "proceed";
+            return null;
+        }
+
         if (string.Equals(screen, "MULTIPLAYER_LOBBY", StringComparison.OrdinalIgnoreCase))
         {
             if (!hasLobby && Contains(actions, "join_multiplayer_lobby")) return "join_multiplayer_lobby";
@@ -183,13 +222,25 @@ internal static class CoopLaunchPolicy
         return null;
     }
 
+    public static bool NeedsOptionIndex(string action)
+    {
+        return action is "select_character"
+            or "choose_bundle"
+            or "select_deck_card"
+            or "choose_event_option"
+            or "choose_capstone_option"
+            or "claim_reward"
+            or "choose_reward_card";
+    }
+
     public static bool CompanionHasJoinedRun(string screen, IReadOnlyList<string> availableActions)
     {
-        var actions = availableActions ?? Array.Empty<string>();
-        if (Contains(actions, "unready")) return true;
-        return screen is "EVENT" or "MAP" or "COMBAT" or "REWARD" or "REST" or "SHOP"
-            or "TREASURE" or "CHEST" or "GAME_OVER" or "CAPSTONE" or "BUNDLES"
-            or "CRYSTAL_SPHERE" or "CARD_REWARD" or "MAP_WAIT";
+        _ = availableActions;
+        // Personal setup screens (Neow, bundles, cards) still need bootstrap
+        // clicks. Auto-play starts on shared climb screens so both players
+        // reach the map together instead of stalling on EVENT.
+        return screen is "MAP" or "COMBAT" or "MAP_WAIT" or "REST" or "SHOP"
+            or "TREASURE" or "CHEST" or "GAME_OVER" or "CRYSTAL_SPHERE";
     }
 
     private static bool Contains(IReadOnlyList<string> actions, string name)

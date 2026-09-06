@@ -37,7 +37,7 @@ internal static class DualInstanceCoordinator
             return launch.Message;
         }
 
-        return launch.Message + "。本机已创建 4 人大厅，请选角色后 Ready。同伴实例会自动加入并开始游玩。";
+        return launch.Message + "。本机已创建 4 人大厅，请选角色后 Ready 开局。你打自己的角色；AI 会自动加入、点开局并打另一个角色。";
     }
 
     public static async Task<bool> RunCompanionBootstrapAsync(CancellationToken cancellationToken)
@@ -50,7 +50,8 @@ internal static class DualInstanceCoordinator
         try
         {
             Log.Info($"{LogPrefix} Companion bootstrap starting");
-            var deadline = DateTime.UtcNow + TimeSpan.FromSeconds(120);
+            var deadline = DateTime.UtcNow + TimeSpan.FromMinutes(5);
+            string? lastLog = null;
             while (DateTime.UtcNow < deadline)
             {
                 cancellationToken.ThrowIfCancellationRequested();
@@ -60,34 +61,40 @@ internal static class DualInstanceCoordinator
                     return true;
                 });
                 var snapshot = await GetBootstrapSnapshotAsync();
-                if (CoopLaunchPolicy.CompanionHasJoinedRun(snapshot.Screen, snapshot.Actions))
-                {
-                    Log.Info($"{LogPrefix} Companion is ready; auto-play can start");
-                    return true;
-                }
-
                 var next = CoopLaunchPolicy.NextCompanionBootstrapAction(
                     snapshot.Screen,
                     snapshot.Actions,
                     snapshot.HasLobby);
-                if (next == null)
+                var log = snapshot.Screen + "|" + (next ?? "-") + "|" + string.Join(",", snapshot.Actions);
+                if (!string.Equals(log, lastLog, StringComparison.Ordinal))
                 {
-                    await GameThread.WaitForNextFrameAsync();
+                    Log.Info($"{LogPrefix} Companion bootstrap {log}");
+                    lastLog = log;
+                }
+
+                if (next != null)
+                {
+                    try
+                    {
+                        var option = CoopLaunchPolicy.NeedsOptionIndex(next) ? 0 : (int?)null;
+                        await ExecuteActionAsync(next, cancellationToken, option);
+                    }
+                    catch (Exception ex) when (ex is not OperationCanceledException)
+                    {
+                        Log.Warn($"{LogPrefix} Companion bootstrap action {next} failed: {ex.Message}");
+                        await GameThread.WaitForNextFrameAsync();
+                    }
+
                     continue;
                 }
 
-                try
+                if (CoopLaunchPolicy.CompanionHasJoinedRun(snapshot.Screen, snapshot.Actions))
                 {
-                    var option = string.Equals(next, "select_character", StringComparison.OrdinalIgnoreCase)
-                        ? 0
-                        : (int?)null;
-                    await ExecuteActionAsync(next, cancellationToken, option);
+                    Log.Info($"{LogPrefix} Companion reached {snapshot.Screen}; auto-play can start");
+                    return true;
                 }
-                catch (Exception ex) when (ex is not OperationCanceledException)
-                {
-                    Log.Warn($"{LogPrefix} Companion bootstrap action {next} failed: {ex.Message}");
-                    await GameThread.WaitForNextFrameAsync();
-                }
+
+                await GameThread.WaitForNextFrameAsync();
             }
 
             throw new TimeoutException("Timed out joining the local room.");
@@ -104,7 +111,7 @@ internal static class DualInstanceCoordinator
         EnableFastMpENetHost();
         try
         {
-            await GameThread.InvokeAsync(() => GameActionService.StartLocalFourPlayerHostAsync());
+            await GameThread.InvokeAsync(async () => await GameActionService.StartLocalFourPlayerHostAsync());
             await GameThread.InvokeAsync(() =>
             {
                 GameStateService.EnsureFourPlayerLobby();
@@ -172,13 +179,16 @@ internal static class DualInstanceCoordinator
         await WaitForScreenAsync(new[] { "MULTIPLAYER_LOBBY" }, TimeSpan.FromSeconds(20), cancellationToken);
     }
 
-    private static Task ExecuteActionAsync(string action, CancellationToken cancellationToken, int? optionIndex = null)
+    private static Task<ActionResponsePayload> ExecuteActionAsync(
+        string action,
+        CancellationToken cancellationToken,
+        int? optionIndex = null)
     {
         cancellationToken.ThrowIfCancellationRequested();
-        return GameThread.InvokeAsync(() =>
+        return GameThread.InvokeAsync(async () =>
         {
             cancellationToken.ThrowIfCancellationRequested();
-            return GameActionService.ExecuteAsync(new ActionRequest
+            return await GameActionService.ExecuteAsync(new ActionRequest
             {
                 action = action,
                 option_index = optionIndex,

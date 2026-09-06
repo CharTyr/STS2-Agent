@@ -383,10 +383,10 @@ internal sealed class AgentOverlayHost
     {
         var page = UiFactory.Column();
         page.AddChild(UiFactory.Label("和 AI 一起爬塔", 18));
-        page.AddChild(UiFactory.Label("你操作自己的角色，AI 作为第二个游戏实例加入同一房间（本地 1 人 + 1 AI）。大厅仍是 4 人位，还可以再邀 2 名在线玩家。", 13));
+        page.AddChild(UiFactory.Label("可以一起玩：你打自己的角色，AI 打另一个角色，同一座塔往上爬。大厅仍是 4 人位，还可以再邀 2 名在线玩家。", 13));
         _firstRunHint = UiFactory.Label(FirstRunSetup.Evaluate(AgentRuntime.Instance.Settings).Hint, 13, muted: true);
         page.AddChild(_firstRunHint);
-        page.AddChild(UiFactory.Label("邀请后会打开队友窗口。它只操作自己的角色，自动加入、选角并准备。请从主菜单邀请。", 12, muted: true));
+        page.AddChild(UiFactory.Label("请从主菜单邀请。第二窗口打开后，AI 会自己选角、点开局事件并进图。你继续在这个窗口操作自己的角色；轮到它时，它会自动出牌。", 12, muted: true));
         _dualLaunchButton = UiFactory.Button("邀请 AI 队友", () => _ = LaunchDualAsync());
         page.AddChild(_dualLaunchButton);
         _dualStatus = UiFactory.Label("队友尚未加入。", 13, muted: true);

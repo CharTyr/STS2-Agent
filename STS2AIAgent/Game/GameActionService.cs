@@ -209,7 +209,7 @@ internal static class GameActionService
                 screen
             }, retryable: true);
 
-        var endTurnButton = GameStateService.GetEndTurnButton(currentScreen as NCombatRoom);
+        var endTurnButton = GameStateService.GetEndTurnButton(GameStateService.FindActiveCombatRoom(currentScreen));
         if (!GameStateService.IsEndTurnButtonReady(endTurnButton))
         {
             throw new ApiException(503, "state_unavailable", "End turn button is unavailable.", new
@@ -1234,7 +1234,8 @@ internal static class GameActionService
 
         if (screen == "COMBAT")
         {
-            return currentScreen is NCombatRoom combatRoom &&
+            var combatRoom = GameStateService.FindActiveCombatRoom(currentScreen);
+            return combatRoom != null &&
                 combatRoom.Mode == CombatRoomMode.ActiveCombat &&
                 CombatManager.Instance.IsInProgress &&
                 !CombatManager.Instance.IsOverOrEnding &&
