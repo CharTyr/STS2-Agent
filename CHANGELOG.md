@@ -1,5 +1,13 @@
 # Changelog
 
+## v0.10.1 - 2026-09-06
+
+### Fixed
+
+- Companion bootstrap clicks through Neow / bundle / card / reward instead of treating EVENT as already in the run, so both players reach the map together.
+- The AI teammate follows the human map vote so both enter the same node.
+- Combat actions still work if the map screen remains the active context; ending a turn no longer requires the HUD button to stay visible.
+
 ## v0.10.0 - 2026-09-06
 
 ### Added

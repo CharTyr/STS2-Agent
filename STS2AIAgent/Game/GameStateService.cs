@@ -770,6 +770,40 @@ internal static class GameStateService
         return screen;
     }
 
+    public static NCombatRoom? FindActiveCombatRoom(IScreenContext? currentScreen)
+    {
+        if (currentScreen is NCombatRoom current &&
+            GodotObject.IsInstanceValid(current) &&
+            current.Mode == CombatRoomMode.ActiveCombat)
+        {
+            return current;
+        }
+
+        if (!CombatManager.Instance.IsInProgress)
+        {
+            return null;
+        }
+
+        try
+        {
+            var game = NGame.Instance;
+            if (game == null || !GodotObject.IsInstanceValid(game))
+            {
+                return null;
+            }
+
+            return FindDescendants<NCombatRoom>(game)
+                .FirstOrDefault(room =>
+                    GodotObject.IsInstanceValid(room) &&
+                    room.IsVisibleInTree() &&
+                    room.Mode == CombatRoomMode.ActiveCombat);
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
     public static bool CanEndTurn(IScreenContext? currentScreen, CombatState? combatState, bool requireButtonReady = true)
     {
         if (!CanUseCombatActions(currentScreen, combatState, out _, out var combatRoom))
@@ -2120,13 +2154,18 @@ internal static class GameStateService
         me = null;
         combatRoom = null;
 
-        if (combatState == null || currentScreen is not NCombatRoom room)
+        if (combatState == null)
         {
             ResetCombatActionReadiness();
             return false;
         }
 
-        combatRoom = room;
+        combatRoom = FindActiveCombatRoom(currentScreen);
+        if (combatRoom == null)
+        {
+            ResetCombatActionReadiness();
+            return false;
+        }
 
         if (!CombatManager.Instance.IsInProgress ||
             CombatManager.Instance.IsOverOrEnding ||
@@ -2233,7 +2272,7 @@ internal static class GameStateService
         Player me)
     {
         var modal = GetOpenModal();
-        var room = currentScreen as NCombatRoom;
+        var room = FindActiveCombatRoom(currentScreen);
         var hand = room?.Ui?.Hand;
         var runningAction = RunManager.Instance.ActionExecutor.CurrentlyRunningAction;
         MegaCrit.Sts2.Core.GameActions.GameAction? readyAction = null;
@@ -2347,7 +2386,7 @@ internal static class GameStateService
 
     public static bool IsEndTurnButtonReady(NEndTurnButton? button)
     {
-        if (button == null || !GodotObject.IsInstanceValid(button) || !button.IsVisibleInTree() || !button.IsEnabled)
+        if (button == null || !GodotObject.IsInstanceValid(button) || !button.IsEnabled)
         {
             return false;
         }
@@ -6222,6 +6261,11 @@ internal static class GameStateService
         if (GetMultiplayerTestScene() != null)
         {
             return "MULTIPLAYER_LOBBY";
+        }
+
+        if (FindActiveCombatRoom(currentScreen) != null)
+        {
+            return "COMBAT";
         }
 
         return currentScreen switch

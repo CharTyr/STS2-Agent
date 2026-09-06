@@ -11,7 +11,7 @@ internal static class FirstRunSetup
         "请先在设置中填写 OpenAI 兼容接口地址和模型名称。本地 Ollama / LM Studio 可以留空 API Key。";
 
     public const string InviteHint =
-        "配好游玩模型后，回到主菜单打开「AI 队友」，邀请第二实例加入。本地 1 人 + 1 AI，大厅仍为 4 人位。";
+        "配好游玩模型后，回到主菜单打开「AI 队友」邀请。本地 1 人 + 1 AI 同一局：你打你的角色，AI 自动打另一个。大厅仍为 4 人位。";
 
     public static FirstRunStatus Evaluate(AgentSettings settings)
     {

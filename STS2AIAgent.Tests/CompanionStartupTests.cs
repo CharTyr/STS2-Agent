@@ -93,14 +93,70 @@ internal static class CompanionStartupTests
             "CHARACTER_SELECT",
             new[] { "select_character", "embark" },
             hasLobby: true));
+        Assert.True(CoopLaunchPolicy.NextCompanionBootstrapAction(
+            "CHARACTER_SELECT",
+            new[] { "unready" },
+            hasLobby: true) == null);
+        Assert.Equal("choose_bundle", CoopLaunchPolicy.NextCompanionBootstrapAction(
+            "BUNDLE_SELECTION",
+            new[] { "choose_bundle" },
+            hasLobby: true));
+        Assert.Equal("confirm_bundle", CoopLaunchPolicy.NextCompanionBootstrapAction(
+            "BUNDLE_SELECTION",
+            new[] { "choose_bundle", "confirm_bundle" },
+            hasLobby: true));
+        Assert.Equal("select_deck_card", CoopLaunchPolicy.NextCompanionBootstrapAction(
+            "CARD_SELECTION",
+            new[] { "select_deck_card" },
+            hasLobby: true));
+        Assert.Equal("choose_event_option", CoopLaunchPolicy.NextCompanionBootstrapAction(
+            "EVENT",
+            new[] { "choose_event_option" },
+            hasLobby: true));
+        Assert.Equal("claim_reward", CoopLaunchPolicy.NextCompanionBootstrapAction(
+            "REWARD",
+            new[] { "claim_reward" },
+            hasLobby: true));
+        Assert.Equal("choose_capstone_option", CoopLaunchPolicy.NextCompanionBootstrapAction(
+            "CAPSTONE_SELECTION",
+            new[] { "choose_capstone_option" },
+            hasLobby: true));
         Assert.Equal("dismiss_modal", CoopLaunchPolicy.NextCompanionBootstrapAction(
             "MODAL",
             new[] { "confirm_modal", "dismiss_modal" },
             hasLobby: false));
-        Assert.True(CoopLaunchPolicy.CompanionHasJoinedRun("CHARACTER_SELECT", new[] { "unready" }));
-        Assert.True(CoopLaunchPolicy.CompanionHasJoinedRun("EVENT", Array.Empty<string>()));
+        Assert.True(CoopLaunchPolicy.NeedsOptionIndex("choose_event_option"));
+        Assert.True(CoopLaunchPolicy.NeedsOptionIndex("select_character"));
+        Assert.True(!CoopLaunchPolicy.NeedsOptionIndex("embark"));
+        Assert.True(!CoopLaunchPolicy.CompanionHasJoinedRun("CHARACTER_SELECT", new[] { "unready" }));
+        Assert.True(!CoopLaunchPolicy.CompanionHasJoinedRun("EVENT", new[] { "choose_event_option" }));
+        Assert.True(!CoopLaunchPolicy.CompanionHasJoinedRun("BUNDLE_SELECTION", new[] { "choose_bundle" }));
         Assert.True(CoopLaunchPolicy.CompanionHasJoinedRun("MAP", new[] { "choose_map_node" }));
+        Assert.True(CoopLaunchPolicy.CompanionHasJoinedRun("COMBAT", new[] { "play_card", "end_turn" }));
         Assert.True(!CoopLaunchPolicy.CompanionHasJoinedRun("MAIN_MENU", new[] { "close_main_menu_submenu" }));
+        Assert.Equal(CompanionImmediateDecision.Wait, CompanionPlayPolicy.DecideMapVote(
+            "MAP",
+            new[] { "choose_map_node" },
+            Array.Empty<CompanionMapOption>()).Kind);
+        var follow = CompanionPlayPolicy.DecideMapVote(
+            "MAP",
+            new[] { "choose_map_node" },
+            new[]
+            {
+                new CompanionMapOption(0, 0, false),
+                new CompanionMapOption(1, 1, false)
+            });
+        Assert.Equal(CompanionImmediateDecision.Act, follow.Kind);
+        Assert.Equal("choose_map_node", follow.Action);
+        Assert.Equal(1, follow.OptionIndex);
+        Assert.Equal(CompanionImmediateDecision.Wait, CompanionPlayPolicy.DecideMapVote(
+            "MAP",
+            new[] { "choose_map_node" },
+            new[] { new CompanionMapOption(0, 1, true) }).Kind);
+        Assert.Equal(CompanionImmediateDecision.None, CompanionPlayPolicy.DecideMapVote(
+            "COMBAT",
+            new[] { "play_card" },
+            null).Kind);
     }
 
     public static void FirstRunProviderConfigIsReachable()

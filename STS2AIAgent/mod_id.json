@@ -3,7 +3,7 @@
   "name": "STS2 AI Agent",
   "author": "CharTyr",
   "description": "带一个 AI 一起爬塔。你打自己的角色，同一台电脑上 AI 可以打另一个。还在开发中，欢迎反馈。",
-  "version": "0.10.0",
+  "version": "0.10.1",
   "min_game_version": "0.111.0",
   "has_pck": true,
   "has_dll": true,
