@@ -20,7 +20,7 @@ https://github.com/user-attachments/assets/89353468-a299-4315-9516-e520bcbfbd4b
 - 👥 **本地双开联机组队 (AI Teammate)**：一键在本地拉起副游戏窗口并自动组队，你操控自己的角色，AI 队友操作它的角色，共同爬塔。
 - 💬 **队伍实时自然语言交流**：在人类窗口直接向 AI 队友发战术指令（如“集火右怪”、“走商店路线”），AI 队友会回复并根据讨论调整出牌。
 - 🛡️ **会话成本硬护栏与异常熔断**：实时统计并限制 Token 消耗与请求数，防范失控扣费；连续 3 次异常自动安全熔断；离开对局自动刹车。
-- 🔌 **开发者友好**：内置本地 HTTP API (`:8080`) 与 FastMCP Server (`:8765`)，支持 Cursor、Claude Desktop、Codex 等外部 Agent 客户端一键接入。
+- 🔌 **开发者友好**：内置本地 HTTP API (`:8080`)；游戏内「接入」页可打开 MCP（同一端口 `/mcp`），支持 Cursor、Claude、Codex 等外部客户端接入。
 
 ---
 
@@ -118,14 +118,7 @@ https://github.com/user-attachments/assets/89353468-a299-4315-9516-e520bcbfbd4b
 │  └───────────────────────┬─────────────────────────────┘  │
 └──────────────────────────┼────────────────────────────────┘
                            │ 本地 HTTP API (:8080)
-                           ▼
-┌───────────────────────────────────────────────────────────┐
-│              mcp_server (Python FastMCP)                  │
-│  - stdio / HTTP (:8765) 适配器                             │
-│  - Tool Profiles: guided / layered / full                 │
-│  - 离线/内置游戏元数据检索 (Cards/Relics/Monsters/Events)   │
-└──────────────────────────┬────────────────────────────────┘
-                           │ MCP Protocol
+                           │ 可选 MCP (:8080/mcp)
                            ▼
         外部智能体 (Cursor / Claude Desktop / Codex)
 ```
@@ -134,38 +127,35 @@ https://github.com/user-attachments/assets/89353468-a299-4315-9516-e520bcbfbd4b
 
 Mod 默认在本地启动 HTTP 服务（默认端口 `8080`，遇冲突自动动态选择）：
 
-- `GET /health`：服务健康检查，返回 `api_port`、`instance_role` 与进程 PID。
+- `GET /health`：服务健康检查，返回 `api_port`、`instance_role`、`mcp_enabled` 与进程 PID。
 - `GET /state`：获取完整原始游戏状态 JSON。
 - `GET /actions/available`：获取当前所有合法动作清单与参数 Schema。
 - `GET /events/stream`：订阅游戏状态转换的 SSE 长连接流。
 - `POST /action`：执行具体游戏动作（例如 `play_card`、`choose_map_node`、`proceed` 等）。
+- `POST /mcp`：可选 MCP（Streamable HTTP）。默认关闭，在悬浮窗「接入」页打开。
 
-### FastMCP 协议集成
+### MCP 接入（做进 Mod 里）
 
-若希望使用外部 AI 客户端（如 Cursor、Claude Desktop 等）直接接管游玩，可通过内置 FastMCP 服务连接：
+外部客户端（Cursor / Claude / Codex）走 MCP。游戏内自动打不需要打开。
 
-1. **环境准备**：安装 Python 3.11+ 与 [uv](https://astral.sh/uv)。
-2. **启动服务**：
-   - 方式一：在游戏内悬浮窗 **「接入」** 页面点击一键启动。
-   - 方式二：通过脚本启动：
-     ```powershell
-     # Windows (HTTP 模式，默认 http://127.0.0.1:8765/mcp)
-     powershell -ExecutionPolicy Bypass -File ".\scripts\start-mcp-network.ps1"
-     ```
-3. **外部客户端配置**（以 `claude_desktop_config.json` 为例）：
+1. 按 **F8** 打开悬浮窗 → **接入**。
+2. 勾选 **打开 MCP 服务**。
+3. 复制页面上的地址或 JSON 配置，贴进客户端。默认：
    ```json
    {
      "mcpServers": {
        "sts2-ai-agent": {
-         "url": "http://127.0.0.1:8765/mcp"
+         "type": "http",
+         "url": "http://127.0.0.1:8080/mcp"
        }
      }
    }
    ```
-4. **Tool Profile 说明**：
-   - `guided`（默认推荐）：提供精简的自主游玩接口 (`health_check`, `get_game_state`, `get_available_actions`, `act`, `get_game_data_*`, `wait_until_actionable`)。
-   - `layered`：面向主/副 Agent 分层协同，补充提供 Handoff 与战斗观察记录工具。
-   - `full`：全量暴露所有独立的 Legacy per-action 工具，适合细粒度测试。
+   端口与 HTTP API 相同；8080 被占用时会跟着改绑。服务只监听 `127.0.0.1`。
+
+内置工具与游戏内自动打一致：`health_check`、`get_game_state`、`get_available_actions`、`act`、`get_game_data_*`、`wait_until_actionable`。
+
+开发者若还要 Python sidecar（stdio / layered / full profile），仍可用 `mcp_server/`。普通接入不需要 uv。
 
 ---
 

@@ -65,7 +65,7 @@ if ([string]::IsNullOrWhiteSpace($OutputRoot)) {
 }
 
 $manifestPath = Join-Path $ProjectRoot "STS2AIAgent/mod_manifest.json"
-$manifest = Get-Content $manifestPath -Raw | ConvertFrom-Json
+$manifest = Get-Content $manifestPath -Raw -Encoding UTF8 | ConvertFrom-Json
 $version = $manifest.version
 $releaseBaseName = "sts2-ai-agent-v$version-windows"
 

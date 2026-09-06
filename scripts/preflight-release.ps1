@@ -90,8 +90,8 @@ Invoke-Step -Name "MCP unit tests" -Action {
 }
 
 Invoke-Step -Name "Validate release version metadata" -Action {
-    $modManifest = Get-Content -LiteralPath $modManifestPath -Raw | ConvertFrom-Json
-    $modIdManifest = Get-Content -LiteralPath $modIdManifestPath -Raw | ConvertFrom-Json
+    $modManifest = Get-Content -LiteralPath $modManifestPath -Raw -Encoding UTF8 | ConvertFrom-Json
+    $modIdManifest = Get-Content -LiteralPath $modIdManifestPath -Raw -Encoding UTF8 | ConvertFrom-Json
     $releaseVersion = [string]$modManifest.version
 
     if ([string]::IsNullOrWhiteSpace($releaseVersion)) {
@@ -102,7 +102,7 @@ Invoke-Step -Name "Validate release version metadata" -Action {
     }
 
     $routerContents = Get-Content -LiteralPath $routerPath -Raw
-    $expectedRouterVersion = 'private const string ModVersion = "' + $releaseVersion + '";'
+    $expectedRouterVersion = 'const string ModVersion = "' + $releaseVersion + '";'
     if ($routerContents.IndexOf($expectedRouterVersion, [StringComparison]::Ordinal) -lt 0) {
         throw "Router ModVersion does not match release version '$releaseVersion'."
     }

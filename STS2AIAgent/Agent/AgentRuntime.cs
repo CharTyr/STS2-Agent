@@ -1,4 +1,3 @@
-using System.Diagnostics;
 using MegaCrit.Sts2.Core.Logging;
 using STS2AIAgent.Config;
 using STS2AIAgent.Game;
@@ -38,9 +37,7 @@ internal sealed class AgentRuntime
     private string _lastAction = "-";
     private string _lastThought = "-";
     private string _dualStatus = "尚未启动双开。";
-    private string _mcpStatus = "MCP 未启动。外部 Agent 可走下方接入说明。";
-    private string? _mcpUrl;
-    private Process? _mcpProcess;
+    private string _mcpStatus = "MCP 已关闭，未对外暴露。";
     private LlmUsage _sessionUsage = LlmUsage.Empty;
     private int _sessionRequests;
     private SessionBudgetGuard _budgetGuard;
@@ -247,22 +244,11 @@ internal sealed class AgentRuntime
 
     public string McpStatus => _mcpStatus;
 
-    public string? McpUrl => _mcpUrl;
+    public string? McpUrl => NativeMcpServer.Runtime?.EndpointUrl;
 
-    public bool McpRunning
-    {
-        get
-        {
-            try
-            {
-                return _mcpProcess is { HasExited: false };
-            }
-            catch
-            {
-                return false;
-            }
-        }
-    }
+    public bool McpRunning => NativeMcpServer.Runtime?.Enabled == true;
+
+    public string McpClientConfig => NativeMcpServer.FormatClientConfigJson(McpUrl ?? McpEndpointUrl());
 
     public string SettingsPath => _store.Path;
 
@@ -279,6 +265,8 @@ internal sealed class AgentRuntime
 
     public void Initialize()
     {
+        NativeMcpServer.BindRuntime(new GameBridge(), Router.BuildHealthData, Router.ModVersion);
+        ApplyMcpFromSettings();
         AppendLog($"API {Server.HttpServer.Instance.Prefix}  role={InstanceRole.Current}");
         if (InstanceRole.IsCompanion)
         {
@@ -290,7 +278,7 @@ internal sealed class AgentRuntime
     public void Shutdown()
     {
         StopAutoPlay();
-        StopMcp();
+        NativeMcpServer.Runtime?.SetEnabled(false, McpEndpointUrl());
         try
         {
             _lifetime.Cancel();
@@ -310,6 +298,7 @@ internal sealed class AgentRuntime
         }
 
         _store.Save(settings);
+        ApplyMcpFromSettings();
         SetStatus("设置已保存");
         RaiseChanged();
     }
@@ -388,17 +377,15 @@ internal sealed class AgentRuntime
         SetStatus(task.IsCompleted ? "已暂停自动游玩" : "正在暂停，等待当前任务完成…");
     }
 
-    public Task StartMcpAsync(CancellationToken cancellationToken)
+    public void SetMcpEnabled(bool enabled)
     {
-        return Task.Run(() => StartMcpCoreAsync(cancellationToken), cancellationToken);
-    }
+        lock (_gate)
+        {
+            _settings.McpEnabled = enabled;
+            _store.Save(_settings);
+        }
 
-    public void StopMcp()
-    {
-        McpProcessLauncher.TryStop(_mcpProcess);
-        _mcpProcess = null;
-        _mcpUrl = null;
-        _mcpStatus = "MCP 已停止。";
+        ApplyMcpFromSettings();
         RaiseChanged();
     }
 
@@ -729,64 +716,19 @@ internal sealed class AgentRuntime
         };
     }
 
-    private async Task StartMcpCoreAsync(CancellationToken cancellationToken)
+    private void ApplyMcpFromSettings()
     {
-        if (McpRunning)
-        {
-            _mcpStatus = "MCP 已在运行：" + (_mcpUrl ?? "");
-            RaiseChanged();
-            return;
-        }
+        var enabled = Settings.McpEnabled;
+        var url = McpEndpointUrl();
+        NativeMcpServer.Runtime?.SetEnabled(enabled, url);
+        _mcpStatus = enabled
+            ? "MCP 已打开。把下面的地址或配置贴进外部客户端。"
+            : "MCP 已关闭，未对外暴露。";
+    }
 
-        string configured;
-        int preferredPort;
-        lock (_gate)
-        {
-            configured = _settings.McpServerPath;
-            preferredPort = _settings.McpPort;
-        }
-
-        var root = McpProcessLauncher.FindMcpRoot(configured);
-        if (root == null)
-        {
-            _mcpStatus = "未找到 mcp_server。把 release 包里的 mcp_server 放到游戏目录旁，或在接入页填写路径。";
-            RaiseChanged();
-            return;
-        }
-
-        lock (_gate)
-        {
-            _settings.McpServerPath = root;
-            _store.Save(_settings);
-        }
-
-        _mcpStatus = "正在启动 MCP…";
-        RaiseChanged();
-        try
-        {
-            var api = HttpServer.Instance.Prefix.TrimEnd('/');
-            var launched = await McpProcessLauncher.StartAsync(root, api, preferredPort, cancellationToken);
-            if (!launched.Ok)
-            {
-                _mcpStatus = launched.Message;
-                RaiseChanged();
-                return;
-            }
-
-            _mcpProcess = launched.Process;
-            _mcpUrl = launched.Url;
-            _mcpStatus = launched.Message;
-        }
-        catch (OperationCanceledException)
-        {
-            _mcpStatus = "MCP 启动已取消。";
-        }
-        catch (Exception ex)
-        {
-            _mcpStatus = "MCP 启动失败：" + ex.Message;
-        }
-
-        RaiseChanged();
+    private static string McpEndpointUrl()
+    {
+        return HttpServer.Instance.Prefix.TrimEnd('/') + "/mcp";
     }
 
     private void AccountTurn(AgentTurnResult result, bool recordBudget = false)

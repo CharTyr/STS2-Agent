@@ -25,6 +25,7 @@ If you used to copy this mod into the game folder by hand, delete those files an
 [*]Set up your model and chat without leaving the game
 [*]Let it play on its own, or take one step at a time
 [*]Invite an AI teammate on the same PC
+[*]Optional MCP for Cursor / Claude / Codex: press F8 → Connect, turn it on, copy the address. No Python install.
 [*]No new cards, no balance tweaks, no changes to your save
 [/list]
 

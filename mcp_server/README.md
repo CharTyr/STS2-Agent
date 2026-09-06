@@ -1,24 +1,20 @@
 # STS2 MCP Server
 
-`mcp_server/` 提供一个基于 `FastMCP` 的本地 MCP Server，把 `STS2AIAgent` Mod 暴露的 HTTP API 包装成可直接给大模型调用的工具。
+普通玩家请用游戏内悬浮窗 **接入** 页打开 MCP（Mod 内置，`http://127.0.0.1:8080/mcp`，不需要 Python / uv）。
 
-它的目标不是“把所有底层按钮都暴露出去”，而是给 agent 一套足够完整、但仍然有状态约束的游玩接口。
-
-游戏内 overlay 的 **接入** 页可以一键启动本目录对应的 HTTP MCP（`http://127.0.0.1:8765/mcp`），并把当前 Mod API 端口传给它。玩家只装 DLL/PCK 时需要把 release 包里的 `mcp_server` 放到游戏目录旁，并安装 `uv`。
-
-外部客户端最小配置：
+`mcp_server/` 是可选的 Python FastMCP sidecar，给开发者做 stdio、layered/full tool profile 和契约测试。它把 Mod 的 HTTP API 再包一层 MCP。
 
 ```json
 {
   "mcpServers": {
     "sts2-ai-agent": {
-      "url": "http://127.0.0.1:8765/mcp"
+      "url": "http://127.0.0.1:8080/mcp"
     }
   }
 }
 ```
 
-不走 overlay 时仍可用 `scripts/start-mcp-stdio.ps1` 或 `scripts/start-mcp-network.ps1`。
+sidecar 仍可用 `scripts/start-mcp-stdio.ps1` 或 `scripts/start-mcp-network.ps1`。
 
 ## Tool Profile
 

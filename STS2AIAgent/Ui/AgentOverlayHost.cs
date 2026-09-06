@@ -54,9 +54,11 @@ internal sealed class AgentOverlayHost
     private Button? _playToggle;
     private Button? _stepButton;
     private Button? _sendButton;
-    private Button? _mcpToggle;
+    private CheckBox? _mcpToggle;
     private Label? _mcpStatus;
-    private LineEdit? _mcpPathEdit;
+    private Label? _mcpUrlLabel;
+    private TextEdit? _mcpConfigEdit;
+    private Control? _mcpInfoBox;
     private Control? _pageHost;
     private Control? _chatFooter;
     private Control? _chatPage;
@@ -416,31 +418,35 @@ internal sealed class AgentOverlayHost
     private Control BuildConnectPage()
     {
         var page = UiFactory.Column();
-        var settings = AgentRuntime.Instance.Settings;
-        page.AddChild(UiFactory.Label("外部 Agent 接入", 15));
-        page.AddChild(UiFactory.Label("游戏内自动打不需要 MCP。只有 Cursor / Claude / Codex 等外部客户端才需要启动 MCP。", 12, muted: true));
-
-        var detected = McpProcessLauncher.FindMcpRoot(settings.McpServerPath) ?? settings.McpServerPath;
-        _mcpPathEdit = UiFactory.Line(detected, "mcp_server 目录");
-        page.AddChild(Labeled("mcp_server 路径", _mcpPathEdit));
-        _mcpToggle = UiFactory.Button(AgentRuntime.Instance.McpRunning ? "停止 MCP" : "一键启动 MCP", ToggleMcp);
-        var copyApi = UiFactory.Button("复制 API", () => CopyText(HttpServer.Instance.Prefix));
-        var copyMcp = UiFactory.Button("复制 MCP", () => CopyText(AgentRuntime.Instance.McpUrl ?? "http://127.0.0.1:8765/mcp"));
-        page.AddChild(UiFactory.Row(_mcpToggle, copyApi, copyMcp));
+        page.AddChild(UiFactory.Label("MCP 接入", 15));
+        page.AddChild(UiFactory.Label("游戏内自动打不需要打开。只有 Cursor / Claude / Codex 等外部客户端才需要。", 12, muted: true));
+        _mcpToggle = UiFactory.Check("打开 MCP 服务", AgentRuntime.Instance.McpRunning);
+        _mcpToggle.Toggled += on => AgentRuntime.Instance.SetMcpEnabled(on);
+        page.AddChild(_mcpToggle);
         _mcpStatus = UiFactory.Label(AgentRuntime.Instance.McpStatus, 12, muted: true);
         page.AddChild(_mcpStatus);
 
-        page.AddChild(UiFactory.Label("1) 本机 HTTP API（无需 MCP）", 14));
-        page.AddChild(UiFactory.Label("GET /health  /state  /actions/available    POST /action    SSE /events/stream", 12, muted: true));
-        page.AddChild(UiFactory.Label("默认 http://127.0.0.1:8080 ，被占用会自动改绑。外部脚本可直接调这些接口。", 12, muted: true));
+        _mcpInfoBox = UiFactory.Column();
+        _mcpUrlLabel = UiFactory.Label("", 13);
+        _mcpInfoBox.AddChild(_mcpUrlLabel);
+        var copyUrl = UiFactory.Button("复制地址", () =>
+        {
+            var url = AgentRuntime.Instance.McpUrl;
+            if (!string.IsNullOrWhiteSpace(url))
+            {
+                CopyText(url);
+            }
+        });
+        var copyCfg = UiFactory.Button("复制配置", () => CopyText(AgentRuntime.Instance.McpClientConfig));
+        _mcpInfoBox.AddChild(UiFactory.Row(copyUrl, copyCfg));
+        _mcpConfigEdit = UiFactory.Multiline("", 120);
+        _mcpConfigEdit.Editable = false;
+        _mcpInfoBox.AddChild(_mcpConfigEdit);
+        _mcpInfoBox.AddChild(UiFactory.Label("把配置贴进外部客户端的 MCP 设置。服务只监听本机 127.0.0.1。", 12, muted: true));
+        _mcpInfoBox.Visible = AgentRuntime.Instance.McpRunning;
+        page.AddChild(_mcpInfoBox);
 
-        page.AddChild(UiFactory.Label("2) Cursor / Claude / Codex（推荐点上面的按钮）", 14));
-        page.AddChild(UiFactory.Label("启动后把 MCP URL 配进客户端，例如：", 12, muted: true));
-        page.AddChild(UiFactory.Label("{\"mcpServers\":{\"sts2-ai-agent\":{\"url\":\"http://127.0.0.1:8765/mcp\"}}}", 11, muted: true));
-        page.AddChild(UiFactory.Label("并设置环境变量 STS2_API_BASE_URL 为当前 API 地址。需要 uv + 本机 mcp_server 目录。", 12, muted: true));
-
-        page.AddChild(UiFactory.Label("3) 命令行 stdio（不点按钮时）", 14));
-        page.AddChild(UiFactory.Label("scripts/start-mcp-stdio.ps1  或  cd mcp_server && uv run sts2-mcp-server", 12, muted: true));
+        page.AddChild(UiFactory.Label("本机 HTTP API 始终可用：GET /health /state ，POST /action。MCP 打开后才会在同一端口暴露 /mcp。", 12, muted: true));
         return page;
     }
 
@@ -688,7 +694,7 @@ internal sealed class AgentOverlayHost
         current.Hotkey = _hotkeyEdit?.Text.Trim() is { Length: > 0 } hotkey ? hotkey : "F8";
         current.AttachStateInChat = _attachState?.ButtonPressed ?? true;
         current.AttachScreenshotInChat = _attachShot?.ButtonPressed ?? false;
-        current.McpServerPath = _mcpPathEdit?.Text.Trim() ?? current.McpServerPath;
+        current.McpEnabled = _mcpToggle?.ButtonPressed ?? current.McpEnabled;
         if (int.TryParse(_maxTokensEdit?.Text.Trim(), out var maxTokens) && maxTokens > 0)
         {
             current.MaxSessionTokens = maxTokens;
@@ -745,6 +751,7 @@ internal sealed class AgentOverlayHost
             OverlayTop = source.OverlayTop,
             McpServerPath = source.McpServerPath,
             McpPort = source.McpPort,
+            McpEnabled = source.McpEnabled,
             MaxSessionTokens = source.MaxSessionTokens,
             MaxSessionRequests = source.MaxSessionRequests
         };
@@ -814,20 +821,6 @@ internal sealed class AgentOverlayHost
         AgentRuntime.Instance.PersistChatAttachFlags(
             _attachState?.ButtonPressed ?? true,
             _attachShot?.ButtonPressed ?? false);
-    }
-
-    private void ToggleMcp()
-    {
-        if (AgentRuntime.Instance.McpRunning)
-        {
-            AgentRuntime.Instance.StopMcp();
-            RefreshDynamic();
-            return;
-        }
-
-        var settings = HarvestSettings();
-        AgentRuntime.Instance.SaveSettings(settings);
-        _ = AgentRuntime.Instance.StartMcpAsync(CancellationToken.None);
     }
 
     private static void CopyText(string text)
@@ -955,7 +948,23 @@ internal sealed class AgentOverlayHost
 
         if (_mcpToggle != null)
         {
-            _mcpToggle.Text = AgentRuntime.Instance.McpRunning ? "停止 MCP" : "一键启动 MCP";
+            _mcpToggle.SetPressedNoSignal(AgentRuntime.Instance.McpRunning);
+        }
+
+        if (_mcpInfoBox != null)
+        {
+            _mcpInfoBox.Visible = AgentRuntime.Instance.McpRunning;
+        }
+
+        if (_mcpUrlLabel != null)
+        {
+            var url = AgentRuntime.Instance.McpUrl;
+            _mcpUrlLabel.Text = string.IsNullOrWhiteSpace(url) ? "" : "地址：" + url;
+        }
+
+        if (_mcpConfigEdit != null)
+        {
+            _mcpConfigEdit.Text = AgentRuntime.Instance.McpClientConfig;
         }
 
         if (_chatLog != null)

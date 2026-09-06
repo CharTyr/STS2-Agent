@@ -18,6 +18,7 @@ After you subscribe, you do not copy any files.
 6. In Settings, fill in the model web address, the model name, and your key. Ollama / LM Studio on this PC can leave the key empty.
 7. Chat or Play for your own character.
 8. From the **main menu**, open **AI teammate** and invite. The room has 4 seats; you two take two of them.
+9. Optional MCP for Cursor / Claude / Codex: F8 → **Connect**, turn it on, copy the address. No Python.
 
 If you used to copy this mod into the game folder by hand, delete those files and keep only the Workshop subscription.
 
@@ -53,6 +54,7 @@ Needs Slay the Spire 2 v0.111.0 or newer.
 6. 在设置里填：模型网址、模型名字、Key。电脑上的 Ollama / LM Studio 可以不填 Key。
 7. 用「对话」或「游玩」打你自己这号。
 8. 回到 **主菜单**，打开 **AI 队友** 点邀请。两边选角、Ready 后开局。你打你的，AI 打它的。
+9. 要用 Cursor / Claude / Codex：按 **F8** → **接入**，打开 MCP，复制地址。不用装 Python。
 
 如果以前手动放过这个 Mod，请删掉那些文件，只保留工坊订阅。
 

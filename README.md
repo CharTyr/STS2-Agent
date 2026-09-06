@@ -20,7 +20,7 @@ https://github.com/user-attachments/assets/89353468-a299-4315-9516-e520bcbfbd4b
 - 👥 **Local Co-op AI Teammate**: One-click launch from the main menu spins up an isolated second game instance. You play your character; the AI teammate plays its own character in co-op mode.
 - 💬 **Live Team Conversation**: Talk to your AI teammate in natural language from the human window (e.g., "focus the right cultist", "let's take the shop path"). The AI replies and uses recent context in subsequent decisions.
 - 🛡️ **Session Budget Guards & Fault Recovery**: Accurate Token accounting with hard cutoff thresholds prevents runaway API bills. Autoplay automatically breaks after 3 consecutive failures with exponential backoff; halts when leaving the run.
-- 🔌 **Developer-Ready**: Built-in local HTTP API (`:8080`) and FastMCP server (`:8765`) allow external AI agents (Cursor, Claude Desktop, Codex) to interface directly with the game.
+- 🔌 **Developer-Ready**: Built-in local HTTP API (`:8080`). The overlay Connect tab can expose MCP at `/mcp` on the same port for Cursor, Claude, and Codex.
 
 ---
 
@@ -118,14 +118,7 @@ This mod is still in development. Some things may be unfinished or break. Please
 │  └───────────────────────┬─────────────────────────────┘  │
 └──────────────────────────┼────────────────────────────────┘
                            │ Local HTTP API (:8080)
-                           ▼
-┌───────────────────────────────────────────────────────────┐
-│              mcp_server (Python FastMCP)                  │
-│  - stdio / HTTP (:8765) Adapters                          │
-│  - Tool Profiles: guided / layered / full                 │
-│  - Bundled Metadata Lookups (Cards/Relics/Monsters/Events)│
-└──────────────────────────┬────────────────────────────────┘
-                           │ MCP Protocol
+                           │ Optional MCP (:8080/mcp)
                            ▼
         External Agents (Cursor / Claude Desktop / Codex)
 ```
@@ -134,38 +127,35 @@ This mod is still in development. Some things may be unfinished or break. Please
 
 The mod runs an embedded HTTP server on `http://127.0.0.1:8080` (with dynamic fallback on port contention):
 
-- `GET /health`: Health check, returns `api_port`, `instance_role`, and process PID.
+- `GET /health`: Health check, returns `api_port`, `instance_role`, `mcp_enabled`, and process PID.
 - `GET /state`: Full raw game state JSON.
 - `GET /actions/available`: Currently available legal actions and schema.
 - `GET /events/stream`: Real-time SSE stream for game events.
 - `POST /action`: Dispatch an action (e.g., `play_card`, `choose_map_node`, `proceed`).
+- `POST /mcp`: Optional MCP (Streamable HTTP). Off by default; enable it on the overlay Connect tab.
 
-### FastMCP Server Integration
+### MCP (built into the mod)
 
-To connect external agent IDEs (e.g. Cursor, Claude Desktop, Codex):
+External clients (Cursor / Claude / Codex) use MCP. In-game autoplay does not need it.
 
-1. **Prerequisites**: Python 3.11+ and [uv](https://astral.sh/uv).
-2. **Run Server**:
-   - In-game: Click the one-click launch button on the **Connect** tab.
-   - Or run script:
-     ```powershell
-     # Windows (HTTP Mode, default http://127.0.0.1:8765/mcp)
-     powershell -ExecutionPolicy Bypass -File ".\scripts\start-mcp-network.ps1"
-     ```
-3. **Configure External Client** (e.g. `claude_desktop_config.json`):
+1. Press **F8** → **Connect**.
+2. Enable **Open MCP service**.
+3. Copy the URL or JSON from that page into the client. Default:
    ```json
    {
      "mcpServers": {
        "sts2-ai-agent": {
-         "url": "http://127.0.0.1:8765/mcp"
+         "type": "http",
+         "url": "http://127.0.0.1:8080/mcp"
        }
      }
    }
    ```
-4. **Tool Profiles**:
-   - `guided` (Default): Streamlined autonomous play tools (`health_check`, `get_game_state`, `get_available_actions`, `act`, `get_game_data_*`, `wait_until_actionable`).
-   - `layered`: Handoff and knowledge tracking tools for multi-agent planner/combat tiers.
-   - `full`: Complete legacy per-action tool surface.
+   The path is on the same port as the HTTP API and only listens on `127.0.0.1`.
+
+Built-in tools match in-game autoplay: `health_check`, `get_game_state`, `get_available_actions`, `act`, `get_game_data_*`, `wait_until_actionable`.
+
+The Python `mcp_server/` sidecar remains for stdio / layered / full profiles. Ordinary access does not need uv.
 
 ---
 

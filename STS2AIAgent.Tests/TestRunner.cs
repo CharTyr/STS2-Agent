@@ -222,6 +222,12 @@ internal static class TestRunner
         yield return ("AgentLoop.RetryFailedAct", AgentLoopTests.PlayOnce_RetriesAfterFailedAct);
         yield return ("AgentLoop.CancelPropagates", AgentLoopTests.PlayOnce_PropagatesCancellation);
         yield return ("McpLauncher.DetectRoot", () => Task.Run(AgentLoopTests.McpRoot_DetectsValidLayout));
+        yield return ("NativeMcp.Disabled", McpServiceTests.Disabled_Returns403);
+        yield return ("NativeMcp.Initialize", McpServiceTests.Initialize_ReturnsServerInfoAndSession);
+        yield return ("NativeMcp.ToolsList", McpServiceTests.ToolsList_IncludesHealthAndAct);
+        yield return ("NativeMcp.ToolsCall", McpServiceTests.ToolsCall_GetGameStateAndAct);
+        yield return ("NativeMcp.Notification", McpServiceTests.Notification_Returns202);
+        yield return ("NativeMcp.ClientConfig", McpServiceTests.ClientConfig_UsesEnabledUrl);
         yield return ("CrystalSettle.Progress", () => Task.Run(CrystalSphereSettlePolicyTests.RequiresObservedProgressOnSameScreen));
         yield return ("CrystalSettle.FinalProceed", () => Task.Run(CrystalSphereSettlePolicyTests.WaitsForProceedAfterFinalDivination));
         yield return ("CrystalSettle.ScreenChange", () => Task.Run(CrystalSphereSettlePolicyTests.AcceptsChildScreenButNotMissingMinigame));
