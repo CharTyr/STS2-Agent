@@ -1,5 +1,15 @@
 # Changelog
 
+## v0.10.2 - 2026-09-06
+
+### Added
+
+- In-mod MCP: overlay Connect tab can turn on a Streamable HTTP endpoint at `http://127.0.0.1:<api-port>/mcp` and shows copyable client config. No Python/`uv` sidecar is required for Cursor / Claude / Codex.
+
+### Fixed
+
+- `package-release.ps1` reads `mod_manifest.json` as UTF-8 so Chinese metadata does not break packaging on Windows PowerShell 5.
+
 ## v0.10.1 - 2026-09-06
 
 ### Fixed

@@ -30,6 +30,8 @@ internal sealed class AgentSettings
 
     public int McpPort { get; set; } = 8765;
 
+    public bool McpEnabled { get; set; }
+
     public int? MaxSessionTokens { get; set; }
 
     public int? MaxSessionRequests { get; set; }

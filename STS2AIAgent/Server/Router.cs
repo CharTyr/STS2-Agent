@@ -15,7 +15,7 @@ internal static class Router
 {
     private const string ServiceName = "sts2-ai-agent";
     private const string ProtocolVersion = "2026-03-11-v1";
-    private const string ModVersion = "0.10.1";
+    internal const string ModVersion = "0.10.2";
     private const string LogPrefix = "[STS2AIAgent.Router]";
 
     private static long _requestCounter;
@@ -65,6 +65,20 @@ internal static class Router
                 return;
             }
 
+            if (IsMcpPath(request.Url?.AbsolutePath))
+            {
+                var mcp = NativeMcpServer.Runtime;
+                if (mcp == null || !mcp.Enabled)
+                {
+                    statusCode = 403;
+                    await WriteErrorAsync(response, 403, "mcp_disabled", "MCP is turned off. Enable it in the in-game overlay Connect tab.", requestId);
+                    return;
+                }
+
+                statusCode = await mcp.HandleHttpAsync(context, cancellationToken);
+                return;
+            }
+
             if (request.HttpMethod.Equals("GET", StringComparison.OrdinalIgnoreCase) &&
                 request.Url?.AbsolutePath == "/health")
             {
@@ -72,18 +86,7 @@ internal static class Router
                 {
                     ok = true,
                     request_id = requestId,
-                    data = new
-                    {
-                        service = ServiceName,
-                        mod_version = ModVersion,
-                        protocol_version = ProtocolVersion,
-                        game_version = ReleaseInfoManager.Instance.ReleaseInfo?.Version ?? "unknown",
-                        status = "ready",
-                        api_host = HttpServer.Instance.Host,
-                        api_port = HttpServer.Instance.Port,
-                        process_id = Environment.ProcessId,
-                        instance_role = InstanceRole.Current
-                    }
+                    data = BuildHealthData()
                 });
                 statusCode = 200;
                 return;
@@ -195,6 +198,36 @@ internal static class Router
             Log.Info($"{LogPrefix} {requestId} Completed {statusCode} in {stopwatch.ElapsedMilliseconds}ms");
             response.Close();
         }
+    }
+
+    internal static object BuildHealthData()
+    {
+        var mcp = NativeMcpServer.Runtime;
+        return new
+        {
+            service = ServiceName,
+            mod_version = ModVersion,
+            protocol_version = ProtocolVersion,
+            game_version = ReleaseInfoManager.Instance.ReleaseInfo?.Version ?? "unknown",
+            status = "ready",
+            api_host = HttpServer.Instance.Host,
+            api_port = HttpServer.Instance.Port,
+            process_id = Environment.ProcessId,
+            instance_role = InstanceRole.Current,
+            mcp_enabled = mcp?.Enabled == true,
+            mcp_url = mcp?.EndpointUrl
+        };
+    }
+
+    private static bool IsMcpPath(string? path)
+    {
+        if (string.IsNullOrWhiteSpace(path))
+        {
+            return false;
+        }
+
+        return path.Equals("/mcp", StringComparison.OrdinalIgnoreCase) ||
+               path.Equals("/mcp/", StringComparison.OrdinalIgnoreCase);
     }
 
     public static Task WriteErrorAsync(

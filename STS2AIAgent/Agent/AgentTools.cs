@@ -77,6 +77,11 @@ internal static class AgentTools
         }
     }).ToArray();
 
+    public static readonly IReadOnlyList<LlmTool> Mcp = new[]
+    {
+        Tool("health_check", "Check whether the STS2 AI Agent mod is loaded and this MCP endpoint is open.")
+    }.Concat(Play).ToArray();
+
     private static LlmTool Tool(string name, string description, object? parameters = null)
     {
         return new LlmTool

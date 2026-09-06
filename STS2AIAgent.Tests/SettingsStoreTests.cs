@@ -18,6 +18,7 @@ internal static class SettingsStoreTests
         settings.AttachStateInChat = false;
         settings.AttachScreenshotInChat = true;
         settings.McpServerPath = @"C:\mods\mcp_server";
+        settings.McpEnabled = true;
         store.Save(settings);
 
         var loaded = store.Load();
@@ -31,6 +32,7 @@ internal static class SettingsStoreTests
         Assert.False(loaded.AttachStateInChat);
         Assert.True(loaded.AttachScreenshotInChat);
         Assert.Equal(@"C:\mods\mcp_server", loaded.McpServerPath);
+        Assert.True(loaded.McpEnabled);
     }
 
     public static void Load_MissingFile_CreatesDefaults()

@@ -2,7 +2,7 @@
 
 This folder stores the versioned source assets and listing copy for the Steam Workshop item. Generated upload folders stay under `build/steam-workshop` and are not committed.
 
-The uploaded item contains `STS2AIAgent.dll`, `STS2AIAgent.pck`, `STS2AIAgent.json`, `README.md`, and `LICENSE`. `STS2AIAgent.json` is a namespaced copy of the normal release package manifest. The player README comes from `content-readme.md`. The optional Python MCP server remains in the full GitHub release, not the Workshop item.
+The uploaded item contains `STS2AIAgent.dll`, `STS2AIAgent.pck`, `STS2AIAgent.json`, `README.md`, and `LICENSE`. `STS2AIAgent.json` is a namespaced copy of the normal release package manifest. The player README comes from `content-readme.md`. In-game MCP is in the Workshop item (overlay Connect tab). The optional Python sidecar remains GitHub-only.
 
 ## Listing assets
 
