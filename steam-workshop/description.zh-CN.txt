@@ -1,5 +1,7 @@
 带一个 AI 一起爬塔。你打自己的角色；同一台电脑上，AI 打另一个角色。模型用你自己的就行（DeepSeek、硅基流动、ChatGPT、家里的本地模型都可以）。订阅后不会附带账号或 Key。
 
+[b]这个 Mod 还在开发中。[/b]有的功能可能不完整，也可能出错。欢迎把建议和遇到的问题发过来，这能帮它更快变好。反馈请到：[url=https://github.com/CharTyr/STS2-Agent/issues]GitHub Issues[/url]
+
 更详细的说明：
 [url=https://github.com/CharTyr/STS2-Agent]https://github.com/CharTyr/STS2-Agent[/url]
 

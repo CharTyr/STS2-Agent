@@ -2,6 +2,8 @@
 
 Bring an AI along for the climb in Slay the Spire 2. You play your character; on the same PC, the AI can play a second one. Use your own model. This package does not include an account or an API key.
 
+**This mod is still in development.** Some things may be unfinished or break. Please send suggestions and anything that goes wrong — that feedback really helps: https://github.com/CharTyr/STS2-Agent/issues
+
 **More detail:** https://github.com/CharTyr/STS2-Agent
 
 ## How to start
@@ -23,6 +25,8 @@ Needs Slay the Spire 2 v0.111.0 or newer.
 # STS2 AI Agent
 
 带一个 AI 一起爬塔。你打自己的角色；同一台电脑上，AI 可以打另一个角色。模型用你自己的。这里不附带账号或 Key。
+
+**这个 Mod 还在开发中。**有的功能可能不完整，也可能出错。欢迎把建议和遇到的问题发过来，这能帮它更快变好：https://github.com/CharTyr/STS2-Agent/issues
 
 **更详细的说明：** https://github.com/CharTyr/STS2-Agent
 

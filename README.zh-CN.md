@@ -28,6 +28,8 @@ https://github.com/user-attachments/assets/89353468-a299-4315-9516-e520bcbfbd4b
 
 玩家最省事的方式是订阅 [Steam 创意工坊](https://steamcommunity.com/sharedfiles/filedetails/?id=3796486050)，然后 Steam → **带 Mod 启动 / Play with Mods**。工坊页面是给玩家看的短说明；这份 README 写得更细，需要时再来看。
 
+这个 Mod 还在开发中。有的功能可能不完整，也可能出错。欢迎把建议和遇到的问题发到 [GitHub Issues](https://github.com/CharTyr/STS2-Agent/issues)。
+
 ### 第 1 步：安装 Mod
 1. 在 [Steam 创意工坊](https://steamcommunity.com/sharedfiles/filedetails/?id=3796486050) 订阅，**或**前往 [GitHub Releases](https://github.com/CharTyr/STS2-Agent/releases) 下载最新的发布包（zip）。
 2. 解压后将以下三个文件复制到游戏的 `mods/` 文件夹中（若没有 `mods` 文件夹可新建）：

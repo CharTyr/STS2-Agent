@@ -28,6 +28,8 @@ https://github.com/user-attachments/assets/89353468-a299-4315-9516-e520bcbfbd4b
 
 The easiest way to play is the [Steam Workshop](https://steamcommunity.com/sharedfiles/filedetails/?id=3796486050) page. Subscribe, then Steam → **Play with Mods**. That page is a short player guide; this README has extra detail if you need it.
 
+This mod is still in development. Some things may be unfinished or break. Please send suggestions and issues here: [GitHub Issues](https://github.com/CharTyr/STS2-Agent/issues).
+
 ### Step 1: Install The Mod
 1. Subscribe on [Steam Workshop](https://steamcommunity.com/sharedfiles/filedetails/?id=3796486050), **or** download the latest release `.zip` from [GitHub Releases](https://github.com/CharTyr/STS2-Agent/releases).
 2. Extract the files into your game's `mods/` directory (create the folder if it does not exist):

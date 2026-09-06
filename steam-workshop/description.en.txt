@@ -1,5 +1,7 @@
 Bring an AI along for the climb. You play your character; on the same PC, the AI plays a second one. Use your own model (DeepSeek, SiliconFlow, ChatGPT, or something running on your computer). Subscribing does not give you an account or an API key.
 
+[b]This mod is still in development.[/b] Some things may be unfinished or break. Please send suggestions and anything that goes wrong — that feedback really helps. Post here: [url=https://github.com/CharTyr/STS2-Agent/issues]GitHub Issues[/url]
+
 More detail:
 [url=https://github.com/CharTyr/STS2-Agent]https://github.com/CharTyr/STS2-Agent[/url]
 
