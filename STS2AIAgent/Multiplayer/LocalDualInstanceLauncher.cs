@@ -108,9 +108,10 @@ internal static class LocalDualInstanceLauncher
         var hostPort = HttpServer.Instance.Port;
         var companionPort = hostPort is > 0 and < 65535 ? hostPort + 1 : 8081;
 
+        var hostClientId = CommandLineHelper.GetValue("clientId");
         if (!CoopLaunchPolicy.TryGetCompanionArguments(
                 CommandLineHelper.GetValue("force-steam"),
-                CommandLineHelper.GetValue("clientId"),
+                hostClientId,
                 out var companionArguments,
                 out var argumentError))
         {
@@ -119,6 +120,18 @@ internal static class LocalDualInstanceLauncher
                 Ok = false,
                 Message = "无法计算队友启动参数：" + argumentError
             };
+        }
+
+        var companionClientId = CoopLaunchPolicy.ResolveCompanionClientId(hostClientId);
+        try
+        {
+            CompanionProfileBootstrap.WriteCompanionSave(
+                CompanionProfileBootstrap.DefaultUserRoot(),
+                companionClientId.ToString(System.Globalization.CultureInfo.InvariantCulture));
+        }
+        catch (Exception ex)
+        {
+            Log.Warn($"{LogPrefix} companion profile bootstrap: {ex.Message}");
         }
 
         string companionSettingsPath;
@@ -159,6 +172,8 @@ internal static class LocalDualInstanceLauncher
         startInfo.Environment["STS2_API_ALLOW_FALLBACK"] = "1";
         startInfo.Environment["STS2_AGENT_ROLE"] = InstanceRole.Companion;
         startInfo.Environment["STS2_MULTIPLAYER_HOST_IP"] = "127.0.0.1";
+        startInfo.Environment["STS2_MULTIPLAYER_NET_ID"] = companionClientId
+            .ToString(System.Globalization.CultureInfo.InvariantCulture);
         startInfo.Environment["STS2_AGENT_AUTOPLAY"] = "1";
         startInfo.Environment["STS2_AGENT_SETTINGS_PATH"] = companionSettingsPath;
         var sessionToken = CompanionConnection.CreateToken();

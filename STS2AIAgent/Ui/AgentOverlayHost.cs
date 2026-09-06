@@ -42,6 +42,7 @@ internal sealed class AgentOverlayHost
     private LineEdit? _maxRequestsEdit;
     private Label? _apiLabel;
     private Label? _dualStatus;
+    private Label? _firstRunHint;
     private Button? _dualLaunchButton;
     private RichTextLabel? _teamChat;
     private TextEdit? _teamInput;
@@ -382,8 +383,10 @@ internal sealed class AgentOverlayHost
     {
         var page = UiFactory.Column();
         page.AddChild(UiFactory.Label("和 AI 一起爬塔", 18));
-        page.AddChild(UiFactory.Label("你操作自己的角色，AI 作为队友加入冒险。先在设置中选好游玩模型，再从主菜单邀请它组队。", 13));
-        page.AddChild(UiFactory.Label("邀请后会打开队友的游戏窗口。等待它加入大厅，选择你的角色并准备，就能一起出发。", 12, muted: true));
+        page.AddChild(UiFactory.Label("你操作自己的角色，AI 作为第二个游戏实例加入同一房间（本地 1 人 + 1 AI）。大厅仍是 4 人位，还可以再邀 2 名在线玩家。", 13));
+        _firstRunHint = UiFactory.Label(FirstRunSetup.Evaluate(AgentRuntime.Instance.Settings).Hint, 13, muted: true);
+        page.AddChild(_firstRunHint);
+        page.AddChild(UiFactory.Label("邀请后会打开队友窗口。它只操作自己的角色，自动加入、选角并准备。请从主菜单邀请。", 12, muted: true));
         _dualLaunchButton = UiFactory.Button("邀请 AI 队友", () => _ = LaunchDualAsync());
         page.AddChild(_dualLaunchButton);
         _dualStatus = UiFactory.Label("队友尚未加入。", 13, muted: true);
@@ -912,6 +915,11 @@ internal sealed class AgentOverlayHost
         if (_dualStatus != null)
         {
             _dualStatus.Text = AgentRuntime.Instance.DualStatus;
+        }
+
+        if (_firstRunHint != null)
+        {
+            _firstRunHint.Text = FirstRunSetup.Evaluate(AgentRuntime.Instance.Settings).Hint;
         }
 
         if (_dualLaunchButton != null)

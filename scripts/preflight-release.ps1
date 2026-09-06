@@ -108,7 +108,7 @@ Invoke-Step -Name "Validate release version metadata" -Action {
     }
 
     $mcpProjectContents = Get-Content -LiteralPath $mcpProjectPath -Raw
-    $mcpVersion = [regex]::Match($mcpProjectContents, '(?m)^version = "([^"]+)"$').Groups[1].Value
+    $mcpVersion = [regex]::Match($mcpProjectContents, '(?m)^version = "([^"]+)"\r?$').Groups[1].Value
     if ($mcpVersion -ne $releaseVersion) {
         throw "mcp_server pyproject version '$mcpVersion' does not match release version '$releaseVersion'."
     }

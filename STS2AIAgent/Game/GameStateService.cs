@@ -53,6 +53,7 @@ using MegaCrit.Sts2.Core.Saves;
 using MegaCrit.Sts2.Core.Saves.Managers;
 using MegaCrit.Sts2.Core.Timeline;
 using MegaCrit.Sts2.addons.mega_text;
+using STS2AIAgent.Multiplayer;
 
 namespace STS2AIAgent.Game;
 
@@ -337,6 +338,16 @@ internal static class GameStateService
             descriptors.Add(new ActionDescriptor
             {
                 name = "close_main_menu_submenu",
+                requires_target = false,
+                requires_index = false
+            });
+        }
+
+        if (currentScreen is NMainMenu inviteMenu && inviteMenu.IsVisibleInTree())
+        {
+            descriptors.Add(new ActionDescriptor
+            {
+                name = "invite_ai_teammate",
                 requires_target = false,
                 requires_index = false
             });
@@ -2418,6 +2429,11 @@ internal static class GameStateService
         if (CanCloseMainMenuSubmenu(currentScreen))
         {
             names.Add("close_main_menu_submenu");
+        }
+
+        if (currentScreen is NMainMenu mainMenu && mainMenu.IsVisibleInTree())
+        {
+            names.Add("invite_ai_teammate");
         }
 
         if (CanChooseTimelineEpoch(currentScreen))
@@ -5677,8 +5693,19 @@ internal static class GameStateService
 
     private static int GetStartRunLobbyMaxPlayers(StartRunLobby lobby)
     {
-        var maxPlayers = StartRunLobbyMaxPlayersField?.GetValue(lobby) is int parsed ? parsed : 0;
-        return maxPlayers > 0 ? maxPlayers : lobby.Players.Count;
+        return StartRunLobbyMaxPlayersField?.GetValue(lobby) is int parsed ? parsed : 0;
+    }
+
+    public static void EnsureFourPlayerLobby()
+    {
+        var scene = GetMultiplayerTestScene();
+        var lobby = scene != null ? GetMultiplayerTestLobby(scene) : GetCharacterSelectScreen(ActiveScreenContext.Instance.GetCurrentScreen())?.Lobby;
+        if (lobby == null || StartRunLobbyMaxPlayersField == null)
+        {
+            return;
+        }
+
+        StartRunLobbyMaxPlayersField.SetValue(lobby, CoopLaunchPolicy.MaxLobbyPlayers);
     }
 
     public static NMultiplayerTestCharacterPaginator? GetMultiplayerTestCharacterPaginator(NMultiplayerTest scene)

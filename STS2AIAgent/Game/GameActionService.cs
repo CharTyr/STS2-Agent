@@ -48,6 +48,9 @@ using MegaCrit.Sts2.Core.Rooms;
 using MegaCrit.Sts2.Core.Rewards;
 using MegaCrit.Sts2.Core.Saves;
 using MegaCrit.Sts2.Core.Timeline;
+using STS2AIAgent.Agent;
+using STS2AIAgent.Config;
+using STS2AIAgent.Multiplayer;
 using STS2AIAgent.Server;
 
 namespace STS2AIAgent.Game;
@@ -94,6 +97,25 @@ internal static class GameActionService
     public static Task<ActionResponsePayload> ExecuteAsync(ActionRequest request)
     {
         var actionName = request.action?.Trim().ToLowerInvariant();
+        var localPlayerId = System.Environment.GetEnvironmentVariable("STS2_MULTIPLAYER_NET_ID");
+        if (string.IsNullOrWhiteSpace(localPlayerId) && !InstanceRole.IsCompanion)
+        {
+            localPlayerId = "1";
+        }
+
+        if (!CompanionActPolicy.Allows(
+                actionName,
+                isCompanion: InstanceRole.IsCompanion,
+                actorIsLocal: true,
+                requestedPlayerId: request.player_id,
+                localPlayerId: localPlayerId))
+        {
+            throw new ApiException(403, "forbidden_actor", "AI teammate can only act for its own character.", new
+            {
+                action = request.action,
+                player_id = request.player_id
+            });
+        }
 
         return actionName switch
         {
@@ -150,6 +172,7 @@ internal static class GameActionService
             "confirm_modal" => ExecuteConfirmModalAsync(),
             "dismiss_modal" => ExecuteDismissModalAsync(),
             "return_to_main_menu" => ExecuteReturnToMainMenuAsync(),
+            "invite_ai_teammate" => ExecuteInviteAiTeammateAsync(),
             _ => throw new ApiException(409, "invalid_action", "Action is not supported yet.", new
             {
                 action = request.action
@@ -3991,6 +4014,122 @@ internal static class GameActionService
         return ExecuteConsoleCommandCoreAsync(command);
     }
 
+    internal static async Task<bool> StartLocalFourPlayerHostAsync()
+    {
+        var currentScreen = ActiveScreenContext.Instance.GetCurrentScreen();
+        if (currentScreen is not NMainMenu mainMenu)
+        {
+            throw new InvalidOperationException("请先回到主菜单，再邀请 AI 队友组队。");
+        }
+
+        var submenu = mainMenu.SubmenuStack.GetSubmenuType<NMultiplayerSubmenu>();
+        if (submenu == null)
+        {
+            mainMenu.Call("OpenMultiplayerSubmenu");
+            await WaitForMainMenuSubmenuOpenAsync<NMultiplayerSubmenu>(mainMenu, TimeSpan.FromSeconds(5));
+            submenu = mainMenu.SubmenuStack.GetSubmenuType<NMultiplayerSubmenu>()
+                ?? throw new InvalidOperationException("找不到多人子菜单。");
+        }
+        else
+        {
+            mainMenu.SubmenuStack.Push(submenu);
+            await WaitForMainMenuSubmenuOpenAsync<NMultiplayerSubmenu>(mainMenu, TimeSpan.FromSeconds(5));
+        }
+
+        var opened = await InvokeFastHostAsync(submenu);
+        if (!opened)
+        {
+            var screen = GameStateService.ResolveScreen(ActiveScreenContext.Instance.GetCurrentScreen());
+            throw new TimeoutException("FastHost did not open character select. screen=" + screen + " methods=" + DescribeHostMethods());
+        }
+
+        return true;
+    }
+
+    private static async Task<bool> InvokeFastHostAsync(NMultiplayerSubmenu submenu)
+    {
+        const BindingFlags flags = BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic;
+        var method = typeof(NMultiplayerSubmenu).GetMethods(flags)
+            .FirstOrDefault(candidate => candidate.Name == "FastHost");
+        if (method == null)
+        {
+            throw new InvalidOperationException("找不到 FastHost。");
+        }
+
+        var parameters = method.GetParameters();
+        if (parameters.Length == 1)
+        {
+            foreach (var mode in EnumerateFastHostModes(parameters[0].ParameterType))
+            {
+                var result = method.Invoke(submenu, new[] { mode });
+                if (result is Task task)
+                {
+                    await task;
+                }
+
+                if (await WaitForCharacterSelectOpenAsync(TimeSpan.FromSeconds(8)))
+                {
+                    return true;
+                }
+            }
+        }
+        else
+        {
+            var result = method.Invoke(submenu, Array.Empty<object>());
+            if (result is Task task)
+            {
+                await task;
+            }
+
+            return await WaitForCharacterSelectOpenAsync(TimeSpan.FromSeconds(8));
+        }
+
+        return false;
+    }
+
+    private static IEnumerable<object> EnumerateFastHostModes(Type modeType)
+    {
+        var values = new List<(string Name, object Value)>();
+        if (modeType.IsEnum)
+        {
+            foreach (var value in Enum.GetValues(modeType))
+            {
+                if (value != null)
+                {
+                    values.Add((Enum.GetName(modeType, value) ?? string.Empty, value));
+                }
+            }
+        }
+        else
+        {
+            foreach (var field in modeType.GetFields(BindingFlags.Public | BindingFlags.Static))
+            {
+                var value = field.GetValue(null);
+                if (value != null)
+                {
+                    values.Add((field.Name, value));
+                }
+            }
+        }
+
+        foreach (var item in values.OrderBy(value =>
+                     value.Name.Contains("Standard", StringComparison.OrdinalIgnoreCase) ? 0 : 1))
+        {
+            yield return item.Value;
+        }
+    }
+
+    private static string DescribeHostMethods()
+    {
+        const BindingFlags flags = BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic;
+        return string.Join("; ", typeof(NMultiplayerSubmenu).GetMethods(flags)
+            .Where(method => method.Name.Contains("Host", StringComparison.OrdinalIgnoreCase)
+                             || method.Name.Contains("Fast", StringComparison.OrdinalIgnoreCase)
+                             || method.Name.Contains("Standard", StringComparison.OrdinalIgnoreCase))
+            .Select(method => method.Name + "(" + string.Join(",", method.GetParameters()
+                .Select(parameter => parameter.ParameterType.Name)) + ")"));
+    }
+
     private static async Task<ActionResponsePayload> ExecuteConsoleCommandCoreAsync(string? rawCommand)
     {
         var command = rawCommand?.Trim();
@@ -4132,7 +4271,49 @@ internal static class GameActionService
         return await ExecuteModalButtonAsync("dismiss_modal", GameStateService.GetModalCancelButton);
     }
 
+    private static async Task<ActionResponsePayload> ExecuteInviteAiTeammateAsync()
+    {
+        var payload = GameStateService.BuildStatePayload();
+        var error = CoopLaunchPolicy.GetError(
+            InstanceRole.IsCompanion,
+            AgentRuntime.Instance.PlayRunning,
+            payload.screen,
+            AgentRuntime.Instance.Settings.TryResolvePlayModel());
+        if (error != null)
+        {
+            throw new ApiException(409, "invalid_action", error, new
+            {
+                action = "invite_ai_teammate",
+                screen = payload.screen
+            });
+        }
+
+        await AgentRuntime.Instance.LaunchDualInstanceAsync(AgentRuntime.Instance.Settings, CancellationToken.None);
+        var message = AgentRuntime.Instance.DualStatus ?? string.Empty;
+        var failed = message.Contains("失败", StringComparison.Ordinal) ||
+                     message.Contains("请先", StringComparison.Ordinal) ||
+                     message.Contains("找不到", StringComparison.Ordinal);
+        if (failed)
+        {
+            throw new ApiException(409, "invite_failed", message, new
+            {
+                action = "invite_ai_teammate",
+                screen = GameStateService.BuildStatePayload().screen
+            });
+        }
+
+        return new ActionResponsePayload
+        {
+            action = "invite_ai_teammate",
+            status = "completed",
+            stable = true,
+            message = message,
+            state = GameStateService.BuildStatePayload()
+        };
+    }
+
     private static async Task<ActionResponsePayload> ExecuteReturnToMainMenuAsync()
+
     {
         var currentScreen = ActiveScreenContext.Instance.GetCurrentScreen();
         var screen = GameStateService.ResolveScreen(currentScreen);
@@ -5269,6 +5450,8 @@ internal sealed class ActionRequest
     public string? tool { get; init; }
 
     public string? command { get; init; }
+
+    public string? player_id { get; init; }
 
     public object? client_context { get; init; }
 }

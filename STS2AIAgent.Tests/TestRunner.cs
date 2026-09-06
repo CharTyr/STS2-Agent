@@ -136,6 +136,11 @@ internal static class TestRunner
         yield return ("TeamChat.Transport", TeamConversationTests.TransportChecksIdentityAndSendsBoundedBody);
         yield return ("TeamChat.ReusedPort", TeamConversationTests.ReusedPortDoesNotReceiveMessage);
         yield return ("CoopStartup.OfflineIsolation", () => Task.Run(CompanionStartupTests.OfflineLaunchKeepsAccountsIsolated));
+        yield return ("CoopStartup.FourPlayerOccupancy", () => Task.Run(CompanionStartupTests.LocalJoinOccupiesOneSlotInFourPlayerLobby));
+        yield return ("CoopStartup.OwnCharacterOnly", () => Task.Run(CompanionStartupTests.CompanionActionsTargetOnlyLocalCharacter));
+        yield return ("CoopStartup.JoinBootstrap", () => Task.Run(CompanionStartupTests.CompanionBootstrapJoinsAsExtraPlayerThenReady));
+        yield return ("CoopStartup.FirstRunProvider", () => Task.Run(CompanionStartupTests.FirstRunProviderConfigIsReachable));
+        yield return ("CoopStartup.ProfileMods", () => Task.Run(CompanionStartupTests.CompanionProfileEnablesTheMod));
         yield return ("CoopStartup.SettingsIsolation", () => Task.Run(CompanionStartupTests.SettingsPathCanBeIsolated));
         yield return ("CoopStartup.PortFile", () => Task.Run(CompanionStartupTests.CompanionPortFileRoundTrip));
         yield return ("CoopStartup.CompanionDoesNotHost", () => Task.Run(CompanionStartupTests.CompanionBootstrapDoesNotHostLobby));

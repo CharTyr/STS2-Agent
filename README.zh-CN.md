@@ -26,8 +26,10 @@ https://github.com/user-attachments/assets/89353468-a299-4315-9516-e520bcbfbd4b
 
 ## 🚀 新手 3 分钟极速上手
 
+玩家最省事的安装方式是订阅 [Steam 创意工坊](https://steamcommunity.com/sharedfiles/filedetails/?id=3796486050)，然后 Steam → **带 Mod 启动 / Play with Mods**。本 README 是完整说明（含 MCP / HTTP API / 开发者）；工坊页面只写快速上手。
+
 ### 第 1 步：安装 Mod
-1. 前往 [GitHub Releases](https://github.com/CharTyr/STS2-Agent/releases) 下载最新的发布包（zip）。
+1. 在 [Steam 创意工坊](https://steamcommunity.com/sharedfiles/filedetails/?id=3796486050) 订阅，**或**前往 [GitHub Releases](https://github.com/CharTyr/STS2-Agent/releases) 下载最新的发布包（zip）。
 2. 解压后将以下三个文件复制到游戏的 `mods/` 文件夹中（若没有 `mods` 文件夹可新建）：
    ```text
    STS2AIAgent.dll

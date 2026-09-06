@@ -1,3 +1,5 @@
+using System.Reflection;
+using MegaCrit.Sts2.Core.Helpers;
 using MegaCrit.Sts2.Core.Logging;
 using STS2AIAgent.Config;
 using STS2AIAgent.Game;
@@ -15,22 +17,9 @@ internal static class DualInstanceCoordinator
             return "请先回到主菜单，再邀请 AI 队友组队。";
         }
 
-        var launch = await LocalDualInstanceLauncher.LaunchCompanionAsync(cancellationToken);
-        if (!launch.Ok)
-        {
-            return launch.Message;
-        }
-
         try
         {
-            if (await GetScreenAsync() != "MAIN_MENU")
-            {
-                return launch.Message + "。主窗口已经离开主菜单，组队已停止。请先关闭队友窗口，回到主菜单后重试。";
-            }
-
-            await OpenMultiplayerTestAsync(cancellationToken);
-            await ExecuteActionAsync("host_multiplayer_lobby", cancellationToken);
-            return launch.Message + "。本机已创建大厅，请选角色后 Ready。同伴实例会自动加入并开始游玩。";
+            await OpenLocalFourPlayerLobbyAsync(cancellationToken);
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
@@ -38,9 +27,17 @@ internal static class DualInstanceCoordinator
         }
         catch (Exception ex)
         {
-            Log.Warn($"{LogPrefix} Host lobby failed: {ex.Message}");
-            return launch.Message + "。大厅创建失败：" + ex.Message;
+            Log.Warn($"{LogPrefix} Local lobby failed: {ex.Message}");
+            return "创建 4 人大厅失败：" + ex.Message;
         }
+
+        var launch = await LocalDualInstanceLauncher.LaunchCompanionAsync(cancellationToken);
+        if (!launch.Ok)
+        {
+            return launch.Message;
+        }
+
+        return launch.Message + "。本机已创建 4 人大厅，请选角色后 Ready。同伴实例会自动加入并开始游玩。";
     }
 
     public static async Task<bool> RunCompanionBootstrapAsync(CancellationToken cancellationToken)
@@ -53,32 +50,111 @@ internal static class DualInstanceCoordinator
         try
         {
             Log.Info($"{LogPrefix} Companion bootstrap starting");
-            await WaitForScreenAsync(new[] { "MAIN_MENU", "MULTIPLAYER_LOBBY" }, TimeSpan.FromSeconds(90), cancellationToken);
-            if (await GetScreenAsync() != "MULTIPLAYER_LOBBY")
+            var deadline = DateTime.UtcNow + TimeSpan.FromSeconds(120);
+            while (DateTime.UtcNow < deadline)
             {
-                await WaitForScreenAsync(new[] { "MULTIPLAYER_LOBBY" }, TimeSpan.FromSeconds(60), cancellationToken);
-            }
-            await WaitForAnyActionAsync(new[] { "join_multiplayer_lobby" }, TimeSpan.FromSeconds(30), cancellationToken);
-            await ExecuteActionAsync("join_multiplayer_lobby", cancellationToken);
-            var next = await WaitForAnyActionAsync(
-                new[] { "select_character", "ready_multiplayer_lobby" },
-                TimeSpan.FromSeconds(20),
-                cancellationToken);
-            if (string.Equals(next, "select_character", StringComparison.OrdinalIgnoreCase))
-            {
-                await ExecuteActionAsync("select_character", cancellationToken, optionIndex: 0);
-                await WaitForAnyActionAsync(new[] { "ready_multiplayer_lobby" }, TimeSpan.FromSeconds(15), cancellationToken);
+                cancellationToken.ThrowIfCancellationRequested();
+                await GameThread.InvokeAsync(() =>
+                {
+                    GameStateService.EnsureFourPlayerLobby();
+                    return true;
+                });
+                var snapshot = await GetBootstrapSnapshotAsync();
+                if (CoopLaunchPolicy.CompanionHasJoinedRun(snapshot.Screen, snapshot.Actions))
+                {
+                    Log.Info($"{LogPrefix} Companion is ready; auto-play can start");
+                    return true;
+                }
+
+                var next = CoopLaunchPolicy.NextCompanionBootstrapAction(
+                    snapshot.Screen,
+                    snapshot.Actions,
+                    snapshot.HasLobby);
+                if (next == null)
+                {
+                    await GameThread.WaitForNextFrameAsync();
+                    continue;
+                }
+
+                try
+                {
+                    var option = string.Equals(next, "select_character", StringComparison.OrdinalIgnoreCase)
+                        ? 0
+                        : (int?)null;
+                    await ExecuteActionAsync(next, cancellationToken, option);
+                }
+                catch (Exception ex) when (ex is not OperationCanceledException)
+                {
+                    Log.Warn($"{LogPrefix} Companion bootstrap action {next} failed: {ex.Message}");
+                    await GameThread.WaitForNextFrameAsync();
+                }
             }
 
-            await ExecuteActionAsync("ready_multiplayer_lobby", cancellationToken);
-            Log.Info($"{LogPrefix} Companion is ready; auto-play can start");
-            return true;
+            throw new TimeoutException("Timed out joining the local room.");
         }
         catch (Exception ex)
         {
             Log.Error($"{LogPrefix} Companion bootstrap failed: {ex}");
             return false;
         }
+    }
+
+    private static async Task OpenLocalFourPlayerLobbyAsync(CancellationToken cancellationToken)
+    {
+        EnableFastMpENetHost();
+        try
+        {
+            await GameThread.InvokeAsync(() => GameActionService.StartLocalFourPlayerHostAsync());
+            await GameThread.InvokeAsync(() =>
+            {
+                GameStateService.EnsureFourPlayerLobby();
+                return true;
+            });
+            return;
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            Log.Warn($"{LogPrefix} FastHost ENet lobby failed, falling back to debug lobby: {ex.Message}");
+        }
+
+        await OpenMultiplayerTestAsync(cancellationToken);
+        await ExecuteActionAsync("host_multiplayer_lobby", cancellationToken);
+        await GameThread.InvokeAsync(() =>
+        {
+            GameStateService.EnsureFourPlayerLobby();
+            return true;
+        });
+    }
+
+    private static void EnableFastMpENetHost()
+    {
+        var field = typeof(CommandLineHelper).GetField("_args", BindingFlags.Static | BindingFlags.NonPublic)
+            ?? typeof(CommandLineHelper).GetFields(BindingFlags.Static | BindingFlags.NonPublic | BindingFlags.Public)
+                .FirstOrDefault(candidate => candidate.FieldType.Name.Contains("Dictionary", StringComparison.Ordinal));
+        var args = field?.GetValue(null)
+            ?? throw new InvalidOperationException("找不到 FastHost 命令行参数表。");
+
+        if (args is Godot.Collections.Dictionary<string, string?> typedNullable)
+        {
+            typedNullable["fastmp"] = "host_standard";
+        }
+        else if (args is Godot.Collections.Dictionary<string, string> typed)
+        {
+            typed["fastmp"] = "host_standard";
+        }
+        else
+        {
+            var indexer = args.GetType().GetProperty("Item")
+                ?? throw new InvalidOperationException("FastHost 命令行参数表类型无法写入：" + args.GetType().FullName);
+            indexer.SetValue(args, "host_standard", new object[] { "fastmp" });
+        }
+
+        if (!CommandLineHelper.HasArg("fastmp"))
+        {
+            throw new InvalidOperationException("写入 -fastmp 后 HasArg 仍为 false。type=" + args.GetType().FullName);
+        }
+
+        Log.Info($"{LogPrefix} Injected -fastmp host_standard so Steam host uses ENet:33771 max=4");
     }
 
     private static async Task OpenMultiplayerTestAsync(CancellationToken cancellationToken)
@@ -116,35 +192,26 @@ internal static class DualInstanceCoordinator
         return GameThread.InvokeAsync(() => GameStateService.BuildStatePayload().screen);
     }
 
-    private static Task<IReadOnlyList<string>> GetActionNamesAsync()
+    private static Task<CompanionBootstrapSnapshot> GetBootstrapSnapshotAsync()
     {
         return GameThread.InvokeAsync(() =>
-            (IReadOnlyList<string>)(GameStateService.BuildStatePayload().available_actions ?? Array.Empty<string>()));
-    }
-
-    private static async Task<string> WaitForAnyActionAsync(
-        IReadOnlyList<string> actions,
-        TimeSpan timeout,
-        CancellationToken cancellationToken)
-    {
-        var deadline = DateTime.UtcNow + timeout;
-        while (DateTime.UtcNow < deadline)
         {
-            cancellationToken.ThrowIfCancellationRequested();
-            var names = await GetActionNamesAsync();
-            foreach (var action in actions)
-            {
-                if (names.Contains(action, StringComparer.OrdinalIgnoreCase))
-                {
-                    return action;
-                }
-            }
-
-            await GameThread.WaitForNextFrameAsync();
-        }
-
-        throw new TimeoutException($"Timed out waiting for action {string.Join("/", actions)}.");
+            var payload = GameStateService.BuildStatePayload();
+            var hasLobby = payload.multiplayer_lobby?.has_lobby == true
+                || string.Equals(payload.multiplayer?.net_game_type, "Client", StringComparison.OrdinalIgnoreCase)
+                || string.Equals(payload.multiplayer?.net_game_type, "Host", StringComparison.OrdinalIgnoreCase)
+                || (payload.character_select?.player_count ?? 0) >= 2;
+            return new CompanionBootstrapSnapshot(
+                payload.screen,
+                payload.available_actions ?? Array.Empty<string>(),
+                hasLobby);
+        });
     }
+
+    private readonly record struct CompanionBootstrapSnapshot(
+        string Screen,
+        IReadOnlyList<string> Actions,
+        bool HasLobby);
 
     private static async Task WaitForScreenAsync(IReadOnlyList<string> screens, TimeSpan timeout, CancellationToken cancellationToken)
     {

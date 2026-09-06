@@ -2,31 +2,43 @@ using STS2AIAgent.Config;
 
 namespace STS2AIAgent.Multiplayer;
 
+internal readonly record struct CoopOccupancy(int Occupied, int Max, int FreeSlots)
+{
+    public bool KeepsFourPlayerLobby => Max == CoopLaunchPolicy.MaxLobbyPlayers && FreeSlots >= 2;
+}
+
 internal static class CoopLaunchPolicy
 {
+    public const int MaxLobbyPlayers = 4;
+    public const int CompanionSlotCount = 1;
+    public const ulong DefaultCompanionClientId = 1001;
+
     public static string CompanionArguments(string? forceSteam, string? clientId)
     {
-        if (!string.Equals(forceSteam, "off", StringComparison.OrdinalIgnoreCase)) return "--windowed";
-        ulong companionId;
-        if (string.IsNullOrWhiteSpace(clientId))
+        _ = forceSteam;
+        var id = ResolveCompanionClientId(clientId)
+            .ToString(System.Globalization.CultureInfo.InvariantCulture);
+        return "--windowed --force-steam off --clientId " + id + " -fastmp join";
+    }
+
+    public static ulong ResolveCompanionClientId(string? hostClientId)
+    {
+        if (string.IsNullOrWhiteSpace(hostClientId))
         {
-            companionId = 1;
+            return DefaultCompanionClientId;
         }
-        else if (!ulong.TryParse(clientId, out var id))
+
+        if (!ulong.TryParse(hostClientId, out var id))
         {
             throw new InvalidOperationException("Offline clientId must be a non-negative integer.");
         }
-        else if (id == ulong.MaxValue)
+
+        if (id == ulong.MaxValue)
         {
             throw new InvalidOperationException("Offline clientId leaves no adjacent companion ID.");
         }
-        else
-        {
-            companionId = id + 1;
-        }
 
-        return "--windowed --force-steam off --clientId " +
-            companionId.ToString(System.Globalization.CultureInfo.InvariantCulture);
+        return id + 1;
     }
 
     public static bool TryGetCompanionArguments(string? forceSteam, string? clientId, out string arguments, out string? error)
@@ -80,16 +92,116 @@ internal static class CoopLaunchPolicy
             System.IO.File.Copy(mainSettingsPath, companionSettingsPath, overwrite: true);
     }
 
+    public static CoopOccupancy FromRoomState(
+        int playerCount,
+        int maxPlayers,
+        IReadOnlyList<string>? connectedPlayerIds = null)
+    {
+        var occupied = connectedPlayerIds is { Count: > 0 } ? connectedPlayerIds.Count : playerCount;
+        if (occupied < 1)
+        {
+            throw new InvalidOperationException("Local co-op needs the human host.");
+        }
+
+        var companionSlots = 0;
+        if (connectedPlayerIds != null)
+        {
+            for (var i = 0; i < connectedPlayerIds.Count; i++)
+            {
+                if (!string.Equals(connectedPlayerIds[i], "1", StringComparison.Ordinal))
+                {
+                    companionSlots++;
+                }
+            }
+        }
+        else if (occupied >= 2)
+        {
+            companionSlots = occupied - 1;
+        }
+
+        if (companionSlots != CompanionSlotCount)
+        {
+            throw new InvalidOperationException("The AI teammate occupies exactly one player slot.");
+        }
+
+        if (maxPlayers != MaxLobbyPlayers || occupied > maxPlayers || maxPlayers - occupied < 2)
+        {
+            throw new InvalidOperationException("Local 1 human + 1 AI must leave room for online players.");
+        }
+
+        return new CoopOccupancy(occupied, maxPlayers, maxPlayers - occupied);
+    }
+
     public static string? GetError(bool isCompanion, bool autoPlayRunning, string screen, ResolvedModel? model)
     {
         if (isCompanion) return "当前窗口已是 AI 队友。请在你的主窗口邀请队友。";
         if (autoPlayRunning) return "请先暂停当前角色的自动游玩，再邀请 AI 队友。";
         if (screen != "MAIN_MENU") return "请先回到主菜单，再邀请 AI 队友组队。";
-        if (model == null || string.IsNullOrWhiteSpace(model.Model.Model))
-            return "请先在设置中选择 AI 队友使用的游玩模型。";
-        if (!Uri.TryCreate(model.Endpoint.BaseUrl, UriKind.Absolute, out var endpoint) ||
-            endpoint.Scheme is not ("http" or "https"))
-            return "模型端点地址无效，请在设置中填写完整的 HTTP 或 HTTPS 地址。";
+        var firstRun = FirstRunSetup.Evaluate(model);
+        if (!firstRun.ReadyToInvite) return firstRun.Hint;
         return null;
+    }
+
+    public static string? NextCompanionBootstrapAction(
+        string screen,
+        IReadOnlyList<string> availableActions,
+        bool hasLobby)
+    {
+        var actions = availableActions ?? Array.Empty<string>();
+        if (string.Equals(screen, "MODAL", StringComparison.OrdinalIgnoreCase))
+        {
+            if (Contains(actions, "dismiss_modal")) return "dismiss_modal";
+            if (Contains(actions, "confirm_modal")) return "confirm_modal";
+            return null;
+        }
+
+        if (string.Equals(screen, "CHARACTER_SELECT", StringComparison.OrdinalIgnoreCase))
+        {
+            if (Contains(actions, "embark")) return "embark";
+            if (Contains(actions, "ready_multiplayer_lobby")) return "ready_multiplayer_lobby";
+            if (Contains(actions, "select_character")) return "select_character";
+            return null;
+        }
+
+        if (string.Equals(screen, "MULTIPLAYER_LOBBY", StringComparison.OrdinalIgnoreCase))
+        {
+            if (!hasLobby && Contains(actions, "join_multiplayer_lobby")) return "join_multiplayer_lobby";
+            if (Contains(actions, "ready_multiplayer_lobby")) return "ready_multiplayer_lobby";
+            if (Contains(actions, "select_character")) return "select_character";
+            return null;
+        }
+
+        if (string.Equals(screen, "MAIN_MENU", StringComparison.OrdinalIgnoreCase))
+        {
+            if (Contains(actions, "dismiss_modal")) return "dismiss_modal";
+            if (Contains(actions, "confirm_modal")) return "confirm_modal";
+            // -fastmp join opens the friends submenu and connects in the background.
+            // Closing that submenu cancels JoinFlow; do not host from the companion.
+            return null;
+        }
+
+        return null;
+    }
+
+    public static bool CompanionHasJoinedRun(string screen, IReadOnlyList<string> availableActions)
+    {
+        var actions = availableActions ?? Array.Empty<string>();
+        if (Contains(actions, "unready")) return true;
+        return screen is "EVENT" or "MAP" or "COMBAT" or "REWARD" or "REST" or "SHOP"
+            or "TREASURE" or "CHEST" or "GAME_OVER" or "CAPSTONE" or "BUNDLES"
+            or "CRYSTAL_SPHERE" or "CARD_REWARD" or "MAP_WAIT";
+    }
+
+    private static bool Contains(IReadOnlyList<string> actions, string name)
+    {
+        for (var i = 0; i < actions.Count; i++)
+        {
+            if (string.Equals(actions[i], name, StringComparison.OrdinalIgnoreCase))
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 }

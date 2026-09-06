@@ -1,5 +1,20 @@
 # Changelog
 
+## v0.10.0 - 2026-09-06
+
+### Added
+
+- Same-PC AI teammate: from the main-menu overlay, invite a second windowed instance (`--force-steam off --clientId` + `-fastmp join`) into a Steam-hosted 4-player room (本地1人、1ai, two online seats remain).
+- Companion bootstrap joins FastHost character select, writes lobby `max_players=4`, and only acts for its own character.
+- First-run overlay copy for OpenAI-compatible provider setup before inviting a teammate.
+- HTTP action `invite_ai_teammate` plus `/health` `process_id` / `instance_role` so the host can verify the companion process.
+- Bilingual Steam Workshop listing and player README: quick start in-game, details on GitHub. MCP is not in the Workshop item.
+
+### Fixed
+
+- Steam overlay invite uses ENet FastHost (injected `-fastmp`) so an offline companion can join; `/state` reports the raw lobby `max_players` after `EnsureFourPlayerLobby`.
+- Companion settings stay isolated (`settings.companion.json`) and companion HTTP ports can fall back and be rediscovered by pid/port file.
+
 ## Unreleased
 
 ### Fixed

@@ -36,6 +36,10 @@ $PreviewFile = Get-FullPath -PathValue $PreviewFile
 if (-not (Test-Path -LiteralPath $PreviewFile -PathType Leaf)) {
     throw "Workshop preview image not found: $PreviewFile"
 }
+$previewLength = (Get-Item -LiteralPath $PreviewFile).Length
+if ($previewLength -ge 1048576) {
+    throw "Workshop preview image exceeds 1 MB: $PreviewFile ($previewLength bytes)."
+}
 
 if ([string]::IsNullOrWhiteSpace($OutputPath)) {
     $OutputPath = Join-Path $ContentFolder "../steam-workshop.vdf"

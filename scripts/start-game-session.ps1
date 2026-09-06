@@ -4,7 +4,12 @@ param(
     [int]$DelaySeconds = 1,
     [switch]$EnableDebugActions,
     [int]$ApiPort = 8080,
-    [switch]$KeepExistingProcesses
+    [switch]$KeepExistingProcesses,
+    [switch]$Headless,
+    [switch]$ViaSteam,
+    [string]$SteamExe = "",
+    [string]$SteamAppId = "2868840",
+    [string]$ExtraArguments = ""
 )
 
 $ErrorActionPreference = "Stop"
@@ -30,7 +35,7 @@ function Wait-ForHealth {
         } catch {
         }
 
-        if ($Process.HasExited) {
+        if ($Process -and $Process.HasExited -and -not (Get-Process -Name "SlayTheSpire2" -ErrorAction SilentlyContinue)) {
             throw "Game process exited before /health became ready."
         }
     }
@@ -67,7 +72,7 @@ function Wait-ForStateReady {
         } catch {
         }
 
-        if ($Process.HasExited) {
+        if ($Process -and $Process.HasExited -and -not (Get-Process -Name "SlayTheSpire2" -ErrorAction SilentlyContinue)) {
             throw "Game process exited before /state became ready."
         }
     }
@@ -117,8 +122,40 @@ if (-not $KeepExistingProcesses) {
     }
 }
 
+function Resolve-SteamExe {
+    param([string]$ExplicitPath)
+
+    if (-not [string]::IsNullOrWhiteSpace($ExplicitPath) -and (Test-Path -LiteralPath $ExplicitPath)) {
+        return (Resolve-Path -LiteralPath $ExplicitPath).Path
+    }
+
+    $candidates = @(
+        "${env:ProgramFiles(x86)}\Steam\steam.exe",
+        "$env:ProgramFiles\Steam\steam.exe",
+        "C:\Program Files (x86)\Steam\steam.exe"
+    )
+    foreach ($candidate in $candidates) {
+        if (Test-Path -LiteralPath $candidate) {
+            return $candidate
+        }
+    }
+
+    throw "Steam executable not found. Pass -SteamExe."
+}
+
+function Get-ExtraArgumentList {
+    param([string]$Raw)
+
+    if ([string]::IsNullOrWhiteSpace($Raw)) {
+        return @()
+    }
+
+    return @($Raw -split "\s+" | Where-Object { -not [string]::IsNullOrWhiteSpace($_) })
+}
+
 $previousDebugValue = [Environment]::GetEnvironmentVariable("STS2_ENABLE_DEBUG_ACTIONS", "Process")
 $previousPortValue = [Environment]::GetEnvironmentVariable("STS2_API_PORT", "Process")
+$proc = $null
 
 try {
     [Environment]::SetEnvironmentVariable("STS2_API_PORT", [string]$ApiPort, "Process")
@@ -129,7 +166,55 @@ try {
         [Environment]::SetEnvironmentVariable("STS2_ENABLE_DEBUG_ACTIONS", $null, "Process")
     }
 
-    $proc = Start-Process -FilePath $ExePath -WorkingDirectory $launchDir -PassThru
+    $extraArgs = Get-ExtraArgumentList -Raw $ExtraArguments
+    if ($ViaSteam) {
+        $steamExe = Resolve-SteamExe -ExplicitPath $SteamExe
+        $steamArgs = @("-applaunch", $SteamAppId) + $extraArgs
+        Write-Host "[start-game-session] launching via Steam: $steamExe $($steamArgs -join ' ')"
+        $null = Start-Process -FilePath $steamExe -ArgumentList $steamArgs
+        $deadline = (Get-Date).AddSeconds([Math]::Max(30, $Attempts * $DelaySeconds))
+        while ((Get-Date) -lt $deadline) {
+            $proc = Get-Process -Name "SlayTheSpire2" -ErrorAction SilentlyContinue |
+                Sort-Object StartTime -Descending |
+                Select-Object -First 1
+            if ($proc) {
+                break
+            }
+            Start-Sleep -Seconds $DelaySeconds
+        }
+        if (-not $proc) {
+            throw "Steam launch did not start SlayTheSpire2.exe."
+        }
+        Write-Host "[start-game-session] Steam started SlayTheSpire2 PID $($proc.Id)"
+    }
+    else {
+        $argumentList = @()
+        if ($Headless) {
+            $argumentList += "--headless"
+        }
+        $argumentList += $extraArgs
+
+        $startParams = @{
+            FilePath = $ExePath
+            WorkingDirectory = $launchDir
+            PassThru = $true
+        }
+        if ($argumentList.Count -gt 0) {
+            $startParams.ArgumentList = $argumentList
+            Write-Host "[start-game-session] arguments: $($argumentList -join ' ')"
+        }
+
+        $proc = Start-Process @startParams
+        if ($proc.HasExited) {
+            $relaunched = Get-Process -Name "SlayTheSpire2" -ErrorAction SilentlyContinue |
+                Sort-Object StartTime -Descending |
+                Select-Object -First 1
+            if ($relaunched) {
+                Write-Host "[start-game-session] original PID exited; tracking relaunched PID $($relaunched.Id)"
+                $proc = $relaunched
+            }
+        }
+    }
 }
 finally {
     [Environment]::SetEnvironmentVariable("STS2_API_PORT", $previousPortValue, "Process")

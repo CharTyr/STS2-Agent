@@ -50,6 +50,37 @@ function Assert-EqualValue {
     }
 }
 
+function Assert-RequiredFile {
+    param([string]$Path)
+
+    if (-not (Test-Path -LiteralPath $Path -PathType Leaf)) {
+        throw "Required Workshop listing file not found: $Path"
+    }
+}
+
+function Assert-WorkshopPreviewImage {
+    param(
+        [string]$Path,
+        [int]$MaxBytes = 1048576
+    )
+
+    Assert-RequiredFile -Path $Path
+    $length = (Get-Item -LiteralPath $Path).Length
+    if ($length -ge $MaxBytes) {
+        throw "Workshop preview image exceeds 1 MB: $Path ($length bytes)."
+    }
+}
+
+function Write-Utf8NoBomFile {
+    param(
+        [string]$Path,
+        [string]$Content
+    )
+
+    $encoding = New-Object System.Text.UTF8Encoding $false
+    [System.IO.File]::WriteAllText($Path, $Content, $encoding)
+}
+
 $ProjectRoot = Resolve-ProjectRoot -InputRoot $ProjectRoot
 if ([string]::IsNullOrWhiteSpace($OutputRoot)) {
     $OutputRoot = Join-Path $ProjectRoot "build/steam-workshop"
@@ -66,6 +97,20 @@ $modId = Get-Content -LiteralPath $modIdPath -Raw | ConvertFrom-Json
 Assert-EqualValue -Name "Mod ID" -Expected $manifest.id -Actual $modId.id
 Assert-EqualValue -Name "Mod version" -Expected $manifest.version -Actual $modId.version
 Assert-EqualValue -Name "Minimum game version" -Expected $manifest.min_game_version -Actual $modId.min_game_version
+
+$workshopSourceDir = Join-Path $ProjectRoot "steam-workshop"
+$playerReadmePath = Join-Path $workshopSourceDir "content-readme.md"
+$workshopConfigPath = Join-Path $workshopSourceDir "workshop.json"
+$englishDescriptionPath = Join-Path $workshopSourceDir "description.en.txt"
+$chineseDescriptionPath = Join-Path $workshopSourceDir "description.zh-CN.txt"
+$previewJpgPath = Join-Path $workshopSourceDir "preview.jpg"
+$imagePngPath = Join-Path $workshopSourceDir "image.png"
+Assert-RequiredFile -Path $playerReadmePath
+Assert-RequiredFile -Path $workshopConfigPath
+Assert-RequiredFile -Path $englishDescriptionPath
+Assert-RequiredFile -Path $chineseDescriptionPath
+Assert-WorkshopPreviewImage -Path $previewJpgPath
+Assert-WorkshopPreviewImage -Path $imagePngPath
 
 $buildScript = Join-Path $ProjectRoot "scripts/build-mod.ps1"
 $buildArgs = @(
@@ -105,7 +150,7 @@ foreach ($fileName in $requiredStagedFiles) {
 Copy-Item -LiteralPath (Join-Path $stagingDirectory "$($manifest.id).dll") -Destination (Join-Path $contentDirectory "$($manifest.id).dll") -Force
 Copy-Item -LiteralPath (Join-Path $stagingDirectory "$($manifest.id).pck") -Destination (Join-Path $contentDirectory "$($manifest.id).pck") -Force
 Copy-Item -LiteralPath (Join-Path $stagingDirectory "mod_id.json") -Destination (Join-Path $contentDirectory "$($manifest.id).json") -Force
-Copy-Item -LiteralPath (Join-Path $ProjectRoot "steam-workshop/README.md") -Destination (Join-Path $contentDirectory "README.md") -Force
+Copy-Item -LiteralPath $playerReadmePath -Destination (Join-Path $contentDirectory "README.md") -Force
 Copy-Item -LiteralPath (Join-Path $ProjectRoot "LICENSE") -Destination (Join-Path $contentDirectory "LICENSE") -Force
 
 $workshopManifest = Get-Content -LiteralPath (Join-Path $contentDirectory "$($manifest.id).json") -Raw | ConvertFrom-Json
@@ -114,7 +159,32 @@ Assert-EqualValue -Name "Workshop manifest version" -Expected $manifest.version 
 
 $vdfScript = Join-Path $ProjectRoot "scripts/new-steam-workshop-vdf.ps1"
 $vdfPath = Join-Path $releaseDirectory "steam-workshop.vdf"
-& $vdfScript -ContentFolder $contentDirectory -PreviewFile (Join-Path $ProjectRoot "steam-workshop/preview.jpg") -OutputPath $vdfPath -PublishedFileId $PublishedFileId -Visibility $Visibility -ChangeNote $ChangeNote
+& $vdfScript -ContentFolder $contentDirectory -PreviewFile $previewJpgPath -OutputPath $vdfPath -PublishedFileId $PublishedFileId -Visibility $Visibility -ChangeNote $ChangeNote
+
+Copy-Item -LiteralPath $imagePngPath -Destination (Join-Path $releaseDirectory "image.png") -Force
+
+$previewsSourceDir = Join-Path $workshopSourceDir "previews"
+if (Test-Path -LiteralPath $previewsSourceDir -PathType Container) {
+    $previewFiles = Get-ChildItem -LiteralPath $previewsSourceDir -File
+    if ($previewFiles.Count -gt 0) {
+        $previewsOutputDir = Join-Path $releaseDirectory "previews"
+        New-Item -ItemType Directory -Force -Path $previewsOutputDir | Out-Null
+        foreach ($previewFile in $previewFiles) {
+            Assert-WorkshopPreviewImage -Path $previewFile.FullName
+            Copy-Item -LiteralPath $previewFile.FullName -Destination (Join-Path $previewsOutputDir $previewFile.Name) -Force
+        }
+    }
+}
+
+$workshopConfig = Get-Content -LiteralPath $workshopConfigPath -Raw -Encoding UTF8 | ConvertFrom-Json
+$englishDescription = (Get-Content -LiteralPath $englishDescriptionPath -Raw -Encoding UTF8).Trim()
+$visibilityForUploader = if ($Visibility -eq "friends") { "friends_only" } else { $Visibility }
+$workshopConfig | Add-Member -NotePropertyName "description" -NotePropertyValue $englishDescription -Force
+$workshopConfig.visibility = $visibilityForUploader
+$workshopConfig.changeNote = $ChangeNote
+Write-Utf8NoBomFile -Path (Join-Path $releaseDirectory "workshop.json") -Content ($workshopConfig | ConvertTo-Json -Depth 8)
 
 Write-Host "[steam-workshop] Content folder: $contentDirectory"
 Write-Host "[steam-workshop] Upload VDF: $vdfPath"
+Write-Host "[steam-workshop] ModUploader workspace: $releaseDirectory"
+Write-Host "[steam-workshop] After upload, paste Simplified Chinese listing from: $chineseDescriptionPath"

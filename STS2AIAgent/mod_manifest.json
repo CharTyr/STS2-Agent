@@ -4,7 +4,7 @@
   "name": "STS2 AI Agent",
   "author": "CharTyr",
   "description": "In-game AI agent overlay with optional local HTTP API and MCP integration for Slay the Spire 2.",
-  "version": "0.9.2",
+  "version": "0.10.0",
   "min_game_version": "0.111.0",
   "has_pck": true,
   "has_dll": true,

@@ -15,6 +15,8 @@
     <Compile Include="..\STS2AIAgent\Server\LoopbackListener.cs" Link="Server\LoopbackListener.cs" />
     <Compile Include="..\STS2AIAgent\Server\CompanionPortFile.cs" Link="Server\CompanionPortFile.cs" />
     <Compile Include="..\STS2AIAgent\Multiplayer\CompanionHealth.cs" Link="Multiplayer\CompanionHealth.cs" />
+    <Compile Include="..\STS2AIAgent\Multiplayer\CompanionActPolicy.cs" Link="Multiplayer\CompanionActPolicy.cs" />
+    <Compile Include="..\STS2AIAgent\Multiplayer\CompanionProfileBootstrap.cs" Link="Multiplayer\CompanionProfileBootstrap.cs" />
     <Compile Include="..\STS2AIAgent\Multiplayer\CoopLaunchPolicy.cs" Link="Multiplayer\CoopLaunchPolicy.cs" />
     <Compile Include="..\STS2AIAgent\Multiplayer\TeamConversation.cs" Link="Multiplayer\TeamConversation.cs" />
     <Compile Include="..\STS2AIAgent\Multiplayer\CompanionConnection.cs" Link="Multiplayer\CompanionConnection.cs" />

@@ -1,0 +1,12 @@
+{
+  "title": "STS2 AI Agent",
+  "visibility": "private",
+  "changeNote": "Initial Workshop upload",
+  "tags": [
+    "Tools & APIs",
+    "Utility",
+    "QoL"
+  ],
+  "dependencies": [],
+  "contentDescriptors": []
+}

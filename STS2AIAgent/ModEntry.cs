@@ -1,7 +1,9 @@
 using System.Threading;
+using Godot;
 using MegaCrit.Sts2.Core.Logging;
 using MegaCrit.Sts2.Core.Modding;
 using STS2AIAgent.Agent;
+using STS2AIAgent.Config;
 using STS2AIAgent.Game;
 using STS2AIAgent.Server;
 using STS2AIAgent.Ui;
@@ -23,8 +25,28 @@ public static class ModEntry
         GameEventService.Instance.Start();
         HttpServer.Instance.Start();
         AgentRuntime.Instance.Initialize();
-        AgentOverlayHost.Install();
+        if (InstanceRole.IsCompanion || IsHeadlessDisplay())
+        {
+            Log.Info($"{LogPrefix} Skipping overlay (companion={InstanceRole.IsCompanion}, headless={IsHeadlessDisplay()})");
+        }
+        else
+        {
+            AgentOverlayHost.Install();
+        }
+
         Log.Info($"{LogPrefix} Ready on {HttpServer.Instance.Prefix}");
+    }
+
+    private static bool IsHeadlessDisplay()
+    {
+        try
+        {
+            return string.Equals(DisplayServer.GetName(), "headless", StringComparison.OrdinalIgnoreCase);
+        }
+        catch
+        {
+            return false;
+        }
     }
 
     private static void RegisterShutdownHooks()
