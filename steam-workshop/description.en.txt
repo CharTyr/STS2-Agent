@@ -1,29 +1,27 @@
-STS2 AI Agent is an in-game overlay for Slay the Spire 2. You play as usual; an AI can play a second character on the same PC. You bring your own OpenAI-compatible model. This item does not include an API key, account, or hosted model.
+Bring an AI along for the climb. You play your character; on the same PC, the AI plays a second one. Use your own model (DeepSeek, SiliconFlow, ChatGPT, or something running on your computer). Subscribing does not give you an account or an API key.
 
-Full install notes, MCP/HTTP API, and developer docs:
+More detail:
 [url=https://github.com/CharTyr/STS2-Agent]https://github.com/CharTyr/STS2-Agent[/url]
 
-[h2]Quick start[/h2]
+[h2]How to start[/h2]
 [olist]
-[*]Subscribe here, then in Steam click Play and choose [b]Play with Mods[/b]. Launching the exe directly may skip the mod loader.
-[*]Accept the untrusted-code warning, fully restart the game, enable [b]STS2 AI Agent[/b] in Mods, and restart once more.
-[*]Press [b]F8[/b] or the [b]AI[/b] tab on the right edge.
-[*]Open Settings. Add an OpenAI-compatible provider: HTTP/HTTPS base URL, model name, optional API key. Local Ollama or LM Studio can leave the key empty.
-[*]Use Chat or Play for your own character.
-[*]From the [b]main menu[/b], open [b]AI teammate[/b] and invite. That starts a second window (1 human + 1 AI) in the same 4-player room. Two seats stay free for online players. The AI only acts for its own character.
+[*]Subscribe, then in Steam click Play and choose [b]Play with Mods[/b].
+[*]The first launch may warn that the code is untrusted. Accept it, then fully quit the game and start it again.
+[*]In Mods, turn on [b]STS2 AI Agent[/b] and restart once more.
+[*]In game, press [b]F8[/b] or the [b]AI[/b] tab on the right.
+[*]Open Settings and fill in three things: the model web address, the model name, and your key. If you use Ollama or LM Studio on this PC, the key can stay empty.
+[*]Want the AI to help with [b]your[/b] character? Use Chat or Play.
+[*]Want a teammate? Go back to the [b]main menu[/b], open [b]AI teammate[/b], and invite. A second window appears. The room has 4 seats; you two take two of them, so friends can still join. The AI only plays its own character.
 [/olist]
 
-If you previously copied this mod into the game [b]mods[/b] folder by hand, delete those files first so it appears only once.
+If you used to copy this mod into the game folder by hand, delete those files first so it does not show up twice.
 
-[h2]What this Workshop item includes[/h2]
+[h2]What you get[/h2]
 [list]
-[*]In-game overlay: settings, chat, auto-play / single-step, AI teammate invite, optional screenshots
-[*]Same-PC co-op: Steam host + a second windowed instance with its own offline account
-[*]No new cards, relics, balance changes, or save-format changes
+[*]Set up your model and chat without leaving the game
+[*]Let it play on its own, or take one step at a time
+[*]Invite an AI teammate on the same PC
+[*]No new cards, no balance tweaks, no changes to your save
 [/list]
 
-[h2]What is not in this item[/h2]
-The optional Python MCP server and extra developer scripts ship on GitHub only. Players do not need them to play.
-
-[h2]Compatibility[/h2]
-Requires Slay the Spire 2 [b]v0.111.0[/b] or later. License: AGPL-3.0-only.
+Needs Slay the Spire 2 [b]v0.111.0[/b] or newer.

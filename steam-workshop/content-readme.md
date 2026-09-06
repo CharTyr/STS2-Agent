@@ -1,47 +1,41 @@
 # STS2 AI Agent
 
-In-game overlay for Slay the Spire 2: configure your own OpenAI-compatible model, chat, auto-play your character, or invite an AI teammate on the same PC (1 human + 1 AI in a 4-player room).
+Bring an AI along for the climb in Slay the Spire 2. You play your character; on the same PC, the AI can play a second one. Use your own model. This package does not include an account or an API key.
 
-This Workshop package has no API key and no hosted model.
+**More detail:** https://github.com/CharTyr/STS2-Agent
 
-**Full docs, MCP server, HTTP API, and releases:** https://github.com/CharTyr/STS2-Agent
-
-## Quick start
+## How to start
 
 1. Subscribe, then Steam → Play → **Play with Mods**.
-2. Accept the untrusted-code warning, restart, enable **STS2 AI Agent** in Mods, restart again.
-3. Press **F8** or the **AI** tab.
-4. Settings: HTTP/HTTPS URL, model name, optional API key (Ollama / LM Studio can leave the key empty).
-5. Chat or Play for your character.
-6. From the **main menu**, open **AI teammate** and invite.
+2. Accept the untrusted-code warning, fully quit, and start again.
+3. Turn on **STS2 AI Agent** in Mods, then restart once more.
+4. Press **F8** or the **AI** tab on the right.
+5. In Settings, fill in the model web address, the model name, and your key. Ollama / LM Studio on this PC can leave the key empty.
+6. Chat or Play for your own character.
+7. From the **main menu**, open **AI teammate** and invite. The room has 4 seats; you two take two of them.
 
-If you previously copied `STS2AIAgent.dll` / `.pck` / `mod_id.json` into `mods/` by hand, delete those copies first.
+If you used to copy this mod into the game folder by hand, delete those files first.
 
-Settings: `%AppData%/STS2AIAgent/settings.json`
-
-Requires Slay the Spire 2 v0.111.0+. License: AGPL-3.0-only.
+Needs Slay the Spire 2 v0.111.0 or newer.
 
 ---
 
 # STS2 AI Agent
 
-《杀戮尖塔 2》游戏内浮层：用你自己的 OpenAI 兼容模型对话、自动游玩，或在同一台电脑邀请 AI 队友（本地 1 人 + 1 AI，大厅仍为 4 人）。
+带一个 AI 一起爬塔。你打自己的角色；同一台电脑上，AI 可以打另一个角色。模型用你自己的。这里不附带账号或 Key。
 
-本创意工坊包不含 API Key，也不提供托管模型。
+**更详细的说明：** https://github.com/CharTyr/STS2-Agent
 
-**完整说明、MCP、HTTP API 与版本发布：** https://github.com/CharTyr/STS2-Agent
-
-## 快速上手
+## 怎么开始
 
 1. 订阅后，Steam → 开始游戏 → **带 Mod 启动 / Play with Mods**。
-2. 接受不受信任代码提示，重启，在 Mods 启用 **STS2 AI Agent**，再重启一次。
-3. 按 **F8** 或右侧 **AI** 标签。
-4. 设置：HTTP/HTTPS 地址、模型名、可选 API Key（Ollama / LM Studio 可留空 Key）。
-5. 用对话或游玩操作你自己的角色。
-6. 回到 **主菜单**，打开 **AI 队友** 并邀请。
+2. 接受「代码不受信任」提示，把游戏完全关掉再开。
+3. 在 Mods 打开 **STS2 AI Agent**，再重启一次。
+4. 按 **F8**，或点屏幕右边的 **AI**。
+5. 在设置里填：模型网址、模型名字、Key。电脑上的 Ollama / LM Studio 可以不填 Key。
+6. 用「对话」或「游玩」打你自己这号。
+7. 回到 **主菜单**，打开 **AI 队友** 点邀请。房间是 4 人位，你们占两个。
 
-若曾手工复制 `STS2AIAgent.dll` / `.pck` / `mod_id.json` 到 `mods/`，请先删除。
+以前如果手动拷过这个 Mod 进游戏文件夹，先删掉。
 
-配置目录：`%AppData%/STS2AIAgent/settings.json`
-
-需要杀戮尖塔 2 v0.111.0+。许可证：AGPL-3.0-only。
+需要《杀戮尖塔 2》v0.111.0 或更新版本。
