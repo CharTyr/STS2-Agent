@@ -646,6 +646,36 @@ internal static class GameActionService
             });
         }
 
+        var tutorial = GameStateService.GetTimelineTutorial(currentScreen);
+        if (tutorial != null)
+        {
+            var buttonDeadline = DateTime.UtcNow + TimeSpan.FromSeconds(5);
+            NButton? tutorialButton = GameStateService.GetTimelineTutorialAcknowledgeButton(currentScreen);
+            while (DateTime.UtcNow < buttonDeadline)
+            {
+                tutorialButton = GameStateService.GetTimelineTutorialAcknowledgeButton(currentScreen);
+                if (tutorialButton != null && tutorialButton.IsEnabled)
+                {
+                    break;
+                }
+
+                await WaitForNextFrameAsync();
+            }
+
+            tutorialButton ??= GameStateService.GetTimelineTutorialAcknowledgeButton(currentScreen);
+            tutorialButton?.ForceClick();
+
+            var tutorialGone = await WaitForTimelineTutorialClosedAsync(tutorial, TimeSpan.FromSeconds(15));
+            return new ActionResponsePayload
+            {
+                action = "confirm_timeline_overlay",
+                status = tutorialGone ? "completed" : "pending",
+                stable = tutorialGone,
+                message = tutorialGone ? "Action completed." : "Action queued but state is still transitioning.",
+                state = GameStateService.BuildStatePayload()
+            };
+        }
+
         var unlockScreen = GameStateService.GetTimelineUnlockScreen(currentScreen);
         if (unlockScreen != null)
         {
@@ -4894,6 +4924,36 @@ internal static class GameActionService
         return GameStateService.GetOpenModal() != null;
     }
 
+    private static async Task<bool> WaitForTimelineTutorialClosedAsync(
+        NTimelineTutorial tutorial,
+        TimeSpan timeout)
+    {
+        var deadline = DateTime.UtcNow + timeout;
+        while (DateTime.UtcNow < deadline)
+        {
+            await WaitForNextFrameAsync();
+            var currentScreen = ActiveScreenContext.Instance.GetCurrentScreen();
+            if (GameStateService.GetTimelineTutorial(currentScreen) == null)
+            {
+                return true;
+            }
+
+            if (!GodotObject.IsInstanceValid(tutorial) || !tutorial.IsVisibleInTree())
+            {
+                return true;
+            }
+
+            if (GameStateService.CanChooseTimelineEpoch(currentScreen) ||
+                GameStateService.GetTimelineUnlockScreen(currentScreen) != null)
+            {
+                return true;
+            }
+        }
+
+        var finalScreen = ActiveScreenContext.Instance.GetCurrentScreen();
+        return GameStateService.GetTimelineTutorial(finalScreen) == null;
+    }
+
     private static async Task<bool> WaitForTimelineInspectCloseAsync(
         NEpochInspectScreen? inspectScreen,
         TimeSpan timeout)
@@ -5325,7 +5385,14 @@ internal static class GameActionService
             });
         }
 
-        var stable = await WaitForModalTransitionAsync(previousModal, TimeSpan.FromSeconds(10));
+        var stable = await WaitForModalTransitionAsync(previousModal, TimeSpan.FromSeconds(2));
+        if (!stable &&
+            actionName == "confirm_modal" &&
+            FtueModalPolicy.ForceCloseIfStuck(previousModal.GetType().Name))
+        {
+            GameStateService.TryCloseOpenFtue();
+            stable = await WaitForModalTransitionAsync(previousModal, TimeSpan.FromSeconds(8));
+        }
 
         return new ActionResponsePayload
         {

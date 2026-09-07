@@ -1432,6 +1432,11 @@ internal static class GameStateService
 
     public static bool CanConfirmTimelineOverlay(IScreenContext? currentScreen)
     {
+        if (GetTimelineTutorial(currentScreen) != null)
+        {
+            return true;
+        }
+
         var unlockConfirmButton = GetTimelineUnlockConfirmButton(currentScreen);
         if (unlockConfirmButton != null && unlockConfirmButton.IsVisibleInTree() && unlockConfirmButton.IsEnabled)
         {
@@ -3188,7 +3193,8 @@ internal static class GameStateService
                 i = option.index,
                 line = FormatEventOptionLine(option),
                 locked = option.is_locked,
-                proceed = option.is_proceed
+                proceed = option.is_proceed,
+                kill = option.will_kill_player
             }).ToArray()
         };
     }
@@ -3335,6 +3341,7 @@ internal static class GameStateService
         {
             back = timeline.back_enabled,
             confirm = timeline.can_confirm_overlay,
+            tutorial = timeline.tutorial_open,
             slots = timeline.slots.Select(slot => new
             {
                 i = slot.index,
@@ -3667,6 +3674,16 @@ internal static class GameStateService
         if (segments.Count == 0 && !string.IsNullOrWhiteSpace(option.text_key))
         {
             segments.Add(option.text_key);
+        }
+
+        if (option.is_locked)
+        {
+            segments.Add("LOCKED");
+        }
+
+        if (option.will_kill_player)
+        {
+            segments.Add("LETHAL");
         }
 
         return string.Join(" | ", segments);
@@ -4499,6 +4516,7 @@ internal static class GameStateService
             back_enabled = GetTimelineBackButton(currentScreen)?.IsEnabled == true,
             inspect_open = GetTimelineInspectScreen(currentScreen)?.Visible == true,
             unlock_screen_open = GetTimelineUnlockScreen(currentScreen) != null,
+            tutorial_open = GetTimelineTutorial(currentScreen) != null,
             can_choose_epoch = CanChooseTimelineEpoch(currentScreen),
             can_confirm_overlay = CanConfirmTimelineOverlay(currentScreen),
             slots = slots
@@ -5892,12 +5910,59 @@ internal static class GameStateService
 
     public static NTimelineScreen? GetTimelineScreen(IScreenContext? currentScreen)
     {
-        if (currentScreen is NTimelineScreen timelineScreen && timelineScreen.IsVisibleInTree())
+        if (currentScreen is NTimelineScreen currentTimeline && currentTimeline.IsVisibleInTree())
         {
-            return timelineScreen;
+            return currentTimeline;
+        }
+
+        try
+        {
+            var instance = NTimelineScreen.Instance;
+            if (instance != null && GodotObject.IsInstanceValid(instance) && instance.IsVisibleInTree())
+            {
+                return instance;
+            }
+        }
+        catch
+        {
+        }
+
+        if (currentScreen is Node node)
+        {
+            return FindDescendants<NTimelineScreen>(node).FirstOrDefault(screen => screen.IsVisibleInTree());
         }
 
         return null;
+    }
+
+    public static NTimelineTutorial? GetTimelineTutorial(IScreenContext? currentScreen)
+    {
+        var timelineScreen = GetTimelineScreen(currentScreen);
+        if (timelineScreen == null)
+        {
+            return null;
+        }
+
+        return FindDescendants<NTimelineTutorial>(timelineScreen)
+            .FirstOrDefault(tutorial => GodotObject.IsInstanceValid(tutorial) && tutorial.IsVisibleInTree());
+    }
+
+    public static NButton? GetTimelineTutorialAcknowledgeButton(IScreenContext? currentScreen)
+    {
+        var tutorial = GetTimelineTutorial(currentScreen);
+        if (tutorial == null)
+        {
+            return null;
+        }
+
+        var named = tutorial.GetNodeOrNull<NButton>("%AcknowledgeButton");
+        if (named != null && GodotObject.IsInstanceValid(named))
+        {
+            return named;
+        }
+
+        return FindDescendants<NButton>(tutorial).FirstOrDefault(button =>
+            GodotObject.IsInstanceValid(button) && button.IsVisibleInTree());
     }
 
     public static IReadOnlyList<NEpochSlot> GetTimelineSlots(IScreenContext? currentScreen)
@@ -6125,42 +6190,102 @@ internal static class GameStateService
     public static bool TryCloseOpenFtue()
     {
         var modal = GetOpenModal();
-        if (modal == null || !FtueModalPolicy.CloseFtueDirectly(modal.GetType().Name, hasUsableConfirmButton: false))
+        if (modal == null || !FtueModalPolicy.ForceCloseIfStuck(modal.GetType().Name))
         {
             return false;
         }
 
         var closed = false;
+        var confirmButton = GetModalConfirmButton(ActiveScreenContext.Instance.GetCurrentScreen());
+        var closeWithButton = FindInstanceMethod(modal.GetType(), "CloseFtue", typeof(NButton));
+        if (closeWithButton != null)
+        {
+            try
+            {
+                closeWithButton.Invoke(modal, new object?[] { confirmButton });
+                closed = true;
+            }
+            catch (Exception ex)
+            {
+                Log.Warn("[STS2AIAgent] CloseFtue(NButton) failed: " + ex.GetBaseException().Message);
+            }
+        }
+
+        if (IsModalGone(modal))
+        {
+            return true;
+        }
+
         foreach (var methodName in FtueModalPolicy.CloseMethodNames(modal.GetType().Name))
         {
-            var method = modal.GetType().GetMethod(
-                methodName,
-                BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic,
-                binder: null,
-                types: Type.EmptyTypes,
-                modifiers: null);
+            var method = FindInstanceMethod(modal.GetType(), methodName);
             if (method == null)
             {
                 continue;
             }
 
-            method.Invoke(modal, null);
-            closed = true;
+            try
+            {
+                method.Invoke(modal, null);
+                closed = true;
+            }
+            catch (Exception ex)
+            {
+                Log.Warn("[STS2AIAgent] " + methodName + " failed: " + ex.GetBaseException().Message);
+            }
+
+            if (IsModalGone(modal))
+            {
+                return true;
+            }
         }
 
-        var closeWithButton = modal.GetType().GetMethod(
-            "CloseFtue",
-            BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic,
-            binder: null,
-            types: new[] { typeof(NButton) },
-            modifiers: null);
-        if (closeWithButton != null)
+        try
         {
-            closeWithButton.Invoke(modal, new object?[] { GetModalConfirmButton(ActiveScreenContext.Instance.GetCurrentScreen()) });
+            NModalContainer.Instance?.Clear();
             closed = true;
         }
+        catch (Exception ex)
+        {
+            Log.Warn("[STS2AIAgent] NModalContainer.Clear failed: " + ex.Message);
+        }
 
-        return closed;
+        if (modal is Node node && GodotObject.IsInstanceValid(node))
+        {
+            try
+            {
+                node.QueueFree();
+                closed = true;
+            }
+            catch (Exception ex)
+            {
+                Log.Warn("[STS2AIAgent] FTUE QueueFree failed: " + ex.Message);
+            }
+        }
+
+        return closed || IsModalGone(modal);
+    }
+
+    private static bool IsModalGone(IScreenContext previousModal)
+    {
+        var current = GetOpenModal();
+        return current == null || !ReferenceEquals(current, previousModal);
+    }
+
+    private static MethodInfo? FindInstanceMethod(Type type, string name, params Type[] parameterTypes)
+    {
+        var types = parameterTypes.Length == 0 ? Type.EmptyTypes : parameterTypes;
+        const BindingFlags flags = BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.DeclaredOnly;
+        for (var current = type; current != null; current = current.BaseType)
+        {
+            var method = current.GetMethod(name, flags, binder: null, types: types, modifiers: null);
+            if (method != null)
+            {
+                return method;
+            }
+        }
+
+        return null;
     }
 
     public static NButton? GetModalConfirmButton(IScreenContext? currentScreen)
@@ -6342,6 +6467,7 @@ internal static class GameStateService
             NChooseABundleSelectionScreen => "BUNDLE_SELECTION",
             NCapstoneSubmenuStack => "CAPSTONE_SELECTION",
             NCrystalSphereScreen => "CRYSTAL_SPHERE",
+            NTimelineScreen => "TIMELINE",
             NPatchNotesScreen => "MAIN_MENU",
             NSubmenu => "MAIN_MENU",
             NLogoAnimation => "MAIN_MENU",
@@ -6825,6 +6951,8 @@ internal sealed class TimelinePayload
     public bool inspect_open { get; init; }
 
     public bool unlock_screen_open { get; init; }
+
+    public bool tutorial_open { get; init; }
 
     public bool can_choose_epoch { get; init; }
 

@@ -30,6 +30,11 @@ internal static class FtueModalPolicy
         return !hasUsableConfirmButton && IsFtueType(modalTypeName);
     }
 
+    public static bool ForceCloseIfStuck(string? modalTypeName)
+    {
+        return IsFtueType(modalTypeName) && !IsCombatRulesFtue(modalTypeName);
+    }
+
     public static bool AdvanceWithConfirmButton(string? modalTypeName, bool hasUsableConfirmButton)
     {
         return IsCombatRulesFtue(modalTypeName) && hasUsableConfirmButton;

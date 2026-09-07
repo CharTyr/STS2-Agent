@@ -108,11 +108,18 @@ internal static class ActIndexValidator
             }
             else if (index is int option)
             {
-                if (OptionPaths.TryGetValue(action, out var paths) &&
-                    HasAnyArray(root, paths) &&
-                    !ContainsIndex(root, paths, option))
+                if (OptionPaths.TryGetValue(action, out var paths) && HasAnyArray(root, paths))
                 {
-                    return $"option_index {option} is not in the latest payload for {action}.";
+                    if (!ContainsIndex(root, paths, option))
+                    {
+                        return $"option_index {option} is not in the latest payload for {action}.";
+                    }
+
+                    if (string.Equals(action, "choose_event_option", StringComparison.OrdinalIgnoreCase) &&
+                        IsLockedIndex(root, paths, option))
+                    {
+                        return $"option_index {option} is locked.";
+                    }
                 }
             }
         }
@@ -179,6 +186,22 @@ internal static class ActIndexValidator
 
     private static bool ContainsIndex(JsonElement root, IReadOnlyList<string[]> paths, int index)
     {
+        return FindIndexedItem(root, paths, index) != null;
+    }
+
+    private static bool IsLockedIndex(JsonElement root, IReadOnlyList<string[]> paths, int index)
+    {
+        var item = FindIndexedItem(root, paths, index);
+        if (item == null)
+        {
+            return false;
+        }
+
+        return ReadLockedFlag(item.Value);
+    }
+
+    private static JsonElement? FindIndexedItem(JsonElement root, IReadOnlyList<string[]> paths, int index)
+    {
         foreach (var path in paths)
         {
             if (!TryGetArray(root, path, out var array))
@@ -188,17 +211,45 @@ internal static class ActIndexValidator
 
             foreach (var item in array.EnumerateArray())
             {
-                if (item.ValueKind == JsonValueKind.Object &&
-                    item.TryGetProperty("i", out var i) &&
-                    i.TryGetInt32(out var value) &&
-                    value == index)
+                if (item.ValueKind != JsonValueKind.Object)
                 {
-                    return true;
+                    continue;
+                }
+
+                if (TryReadIndex(item, out var value) && value == index)
+                {
+                    return item;
                 }
             }
         }
 
+        return null;
+    }
+
+    private static bool TryReadIndex(JsonElement item, out int value)
+    {
+        if (item.TryGetProperty("i", out var i) && i.TryGetInt32(out value))
+        {
+            return true;
+        }
+
+        if (item.TryGetProperty("index", out var index) && index.TryGetInt32(out value))
+        {
+            return true;
+        }
+
+        value = 0;
         return false;
+    }
+
+    private static bool ReadLockedFlag(JsonElement item)
+    {
+        if (item.TryGetProperty("locked", out var locked) && locked.ValueKind == JsonValueKind.True)
+        {
+            return true;
+        }
+
+        return item.TryGetProperty("is_locked", out var isLocked) && isLocked.ValueKind == JsonValueKind.True;
     }
 
     private static IReadOnlyList<int>? ReadCardTargets(JsonElement root, int cardIndex)

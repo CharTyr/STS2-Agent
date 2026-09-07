@@ -86,7 +86,7 @@ Do not trust memory over the current payload. The game mutates screens in place,
 
 ## Screen Routing
 
-- `MAIN_MENU`: prefer `continue_run`; if unavailable, finish timeline gates or start a run from `open_character_select`. Do not call `switch_profile` unless asked; `option_index` is the native profile id 1..3.
+- `MAIN_MENU`: prefer `continue_run`; if unavailable, finish timeline gates (slot obtained epochs, confirm unlock overlays) or start a run from `open_character_select`. Character unlocks happen on the timeline, not on `GAME_OVER`. Do not call `switch_profile` unless asked; `option_index` is the native profile id 1..3.
 - `CHARACTER_SELECT`: choose an unlocked character, wait for `can_embark = true`, then `embark`.
 - `MULTIPLAYER_LOBBY`: stay on the same compact tool surface; use `available_actions` for `host_multiplayer_lobby`, `join_multiplayer_lobby`, `select_character`, `ready_multiplayer_lobby`, or `disconnect_multiplayer_lobby`.
 - `MAP`: use `choose_map_node` with `map.options[].i`. In multiplayer, if `map.local_vote` is set, `wait_until_actionable` instead of voting again; if `map.votes` exist and you have not voted, follow that option.
