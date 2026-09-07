@@ -22,6 +22,10 @@ internal sealed class AgentSettings
 
     public bool OverlayVisibleOnStart { get; set; }
 
+    public bool HasSeenFirstRunGuide { get; set; }
+
+    public List<ModelRoleTestRecord> RoleTests { get; set; } = new();
+
     public float? OverlayLeft { get; set; }
 
     public float? OverlayTop { get; set; }
@@ -61,6 +65,11 @@ internal sealed class AgentSettings
 
         return Endpoints.FirstOrDefault(endpoint =>
             string.Equals(endpoint.Id, endpointId, StringComparison.OrdinalIgnoreCase));
+    }
+
+    public ResolvedModel? TryResolveConversationModel()
+    {
+        return TryResolveRoleModel(ConversationModelId);
     }
 
     public ResolvedModel ResolveConversationModel()
@@ -114,7 +123,8 @@ internal sealed class AgentSettings
             ConversationModelId = model.Id,
             Hotkey = "F8",
             AttachStateInChat = true,
-            OverlayVisibleOnStart = false
+            OverlayVisibleOnStart = false,
+            HasSeenFirstRunGuide = false
         };
     }
 
@@ -122,6 +132,7 @@ internal sealed class AgentSettings
     {
         Endpoints ??= new List<LlmEndpoint>();
         Models ??= new List<LlmModelConfig>();
+        RoleTests ??= new List<ModelRoleTestRecord>();
         if (Endpoints.Count == 0 && Models.Count == 0)
         {
             var defaults = CreateDefault();

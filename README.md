@@ -31,28 +31,46 @@ The easiest way to play is the [Steam Workshop](https://steamcommunity.com/share
 This mod is still in development. Some things may be unfinished or break. Please send suggestions and issues here: [GitHub Issues](https://github.com/CharTyr/STS2-Agent/issues).
 
 ### Step 1: Install The Mod
-1. Subscribe on [Steam Workshop](https://steamcommunity.com/sharedfiles/filedetails/?id=3796486050), **or** download the latest release `.zip` from [GitHub Releases](https://github.com/CharTyr/STS2-Agent/releases).
-2. Extract the files into your game's `mods/` directory (create the folder if it does not exist):
+
+**Option A: Steam Workshop (recommended)**
+
+1. Subscribe on the [Workshop page](https://steamcommunity.com/sharedfiles/filedetails/?id=3796486050) and wait for the download.
+2. Start the game from Steam with **Play with Mods**. You do not copy any files.
+3. If the game warns that the code is untrusted: accept, quit fully, enable **STS2 AI Agent** in Mods, then restart.
+
+**Option B: GitHub zip**
+
+1. Download `sts2-ai-agent-v*-windows.zip` from [GitHub Releases](https://github.com/CharTyr/STS2-Agent/releases) and unzip it.
+2. Copy **only** these three files from the zip **`mod/`** folder into the game `mods/` folder (create it if needed):
    ```text
    STS2AIAgent.dll
    STS2AIAgent.pck
    mod_id.json
    ```
-   > 💡 **Default Steam Directory**: `C:\Program Files (x86)\Steam\steamapps\common\Slay the Spire 2\mods\`
+3. Final layout example:
+   ```text
+   C:\Program Files (x86)\Steam\steamapps\common\Slay the Spire 2\mods\STS2AIAgent.dll
+   C:\Program Files (x86)\Steam\steamapps\common\Slay the Spire 2\mods\STS2AIAgent.pck
+   C:\Program Files (x86)\Steam\steamapps\common\Slay the Spire 2\mods\mod_id.json
+   ```
+   Do not copy the whole zip or `mcp_server/` into `mods/`. `mcp_server/` is optional for developers.
+
+**Do not double-install:** if you already subscribed on Workshop and also copied GitHub files, delete the manual copies from `mods/` and keep the Workshop item. Two copies can load twice.
 
 ### Step 2: Launch The Game & Open The Overlay
 1. Start *Slay the Spire 2* normally.
 2. Press **`F8`** (configurable) or click the grey **`AI`** tab on the right edge of the screen to open the Agent window.
 
 ### Step 3: Configure Your LLM Endpoint
-1. In the overlay, navigate to the **Settings** tab.
-2. Click **Add Endpoint**:
-   - **Name**: e.g., `SiliconFlow` or `DeepSeek`
-   - **Base URL**: e.g., `https://api.siliconflow.cn/v1` or `https://api.deepseek.com/v1`
-   - **API Key**: Enter your API key (leave blank or enter dummy string for local Ollama/LM Studio).
-3. Select your added endpoint and assign models for **Chat Model** and **Play Model** (e.g., `deepseek-chat`).
-4. (Optional) Adjust the thinking intensity (**Off / Low / Medium / High**).
-5. *Cost Protection*: The built-in `SessionBudgetGuard` is active by default. You can adjust `Max Tokens` and `Max Requests` in Settings to protect your wallet.
+1. The overlay opens automatically on first launch. Later, press **`F8`** or click **`AI`**. A default URL plus model name is **not** treated as ready.
+2. Open **Settings**:
+   1. **Add Endpoint** (name, Base URL; API Key may be empty for Ollama / LM Studio)
+   2. **Add Model** and bind it to that endpoint
+   3. Choose **Chat Model** and **Play Model** (empty play model uses chat)
+   4. Click **Test Connection** (sends a request to your configured service). Chat success is not play success.
+   5. Click **Save Settings**. Unsaved edits are saved when you leave the tab so they are not dropped silently.
+3. Thinking intensity, vision, and session budgets are under **Show advanced options**.
+4. Invite a teammate only after the play model shows connectivity success.
 
 ### Step 4: Play!
 
@@ -65,7 +83,8 @@ This mod is still in development. Some things may be unfinished or break. Please
 - Go to the game's **Main Menu**.
 - Switch to the **AI Teammate** tab and click **Invite AI Teammate**.
 - A second game window will launch automatically and join the co-op lobby. You play your character; the AI controls its character!
-- Use the **Team Conversation** tab to coordinate strategy with your teammate in plain English or Chinese.
+- The main window shows whether the teammate is connected, waiting on you/the game/the model, or why it stopped and what to click next. **Pause teammate** gives immediate feedback; already submitted actions still finish.
+- Use team chat to coordinate in plain English or Chinese.
 
 ---
 
@@ -134,13 +153,19 @@ The mod runs an embedded HTTP server on `http://127.0.0.1:8080` (with dynamic fa
 - `POST /action`: Dispatch an action (e.g., `play_card`, `choose_map_node`, `proceed`).
 - `POST /mcp`: Optional MCP (Streamable HTTP). Off by default; enable it on the overlay Connect tab.
 
-### MCP (built into the mod)
+### Which MCP entry to use
 
-External clients (Cursor / Claude / Codex) use MCP. In-game autoplay does not need it.
+| If you want to… | Use | Needs | How to confirm |
+| --- | --- | --- | --- |
+| Play with an AI teammate | In-game overlay, MCP off | Mod only | F8 / AI tab opens **AI Teammate** |
+| Drive the game from Cursor / Claude / Codex | **Native MCP** on the Connect tab | Mod only | Copy the **actual** URL shown (port may not be 8080) |
+| stdio, layered/full, or compatibility | Optional Python `mcp_server/` | Python + uv | From the release root, run `scripts/test-mcp-tool-profile.ps1` |
 
-1. Press **F8** → **Connect**.
-2. Enable **Open MCP service**.
-3. Copy the URL or JSON from that page into the client. Default:
+External clients: F8 → **Connect** → enable **Open MCP service** → copy the URL or JSON. It shares the HTTP API port and listens on `127.0.0.1` only. Do not hard-code `8080` or `8765`.
+
+The Python sidecar is not required for players and is not the recommended entry.
+
+Default shape (replace the port with the one on the Connect tab):
    ```json
    {
      "mcpServers": {
@@ -151,17 +176,17 @@ External clients (Cursor / Claude / Codex) use MCP. In-game autoplay does not ne
      }
    }
    ```
-   The path is on the same port as the HTTP API and only listens on `127.0.0.1`.
-
 Built-in tools match in-game autoplay: `health_check`, `get_game_state`, `get_available_actions`, `act`, `get_game_data_*`, `wait_until_actionable`.
-
-The Python `mcp_server/` sidecar remains for stdio / layered / full profiles. Ordinary access does not need uv.
 
 ---
 
 ## 🧪 Building From Source & Automated Testing
 
 All core logic can be verified **without running the game client**:
+
+The GitHub zip includes only the optional sidecar launch and profile-check
+scripts under `scripts/`. The build, preflight, and live-game commands below
+require a source checkout.
 
 ### Build Mod
 
@@ -177,11 +202,11 @@ powershell -ExecutionPolicy Bypass -File ".\scripts\build-mod.ps1" -Configuratio
 
 ### Run Tests
 
-- **C# Core Unit Tests (121 / 121 PASS)**:
+- **C# Core Unit Tests**:
   ```powershell
   dotnet run --project STS2AIAgent.Tests/STS2AIAgent.Tests.csproj
   ```
-- **Python MCP Contract Tests (48 / 48 PASS)**:
+- **Python MCP Contract Tests**:
   ```powershell
   cd mcp_server
   uv run python -m unittest discover -s tests -v
@@ -196,14 +221,14 @@ powershell -ExecutionPolicy Bypass -File ".\scripts\build-mod.ps1" -Configuratio
 ## ❓ FAQ
 
 ### Q1: Pressing F8 does not open the overlay.
-1. Ensure `STS2AIAgent.dll`, `STS2AIAgent.pck`, and `mod_id.json` are inside `Slay the Spire 2/mods/`.
+1. Workshop: start with **Play with Mods**. GitHub: copy the three files from the zip `mod/` folder into the game `mods/` folder. Do not keep both Workshop and a manual copy.
 2. Confirm files were copied into the Steam game installation directory, not the repository directory.
 3. Look for the grey **AI** tab on the right screen edge and click it directly.
 
 ### Q2: Autoplay stopped unexpectedly. How do I resume?
-1. **Check Budget**: A notification will indicate if `MaxSessionTokens` or `MaxSessionRequests` was reached. Increase the limits in Settings or reset stats to continue.
-2. **Check API Status**: If your API key expired or network failed, the 3-failure circuit breaker safely halts the loop.
-3. **Check Game State**: Did you exit to the main menu? The run boundary protection stops autoplay upon leaving an active run.
+1. Read the **AI Teammate** status line and the suggested next click. Config errors do not retry forever; fix settings, test, then **Resume play** without restarting the whole game.
+2. If tokens show **unknown**, the provider omitted usage; that is not a zero spend. Request caps still work.
+3. Use **Export diagnostics**. The copy excludes API keys, Authorization headers, and session tokens, and does not include chat bodies by default.
 
 ### Q3: Dual-instance companion window fails to start.
 1. Local co-op runs through the internal multiplayer test lobby.
@@ -221,7 +246,7 @@ powershell -ExecutionPolicy Bypass -File ".\scripts\build-mod.ps1" -Configuratio
 ```text
 STS2-Agent/
 ├── STS2AIAgent/          # C# In-Game Mod (Overlay UI, LLM Client, Decision Loop, Budget Guard)
-├── STS2AIAgent.Tests/    # Standalone C# Tests (121 tests, no game client required)
+├── STS2AIAgent.Tests/    # Standalone C# tests (no game client required)
 ├── mcp_server/           # FastMCP Server implementation and offline game data
 ├── scripts/              # Build, packaging, startup, and preflight scripts
 ├── skills/               # State-first gameplay skill specifications

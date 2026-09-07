@@ -19,11 +19,23 @@ internal static class Router
     private const string LogPrefix = "[STS2AIAgent.Router]";
 
     private static long _requestCounter;
+    private static readonly System.Collections.Concurrent.ConcurrentQueue<string> RecentIds = new();
+
+    internal static string[] RecentRequestIds() => RecentIds.ToArray();
+
+    private static void NoteRequestId(string requestId)
+    {
+        RecentIds.Enqueue(requestId);
+        while (RecentIds.Count > 16 && RecentIds.TryDequeue(out _))
+        {
+        }
+    }
 
     public static async Task HandleAsync(HttpListenerContext context, CancellationToken cancellationToken)
     {
         var seq = Interlocked.Increment(ref _requestCounter);
         var requestId = $"req_{DateTime.UtcNow:yyyyMMdd_HHmmss_ffff}_{seq}";
+        NoteRequestId(requestId);
         var request = context.Request;
         var response = context.Response;
         var stopwatch = Stopwatch.StartNew();

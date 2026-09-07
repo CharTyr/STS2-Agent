@@ -11,6 +11,66 @@ internal readonly record struct CompanionImmediateDecision(string Kind, string? 
 
 internal static class CompanionPlayPolicy
 {
+    public static CompanionImmediateDecision DecideImmediate(
+        string screen,
+        IReadOnlyList<string>? availableActions,
+        IReadOnlyList<CompanionMapOption>? mapOptions,
+        string? modalTypeName,
+        bool canConfirm,
+        bool canDismiss,
+        bool inCombat,
+        bool followMapVotes)
+    {
+        var blocking = DecideBlockingModal(
+            screen,
+            availableActions,
+            modalTypeName,
+            canConfirm,
+            canDismiss,
+            inCombat);
+        if (blocking.Kind != CompanionImmediateDecision.None)
+        {
+            return blocking;
+        }
+
+        if (!followMapVotes)
+        {
+            return new CompanionImmediateDecision(CompanionImmediateDecision.None, null, null);
+        }
+
+        return DecideMapVote(screen, availableActions, mapOptions);
+    }
+
+    public static CompanionImmediateDecision DecideBlockingModal(
+        string screen,
+        IReadOnlyList<string>? availableActions,
+        string? modalTypeName,
+        bool canConfirm,
+        bool canDismiss,
+        bool inCombat)
+    {
+        var actions = availableActions ?? Array.Empty<string>();
+        if (!string.Equals(screen, "MODAL", StringComparison.OrdinalIgnoreCase))
+        {
+            return new CompanionImmediateDecision(CompanionImmediateDecision.None, null, null);
+        }
+
+        if (!Contains(actions, "confirm_modal") || Contains(actions, "dismiss_modal") || canDismiss)
+        {
+            return new CompanionImmediateDecision(CompanionImmediateDecision.None, null, null);
+        }
+
+        var isFtue = !string.IsNullOrWhiteSpace(modalTypeName) &&
+            modalTypeName.IndexOf("Ftue", StringComparison.OrdinalIgnoreCase) >= 0;
+        if (!isFtue && !inCombat)
+        {
+            return new CompanionImmediateDecision(CompanionImmediateDecision.None, null, null);
+        }
+
+        _ = canConfirm;
+        return new CompanionImmediateDecision(CompanionImmediateDecision.Act, "confirm_modal", null);
+    }
+
     public static CompanionImmediateDecision DecideMapVote(
         string screen,
         IReadOnlyList<string>? availableActions,

@@ -159,14 +159,94 @@ internal static class CompanionStartupTests
             null).Kind);
     }
 
+    public static void CombatRulesFtueIsConfirmedImmediately()
+    {
+        var captured = CompanionPlayPolicy.DecideBlockingModal(
+            "MODAL",
+            new[] { "confirm_modal" },
+            "NCombatRulesFtue",
+            canConfirm: true,
+            canDismiss: false,
+            inCombat: true);
+        Assert.Equal(CompanionImmediateDecision.Act, captured.Kind);
+        Assert.Equal("confirm_modal", captured.Action);
+
+        var hostAutoplay = CompanionPlayPolicy.DecideImmediate(
+            "MODAL",
+            new[] { "confirm_modal" },
+            null,
+            "NCombatRulesFtue",
+            canConfirm: true,
+            canDismiss: false,
+            inCombat: true,
+            followMapVotes: false);
+        Assert.Equal(CompanionImmediateDecision.Act, hostAutoplay.Kind);
+        Assert.Equal("confirm_modal", hostAutoplay.Action);
+
+        var companionAutoplay = CompanionPlayPolicy.DecideImmediate(
+            "MODAL",
+            new[] { "confirm_modal" },
+            new[] { new CompanionMapOption(0, 1, false) },
+            "NCombatRulesFtue",
+            canConfirm: true,
+            canDismiss: false,
+            inCombat: true,
+            followMapVotes: true);
+        Assert.Equal("confirm_modal", companionAutoplay.Action);
+
+        Assert.Equal(CompanionImmediateDecision.None, CompanionPlayPolicy.DecideBlockingModal(
+            "MODAL",
+            new[] { "confirm_modal", "dismiss_modal" },
+            "NConfirmDialog",
+            canConfirm: true,
+            canDismiss: true,
+            inCombat: false).Kind);
+        Assert.Equal(CompanionImmediateDecision.None, CompanionPlayPolicy.DecideBlockingModal(
+            "COMBAT",
+            new[] { "play_card" },
+            "NCombatRulesFtue",
+            canConfirm: false,
+            canDismiss: false,
+            inCombat: true).Kind);
+        Assert.Equal(CompanionImmediateDecision.None, CompanionPlayPolicy.DecideImmediate(
+            "COMBAT",
+            new[] { "play_card" },
+            null,
+            null,
+            canConfirm: false,
+            canDismiss: false,
+            inCombat: true,
+            followMapVotes: false).Kind);
+        Assert.Equal("choose_map_node", CompanionPlayPolicy.DecideImmediate(
+            "MAP",
+            new[] { "choose_map_node" },
+            new[] { new CompanionMapOption(0, 1, false) },
+            null,
+            canConfirm: false,
+            canDismiss: false,
+            inCombat: false,
+            followMapVotes: true).Action);
+
+        var runtime = AgentSourceFixture.Read("STS2AIAgent/Agent/AgentRuntime.cs");
+        Assert.Contains("CompanionPlayPolicy.DecideImmediate(", runtime);
+        Assert.Contains("payload.modal?.type_name", runtime);
+        var lobby = AgentSourceFixture.Read("scripts/test-multiplayer-lobby-flow.ps1");
+        Assert.Contains("Clear-BlockingFtueModals", lobby);
+        Assert.Contains("Test-ShouldConfirmBlockingModal", lobby);
+    }
+
     public static void FirstRunProviderConfigIsReachable()
     {
         var defaults = AgentSettings.CreateDefault();
+        var filled = FirstRunSetup.Evaluate(defaults);
+        Assert.True(!filled.ReadyToInvite);
+        Assert.Equal("filled_unverified", filled.Phase);
+        Assert.True(filled.ProviderConfigReachable);
+        ModelRoleProbe.Upsert(defaults, ModelRoleProbe.FromSuccess(ModelRoleNames.Play, defaults.TryResolvePlayModel()!));
         var ready = FirstRunSetup.Evaluate(defaults);
         Assert.True(ready.ReadyToInvite);
         Assert.Contains("1 人", ready.Hint);
         Assert.Contains("1 AI", ready.Hint);
-        Assert.True(ready.ProviderConfigReachable);
 
         var empty = FirstRunSetup.Evaluate((ResolvedModel?)null);
         Assert.True(!empty.ReadyToInvite);
@@ -177,7 +257,7 @@ internal static class CompanionStartupTests
         var invalid = FirstRunSetup.Evaluate(settings);
         Assert.True(!invalid.ReadyToInvite);
         Assert.Contains("地址", invalid.Hint);
-        Assert.Contains("设置", CoopLaunchPolicy.GetError(false, false, "MAIN_MENU", null));
+        Assert.Contains("设置", CoopLaunchPolicy.GetError(false, false, "MAIN_MENU", (ResolvedModel?)null));
     }
 
     public static void CompanionProfileEnablesTheMod()
@@ -312,7 +392,7 @@ internal static class CompanionStartupTests
         Assert.Contains("主窗口", CoopLaunchPolicy.GetError(true, false, "MAIN_MENU", model));
         Assert.Contains("暂停", CoopLaunchPolicy.GetError(false, true, "MAIN_MENU", model));
         Assert.Contains("主菜单", CoopLaunchPolicy.GetError(false, false, "COMBAT", model));
-        Assert.Contains("模型", CoopLaunchPolicy.GetError(false, false, "MAIN_MENU", null));
+        Assert.Contains("模型", CoopLaunchPolicy.GetError(false, false, "MAIN_MENU", (ResolvedModel?)null));
         model.Endpoint.BaseUrl = "file:///tmp/model";
         Assert.Contains("地址", CoopLaunchPolicy.GetError(false, false, "MAIN_MENU", model));
         model.Endpoint.BaseUrl = "http://localhost:1234/v1";

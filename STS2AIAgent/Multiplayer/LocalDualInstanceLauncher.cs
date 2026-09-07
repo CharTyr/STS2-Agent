@@ -26,6 +26,10 @@ internal static class LocalDualInstanceLauncher
     private static Process? _companionProcess;
     public static CompanionConnection? Connection { get; private set; }
 
+    public static bool CompanionProcessAlive => _companionProcess is { HasExited: false };
+
+    public static bool CompanionProcessExited => _companionProcess is { HasExited: true };
+
     public static string? ResolveGameExe()
     {
         try
