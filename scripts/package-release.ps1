@@ -89,6 +89,7 @@ function Rewrite-PackagedReadmeLinks {
         "(./COOP_DELIVERY.md)" = "(https://github.com/CharTyr/STS2-Agent/blob/main/COOP_DELIVERY.md)"
         "(./docs/api.md)" = "(https://github.com/CharTyr/STS2-Agent/blob/main/docs/api.md)"
         "(../skills/sts2-mcp-player/SKILL.md)" = "(https://github.com/CharTyr/STS2-Agent/blob/main/skills/sts2-mcp-player/SKILL.md)"
+        "(./skills/sts2-mcp-player/SKILL.md)" = "(https://github.com/CharTyr/STS2-Agent/blob/main/skills/sts2-mcp-player/SKILL.md)"
         "(../docs/release-readiness.md)" = "(https://github.com/CharTyr/STS2-Agent/blob/main/docs/release-readiness.md)"
     }
     foreach ($pair in $replacements.GetEnumerator()) {
