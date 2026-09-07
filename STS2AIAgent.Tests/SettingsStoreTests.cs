@@ -19,6 +19,8 @@ internal static class SettingsStoreTests
         settings.AttachScreenshotInChat = true;
         settings.McpServerPath = @"C:\mods\mcp_server";
         settings.McpEnabled = true;
+        settings.HasSeenFirstRunGuide = true;
+        ModelRoleProbe.Upsert(settings, ModelRoleProbe.FromSuccess(ModelRoleNames.Play, settings.TryResolvePlayModel()!));
         store.Save(settings);
 
         var loaded = store.Load();
@@ -33,6 +35,28 @@ internal static class SettingsStoreTests
         Assert.True(loaded.AttachScreenshotInChat);
         Assert.Equal(@"C:\mods\mcp_server", loaded.McpServerPath);
         Assert.True(loaded.McpEnabled);
+        Assert.True(loaded.HasSeenFirstRunGuide);
+        Assert.Equal("verified", ModelRoleProbe.Current(loaded, ModelRoleNames.Play).Status);
+    }
+
+
+    public static void Load_VerifiedPlayFingerprint_IsCaseInsensitive()
+    {
+        var path = Path.Combine(Path.GetTempPath(), "sts2-agent-tests", Guid.NewGuid().ToString("N"), "settings.json");
+        Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+        var settings = AgentSettings.CreateDefault();
+        settings.Endpoints[0].BaseUrl = "https://api.example.com/v1";
+        settings.Endpoints[0].ApiKey = "sk-test";
+        settings.PlayModelId = settings.Models[0].Id;
+        var resolved = settings.TryResolvePlayModel()!;
+        var record = ModelRoleProbe.FromSuccess(ModelRoleNames.Play, resolved);
+        record.Fingerprint = record.Fingerprint!.ToLowerInvariant();
+        ModelRoleProbe.Upsert(settings, record);
+        new SettingsStore(path).Save(settings);
+
+        var loaded = new SettingsStore(path).Load();
+        Assert.Equal("verified", ModelRoleProbe.Current(loaded, ModelRoleNames.Play).Status);
+        Assert.True(FirstRunSetup.Evaluate(loaded).ReadyToInvite);
     }
 
     public static void Load_MissingFile_CreatesDefaults()

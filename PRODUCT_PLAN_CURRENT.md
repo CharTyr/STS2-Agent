@@ -1,109 +1,153 @@
-# STS2 AI Agent：当前评估与成熟产品开发计划
+# STS2 AI Agent：当前测试前交付方案
 
-评估日期：2026-09-05。以本次 `git fetch origin` 后的远程 `main` **27f2b704991e8142f73b5a0b80c7a73c6feb8037** 为准。本文是当前执行建议；旧版 PRODUCT_ROADMAP.md 的调研基线与待办状态已过时，产品定位和长期验收原则继续保留。
+本文是本工作树唯一的测试前执行入口。它描述修复后的代码如何被分层验收，不把静态阅读、历史记录或分支上的旧输出写成当前通过。旧规划见 [PRODUCT_ROADMAP.md](PRODUCT_ROADMAP.md)（历史）；交付证据记录见 [COOP_DELIVERY.md](COOP_DELIVERY.md)。
 
-## 1. 产品判断
+## 当前边界与基线
 
-执行更新：集成测试与 CI/预检修复已提交至 [PR #61](https://github.com/CharTyr/STS2-Agent/pull/61)，提交 `accd605`。修复分支完整本地预检通过（97 项 C#、48 项 Python、profile、Mod 编译、元数据及文档），实际预检失败注入通过。远程 Actions 因 GitHub 账户账单锁定未启动任何步骤；A 阶段的远程 CI 门槛未达成，PR 尚未合并。下文 main 评估结果保留为修复前基线。
+- 工作树：C:\Users\chart\Documents\project\sp-player-first-experience
+- 分支：codex/player-first-experience
+- 准确基线：HEAD 1be8e83（标签 v0.10.2）加上本工作树当前全部未提交修改。未提交修改包含代码、测试、脚本和文档；完整文件清单以该工作树的 git status --short 为准。
+- 本轮状态：离线 A1–A6、B、C/G0 已通过。用户允许后已把 staging 装入 Steam `mods/`（旧文件备份在 `build/live-test-backup-mods`）。实机已验证 health/版本/未验证邀请拦截/原生 MCP；双开大厅进战斗超时失败。真实模型 F 未调用。日常档位 1 未开局，测试大厅走档位 3 后已切回 1。
+- 本轮所有权：只维护 PRODUCT_PLAN_CURRENT.md、COOP_DELIVERY.md、CHANGELOG.md；不撤销其它代理或用户的修改，不提交、不合并、不发布、不上传 Workshop。
+- 证据标签：代码改动（未验证）、静态检查（未运行）、自动化通过、实机通过、历史记录、已发布。只有取得对应新证据后才能使用后两个当前状态标签。
 
-项目已从“外部 AI 操作游戏的接口”发展为“游戏内可配置、可交流、可控制的 AI 队友”。游戏动作覆盖、多人启动、模型接入和 MCP 基础已经比较完整，适合定位为功能型 Beta；当前证据还不足以支持稳定版承诺。
+v0.10.2 只作为基线标签和历史版本名使用。它不表示本工作树叠加的未提交修改已经进入发布包。
 
-建议产品主线保持：**玩家操作自己的角色，邀请一个能交流、会配合、有个性的 AI 队友共同冒险。** 本地双开是核心旅程，单人代打是辅助模式，MCP 面向高级用户。成熟产品的重点是可靠完成这一旅程，并让玩家理解队友状态、控制行为和成本。
+## 给用户的一次确认
 
-下一阶段优先级：合并后的稳定基线 → 安全可控的整局体验 → 首次使用与成本/配置管理 → 有趣的协同互动 → 可持续发布。不能以增加工具数量或少数演示局替代完整验收。
+用户只需对下面的范围确认一次，代理即可按阶段执行，并在每个阶段形成证据后继续下一阶段：
 
-## 2. 远程、本地与发布版本
+> 同意在 C:\Users\chart\Documents\project\sp-player-first-experience、基线 1be8e83 + 当前未提交修改上，按本文件的 A–G 阶段执行离线门禁、隔离构建、ZIP 检查和指定的实机手动验收；允许写入工作树的 build/、bin/obj、.uv-cache 与临时目录；实机阶段只使用专用测试游戏目录、测试档位和隔离的双开设置文件；默认不访问真实存档、不调用真实模型、不运行发布/上传操作。真实模型测试另行确认模型、端点、单价来源、最大请求数/Token 和总预算后才能开始。任一失败先修复，再复测失败项及其受影响的完整矩阵；未有证据的项目保持“未运行”。
 
-| 范围 | 本次核实结果 | 计划含义 |
-| --- | --- | --- |
-| 远程 main | `5933959`，已合并 #53/#54/#56/#57/#58/#59/#60/#61 | 主线 NETSDK1022 已修复，原生 Profile 切换已合入 |
-| 候选 PR 链条 | PR #62-#65 均已审核通过并按序合入集成分支 | 包含自动游玩恢复、离线与配置隔离、Token 用量与预算硬护栏及对齐文档 |
-| 最新 GitHub Release | [v0.9.2](https://github.com/CharTyr/STS2-Agent/releases/tag/v0.9.2)，2026-08-31 | 新 main 能力不等于已进入用户安装包；main 版本字段仍为 0.9.2 |
-| 远程自动化 | main 已合入 `.github/workflows/validate.yml` (见 #61) | 基础 CI 工作流与原生命令失败注入就绪 |
-| 开放 issue | [#50 uv.lock 依赖报告](https://github.com/CharTyr/STS2-Agent/issues/50)、[#51 package-lock.json 依赖报告](https://github.com/CharTyr/STS2-Agent/issues/51) | 核实实际版本、发布范围与影响后修复，不照抄报告中的漏洞数量 |
+这次确认不自动授权以下动作：覆盖日常 mods/、打开或修改日常存档、向模型供应商发送请求、向 GitHub/Workshop 推送或创建 Release。即使当前打包脚本已经向构建步骤传递 -SkipInstall，C/G 阶段仍只允许写入专用测试目录。
 
-### 近期 PR 对计划的影响
+## 阶段、命令和隔离矩阵
 
-| PR/提交 | 已进入主线的能力 | 剩余工作 |
-| --- | --- | --- |
-| [#53](https://github.com/CharTyr/STS2-Agent/pull/53) | 原生结算、解锁、保存校验和 MCP 写动作响应不确定时的防重放 | 普通/跨解锁阈值结算、重新读取存档和双人结算实机回归 |
-| [#54](https://github.com/CharTyr/STS2-Agent/pull/54) | 事件选项本地化变量 | 多事件、中英文和缺失字段回归 |
-| [#57](https://github.com/CharTyr/STS2-Agent/pull/57) | 卡组多选动作确认语义 | 选择、取消、确认及等待状态的场景回归 |
-| [#58](https://github.com/CharTyr/STS2-Agent/pull/58) | 战斗 CanPlay 就绪诊断 | 将等待原因转为玩家能理解的状态；验证真实战斗 |
-| [#59](https://github.com/CharTyr/STS2-Agent/pull/59) / `24d3244` | 队友身份绑定、会话通信、历史进入决策、只读聊天、暂停/恢复、动作队列与结算等待修正 | 双开完整旅程、断线恢复、真实模型策略效果；已同步更正 COOP_DELIVERY 旅程状态为“接口已合入主线，实机端到端待验收” |
-| [#60](https://github.com/CharTyr/STS2-Agent/pull/60) | Windows 保留端口的有界动态后备与绑定测试 | 合并后的测试项目修复、真实环境启动验收 |
+所有代码块都是“获确认后才执行”的候选命令；本次编写文档时没有执行其中任何一条。每条命令都标注独立的工作目录，避免在 mcp_server 中 cd 后继续使用仓库根目录的相对路径。
 
-### 本次复验
-
-使用远程 main 的独立临时快照，未带入本地未提交代码。未修改业务代码、切换当前分支、启动游戏、调用付费模型或发布。
-
-| 检查 | 结果 |
-| --- | --- |
-| `dotnet run --project STS2AIAgent.Tests/STS2AIAgent.Tests.csproj -c Release` | **失败，退出码 1**：测试 csproj 两次显式引用 `Server/LoopbackListener.cs`，触发 NETSDK1022；测试未执行 |
-| `uv run --locked python -m unittest discover -s tests -v`（mcp_server） | **48 项通过**，退出码 0 |
-| `uv run --locked python ../scripts/run_sts2_validation.py mcp-tool-profile` | **通过**，guided 10、guided debug 11、full 63，failures 为空 |
-
-以上是当前集成主线（remote main 27f2b70）的结果。各候选分支（PR #61~#64）的单测和功能通过证据属于分支证据，在 PR 合并入 main 并重新跑通集成验证前，不能视为主线已交付基线。没有进行完整 Mod 构建、实机整局或用户测试。
-
-## 3. 当前最重要的缺口
-
-1. **可信集成基线。** PR 分别通过不保证合并后通过，本次重复编译项就是实例。预检和 CI 必须能够挡住失败，文档要跟随集成结果更新。
-2. **异常恢复和有限运行。** `AgentRuntime.AutoPlayLoopAsync` 仍在错误后固定延迟继续，缺少清晰的连续失败/无进展停止策略。已有暂停生命周期应复用，补充故障原因与“仅当前局”边界。
-3. **成本透明。** `LlmCompletion` 没有 usage；客户端流式响应仍先 `ReadAsStringAsync`。玩家尚不能可靠知道本局成本、设置硬限制或实时观察请求进度。
-4. **配置恢复与双进程写入。** 远程 SettingsStore 仍使用进程内锁、固定 `.tmp` 和复制覆盖，读取异常静默回到默认值；API key 随普通设置保存。需要跨进程协调、备份迁移和凭据分离。
-5. **完整队友体验。** 通信和建议上下文已有；共同目标、关键时刻主动交流、战后反馈、低打扰频率和失联恢复仍需完善。消息进入 prompt 不等于策略正确采纳。
-6. **可交付证据。** 缺少本次可核实的双开整局、首次用户成功率、支持矩阵和安装升级回退证据。测试框架、真实局面与用户体验须分别验收。
-
-## 4. 开发阶段与退出门槛
-
-时间是粗略估算：一名熟悉项目的主要开发者，配合稳定的实机 QA 和少量真实模型预算；约 8–12 周，需在第一阶段结束后复估。按门槛推进，不按日期跳过验证。
-
-| 阶段 | 交付内容 | 退出门槛 | 预估 |
-| --- | --- | --- | --- |
-| A：集成基线 | 修复重复编译项；审查本地 CI/预检候选；统一远程与本地基线；更新状态文档；评审 #56；核实依赖报告 | 干净 main 快照核心测试、Python、profile、版本一致性全通过；故意失败能阻止预检；远程 CI 有成功记录；完整 Mod 编译通过 | 3–5 个工作日 |
-| B：可靠整局 | 自动运行错误分类、有限退避、无进展暂停、仅当前局；复用现有暂停控制；明确等待/已提交动作；角色与存档身份；断线后的状态核对 | 401、429、5xx、超时、UNKNOWN、无动作、响应丢失、暂停及竞争测试；确认暂停后无新写动作；真实双开完成战斗到双方结算/存档 | 1–2 周 |
-| C：普通玩家可用 | 组队引导、模型工具/视觉能力检测、配置迁移与恢复、凭据分离、usage/预算、取消与增量展示、脱敏诊断包 | 首次组队流程可由新用户独立完成；预算触发后不新发请求；usage 缺失显示未知；双进程保存/损坏恢复/升级测试通过 | 2–3 周 |
-| D：有趣且有依据的队友 | 轻量共同目标、意图交流、战后短评、可选风格、主动发言频率；固定场景与对局评估 | 玩家建议可追踪到后续决策；始终只操作自身角色；发言能对应真实状态；新用户反馈和策略/成本对比有记录 | 2–3 周 |
-| E：稳定发布 | GitHub/Workshop 一致性、干净安装/升级/回退、兼容性矩阵、诊断与支持入口、RC 观察 | 至少 30 次双开端到端样本；无未解决 P0；支持范围有实机证据；至少 7 天 RC 观察通过 | 1–2 周，含观察期 |
-
-依赖：A 是所有后续合入的门槛；B 先确定会话生命周期与执行结果语义，C/D 才能可靠复用。诊断记录应从 B 开始，贯穿成本、策略评估与用户支持。
-
-## 5. 接下来两个迭代的任务清单
-
-| 顺序 | 任务 | 主要范围 | 实施 PR 与状态 | 验收/依赖 |
+| 阶段 | 目的与入口 | 明确 CWD / 环境 | 游戏、存档、模型副作用 | 粗略耗时 / 退出门槛 |
 | --- | --- | --- | --- | --- |
-| 1 / P0 | 去掉测试项目重复引用并复跑集成测试 | `STS2AIAgent.Tests.csproj` | [PR #61](https://github.com/CharTyr/STS2-Agent/pull/61) (待合并) | 修复 NETSDK1022，100% 保留所有测试；全量核心测试通过 |
-| 2 / P0 | 合入可信 CI 与预检 | `.github/workflows`、`scripts` | [PR #61](https://github.com/CharTyr/STS2-Agent/pull/61) (待合并) | 新增 GitHub Actions 工作流，加固 Invoke-CheckedNative 原生退出码传播与失败注入 |
-| 3 / P0 | 对齐开发基线及交付文档 | Git 分支、PRODUCT/COOP 文档 | [PR #65](https://github.com/CharTyr/STS2-Agent/pull/65) (当前 PR，待合并) | 梳理规范 PR 链条 (#61~#64)，澄清主线基线与分支证据边界 |
-| 4 / P0 | 双开主旅程实机验收包 | Multiplayer、验证脚本 | 本地实机在线 | 不污染日常存档；邀请、入厅、准备、消息、暂停、战斗、结算实测 |
-| 5 / P1 | 运行恢复策略 | AgentRuntime、AutoPlayRecovery | [PR #62](https://github.com/CharTyr/STS2-Agent/pull/62) (已合并) | 连续 3 次失败停止、2/4s 指数退避、正常等待不误扣预算、保留 HTTP 状态与配置错误退出 |
-| 6 / P1 | 战局边界与离线账号作用域 | CurrentRunBoundary、CoopLaunchPolicy | [PR #62](https://github.com/CharTyr/STS2-Agent/pull/62) & [PR #63](https://github.com/CharTyr/STS2-Agent/pull/63) (已合并) | 战局边界离开回菜单停止；离线双开自动递增 --clientId，隔离两窗口账号与存档 |
-| 7 / P1 | 配置与凭据多实例隔离 | SettingsStore、环境变量 | [PR #63](https://github.com/CharTyr/STS2-Agent/pull/63) (已合并) | 支持 STS2_AGENT_SETTINGS_PATH 隔离双实例配置并发写入，单测覆盖隔离与回退 |
-| 8 / P1 | 会话诊断与预算基础 | LlmTypes、SessionBudgetGuard、UI | [PR #64](https://github.com/CharTyr/STS2-Agent/pull/64) (待合并) | 提取 SSE/JSON Usage；统一游玩/视觉/对话计入；支持 MaxTokens/MaxRequests 硬上限；UI 实时展示 |
-| 9 / P1 | 核实依赖报告 | #50/#51、锁文件、发布包 | 待后续跟进 | 确定实际暴露范围与修复版本，再运行回归 |
+| A1 | C# 核心测试：TestRunner 注册的全套测试，覆盖首次引导、角色探测、设置保存、删除绑定、暂停/恢复、恢复策略、预算、队友、对局边界、结算/存档契约、Agent loop、原生 MCP 和现有游戏契约 | CWD=<repo>；Windows PowerShell；.NET 9 SDK；不设置真实模型凭据 | 不启动游戏；测试中的 loopback/temp 文件只能留在测试临时目录 | 约 2–8 分钟；退出码 0，所有测试 PASS |
+| A2 | Python MCP sidecar 单元测试 | CWD=<repo>\mcp_server；uv 按 uv.lock；建议 UV_CACHE_DIR=<repo>\.uv-cache | 不启动游戏、不访问 Mod、不调用模型；uv 缓存只写工作树 | 约 1–5 分钟；退出码 0 |
+| A3 | Python profile 矩阵与原生工具对齐：guided / layered / full / debug gating，另含 test_native_tool_alignment.py | CWD=<repo>；PowerShell；RepoRoot=<repo>；STS2_ENABLE_DEBUG_ACTIONS 仅由脚本临时设置 | 只导入 Python、读取源码/离线数据；不启动游戏 | 约 1–3 分钟；工具集合和 debug 开关符合矩阵 |
+| A4 | 版本和 README 安装规则的源码静态检查 | CWD=<repo>；Python 3.11+；不需要游戏或模型 | 只读文件；不生成 ZIP、不安装 Mod | 约 1 分钟；版本字段、链接和 mod/ 安装说明一致 |
+| A5 | 原生命令失败传播检查 | CWD=<repo>；Windows PowerShell；脚本使用临时 fixture | 不启动游戏、不访问存档或模型；只写系统临时目录并清理 | 约 1 分钟；故障注入返回非零且不能输出成功 |
+| A6 | 与 fix_delivery 协调的离线总门禁：preflight-release.ps1 | CWD=<repo>；PowerShell、.NET 9、Python、uv；-ProjectRoot <repo> -Configuration Release | 会构建和运行离线测试；不安装到游戏 mods/、不启动游戏；uv 可能访问依赖索引 | 约 5–15 分钟；所有离线类别、版本和文档门槛通过 |
+| B | 安全构建 Mod staging，明确使用 -SkipInstall | CWD=<repo>；需 Godot 控制台可执行文件，优先显式 -GodotExe；可将 -GameRoot 指向专用测试目录 | 写工作树 bin/obj、build/mods/STS2AIAgent；-SkipInstall 不复制到游戏 mods/ | 约 5–15 分钟；DLL、PCK、mod_id.json 齐全且游戏目录未变 |
+| C | 生成 Windows ZIP；package-release.ps1 当前会向内部 build-mod 传递 -SkipInstall，并在压缩前后调用 artifact checker | CWD=<repo>；同 B；-OutputRoot 指向工作树专用目录 | 只写工作树 release 目录和 ZIP；不会因内部构建写入游戏 mods/ | 约 2–8 分钟；源码检查、目录检查和 ZIP 检查均通过 |
+| D | 已安装 Mod 的脚本 smoke / API 状态 | CWD=<repo>；专用游戏目录、专用 API 端口（例如 18080/18081）；设置文件用绝对临时路径 | 会启动/停止游戏并读写测试档位，可能写日志和 steam_appid.txt；不接触日常存档 | 约 10–20 分钟；只在专用安装后执行 |
+| E | 实机手动产品旅程：设置、暂停、预算、失联、双开、完整结算与存档 | CWD=<repo> 仅用于记录；游戏在专用目录/账号；双开使用两个隔离 STS2_AGENT_SETTINGS_PATH | 会启动两窗口、占用测试端口并改变测试存档；默认不允许真实模型 | 单项 5–90 分钟；按功能矩阵逐项取证 |
+| F | 真实模型成本和策略验收（单独确认） | 供应商、模型、端点、价格和限额由用户另行确认 | 会产生供应商费用并发送状态/提示词；不得继承日常 Key 或真实存档 | 视模型响应和局长而定；无报价来源不估算金额 |
+| G | 安装、升级、回退和最终交付决定 | CWD=<repo>；只对专用测试安装目录操作 | 写测试 mods/、备份目录和测试设置；不推送、不上传，除非另行授权 | 约 15–40 分钟；通过后仍是候选包 |
 
-第一迭代集中完成 1–4 并启动 5；第二迭代完成 5–8，9 根据核查结果插入。不要同时启动全部大型功能，也不要重做 #59 的通信与暂停。
+### 可直接复核的离线命令
 
-## 6. 成熟产品的验收口径
+以下每段命令都从新的 PowerShell 会话开始，CWD 不共享：
 
-- **首次体验：** 5–8 名未参与开发的玩家中至少 80% 在 10 分钟内组队并完成第一场协同战斗，保留每个失败原因。
-- **流程：** 至少 30 次人机联机端到端会话，目标至少 95% 到达自然结束并完成双方结算；正常战败属于流程成功。此为内部样本门槛，不宣传为统计可靠率。
-- **控制：** 确认暂停后无新写动作；已提交动作如实等待；队友不操作人类角色；响应不确定不得盲目重放。
-- **成本：** 每次模型调用有 usage 或明确未知；费用只作带单价来源的估算。缺 usage 时仍用请求数/时长做可执行的硬上限。
-- **乐趣：** 记录“像队友的时刻”和“打断体验的时刻”，目标至少 80% 测试玩家愿意再次组队，报告样本数。胜率不能替代此指标。
-- **策略：** 固定游戏/Mod/模型/提示词版本、角色、难度和种子条件，比较合法性、流程、楼层、胜率、耗时与 token；先建基线再承诺提升。
-- **维护：** 异常可通过脱敏诊断定位；安装、升级、回退和支持平台有证据；发布包与版本说明一致。
+    # A1；CWD: C:\Users\chart\Documents\project\sp-player-first-experience
+    Set-Location -LiteralPath 'C:\Users\chart\Documents\project\sp-player-first-experience'
+    dotnet run --project '.\STS2AIAgent.Tests\STS2AIAgent.Tests.csproj' -c Release
 
-## 7. 架构与范围控制
+    # A2；CWD: C:\Users\chart\Documents\project\sp-player-first-experience\mcp_server
+    Set-Location -LiteralPath 'C:\Users\chart\Documents\project\sp-player-first-experience\mcp_server'
+    $env:UV_CACHE_DIR = 'C:\Users\chart\Documents\project\sp-player-first-experience\.uv-cache'
+    uv run --locked python -m unittest discover -s tests -v
 
-保留 Mod + 可选 MCP 架构。把会话生命周期、恢复、预算和诊断做成无 Godot 依赖的核心模块，利用现有独立测试；GameThread 负责游戏操作。GameStateService/GameActionService 随热点修复逐步拆分，不安排整体重写。
+    # A3；CWD: C:\Users\chart\Documents\project\sp-player-first-experience
+    Set-Location -LiteralPath 'C:\Users\chart\Documents\project\sp-player-first-experience'
+    $env:UV_CACHE_DIR = 'C:\Users\chart\Documents\project\sp-player-first-experience\.uv-cache'
+    powershell -ExecutionPolicy Bypass -File '.\scripts\test-mcp-tool-profile.ps1' -RepoRoot 'C:\Users\chart\Documents\project\sp-player-first-experience'
 
-复用现有 AutoPlaySession、CompanionConnection、TeamConversation 与动作防重放逻辑；扩展统一控制权与状态一致性测试。新增 API 字段向后兼容，旧客户端继续可用。
+    # A4；CWD: C:\Users\chart\Documents\project\sp-player-first-experience
+    Set-Location -LiteralPath 'C:\Users\chart\Documents\project\sp-player-first-experience'
+    python '.\scripts\check_release_metadata.py'
+    python '.\scripts\check_release_package.py' --source-root 'C:\Users\chart\Documents\project\sp-player-first-experience'
 
-1.0 暂缓云托管、账户订阅、复杂语音、多 Agent 编排、训练管线和向量记忆库。共同目标先采用有界、可解释的结构化摘要，以真实体验和评估结果决定是否增加复杂度。
+    # A5；CWD: C:\Users\chart\Documents\project\sp-player-first-experience
+    Set-Location -LiteralPath 'C:\Users\chart\Documents\project\sp-player-first-experience'
+    powershell -ExecutionPolicy Bypass -File '.\scripts\test-native-exit-propagation.ps1'
 
-## 8. 证据位置与限制
+    # A6；CWD: C:\Users\chart\Documents\project\sp-player-first-experience
+    Set-Location -LiteralPath 'C:\Users\chart\Documents\project\sp-player-first-experience'
+    powershell -ExecutionPolicy Bypass -File '.\scripts\preflight-release.ps1' -ProjectRoot 'C:\Users\chart\Documents\project\sp-player-first-experience' -Configuration Release
 
-远程代码依据：[测试项目](https://github.com/CharTyr/STS2-Agent/blob/27f2b704991e8142f73b5a0b80c7a73c6feb8037/STS2AIAgent.Tests/STS2AIAgent.Tests.csproj)、[AgentRuntime](https://github.com/CharTyr/STS2-Agent/blob/27f2b704991e8142f73b5a0b80c7a73c6feb8037/STS2AIAgent/Agent/AgentRuntime.cs)、[SettingsStore](https://github.com/CharTyr/STS2-Agent/blob/27f2b704991e8142f73b5a0b80c7a73c6feb8037/STS2AIAgent/Config/SettingsStore.cs)、[LLM 类型](https://github.com/CharTyr/STS2-Agent/blob/27f2b704991e8142f73b5a0b80c7a73c6feb8037/STS2AIAgent/Llm/LlmTypes.cs)、[LLM 客户端](https://github.com/CharTyr/STS2-Agent/blob/27f2b704991e8142f73b5a0b80c7a73c6feb8037/STS2AIAgent/Llm/OpenAiCompatibleClient.cs)。
+A6 是当前仓库静态可确认的离线总门禁候选。它不是本轮已运行证据。fix_delivery 需要在最终交付前确认它仍是离线总门禁，并保持其源码检查调用使用 --source-root；实际 ZIP 检查由 G0 的 --artifact 输入完成。
 
-本次远程状态来自 GitHub CLI/API 与 fetch；PR 的历史测试自述不当作本次实测。临时验证快照位于 `C:/Users/chart/AppData/Local/Temp/sts2-assessment-d566692e5c4f4da5bd615dcc5a937d12/source`。本计划不声称完成依赖漏洞审计、真实模型质量评估、用户访谈或实机兼容性测试。
+### 构建、打包和最终 ZIP 检查
+
+    # B；CWD: C:\Users\chart\Documents\project\sp-player-first-experience
+    Set-Location -LiteralPath 'C:\Users\chart\Documents\project\sp-player-first-experience'
+    powershell -ExecutionPolicy Bypass -File '.\scripts\build-mod.ps1' -ProjectRoot 'C:\Users\chart\Documents\project\sp-player-first-experience' -Configuration Release -SkipInstall -GodotExe '<absolute-path-to-Godot-console.exe>'
+
+B 的 -SkipInstall 是必需参数。B 会写工作树构建产物，但不会将 DLL/PCK/manifest 复制到游戏 mods/。
+
+    # C；CWD: C:\Users\chart\Documents\project\sp-player-first-experience
+    Set-Location -LiteralPath 'C:\Users\chart\Documents\project\sp-player-first-experience'
+    powershell -ExecutionPolicy Bypass -File '.\scripts\package-release.ps1' -ProjectRoot 'C:\Users\chart\Documents\project\sp-player-first-experience' -Configuration Release -OutputRoot 'C:\Users\chart\Documents\project\sp-player-first-experience\build\release-confirmation' -GodotExe '<absolute-path-to-Godot-console.exe>'
+
+C 当前会在内部构建步骤传递 -SkipInstall，并在压缩前检查 release 目录、压缩后检查实际 ZIP。生成的目录名和 ZIP 名由 mod_manifest.json 版本和冲突后缀决定，当前没有真实产物，不能预写名称、哈希或通过状态。
+
+检查器一次只能走一个模式：`--source-root` 或 `--artifact`，不能写在同一条命令里。
+
+    # G0 源码合同；CWD: C:\Users\chart\Documents\project\sp-player-first-experience
+    Set-Location -LiteralPath 'C:\Users\chart\Documents\project\sp-player-first-experience'
+    python '.\scripts\check_release_package.py' --source-root 'C:\Users\chart\Documents\project\sp-player-first-experience'
+
+    # G0 产物；CWD: C:\Users\chart\Documents\project\sp-player-first-experience
+    Set-Location -LiteralPath 'C:\Users\chart\Documents\project\sp-player-first-experience'
+    python '.\scripts\check_release_package.py' --artifact '<absolute-path-to-generated-release.zip>'
+
+G0 源码模式检查安装说明与打包脚本接线；产物模式检查真实目录或 ZIP 的 `mod/` 与包内 Markdown 链接。两条都未运行，没有真实 ZIP、哈希或通过记录。package-release.ps1 内部也会对目录和 ZIP 各跑一次产物检查。
+
+## 功能验收全量矩阵
+
+| 编号 | 能力与覆盖 | 自动化证据（获准后） | 实机/手动证据与验收标准 | 默认资源 / 状态 |
+| --- | --- | --- | --- | --- |
+| M1 | C# / Python 基础契约 | A1、A2；C# TestRunner 与 mcp_server/tests/ | 不需要实机；所有命令退出码 0，失败项阻断后续 | 无模型、无游戏；未运行 |
+| M2 | 原生 MCP 与 Python 跨端契约 | McpServiceTests：禁用 403、initialize/session、tools/list、tools/call、notification 202、client config；PlayerExperienceTests.NativeMcpToolsMatchGuidedActContract；test_native_tool_alignment.py；A3 profile 矩阵 | 专用 Mod 启动后，从一个可用 MCP 客户端发现 health/state/data/wait/act 工具；确认 option_index、target_index、card_index 字段一致，通知无伪响应，关闭时返回可理解的 403 | 先离线契约；外部客户端连接未运行 |
+| M3 | 首次引导与分用途 Test Connection | PlayerExperienceTests 默认未验证、游玩验证、Key 变更、对话成功不掩盖游玩 401、fresh fingerprint；CompanionStartupTests.FirstRunProvider | 依次测试对话/游玩/视觉角色；结果显示正确角色、成功/失败和下一步；游玩未验证时不可邀请；视觉未使用时显示未使用/未验证而不伪造成功 | 无真实 Key；无安全 fixture 时阻塞；未运行 |
+| M4 | 配置保存、重载、迁移和删除保护 | SettingsStoreTests round-trip/missing/migration；PlayerExperienceTests endpoint/model removal；A1 | 分别绑定对话、游玩、视觉并保存，切页/重启 overlay 后仍在；删除被引用端点/模型先显示角色和替代步骤；取消不删除；重绑定并保存后才允许删除；未引用对象可删除 | 只写测试设置；未运行 |
+| M5 | 各角色错误路径 | C# fake 覆盖游玩 401、用途状态和错误下一步；OpenAiCompatibleClientTests 覆盖协议解析 | 对话/游玩/视觉分别观察 401、429、5xx、超时和坏地址；错误归属于触发用途，不能被其它用途成功结果覆盖；不无限重试；可修正后单独重测 | 真实模型另行确认；未运行 |
+| M6 | 暂停 / 恢复 / 聊天接管 | AutoPlaySessionTests、AgentLoopTests、TeamConversationTests、PlayerExperienceTests.PlayerFacingMapsPauseAndConfigError | 模型请求等待时点暂停；已提交动作可完成，之后不派发新动作；显示暂停原因；暂停期间可聊天且不执行 act；恢复只启动一个新回合，无重叠或重复 | 优先无费用响应；未运行 |
+| M7 | 预算、usage 已知与未知 | SessionBudgetGuardTests 覆盖 token/request 上限、in-flight、恢复累计、超限立即停止；OpenAiCompatibleClientTests 覆盖 JSON/SSE usage；PlayerExperienceTests.MissingUsageIsNotDisplayedAsZero | 无 usage 响应显示“未知/尚无”而非 0；极小 request/token 上限在下一轮前停止；暂停/恢复不清零；聊天/队友回复共享预算；超限后无新请求 | 无模型费用；未运行 |
+| M8 | 网络失联、退避、恢复和不可重试错误 | AutoPlayRecoveryTests 覆盖 401/403/429/5xx、无动作、等待、取消退避；AgentLoopTests 覆盖取消/失败动作 | 仅在无费用 mock 或另行授权环境中：请求等待时临时断网，观察有限退避和可见错误；恢复后手动继续并读取最新状态；配置类错误不无限重试；不盲目重放不确定动作 | 无安全 mock 时阻塞；真实网络故障需单独确认；未运行 |
+| M9 | 双开启动、账号/设置/端口/角色隔离 | CompanionStartupTests、LoopbackListenerTests、TeamConversationTests；现有 test-multiplayer-lobby-flow.ps1 覆盖大厅/端口/投票前置 | Host 邀请 companion；health 同时匹配 service/ready/role/port/PID；重复点击不重复开进程；离线双开有不同 clientId；主/副设置文件互不覆盖；companion 只操作自己的角色 | 会改测试进程、端口和存档；未运行 |
+| M10 | 双开共同旅程和协同战斗 | 现有 test-multiplayer-lobby-flow.ps1、test-coop-play-together.ps1（只用真实参数）；A1 队友/边界测试 | 建房→加入→选角→ready→开局过场→同一地图节点→至少一场战斗→奖励/休息→回地图；主窗口可发消息；暂停/恢复只控制 companion；投票、角色、状态一致 | 默认不接真实模型；策略效果按手测；未运行 |
+| M11 | 完整结算、解锁、回主菜单和存档 | GameOverContractTests、ProgressSaveVerificationTests 覆盖 summary/continue/return、物理 save 缺失/损坏/不匹配/读取失败；CurrentRunBoundaryTests 覆盖离开 run | 专用存档正常完成一局或正常战败，等待 summary 动画，走原生继续/解锁/返回流程；两窗口确认 save verified；重启后进度仍在；回主菜单后队友停止且不自动新局。无脚本时只手动操作 | 会改测试存档；未运行 |
+| M12 | 安装、升级、回退 | A4、C、G0 ZIP 结构/链接检查；B staging | 从 ZIP 只复制 mod/ 到专用 mods/，按 README 的 Steam 入口启动；确认 overlay/health/版本/设置；升级前备份旧 DLL/PCK/manifest，覆盖后检查旧遗留 manifest；回退恢复备份 | 只操作专用安装和备份；未运行 |
+| M13 | 发布候选和支持边界 | A6、C、G0；fix_delivery 最终检查器确认记录 | 记录版本、ZIP 路径/哈希、安装升级、失败/修复/复测和支持矩阵；没有用户发布授权时只停在候选包，不创建 Release/Workshop | 未发布；未运行 |
+
+## 实机命令与手动边界
+
+项目已有的实机脚本只能按其真实参数调用：
+
+    # M9 的大厅和端口前置；CWD: C:\Users\chart\Documents\project\sp-player-first-experience
+    Set-Location -LiteralPath 'C:\Users\chart\Documents\project\sp-player-first-experience'
+    powershell -ExecutionPolicy Bypass -File '.\scripts\test-multiplayer-lobby-flow.ps1' -ProjectRoot 'C:\Users\chart\Documents\project\sp-player-first-experience' -HostApiPort 18080 -ClientApiPort 18081
+
+    # M10 的既有双开流程；CWD: C:\Users\chart\Documents\project\sp-player-first-experience
+    Set-Location -LiteralPath 'C:\Users\chart\Documents\project\sp-player-first-experience'
+    powershell -ExecutionPolicy Bypass -File '.\scripts\test-coop-play-together.ps1' -HostApiPort 18080 -CompanionApiPort 18081 -Minutes 25
+
+这些脚本会启动游戏并读写测试状态，不能在默认用户安装或日常存档上运行。test-full-regression.ps1 也会启动/停止游戏；只有在专用游戏目录和用户确认测试安装副作用后才可使用。它不替代 M3–M8、M11–M12 的手动验收。
+
+设置保存/删除、暂停/恢复、网络断开、真实模型成本、完整结算存档、安装升级没有一个可静态确认的单一安全脚本时，采用矩阵中的手动步骤和验收标准。没有可用的无费用网络故障 fixture 时，不以真实模型请求填空。
+
+## 失败、修复和复测规则
+
+1. 任一命令非零、断言失败、UI 状态不符、双窗口状态不一致、存档未验证或 ZIP 结构不符，立即标为“失败/待修复”，不继续宣称后续阶段通过。
+2. 修复由拥有相应代码文件的代理完成，并在记录中写出原因、修改文件和新证据；不得只重跑而不修复，也不得只修复而不复测。
+3. 复测顺序为：失败用例/手动场景 → 同一文件或模块的相关矩阵 → A6 或对应实机回归。受影响的 C#、Python、原生 MCP、ZIP 或双开契约都要重新纳入范围。
+4. 失败输出、请求 ID、版本、端口、PID、设置路径和存档类型只记录脱敏摘要；诊断导出默认不含聊天正文、API Key、Authorization 或会话令牌。
+5. 未得到新证据前保持“未运行”；历史日志中的 PASS 只能放在历史区域，不能升格为当前基线或当前发布状态。
+
+## 成本与授权边界
+
+离线 C#/Python/MCP 契约和 ZIP 文档检查不需要真实模型费用；游戏本体的测试时间和本机资源另行记录。真实模型费用无法从仓库、请求数或旧日志可靠推导，必须在 F 阶段开始前由用户单独确认：供应商、模型、计费单位/价格来源、最大请求数、最大 Token、最长时长和总预算。若服务不返回 usage，只能显示未知并依靠请求数/时长硬上限，不能把未知换算成 0 或虚构金额。
+
+## 当前未完成
+
+- A1–A6、B–G 全部尚未在本工作树运行；没有当前自动化、构建、ZIP、API、游戏、真实模型或发布证据。
+- G0 的 --source-root / --artifact 检查器接口已由 fix_delivery 协调到文档，实际脚本与参数仍需在执行前静态复核；当前未运行、未生成 ZIP、未通过。
+- 不访问真实存档、不调用真实模型、不清理其它工作树、不提交、不公开发布。
+

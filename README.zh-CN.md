@@ -31,28 +31,46 @@ https://github.com/user-attachments/assets/89353468-a299-4315-9516-e520bcbfbd4b
 这个 Mod 还在开发中。有的功能可能不完整，也可能出错。欢迎把建议和遇到的问题发到 [GitHub Issues](https://github.com/CharTyr/STS2-Agent/issues)。
 
 ### 第 1 步：安装 Mod
-1. 在 [Steam 创意工坊](https://steamcommunity.com/sharedfiles/filedetails/?id=3796486050) 订阅直接开启游戏使用，**或**前往 [GitHub Releases](https://github.com/CharTyr/STS2-Agent/releases) 下载最新的发布包（zip）。
-2. 如果是从github下载，则解压后将以下三个文件复制到游戏的 `mods/` 文件夹中（若没有 `mods` 文件夹可新建）：
+
+**方式 A：Steam 创意工坊（推荐）**
+
+1. 打开 [Steam 创意工坊页面](https://steamcommunity.com/sharedfiles/filedetails/?id=3796486050) 点订阅，等下载完成。
+2. 在 Steam 启动游戏时选择 **带 Mod 启动 / Play with Mods**。不用拷任何文件。
+3. 若提示代码不受信任：接受后把游戏完全关掉再开；进 Mods 打开 **STS2 AI Agent**，再重启一次。
+
+**方式 B：GitHub 发布包**
+
+1. 从 [GitHub Releases](https://github.com/CharTyr/STS2-Agent/releases) 下载 `sts2-ai-agent-v*-windows.zip` 并解压。
+2. 只把压缩包 **`mod/`** 目录里的这三个文件复制到游戏的 `mods/`（没有就新建）：
    ```text
    STS2AIAgent.dll
    STS2AIAgent.pck
    mod_id.json
    ```
-   > 💡 **Steam 默认路径参考**：`C:\Program Files (x86)\Steam\steamapps\common\Slay the Spire 2\mods\`
+3. 最终目录示例：
+   ```text
+   C:\Program Files (x86)\Steam\steamapps\common\Slay the Spire 2\mods\STS2AIAgent.dll
+   C:\Program Files (x86)\Steam\steamapps\common\Slay the Spire 2\mods\STS2AIAgent.pck
+   C:\Program Files (x86)\Steam\steamapps\common\Slay the Spire 2\mods\mod_id.json
+   ```
+   不要把整个 zip、也不要把 `mcp_server/` 拷进 `mods/`。`mcp_server/` 只给开发者可选使用。
+
+**不要重复安装：** 如果已经订阅工坊，又手动拷过 GitHub 文件，请删掉 `mods/` 里那份手动文件，只保留工坊订阅，否则可能看到两份 Mod。
 
 ### 第 2 步：进入游戏并呼出界面
 1. 正常启动《杀戮尖塔 2》。
 2. 在任意游戏界面按下 **`F8`**（可在设置中修改），或点击屏幕右侧边缘灰色的 **`AI`** 标签，即可打开 Agent 控制悬浮窗。
 
 ### 第 3 步：配置大模型（以 DeepSeek / 硅基流动 / 本地模型为例）
-1. 在悬浮窗顶部切换到 **「设置」** 页面。
-2. 点击 **「添加端点」**：
-   - **名称**：如 `SiliconFlow` 或 `DeepSeek`
-   - **Base URL**：例如 `https://api.siliconflow.cn/v1` 或 `https://api.deepseek.com/v1`
-   - **API Key**：填入你的模型 API 密钥（使用本地 Ollama/LM Studio 可留空或填任意值）
-3. 在下方选择你刚刚添加的端点，并在「对话模型」与「游玩模型」中选定对应模型（例如 `deepseek-chat` 或 `deepseek-ai/DeepSeek-V3`）。
-4. （可选）为模型设置思考强度（**Off / Low / Medium / High**）。
-5. 默认开启了「会话预算守卫」，在设置页面可看到 `Max Tokens` 与 `Max Requests`，防止产生意料外的模型调用费用。
+1. 第一次启动会自动打开悬浮窗。之后按 **`F8`** 或点右侧 **`AI`**。默认不会把空白默认值当成“已经可用”。
+2. 打开 **「设置」**：
+   1. **添加端点**（名称、Base URL；API Key 可空，Ollama / LM Studio 请留空）
+   2. **添加模型** 并绑到刚加的端点
+   3. 选择 **主对话模型** 和 **游玩模型**（可空=用对话模型）
+   4. 点 **测试连接**（会向配置的服务发测试请求）。对话通过 ≠ 游玩已通过。
+   5. 点 **保存设置**。未保存的编辑切页时会自动保存，避免悄悄丢失。
+3. 思考强度、视觉、会话预算在 **显示高级选项** 里。
+4. 游玩模型显示「连通成功」后，再去 **「AI 队友」** 邀请。
 
 ### 第 4 步：开始体验！
 
@@ -65,7 +83,8 @@ https://github.com/user-attachments/assets/89353468-a299-4315-9516-e520bcbfbd4b
 - 回到游戏**主菜单**。
 - 悬浮窗切换到 **「AI 队友」** 页面，点击 **「邀请 AI 队友」**。
 - 系统会自动拉起第二个游戏实例并加入本地联机大厅！你控制主角色，AI 队友控制副角色。
-- 点击 **「队伍交流」** 标签，可以直接用文字和队友商量路线与集火策略。
+- 主窗口会显示队友是否在连、正在等你/等游戏/请求模型，或为什么停、下一步点哪里。点 **暂停队友** 会立刻反馈；已提交的动作会先完成。
+- 可以直接用文字和队友商量路线与集火策略。
 
 ---
 
@@ -134,34 +153,25 @@ Mod 默认在本地启动 HTTP 服务（默认端口 `8080`，遇冲突自动动
 - `POST /action`：执行具体游戏动作（例如 `play_card`、`choose_map_node`、`proceed` 等）。
 - `POST /mcp`：可选 MCP（Streamable HTTP）。默认关闭，在悬浮窗「接入」页打开。
 
-### MCP 接入（做进 Mod 里）
+### MCP 怎么选
 
-外部客户端（Cursor / Claude / Codex）走 MCP。游戏内自动打不需要打开。
+| 我的场景 | 用哪个入口 | 需要什么 | 如何确认连上 |
+| --- | --- | --- | --- |
+| 自己和 AI 一起玩 | 游戏内悬浮窗，不必开 MCP | 只装 Mod | 按 F8 / 点 AI，能打开「AI 队友」 |
+| Cursor / Claude / Codex 操作游戏 | **原生 MCP**：接入页打开开关 | 只装 Mod | 复制页面上的实际地址（端口可能不是 8080） |
+| stdio、layered/full、兼容旧客户端 | 可选 Python `mcp_server/` | Python + uv | 在发布包根目录运行 `scripts/test-mcp-tool-profile.ps1` |
 
-1. 按 **F8** 打开悬浮窗 → **接入**。
-2. 勾选 **打开 MCP 服务**。
-3. 复制页面上的地址或 JSON 配置，贴进客户端。默认：
-   ```json
-   {
-     "mcpServers": {
-       "sts2-ai-agent": {
-         "type": "http",
-         "url": "http://127.0.0.1:8080/mcp"
-       }
-     }
-   }
-   ```
-   端口与 HTTP API 相同；8080 被占用时会跟着改绑。服务只监听 `127.0.0.1`。
+外部客户端步骤：F8 → **接入** → 勾选 **打开 MCP 服务** → 复制页面地址或 JSON。地址与 HTTP API 同一端口，只监听 `127.0.0.1`。不要写死 `8080` 或 `8765`。
 
-内置工具与游戏内自动打一致：`health_check`、`get_game_state`、`get_available_actions`、`act`、`get_game_data_*`、`wait_until_actionable`。
-
-开发者若还要 Python sidecar（stdio / layered / full profile），仍可用 `mcp_server/`。普通接入不需要 uv。
+Python sidecar 不是玩家必装，也不再作为推荐入口。
 
 ---
 
 ## 🧪 源码构建与自动化测试
 
 本项目拥有完善的端到端自动化单测套件，**所有核心逻辑均可脱离游戏客户端运行并验证**：
+
+GitHub 发布包只带 `scripts/` 下用于启动和检查 Python sidecar 的脚本；下面的构建、预检和实机命令需要完整源码仓库。
 
 ### 编译 Mod
 
@@ -178,12 +188,12 @@ powershell -ExecutionPolicy Bypass -File ".\scripts\build-mod.ps1" -Configuratio
 
 ### 运行自动化测试
 
-- **C# 核心单元测试（121 项全部通过）**：
+- **C# 核心单元测试**：
   ```powershell
   dotnet run --project STS2AIAgent.Tests/STS2AIAgent.Tests.csproj
   ```
   涵盖会话预算守卫、自动恢复退避、战局边界拦截、离线双开隔离、网络端口自动后备、原生存档切换等。
-- **Python MCP 契约测试（48 项全部通过）**：
+- **Python MCP 契约测试**：
   ```powershell
   cd mcp_server
   uv run python -m unittest discover -s tests -v
@@ -198,14 +208,14 @@ powershell -ExecutionPolicy Bypass -File ".\scripts\build-mod.ps1" -Configuratio
 ## ❓ 常见问题排查 (FAQ)
 
 ### Q1: 进入游戏后按 F8 没有任何反应？
-1. 确认已将 `STS2AIAgent.dll`、`STS2AIAgent.pck` 和 `mod_id.json` 三个文件放进游戏的 `mods/` 文件夹。
+1. 工坊用户确认已「带 Mod 启动」。GitHub 用户确认 zip 的 `mod/` 里三个文件已放到游戏 `mods/`。不要同时留工坊和手动拷贝。
 2. 确认复制到的是 Steam 游戏实际的安装目录，而不是从 Git 克隆的项目源码目录。
 3. 观察游戏主界面右侧屏幕边缘是否有半透明的灰色 **AI** 标签，若有可直接用鼠标点击展开。
 
 ### Q2: 自动游玩突然停住了，怎么恢复？
-1. **检查是否达到预算上限**：悬浮窗中会显示明确的红字提示（如 `Session budget exceeded`）。若确认安全，可在「设置」中将 `Max Tokens` 或 `Max Requests` 调大，或重置统计后继续。
-2. **检查网络与 API Key**：若 API 额度不足或网络断开，恢复控制器在连续 3 次失败后会自动停止保护。
-3. **检查游戏状态**：是否退回了主菜单或联机大厅？战局边界保护会在离开战局时自动刹车。
+1. 看「AI 队友」页的状态和下一步。配置错误不会无限重试；改完设置、测试通过后点「继续游玩」，不必重启整个游戏。
+2. Token 若显示「未知」，表示服务没返回 usage，不是消耗为 0。预算仍可用请求次数限制。
+3. 需要排查时点「导出诊断」。导出不含 API Key、授权头和会话令牌，默认也不含聊天正文。
 
 ### Q3: 本地双开副窗口打不开或提示失败？
 1. 本地双开通过游戏内部的联机大厅进行对接。
@@ -223,7 +233,7 @@ powershell -ExecutionPolicy Bypass -File ".\scripts\build-mod.ps1" -Configuratio
 ```text
 STS2-Agent/
 ├── STS2AIAgent/          # C# 游戏内 Mod（Godot UI 悬浮窗、决策循环、预算守卫、HTTP 服务）
-├── STS2AIAgent.Tests/    # C# 核心单元测试（121 项，无游戏依赖）
+├── STS2AIAgent.Tests/    # C# 核心单元测试（无游戏依赖）
 ├── mcp_server/           # FastMCP Server 封装（Python）及离线游戏元数据
 ├── scripts/              # 构建、部署、启动与全量预检脚本
 ├── skills/               # 面向 MCP 外部 Agent 的策略 Skill 规范

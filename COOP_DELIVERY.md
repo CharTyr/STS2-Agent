@@ -1,5 +1,23 @@
 # AI 队友交付跟踪
 
+## 2026-09-06 玩家首次成功与运行状态（代码实现，验证未跑）
+
+工作树：`C:\Users\chart\Documents\project\sp-player-first-experience`，分支 `codex/player-first-experience`，基于 `origin/main` `1be8e83` / 发布 v0.10.2。
+
+本批补：安装说明与 zip `mod/` 结构、首次引导、分用途连通测试、设置保存/删除保护、主窗口运行状态与暂停文案、usage 未知、脱敏诊断、MCP 选择矩阵。不重做恢复/预算/原生 MCP 核心策略。
+
+**证据状态：** 代码已写，测试用例已更新但**尚未执行**任何构建或测试。实机、真实模型、zip 产物检查均待授权。
+
+后续静态返工：诊断字段全部走脱敏；暂停完成回调按会话身份隔离；模型测试失败只清对应用途的瞬时停止；删除被引用端点/模型改为先改绑再删；打包检查分 `--source-root` / `--artifact`；`RuntimeExperienceRegressionTests` 已接入 TestRunner。
+
+**2026-09-06 离线验证（工作树 `sp-player-first-experience`，HEAD `1be8e83` + 未提交修改）：** A1 C# TestRunner 全绿；A2 Python 49 项通过；A3 guided 10 / layered 18 / debug 11 / full 63；A4 版本与源码包装通过；A5 退出码传播通过；A6 预检通过（Mod Release 编译 0 警告 0 错误）；B SkipInstall 构建成功；C/G0 zip `build/release-confirmation/sts2-ai-agent-v0.10.2-windows.zip` 产物检查通过。
+
+**2026-09-06 实机（用户允许写入 Steam `mods/`）：** 已备份旧文件到 `build/live-test-backup-mods`，装入本工作树 staging。`/health` 报 `mod_version=0.10.2`、`api_port=18080`、`mcp_enabled=true`、`mcp_url=http://127.0.0.1:18080/mcp`。未验证配置下 `invite_ai_teammate` 返回 409「配置已填写，但尚未验证游玩模型」。原生 MCP initialize 200、tools/list 含 health/state/act 及 option_index/target_index/card_index。Agent 设置用 `build/live-test-settings/settings.json`。双开大厅脚本在档位 3 上完成建房/加入/选角/ready/进图投票，等待战斗超时失败。结束后切回档位 1 并关闭游戏。未调用付费模型。日常档位 1 未开局。
+
+旧工作区 `sp` @ `24d3244` 的未提交改动未迁入；经核对，相关 FirstRun/Companion 文件主线已有。
+
+---
+
 ## PR 系列与分支能力进展（2026-09-05）
 
 > **基线说明**：远程 `main`（`27f2b70`）当前处于 `STS2AIAgent.Tests.csproj` 重复引用 `LoopbackListener.cs` 导致 `NETSDK1022` 编译失败的状态。以下能力按规范拆分为候选 PR 链条提交，各分支内部单测与预检已通过，但**在全部合入 `main` 并重新运行集成验证前，不能视为主线或正式 Release 的已交付基线**。

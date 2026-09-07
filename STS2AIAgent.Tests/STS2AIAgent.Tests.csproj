@@ -12,6 +12,8 @@
     <Compile Include="..\STS2AIAgent\Agent\AutoPlayRecovery.cs" Link="Agent\AutoPlayRecovery.cs" />
     <Compile Include="..\STS2AIAgent\Agent\CurrentRunBoundary.cs" Link="Agent\CurrentRunBoundary.cs" />
     <Compile Include="..\STS2AIAgent\Agent\SessionBudgetGuard.cs" Link="Agent\SessionBudgetGuard.cs" />
+    <Compile Include="..\STS2AIAgent\Agent\PlayerFacingSession.cs" Link="Agent\PlayerFacingSession.cs" />
+    <Compile Include="..\STS2AIAgent\Agent\DiagnosticExport.cs" Link="Agent\DiagnosticExport.cs" />
     <Compile Include="..\STS2AIAgent\Server\LoopbackListener.cs" Link="Server\LoopbackListener.cs" />
     <Compile Include="..\STS2AIAgent\Server\CompanionPortFile.cs" Link="Server\CompanionPortFile.cs" />
     <Compile Include="..\STS2AIAgent\Multiplayer\CompanionHealth.cs" Link="Multiplayer\CompanionHealth.cs" />
@@ -35,6 +37,7 @@
     <Compile Include="..\STS2AIAgent\Server\NativeMcpServer.cs" Link="Server\NativeMcpServer.cs" />
     <Compile Include="..\STS2AIAgent\Game\ReflectionMemberAccessor.cs" Link="Game\ReflectionMemberAccessor.cs" />
     <Compile Include="..\STS2AIAgent\Game\UnlockConfirmResolutionPolicy.cs" Link="Game\UnlockConfirmResolutionPolicy.cs" />
+    <Compile Include="..\STS2AIAgent\Game\FtueModalPolicy.cs" Link="Game\FtueModalPolicy.cs" />
     <Compile Include="..\STS2AIAgent\Game\CrystalSphereSettlePolicy.cs" Link="Game\CrystalSphereSettlePolicy.cs" />
     <Compile Include="..\STS2AIAgent\Game\ProgressSaveVerification.cs" Link="Game\ProgressSaveVerification.cs" />
     <Compile Include="..\STS2AIAgent\Game\EventOptionLocalization.cs" Link="Game\EventOptionLocalization.cs" />

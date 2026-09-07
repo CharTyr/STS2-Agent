@@ -1,20 +1,14 @@
 # STS2 MCP Server
 
-普通玩家请用游戏内悬浮窗 **接入** 页打开 MCP（Mod 内置，`http://127.0.0.1:8080/mcp`，不需要 Python / uv）。
+普通玩家一起玩：**不要装本目录**。游戏内 F8 → 自动打 / 邀请队友即可。
 
-`mcp_server/` 是可选的 Python FastMCP sidecar，给开发者做 stdio、layered/full tool profile 和契约测试。它把 Mod 的 HTTP API 再包一层 MCP。
+外部客户端（Cursor / Claude / Codex）：游戏内 **接入** 页打开 **原生 MCP**，复制页面上的实际地址（与 HTTP API 同一端口，不一定是 8080，更不是 8765）。不需要 Python / uv。
 
-```json
-{
-  "mcpServers": {
-    "sts2-ai-agent": {
-      "url": "http://127.0.0.1:8080/mcp"
-    }
-  }
-}
-```
+`mcp_server/` 是可选 Python FastMCP sidecar，给开发者做 **stdio**、**layered/full** profile 和契约测试。它把 Mod 的 HTTP API 再包一层。
 
-sidecar 仍可用 `scripts/start-mcp-stdio.ps1` 或 `scripts/start-mcp-network.ps1`。
+从仓库或 GitHub 发布包根目录运行 sidecar：`scripts/start-mcp-stdio.ps1` 或
+`scripts/start-mcp-network.ps1`。发布包还带有
+`scripts/test-mcp-tool-profile.ps1`，用于不连接游戏地检查 profile 工具表面。
 
 ## Tool Profile
 
@@ -231,7 +225,10 @@ uv run sts2-mcp-server
 
 默认通过 `stdio` 运行，适合直接接入 MCP 客户端。
 
-## 开发期验证脚本
+## 开发期验证脚本（源码仓库）
+
+下面的启动游戏和 debug 命令需要完整源码仓库以及本地游戏。发布包只带
+上面列出的 sidecar 启动 / profile 检查脚本；不要在发布包中寻找这些实机脚本。
 
 启动游戏并保持运行：
 

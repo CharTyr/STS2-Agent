@@ -25,6 +25,9 @@ internal sealed class AgentRuntime
     private string _teamStatus = "组队后，可以在这里和 AI 队友商量打法。";
     private CancellationTokenSource _lifetime = new();
     private readonly AutoPlaySession _playSession = new();
+    private readonly object _playLifecycleGate = new();
+    private long _playGeneration;
+    private PlaySessionIdentity? _playSessionIdentity;
     private readonly SemaphoreSlim _companionControlGate = new(1, 1);
     private readonly SemaphoreSlim _remoteControlGate = new(1, 1);
     private volatile bool _teamControlPending;
@@ -40,6 +43,14 @@ internal sealed class AgentRuntime
     private string _mcpStatus = "MCP 已关闭，未对外暴露。";
     private LlmUsage _sessionUsage = LlmUsage.Empty;
     private int _sessionRequests;
+    private bool _sessionUsageKnown;
+    private string? _stopKind;
+    private string? _stopDetail;
+    private string? _stopRole;
+    private bool _waitingForGame;
+    private bool _waitingForPlayer;
+    private bool _requestingModel;
+    private readonly List<string> _diagnosticEvents = new();
     private SessionBudgetGuard _budgetGuard;
 
     public static AgentRuntime Instance => LazyInstance.Value;
@@ -91,7 +102,21 @@ internal sealed class AgentRuntime
         try
         {
             if (_dualLaunching) throw new InvalidOperationException("请等待组队完成。");
+            if (LocalDualInstanceLauncher.CompanionProcessExited)
+            {
+                throw new InvalidOperationException("队友进程已退出。请回到主菜单重新邀请。");
+            }
+
             var connection = LocalDualInstanceLauncher.Connection ?? throw new InvalidOperationException("请先邀请 AI 队友。");
+            if (running)
+            {
+                var firstRun = FirstRunSetup.Evaluate(Settings);
+                if (!firstRun.ReadyToInvite)
+                {
+                    throw new InvalidOperationException(firstRun.Hint);
+                }
+            }
+
             var phase = await connection.ControlAsync(running, cancellationToken);
             _teamControlStatus = phase switch
             {
@@ -128,6 +153,7 @@ internal sealed class AgentRuntime
             {
                 var stopping = _playSession.RequestPause();
                 SetStatus(stopping.IsCompleted ? "已暂停自动游玩" : "正在暂停，等待当前任务完成…");
+                NoteEvent(Status);
                 await stopping.WaitAsync(TimeSpan.FromSeconds(30), cancellationToken);
                 if (PlayPhase == "paused") SetStatus("已暂停自动游玩");
             }
@@ -158,6 +184,7 @@ internal sealed class AgentRuntime
         {
             _sessionUsage = LlmUsage.Empty;
             _sessionRequests = 0;
+            _sessionUsageKnown = false;
             _budgetGuard = _settings.CreateBudgetGuard();
         }
         RaiseChanged();
@@ -299,8 +326,31 @@ internal sealed class AgentRuntime
 
         _store.Save(settings);
         ApplyMcpFromSettings();
-        SetStatus("设置已保存");
         RaiseChanged();
+    }
+
+    public void PersistOverlayVisible(bool visible)
+    {
+        lock (_gate)
+        {
+            _settings.OverlayVisibleOnStart = visible;
+            _settings.HasSeenFirstRunGuide = true;
+            _store.Save(_settings);
+        }
+    }
+
+    public void MarkFirstRunGuideSeen()
+    {
+        lock (_gate)
+        {
+            if (_settings.HasSeenFirstRunGuide)
+            {
+                return;
+            }
+
+            _settings.HasSeenFirstRunGuide = true;
+            _store.Save(_settings);
+        }
     }
 
     public void PersistOverlayPlacement(float? left, float? top)
@@ -348,7 +398,7 @@ internal sealed class AgentRuntime
 
     public Task<string> TestConnectionAsync(CancellationToken cancellationToken)
     {
-        return Task.Run(() => TestConnectionCoreAsync(cancellationToken), cancellationToken);
+        return Task.Run(() => TestConnectionCoreAsync(force: true, cancellationToken), cancellationToken);
     }
 
     public void StartAutoPlay()
@@ -364,10 +414,27 @@ internal sealed class AgentRuntime
             return;
         }
 
-        var task = _playSession.TryStart(AutoPlayLoopAsync, _lifetime.Token);
-        if (task == null) return;
+        Task task;
+        PlaySessionIdentity identity;
+        lock (_playLifecycleGate)
+        {
+            var started = _playSession.TryStart(AutoPlayLoopAsync, _lifetime.Token);
+            if (started == null) return;
+
+            task = started;
+
+            identity = new PlaySessionIdentity(++_playGeneration, task);
+            _playSessionIdentity = identity;
+            _stopKind = null;
+            _stopDetail = null;
+            _stopRole = null;
+            _waitingForGame = false;
+            _waitingForPlayer = false;
+            _requestingModel = true;
+        }
+
         SetStatus("自动游玩中");
-        _ = ObservePlayCompletionAsync(task);
+        _ = ObservePlayCompletionAsync(task, identity);
     }
 
     public void StopAutoPlay()
@@ -375,6 +442,7 @@ internal sealed class AgentRuntime
         if (InstanceRole.IsCompanion) _companionAutoStartSuppressed = true;
         var task = _playSession.RequestPause();
         SetStatus(task.IsCompleted ? "已暂停自动游玩" : "正在暂停，等待当前任务完成…");
+        NoteEvent(Status);
     }
 
     public void SetMcpEnabled(bool enabled)
@@ -491,20 +559,51 @@ internal sealed class AgentRuntime
         }
     }
 
-    private async Task<string> TestConnectionCoreAsync(CancellationToken cancellationToken)
+    private async Task<string> TestConnectionCoreAsync(bool force, CancellationToken cancellationToken)
     {
-        SetStatus("正在测试连通…");
+        SetStatus("正在测试模型…会向配置的服务发送测试请求。");
+        NoteEvent(Status);
         try
         {
-            var reply = await _loop.TestConnectionAsync(cancellationToken);
-            SetStatus("连通正常");
-            AddHistory("assistant", "连通测试：" + reply);
-            return reply;
+            var results = await _loop.TestConfiguredRolesAsync(force, cancellationToken);
+            AgentSettings settings;
+            lock (_gate)
+            {
+                settings = _settings;
+            }
+
+            foreach (var item in results)
+            {
+                ModelRoleProbe.Upsert(settings, item.Record);
+            }
+
+            SaveSettings(settings);
+            var play = results.First(item => item.Role == ModelRoleNames.Play);
+            var summary = string.Join(" ", results.Select(item => ModelRoleProbe.FormatLine(item.Record)));
+            if (play.Record.Status == "failed")
+            {
+                SetModelTestFailure(play.Record);
+                SetStatus("游玩模型测试失败");
+            }
+            else if (play.Record.Status == "verified")
+            {
+                ClearModelTestFailure();
+                SetStatus("游玩模型连通成功（不等于工具/视觉已验证）");
+                MarkFirstRunGuideSeen();
+            }
+            else
+            {
+                SetStatus("模型尚未验证");
+            }
+
+            NoteEvent(summary);
+            return summary;
         }
         catch (Exception ex)
         {
             SetStatus("连通失败");
-            return ex.Message;
+            ClassifyStop(ex.Message, ModelRoleNames.Play);
+            return DiagnosticExport.Redact(ex.Message);
         }
     }
 
@@ -561,7 +660,7 @@ internal sealed class AgentRuntime
                 return;
             }
             var screen = await new GameBridge().GetScreenAsync(cancellationToken);
-            var error = CoopLaunchPolicy.GetError(InstanceRole.IsCompanion, PlayRunning, screen, settings.TryResolvePlayModel());
+            var error = CoopLaunchPolicy.GetError(InstanceRole.IsCompanion, PlayRunning, screen, settings);
             if (error != null)
             {
                 _dualStatus = error;
@@ -620,17 +719,31 @@ internal sealed class AgentRuntime
         finally { _companionControlGate.Release(); }
     }
 
-    private async Task ObservePlayCompletionAsync(Task task)
+    private async Task ObservePlayCompletionAsync(Task task, PlaySessionIdentity identity)
     {
         try
         {
             await task;
-            if (PlayPhase == "paused") SetStatus("已暂停自动游玩");
+            lock (_playLifecycleGate)
+            {
+                if (!IsCurrentPlaySessionLocked(identity)) return;
+
+                _requestingModel = false;
+                if (PlayPhase == "paused" && _stopKind == null) SetStatus("已暂停自动游玩");
+            }
         }
         catch (Exception ex)
         {
-            Log.Warn($"{LogPrefix} Auto-play session ended: {ex.Message}");
-            if (PlayPhase == "paused") SetStatus("自动游玩已停止：" + ex.Message);
+            lock (_playLifecycleGate)
+            {
+                if (!IsCurrentPlaySessionLocked(identity)) return;
+
+                Log.Warn($"{LogPrefix} Auto-play session ended: {ex.Message}");
+                ClassifyStop(ex.Message, ModelRoleNames.Play);
+                _requestingModel = false;
+                if (PlayPhase == "paused") SetStatus("自动游玩已停止：" + DiagnosticExport.Redact(ex.Message));
+                NoteEvent("stop " + (_stopKind ?? "failed") + ": " + ex.Message);
+            }
         }
     }
 
@@ -650,11 +763,20 @@ internal sealed class AgentRuntime
                 await _turnGate.WaitAsync(token);
                 try
                 {
+                    _requestingModel = true;
+                    RaiseChanged();
                     var immediate = await TryCompanionImmediateAsync(token);
-                    return immediate ?? await _loop.PlayOnceAsync(token, boundary.Check);
+                    if (immediate != null)
+                    {
+                        return immediate;
+                    }
+
+                    SetStatus("正在请求模型…");
+                    return await _loop.PlayOnceAsync(token, boundary.Check);
                 }
                 finally
                 {
+                    _requestingModel = false;
                     _turnGate.Release();
                 }
 
@@ -665,18 +787,22 @@ internal sealed class AgentRuntime
 
     private async Task<AgentTurnResult?> TryCompanionImmediateAsync(CancellationToken cancellationToken)
     {
-        if (!InstanceRole.IsCompanion)
-        {
-            return null;
-        }
-
+        var followMapVotes = InstanceRole.IsCompanion;
         var decision = await GameThread.InvokeAsync(() =>
         {
             var payload = GameStateService.BuildStatePayload();
             var mapOptions = payload.map?.available_nodes
                 .Select(node => new CompanionMapOption(node.index, node.vote_count, node.has_local_vote))
                 .ToArray();
-            return CompanionPlayPolicy.DecideMapVote(payload.screen, payload.available_actions, mapOptions);
+            return CompanionPlayPolicy.DecideImmediate(
+                payload.screen,
+                payload.available_actions,
+                followMapVotes ? mapOptions : null,
+                payload.modal?.type_name,
+                payload.modal?.can_confirm == true,
+                payload.modal?.can_dismiss == true,
+                payload.in_combat,
+                followMapVotes);
         });
 
         if (decision.Kind == CompanionImmediateDecision.Wait)
@@ -685,7 +811,9 @@ internal sealed class AgentRuntime
             return new AgentTurnResult
             {
                 Reasoning = "等待你选择地图节点，随后投同一格。",
-                ToolRounds = 0
+                WaitingForGame = true,
+                ToolRounds = 0,
+                RequestsSpent = 0
             };
         }
 
@@ -707,11 +835,14 @@ internal sealed class AgentRuntime
             return response.message ?? response.action;
         });
 
+        var reasoning = string.Equals(acted, "confirm_modal", StringComparison.OrdinalIgnoreCase)
+            ? "确认阻挡操作的教学弹窗。"
+            : "跟随你的地图选择。";
         return new AgentTurnResult
         {
             Acted = acted,
             ActResultJson = json,
-            Reasoning = "跟随你的地图选择。",
+            Reasoning = reasoning,
             ToolRounds = 0
         };
     }
@@ -738,6 +869,7 @@ internal sealed class AgentRuntime
             if (result.Usage != null)
             {
                 _sessionUsage = LlmUsage.Combine(_sessionUsage, result.Usage) ?? LlmUsage.Empty;
+                _sessionUsageKnown = true;
             }
 
             _sessionRequests += Math.Max(0, result.RequestsSpent);
@@ -751,6 +883,9 @@ internal sealed class AgentRuntime
     private void ApplyPlayResult(AgentTurnResult result)
     {
         AccountTurn(result);
+        _waitingForGame = result.WaitingForGame;
+        _waitingForPlayer = result.Reasoning != null && result.Reasoning.Contains("等待你", StringComparison.Ordinal);
+        _requestingModel = false;
 
         if (!string.IsNullOrWhiteSpace(result.Acted))
         {
@@ -763,9 +898,167 @@ internal sealed class AgentRuntime
             AddHistory("assistant", result.AssistantText);
         }
 
-        SetStatus(result.Error == null
-            ? (result.Acted != null ? "已执行 " + result.Acted : "等待可操作状态")
-            : result.Error);
+        if (result.RequiresConfiguration)
+        {
+            ClassifyStop(result.Error ?? "配置错误", ModelRoleNames.Play);
+        }
+
+            SetStatus(result.Error == null
+            ? (result.Acted != null ? "已执行 " + result.Acted : result.WaitingForGame ? "等待游戏可操作" : "等待可操作状态")
+            : DiagnosticExport.Redact(result.Error));
+    }
+
+    public PlayerFacingView PlayerFacing()
+    {
+        string? budget;
+        lock (_gate)
+        {
+            budget = _budgetGuard.CheckBudget();
+        }
+
+        return PlayerFacingSession.Compose(new PlayerFacingSnapshot
+        {
+            FirstRun = FirstRunSetup.Evaluate(Settings),
+            PlayPhase = PlayPhase,
+            PlayRunning = PlayRunning,
+            Status = Status,
+            DualLaunching = DualLaunching,
+            DualStatus = DualStatus,
+            TeamControlPending = TeamControlPending,
+            TeamControlStatus = TeamControlStatus,
+            CompanionConnected = LocalDualInstanceLauncher.Connection != null,
+            CompanionProcessAlive = LocalDualInstanceLauncher.CompanionProcessAlive,
+            CompanionProcessExited = LocalDualInstanceLauncher.CompanionProcessExited,
+            WaitingForGame = _waitingForGame,
+            WaitingForPlayer = _waitingForPlayer,
+            RequestingModel = _requestingModel || Status.Contains("请求模型", StringComparison.Ordinal),
+            FinishingSubmittedAction = PlayPhase == "stopping",
+            StopKind = _stopKind,
+            StopDetail = _stopDetail,
+            UsageKnown = _sessionUsageKnown,
+            SessionUsage = SessionUsage,
+            SessionRequests = SessionRequests,
+            BudgetReason = budget,
+            IsCompanion = InstanceRole.IsCompanion
+        });
+    }
+
+    public string ExportDiagnostics()
+    {
+        IReadOnlyList<string> events;
+        lock (_gate)
+        {
+            events = _diagnosticEvents.ToArray();
+        }
+
+        return DiagnosticExport.Render(new DiagnosticSnapshot
+        {
+            ModVersion = Router.ModVersion,
+            Role = InstanceRole.Current,
+            PlayPhase = PlayPhase,
+            Status = Status,
+            DualStatus = DualStatus,
+            TeamControlStatus = TeamControlStatus,
+            StopKind = _stopKind,
+            StopDetail = _stopDetail,
+            ApiPrefix = HttpServer.Instance.Prefix,
+            McpUrl = McpUrl,
+            McpEnabled = McpRunning,
+            UsageKnown = _sessionUsageKnown,
+            SessionRequests = SessionRequests,
+            SessionTokens = _sessionUsageKnown ? SessionUsage.TotalTokens : null,
+            RecentEvents = events,
+            RecentRequestIds = Router.RecentRequestIds(),
+            Settings = Settings
+        });
+    }
+
+    public bool SessionUsageKnown
+    {
+        get { lock (_gate) return _sessionUsageKnown; }
+    }
+
+    private void SetModelTestFailure(ModelRoleTestRecord record)
+    {
+        _stopKind = ModelRoleProbe.FailureKind(record.StatusCode, record.Error);
+        _stopDetail = DiagnosticExport.Redact(record.Error);
+        _stopRole = record.Role;
+    }
+
+    private void ClearModelTestFailure()
+    {
+        if (PlayerFacingSession.ShouldClearModelTestFailure(_stopKind, _stopRole, ModelRoleNames.Play))
+        {
+            _stopKind = null;
+            _stopDetail = null;
+            _stopRole = null;
+        }
+    }
+
+    private static string ClassifyStopKind(string? message)
+    {
+        message ??= string.Empty;
+        if (message.Contains("预算", StringComparison.Ordinal) || message.Contains("上限", StringComparison.Ordinal))
+        {
+            return "budget";
+        }
+
+        if (message.Contains("当前局", StringComparison.Ordinal) || message.Contains("对局", StringComparison.Ordinal))
+        {
+            return "run_end";
+        }
+
+        if (message.Contains("请检查模型", StringComparison.Ordinal) ||
+            message.Contains("401", StringComparison.Ordinal) ||
+            message.Contains("402", StringComparison.Ordinal) ||
+            message.Contains("403", StringComparison.Ordinal) ||
+            message.Contains("404", StringComparison.Ordinal) ||
+            message.Contains("422", StringComparison.Ordinal) ||
+            message.Contains("认证失败", StringComparison.Ordinal) ||
+            message.Contains("配置错误", StringComparison.Ordinal))
+        {
+            return "config";
+        }
+
+        if (message.Contains("408", StringComparison.Ordinal) ||
+            message.Contains("429", StringComparison.Ordinal) ||
+            message.Contains("超时", StringComparison.Ordinal) ||
+            message.Contains("timed out", StringComparison.OrdinalIgnoreCase) ||
+            message.Contains("timeout", StringComparison.OrdinalIgnoreCase) ||
+            message.Contains("HTTP 5", StringComparison.OrdinalIgnoreCase) ||
+            message.Contains("refused", StringComparison.OrdinalIgnoreCase) ||
+            message.Contains("Name or service", StringComparison.OrdinalIgnoreCase) ||
+            message.Contains("connection", StringComparison.OrdinalIgnoreCase) ||
+            message.Contains("network", StringComparison.OrdinalIgnoreCase))
+        {
+            return "network";
+        }
+
+        return "failed";
+    }
+
+    private void ClassifyStop(string message, string? role = null)
+    {
+        _stopKind = ClassifyStopKind(message);
+        _stopDetail = DiagnosticExport.Redact(message);
+        _stopRole = role;
+    }
+
+    private bool IsCurrentPlaySessionLocked(PlaySessionIdentity identity)
+    {
+        return PlayerFacingSession.IsCurrentPlaySession(_playSessionIdentity, identity);
+    }
+
+    private void NoteEvent(string line)
+    {
+        lock (_gate)
+        {
+            _diagnosticEvents.Add(DateTimeOffset.UtcNow.ToString("HH:mm:ss") + " " + DiagnosticExport.Redact(line));
+            if (_diagnosticEvents.Count > 24)
+            {
+                _diagnosticEvents.RemoveRange(0, _diagnosticEvents.Count - 24);
+            }
+        }
     }
 
     private void AddHistory(string role, string text)
@@ -786,6 +1079,8 @@ internal sealed class AgentRuntime
     {
         Log.Info($"{LogPrefix} {line}");
     }
+
+    public void NotifyStatus(string status) => SetStatus(status);
 
     private void SetStatus(string status)
     {

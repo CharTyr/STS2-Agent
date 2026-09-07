@@ -1482,7 +1482,8 @@ internal static class GameStateService
 
     public static bool CanConfirmModal(IScreenContext? currentScreen)
     {
-        return GetModalConfirmButton(currentScreen) != null;
+        var hasButton = GetModalConfirmButton(currentScreen) != null;
+        return FtueModalPolicy.ExposeConfirm(GetOpenModal()?.GetType().Name, hasButton);
     }
 
     public static bool CanDismissModal(IScreenContext? currentScreen)
@@ -2299,8 +2300,10 @@ internal static class GameStateService
                     ? "combat_not_in_progress"
                     : CombatManager.Instance.IsOverOrEnding
                         ? "combat_over_or_ending"
-                        : CombatManager.Instance.PlayerActionsDisabled
-                            ? "player_actions_disabled"
+                        : CombatManager.Instance.IsPaused
+                            ? "combat_paused"
+                            : CombatManager.Instance.PlayerActionsDisabled
+                                ? "player_actions_disabled"
                             : room.Mode != CombatRoomMode.ActiveCombat
                                 ? "combat_room_not_active"
                                 : hand == null
@@ -2337,6 +2340,12 @@ internal static class GameStateService
             modal_open = modal != null,
             modal_type = modal?.GetType().FullName,
             player_actions_disabled = CombatManager.Instance.PlayerActionsDisabled,
+            is_paused = CombatManager.Instance.IsPaused,
+            local_ready_to_end_turn = CombatManager.Instance.IsPlayerReadyToEndTurn(me),
+            all_players_ready_to_end_turn = CombatManager.Instance.AllPlayersReadyToEndTurn(),
+            ending_turn_phase_one = CombatManager.Instance.EndingPlayerTurnPhaseOne,
+            ending_turn_phase_two = CombatManager.Instance.EndingPlayerTurnPhaseTwo,
+            end_turn_kick = GameActionService.EndTurnKickDetail,
             combat_in_progress = CombatManager.Instance.IsInProgress,
             combat_over_or_ending = CombatManager.Instance.IsOverOrEnding,
             combat_room_mode = room?.Mode.ToString(),
@@ -6107,6 +6116,47 @@ internal static class GameStateService
         return NModalContainer.Instance?.OpenModal;
     }
 
+    public static bool TryCloseOpenFtue()
+    {
+        var modal = GetOpenModal();
+        if (modal == null || !FtueModalPolicy.CloseFtueDirectly(modal.GetType().Name, hasUsableConfirmButton: false))
+        {
+            return false;
+        }
+
+        var closed = false;
+        foreach (var methodName in FtueModalPolicy.CloseMethodNames(modal.GetType().Name))
+        {
+            var method = modal.GetType().GetMethod(
+                methodName,
+                BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic,
+                binder: null,
+                types: Type.EmptyTypes,
+                modifiers: null);
+            if (method == null)
+            {
+                continue;
+            }
+
+            method.Invoke(modal, null);
+            closed = true;
+        }
+
+        var closeWithButton = modal.GetType().GetMethod(
+            "CloseFtue",
+            BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic,
+            binder: null,
+            types: new[] { typeof(NButton) },
+            modifiers: null);
+        if (closeWithButton != null)
+        {
+            closeWithButton.Invoke(modal, new object?[] { GetModalConfirmButton(ActiveScreenContext.Instance.GetCurrentScreen()) });
+            closed = true;
+        }
+
+        return closed;
+    }
+
     public static NButton? GetModalConfirmButton(IScreenContext? currentScreen)
     {
         return FindModalButton(
@@ -6203,7 +6253,7 @@ internal static class GameStateService
 
     private static bool IsConfirmNamedModalButton(NButton button)
     {
-        return ModalButtonNameContains(button, "Yes", "Confirm", "Acknowledge", "Ok", "Okay", "Continue", "Accept");
+        return ModalButtonNameContains(button, "Yes", "Confirm", "Acknowledge", "Ok", "Okay", "Continue", "Accept", "RightArrow");
     }
 
     private static bool IsDismissNamedModalButton(NButton button)
@@ -6503,6 +6553,18 @@ internal sealed class CombatActionReadinessPayload
     public string? modal_type { get; init; }
 
     public bool player_actions_disabled { get; init; }
+
+    public bool is_paused { get; init; }
+
+    public bool local_ready_to_end_turn { get; init; }
+
+    public bool all_players_ready_to_end_turn { get; init; }
+
+    public bool ending_turn_phase_one { get; init; }
+
+    public bool ending_turn_phase_two { get; init; }
+
+    public string? end_turn_kick { get; init; }
 
     public bool combat_in_progress { get; init; }
 

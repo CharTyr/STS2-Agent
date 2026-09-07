@@ -35,6 +35,13 @@
 
 ## Unreleased
 
+### Added
+
+- First-run overlay opens a short setup path. Default URL + model name is unverified until **Test Connection** succeeds per role (chat / play / vision).
+- Settings keep per-role test results, a save indicator, and a confirm step before deleting a referenced endpoint or model.
+- AI Teammate page shows why the companion is waiting or stopped, what to click next, unknown token usage, and a redacted diagnostics copy.
+- GitHub zip now ships `README.zh-CN.md` and `LICENSE`; install copy steps match the `mod/` folder. Native MCP remains the recommended external-client entry.
+
 ### Fixed
 
 - Autoplay now rethrows run-boundary stops from `act` and re-checks compact state after `get_game_state` / `wait_until_actionable`, so leaving a run no longer burns extra model rounds.

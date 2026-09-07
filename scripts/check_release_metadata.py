@@ -19,7 +19,10 @@ def main() -> None:
     router = (root / "STS2AIAgent/Server/Router.cs").read_text(encoding="utf-8")
     if mod_id["version"] != version or project["project"]["version"] != version or package["version"] != version:
         raise ValueError("Manifest, Mod metadata, MCP package and lockfile versions must agree")
-    if f'private const string ModVersion = "{version}";' not in router:
+    if (
+        f'private const string ModVersion = "{version}";' not in router
+        and f'internal const string ModVersion = "{version}";' not in router
+    ):
         raise ValueError("HTTP API version does not match the manifest")
     print(f"Release metadata consistent: {version}")
 
