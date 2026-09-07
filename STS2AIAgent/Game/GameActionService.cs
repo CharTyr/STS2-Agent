@@ -2173,7 +2173,90 @@ internal static class GameActionService
                 return await WaitForRewardFlowExitAsync(rewardsScreen, deadline);
             }
 
-            return IsRewardFlowStable();
+            if (await TryEscapeEmptyRewardsScreenAsync(rewardsScreen, deadline))
+            {
+                return true;
+            }
+        }
+
+        return IsRewardFlowStable();
+    }
+
+    private static async Task<bool> TryEscapeEmptyRewardsScreenAsync(NRewardsScreen rewardsScreen, DateTime deadline)
+    {
+        var emptySince = DateTime.UtcNow;
+        while (DateTime.UtcNow < deadline)
+        {
+            await WaitForNextFrameAsync();
+            if (!GodotObject.IsInstanceValid(rewardsScreen) ||
+                ActiveScreenContext.Instance.GetCurrentScreen() != rewardsScreen)
+            {
+                return true;
+            }
+
+            if (TryGetNextClaimableRewardButton(rewardsScreen, new HashSet<ulong>(), out _))
+            {
+                return false;
+            }
+
+            var proceedButton = GameStateService.GetRewardProceedButton(rewardsScreen);
+            if (proceedButton != null && proceedButton.IsEnabled)
+            {
+                proceedButton.ForceClick();
+                return await WaitForRewardFlowExitAsync(rewardsScreen, deadline);
+            }
+
+            if (DateTime.UtcNow - emptySince < TimeSpan.FromSeconds(1))
+            {
+                continue;
+            }
+
+            try
+            {
+                rewardsScreen.Call("TryEnableProceedButton");
+            }
+            catch
+            {
+            }
+
+            proceedButton = GameStateService.GetRewardProceedButton(rewardsScreen);
+            if (proceedButton != null)
+            {
+                proceedButton.ForceClick();
+                var proceedDeadline = DateTime.UtcNow + TimeSpan.FromSeconds(3);
+                if (proceedDeadline > deadline)
+                {
+                    proceedDeadline = deadline;
+                }
+
+                if (await WaitForRewardFlowExitAsync(rewardsScreen, proceedDeadline))
+                {
+                    return true;
+                }
+            }
+
+            try
+            {
+                NOverlayStack.Instance?.Remove(rewardsScreen);
+            }
+            catch
+            {
+            }
+
+            if (await WaitForRewardFlowExitAsync(rewardsScreen, deadline))
+            {
+                return true;
+            }
+
+            try
+            {
+                _ = RunManager.Instance.ProceedFromTerminalRewardsScreen();
+            }
+            catch
+            {
+            }
+
+            return await WaitForRewardFlowExitAsync(rewardsScreen, deadline);
         }
 
         return IsRewardFlowStable();
