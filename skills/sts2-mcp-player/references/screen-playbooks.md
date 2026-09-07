@@ -84,6 +84,8 @@ Use this reference when the active screen is clear and you need the exact action
 ## EVENT
 
 - Use `choose_event_option` for both normal branches and finished synthetic proceed options.
+- Never send a locked option. Read `event.options`, skip `is_locked=true`, and use the first unlocked `index`. Option 0 is often locked.
+- `available_actions` can still contain `choose_event_option` when the first option is locked; that is not permission to pick index 0.
 - Expect event flows like `EVENT -> COMBAT -> EVENT` or `EVENT -> COMBAT -> MAP`.
 - Re-read state after every branch because events mutate in place.
 
