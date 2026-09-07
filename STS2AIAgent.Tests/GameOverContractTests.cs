@@ -13,7 +13,7 @@ internal static class GameOverContractTests
             AgentSourceFixture.Read("STS2AIAgent/Game/GameActionService.cs"));
         var stateSource = AgentSourceFixture.WithoutWhitespace(
             AgentSourceFixture.Read("STS2AIAgent/Game/GameStateService.cs"));
-        var promptSource = AgentSourceFixture.Read("STS2AIAgent/Agent/PlayPrompt.cs");
+        var promptSource = AgentSourceFixture.Read("skills/sts2-mcp-player/SKILL.md");
 
         Assert.Contains(
             "\"continue_game_over\"=>ExecuteContinueGameOverAsync()",

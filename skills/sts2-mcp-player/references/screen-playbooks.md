@@ -20,10 +20,23 @@ Use this reference when the active screen is clear and you need the exact action
 - `embark` can be a heavy transition. Prefer a longer request timeout and tolerate a short retry window.
 - If a `MODAL` appears after `open_character_select` or `embark`, resolve it before making any gameplay decision.
 
+## BUNDLE_SELECTION
+
+- Read `bundles[]` from compact state.
+- `choose_bundle` with `option_index` from that list.
+- When `confirm_bundle` is exposed, confirm before expecting map or combat.
+
+## CAPSTONE_SELECTION
+
+- Read `capstone.options[].i` and `line`.
+- `choose_capstone_option` once per exposed option set.
+- Re-read state; capstone can return to map, an event, or another overlay.
+
 ## MAP
 
-- `map.available_nodes[]` is the only source of truth for valid node indexes.
+- Compact state uses `map.options[].i` as the only legal node index; raw state uses `map.available_nodes[]`.
 - Recompute node indexes after every room transition.
+- In multiplayer, read `map.local_vote` and `map.votes`. If `local_vote` is already set, call `wait_until_actionable` instead of voting again. If another player has voted and you have not, follow that option.
 - `choose_map_node` should not be considered done until the returned screen matches the destination room or stabilized combat entry.
 
 ## COMBAT
@@ -89,10 +102,11 @@ Use this reference when the active screen is clear and you need the exact action
 - After the last divination, resolve any reward child screens, then use
   `proceed` when it reappears.
 
-## MODAL and GAME_OVER
+## MODAL, GAME_OVER, and UNLOCK
 
 - Resolve `MODAL` before anything else with `confirm_modal` or `dismiss_modal`.
-- On `GAME_OVER`, use `return_to_main_menu`.
+- On `GAME_OVER`, use `continue_game_over` first so the native summary, score, unlock, and save flow runs. Wait while `game_over.phase=summary_animating`. Use `return_to_main_menu` only when `game_over.can_return` is true and the action is in `available_actions`.
+- On `UNLOCK`, use `confirm_unlock` repeatedly until the unlock screen closes. Do not call `select_deck_card` or `return_to_main_menu` here.
 
 ## Potion Targeting
 

@@ -7,7 +7,10 @@ Use this reference when the task is not ordinary play, but smoke testing, protoc
 - Guided profile is the default and should stay compact:
   - `health_check`
   - `get_game_state`
+  - `get_raw_game_state`
   - `get_available_actions`
+  - `get_relevant_game_data` / `get_game_data_item` / `get_game_data_items`
+  - `wait_until_actionable`
   - `act`
 - Guided profile exposes `run_console_command` only when debug actions are enabled.
 - Full profile exposes legacy per-action tools and is appropriate only when a harness explicitly needs them.

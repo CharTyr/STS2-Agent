@@ -39,6 +39,7 @@ $testScript = Join-Path $ProjectRoot "scripts/test-mod-load.ps1"
 $stateInvariantScript = Join-Path $ProjectRoot "scripts/test-state-invariants.ps1"
 $mcpToolProfileScript = Join-Path $ProjectRoot "scripts/test-mcp-tool-profile.ps1"
 $multiplayerFlowScript = Join-Path $ProjectRoot "scripts/test-multiplayer-lobby-flow.ps1"
+$packageChecker = Join-Path $ProjectRoot "scripts/check_release_package.py"
 $changelogPath = Join-Path $ProjectRoot "CHANGELOG.md"
 $releaseDoc = Join-Path $ProjectRoot "docs/release-readiness.md"
 $modManifestPath = Join-Path $ProjectRoot "STS2AIAgent/mod_manifest.json"
@@ -121,6 +122,10 @@ Invoke-Step -Name "Validate release version metadata" -Action {
     }
 }
 
+Invoke-Step -Name "Check release packaging source contract" -Action {
+    Invoke-CheckedNative -FilePath "python" -Arguments @($packageChecker, "--source-root", $ProjectRoot)
+}
+
 Invoke-Step -Name "Check release documents" -Action {
     $missing = $requiredDocs | Where-Object { -not (Test-Path $_) }
 
@@ -142,3 +147,4 @@ Write-Host "  3. powershell -ExecutionPolicy Bypass -File `"$stateInvariantScrip
 Write-Host "  4. powershell -ExecutionPolicy Bypass -File `"$mcpToolProfileScript`" -RepoRoot `"$ProjectRoot`""
 Write-Host "  5. powershell -ExecutionPolicy Bypass -File `"$multiplayerFlowScript`""
 Write-Host "  6. Follow the manual checklist in `"$releaseDoc`""
+Write-Host "  7. After packaging, inspect the real release directory or zip: python `"$packageChecker`" --artifact <release-dir-or-zip>"

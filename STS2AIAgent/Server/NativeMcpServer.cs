@@ -297,7 +297,9 @@ internal sealed class NativeMcpServer
                         result = await CallToolAsync(args, cancellationToken)
                     };
                 case "resources/list":
-                    return new { jsonrpc = "2.0", id, result = new { resources = Array.Empty<object>() } };
+                    return new { jsonrpc = "2.0", id, result = new { resources = ListSkillResources() } };
+                case "resources/read":
+                    return ReadSkillResource(id, args);
                 case "prompts/list":
                     return new { jsonrpc = "2.0", id, result = new { prompts = Array.Empty<object>() } };
                 case "logging/setLevel":
@@ -338,7 +340,8 @@ internal sealed class NativeMcpServer
             protocolVersion = protocol,
             capabilities = new
             {
-                tools = new { listChanged = false }
+                tools = new { listChanged = false },
+                resources = new { listChanged = false }
             },
             serverInfo = new
             {
@@ -346,7 +349,41 @@ internal sealed class NativeMcpServer
                 version = _version,
                 title = "STS2 AI Agent"
             },
-            instructions = "Local Slay the Spire 2 mod MCP. Call get_game_state before acting. Recompute indexes from the latest state. Do not guess card_index or option_index."
+            instructions = PlayPrompt.PlaySystem
+        };
+    }
+
+    private static object[] ListSkillResources()
+    {
+        return PlayPrompt.SkillResources.Select(static resource => (object)new
+        {
+            uri = resource.Uri,
+            name = resource.Name,
+            description = resource.Description,
+            mimeType = "text/markdown"
+        }).ToArray();
+    }
+
+    private static object ReadSkillResource(object? id, JsonElement args)
+    {
+        var uri = ReadString(args, "uri")?.Trim();
+        var resource = PlayPrompt.SkillResources.FirstOrDefault(item => string.Equals(item.Uri, uri, StringComparison.Ordinal));
+        if (string.IsNullOrWhiteSpace(resource.Uri))
+        {
+            return RpcError(id, -32002, "Resource not found: " + uri);
+        }
+
+        return new
+        {
+            jsonrpc = "2.0",
+            id,
+            result = new
+            {
+                contents = new[]
+                {
+                    new { uri = resource.Uri, mimeType = "text/markdown", text = resource.Text }
+                }
+            }
         };
     }
 

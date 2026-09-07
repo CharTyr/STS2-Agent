@@ -145,10 +145,81 @@ internal sealed class AgentLoop
 
     public async Task<string> TestConnectionAsync(CancellationToken cancellationToken)
     {
+        var results = await TestConfiguredRolesAsync(force: true, cancellationToken);
+        var play = results.FirstOrDefault(item => item.Role == ModelRoleNames.Play);
+        return play.Record.Status == "verified" ? "ok" : play.Record.Error ?? "failed";
+    }
+
+    public async Task<IReadOnlyList<ModelRoleProbeResult>> TestConfiguredRolesAsync(bool force, CancellationToken cancellationToken)
+    {
         var settings = _settings();
-        var resolved = settings.ResolveConversationModel();
-        var client = _factory.Create(resolved.Endpoint);
-        return await client.PingAsync(resolved.Model.Model, cancellationToken);
+        var results = new List<ModelRoleProbeResult>();
+        var cache = new Dictionary<string, ModelRoleTestRecord>(StringComparer.Ordinal);
+        foreach (var role in new[] { ModelRoleNames.Conversation, ModelRoleNames.Play, ModelRoleNames.Vision })
+        {
+            var resolved = ModelRoleProbe.Resolve(settings, role);
+            if (role == ModelRoleNames.Vision && resolved == null)
+            {
+                results.Add(new ModelRoleProbeResult(role, ModelRoleProbe.Unused(role), false));
+                continue;
+            }
+
+            if (resolved == null)
+            {
+                results.Add(new ModelRoleProbeResult(role, ModelRoleProbe.Unverified(role, null), false));
+                continue;
+            }
+
+            var current = ModelRoleProbe.Current(settings, role);
+            var fingerprint = ModelRoleProbe.Fingerprint(resolved);
+            if (!force && current.Status == "verified" && current.Fingerprint == fingerprint)
+            {
+                results.Add(new ModelRoleProbeResult(role, current, true));
+                continue;
+            }
+
+            if (cache.TryGetValue(fingerprint, out var cached))
+            {
+                results.Add(new ModelRoleProbeResult(role, CopyForRole(cached, role), false));
+                continue;
+            }
+
+            try
+            {
+                var client = _factory.Create(resolved.Endpoint);
+                await client.PingAsync(resolved.Model.Model, cancellationToken);
+                var record = ModelRoleProbe.FromSuccess(role, resolved);
+                cache[fingerprint] = record;
+                results.Add(new ModelRoleProbeResult(role, record, false));
+            }
+            catch (Exception ex)
+            {
+                var record = ModelRoleProbe.FromException(role, resolved, ex);
+                cache[fingerprint] = record;
+                results.Add(new ModelRoleProbeResult(role, record, false));
+            }
+        }
+
+        return results;
+    }
+
+    private static ModelRoleTestRecord CopyForRole(ModelRoleTestRecord source, string role)
+    {
+        return new ModelRoleTestRecord
+        {
+            Role = role,
+            Status = source.Status,
+            CapabilityStatus = source.CapabilityStatus,
+            EndpointId = source.EndpointId,
+            EndpointName = source.EndpointName,
+            ModelId = source.ModelId,
+            ModelName = source.ModelName,
+            Fingerprint = source.Fingerprint,
+            StatusCode = source.StatusCode,
+            Error = source.Error,
+            NextStep = source.NextStep,
+            TestedAt = source.TestedAt
+        };
     }
 
     private async Task<AgentTurnResult> CompleteWithToolsAsync(

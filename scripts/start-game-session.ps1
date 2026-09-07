@@ -204,7 +204,30 @@ try {
             Write-Host "[start-game-session] arguments: $($argumentList -join ' ')"
         }
 
-        $proc = Start-Process @startParams
+        $settingsPath = [Environment]::GetEnvironmentVariable("STS2_AGENT_SETTINGS_PATH", "Process")
+        if (-not [string]::IsNullOrWhiteSpace($settingsPath)) {
+            $startInfo = New-Object System.Diagnostics.ProcessStartInfo
+            $startInfo.FileName = $ExePath
+            $startInfo.WorkingDirectory = $launchDir
+            $startInfo.UseShellExecute = $false
+            if ($argumentList.Count -gt 0) {
+                $quoted = @()
+                foreach ($arg in $argumentList) {
+                    if ($arg -match '\s') { $quoted += '"' + $arg + '"' } else { $quoted += $arg }
+                }
+                $startInfo.Arguments = [string]::Join(' ', $quoted)
+            }
+            foreach ($entry in [Environment]::GetEnvironmentVariables("Process").GetEnumerator()) {
+                $startInfo.Environment[$entry.Key] = [string]$entry.Value
+            }
+            $startInfo.Environment["STS2_API_PORT"] = [string]$ApiPort
+            if ($EnableDebugActions) { $startInfo.Environment["STS2_ENABLE_DEBUG_ACTIONS"] = "1" }
+            $startInfo.Environment["STS2_AGENT_SETTINGS_PATH"] = $settingsPath
+            Write-Host "[start-game-session] STS2_AGENT_SETTINGS_PATH=$settingsPath"
+            $proc = [System.Diagnostics.Process]::Start($startInfo)
+        } else {
+            $proc = Start-Process @startParams
+        }
         if ($proc.HasExited) {
             $relaunched = Get-Process -Name "SlayTheSpire2" -ErrorAction SilentlyContinue |
                 Sort-Object StartTime -Descending |

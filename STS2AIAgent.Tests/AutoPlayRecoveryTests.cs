@@ -73,6 +73,24 @@ internal static class AutoPlayRecoveryTests
         return Task.CompletedTask;
     }
 
+    public static Task CompanionMapWaitDoesNotStopAutoPlay()
+    {
+        var policy = new AutoPlayRecovery();
+        var wait = new AgentTurnResult
+        {
+            Reasoning = "等待你选择地图节点，随后投同一格。",
+            WaitingForGame = true,
+            ToolRounds = 0,
+            RequestsSpent = 0
+        };
+        for (var i = 0; i < 8; i++)
+        {
+            Assert.Null(policy.Observe(wait).StopReason);
+        }
+
+        return Task.CompletedTask;
+    }
+
     public static Task SuccessfulActionResetsFailures()
     {
         var policy = new AutoPlayRecovery();

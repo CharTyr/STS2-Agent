@@ -185,22 +185,39 @@ internal static class GameActionService
         var currentScreen = ActiveScreenContext.Instance.GetCurrentScreen();
         var combatState = CombatManager.Instance.DebugOnlyGetState();
         var screen = GameStateService.ResolveScreen(currentScreen);
-
-        if (!GameStateService.CanEndTurn(currentScreen, combatState, requireButtonReady: false))
+        var me = GameStateService.GetLocalPlayer(combatState);
+        if (me == null)
         {
-            throw new ApiException(409, "invalid_action", "Action is not available in the current state.", new
-            {
-                action = "end_turn",
-                screen
-            });
-        }
-
-        var me = GameStateService.GetLocalPlayer(combatState)
-            ?? throw new ApiException(503, "state_unavailable", "Local player is unavailable.", new
+            throw new ApiException(503, "state_unavailable", "Local player is unavailable.", new
             {
                 action = "end_turn",
                 screen
             }, retryable: true);
+        }
+
+        if (CombatManager.Instance.IsPaused)
+        {
+            CombatManager.Instance.Unpause();
+        }
+
+        for (var attempt = 0; attempt < 12; attempt++)
+        {
+            combatState = CombatManager.Instance.DebugOnlyGetState();
+            currentScreen = ActiveScreenContext.Instance.GetCurrentScreen();
+            me = GameStateService.GetLocalPlayer(combatState) ?? me;
+            if (CombatManager.Instance.IsPlayerReadyToEndTurn(me) ||
+                GameStateService.CanEndTurn(currentScreen, combatState, requireButtonReady: false))
+            {
+                break;
+            }
+
+            if (NGame.Instance == null)
+            {
+                break;
+            }
+
+            await NGame.Instance.ToSignal(NGame.Instance.GetTree(), SceneTree.SignalName.ProcessFrame);
+        }
 
         var playerCombatState = me.Creature.CombatState
             ?? throw new ApiException(503, "state_unavailable", "Combat state is unavailable.", new
@@ -208,19 +225,45 @@ internal static class GameActionService
                 action = "end_turn",
                 screen
             }, retryable: true);
-
-        var endTurnButton = GameStateService.GetEndTurnButton(GameStateService.FindActiveCombatRoom(currentScreen));
-        if (!GameStateService.IsEndTurnButtonReady(endTurnButton))
-        {
-            throw new ApiException(503, "state_unavailable", "End turn button is unavailable.", new
-            {
-                action = "end_turn",
-                screen
-            }, retryable: true);
-        }
-
         var roundNumber = playerCombatState.RoundNumber;
-        endTurnButton!.ForceClick();
+        var endTurnButton = GameStateService.GetEndTurnButton(GameStateService.FindActiveCombatRoom(currentScreen));
+
+        if (!CombatManager.Instance.IsPlayerReadyToEndTurn(me))
+        {
+            if (endTurnButton == null)
+            {
+                throw new ApiException(503, "state_unavailable", "End turn button is unavailable.", new
+                {
+                    action = "end_turn",
+                    screen
+                }, retryable: true);
+            }
+
+            await CommitEndTurnButtonAsync(endTurnButton, me);
+            if (NGame.Instance != null)
+            {
+                await NGame.Instance.ToSignal(NGame.Instance.GetTree(), SceneTree.SignalName.ProcessFrame);
+                await NGame.Instance.ToSignal(NGame.Instance.GetTree(), SceneTree.SignalName.ProcessFrame);
+            }
+
+            if (GameStateService.GetOpenModal() != null)
+            {
+                var modalType = GameStateService.GetOpenModal()?.GetType().Name;
+                if (FtueModalPolicy.IsCombatRulesFtue(modalType))
+                {
+                    throw new ApiException(409, "invalid_action", "Combat rules FTUE is still open; confirm pages instead of ending the turn.", new
+                    {
+                        action = "end_turn",
+                        modal_type = modalType
+                    });
+                }
+
+                if (GameStateService.TryCloseOpenFtue())
+                {
+                    await CommitEndTurnButtonAsync(endTurnButton, me);
+                }
+            }
+        }
 
         var stable = await WaitForEndTurnTransitionAsync(roundNumber, TimeSpan.FromSeconds(5));
 
@@ -232,6 +275,60 @@ internal static class GameActionService
             message = stable ? "Action completed." : "Action queued but state is still transitioning.",
             state = GameStateService.BuildStatePayload()
         };
+    }
+
+    private static int _endTurnKickRound = int.MinValue;
+
+    internal static string EndTurnKickDetail { get; } = string.Empty;
+
+    internal static void EnsureEndTurnPhaseStarts()
+    {
+        // Intentionally empty: GET /state and end_turn must not reflectively mutate CombatManager.
+        _ = _endTurnKickRound;
+    }
+
+    private static async Task CommitEndTurnButtonAsync(NEndTurnButton endTurnButton, Player me)
+    {
+        _ = me;
+        if (CombatManager.Instance.IsPaused)
+        {
+            CombatManager.Instance.Unpause();
+        }
+
+        endTurnButton.DebugPress();
+        await WaitForEndTurnLongPressAsync(endTurnButton);
+        endTurnButton.CallReleaseLogic();
+        endTurnButton.DebugRelease();
+
+        if (CombatManager.Instance.IsPaused)
+        {
+            CombatManager.Instance.Unpause();
+        }
+    }
+
+    private static async Task WaitForEndTurnLongPressAsync(NEndTurnButton endTurnButton)
+    {
+        const BindingFlags flags = BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic;
+        var bar = typeof(NEndTurnButton).GetField("_longPressBar", flags)?.GetValue(endTurnButton);
+        if (bar == null)
+        {
+            return;
+        }
+
+        var enabled = bar.GetType().GetField("_enabled", flags)?.GetValue(bar) as bool?;
+        if (enabled != true)
+        {
+            return;
+        }
+
+        var duration = bar.GetType().GetField("_longPressDuration", flags)?.GetValue(bar) is double seconds
+            ? seconds
+            : 0.45;
+        var deadline = DateTime.UtcNow + TimeSpan.FromSeconds(Math.Max(0.05, duration + 0.1));
+        while (DateTime.UtcNow < deadline && NGame.Instance != null)
+        {
+            await NGame.Instance.ToSignal(NGame.Instance.GetTree(), SceneTree.SignalName.ProcessFrame);
+        }
     }
 
     private static async Task<bool> WaitForEndTurnTransitionAsync(int previousRound, TimeSpan timeout)
@@ -279,7 +376,13 @@ internal static class GameActionService
             return true;
         }
 
-        return !GameStateService.IsPlayerActionPhase(combatState);
+        if (!GameStateService.IsPlayerActionPhase(combatState))
+        {
+            return true;
+        }
+
+        var localPlayer = GameStateService.GetLocalPlayer(combatState);
+        return localPlayer != null && CombatManager.Instance.IsPlayerReadyToEndTurn(localPlayer);
     }
 
     private static async Task<ActionResponsePayload> ExecutePlayCardAsync(ActionRequest request)
@@ -2003,6 +2106,11 @@ internal static class GameActionService
 
         while (DateTime.UtcNow < deadline)
         {
+            if (await TryAdvanceRewardModalAsync())
+            {
+                continue;
+            }
+
             var currentScreen = ActiveScreenContext.Instance.GetCurrentScreen();
 
             if (currentScreen is NCardRewardSelectionScreen cardRewardScreen)
@@ -2171,6 +2279,34 @@ internal static class GameActionService
     {
         var currentScreen = ActiveScreenContext.Instance.GetCurrentScreen();
         return currentScreen is not NRewardsScreen && currentScreen is not NCardRewardSelectionScreen;
+    }
+
+    private static async Task<bool> TryAdvanceRewardModalAsync()
+    {
+        var modal = GameStateService.GetOpenModal();
+        if (modal == null)
+        {
+            return false;
+        }
+
+        var currentScreen = ActiveScreenContext.Instance.GetCurrentScreen();
+        var button = GameStateService.GetModalConfirmButton(currentScreen);
+        if (button != null)
+        {
+            button.ForceClick();
+            await WaitForNextFrameAsync();
+            return true;
+        }
+
+        if (FtueModalPolicy.CloseFtueDirectly(modal.GetType().Name, hasUsableConfirmButton: false) &&
+            GameStateService.TryCloseOpenFtue())
+        {
+            await WaitForNextFrameAsync();
+            return true;
+        }
+
+        await WaitForNextFrameAsync();
+        return true;
     }
 
     private static async Task<bool> WaitForRewardCardResolutionAsync(
@@ -4279,7 +4415,7 @@ internal static class GameActionService
             InstanceRole.IsCompanion,
             AgentRuntime.Instance.PlayRunning,
             payload.screen,
-            AgentRuntime.Instance.Settings.TryResolvePlayModel());
+            AgentRuntime.Instance.Settings);
         if (error != null)
         {
             throw new ApiException(409, "invalid_action", error, new
@@ -5162,7 +5298,7 @@ internal static class GameActionService
         var previousModal = GameStateService.GetOpenModal();
         var button = buttonResolver(currentScreen);
 
-        if (previousModal == null || button == null)
+        if (previousModal == null)
         {
             throw new ApiException(409, "invalid_action", "Action is not available in the current state.", new
             {
@@ -5171,7 +5307,24 @@ internal static class GameActionService
             });
         }
 
-        button.ForceClick();
+        if (button != null)
+        {
+            button.ForceClick();
+        }
+        else if (actionName == "confirm_modal" &&
+                 FtueModalPolicy.CloseFtueDirectly(previousModal.GetType().Name, hasUsableConfirmButton: false) &&
+                 GameStateService.TryCloseOpenFtue())
+        {
+        }
+        else
+        {
+            throw new ApiException(409, "invalid_action", "Action is not available in the current state.", new
+            {
+                action = actionName,
+                screen
+            });
+        }
+
         var stable = await WaitForModalTransitionAsync(previousModal, TimeSpan.FromSeconds(10));
 
         return new ActionResponsePayload

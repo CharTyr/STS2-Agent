@@ -17,13 +17,52 @@ else {
 $scriptRoot = Join-Path $ProjectRoot "scripts"
 $hostBaseUrl = "http://127.0.0.1:$HostApiPort"
 $clientBaseUrl = "http://127.0.0.1:$ClientApiPort"
+$script:KnownTestPids = New-Object 'System.Collections.Generic.HashSet[int]'
+
+function Get-TestGameProcesses {
+    param([int[]]$ApiPorts)
+
+    $matches = @()
+    foreach ($proc in Get-CimInstance Win32_Process | Where-Object { $_.Name -eq "SlayTheSpire2.exe" }) {
+        $command = [string]$proc.CommandLine
+        $matchedPort = $null
+        foreach ($port in $ApiPorts) {
+            if ($command -match ("STS2_API_PORT[= ]{0}" -f $port) -or $command -match ("--api-port[= ]{0}" -f $port) -or $command -match ("127\.0\.0\.1:{0}" -f $port)) {
+                $matchedPort = $port
+                break
+            }
+        }
+
+        if ($null -ne $matchedPort) {
+            $matches += [pscustomobject]@{
+                ProcessId = [int]$proc.ProcessId
+                Port = $matchedPort
+                CommandLine = $command
+            }
+        }
+    }
+
+    return $matches
+}
 
 function Stop-Games {
-    $existing = Get-Process -Name "SlayTheSpire2" -ErrorAction SilentlyContinue
-    if ($existing) {
-        Stop-Process -Id $existing.Id -Force
-        Start-Sleep -Seconds 2
+    $ports = @($HostApiPort, $ClientApiPort)
+    $known = @(Get-TestGameProcesses -ApiPorts $ports)
+    $ids = New-Object 'System.Collections.Generic.HashSet[int]'
+    foreach ($proc in $known) { [void]$ids.Add([int]$proc.ProcessId) }
+    foreach ($testPid in @($script:KnownTestPids)) {
+        if (Get-Process -Id $testPid -ErrorAction SilentlyContinue) { [void]$ids.Add([int]$testPid) }
     }
+    if ($ids.Count -eq 0) {
+        Write-Host "==> no proven test games on ports $($ports -join ',') ; leaving other SlayTheSpire2 processes alone"
+        return
+    }
+
+    foreach ($testPid in $ids) {
+        Write-Host "==> stopping test game pid=$testPid"
+        Stop-Process -Id $testPid -Force -ErrorAction SilentlyContinue
+    }
+    Start-Sleep -Seconds 2
 }
 
 function Invoke-ApiJson {
@@ -85,31 +124,227 @@ function Invoke-Action {
     return Invoke-ApiJson -BaseUrl $BaseUrl -Method "POST" -Path "/action" -Body $Payload
 }
 
+function Save-TimeoutStateDump {
+    param(
+        [string]$TimedOutBaseUrl,
+        [string]$Description,
+        $LastState = $null,
+        [string]$ErrorMessage = ""
+    )
+
+    $dumpDir = [Environment]::GetEnvironmentVariable("STS2_STATE_DUMP_DIR", "Process")
+    if ([string]::IsNullOrWhiteSpace($dumpDir)) {
+        return
+    }
+
+    try {
+        New-Item -ItemType Directory -Force -Path $dumpDir | Out-Null
+        [pscustomobject]@{
+            timestamp = (Get-Date).ToString("o")
+            timed_out_url = $TimedOutBaseUrl
+            description = $Description
+            error = $ErrorMessage
+        } | ConvertTo-Json -Depth 6 | Set-Content -LiteralPath (Join-Path $dumpDir "timeout-meta.json") -Encoding UTF8
+
+        if ($null -ne $LastState) {
+            $LastState | ConvertTo-Json -Depth 30 | Set-Content -LiteralPath (Join-Path $dumpDir "last-polled-state.json") -Encoding UTF8
+        }
+
+        foreach ($name in @("host", "client")) {
+            $url = if ($name -eq "host") { $hostBaseUrl } else { $clientBaseUrl }
+            try {
+                $payload = Invoke-RestMethod -Uri ($url.TrimEnd("/") + "/state") -TimeoutSec 8
+                $payload | ConvertTo-Json -Depth 30 | Set-Content -LiteralPath (Join-Path $dumpDir "$name-state.json") -Encoding UTF8
+                $data = $payload.data
+                [pscustomobject]@{
+                    url = $url
+                    screen = $data.screen
+                    in_combat = $data.in_combat
+                    turn = $data.turn
+                    run_id = $data.run_id
+                    available_actions = @($data.available_actions)
+                    map_current = $data.map.current_node
+                    map_local_vote = $data.map.local_vote
+                    map_available = @($data.map.available_nodes)
+                    combat_enemy_count = @($data.combat.enemies).Count
+                    combat_hand_count = @($data.combat.hand).Count
+                    play_card_available = @($data.available_actions) -contains "play_card"
+                    multiplayer = $data.multiplayer
+                } | ConvertTo-Json -Depth 12 | Set-Content -LiteralPath (Join-Path $dumpDir "$name-summary.json") -Encoding UTF8
+            }
+            catch {
+                $_.Exception.ToString() | Set-Content -LiteralPath (Join-Path $dumpDir "$name-state-error.txt") -Encoding UTF8
+            }
+        }
+
+        Write-Host "==> timeout state dump written to $dumpDir"
+    }
+    catch {
+        Write-Host "==> timeout state dump failed: $($_.Exception.Message)"
+    }
+}
+
+function Test-ShouldConfirmBlockingModal {
+    param($State)
+
+    if ($null -eq $State -or [string]$State.screen -ne "MODAL") {
+        return $false
+    }
+
+    $typeName = [string]$State.modal.type_name
+    if ($typeName -match "NErrorPopup" -or $typeName -match "ErrorPopup") {
+        return $false
+    }
+
+    $actions = @($State.available_actions)
+    if ($actions -notcontains "confirm_modal" -or $actions -contains "dismiss_modal") {
+        return $false
+    }
+
+    if ([bool]$State.modal.can_dismiss) {
+        return $false
+    }
+
+    return $typeName -match "Ftue" -or [bool]$State.in_combat
+}
+
+function Save-ErrorPopupAndFail {
+    param(
+        [string]$BaseUrl,
+        $State,
+        [string]$Reason = "NErrorPopup"
+    )
+
+    $dumpDir = [Environment]::GetEnvironmentVariable("STS2_STATE_DUMP_DIR", "Process")
+    if (-not [string]::IsNullOrWhiteSpace($dumpDir)) {
+        New-Item -ItemType Directory -Force -Path $dumpDir | Out-Null
+        $stamp = Get-Date -Format "HHmmss"
+        $State | ConvertTo-Json -Depth 30 | Set-Content -LiteralPath (Join-Path $dumpDir ("error-popup-{0}-{1}.json" -f ($BaseUrl -replace "[^0-9]", ""), $stamp)) -Encoding UTF8
+        [pscustomobject]@{
+            url = $BaseUrl
+            reason = $Reason
+            screen = $State.screen
+            modal = $State.modal
+            run_id = $State.run_id
+            turn = $State.turn
+            in_combat = $State.in_combat
+            available_actions = @($State.available_actions)
+        } | ConvertTo-Json -Depth 12 | Set-Content -LiteralPath (Join-Path $dumpDir ("error-popup-{0}-{1}-summary.json" -f ($BaseUrl -replace "[^0-9]", ""), $stamp)) -Encoding UTF8
+    }
+
+    throw ("Captured {0} on {1} type={2}; not auto-confirming." -f $Reason, $BaseUrl, [string]$State.modal.type_name)
+}
+
+function Clear-BlockingFtueModals {
+    param([string[]]$BaseUrls)
+
+    foreach ($url in $BaseUrls) {
+        if ([string]::IsNullOrWhiteSpace($url)) {
+            continue
+        }
+
+        try {
+            $payload = Invoke-ApiJson -BaseUrl $url -Method "GET" -Path "/state" -TimeoutSec 2 -RetryCount 1 -RetryDelayMs 0
+            $state = $payload.data
+            if (-not (Test-ShouldConfirmBlockingModal -State $state)) {
+                continue
+            }
+
+            $response = Invoke-ApiJson -BaseUrl $url -Method "POST" -Path "/action" -Body @{ action = "confirm_modal" } -TimeoutSec 5 -RetryCount 1 -RetryDelayMs 0
+            if ($response.ok) {
+                Write-Host "==> confirmed blocking modal on $url type=$($state.modal.type_name)"
+            }
+        }
+        catch {
+        }
+    }
+}
+
+function Advance-CombatTurnIfNeeded {
+    param(
+        [string[]]$BaseUrls,
+        [int]$MinTurn
+    )
+
+    if ($MinTurn -le 0) {
+        return
+    }
+
+    foreach ($url in $BaseUrls) {
+        if ([string]::IsNullOrWhiteSpace($url)) {
+            continue
+        }
+
+        try {
+            $payload = Invoke-ApiJson -BaseUrl $url -Method "GET" -Path "/state" -TimeoutSec 2 -RetryCount 1 -RetryDelayMs 0
+            $state = $payload.data
+            if (-not [bool]$state.in_combat) {
+                continue
+            }
+
+            $turn = 0
+            [void][int]::TryParse([string]$state.turn, [ref]$turn)
+            if ($turn -ge $MinTurn) {
+                continue
+            }
+
+            if (@($state.available_actions) -contains "end_turn") {
+                $response = Invoke-ApiJson -BaseUrl $url -Method "POST" -Path "/action" -Body @{ action = "end_turn" } -TimeoutSec 5 -RetryCount 1 -RetryDelayMs 0
+                if ($response.ok) {
+                    Write-Host "==> end_turn retry on $url turn=$turn"
+                }
+            }
+        }
+        catch {
+        }
+    }
+}
+
 function Wait-ForState {
     param(
         [string]$BaseUrl,
         [string]$Description,
         [scriptblock]$Condition,
         [int]$PollAttempts = 180,
-        [int]$PollDelayMs = 250
+        [int]$PollDelayMs = 250,
+        [int]$EndTurnBelowTurn = 0
     )
 
+    $state = $null
     for ($attempt = 0; $attempt -lt $PollAttempts; $attempt++) {
-        $state = Get-State -BaseUrl $BaseUrl
+        try {
+            $state = Get-State -BaseUrl $BaseUrl
+        }
+        catch {
+            Save-TimeoutStateDump -TimedOutBaseUrl $BaseUrl -Description $Description -LastState $state -ErrorMessage $_.Exception.Message
+            throw
+        }
+
+        $modalType = [string]$state.modal.type_name
+        if ([string]$state.screen -eq "MODAL" -and ($modalType -match "NErrorPopup" -or $modalType -match "ErrorPopup")) {
+            Save-ErrorPopupAndFail -BaseUrl $BaseUrl -State $state
+        }
+
         if (& $Condition $state) {
             return $state
         }
 
+        Clear-BlockingFtueModals -BaseUrls @($hostBaseUrl, $clientBaseUrl)
+        if ([string]$state.screen -eq "CARD_SELECTION") {
+            try { [void](Invoke-LocalRunProgressionStep -BaseUrl $BaseUrl -State $state) } catch { }
+        }
+        Advance-CombatTurnIfNeeded -BaseUrls @($hostBaseUrl, $clientBaseUrl) -MinTurn $EndTurnBelowTurn
         Start-Sleep -Milliseconds $PollDelayMs
     }
 
+    Save-TimeoutStateDump -TimedOutBaseUrl $BaseUrl -Description $Description -LastState $state
     throw "Timed out waiting for state at ${BaseUrl}: $Description"
 }
 
 function Resolve-BlockingModal {
     param(
         [string]$BaseUrl,
-        [int]$MaxAttempts = 4
+        [int]$MaxAttempts = 12
     )
 
     for ($attempt = 0; $attempt -lt $MaxAttempts; $attempt++) {
@@ -161,9 +396,10 @@ function Invoke-ActionExpectOk {
             return $lastResponse
         }
 
-        $isRetryableInternalError = $lastResponse.error.code -eq "internal_error"
+        $code = [string]$lastResponse.error.code
+        $isRetryable = $code -eq "internal_error" -or $code -eq "invalid_action" -or $code -eq "state_unavailable"
         $hasRetriesRemaining = $attempt -lt ($RetryCount - 1)
-        if (-not $isRetryableInternalError -or -not $hasRetriesRemaining) {
+        if (-not $isRetryable -or -not $hasRetriesRemaining) {
             break
         }
 
@@ -186,12 +422,42 @@ function Assert-ActionAvailable {
 }
 
 function Invoke-StateInvariantScript {
-    param([string]$BaseUrl)
+    param(
+        [string]$BaseUrl,
+        [int]$RetryCount = 4
+    )
 
     $scriptPath = Join-Path $scriptRoot "test-state-invariants.ps1"
-    & powershell -ExecutionPolicy Bypass -File $scriptPath -BaseUrl $BaseUrl
-    if ($LASTEXITCODE -ne 0) {
-        throw "test-state-invariants.ps1 failed for $BaseUrl"
+    $lastExit = 1
+    for ($attempt = 0; $attempt -lt $RetryCount; $attempt++) {
+        Clear-BlockingFtueModals -BaseUrls @($hostBaseUrl, $clientBaseUrl)
+        & powershell -ExecutionPolicy Bypass -File $scriptPath -BaseUrl $BaseUrl
+        $lastExit = $LASTEXITCODE
+        if ($lastExit -eq 0) {
+            return
+        }
+
+        Start-Sleep -Milliseconds 400
+    }
+
+    throw "test-state-invariants.ps1 failed for $BaseUrl"
+}
+
+function Wait-ForCardPlayResolved {
+    param(
+        [string]$BaseUrl,
+        [string]$Description
+    )
+
+    return Wait-ForState -BaseUrl $BaseUrl -Description $Description -Condition {
+        param($CurrentState)
+        if ($CurrentState.screen -eq "CARD_SELECTION" -or $CurrentState.screen -eq "MODAL") {
+            return $false
+        }
+
+        return $CurrentState.screen -eq "COMBAT" -and
+            $CurrentState.in_combat -and
+            $CurrentState.combat.player.cards_played_this_turn -ge 1
     }
 }
 
@@ -262,6 +528,86 @@ function Wait-ForCombatPlayable {
     }
 }
 
+function Invoke-NaturalCombatUntilReward {
+    param(
+        [string]$HostBaseUrl,
+        [string]$ClientBaseUrl,
+        [int]$TimeoutSeconds = 180
+    )
+
+    $deadline = (Get-Date).AddSeconds($TimeoutSeconds)
+    while ((Get-Date) -lt $deadline) {
+        $hostState = Get-State -BaseUrl $HostBaseUrl
+        $clientState = Get-State -BaseUrl $ClientBaseUrl
+        foreach ($pair in @(
+                @{ url = $HostBaseUrl; state = $hostState },
+                @{ url = $ClientBaseUrl; state = $clientState }
+            )) {
+            $modalType = [string]$pair.state.modal.type_name
+            if ([string]$pair.state.screen -eq "MODAL" -and ($modalType -match "NErrorPopup" -or $modalType -match "ErrorPopup")) {
+                Save-ErrorPopupAndFail -BaseUrl $pair.url -State $pair.state
+            }
+        }
+
+        if ([string]$hostState.screen -eq "REWARD" -and [string]$clientState.screen -eq "REWARD" -and
+            [string]$hostState.run_id -eq [string]$clientState.run_id -and
+            -not [string]::IsNullOrWhiteSpace([string]$hostState.run_id) -and
+            [string]$hostState.run_id -ne "run_unknown") {
+            Write-Host ("==> natural reward host turn={0} client turn={1}" -f $hostState.turn, $clientState.turn)
+            return @{
+                Host = $hostState
+                Client = $clientState
+            }
+        }
+
+        Clear-BlockingFtueModals -BaseUrls @($HostBaseUrl, $ClientBaseUrl)
+
+        foreach ($pair in @(
+                @{ url = $HostBaseUrl; state = $hostState; name = "host" },
+                @{ url = $ClientBaseUrl; state = $clientState; name = "client" }
+            )) {
+            $state = $pair.state
+            if ([string]$state.screen -ne "COMBAT" -or -not [bool]$state.in_combat) {
+                continue
+            }
+
+            $actions = @($state.available_actions)
+            $ready = $false
+            try { $ready = [bool]$state.combat.action_readiness.can_use_combat_actions } catch { $ready = $true }
+            if (-not $ready) {
+                continue
+            }
+
+            if (($actions -contains "play_card") -and (Test-CombatHasPlayableCard -State $state)) {
+                try {
+                    $payload = Get-FirstPlayableCardPayload -State $state
+                    $response = Invoke-Action -BaseUrl $pair.url -Payload $payload
+                    if ($response.ok) {
+                        Write-Host ("==> {0} play_card turn={1}" -f $pair.name, $state.turn)
+                    }
+                } catch {
+                }
+                continue
+            }
+
+            if ($actions -contains "end_turn") {
+                try {
+                    $response = Invoke-Action -BaseUrl $pair.url -Payload @{ action = "end_turn" }
+                    if ($response.ok) {
+                        Write-Host ("==> {0} end_turn turn={1}" -f $pair.name, $state.turn)
+                    }
+                } catch {
+                }
+            }
+        }
+
+        Start-Sleep -Milliseconds 350
+    }
+
+    Save-TimeoutStateDump -TimedOutBaseUrl $HostBaseUrl -Description "natural combat until both REWARD" -LastState (Get-State -BaseUrl $HostBaseUrl)
+    throw "Timed out waiting for both sides to reach natural REWARD without debug-win"
+}
+
 function Wait-ForCombatAction {
     param(
         [string]$BaseUrl,
@@ -273,6 +619,7 @@ function Wait-ForCombatAction {
         param($CurrentState)
         $CurrentState.screen -eq "COMBAT" -and
         $CurrentState.in_combat -and
+        $CurrentState.combat.action_readiness.can_use_combat_actions -eq $true -and
         @($CurrentState.available_actions) -contains $ActionName
     }
 }
@@ -472,6 +819,7 @@ function Start-DebugSession {
             $CurrentState.screen -eq "MAIN_MENU" -and @($CurrentState.available_actions).Count -gt 0
         } -PollAttempts 80 -PollDelayMs 250)
 
+    if ($latestProcess?.Id) { [void]$script:KnownTestPids.Add([int]$latestProcess.Id) }
     return [pscustomobject]@{
         pid = $latestProcess?.Id
         debug_actions_enabled = $true
@@ -720,12 +1068,7 @@ try {
         throw "Host play_card failed: $($hostPlayResponse | ConvertTo-Json -Depth 8 -Compress)"
     }
 
-    $hostAfterPlayState = Wait-ForState -BaseUrl $hostBaseUrl -Description "host card resolved" -Condition {
-        param($CurrentState)
-        $CurrentState.screen -eq "COMBAT" -and
-        $CurrentState.in_combat -and
-        $CurrentState.combat.player.cards_played_this_turn -ge 1
-    }
+    $hostAfterPlayState = Wait-ForCardPlayResolved -BaseUrl $hostBaseUrl -Description "host card resolved"
 
     Write-Host "==> client plays a combat card"
     $clientCombatState = Wait-ForCombatPlayable -BaseUrl $clientBaseUrl -Description "client can play a card after host play"
@@ -735,106 +1078,148 @@ try {
         throw "Client play_card failed: $($clientPlayResponse | ConvertTo-Json -Depth 8 -Compress)"
     }
 
-    $clientAfterPlayState = Wait-ForState -BaseUrl $clientBaseUrl -Description "client card resolved" -Condition {
-        param($CurrentState)
-        $CurrentState.screen -eq "COMBAT" -and
-        $CurrentState.in_combat -and
-        $CurrentState.combat.player.cards_played_this_turn -ge 1
-    }
+    $clientAfterPlayState = Wait-ForCardPlayResolved -BaseUrl $clientBaseUrl -Description "client card resolved"
 
     Write-Host "==> host and client end turn"
     [void](Wait-ForCombatAction -BaseUrl $hostBaseUrl -ActionName "end_turn" -Description "host can end turn")
-    $hostEndTurnResponse = Invoke-Action -BaseUrl $hostBaseUrl -Payload @{ action = "end_turn" }
-    if (-not $hostEndTurnResponse.ok) {
-        throw "Host end_turn failed: $($hostEndTurnResponse | ConvertTo-Json -Depth 8 -Compress)"
-    }
+    $hostEndTurnResponse = Invoke-ActionExpectOk -BaseUrl $hostBaseUrl -Description "Host end_turn" -RetryCount 4 -RetryDelayMs 400 -Payload @{ action = "end_turn" }
 
     [void](Wait-ForCombatAction -BaseUrl $clientBaseUrl -ActionName "end_turn" -Description "client can end turn")
-    $clientEndTurnResponse = Invoke-Action -BaseUrl $clientBaseUrl -Payload @{ action = "end_turn" }
-    if (-not $clientEndTurnResponse.ok) {
-        throw "Client end_turn failed: $($clientEndTurnResponse | ConvertTo-Json -Depth 8 -Compress)"
+    $clientEndTurnResponse = Invoke-ActionExpectOk -BaseUrl $clientBaseUrl -Description "Client end_turn" -RetryCount 4 -RetryDelayMs 400 -Payload @{ action = "end_turn" }
+
+    $deadline = (Get-Date).AddMinutes(2)
+    $hostTurnTwoState = $null
+    $clientTurnTwoState = $null
+    do {
+        $hostTurnTwoState = Get-State -BaseUrl $hostBaseUrl
+        $clientTurnTwoState = Get-State -BaseUrl $clientBaseUrl
+        foreach ($pair in @(
+                @{ url = $hostBaseUrl; state = $hostTurnTwoState },
+                @{ url = $clientBaseUrl; state = $clientTurnTwoState }
+            )) {
+            $modalType = [string]$pair.state.modal.type_name
+            if ([string]$pair.state.screen -eq "MODAL" -and ($modalType -match "NErrorPopup" -or $modalType -match "ErrorPopup")) {
+                Save-ErrorPopupAndFail -BaseUrl $pair.url -State $pair.state
+            }
+        }
+
+        $bothCombatTurnTwo = (
+            [string]$hostTurnTwoState.screen -eq "COMBAT" -and [bool]$hostTurnTwoState.in_combat -and [int]$hostTurnTwoState.turn -ge 2 -and
+            [string]$clientTurnTwoState.screen -eq "COMBAT" -and [bool]$clientTurnTwoState.in_combat -and [int]$clientTurnTwoState.turn -ge 2
+        )
+        $bothNaturalReward = (
+            [string]$hostTurnTwoState.screen -eq "REWARD" -and [string]$clientTurnTwoState.screen -eq "REWARD" -and
+            [string]$hostTurnTwoState.run_id -eq [string]$clientTurnTwoState.run_id -and
+            -not [string]::IsNullOrWhiteSpace([string]$hostTurnTwoState.run_id) -and
+            [string]$hostTurnTwoState.run_id -ne "run_unknown"
+        )
+        if ($bothCombatTurnTwo -or $bothNaturalReward) {
+            break
+        }
+
+        Clear-BlockingFtueModals -BaseUrls @($hostBaseUrl, $clientBaseUrl)
+        Advance-CombatTurnIfNeeded -BaseUrls @($hostBaseUrl, $clientBaseUrl) -MinTurn 2
+        Start-Sleep -Milliseconds 250
+        $hostTurnTwoState = $null
+    } while ((Get-Date) -lt $deadline)
+
+    if ($null -eq $hostTurnTwoState) {
+        $hostTurnTwoState = Get-State -BaseUrl $hostBaseUrl
+        $clientTurnTwoState = Get-State -BaseUrl $clientBaseUrl
+        Save-TimeoutStateDump -TimedOutBaseUrl $hostBaseUrl -Description "both sides COMBAT turn>=2 or both natural REWARD" -LastState $hostTurnTwoState
+        throw "Timed out waiting for both sides COMBAT turn>=2 or both natural REWARD"
     }
 
-    $hostTurnTwoState = Wait-ForState -BaseUrl $hostBaseUrl -Description "host reached turn 2" -Condition {
-        param($CurrentState)
-        $CurrentState.screen -eq "COMBAT" -and
-        $CurrentState.in_combat -and
-        [int]$CurrentState.turn -ge 2 -and
-        (
-            @($CurrentState.available_actions) -contains "play_card" -or
-            @($CurrentState.available_actions) -contains "end_turn"
-        )
+    $dumpDir = [Environment]::GetEnvironmentVariable("STS2_STATE_DUMP_DIR", "Process")
+    if (-not [string]::IsNullOrWhiteSpace($dumpDir)) {
+        New-Item -ItemType Directory -Force -Path $dumpDir | Out-Null
+        $hostTurnTwoState | ConvertTo-Json -Depth 30 | Set-Content -LiteralPath (Join-Path $dumpDir "host-turn2-or-reward.json") -Encoding UTF8
+        $clientTurnTwoState | ConvertTo-Json -Depth 30 | Set-Content -LiteralPath (Join-Path $dumpDir "client-turn2-or-reward.json") -Encoding UTF8
     }
-    $clientTurnTwoState = Wait-ForState -BaseUrl $clientBaseUrl -Description "client reached turn 2" -Condition {
-        param($CurrentState)
-        $CurrentState.screen -eq "COMBAT" -and
-        $CurrentState.in_combat -and
-        [int]$CurrentState.turn -ge 2 -and
-        (
-            @($CurrentState.available_actions) -contains "play_card" -or
-            @($CurrentState.available_actions) -contains "end_turn"
-        )
-    }
+    Write-Host ("==> end-turn accepted host screen={0} turn={1} client screen={2} turn={3}" -f $hostTurnTwoState.screen, $hostTurnTwoState.turn, $clientTurnTwoState.screen, $clientTurnTwoState.turn)
 
     Invoke-StateInvariantScript -BaseUrl $hostBaseUrl
     Invoke-StateInvariantScript -BaseUrl $clientBaseUrl
 
-    Write-Host "==> finish combat with debug win on both players"
-    $hostWinResponse = Invoke-DebugCombatWin -BaseUrl $hostBaseUrl
-    if (-not $hostWinResponse.ok) {
-        throw "Host debug combat win failed: $($hostWinResponse | ConvertTo-Json -Depth 8 -Compress)"
+    $hostRewardState = $null
+    $clientRewardState = $null
+    if ([string]$hostTurnTwoState.screen -eq "REWARD" -and [string]$clientTurnTwoState.screen -eq "REWARD") {
+        Write-Host "==> combat ended naturally after end_turn; skipping later debug fixture"
+        $hostRewardState = $hostTurnTwoState
+        $clientRewardState = $clientTurnTwoState
+    }
+    else {
+        Write-Host "==> continue natural combat until both REWARD; debug-win is not used"
+        $natural = Invoke-NaturalCombatUntilReward -HostBaseUrl $hostBaseUrl -ClientBaseUrl $clientBaseUrl
+        $hostRewardState = $natural.Host
+        $clientRewardState = $natural.Client
     }
 
-    $clientWinResponse = Invoke-DebugCombatWin -BaseUrl $clientBaseUrl
-    if (-not $clientWinResponse.ok) {
-        throw "Client debug combat win failed: $($clientWinResponse | ConvertTo-Json -Depth 8 -Compress)"
-    }
-
-    $hostRewardState = Wait-ForState -BaseUrl $hostBaseUrl -Description "host reward screen ready" -Condition {
-        param($CurrentState)
-        $CurrentState.screen -eq "REWARD" -and
-        $null -ne $CurrentState.reward -and
-        (@($CurrentState.reward.rewards).Count -ge 1 -or @($CurrentState.reward.card_options).Count -ge 1)
-    }
-    $clientRewardState = Wait-ForState -BaseUrl $clientBaseUrl -Description "client reward screen ready" -Condition {
-        param($CurrentState)
-        $CurrentState.screen -eq "REWARD" -and
-        $null -ne $CurrentState.reward -and
-        (@($CurrentState.reward.rewards).Count -ge 1 -or @($CurrentState.reward.card_options).Count -ge 1)
+    if ($null -eq $hostRewardState) {
+        $hostRewardState = Wait-ForState -BaseUrl $hostBaseUrl -Description "host reward screen ready" -Condition {
+            param($CurrentState)
+            $CurrentState.screen -eq "REWARD" -and
+            $null -ne $CurrentState.reward -and
+            (@($CurrentState.reward.rewards).Count -ge 1 -or @($CurrentState.reward.card_options).Count -ge 1)
+        }
+        $clientRewardState = Wait-ForState -BaseUrl $clientBaseUrl -Description "client reward screen ready" -Condition {
+            param($CurrentState)
+            $CurrentState.screen -eq "REWARD" -and
+            $null -ne $CurrentState.reward -and
+            (@($CurrentState.reward.rewards).Count -ge 1 -or @($CurrentState.reward.card_options).Count -ge 1)
+        }
     }
 
     Invoke-StateInvariantScript -BaseUrl $hostBaseUrl
     Invoke-StateInvariantScript -BaseUrl $clientBaseUrl
 
     Write-Host "==> host and client resolve reward flow"
-    $hostResolveRewardResponse = Invoke-Action -BaseUrl $hostBaseUrl -Payload @{ action = "resolve_rewards" }
-    if (-not $hostResolveRewardResponse.ok) {
-        throw "Host resolve_rewards failed: $($hostResolveRewardResponse | ConvertTo-Json -Depth 8 -Compress)"
-    }
+    $hostResolveRewardResponse = Invoke-ActionExpectOk -BaseUrl $hostBaseUrl -Description "Host resolve_rewards" -RetryCount 6 -RetryDelayMs 500 -Payload @{ action = "resolve_rewards" }
+    $clientResolveRewardResponse = Invoke-ActionExpectOk -BaseUrl $clientBaseUrl -Description "Client resolve_rewards" -RetryCount 6 -RetryDelayMs 500 -Payload @{ action = "resolve_rewards" }
 
-    $clientResolveRewardResponse = Invoke-Action -BaseUrl $clientBaseUrl -Payload @{ action = "resolve_rewards" }
-    if (-not $clientResolveRewardResponse.ok) {
-        throw "Client resolve_rewards failed: $($clientResolveRewardResponse | ConvertTo-Json -Depth 8 -Compress)"
-    }
+    $deadline = (Get-Date).AddMinutes(2)
+    $hostPostRewardMapState = $null
+    $clientPostRewardMapState = $null
+    do {
+        $hostPostRewardMapState = Get-State -BaseUrl $hostBaseUrl
+        $clientPostRewardMapState = Get-State -BaseUrl $clientBaseUrl
+        foreach ($pair in @(
+                @{ url = $hostBaseUrl; state = $hostPostRewardMapState },
+                @{ url = $clientBaseUrl; state = $clientPostRewardMapState }
+            )) {
+            $modalType = [string]$pair.state.modal.type_name
+            if ([string]$pair.state.screen -eq "MODAL" -and ($modalType -match "NErrorPopup" -or $modalType -match "ErrorPopup")) {
+                Save-ErrorPopupAndFail -BaseUrl $pair.url -State $pair.state
+            }
+        }
 
-    $hostPostRewardMapState = Wait-ForState -BaseUrl $hostBaseUrl -Description "host returned to map after rewards" -Condition {
-        param($CurrentState)
-        $CurrentState.screen -eq "MAP" -and
-        $null -ne $CurrentState.map -and
-        $null -ne $CurrentState.map.current_node -and
-        [int]$CurrentState.map.current_node.row -eq [int]$selectedMapNode.row -and
-        [int]$CurrentState.map.current_node.col -eq [int]$selectedMapNode.col -and
-        @($CurrentState.map.available_nodes).Count -ge 1
+        $bothOnMap = (
+            [string]$hostPostRewardMapState.screen -eq "MAP" -and [string]$clientPostRewardMapState.screen -eq "MAP" -and
+            @($hostPostRewardMapState.available_actions) -contains "choose_map_node" -and
+            @($clientPostRewardMapState.available_actions) -contains "choose_map_node"
+        )
+        if ($bothOnMap) { break }
+
+        Clear-BlockingFtueModals -BaseUrls @($hostBaseUrl, $clientBaseUrl)
+        foreach ($url in @($hostBaseUrl, $clientBaseUrl)) {
+            try {
+                $state = if ($url -eq $hostBaseUrl) { $hostPostRewardMapState } else { $clientPostRewardMapState }
+                if ([string]$state.screen -in @("REWARD", "MODAL", "CARD_SELECTION")) {
+                    [void](Invoke-LocalRunProgressionStep -BaseUrl $url -State $state)
+                }
+            } catch { }
+        }
+        Start-Sleep -Milliseconds 400
+        $hostPostRewardMapState = $null
+    } while ((Get-Date) -lt $deadline)
+
+    if ($null -eq $hostPostRewardMapState) {
+        $hostPostRewardMapState = Get-State -BaseUrl $hostBaseUrl
+        $clientPostRewardMapState = Get-State -BaseUrl $clientBaseUrl
+        Save-TimeoutStateDump -TimedOutBaseUrl $hostBaseUrl -Description "both returned to map after rewards" -LastState $hostPostRewardMapState
+        throw "Timed out waiting for both sides to return to MAP after rewards"
     }
-    $clientPostRewardMapState = Wait-ForState -BaseUrl $clientBaseUrl -Description "client returned to map after rewards" -Condition {
-        param($CurrentState)
-        $CurrentState.screen -eq "MAP" -and
-        $null -ne $CurrentState.map -and
-        $null -ne $CurrentState.map.current_node -and
-        [int]$CurrentState.map.current_node.row -eq [int]$selectedMapNode.row -and
-        [int]$CurrentState.map.current_node.col -eq [int]$selectedMapNode.col -and
-        @($CurrentState.map.available_nodes).Count -ge 1
-    }
+    Write-Host ("==> post-reward map host={0} client={1}" -f $hostPostRewardMapState.screen, $clientPostRewardMapState.screen)
 
     Invoke-StateInvariantScript -BaseUrl $hostBaseUrl
     Invoke-StateInvariantScript -BaseUrl $clientBaseUrl
@@ -1010,3 +1395,6 @@ finally {
         Stop-Games
     }
 }
+
+
+

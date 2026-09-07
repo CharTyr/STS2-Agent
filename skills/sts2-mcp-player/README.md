@@ -1,5 +1,7 @@
 # STS2 MCP Player 使用说明
 
+游戏内自动游玩和这份技能共用同一份游玩合同：in-game agent 把 SKILL.md 的 shared play contract 加上 screen-playbooks.md 作为 system prompt。
+
 这是一个给 Codex/Agent 用的技能，目标是更稳定地通过 `sts2-ai-agent` MCP 接口游玩或验证《Slay the Spire 2》。
 
 它解决的核心问题是：
@@ -124,7 +126,10 @@ debug 模式：
 
 - `health_check`
 - `get_game_state`
+- `get_raw_game_state`
 - `get_available_actions`
+- `get_relevant_game_data` / `get_game_data_item` / `get_game_data_items`
+- `wait_until_actionable`
 - `act`
 
 只有在这些情况下才建议用 full profile：

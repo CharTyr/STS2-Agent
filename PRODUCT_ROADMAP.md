@@ -1,6 +1,6 @@
 # STS2 AI Agent 产品现状与后续开发计划
 
-> **当前计划与执行入口：** 请参阅 [PRODUCT_PLAN_CURRENT.md](PRODUCT_PLAN_CURRENT.md) 与 [COOP_DELIVERY.md](COOP_DELIVERY.md)。2026-09-05 已按远程 main `27f2b70`、近期合并 PR 及最新 PR 链（PR #61 ~ #64）系统推进。本文保留为历史产品规划，执行状态与最新交付指标以当前计划与跟踪文档为准；未合并入 main 的候选 PR 能力属于分支验证证据，主线基线以 `27f2b70` 及其实际执行结果为准。
+> **历史规划。** 当前执行清单只有 [PRODUCT_PLAN_CURRENT.md](PRODUCT_PLAN_CURRENT.md)；证据追加在 [COOP_DELIVERY.md](COOP_DELIVERY.md)。下文的提交号、测试数量和“待实现”条目已过时（远程 main 已至 v0.10.2 / `1be8e83`），不要当任务板用。
 
 评估日期：2026-09-05。本文为开发建议，不代表功能已经交付或发布承诺。
 

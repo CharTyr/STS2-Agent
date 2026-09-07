@@ -137,7 +137,21 @@ internal static class CoopLaunchPolicy
         if (isCompanion) return "当前窗口已是 AI 队友。请在你的主窗口邀请队友。";
         if (autoPlayRunning) return "请先暂停当前角色的自动游玩，再邀请 AI 队友。";
         if (screen != "MAIN_MENU") return "请先回到主菜单，再邀请 AI 队友组队。";
-        var firstRun = FirstRunSetup.Evaluate(model);
+        if (model == null || string.IsNullOrWhiteSpace(model.Model.Model)) return FirstRunSetup.SettingsHint;
+        if (!Uri.TryCreate(model.Endpoint.BaseUrl, UriKind.Absolute, out var endpoint) ||
+            endpoint.Scheme is not ("http" or "https"))
+        {
+            return "模型端点地址无效，请在设置中填写完整的 HTTP 或 HTTPS 地址。";
+        }
+
+        return null;
+    }
+
+    public static string? GetError(bool isCompanion, bool autoPlayRunning, string screen, AgentSettings settings)
+    {
+        var structural = GetError(isCompanion, autoPlayRunning, screen, settings.TryResolvePlayModel());
+        if (structural != null) return structural;
+        var firstRun = FirstRunSetup.Evaluate(settings);
         if (!firstRun.ReadyToInvite) return firstRun.Hint;
         return null;
     }

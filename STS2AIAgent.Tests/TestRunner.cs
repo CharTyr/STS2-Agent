@@ -110,6 +110,26 @@ internal static class TestRunner
 
     private static IEnumerable<(string Name, Func<Task> Body)> AllTests()
     {
+        yield return ("FirstRun.DefaultUnverified", () => Task.Run(PlayerExperienceTests.DefaultSettingsAreUnverifiedAndNotInvitable));
+        yield return ("FirstRun.VerifiedInvite", () => Task.Run(PlayerExperienceTests.VerifiedPlayFingerprintAllowsInvite));
+        yield return ("FirstRun.KeyChangeInvalidates", () => Task.Run(PlayerExperienceTests.ChangingKeyInvalidatesVerification));
+        yield return ("Probe.Play401NotMaskedByChat", PlayerExperienceTests.ConversationSuccessDoesNotMarkPlayWhenPlayReturns401);
+        yield return ("Probe.SkipFreshVerified", PlayerExperienceTests.FreshVerifiedFingerprintSkipsRetest);
+        yield return ("Settings.EndpointRemovalBlocked", () => Task.Run(PlayerExperienceTests.EndpointRemovalRequiresConfirmationWhenReferenced));
+        yield return ("Settings.ModelRemovalBlocked", () => Task.Run(PlayerExperienceTests.ModelRemovalRequiresConfirmationWhenBound));
+        yield return ("Settings.EndpointRemovalDisabledReference", () => Task.Run(SettingsExperienceRegressionTests.EndpointRemovalBlocksDisabledEndpointReferences));
+        yield return ("Settings.EndpointRemovalFallbackPlay", () => Task.Run(SettingsExperienceRegressionTests.EndpointRemovalIncludesFallbackPlayReference));
+        yield return ("Settings.ModelRemovalAllRoles", () => Task.Run(SettingsExperienceRegressionTests.ModelRemovalReportsEveryRoleReference));
+        yield return ("Settings.ModelRemovalUnreferenced", () => Task.Run(SettingsExperienceRegressionTests.ModelRemovalAllowsUnreferencedModel));
+        yield return ("Usage.MissingNotZero", () => Task.Run(PlayerExperienceTests.MissingUsageIsNotDisplayedAsZero));
+        yield return ("Diagnostics.RedactsSecrets", () => Task.Run(PlayerExperienceTests.DiagnosticExportRedactsSecretsAndOmitsChat));
+        yield return ("Diagnostics.RedactsAllCredentialShapes", () => Task.Run(RuntimeExperienceRegressionTests.DiagnosticExportRedactsAllCredentialShapes));
+        yield return ("Probe.RoleInFallbackError", () => Task.Run(RuntimeExperienceRegressionTests.ModelRoleProbeUsesTheTestedRoleInFallbackErrors));
+        yield return ("Probe.FailureKind", () => Task.Run(RuntimeExperienceRegressionTests.ModelRoleProbeClassifiesConfigAndNetworkFailures));
+        yield return ("Session.RejectsStaleCompletion", () => Task.Run(RuntimeExperienceRegressionTests.CompletionIdentityRejectsLatePreviousSessionCallbacks));
+        yield return ("Session.ClearOwnModelTestStop", () => Task.Run(RuntimeExperienceRegressionTests.SuccessfulModelTestClearsOnlyItsOwnTransientStop));
+        yield return ("Session.PauseAndConfigCopy", () => Task.Run(PlayerExperienceTests.PlayerFacingMapsPauseAndConfigError));
+        yield return ("Mcp.NativeActContract", () => Task.Run(PlayerExperienceTests.NativeMcpToolsMatchGuidedActContract));
         yield return ("CurrentRun.AllowsLobbyBeforeRun", () => Task.Run(CurrentRunBoundaryTests.AllowsLobbyBeforeRun));
         yield return ("CurrentRun.StopsWhenLeavingRunToMainMenu", () => Task.Run(CurrentRunBoundaryTests.StopsWhenLeavingRunToMainMenu));
         yield return ("CurrentRun.StopsWhenLeavingRunToLobby", () => Task.Run(CurrentRunBoundaryTests.StopsWhenLeavingRunToLobby));
@@ -118,6 +138,7 @@ internal static class TestRunner
         yield return ("Recovery.NoActionStops", AutoPlayRecoveryTests.RepeatedNoActionStops);
         yield return ("Recovery.HttpStatus", AutoPlayRecoveryTests.HttpFailuresKeepStatusWithoutStreamReplay);
         yield return ("Recovery.Waiting", AutoPlayRecoveryTests.WaitingDoesNotHideFailures);
+        yield return ("Recovery.CompanionMapWait", AutoPlayRecoveryTests.CompanionMapWaitDoesNotStopAutoPlay);
         yield return ("Recovery.SuccessResets", AutoPlayRecoveryTests.SuccessfulActionResetsFailures);
         yield return ("Recovery.CancelBackoff", AutoPlayRecoveryTests.CancelDuringBackoffPreventsNextTurn);
         yield return ("TeamControl.WaitForCommittedWork", AutoPlaySessionTests.PauseWaitsForCommittedWorkAndBlocksRestart);
@@ -139,6 +160,8 @@ internal static class TestRunner
         yield return ("CoopStartup.FourPlayerOccupancy", () => Task.Run(CompanionStartupTests.LocalJoinOccupiesOneSlotInFourPlayerLobby));
         yield return ("CoopStartup.OwnCharacterOnly", () => Task.Run(CompanionStartupTests.CompanionActionsTargetOnlyLocalCharacter));
         yield return ("CoopStartup.JoinBootstrap", () => Task.Run(CompanionStartupTests.CompanionBootstrapJoinsAsExtraPlayerThenReady));
+        yield return ("CoopStartup.CombatFtueConfirm", () => Task.Run(CompanionStartupTests.CombatRulesFtueIsConfirmedImmediately));
+        yield return ("Ftue.CombatRulesWithoutButton", () => Task.Run(FtueModalPolicyTests.CombatRulesFtueWithoutButtonIsConfirmable));
         yield return ("CoopStartup.FirstRunProvider", () => Task.Run(CompanionStartupTests.FirstRunProviderConfigIsReachable));
         yield return ("CoopStartup.ProfileMods", () => Task.Run(CompanionStartupTests.CompanionProfileEnablesTheMod));
         yield return ("CoopStartup.SettingsIsolation", () => Task.Run(CompanionStartupTests.SettingsPathCanBeIsolated));
@@ -147,6 +170,7 @@ internal static class TestRunner
         yield return ("CoopStartup.Identity", () => Task.Run(CompanionStartupTests.HealthRequiresExactCompanionIdentity));
         yield return ("CoopStartup.Preconditions", () => Task.Run(CompanionStartupTests.LaunchPreconditionsProtectHumanRun));
         yield return ("SettingsStore.RoundTrip", () => Task.Run(SettingsStoreTests.RoundTrip_PreservesEndpointsModelsAndRoles));
+        yield return ("SettingsStore.FingerprintCase", () => Task.Run(SettingsStoreTests.Load_VerifiedPlayFingerprint_IsCaseInsensitive));
         yield return ("SettingsStore.MissingFile", () => Task.Run(SettingsStoreTests.Load_MissingFile_CreatesDefaults));
         yield return ("SettingsStore.MigrateThinking", () => Task.Run(SettingsStoreTests.Load_MigratesGlobalThinkingIntensityOntoModels));
         yield return ("Thinking.gpt-4o", () => Task.Run(() => ThinkingRequestBuilderTests.Infer("gpt-4o", "auto", "prompt")));
@@ -186,6 +210,7 @@ internal static class TestRunner
         yield return ("UnlockConfirm.Session", () => Task.Run(UnlockConfirmResolutionPolicyTests.ProbeSignatureIncludesScreenInstance));
         yield return ("UnlockScreen.MixedCardGrid", () => Task.Run(UnlockScreenContractTests.UnlockCardsScreenWithVisibleGridReportsOnlyUnlockAction));
         yield return ("GameOver.ContinueAction", () => Task.Run(GameOverContractTests.DedicatedContinueActionIsWiredEndToEnd));
+        yield return ("Skill.McpPlayerContract", () => Task.Run(McpPlayerSkillTests.SkillTracksLivePlayContract));
         yield return ("GameOver.ReturnGate", () => Task.Run(GameOverContractTests.ReturnActionRequiresVisibleAndEnabledMainMenuButton));
         yield return ("GameOver.NativeButtons", () => Task.Run(GameOverContractTests.ContinueAndReturnUseNativeButtonsWithoutSkippingSummary));
         yield return ("GameOver.SummaryReady", () => Task.Run(GameOverContractTests.ContinueWaitsForNativeSummaryReadiness));
@@ -225,6 +250,7 @@ internal static class TestRunner
         yield return ("NativeMcp.Disabled", McpServiceTests.Disabled_Returns403);
         yield return ("NativeMcp.Initialize", McpServiceTests.Initialize_ReturnsServerInfoAndSession);
         yield return ("NativeMcp.ToolsList", McpServiceTests.ToolsList_IncludesHealthAndAct);
+        yield return ("NativeMcp.SkillResources", McpServiceTests.Resources_ExposeSharedPlaySkill);
         yield return ("NativeMcp.ToolsCall", McpServiceTests.ToolsCall_GetGameStateAndAct);
         yield return ("NativeMcp.Notification", McpServiceTests.Notification_Returns202);
         yield return ("NativeMcp.ClientConfig", McpServiceTests.ClientConfig_UsesEnabledUrl);

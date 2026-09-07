@@ -43,6 +43,9 @@ internal sealed class AgentOverlayHost
     private Label? _apiLabel;
     private Label? _dualStatus;
     private Label? _firstRunHint;
+    private Label? _sessionHeadline;
+    private Label? _sessionDetail;
+    private Label? _sessionNext;
     private Button? _dualLaunchButton;
     private RichTextLabel? _teamChat;
     private TextEdit? _teamInput;
@@ -76,6 +79,16 @@ internal sealed class AgentOverlayHost
     private OptionButton? _playCombo;
     private OptionButton? _visionCombo;
     private LineEdit? _hotkeyEdit;
+    private Label? _saveStatus;
+    private Label? _testNotice;
+    private Label? _conversationTest;
+    private Label? _playTest;
+    private Label? _visionTest;
+    private Label? _deleteWarning;
+    private CheckBox? _showAdvanced;
+    private bool _settingsDirty;
+    private bool _rebuildingSettings;
+    private bool _showAdvancedValue;
 
     public static void Install()
     {
@@ -237,7 +250,8 @@ internal sealed class AgentOverlayHost
         layout.AddChild(_chatFooter);
         chrome.AddChild(layout);
         _panel.AddChild(chrome);
-        _panel.Visible = AgentRuntime.Instance.Settings.OverlayVisibleOnStart;
+        var startupSettings = AgentRuntime.Instance.Settings;
+        _panel.Visible = startupSettings.OverlayVisibleOnStart || !startupSettings.HasSeenFirstRunGuide;
 
         host.AddChild(_edgeTab);
         host.AddChild(_panel);
@@ -245,7 +259,18 @@ internal sealed class AgentOverlayHost
         _layer.TreeEntered += OnOverlayEnteredTree;
         root.CallDeferred(Node.MethodName.AddChild, _layer);
         _tree.ProcessFrame += OnProcessFrame;
-        ShowTab(InstanceRole.IsCompanion ? "play" : "dual");
+        if (InstanceRole.IsCompanion)
+        {
+            ShowTab("play");
+        }
+        else if (!startupSettings.HasSeenFirstRunGuide)
+        {
+            ShowTab("settings");
+        }
+        else
+        {
+            ShowTab("dual");
+        }
         RefreshDynamic();
         Log.Info($"{LogPrefix} Attach scheduled");
     }
@@ -354,7 +379,7 @@ internal sealed class AgentOverlayHost
         var addEndpoint = UiFactory.Button("添加端点", AddEndpoint);
         var addModel = UiFactory.Button("添加模型", AddModel);
         var save = UiFactory.Button("保存设置", SaveSettingsFromUi);
-        var test = UiFactory.Button("测试连通", () => _ = TestConnectionAsync());
+        var test = UiFactory.Button("测试连接", () => _ = TestConnectionAsync());
         page.AddChild(UiFactory.Row(addEndpoint, addModel));
         page.AddChild(UiFactory.Row(save, test));
         RebuildSettingsForm();
@@ -386,9 +411,16 @@ internal sealed class AgentOverlayHost
         var page = UiFactory.Column();
         page.AddChild(UiFactory.Label("和 AI 一起爬塔", 18));
         page.AddChild(UiFactory.Label("可以一起玩：你打自己的角色，AI 打另一个角色，同一座塔往上爬。大厅仍是 4 人位，还可以再邀 2 名在线玩家。", 13));
+        _sessionHeadline = UiFactory.Label("状态：-", 16);
+        _sessionDetail = UiFactory.Label("-", 13, muted: true);
+        _sessionNext = UiFactory.Label("下一步：-", 13);
+        page.AddChild(_sessionHeadline);
+        page.AddChild(_sessionDetail);
+        page.AddChild(_sessionNext);
         _firstRunHint = UiFactory.Label(FirstRunSetup.Evaluate(AgentRuntime.Instance.Settings).Hint, 13, muted: true);
         page.AddChild(_firstRunHint);
         page.AddChild(UiFactory.Label("请从主菜单邀请。第二窗口打开后，AI 会自己选角、点开局事件并进图。你继续在这个窗口操作自己的角色；轮到它时，它会自动出牌。", 12, muted: true));
+        page.AddChild(UiFactory.Button("导出诊断", CopyDiagnostics));
         _dualLaunchButton = UiFactory.Button("邀请 AI 队友", () => _ = LaunchDualAsync());
         page.AddChild(_dualLaunchButton);
         _dualStatus = UiFactory.Label("队友尚未加入。", 13, muted: true);
@@ -419,6 +451,7 @@ internal sealed class AgentOverlayHost
     {
         var page = UiFactory.Column();
         page.AddChild(UiFactory.Label("MCP 接入", 15));
+        page.AddChild(UiFactory.Label("选择：一起玩只用游戏内窗口，不必打开 MCP。外部客户端用本页开关。Python sidecar 仅 stdio / layered / full。", 12, muted: true));
         page.AddChild(UiFactory.Label("游戏内自动打不需要打开。只有 Cursor / Claude / Codex 等外部客户端才需要。", 12, muted: true));
         _mcpToggle = UiFactory.Check("打开 MCP 服务", AgentRuntime.Instance.McpRunning);
         _mcpToggle.Toggled += on => AgentRuntime.Instance.SetMcpEnabled(on);
@@ -446,7 +479,7 @@ internal sealed class AgentOverlayHost
         _mcpInfoBox.Visible = AgentRuntime.Instance.McpRunning;
         page.AddChild(_mcpInfoBox);
 
-        page.AddChild(UiFactory.Label("本机 HTTP API 始终可用：GET /health /state ，POST /action。MCP 打开后才会在同一端口暴露 /mcp。", 12, muted: true));
+        page.AddChild(UiFactory.Label("本机 HTTP API 始终可用：GET /health /state ，POST /action。MCP 打开后才会在同一端口暴露 /mcp。地址以本页复制为准，不要写死 8080 或 8765。", 12, muted: true));
         return page;
     }
 
@@ -457,6 +490,9 @@ internal sealed class AgentOverlayHost
             return;
         }
 
+        _rebuildingSettings = true;
+        try
+        {
         foreach (var child in _settingsBody.GetChildren().ToArray())
         {
             _settingsBody.RemoveChild(child);
@@ -466,6 +502,27 @@ internal sealed class AgentOverlayHost
         _endpointEditors.Clear();
         _modelEditors.Clear();
         var settings = CloneSettings(AgentRuntime.Instance.Settings);
+        var firstRun = FirstRunSetup.Evaluate(settings);
+
+        _saveStatus = UiFactory.Label(_settingsDirty ? "未保存" : "已保存", 12, muted: true);
+        _settingsBody.AddChild(_saveStatus);
+        _settingsBody.AddChild(UiFactory.Label("首次配置", 15));
+        _settingsBody.AddChild(UiFactory.Label("添加端点 → 添加模型并绑定 → 选择对话/游玩用途 → 测试连接 → 保存。通过后再去「AI 队友」从主菜单邀请。默认网址和模型名不算已经可用。", 12, muted: true));
+        _testNotice = UiFactory.Label("测试连接会向配置的服务发送测试请求。对话通过不等于游玩已通过。本地服务可以留空 API Key。", 12, muted: true);
+        _settingsBody.AddChild(_testNotice);
+        _conversationTest = UiFactory.Label(ModelRoleProbe.FormatLine(firstRun.Conversation), 12, muted: true);
+        _playTest = UiFactory.Label(ModelRoleProbe.FormatLine(firstRun.Play), 12, muted: true);
+        _visionTest = UiFactory.Label(ModelRoleProbe.FormatLine(firstRun.Vision), 12, muted: true);
+        _settingsBody.AddChild(_conversationTest);
+        _settingsBody.AddChild(_playTest);
+        _settingsBody.AddChild(_visionTest);
+        if (firstRun.Play.Status == "failed" && !string.IsNullOrWhiteSpace(firstRun.Play.NextStep))
+        {
+            _settingsBody.AddChild(UiFactory.Label("下一步：" + firstRun.Play.NextStep, 12));
+        }
+
+        _deleteWarning = UiFactory.Label("", 12);
+        _settingsBody.AddChild(_deleteWarning);
 
         _settingsBody.AddChild(UiFactory.Label("端点", 15));
         for (var i = 0; i < settings.Endpoints.Count; i++)
@@ -486,17 +543,45 @@ internal sealed class AgentOverlayHost
         _settingsBody.AddChild(Labeled("主对话模型", _conversationCombo));
         _settingsBody.AddChild(Labeled("游玩模型（可空=主对话）", _playCombo));
         _settingsBody.AddChild(Labeled("外挂视觉模型（可空）", _visionCombo));
-        _settingsBody.AddChild(UiFactory.Label("视觉可选。不勾选「视觉」、不配外挂视觉时，仍用 compact 状态与工具打完全部内容。", 11, muted: true));
-        _hotkeyEdit = UiFactory.Line(settings.Hotkey, "F8");
-        _settingsBody.AddChild(Labeled("开关热键", _hotkeyEdit));
-        _maxTokensEdit = UiFactory.Line(settings.MaxSessionTokens?.ToString() ?? "", "不限（留空或0）");
-        _maxRequestsEdit = UiFactory.Line(settings.MaxSessionRequests?.ToString() ?? "", "不限（留空或0）");
-        _settingsBody.AddChild(Labeled("会话 Token 上限", _maxTokensEdit));
-        _settingsBody.AddChild(Labeled("会话请求上限", _maxRequestsEdit));
-        _settingsBody.AddChild(UiFactory.Label("预算护栏：达到上限时优雅停止自动游玩并提示，避免意外耗尽额度。", 11, muted: true));
-        _settingsBody.AddChild(UiFactory.Button("重置窗口位置", ResetPlacement));
-        _settingsBody.AddChild(UiFactory.Label("拖动标题栏可移动窗口，位置会保存。", 11, muted: true));
-        _settingsBody.AddChild(UiFactory.Label("配置文件：" + AgentRuntime.Instance.SettingsPath, 11, muted: true));
+        WatchCombo(_conversationCombo);
+        WatchCombo(_playCombo);
+        WatchCombo(_visionCombo);
+        _showAdvanced = UiFactory.Check("显示高级选项", _showAdvancedValue);
+        _showAdvanced.Toggled += on =>
+        {
+            _showAdvancedValue = on;
+            FlushSettingsIfDirty();
+            RebuildSettingsForm();
+        };
+        _settingsBody.AddChild(_showAdvanced);
+        if (_showAdvancedValue)
+        {
+            _settingsBody.AddChild(UiFactory.Label("视觉可选。不勾选「视觉」、不配外挂视觉时，仍用 compact 状态与工具打完全部内容。", 11, muted: true));
+            _hotkeyEdit = UiFactory.Line(settings.Hotkey, "F8");
+            WatchLine(_hotkeyEdit);
+            _settingsBody.AddChild(Labeled("开关热键", _hotkeyEdit));
+            _maxTokensEdit = UiFactory.Line(settings.MaxSessionTokens?.ToString() ?? "", "不限（留空或0）");
+            _maxRequestsEdit = UiFactory.Line(settings.MaxSessionRequests?.ToString() ?? "", "不限（留空或0）");
+            WatchLine(_maxTokensEdit);
+            WatchLine(_maxRequestsEdit);
+            _settingsBody.AddChild(Labeled("会话 Token 上限", _maxTokensEdit));
+            _settingsBody.AddChild(Labeled("会话请求上限", _maxRequestsEdit));
+            _settingsBody.AddChild(UiFactory.Label("预算护栏：达到上限时优雅停止自动游玩并提示，避免意外耗尽额度。", 11, muted: true));
+            _settingsBody.AddChild(UiFactory.Button("重置窗口位置", ResetPlacement));
+            _settingsBody.AddChild(UiFactory.Label("拖动标题栏可移动窗口，位置会保存。", 11, muted: true));
+            _settingsBody.AddChild(UiFactory.Label("配置文件：" + AgentRuntime.Instance.SettingsPath, 11, muted: true));
+        }
+        else
+        {
+            _hotkeyEdit = null;
+            _maxTokensEdit = null;
+            _maxRequestsEdit = null;
+        }
+        }
+        finally
+        {
+            _rebuildingSettings = false;
+        }
     }
 
     private Control BuildEndpointCard(LlmEndpoint endpoint, int index)
@@ -507,7 +592,11 @@ internal sealed class AgentOverlayHost
         var name = UiFactory.Line(endpoint.Name, "名称");
         var url = UiFactory.Line(endpoint.BaseUrl, "https://api.openai.com/v1");
         var key = UiFactory.Line(endpoint.ApiKey, "API Key", secret: true);
+        WatchLine(name);
+        WatchLine(url);
+        WatchLine(key);
         var enabled = UiFactory.Check("启用", endpoint.Enabled);
+        WatchCheck(enabled);
         var remove = UiFactory.Button("删除", () => RemoveEndpoint(index));
         column.AddChild(UiFactory.Row(name, enabled, remove));
         column.AddChild(url);
@@ -524,20 +613,38 @@ internal sealed class AgentOverlayHost
         var column = UiFactory.Column();
         var display = UiFactory.Line(model.DisplayName, "显示名");
         var modelName = UiFactory.Line(model.Model, "模型名");
+        WatchLine(display);
+        WatchLine(modelName);
         var endpointCombo = UiFactory.Combo();
+        var selectedEndpointIndex = -1;
         for (var i = 0; i < settings.Endpoints.Count; i++)
         {
             var endpoint = settings.Endpoints[i];
             endpointCombo.AddItem(string.IsNullOrWhiteSpace(endpoint.Name) ? endpoint.Id : endpoint.Name);
             endpointCombo.SetItemMetadata(i, endpoint.Id);
-            if (endpoint.Id == model.EndpointId)
+            if (string.Equals(endpoint.Id, model.EndpointId, StringComparison.OrdinalIgnoreCase))
             {
-                endpointCombo.Selected = i;
+                selectedEndpointIndex = i;
             }
         }
 
+        if (selectedEndpointIndex < 0)
+        {
+            var missingEndpoint = string.IsNullOrWhiteSpace(model.EndpointId)
+                ? "(未绑定端点)"
+                : "(当前端点不可用：" + model.EndpointId + ")";
+            endpointCombo.AddItem(missingEndpoint);
+            endpointCombo.SetItemMetadata(endpointCombo.ItemCount - 1, model.EndpointId ?? "");
+            selectedEndpointIndex = endpointCombo.ItemCount - 1;
+        }
+
+        endpointCombo.Selected = selectedEndpointIndex;
+        WatchCombo(endpointCombo);
+
         var vision = UiFactory.Check("视觉", model.SupportsVision);
         var tools = UiFactory.Check("工具调用", model.SupportsTools);
+        WatchCheck(vision);
+        WatchCheck(tools);
         var thinkingMode = UiFactory.Combo();
         foreach (var item in new[] { "auto", "reasoning_effort", "deepseek", "prompt" })
         {
@@ -545,6 +652,7 @@ internal sealed class AgentOverlayHost
         }
 
         SelectByText(thinkingMode, model.ThinkingMode);
+        WatchCombo(thinkingMode);
         var thinkingIntensity = UiFactory.Combo();
         foreach (var item in new[] { "off", "low", "medium", "high" })
         {
@@ -552,12 +660,16 @@ internal sealed class AgentOverlayHost
         }
 
         SelectByText(thinkingIntensity, model.ThinkingIntensity);
+        WatchCombo(thinkingIntensity);
         var remove = UiFactory.Button("删除", () => RemoveModel(index));
         column.AddChild(UiFactory.Row(display, remove));
         column.AddChild(UiFactory.Row(modelName, endpointCombo));
-        column.AddChild(UiFactory.Row(vision, tools));
-        column.AddChild(Labeled("思考方式", thinkingMode));
-        column.AddChild(Labeled("思考强度", thinkingIntensity));
+        if (_showAdvancedValue)
+        {
+            column.AddChild(UiFactory.Row(vision, tools));
+            column.AddChild(Labeled("思考方式", thinkingMode));
+            column.AddChild(Labeled("思考强度", thinkingIntensity));
+        }
         box.AddChild(column);
         _modelEditors.Add(new ModelEditors(model.Id, display, modelName, endpointCombo, vision, tools, thinkingMode, thinkingIntensity));
         return box;
@@ -578,11 +690,23 @@ internal sealed class AgentOverlayHost
     private static OptionButton FillModelCombo(AgentSettings settings, string? selectedId, bool includeEmpty)
     {
         var combo = UiFactory.Combo();
-        var start = 0;
+        var selectedIndex = -1;
         if (includeEmpty)
         {
             combo.AddItem("(默认/无)");
             combo.SetItemMetadata(0, "");
+            if (string.IsNullOrWhiteSpace(selectedId))
+            {
+                selectedIndex = 0;
+            }
+        }
+
+        var start = includeEmpty ? 1 : 0;
+        if (!includeEmpty && string.IsNullOrWhiteSpace(selectedId))
+        {
+            combo.AddItem("(未选择)");
+            combo.SetItemMetadata(0, "");
+            selectedIndex = 0;
             start = 1;
         }
 
@@ -591,17 +715,20 @@ internal sealed class AgentOverlayHost
             var model = settings.Models[i];
             combo.AddItem(model.Label);
             combo.SetItemMetadata(start + i, model.Id);
-            if (model.Id == selectedId)
+            if (string.Equals(model.Id, selectedId, StringComparison.OrdinalIgnoreCase))
             {
-                combo.Selected = start + i;
+                selectedIndex = start + i;
             }
         }
 
-        if (combo.Selected < 0)
+        if (selectedIndex < 0 && !string.IsNullOrWhiteSpace(selectedId))
         {
-            combo.Selected = 0;
+            combo.AddItem("(当前绑定不可用：" + selectedId + ")");
+            combo.SetItemMetadata(combo.ItemCount - 1, selectedId);
+            selectedIndex = combo.ItemCount - 1;
         }
 
+        combo.Selected = selectedIndex;
         return combo;
     }
 
@@ -610,6 +737,7 @@ internal sealed class AgentOverlayHost
         var settings = HarvestSettings();
         settings.Endpoints.Add(new LlmEndpoint { Name = "新端点" });
         AgentRuntime.Instance.SaveSettings(settings);
+        _settingsDirty = false;
         RebuildSettingsForm();
     }
 
@@ -624,36 +752,73 @@ internal sealed class AgentOverlayHost
             ThinkingIntensity = "medium"
         });
         AgentRuntime.Instance.SaveSettings(settings);
+        _settingsDirty = false;
         RebuildSettingsForm();
     }
 
     private void RemoveEndpoint(int index)
     {
         var settings = HarvestSettings();
-        if (index >= 0 && index < settings.Endpoints.Count)
+        if (index < 0 || index >= settings.Endpoints.Count)
         {
-            settings.Endpoints.RemoveAt(index);
+            return;
         }
 
+        var impact = SettingsBinding.EndpointRemoval(settings, settings.Endpoints[index].Id);
+        if (impact.Blocked)
+        {
+            ShowDeleteWarning(impact.Message);
+            return;
+        }
+
+        settings.Endpoints.RemoveAt(index);
+        ModelRoleProbe.InvalidateMismatched(settings);
         AgentRuntime.Instance.SaveSettings(settings);
+        _settingsDirty = false;
         RebuildSettingsForm();
     }
 
     private void RemoveModel(int index)
     {
         var settings = HarvestSettings();
-        if (index >= 0 && index < settings.Models.Count)
+        if (index < 0 || index >= settings.Models.Count)
         {
-            settings.Models.RemoveAt(index);
+            return;
         }
 
+        var impact = SettingsBinding.ModelRemoval(settings, settings.Models[index].Id);
+        if (impact.Blocked)
+        {
+            ShowDeleteWarning(impact.Message);
+            return;
+        }
+
+        settings.Models.RemoveAt(index);
+        ModelRoleProbe.InvalidateMismatched(settings);
         AgentRuntime.Instance.SaveSettings(settings);
+        _settingsDirty = false;
         RebuildSettingsForm();
+    }
+
+    private void ShowDeleteWarning(string message)
+    {
+        if (_deleteWarning != null)
+        {
+            _deleteWarning.Text = message;
+        }
     }
 
     private void SaveSettingsFromUi()
     {
-        AgentRuntime.Instance.SaveSettings(HarvestSettings());
+        var settings = HarvestSettings();
+        ModelRoleProbe.InvalidateMismatched(settings);
+        AgentRuntime.Instance.SaveSettings(settings);
+        _settingsDirty = false;
+        if (_saveStatus != null)
+        {
+            _saveStatus.Text = "已保存";
+        }
+
         RebuildSettingsForm();
     }
 
@@ -686,32 +851,45 @@ internal sealed class AgentOverlayHost
             }
         }
 
-        current.ConversationModelId = SelectedMetadata(_conversationCombo);
-        current.PlayModelId = EmptyToNull(SelectedMetadata(_playCombo));
-        current.VisionModelId = EmptyToNull(SelectedMetadata(_visionCombo));
+        if (_conversationCombo != null)
+        {
+            current.ConversationModelId = EmptyToNull(SelectedMetadata(_conversationCombo));
+        }
+
+        if (_playCombo != null)
+        {
+            current.PlayModelId = EmptyToNull(SelectedMetadata(_playCombo));
+        }
+
+        if (_visionCombo != null)
+        {
+            current.VisionModelId = EmptyToNull(SelectedMetadata(_visionCombo));
+        }
         current.ThinkingIntensity = current.FindModel(current.ConversationModelId)?.ThinkingIntensity
             ?? current.ThinkingIntensity;
-        current.Hotkey = _hotkeyEdit?.Text.Trim() is { Length: > 0 } hotkey ? hotkey : "F8";
+        if (_hotkeyEdit != null)
+        {
+            current.Hotkey = _hotkeyEdit.Text.Trim() is { Length: > 0 } hotkey ? hotkey : "F8";
+        }
+
         current.AttachStateInChat = _attachState?.ButtonPressed ?? true;
         current.AttachScreenshotInChat = _attachShot?.ButtonPressed ?? false;
         current.McpEnabled = _mcpToggle?.ButtonPressed ?? current.McpEnabled;
-        if (int.TryParse(_maxTokensEdit?.Text.Trim(), out var maxTokens) && maxTokens > 0)
+        if (_maxTokensEdit != null)
         {
-            current.MaxSessionTokens = maxTokens;
-        }
-        else
-        {
-            current.MaxSessionTokens = null;
+            current.MaxSessionTokens = int.TryParse(_maxTokensEdit.Text.Trim(), out var maxTokens) && maxTokens > 0
+                ? maxTokens
+                : null;
         }
 
-        if (int.TryParse(_maxRequestsEdit?.Text.Trim(), out var maxReqs) && maxReqs > 0)
+        if (_maxRequestsEdit != null)
         {
-            current.MaxSessionRequests = maxReqs;
+            current.MaxSessionRequests = int.TryParse(_maxRequestsEdit.Text.Trim(), out var maxReqs) && maxReqs > 0
+                ? maxReqs
+                : null;
         }
-        else
-        {
-            current.MaxSessionRequests = null;
-        }
+
+        ModelRoleProbe.InvalidateMismatched(current);
         return current;
     }
 
@@ -747,18 +925,39 @@ internal sealed class AgentOverlayHost
             AttachStateInChat = source.AttachStateInChat,
             AttachScreenshotInChat = source.AttachScreenshotInChat,
             OverlayVisibleOnStart = source.OverlayVisibleOnStart,
+            HasSeenFirstRunGuide = source.HasSeenFirstRunGuide,
             OverlayLeft = source.OverlayLeft,
             OverlayTop = source.OverlayTop,
             McpServerPath = source.McpServerPath,
             McpPort = source.McpPort,
             McpEnabled = source.McpEnabled,
             MaxSessionTokens = source.MaxSessionTokens,
-            MaxSessionRequests = source.MaxSessionRequests
+            MaxSessionRequests = source.MaxSessionRequests,
+            RoleTests = source.RoleTests.Select(test => new ModelRoleTestRecord
+            {
+                Role = test.Role,
+                Status = test.Status,
+                CapabilityStatus = test.CapabilityStatus,
+                EndpointId = test.EndpointId,
+                EndpointName = test.EndpointName,
+                ModelId = test.ModelId,
+                ModelName = test.ModelName,
+                Fingerprint = test.Fingerprint,
+                StatusCode = test.StatusCode,
+                Error = test.Error,
+                NextStep = test.NextStep,
+                TestedAt = test.TestedAt
+            }).ToList()
         };
     }
 
     private void ShowTab(string tab)
     {
+        if (_tab == "settings" && tab != "settings")
+        {
+            FlushSettingsIfDirty();
+        }
+
         _tab = tab;
         if (_chatPage != null) _chatPage.Visible = tab == "chat";
         if (_settingsPage != null) _settingsPage.Visible = tab == "settings";
@@ -775,7 +974,13 @@ internal sealed class AgentOverlayHost
             return;
         }
 
+        if (_panel.Visible)
+        {
+            FlushSettingsIfDirty();
+        }
+
         _panel.Visible = !_panel.Visible;
+        AgentRuntime.Instance.PersistOverlayVisible(_panel.Visible);
     }
 
     private void TogglePlay()
@@ -813,7 +1018,9 @@ internal sealed class AgentOverlayHost
     {
         SaveSettingsFromUi();
         await AgentRuntime.Instance.TestConnectionAsync(CancellationToken.None);
-        ShowTab("chat");
+        _settingsDirty = false;
+        RebuildSettingsForm();
+        ShowTab("settings");
     }
 
     private void PersistChatFlags()
@@ -828,8 +1035,54 @@ internal sealed class AgentOverlayHost
         DisplayServer.ClipboardSet(text);
     }
 
+    private void CopyDiagnostics()
+    {
+        CopyText(AgentRuntime.Instance.ExportDiagnostics());
+        AgentRuntime.Instance.NotifyStatus("诊断已复制到剪贴板（不含 API Key 和对话正文）。");
+    }
+
+    private void MarkSettingsDirty()
+    {
+        if (_rebuildingSettings)
+        {
+            return;
+        }
+
+        _settingsDirty = true;
+        if (_saveStatus != null)
+        {
+            _saveStatus.Text = "未保存";
+        }
+    }
+
+    private void WatchLine(LineEdit edit)
+    {
+        edit.TextChanged += _ => MarkSettingsDirty();
+    }
+
+    private void WatchCheck(CheckBox check)
+    {
+        check.Toggled += _ => MarkSettingsDirty();
+    }
+
+    private void WatchCombo(OptionButton combo)
+    {
+        combo.ItemSelected += _ => MarkSettingsDirty();
+    }
+
+    private void FlushSettingsIfDirty()
+    {
+        if (!_settingsDirty || _settingsBody == null)
+        {
+            return;
+        }
+
+        SaveSettingsFromUi();
+    }
+
     private async Task LaunchDualAsync()
     {
+        FlushSettingsIfDirty();
         await AgentRuntime.Instance.LaunchDualInstanceAsync(HarvestSettings(), CancellationToken.None);
         RefreshDynamic();
     }
@@ -884,9 +1137,34 @@ internal sealed class AgentOverlayHost
 
         if (_playUsage != null)
         {
-            var usage = AgentRuntime.Instance.SessionUsage;
-            var reqs = AgentRuntime.Instance.SessionRequests;
-            _playUsage.Text = $"Token 消耗：{usage.TotalTokens:N0} (Prompt: {usage.PromptTokens:N0}, Completion: {usage.CompletionTokens:N0}) | 请求：{reqs} 次";
+            _playUsage.Text = PlayerFacingSession.FormatUsage(
+                AgentRuntime.Instance.SessionUsageKnown,
+                AgentRuntime.Instance.SessionUsage,
+                AgentRuntime.Instance.SessionRequests);
+        }
+
+        var facing = AgentRuntime.Instance.PlayerFacing();
+        if (_sessionHeadline != null)
+        {
+            _sessionHeadline.Text = facing.Headline;
+        }
+
+        if (_sessionDetail != null)
+        {
+            _sessionDetail.Text = facing.Detail;
+        }
+
+        if (_sessionNext != null)
+        {
+            _sessionNext.Text = "下一步：" + facing.NextAction;
+        }
+
+        if (_playTest != null)
+        {
+            var firstRun = FirstRunSetup.Evaluate(AgentRuntime.Instance.Settings);
+            if (_conversationTest != null) _conversationTest.Text = ModelRoleProbe.FormatLine(firstRun.Conversation);
+            _playTest.Text = ModelRoleProbe.FormatLine(firstRun.Play);
+            if (_visionTest != null) _visionTest.Text = ModelRoleProbe.FormatLine(firstRun.Vision);
         }
 
         if (_playToggle != null)
@@ -1031,6 +1309,8 @@ internal sealed class AgentOverlayHost
 
     private void TearDown()
     {
+        FlushSettingsIfDirty();
+
         if (_dragHandle != null)
         {
             _dragHandle.GuiInput -= OnDragHandleGuiInput;
@@ -1235,7 +1515,16 @@ internal sealed class AgentOverlayHost
             }
         }
 
-        combo.Selected = 0;
+        if (!string.IsNullOrWhiteSpace(value))
+        {
+            // Preserve an unknown value visibly until the user chooses a supported option.
+            // Falling back to item 0 would silently rewrite the model configuration on save.
+            combo.AddItem(value);
+            combo.Selected = combo.ItemCount - 1;
+            return;
+        }
+
+        combo.Selected = combo.ItemCount > 0 ? 0 : -1;
     }
 
     private static string? EmptyToNull(string? value)
