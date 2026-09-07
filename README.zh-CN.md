@@ -224,10 +224,6 @@ powershell -ExecutionPolicy Bypass -File ".\scripts\build-mod.ps1" -Configuratio
 2. 启动器已自动配置 `--force-steam off` 与增量 `clientId`；部分杀毒软件可能会拦截子进程拉起，请加入信任列表。
 3. 若端口被占用，Mod 会自动寻找后续可用端口，请以悬浮窗显示的地址为准。
 
-### Q4: 推荐使用什么大模型？
-- **云端商业模型**：首选 DeepSeek-V3 / DeepSeek-R1、OpenAI GPT-4o / o3-mini、Claude 3.5 Sonnet。
-- **本地私有化模型**：使用 Ollama / LM Studio 部署 7B~14B 以上参数量、具备良好 JSON 工具调用能力的模型（如 Qwen2.5-7B/14B、Llama-3-8B 等）。
-
 ---
 
 ## 📁 仓库结构
