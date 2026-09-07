@@ -1,5 +1,18 @@
 # Changelog
 
+## v0.10.4 - 2026-09-07
+
+### Fixed
+- Relic/shop FTUE popups no longer stay open after confirm_modal.
+- Timeline first-visit tutorial can be confirmed; screen is TIMELINE not MAIN_MENU.
+- In-game play rejects locked event options.
+
+### Changed
+- Character unlocks are documented as timeline overlays. Slot obtained epochs, then confirm_unlock.
+
+### Validation
+- Profile 3: Silent unlocked via NEOW then SILENT1. confirm_unlock completed NUnlockCardsScreen, NUnlockTimelineScreen, NUnlockPotionsScreen, NUnlockMiscScreen. GAME_OVER save_status=verified.
+
 ## v0.10.3 - 2026-09-07
 
 ### Fixed

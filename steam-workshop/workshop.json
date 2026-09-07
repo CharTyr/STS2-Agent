@@ -1,7 +1,7 @@
 {
   "title": "STS2 AI Agent",
   "visibility": "private",
-  "changeNote": "v0.10.3 co-op climb, game-over save, MCP skill",
+  "changeNote": "v0.10.4 timeline unlocks, stuck FTUE confirm, locked event options",
   "tags": [
     "Tools & APIs",
     "Utility",
