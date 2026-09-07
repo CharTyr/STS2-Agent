@@ -22,7 +22,7 @@ Use a conservative SubAgent profile for STS2. The goal is to keep the tool surfa
 
 - Recommended plugin settings: `max_concurrent = 1`, `auto_discover = false`, `broadcast_iteration_progress = false`, `inject_status_to_main_prompt = false`
 - Recommended retention settings: `inject_completed_for_seconds = 120`, `status_retention_seconds = 900`
-- Recommended skill settings: `allowed_tool_names = ["health_check", "get_game_state", "get_available_actions", "act", "get_game_data_item", "get_game_data_items", "get_relevant_game_data"]`, `max_mcp_tools_per_iteration = 1`, `share_to_main_chat = false`
+- Recommended skill settings: `allowed_tool_names = ["health_check", "get_game_state", "get_raw_game_state", "get_available_actions", "act", "get_game_data_item", "get_game_data_items", "get_relevant_game_data", "wait_until_actionable"]`, `max_mcp_tools_per_iteration = 1`, `share_to_main_chat = false`
 
 ### Simplified Config
 
@@ -47,6 +47,7 @@ For an optional skill-local remote checklist, read [references/remote-connection
 
 1. Call `health_check` once at session start.
 2. Prefer the guided decision loop: `get_game_state -> get_available_actions -> act` (with `health_check` only at session start).
+   Use `wait_until_actionable` across animations and screen changes. Use `get_raw_game_state` only if compact state is missing a needed field.
 3. For cards, monsters, relics, potions, shop items, and event options, prioritize game-data tools before using memory:
    `get_relevant_game_data` (default, scene-aware minimal context) ->
    `get_game_data_item` (single-entity lookup) ->
@@ -99,17 +100,22 @@ For validation flows, read [references/debug-and-validation.md](references/debug
 
 ## Screen Routing
 
-- `MAIN_MENU`: prefer `continue_run`; if unavailable, finish timeline gates or start a run from `open_character_select`.
+- `MAIN_MENU`: prefer `continue_run`; if unavailable, finish timeline gates or start a run from `open_character_select`. Do not call `switch_profile` unless asked; `option_index` is the native profile id 1..3.
 - `CHARACTER_SELECT`: choose an unlocked character, wait for `can_embark = true`, then `embark`.
 - `MULTIPLAYER_LOBBY`: stay on the same compact tool surface; use `available_actions` for `host_multiplayer_lobby`, `join_multiplayer_lobby`, `select_character`, `ready_multiplayer_lobby`, or `disconnect_multiplayer_lobby`.
-- `MAP`: use `choose_map_node`.
+- `MAP`: use `choose_map_node` with `map.options[].i`. In multiplayer, if `map.local_vote` is set, `wait_until_actionable` instead of voting again; if `map.votes` exist and you have not voted, follow that option.
 - `COMBAT`: stay inside combat actions unless a selection overlay interrupts.
 - `REWARD`: prefer `collect_rewards_and_proceed` unless making deliberate reward choices.
 - `CARD_SELECTION`: finish the selection with `select_deck_card` and, when exposed, `confirm_selection`.
 - `SHOP`: `open_shop_inventory` first, then buy/remove actions, then `close_shop_inventory`, then `proceed`.
 - `REST`: use `choose_rest_option`; if selection opens, resolve it before `proceed`.
 - `CHEST`: `open_chest -> choose_treasure_relic -> proceed`.
+- `BUNDLE_SELECTION`: `choose_bundle` then `confirm_bundle` when exposed.
+- `CAPSTONE_SELECTION`: `choose_capstone_option` from `capstone.options[].i`.
 - `EVENT`: use `choose_event_option` even after combat returns to a finished event.
+- `CRYSTAL_SPHERE`: `crystal_clear_cell` until divinations are spent, then `proceed`.
+- `GAME_OVER`: `continue_game_over` first. Wait while `game_over.phase=summary_animating`. Use `return_to_main_menu` only when it is exposed.
+- `UNLOCK`: `confirm_unlock` repeatedly until the screen closes; never bypass it with a menu-return action.
 
 For detailed per-screen sequences and pitfalls, read [references/screen-playbooks.md](references/screen-playbooks.md).
 
@@ -121,6 +127,9 @@ For detailed per-screen sequences and pitfalls, read [references/screen-playbook
 - Multiplayer targeting still controls only the local player. Use `target_index_space` and `valid_target_indices`; never assume teammate control.
 - `shop.is_open = true` means inner inventory, not room completion.
 - Timeline gates can block run start until the overlay is confirmed or the submenu is closed.
+- `return_to_main_menu` on `GAME_OVER` before `continue_game_over` skips score, unlock, and save.
+- `UNLOCK` is not a card-selection screen; only `confirm_unlock`.
+- After a multiplayer map vote, `map.local_vote` means wait, not pick a second node.
 
 ## Minimal Decision Heuristics
 

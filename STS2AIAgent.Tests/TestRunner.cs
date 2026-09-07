@@ -210,6 +210,7 @@ internal static class TestRunner
         yield return ("UnlockConfirm.Session", () => Task.Run(UnlockConfirmResolutionPolicyTests.ProbeSignatureIncludesScreenInstance));
         yield return ("UnlockScreen.MixedCardGrid", () => Task.Run(UnlockScreenContractTests.UnlockCardsScreenWithVisibleGridReportsOnlyUnlockAction));
         yield return ("GameOver.ContinueAction", () => Task.Run(GameOverContractTests.DedicatedContinueActionIsWiredEndToEnd));
+        yield return ("Skill.McpPlayerContract", () => Task.Run(McpPlayerSkillTests.SkillTracksLivePlayContract));
         yield return ("GameOver.ReturnGate", () => Task.Run(GameOverContractTests.ReturnActionRequiresVisibleAndEnabledMainMenuButton));
         yield return ("GameOver.NativeButtons", () => Task.Run(GameOverContractTests.ContinueAndReturnUseNativeButtonsWithoutSkippingSummary));
         yield return ("GameOver.SummaryReady", () => Task.Run(GameOverContractTests.ContinueWaitsForNativeSummaryReadiness));

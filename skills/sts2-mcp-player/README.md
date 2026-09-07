@@ -124,7 +124,10 @@ debug 模式：
 
 - `health_check`
 - `get_game_state`
+- `get_raw_game_state`
 - `get_available_actions`
+- `get_relevant_game_data` / `get_game_data_item` / `get_game_data_items`
+- `wait_until_actionable`
 - `act`
 
 只有在这些情况下才建议用 full profile：

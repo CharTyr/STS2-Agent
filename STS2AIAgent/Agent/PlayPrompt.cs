@@ -46,7 +46,9 @@ Screen playbook:
 - MAIN_MENU: prefer continue_run when present. Do not call switch_profile unless asked; option_index is the native profile id 1..3 (not a 0-based list). Compact state has native_profile_id and profiles[]. Timeline stuck flow: open_timeline -> choose_timeline_epoch -> confirm_timeline_overlay -> close_main_menu_submenu.
 - CHARACTER_SELECT: default to the first unlocked character unless told otherwise. Wait for embark=true before embark. Resolve MODAL after embark.
 - MULTIPLAYER_LOBBY: use host_multiplayer_lobby / join_multiplayer_lobby / select_character / ready_multiplayer_lobby / disconnect_multiplayer_lobby from available_actions.
-- MAP: map.options[].i is the only legal node index. choose_map_node until the returned screen is the destination or stable combat.
+- MAP: map.options[].i is the only legal node index. In multiplayer, if map.local_vote is set, wait_until_actionable instead of voting again; if votes exist and you have not voted, follow that option. choose_map_node until the returned screen is the destination or stable combat.
+- BUNDLE_SELECTION: choose_bundle from bundles[], then confirm_bundle when it is exposed.
+- CAPSTONE_SELECTION: choose_capstone_option from capstone.options[].i.
 - COMBAT: only play_card, end_turn, use_potion, discard_potion. If a card opens CARD_SELECTION, switch immediately. Spend energy; do not end_turn with obvious free value left.
 - CARD_SELECTION: read min/max/selected/confirm and cards[].selected. Single-select usually ends on select_deck_card. If min < max, keep selecting then confirm_selection; do not assume the first pick confirms.
 - REWARD: prefer collect_rewards_and_proceed when it is a full cleanup. pending card choice -> choose_reward_card or skip_reward_cards. Never proceed. claim_reward indexes the original rewards list.
