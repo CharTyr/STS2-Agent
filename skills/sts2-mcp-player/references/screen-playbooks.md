@@ -58,7 +58,7 @@ Use this reference when the active screen is clear and you need the exact action
 
 ## REWARD
 
-- Prefer `collect_rewards_and_proceed` for hands-off reward cleanup.
+- Prefer `collect_rewards_and_proceed` for hands-off reward cleanup. An empty rewards overlay with `can_proceed=false` is still that action; it should close the overlay instead of staying pending.
 - If `reward.pending_card_choice = true`, use `choose_reward_card` or `skip_reward_cards`.
 - If `skip_reward_cards` closes only the overlay, re-read state to see whether the parent reward remains claimable.
 - Do not use `proceed` on reward flows.
