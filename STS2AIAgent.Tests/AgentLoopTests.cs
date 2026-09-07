@@ -58,6 +58,11 @@ internal static class ActIndexValidatorTests
         const string timelineState = """{"timeline":{"slots":[{"i":1,"line":"Epoch 1"}]}}""";
         Assert.NotNull(ActIndexValidator.Validate("choose_timeline_epoch", null, null, 9, timelineActions, timelineState));
         Assert.Null(ActIndexValidator.Validate("choose_timeline_epoch", null, null, 1, timelineActions, timelineState));
+
+        const string eventActions = """[{"name":"choose_event_option","requires_index":true}]""";
+        const string eventState = """{"event":{"options":[{"i":0,"locked":true},{"i":1,"locked":false}]}}""";
+        Assert.NotNull(ActIndexValidator.Validate("choose_event_option", null, null, 0, eventActions, eventState));
+        Assert.Null(ActIndexValidator.Validate("choose_event_option", null, null, 1, eventActions, eventState));
     }
 
     public static void DetectsUnsettledActResults()

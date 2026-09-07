@@ -8,10 +8,13 @@ Use this reference when the active screen is clear and you need the exact action
 - If only `open_character_select` and `open_timeline` are available, there is no active run.
 - If `open_timeline` is available and a run is blocked, finish the flow:
   - `open_timeline`
-  - `choose_timeline_epoch`
-  - `confirm_timeline_overlay`
-  - `close_main_menu_submenu`
-- `choose_timeline_epoch` should already return a state that exposes `confirm_timeline_overlay` when the overlay is ready.
+  - `choose_timeline_epoch` on an obtained, unslotted epoch (`timeline.slots[].state` like `obtained`)
+  - `confirm_timeline_overlay` or `confirm_unlock` until the overlay is gone
+  - slot any newly granted epochs (slotting `NEOW_EPOCH` grants `SILENT1_EPOCH`)
+  - `close_main_menu_submenu` only after unlock overlays are finished
+- Character unlocks (`NUnlockCharacterScreen`) appear on the timeline after an epoch is slotted, not on `GAME_OVER`.
+- The first timeline visit shows `NTimelineTutorial`. Screen is `TIMELINE` with `confirm_timeline_overlay`; do not `close_main_menu_submenu` until the tutorial and unlock overlays are done.
+- `choose_timeline_epoch` should already return a state that exposes `confirm_timeline_overlay` or `UNLOCK` when the overlay is ready.
 
 ## CHARACTER_SELECT
 
@@ -84,7 +87,9 @@ Use this reference when the active screen is clear and you need the exact action
 ## EVENT
 
 - Use `choose_event_option` for both normal branches and finished synthetic proceed options.
-- Never send a locked option. Read `event.options`, skip `is_locked=true`, and use the first unlocked `index`. Option 0 is often locked.
+- Never send a locked option. Read `event.options`, skip `is_locked=true` / compact `locked=true`, and use the first unlocked `index`. Option 0 is often locked.
+- Skip options marked `will_kill_player` / compact `kill=true` unless the run is intentionally ending.
+- `THE_ARCHITECT` EVENT `PROCEED` is lethal even with godmode. Enter the fight with debug `fight THE_ARCHITECT_EVENT_ENCOUNTER` instead of proceeding the event.
 - `available_actions` can still contain `choose_event_option` when the first option is locked; that is not permission to pick index 0.
 - Expect event flows like `EVENT -> COMBAT -> EVENT` or `EVENT -> COMBAT -> MAP`.
 - Re-read state after every branch because events mutate in place.
@@ -106,8 +111,9 @@ Use this reference when the active screen is clear and you need the exact action
 
 ## MODAL, GAME_OVER, and UNLOCK
 
-- Resolve `MODAL` before anything else with `confirm_modal` or `dismiss_modal`.
-- On `GAME_OVER`, use `continue_game_over` first so the native summary, score, unlock, and save flow runs. Wait while `game_over.phase=summary_animating`. Use `return_to_main_menu` only when `game_over.can_return` is true and the action is in `available_actions`.
+- Resolve `MODAL` before anything else with `confirm_modal` or `dismiss_modal`. Relic/potion FTUEs listen to `Released`; if `confirm_modal` stays pending, retry once and keep waiting until the modal is gone.
+- On `GAME_OVER`, use `continue_game_over` first so the native summary, score, and save flow runs. Wait while `game_over.phase=summary_animating`. Use `return_to_main_menu` only when `game_over.can_return` is true and the action is in `available_actions`. Death/victory summary itself does not show character unlocks.
+- After returning to `MAIN_MENU`, open the timeline and slot obtained epochs. That is where `UNLOCK` / `confirm_unlock` appears.
 - On `UNLOCK`, use `confirm_unlock` repeatedly until the unlock screen closes. Do not call `select_deck_card` or `return_to_main_menu` here.
 
 ## Potion Targeting
