@@ -237,10 +237,6 @@ powershell -ExecutionPolicy Bypass -File ".\scripts\build-mod.ps1" -Configuratio
 2. The launcher sets `--force-steam off` and steps `clientId` automatically. Check if third-party antivirus software blocked launching the child process.
 3. If ports are in use, the mod automatically selects an available fallback port.
 
-### Q4: Which models are recommended?
-- **Cloud Models**: DeepSeek-V3 / DeepSeek-R1, OpenAI GPT-4o / o3-mini, Claude 3.5 Sonnet.
-- **Local Models**: 7B~14B+ models with strong structured JSON tool-call abilities (e.g. Qwen2.5-7B/14B, Llama-3-8B) via Ollama or LM Studio.
-
 ---
 
 ## 📁 Repository Layout
