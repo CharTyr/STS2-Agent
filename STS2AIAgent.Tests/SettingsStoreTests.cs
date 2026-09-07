@@ -39,6 +39,26 @@ internal static class SettingsStoreTests
         Assert.Equal("verified", ModelRoleProbe.Current(loaded, ModelRoleNames.Play).Status);
     }
 
+
+    public static void Load_VerifiedPlayFingerprint_IsCaseInsensitive()
+    {
+        var path = Path.Combine(Path.GetTempPath(), "sts2-agent-tests", Guid.NewGuid().ToString("N"), "settings.json");
+        Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+        var settings = AgentSettings.CreateDefault();
+        settings.Endpoints[0].BaseUrl = "https://api.example.com/v1";
+        settings.Endpoints[0].ApiKey = "sk-test";
+        settings.PlayModelId = settings.Models[0].Id;
+        var resolved = settings.TryResolvePlayModel()!;
+        var record = ModelRoleProbe.FromSuccess(ModelRoleNames.Play, resolved);
+        record.Fingerprint = record.Fingerprint!.ToLowerInvariant();
+        ModelRoleProbe.Upsert(settings, record);
+        new SettingsStore(path).Save(settings);
+
+        var loaded = new SettingsStore(path).Load();
+        Assert.Equal("verified", ModelRoleProbe.Current(loaded, ModelRoleNames.Play).Status);
+        Assert.True(FirstRunSetup.Evaluate(loaded).ReadyToInvite);
+    }
+
     public static void Load_MissingFile_CreatesDefaults()
     {
         var path = Path.Combine(Path.GetTempPath(), "sts2-agent-tests", Guid.NewGuid().ToString("N"), "missing.json");

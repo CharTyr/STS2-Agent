@@ -119,6 +119,11 @@ internal static class ModelRoleProbe
         };
     }
 
+    private static bool FingerprintsMatch(string? left, string? right)
+    {
+        return string.Equals(left, right, StringComparison.OrdinalIgnoreCase);
+    }
+
     public static ModelRoleTestRecord Current(AgentSettings settings, string role)
     {
         var resolved = Resolve(settings, role);
@@ -133,7 +138,7 @@ internal static class ModelRoleProbe
             return Unverified(role, null);
         }
 
-        if (stored != null && stored.Fingerprint == Fingerprint(resolved))
+        if (stored != null && FingerprintsMatch(stored.Fingerprint, Fingerprint(resolved)))
         {
             return stored;
         }
@@ -178,7 +183,7 @@ internal static class ModelRoleProbe
                 continue;
             }
 
-            if (resolved == null || stored.Fingerprint != Fingerprint(resolved))
+            if (resolved == null || !FingerprintsMatch(stored.Fingerprint, Fingerprint(resolved)))
             {
                 Upsert(settings, Unverified(role, resolved));
             }
