@@ -528,6 +528,86 @@ function Wait-ForCombatPlayable {
     }
 }
 
+function Invoke-NaturalCombatUntilReward {
+    param(
+        [string]$HostBaseUrl,
+        [string]$ClientBaseUrl,
+        [int]$TimeoutSeconds = 180
+    )
+
+    $deadline = (Get-Date).AddSeconds($TimeoutSeconds)
+    while ((Get-Date) -lt $deadline) {
+        $hostState = Get-State -BaseUrl $HostBaseUrl
+        $clientState = Get-State -BaseUrl $ClientBaseUrl
+        foreach ($pair in @(
+                @{ url = $HostBaseUrl; state = $hostState },
+                @{ url = $ClientBaseUrl; state = $clientState }
+            )) {
+            $modalType = [string]$pair.state.modal.type_name
+            if ([string]$pair.state.screen -eq "MODAL" -and ($modalType -match "NErrorPopup" -or $modalType -match "ErrorPopup")) {
+                Save-ErrorPopupAndFail -BaseUrl $pair.url -State $pair.state
+            }
+        }
+
+        if ([string]$hostState.screen -eq "REWARD" -and [string]$clientState.screen -eq "REWARD" -and
+            [string]$hostState.run_id -eq [string]$clientState.run_id -and
+            -not [string]::IsNullOrWhiteSpace([string]$hostState.run_id) -and
+            [string]$hostState.run_id -ne "run_unknown") {
+            Write-Host ("==> natural reward host turn={0} client turn={1}" -f $hostState.turn, $clientState.turn)
+            return @{
+                Host = $hostState
+                Client = $clientState
+            }
+        }
+
+        Clear-BlockingFtueModals -BaseUrls @($HostBaseUrl, $ClientBaseUrl)
+
+        foreach ($pair in @(
+                @{ url = $HostBaseUrl; state = $hostState; name = "host" },
+                @{ url = $ClientBaseUrl; state = $clientState; name = "client" }
+            )) {
+            $state = $pair.state
+            if ([string]$state.screen -ne "COMBAT" -or -not [bool]$state.in_combat) {
+                continue
+            }
+
+            $actions = @($state.available_actions)
+            $ready = $false
+            try { $ready = [bool]$state.combat.action_readiness.can_use_combat_actions } catch { $ready = $true }
+            if (-not $ready) {
+                continue
+            }
+
+            if (($actions -contains "play_card") -and (Test-CombatHasPlayableCard -State $state)) {
+                try {
+                    $payload = Get-FirstPlayableCardPayload -State $state
+                    $response = Invoke-Action -BaseUrl $pair.url -Payload $payload
+                    if ($response.ok) {
+                        Write-Host ("==> {0} play_card turn={1}" -f $pair.name, $state.turn)
+                    }
+                } catch {
+                }
+                continue
+            }
+
+            if ($actions -contains "end_turn") {
+                try {
+                    $response = Invoke-Action -BaseUrl $pair.url -Payload @{ action = "end_turn" }
+                    if ($response.ok) {
+                        Write-Host ("==> {0} end_turn turn={1}" -f $pair.name, $state.turn)
+                    }
+                } catch {
+                }
+            }
+        }
+
+        Start-Sleep -Milliseconds 350
+    }
+
+    Save-TimeoutStateDump -TimedOutBaseUrl $HostBaseUrl -Description "natural combat until both REWARD" -LastState (Get-State -BaseUrl $HostBaseUrl)
+    throw "Timed out waiting for both sides to reach natural REWARD without debug-win"
+}
+
 function Wait-ForCombatAction {
     param(
         [string]$BaseUrl,
@@ -1069,16 +1149,10 @@ try {
         $clientRewardState = $clientTurnTwoState
     }
     else {
-        Write-Host "==> later debug fixture: finish remaining combat with debug win; this is not a natural combat clear"
-        $hostWinResponse = Invoke-DebugCombatWin -BaseUrl $hostBaseUrl
-        if (-not $hostWinResponse.ok) {
-            throw "Host debug combat win failed: $($hostWinResponse | ConvertTo-Json -Depth 8 -Compress)"
-        }
-
-        $clientWinResponse = Invoke-DebugCombatWin -BaseUrl $clientBaseUrl
-        if (-not $clientWinResponse.ok) {
-            throw "Client debug combat win failed: $($clientWinResponse | ConvertTo-Json -Depth 8 -Compress)"
-        }
+        Write-Host "==> continue natural combat until both REWARD; debug-win is not used"
+        $natural = Invoke-NaturalCombatUntilReward -HostBaseUrl $hostBaseUrl -ClientBaseUrl $clientBaseUrl
+        $hostRewardState = $natural.Host
+        $clientRewardState = $natural.Client
     }
 
     if ($null -eq $hostRewardState) {
@@ -1321,5 +1395,6 @@ finally {
         Stop-Games
     }
 }
+
 
 
