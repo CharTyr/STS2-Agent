@@ -110,6 +110,26 @@ internal static class TestRunner
 
     private static IEnumerable<(string Name, Func<Task> Body)> AllTests()
     {
+        yield return ("FirstRun.DefaultUnverified", () => Task.Run(PlayerExperienceTests.DefaultSettingsAreUnverifiedAndNotInvitable));
+        yield return ("FirstRun.VerifiedInvite", () => Task.Run(PlayerExperienceTests.VerifiedPlayFingerprintAllowsInvite));
+        yield return ("FirstRun.KeyChangeInvalidates", () => Task.Run(PlayerExperienceTests.ChangingKeyInvalidatesVerification));
+        yield return ("Probe.Play401NotMaskedByChat", PlayerExperienceTests.ConversationSuccessDoesNotMarkPlayWhenPlayReturns401);
+        yield return ("Probe.SkipFreshVerified", PlayerExperienceTests.FreshVerifiedFingerprintSkipsRetest);
+        yield return ("Settings.EndpointRemovalBlocked", () => Task.Run(PlayerExperienceTests.EndpointRemovalRequiresConfirmationWhenReferenced));
+        yield return ("Settings.ModelRemovalBlocked", () => Task.Run(PlayerExperienceTests.ModelRemovalRequiresConfirmationWhenBound));
+        yield return ("Settings.EndpointRemovalDisabledReference", () => Task.Run(SettingsExperienceRegressionTests.EndpointRemovalBlocksDisabledEndpointReferences));
+        yield return ("Settings.EndpointRemovalFallbackPlay", () => Task.Run(SettingsExperienceRegressionTests.EndpointRemovalIncludesFallbackPlayReference));
+        yield return ("Settings.ModelRemovalAllRoles", () => Task.Run(SettingsExperienceRegressionTests.ModelRemovalReportsEveryRoleReference));
+        yield return ("Settings.ModelRemovalUnreferenced", () => Task.Run(SettingsExperienceRegressionTests.ModelRemovalAllowsUnreferencedModel));
+        yield return ("Usage.MissingNotZero", () => Task.Run(PlayerExperienceTests.MissingUsageIsNotDisplayedAsZero));
+        yield return ("Diagnostics.RedactsSecrets", () => Task.Run(PlayerExperienceTests.DiagnosticExportRedactsSecretsAndOmitsChat));
+        yield return ("Diagnostics.RedactsAllCredentialShapes", () => Task.Run(RuntimeExperienceRegressionTests.DiagnosticExportRedactsAllCredentialShapes));
+        yield return ("Probe.RoleInFallbackError", () => Task.Run(RuntimeExperienceRegressionTests.ModelRoleProbeUsesTheTestedRoleInFallbackErrors));
+        yield return ("Probe.FailureKind", () => Task.Run(RuntimeExperienceRegressionTests.ModelRoleProbeClassifiesConfigAndNetworkFailures));
+        yield return ("Session.RejectsStaleCompletion", () => Task.Run(RuntimeExperienceRegressionTests.CompletionIdentityRejectsLatePreviousSessionCallbacks));
+        yield return ("Session.ClearOwnModelTestStop", () => Task.Run(RuntimeExperienceRegressionTests.SuccessfulModelTestClearsOnlyItsOwnTransientStop));
+        yield return ("Session.PauseAndConfigCopy", () => Task.Run(PlayerExperienceTests.PlayerFacingMapsPauseAndConfigError));
+        yield return ("Mcp.NativeActContract", () => Task.Run(PlayerExperienceTests.NativeMcpToolsMatchGuidedActContract));
         yield return ("CurrentRun.AllowsLobbyBeforeRun", () => Task.Run(CurrentRunBoundaryTests.AllowsLobbyBeforeRun));
         yield return ("CurrentRun.StopsWhenLeavingRunToMainMenu", () => Task.Run(CurrentRunBoundaryTests.StopsWhenLeavingRunToMainMenu));
         yield return ("CurrentRun.StopsWhenLeavingRunToLobby", () => Task.Run(CurrentRunBoundaryTests.StopsWhenLeavingRunToLobby));
@@ -139,6 +159,8 @@ internal static class TestRunner
         yield return ("CoopStartup.FourPlayerOccupancy", () => Task.Run(CompanionStartupTests.LocalJoinOccupiesOneSlotInFourPlayerLobby));
         yield return ("CoopStartup.OwnCharacterOnly", () => Task.Run(CompanionStartupTests.CompanionActionsTargetOnlyLocalCharacter));
         yield return ("CoopStartup.JoinBootstrap", () => Task.Run(CompanionStartupTests.CompanionBootstrapJoinsAsExtraPlayerThenReady));
+        yield return ("CoopStartup.CombatFtueConfirm", () => Task.Run(CompanionStartupTests.CombatRulesFtueIsConfirmedImmediately));
+        yield return ("Ftue.CombatRulesWithoutButton", () => Task.Run(FtueModalPolicyTests.CombatRulesFtueWithoutButtonIsConfirmable));
         yield return ("CoopStartup.FirstRunProvider", () => Task.Run(CompanionStartupTests.FirstRunProviderConfigIsReachable));
         yield return ("CoopStartup.ProfileMods", () => Task.Run(CompanionStartupTests.CompanionProfileEnablesTheMod));
         yield return ("CoopStartup.SettingsIsolation", () => Task.Run(CompanionStartupTests.SettingsPathCanBeIsolated));
