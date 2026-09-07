@@ -27,3 +27,6 @@ _bmad-output/
 .claude/
 .serena/
 node_modules/
+
+# Local Steam workshop uploader output
+mod-uploader.log
