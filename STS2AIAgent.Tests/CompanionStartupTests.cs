@@ -230,6 +230,10 @@ internal static class CompanionStartupTests
         var runtime = AgentSourceFixture.Read("STS2AIAgent/Agent/AgentRuntime.cs");
         Assert.Contains("CompanionPlayPolicy.DecideImmediate(", runtime);
         Assert.Contains("payload.modal?.type_name", runtime);
+        var waitMarker = runtime.IndexOf("等待你选择地图节点", StringComparison.Ordinal);
+        Assert.True(waitMarker >= 0);
+        var waitSnippet = runtime.Substring(waitMarker, Math.Min(280, runtime.Length - waitMarker));
+        Assert.Contains("WaitingForGame = true", waitSnippet);
         var lobby = AgentSourceFixture.Read("scripts/test-multiplayer-lobby-flow.ps1");
         Assert.Contains("Clear-BlockingFtueModals", lobby);
         Assert.Contains("Test-ShouldConfirmBlockingModal", lobby);

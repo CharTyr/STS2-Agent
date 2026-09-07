@@ -811,7 +811,9 @@ internal sealed class AgentRuntime
             return new AgentTurnResult
             {
                 Reasoning = "等待你选择地图节点，随后投同一格。",
-                ToolRounds = 0
+                WaitingForGame = true,
+                ToolRounds = 0,
+                RequestsSpent = 0
             };
         }
 

@@ -138,6 +138,7 @@ internal static class TestRunner
         yield return ("Recovery.NoActionStops", AutoPlayRecoveryTests.RepeatedNoActionStops);
         yield return ("Recovery.HttpStatus", AutoPlayRecoveryTests.HttpFailuresKeepStatusWithoutStreamReplay);
         yield return ("Recovery.Waiting", AutoPlayRecoveryTests.WaitingDoesNotHideFailures);
+        yield return ("Recovery.CompanionMapWait", AutoPlayRecoveryTests.CompanionMapWaitDoesNotStopAutoPlay);
         yield return ("Recovery.SuccessResets", AutoPlayRecoveryTests.SuccessfulActionResetsFailures);
         yield return ("Recovery.CancelBackoff", AutoPlayRecoveryTests.CancelDuringBackoffPreventsNextTurn);
         yield return ("TeamControl.WaitForCommittedWork", AutoPlaySessionTests.PauseWaitsForCommittedWorkAndBlocksRestart);
