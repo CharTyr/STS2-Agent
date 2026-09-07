@@ -25,7 +25,7 @@ If you used to copy this mod into the game folder by hand, delete those files an
 [*]Set up your model and chat without leaving the game
 [*]Let it play on its own, or take one step at a time
 [*]Invite an AI teammate on the same PC
-[*]Optional MCP for Cursor / Claude / Codex: press F8 → Connect, turn it on, copy the address. No Python install.
+[*]Optional MCP for Cursor / Claude / Codex: F8 -> Connect, copy the address. For best results when an external agent plays over MCP, also load the companion skill [url=https://github.com/CharTyr/STS2-Agent/tree/main/skills/sts2-mcp-player]sts2-mcp-player[/url]. Tools without that skill can click; the skill is what matches in-game autoplay. No Python install.
 [*]No new cards, no balance tweaks, no changes to your save
 [/list]
 

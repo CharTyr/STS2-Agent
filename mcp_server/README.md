@@ -139,11 +139,11 @@ Modal：
 
 ## 推荐配套 Skill
 
-如果上层 agent 支持 Codex Skill，推荐同时加载：
+用外部 AI Agent 经 MCP 操作本 Mod 时，请同时加载：
 
 - [sts2-mcp-player](../skills/sts2-mcp-player/SKILL.md)
 
-这个 skill 会强制 agent 采用“状态优先、按房间推进、只用可用动作”的工作流，能明显减少误调用和索引漂移。
+游戏内自动游玩已经按这份合同决策。外部客户端只接 MCP 工具、不加载 skill，也能点合法动作；要接近游戏内自动游玩的效果，需要配套 skill。
 
 ## 费用字段说明
 

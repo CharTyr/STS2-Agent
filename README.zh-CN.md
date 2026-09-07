@@ -165,6 +165,8 @@ Mod 默认在本地启动 HTTP 服务（默认端口 `8080`，遇冲突自动动
 
 Python sidecar 不是玩家必装，也不再作为推荐入口。
 
+游戏内自动游玩已经按配套 skill 的合同在打。若用 **外部** Agent 经 MCP 操作游戏（Cursor / Claude / Codex，或可选的 Python sidecar），请同时加载 [`sts2-mcp-player`](./skills/sts2-mcp-player/SKILL.md)。只接工具、不加载 skill，也能点合法动作；要接近游戏内自动游玩的效果，需要这份配套 skill。
+
 ---
 
 ## 🧪 源码构建与自动化测试
