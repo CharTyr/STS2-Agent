@@ -226,6 +226,7 @@ internal static class TestRunner
         yield return ("DeckSelection.PayloadProgress", () => Task.Run(DeckSelectionContractTests.DeckGridPayloadReportsNativeSelectionProgress));
         yield return ("DeckSelection.ClickSettle", () => Task.Run(DeckSelectionContractTests.DeckGridClickSettlesInEitherDirectionBeforeConfirming));
         yield return ("CombatDiagnostics.CanPlay", () => Task.Run(CombatDiagnosticsContractTests.HandPayloadKeepsNativeCanPlayEvidence));
+        yield return ("Map.NoVoteDuringCombat", () => Task.Run(MapCombatGatingTests.ChooseMapNodeHiddenWhileCombatInProgress));
         yield return ("CombatDiagnostics.Readiness", () => Task.Run(CombatDiagnosticsContractTests.CombatPayloadDistinguishesQueueModalAndSnapshotLocks));
         yield return ("ProfileSelection.NativeSwitch", () => Task.Run(ProfileSelectionContractTests.NativeProfileIdentityAndSwitchAreWiredEndToEnd));
         yield return ("AgentLoop.PlayOnce", AgentLoopTests.PlayOnce_ExecutesSingleValidatedAct);

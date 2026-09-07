@@ -859,6 +859,12 @@ internal static class GameStateService
 
     public static bool CanChooseMapNode(IScreenContext? currentScreen, RunState? runState)
     {
+        // Map votes during an active fight hide end_turn/play_card and desync co-op.
+        if (CombatManager.Instance.IsInProgress)
+        {
+            return false;
+        }
+
         return GetAvailableMapNodes(currentScreen, runState).Count > 0;
     }
 

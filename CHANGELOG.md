@@ -1,5 +1,18 @@
 # Changelog
 
+## v0.10.3 - 2026-09-07
+
+### Fixed
+- Invited teammates no longer stop autoplay while waiting to follow a map vote.
+- Map node votes are not offered during an active fight, so end_turn/play_card stay available.
+
+### Added
+- In-game autoplay and native MCP load the sts2-mcp-player play contract.
+- README and Workshop listings tell external MCP clients to load that skill.
+
+### Validation
+- Live invite run YFZH54KDS15D: companion followed map votes and played cards; host reached GAME_OVER with save_status=verified.
+
 ## v0.10.2 - 2026-09-06
 
 ### Added
