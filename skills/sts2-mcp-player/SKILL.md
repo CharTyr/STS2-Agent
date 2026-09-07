@@ -43,6 +43,10 @@ This skill does not require a long MCP config walkthrough. At runtime, simply fo
 
 For an optional skill-local remote checklist, read [references/remote-connection.md](references/remote-connection.md).
 
+The in-game overlay agent loads the shared play contract below plus references/screen-playbooks.md as its system prompt. Follow those same documents. Do not invent a parallel workflow.
+
+<!-- BEGIN SHARED PLAY CONTRACT -->
+
 ## Quick Start
 
 1. Call `health_check` once at session start.
@@ -61,17 +65,8 @@ For an optional skill-local remote checklist, read [references/remote-connection
 7. After every action, inspect the returned `state`; if needed, fetch fresh state again before the next step.
 8. Treat multiplayer as local-player control only. Never invent teammate actions that are not present in the latest state.
 9. Recompute indexes from fresh payloads every time. Never reuse stale hand, node, reward, or selection indexes.
-10. For user-facing play, maintain a run decision log under `agent_knowledge/run_logs/` using the repository template. Record seed, character, route choices, stage decisions, and concise reasons as the run progresses.
 
 Do not trust memory over the current payload. The game mutates screens in place, overlays replace rooms, and some actions complete only after a follow-up state transition.
-
-## Run Decision Logs
-
-- Create one markdown log per played or continued run under `agent_knowledge/run_logs/`.
-- Use `YYYYMMDD-HHMM_<character>_<seed>.md` when possible; use `unknown-character` or `unknown-seed` until the state exposes the missing value.
-- Record route choices, card/relic/potion rewards, shop buys/removes, event branches, rest choices, key combat turns, potion use, lethal planning, and MCP/action anomalies.
-- Keep entries short so logging does not block play. If needed, execute the legal action first and flush the note after the returned state stabilizes.
-- Use the template in `agent_knowledge/run_logs/README.md` for the header and decision table.
 
 ## Game Data Priority Rules
 
@@ -80,15 +75,6 @@ Do not trust memory over the current payload. The game mutates screens in place,
 - Use `get_game_data_item` when you need deep details for one entity id.
 - Use `get_game_data_items` when comparing multiple entities (for example, reward-card choices, shop candidates, potion options).
 - If state and metadata disagree, trust live state for legality and metadata for semantics; then re-read state.
-
-## Choose the Right Tool Surface
-
-- Use the guided profile for normal play and most evaluations.
-- Keep `get_relevant_game_data` / `get_game_data_item` / `get_game_data_items` available in guided runs for card, monster, potion, shop, and event decisions.
-- Use legacy per-action tools only when a harness explicitly needs tool-by-tool coverage.
-- Use `run_console_command` only in development flows where debug actions are enabled.
-
-For validation flows, read [references/debug-and-validation.md](references/debug-and-validation.md).
 
 ## Non-Negotiable State Rules
 
@@ -137,3 +123,23 @@ For detailed per-screen sequences and pitfalls, read [references/screen-playbook
 - In rewards, take cards only when the upgrade is clear; otherwise skip.
 - In shops, check relics and removal before committing all gold.
 - In events, prefer unlocked options and re-read state after every branch.
+
+<!-- END SHARED PLAY CONTRACT -->
+
+## Run Decision Logs
+
+- Create one markdown log per played or continued run under `agent_knowledge/run_logs/`.
+- Use `YYYYMMDD-HHMM_<character>_<seed>.md` when possible; use `unknown-character` or `unknown-seed` until the state exposes the missing value.
+- Record route choices, card/relic/potion rewards, shop buys/removes, event branches, rest choices, key combat turns, potion use, lethal planning, and MCP/action anomalies.
+- Keep entries short so logging does not block play. If needed, execute the legal action first and flush the note after the returned state stabilizes.
+- Use the template in `agent_knowledge/run_logs/README.md` for the header and decision table.
+
+## Choose the Right Tool Surface
+
+- Use the guided profile for normal play and most evaluations.
+- Keep `get_relevant_game_data` / `get_game_data_item` / `get_game_data_items` available in guided runs for card, monster, potion, shop, and event decisions.
+- Use legacy per-action tools only when a harness explicitly needs tool-by-tool coverage.
+- Use `run_console_command` only in development flows where debug actions are enabled.
+
+For validation flows, read [references/debug-and-validation.md](references/debug-and-validation.md).
+

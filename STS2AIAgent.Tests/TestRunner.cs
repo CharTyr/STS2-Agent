@@ -250,6 +250,7 @@ internal static class TestRunner
         yield return ("NativeMcp.Disabled", McpServiceTests.Disabled_Returns403);
         yield return ("NativeMcp.Initialize", McpServiceTests.Initialize_ReturnsServerInfoAndSession);
         yield return ("NativeMcp.ToolsList", McpServiceTests.ToolsList_IncludesHealthAndAct);
+        yield return ("NativeMcp.SkillResources", McpServiceTests.Resources_ExposeSharedPlaySkill);
         yield return ("NativeMcp.ToolsCall", McpServiceTests.ToolsCall_GetGameStateAndAct);
         yield return ("NativeMcp.Notification", McpServiceTests.Notification_Returns202);
         yield return ("NativeMcp.ClientConfig", McpServiceTests.ClientConfig_UsesEnabledUrl);

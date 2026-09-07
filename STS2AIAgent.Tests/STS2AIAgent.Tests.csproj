@@ -42,4 +42,8 @@
     <Compile Include="..\STS2AIAgent\Game\ProgressSaveVerification.cs" Link="Game\ProgressSaveVerification.cs" />
     <Compile Include="..\STS2AIAgent\Game\EventOptionLocalization.cs" Link="Game\EventOptionLocalization.cs" />
   </ItemGroup>
+  <ItemGroup>
+    <EmbeddedResource Include="../skills/sts2-mcp-player/SKILL.md" LogicalName="STS2AIAgent.Sts2McpPlayer.Skill.md" />
+    <EmbeddedResource Include="../skills/sts2-mcp-player/references/screen-playbooks.md" LogicalName="STS2AIAgent.Sts2McpPlayer.ScreenPlaybooks.md" />
+  </ItemGroup>
 </Project>

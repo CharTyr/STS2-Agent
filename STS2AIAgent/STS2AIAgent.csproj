@@ -28,4 +28,8 @@
       <Private>false</Private>
     </Reference>
   </ItemGroup>
+  <ItemGroup>
+    <EmbeddedResource Include="../skills/sts2-mcp-player/SKILL.md" LogicalName="STS2AIAgent.Sts2McpPlayer.Skill.md" />
+    <EmbeddedResource Include="../skills/sts2-mcp-player/references/screen-playbooks.md" LogicalName="STS2AIAgent.Sts2McpPlayer.ScreenPlaybooks.md" />
+  </ItemGroup>
 </Project>

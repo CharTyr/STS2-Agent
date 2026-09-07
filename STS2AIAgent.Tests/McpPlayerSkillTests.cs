@@ -1,3 +1,4 @@
+using STS2AIAgent.Agent;
 using System;
 namespace STS2AIAgent.Tests;
 
@@ -7,8 +8,15 @@ internal static class McpPlayerSkillTests
     {
         var skill = AgentSourceFixture.Read("skills/sts2-mcp-player/SKILL.md");
         var playbooks = AgentSourceFixture.Read("skills/sts2-mcp-player/references/screen-playbooks.md");
-        var prompt = AgentSourceFixture.Read("STS2AIAgent/Agent/PlayPrompt.cs");
         var combined = skill + Environment.NewLine + playbooks;
+        Assert.Contains(PlayPrompt.SharedContractBegin, skill, StringComparison.Ordinal);
+        Assert.Contains(PlayPrompt.SharedContractEnd, skill, StringComparison.Ordinal);
+        Assert.Equal(PlayPrompt.ExtractSharedContract(skill), PlayPrompt.PlayContract);
+        var playSystem = PlayPrompt.PlaySystem;
+        Assert.Contains(PlayPrompt.PlayContract, playSystem, StringComparison.Ordinal);
+        Assert.Contains(PlayPrompt.ScreenPlaybooks, playSystem, StringComparison.Ordinal);
+        Assert.Contains("same play contract as the STS2 MCP player skill", playSystem, StringComparison.Ordinal);
+
         foreach (var token in new[]
                  {
                      "continue_game_over",
@@ -23,7 +31,7 @@ internal static class McpPlayerSkillTests
                  })
         {
             Assert.True(combined.Contains(token, StringComparison.Ordinal), "mcp skill missing " + token);
-            Assert.True(prompt.Contains(token, StringComparison.Ordinal), "PlayPrompt missing " + token);
+            Assert.True(PlayPrompt.PlaySystem.Contains(token, StringComparison.Ordinal), "in-game PlaySystem missing " + token);
         }
     }
 }

@@ -32,6 +32,10 @@ internal static class McpServiceTests
         Assert.Equal("sts2-ai-agent", info.GetProperty("name").GetString());
         Assert.Equal("9.9.9", info.GetProperty("version").GetString());
         Assert.Equal("2025-03-26", root.GetProperty("result").GetProperty("protocolVersion").GetString());
+        var instructions = root.GetProperty("result").GetProperty("instructions").GetString();
+        Assert.Contains("continue_game_over", instructions);
+        Assert.Contains("get_game_state", instructions);
+        Assert.Contains("same play contract as the STS2 MCP player skill", instructions);
     }
 
     public static async Task ToolsList_IncludesHealthAndAct()
@@ -47,6 +51,22 @@ internal static class McpServiceTests
         var act = listed.GetProperty("result").GetProperty("tools").EnumerateArray()
             .First(tool => tool.GetProperty("name").GetString() == "act");
         Assert.True(act.GetProperty("inputSchema").GetProperty("properties").TryGetProperty("action", out _));
+    }
+
+    public static async Task Resources_ExposeSharedPlaySkill()
+    {
+        var server = CreateServer();
+        var listed = await Rpc(server, """{"jsonrpc":"2.0","id":12,"method":"resources/list"}""");
+        var uris = listed.GetProperty("result").GetProperty("resources").EnumerateArray()
+            .Select(resource => resource.GetProperty("uri").GetString())
+            .ToArray();
+        Assert.True(uris.Contains("sts2://skill/play-contract"), "expected play-contract resource");
+        Assert.True(uris.Contains("sts2://skill/screen-playbooks"), "expected screen-playbooks resource");
+
+        var read = await Rpc(server, """{"jsonrpc":"2.0","id":13,"method":"resources/read","params":{"uri":"sts2://skill/play-contract"}}""");
+        var text = read.GetProperty("result").GetProperty("contents")[0].GetProperty("text").GetString();
+        Assert.Contains("continue_game_over", text);
+        Assert.Contains("local_vote", text);
     }
 
     public static async Task ToolsCall_GetGameStateAndAct()
