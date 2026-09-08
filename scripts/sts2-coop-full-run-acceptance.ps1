@@ -1,5 +1,5 @@
 param(
-    [ValidateSet('Prepare', 'ErrorFixture', 'DiscoverModels', 'Execute', 'Disconnect')]
+    [ValidateSet('Prepare', 'ErrorFixture', 'DiscoverModels', 'Execute', 'GameOverSave', 'Disconnect')]
     [string]$Mode = 'Prepare',
     [switch]$AllowLiveGame,
     [string]$RepoRoot = '',
@@ -42,6 +42,9 @@ $Upstream = 'https://api.gmi-serving.com'
 $ProxyBase = 'http://' + $ProxyListen
 $DummyKey = 'sts2-budget-proxy-local'
 $ExpectedModel = 'MiniMaxAI/MiniMax-M3'
+$script:ContinueGameOverIssued = @{}
+$script:ContinueGameOverSeconds = @{}
+$script:ContinueGameOverClicks = 0
 
 New-Item -ItemType Directory -Force -Path $Evidence | Out-Null
 . $Secrets
@@ -516,7 +519,23 @@ function Drive-Once([string]$BaseUrl, $state) {
         'CRYSTAL_SPHERE' { if ($actions -contains 'proceed') { return Invoke-Act $BaseUrl @{ action = 'proceed' } } }
         'GAME_OVER' {
             if ($actions -contains 'dismiss_game_over_wait') { return Invoke-Act $BaseUrl @{ action = 'dismiss_game_over_wait' } }
-            if ($actions -contains 'continue_game_over') { return Invoke-Act $BaseUrl @{ action = 'continue_game_over' } }
+            if ($actions -contains 'continue_game_over') {
+                if ($script:ContinueGameOverIssued -and $script:ContinueGameOverIssued[$BaseUrl]) { return $null }
+                if (-not $script:ContinueGameOverIssued) { $script:ContinueGameOverIssued = @{} }
+                $script:ContinueGameOverIssued[$BaseUrl] = $true
+                $script:ContinueGameOverClicks++
+                $sw = [System.Diagnostics.Stopwatch]::StartNew()
+                try {
+                    $resp = Invoke-Act $BaseUrl @{ action = 'continue_game_over' } -TimeoutSec 90
+                    $script:ContinueGameOverSeconds[$BaseUrl] = [math]::Round($sw.Elapsed.TotalSeconds, 2)
+                    Write-RunLog ('continue_game_over once url={0} seconds={1} ok={2}' -f $BaseUrl, $script:ContinueGameOverSeconds[$BaseUrl], $resp.ok)
+                    return $resp
+                } catch {
+                    $script:ContinueGameOverIssued[$BaseUrl] = $false
+                    $script:ContinueGameOverClicks = [Math]::Max(0, $script:ContinueGameOverClicks - 1)
+                    throw
+                }
+            }
             if ($actions -contains 'confirm_unlock') { return Invoke-Act $BaseUrl @{ action = 'confirm_unlock' } }
             if ($actions -contains 'return_to_main_menu') { return Invoke-Act $BaseUrl @{ action = 'return_to_main_menu' } }
         }
@@ -568,6 +587,9 @@ function Invoke-Execute {
         throw ('Refuse to start isolated acceptance while SlayTheSpire2 is already running: ' + (($running | ForEach-Object { $_.Id }) -join ','))
     }
     $script:FullRunLog = Join-Path $Evidence 'full-run.log'
+    $script:ContinueGameOverIssued = @{}
+    $script:ContinueGameOverSeconds = @{}
+    $script:ContinueGameOverClicks = 0
     Set-Content -LiteralPath $script:FullRunLog -Value ('=== START {0} ===' -f (Get-Date -Format o)) -Encoding UTF8
     Initialize-IsolatedSettings
     if (-not (Test-Path -LiteralPath $ProtectedSnapshot)) { Save-ProtectedSnapshot | Out-Null }
@@ -963,11 +985,320 @@ function Invoke-Disconnect {
     }
 }
 
+function Get-ProgressSaveInfo([string]$ClientId) {
+    $path = Join-Path $env:APPDATA ("SlayTheSpire2\default\" + $ClientId + "\modded\profile1\saves\progress.save")
+    if (-not (Test-Path -LiteralPath $path)) {
+        return [pscustomobject]@{ client_id = $ClientId; path = $path; exists = $false }
+    }
+    $item = Get-Item -LiteralPath $path
+    $raw = Get-Content -LiteralPath $path -Raw | ConvertFrom-Json
+    $losses = $null
+    if ($raw.character_stats) {
+        $stats = @($raw.character_stats)
+        if ($stats.Count -gt 0) { $losses = $stats[0].total_losses }
+    }
+    return [pscustomobject]@{
+        client_id = $ClientId
+        path = $path
+        exists = $true
+        mtime_utc = $item.LastWriteTimeUtc.ToString('o')
+        mtime_ticks = $item.LastWriteTimeUtc.Ticks
+        length = $item.Length
+        floors_climbed = $raw.floors_climbed
+        current_score = $raw.current_score
+        total_losses = $losses
+    }
+}
+
+function Install-IsolatedCandidate {
+    $staging = Join-Path $RepoRoot 'build\mods\STS2AIAgent'
+    $paths = Get-CandidatePaths
+    New-Item -ItemType Directory -Force -Path $paths.Mods | Out-Null
+    foreach ($name in @('STS2AIAgent.dll', 'STS2AIAgent.pck', 'mod_id.json')) {
+        $from = Join-Path $staging $name
+        if (-not (Test-Path -LiteralPath $from)) { throw "staging missing $from" }
+        Copy-Item -LiteralPath $from -Destination (Join-Path $paths.Mods $name) -Force
+    }
+}
+
+function Invoke-DriveBoth([string]$HostBase, [string]$CompanionBase) {
+    $hostState = Get-State $HostBase
+    Write-RunLog (Summarize $hostState 'host')
+    $cstate = $null
+    try {
+        $cstate = Get-State $CompanionBase
+        Write-RunLog (Summarize $cstate 'companion')
+    } catch {
+        Write-RunLog ('companion state error: ' + $_.Exception.Message)
+    }
+    $acted = $false
+    try {
+        $resp = Drive-Once $HostBase $hostState
+        if ($null -ne $resp) {
+            $acted = $true
+            Write-RunLog ('host action ok={0} action={1} msg={2}' -f $resp.ok, $resp.data.action, $resp.data.message)
+        }
+    } catch {
+        Write-RunLog ('host action error: ' + $_.Exception.Message)
+    }
+    if ($null -ne $cstate) {
+        try {
+            $cresp = Drive-Once $CompanionBase $cstate
+            if ($null -ne $cresp) {
+                $acted = $true
+                Write-RunLog ('companion action ok={0} action={1} msg={2}' -f $cresp.ok, $cresp.data.action, $cresp.data.message)
+            }
+        } catch {
+            Write-RunLog ('companion action error: ' + $_.Exception.Message)
+        }
+    }
+    return [pscustomobject]@{ host = $hostState; companion = $cstate; acted = $acted }
+}
+
+function Test-OnClimb($state) {
+    if ($null -eq $state) { return $false }
+    $screen = [string]$state.screen
+    return $screen -in @('MAP', 'COMBAT', 'MAP_WAIT', 'EVENT', 'REWARD', 'REST', 'SHOP', 'CHEST') -or [bool]$state.in_combat
+}
+
+function Invoke-GameOverSave {
+    if (-not $AllowLiveGame) {
+        throw 'GameOverSave refused: pass -AllowLiveGame after the candidate is installed only in the isolated mods folder. Do not start the live Steam game.'
+    }
+    if (-not (Test-Path -LiteralPath $GameExe)) { throw "isolated game missing: $GameExe" }
+    $running = @(Get-Process -Name 'SlayTheSpire2' -ErrorAction SilentlyContinue)
+    if ($running.Count -gt 0) {
+        throw ('Refuse to start isolated acceptance while SlayTheSpire2 is already running: ' + (($running | ForEach-Object { $_.Id }) -join ','))
+    }
+    Install-IsolatedCandidate
+    $paths = Get-CandidatePaths
+    if (-not ((Test-Path -LiteralPath $paths.Dll) -and (Test-Path -LiteralPath $paths.Pck))) {
+        throw 'GameOverSave is prepared but candidate DLL/PCK hashes are not installed in isolated mods/ yet.'
+    }
+    $script:FullRunLog = Join-Path $Evidence 'gameover-save-run.log'
+    $script:ContinueGameOverIssued = @{}
+    $script:ContinueGameOverSeconds = @{}
+    $script:ContinueGameOverClicks = 0
+    Set-Content -LiteralPath $script:FullRunLog -Value ('=== GAME_OVER SAVE START {0} ===' -f (Get-Date -Format o)) -Encoding UTF8
+    Initialize-IsolatedSettings
+    if (-not (Test-Path -LiteralPath $ProtectedSnapshot)) { Save-ProtectedSnapshot | Out-Null }
+    Write-IsolatedProgressSaves
+    $env:STS2_ENABLE_DEBUG_ACTIONS = '1'
+    $env:STS2_AGENT_SETTINGS_PATH = $HostSettings
+    $env:STS2_COMPANION_SETTINGS_PATH = $CompanionSettings
+    $candidate = [pscustomobject]@{
+        at_utc = [DateTime]::UtcNow.ToString('o')
+        baseline_sha = (git -C $RepoRoot rev-parse HEAD)
+        branch = (git -C $RepoRoot rev-parse --abbrev-ref HEAD)
+        dll = Get-FileHashRecord $paths.Dll
+        pck = Get-FileHashRecord $paths.Pck
+        mod_id = Get-FileHashRecord $paths.ModId
+        game_exe = Get-FileHashRecord $GameExe
+        installed_only_in_isolated_mods = $true
+        mode = 'GameOverSave'
+    }
+    Write-JsonFile -Path (Join-Path $Evidence 'gameover-save-candidate.json') -Object $candidate
+    $proxy = $null
+    $hostPid = $null
+    $companionPid = $null
+    $companionPort = $HostApiPort + 1
+    $hostBase = 'http://127.0.0.1:' + $HostApiPort
+    $companionBase = 'http://127.0.0.1:' + $companionPort
+    $result = [ordered]@{
+        started_at_utc = [DateTime]::UtcNow.ToString('o')
+        outcome = 'incomplete'
+        mode = 'GameOverSave'
+        flow = @('isolated dual launch', 'invite companion', 'HTTP lobby/embark', 'console fight', 'console die', 'continue_game_over once/90s', 'return_to_main_menu', 'progress.save mtime + save_verified')
+        host_continue_seconds = $null
+        companion_continue_seconds = $null
+        continue_clicks = 0
+        forced_return_suspected = $false
+        host_progress_before = $null
+        companion_progress_before = $null
+        host_progress_after = $null
+        companion_progress_after = $null
+        flags = @{}
+        failures = @()
+        protected_save_failures = @()
+    }
+    try {
+        $secure = Import-Sts2ValidationSecureKey
+        $plain = Convert-Sts2SecureStringToPlain -Secure $secure
+        try {
+            $proxy = Start-BudgetProxy -Fixture 'none' -UpstreamKey $plain
+        } finally {
+            $plain = $null
+            [GC]::Collect()
+        }
+        Write-RunLog 'budget proxy healthy; running connectivity probe'
+        Invoke-ConnectivityProbe | Out-Null
+        Set-VerifiedRoleTests
+        Write-RunLog 'launching isolated host with debug actions'
+        $launchLines = @(& $StartGame -ExePath $GameExe -ApiPort $HostApiPort -EnableDebugActions -KeepExistingProcesses -Attempts 360 -DelaySeconds 1 -ExtraArguments ("--windowed --force-steam off --clientId " + $HostClientId))
+        $launchJson = $launchLines | Where-Object { $_ -match '^\s*\{' } | Select-Object -Last 1
+        if (-not $launchJson) { throw ('host launch did not return JSON: ' + ($launchLines -join ' | ')) }
+        $launch = $launchJson | ConvertFrom-Json
+        $hostPid = [int]$launch.pid
+        Write-RunLog ('host pid={0} health={1} debug={2}' -f $hostPid, $launch.health, $launch.debug_actions_enabled)
+        $inviteDeadline = (Get-Date).AddSeconds(180)
+        $hostState = $null
+        $lastHostSummary = ''
+        while ((Get-Date) -lt $inviteDeadline) {
+            try {
+                $hostState = Get-State $hostBase
+                $summary = Summarize $hostState 'host'
+                if ($summary -ne $lastHostSummary) { Write-RunLog $summary; $lastHostSummary = $summary }
+                $acts = @($hostState.available_actions)
+                if ($acts -contains 'abandon_run') {
+                    Write-RunLog 'abandoning leftover isolated run'
+                    Invoke-Act $hostBase @{ action = 'abandon_run' } | Out-Null
+                    Start-Sleep -Seconds 1
+                    continue
+                }
+                if ($acts -contains 'confirm_modal') { Invoke-Act $hostBase @{ action = 'confirm_modal' } | Out-Null; Start-Sleep -Milliseconds 400; continue }
+                if ($acts -contains 'dismiss_modal') { Invoke-Act $hostBase @{ action = 'dismiss_modal' } | Out-Null; Start-Sleep -Milliseconds 400; continue }
+                if ($hostState.screen -eq 'MAIN_MENU' -and $acts -contains 'invite_ai_teammate') { break }
+            } catch {
+                Write-RunLog ('wait main menu: ' + $_.Exception.Message)
+            }
+            Start-Sleep -Seconds 1
+        }
+        if ($null -eq $hostState -or $hostState.screen -ne 'MAIN_MENU' -or @($hostState.available_actions) -notcontains 'invite_ai_teammate') {
+            throw ('host is not ready to invite: ' + (Summarize $hostState 'host'))
+        }
+        Write-RunLog 'inviting AI teammate'
+        $invite = Invoke-Act $hostBase @{ action = 'invite_ai_teammate' } -TimeoutSec 180
+        Write-RunLog ('invite ok={0} msg={1}' -f $invite.ok, $invite.data.message)
+        if (-not $invite.ok) { throw ('invite failed: ' + ($invite | ConvertTo-Json -Compress -Depth 6)) }
+        if ($invite.data.message -match 'API (\d+)') {
+            $companionPort = [int]$Matches[1]
+            $companionBase = 'http://127.0.0.1:' + $companionPort
+        }
+        $companionReady = $false
+        for ($i = 0; $i -lt 120; $i++) {
+            try {
+                $ch = Get-Health $companionBase
+                if ($ch.ok -and $ch.data.instance_role -eq 'companion') {
+                    $companionPid = [int]$ch.data.process_id
+                    Write-RunLog ('companion health port={0} pid={1} play={2}' -f $ch.data.api_port, $companionPid, $ch.data.play_phase)
+                    $companionReady = $true
+                    break
+                }
+            } catch {}
+            Start-Sleep -Seconds 1
+        }
+        if (-not $companionReady) { throw "companion API did not come up on $companionBase" }
+        Write-RunLog 'pausing companion autoplay; host and companion will be driven over HTTP'
+        try { Invoke-SessionControl $companionBase $false | Out-Null } catch { Write-RunLog ('pause companion: ' + $_.Exception.Message) }
+        $flags = @{
+            companionReady = $true
+            reachedClimb = $false
+            fought = $false
+            died = $false
+            gameOver = $false
+            hostSaveVerified = $false
+            companionSaveVerified = $false
+            returnedToMenu = $false
+        }
+        $climbDeadline = (Get-Date).AddMinutes(10)
+        while ((Get-Date) -lt $climbDeadline) {
+            $pair = Invoke-DriveBoth $hostBase $companionBase
+            if ((Test-OnClimb $pair.host) -and (Test-OnClimb $pair.companion)) {
+                $flags.reachedClimb = $true
+                break
+            }
+            if (-not $pair.acted) { Start-Sleep -Seconds 1 } else { Start-Sleep -Milliseconds 350 }
+        }
+        if (-not $flags.reachedClimb) { throw 'did not reach MAP/COMBAT on both instances' }
+        $hostState = Get-State $hostBase
+        if ([string]$hostState.screen -ne 'COMBAT' -and -not [bool]$hostState.in_combat) {
+            Write-RunLog 'issuing fight MAWLER_NORMAL'
+            $fight = Invoke-Act $hostBase @{ action = 'run_console_command'; command = 'fight MAWLER_NORMAL' } -TimeoutSec 30
+            Write-RunLog ('fight ok={0} msg={1}' -f $fight.ok, $fight.data.message)
+            $combatDeadline = (Get-Date).AddSeconds(45)
+            while ((Get-Date) -lt $combatDeadline) {
+                $hostState = Get-State $hostBase
+                if ([string]$hostState.screen -eq 'COMBAT' -or [bool]$hostState.in_combat) { break }
+                Start-Sleep -Milliseconds 500
+            }
+        }
+        $hostState = Get-State $hostBase
+        if ([string]$hostState.screen -eq 'COMBAT' -or [bool]$hostState.in_combat) { $flags.fought = $true }
+        if (-not $flags.fought) { throw ('fight did not enter COMBAT: ' + (Summarize $hostState 'host')) }
+        Write-RunLog 'issuing die on companion then host'
+        try { Invoke-Act $companionBase @{ action = 'run_console_command'; command = 'die' } -TimeoutSec 30 | Out-Null } catch { Write-RunLog ('companion die: ' + $_.Exception.Message) }
+        Start-Sleep -Milliseconds 400
+        $die = Invoke-Act $hostBase @{ action = 'run_console_command'; command = 'die' } -TimeoutSec 30
+        Write-RunLog ('host die ok={0} msg={1}' -f $die.ok, $die.data.message)
+        $dieDeadline = (Get-Date).AddSeconds(60)
+        while ((Get-Date) -lt $dieDeadline) {
+            $hostState = Get-State $hostBase
+            $cstate = $null
+            try { $cstate = Get-State $companionBase } catch {}
+            if ([string]$hostState.screen -eq 'GAME_OVER') { $flags.gameOver = $true; $flags.died = $true; break }
+            Start-Sleep -Milliseconds 500
+        }
+        if (-not $flags.gameOver) { throw ('did not reach GAME_OVER: ' + (Summarize $hostState 'host')) }
+        $result.host_progress_before = Get-ProgressSaveInfo $HostClientId
+        $result.companion_progress_before = Get-ProgressSaveInfo $CompanionClientId
+        Write-RunLog ('progress before host ticks={0} companion ticks={1}' -f $result.host_progress_before.mtime_ticks, $result.companion_progress_before.mtime_ticks)
+        $continueDeadline = (Get-Date).AddMinutes(4)
+        $hostContinueStarted = $null
+        $companionContinueStarted = $null
+        while ((Get-Date) -lt $continueDeadline) {
+            $pair = Invoke-DriveBoth $hostBase $companionBase
+            if ($pair.host -and $pair.host.game_over -and $pair.host.game_over.save_verified) { $flags.hostSaveVerified = $true }
+            if ($pair.companion -and $pair.companion.game_over -and $pair.companion.game_over.save_verified) { $flags.companionSaveVerified = $true }
+            if ($script:ContinueGameOverIssued[$hostBase] -and -not $hostContinueStarted) { $hostContinueStarted = Get-Date }
+            if ($script:ContinueGameOverIssued[$companionBase] -and -not $companionContinueStarted) { $companionContinueStarted = Get-Date }
+            $hostMenu = $pair.host -and [string]$pair.host.screen -eq 'MAIN_MENU'
+            $compMenu = $pair.companion -and [string]$pair.companion.screen -eq 'MAIN_MENU'
+            if ($hostMenu -and $compMenu) { $flags.returnedToMenu = $true; break }
+            if (-not $pair.acted) { Start-Sleep -Seconds 1 } else { Start-Sleep -Milliseconds 350 }
+        }
+        if ($script:ContinueGameOverSeconds.ContainsKey($hostBase)) { $result.host_continue_seconds = $script:ContinueGameOverSeconds[$hostBase] }
+        if ($script:ContinueGameOverSeconds.ContainsKey($companionBase)) { $result.companion_continue_seconds = $script:ContinueGameOverSeconds[$companionBase] }
+        $result.continue_clicks = $script:ContinueGameOverClicks
+        $result.host_progress_after = Get-ProgressSaveInfo $HostClientId
+        $result.companion_progress_after = Get-ProgressSaveInfo $CompanionClientId
+        $hostSaved = $result.host_progress_after.exists -and $result.host_progress_before.exists -and ($result.host_progress_after.mtime_ticks -gt $result.host_progress_before.mtime_ticks)
+        $compSaved = $result.companion_progress_after.exists -and $result.companion_progress_before.exists -and ($result.companion_progress_after.mtime_ticks -gt $result.companion_progress_before.mtime_ticks)
+        $result.forced_return_suspected = ($result.host_continue_seconds -ge 14 -and $result.host_continue_seconds -le 17 -and -not $hostSaved)
+        $result.protected_save_failures = @(Test-ProtectedSnapshotUnchanged)
+        $failures = @()
+        if (-not $flags.reachedClimb) { $failures += 'did not reach climb' }
+        if (-not $flags.fought) { $failures += 'fight did not enter COMBAT' }
+        if (-not $flags.gameOver) { $failures += 'GAME_OVER not reached' }
+        if ($result.continue_clicks -gt 2) { $failures += ('continue clicked too many times: ' + $result.continue_clicks) }
+        if (-not $flags.hostSaveVerified) { $failures += 'host save not verified' }
+        if (-not $flags.companionSaveVerified) { $failures += 'companion save not verified' }
+        if (-not $hostSaved) { $failures += 'host progress.save mtime did not update' }
+        if (-not $compSaved) { $failures += 'companion progress.save mtime did not update' }
+        if (-not $flags.returnedToMenu) { $failures += 'did not return to MAIN_MENU on both instances' }
+        if ($result.forced_return_suspected) { $failures += 'continue_game_over looks like the old 15s Enable skip' }
+        if ($result.protected_save_failures.Count -gt 0) { $failures += 'protected saves changed' }
+        $result.flags = $flags
+        $result.failures = $failures
+        $result.ended_at_utc = [DateTime]::UtcNow.ToString('o')
+        $result.outcome = $(if ($failures.Count -eq 0) { 'gameover_save_ok' } else { 'failed' })
+        Write-JsonFile -Path (Join-Path $Evidence 'gameover-save-result.json') -Object $result
+        Write-RunLog ('RESULT outcome={0} failures={1}' -f $result.outcome, ($failures -join '; '))
+        if ($result.outcome -eq 'failed') { throw ('GAMEOVER_SAVE_FAIL ' + ($failures -join '; ')) }
+        Write-Output ('GAMEOVER_SAVE_OK host_mtime=' + $result.host_progress_after.mtime_utc)
+    }
+    finally {
+        Stop-TrackedGames @($hostPid, $companionPid)
+        Stop-BudgetProxy -Process $proxy
+        Remove-Item Env:STS2_ENABLE_DEBUG_ACTIONS -ErrorAction SilentlyContinue
+    }
+}
+
 switch ($Mode) {
     'Prepare' { Invoke-Prepare }
     'ErrorFixture' { Invoke-Prepare; $p = Invoke-ErrorFixture; Write-Output ('ERROR_FIXTURE_OK ' + $p) }
     'DiscoverModels' { Invoke-Prepare; $c = Invoke-DiscoverModels; Write-Output ('DISCOVER_OK count=' + $c.model_count + ' expected_present=' + $c.expected_id_present) }
     'Execute' { Invoke-Execute }
+    'GameOverSave' { Invoke-GameOverSave }
     'Disconnect' { Invoke-Disconnect }
 }
 
