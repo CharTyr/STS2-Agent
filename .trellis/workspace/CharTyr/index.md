@@ -8,8 +8,8 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-1.md`
-- **Total Sessions**: 1
-- **Last Active**: 2026-09-08
+- **Total Sessions**: 2
+- **Last Active**: 2026-09-09
 <!-- @@@/auto:current-status -->
 
 ---
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-1.md` | ~44 | Active |
+| `journal-1.md` | ~84 | Active |
 <!-- @@@/auto:active-documents -->
 
 ---
@@ -29,6 +29,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 2 | 2026-09-09 | v0.10.5 release, Workshop public visibility and P3 closeout | `e3412eb`, `04d2466`, `15e483c`, `2838250`, `96bd410` | `main` |
 | 1 | 2026-09-08 | GAME_OVER save wait and reliability merge | `4b4da6e`, `22907b0` | `main` |
 <!-- @@@/auto:session-history -->
 
