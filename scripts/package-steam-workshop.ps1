@@ -13,6 +13,14 @@ param(
 $ErrorActionPreference = "Stop"
 $scriptRoot = $PSScriptRoot
 
+# Updates to an existing item must not silently flip it back to private.
+# Default public downstream unless the caller explicitly chooses visibility
+# or this is the very first upload (PublishedFileId 0).
+if (-not $PSBoundParameters.ContainsKey('Visibility'))
+{
+    $Visibility = if ([string]$PublishedFileId -eq '0') { 'private' } else { 'public' }
+}
+
 function Resolve-ProjectRoot {
     param([string]$InputRoot)
 

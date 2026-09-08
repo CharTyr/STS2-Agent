@@ -1,6 +1,6 @@
 {
   "title": "STS2 AI Agent",
-  "visibility": "private",
+  "visibility": "public",
   "changeNote": "v0.10.4 timeline unlocks, stuck FTUE confirm, locked event options",
   "tags": [
     "Tools & APIs",
