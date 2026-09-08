@@ -2,6 +2,45 @@
 
 > Release attribution is recorded only when verified against git tags or release commits. The existing `Unreleased` entries below remain to be checked against git history and are not evidence for the current status page.
 
+## v0.10.5 - 2026-09-08
+
+> Release attribution: git tag \`v0.10.5\` points to the release commit; covers \`19710ad\` (#78), \`4b4da6e\` (#79), \`22907b0\` (#80) after tag \`v0.10.4\` (\`1c86596\`).
+
+### Fixed
+
+- Empty reward overlays no longer remain pending after collecting rewards (#78, \`19710ad\`).
+- \`continue_game_over\` waits for the native summary save before returning to the main menu; it no longer force-enables the Return button after 15 seconds (#79, \`4b4da6e\`).
+- Autoplay rethrows run-boundary stops from \`act\` and re-checks compact state after \`get_game_state\` / \`wait_until_actionable\`, so leaving a run no longer burns extra model rounds.
+- Session request budgets are checked before each LLM round and shared with chat/teammate replies, not only after a finished autoplay turn.
+- Deck multi-select no longer confirms at \`min_select\`; cards report \`selected\`, and \`confirm_selection\` works on deck-grid screens.
+- Combat selection waits for action-queue readiness; settle timeouts return pending instead of a weaker \`stable=true\`.
+- Companion HTTP ports may fall back and are rediscovered by pid/port file; settings are recopied on every invite; offline launches always get a distinct \`clientId\`.
+- Companion bootstrap joins the host lobby and no longer runs \`multiplayer test\` itself.
+- Compact state now includes \`native_profile_id\` / \`profiles[]\`; the playbook tells the agent not to \`switch_profile\` unless asked.
+
+### Added
+
+- First-run overlay opens a short setup path. Default URL + model name is unverified until **Test Connection** succeeds per role (chat / play / vision).
+- Settings keep per-role test results, a save indicator, and a confirm step before deleting a referenced endpoint or model.
+- AI Teammate page shows why the companion is waiting or stopped, what to click next, unknown token usage, and a redacted diagnostics copy.
+- Session-scoped team chat from the human overlay to the launched AI companion; team replies use the play model and inform future play decisions without granting chat permission to execute actions.
+- AI teammate page is the default entry for the human window, with an invite flow that saves model settings and checks main-menu and autoplay preconditions.
+- \`process_id\` on \`/health\`; service, role, port, and process identity are verified before accepting a companion connection.
+- GitHub zip now ships \`README.zh-CN.md\` and \`LICENSE\`; install copy steps match the \`mod/\` folder. Native MCP remains the recommended external-client entry.
+
+### Changed
+
+- Session budgets (token/request limits) keep a safe ceiling and restore from corrupt settings backups; exhausted budgets stop autoplay with an in-overlay next-action hint.
+- MCP Origin contract: same-origin request and missing Origin are accepted, untrusted/malformed origins are rejected, no open CORS \`*\`.
+- Stalled stream bodies time out (tests inject shorter timeouts; production default remains 3 minutes).
+- \`play_card\` selection is cancellable and waits for action-queue settlement.
+
+### Validation
+
+- Isolated dual-instance run on current main (DLL \`72C72F02\`): first map combat wiped by idle end-turn; both instances ran \`continue_game_over\` once (4.2s / 2.4s), \`save_verified=true\`, both \`progress.save\` mtimes updated after continue, returning to main menu; no forced 15s Return.
+- Over-limit UI: \`maxSessionRequests=1\` stops with \`stop_kind=budget\` and the overlay shows the request-limit message and next actions.
+- 180 core tests pass, 0 failures. Full preflight and Workshop install were not run as part of this change.
+
 ## v0.10.4 - 2026-09-07
 
 > Release attribution: git tag `v0.10.4` points to `1c86596`; release commit `2157697`.
@@ -62,47 +101,6 @@
 
 - Steam overlay invite uses ENet FastHost (injected `-fastmp`) so an offline companion can join; `/state` reports the raw lobby `max_players` after `EnsureFourPlayerLobby`.
 - Companion settings stay isolated (`settings.companion.json`) and companion HTTP ports can fall back and be rediscovered by pid/port file.
-
-## Unreleased
-
-> The existing entries in this section remain unassigned until their git release attribution is checked. The following post-tag fix is confirmed on `main` but has no release tag yet.
-
-### After v0.10.4 tag
-
-- `19710ad` fixes empty reward overlays that could remain pending. It is after tag `v0.10.4` (`1c86596`) and is present on current `main` (`bb26a21`); release attribution is unassigned and the source version remains `0.10.4`.
-
-### Added
-
-- First-run overlay opens a short setup path. Default URL + model name is unverified until **Test Connection** succeeds per role (chat / play / vision).
-- Settings keep per-role test results, a save indicator, and a confirm step before deleting a referenced endpoint or model.
-- AI Teammate page shows why the companion is waiting or stopped, what to click next, unknown token usage, and a redacted diagnostics copy.
-- GitHub zip now ships `README.zh-CN.md` and `LICENSE`; install copy steps match the `mod/` folder. Native MCP remains the recommended external-client entry.
-
-### Fixed
-
-- Autoplay now rethrows run-boundary stops from `act` and re-checks compact state after `get_game_state` / `wait_until_actionable`, so leaving a run no longer burns extra model rounds.
-- Session request budgets are checked before each LLM round and shared with chat/teammate replies, not only after a finished autoplay turn.
-- Deck multi-select no longer confirms at `min_select`; cards report `selected`, and `confirm_selection` works on deck-grid screens.
-- Combat selection waits for action-queue readiness; settle timeouts return pending instead of a weaker `stable=true`.
-- Companion HTTP ports may fall back and are rediscovered by pid/port file; settings are recopied on every invite; offline launches always get a distinct `clientId`.
-- Companion bootstrap joins the host lobby and no longer runs `multiplayer test` itself.
-- Compact state now includes `native_profile_id` / `profiles[]`; the playbook tells the agent not to `switch_profile` unless asked.
-
-### Added
-
-- Added session-scoped team chat from the human overlay to the launched AI companion. Team replies use the play model; recent conversation informs future play decisions without granting chat permission to execute actions.
-- Made the AI teammate page the default entry for the human window, with an invite flow that saves model settings and checks the main-menu and autoplay preconditions.
-- Added `process_id` to `/health` and verify service, role, port, and process identity before accepting a companion connection.
-
-### Fixed
-
-- HTTP startup now falls back to bounded dynamic port selection when Windows excludes the default and nearby ports. Explicitly configured ports remain fixed.
-- Companion port discovery checks an actual HTTP bind. Repeated invitations retain the existing child process instead of starting additional games, including after connection timeout.
-- Companion startup detects early process exit and propagates cancellation while waiting for health.
-
-### Validation
-
-- Core tests cover run-boundary rethrow, in-flight request budgets, companion port-file discovery, settings reseed, and deck selected-card contracts. Live co-op and in-game selection still need a game session.
 
 ## v0.9.2 - 2026-08-31
 
