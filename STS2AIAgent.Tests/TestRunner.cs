@@ -215,6 +215,7 @@ internal static class TestRunner
         yield return ("GameOver.ReturnGate", () => Task.Run(GameOverContractTests.ReturnActionRequiresVisibleAndEnabledMainMenuButton));
         yield return ("GameOver.NativeButtons", () => Task.Run(GameOverContractTests.ContinueAndReturnUseNativeButtonsWithoutSkippingSummary));
         yield return ("GameOver.SummaryReady", () => Task.Run(GameOverContractTests.ContinueWaitsForNativeSummaryReadiness));
+        yield return ("GameOver.NoForcedReturn", () => Task.Run(GameOverContractTests.ContinueDoesNotForceEnableReturnBeforeNativeSave));
         yield return ("GameOver.Phases", () => Task.Run(GameOverContractTests.GameOverPayloadKeepsContinueSummaryAndReturnAsDistinctPhases));
         yield return ("GameOver.SaveContract", () => Task.Run(GameOverContractTests.GameOverPayloadReportsPhysicalProgressSaveVerification));
         yield return ("GameOver.SaveVerified", () => Task.Run(ProgressSaveVerificationTests.MatchingPhysicalFileIsVerified));

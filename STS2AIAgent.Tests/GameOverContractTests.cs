@@ -66,6 +66,7 @@ internal static class GameOverContractTests
         Assert.Contains("ExecuteContinueGameOverAsync", actionSource, StringComparison.Ordinal);
         Assert.Contains("NGameOverContinueButton", continueBody, StringComparison.Ordinal);
         Assert.Contains("ForceClick", continueBody, StringComparison.Ordinal);
+        Assert.Contains("IsGameOverSummaryStarted", continueBody, StringComparison.Ordinal);
         Assert.Contains("WaitForGameOverSummaryReadyAsync", continueBody, StringComparison.Ordinal);
         Assert.Contains("NReturnToMainMenuButton", returnBody, StringComparison.Ordinal);
         Assert.Contains("ForceClick", returnBody, StringComparison.Ordinal);
@@ -81,6 +82,10 @@ internal static class GameOverContractTests
         Assert.False(
             continueBody.Contains("GetProceedButton", StringComparison.Ordinal),
             "continue_game_over must resolve NGameOverContinueButton directly, not reuse the generic proceed-button path.");
+        Assert.False(
+            continueBody.Contains("TrySkipGameOverSummary", StringComparison.Ordinal),
+            "continue_game_over must wait for the native Return button instead of skipping the summary save.");
+        Assert.Contains("TimeSpan.FromSeconds(60)", continueBody, StringComparison.Ordinal);
     }
 
     public static void ContinueWaitsForNativeSummaryReadiness()
@@ -96,6 +101,29 @@ internal static class GameOverContractTests
         Assert.False(
             waitBody.Contains("CanContinueGameOver", StringComparison.Ordinal),
             "Disabling Continue starts the native summary animation; it must not complete the action before the summary button is ready.");
+    }
+
+    public static void ContinueDoesNotForceEnableReturnBeforeNativeSave()
+    {
+        var rawActionSource = AgentSourceFixture.Read("STS2AIAgent/Game/GameActionService.cs");
+        var continueBody = AgentSourceFixture.WithoutWhitespace(
+            AgentSourceFixture.MethodBody(rawActionSource, "ExecuteContinueGameOverAsync"));
+        var stateSource = AgentSourceFixture.Read("STS2AIAgent/Game/GameStateService.cs");
+
+        Assert.Contains("WaitForGameOverContinueOrSummaryAsync", continueBody, StringComparison.Ordinal);
+        Assert.Contains("TimeSpan.FromSeconds(60)", continueBody, StringComparison.Ordinal);
+        Assert.False(
+            continueBody.Contains(".Enable()", StringComparison.Ordinal),
+            "continue_game_over must not Enable the native Return button before SaveProgressFile.");
+        Assert.False(
+            continueBody.Contains("TrySkipGameOverSummary", StringComparison.Ordinal),
+            "continue_game_over must wait for the native Return button instead of skipping the summary save.");
+        Assert.False(
+            continueBody.Contains("TimeSpan.FromSeconds(15)", StringComparison.Ordinal),
+            "continue_game_over must not fall back to the 15-second skip timeout.");
+        Assert.False(
+            stateSource.Contains("TrySkipGameOverSummary", StringComparison.Ordinal),
+            "The skip helper that previously force-enabled Return must not remain in GameStateService.");
     }
 
     public static void GameOverPayloadKeepsContinueSummaryAndReturnAsDistinctPhases()

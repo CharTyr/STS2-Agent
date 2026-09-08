@@ -125,6 +125,7 @@ internal static class GameActionService
             "switch_profile" => ExecuteSwitchProfileAsync(request),
             "continue_run" => ExecuteContinueRunAsync(),
             "continue_game_over" => ExecuteContinueGameOverAsync(),
+            "dismiss_game_over_wait" => ExecuteDismissGameOverWaitAsync(),
             "abandon_run" => ExecuteAbandonRunAsync(),
             "save_and_quit" => ExecuteSaveAndQuitAsync(),
             "open_character_select" => ExecuteOpenCharacterSelectAsync(),
@@ -4597,13 +4598,45 @@ internal static class GameActionService
         };
     }
 
+    private static async Task<ActionResponsePayload> ExecuteDismissGameOverWaitAsync()
+    {
+        var currentScreen = ActiveScreenContext.Instance.GetCurrentScreen();
+        var screen = GameStateService.ResolveScreen(currentScreen);
+        if (currentScreen is not NGameOverScreen || !GameStateService.IsWaitingForOtherPlayers(currentScreen))
+        {
+            throw new ApiException(409, "invalid_action", "Action is not available in the current state.", new
+            {
+                action = "dismiss_game_over_wait",
+                screen
+            });
+        }
+
+        GameStateService.HideWaitingForOtherPlayers(currentScreen);
+        var stable = await WaitForGameOverContinueOrSummaryAsync(TimeSpan.FromSeconds(8));
+        return new ActionResponsePayload
+        {
+            action = "dismiss_game_over_wait",
+            status = stable ? "completed" : "pending",
+            stable = stable,
+            message = stable ? "Action completed." : "Action queued but state is still transitioning.",
+            state = GameStateService.BuildStatePayload()
+        };
+    }
+
     private static async Task<ActionResponsePayload> ExecuteContinueGameOverAsync()
     {
         var currentScreen = ActiveScreenContext.Instance.GetCurrentScreen();
         var screen = GameStateService.ResolveScreen(currentScreen);
 
-        if (currentScreen is not NGameOverScreen gameOverScreen
-            || !GameStateService.CanContinueGameOver(currentScreen))
+        if (currentScreen is NGameOverScreen && GameStateService.IsWaitingForOtherPlayers(currentScreen))
+        {
+            GameStateService.HideWaitingForOtherPlayers(currentScreen);
+            await WaitForGameOverContinueOrSummaryAsync(TimeSpan.FromSeconds(8));
+            currentScreen = ActiveScreenContext.Instance.GetCurrentScreen();
+            screen = GameStateService.ResolveScreen(currentScreen);
+        }
+
+        if (currentScreen is not NGameOverScreen gameOverScreen)
         {
             throw new ApiException(409, "invalid_action", "Action is not available in the current state.", new
             {
@@ -4612,15 +4645,71 @@ internal static class GameActionService
             });
         }
 
-        NGameOverContinueButton continueButton = GameStateService.GetGameOverContinueButton(currentScreen)
-            ?? throw new ApiException(503, "state_unavailable", "Game-over continue button is unavailable.", new
+        if (GameStateService.CanReturnToMainMenu(gameOverScreen))
+        {
+            return new ActionResponsePayload
             {
                 action = "continue_game_over",
-                screen
-            }, retryable: true);
+                status = "completed",
+                stable = true,
+                message = "Action completed.",
+                state = GameStateService.BuildStatePayload()
+            };
+        }
 
-        continueButton.ForceClick();
-        var stable = await WaitForGameOverSummaryReadyAsync(gameOverScreen, TimeSpan.FromSeconds(15));
+        // Intro animation disables Continue for a second. Clicking then is a
+        // no-op, and later retries refuse to click because they think summary
+        // already started.
+        if (!GameStateService.CanContinueGameOver(gameOverScreen)
+            && !GameStateService.IsGameOverSummaryStarted(gameOverScreen))
+        {
+            await WaitForGameOverContinueOrSummaryAsync(TimeSpan.FromSeconds(8));
+            currentScreen = ActiveScreenContext.Instance.GetCurrentScreen();
+            if (currentScreen is not NGameOverScreen gameOverAfterIntro)
+            {
+                throw new ApiException(409, "invalid_action", "Action is not available in the current state.", new
+                {
+                    action = "continue_game_over",
+                    screen = GameStateService.ResolveScreen(currentScreen)
+                });
+            }
+
+            gameOverScreen = gameOverAfterIntro;
+            if (GameStateService.CanReturnToMainMenu(gameOverScreen))
+            {
+                return new ActionResponsePayload
+                {
+                    action = "continue_game_over",
+                    status = "completed",
+                    stable = true,
+                    message = "Action completed.",
+                    state = GameStateService.BuildStatePayload()
+                };
+            }
+        }
+
+        // Clicking Continue after the native summary has started re-runs
+        // OpenSummaryScreen and restarts the animation, so the main-menu
+        // button never appears. Only click once, then wait for native Return.
+        if (!GameStateService.IsGameOverSummaryStarted(gameOverScreen))
+        {
+            NGameOverContinueButton continueButton = GameStateService.GetGameOverContinueButton(currentScreen)
+                ?? throw new ApiException(503, "state_unavailable", "Game-over continue button is unavailable.", new
+                {
+                    action = "continue_game_over",
+                    screen
+                }, retryable: true);
+
+            continueButton.Visible = true;
+            continueButton.Set("disabled", false);
+            TryInvokePressed(continueButton);
+            continueButton.ForceClick();
+        }
+
+        // Native summary writes badges, score, unlocks, then enables Return.
+        // Do not force-enable that button: it lets the player leave before
+        // SaveProgressFile runs, so lifetime stats stay stale.
+        var stable = await WaitForGameOverSummaryReadyAsync(gameOverScreen, TimeSpan.FromSeconds(60));
 
         return new ActionResponsePayload
         {
@@ -5521,6 +5610,27 @@ internal static class GameActionService
         return ActiveScreenContext.Instance.GetCurrentScreen() is not NGameOverScreen;
     }
 
+    private static async Task<bool> WaitForGameOverContinueOrSummaryAsync(TimeSpan timeout)
+    {
+        var deadline = DateTime.UtcNow + timeout;
+        while (DateTime.UtcNow < deadline)
+        {
+            await WaitForNextFrameAsync();
+            var currentScreen = ActiveScreenContext.Instance.GetCurrentScreen();
+            if (GameStateService.CanContinueGameOver(currentScreen)
+                || GameStateService.CanReturnToMainMenu(currentScreen)
+                || currentScreen is not NGameOverScreen)
+            {
+                return true;
+            }
+        }
+
+        var last = ActiveScreenContext.Instance.GetCurrentScreen();
+        return GameStateService.CanContinueGameOver(last)
+            || GameStateService.CanReturnToMainMenu(last)
+            || last is not NGameOverScreen;
+    }
+
     private static async Task<bool> WaitForGameOverSummaryReadyAsync(
         NGameOverScreen gameOverScreen,
         TimeSpan timeout)
@@ -5662,6 +5772,50 @@ internal static class GameActionService
         const BindingFlags flags = BindingFlags.Instance | BindingFlags.NonPublic;
         var field = target.GetType().GetField(fieldName, flags);
         return field?.GetValue(target) as T;
+    }
+
+    private static void TryInvokePressed(NButton button)
+    {
+        const BindingFlags flags = BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic;
+        foreach (var name in new[] { "OnContinueButtonPressed", "OnPressed" })
+        {
+            try
+            {
+                var method = button.GetType().GetMethod(name, flags, binder: null, types: Type.EmptyTypes, modifiers: null);
+                method?.Invoke(button, null);
+            }
+            catch
+            {
+            }
+        }
+
+        try
+        {
+            var asyncPressed = button.GetType().GetMethod("OnContinueButtonPressedAsync", flags);
+            if (asyncPressed?.Invoke(button, null) is Task task)
+            {
+                ObserveBackgroundResult(task.ContinueWith(static completed =>
+                {
+                    if (completed.IsFaulted)
+                    {
+                        return false;
+                    }
+
+                    return true;
+                }), "continue_game_over");
+            }
+        }
+        catch
+        {
+        }
+
+        try
+        {
+            button.EmitSignal(Button.SignalName.Pressed);
+        }
+        catch
+        {
+        }
     }
 
     private static void InvokePrivateVoid(object target, string methodName, params object?[] args)

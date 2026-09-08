@@ -727,7 +727,26 @@ internal static class GameStateService
         }
 
         var gameOver = BuildGameOverPayload(currentScreen, runState) ?? new GameOverPayload();
+        if (gameOver.waiting_for_other_players)
+        {
+            descriptors.Add(new ActionDescriptor
+            {
+                name = "dismiss_game_over_wait",
+                requires_target = false,
+                requires_index = false
+            });
+        }
+
         if (gameOver.can_continue)
+        {
+            descriptors.Add(new ActionDescriptor
+            {
+                name = "continue_game_over",
+                requires_target = false,
+                requires_index = false
+            });
+        }
+        else if (GetGameOverContinueButton(currentScreen) != null && !gameOver.can_return_to_main_menu)
         {
             descriptors.Add(new ActionDescriptor
             {
@@ -2678,7 +2697,16 @@ internal static class GameStateService
         }
 
         var gameOver = BuildGameOverPayload(currentScreen, runState) ?? new GameOverPayload();
+        if (gameOver.waiting_for_other_players)
+        {
+            names.Add("dismiss_game_over_wait");
+        }
+
         if (gameOver.can_continue)
+        {
+            names.Add("continue_game_over");
+        }
+        else if (GetGameOverContinueButton(currentScreen) != null && !gameOver.can_return_to_main_menu)
         {
             names.Add("continue_game_over");
         }
@@ -3402,6 +3430,7 @@ internal static class GameStateService
             phase = gameOver.phase,
             can_continue = gameOver.can_continue,
             can_return = gameOver.can_return_to_main_menu,
+            waiting_for_other_players = gameOver.waiting_for_other_players,
             save_status = gameOver.save_status,
             save_verified = gameOver.save_verified,
             save_error = gameOver.save_error
@@ -4712,6 +4741,7 @@ internal static class GameStateService
                 && mainMenuButton?.IsEnabled == true
                 && mainMenuButton?.IsVisibleInTree() == true,
             showing_summary = mainMenuButton?.Visible == true,
+            waiting_for_other_players = IsWaitingForOtherPlayers(currentScreen),
             save_status = saveVerification.Status,
             save_verified = saveVerification.Verified,
             save_error = saveVerification.Error
@@ -5853,6 +5883,93 @@ internal static class GameStateService
     {
         return (currentScreen as NGameOverScreen)?
             .GetNodeOrNull<NGameOverContinueButton>("%ContinueButton");
+    }
+
+    public static bool IsWaitingForOtherPlayers(IScreenContext? currentScreen)
+    {
+        var overlay = GetWaitingForOtherPlayersOverlay(currentScreen);
+        return overlay != null && overlay.IsVisibleInTree();
+    }
+
+    public static CanvasItem? GetWaitingForOtherPlayersOverlay(IScreenContext? currentScreen)
+    {
+        if (currentScreen is not NGameOverScreen gameOver)
+        {
+            return null;
+        }
+
+        foreach (var path in new[] { "%WaitingForOtherPlayers", "WaitingForOtherPlayers" })
+        {
+            var node = gameOver.GetNodeOrNull<CanvasItem>(path);
+            if (node != null)
+            {
+                return node;
+            }
+        }
+
+        return FindDescendants<CanvasItem>(gameOver)
+            .FirstOrDefault(node => GodotObject.IsInstanceValid(node)
+                && node.Name.ToString().Contains("WaitingForOtherPlayers", StringComparison.OrdinalIgnoreCase));
+    }
+
+    public static bool HideWaitingForOtherPlayers(IScreenContext? currentScreen)
+    {
+        if (currentScreen is not NGameOverScreen gameOver)
+        {
+            return false;
+        }
+
+        var hidden = false;
+        const BindingFlags flags = BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic;
+        var setVisible = gameOver.GetType().GetMethod("SetWaitingForOtherPlayersOverlayVisible", flags, binder: null, types: new[] { typeof(bool) }, modifiers: null);
+        if (setVisible != null)
+        {
+            setVisible.Invoke(gameOver, new object[] { false });
+            hidden = true;
+        }
+
+        var hide = gameOver.GetType().GetMethod("HideWaitingForPlayersScreen", flags, binder: null, types: Type.EmptyTypes, modifiers: null);
+        if (hide != null)
+        {
+            hide.Invoke(gameOver, null);
+            hidden = true;
+        }
+
+        var overlay = GetWaitingForOtherPlayersOverlay(gameOver);
+        if (overlay != null && overlay.Visible)
+        {
+            overlay.Visible = false;
+            hidden = true;
+        }
+
+        return hidden || !IsWaitingForOtherPlayers(gameOver);
+    }
+
+    public static bool IsGameOverSummaryStarted(IScreenContext? currentScreen)
+    {
+        if (currentScreen is not NGameOverScreen gameOver)
+        {
+            return false;
+        }
+
+        if (GetGameOverMainMenuButton(gameOver)?.Visible == true)
+        {
+            return true;
+        }
+
+        const BindingFlags flags = BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic;
+        try
+        {
+            if (gameOver.GetType().GetField("_isAnimatingSummary", flags)?.GetValue(gameOver) is true)
+            {
+                return true;
+            }
+        }
+        catch
+        {
+        }
+
+        return false;
     }
 
     public static NReturnToMainMenuButton? GetGameOverMainMenuButton(IScreenContext? currentScreen)
@@ -7532,6 +7649,8 @@ internal sealed class GameOverPayload
     public bool can_return_to_main_menu { get; init; }
 
     public bool showing_summary { get; init; }
+
+    public bool waiting_for_other_players { get; init; }
 
     public string save_status { get; init; } = "pending";
 
