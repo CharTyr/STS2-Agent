@@ -1,20 +1,21 @@
 # STS2 AI Agent：当前状态页
 
-> 本页是仓库唯一的当前状态入口。待办整理时间：2026-09-08（P0/P1.1 收口后更新）。
-> 代码基准：本地 main 与 origin/main 同步（Release v0.10.5 @ 04d2466）。
-> 发布基准：最新 release 为 v0.10.5（标签 04d2466 指向发布提交；GitHub Release 已创建）。#78 / #79 / #80 已随 v0.10.5 发布。
+> 本页是仓库唯一的当前状态入口。更新日期：2026-09-09（发布、Workshop 可见性、P3 与文档归档核对）。
+> 发布代码基准：v0.10.5 @ 04d2466；标签后主线变更单列在下方，不把文档更新视为新版本发布。
+> 发布基准：[GitHub Release v0.10.5](https://github.com/CharTyr/STS2-Agent/releases/tag/v0.10.5)，2026-09-08 发布。2026-09-09 通过 GitHub API 核对标签指向 04d2466，Windows ZIP 已上传。#78 / #79 / #80 已随该版本发布。
 
 旧路线图见 [PRODUCT_ROADMAP.md](PRODUCT_ROADMAP.md)（历史），旧交付原文见 [history/PRODUCT_PLAN_CURRENT_2026-09-07.md](history/PRODUCT_PLAN_CURRENT_2026-09-07.md) 和 [history/COOP_DELIVERY_2026-09-07.md](history/COOP_DELIVERY_2026-09-07.md)。[COOP_DELIVERY.md](COOP_DELIVERY.md) 现在只是历史证据索引。本页不继承历史文档中的审批、工作树或测试前执行约束。
 
 ## 1. 当前基线
 
-- v0.10.4 之后已合进 main、尚未发版的产品提交：
+- v0.10.4 之后合入、已随 v0.10.5 发布的产品提交：
   - 19710ad（#78）空奖励 overlay 不再卡 pending
   - 4b4da6e（#79）continue_game_over 等待原生结算写入，不再 15 秒强行 Enable 返回
   - 22907b0（#80）会话预算、损坏配置恢复、MCP Origin、停流超时、play_card 取消，以及协作验收脚本
 - c69d3b3 只忽略本地 mod-uploader.log；374d7fd 只记录 Trellis journal。
 - 本轮仓库卫生：90s continue 超时与不重复 Continue 已提交；Trellis spec/skills/platform 文件已纳入版本控制；stash@{0} 已 drop（ai-companion 旧脏树，功能已在 main）；00-bootstrap-guidelines 已归档。.trellis/.template-hashes.json 保持本地、不入库。
-- 未创建新 GitHub release，也未把当前 main 装进 Steam mods/。
+- v0.10.5 GitHub ZIP 已发布并安装到 Steam mods/；Workshop 内容已上传，本地订阅清单为 0.10.5。2026-09-09 查询物品详情 result=1、visibility=0（公开）。用户启用重启后，Workshop 加载来源、窗口及运行接口已核对通过，见验收记录。
+- 主线未进入 v0.10.5 标签：96bd410 修复已有 Workshop 物品更新默认 public；15e483c、2838250 为发布/P3 文档记录，4f1ec66 为收尾日志。没有因此发布 v0.10.6。更新工坊应使用包含 96bd410 的打包脚本，并明确绑定目标发布版本。
 
 ## 2. 已有验收证据与边界
 
@@ -25,14 +26,14 @@
 | C# 核心测试 | 180 PASS，0 FAIL | 离线测试结果，不等于完整 Mod 或自然结束整局通过 |
 | 停流超时回归 | loopback 先回 header、正文停流 | 生产默认超时仍是 3 分钟 |
 | MCP Origin | 7 项离线测试通过；隔离 Host 实机探测 | 不是完整浏览器页面利用 |
-| Mod Release 构建 | 0 warning 0 error；SkipInstall 生成 DLL/PCK | 只复制到隔离 game/mods/，未装 Steam、未打 ZIP |
+| Mod Release 构建 | 0 warning 0 error；SkipInstall 生成 DLL/PCK | 此行记录隔离候选构建；后续正式打包与安装见下方发布验收 |
 | 隔离双开 13 层 | 2026-09-08 08:35 打到 13 层原生 GAME_OVER | full-run-result.json。Host progress 聚合当时未更新；不能顶替下面短路径 |
 | P1.3 超限 UI | 2026-09-08 请求上限=1，stop_kind=budget，overlay 出现上限文案与下一步 | p13-overlimit-result.json；重置按钮截图 ui-budget-scrolled3.jpg。不是真实 MiniMax 超长停流。 |
 | 隔离双开 GAME_OVER 存档 | 2026-09-08 20:24-20:28，当前 main 隔离 DLL 72C72F02。第一场地图战斗空过团灭，双方 continue_game_over 各一次（4.22s / 2.42s），save_verified=true，双方 progress.save mtime 在 continue 后更新，返回主菜单。forced_return_suspected=false | gameover-save-result.json outcome=gameover_save_ok。控制台 fight/die 会触发多人数据不同步断线，短路径改为自然进战斗 + end_turn 团灭。total_losses 本局未增加（host 仍为 2），score 有更新。已随 v0.10.5 发布。 |
 
-候选绑定：隔离 DLL SHA256 72C72F022F7EC32563BCDFA5F3269449DFFF0956A764441E8D7565A8D8AED920；隔离 exe SHA256 8602C26BFFD2937E3841835FD8360EF8E974624A543E05977229FD3D062BE231。Steam mods/STS2AIAgent.dll 仍是更早的 5F86AF22，本轮未覆盖。真档快照未改。
+历史候选绑定：隔离 DLL SHA256 72C72F022F7EC32563BCDFA5F3269449DFFF0956A764441E8D7565A8D8AED920；隔离 exe SHA256 8602C26BFFD2937E3841835FD8360EF8E974624A543E05977229FD3D062BE231。该隔离验收未修改真档快照；Steam 手动安装随后已更新到 v0.10.5，见 P2.4。
 
-未做完整 preflight-release、发布包/ZIP 验证或 Workshop 安装验证。
+后续发布验收：2026-09-08 preflight-release、发布目录/ZIP artifact check 已通过，记录见提交 15e483c。2026-09-09 复核 GitHub 资产 `sts2-ai-agent-v0.10.5-windows.zip`（SHA256 `27da01401714347143244badfb9674e0e31932d03f1e5bebe1e4c67705fb12b8`）、Workshop 公开状态和本地订阅清单。后续用户启用并重启游戏，已核对本次 Workshop 加载日志、悬浮窗和运行接口；见 [订阅加载验收](history/workshop-load-acceptance_2026-09-09.md)。未重跑历史游戏测试。
 
 ## 3. 能力状态矩阵
 
@@ -40,20 +41,20 @@
 | --- | --- | --- | --- | --- |
 | 游戏内 UI、聊天、自动游玩 | v0.9.0 | 已发布 v0.9.0 | 发布记录 | 完整自然结束仍待实机；短路径结算已做 |
 | AI 队友启动隔离与地图投票 | v0.10.0-v0.10.1 | 已发布 | 隔离双开 | 控制台 fight/die 在双开会不同步断线 |
-| 原生 MCP | v0.10.2 | 已发布 | Origin 契约 | 外部 MCP 客户端连接/关闭未做 |
+| 原生 MCP | v0.10.2 | 已发布 | Origin 契约；2026-09-08 外部客户端 initialize/list_tools/ping/关闭成功 | 已验证 streamable-http 客户端，不代表所有桌面客户端均实测 |
 | 共享 skill 与投票 | v0.10.3 | 已发布 | 离线测试；隔离实机 | 完整 13 层结算不是当前门槛 |
 | FTUE 与时间线解锁 | v0.10.4 | 已发布 | 离线测试；隔离 FTUE | 无 |
 | 首次配置与诊断 | v0.10.4 | 已发布 | 隔离邀请成功 | 无 |
-| 恢复、预算与暂停 | v0.10.4 + #80 | 未进入新标签 | 暂停探测 ok；P1.3 超限 UI 已看 | 无 |
-| 空奖励 overlay | 19710ad | 未进入标签 | 180 PASS | 未做完整预检、ZIP、Workshop |
-| GAME_OVER 等待原生结算 | 4b4da6e（#79） | 未进入标签 | 2026-09-08 20:28 隔离双开 continue 4.22s/2.42s，save_verified，progress mtime 更新 | total_losses 未观察到 +1 |
-| 主动发言与交流风格 | 历史待办 | 未分配 | 未完整核查 | 先查代码再定产品边界 |
+| 恢复、预算与暂停 | v0.10.4 + #80 | 已发布 v0.10.5 | 暂停探测 ok；P1.3 超限 UI 已看 | 真实上游超长停流仍后置 |
+| 空奖励 overlay | 19710ad | 已发布 v0.10.5 | 180 PASS；发布预检与 ZIP 检查通过 | Workshop 订阅加载冒烟已通过；不代表完整对局验收 |
+| GAME_OVER 等待原生结算 | 4b4da6e（#79） | 已发布 v0.10.5 | 2026-09-08 20:28 隔离双开 continue 4.22s/2.42s，save_verified，progress mtime 更新 | total_losses 未观察到 +1 |
+| 主动发言与交流风格 | 2026-09-08 源码核查 | 核查完成，不是新增功能发布 | 无主动发言路径；聊天由玩家触发，语气由 prompt 约束 | 主动发言、可选语气设置尚未实现；作为新功能另行确定范围 |
 
 ## 4. 待办任务
 
 优先级从高到低。没有明确负责人时记为“未分配”。不要把盘点或收尾做成完整 13 层自然通关。
 
-P0 已完成：基线页与 main 对齐；90s continue 超时已提交；Trellis 纳入版本控制并归档 bootstrap；journal 随 Trellis 一起待推 origin；旧 stash 已 drop。
+P0 已完成：90s continue 超时已提交；Trellis 纳入版本控制并归档 bootstrap；收尾日志 4f1ec66 已推送；旧 stash 已 drop。2026-09-09 文档维护将旧规划移入 history/ 并保留兼容入口。
 
 P1 已完成：当前 main 隔离 DLL 双开 GAME_OVER 存档短路径；continue 只点一次且 90s 超时；控制台 fight/die 不能用于双开。P1.3：高级设置「重置本会话统计」见 ui-budget-scrolled3.jpg；请求上限=1 后 health stop_kind=budget、session_requests=1，overlay 显示「已达到会话请求次数上限」和下一步（提高上限 / 重置本会话统计 / 继续游玩）。证据 p13-overlimit-result.json。真实上游超长停流、浏览器 Origin 页仍后置。
 
@@ -65,14 +66,21 @@ P2 发布与安装
 - P2.2 完成：CHANGELOG Unreleased 清理为 v0.10.5 段。
 - P2.3 完成：preflight-release 全绿；package-release 生成 sts2-ai-agent-v0.10.5-windows.zip；artifact check 通过。
 - P2.4 完成：安装前备份保留在 build/backup-steam-mods-2026-09-08/；v0.10.5 已安装到 Steam mods/（DLL 哈希匹配 release）；旧嵌套目录已备份并清理。
-- P2.5 部分完成：Steam mods/ 已是 v0.10.5；Workshop 订阅安装实机验证未做（workshop.json visibility=private，需 Steam 客户端）。
+- P2.5 完成（订阅加载冒烟范围）：Steam mods/ 与 Workshop 本地订阅清单均为 v0.10.5；2026-09-09 Workshop result=1、visibility=0（公开）。96bd410 将已有物品更新默认设为 public，首次 ID=0 仍 private，显式 Visibility 优先。用户启用重启后，截图确认窗口显示；本次日志第 40–41 行从 Workshop 目录加载 DLL/PCK，未发现重复加载错误；/health 为 0.10.5、ready，/state 和动作接口为 MAIN_MENU。证据见 [验收记录](history/workshop-load-acceptance_2026-09-09.md)。
 
 P3 支持范围与卫生
 
 - P3.1 已完成：docs/model-compatibility-matrix.md（工具调用/JSON fallback/SSE usage/超时/401/429/5xx/无 usage，均带测试或源码证据）。
 - P3.2 已完成：docs/proactive-chat-review.md。结论：无主动发言路径（聊天仅用户触发），语气由 system prompt 约束，低打扰由预算护栏/暂停语义/恢复退避实现。
 - P3.3 已完成：外部 mcp 客户端（streamable-http）initialize/list_tools/ping/关闭会话成功；guided profile 10 工具、无 run_console_command（debug 门控生效）。证据 build/validation-2026-09-08/p33-external-mcp-client.json。
-- P3.4 已完成：仓库无 Dependabot PR #50/#51（PR 列表不存在）。独立评估：uv.lock 依赖均在约束内（fastmcp 3.1.0 受 `>=3.1.0,<4.0.0` 锁定；mcp 1.26.0 为 fastmcp 传递依赖）；package-lock.json 仅含 @sammysnake/fast-context-mcp 一个 dev 依赖，yauzl 已随 #20 修复。无需合入 Dependabot 变更。
+- P3.4 已完成既定核查：2026-09-08 记录未发现可合入的 Dependabot PR #50/#51；历史规划引用的是同号 issue，不能据此认定安全报告不存在。锁文件约束与 yauzl/#20 的检查记录见 2838250；该结论不是依赖安全审计，也不代表以后无需更新依赖。
+
+### 剩余事项与证据边界
+
+- Workshop 订阅加载已收口；未额外执行第二轮重启或升级回退，不将这些扩展项目计为已验证。
+- 后置验证：真实上游超长停流、浏览器 Origin 场景；完整自然结束长局不作为此次文档收尾门槛。
+- 已知观察：双开控制台 fight/die 会导致不同步；短路径结算中 total_losses 未观察到 +1，不能将 save_verified 扩大为所有统计字段均已验收。
+- 产品边界：模型兼容矩阵主要是源码与离线协议证据，不代表所有服务商均经过实机测试；主动发言与可选语气尚未实现。P3 的“完成”指支持范围核查完成。
 
 ## 5. 后续维护规则
 
@@ -81,3 +89,4 @@ P3 支持范围与卫生
 3. 标签后提交必须单列为“主线未发布”，直到出现明确 release tag。
 4. 原计划与旧 COOP 原文放在 history/，醒目标注“历史，不代表当前”。
 5. README 入口持续指向本页和 COOP 历史索引；打包脚本依赖的 ./PRODUCT_PLAN_CURRENT.md 与 ./COOP_DELIVERY.md 相对目标字面保持不变。
+6. 归档目录见 [history/README.md](history/README.md)。旧文档只保留时间点证据，不能重新作为任务板；原路径跳转页用于兼容引用和预检。

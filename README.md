@@ -15,11 +15,11 @@ https://github.com/user-attachments/assets/89353468-a299-4315-9516-e520bcbfbd4b
 ## 🌟 Key Highlights
 
 - 🎮 **In-Game Overlay UI**: Press **F8** at any time to open the configuration and control window directly inside the game—no external browser required.
-- 🤖 **Any OpenAI-Compatible Model**: Works seamlessly with official OpenAI, DeepSeek, SiliconFlow, OpenRouter, Ollama, LM Studio, vLLM, and more. Features per-model configurable thinking intensity.
-- 🃏 **Autonomous Auto-Play**: Text-only models can complete full runs (combat, card drafting, shops, events, pathing, capstones). Optional vision model support for screenshot context.
+- 🤖 **OpenAI-Compatible Endpoints**: Configure a compatible chat-completions endpoint, with per-model thinking settings. Tool calling, vision, streaming, and usage reporting depend on the provider and model; test chat and play separately.
+- 🃏 **Autonomous Auto-Play**: Uses text state for combat, card drafting, shops, events, pathing, and capstones, with optional screenshot context. Run completion and strategy quality depend on the model and game conditions; see the current status for validation limits.
 - 👥 **Local Co-op AI Teammate**: One-click launch from the main menu spins up an isolated second game instance. You play your character; the AI teammate plays its own character in co-op mode.
 - 💬 **Live Team Conversation**: Talk to your AI teammate in natural language from the human window (e.g., "focus the right cultist", "let's take the shop path"). The AI replies and uses recent context in subsequent decisions.
-- 🛡️ **Session Budget Guards & Fault Recovery**: Accurate Token accounting with hard cutoff thresholds prevents runaway API bills. Autoplay automatically breaks after 3 consecutive failures with exponential backoff; halts when leaving the run.
+- 🛡️ **Session Budget Guards & Fault Recovery**: Tracks reported token usage and request counts, stops new calls when session limits are reached, and bounds retries. Missing usage is shown as unknown; these guards are not a billing guarantee.
 - 🔌 **Developer-Ready**: Built-in local HTTP API (`:8080`). The overlay Connect tab can expose MCP at `/mcp` on the same port for Cursor, Claude, and Codex.
 
 ---
@@ -58,7 +58,7 @@ This mod is still in development. Some things may be unfinished or break. Please
 **Do not double-install:** if you already subscribed on Workshop and also copied GitHub files, delete the manual copies from `mods/` and keep the Workshop item. Two copies can load twice.
 
 ### Step 2: Launch The Game & Open The Overlay
-1. Start *Slay the Spire 2* normally.
+1. Start *Slay the Spire 2* from Steam with **Play with Mods**.
 2. Press **`F8`** (configurable) or click the grey **`AI`** tab on the right edge of the screen to open the Agent window.
 
 ### Step 3: Configure Your LLM Endpoint
@@ -91,7 +91,7 @@ This mod is still in development. Some things may be unfinished or break. Please
 ## 🎮 Core Features
 
 ### 1. Autonomous Gameplay (Auto-Play)
-- **Compact State Engine**: Highly compressed, actionable representation covering cards, energy, intents, relics, HP, and potion slots. Text-only models can clear full runs.
+- **Compact State Engine**: Actionable text state covering cards, energy, intents, relics, HP, and potion slots. Vision is optional; offline state and action tests do not prove full-run completion.
 - **Optional Vision Augmentation**: When using a vision-capable model, screenshots are captured on demand to provide rich visual context.
 - **Real-Time Counters**: The overlay displays prompt, completion, total tokens, and request counts live.
 
@@ -101,6 +101,7 @@ This mod is still in development. Some things may be unfinished or break. Please
   - Chat directly with the AI teammate during multiplayer runs.
   - Teammate replies using its play model, and recent discussions inform subsequent play decisions.
   - Read-only safety: The chat interface never plays cards for the human or unpauses a paused companion.
+  - Conversation is player-initiated. Proactive outreach and selectable personality styles are not implemented; reply tone is defined by prompts.
 
 ### 3. Interactive In-Game Advisor
 - Use the **Chat** tab to ask strategic advice.
@@ -112,7 +113,7 @@ This mod is still in development. Some things may be unfinished or break. Please
 
 | Mechanism | Description | Player Benefit |
 |---|---|---|
-| **Session Budget Guard (`SessionBudgetGuard`)** | Accurate accounting across JSON and streaming SSE; hard configurable caps | Immediate cutoff with visual alerts when budget is reached—no runaway bills |
+| **Session Budget Guard (`SessionBudgetGuard`)** | Tracks provider-reported JSON/SSE usage and requests; checks configured caps before new calls | Stops new calls at the limit and shows next steps; in-flight calls can add usage, and missing usage remains unknown |
 | **Autoplay Circuit Breaker (`AutoPlayRecovery`)** | Automatic halt after 3 consecutive failures with 2s/4s exponential backoff | Prevents spin loops on unrecognized game dialogs or invalid choices |
 | **Immediate Config Error Exit** | Halts immediately upon receiving HTTP 401, 403, or 404 responses | Stops wasted token calls when API keys expire or are mistyped |
 | **Run Boundary Protection (`CurrentRunBoundary`)** | Scoped strictly to the active run's unique `runId` | Exiting a run, surrendering, or returning to lobby immediately stops autoplay |
@@ -184,7 +185,7 @@ In-game Auto-Play already follows the bundled play contract. If you drive the ga
 
 ## 🧪 Building From Source & Automated Testing
 
-All core logic can be verified **without running the game client**:
+Standalone core and MCP contract tests run **without the game client**. Godot UI, real-game actions, multiplayer, saves, and installation channels require separate live validation:
 
 The GitHub zip includes only the optional sidecar launch and profile-check
 scripts under `scripts/`. The build, preflight, and live-game commands below

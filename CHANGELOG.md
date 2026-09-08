@@ -1,6 +1,12 @@
 # Changelog
 
-> Release attribution is recorded only when verified against git tags or release commits. The existing `Unreleased` entries below remain to be checked against git history and are not evidence for the current status page.
+> Release attribution is recorded against tags or release commits. Post-tag maintenance is listed separately; current validation limits are maintained in [PRODUCT_PLAN_CURRENT.md](https://github.com/CharTyr/STS2-Agent/blob/main/PRODUCT_PLAN_CURRENT.md).
+
+## Unreleased
+
+### Publishing
+
+- Existing Steam Workshop item updates default to public visibility; first uploads with item ID 0 default to private, and explicit visibility overrides take precedence (`96bd410`). This publishing-script change is not included in the v0.10.5 tag; pass `-Visibility public` when updating a public item from that tag.
 
 ## v0.10.5 - 2026-09-08
 
@@ -39,7 +45,7 @@
 
 - Isolated dual-instance run on current main (DLL \`72C72F02\`): first map combat wiped by idle end-turn; both instances ran \`continue_game_over\` once (4.2s / 2.4s), \`save_verified=true\`, both \`progress.save\` mtimes updated after continue, returning to main menu; no forced 15s Return.
 - Over-limit UI: \`maxSessionRequests=1\` stops with \`stop_kind=budget\` and the overlay shows the request-limit message and next actions.
-- 180 core tests pass, 0 failures. Full preflight and Workshop install were not run as part of this change.
+- 180 core tests pass, 0 failures. The initial change validation did not include full preflight or Workshop installation. Subsequent v0.10.5 release validation passed preflight and release directory/ZIP checks (recorded in `15e483c`); Steam manual installation was updated. On 2026-09-09, after the user enabled the Workshop mod and restarted, startup logs confirmed DLL/PCK loading from the subscribed directory, the overlay was visible, and health/state/action queries passed with version 0.10.5. This was a loading smoke test, not full-run, second-restart, or upgrade/rollback validation; see the [acceptance record](https://github.com/CharTyr/STS2-Agent/blob/main/history/workshop-load-acceptance_2026-09-09.md).
 
 ## v0.10.4 - 2026-09-07
 

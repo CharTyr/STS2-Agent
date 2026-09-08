@@ -268,4 +268,4 @@ cd "<repo-root>/mcp_server"
 uv run python -c "from sts2_mcp.server import create_server; create_server(); print('MCP_IMPORT_OK')"
 ```
 
-完整发布清单见 [release-readiness.md](../docs/release-readiness.md)。
+发布流程入口见 [release-readiness.md](../docs/release-readiness.md)；当前版本、验收证据与剩余缺口见 [当前状态页](https://github.com/CharTyr/STS2-Agent/blob/main/PRODUCT_PLAN_CURRENT.md)。
