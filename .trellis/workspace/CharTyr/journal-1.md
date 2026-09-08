@@ -82,3 +82,36 @@ Fixed GAME_OVER continue so native summary save runs before Return; merged that 
 ### Next Steps
 
 - PRODUCT_PLAN_CURRENT.md 尚存过时基线和 P2.5 部分完成描述，需要后续文档同步；当前已确认 Workshop 公开及本地订阅版本，但本次未从订阅目录启动游戏验证加载。
+
+
+## Session 3: Documentation archive and Workshop loading acceptance
+
+**Date**: 2026-09-09
+**Task**: Documentation archive and Workshop loading acceptance
+**Branch**: `main`
+
+### Summary
+
+归档五份过时文档并保留兼容入口，对齐当前状态、中英文 README、CHANGELOG 与 Workshop 发布说明，记录用户启用重启后的订阅加载验收。
+
+### Main Changes
+
+- P2.5 按订阅加载冒烟范围标为完成：用户截图与重启说明，本次日志从 Workshop 3796486050 加载 DLL/PCK，PID 40664，health 0.10.5 ready，state/actions MAIN_MENU。
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `5ff7303` | (see git log) |
+
+### Testing
+
+- [OK] 18 份变更文档中 59 个本地链接有效；check_release_package.py --source-root . 通过；git diff --cached --check 通过。纯文档提交未重跑构建或游戏测试。
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- 完整对局、第二轮重启和升级回退不在本次订阅加载验收范围；文档及日志提交尚未推送。
