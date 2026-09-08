@@ -69,10 +69,10 @@ P2 发布与安装
 
 P3 支持范围与卫生
 
-- P3.1 OpenAI-compatible 模型兼容矩阵。
-- P3.2 核查主动发言、交流风格、低打扰策略。
-- P3.3 外部 MCP 客户端连接/关闭。
-- P3.4 Dependabot #50 / #51；独立评估。
+- P3.1 已完成：docs/model-compatibility-matrix.md（工具调用/JSON fallback/SSE usage/超时/401/429/5xx/无 usage，均带测试或源码证据）。
+- P3.2 已完成：docs/proactive-chat-review.md。结论：无主动发言路径（聊天仅用户触发），语气由 system prompt 约束，低打扰由预算护栏/暂停语义/恢复退避实现。
+- P3.3 已完成：外部 mcp 客户端（streamable-http）initialize/list_tools/ping/关闭会话成功；guided profile 10 工具、无 run_console_command（debug 门控生效）。证据 build/validation-2026-09-08/p33-external-mcp-client.json。
+- P3.4 已完成：仓库无 Dependabot PR #50/#51（PR 列表不存在）。独立评估：uv.lock 依赖均在约束内（fastmcp 3.1.0 受 `>=3.1.0,<4.0.0` 锁定；mcp 1.26.0 为 fastmcp 传递依赖）；package-lock.json 仅含 @sammysnake/fast-context-mcp 一个 dev 依赖，yauzl 已随 #20 修复。无需合入 Dependabot 变更。
 
 ## 5. 后续维护规则
 
