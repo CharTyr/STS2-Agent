@@ -152,6 +152,20 @@ internal static class GameThread
             return;
         }
 
+        // Occluded/background windows may never emit ProcessFrame. Bound the wait so
+        // action timeouts can still fire.
+        var frame = AwaitProcessFrame(game, tree);
+        var completed = await Task.WhenAny(frame, Task.Delay(50));
+        if (completed != frame)
+        {
+            return;
+        }
+
+        await frame;
+    }
+
+    private static async Task AwaitProcessFrame(NGame game, SceneTree tree)
+    {
         await game.ToSignal(tree, SceneTree.SignalName.ProcessFrame);
     }
 }

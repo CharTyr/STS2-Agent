@@ -89,6 +89,12 @@ internal sealed class AgentOverlayHost
     private bool _settingsDirty;
     private bool _rebuildingSettings;
     private bool _showAdvancedValue;
+    private string? _budgetInputError;
+    private Label? _budgetHint;
+    private Label? _settingsLoadNotice;
+    private Label? _sessionConfigNotice;
+    private Button? _resetStatsButton;
+    private Button? _settingsResetStatsButton;
 
     public static void Install()
     {
@@ -417,6 +423,10 @@ internal sealed class AgentOverlayHost
         page.AddChild(_sessionHeadline);
         page.AddChild(_sessionDetail);
         page.AddChild(_sessionNext);
+        _sessionConfigNotice = UiFactory.Label("", 12);
+        page.AddChild(_sessionConfigNotice);
+        _resetStatsButton = UiFactory.Button(SessionBudgetLimits.ResetStatsActionLabel, ResetSessionStatsFromUi);
+        page.AddChild(_resetStatsButton);
         _firstRunHint = UiFactory.Label(FirstRunSetup.Evaluate(AgentRuntime.Instance.Settings).Hint, 13, muted: true);
         page.AddChild(_firstRunHint);
         page.AddChild(UiFactory.Label("请从主菜单邀请。第二窗口打开后，AI 会自己选角、点开局事件并进图。你继续在这个窗口操作自己的角色；轮到它时，它会自动出牌。", 12, muted: true));
@@ -506,6 +516,8 @@ internal sealed class AgentOverlayHost
 
         _saveStatus = UiFactory.Label(_settingsDirty ? "未保存" : "已保存", 12, muted: true);
         _settingsBody.AddChild(_saveStatus);
+        _settingsLoadNotice = UiFactory.Label(FormatSettingsNotice(), 12);
+        _settingsBody.AddChild(_settingsLoadNotice);
         _settingsBody.AddChild(UiFactory.Label("首次配置", 15));
         _settingsBody.AddChild(UiFactory.Label("添加端点 → 添加模型并绑定 → 选择对话/游玩用途 → 测试连接 → 保存。通过后再去「AI 队友」从主菜单邀请。默认网址和模型名不算已经可用。", 12, muted: true));
         _testNotice = UiFactory.Label("测试连接会向配置的服务发送测试请求。对话通过不等于游玩已通过。本地服务可以留空 API Key。", 12, muted: true);
@@ -566,7 +578,11 @@ internal sealed class AgentOverlayHost
             WatchLine(_maxRequestsEdit);
             _settingsBody.AddChild(Labeled("会话 Token 上限", _maxTokensEdit));
             _settingsBody.AddChild(Labeled("会话请求上限", _maxRequestsEdit));
+            _budgetHint = UiFactory.Label(_budgetInputError ?? "非法预算输入会保留原来的安全上限，不会静默变成不限。", 11, muted: true);
+            _settingsBody.AddChild(_budgetHint);
             _settingsBody.AddChild(UiFactory.Label("预算护栏：达到上限时优雅停止自动游玩并提示，避免意外耗尽额度。", 11, muted: true));
+            _settingsResetStatsButton = UiFactory.Button(SessionBudgetLimits.ResetStatsActionLabel, ResetSessionStatsFromUi);
+            _settingsBody.AddChild(_settingsResetStatsButton);
             _settingsBody.AddChild(UiFactory.Button("重置窗口位置", ResetPlacement));
             _settingsBody.AddChild(UiFactory.Label("拖动标题栏可移动窗口，位置会保存。", 11, muted: true));
             _settingsBody.AddChild(UiFactory.Label("配置文件：" + AgentRuntime.Instance.SettingsPath, 11, muted: true));
@@ -576,6 +592,8 @@ internal sealed class AgentOverlayHost
             _hotkeyEdit = null;
             _maxTokensEdit = null;
             _maxRequestsEdit = null;
+            _budgetHint = null;
+            _settingsResetStatsButton = null;
         }
         }
         finally
@@ -736,9 +754,7 @@ internal sealed class AgentOverlayHost
     {
         var settings = HarvestSettings();
         settings.Endpoints.Add(new LlmEndpoint { Name = "新端点" });
-        AgentRuntime.Instance.SaveSettings(settings);
-        _settingsDirty = false;
-        RebuildSettingsForm();
+        PersistHarvested(settings);
     }
 
     private void AddModel()
@@ -751,9 +767,7 @@ internal sealed class AgentOverlayHost
             DisplayName = "新模型",
             ThinkingIntensity = "medium"
         });
-        AgentRuntime.Instance.SaveSettings(settings);
-        _settingsDirty = false;
-        RebuildSettingsForm();
+        PersistHarvested(settings);
     }
 
     private void RemoveEndpoint(int index)
@@ -773,9 +787,7 @@ internal sealed class AgentOverlayHost
 
         settings.Endpoints.RemoveAt(index);
         ModelRoleProbe.InvalidateMismatched(settings);
-        AgentRuntime.Instance.SaveSettings(settings);
-        _settingsDirty = false;
-        RebuildSettingsForm();
+        PersistHarvested(settings);
     }
 
     private void RemoveModel(int index)
@@ -795,9 +807,7 @@ internal sealed class AgentOverlayHost
 
         settings.Models.RemoveAt(index);
         ModelRoleProbe.InvalidateMismatched(settings);
-        AgentRuntime.Instance.SaveSettings(settings);
-        _settingsDirty = false;
-        RebuildSettingsForm();
+        PersistHarvested(settings);
     }
 
     private void ShowDeleteWarning(string message)
@@ -812,14 +822,66 @@ internal sealed class AgentOverlayHost
     {
         var settings = HarvestSettings();
         ModelRoleProbe.InvalidateMismatched(settings);
-        AgentRuntime.Instance.SaveSettings(settings);
-        _settingsDirty = false;
-        if (_saveStatus != null)
+        var saveText = string.IsNullOrWhiteSpace(_budgetInputError)
+            ? "已保存"
+            : "已保存（预算未改：" + _budgetInputError + "）";
+        if (!PersistHarvested(settings))
         {
-            _saveStatus.Text = "已保存";
+            return;
         }
 
-        RebuildSettingsForm();
+        if (_saveStatus != null)
+        {
+            _saveStatus.Text = saveText;
+        }
+
+        if (_budgetHint != null && !string.IsNullOrWhiteSpace(_budgetInputError))
+        {
+            _budgetHint.Text = _budgetInputError;
+        }
+    }
+
+    private bool PersistHarvested(AgentSettings settings)
+    {
+        try
+        {
+            AgentRuntime.Instance.SaveSettings(settings);
+            _settingsDirty = false;
+            RebuildSettingsForm();
+            return true;
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            if (_saveStatus != null)
+            {
+                _saveStatus.Text = FormatSettingsNotice(fallback: "保存失败，原配置未被覆盖。");
+            }
+
+            return false;
+        }
+    }
+
+    private void ResetSessionStatsFromUi()
+    {
+        AgentRuntime.Instance.TryResetSessionStats(out _);
+        RefreshDynamic();
+    }
+
+    private static string FormatSettingsNotice(string? fallback = null)
+    {
+        var notice = AgentRuntime.Instance.SettingsNotice;
+        if (notice.HasMessage)
+        {
+            var text = notice.Message;
+            if (!string.IsNullOrWhiteSpace(notice.BackupPath))
+            {
+                text += " 备份：" + notice.BackupPath;
+            }
+
+            return text;
+        }
+
+        return fallback ?? "";
     }
 
     private AgentSettings HarvestSettings()
@@ -875,18 +937,17 @@ internal sealed class AgentOverlayHost
         current.AttachStateInChat = _attachState?.ButtonPressed ?? true;
         current.AttachScreenshotInChat = _attachShot?.ButtonPressed ?? false;
         current.McpEnabled = _mcpToggle?.ButtonPressed ?? current.McpEnabled;
-        if (_maxTokensEdit != null)
+        _budgetInputError = null;
+        if (_maxTokensEdit != null || _maxRequestsEdit != null)
         {
-            current.MaxSessionTokens = int.TryParse(_maxTokensEdit.Text.Trim(), out var maxTokens) && maxTokens > 0
-                ? maxTokens
-                : null;
-        }
-
-        if (_maxRequestsEdit != null)
-        {
-            current.MaxSessionRequests = int.TryParse(_maxRequestsEdit.Text.Trim(), out var maxReqs) && maxReqs > 0
-                ? maxReqs
-                : null;
+            if (!SessionBudgetLimits.TryHarvestBudget(
+                    current,
+                    _maxTokensEdit?.Text,
+                    _maxRequestsEdit?.Text,
+                    out var budgetError))
+            {
+                _budgetInputError = budgetError;
+            }
         }
 
         ModelRoleProbe.InvalidateMismatched(current);
@@ -1157,6 +1218,35 @@ internal sealed class AgentOverlayHost
         if (_sessionNext != null)
         {
             _sessionNext.Text = "下一步：" + facing.NextAction;
+        }
+
+        var canResetStats = SessionBudgetLimits.CanResetSessionStats(
+            AgentRuntime.Instance.PlayRunning,
+            AgentRuntime.Instance.PlayPhase);
+        if (_resetStatsButton != null)
+        {
+            _resetStatsButton.Disabled = !canResetStats;
+        }
+
+        if (_settingsResetStatsButton != null)
+        {
+            _settingsResetStatsButton.Disabled = !canResetStats;
+        }
+
+        if (_sessionConfigNotice != null)
+        {
+            _sessionConfigNotice.Text = FormatSettingsNotice();
+            _sessionConfigNotice.Visible = AgentRuntime.Instance.SettingsNotice.HasMessage;
+        }
+
+        if (_settingsLoadNotice != null)
+        {
+            _settingsLoadNotice.Text = FormatSettingsNotice();
+        }
+
+        if (_budgetHint != null && !string.IsNullOrWhiteSpace(_budgetInputError))
+        {
+            _budgetHint.Text = _budgetInputError;
         }
 
         if (_playTest != null)

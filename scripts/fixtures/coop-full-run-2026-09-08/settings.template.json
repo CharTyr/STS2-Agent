@@ -1,0 +1,34 @@
+{
+  "endpoints": [
+    {
+      "id": "gmi-proxy",
+      "name": "Validation Budget Proxy",
+      "baseUrl": "http://127.0.0.1:18090/v1",
+      "apiKey": "sts2-budget-proxy-local",
+      "enabled": true
+    }
+  ],
+  "models": [
+    {
+      "id": "minimax-m3",
+      "endpointId": "gmi-proxy",
+      "model": "MiniMaxAI/MiniMax-M3",
+      "displayName": "MiniMax-M3 via budget proxy",
+      "supportsVision": false,
+      "supportsTools": true,
+      "thinkingMode": "auto",
+      "thinkingIntensity": "medium"
+    }
+  ],
+  "conversationModelId": "minimax-m3",
+  "playModelId": "minimax-m3",
+  "thinkingIntensity": "medium",
+  "hotkey": "F8",
+  "attachStateInChat": true,
+  "attachScreenshotInChat": false,
+  "overlayVisibleOnStart": false,
+  "hasSeenFirstRunGuide": true,
+  "mcpEnabled": true,
+  "mcpPort": 18080,
+  "roleTests": []
+}

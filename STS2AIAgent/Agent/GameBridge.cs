@@ -144,12 +144,45 @@ internal sealed class GameBridge : IGameBridge
     public async Task<bool> WaitUntilActionableAsync(TimeSpan timeout, CancellationToken cancellationToken)
     {
         var deadline = DateTime.UtcNow + timeout;
+        string? stuckActionType = null;
+        var stuckSince = DateTime.UtcNow;
         while (DateTime.UtcNow < deadline)
         {
             cancellationToken.ThrowIfCancellationRequested();
             var actionable = await GameThread.InvokeAsync(() =>
             {
                 var state = GameStateService.BuildStatePayload();
+                var readiness = state.combat?.action_readiness;
+                var selecting = readiness?.modal_open == true
+                    || readiness?.hand_in_card_selection == true
+                    || readiness?.hand_in_card_play == true;
+                var runningType = readiness?.running_action_type;
+                if (state.screen == "COMBAT"
+                    && readiness?.reason == "game_action_running"
+                    && !selecting
+                    && !string.IsNullOrEmpty(runningType))
+                {
+                    if (!string.Equals(runningType, stuckActionType, StringComparison.Ordinal))
+                    {
+                        stuckActionType = runningType;
+                        stuckSince = DateTime.UtcNow;
+                    }
+                    else if (DateTime.UtcNow - stuckSince >= TimeSpan.FromSeconds(12))
+                    {
+                        GameActionService.TryCancelRunningPlayerAction();
+                        stuckSince = DateTime.UtcNow;
+                    }
+                }
+                else
+                {
+                    stuckActionType = null;
+                }
+
+                if (state.screen == "COMBAT" && state.combat?.action_readiness?.can_use_combat_actions != true)
+                {
+                    return false;
+                }
+
                 return (state.available_actions ?? Array.Empty<string>())
                     .Any(name => !PassiveActions.Contains(name));
             });

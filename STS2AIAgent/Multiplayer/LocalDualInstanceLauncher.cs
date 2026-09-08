@@ -64,14 +64,16 @@ internal static class LocalDualInstanceLauncher
 
         var destDir = Path.Combine(gameDir, "mods", "STS2AIAgent");
         var destDll = Path.Combine(destDir, "STS2AIAgent.dll");
+        var flatDll = Path.Combine(gameDir, "mods", "STS2AIAgent.dll");
+        if (File.Exists(flatDll) || File.Exists(destDll))
+        {
+            Log.Info($"{LogPrefix} Keeping the already-installed local STS2AIAgent copy instead of staging Workshop files.");
+            return;
+        }
+
         var sourceDir = FindSubscribedWorkshopModDir();
         if (sourceDir == null)
         {
-            if (File.Exists(destDll))
-            {
-                return;
-            }
-
             Log.Warn($"{LogPrefix} No subscribed Workshop copy of STS2AIAgent found for the offline companion.");
             return;
         }

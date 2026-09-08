@@ -17,6 +17,8 @@ internal sealed class McpHttpResult
     public string? SessionId { get; init; }
 
     public string ProtocolVersion { get; init; } = NativeMcpServer.DefaultProtocolVersion;
+
+    public string? AllowOrigin { get; init; }
 }
 
 internal sealed class NativeMcpServer
@@ -148,7 +150,9 @@ internal sealed class NativeMcpServer
             request.Headers["Accept"],
             request.Headers["Mcp-Session-Id"] ?? request.Headers["MCP-Session-Id"],
             body,
-            cancellationToken);
+            cancellationToken,
+            request.Headers["Origin"],
+            request.Headers["Host"]);
         await WriteHttpAsync(response, result);
         return result.StatusCode;
     }
@@ -158,13 +162,31 @@ internal sealed class NativeMcpServer
         string? accept,
         string? sessionHeader,
         string? body,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        string? origin = null,
+        string? host = null)
     {
         if (!Enabled)
         {
             return RestError(403, "mcp_disabled", "MCP is turned off. Enable it in the in-game overlay Connect tab.");
         }
 
+        if (!TryAuthorizeOrigin(origin, host, EndpointUrl, out var allowOrigin))
+        {
+            return RestError(403, "origin_not_allowed", "Untrusted Origin is not allowed.");
+        }
+
+        var result = await ProcessAuthorizedAsync(httpMethod, accept, sessionHeader, body, cancellationToken);
+        return StampAllowOrigin(result, allowOrigin);
+    }
+
+    private async Task<McpHttpResult> ProcessAuthorizedAsync(
+        string httpMethod,
+        string? accept,
+        string? sessionHeader,
+        string? body,
+        CancellationToken cancellationToken)
+    {
         RememberSession(sessionHeader);
         var method = (httpMethod ?? "POST").Trim().ToUpperInvariant();
         if (method == "OPTIONS")
@@ -605,10 +627,14 @@ internal sealed class NativeMcpServer
     private static async Task WriteHttpAsync(HttpListenerResponse response, McpHttpResult result)
     {
         response.StatusCode = result.StatusCode;
-        response.Headers["Access-Control-Allow-Origin"] = "*";
-        response.Headers["Access-Control-Allow-Methods"] = "GET, POST, DELETE, OPTIONS";
-        response.Headers["Access-Control-Allow-Headers"] = "Content-Type, Accept, MCP-Protocol-Version, Mcp-Session-Id, Last-Event-ID";
-        response.Headers["Access-Control-Expose-Headers"] = "MCP-Protocol-Version, Mcp-Session-Id";
+        if (!string.IsNullOrWhiteSpace(result.AllowOrigin))
+        {
+            response.Headers["Access-Control-Allow-Origin"] = result.AllowOrigin;
+            response.Headers["Vary"] = "Origin";
+            response.Headers["Access-Control-Allow-Methods"] = "GET, POST, DELETE, OPTIONS";
+            response.Headers["Access-Control-Allow-Headers"] = "Content-Type, Accept, MCP-Protocol-Version, Mcp-Session-Id, Last-Event-ID";
+            response.Headers["Access-Control-Expose-Headers"] = "MCP-Protocol-Version, Mcp-Session-Id";
+        }
         response.Headers["MCP-Protocol-Version"] = result.ProtocolVersion;
         if (!string.IsNullOrWhiteSpace(result.SessionId))
         {
@@ -647,6 +673,142 @@ internal sealed class NativeMcpServer
         {
             return _sessionId;
         }
+    }
+
+    private static McpHttpResult StampAllowOrigin(McpHttpResult result, string? allowOrigin)
+    {
+        if (string.IsNullOrWhiteSpace(allowOrigin))
+        {
+            return result;
+        }
+
+        return new McpHttpResult
+        {
+            StatusCode = result.StatusCode,
+            ContentType = result.ContentType,
+            Body = result.Body,
+            SessionId = result.SessionId,
+            ProtocolVersion = result.ProtocolVersion,
+            AllowOrigin = allowOrigin
+        };
+    }
+
+    // Native clients omit Origin and stay compatible. A present Origin is allowed
+    // only when it matches the configured MCP endpoint authority. The request Host
+    // is never an allow-list; if present it must also match that same authority.
+    internal static bool TryAuthorizeOrigin(string? origin, string? host, string? endpointUrl, out string? allowOrigin)
+    {
+        allowOrigin = null;
+        if (string.IsNullOrWhiteSpace(origin))
+        {
+            return true;
+        }
+
+        if (!TryParseSingleOrigin(origin, out var originUri) ||
+            !TryGetEndpointAuthority(endpointUrl, out var endpoint) ||
+            !OriginMatchesEndpoint(originUri, endpoint))
+        {
+            return false;
+        }
+
+        if (!string.IsNullOrWhiteSpace(host) && !HostMatchesEndpoint(host, endpoint))
+        {
+            return false;
+        }
+
+        allowOrigin = originUri.GetLeftPart(UriPartial.Authority);
+        return allowOrigin.Length > 0;
+    }
+
+    private static bool IsHttpScheme(Uri uri)
+    {
+        return uri.Scheme.Equals(Uri.UriSchemeHttp, StringComparison.OrdinalIgnoreCase) ||
+               uri.Scheme.Equals(Uri.UriSchemeHttps, StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static bool TryParseSingleOrigin(string origin, out Uri originUri)
+    {
+        originUri = null!;
+        var trimmed = origin.Trim();
+        if (trimmed.Length == 0 || trimmed.Equals("null", StringComparison.OrdinalIgnoreCase))
+        {
+            return false;
+        }
+
+        foreach (var ch in trimmed)
+        {
+            if (ch is ',' or ' ' or '\t' or '\r' or '\n')
+            {
+                return false;
+            }
+        }
+
+        if (!Uri.TryCreate(trimmed, UriKind.Absolute, out var uri) || !IsHttpScheme(uri))
+        {
+            return false;
+        }
+
+        if (!string.IsNullOrEmpty(uri.UserInfo) ||
+            uri.AbsolutePath is not ("/" or "") ||
+            !string.IsNullOrEmpty(uri.Query) ||
+            !string.IsNullOrEmpty(uri.Fragment))
+        {
+            return false;
+        }
+
+        originUri = uri;
+        return true;
+    }
+
+    private static bool TryGetEndpointAuthority(string? endpointUrl, out Uri endpoint)
+    {
+        endpoint = null!;
+        if (!Uri.TryCreate(endpointUrl, UriKind.Absolute, out var uri) || !IsHttpScheme(uri))
+        {
+            return false;
+        }
+
+        endpoint = uri;
+        return true;
+    }
+
+    private static bool OriginMatchesEndpoint(Uri origin, Uri endpoint)
+    {
+        return origin.Scheme.Equals(endpoint.Scheme, StringComparison.OrdinalIgnoreCase) &&
+               HostEquals(origin.Host, endpoint.Host) &&
+               origin.Port == endpoint.Port;
+    }
+
+    private static bool HostMatchesEndpoint(string hostHeader, Uri endpoint)
+    {
+        return TryParseHostHeader(hostHeader, out var host, out var port) &&
+               HostEquals(host, endpoint.Host) &&
+               port == endpoint.Port;
+    }
+
+    private static bool TryParseHostHeader(string hostHeader, out string host, out int port)
+    {
+        host = string.Empty;
+        port = 0;
+        if (string.IsNullOrWhiteSpace(hostHeader))
+        {
+            return false;
+        }
+
+        if (!Uri.TryCreate("http://" + hostHeader.Trim(), UriKind.Absolute, out var uri) ||
+            string.IsNullOrWhiteSpace(uri.Host))
+        {
+            return false;
+        }
+
+        host = uri.Host;
+        port = uri.Port;
+        return port > 0;
+    }
+
+    private static bool HostEquals(string left, string right)
+    {
+        return left.Equals(right, StringComparison.OrdinalIgnoreCase);
     }
 
     private static string? NormalizeEndpoint(string? endpointUrl)
