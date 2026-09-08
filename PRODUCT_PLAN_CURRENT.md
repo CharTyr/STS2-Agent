@@ -1,8 +1,8 @@
 # STS2 AI Agent：当前状态页
 
 > 本页是仓库唯一的当前状态入口。待办整理时间：2026-09-08（P0/P1.1 收口后更新）。
-> 代码基准：本地 main 领先 origin/main（#80 cdd820a）。本轮额外提交：374d7fd journal、508c22d continue 90s/不重复点击、38610d7 Trellis 纳入版本控制，以及 GameOverSave 验收脚本。源码版本仍为 0.10.4。
-> 发布基准：最新 release 为 v0.10.4，标签 1c86596。#78 / #79 / #80 已合进 main，尚未打新标签或发版。
+> 代码基准：本地 main 与 origin/main 同步（Release v0.10.5 @ 04d2466）。
+> 发布基准：最新 release 为 v0.10.5（标签 04d2466 指向发布提交；GitHub Release 已创建）。#78 / #79 / #80 已随 v0.10.5 发布。
 
 旧路线图见 [PRODUCT_ROADMAP.md](PRODUCT_ROADMAP.md)（历史），旧交付原文见 [history/PRODUCT_PLAN_CURRENT_2026-09-07.md](history/PRODUCT_PLAN_CURRENT_2026-09-07.md) 和 [history/COOP_DELIVERY_2026-09-07.md](history/COOP_DELIVERY_2026-09-07.md)。[COOP_DELIVERY.md](COOP_DELIVERY.md) 现在只是历史证据索引。本页不继承历史文档中的审批、工作树或测试前执行约束。
 
@@ -28,7 +28,7 @@
 | Mod Release 构建 | 0 warning 0 error；SkipInstall 生成 DLL/PCK | 只复制到隔离 game/mods/，未装 Steam、未打 ZIP |
 | 隔离双开 13 层 | 2026-09-08 08:35 打到 13 层原生 GAME_OVER | full-run-result.json。Host progress 聚合当时未更新；不能顶替下面短路径 |
 | P1.3 超限 UI | 2026-09-08 请求上限=1，stop_kind=budget，overlay 出现上限文案与下一步 | p13-overlimit-result.json；重置按钮截图 ui-budget-scrolled3.jpg。不是真实 MiniMax 超长停流。 |
-| 隔离双开 GAME_OVER 存档 | 2026-09-08 20:24-20:28，当前 main 隔离 DLL 72C72F02。第一场地图战斗空过团灭，双方 continue_game_over 各一次（4.22s / 2.42s），save_verified=true，双方 progress.save mtime 在 continue 后更新，返回主菜单。forced_return_suspected=false | gameover-save-result.json outcome=gameover_save_ok。控制台 fight/die 会触发多人数据不同步断线，短路径改为自然进战斗 + end_turn 团灭。total_losses 本局未增加（host 仍为 2），score 有更新。 |
+| 隔离双开 GAME_OVER 存档 | 2026-09-08 20:24-20:28，当前 main 隔离 DLL 72C72F02。第一场地图战斗空过团灭，双方 continue_game_over 各一次（4.22s / 2.42s），save_verified=true，双方 progress.save mtime 在 continue 后更新，返回主菜单。forced_return_suspected=false | gameover-save-result.json outcome=gameover_save_ok。控制台 fight/die 会触发多人数据不同步断线，短路径改为自然进战斗 + end_turn 团灭。total_losses 本局未增加（host 仍为 2），score 有更新。已随 v0.10.5 发布。 |
 
 候选绑定：隔离 DLL SHA256 72C72F022F7EC32563BCDFA5F3269449DFFF0956A764441E8D7565A8D8AED920；隔离 exe SHA256 8602C26BFFD2937E3841835FD8360EF8E974624A543E05977229FD3D062BE231。Steam mods/STS2AIAgent.dll 仍是更早的 5F86AF22，本轮未覆盖。真档快照未改。
 
@@ -61,11 +61,11 @@ P1 已完成：当前 main 隔离 DLL 双开 GAME_OVER 存档短路径；continu
 
 P2 发布与安装
 
-- P2.1 决定要不要打 0.10.5，覆盖 #78/#79/#80。版本号三处同步：mod_manifest.json、Router.cs、mcp_server/pyproject.toml。
-- P2.2 清理 CHANGELOG.md 的 Unreleased。
-- P2.3 preflight-release + package-release。
-- P2.4 安装、升级、回退可复核。
-- P2.5 Steam / Workshop：当前 main 未覆盖 Steam mods/。
+- P2.1 完成：v0.10.5 已发布，覆盖 #78/#79/#80。版本号四处同步（mod_manifest.json、mod_id.json、Router.cs、pyproject.toml + uv.lock）。
+- P2.2 完成：CHANGELOG Unreleased 清理为 v0.10.5 段。
+- P2.3 完成：preflight-release 全绿；package-release 生成 sts2-ai-agent-v0.10.5-windows.zip；artifact check 通过。
+- P2.4 完成：安装前备份保留在 build/backup-steam-mods-2026-09-08/；v0.10.5 已安装到 Steam mods/（DLL 哈希匹配 release）；旧嵌套目录已备份并清理。
+- P2.5 部分完成：Steam mods/ 已是 v0.10.5；Workshop 订阅安装实机验证未做（workshop.json visibility=private，需 Steam 客户端）。
 
 P3 支持范围与卫生
 
