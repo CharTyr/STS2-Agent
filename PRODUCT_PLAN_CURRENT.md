@@ -27,6 +27,7 @@
 | MCP Origin | 7 项离线测试通过；隔离 Host 实机探测 | 不是完整浏览器页面利用 |
 | Mod Release 构建 | 0 warning 0 error；SkipInstall 生成 DLL/PCK | 只复制到隔离 game/mods/，未装 Steam、未打 ZIP |
 | 隔离双开 13 层 | 2026-09-08 08:35 打到 13 层原生 GAME_OVER | full-run-result.json。Host progress 聚合当时未更新；不能顶替下面短路径 |
+| P1.3 超限 UI | 2026-09-08 请求上限=1，stop_kind=budget，overlay 出现上限文案与下一步 | p13-overlimit-result.json；重置按钮截图 ui-budget-scrolled3.jpg。不是真实 MiniMax 超长停流。 |
 | 隔离双开 GAME_OVER 存档 | 2026-09-08 20:24-20:28，当前 main 隔离 DLL 72C72F02。第一场地图战斗空过团灭，双方 continue_game_over 各一次（4.22s / 2.42s），save_verified=true，双方 progress.save mtime 在 continue 后更新，返回主菜单。forced_return_suspected=false | gameover-save-result.json outcome=gameover_save_ok。控制台 fight/die 会触发多人数据不同步断线，短路径改为自然进战斗 + end_turn 团灭。total_losses 本局未增加（host 仍为 2），score 有更新。 |
 
 候选绑定：隔离 DLL SHA256 72C72F022F7EC32563BCDFA5F3269449DFFF0956A764441E8D7565A8D8AED920；隔离 exe SHA256 8602C26BFFD2937E3841835FD8360EF8E974624A543E05977229FD3D062BE231。Steam mods/STS2AIAgent.dll 仍是更早的 5F86AF22，本轮未覆盖。真档快照未改。
@@ -42,8 +43,8 @@
 | 原生 MCP | v0.10.2 | 已发布 | Origin 契约 | 外部 MCP 客户端连接/关闭未做 |
 | 共享 skill 与投票 | v0.10.3 | 已发布 | 离线测试；隔离实机 | 完整 13 层结算不是当前门槛 |
 | FTUE 与时间线解锁 | v0.10.4 | 已发布 | 离线测试；隔离 FTUE | 无 |
-| 首次配置与诊断 | v0.10.4 | 已发布 | 隔离邀请成功 | 超限后游戏内文案/按钮未做 UI 手测 |
-| 恢复、预算与暂停 | v0.10.4 + #80 | 未进入新标签 | 暂停探测 ok | 超限 UI 手测仍缺 |
+| 首次配置与诊断 | v0.10.4 | 已发布 | 隔离邀请成功 | 无 |
+| 恢复、预算与暂停 | v0.10.4 + #80 | 未进入新标签 | 暂停探测 ok；P1.3 超限 UI 已看 | 无 |
 | 空奖励 overlay | 19710ad | 未进入标签 | 180 PASS | 未做完整预检、ZIP、Workshop |
 | GAME_OVER 等待原生结算 | 4b4da6e（#79） | 未进入标签 | 2026-09-08 20:28 隔离双开 continue 4.22s/2.42s，save_verified，progress mtime 更新 | total_losses 未观察到 +1 |
 | 主动发言与交流风格 | 历史待办 | 未分配 | 未完整核查 | 先查代码再定产品边界 |
@@ -54,11 +55,7 @@
 
 P0 已完成：基线页与 main 对齐；90s continue 超时已提交；Trellis 纳入版本控制并归档 bootstrap；journal 随 Trellis 一起待推 origin；旧 stash 已 drop。
 
-P1.1 / P1.2 已完成：当前 main 隔离 DLL 双开 GAME_OVER 存档短路径；continue 只点一次且 90s 超时。控制台 fight/die 不能用于双开（多人数据不同步弹窗）。
-
-仍待办：
-
-- P1.3 高级设置「重置本会话统计」和超限后游戏内文案/按钮的边角手测。overlay 早先已见过损坏恢复与重置按钮，超限文案仍缺一眼。真实上游超长停流、浏览器 Origin 页可后置。
+P1 已完成：当前 main 隔离 DLL 双开 GAME_OVER 存档短路径；continue 只点一次且 90s 超时；控制台 fight/die 不能用于双开。P1.3：高级设置「重置本会话统计」见 ui-budget-scrolled3.jpg；请求上限=1 后 health stop_kind=budget、session_requests=1，overlay 显示「已达到会话请求次数上限」和下一步（提高上限 / 重置本会话统计 / 继续游玩）。证据 p13-overlimit-result.json。真实上游超长停流、浏览器 Origin 页仍后置。
 
 已合进 main、不再当待办：非法预算保留安全上限、损坏配置备份恢复、MCP Origin 契约、停流超时契约、play_card 取消、空奖励 overlay、continue_game_over 等待原生结算。
 
