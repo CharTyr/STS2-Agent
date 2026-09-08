@@ -15,8 +15,17 @@ internal sealed class CurrentRunBoundary
         var screen = ReadString(state, "screen");
         var phase = state.TryGetProperty("session", out var session) ? ReadString(session, "phase") : null;
         var seed = ReadString(state, "run_id");
-        if (_enteredRun && (screen == "MAIN_MENU" || phase is "character_select" or "multiplayer_lobby"))
+        Check(screen, phase, seed);
+    }
+
+    public void Check(string? screen, string? phase, string? seed)
+    {
+        if (_enteredRun && (
+            screen is "MAIN_MENU" or "CHARACTER_SELECT" or "MULTIPLAYER_LOBBY" ||
+            phase is "character_select" or "multiplayer_lobby" or "menu"))
+        {
             throw new AutoPlayStoppedException("当前局已离开，自动游玩已停止。开始另一局需要手动继续。");
+        }
 
         // Unlock screens may outlive RunState; let the native unlock queue finish.
         if (phase == "run")
@@ -26,7 +35,7 @@ internal sealed class CurrentRunBoundary
             _enteredRun = true;
             if (seed != "run_unknown") _seed ??= seed;
         }
-        else if (screen is "GAME_OVER" or "UNLOCK")
+        else if (screen is "GAME_OVER" or "UNLOCK" or "MAP" or "COMBAT" or "REWARD" or "EVENT" or "REST" or "SHOP" or "CHEST")
         {
             _enteredRun = true;
         }

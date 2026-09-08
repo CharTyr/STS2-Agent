@@ -18,7 +18,7 @@ internal sealed class DefaultLlmClientFactory : ILlmClientFactory
 {
     private static readonly HttpClient SharedHttp = new()
     {
-        Timeout = TimeSpan.FromMinutes(3)
+        Timeout = TimeSpan.FromMinutes(11)
     };
 
     public ILlmClient Create(LlmEndpoint endpoint)
@@ -142,5 +142,10 @@ internal sealed class LlmException : Exception
 
     public LlmException(string message, Exception inner) : base(message, inner)
     {
+    }
+
+    public LlmException(string message, Exception inner, int statusCode) : base(message, inner)
+    {
+        StatusCode = statusCode;
     }
 }

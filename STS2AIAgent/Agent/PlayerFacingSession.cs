@@ -109,11 +109,12 @@ internal static class PlayerFacingSession
 
         if (s.BudgetReason != null)
         {
+            var canReset = SessionBudgetLimits.CanResetSessionStats(s.PlayRunning, s.PlayPhase);
             return new PlayerFacingView(
                 "budget",
                 "已达到会话预算",
                 s.BudgetReason,
-                "在设置中提高上限或点重置统计后，再点「继续游玩」。",
+                SessionBudgetLimits.BudgetRecoveryNextAction(canReset),
                 null);
         }
 

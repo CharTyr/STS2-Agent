@@ -1,3 +1,5 @@
+using System.Net;
+using System.Text;
 using System.Text.Json;
 using STS2AIAgent.Agent;
 using STS2AIAgent.Server;
@@ -106,7 +108,140 @@ internal static class McpServiceTests
         return Task.CompletedTask;
     }
 
-    private static NativeMcpServer CreateServer(bool enabled = true, FakeMcpBridge? bridge = null)
+    public static async Task MissingOrigin_AllowsNativeInitializeAndOptions()
+    {
+        var server = CreateServer();
+        var options = await Process(server, "OPTIONS", body: null);
+        Assert.Equal(204, options.StatusCode);
+        Assert.Null(options.AllowOrigin);
+
+        var initialized = await Process(server, "POST", InitializeBody);
+        Assert.Equal(200, initialized.StatusCode);
+        Assert.NotNull(initialized.SessionId);
+        Assert.Null(initialized.AllowOrigin);
+        Assert.False(string.IsNullOrWhiteSpace(initialized.Body));
+    }
+
+    public static async Task UntrustedOrigin_RejectedWithoutCreatingSession()
+    {
+        var server = CreateServer();
+        var rejected = await Process(
+            server,
+            "POST",
+            InitializeBody,
+            origin: "https://evil.example",
+            host: "127.0.0.1:8080",
+            sessionHeader: "forged-session");
+        Assert.Equal(403, rejected.StatusCode);
+        Assert.Contains("origin_not_allowed", rejected.Body);
+        Assert.Null(rejected.SessionId);
+        Assert.Null(rejected.AllowOrigin);
+
+        var options = await Process(server, "OPTIONS", body: null, origin: "https://evil.example", host: "127.0.0.1:8080");
+        Assert.Equal(403, options.StatusCode);
+        Assert.Contains("origin_not_allowed", options.Body);
+        Assert.Null(options.SessionId);
+
+        var native = await Process(server, "POST", InitializeBody);
+        Assert.Equal(200, native.StatusCode);
+        Assert.NotNull(native.SessionId);
+    }
+
+    public static async Task SameOriginHost_AllowsInitializeAndEchoesOrigin()
+    {
+        var server = CreateServer();
+        var result = await Process(
+            server,
+            "POST",
+            InitializeBody,
+            origin: "http://127.0.0.1:8080",
+            host: "127.0.0.1:8080");
+        Assert.Equal(200, result.StatusCode);
+        Assert.NotNull(result.SessionId);
+        Assert.Equal("http://127.0.0.1:8080", result.AllowOrigin);
+    }
+
+    public static async Task NullLiteralOrigin_Rejected()
+    {
+        var server = CreateServer();
+        var result = await Process(server, "POST", InitializeBody, origin: "null", host: "127.0.0.1:8080");
+        Assert.Equal(403, result.StatusCode);
+        Assert.Contains("origin_not_allowed", result.Body);
+        Assert.Null(result.SessionId);
+    }
+
+    public static async Task EvilOriginAndHost_RejectedEvenWhenTheyMatchEachOther()
+    {
+        var server = CreateServer();
+        foreach (var (origin, host) in new[]
+        {
+            ("https://evil.example", "evil.example"),
+            ("http://evil.example:8080", "evil.example:8080"),
+            ("https://evil.example:443", "evil.example:443")
+        })
+        {
+            var result = await Process(server, "POST", InitializeBody, origin, host);
+            Assert.Equal(403, result.StatusCode);
+            Assert.Contains("origin_not_allowed", result.Body);
+            Assert.Null(result.SessionId);
+            Assert.Null(result.AllowOrigin);
+        }
+    }
+
+    public static async Task MalformedOrigin_Rejected()
+    {
+        var server = CreateServer();
+        foreach (var origin in new[]
+        {
+            "http://user:pass@127.0.0.1:8080",
+            "http://127.0.0.1:8080/mcp",
+            "http://127.0.0.1:8080/?x=1",
+            "http://127.0.0.1:8080/#frag",
+            "http://127.0.0.1:8080,https://evil.example",
+            "http://127.0.0.1:8080 https://evil.example"
+        })
+        {
+            var result = await Process(server, "POST", InitializeBody, origin, "127.0.0.1:8080");
+            Assert.Equal(403, result.StatusCode);
+            Assert.Contains("origin_not_allowed", result.Body);
+            Assert.Null(result.SessionId);
+        }
+    }
+
+    public static async Task HandleHttp_OriginPolicyRejectsUntrustedAndAllowsSameOrigin()
+    {
+        var started = LoopbackListener.Start(49170, allowFallback: true);
+        using var listener = started.Listener;
+        var endpoint = $"http://127.0.0.1:{started.Port}/mcp";
+        var server = CreateServer(endpointUrl: endpoint);
+        var origin = $"http://127.0.0.1:{started.Port}";
+        var url = $"{origin}/mcp";
+
+        var untrusted = await RoundTrip(listener, server, url, HttpMethod.Post, InitializeBody, "https://evil.example");
+        Assert.Equal(HttpStatusCode.Forbidden, untrusted.StatusCode);
+        Assert.False(untrusted.HasWildcardCors, "untrusted Origin must not receive Access-Control-Allow-Origin: *");
+        Assert.False(untrusted.HasHeader("Access-Control-Allow-Origin"));
+        Assert.Contains("origin_not_allowed", untrusted.Body);
+        Assert.False(untrusted.HasHeader("Mcp-Session-Id"));
+
+        var preflight = await RoundTrip(listener, server, url, HttpMethod.Options, body: null, origin: "https://evil.example");
+        Assert.Equal(HttpStatusCode.Forbidden, preflight.StatusCode);
+        Assert.False(preflight.HasWildcardCors, "untrusted OPTIONS must not receive Access-Control-Allow-Origin: *");
+        Assert.False(preflight.HasHeader("Access-Control-Allow-Origin"));
+
+        var allowed = await RoundTrip(listener, server, url, HttpMethod.Post, InitializeBody, origin);
+        Assert.Equal(HttpStatusCode.OK, allowed.StatusCode);
+        Assert.False(allowed.HasWildcardCors, "allowed Origin must echo itself instead of *");
+        Assert.Equal(origin, allowed.Get("Access-Control-Allow-Origin"));
+        Assert.True(allowed.HasHeader("Mcp-Session-Id"));
+
+        var native = await RoundTrip(listener, server, url, HttpMethod.Post, InitializeBody, origin: null);
+        Assert.Equal(HttpStatusCode.OK, native.StatusCode);
+        Assert.False(native.HasWildcardCors, "native clients without Origin must not receive Access-Control-Allow-Origin: *");
+        Assert.False(native.HasHeader("Access-Control-Allow-Origin"));
+    }
+
+    private static NativeMcpServer CreateServer(bool enabled = true, FakeMcpBridge? bridge = null, string endpointUrl = "http://127.0.0.1:8080/mcp")
     {
         var server = new NativeMcpServer(
             bridge ?? new FakeMcpBridge(),
@@ -114,10 +249,93 @@ internal static class McpServiceTests
             "9.9.9");
         if (enabled)
         {
-            server.SetEnabled(true, "http://127.0.0.1:8080/mcp");
+            server.SetEnabled(true, endpointUrl);
         }
 
         return server;
+    }
+
+    private const string InitializeBody =
+        """{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-03-26","capabilities":{},"clientInfo":{"name":"test","version":"1"}}}""";
+
+    private static Task<McpHttpResult> Process(
+        NativeMcpServer server,
+        string method,
+        string? body,
+        string? origin = null,
+        string? host = null,
+        string? sessionHeader = null)
+    {
+        return server.ProcessAsync(method, "application/json", sessionHeader, body, CancellationToken.None, origin, host);
+    }
+
+    private static async Task<HttpProbe> RoundTrip(
+        HttpListener listener,
+        NativeMcpServer server,
+        string url,
+        HttpMethod method,
+        string? body,
+        string? origin)
+    {
+        using var http = new HttpClient { Timeout = TimeSpan.FromSeconds(5) };
+        using var request = new HttpRequestMessage(method, url);
+        if (origin != null)
+        {
+            request.Headers.TryAddWithoutValidation("Origin", origin);
+        }
+
+        if (body != null)
+        {
+            request.Content = new StringContent(body, Encoding.UTF8, "application/json");
+        }
+
+        var incoming = listener.GetContextAsync();
+        var send = http.SendAsync(request);
+        var context = await incoming;
+        try
+        {
+            await server.HandleHttpAsync(context, CancellationToken.None);
+        }
+        finally
+        {
+            context.Response.Close();
+        }
+
+        using var response = await send;
+        var headers = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var header in response.Headers)
+        {
+            headers[header.Key] = header.Value.FirstOrDefault() ?? string.Empty;
+        }
+
+        foreach (var header in response.Content.Headers)
+        {
+            headers[header.Key] = header.Value.FirstOrDefault() ?? string.Empty;
+        }
+
+        return new HttpProbe
+        {
+            StatusCode = response.StatusCode,
+            Body = await response.Content.ReadAsStringAsync(),
+            Headers = headers
+        };
+    }
+
+
+    private sealed class HttpProbe
+    {
+        public HttpStatusCode StatusCode { get; init; }
+
+        public string Body { get; init; } = string.Empty;
+
+        public Dictionary<string, string> Headers { get; init; } = new(StringComparer.OrdinalIgnoreCase);
+
+        public bool HasWildcardCors =>
+            Headers.TryGetValue("Access-Control-Allow-Origin", out var value) && value.Trim() == "*";
+
+        public bool HasHeader(string name) => Headers.ContainsKey(name);
+
+        public string? Get(string name) => Headers.TryGetValue(name, out var value) ? value : null;
     }
 
     private static async Task<JsonElement> Rpc(NativeMcpServer server, string body)

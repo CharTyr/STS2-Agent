@@ -130,6 +130,96 @@ internal static class PlayerExperienceTests
         Assert.Contains("session_tokens=unknown", rendered);
     }
 
+    public static void IllegalBudgetInputKeepsSafeValue()
+    {
+        Assert.False(SessionBudgetLimits.TryApply("abc", 5000, out var letters, out var letterError));
+        Assert.Equal(5000, letters);
+        Assert.NotNull(letterError);
+        Assert.Contains("安全上限", letterError);
+
+        Assert.False(SessionBudgetLimits.TryApply("-1", 800, out var negative, out var negativeError));
+        Assert.Equal(800, negative);
+        Assert.NotNull(negativeError);
+
+        Assert.False(SessionBudgetLimits.TryApply("1.5", 1200, out var fraction, out var fractionError));
+        Assert.Equal(1200, fraction);
+        Assert.NotNull(fractionError);
+
+        Assert.False(SessionBudgetLimits.TryApply("2147483648", 90, out var overflow, out var overflowError));
+        Assert.Equal(90, overflow);
+        Assert.NotNull(overflowError);
+    }
+
+    public static void EmptyOrZeroBudgetMeansUnlimited()
+    {
+        Assert.True(SessionBudgetLimits.TryApply("", 5000, out var empty, out var emptyError));
+        Assert.Null(empty);
+        Assert.Null(emptyError);
+
+        Assert.True(SessionBudgetLimits.TryApply("0", 5000, out var zero, out var zeroError));
+        Assert.Null(zero);
+        Assert.Null(zeroError);
+
+        Assert.True(SessionBudgetLimits.TryApply(" 2500 ", null, out var positive, out var positiveError));
+        Assert.Equal(2500, positive);
+        Assert.Null(positiveError);
+    }
+
+    public static void BudgetCopyNamesReachableResetEntry()
+    {
+        var settings = AgentSettings.CreateDefault();
+        ModelRoleProbe.Upsert(settings, ModelRoleProbe.FromSuccess(ModelRoleNames.Play, settings.TryResolvePlayModel()!));
+        var verified = FirstRunSetup.Evaluate(settings);
+        var paused = PlayerFacingSession.Compose(BaseSnapshot(verified) with
+        {
+            BudgetReason = "已达到会话请求次数上限（3/3 次），已自动停止游玩。",
+            PlayRunning = false,
+            PlayPhase = "paused"
+        });
+        Assert.Equal("budget", paused.Kind);
+        Assert.Contains(SessionBudgetLimits.ResetStatsActionLabel, paused.NextAction);
+        Assert.Contains("显示高级选项", paused.NextAction);
+        Assert.Contains("继续游玩", paused.NextAction);
+    }
+
+    public static void ResetStatsBlockedWhileRunning()
+    {
+        Assert.False(SessionBudgetLimits.CanResetSessionStats(true, "running"));
+        Assert.False(SessionBudgetLimits.CanResetSessionStats(false, "stopping"));
+        Assert.True(SessionBudgetLimits.CanResetSessionStats(false, "paused"));
+        var settings = AgentSettings.CreateDefault();
+        ModelRoleProbe.Upsert(settings, ModelRoleProbe.FromSuccess(ModelRoleNames.Play, settings.TryResolvePlayModel()!));
+        var verified = FirstRunSetup.Evaluate(settings);
+        var running = PlayerFacingSession.Compose(BaseSnapshot(verified) with
+        {
+            BudgetReason = "已达到会话 Token 预算上限",
+            PlayRunning = true,
+            PlayPhase = "running"
+        });
+        Assert.Contains("暂停", running.NextAction);
+        Assert.False(running.NextAction.Contains("点「" + SessionBudgetLimits.ResetStatsActionLabel + "」后再点"));
+        Assert.Contains(SessionBudgetLimits.ResetStatsActionLabel, running.NextAction);
+    }
+
+    public static void HarvestBudgetRejectsBeforeMutatingSettings()
+    {
+        var current = AgentSettings.CreateDefault();
+        current.MaxSessionTokens = 7777;
+        current.MaxSessionRequests = 12;
+        var harvested = SessionBudgetLimits.Harvest(current, "nope", "also-bad", out var error);
+        Assert.NotNull(error);
+        Assert.Equal(7777, harvested.MaxSessionTokens);
+        Assert.Equal(12, harvested.MaxSessionRequests);
+        Assert.Equal(7777, current.MaxSessionTokens);
+        Assert.Equal(12, current.MaxSessionRequests);
+
+        var cleared = SessionBudgetLimits.Harvest(current, "0", "", out var clearError);
+        Assert.Null(clearError);
+        Assert.Null(cleared.MaxSessionTokens);
+        Assert.Null(cleared.MaxSessionRequests);
+        Assert.Equal(7777, current.MaxSessionTokens);
+    }
+
     public static void PlayerFacingMapsPauseAndConfigError()
     {
         var settings = AgentSettings.CreateDefault();

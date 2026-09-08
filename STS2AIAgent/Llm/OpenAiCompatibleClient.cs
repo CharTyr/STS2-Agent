@@ -8,6 +8,8 @@ namespace STS2AIAgent.Llm;
 
 internal sealed class OpenAiCompatibleClient : ILlmClient
 {
+    internal static readonly TimeSpan DefaultRequestTimeout = TimeSpan.FromMinutes(10);
+
     private static readonly JsonSerializerOptions JsonOptions = new()
     {
         PropertyNamingPolicy = null,
@@ -17,9 +19,12 @@ internal sealed class OpenAiCompatibleClient : ILlmClient
     private readonly HttpClient _http;
     private readonly LlmEndpoint _endpoint;
 
-    public OpenAiCompatibleClient(LlmEndpoint endpoint, HttpMessageHandler? handler = null, HttpClient? httpClient = null)
+    private readonly TimeSpan _requestTimeout;
+
+    public OpenAiCompatibleClient(LlmEndpoint endpoint, HttpMessageHandler? handler = null, HttpClient? httpClient = null, TimeSpan? requestTimeout = null)
     {
         _endpoint = endpoint;
+        _requestTimeout = NormalizeRequestTimeout(requestTimeout);
         if (httpClient != null)
         {
             _http = httpClient;
@@ -28,13 +33,20 @@ internal sealed class OpenAiCompatibleClient : ILlmClient
         {
             _http = new HttpClient(handler, disposeHandler: false)
             {
-                Timeout = TimeSpan.FromMinutes(3)
+                Timeout = DefaultRequestTimeout + TimeSpan.FromMinutes(1)
             };
         }
         else
         {
-            _http = new HttpClient { Timeout = TimeSpan.FromMinutes(3) };
+            _http = new HttpClient { Timeout = DefaultRequestTimeout + TimeSpan.FromMinutes(1) };
         }
+    }
+
+    private static TimeSpan NormalizeRequestTimeout(TimeSpan? requestTimeout)
+    {
+        return requestTimeout is { } timeout && timeout > TimeSpan.Zero
+            ? timeout
+            : DefaultRequestTimeout;
     }
 
     public async Task<LlmCompletion> CompleteAsync(LlmRequest request, CancellationToken cancellationToken)
@@ -145,26 +157,46 @@ internal sealed class OpenAiCompatibleClient : ILlmClient
             request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", _endpoint.ApiKey.Trim());
         }
 
+        using var timeoutCts = new CancellationTokenSource(_requestTimeout);
+        using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, timeoutCts.Token);
+        var linked = linkedCts.Token;
         HttpResponseMessage response;
         try
         {
             var completionOption = stream
                 ? HttpCompletionOption.ResponseHeadersRead
                 : HttpCompletionOption.ResponseContentRead;
-            response = await _http.SendAsync(request, completionOption, cancellationToken);
+            response = await _http.SendAsync(request, completionOption, linked);
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
             throw;
         }
-        catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException)
+        catch (OperationCanceledException ex)
+        {
+            throw new LlmException("LLM request timed out.", ex, 408);
+        }
+        catch (Exception ex) when (ex is HttpRequestException)
         {
             throw new LlmException($"LLM request failed: {ex.Message}", ex);
         }
 
         using (response)
         {
-            var payload = await response.Content.ReadAsStringAsync(cancellationToken);
+            string payload;
+            try
+            {
+                payload = await response.Content.ReadAsStringAsync(linked);
+            }
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+            {
+                throw;
+            }
+            catch (OperationCanceledException ex)
+            {
+                throw new LlmException("LLM request timed out.", ex, 408);
+            }
+
             if (!response.IsSuccessStatusCode)
             {
                 throw new LlmException(FormatError((int)response.StatusCode, payload), (int)response.StatusCode);

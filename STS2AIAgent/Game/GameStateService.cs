@@ -253,7 +253,7 @@ internal static class GameStateService
             };
         }
 
-        if (CanEndTurn(currentScreen, combatState))
+        if (CanEndTurn(currentScreen, combatState, requireButtonReady: false))
         {
             descriptors.Add(new ActionDescriptor
             {
@@ -2464,7 +2464,7 @@ internal static class GameStateService
             return names.ToArray();
         }
 
-        if (CanEndTurn(currentScreen, combatState))
+        if (CanEndTurn(currentScreen, combatState, requireButtonReady: false))
         {
             names.Add("end_turn");
         }

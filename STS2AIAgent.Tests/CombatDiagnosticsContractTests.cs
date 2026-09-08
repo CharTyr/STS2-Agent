@@ -49,6 +49,21 @@ internal static class CombatDiagnosticsContractTests
         Assert.Contains("action_readiness=combat.action_readiness", agentCombatBody, StringComparison.Ordinal);
     }
 
+    public static void PlayCardTimeoutCancelsNativeGameAction()
+    {
+        var actionSource = ReadSource("STS2AIAgent/Game/GameActionService.cs");
+        var cancelBody = WithoutWhitespace(MethodBody(actionSource, "TryCancelRunningPlayerAction"));
+        var playCardBody = WithoutWhitespace(MethodBody(actionSource, "ExecutePlayCardAsync"));
+        var bridgeSource = WithoutWhitespace(ReadSource("STS2AIAgent/Agent/GameBridge.cs"));
+
+        Assert.Contains("running.Cancel()", cancelBody, StringComparison.Ordinal);
+        Assert.Contains("executor.Cancel()", cancelBody, StringComparison.Ordinal);
+        Assert.Contains("GameActionState.GatheringPlayerChoice", cancelBody, StringComparison.Ordinal);
+        Assert.Contains("TryCancelRunningPlayerAction()", playCardBody, StringComparison.Ordinal);
+        Assert.Contains("TimeSpan.FromSeconds(12)", playCardBody, StringComparison.Ordinal);
+        Assert.Contains("GameActionService.TryCancelRunningPlayerAction()", bridgeSource, StringComparison.Ordinal);
+    }
+
     private static string ReadSource(string relativePath)
     {
         foreach (var start in new[] { Directory.GetCurrentDirectory(), AppContext.BaseDirectory })

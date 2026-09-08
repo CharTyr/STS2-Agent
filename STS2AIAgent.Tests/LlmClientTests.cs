@@ -1,3 +1,7 @@
+using System.Diagnostics;
+using System.Net;
+using System.Net.Sockets;
+using System.Text;
 using System.Text.Json;
 using STS2AIAgent.Config;
 using STS2AIAgent.Llm;
@@ -211,6 +215,70 @@ internal static class OpenAiCompatibleClientTests
         Assert.Equal(43, combinedBoth!.TotalTokens);
     }
 
+    public static async Task CompleteAsync_HeadersThenStalledBodyTimesOut()
+    {
+        using var stall = new StallingHeaderServer();
+        using var http = new HttpClient { Timeout = TimeSpan.FromMinutes(3) };
+        http.DefaultRequestHeaders.ExpectContinue = false;
+        var client = new OpenAiCompatibleClient(
+            new LlmEndpoint { BaseUrl = stall.BaseUrl },
+            httpClient: http,
+            requestTimeout: TimeSpan.FromMilliseconds(400));
+
+        var elapsed = Stopwatch.StartNew();
+        try
+        {
+            await client.CompleteAsync(new LlmRequest
+            {
+                Model = "test",
+                Messages = new[] { LlmMessage.User("hi") },
+                Stream = true
+            }, CancellationToken.None);
+            throw new Exception("Expected a timeout after ResponseHeadersRead stall.");
+        }
+        catch (LlmException ex)
+        {
+            Assert.Equal<int?>(408, ex.StatusCode);
+            Assert.Contains("timed out", ex.Message, StringComparison.OrdinalIgnoreCase);
+        }
+
+        elapsed.Stop();
+        Assert.True(elapsed.Elapsed < TimeSpan.FromSeconds(8), $"stall timeout took {elapsed.Elapsed}, expected a short injected timeout");
+        Assert.True(elapsed.Elapsed >= TimeSpan.FromMilliseconds(200), $"stall timeout returned too quickly: {elapsed.Elapsed}");
+    }
+
+    public static async Task CompleteAsync_HeadersThenStalledBodyUserCancel()
+    {
+        using var stall = new StallingHeaderServer();
+        using var http = new HttpClient { Timeout = TimeSpan.FromMinutes(3) };
+        http.DefaultRequestHeaders.ExpectContinue = false;
+        var client = new OpenAiCompatibleClient(
+            new LlmEndpoint { BaseUrl = stall.BaseUrl },
+            httpClient: http,
+            requestTimeout: TimeSpan.FromSeconds(5));
+
+        using var cancel = new CancellationTokenSource(TimeSpan.FromMilliseconds(150));
+        var elapsed = Stopwatch.StartNew();
+        var canceled = false;
+        try
+        {
+            await client.CompleteAsync(new LlmRequest
+            {
+                Model = "test",
+                Messages = new[] { LlmMessage.User("hi") },
+                Stream = true
+            }, cancel.Token);
+        }
+        catch (OperationCanceledException) when (cancel.IsCancellationRequested)
+        {
+            canceled = true;
+        }
+
+        elapsed.Stop();
+        Assert.True(canceled, "user cancellation must surface as OperationCanceledException, not a timeout LlmException");
+        Assert.True(elapsed.Elapsed < TimeSpan.FromSeconds(3), $"user cancel took {elapsed.Elapsed}");
+    }
+
     private sealed class RecordingHandler : HttpMessageHandler
     {
         private readonly string _response;
@@ -235,6 +303,97 @@ internal static class OpenAiCompatibleClientTests
             {
                 Content = new StringContent(_response)
             };
+        }
+    }
+
+    private sealed class StallingHeaderServer : IDisposable
+    {
+        private readonly TcpListener _listener;
+        private readonly CancellationTokenSource _lifetime = new();
+        private readonly Task _loop;
+
+        public string BaseUrl { get; }
+
+        public StallingHeaderServer()
+        {
+            _listener = new TcpListener(IPAddress.Loopback, 0);
+            _listener.Start();
+            var port = ((IPEndPoint)_listener.LocalEndpoint).Port;
+            BaseUrl = $"http://127.0.0.1:{port}/v1";
+            _loop = AcceptLoopAsync();
+        }
+
+        private async Task AcceptLoopAsync()
+        {
+            try
+            {
+                while (!_lifetime.IsCancellationRequested)
+                {
+                    var client = await _listener.AcceptTcpClientAsync(_lifetime.Token);
+                    _ = ServeAsync(client);
+                }
+            }
+            catch (Exception ex) when (ex is OperationCanceledException or ObjectDisposedException or SocketException)
+            {
+            }
+        }
+
+        private async Task ServeAsync(TcpClient client)
+        {
+            try
+            {
+                using (client)
+                await using (var stream = client.GetStream())
+                {
+                    var buffer = new byte[8192];
+                    var total = 0;
+                    while (total < buffer.Length)
+                    {
+                        var read = await stream.ReadAsync(buffer.AsMemory(total), _lifetime.Token);
+                        if (read == 0)
+                        {
+                            return;
+                        }
+
+                        total += read;
+                        if (HasHeaderDelimiter(buffer, total))
+                        {
+                            break;
+                        }
+                    }
+
+                    var headers = Encoding.ASCII.GetBytes(
+                        "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: 1048576\r\nConnection: keep-alive\r\n\r\n");
+                    await stream.WriteAsync(headers, _lifetime.Token);
+                    await stream.FlushAsync(_lifetime.Token);
+                    await Task.Delay(Timeout.InfiniteTimeSpan, _lifetime.Token);
+                }
+            }
+            catch (Exception ex) when (ex is OperationCanceledException or IOException or ObjectDisposedException or SocketException)
+            {
+            }
+        }
+
+        private static bool HasHeaderDelimiter(byte[] buffer, int length)
+        {
+            for (var i = 0; i + 3 < length; i++)
+            {
+                if (buffer[i] == (byte)'\r' && buffer[i + 1] == (byte)'\n' &&
+                    buffer[i + 2] == (byte)'\r' && buffer[i + 3] == (byte)'\n')
+                {
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
+        public void Dispose()
+        {
+            _lifetime.Cancel();
+            try { _listener.Stop(); } catch (Exception) { }
+            try { _loop.Wait(TimeSpan.FromSeconds(2)); } catch (Exception) { }
+            _lifetime.Dispose();
         }
     }
 }

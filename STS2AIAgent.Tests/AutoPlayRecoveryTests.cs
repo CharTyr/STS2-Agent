@@ -121,4 +121,32 @@ internal static class AutoPlayRecoveryTests
         catch (OperationCanceledException) when (cancellation.IsCancellationRequested) { }
         Assert.Equal(1, calls);
     }
+
+    public static async Task TimeoutFailureDoesNotLookLikeUserCancel()
+    {
+        using var lifetime = new CancellationTokenSource();
+        var calls = 0;
+        try
+        {
+            await AutoPlayRecovery.RunAsync(token =>
+            {
+                Assert.False(token.IsCancellationRequested);
+                calls++;
+                if (calls >= 2)
+                {
+                    lifetime.Cancel();
+                }
+
+                throw new LlmException("LLM request timed out.", 408);
+            }, _ => { }, lifetime.Token, (_, _) => Task.CompletedTask);
+        }
+        catch (OperationCanceledException) when (lifetime.IsCancellationRequested)
+        {
+        }
+        catch (AutoPlayStoppedException)
+        {
+        }
+
+        Assert.True(calls >= 2, "timeout LlmException must be retryable, not treated as user cancel");
+    }
 }

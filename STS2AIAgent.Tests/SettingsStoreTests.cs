@@ -85,4 +85,103 @@ internal static class SettingsStoreTests
         var loaded = new SettingsStore(path).Load();
         Assert.Equal("high", loaded.Models[0].ThinkingIntensity);
     }
+
+    public static void Load_CorruptJson_BacksUpOriginalAndDoesNotLoseSecret()
+    {
+        var path = NewSettingsPath();
+        const string secret = "sk-test-preserve";
+        var original = "broken-json apiKey=" + secret;
+        File.WriteAllText(path, original);
+        var store = new SettingsStore(path);
+        var loaded = store.Load();
+        store.Save(loaded);
+
+        var backups = CorruptBackups(path);
+        Assert.True(backups.Length > 0, "expected a lossless corrupt backup before overwrite");
+        Assert.True(File.ReadAllText(backups[0]).Contains(secret));
+        Assert.False((store.LastNotice.Message ?? "").Contains(secret));
+        Assert.False((store.LastNotice.BackupPath ?? "").Contains(secret));
+        Assert.False((store.LastNotice.BackupPath ?? "").Contains(Path.DirectorySeparatorChar));
+        Assert.False((store.LastNotice.BackupPath ?? "").Contains(Path.AltDirectorySeparatorChar));
+    }
+
+    public static void Load_CorruptJson_RestoresLastGoodBackup()
+    {
+        var path = NewSettingsPath();
+        var store = new SettingsStore(path);
+        var settings = AgentSettings.CreateDefault();
+        settings.Endpoints[0].ApiKey = "sk-test-restore";
+        settings.MaxSessionTokens = 4000;
+        store.Save(settings);
+        File.Copy(path, path + ".bak", overwrite: true);
+        File.WriteAllText(path, "{ this is not json, apiKey: sk-test-restore }");
+
+        var restoredStore = new SettingsStore(path);
+        var loaded = restoredStore.Load();
+        Assert.Equal("sk-test-restore", loaded.Endpoints[0].ApiKey);
+        Assert.Equal(4000, loaded.MaxSessionTokens);
+        Assert.Equal("restored", restoredStore.LastNotice.Kind);
+    }
+
+    public static void Save_UnwritableTemp_LeavesOriginalIntact()
+    {
+        var path = NewSettingsPath();
+        var store = new SettingsStore(path);
+        var settings = AgentSettings.CreateDefault();
+        settings.Endpoints[0].ApiKey = "sk-test-keep";
+        store.Save(settings);
+        var original = File.ReadAllText(path);
+        var tempDir = path + ".tmp";
+        Directory.CreateDirectory(tempDir);
+        try
+        {
+            var threw = false;
+            try
+            {
+                settings.Endpoints[0].ApiKey = "sk-test-changed";
+                store.Save(settings);
+            }
+            catch (Exception)
+            {
+                threw = true;
+            }
+
+            Assert.True(threw, "save should fail when temp path is not writable");
+            Assert.Equal(original, File.ReadAllText(path));
+        }
+        finally
+        {
+            if (Directory.Exists(tempDir))
+            {
+                Directory.Delete(tempDir, recursive: true);
+            }
+        }
+    }
+
+    public static void Load_CorruptJson_NoticeDoesNotContainFileBody()
+    {
+        var path = NewSettingsPath();
+        const string secret = "sk-test-notice";
+        File.WriteAllText(path, "broken-json apiKey=" + secret);
+        var store = new SettingsStore(path);
+        store.Load();
+        var notice = store.LastNotice;
+        Assert.True(notice.HasMessage);
+        Assert.False((notice.Message + " " + (notice.BackupPath ?? "")).Contains(secret));
+        Assert.False(notice.Message.Contains("{"));
+    }
+
+    private static string NewSettingsPath()
+    {
+        var path = Path.Combine(Path.GetTempPath(), "sts2-agent-tests", Guid.NewGuid().ToString("N"), "settings.json");
+        Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+        return path;
+    }
+
+    private static string[] CorruptBackups(string path)
+    {
+        var directory = Path.GetDirectoryName(path)!;
+        var name = Path.GetFileName(path);
+        return Directory.GetFiles(directory, name + ".corrupt-*");
+    }
 }

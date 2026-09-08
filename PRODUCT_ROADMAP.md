@@ -1,6 +1,6 @@
 # STS2 AI Agent 产品现状与后续开发计划
 
-> **历史规划。** 当前执行清单只有 [PRODUCT_PLAN_CURRENT.md](PRODUCT_PLAN_CURRENT.md)；证据追加在 [COOP_DELIVERY.md](COOP_DELIVERY.md)。下文的提交号、测试数量和“待实现”条目已过时（远程 main 已至 v0.10.2 / `1be8e83`），不要当任务板用。
+> **历史，不代表当前。** 当前状态唯一入口为 [PRODUCT_PLAN_CURRENT.md](PRODUCT_PLAN_CURRENT.md)；[COOP_DELIVERY.md](COOP_DELIVERY.md) 现在只是历史证据索引。下文的提交号、测试数量和“待实现”条目属于旧时间点，不要当任务板用。
 
 评估日期：2026-09-05。本文为开发建议，不代表功能已经交付或发布承诺。
 

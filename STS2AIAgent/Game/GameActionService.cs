@@ -12,6 +12,7 @@ using MegaCrit.Sts2.Core.Context;
 using MegaCrit.Sts2.Core.DevConsole;
 using MegaCrit.Sts2.Core.Events.Custom.CrystalSphereEvent;
 using MegaCrit.Sts2.Core.GameActions;
+using MegaCrit.Sts2.Core.Entities.Actions;
 using MegaCrit.Sts2.Core.Helpers;
 using MegaCrit.Sts2.Core.Nodes;
 using MegaCrit.Sts2.Core.Nodes.Cards.Holders;
@@ -217,7 +218,7 @@ internal static class GameActionService
                 break;
             }
 
-            await NGame.Instance.ToSignal(NGame.Instance.GetTree(), SceneTree.SignalName.ProcessFrame);
+            await GameThread.WaitForNextFrameAsync();
         }
 
         var playerCombatState = me.Creature.CombatState
@@ -243,8 +244,8 @@ internal static class GameActionService
             await CommitEndTurnButtonAsync(endTurnButton, me);
             if (NGame.Instance != null)
             {
-                await NGame.Instance.ToSignal(NGame.Instance.GetTree(), SceneTree.SignalName.ProcessFrame);
-                await NGame.Instance.ToSignal(NGame.Instance.GetTree(), SceneTree.SignalName.ProcessFrame);
+                await GameThread.WaitForNextFrameAsync();
+                await GameThread.WaitForNextFrameAsync();
             }
 
             if (GameStateService.GetOpenModal() != null)
@@ -328,7 +329,7 @@ internal static class GameActionService
         var deadline = DateTime.UtcNow + TimeSpan.FromSeconds(Math.Max(0.05, duration + 0.1));
         while (DateTime.UtcNow < deadline && NGame.Instance != null)
         {
-            await NGame.Instance.ToSignal(NGame.Instance.GetTree(), SceneTree.SignalName.ProcessFrame);
+            await GameThread.WaitForNextFrameAsync();
         }
     }
 
@@ -343,7 +344,7 @@ internal static class GameActionService
 
         while (DateTime.UtcNow < deadline)
         {
-            await NGame.Instance.ToSignal(NGame.Instance.GetTree(), SceneTree.SignalName.ProcessFrame);
+            await GameThread.WaitForNextFrameAsync();
 
             if (IsEndTurnStable(previousRound))
             {
@@ -467,7 +468,20 @@ internal static class GameActionService
         if (cardType == "Attack") AttacksPlayedThisTurn++;
         else if (cardType == "Skill") SkillsPlayedThisTurn++;
 
-        var stable = await WaitForPlayCardTransitionAsync(card, TimeSpan.FromSeconds(5));
+        var stable = await WaitForPlayCardTransitionAsync(card, TimeSpan.FromSeconds(12));
+        if (!stable)
+        {
+            for (var attempt = 0; attempt < 8; attempt++)
+            {
+                TryCancelRunningPlayerAction();
+                await GameThread.WaitForNextFrameAsync();
+                stable = IsPlayCardStable(card);
+                if (stable || ArePlayerDrivenActionsSettled())
+                {
+                    break;
+                }
+            }
+        }
 
         return new ActionResponsePayload
         {
@@ -1075,7 +1089,7 @@ internal static class GameActionService
 
         while (DateTime.UtcNow < deadline)
         {
-            await NGame.Instance.ToSignal(NGame.Instance.GetTree(), SceneTree.SignalName.ProcessFrame);
+            await GameThread.WaitForNextFrameAsync();
 
             if (IsPlayCardStable(card))
             {
@@ -1115,6 +1129,62 @@ internal static class GameActionService
 
         var currentScreen = ActiveScreenContext.Instance.GetCurrentScreen();
         return currentScreen != null && GameStateService.ResolveScreen(currentScreen) == "CARD_SELECTION";
+    }
+
+    internal static bool TryCancelRunningPlayerAction()
+    {
+        var executor = RunManager.Instance.ActionExecutor;
+        var running = executor.CurrentlyRunningAction;
+        if (running == null)
+        {
+            return false;
+        }
+
+        // Nested player choice is a legitimate wait. Cancelling it drops the other
+        // player's selection UI. The hang we recover from is ExecuteAction never
+        // finishing while the hand is still in Play mode.
+        if (running.State is GameActionState.GatheringPlayerChoice or GameActionState.ReadyToResumeExecuting)
+        {
+            return false;
+        }
+
+        var canceled = false;
+        try
+        {
+            running.Cancel();
+            canceled = true;
+        }
+        catch
+        {
+        }
+
+        try
+        {
+            // ActionExecutor has Cancel(), not CancelAction(). Cancel() trips the
+            // per-frame wait so the executor can drop a stuck Execute() task.
+            executor.Cancel();
+            canceled = true;
+        }
+        catch
+        {
+        }
+
+        if (ReferenceEquals(executor.CurrentlyRunningAction, running))
+        {
+            try
+            {
+                var setter = executor.GetType()
+                    .GetProperty(nameof(ActionExecutor.CurrentlyRunningAction))
+                    ?.GetSetMethod(nonPublic: true);
+                setter?.Invoke(executor, new object?[] { null });
+                canceled = true;
+            }
+            catch
+            {
+            }
+        }
+
+        return canceled;
     }
 
     private static bool ArePlayerDrivenActionsSettled()
@@ -1263,7 +1333,7 @@ internal static class GameActionService
         var deadline = DateTime.UtcNow + timeout;
         while (DateTime.UtcNow < deadline)
         {
-            await NGame.Instance.ToSignal(NGame.Instance.GetTree(), SceneTree.SignalName.ProcessFrame);
+            await GameThread.WaitForNextFrameAsync();
 
             if (HasEnteredMapDestination(roomEntered) || IsLocalMapVoteRegistered(targetCoord))
             {
@@ -1284,7 +1354,7 @@ internal static class GameActionService
         var deadline = DateTime.UtcNow + timeout;
         while (DateTime.UtcNow < deadline)
         {
-            await NGame.Instance.ToSignal(NGame.Instance.GetTree(), SceneTree.SignalName.ProcessFrame);
+            await GameThread.WaitForNextFrameAsync();
 
             if (IsMapTransitionStable(roomEntered))
             {

@@ -77,6 +77,67 @@ internal static class Router
                 return;
             }
 
+
+            if (request.HttpMethod == "POST" && request.Url?.AbsolutePath == "/session/control")
+            {
+                if (!request.IsLocal)
+                {
+                    throw new ApiException(403, "local_only", "Session control is only available on loopback.");
+                }
+
+                if (request.ContentLength64 < 0 || request.ContentLength64 > 16000)
+                {
+                    throw new ApiException(400, "invalid_request", "A bounded JSON body is required.");
+                }
+
+                var control = await JsonHelper.DeserializeAsync<SessionControlRequest>(request.InputStream, cancellationToken);
+                if (control?.running is null)
+                {
+                    throw new ApiException(400, "invalid_request", "running must be a boolean.");
+                }
+
+                string phase;
+                try
+                {
+                    if (InstanceRole.IsCompanion)
+                    {
+                        phase = await AgentRuntime.Instance.SetCompanionRunningAsync(control.running.Value, cancellationToken);
+                    }
+                    else if (control.running.Value)
+                    {
+                        AgentRuntime.Instance.StartAutoPlay();
+                        phase = AgentRuntime.Instance.PlayPhase;
+                    }
+                    else
+                    {
+                        AgentRuntime.Instance.StopAutoPlay();
+                        phase = AgentRuntime.Instance.PlayPhase;
+                    }
+                }
+                catch (TimeoutException)
+                {
+                    throw new ApiException(409, "pause_pending", "Pause requested but the current task has not finished yet.");
+                }
+                catch (InvalidOperationException ex)
+                {
+                    throw new ApiException(409, "session_not_ready", ex.Message);
+                }
+
+                await WriteJsonAsync(response, 200, new
+                {
+                    ok = true,
+                    request_id = requestId,
+                    data = new
+                    {
+                        phase,
+                        play_running = AgentRuntime.Instance.PlayRunning,
+                        play_phase = AgentRuntime.Instance.PlayPhase
+                    }
+                });
+                statusCode = 200;
+                return;
+            }
+
             if (IsMcpPath(request.Url?.AbsolutePath))
             {
                 var mcp = NativeMcpServer.Runtime;
@@ -227,7 +288,15 @@ internal static class Router
             process_id = Environment.ProcessId,
             instance_role = InstanceRole.Current,
             mcp_enabled = mcp?.Enabled == true,
-            mcp_url = mcp?.EndpointUrl
+            mcp_url = mcp?.EndpointUrl,
+            play_running = AgentRuntime.Instance.PlayRunning,
+            play_phase = AgentRuntime.Instance.PlayPhase,
+            stop_kind = AgentRuntime.Instance.StopKind,
+            session_requests = AgentRuntime.Instance.SessionRequests,
+            companion_process_alive = LocalDualInstanceLauncher.CompanionProcessAlive,
+            companion_process_exited = LocalDualInstanceLauncher.CompanionProcessExited,
+            dual_status = AgentRuntime.Instance.DualStatus,
+            team_control_status = AgentRuntime.Instance.TeamControlStatus
         };
     }
 
@@ -371,5 +440,10 @@ internal static class Router
     {
         var bytes = Encoding.UTF8.GetBytes(text);
         return response.OutputStream.WriteAsync(bytes);
+    }
+
+    private sealed class SessionControlRequest
+    {
+        public bool? running { get; set; }
     }
 }

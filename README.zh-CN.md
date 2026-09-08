@@ -6,7 +6,7 @@ https://github.com/user-attachments/assets/89353468-a299-4315-9516-e520bcbfbd4b
 
 **《杀戮尖塔 2》（Slay the Spire 2）游戏内 AI 助手与自主队友 Mod**
 
-[English README](./README.md) • [当前产品计划](./PRODUCT_PLAN_CURRENT.md) • [联机交付跟踪](./COOP_DELIVERY.md) • [API 文档](./docs/api.md) • [MCP 工具指南](./mcp_server/README.md)
+[English README](./README.md) • [当前状态页](./PRODUCT_PLAN_CURRENT.md) • [历史联机证据索引](./COOP_DELIVERY.md) • [API 文档](./docs/api.md) • [MCP 工具指南](./mcp_server/README.md)
 
 </div>
 
@@ -236,8 +236,8 @@ STS2-Agent/
 ├── scripts/              # 构建、部署、启动与全量预检脚本
 ├── skills/               # 面向 MCP 外部 Agent 的策略 Skill 规范
 ├── docs/                 # 开发设计文档与 API 接口参考
-├── PRODUCT_PLAN_CURRENT.md # 官方当前产品成熟度计划与基线评估
-└── COOP_DELIVERY.md      # AI 队友与联机双开交付全流程跟踪
+├── PRODUCT_PLAN_CURRENT.md # 官方当前状态与证据边界
+└── COOP_DELIVERY.md      # 历史联机交付证据索引
 ```
 
 ---

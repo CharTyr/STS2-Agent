@@ -55,6 +55,24 @@ internal static class CurrentRunBoundaryTests
         boundary.Check(State("UNLOCK", "unknown", "run_1"));
     }
 
+    public static void StopsMainMenuEvenIfSessionPhaseStillRun()
+    {
+        var boundary = new CurrentRunBoundary();
+        boundary.Check("COMBAT", "run", "run_1");
+        var ex = Expect<AutoPlayStoppedException>(() =>
+            boundary.Check("MAIN_MENU", "run", "run_1"));
+        Assert.Contains("当前局已离开", ex.Message);
+    }
+
+    public static void StopsCharacterSelectByScreenName()
+    {
+        var boundary = new CurrentRunBoundary();
+        boundary.Check("MAP", "run", "run_1");
+        var ex = Expect<AutoPlayStoppedException>(() =>
+            boundary.Check("CHARACTER_SELECT", "run", "run_2"));
+        Assert.Contains("当前局已离开", ex.Message);
+    }
+
     private static T Expect<T>(Action action) where T : Exception
     {
         try { action(); }

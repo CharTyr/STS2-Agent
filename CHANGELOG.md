@@ -1,6 +1,10 @@
 # Changelog
 
+> Release attribution is recorded only when verified against git tags or release commits. The existing `Unreleased` entries below remain to be checked against git history and are not evidence for the current status page.
+
 ## v0.10.4 - 2026-09-07
+
+> Release attribution: git tag `v0.10.4` points to `1c86596`; release commit `2157697`.
 
 ### Fixed
 - Relic/shop FTUE popups no longer stay open after confirm_modal.
@@ -60,6 +64,12 @@
 - Companion settings stay isolated (`settings.companion.json`) and companion HTTP ports can fall back and be rediscovered by pid/port file.
 
 ## Unreleased
+
+> The existing entries in this section remain unassigned until their git release attribution is checked. The following post-tag fix is confirmed on `main` but has no release tag yet.
+
+### After v0.10.4 tag
+
+- `19710ad` fixes empty reward overlays that could remain pending. It is after tag `v0.10.4` (`1c86596`) and is present on current `main` (`bb26a21`); release attribution is unassigned and the source version remains `0.10.4`.
 
 ### Added
 

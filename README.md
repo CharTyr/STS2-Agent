@@ -6,7 +6,7 @@ https://github.com/user-attachments/assets/89353468-a299-4315-9516-e520bcbfbd4b
 
 **In-Game AI Companion & Autonomous Gameplay Mod for Slay the Spire 2**
 
-[中文说明 (README.zh-CN)](./README.zh-CN.md) • [Product Plan](./PRODUCT_PLAN_CURRENT.md) • [Co-op Delivery Tracker](./COOP_DELIVERY.md) • [API Docs](./docs/api.md) • [MCP Tools Guide](./mcp_server/README.md)
+[中文说明 (README.zh-CN)](./README.zh-CN.md) • [Current Status](./PRODUCT_PLAN_CURRENT.md) • [Historical Co-op Evidence](./COOP_DELIVERY.md) • [API Docs](./docs/api.md) • [MCP Tools Guide](./mcp_server/README.md)
 
 </div>
 
@@ -249,8 +249,8 @@ STS2-Agent/
 ├── scripts/              # Build, packaging, startup, and preflight scripts
 ├── skills/               # State-first gameplay skill specifications
 ├── docs/                 # Developer reference and API documentation
-├── PRODUCT_PLAN_CURRENT.md # Official product plan & remote baseline assessment
-└── COOP_DELIVERY.md      # Co-op companion full delivery tracking
+├── PRODUCT_PLAN_CURRENT.md # Current product status and evidence boundary
+└── COOP_DELIVERY.md      # Historical co-op evidence index
 ```
 
 ---

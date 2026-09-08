@@ -25,6 +25,7 @@ internal sealed class AgentRuntime
     private string _teamStatus = "组队后，可以在这里和 AI 队友商量打法。";
     private CancellationTokenSource _lifetime = new();
     private readonly AutoPlaySession _playSession = new();
+    private CurrentRunBoundary _runBoundary = new();
     private readonly object _playLifecycleGate = new();
     private long _playGeneration;
     private PlaySessionIdentity? _playSessionIdentity;
@@ -154,7 +155,14 @@ internal sealed class AgentRuntime
                 var stopping = _playSession.RequestPause();
                 SetStatus(stopping.IsCompleted ? "已暂停自动游玩" : "正在暂停，等待当前任务完成…");
                 NoteEvent(Status);
-                await stopping.WaitAsync(TimeSpan.FromSeconds(30), cancellationToken);
+                try
+                {
+                    await stopping.WaitAsync(TimeSpan.FromSeconds(30), cancellationToken);
+                }
+                catch (AutoPlayStoppedException)
+                {
+                    // The loop already ended; treat that as a completed pause.
+                }
                 if (PlayPhase == "paused") SetStatus("已暂停自动游玩");
             }
             return PlayPhase;
@@ -178,8 +186,21 @@ internal sealed class AgentRuntime
         get { lock (_gate) return _sessionRequests; }
     }
 
-    public void ResetSessionStats()
+    public string? StopKind
     {
+        get { lock (_playLifecycleGate) return _stopKind; }
+    }
+
+    public bool TryResetSessionStats(out string message)
+    {
+        if (!SessionBudgetLimits.CanResetSessionStats(PlayRunning, PlayPhase))
+        {
+            message = "自动游玩进行中，不能清零本会话统计。请先暂停。暂停/继续不会清零累计。";
+            SetStatus(message);
+            RaiseChanged();
+            return false;
+        }
+
         lock (_gate)
         {
             _sessionUsage = LlmUsage.Empty;
@@ -187,7 +208,11 @@ internal sealed class AgentRuntime
             _sessionUsageKnown = false;
             _budgetGuard = _settings.CreateBudgetGuard();
         }
+
+        message = "已清零本会话统计。预算上限未改；继续游玩将重新计数。";
+        SetStatus(message);
         RaiseChanged();
+        return true;
     }
 
     public string DualStatus => _dualStatus;
@@ -279,6 +304,8 @@ internal sealed class AgentRuntime
 
     public string SettingsPath => _store.Path;
 
+    public SettingsPersistenceNotice SettingsNotice => _store.LastNotice;
+
     public IReadOnlyList<ChatTurn> History
     {
         get
@@ -318,13 +345,13 @@ internal sealed class AgentRuntime
     public void SaveSettings(AgentSettings settings)
     {
         settings.EnsureValidShape();
+        _store.Save(settings);
         lock (_gate)
         {
             _settings = settings;
             _budgetGuard = settings.CreateBudgetGuard(_sessionUsage.TotalTokens, _sessionRequests);
         }
 
-        _store.Save(settings);
         ApplyMcpFromSettings();
         RaiseChanged();
     }
@@ -749,7 +776,7 @@ internal sealed class AgentRuntime
 
     private async Task AutoPlayLoopAsync(CancellationToken cancellationToken)
     {
-        var boundary = new CurrentRunBoundary();
+        var boundary = _runBoundary;
         SessionBudgetGuard budgetGuard;
         lock (_gate)
         {
@@ -765,6 +792,17 @@ internal sealed class AgentRuntime
                 {
                     _requestingModel = true;
                     RaiseChanged();
+                    var snapshot = await GameThread.InvokeAsync(() =>
+                    {
+                        var payload = GameStateService.BuildStatePayload();
+                        return (payload.screen, payload.session.phase, payload.run_id);
+                    });
+                    if (snapshot.Item1 is "MAIN_MENU" or "CHARACTER_SELECT" or "MULTIPLAYER_LOBBY")
+                    {
+                        _runBoundary = new CurrentRunBoundary();
+                        boundary = _runBoundary;
+                    }
+                    boundary.Check(snapshot.Item1, snapshot.Item2, snapshot.Item3);
                     var immediate = await TryCompanionImmediateAsync(token);
                     if (immediate != null)
                     {
