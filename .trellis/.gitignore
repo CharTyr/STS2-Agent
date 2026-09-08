@@ -30,3 +30,6 @@
 # Python cache
 **/__pycache__/
 **/*.pyc
+
+# Local trellis update bookkeeping
+.template-hashes.json
