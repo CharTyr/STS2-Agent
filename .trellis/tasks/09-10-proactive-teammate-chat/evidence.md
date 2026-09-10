@@ -37,6 +37,7 @@ Runner: main session. Date: 2026-09-10. All verification offline; the game was n
 | `SettingsStoreTests.ProactiveChat_LegacyFileLoadsDisabledWithDefaultTone` | PASS — a settings file with no proactive keys loads with the opt-in off and the default tone, and the pre-existing values (maxSessionRequests, conversationModelId) are untouched |
 | `SettingsStoreTests.ProactiveChat_UnknownStoredToneIsRepaired` | PASS — a stored unknown tone is repaired to the default on load while the opt-in stays on |
 | `SettingsStoreTests.RoundTrip_PreservesEndpointsModelsAndRoles` | PASS — extended to carry `proactiveChatEnabled = true` and `proactiveChatTone = terse` through save/load |
+| `SettingsClone.Clone_CarriesEveryEditableField` / `Clone_IsDeep` | PASS — the settings copy the overlay edits now lives in `STS2AIAgent/Config/SettingsClone.cs`, which the test project compiles, so "a new field survives the editor" is checked rather than assumed: the clone carries both proactive fields plus every other editable field, and it is a deep copy |
 | `powershell -File scripts/preflight-release.ps1` | exit 0; includes the C# harness and the MCP suite |
 
 ## Boundary

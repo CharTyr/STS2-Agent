@@ -177,6 +177,8 @@ internal static class TestRunner
         yield return ("SettingsStore.RoundTrip", () => Task.Run(SettingsStoreTests.RoundTrip_PreservesEndpointsModelsAndRoles));
         yield return ("ProactiveChat.LegacySettingsStayOff", () => Task.Run(SettingsStoreTests.ProactiveChat_LegacyFileLoadsDisabledWithDefaultTone));
         yield return ("ProactiveChat.StoredToneRepaired", () => Task.Run(SettingsStoreTests.ProactiveChat_UnknownStoredToneIsRepaired));
+        yield return ("SettingsClone.CarriesEditableFields", () => Task.Run(SettingsStoreTests.Clone_CarriesEveryEditableField));
+        yield return ("SettingsClone.IsDeep", () => Task.Run(SettingsStoreTests.Clone_IsDeep));
         yield return ("SettingsStore.FingerprintCase", () => Task.Run(SettingsStoreTests.Load_VerifiedPlayFingerprint_IsCaseInsensitive));
         yield return ("SettingsStore.MissingFile", () => Task.Run(SettingsStoreTests.Load_MissingFile_CreatesDefaults));
         yield return ("SettingsStore.MigrateThinking", () => Task.Run(SettingsStoreTests.Load_MigratesGlobalThinkingIntensityOntoModels));

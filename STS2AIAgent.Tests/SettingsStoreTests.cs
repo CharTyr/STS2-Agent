@@ -118,6 +118,8 @@ internal static class SettingsStoreTests
     }
 
     public static void ProactiveChat_UnknownStoredToneIsRepaired()
+
+
     {
         var path = NewSettingsPath();
         Directory.CreateDirectory(Path.GetDirectoryName(path)!);
@@ -230,4 +232,49 @@ internal static class SettingsStoreTests
         var name = Path.GetFileName(path);
         return Directory.GetFiles(directory, name + ".corrupt-*");
     }
+
+    public static void Clone_CarriesEveryEditableField()
+    {
+        // The overlay edits a clone, so a field missing here is dropped on the next save.
+        var source = AgentSettings.CreateDefault();
+        source.ProactiveChatEnabled = true;
+        source.ProactiveChatTone = ProactiveChatTones.Terse;
+        source.AttachScreenshotInChat = true;
+        source.McpEnabled = true;
+        source.McpPort = 9001;
+        source.MaxSessionTokens = 1234;
+        source.MaxSessionRequests = 7;
+        source.Hotkey = "F9";
+        source.OverlayLeft = 12;
+        source.OverlayTop = 34;
+        source.Endpoints[0].ApiKey = "sk-clone";
+
+        var clone = SettingsClone.Clone(source);
+
+        Assert.True(clone.ProactiveChatEnabled);
+        Assert.Equal(ProactiveChatTones.Terse, clone.ProactiveChatTone);
+        Assert.True(clone.AttachScreenshotInChat);
+        Assert.True(clone.McpEnabled);
+        Assert.Equal(9001, clone.McpPort);
+        Assert.Equal(1234, clone.MaxSessionTokens);
+        Assert.Equal(7, clone.MaxSessionRequests);
+        Assert.Equal("F9", clone.Hotkey);
+        Assert.Equal(12f, clone.OverlayLeft);
+        Assert.Equal(34f, clone.OverlayTop);
+        Assert.Equal("sk-clone", clone.Endpoints[0].ApiKey);
+        Assert.Equal(source.ConversationModelId, clone.ConversationModelId);
+    }
+
+    public static void Clone_IsDeep()
+    {
+        var source = AgentSettings.CreateDefault();
+        var clone = SettingsClone.Clone(source);
+        clone.Endpoints[0].Name = "changed";
+        clone.Models[0].Model = "changed";
+        clone.ProactiveChatEnabled = true;
+        Assert.True(!string.Equals(source.Endpoints[0].Name, "changed", StringComparison.Ordinal));
+        Assert.True(!string.Equals(source.Models[0].Model, "changed", StringComparison.Ordinal));
+        Assert.False(source.ProactiveChatEnabled);
+    }
 }
+

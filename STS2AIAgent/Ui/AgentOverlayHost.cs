@@ -983,62 +983,8 @@ internal sealed class AgentOverlayHost
 
     private static AgentSettings CloneSettings(AgentSettings source)
     {
-        source.EnsureValidShape();
-        return new AgentSettings
-        {
-            Endpoints = source.Endpoints.Select(endpoint => new LlmEndpoint
-            {
-                Id = endpoint.Id,
-                Name = endpoint.Name,
-                BaseUrl = endpoint.BaseUrl,
-                ApiKey = endpoint.ApiKey,
-                Enabled = endpoint.Enabled
-            }).ToList(),
-            Models = source.Models.Select(model => new LlmModelConfig
-            {
-                Id = model.Id,
-                EndpointId = model.EndpointId,
-                Model = model.Model,
-                DisplayName = model.DisplayName,
-                SupportsVision = model.SupportsVision,
-                SupportsTools = model.SupportsTools,
-                ThinkingMode = model.ThinkingMode,
-                ThinkingIntensity = model.ThinkingIntensity
-            }).ToList(),
-            ConversationModelId = source.ConversationModelId,
-            PlayModelId = source.PlayModelId,
-            VisionModelId = source.VisionModelId,
-            ThinkingIntensity = source.ThinkingIntensity,
-            Hotkey = source.Hotkey,
-            AttachStateInChat = source.AttachStateInChat,
-            AttachScreenshotInChat = source.AttachScreenshotInChat,
-            OverlayVisibleOnStart = source.OverlayVisibleOnStart,
-            HasSeenFirstRunGuide = source.HasSeenFirstRunGuide,
-            OverlayLeft = source.OverlayLeft,
-            OverlayTop = source.OverlayTop,
-            McpServerPath = source.McpServerPath,
-            McpPort = source.McpPort,
-            McpEnabled = source.McpEnabled,
-            MaxSessionTokens = source.MaxSessionTokens,
-            MaxSessionRequests = source.MaxSessionRequests,
-            ProactiveChatEnabled = source.ProactiveChatEnabled,
-            ProactiveChatTone = source.ProactiveChatTone,
-            RoleTests = source.RoleTests.Select(test => new ModelRoleTestRecord
-            {
-                Role = test.Role,
-                Status = test.Status,
-                CapabilityStatus = test.CapabilityStatus,
-                EndpointId = test.EndpointId,
-                EndpointName = test.EndpointName,
-                ModelId = test.ModelId,
-                ModelName = test.ModelName,
-                Fingerprint = test.Fingerprint,
-                StatusCode = test.StatusCode,
-                Error = test.Error,
-                NextStep = test.NextStep,
-                TestedAt = test.TestedAt
-            }).ToList()
-        };
+        // The copy lives in Config so the executable test project can cover it.
+        return SettingsClone.Clone(source);
     }
 
     private void ShowTab(string tab)
