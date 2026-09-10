@@ -129,6 +129,120 @@ function Start-DebugSession {
     Invoke-RepoScript -Name $StepName -FileName "start-game-session.ps1" -Arguments @("-EnableDebugActions")
 }
 
+# The game only writes current_run.save when a run advances naturally, so killing the process or
+# calling save_and_quit on an untouched map leaves nothing for continue_run to load. Advancing one
+# map node first is what makes the active-run MAIN_MENU reachable.
+function Close-MainMenuOverlay {
+    # After a profile's first death the game pushes its timeline/unlock screen over the main menu and
+    # the prompt can still be pending after a reboot, hiding continue_run and open_character_select.
+    for ($attempt = 0; $attempt -lt 12; $attempt++) {
+        $state = Get-State
+        $actions = @($state.available_actions)
+        if ($state.screen -eq "MODAL") {
+            $modalAction = if ($actions -contains "confirm_modal") { "confirm_modal" } else { "dismiss_modal" }
+            if (-not ($actions -contains $modalAction)) {
+                return
+            }
+        }
+        elseif ($actions -contains "confirm_timeline_overlay" -or $actions -contains "close_main_menu_submenu") {
+            $modalAction = if ($actions -contains "confirm_timeline_overlay") { "confirm_timeline_overlay" } else { "close_main_menu_submenu" }
+        }
+        else {
+            return
+        }
+
+        $response = Invoke-Action -Payload @{ action = $modalAction }
+        if (-not $response.ok) {
+            return
+        }
+
+        Start-Sleep -Milliseconds 300
+    }
+}
+
+function Exit-RunToActiveRunMenu {
+    # Clear one-time FTUE modals and let the run settle first: acting while the map tutorial is up
+    # makes the module wait for a transition that never settles and the HTTP call times out.
+    Close-MainMenuOverlay
+    Start-Sleep -Seconds 3
+    Close-MainMenuOverlay
+
+    $state = Get-State
+    if (@($state.available_actions) -contains "choose_map_node") {
+        # Advancing the run is what makes the game write current_run.save; a slow or rejected click
+        # is not fatal because the save_and_quit check below is the real gate.
+        try {
+            $choose = Invoke-Action -Payload @{ action = "choose_map_node"; option_index = 0 }
+            if ($choose.ok) {
+                [void](Wait-ForState -Description "leave MAP after advancing the active run" -Condition {
+                        param($CurrentState)
+                        $CurrentState.screen -ne "MAP"
+                    })
+            }
+            else {
+                Write-Host "==> choose_map_node was rejected: $($choose | ConvertTo-Json -Depth 8 -Compress)"
+            }
+        }
+        catch {
+            Write-Host "==> choose_map_node did not settle: $($_.Exception.Message)"
+        }
+    }
+
+    for ($modalAttempt = 0; $modalAttempt -lt 8; $modalAttempt++) {
+        $state = Get-State
+        if ($state.screen -ne "MODAL") {
+            break
+        }
+
+        $modalAction = if (@($state.available_actions) -contains "confirm_modal") { "confirm_modal" } else { "dismiss_modal" }
+        if (-not (@($state.available_actions) -contains $modalAction)) {
+            throw "MODAL while leaving the active run has no confirm/dismiss action: $($state | ConvertTo-Json -Depth 8 -Compress)"
+        }
+
+        $modalResponse = Invoke-Action -Payload @{ action = $modalAction }
+        if (-not $modalResponse.ok) {
+            throw "$modalAction failed while leaving the active run: $($modalResponse | ConvertTo-Json -Depth 8 -Compress)"
+        }
+    }
+
+    $state = Get-State
+    if ($state.screen -eq "MODAL") {
+        throw "Too many stacked modals while leaving the active run: $($state | ConvertTo-Json -Depth 8 -Compress)"
+    }
+
+    Close-MainMenuOverlay
+    $state = Get-State
+    if (-not (@($state.available_actions) -contains "save_and_quit")) {
+        Write-Host "==> save_and_quit is not offered from screen '$($state.screen)'"
+    }
+    else {
+        try {
+            $saveAndQuit = Invoke-Action -Payload @{ action = "save_and_quit" }
+            if (-not $saveAndQuit.ok) {
+                Write-Host "==> save_and_quit was rejected: $($saveAndQuit | ConvertTo-Json -Depth 8 -Compress)"
+            }
+        }
+        catch {
+            Write-Host "==> save_and_quit did not answer in time: $($_.Exception.Message)"
+        }
+    }
+
+    $deadline = (Get-Date).AddSeconds(40)
+    while ((Get-Date) -lt $deadline) {
+        Close-MainMenuOverlay
+        $state = Get-State
+        if ($state.screen -eq "MAIN_MENU" -and @($state.available_actions) -contains "continue_run") {
+            return $true
+        }
+
+        Start-Sleep -Milliseconds 500
+    }
+
+    # A run that was entered through debug room jumps never reaches a save point, so there is
+    # nothing for continue_run to load and the caller has to start a fresh run instead.
+    return $false
+}
+
 function Ensure-ActiveRunMainMenu {
     Invoke-Step -Name "ensure active-run MAIN_MENU" -Action {
         $state = Wait-ForState -Description "stable startup state" -Condition {
@@ -138,8 +252,20 @@ function Ensure-ActiveRunMainMenu {
             )
         } -PollAttempts 160 -PollDelayMs 250
 
+        Close-MainMenuOverlay
+        $state = Get-State
+
         if ($state.screen -eq "MAIN_MENU" -and @($state.available_actions) -contains "continue_run") {
             return
+        }
+
+        # Already inside a run: leave it the supported way so the game writes current_run.save.
+        if ($state.screen -ne "MAIN_MENU") {
+            if (Exit-RunToActiveRunMenu) {
+                return
+            }
+
+            $state = Get-State
         }
 
         if ($state.screen -eq "MAIN_MENU" -and @($state.available_actions) -contains "open_character_select") {
@@ -223,23 +349,7 @@ function Ensure-ActiveRunMainMenu {
                 throw "Embark returned to MAIN_MENU instead of entering a run while bootstrapping active run."
             }
 
-            Stop-GameIfRunning
-            Start-DebugSession -StepName "restart debug session after creating active run"
-            [void](Wait-ForState -Description "active-run MAIN_MENU after bootstrap restart" -Condition {
-                    param($CurrentState)
-                    $CurrentState.screen -eq "MAIN_MENU" -and @($CurrentState.available_actions) -contains "continue_run"
-                } -PollAttempts 160 -PollDelayMs 250)
-
-            return
-        }
-
-        if ($state.screen -ne "MAIN_MENU") {
-            Stop-GameIfRunning
-            Start-DebugSession -StepName "restart debug session to surface active-run MAIN_MENU"
-            [void](Wait-ForState -Description "active-run MAIN_MENU after restart" -Condition {
-                    param($CurrentState)
-                    $CurrentState.screen -eq "MAIN_MENU" -and @($CurrentState.available_actions) -contains "continue_run"
-                } -PollAttempts 160 -PollDelayMs 250)
+            [void](Exit-RunToActiveRunMenu)
 
             return
         }
