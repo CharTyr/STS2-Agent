@@ -1107,51 +1107,9 @@ internal sealed class AgentRuntime
         }
     }
 
-    private static string ClassifyStopKind(string? message)
-    {
-        message ??= string.Empty;
-        if (message.Contains("预算", StringComparison.Ordinal) || message.Contains("上限", StringComparison.Ordinal))
-        {
-            return "budget";
-        }
-
-        if (message.Contains("当前局", StringComparison.Ordinal) || message.Contains("对局", StringComparison.Ordinal))
-        {
-            return "run_end";
-        }
-
-        if (message.Contains("请检查模型", StringComparison.Ordinal) ||
-            message.Contains("401", StringComparison.Ordinal) ||
-            message.Contains("402", StringComparison.Ordinal) ||
-            message.Contains("403", StringComparison.Ordinal) ||
-            message.Contains("404", StringComparison.Ordinal) ||
-            message.Contains("422", StringComparison.Ordinal) ||
-            message.Contains("认证失败", StringComparison.Ordinal) ||
-            message.Contains("配置错误", StringComparison.Ordinal))
-        {
-            return "config";
-        }
-
-        if (message.Contains("408", StringComparison.Ordinal) ||
-            message.Contains("429", StringComparison.Ordinal) ||
-            message.Contains("超时", StringComparison.Ordinal) ||
-            message.Contains("timed out", StringComparison.OrdinalIgnoreCase) ||
-            message.Contains("timeout", StringComparison.OrdinalIgnoreCase) ||
-            message.Contains("HTTP 5", StringComparison.OrdinalIgnoreCase) ||
-            message.Contains("refused", StringComparison.OrdinalIgnoreCase) ||
-            message.Contains("Name or service", StringComparison.OrdinalIgnoreCase) ||
-            message.Contains("connection", StringComparison.OrdinalIgnoreCase) ||
-            message.Contains("network", StringComparison.OrdinalIgnoreCase))
-        {
-            return "network";
-        }
-
-        return "failed";
-    }
-
     private void ClassifyStop(string message, string? role = null)
     {
-        _stopKind = ClassifyStopKind(message);
+        _stopKind = StopKindPolicy.Classify(message);
         _stopDetail = DiagnosticExport.Redact(message);
         _stopRole = role;
     }

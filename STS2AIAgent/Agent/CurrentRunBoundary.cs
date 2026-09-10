@@ -5,6 +5,10 @@ namespace STS2AIAgent.Agent;
 // Scoped to one automatic session. Lobby setup is allowed until the first run is observed.
 internal sealed class CurrentRunBoundary
 {
+    // The stop-kind classifier matches these exact messages, so the wording lives here once.
+    public const string LeftRunMessage = "当前局已离开，自动游玩已停止。开始另一局需要手动继续。";
+    public const string RunIdentityChangedMessage = "检测到对局标识变化，已停止自动游玩。请确认当前局后再继续。";
+
     private bool _enteredRun;
     private string? _seed;
 
@@ -24,14 +28,14 @@ internal sealed class CurrentRunBoundary
             screen is "MAIN_MENU" or "CHARACTER_SELECT" or "MULTIPLAYER_LOBBY" ||
             phase is "character_select" or "multiplayer_lobby" or "menu"))
         {
-            throw new AutoPlayStoppedException("当前局已离开，自动游玩已停止。开始另一局需要手动继续。");
+            throw new AutoPlayStoppedException(LeftRunMessage);
         }
 
         // Unlock screens may outlive RunState; let the native unlock queue finish.
         if (phase == "run")
         {
             if (_seed != null && seed != null && seed != "run_unknown" && seed != _seed)
-                throw new AutoPlayStoppedException("检测到对局标识变化，已停止自动游玩。请确认当前局后再继续。");
+                throw new AutoPlayStoppedException(RunIdentityChangedMessage);
             _enteredRun = true;
             if (seed != "run_unknown") _seed ??= seed;
         }

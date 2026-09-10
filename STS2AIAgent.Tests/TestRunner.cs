@@ -137,6 +137,9 @@ internal static class TestRunner
         yield return ("CurrentRun.AllowsGameOverAndUnlock", () => Task.Run(CurrentRunBoundaryTests.AllowsGameOverAndUnlock));
         yield return ("CurrentRun.StopsMainMenuEvenIfSessionPhaseStillRun", () => Task.Run(CurrentRunBoundaryTests.StopsMainMenuEvenIfSessionPhaseStillRun));
         yield return ("CurrentRun.StopsCharacterSelectByScreenName", () => Task.Run(CurrentRunBoundaryTests.StopsCharacterSelectByScreenName));
+        yield return ("StopKind.RetryIsNotRunEnd", StopKindPolicyTests.RetryStopIsNotRunEnd);
+        yield return ("StopKind.BoundaryIsRunEnd", () => Task.Run(StopKindPolicyTests.BoundaryStopsAreRunEnd));
+        yield return ("StopKind.OtherKindsSurvive", () => Task.Run(StopKindPolicyTests.BudgetConfigAndNetworkKindsSurvive));
         yield return ("Recovery.NoActionStops", AutoPlayRecoveryTests.RepeatedNoActionStops);
         yield return ("Recovery.HttpStatus", AutoPlayRecoveryTests.HttpFailuresKeepStatusWithoutStreamReplay);
         yield return ("Recovery.Waiting", AutoPlayRecoveryTests.WaitingDoesNotHideFailures);
