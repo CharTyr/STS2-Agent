@@ -1,4 +1,4 @@
-param(
+﻿param(
     [ValidateSet('Prepare', 'ErrorFixture', 'DiscoverModels', 'Execute', 'GameOverSave', 'Disconnect')]
     [string]$Mode = 'Prepare',
     [switch]$AllowLiveGame,

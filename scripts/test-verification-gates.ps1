@@ -1,4 +1,4 @@
-# Proves the verification gates in scripts/check_verification_gates.py actually fail on drift.
+﻿# Proves the verification gates in scripts/check_verification_gates.py actually fail on drift.
 # Builds a throwaway fixture, mutates one input per case, and asserts the matching gate rejects it.
 # Offline only: no game, no network.
 
@@ -106,7 +106,9 @@ try {
 
     # 2. A documented action the code does not accept.
     # Build the backticks with [char]96: PowerShell would treat a literal backtick as an escape.
-    $phantom = "- " + [char]96 + "totally_made_up_action" + [char]96 + " — not real"
+    # Keep this fixture ASCII: Windows PowerShell 5.1 reads a BOM-less script with the machine's
+    # ANSI code page, where the UTF-8 bytes of a dash decode to a smart quote that ends the string.
+    $phantom = "- " + [char]96 + "totally_made_up_action" + [char]96 + " - not real"
     $mutated = $original.Replace("<!-- END ACTION CONTRACT -->", $phantom + [char]10 + "<!-- END ACTION CONTRACT -->")
     if ($mutated -eq $original) { throw "fixture setup failed: the action contract end marker was not found in docs/api.md" }
     Write-Utf8 $apiDoc $mutated
@@ -163,6 +165,27 @@ try {
     Write-Utf8 $redirectDoc $mutated
     Assert-Case -Name "doc-marks gate rejects a broken archive redirect" -Only "doc-marks"
     Write-Utf8 $redirectDoc $originalRedirect
+
+    # 6. A PowerShell script with non-ASCII text saved without a UTF-8 BOM. Windows PowerShell 5.1
+    # would read such a file with the machine's ANSI code page, so the same bytes decode differently
+    # per locale and a stray quote character can break the whole script.
+    $snapshotMarker = [string][char]0x5386 + [char]0x53F2 + [char]0x5FEB + [char]0x7167
+    $encodingScript = Join-Path (Join-Path $fixture "scripts") "fixture-non-ascii.ps1"
+    $fixtureBody = "Write-Host '" + $snapshotMarker + "'" + [char]10
+    [System.IO.File]::WriteAllText($encodingScript, $fixtureBody, (New-Object System.Text.UTF8Encoding($true)))
+    $withBom = Invoke-Gate -Fixture $fixture -Only "script-encoding"
+    if ($withBom.ExitCode -ne 0) {
+        Write-Host "FAIL  script-encoding gate rejects a non-ASCII script that has a BOM"
+        Write-Host $withBom.Output
+        $failures++
+    }
+    else {
+        Write-Host "PASS  script-encoding gate accepts a non-ASCII script with a BOM"
+    }
+
+    Write-Utf8 $encodingScript $fixtureBody
+    Assert-Case -Name "script-encoding gate rejects non-ASCII without a BOM" -Only "script-encoding"
+    Remove-Item -LiteralPath $encodingScript -Force
 
     $restored = Invoke-Gate -Fixture $fixture -Only $null
     if ($restored.ExitCode -ne 0) {

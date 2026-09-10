@@ -16,6 +16,8 @@ api-doc    Every action the mod accepts in POST /action must appear in the
            actions the code no longer supports.
 doc-marks  Date-stamped validation records must carry a historical marker, and
            archived topic pages must keep their redirect to history/.
+script-encoding
+           PowerShell scripts containing non-ASCII text must carry a UTF-8 BOM.
 
 Exit code 0 means every selected gate passed. Exit code 1 means at least one
 gate failed and the failure detail has been printed to stderr. Standard library
@@ -63,6 +65,14 @@ REQUIRED_SNAPSHOT_MARKERS = {
 REQUIRED_REDIRECTS = {
     "docs/sts2-coverage-gaps.md": "history/sts2-coverage-gaps_2026-03-10.md",
 }
+
+# Windows PowerShell 5.1 — what `powershell` resolves to on the CI runner and on most developer
+# machines — reads a BOM-less script with the machine's ANSI code page. The same bytes therefore
+# decode differently per locale: the UTF-8 bytes of a dash are harmless on a GBK machine and become
+# a smart closing quote on CP1252, which ends the string early and makes the whole file a parse
+# error. A UTF-8 BOM removes the ambiguity, so non-ASCII PowerShell scripts have to carry one.
+SCRIPT_ENCODING_GLOBS = ("scripts/*.ps1",)
+UTF8_BOM = b"\xef\xbb\xbf"
 
 
 class GateError(Exception):
@@ -381,10 +391,32 @@ def check_doc_marks(repo_root: Path) -> list[str]:
     return notes
 
 
+def check_script_encoding(repo_root: Path) -> list[str]:
+    notes: list[str] = []
+
+    for pattern in SCRIPT_ENCODING_GLOBS:
+        for path in sorted(repo_root.glob(pattern)):
+            raw = path.read_bytes()
+            relative = path.relative_to(repo_root).as_posix()
+            if not any(byte > 0x7F for byte in raw):
+                continue
+            if not raw.startswith(UTF8_BOM):
+                raise GateError(
+                    f"{relative} contains non-ASCII text but has no UTF-8 BOM. Windows PowerShell 5.1 "
+                    "would read it with the machine's ANSI code page, so the same bytes can decode "
+                    "differently per locale and a stray quote character can break the whole script. "
+                    "Save the file as UTF-8 with BOM."
+                )
+            notes.append(f"{relative} carries non-ASCII text with a UTF-8 BOM")
+
+    return notes
+
+
 GATES = {
     "lockfile": check_lockfile,
     "api-doc": check_api_doc,
     "doc-marks": check_doc_marks,
+    "script-encoding": check_script_encoding,
 }
 
 
