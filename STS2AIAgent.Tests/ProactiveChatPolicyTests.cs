@@ -12,7 +12,7 @@ internal static class ProactiveChatPolicyTests
         int messagesSent = 0,
         TimeSpan? sinceLastMessage = null,
         ProactiveChatMoment moment = ProactiveChatMoment.CombatStart) =>
-        new(enabled, ProactiveChatTones.Default, playRunning, budgetBlock, messagesSent, sinceLastMessage, moment);
+        new(enabled, playRunning, budgetBlock, messagesSent, sinceLastMessage, moment);
 
     public static void DefaultsStayOff()
     {
@@ -160,3 +160,100 @@ internal static class ProactiveChatPolicyTests
     }
 }
 
+
+/// <summary>
+/// The runtime delegates its proactive volume bookkeeping to this type, so these cases
+/// are the evidence for the runtime-level bound: at most MaxMessagesPerSession sends,
+/// never inside MinInterval, and a refusal never silently consumes a slot.
+/// </summary>
+internal static class ProactiveChatSessionTests
+{
+    private static readonly DateTimeOffset Start = new(2026, 9, 10, 12, 0, 0, TimeSpan.Zero);
+
+    public static void AllowsSendsThatRespectTheInterval()
+    {
+        var session = new ProactiveChatSession();
+        var first = session.Decide(true, true, null, ProactiveChatMoment.CombatStart, Start);
+        Assert.True(first.Send);
+        Assert.Equal(1, session.MessagesSent);
+        Assert.Equal(Start, session.LastSentAt);
+
+        var tooSoon = session.Decide(true, true, null, ProactiveChatMoment.CombatEnd, Start + TimeSpan.FromSeconds(10));
+        Assert.False(tooSoon.Send);
+        Assert.Equal("min interval", tooSoon.Reason);
+        Assert.Equal(1, session.MessagesSent);
+
+        var later = session.Decide(
+            true, true, null, ProactiveChatMoment.CombatEnd, Start + ProactiveChatPolicy.MinInterval);
+        Assert.True(later.Send);
+        Assert.Equal(2, session.MessagesSent);
+    }
+
+    public static void StopsAtTheSessionCap()
+    {
+        var session = new ProactiveChatSession();
+        var now = Start;
+        for (var i = 0; i < ProactiveChatPolicy.MaxMessagesPerSession; i++)
+        {
+            var decision = session.Decide(true, true, null, ProactiveChatMoment.CombatStart, now);
+            Assert.True(decision.Send);
+            now += ProactiveChatPolicy.MinInterval;
+        }
+
+        Assert.Equal(ProactiveChatPolicy.MaxMessagesPerSession, session.MessagesSent);
+        var refused = session.Decide(true, true, null, ProactiveChatMoment.CombatEnd, now);
+        Assert.False(refused.Send);
+        Assert.Equal("session cap", refused.Reason);
+        Assert.Equal(ProactiveChatPolicy.MaxMessagesPerSession, session.MessagesSent);
+    }
+
+    public static void RefusalsDoNotConsumeTheCap()
+    {
+        var session = new ProactiveChatSession();
+        var moment = ProactiveChatMoment.CombatStart;
+
+        var paused = session.Decide(true, playRunning: false, null, moment, Start);
+        Assert.Equal("not playing", paused.Reason);
+        var blocked = session.Decide(true, true, "已达到会话请求次数上限", moment, Start);
+        Assert.Equal("budget", blocked.Reason);
+        var disabled = session.Decide(false, true, null, moment, Start);
+        Assert.Equal("opt-in off", disabled.Reason);
+        var noMoment = session.Decide(true, true, null, ProactiveChatMoment.None, Start);
+        Assert.Equal("no moment", noMoment.Reason);
+
+        Assert.Equal(0, session.MessagesSent);
+        Assert.Null(session.LastSentAt);
+
+        // Nothing above consumed a slot or stamped the interval, so the very next
+        // eligible moment still speaks.
+        var allowed = session.Decide(true, true, null, moment, Start);
+        Assert.True(allowed.Send);
+        Assert.Equal(1, session.MessagesSent);
+    }
+
+    public static void ResetClearsTheBounds()
+    {
+        var session = new ProactiveChatSession();
+        session.Decide(true, true, null, ProactiveChatMoment.CombatStart, Start);
+        Assert.Equal(1, session.MessagesSent);
+
+        session.Reset();
+        Assert.Equal(0, session.MessagesSent);
+        Assert.Null(session.LastSentAt);
+        Assert.True(session.Decide(true, true, null, ProactiveChatMoment.CombatStart, Start).Send);
+    }
+
+    public static void IntervalBoundaryIsInclusive()
+    {
+        var session = new ProactiveChatSession();
+        session.Decide(true, true, null, ProactiveChatMoment.CombatStart, Start);
+
+        var justUnder = session.Decide(
+            true, true, null, ProactiveChatMoment.CombatEnd,
+            Start + ProactiveChatPolicy.MinInterval - TimeSpan.FromMilliseconds(1));
+        Assert.False(justUnder.Send);
+
+        var exactly = session.Decide(true, true, null, ProactiveChatMoment.CombatEnd, Start + ProactiveChatPolicy.MinInterval);
+        Assert.True(exactly.Send);
+    }
+}

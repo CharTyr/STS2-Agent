@@ -20,7 +20,6 @@ internal enum ProactiveChatMoment { None = 0, CombatStart = 1, CombatEnd = 2 }
 
 internal readonly record struct ProactiveChatInput(
     bool Enabled,
-    string? Tone,
     bool PlayRunning,
     string? BudgetBlock,
     int MessagesSent,
@@ -38,6 +37,19 @@ internal static class ProactiveChatPolicy
     public static ProactiveChatMoment Observe(string? previousKey, string? currentKey);
     public static ProactiveChatDecision Decide(ProactiveChatInput input);
     public static string BuildPrompt(ProactiveChatMoment moment);
+}
+
+internal sealed class ProactiveChatSession
+{
+    public int MessagesSent { get; }
+    public DateTimeOffset? LastSentAt { get; }
+    public ProactiveChatDecision Decide(
+        bool enabled,
+        bool playRunning,
+        string? budgetBlock,
+        ProactiveChatMoment moment,
+        DateTimeOffset now);
+    public void Reset();
 }
 
 internal static class ProactiveChatTones
@@ -60,6 +72,8 @@ Semantics that are not negotiable:
 - `Observe` returns `None` when the key is unchanged, `CombatStart` when the new key is COMBAT, `CombatEnd` when the previous key was COMBAT, and `None` otherwise.
 - `Decide` returns `Send = false` with a stable reason string for: disabled, no moment, not playing, budget blocked, session cap reached, minimum interval not elapsed. Only when every gate passes does it return `Send = true`.
 - Check order is fixed: enabled, moment, play running, budget, session cap, minimum interval.
+- `ProactiveChatSession` owns the counter and the last-send timestamp and calls `Decide` on behalf of the runtime, so approving a send and recording it are one operation. A refused decision leaves both untouched, which makes "a refusal never consumes a slot" checkable rather than assumed.
+- The session counts approved sends, not delivered sentences: a send whose model call later fails still consumes its slot, so the cap bounds model calls.
 - `Normalize` maps null/empty/unknown to `Default@@ and otherwise to the lower-cased known id; it must never throw.
 - `BuildSystemInstruction` returns a distinct non-empty instruction per tone, and every variant repeats the shared rules: at most one short sentence, grounded in current state, no invented outcomes, no acknowledgement of being prompted.
 

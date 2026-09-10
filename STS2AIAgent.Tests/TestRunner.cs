@@ -311,5 +311,10 @@ internal static class TestRunner
         yield return ("ProactiveChat.VolumeStaysSmall", () => Task.Run(ProactiveChatPolicyTests.SessionCapStaysSmall));
         yield return ("ProactiveChat.ReadOnlyCannotAct", AgentLoopTests.ReadOnlyChat_CannotActEvenWithPlayIntent);
         yield return ("ProactiveChat.ToneReachesSystemPrompt", AgentLoopTests.ProactiveChat_InjectsToneIntoSystemPrompt);
+        yield return ("ProactiveChat.SessionInterval", () => Task.Run(ProactiveChatSessionTests.AllowsSendsThatRespectTheInterval));
+        yield return ("ProactiveChat.SessionCap", () => Task.Run(ProactiveChatSessionTests.StopsAtTheSessionCap));
+        yield return ("ProactiveChat.RefusalsKeepTheCap", () => Task.Run(ProactiveChatSessionTests.RefusalsDoNotConsumeTheCap));
+        yield return ("ProactiveChat.ResetClearsBounds", () => Task.Run(ProactiveChatSessionTests.ResetClearsTheBounds));
+        yield return ("ProactiveChat.IntervalBoundaryInclusive", () => Task.Run(ProactiveChatSessionTests.IntervalBoundaryIsInclusive));
     }
 }

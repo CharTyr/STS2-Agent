@@ -54,8 +54,7 @@ internal sealed class AgentRuntime
     private readonly List<string> _diagnosticEvents = new();
     private SessionBudgetGuard _budgetGuard;
     private string? _proactiveSituationKey;
-    private int _proactiveMessagesSent;
-    private DateTimeOffset? _proactiveLastSentAt;
+    private readonly ProactiveChatSession _proactiveChat = new();
 
     public static AgentRuntime Instance => LazyInstance.Value;
 
@@ -210,8 +209,7 @@ internal sealed class AgentRuntime
             _sessionRequests = 0;
             _sessionUsageKnown = false;
             _budgetGuard = _settings.CreateBudgetGuard();
-            _proactiveMessagesSent = 0;
-            _proactiveLastSentAt = null;
+            _proactiveChat.Reset();
         }
 
         message = "已清零本会话统计。预算上限未改；继续游玩将重新计数。";
@@ -916,33 +914,21 @@ internal sealed class AgentRuntime
             bool enabled;
             string tone;
             string? budgetBlock;
-            int sent;
-            DateTimeOffset? lastSent;
             lock (_gate)
             {
                 enabled = _settings.ProactiveChatEnabled;
                 tone = _settings.ProactiveChatTone;
                 budgetBlock = _budgetGuard.CheckBudget();
-                sent = _proactiveMessagesSent;
-                lastSent = _proactiveLastSentAt;
             }
 
-            var since = lastSent is { } last ? DateTimeOffset.UtcNow - last : (TimeSpan?)null;
-            var decision = ProactiveChatPolicy.Decide(new ProactiveChatInput(
-                enabled,
-                tone,
-                PlayRunning,
-                budgetBlock,
-                sent,
-                since,
-                moment));
+            // The session owns the counter and the interval stamp, so the volume bounds
+            // cannot drift from the policy.
+            var decision = _proactiveChat.Decide(enabled, PlayRunning, budgetBlock, moment, DateTimeOffset.UtcNow);
             if (!decision.Send)
             {
                 return;
             }
 
-            _proactiveMessagesSent = sent + 1;
-            _proactiveLastSentAt = DateTimeOffset.UtcNow;
             var result = await _loop.ChatAsync(
                 ProactiveChatPolicy.BuildPrompt(moment),
                 History,

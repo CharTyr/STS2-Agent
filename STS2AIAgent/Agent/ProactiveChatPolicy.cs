@@ -13,7 +13,6 @@ internal enum ProactiveChatMoment
 
 internal readonly record struct ProactiveChatInput(
     bool Enabled,
-    string? Tone,
     bool PlayRunning,
     string? BudgetBlock,
     int MessagesSent,
@@ -92,6 +91,55 @@ internal static class ProactiveChatPolicy
             "The fight just ended. Say one short line to your teammate about what it cost and what is next.",
         _ => "Say one short line to your teammate about the current situation."
     };
+}
+
+/// <summary>
+/// Per-session bookkeeping for proactive speech. It owns the message counter and the
+/// last-send timestamp, so the runtime cannot drift from the policy's volume bounds:
+/// deciding a send and recording it are the same call.
+/// </summary>
+/// <remarks>
+/// A slot is consumed when a send is approved, not when it succeeds, so the cap bounds
+/// model calls rather than delivered sentences.
+/// </remarks>
+internal sealed class ProactiveChatSession
+{
+    private int _messagesSent;
+    private DateTimeOffset? _lastSentAt;
+
+    public int MessagesSent => _messagesSent;
+
+    public DateTimeOffset? LastSentAt => _lastSentAt;
+
+    public ProactiveChatDecision Decide(
+        bool enabled,
+        bool playRunning,
+        string? budgetBlock,
+        ProactiveChatMoment moment,
+        DateTimeOffset now)
+    {
+        var since = _lastSentAt is { } last ? now - last : (TimeSpan?)null;
+        var decision = ProactiveChatPolicy.Decide(new ProactiveChatInput(
+            enabled,
+            playRunning,
+            budgetBlock,
+            _messagesSent,
+            since,
+            moment));
+        if (decision.Send)
+        {
+            _messagesSent++;
+            _lastSentAt = now;
+        }
+
+        return decision;
+    }
+
+    public void Reset()
+    {
+        _messagesSent = 0;
+        _lastSentAt = null;
+    }
 }
 
 internal static class ProactiveChatTones
