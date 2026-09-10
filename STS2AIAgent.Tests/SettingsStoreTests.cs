@@ -1,3 +1,4 @@
+using STS2AIAgent.Agent;
 using STS2AIAgent.Config;
 
 namespace STS2AIAgent.Tests;
@@ -20,6 +21,8 @@ internal static class SettingsStoreTests
         settings.McpServerPath = @"C:\mods\mcp_server";
         settings.McpEnabled = true;
         settings.HasSeenFirstRunGuide = true;
+        settings.ProactiveChatEnabled = true;
+        settings.ProactiveChatTone = ProactiveChatTones.Terse;
         ModelRoleProbe.Upsert(settings, ModelRoleProbe.FromSuccess(ModelRoleNames.Play, settings.TryResolvePlayModel()!));
         store.Save(settings);
 
@@ -37,6 +40,8 @@ internal static class SettingsStoreTests
         Assert.True(loaded.McpEnabled);
         Assert.True(loaded.HasSeenFirstRunGuide);
         Assert.Equal("verified", ModelRoleProbe.Current(loaded, ModelRoleNames.Play).Status);
+        Assert.True(loaded.ProactiveChatEnabled);
+        Assert.Equal(ProactiveChatTones.Terse, loaded.ProactiveChatTone);
     }
 
 
@@ -84,6 +89,47 @@ internal static class SettingsStoreTests
         """);
         var loaded = new SettingsStore(path).Load();
         Assert.Equal("high", loaded.Models[0].ThinkingIntensity);
+    }
+
+
+    public static void ProactiveChat_LegacyFileLoadsDisabledWithDefaultTone()
+    {
+        // A settings file written before the feature existed has no proactive keys. Loading it
+        // must not enable proactive speech, and an unknown stored tone must fall back.
+        var path = NewSettingsPath();
+        Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+        File.WriteAllText(path, """
+        {
+          "endpoints": [{ "id": "e1", "name": "Local", "baseUrl": "http://localhost:1234/v1", "apiKey": "", "enabled": true }],
+          "models": [{ "id": "m1", "endpointId": "e1", "model": "gpt-4o", "displayName": "gpt-4o", "supportsVision": false, "supportsTools": true, "thinkingMode": "auto", "thinkingIntensity": "medium" }],
+          "conversationModelId": "m1",
+          "attachStateInChat": true,
+          "maxSessionRequests": 12
+        }
+        """);
+
+        var loaded = new SettingsStore(path).Load();
+
+        Assert.False(loaded.ProactiveChatEnabled);
+        Assert.Equal(ProactiveChatTones.Default, loaded.ProactiveChatTone);
+        // The pre-existing values are untouched by the new fields.
+        Assert.Equal(12, loaded.MaxSessionRequests);
+        Assert.Equal("m1", loaded.ConversationModelId);
+    }
+
+    public static void ProactiveChat_UnknownStoredToneIsRepaired()
+    {
+        var path = NewSettingsPath();
+        Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+        var settings = AgentSettings.CreateDefault();
+        settings.ProactiveChatEnabled = true;
+        settings.ProactiveChatTone = "dramatic";
+        new SettingsStore(path).Save(settings);
+
+        var loaded = new SettingsStore(path).Load();
+
+        Assert.Equal(ProactiveChatTones.Default, loaded.ProactiveChatTone);
+        Assert.True(loaded.ProactiveChatEnabled);
     }
 
     public static void Load_CorruptJson_BacksUpOriginalAndDoesNotLoseSecret()

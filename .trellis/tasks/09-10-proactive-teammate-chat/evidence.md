@@ -34,6 +34,9 @@ Runner: main session. Date: 2026-09-10. All verification offline; the game was n
 | --- | --- |
 | `dotnet run --project STS2AIAgent.Tests/STS2AIAgent.Tests.csproj -c Release` | exit 0; 22 new cases PASS. Policy: DefaultsOff, UnknownToneFallsBack, ShapeRepair, TonesDistinct, SituationKey, ObserveBoundaries, RefusesDisabled, RefusesWithoutMoment, RefusesWhilePaused, RefusesOnBudget, RefusesAtSessionCap, RefusesInsideInterval, SendsWhenAllGatesPass, PromptPerMoment, VolumeStaysSmall. Session: SessionInterval, SessionCap, RefusalsKeepTheCap, ResetClearsBounds, IntervalBoundaryInclusive. Chat contract: ReadOnlyCannotAct, ToneReachesSystemPrompt. Previously passing cases still pass |
 | `dotnet build STS2AIAgent/STS2AIAgent.csproj -c Release` | exit 0, 0 warnings, 0 errors (this is the only check that compiles the UI wiring) |
+| `SettingsStoreTests.ProactiveChat_LegacyFileLoadsDisabledWithDefaultTone` | PASS — a settings file with no proactive keys loads with the opt-in off and the default tone, and the pre-existing values (maxSessionRequests, conversationModelId) are untouched |
+| `SettingsStoreTests.ProactiveChat_UnknownStoredToneIsRepaired` | PASS — a stored unknown tone is repaired to the default on load while the opt-in stays on |
+| `SettingsStoreTests.RoundTrip_PreservesEndpointsModelsAndRoles` | PASS — extended to carry `proactiveChatEnabled = true` and `proactiveChatTone = terse` through save/load |
 | `powershell -File scripts/preflight-release.ps1` | exit 0; includes the C# harness and the MCP suite |
 
 ## Boundary

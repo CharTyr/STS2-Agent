@@ -175,6 +175,8 @@ internal static class TestRunner
         yield return ("CoopStartup.Identity", () => Task.Run(CompanionStartupTests.HealthRequiresExactCompanionIdentity));
         yield return ("CoopStartup.Preconditions", () => Task.Run(CompanionStartupTests.LaunchPreconditionsProtectHumanRun));
         yield return ("SettingsStore.RoundTrip", () => Task.Run(SettingsStoreTests.RoundTrip_PreservesEndpointsModelsAndRoles));
+        yield return ("ProactiveChat.LegacySettingsStayOff", () => Task.Run(SettingsStoreTests.ProactiveChat_LegacyFileLoadsDisabledWithDefaultTone));
+        yield return ("ProactiveChat.StoredToneRepaired", () => Task.Run(SettingsStoreTests.ProactiveChat_UnknownStoredToneIsRepaired));
         yield return ("SettingsStore.FingerprintCase", () => Task.Run(SettingsStoreTests.Load_VerifiedPlayFingerprint_IsCaseInsensitive));
         yield return ("SettingsStore.MissingFile", () => Task.Run(SettingsStoreTests.Load_MissingFile_CreatesDefaults));
         yield return ("SettingsStore.MigrateThinking", () => Task.Run(SettingsStoreTests.Load_MigratesGlobalThinkingIntensityOntoModels));
