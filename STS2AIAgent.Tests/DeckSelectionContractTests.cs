@@ -3,7 +3,8 @@ namespace STS2AIAgent.Tests;
 /// <summary>
 /// Source-level contracts for Godot card-grid selections. These screens cannot be
 /// instantiated in the lightweight test process, so the tests verify that the
-/// native private selection state is exposed and consumed by the action settle path.
+/// native private selection state is exposed and consumed by the action settle and
+/// explicit confirmation paths.
 /// </summary>
 internal static class DeckSelectionContractTests
 {
@@ -77,6 +78,23 @@ internal static class DeckSelectionContractTests
         var stateSource = WithoutWhitespace(ReadSource("STS2AIAgent/Game/GameStateService.cs"));
         Assert.Contains("IsCardSelected(currentScreen,holder.CardModel!)", stateSource, StringComparison.Ordinal);
         Assert.Contains("selected=selected", stateSource, StringComparison.Ordinal);
+    }
+
+    public static void CardGridConfirmationUsesSharedExecutor()
+    {
+        var rawActionSource = ReadSource(
+            "STS2AIAgent/Game/GameActionService.cs");
+        var confirmBody = WithoutWhitespace(
+            MethodBody(rawActionSource, "ExecuteConfirmSelectionAsync"));
+
+        Assert.Contains(
+            "currentScreenisNCardGridSelectionScreencardGridScreen",
+            confirmBody,
+            StringComparison.Ordinal);
+        Assert.Contains(
+            "ConfirmDeckSelectionAsync(cardGridScreen,TimeSpan.FromSeconds(10))",
+            confirmBody,
+            StringComparison.Ordinal);
     }
 
     private static string ReadSource(string relativePath)

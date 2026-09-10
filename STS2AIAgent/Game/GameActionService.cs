@@ -1986,15 +1986,15 @@ internal static class GameActionService
             });
         }
 
-        if (currentScreen is NDeckCardSelectScreen deckScreen)
+        if (currentScreen is NCardGridSelectionScreen cardGridScreen)
         {
-            var stableDeck = await ConfirmDeckSelectionAsync(deckScreen, TimeSpan.FromSeconds(10));
+            var stableGrid = await ConfirmDeckSelectionAsync(cardGridScreen, TimeSpan.FromSeconds(10));
             return new ActionResponsePayload
             {
                 action = "confirm_selection",
-                status = stableDeck ? "completed" : "pending",
-                stable = stableDeck,
-                message = stableDeck ? "Action completed." : "Action queued but state is still transitioning.",
+                status = stableGrid ? "completed" : "pending",
+                stable = stableGrid,
+                message = stableGrid ? "Action completed." : "Action queued but state is still transitioning.",
                 state = GameStateService.BuildStatePayload()
             };
         }
