@@ -207,3 +207,42 @@ AgentRuntime 的 _proactiveSituationKey 只在观察时写入，没有随自动�
 4. 自测新增两个用例：带 BOM 的非 ASCII 脚本必须通过，去掉 BOM 后必须被拒。
 
 复验：闸门 exit 0（列出两个带 BOM 的脚本）、自测 exit 0（9 个漂移用例 + baseline + restored）、preflight exit 0、C# 213 PASS / 0 FAIL、MCP 49 tests OK；解析错误数为 0；CP1252 下的引号类字符由 1 降为 0。
+
+## PR #81 评审、合并与实机复验（2026-09-11）
+
+外部贡献 PR #81（XenoAmess，分支 fix/simple-card-multiselect-acknowledgements，2 个提交、4 文件 +75/−46）把牌库选择元数据从具体类型 `NDeckCardSelectScreen` 泛化到基类 `NCardGridSelectionScreen`，并把 `NSimpleCardSelectScreen` 纳入白名单；同时改名 `TryGetCardGridSelectionMetadata` / `CardGridSelectionMetadata` / `SettleCardGridSelectionClickAsync`。
+
+前提核验（反编译源码，extraction/decompiled/MegaCrit.Sts2.Core.Nodes.Screens.CardSelection/）：
+
+| 前提 | 结论 |
+| --- | --- |
+| `NDeckCardSelectScreen` / `NSimpleCardSelectScreen` 是 `NCardGridSelectionScreen` 的 sealed 子类 | 成立 |
+| `_prefs` / `_selectedCards` 由各子类自行声明（不在基类） | 成立，按具体实例反射是唯一正确写法 |
+| `SettleCardGridSelectionClickAsync` 函数体未被 PR 修改 | 成立，仅签名泛化，「点击后返回 completed」的既有语义保留 |
+| `NChooseACardSelectionScreen` 不继承基类 | 成立，分支不互相吞掉 |
+| Sourcery 的 blocking 发现（`confirm_selection` 对简单屏 409） | 已被第二个提交 27fa223 修掉 |
+
+本地真合并验证（worktree detached from 2bb1f34，git merge 无冲突）：C# 214 PASS / 0 FAIL（213 + PR 新增 CardGridSelection.ConfirmDispatch）、MCP 49 tests OK、四道闸门含新 script-encoding exit 0；上一步的 select_deck_card 战斗手牌修复与 PR 改名同时存活，无旧名残留。
+
+结论与动作：合并（merge commit ee308ff，与仓库既有 `Merge pull request #NN` 习惯一致；main 保护要求 0 个批准）。评审意见已发到 PR（#issuecomment-5622477667，含 214 基线与两条非阻塞建议），泛化白名单偏窄与改名不彻底两点另开 issue #82 跟踪。
+
+### 合并后的实机复验
+
+| 项 | 值 |
+| --- | --- |
+| 合并后 DLL SHA256 | CC6D616978F726E1BAAFD31732A54AF727A6EB80E23CF4D7B3E00576B9F82C7F |
+| 隔离副本 | build/validation-2026-09-08/game/SlayTheSpire2.exe，`--windowed --force-steam off --clientId 2026091012` |
+| 造局手段 | 调试控制台（`room EVENT` / `event <id>` / `relic add <id>`），`STS2_ENABLE_DEBUG_ACTIONS=1` |
+
+踩坑：新建 clientId 档案的 `settings.save` 里 `mod_settings` 为 null，游戏会弹「mods warning」并**跳过加载 mod**（日志 `Skipping loading mod STS2AIAgent, user has not yet seen the mods warning`，门控在 `NMainMenu.cs:306`）。改用已授权过的档案 2026091012 即可，无需改任何存档。
+
+结果（均为实测）：
+
+| 场景 | 结果 |
+| --- | --- |
+| `event ROOM_FULL_OF_CHEESE` → 大快朵颐（`NSimpleCardSelectScreen`，min=max=2） | 输入前 `min_select=2 max_select=2 selected_count=0`（修复前为 1/1/0）；点第 1 张 151 ms、`selected_count=1`、`cards[0].selected=true`；点第 2 张 347 ms 后屏幕关闭，牌组 10 → 12，原生日志 `Player 1 chose cards [ANGER,THUNDERCLAP]` |
+| `relic add SEA_GLASS`（min=0/max=15，需手动确认） | `confirm_selection` 正确出现在 available_actions；点 1 张 143 ms；`confirm_selection` 235 ms 完成，牌组 12 → 13，原生 `Player 1 chose cards [THUNDERCLAP]` |
+| `relic add GNARLED_HAMMER`（附魔屏，属 issue #82 范围） | 原生提示「选择 3 张牌来附魔」，API 仍报 `1/1/0` 且不暴露 `confirm_selection`；首次点击耗时 10036 ms（整整一个 10 s 超时）并返回 pending |
+| `event SAPPHIRE_SEED` → 吃下（升级屏，单选） | 报 `1/1/0`；因单选原生值本就是 1/1，此处误报不可见，问题只在 min≠max 或多选时显现 |
+
+离线复验：C# 214 PASS / 0 FAIL、MCP 49 tests OK（合并后的 main）。
