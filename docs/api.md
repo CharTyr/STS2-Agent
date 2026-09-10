@@ -1127,12 +1127,14 @@
 
 ### `select_deck_card`
 
-在牌库选牌界面选择一张牌。
+在选牌界面选择一张牌。牌库单选会在点击时自动确认；战斗手牌多选只累积当前这一步，需要再用 `confirm_selection` 收尾。
 
 - **前提**：`screen = "CARD_SELECTION"`，`selection.cards[]` 非空
 - **参数**：`option_index`（必填）：`selection.cards[]` 的索引
-- **行为**：选择牌并自动确认。当前已验证**删牌**、**升级牌**场景；变化牌、附魔牌等单选牌库选择也复用此接口
-- **稳定条件**：离开选牌界面
+- **行为**：按 `selection.kind` 分两种
+  - 牌库单选（`deck_card_select`、`deck_upgrade_select`、`deck_transform_select`、`deck_enchant_select`、`choose_card_select`）：选择并自动确认，返回 `completed`。当前已验证**删牌**、**升级牌**场景；变化牌、附魔牌等单选牌库选择也复用此接口
+  - 战斗手牌多选（`combat_hand_select`、`combat_hand_upgrade_select`）：只计入这一步并返回 `pending`，界面保持打开。读 `selection.selected_count` / `max_select` / `requires_confirmation` 判断是否还需要继续选，选完用 `confirm_selection` 结束
+- **稳定条件**：牌库单选离开选牌界面；战斗手牌多选在 `confirm_selection` 之后离开选牌界面
 - **超时**：10 秒
 
 ```json

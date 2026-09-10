@@ -2175,7 +2175,11 @@ internal static class GameActionService
                     continue;
                 }
 
-                return true;
+                // The click landed, but the overlay is still open: either more picks are allowed or
+                // the player has to confirm. select_deck_card is one step of a combat-hand
+                // selection, so report it as pending and let confirm_selection end it, the same way
+                // use_potion reports the selection it opens.
+                return false;
             }
         }
 
