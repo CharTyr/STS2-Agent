@@ -190,3 +190,20 @@ AgentRuntime 的 _proactiveSituationKey 只在观察时写入，没有随自动�
 | new-run-lifecycle | exit 0；timeline={opened: true, screen: TIMELINE, epochs_selectable: false, overlay_confirmed: true} |
 | 其余 8 个套件（mod-load、state-summary、state-invariants、bootstrap-active-run、combat-hand-confirm-flow、deferred-potion-flow、target-index-contract、enemy-intents-payload） | 全部 exit 0 |
 | 离线 | 闸门 exit 0、自测 exit 0、C# 213 PASS / 0 FAIL |
+
+## 首次推送后的 CI 失败与修复（2026-09-11）
+
+推送 23 个提交到 origin/main 后，CI 的「Verification gate self-test」步骤失败，本地同一命令一直 exit 0。
+
+根因：`scripts/test-verification-gates.ps1` 含非 ASCII 文本且没有 UTF-8 BOM 头部。Windows PowerShell 5.1 会用**系统 ANSI 代码页**读取无 BOM 文件，而 CI 的 Windows runner 是 CP1252、开发机是 GBK，同样的字节因此解出不同文本。em-dash（U+2014，UTF-8 字节 E2 80 94）在 CP1252 下解成 `â€”`，其中 0x94 正是右双引号 U+201D，PowerShell 把它当字符串结束符，于是字符串提前闭合、整份脚本解析失败（CI 报 `Unexpected token 'not' in expression or statement`）。本地因 GBK 把同样的字节解成无害汉字而侥幸通过，属区域设置相关的可移植性缺陷，由本次工作引入（脚本与 CI 步骤同批加入，此前从未在 CI 上执行过）。
+
+复现方式（无需 CI）：把该文件按 CP1252 解码后统计引号类字符，可检出恰好 1 个 U+201D。
+
+修复：
+
+1. 该自测里的 phantom fixture 字符串改用 ASCII 连字符，去掉最高风险字符（CP1252 下解成字符串结束符的那一类）。
+2. 给 `scripts/test-verification-gates.ps1` 与同样含非 ASCII 的 `scripts/sts2-coop-full-run-acceptance.ps1` 补上 UTF-8 BOM，使 PowerShell 在任何区域设置下都按 UTF-8 读取。
+3. 新增 `script-encoding` 闸门：`scripts/*.ps1` 含非 ASCII 时必须带 UTF-8 BOM，从根本上阻止同类问题复发。
+4. 自测新增两个用例：带 BOM 的非 ASCII 脚本必须通过，去掉 BOM 后必须被拒。
+
+复验：闸门 exit 0（列出两个带 BOM 的脚本）、自测 exit 0（9 个漂移用例 + baseline + restored）、preflight exit 0、C# 213 PASS / 0 FAIL、MCP 49 tests OK；解析错误数为 0；CP1252 下的引号类字符由 1 降为 0。

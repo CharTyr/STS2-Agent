@@ -10,7 +10,7 @@
 
 - 2026-09-10 主线未发布变更（任务树 `.trellis/tasks/09-10-repo-hardening-5goals`，证据见各子任务 `evidence.md`）：
   - 依赖安全收口：#50 的 `fastmcp` 由 3.1.0 升到 3.4.7（越过后者的修复版本 3.2.0，CVE-2026-32871），#51 的 `fast-uri` 由 3.1.0 升到 3.1.7（CVE-2026-13676 的修复线是 3.1.6）；`npm audit` 由 9 项漏洞（5 high）降为 0，`yauzl` 覆写仍为 3.2.1。
-  - 新增离线验证闸门 `scripts/check_verification_gates.py`（依赖安全下限、`docs/api.md` 动作契约、文档快照标记）与自测 `scripts/test-verification-gates.ps1`，已接入 `preflight-release.ps1` 与 CI。`docs/api.md` 现在登记全部 55 个动作。
+  - 新增离线验证闸门 `scripts/check_verification_gates.py`（依赖安全下限、`docs/api.md` 动作契约、文档快照标记、PowerShell 脚本编码）与自测 `scripts/test-verification-gates.ps1`，已接入 `preflight-release.ps1` 与 CI。`docs/api.md` 现在登记全部 55 个动作。
   - 归档 `docs/sts2-coverage-gaps.md` 至 `history/sts2-coverage-gaps_2026-03-10.md` 并保留跳转页；5 份带日期的验证记录补上历史快照标记。
   - 主动发言与可选语气已实现（默认关闭）。
 
@@ -56,7 +56,7 @@
 | GAME_OVER 等待原生结算 | 4b4da6e（#79） | 已发布 v0.10.5 | 2026-09-08 20:28 隔离双开 continue 4.22s/2.42s，save_verified，progress mtime 更新 | total_losses 未观察到 +1 |
 | 主动发言与交流风格 | 2026-09-10 主线未发布 | 未发布（未进 v0.10.5 标签） | C# 核心离线测试 17 项（策略/语气/只读）；mod 编译 0 警告 0 错误 | 默认关闭的可选功能；仅战斗开始/结束触发，最多 6 句、间隔 ≥75 秒；实机发言质量未验收 |
 | 依赖安全（#50 / #51） | 2026-09-10 主线未发布 | 未发布 | fastmcp 3.4.7、fast-uri 3.1.7；npm audit total 0；MCP 49 项单测通过 | 只覆盖这两条报告与 npm 树，不是完整的第三方审计 |
-| 文档契约与验证闸门 | 2026-09-10 主线未发布 | 未发布 | `check_verification_gates.py` 三闸门全绿；自测 5 个漂移场景全部被拒；preflight 端到端 exit 0 | 静态检查，不能替代实机行为验证 |
+| 文档契约与验证闸门 | 2026-09-10 主线未发布 | 未发布 | `check_verification_gates.py` 四闸门全绿；自测 9 个漂移场景全部被拒；preflight 端到端 exit 0 | 静态检查，不能替代实机行为验证 |
 
 ## 4. 待办任务
 
