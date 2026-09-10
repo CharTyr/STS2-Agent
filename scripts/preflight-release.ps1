@@ -40,6 +40,7 @@ $stateInvariantScript = Join-Path $ProjectRoot "scripts/test-state-invariants.ps
 $mcpToolProfileScript = Join-Path $ProjectRoot "scripts/test-mcp-tool-profile.ps1"
 $multiplayerFlowScript = Join-Path $ProjectRoot "scripts/test-multiplayer-lobby-flow.ps1"
 $packageChecker = Join-Path $ProjectRoot "scripts/check_release_package.py"
+$verificationGates = Join-Path $ProjectRoot "scripts/check_verification_gates.py"
 $changelogPath = Join-Path $ProjectRoot "CHANGELOG.md"
 $releaseDoc = Join-Path $ProjectRoot "docs/release-readiness.md"
 $modManifestPath = Join-Path $ProjectRoot "STS2AIAgent/mod_manifest.json"
@@ -124,6 +125,10 @@ Invoke-Step -Name "Validate release version metadata" -Action {
 
 Invoke-Step -Name "Check release packaging source contract" -Action {
     Invoke-CheckedNative -FilePath "python" -Arguments @($packageChecker, "--source-root", $ProjectRoot)
+}
+
+Invoke-Step -Name "Run dependency, API-doc, and doc-snapshot gates" -Action {
+    Invoke-CheckedNative -FilePath "python" -Arguments @($verificationGates, "--repo-root", $ProjectRoot)
 }
 
 Invoke-Step -Name "Check release documents" -Action {

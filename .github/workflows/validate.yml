@@ -30,5 +30,9 @@ jobs:
       - name: Release metadata
         working-directory: mcp_server
         run: uv run --locked python ../scripts/check_release_metadata.py
+      - name: Verification gates (deps, API doc, doc snapshots)
+        run: python scripts/check_verification_gates.py
+      - name: Verification gate self-test
+        run: powershell -NoProfile -ExecutionPolicy Bypass -File scripts/test-verification-gates.ps1
       - name: Windows PowerShell failure propagation
         run: powershell -NoProfile -ExecutionPolicy Bypass -File scripts/test-native-exit-propagation.ps1
