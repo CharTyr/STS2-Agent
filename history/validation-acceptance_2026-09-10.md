@@ -164,3 +164,29 @@ AgentRuntime 的 _proactiveSituationKey 只在观察时写入，没有随自动�
 | 自动游玩冒烟（桩模型，零成本） | 桩先打出 PURITY（play_card card_index 5），随后连续三次调用 select_deck_card；日志中 "Timed out waiting for a stable state" 出现次数为 0，会话在每次 pending 之后继续推进 |
 
 冒烟测试用的桩（build/validation-2026-09-10/stub-model-server.py）新增了按紧凑状态选牌的能力：紧凑手牌数组只有 i/line/playable/targets 而没有 card_id，且需要目标的牌必须带 target_index，否则会被 agent 自己的索引校验拒绝。这两点对后续写自动游玩验证脚本同样适用。
+
+## open_timeline 断言定案（2026-09-11）
+
+「实机发现 2」里那条「有存档时主菜单不暴露 open_timeline」已按「套件口径不对」定案并修复。
+
+根因（游戏源码，非 mod 缺陷）：extraction/decompiled 下的 NMainMenu.UpdateTimelineButtonBehavior 要求 !SaveManager.Instance.HasRunSave 才启用时间线按钮；有存档时落入 else 分支被 Disable，第二个分支还会在「已发现纪元 > 0」时显式 Disable。mod 的 CanOpenTimeline 要求按钮 IsEnabled，因此有存档时不暴露 open_timeline 是正确行为。同文件还表明该状态受档案进度影响（未发现任何纪元时会 Enable），所以断言「必须有」和「必须没有」都不成立。
+
+另有一层档案依赖：choose_timeline_epoch 只在「已揭示但未解锁的纪元」存在时才暴露。实测档案 2026091007 打开时间线后只给 close_main_menu_submenu 与 confirm_timeline_overlay。
+
+改动：
+
+| 套件 | 改动 |
+| --- | --- |
+| assert-active-run-main-menu | 去掉 open_timeline 断言，改为在结果里如实报告 open_timeline_available |
+| main-menu-active-run | 去掉「有存档时应有 open_timeline」的前置断言与后续时间线阶段；改为断言撤回放弃对话框后仍保留 continue_run，并继续验证 continue_run 能回到对局 |
+| new-run-lifecycle | 在结尾的无存档主菜单上补做时间线覆盖：open_timeline → （档案支持时）choose_timeline_epoch → confirm_timeline_overlay → close_main_menu_submenu；档案不支持纪元选择时如实记录而不是失败。结尾等待改用 settle_main_menu，以吸收游戏在死亡后自动弹出的时间线浮层 |
+
+实机验证（隔离副本，同一实例连续执行）：
+
+| 套件 | 结果 |
+| --- | --- |
+| assert-active-run-main-menu | exit 0；open_timeline_available=false（有存档时游戏正确地未暴露） |
+| main-menu-active-run | exit 0；menu_after_dismiss_actions 保留 continue_run，continue_run_destination=COMBAT |
+| new-run-lifecycle | exit 0；timeline={opened: true, screen: TIMELINE, epochs_selectable: false, overlay_confirmed: true} |
+| 其余 8 个套件（mod-load、state-summary、state-invariants、bootstrap-active-run、combat-hand-confirm-flow、deferred-potion-flow、target-index-contract、enemy-intents-payload） | 全部 exit 0 |
+| 离线 | 闸门 exit 0、自测 exit 0、C# 213 PASS / 0 FAIL |
