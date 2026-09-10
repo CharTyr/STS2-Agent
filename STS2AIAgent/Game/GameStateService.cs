@@ -931,9 +931,9 @@ internal static class GameStateService
             return true;
         }
 
-        return TryGetDeckCardSelectionMetadata(currentScreen, out var deckMetadata) &&
-            deckMetadata.CanConfirm &&
-            (deckMetadata.RequiresConfirmation || deckMetadata.MinSelect < deckMetadata.MaxSelect);
+        return TryGetCardGridSelectionMetadata(currentScreen, out var gridMetadata) &&
+            gridMetadata.CanConfirm &&
+            (gridMetadata.RequiresConfirmation || gridMetadata.MinSelect < gridMetadata.MaxSelect);
     }
 
     public static bool CanProceed(IScreenContext? currentScreen)
@@ -1639,14 +1639,14 @@ internal static class GameStateService
         return Array.Empty<NCardHolder>();
     }
 
-    public static bool TryGetDeckCardSelectionMetadata(
+    public static bool TryGetCardGridSelectionMetadata(
         IScreenContext? currentScreen,
-        out DeckCardSelectionMetadata metadata)
+        out CardGridSelectionMetadata metadata)
     {
         metadata = default;
-        if (currentScreen is not NDeckCardSelectScreen deckCardScreen ||
-            ReflectionMemberAccessor.TryGetValue(deckCardScreen, "_prefs") is not CardSelectorPrefs prefs ||
-            ReflectionMemberAccessor.TryGetValue(deckCardScreen, "_selectedCards") is not IEnumerable selectedCards)
+        if (currentScreen is not (NDeckCardSelectScreen or NSimpleCardSelectScreen) ||
+            ReflectionMemberAccessor.TryGetValue(currentScreen, "_prefs") is not CardSelectorPrefs prefs ||
+            ReflectionMemberAccessor.TryGetValue(currentScreen, "_selectedCards") is not IEnumerable selectedCards)
         {
             return false;
         }
@@ -1657,7 +1657,7 @@ internal static class GameStateService
             selectedCount++;
         }
 
-        metadata = new DeckCardSelectionMetadata(
+        metadata = new CardGridSelectionMetadata(
             prefs.MinSelect,
             prefs.MaxSelect,
             selectedCount,
@@ -3492,10 +3492,10 @@ internal static class GameStateService
 
     private static bool IsCardSelected(IScreenContext? currentScreen, CardModel card)
     {
-        if (currentScreen is NDeckCardSelectScreen deckCardScreen &&
-            ReflectionMemberAccessor.TryGetValue(deckCardScreen, "_selectedCards") is IEnumerable selectedDeckCards)
+        if (currentScreen is NDeckCardSelectScreen or NSimpleCardSelectScreen &&
+            ReflectionMemberAccessor.TryGetValue(currentScreen, "_selectedCards") is IEnumerable selectedGridCards)
         {
-            foreach (var item in selectedDeckCards)
+            foreach (var item in selectedGridCards)
             {
                 if (ReferenceEquals(item, card))
                 {
@@ -4163,8 +4163,8 @@ internal static class GameStateService
 
         var hasCombatHandSelection = TryGetCombatHandSelectionMetadata(
             currentScreen, out _, out var combatHandSelection);
-        var hasDeckCardSelection = TryGetDeckCardSelectionMetadata(
-            currentScreen, out var deckCardSelection);
+        var hasCardGridSelection = TryGetCardGridSelectionMetadata(
+            currentScreen, out var cardGridSelection);
 
         return new SelectionPayload
         {
@@ -4182,19 +4182,19 @@ internal static class GameStateService
             prompt = GetDeckSelectionPrompt(currentScreen) ?? string.Empty,
             min_select = hasCombatHandSelection
                 ? combatHandSelection.MinSelect
-                : hasDeckCardSelection ? deckCardSelection.MinSelect : 1,
+                : hasCardGridSelection ? cardGridSelection.MinSelect : 1,
             max_select = hasCombatHandSelection
                 ? combatHandSelection.MaxSelect
-                : hasDeckCardSelection ? deckCardSelection.MaxSelect : 1,
+                : hasCardGridSelection ? cardGridSelection.MaxSelect : 1,
             selected_count = hasCombatHandSelection
                 ? combatHandSelection.SelectedCount
-                : hasDeckCardSelection ? deckCardSelection.SelectedCount : 0,
+                : hasCardGridSelection ? cardGridSelection.SelectedCount : 0,
             requires_confirmation = hasCombatHandSelection
                 ? combatHandSelection.RequiresConfirmation
-                : hasDeckCardSelection && deckCardSelection.RequiresConfirmation,
+                : hasCardGridSelection && cardGridSelection.RequiresConfirmation,
             can_confirm = hasCombatHandSelection
                 ? combatHandSelection.CanConfirm
-                : hasDeckCardSelection && deckCardSelection.CanConfirm,
+                : hasCardGridSelection && cardGridSelection.CanConfirm,
             cards = cards.Select((holder, index) => BuildSelectionCardPayload(
                 holder.CardModel!,
                 index,
@@ -6985,7 +6985,7 @@ internal readonly record struct CombatHandSelectionMetadata(
     bool RequiresConfirmation,
     bool CanConfirm);
 
-internal readonly record struct DeckCardSelectionMetadata(
+internal readonly record struct CardGridSelectionMetadata(
     int MinSelect,
     int MaxSelect,
     int SelectedCount,
