@@ -40,6 +40,10 @@ internal sealed class AgentSettings
 
     public int? MaxSessionRequests { get; set; }
 
+    public bool ProactiveChatEnabled { get; set; }
+
+    public string ProactiveChatTone { get; set; } = STS2AIAgent.Agent.ProactiveChatTones.Default;
+
     public STS2AIAgent.Agent.SessionBudgetGuard CreateBudgetGuard(int initialTokens = 0, int initialRequests = 0)
     {
         return new STS2AIAgent.Agent.SessionBudgetGuard(MaxSessionTokens, MaxSessionRequests, initialTokens, initialRequests);
@@ -200,6 +204,8 @@ internal sealed class AgentSettings
         {
             MaxSessionRequests = null;
         }
+
+        ProactiveChatTone = STS2AIAgent.Agent.ProactiveChatTones.Normalize(ProactiveChatTone);
     }
 
     private ResolvedModel ResolveRoleModel(string? modelId, bool required, string roleName)

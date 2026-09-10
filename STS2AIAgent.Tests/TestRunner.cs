@@ -294,5 +294,22 @@ internal static class TestRunner
         yield return ("LoopbackListener.ExhaustionIsBounded", () => Task.Run(LoopbackListenerTests.ExhaustionIsBounded));
         yield return ("LoopbackListener.UnexpectedFailureIsNotHidden", () => Task.Run(LoopbackListenerTests.UnexpectedFailureIsNotHidden));
         yield return ("LoopbackListener.RealLoopbackListenerResponds", LoopbackListenerTests.RealLoopbackListenerResponds);
+        yield return ("ProactiveChat.DefaultsOff", () => Task.Run(ProactiveChatPolicyTests.DefaultsStayOff));
+        yield return ("ProactiveChat.UnknownToneFallsBack", () => Task.Run(ProactiveChatPolicyTests.UnknownToneFallsBackToDefault));
+        yield return ("ProactiveChat.ShapeRepair", () => Task.Run(ProactiveChatPolicyTests.ShapeRepairKeepsOptInOffAndFixesTone));
+        yield return ("ProactiveChat.TonesDistinct", () => Task.Run(ProactiveChatPolicyTests.ToneInstructionsAreDistinctAndBounded));
+        yield return ("ProactiveChat.SituationKey", () => Task.Run(ProactiveChatPolicyTests.SituationKeySeparatesCombatFromScreen));
+        yield return ("ProactiveChat.ObserveBoundaries", () => Task.Run(ProactiveChatPolicyTests.ObserveReportsOnlyBoundaryCrossings));
+        yield return ("ProactiveChat.RefusesDisabled", () => Task.Run(ProactiveChatPolicyTests.DecideRefusesWhenDisabled));
+        yield return ("ProactiveChat.RefusesWithoutMoment", () => Task.Run(ProactiveChatPolicyTests.DecideRefusesWithoutMoment));
+        yield return ("ProactiveChat.RefusesWhilePaused", () => Task.Run(ProactiveChatPolicyTests.DecideRefusesWhilePaused));
+        yield return ("ProactiveChat.RefusesOnBudget", () => Task.Run(ProactiveChatPolicyTests.DecideRefusesWhenBudgetBlocks));
+        yield return ("ProactiveChat.RefusesAtSessionCap", () => Task.Run(ProactiveChatPolicyTests.DecideRefusesAtSessionCap));
+        yield return ("ProactiveChat.RefusesInsideInterval", () => Task.Run(ProactiveChatPolicyTests.DecideRefusesInsideMinimumInterval));
+        yield return ("ProactiveChat.SendsWhenAllGatesPass", () => Task.Run(ProactiveChatPolicyTests.DecideSendsWhenEveryGatePasses));
+        yield return ("ProactiveChat.PromptPerMoment", () => Task.Run(ProactiveChatPolicyTests.BuildPromptDistinguishesMoments));
+        yield return ("ProactiveChat.VolumeStaysSmall", () => Task.Run(ProactiveChatPolicyTests.SessionCapStaysSmall));
+        yield return ("ProactiveChat.ReadOnlyCannotAct", AgentLoopTests.ReadOnlyChat_CannotActEvenWithPlayIntent);
+        yield return ("ProactiveChat.ToneReachesSystemPrompt", AgentLoopTests.ProactiveChat_InjectsToneIntoSystemPrompt);
     }
 }

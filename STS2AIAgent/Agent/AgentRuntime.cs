@@ -53,6 +53,9 @@ internal sealed class AgentRuntime
     private bool _requestingModel;
     private readonly List<string> _diagnosticEvents = new();
     private SessionBudgetGuard _budgetGuard;
+    private string? _proactiveSituationKey;
+    private int _proactiveMessagesSent;
+    private DateTimeOffset? _proactiveLastSentAt;
 
     public static AgentRuntime Instance => LazyInstance.Value;
 
@@ -207,6 +210,8 @@ internal sealed class AgentRuntime
             _sessionRequests = 0;
             _sessionUsageKnown = false;
             _budgetGuard = _settings.CreateBudgetGuard();
+            _proactiveMessagesSent = 0;
+            _proactiveLastSentAt = null;
         }
 
         message = "已清零本会话统计。预算上限未改；继续游玩将重新计数。";
@@ -795,7 +800,7 @@ internal sealed class AgentRuntime
                     var snapshot = await GameThread.InvokeAsync(() =>
                     {
                         var payload = GameStateService.BuildStatePayload();
-                        return (payload.screen, payload.session.phase, payload.run_id);
+                        return (payload.screen, payload.session.phase, payload.run_id, payload.in_combat);
                     });
                     if (snapshot.Item1 is "MAIN_MENU" or "CHARACTER_SELECT" or "MULTIPLAYER_LOBBY")
                     {
@@ -803,14 +808,18 @@ internal sealed class AgentRuntime
                         boundary = _runBoundary;
                     }
                     boundary.Check(snapshot.Item1, snapshot.Item2, snapshot.Item3);
+                    var moment = ObserveProactiveMoment(snapshot.Item1, snapshot.Item4);
                     var immediate = await TryCompanionImmediateAsync(token);
                     if (immediate != null)
                     {
+                        await TryProactiveChatAsync(moment, token);
                         return immediate;
                     }
 
                     SetStatus("正在请求模型…");
-                    return await _loop.PlayOnceAsync(token, boundary.Check);
+                    var turn = await _loop.PlayOnceAsync(token, boundary.Check);
+                    await TryProactiveChatAsync(moment, token);
+                    return turn;
                 }
                 finally
                 {
@@ -883,6 +892,85 @@ internal sealed class AgentRuntime
             Reasoning = reasoning,
             ToolRounds = 0
         };
+    }
+
+    private ProactiveChatMoment ObserveProactiveMoment(string? screen, bool inCombat)
+    {
+        var key = ProactiveChatPolicy.SituationKey(screen, inCombat);
+        var moment = ProactiveChatPolicy.Observe(_proactiveSituationKey, key);
+        _proactiveSituationKey = key;
+        return moment;
+    }
+
+    // Runs while the turn gate is already held: the chat call must not take it again,
+    // and a failure here must never fail the auto-play turn.
+    private async Task TryProactiveChatAsync(ProactiveChatMoment moment, CancellationToken cancellationToken)
+    {
+        try
+        {
+            if (moment == ProactiveChatMoment.None)
+            {
+                return;
+            }
+
+            bool enabled;
+            string tone;
+            string? budgetBlock;
+            int sent;
+            DateTimeOffset? lastSent;
+            lock (_gate)
+            {
+                enabled = _settings.ProactiveChatEnabled;
+                tone = _settings.ProactiveChatTone;
+                budgetBlock = _budgetGuard.CheckBudget();
+                sent = _proactiveMessagesSent;
+                lastSent = _proactiveLastSentAt;
+            }
+
+            var since = lastSent is { } last ? DateTimeOffset.UtcNow - last : (TimeSpan?)null;
+            var decision = ProactiveChatPolicy.Decide(new ProactiveChatInput(
+                enabled,
+                tone,
+                PlayRunning,
+                budgetBlock,
+                sent,
+                since,
+                moment));
+            if (!decision.Send)
+            {
+                return;
+            }
+
+            _proactiveMessagesSent = sent + 1;
+            _proactiveLastSentAt = DateTimeOffset.UtcNow;
+            var result = await _loop.ChatAsync(
+                ProactiveChatPolicy.BuildPrompt(moment),
+                History,
+                new ChatOptions
+                {
+                    AttachState = true,
+                    ReadOnly = true,
+                    ExtraSystemInstruction = ProactiveChatTones.BuildSystemInstruction(tone)
+                },
+                cancellationToken);
+            if (result.Error != null)
+            {
+                NoteEvent("proactive chat: " + DiagnosticExport.Redact(result.Error));
+                return;
+            }
+
+            AccountTurn(result, recordBudget: true);
+            if (!string.IsNullOrWhiteSpace(result.AssistantText))
+            {
+                AddHistory("assistant", result.AssistantText);
+            }
+
+            NoteEvent("proactive chat sent (" + moment + ")");
+        }
+        catch (Exception ex)
+        {
+            NoteEvent("proactive chat skipped: " + DiagnosticExport.Redact(ex.Message));
+        }
     }
 
     private void ApplyMcpFromSettings()

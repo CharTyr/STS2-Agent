@@ -111,6 +111,43 @@ internal static class AgentLoopTests
         Assert.Contains("read-only", factory.LastRequest.Messages[0].Content);
     }
 
+    public static async Task ReadOnlyChat_CannotActEvenWithPlayIntent()
+    {
+        var bridge = new FakeBridge();
+        var factory = new ScriptedClientFactory(new[]
+        {
+            new LlmCompletion { ToolCalls = new[] { new LlmToolCall { Id = "forbidden", Name = "act", ArgumentsJson = "{\"action\":\"end_turn\"}" } } },
+            new LlmCompletion { Content = "这波先控场。" }
+        });
+        var settings = AgentSettings.CreateDefault();
+        var loop = new AgentLoop(bridge, factory, () => settings);
+        var result = await loop.ChatAsync("帮我出牌", Array.Empty<ChatTurn>(),
+            new ChatOptions { ReadOnly = true, AllowAct = true }, CancellationToken.None);
+        Assert.Equal(0, bridge.ActCalls);
+        Assert.Null(result.Acted);
+        Assert.False(factory.LastRequest!.Tools!.Any(tool => tool.Name == "act"));
+    }
+
+    public static async Task ProactiveChat_InjectsToneIntoSystemPrompt()
+    {
+        var bridge = new FakeBridge();
+        var factory = new ScriptedClientFactory(new[] { new LlmCompletion { Content = "先看对面意图。" } });
+        var loop = new AgentLoop(bridge, factory, AgentSettings.CreateDefault);
+        var result = await loop.ChatAsync(
+            ProactiveChatPolicy.BuildPrompt(ProactiveChatMoment.CombatStart),
+            Array.Empty<ChatTurn>(),
+            new ChatOptions
+            {
+                AttachState = true,
+                ReadOnly = true,
+                ExtraSystemInstruction = ProactiveChatTones.BuildSystemInstruction(ProactiveChatTones.Terse)
+            },
+            CancellationToken.None);
+        Assert.Contains("clipped field report", factory.LastRequest!.Messages[0].Content);
+        Assert.Equal(0, bridge.ActCalls);
+        Assert.Null(result.Acted);
+    }
+
     public static async Task TeamSuggestion_ReachesNextPlayDecision()
     {
         var conversation = new STS2AIAgent.Multiplayer.TeamConversation();

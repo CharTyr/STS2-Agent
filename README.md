@@ -101,7 +101,7 @@ This mod is still in development. Some things may be unfinished or break. Please
   - Chat directly with the AI teammate during multiplayer runs.
   - Teammate replies using its play model, and recent discussions inform subsequent play decisions.
   - Read-only safety: The chat interface never plays cards for the human or unpauses a paused companion.
-  - Conversation is player-initiated. Proactive outreach and selectable personality styles are not implemented; reply tone is defined by prompts.
+  - Conversation is player-initiated by default. An optional, off-by-default proactive chat lets the teammate speak one short line when a fight starts and ends, with a selectable tone (轻松搭档 / 沉稳参谋 / 简短简报). It never plays for you and stays under the session budget.
 
 ### 3. Interactive In-Game Advisor
 - Use the **Chat** tab to ask strategic advice.

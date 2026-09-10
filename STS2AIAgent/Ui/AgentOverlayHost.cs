@@ -40,6 +40,8 @@ internal sealed class AgentOverlayHost
     private Label? _playUsage;
     private LineEdit? _maxTokensEdit;
     private LineEdit? _maxRequestsEdit;
+    private CheckBox? _proactiveChatToggle;
+    private OptionButton? _proactiveToneCombo;
     private Label? _apiLabel;
     private Label? _dualStatus;
     private Label? _firstRunHint;
@@ -583,6 +585,19 @@ internal sealed class AgentOverlayHost
             _settingsBody.AddChild(UiFactory.Label("预算护栏：达到上限时优雅停止自动游玩并提示，避免意外耗尽额度。", 11, muted: true));
             _settingsResetStatsButton = UiFactory.Button(SessionBudgetLimits.ResetStatsActionLabel, ResetSessionStatsFromUi);
             _settingsBody.AddChild(_settingsResetStatsButton);
+            _proactiveChatToggle = UiFactory.Check("主动发言（AI 队友偶尔主动说一句）", settings.ProactiveChatEnabled);
+            WatchCheck(_proactiveChatToggle);
+            _settingsBody.AddChild(_proactiveChatToggle);
+            _proactiveToneCombo = UiFactory.Combo();
+            foreach (var option in ProactiveChatTones.Options)
+            {
+                _proactiveToneCombo.AddItem(option.Label);
+                _proactiveToneCombo.SetItemMetadata(_proactiveToneCombo.ItemCount - 1, option.Id);
+            }
+            SelectByText(_proactiveToneCombo, ProactiveChatTones.Label(settings.ProactiveChatTone));
+            WatchCombo(_proactiveToneCombo);
+            _settingsBody.AddChild(Labeled("交流风格", _proactiveToneCombo));
+            _settingsBody.AddChild(UiFactory.Label("默认关闭。开启后仅在战斗开始与结束时各说一句，最多 6 句、间隔至少 75 秒；不会代打，也遵守暂停和预算上限。", 11, muted: true));
             _settingsBody.AddChild(UiFactory.Button("重置窗口位置", ResetPlacement));
             _settingsBody.AddChild(UiFactory.Label("拖动标题栏可移动窗口，位置会保存。", 11, muted: true));
             _settingsBody.AddChild(UiFactory.Label("配置文件：" + AgentRuntime.Instance.SettingsPath, 11, muted: true));
@@ -594,6 +609,8 @@ internal sealed class AgentOverlayHost
             _maxRequestsEdit = null;
             _budgetHint = null;
             _settingsResetStatsButton = null;
+            _proactiveChatToggle = null;
+            _proactiveToneCombo = null;
         }
         }
         finally
@@ -934,6 +951,16 @@ internal sealed class AgentOverlayHost
             current.Hotkey = _hotkeyEdit.Text.Trim() is { Length: > 0 } hotkey ? hotkey : "F8";
         }
 
+        if (_proactiveChatToggle != null)
+        {
+            current.ProactiveChatEnabled = _proactiveChatToggle.ButtonPressed;
+        }
+
+        if (_proactiveToneCombo != null)
+        {
+            current.ProactiveChatTone = ProactiveChatTones.Normalize(SelectedMetadata(_proactiveToneCombo));
+        }
+
         current.AttachStateInChat = _attachState?.ButtonPressed ?? true;
         current.AttachScreenshotInChat = _attachShot?.ButtonPressed ?? false;
         current.McpEnabled = _mcpToggle?.ButtonPressed ?? current.McpEnabled;
@@ -994,6 +1021,8 @@ internal sealed class AgentOverlayHost
             McpEnabled = source.McpEnabled,
             MaxSessionTokens = source.MaxSessionTokens,
             MaxSessionRequests = source.MaxSessionRequests,
+            ProactiveChatEnabled = source.ProactiveChatEnabled,
+            ProactiveChatTone = source.ProactiveChatTone,
             RoleTests = source.RoleTests.Select(test => new ModelRoleTestRecord
             {
                 Role = test.Role,

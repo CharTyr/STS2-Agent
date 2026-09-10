@@ -41,9 +41,15 @@ internal sealed class AgentLoop
     {
         var settings = _settings();
         var resolved = options.TeammateConversation ? settings.ResolvePlayModel() : settings.ResolveConversationModel();
+        var system = options.TeammateConversation ? PlayPrompt.TeammateChatSystem : PlayPrompt.ChatSystem;
+        if (!string.IsNullOrWhiteSpace(options.ExtraSystemInstruction))
+        {
+            system += Environment.NewLine + options.ExtraSystemInstruction.Trim();
+        }
+
         var messages = new List<LlmMessage>
         {
-            LlmMessage.System(options.TeammateConversation ? PlayPrompt.TeammateChatSystem : PlayPrompt.ChatSystem)
+            LlmMessage.System(system)
         };
 
         foreach (var turn in history.TakeLast(12))
@@ -70,7 +76,9 @@ internal sealed class AgentLoop
         screenshot = visionNote.AttachToPrimary ? visionNote.Jpeg : null;
         messages.Add(LlmMessage.User(userText, screenshot));
 
-        var allowAct = !options.TeammateConversation && (options.AllowAct || PlayIntent.Detect(userText));
+        var allowAct = !options.TeammateConversation &&
+            !options.ReadOnly &&
+            (options.AllowAct || PlayIntent.Detect(userText));
         AppendJsonActFallbackIfNeeded(messages, resolved, allowAct);
         var tools = allowAct ? AgentTools.Play : AgentTools.ReadOnly;
         return await CompleteWithToolsAsync(

@@ -74,4 +74,10 @@ internal sealed class ChatOptions
     public bool AttachScreenshot { get; init; }
 
     public bool AllowAct { get; init; }
+
+    // A read-only chat must not act even when AllowAct or the message text asks for play.
+    public bool ReadOnly { get; init; }
+
+    // Extra system instruction for this turn, e.g. the selected proactive-chat tone.
+    public string? ExtraSystemInstruction { get; init; }
 }
