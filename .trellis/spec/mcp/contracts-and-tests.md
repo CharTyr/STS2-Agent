@@ -42,6 +42,32 @@ Use the standard library `unittest` runner used by the project. Prefer small fak
 - Patch `request.urlopen` and `time.sleep` to verify transport outcomes. The [replay-safety tests](../../../mcp_server/tests/test_action_replay_safety.py#L108) assert one action POST, no action retry, and one reconciliation GET for an ambiguous result.
 - The [native alignment test](../../../mcp_server/tests/test_native_tool_alignment.py#L97) compares the Python guided surface with the C# native MCP surface. Update both sides deliberately when a guided tool changes.
 
+## Dependency refresh checklist
+
+`fastmcp` is a meta distribution: since 3.4.x the implementation ships in the `fastmcp-slim`
+distribution declared as `fastmcp-slim[client,server]==<version>`, while the `fastmcp` wheel only
+contributes an `__init__.py` and the dependency edges. An in-place upgrade in an existing venv can
+therefore leave a `site-packages/fastmcp/` directory that still contains the previous release's
+subpackages but no `__init__.py`, and `from fastmcp import FastMCP` then fails with
+`cannot import name 'FastMCP' from 'fastmcp' (unknown location)`.
+
+After `uv lock --upgrade-package`, force a clean reinstall of both distributions:
+
+```powershell
+Push-Location mcp_server
+uv lock --upgrade-package fastmcp
+uv sync --locked --reinstall-package fastmcp --reinstall-package fastmcp-slim
+uv run --locked python -m unittest discover -s tests -v
+Pop-Location
+```
+
+Note that `uv sync` prunes anything the lock does not declare, so an ad-hoc `uv pip install pytest`
+does not survive it. The project's runner is `python -m unittest`, so that is not a supported need.
+
+The security floors themselves are enforced by `python scripts/check_verification_gates.py`; raise a
+floor in that script only together with the lock that satisfies it.
+
+
 ## Change checklist
 
 - Preserve existing response fields and error names for compatibility.
