@@ -143,3 +143,24 @@ AgentRuntime 的 _proactiveSituationKey 只在观察时写入，没有随自动�
 实机复验中确认的一个关键机制（值得写进套件设计）：全新档案上**刚进图就下 die，游戏会接受命令但不会打开结算界面**，留下一个停在 MAP 上的死局；等地图可交互并稳定约 3 秒后再 die，结算立刻正常出现。已固化为 RUN_SETTLE_SECONDS 与相应的稳定等待。
 
 第 6 项仍有一处未覆盖：多人大厅套件在「双方同到休息点」阶段没有跑完。MP 里两人共享地图位置，对客户端单独下发 room RestSite 后客户端回到 MAP（host 停在 REST），套件随即等待客户端进入 REST。这与本次新增的启动参数无关，属于套件自身的 MP 推进逻辑，建议后续单独处理。
+
+## select_deck_card 语义定案（2026-09-11）
+
+「实机发现 1」里那条战斗多选返回 completed 的问题已按「代码改回 pending」定案并验证。
+
+改动：STS2AIAgent/Game/GameActionService.cs 的 WaitForCombatHandSelectionStepAsync 在「选中数已变化但界面仍需确认」时返回 false（pending），与 use_potion 及 skill 文档描述的语义对齐；docs/api.md 的 select_deck_card 段落按 selection.kind 拆成牌库单选（自动确认，completed）与战斗手牌多选（逐步 pending，需 confirm_selection）两种说明。
+
+回归定位：该函数自引入（52c3467）到 PR #56 合并（9295f35）一直是 return false，93e5ab5（#68）把它改成 return true；该提交说明里唯一与选择有关的一句是「stop confirming deck picks at min_select」，指的是牌库路径，战斗手牌这次翻转属于连带改动。
+
+实机证据（隔离副本，候选 DLL SHA256 43100E7621E1F962D2A1F7B1719339E2EEF8607735AF39B16B9AA232A6FF1A39）：
+
+| 验证 | 结果 |
+| --- | --- |
+| combat-hand-confirm-flow | exit 0；post_select_status=pending（修复前为 completed，正是最初的失败断言），confirm_status=completed，final_screen=COMBAT |
+| state-invariants | exit 0，0 failure / 0 warning |
+| deferred-potion-flow | exit 0（牌库单选自动确认路径未受影响） |
+| target-index-contract / enemy-intents-payload | exit 0 |
+| C# 核心单测 | 213 PASS / 0 FAIL |
+| 自动游玩冒烟（桩模型，零成本） | 桩先打出 PURITY（play_card card_index 5），随后连续三次调用 select_deck_card；日志中 "Timed out waiting for a stable state" 出现次数为 0，会话在每次 pending 之后继续推进 |
+
+冒烟测试用的桩（build/validation-2026-09-10/stub-model-server.py）新增了按紧凑状态选牌的能力：紧凑手牌数组只有 i/line/playable/targets 而没有 card_id，且需要目标的牌必须带 target_index，否则会被 agent 自己的索引校验拒绝。这两点对后续写自动游玩验证脚本同样适用。
