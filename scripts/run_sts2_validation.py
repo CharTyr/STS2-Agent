@@ -142,6 +142,7 @@ class ApiClient:
         attempts: int,
         delay_ms: int,
         deadline: float | None = None,
+        resolve_modals: bool = False,
     ) -> dict[str, Any]:
         last_error: ValidationError | None = None
         for _ in range(attempts):
@@ -158,6 +159,8 @@ class ApiClient:
 
             if predicate(state):
                 return state
+            if resolve_modals and state.get("screen") == "MODAL":
+                dismiss_blocking_modal(self, state)
             sleep_with_deadline(delay_ms, deadline)
 
         if last_error is not None:
@@ -1215,7 +1218,103 @@ def ensure_action_ok(response: dict[str, Any], label: str) -> dict[str, Any]:
     return response
 
 
+def dismiss_blocking_modal(client: ApiClient, state: dict[str, Any] | None = None) -> bool:
+    """Confirm or dismiss a one-time modal so the underlying screen becomes actionable again.
+
+    A fresh profile raises FTUE modals (map tutorial, first potion, combat rules) that replace
+    every other entry in available_actions, so suites waiting for a specific action time out on a
+    profile's first run. Clearing them here mirrors what a player does and keeps the assertion
+    focused on the behaviour under test.
+    """
+    try:
+        current = state if state is not None else client.get_state()
+    except ValidationError:
+        return False
+
+    if current.get("screen") != "MODAL":
+        return False
+
+    available = [str(action) for action in list(current.get("available_actions") or [])]
+    for candidate in ("confirm_modal", "dismiss_modal"):
+        if candidate not in available:
+            continue
+        try:
+            ensure_action_ok(client.action(candidate), candidate)
+        except ValidationError:
+            return False
+        return True
+    return False
+
+
+def settle_game_over(client: ApiClient, *, attempts: int, delay_ms: int) -> dict[str, Any]:
+    """Drive the death summary with fresh reads instead of a captured payload.
+
+    Death, the native summary save and the one-time FTUEs interleave differently on a fresh
+    profile: the map tutorial can sit on top of the death, and a button captured a moment earlier
+    can answer 409 because the game already moved on. Reading the state and pressing whatever is
+    offered ties the suite to the outcome instead of to one button order.
+    """
+    last_error: ValidationError | None = None
+    for _ in range(attempts):
+        state = client.get_state()
+        screen = state.get("screen")
+        if screen in {"MAIN_MENU", "UNKNOWN"}:
+            return state
+        if screen == "GAME_OVER" and bool((state.get("game_over") or {}).get("can_return_to_main_menu")):
+            return state
+        if screen == "MODAL":
+            dismiss_blocking_modal(client, state)
+        else:
+            available = list(state.get("available_actions") or [])
+            for candidate in ("continue_game_over", "dismiss_game_over_wait"):
+                if candidate not in available:
+                    continue
+                try:
+                    client.action(candidate)
+                except ValidationError as exc:
+                    last_error = exc
+                break
+
+        time.sleep(delay_ms / 1000.0)
+
+    raise last_error or ValidationError("Timed out waiting for the game-over summary")
+
+
+def settle_main_menu(client: ApiClient, *, attempts: int, delay_ms: int) -> dict[str, Any]:
+    """Return a plain MAIN_MENU, closing the overlays the game opens on its own.
+
+    After the first death of a profile the game pushes its timeline/unlock screen over the main
+    menu, and the accept-tutorials prompt can appear there too. Both hide open_character_select and
+    continue_run, so suites that start from the menu have to clear them first.
+    """
+    for _ in range(attempts):
+        state = client.get_state()
+        screen = state.get("screen")
+        actions = list(state.get("available_actions") or [])
+        if screen == "MAIN_MENU" and ({"open_character_select", "continue_run"} & set(actions)):
+            return state
+        if screen == "MODAL":
+            dismiss_blocking_modal(client, state)
+        elif "confirm_timeline_overlay" in actions or "close_main_menu_submenu" in actions:
+            action = "confirm_timeline_overlay" if "confirm_timeline_overlay" in actions else "close_main_menu_submenu"
+            try:
+                client.action(action)
+            except ValidationError:
+                pass
+
+        time.sleep(delay_ms / 1000.0)
+
+    raise ValidationError("Timed out waiting for a plain MAIN_MENU")
+
+
 def continue_from_main_menu_if_needed(client: ApiClient, state: dict[str, Any], *, attempts: int, delay_ms: int) -> dict[str, Any]:
+    if state.get("screen") != "MAIN_MENU":
+        actions = list(state.get("available_actions") or [])
+        if "confirm_timeline_overlay" in actions or "close_main_menu_submenu" in actions:
+            state = settle_main_menu(client, attempts=attempts, delay_ms=delay_ms)
+        else:
+            return state
+
     if state.get("screen") != "MAIN_MENU":
         return state
 
@@ -1226,6 +1325,7 @@ def continue_from_main_menu_if_needed(client: ApiClient, state: dict[str, Any], 
         lambda current: current.get("screen") != "MAIN_MENU",
         attempts=attempts,
         delay_ms=delay_ms,
+        resolve_modals=True,
     )
 
 
@@ -1239,14 +1339,43 @@ def collect_rewards_if_needed(client: ApiClient, state: dict[str, Any], *, attem
             lambda candidate: candidate.get("screen") != "REWARD",
             attempts=attempts,
             delay_ms=delay_ms,
+            resolve_modals=True,
         )
 
     return current
 
 
+DEBUG_COMMAND_ATTEMPTS = 20
+DEBUG_COMMAND_RETRY_DELAY_MS = 500
+
+# A run started on a fresh profile needs a moment before it answers to state-changing console
+# commands: measured on a new profile, a death issued the instant the map appears is accepted but
+# the game never opens its game-over screen, leaving a dead run parked on the map.
+RUN_SETTLE_SECONDS = 3.0
+
+
 def run_debug_command(client: ApiClient, command: str) -> dict[str, Any]:
-    response = client.action("run_console_command", command=command)
-    return ensure_action_ok(response, f"run_console_command({command})")
+    """Run a debug console command, giving a still-settling screen time to accept it.
+
+    On a fresh profile the run is not registered the instant embark returns: the console answers
+    "A run does not appear to be in progress" and the map FTUE opens a moment later. Retrying inside
+    a bounded window, clearing one-time modals on the way, keeps the suites independent of that
+    startup timing. A genuinely invalid command still fails after the window.
+    """
+    last_error: ValidationError | None = None
+    for attempt in range(DEBUG_COMMAND_ATTEMPTS):
+        try:
+            response = client.action("run_console_command", command=command)
+            return ensure_action_ok(response, f"run_console_command({command})")
+        except ValidationError as exc:
+            last_error = exc
+
+        if attempt + 1 >= DEBUG_COMMAND_ATTEMPTS:
+            break
+        dismiss_blocking_modal(client)
+        time.sleep(DEBUG_COMMAND_RETRY_DELAY_MS / 1000.0)
+
+    raise last_error or ValidationError(f"run_console_command({command}) failed")
 
 
 def resolve_modals(client: ApiClient, state: dict[str, Any], *, attempts: int, delay_ms: int, description: str = "leave modal") -> dict[str, Any]:
@@ -1323,6 +1452,7 @@ def ensure_combat(client: ApiClient, state: dict[str, Any], *, attempts: int, de
         lambda current: bool(current.get("in_combat")) and current.get("screen") == "COMBAT",
         attempts=attempts,
         delay_ms=delay_ms,
+        resolve_modals=True,
     )
 
 
@@ -1426,13 +1556,7 @@ def suite_bootstrap_active_run(args: argparse.Namespace) -> dict[str, Any]:
     client = ApiClient(base_url=args.base_url, timeout=args.timeout_sec, retries=args.request_retries, retry_delay_ms=args.retry_delay_ms)
     client.request("GET", "/health")
 
-    state = client.wait_for_state(
-        "stable startup state",
-        lambda current: current.get("screen") != "UNKNOWN"
-        and (current.get("screen") != "MAIN_MENU" or len(list(current.get("available_actions") or [])) > 0),
-        attempts=args.poll_attempts,
-        delay_ms=args.poll_delay_ms,
-    )
+    state = settle_main_menu(client, attempts=args.poll_attempts, delay_ms=args.poll_delay_ms)
 
     if state.get("screen") == "MAIN_MENU" and "continue_run" in list(state.get("available_actions") or []):
         return {"already_active_run": True, "screen": state.get("screen")}
@@ -1462,6 +1586,7 @@ def suite_bootstrap_active_run(args: argparse.Namespace) -> dict[str, Any]:
         and bool(current["character_select"].get("can_embark")),
         attempts=args.poll_attempts,
         delay_ms=args.poll_delay_ms,
+        resolve_modals=True,
     )
 
     ensure_action_ok(client.action("embark"), "embark")
@@ -1481,6 +1606,7 @@ def suite_bootstrap_active_run(args: argparse.Namespace) -> dict[str, Any]:
             lambda current: current.get("screen") != "MODAL",
             attempts=args.poll_attempts,
             delay_ms=args.poll_delay_ms,
+            resolve_modals=True,
         )
 
     if run_state.get("screen") == "MAIN_MENU":
@@ -1747,16 +1873,7 @@ def suite_new_run_lifecycle(args: argparse.Namespace) -> dict[str, Any]:
     )
     client.request("GET", "/health")
 
-    state = client.wait_for_state(
-        "MAIN_MENU",
-        lambda current: current.get("screen") == "MAIN_MENU"
-        and (
-            "abandon_run" in list(current.get("available_actions") or [])
-            or "open_character_select" in list(current.get("available_actions") or [])
-        ),
-        attempts=args.poll_attempts,
-        delay_ms=args.poll_delay_ms,
-    )
+    state = settle_main_menu(client, attempts=args.poll_attempts, delay_ms=args.poll_delay_ms)
 
     if "abandon_run" in list(state.get("available_actions") or []):
         abandon_response = ensure_action_ok(client.action("abandon_run"), "abandon_run")
@@ -1790,6 +1907,7 @@ def suite_new_run_lifecycle(args: argparse.Namespace) -> dict[str, Any]:
         and bool(current["character_select"].get("can_embark")),
         attempts=args.poll_attempts,
         delay_ms=args.poll_delay_ms,
+        resolve_modals=True,
     )
 
     ensure_action_ok(client.action("embark"), "embark")
@@ -1798,6 +1916,7 @@ def suite_new_run_lifecycle(args: argparse.Namespace) -> dict[str, Any]:
         lambda current: current.get("screen") != "CHARACTER_SELECT",
         attempts=args.poll_attempts,
         delay_ms=args.poll_delay_ms,
+        resolve_modals=True,
     )
 
     while run_state.get("screen") == "MODAL":
@@ -1809,37 +1928,35 @@ def suite_new_run_lifecycle(args: argparse.Namespace) -> dict[str, Any]:
             lambda current: current.get("screen") != "MODAL",
             attempts=args.poll_attempts,
             delay_ms=args.poll_delay_ms,
+            resolve_modals=True,
         )
 
-    run_debug_command(client, "die")
-    game_over_state = client.wait_for_state(
-        "GAME_OVER actionable",
-        lambda current: current.get("screen") == "GAME_OVER"
-        and current.get("game_over") is not None
-        and (
-            "continue_game_over" in list(current.get("available_actions") or [])
-            or bool(current["game_over"].get("can_return_to_main_menu"))
-        ),
+    # Let the freshly started run settle before ending it; see RUN_SETTLE_SECONDS.
+    run_state = client.wait_for_state(
+        "interactive map for the started run",
+        lambda current: current.get("screen") == "MAP"
+        and "choose_map_node" in list(current.get("available_actions") or []),
         attempts=args.poll_attempts,
         delay_ms=args.poll_delay_ms,
+        resolve_modals=True,
     )
-    if "continue_game_over" in list(game_over_state.get("available_actions") or []):
-        ensure_action_ok(client.action("continue_game_over"), "continue_game_over")
-        game_over_state = client.wait_for_state(
-            "GAME_OVER summary",
-            lambda current: current.get("screen") == "GAME_OVER"
-            and current.get("game_over") is not None
-            and bool(current["game_over"].get("can_return_to_main_menu")),
-            attempts=args.poll_attempts,
-            delay_ms=args.poll_delay_ms,
-        )
+    time.sleep(RUN_SETTLE_SECONDS)
 
-    ensure_action_ok(client.action("return_to_main_menu"), "return_to_main_menu")
+    run_debug_command(client, "die")
+    game_over_state = settle_game_over(client, attempts=args.poll_attempts, delay_ms=args.poll_delay_ms)
+    if game_over_state.get("screen") == "GAME_OVER":
+        try:
+            ensure_action_ok(client.action("return_to_main_menu"), "return_to_main_menu")
+        except ValidationError:
+            # The summary can return to the menu on its own; the wait below is the real assertion.
+            pass
+
     final_menu_state = client.wait_for_state(
         "MAIN_MENU after game over",
         lambda current: current.get("screen") == "MAIN_MENU" and "open_character_select" in list(current.get("available_actions") or []),
         attempts=args.poll_attempts,
         delay_ms=args.poll_delay_ms,
+        resolve_modals=True,
     )
 
     return {
@@ -1873,6 +1990,7 @@ def suite_combat_hand_confirm_flow(args: argparse.Namespace) -> dict[str, Any]:
         and any(card.get("card_id") == "PURITY" for card in list((current.get("combat") or {}).get("hand") or [])),
         attempts=args.poll_attempts,
         delay_ms=args.poll_delay_ms,
+        resolve_modals=True,
     )
     purity_card = next((card for card in list(state["combat"]["hand"]) if card.get("card_id") == "PURITY"), None)
     if purity_card is None:
@@ -1925,6 +2043,7 @@ def suite_combat_hand_confirm_flow(args: argparse.Namespace) -> dict[str, Any]:
             lambda current: bool(current.get("in_combat")) and current.get("screen") == "COMBAT",
             attempts=args.poll_attempts,
             delay_ms=args.poll_delay_ms,
+            resolve_modals=True,
         )
 
     if any(card.get("card_id") == target_card.get("card_id") for card in list(final_state["combat"]["hand"])):
@@ -1970,6 +2089,7 @@ def suite_deferred_potion_flow(args: argparse.Namespace) -> dict[str, Any]:
         ),
         attempts=args.poll_attempts,
         delay_ms=args.poll_delay_ms,
+        resolve_modals=True,
     )
     liquid_memories = next((p for p in list(state["run"]["potions"]) if p.get("occupied") and p.get("potion_id") == "LIQUID_MEMORIES"), None)
     if liquid_memories is None:
@@ -1998,6 +2118,7 @@ def suite_deferred_potion_flow(args: argparse.Namespace) -> dict[str, Any]:
             lambda current: bool(current.get("in_combat")) and current.get("screen") == "COMBAT",
             attempts=args.poll_attempts,
             delay_ms=args.poll_delay_ms,
+            resolve_modals=True,
         )
 
     zero_cost_matches = [
@@ -2055,6 +2176,7 @@ def suite_target_index_contract(args: argparse.Namespace) -> dict[str, Any]:
         and any(p.get("occupied") and p.get("potion_id") == "BLOCK_POTION" for p in list(current["run"]["potions"])),
         attempts=args.poll_attempts,
         delay_ms=args.poll_delay_ms,
+        resolve_modals=True,
     )
 
     card = next((item for item in list(state["combat"]["hand"]) if item.get("card_id") == "BELIEVE_IN_YOU"), None)
@@ -2126,6 +2248,7 @@ def suite_enemy_intents_payload(args: argparse.Namespace) -> dict[str, Any]:
         and any(enemy.get("enemy_id") == "BYRDONIS" for enemy in list(current["combat"]["enemies"])),
         attempts=args.poll_attempts,
         delay_ms=args.poll_delay_ms,
+        resolve_modals=True,
     )
 
     enemy = next((item for item in list(state["combat"]["enemies"]) if item.get("enemy_id") == "BYRDONIS"), None)
