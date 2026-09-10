@@ -25,9 +25,11 @@
 | 闸门自测 | powershell -File scripts/test-verification-gates.ps1 | exit 0；全部漂移用例 PASS |
 | 发布预检 | powershell -File scripts/preflight-release.ps1 | exit 0 |
 | C# 核心单测 | dotnet run --project STS2AIAgent.Tests | 210 PASS / 0 FAIL（本周期复验） |
-| MCP 单测 | uv run pytest tests/ | 49 passed（本周期复验） |
+| MCP 单测 | uv run --with pytest python -m pytest tests/ -q | 49 passed, 61 subtests passed（本周期复验） |
 
 本轮同时验证并提交了工作区里未提交的闸门增强（scripts/check_verification_gates.py、scripts/test-verification-gates.ps1 的版本约束求解：支持 >=、<、~=、^ 等，并对 uv.lock / package-lock.json / pyproject.toml 做真实比对）。
+
+补充发现：AGENTS.md 与 mcp_server/README 记录的测试命令 uv run pytest tests/ -v 在干净检出下不可执行——pytest 并未声明在 mcp_server/pyproject.toml 里，uv run pytest 会直接报 Failed to spawn: pytest / program not found（uv run python -m pytest 亦为 No module named pytest）。本次改用 uv run --with pytest python -m pytest tests/ -q 得到 49 passed。这是目标五「可复现验证」的一处缺口。
 
 ## 实机套件结果
 
@@ -123,3 +125,4 @@ AgentRuntime 的 _proactiveSituationKey 只在观察时写入，没有随自动�
 2. 对齐 assert-active-run-main-menu 与 main-menu-active-run 对 open_timeline 的断言，或在无存档主菜单下单独覆盖时间线流程。
 3. 把 test-full-regression.ps1 的 active-run 引导改成「自然节点 + save_and_quit」，并加入 FTUE 预热步骤。
 4. 给多人大厅 PowerShell 脚本补隔离副本参数，恢复该套件的可运行性。
+5. 在 mcp_server/pyproject.toml 声明 pytest（依赖组或可选依赖），或把文档命令改成 uv run --with pytest，让干净检出按文档就能跑测试。
