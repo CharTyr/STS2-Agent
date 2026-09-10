@@ -113,7 +113,7 @@ AgentRuntime 的 _proactiveSituationKey 只在观察时写入，没有随自动�
 
 - 保护快照（steam/76561198420578597、default/1、default/1001、%APPDATA%/STS2AIAgent，共 197 个文件）复验：0 changed、0 missing。真实存档、模型配置均未被本次验收修改。
 - 隔离实例只写 default/2026091001 与游戏日志。
-- 正式安装目录 mods/STS2AIAgent.dll 当前 SHA256 为 4C2092EF...，与本次候选一致（上一轮 build-mod.ps1 部署所致）；被覆盖的旧 DLL 备份在 build/validation-2026-09-10/prior-candidate-STS2AIAgent.dll，需要回退可直接替换。
+- 正式安装目录 mods/STS2AIAgent.dll 当前 SHA256 为 47CE0F90...（2026-09-11 由合并后的 main 重新构建部署，见下节）；被它覆盖的上一版 4C2092EF... 备份在 build/backup-steam-mods-2026-09-11/，需要回退可直接替换。
 
 ## 结论与建议
 
@@ -246,3 +246,18 @@ AgentRuntime 的 _proactiveSituationKey 只在观察时写入，没有随自动�
 | `event SAPPHIRE_SEED` → 吃下（升级屏，单选） | 报 `1/1/0`；因单选原生值本就是 1/1，此处误报不可见，问题只在 min≠max 或多选时显现 |
 
 离线复验：C# 214 PASS / 0 FAIL、MCP 49 tests OK（合并后的 main）。
+
+### 部署到正式安装并复验（2026-09-11）
+
+正式安装长期停留在旧 DLL（4C2092EF...，缺合并前的全部近期修复），因此把合并后的 main 重新构建并部署到真实 Steam 安装：`scripts/build-mod.ps1 -Configuration Release`（不带 -GameRoot，默认指向 Steam 安装）。部署前先备份到 build/backup-steam-mods-2026-09-11/。
+
+构建非确定性排查：部署后的 DLL（47CE0F90...）与隔离实例里实测过的那份（CC6D6169...）字节数相同但哈希不同。逐字节比对只有 72 字节差异，全部落在 PE 时间戳（偏移 0x88）与程序集/PDB 标识 GUID 区（0xE6E64 起 16 字节 MVID、0xFE4E4 起、0xFE538 起、0xFE5A6 起），代码段无差异；重复构建稳定复现 47CE0F90。进一步核对：两处 `data_sts2_windows_x86_64/sts2.dll` 哈希一致（0861BFA1...），说明不是引用不同程序集所致。结论是编译标识差异而非代码差异，并用符号检索佐证——已部署 DLL 含 `TryGetCardGridSelectionMetadata` / `SettleCardGridSelectionClickAsync`，旧名 `TryGetDeckCardSelectionMetadata` / `SettleDeckCardSelectionClickAsync` 已完全消失。
+
+为消除「未实测的二进制」这一疑虑，把与 Steam 完全同字节的产物放回隔离实例，用同一套造局手段重跑两个场景：
+
+| 场景 | 结果 |
+| --- | --- |
+| `event ROOM_FULL_OF_CHEESE` → 大快朵颐（简单屏，min=max=2） | 输入前 `min=2 max=2 count=0`；两次点击分别 30 ms / 131 ms（均 completed）；牌组 10 → 12；原生 `Player 1 chose cards [SETUP_STRIKE,TAUNT]` |
+| `relic add SEA_GLASS`（min=0/max=15，手动确认） | `confirm_selection` 正确暴露；点击 34 ms；`confirm_selection` 168 ms 完成；牌组 12 → 13 |
+
+复验后真实安装 DLL 仍为 47CE0F90。除此以外未对真实安装做任何改动（其余 mods 目录与真实存档均未触碰）。
