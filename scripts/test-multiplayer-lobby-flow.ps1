@@ -2,7 +2,15 @@ param(
     [string]$ProjectRoot = "",
     [int]$HostApiPort = 8080,
     [int]$ClientApiPort = 8081,
-    [switch]$KeepGamesRunning
+    [switch]$KeepGamesRunning,
+    # Point the suite at an isolated game copy instead of the Steam installation. Pair this with
+    # per-instance extra arguments so the two windows never share a save slot, for example:
+    #   -ExePath <isolated>/SlayTheSpire2.exe
+    #   -HostExtraArguments "--windowed --force-steam off --clientId 2026091002"
+    #   -ClientExtraArguments "--windowed --force-steam off --clientId 2026091003"
+    [string]$ExePath = "",
+    [string]$HostExtraArguments = "",
+    [string]$ClientExtraArguments = ""
 )
 
 $ErrorActionPreference = "Stop"
@@ -787,15 +795,24 @@ function Get-RestOptionById {
 function Start-DebugSession {
     param(
         [int]$ApiPort,
-        [switch]$KeepExistingProcesses
+        [switch]$KeepExistingProcesses,
+        [string]$ExtraArguments = ""
     )
 
     $scriptPath = Join-Path $scriptRoot "start-game-session.ps1"
-    $startOutput = if ($KeepExistingProcesses) {
-        & $scriptPath -EnableDebugActions -ApiPort $ApiPort -KeepExistingProcesses
-    } else {
-        & $scriptPath -EnableDebugActions -ApiPort $ApiPort
+    # Splat a hashtable: an array splat would pass these positionally.
+    $startParameters = @{ EnableDebugActions = $true; ApiPort = $ApiPort }
+    if (-not [string]::IsNullOrWhiteSpace($ExePath)) {
+        $startParameters.ExePath = $ExePath
     }
+    if (-not [string]::IsNullOrWhiteSpace($ExtraArguments)) {
+        $startParameters.ExtraArguments = $ExtraArguments
+    }
+    if ($KeepExistingProcesses) {
+        $startParameters.KeepExistingProcesses = $true
+    }
+
+    $startOutput = & $scriptPath @startParameters
 
     $latestProcess = Get-Process -Name "SlayTheSpire2" -ErrorAction SilentlyContinue |
         Sort-Object StartTime -Descending |
@@ -834,7 +851,7 @@ try {
     Stop-Games
 
     Write-Host "==> start host debug session"
-    $hostSession = Start-DebugSession -ApiPort $HostApiPort
+    $hostSession = Start-DebugSession -ApiPort $HostApiPort -ExtraArguments $HostExtraArguments
     Write-Host "==> host open multiplayer test"
     $hostOpenResponse = Invoke-Action -BaseUrl $hostBaseUrl -Payload @{
         action = "run_console_command"
@@ -891,7 +908,7 @@ try {
         })
 
     Write-Host "==> start client debug session"
-    $clientSession = Start-DebugSession -ApiPort $ClientApiPort -KeepExistingProcesses
+    $clientSession = Start-DebugSession -ApiPort $ClientApiPort -KeepExistingProcesses -ExtraArguments $ClientExtraArguments
     Write-Host "==> client open multiplayer test"
     $clientOpenResponse = Invoke-Action -BaseUrl $clientBaseUrl -Payload @{
         action = "run_console_command"
