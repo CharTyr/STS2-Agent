@@ -20,6 +20,7 @@ Dated validation records also had no signal that they are point-in-time snapshot
   status page and the API action table — the same pattern `docs/phase-1c-status.md`,
   `docs/phase-4c-shop.md` and `docs/roadmap-current.md` already use.
 - `history/README.md` index row added.
+- `docs/mechanic-coverage-matrix.md` gained the same marker even though its filename carries no date: its release-candidate conclusion and its remaining-gap column belong to the v0.98.3 build it was written against, and it is a tracked file that preflight requires, so it stays at its path. `REQUIRED_SNAPSHOT_MARKERS` in the gate keeps that marker from being dropped later.
 - Five date-stamped records gained a "历史快照 / Historical snapshot" marker:
   `2026-08-31-event-option-localization.md`, `2026-08-31-pr53-review-follow-up.md`,
   `phase-6-validation-2026-03-11.md`, `phase-6-validation-2026-03-30-dynamic-card-values.md`,
@@ -29,8 +30,8 @@ Dated validation records also had no signal that they are point-in-time snapshot
 
 | Command | Result |
 | --- | --- |
-| `python scripts/check_verification_gates.py --only doc-marks` | exit 0; lists the five marked snapshots and the `docs/sts2-coverage-gaps.md -> history/sts2-coverage-gaps_2026-03-10.md` redirect |
-| `powershell -File scripts/test-verification-gates.ps1` | "doc-marks gate rejects an unmarked snapshot" PASS, "doc-marks gate rejects a broken archive redirect" PASS |
+| `python scripts/check_verification_gates.py --only doc-marks` | exit 0; lists the six marked snapshots and the `docs/sts2-coverage-gaps.md -> history/sts2-coverage-gaps_2026-03-10.md` redirect |
+| `powershell -File scripts/test-verification-gates.ps1` | "doc-marks gate rejects an unmarked snapshot" PASS, "doc-marks gate rejects an unmarked date-less snapshot" PASS, "doc-marks gate rejects a broken archive redirect" PASS |
 | `git status --short` | `history/sts2-coverage-gaps_2026-03-10.md` added; `docs/sts2-coverage-gaps.md` modified |
 
 ## Boundary
@@ -38,4 +39,3 @@ Dated validation records also had no signal that they are point-in-time snapshot
 Only the documents whose claims were checked against source were touched. The remaining
 `docs/` files were classified in the scout report but left alone when no contradiction was found;
 this is not a claim that every document in the repository has been re-audited line by line.
-

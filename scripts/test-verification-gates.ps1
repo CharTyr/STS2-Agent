@@ -130,7 +130,16 @@ try {
     Assert-Case -Name "doc-marks gate rejects an unmarked snapshot" -Only "doc-marks"
     Write-Utf8 $datedDoc $originalDated
 
+    $matrixDoc = Join-Path $fixtureDocs "mechanic-coverage-matrix.md"
+    $originalMatrix = Read-Utf8 $matrixDoc
+    $mutated = ($originalMatrix -split "\r?\n" | Where-Object { $_ -notmatch 'Historical snapshot|历史快照' }) -join "`n"
+    if ($mutated -eq $originalMatrix) { throw "fixture setup failed: the matrix header holds no marker to remove" }
+    Write-Utf8 $matrixDoc $mutated
+    Assert-Case -Name "doc-marks gate rejects an unmarked date-less snapshot" -Only "doc-marks"
+    Write-Utf8 $matrixDoc $originalMatrix
+
     # 5. An archived topic page that lost its redirect.
+   # 5. An archived topic page that lost its redirect.
     $redirectDoc = Join-Path $fixtureDocs "sts2-coverage-gaps.md"
     $originalRedirect = Read-Utf8 $redirectDoc
     $mutated = $originalRedirect -replace 'history/sts2-coverage-gaps_2026-03-10.md', 'somewhere-else.md'

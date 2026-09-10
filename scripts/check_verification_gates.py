@@ -53,6 +53,12 @@ API_CONTRACT_END = "<!-- END ACTION CONTRACT -->"
 DATED_DOC_PATTERN = re.compile(r"\d{4}-\d{2}-\d{2}")
 HISTORICAL_MARKERS = ("历史快照", "Historical snapshot")
 
+# Snapshots whose filename carries no date, so the pattern above cannot find them. They are
+# listed explicitly to keep the marker from being quietly dropped.
+REQUIRED_SNAPSHOT_MARKERS = {
+    "docs/mechanic-coverage-matrix.md": "its release-candidate conclusion belongs to the v0.98.3 build it was written against",
+}
+
 # Archived topic pages keep their old path working as a redirect.
 REQUIRED_REDIRECTS = {
     "docs/sts2-coverage-gaps.md": "history/sts2-coverage-gaps_2026-03-10.md",
@@ -263,6 +269,15 @@ def check_doc_marks(repo_root: Path) -> list[str]:
             raise GateError(
                 f"{relative} is a date-stamped record but carries no historical marker. Add a line containing "
                 "'Historical snapshot' (or the Chinese equivalent) so the file cannot be mistaken for current state."
+            )
+        notes.append(f"{relative} marked as a snapshot")
+
+    for relative, reason in REQUIRED_SNAPSHOT_MARKERS.items():
+        text = read_text(repo_root, relative)
+        if not any(marker in text for marker in HISTORICAL_MARKERS):
+            raise GateError(
+                f"{relative} is a point-in-time snapshot ({reason}) but carries no historical marker. "
+                "Restore the marked header so it cannot be read as current state."
             )
         notes.append(f"{relative} marked as a snapshot")
 
