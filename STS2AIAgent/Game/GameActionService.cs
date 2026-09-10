@@ -1924,8 +1924,8 @@ internal static class GameActionService
         }
 
         var isCombatHandSelection = GameStateService.TryGetCombatHandSelectionMetadata(currentScreen, out var combatHand, out var combatHandSelection);
-        var isDeckCardSelection = GameStateService.TryGetDeckCardSelectionMetadata(
-            currentScreen, out var deckCardSelection);
+        var isCardGridSelection = GameStateService.TryGetCardGridSelectionMetadata(
+            currentScreen, out var cardGridSelection);
         var selected = options[request.option_index.Value];
         if (isCombatHandSelection)
         {
@@ -1952,10 +1952,10 @@ internal static class GameActionService
 
         var stable = currentScreen switch
         {
-            NDeckCardSelectScreen deckCardScreen
-                when isDeckCardSelection =>
-                await SettleDeckCardSelectionClickAsync(
-                    deckCardScreen, deckCardSelection.SelectedCount, TimeSpan.FromSeconds(10)),
+            NCardGridSelectionScreen cardGridScreen
+                when isCardGridSelection =>
+                await SettleCardGridSelectionClickAsync(
+                    cardGridScreen, cardGridSelection.SelectedCount, TimeSpan.FromSeconds(10)),
             NCardGridSelectionScreen cardSelectScreen => await ConfirmDeckSelectionAsync(cardSelectScreen, TimeSpan.FromSeconds(10)),
             NChooseACardSelectionScreen chooseCardScreen => await WaitForChooseCardSelectionResolutionAsync(chooseCardScreen, TimeSpan.FromSeconds(10)),
             _ when isCombatHandSelection => await WaitForCombatHandSelectionStepAsync(combatHandSelection, TimeSpan.FromSeconds(10)),
@@ -2600,8 +2600,8 @@ internal static class GameActionService
         return false;
     }
 
-    private static async Task<bool> SettleDeckCardSelectionClickAsync(
-        NDeckCardSelectScreen screen,
+    private static async Task<bool> SettleCardGridSelectionClickAsync(
+        NCardGridSelectionScreen screen,
         int previousSelectedCount,
         TimeSpan timeout)
     {
@@ -2616,7 +2616,7 @@ internal static class GameActionService
                 return await WaitForDeckSelectionResolutionAsync(screen, deadline);
             }
 
-            if (!GameStateService.TryGetDeckCardSelectionMetadata(screen, out var metadata) ||
+            if (!GameStateService.TryGetCardGridSelectionMetadata(screen, out var metadata) ||
                 metadata.SelectedCount == previousSelectedCount)
             {
                 continue;

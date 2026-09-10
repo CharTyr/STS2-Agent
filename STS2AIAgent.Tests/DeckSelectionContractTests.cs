@@ -1,35 +1,41 @@
 namespace STS2AIAgent.Tests;
 
 /// <summary>
-/// Source-level contracts for Godot deck-grid selections. These screens cannot be
+/// Source-level contracts for Godot card-grid selections. These screens cannot be
 /// instantiated in the lightweight test process, so the tests verify that the
 /// native private selection state is exposed and consumed by the action settle path.
 /// </summary>
 internal static class DeckSelectionContractTests
 {
-    public static void DeckGridPayloadReportsNativeSelectionProgress()
+    public static void CardGridPayloadReportsNativeSelectionProgress()
     {
         var rawStateSource = ReadSource(
             "STS2AIAgent/Game/GameStateService.cs");
         var stateSource = WithoutWhitespace(rawStateSource);
         var payloadBody = WithoutWhitespace(
             MethodBody(rawStateSource, "BuildSelectionPayload"));
-
-        Assert.Contains("NDeckCardSelectScreen", stateSource, StringComparison.Ordinal);
+        Assert.Contains(
+            "NDeckCardSelectScreenorNSimpleCardSelectScreen",
+            stateSource,
+            StringComparison.Ordinal);
         Assert.Contains("\"_prefs\"", stateSource, StringComparison.Ordinal);
         Assert.Contains("\"_selectedCards\"", stateSource, StringComparison.Ordinal);
         Assert.Contains("selectedCount++", stateSource, StringComparison.Ordinal);
         Assert.Contains(
-            "selected_count=hasCombatHandSelection?combatHandSelection.SelectedCount:hasDeckCardSelection?deckCardSelection.SelectedCount:0",
+            "selected_count=hasCombatHandSelection?combatHandSelection.SelectedCount:hasCardGridSelection?cardGridSelection.SelectedCount:0",
             payloadBody,
             StringComparison.Ordinal);
         Assert.Contains(
-            "min_select=hasCombatHandSelection?combatHandSelection.MinSelect:hasDeckCardSelection?deckCardSelection.MinSelect:1",
+            "min_select=hasCombatHandSelection?combatHandSelection.MinSelect:hasCardGridSelection?cardGridSelection.MinSelect:1",
             payloadBody,
+            StringComparison.Ordinal);
+        Assert.Contains(
+            "IsCardSelected(currentScreen,holder.CardModel!)",
+            stateSource,
             StringComparison.Ordinal);
     }
 
-    public static void DeckGridClickSettlesInEitherDirectionBeforeConfirming()
+    public static void CardGridClickSettlesInEitherDirectionBeforeConfirming()
     {
         var rawActionSource = ReadSource(
             "STS2AIAgent/Game/GameActionService.cs");
@@ -37,9 +43,13 @@ internal static class DeckSelectionContractTests
             MethodBody(rawActionSource, "ExecuteSelectDeckCardAsync"));
         var settleBody = WithoutWhitespace(
             MethodBody(
-                rawActionSource, "SettleDeckCardSelectionClickAsync"));
+                rawActionSource, "SettleCardGridSelectionClickAsync"));
 
-        Assert.Contains("SettleDeckCardSelectionClickAsync", selectBody, StringComparison.Ordinal);
+        Assert.Contains("SettleCardGridSelectionClickAsync", selectBody, StringComparison.Ordinal);
+        Assert.Contains(
+            "NCardGridSelectionScreencardGridScreenwhenisCardGridSelection",
+            selectBody,
+            StringComparison.Ordinal);
         Assert.Contains(
             "metadata.SelectedCount==previousSelectedCount",
             settleBody,
