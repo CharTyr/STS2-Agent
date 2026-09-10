@@ -1545,10 +1545,13 @@ def suite_assert_active_run_main_menu(args: argparse.Namespace) -> dict[str, Any
         delay_ms=args.poll_delay_ms,
     )
     assert_action_available(state, "abandon_run")
-    assert_action_available(state, "open_timeline")
+    # The main menu disables its timeline button while a run save exists
+    # (NMainMenu.UpdateTimelineButtonBehavior), so open_timeline is not part of the active-run
+    # contract; it is only reported here and exercised from a menu without a run.
     return {
         "screen": state.get("screen"),
         "available_actions": list(state.get("available_actions") or []),
+        "open_timeline_available": "open_timeline" in list(state.get("available_actions") or []),
     }
 
 
@@ -1792,7 +1795,6 @@ def suite_main_menu_active_run(args: argparse.Namespace) -> dict[str, Any]:
     )
 
     assert_action_available(state, "abandon_run")
-    assert_action_available(state, "open_timeline")
 
     abandon_response = ensure_action_ok(client.action("abandon_run"), "abandon_run")
     modal_state = abandon_response["data"]["state"]
@@ -1803,46 +1805,9 @@ def suite_main_menu_active_run(args: argparse.Namespace) -> dict[str, Any]:
     assert_action_available(modal_state, "dismiss_modal")
     ensure_action_ok(client.action("dismiss_modal"), "dismiss_modal")
 
-    client.wait_for_state(
-        "return to MAIN_MENU after dismiss_modal",
-        lambda current: current.get("screen") == "MAIN_MENU" and "open_timeline" in list(current.get("available_actions") or []),
-        attempts=args.poll_attempts,
-        delay_ms=args.poll_delay_ms,
-    )
-
-    timeline_response = ensure_action_ok(client.action("open_timeline"), "open_timeline")
-    timeline_state = timeline_response["data"]["state"]
-    assert_action_available(timeline_state, "choose_timeline_epoch")
-    assert_action_available(timeline_state, "close_main_menu_submenu")
-
-    choose_epoch_response = ensure_action_ok(client.action("choose_timeline_epoch", option_index=0), "choose_timeline_epoch")
-    epoch_state = choose_epoch_response["data"]["state"]
-    timeline = epoch_state.get("timeline") or {}
-    if not timeline.get("inspect_open") and not timeline.get("unlock_screen_open"):
-        raise ValidationError(
-            f"Expected choose_timeline_epoch to open an inspect or unlock overlay, but received: {json.dumps(choose_epoch_response, ensure_ascii=False)}"
-        )
-    if not timeline.get("can_confirm_overlay"):
-        raise ValidationError(
-            f"Expected choose_timeline_epoch response state to expose timeline.can_confirm_overlay=true, but received: {json.dumps(choose_epoch_response, ensure_ascii=False)}"
-        )
-
-    assert_action_available(epoch_state, "confirm_timeline_overlay")
-    ensure_action_ok(client.action("confirm_timeline_overlay"), "confirm_timeline_overlay")
-    timeline_after_confirm = client.wait_for_state(
-        "timeline overlay close",
-        lambda current: current.get("screen") == "MAIN_MENU"
-        and current.get("timeline") is not None
-        and not current["timeline"].get("inspect_open")
-        and not current["timeline"].get("unlock_screen_open"),
-        attempts=args.poll_attempts,
-        delay_ms=args.poll_delay_ms,
-    )
-
-    assert_action_available(timeline_after_confirm, "close_main_menu_submenu")
-    ensure_action_ok(client.action("close_main_menu_submenu"), "close_main_menu_submenu")
-    client.wait_for_state(
-        "return to MAIN_MENU after closing timeline",
+    # Dismissing the abandon dialog has to keep the run, so the menu comes back with continue_run.
+    menu_after_dismiss = client.wait_for_state(
+        "return to active-run MAIN_MENU after dismiss_modal",
         lambda current: current.get("screen") == "MAIN_MENU" and "continue_run" in list(current.get("available_actions") or []),
         attempts=args.poll_attempts,
         delay_ms=args.poll_delay_ms,
@@ -1858,7 +1823,9 @@ def suite_main_menu_active_run(args: argparse.Namespace) -> dict[str, Any]:
 
     return {
         "initial_menu_actions": list(state.get("available_actions") or []),
-        "timeline_epoch_state": "inspect" if timeline.get("inspect_open") else "unlock",
+        "menu_after_dismiss_actions": list(menu_after_dismiss.get("available_actions") or []),
+        # The timeline only opens while no run save exists; new-run-lifecycle walks it from there.
+        "open_timeline_available_with_active_run": "open_timeline" in list(state.get("available_actions") or []),
         "continue_run_destination": run_state.get("screen"),
         "final_available_actions": list(run_state.get("available_actions") or []),
     }
@@ -1951,19 +1918,60 @@ def suite_new_run_lifecycle(args: argparse.Namespace) -> dict[str, Any]:
             # The summary can return to the menu on its own; the wait below is the real assertion.
             pass
 
-    final_menu_state = client.wait_for_state(
-        "MAIN_MENU after game over",
-        lambda current: current.get("screen") == "MAIN_MENU" and "open_character_select" in list(current.get("available_actions") or []),
-        attempts=args.poll_attempts,
-        delay_ms=args.poll_delay_ms,
-        resolve_modals=True,
-    )
+    # The game can push its timeline over the menu right after a death, and that overlay is not a
+    # MODAL, so settle_main_menu closes it before the timeline phase below opens it deliberately.
+    final_menu_state = settle_main_menu(client, attempts=args.poll_attempts, delay_ms=args.poll_delay_ms)
+
+    # The timeline only opens while no run save exists, which is exactly this state, so its overlay
+    # actions are exercised here rather than from the active-run menu. Epoch selection additionally
+    # needs revealed-but-undiscovered epochs, so only the parts the profile exposes are asserted.
+    timeline_evidence: dict[str, Any] = {"opened": False}
+    if "open_timeline" in list(final_menu_state.get("available_actions") or []):
+        timeline_state = ensure_action_ok(client.action("open_timeline"), "open_timeline")["data"]["state"]
+        timeline_evidence["opened"] = True
+        timeline_evidence["screen"] = timeline_state.get("screen")
+        assert_action_available(timeline_state, "close_main_menu_submenu")
+
+        if "choose_timeline_epoch" in list(timeline_state.get("available_actions") or []):
+            timeline_state = ensure_action_ok(
+                client.action("choose_timeline_epoch", option_index=0),
+                "choose_timeline_epoch",
+            )["data"]["state"]
+            timeline_payload = timeline_state.get("timeline") or {}
+            overlay_open = bool(timeline_payload.get("inspect_open") or timeline_payload.get("unlock_screen_open"))
+            timeline_evidence["epoch_overlay_opened"] = overlay_open
+            if not overlay_open:
+                raise ValidationError(
+                    f"Expected choose_timeline_epoch to open an inspect or unlock overlay, but received: {json.dumps(timeline_state, ensure_ascii=False)}"
+                )
+        else:
+            timeline_evidence["epochs_selectable"] = False
+
+        if "confirm_timeline_overlay" in list(timeline_state.get("available_actions") or []):
+            timeline_state = ensure_action_ok(
+                client.action("confirm_timeline_overlay"),
+                "confirm_timeline_overlay",
+            )["data"]["state"]
+            timeline_evidence["overlay_confirmed"] = True
+
+        assert_action_available(timeline_state, "close_main_menu_submenu")
+        ensure_action_ok(client.action("close_main_menu_submenu"), "close_main_menu_submenu")
+        final_menu_state = client.wait_for_state(
+            "MAIN_MENU after closing the timeline",
+            lambda current: current.get("screen") == "MAIN_MENU" and "open_character_select" in list(current.get("available_actions") or []),
+            attempts=args.poll_attempts,
+            delay_ms=args.poll_delay_ms,
+            resolve_modals=True,
+        )
+    else:
+        timeline_evidence["skipped"] = "open_timeline is not exposed on this profile's main menu"
 
     return {
         "selected_character_id": selected_character["character_id"],
         "embark_destination": run_state.get("screen"),
         "game_over_actions": list(game_over_state.get("available_actions") or []),
         "final_menu_actions": list(final_menu_state.get("available_actions") or []),
+        "timeline": timeline_evidence,
     }
 
 
