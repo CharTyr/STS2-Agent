@@ -120,7 +120,59 @@ def parse_pyproject_dependencies(text: str) -> list[str]:
 
 
 def dependency_name(specifier: str) -> str:
-    return re.split(r"[<>=!\[;]", specifier, maxsplit=1)[0].strip()
+    return re.split(r"[<>=!~^\[;]", specifier, maxsplit=1)[0].strip()
+
+
+def split_requirement(specifier: str) -> tuple[str, list[tuple[str, str]]]:
+    """Split 'fastmcp>=3.1.0,<4.0.0' into ('fastmcp', [('>=', '3.1.0'), ('<', '4.0.0')])."""
+    name = dependency_name(specifier)
+    remainder = specifier[len(name):].split(";", maxsplit=1)[0]
+    constraints: list[tuple[str, str]] = []
+    for operator, version in re.findall(r"(~=|==|!=|<=|>=|\^|<|>)\s*([0-9][^,\s]*)", remainder):
+        constraints.append((operator, version))
+    return name, constraints
+
+
+def satisfies(actual: str, constraints: list[tuple[str, str]]) -> bool:
+    """PEP 440 subset: enough for the operators this project's manifests actually use."""
+    for operator, required in constraints:
+        left = parse_version(actual)
+        right = parse_version(required)
+        width = max(len(left), len(right))
+        left += (0,) * (width - len(left))
+        right += (0,) * (width - len(right))
+        if operator == ">=" and not left >= right:
+            return False
+        if operator == ">" and not left > right:
+            return False
+        if operator == "<=" and not left <= right:
+            return False
+        if operator == "<" and not left < right:
+            return False
+        if operator == "==" and left != right:
+            return False
+        if operator == "!=" and left == right:
+            return False
+        if operator == "^":
+            # npm caret: ^1.2.3 is >=1.2.3 and <2.0.0; ^0.2.3 is <0.3.0; ^0.0.3 pins exactly.
+            if not left >= right:
+                return False
+            if right[0] > 0:
+                upper = (right[0] + 1,)
+            elif len(right) > 1 and right[1] > 0:
+                upper = (0, right[1] + 1)
+            else:
+                return left == right
+            padded = left + (0,) * max(0, len(upper) - len(left))
+            if padded[: len(upper)] >= tuple(upper):
+                return False
+        if operator == "~=":
+            # Compatible release: >= required, and the same up to the second-to-last part.
+            if not left >= right:
+                return False
+            if len(right) >= 2 and left[: len(right) - 1] != right[: len(right) - 1]:
+                return False
+    return True
 
 
 def flatten_overrides(overrides: dict) -> list[tuple[str, str]]:
@@ -142,12 +194,21 @@ def check_lockfile(repo_root: Path) -> list[str]:
     pyproject = read_text(repo_root, "mcp_server/pyproject.toml")
 
     for specifier in parse_pyproject_dependencies(pyproject):
-        name = dependency_name(specifier)
-        if name and name not in uv_lock:
+        name, constraints = split_requirement(specifier)
+        if not name:
+            continue
+        if name not in uv_lock:
             raise GateError(
                 f"mcp_server/pyproject.toml declares '{name}' but mcp_server/uv.lock has no such package. "
                 "Run 'uv lock' from mcp_server."
             )
+        locked = uv_lock[name]
+        if not satisfies(locked, constraints):
+            raise GateError(
+                f"mcp_server/uv.lock is out of sync with pyproject.toml: the manifest requires "
+                f"'{specifier}' but the lock resolves {name} {locked}. Run 'uv lock' from mcp_server."
+            )
+        notes.append(f"uv.lock {name} {locked} satisfies '{specifier}'")
 
     for package, (minimum, advisory) in SECURITY_FLOORS.items():
         if package not in uv_lock:
@@ -176,6 +237,33 @@ def check_lockfile(repo_root: Path) -> list[str]:
             notes.append(f"package-lock.json {package} {actual} >= {minimum}")
 
         manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+
+        # The npm half of the manifest/lock agreement: every declared dependency must be
+        # present in the lock at a version its range accepts.
+        declared = dict(manifest.get("dependencies", {}))
+        recorded = dict(packages.get("", {}).get("dependencies", {})) or dict(lock.get("dependencies", {}))
+        for package, requirement in declared.items():
+            if package not in recorded:
+                raise GateError(
+                    f"package.json declares '{package}' but package-lock.json does not record it. "
+                    "Run 'npm install' from the repository root."
+                )
+            entry = packages.get(f"node_modules/{package}")
+            if entry is None:
+                raise GateError(
+                    f"package.json declares '{package}' but package-lock.json has no resolved entry for it. "
+                    "Run 'npm install' from the repository root."
+                )
+            actual = str(entry.get("version", ""))
+            _, constraints = split_requirement(package + requirement)
+            if not satisfies(actual, constraints):
+                raise GateError(
+                    f"package-lock.json is out of sync with package.json: the manifest requires "
+                    f"'{package}{requirement}' but the lock resolves {actual}. "
+                    "Run 'npm install' from the repository root."
+                )
+            notes.append(f"package-lock.json {package} {actual} satisfies '{package}{requirement}'")
+
         for package, pinned in flatten_overrides(manifest.get("overrides", {})):
             resolved = [
                 str(entry.get("version", ""))

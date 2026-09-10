@@ -122,6 +122,24 @@ try {
     Assert-Case -Name "lockfile gate rejects a version below the security floor" -Only "lockfile"
     Write-Utf8 $uvLock $originalLock
 
+    # 3b. A manifest that demands more than the lock resolves (the lock is stale, not unsafe).
+    $pyproject = Join-Path $fixtureMcp "pyproject.toml"
+    $originalPyproject = Read-Utf8 $pyproject
+    $mutated = $originalPyproject -replace 'fastmcp>=3\.1\.0,<4\.0\.0', 'fastmcp>=9.0.0,<10.0.0'
+    if ($mutated -eq $originalPyproject) { throw "fixture setup failed: could not rewrite the fastmcp range in pyproject.toml" }
+    Write-Utf8 $pyproject $mutated
+    Assert-Case -Name "lockfile gate rejects a stale uv.lock against its manifest" -Only "lockfile"
+    Write-Utf8 $pyproject $originalPyproject
+
+    # 3c. An npm manifest that demands a version the lock cannot satisfy.
+    $npmManifest = Join-Path $fixture "package.json"
+    $originalNpmManifest = Read-Utf8 $npmManifest
+    $mutated = $originalNpmManifest -replace '"@sammysnake/fast-context-mcp": "\^1\.2\.0"', '"@sammysnake/fast-context-mcp": "^99.0.0"'
+    if ($mutated -eq $originalNpmManifest) { throw "fixture setup failed: could not rewrite the npm dependency range" }
+    Write-Utf8 $npmManifest $mutated
+    Assert-Case -Name "lockfile gate rejects a stale package-lock against its manifest" -Only "lockfile"
+    Write-Utf8 $npmManifest $originalNpmManifest
+
     # 4. A date-stamped record without its historical marker.
     $datedDoc = Join-Path $fixtureDocs "phase-8-validation-2026-03-11.md"
     $originalDated = Read-Utf8 $datedDoc
@@ -138,7 +156,6 @@ try {
     Assert-Case -Name "doc-marks gate rejects an unmarked date-less snapshot" -Only "doc-marks"
     Write-Utf8 $matrixDoc $originalMatrix
 
-    # 5. An archived topic page that lost its redirect.
    # 5. An archived topic page that lost its redirect.
     $redirectDoc = Join-Path $fixtureDocs "sts2-coverage-gaps.md"
     $originalRedirect = Read-Utf8 $redirectDoc
