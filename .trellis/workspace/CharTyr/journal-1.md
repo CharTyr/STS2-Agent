@@ -115,3 +115,24 @@ Fixed GAME_OVER continue so native summary save runs before Return; merged that 
 ### Next Steps
 
 - 完整对局、第二轮重启和升级回退不在本次订阅加载验收范围；文档及日志提交尚未推送。
+
+
+## Session 4: Repo hardening: dep security, proactive chat, doc contract, verification gates
+
+**Date**: 2026-09-10
+**Task**: Repo hardening: dep security, proactive chat, doc contract, verification gates
+**Branch**: `main`
+
+### Summary
+
+Closed issues #50/#51 by refreshing uv.lock (fastmcp 3.4.7) and package-lock.json (fast-uri 3.1.7, npm audit 0). Implemented off-by-default proactive teammate chat with selectable tone behind a read-only chat path, covered by 17 new C# core tests. Documented all 55 mod actions in docs/api.md with a set-equality guard. Archived the stale coverage gap list to history/ with a redirect and marked five dated records. Added check_verification_gates.py plus a negative-path self-test and wired both into preflight and CI. Full offline sweep green; proactive chat remains not live-validated.
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `2bc857d` | (see git log) |
+
+### Status
+
+[OK] **Completed**
