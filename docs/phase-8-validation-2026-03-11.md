@@ -1,5 +1,7 @@
 # Phase 8 Validation - 2026-03-11
 
+> Historical snapshot: this file records a point-in-time validation run, not current state. Current status: [PRODUCT_PLAN_CURRENT.md](../PRODUCT_PLAN_CURRENT.md).
+
 This phase closed the remaining main-menu lifecycle gaps and added a single-entry regression script for the full smoke suite.
 
 ## Fixes

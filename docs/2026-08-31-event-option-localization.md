@@ -1,5 +1,7 @@
 # Event option localization variable injection
 
+> 历史快照：本文件记录的是当时的一次排查/修复过程，不代表当前状态。当前状态见 [PRODUCT_PLAN_CURRENT.md](../PRODUCT_PLAN_CURRENT.md)。
+
 ## Symptom
 
 Live game logs showed `GameStateService.BuildEventPayload` failing while reading event option descriptions. `LocManager.SmartFormat` reported missing event-specific variables, including:

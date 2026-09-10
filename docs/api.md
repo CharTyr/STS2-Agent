@@ -1,7 +1,7 @@
 # STS2 AI Agent Mod — HTTP API
 
 状态：可实现
-协议版本：`2026-03-10-v0`
+协议版本：`2026-03-11-v1`
 
 ---
 
@@ -52,6 +52,10 @@
 | `invalid_action` | 409 | 当前状态下不能执行该动作 | 否 |
 | `invalid_target` | 409 | 目标索引超出范围 | 否 |
 | `state_unavailable` | 503 | 游戏状态暂时不可安全读取（如正在过渡） | 是 |
+| `forbidden_actor` | 403 | 多人场景下试图为其它角色执行动作 | 否 |
+| `mcp_disabled` | 403 | 请求 /mcp 但原生 MCP 未开启 | 否 |
+| `session_not_ready` | 409 | 会话尚未就绪（如组队未完成） | 是 |
+| `pause_pending` | 409 | 暂停尚未完成，需稍后重试 | 是 |
 | `internal_error` | 500 | 服务内部异常 | 否 |
 
 ---
@@ -889,6 +893,68 @@
 
 执行单个游戏动作。
 
+### 动作总表（与代码强一致）
+
++<!-- BEGIN ACTION CONTRACT -->
+本区块由 `scripts/check_verification_gates.py` 与 `GameActionService.ExecuteAsync` 的 action switch 做集合比对：代码新增动作而这里没有登记时，预检与 CI 会失败。
+
+- `resolve_rewards` — 奖励结算界面（可带 `option_index`，或 `card_index`）
+- `end_turn` — 结束当前战斗回合
+- `play_card` — 打出手牌（`card_index` 必填，需要目标时再加 `target_index`）
+- `switch_profile` — 切换存档位（`option_index`，1–3）
+- `continue_run` — 主菜单继续当前局
+- `continue_game_over` — 结算界面继续，等待原生存档写入
+- `dismiss_game_over_wait` — 关闭结算等待提示
+- `abandon_run` — 放弃当前局
+- `save_and_quit` — 保存并退出
+- `open_character_select` — 打开角色选择
+- `open_timeline` — 打开时间线
+- `confirm_unlock` — 确认解锁弹窗
+- `close_main_menu_submenu` — 关闭主菜单子菜单
+- `choose_timeline_epoch` — 选择时间线纪元（`option_index`）
+- `confirm_timeline_overlay` — 确认时间线浮层
+- `choose_map_node` — 选择地图节点（`option_index`）
+- `collect_rewards_and_proceed` — 领取后继续
+- `claim_reward` — 领取单条奖励（`option_index`）
+- `choose_reward_card` — 选择奖励卡（`option_index`）
+- `skip_reward_cards` — 跳过卡牌奖励
+- `select_deck_card` — 选择牌组中的牌（`option_index`）
+- `close_cards_view` — 关闭看牌界面
+- `confirm_selection` — 确认选择
+- `proceed` — 推进到下一步
+- `open_chest` — 打开宝箱
+- `choose_treasure_relic` — 选择宝箱遗物（`option_index`）
+- `choose_event_option` — 选择事件选项（`option_index`）
+- `crystal_set_tool` — 设置水晶球工具（`tool`：`big` / `small`）
+- `crystal_clear_cell` — 清理水晶球格子（`x`、`y`）
+- `choose_capstone_option` — 选择 Capstone 选项（`option_index`）
+- `choose_bundle` — 选择卡包（`option_index`）
+- `confirm_bundle` — 确认卡包
+- `choose_rest_option` — 选择休息点选项（`option_index`，部分多人选项需 `target_index`）
+- `open_shop_inventory` — 打开商店库存
+- `close_shop_inventory` — 关闭商店库存
+- `buy_card` — 购买卡牌（`option_index`）
+- `buy_relic` — 购买遗物（`option_index`）
+- `buy_potion` — 购买药水（`option_index`）
+- `remove_card_at_shop` — 商店删牌
+- `select_character` — 选择角色（`option_index`）
+- `embark` — 出发
+- `unready` — 取消准备
+- `host_multiplayer_lobby` — 创建多人房间
+- `join_multiplayer_lobby` — 加入多人房间
+- `ready_multiplayer_lobby` — 多人准备
+- `disconnect_multiplayer_lobby` — 断开多人连接
+- `increase_ascension` — 提高进阶等级
+- `decrease_ascension` — 降低进阶等级
+- `use_potion` — 使用药水（`option_index`，需要目标时再加 `target_index`）
+- `discard_potion` — 丢弃药水（`option_index`）
+- `run_console_command` — 调试控制台命令，仅在 `STS2_ENABLE_DEBUG_ACTIONS=1` 时注册
+- `confirm_modal` — 确认阻塞弹窗
+- `dismiss_modal` — 关闭阻塞弹窗
+- `return_to_main_menu` — 返回主菜单
+- `invite_ai_teammate` — 邀请 AI 队友
+<!-- END ACTION CONTRACT -->
+
 ### 请求体
 
 | 字段 | 类型 | 说明 |
@@ -901,13 +967,15 @@
 | `y` | number \| null | 水晶球格子的 Y 坐标（`crystal_clear_cell`） |
 | `tool` | string \| null | 水晶球工具：`big` 或 `small` |
 | `client_context` | object \| null | 可选的客户端上下文（如调用来源标识） |
+| `command` | string \| null | 控制台命令（仅 `run_console_command`） |
+| `player_id` | string \| null | 多人场景下的行动归属校验；不属于本机角色时返回 `forbidden_actor` |
 
 ### 通用响应结构（ActionResponsePayload）
 
 | 字段 | 类型 | 说明 |
 | --- | --- | --- |
 | `action` | string | 执行的动作名 |
-| `status` | string | `"completed"` 或 `"pending"` |
+| `status` | string | `"completed"`、`"pending"` 或 `"failed"` |
 | `stable` | boolean | 状态是否已稳定 |
 | `message` | string | 人类可读的结果描述 |
 | `state` | object | 执行后的最新游戏状态快照（同 `GET /state` 的 `data`） |

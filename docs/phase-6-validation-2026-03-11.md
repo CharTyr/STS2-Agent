@@ -1,5 +1,7 @@
 # Phase 6 Validation Record
 
+> Historical snapshot: this file records a point-in-time validation run, not current state. Current status: [PRODUCT_PLAN_CURRENT.md](../PRODUCT_PLAN_CURRENT.md).
+
 - Validation date: `2026-03-11`
 - Validator: Codex
 - Git commits: `69ed5c2`, `26cd9b0`, `588d939`, `637deaa`

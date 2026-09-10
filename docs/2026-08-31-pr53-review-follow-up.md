@@ -1,5 +1,7 @@
 # PR #53 review follow-up
 
+> 历史快照：本文件记录的是当时的一次排查/修复过程，不代表当前状态。当前状态见 [PRODUCT_PLAN_CURRENT.md](../PRODUCT_PLAN_CURRENT.md)。
+
 Date: 2026-08-31
 
 Pull request: https://github.com/CharTyr/STS2-Agent/pull/53
