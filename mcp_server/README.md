@@ -230,6 +230,13 @@ uv run sts2-mcp-server
 下面的启动游戏和 debug 命令需要完整源码仓库以及本地游戏。发布包只带
 上面列出的 sidecar 启动 / profile 检查脚本；不要在发布包中寻找这些实机脚本。
 
+运行 MCP 单元测试（标准库 unittest，不需要游戏；CI 执行的就是同一条命令）：
+
+```powershell
+cd "<repo-root>/mcp_server"
+uv run --locked python -m unittest discover -s tests -v
+```
+
 启动游戏并保持运行：
 
 ```powershell

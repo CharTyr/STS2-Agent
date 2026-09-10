@@ -126,3 +126,20 @@ AgentRuntime 的 _proactiveSituationKey 只在观察时写入，没有随自动�
 3. 把 test-full-regression.ps1 的 active-run 引导改成「自然节点 + save_and_quit」，并加入 FTUE 预热步骤。
 4. 给多人大厅 PowerShell 脚本补隔离副本参数，恢复该套件的可运行性。
 5. 在 mcp_server/pyproject.toml 声明 pytest（依赖组或可选依赖），或把文档命令改成 uv run --with pytest，让干净检出按文档就能跑测试。
+
+## 后续修复与复验（2026-09-11）
+
+上面结论里排在前面的可修项已经落地，逐条列出改法与证据。
+
+| # | 修复 | 证据 |
+| --- | --- | --- |
+| 1 | 停止原因分类：新增纯策略类 STS2AIAgent/Agent/StopKindPolicy.cs，run_end 只匹配 CurrentRunBoundary 的两条真实文案 | 3 个新单测（StopKind.RetryIsNotRunEnd / BoundaryIsRunEnd / OtherKindsSurvive），C# 由 210 升至 213 PASS / 0 FAIL；实机复现：桩模型连续三次给出非法动作后 /health 的 stop_kind 由 run_end 变为 failed |
+| 2 | 验证闸门：uv.lock / package-lock.json 的冻结版本按 >=、<、~=、^ 等约束真实求解 | 闸门 exit 0、自测 exit 0、发布预检 exit 0 |
+| 3 | 文档命令：把 MCP 单测命令从 uv run pytest 改成 CI 实际使用的 uv run --locked python -m unittest discover -s tests -v | CI 同一条命令本地 49 passed；pytest 未声明也不被支持，故不加依赖 |
+| 4 | test-full-regression.ps1：造局引导改为「自然推进一个地图节点 + save_and_quit」，新增 Close-MainMenuOverlay 处理首死后自动弹出的时间线浮层 | 抽出 Ensure-ActiveRunMainMenu 对活实例实跑两条分支均通过（弹窗+未落盘的局 7.1 秒；空主菜单新建 10.2 秒），均达到带 continue_run 的主菜单 |
+| 5 | 一次性教学弹窗：套件等待动作时可自动消解 FTUE，控制台命令支持有界重试，新增 settle_game_over / settle_main_menu | 全新档案（clientId 2026091007）上 new-run-lifecycle、bootstrap-active-run、deferred-potion-flow、target-index-contract、enemy-intents-payload 五个套件全部 exit 0 |
+| 6 | test-multiplayer-lobby-flow.ps1：新增 -ExePath / -HostExtraArguments / -ClientExtraArguments，可指向隔离副本且两个实例各自 clientId | 用隔离副本实跑：两个实例在 8080/8081 起来、创建大厅、进入同一 run（run_id 一致），推进到第 2 层并走完奖励流程 |
+
+实机复验中确认的一个关键机制（值得写进套件设计）：全新档案上**刚进图就下 die，游戏会接受命令但不会打开结算界面**，留下一个停在 MAP 上的死局；等地图可交互并稳定约 3 秒后再 die，结算立刻正常出现。已固化为 RUN_SETTLE_SECONDS 与相应的稳定等待。
+
+第 6 项仍有一处未覆盖：多人大厅套件在「双方同到休息点」阶段没有跑完。MP 里两人共享地图位置，对客户端单独下发 room RestSite 后客户端回到 MAP（host 停在 REST），套件随即等待客户端进入 REST。这与本次新增的启动参数无关，属于套件自身的 MP 推进逻辑，建议后续单独处理。
