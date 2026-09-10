@@ -59,7 +59,11 @@ try {
     New-Item -ItemType Directory -Path (Join-Path $fixture "scripts") | Out-Null
     $fixtureScript = Join-Path $fixture "scripts/check_verification_gates.py"
     Copy-Item -LiteralPath $gateScript -Destination $fixtureScript
-    Copy-Item -LiteralPath (Join-Path $repoRoot "AGENTS.md") -Destination $fixture
+    # Mirror the root sentinels the gate looks for, using tracked files only: AGENTS.md is
+    # gitignored, so a fresh checkout (and therefore CI) does not contain it.
+    $fixtureAgent = Join-Path $fixture "STS2AIAgent"
+    New-Item -ItemType Directory -Path $fixtureAgent -Force | Out-Null
+    Copy-Item -LiteralPath (Join-Path $repoRoot "STS2AIAgent/mod_manifest.json") -Destination $fixtureAgent
 
     Copy-Item -LiteralPath (Join-Path $repoRoot "package.json") -Destination $fixture
     Copy-Item -LiteralPath (Join-Path $repoRoot "package-lock.json") -Destination $fixture
