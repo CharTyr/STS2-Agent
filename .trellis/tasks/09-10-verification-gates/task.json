@@ -3,7 +3,7 @@
   "name": "verification-gates",
   "title": "Preflight and CI verification gates for deps, locks, and docs",
   "description": "",
-  "status": "planning",
+  "status": "in_progress",
   "dev_type": null,
   "scope": null,
   "package": null,
