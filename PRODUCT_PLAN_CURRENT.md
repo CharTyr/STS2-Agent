@@ -31,7 +31,7 @@
 | 检查 | 结果 | 证据边界 |
 | --- | --- | --- |
 | C# 核心测试 | 180 PASS，0 FAIL | 离线测试结果，不等于完整 Mod 或自然结束整局通过 |
-| 停流超时回归 | loopback 先回 header、正文停流 | 生产默认超时仍是 3 分钟 |
+| 停流超时回归 | loopback 先回 header、正文停流的按契约分类（超时 vs 用户取消） | 离线回归 LlmClientTests；生产默认请求超时 10 分钟、HTTP 客户端 11 分钟（OpenAiCompatibleClient.DefaultRequestTimeout，22907b0/#80 起）。真实上游超长停流的端到端仍后置 |
 | MCP Origin | 7 项离线测试通过；隔离 Host 实机探测 | 不是完整浏览器页面利用 |
 | Mod Release 构建 | 0 warning 0 error；SkipInstall 生成 DLL/PCK | 此行记录隔离候选构建；后续正式打包与安装见下方发布验收 |
 | 隔离双开 13 层 | 2026-09-08 08:35 打到 13 层原生 GAME_OVER | full-run-result.json。Host progress 聚合当时未更新；不能顶替下面短路径 |
@@ -56,7 +56,7 @@
 | 空奖励 overlay | 19710ad | 已发布 v0.10.5 | 180 PASS；发布预检与 ZIP 检查通过 | Workshop 订阅加载冒烟已通过；不代表完整对局验收 |
 | GAME_OVER 等待原生结算 | 4b4da6e（#79） | 已发布 v0.10.5 | 2026-09-08 20:28 隔离双开 continue 4.22s/2.42s，save_verified，progress mtime 更新 | total_losses 未观察到 +1 |
 | 简单选牌屏状态与确认（#81） | 1b7236a、27fa223 | 已发布 v0.10.6 | 合并构建隔离实机：事件多选报 2/2/0、两次点击 30ms/131ms 完成、原生 chose cards 记录；Sea Glass（0/15 手动确认）暴露 confirm_selection 并 168ms 完成 | 升级/变形/附魔三个屏仍报 1/1/0 且首次点击跑满 10s 超时，见 #82 |
-| 主动发言与交流风格 | a9d4478 | 已发布 v0.10.6 | C# 核心离线测试 17 项（策略/语气/只读）；mod 编译 0 警告 0 错误 | 默认关闭的可选功能；仅战斗开始/结束触发，最多 6 句、间隔 ≥75 秒；实机发言质量未验收 |
+| 主动发言与交流风格 | a9d4478 | 已发布 v0.10.6 | C# 核心离线测试 17 项（策略/语气/只读）；mod 编译 0 警告 0 错误；2026-09-10 隔离实机 + 本地桩验证触发、提示词、语气注入、只读 chat 路径、回复消费五项，见 [实机验收](history/validation-acceptance_2026-09-10.md) | 默认关闭的可选功能；仅战斗开始/结束触发，最多 6 句、间隔 ≥75 秒；闸门边界（战斗结束触发、75s 间隔、6 条上限、开关关闭负例）与真实模型发言质量未验收 |
 | 依赖安全（#50 / #51） | cd55fe1 | 已发布 v0.10.6 | fastmcp 3.4.7、fast-uri 3.1.7；npm audit total 0；MCP 49 项单测通过 | 只覆盖这两条报告与 npm 树，不是完整的第三方审计 |
 | 文档契约与验证闸门 | c212594、6aabb4f | 已发布 v0.10.6 | `check_verification_gates.py` 四闸门全绿；自测漂移场景全部被拒；preflight 端到端 exit 0 | 静态检查，不能替代实机行为验证 |
 
@@ -66,7 +66,7 @@
 
 P0 已完成：90s continue 超时已提交；Trellis 纳入版本控制并归档 bootstrap；收尾日志 4f1ec66 已推送；旧 stash 已 drop。2026-09-09 文档维护将旧规划移入 history/ 并保留兼容入口。
 
-P1 已完成：当前 main 隔离 DLL 双开 GAME_OVER 存档短路径；continue 只点一次且 90s 超时；控制台 fight/die 不能用于双开。P1.3：高级设置「重置本会话统计」见 ui-budget-scrolled3.jpg；请求上限=1 后 health stop_kind=budget、session_requests=1，overlay 显示「已达到会话请求次数上限」和下一步（提高上限 / 重置本会话统计 / 继续游玩）。证据 p13-overlimit-result.json。真实上游超长停流、浏览器 Origin 页仍后置。
+P1 已完成：当前 main 隔离 DLL 双开 GAME_OVER 存档短路径；continue 只点一次且 90s 超时；控制台 fight/die 不能用于双开。P1.3：高级设置「重置本会话统计」见 ui-budget-scrolled3.jpg；请求上限=1 后 health stop_kind=budget、session_requests=1，overlay 显示「已达到会话请求次数上限」和下一步（提高上限 / 重置本会话统计 / 继续游玩）。证据 p13-overlimit-result.json。真实上游超长停流的端到端与真实浏览器页面加载的 Origin 场景仍后置（两者的生产契约、离线回归与本机 loopback/探测已落地，见上表）。
 
 已合进 main、不再当待办：非法预算保留安全上限、损坏配置备份恢复、MCP Origin 契约、停流超时契约、play_card 取消、空奖励 overlay、continue_game_over 等待原生结算。
 
@@ -90,9 +90,9 @@ P3 支持范围与卫生
 ### 剩余事项与证据边界
 
 - Workshop 订阅加载已收口；未额外执行第二轮重启或升级回退，不将这些扩展项目计为已验证。
-- 后置验证：真实上游超长停流、浏览器 Origin 场景；完整自然结束长局不作为此次文档收尾门槛。
+- 后置验证：真实上游超长停流的端到端、真实浏览器页面加载的 Origin 场景；两者的证据当前止于生产超时契约 + 本机 loopback 回归、MCP Origin 离线契约 + 本机探测。完整自然结束长局不作为此次文档收尾门槛。
 - 已知观察：双开控制台 fight/die 会导致不同步；短路径结算中 total_losses 未观察到 +1，不能将 save_verified 扩大为所有统计字段均已验收。
-- 产品边界：模型兼容矩阵主要是源码与离线协议证据，不代表所有服务商均经过实机测试。主动发言与可选语气已实现且有离线测试覆盖，但**未做实机验收**：真实模型在真实对局中是否在合适时机说出合适的话仍未验证。P3 的"完成"指支持范围核查完成。
+- 产品边界：模型兼容矩阵主要是源码与离线协议证据，不代表所有服务商均经过实机测试。主动发言与可选语气已在 2026-09-10 用本地桩完成隔离实机验收（触发、提示词、语气注入、只读 chat 路径、回复消费五项，见 history/validation-acceptance_2026-09-10.md），但**未用真实模型验收**：真实模型在真实对局中是否在合适时机说出合适的话仍未验证。P3 的"完成"指支持范围核查完成。
 
 ## 5. 后续维护规则
 
