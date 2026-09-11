@@ -2552,9 +2552,21 @@ internal static class GameActionService
     {
         var deadline = DateTime.UtcNow + timeout;
 
+        // The screen-level confirm is not always the last step: on deck, transform and enchant screens
+        // it only opens a preview that still needs its own confirm. Keep that click inside the loop so
+        // one confirm_selection call drives the whole sequence, and cap it so an enabled-but-inert
+        // button cannot be hammered while the loop waits for its deadline.
+        var stageOneClicks = 0;
+        var framesUntilNextStageOneClick = 0;
+
         while (DateTime.UtcNow < deadline)
         {
             await WaitForNextFrameAsync();
+
+            if (framesUntilNextStageOneClick > 0)
+            {
+                framesUntilNextStageOneClick--;
+            }
 
             if (!GodotObject.IsInstanceValid(screen) ||
                 ActiveScreenContext.Instance.GetCurrentScreen() is not NCardGridSelectionScreen)
@@ -2594,15 +2606,26 @@ internal static class GameActionService
 
             var confirmButton = screen.GetNodeOrNull<NConfirmButton>("%Confirm")
                 ?? screen.GetNodeOrNull<NConfirmButton>("Confirm");
-            if (confirmButton?.IsEnabled == true)
+            if (confirmButton?.IsEnabled == true &&
+                stageOneClicks < StageOneConfirmClickLimit &&
+                framesUntilNextStageOneClick == 0)
             {
+                stageOneClicks++;
+                framesUntilNextStageOneClick = StageOneConfirmCooldownFrames;
                 confirmButton.ForceClick();
-                return await WaitForDeckSelectionResolutionAsync(screen, deadline);
+
+                // Deliberately keep looping: the next iterations pick up either the closed screen or
+                // the preview this click may have opened. Returning here instead made the caller wait
+                // out the whole timeout with the preview on screen and then need a second call.
+                continue;
             }
         }
 
         return false;
     }
+
+    private const int StageOneConfirmClickLimit = 2;
+    private const int StageOneConfirmCooldownFrames = 5;
 
     private static async Task<bool> SettleCardGridSelectionClickAsync(
         NCardGridSelectionScreen screen,

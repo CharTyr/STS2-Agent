@@ -1127,14 +1127,15 @@
 
 ### `select_deck_card`
 
-在选牌界面选择一张牌。牌库单选会在点击时自动确认；战斗手牌多选只累积当前这一步，需要再用 `confirm_selection` 收尾。
+在选牌界面选择一张牌。牌库网格的每一次点击都会结算并返回 `completed`；战斗手牌多选只累积当前这一步并返回 `pending`，需要再用 `confirm_selection` 收尾。
 
 - **前提**：`screen = "CARD_SELECTION"`，`selection.cards[]` 非空
 - **参数**：`option_index`（必填）：`selection.cards[]` 的索引
 - **行为**：按 `selection.kind` 分两种
-  - 牌库单选（`deck_card_select`、`deck_upgrade_select`、`deck_transform_select`、`deck_enchant_select`、`choose_card_select`）：选择并自动确认，返回 `completed`。当前已验证**删牌**、**升级牌**场景；变化牌、附魔牌等单选牌库选择也复用此接口
+  - 牌库网格（`deck_card_select`、`deck_upgrade_select`、`deck_transform_select`、`deck_enchant_select`、`choose_card_select`）：点击被原生界面确认后返回 `completed`。**这不代表界面已关闭**：`min_select < max_select` 时界面会保持打开继续收集，读 `selection.selected_count` / `max_select` 决定是否还要继续点；点满或想提前结束时用 `confirm_selection` 收尾（见下）
   - 战斗手牌多选（`combat_hand_select`、`combat_hand_upgrade_select`）：只计入这一步并返回 `pending`，界面保持打开。读 `selection.selected_count` / `max_select` / `requires_confirmation` 判断是否还需要继续选，选完用 `confirm_selection` 结束
-- **稳定条件**：牌库单选离开选牌界面；战斗手牌多选在 `confirm_selection` 之后离开选牌界面
+  - 已实机验证：删牌、升级（单选）、附魔（0/3，多选）、变化（0/6，多选）、事件多选（2/2）。附魔/变化这类 `min_select < max_select` 的界面每次点击在约 0.15 秒内返回，不再空转超时
+- **稳定条件**：牌库网格的点击被原生界面接受（`selected_count` 变化）；战斗手牌多选在 `confirm_selection` 之后离开选牌界面
 - **超时**：10 秒
 
 ```json
@@ -1143,6 +1144,16 @@
   "option_index": 0
 }
 ```
+
+### `confirm_selection`
+
+结束一次需要确认的选牌。一次调用会走完整段原生流程：需要时先点界面的确认按钮打开预览，再点预览里的确认。
+
+- **前提**：`selection.can_confirm = true`（原生确认按钮可用时才会出现在 available_actions）
+- **参数**：无
+- **行为**：牌库网格的 `min_select < max_select` 场景（附魔、变化，以及 `min_select` 为 0 的奖励选牌）与战斗手牌多选都用它收尾。选满 `max_select` 时 `select_deck_card` 通常会自行收尾，因此它主要用于**提前结束**
+- **稳定条件**：离开选牌界面
+- **超时**：10 秒。实机验证：附魔（0/3）与变化（0/6）都在一次调用内完成（约 0.17–0.19 秒），不需要第二次调用
 
 ### `open_chest`
 

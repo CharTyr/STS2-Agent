@@ -15,8 +15,16 @@ internal static class DeckSelectionContractTests
         var stateSource = WithoutWhitespace(rawStateSource);
         var payloadBody = WithoutWhitespace(
             MethodBody(rawStateSource, "BuildSelectionPayload"));
+        // The metadata guard must stay on the shared base type. A per-subclass list silently excluded
+        // the upgrade/transform/enchant screens, so their own _prefs/_selectedCards were never read:
+        // /state reported 1/1/0 while the native screen highlighted picks, and the click settle path
+        // fell through to the confirm-first arm and burned its full timeout on every intermediate pick.
         Assert.Contains(
-            "NDeckCardSelectScreenorNSimpleCardSelectScreen",
+            "if(currentScreenisnotNCardGridSelectionScreen||ReflectionMemberAccessor.TryGetValue(currentScreen,\"_prefs\")",
+            stateSource,
+            StringComparison.Ordinal);
+        Assert.Contains(
+            "if(currentScreenisNCardGridSelectionScreen&&ReflectionMemberAccessor.TryGetValue(currentScreen,\"_selectedCards\")",
             stateSource,
             StringComparison.Ordinal);
         Assert.Contains("\"_prefs\"", stateSource, StringComparison.Ordinal);
@@ -94,6 +102,19 @@ internal static class DeckSelectionContractTests
         Assert.Contains(
             "ConfirmDeckSelectionAsync(cardGridScreen,TimeSpan.FromSeconds(10))",
             confirmBody,
+            StringComparison.Ordinal);
+        // A screen-level confirm click may only open a preview that still needs its own confirm.
+        // The loop has to keep going (bounded) so one confirm_selection call finishes the screen
+        // rather than waiting out the timeout with the preview open and needing a second call.
+        var executorBody = WithoutWhitespace(
+            MethodBody(rawActionSource, "Task<bool> ConfirmDeckSelectionAsync"));
+        Assert.Contains(
+            "stageOneClicks<StageOneConfirmClickLimit",
+            executorBody,
+            StringComparison.Ordinal);
+        Assert.Contains(
+            "framesUntilNextStageOneClick==0",
+            executorBody,
             StringComparison.Ordinal);
     }
 

@@ -1644,7 +1644,11 @@ internal static class GameStateService
         out CardGridSelectionMetadata metadata)
     {
         metadata = default;
-        if (currentScreen is not (NDeckCardSelectScreen or NSimpleCardSelectScreen) ||
+        // Every concrete card-grid screen declares its own private _prefs/_selectedCards: deck, simple,
+        // upgrade, transform and enchant alike. Guarding on the base type keeps the probe on one path,
+        // and the field lookups below stay the real gate - a future subclass without those fields
+        // still fails safely instead of needing a new name in a list here.
+        if (currentScreen is not NCardGridSelectionScreen ||
             ReflectionMemberAccessor.TryGetValue(currentScreen, "_prefs") is not CardSelectorPrefs prefs ||
             ReflectionMemberAccessor.TryGetValue(currentScreen, "_selectedCards") is not IEnumerable selectedCards)
         {
@@ -3492,7 +3496,7 @@ internal static class GameStateService
 
     private static bool IsCardSelected(IScreenContext? currentScreen, CardModel card)
     {
-        if (currentScreen is NDeckCardSelectScreen or NSimpleCardSelectScreen &&
+        if (currentScreen is NCardGridSelectionScreen &&
             ReflectionMemberAccessor.TryGetValue(currentScreen, "_selectedCards") is IEnumerable selectedGridCards)
         {
             foreach (var item in selectedGridCards)
