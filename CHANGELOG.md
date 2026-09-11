@@ -2,9 +2,9 @@
 
 > Release attribution is recorded against tags or release commits. Post-tag maintenance is listed separately; current validation limits are maintained in [PRODUCT_PLAN_CURRENT.md](https://github.com/CharTyr/STS2-Agent/blob/main/PRODUCT_PLAN_CURRENT.md).
 
-## v0.10.7 - 2026-09-11
+## v0.10.7 - 2026-09-12
 
-> Distributed to the Steam Workshop on 2026-09-11: the in-tree version, the uploaded Workshop content and the build all come from the same commit. No GitHub tag or release for this version yet. Live evidence: [validation-acceptance_2026-09-11.md](history/validation-acceptance_2026-09-11.md).
+> Distributed to the Steam Workshop on 2026-09-12 (item 3796486050, public, file_size 1088228). The in-tree version, the uploaded Workshop content and the build all come from commit `f9330ba`; no GitHub tag or release exists for this version yet. Live evidence: [validation-acceptance_2026-09-11.md](history/validation-acceptance_2026-09-11.md).
 
 ### Fixed
 

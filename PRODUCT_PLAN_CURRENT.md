@@ -88,6 +88,7 @@ P2 发布与安装
 - P2.5 完成（订阅加载冒烟范围）：Steam mods/ 与 Workshop 本地订阅清单均为 v0.10.5；2026-09-09 Workshop result=1、visibility=0（公开）。96bd410 将已有物品更新默认设为 public，首次 ID=0 仍 private，显式 Visibility 优先。用户启用重启后，截图确认窗口显示；本次日志第 40–41 行从 Workshop 目录加载 DLL/PCK，未发现重复加载错误；/health 为 0.10.5、ready，/state 和动作接口为 MAIN_MENU。证据见 [验收记录](history/workshop-load-acceptance_2026-09-09.md)。
 - P2.6 完成（v0.10.6 发布）：版本号五处同步（mod_manifest.json、mod_id.json、Router.cs、pyproject.toml、uv.lock），`check_release_metadata.py` 通过；CHANGELOG 的 Unreleased 条目并入 v0.10.6 段；preflight、四闸门、C# 214 PASS / 0 FAIL、MCP 49 项通过；tag v0.10.6 指向发布提交 2f75e4a，GitHub Release 资产 `sts2-ai-agent-v0.10.6-windows.zip` 已上传。
 - P2.7 完成（Workshop 更新）：打包工作区 build/steam-workshop/sts2-ai-agent-v0.10.6，用 ModUploader 以 `--id 3796486050` 更新已有物品（不新建）。上传后 Steam Web API 复核 result=1、visibility=0、file_size 1083108 与本地一致、标签在位；工作区已写入 mod_id.txt。操作要点：上传前必须重启 Steam 客户端，否则 SubmitItemUpdate 长期停在 PreparingConfig/PreparingContent——本次两次未重启的尝试都卡死，重启后同一条命令 16 秒完成。该现象与系统代理（本机 127.0.0.1:10808）无关：直连与走代理对 Steam 域名都时通时断，重启后即可成功。
+ - P2.8 完成（v0.10.7 Workshop 更新，2026-09-12）：版本号五处同步到 0.10.7（发布提交 f9330ba），CHANGELOG 的 Unreleased 段收为 v0.10.7。打包工作区 build/steam-workshop/sts2-ai-agent-v0.10.7，仍用 ModUploader 更新既有物品 3796486050。Steam Web API 复核：visibility=0（公开）、file_size 1088228 与本地 content 目录字节和完全相等、tags 三个在位、description 未被覆盖、time_updated 即时刷新。**本次只更新工坊，未打 GitHub tag、未建 Release。** 两条新经验：(a) 重启 Steam 后立即上传仍会失败（卡 PreparingContent 约 60 秒后 k_EResultFail），开启本机代理后重跑一次成功；(b) ModUploader 必须以后台分离进程启动，前台调用被轮询打断会直接失败。见 [上传记录](history/workshop-upload-v0.10.7_2026-09-12.md)。
 
 P3 支持范围与卫生
 
