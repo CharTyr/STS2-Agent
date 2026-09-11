@@ -3,6 +3,7 @@ using MegaCrit.Sts2.Core.Helpers;
 using MegaCrit.Sts2.Core.Logging;
 using STS2AIAgent.Config;
 using STS2AIAgent.Game;
+using STS2AIAgent.Localization;
 
 namespace STS2AIAgent.Multiplayer;
 
@@ -14,7 +15,7 @@ internal static class DualInstanceCoordinator
     {
         if (await GetScreenAsync() != "MAIN_MENU")
         {
-            return "请先回到主菜单，再邀请 AI 队友组队。";
+            return Loc.T("请先回到主菜单，再邀请 AI 队友组队。");
         }
 
         try
@@ -28,7 +29,7 @@ internal static class DualInstanceCoordinator
         catch (Exception ex)
         {
             Log.Warn($"{LogPrefix} Local lobby failed: {ex.Message}");
-            return "创建 4 人大厅失败：" + ex.Message;
+            return Loc.T("创建 4 人大厅失败：{0}", ex.Message);
         }
 
         var launch = await LocalDualInstanceLauncher.LaunchCompanionAsync(cancellationToken);
@@ -37,7 +38,7 @@ internal static class DualInstanceCoordinator
             return launch.Message;
         }
 
-        return launch.Message + "。本机已创建 4 人大厅，请选角色后 Ready 开局。你打自己的角色；AI 会自动加入、点开局并打另一个角色。";
+        return Loc.T("{0}。本机已创建 4 人大厅，请选角色后 Ready 开局。你打自己的角色；AI 会自动加入、点开局并打另一个角色。", launch.Message);
     }
 
     public static async Task<bool> RunCompanionBootstrapAsync(CancellationToken cancellationToken)
@@ -139,7 +140,7 @@ internal static class DualInstanceCoordinator
             ?? typeof(CommandLineHelper).GetFields(BindingFlags.Static | BindingFlags.NonPublic | BindingFlags.Public)
                 .FirstOrDefault(candidate => candidate.FieldType.Name.Contains("Dictionary", StringComparison.Ordinal));
         var args = field?.GetValue(null)
-            ?? throw new InvalidOperationException("找不到 FastHost 命令行参数表。");
+            ?? throw new InvalidOperationException(Loc.T("找不到 FastHost 命令行参数表。"));
 
         if (args is Godot.Collections.Dictionary<string, string?> typedNullable)
         {
@@ -152,13 +153,13 @@ internal static class DualInstanceCoordinator
         else
         {
             var indexer = args.GetType().GetProperty("Item")
-                ?? throw new InvalidOperationException("FastHost 命令行参数表类型无法写入：" + args.GetType().FullName);
+                ?? throw new InvalidOperationException(Loc.T("FastHost 命令行参数表类型无法写入：{0}", args.GetType().FullName));
             indexer.SetValue(args, "host_standard", new object[] { "fastmp" });
         }
 
         if (!CommandLineHelper.HasArg("fastmp"))
         {
-            throw new InvalidOperationException("写入 -fastmp 后 HasArg 仍为 false。type=" + args.GetType().FullName);
+            throw new InvalidOperationException(Loc.T("写入 -fastmp 后 HasArg 仍为 false。type={0}", args.GetType().FullName));
         }
 
         Log.Info($"{LogPrefix} Injected -fastmp host_standard so Steam host uses ENet:33771 max=4");
@@ -171,7 +172,7 @@ internal static class DualInstanceCoordinator
             cancellationToken.ThrowIfCancellationRequested();
             if (GameStateService.BuildStatePayload().screen != "MAIN_MENU")
             {
-                throw new InvalidOperationException("请先回到主菜单，再邀请 AI 队友组队。");
+                throw new InvalidOperationException(Loc.T("请先回到主菜单，再邀请 AI 队友组队。"));
             }
 
             return GameActionService.ExecuteInternalConsoleCommandAsync("multiplayer test");

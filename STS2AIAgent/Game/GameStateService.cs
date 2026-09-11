@@ -53,6 +53,7 @@ using MegaCrit.Sts2.Core.Saves;
 using MegaCrit.Sts2.Core.Saves.Managers;
 using MegaCrit.Sts2.Core.Timeline;
 using MegaCrit.Sts2.addons.mega_text;
+using STS2AIAgent.Localization;
 using STS2AIAgent.Multiplayer;
 
 namespace STS2AIAgent.Game;
@@ -3117,7 +3118,7 @@ internal static class GameStateService
                 ? BuildAgentCardStacks(deckCards, glossaryTerms)
                 : BuildAgentCardStacks(run.deck, glossaryTerms),
             relics = run.relics
-                .Select(relic => relic.is_melted ? $"{relic.name} (熔毁)" : relic.name)
+                .Select(relic => relic.is_melted ? Loc.T("{0} (熔毁)", relic.name) : relic.name)
                 .ToArray(),
             potions = run.potions.Select(potion => new
             {
@@ -3270,7 +3271,7 @@ internal static class GameStateService
             potions = shop.potions.Select(potion => new
             {
                 i = potion.index,
-                line = $"{potion.name ?? "空"}{(string.IsNullOrWhiteSpace(potion.usage) ? string.Empty : $"：{potion.usage}")} | {potion.price}g",
+                line = FormatShopPotionLine(potion),
                 affordable = potion.enough_gold,
                 stocked = potion.is_stocked
             }).ToArray(),
@@ -3359,7 +3360,7 @@ internal static class GameStateService
             characters = characterSelect.characters.Select(character => new
             {
                 i = character.index,
-                line = character.is_random ? $"{character.name} (随机)" : character.name,
+                line = character.is_random ? Loc.T("{0} (随机)", character.name) : character.name,
                 locked = character.is_locked,
                 selected = character.is_selected
             }).ToArray()
@@ -3468,7 +3469,7 @@ internal static class GameStateService
             unplayable_reason_raw = card.unplayable_reason_raw,
             unplayable_preventer_id = card.unplayable_preventer_id,
             unplayable_preventer_type = card.unplayable_preventer_type,
-            keywords,
+            keywords = TranslateKeywords(keywords),
             mods
         };
     }
@@ -3493,7 +3494,7 @@ internal static class GameStateService
             i = index,
             line = FormatCardLine(name, upgraded, 1, energyCost, starCost, costsX, starCostsX, rulesText),
             selected,
-            keywords,
+            keywords = TranslateKeywords(keywords),
             mods = Array.Empty<string>()
         };
     }
@@ -3551,7 +3552,7 @@ internal static class GameStateService
             i = index,
             line = $"{FormatCardLine(name, upgraded, 1, energyCost, starCost, costsX, starCostsX, rulesText)} | {price}g",
             affordable = enoughGold,
-            keywords,
+            keywords = TranslateKeywords(keywords),
             mods = Array.Empty<string>()
         };
     }
@@ -3586,7 +3587,7 @@ internal static class GameStateService
                 return new
                 {
                     line,
-                    keywords = first.keywords,
+                    keywords = TranslateKeywords(first.keywords),
                     mods = first.mods
                 };
             })
@@ -3652,7 +3653,7 @@ internal static class GameStateService
         var prefix = string.IsNullOrWhiteSpace(cost) ? title : $"{title} [{cost}]";
         return string.IsNullOrWhiteSpace(rulesText)
             ? prefix
-            : $"{prefix}：{rulesText}";
+            : Loc.T("{0}：{1}", prefix, rulesText);
     }
 
     private static string FormatCardCost(int? energyCost, int? starCost, bool costsX, bool starCostsX)
@@ -3660,20 +3661,20 @@ internal static class GameStateService
         var parts = new List<string>();
         if (costsX)
         {
-            parts.Add("X费");
+            parts.Add(Loc.T("X费"));
         }
         else if (energyCost.HasValue)
         {
-            parts.Add($"{Math.Max(0, energyCost.Value)}费");
+            parts.Add(Loc.T("{0}费", Math.Max(0, energyCost.Value)));
         }
 
         if (starCostsX)
         {
-            parts.Add("X星");
+            parts.Add(Loc.T("X星"));
         }
         else if (starCost.HasValue && starCost.Value > 0)
         {
-            parts.Add($"{starCost.Value}星");
+            parts.Add(Loc.T("{0}星", starCost.Value));
         }
 
         return string.Join("/", parts);
@@ -3681,23 +3682,30 @@ internal static class GameStateService
 
     private static string FormatOrbLine(CombatOrbPayload orb)
     {
-        return $"{orb.name} 被动{orb.passive_value}/激发{orb.evoke_value}";
+        return Loc.T("{0} 被动{1}/激发{2}", orb.name, orb.passive_value, orb.evoke_value);
     }
 
     private static string FormatPetLine(CombatPetPayload pet)
     {
-        return $"{pet.name} {pet.current_hp}/{pet.max_hp} 格挡{pet.block}";
+        return Loc.T("{0} {1}/{2} 格挡{3}", pet.name, pet.current_hp, pet.max_hp, pet.block);
     }
 
     private static string FormatPotionLine(RunPotionPayload potion)
     {
         if (!potion.occupied)
         {
-            return $"{potion.index}: 空";
+            return Loc.T("{0}: 空", potion.index);
         }
 
-        var usage = string.IsNullOrWhiteSpace(potion.usage) ? string.Empty : $"：{potion.usage}";
-        return $"{potion.index}: {potion.name}{usage}";
+        var usage = string.IsNullOrWhiteSpace(potion.usage) ? string.Empty : Loc.T("：{0}", potion.usage);
+        return Loc.T("{0}: {1}{2}", potion.index, potion.name, usage);
+    }
+
+    private static string FormatShopPotionLine(ShopPotionPayload potion)
+    {
+        var name = string.IsNullOrWhiteSpace(potion.name) ? Loc.T("空") : potion.name;
+        var usage = string.IsNullOrWhiteSpace(potion.usage) ? string.Empty : Loc.T("：{0}", potion.usage);
+        return Loc.T("{0}{1} | {2}g", name, usage, potion.price);
     }
 
     private static string FormatEventOptionLine(EventOptionPayload option)
@@ -3908,21 +3916,56 @@ internal static class GameStateService
 
         foreach (var (keyword, _) in AgentKeywordDefinitions)
         {
-            if (!string.IsNullOrWhiteSpace(text) && text.Contains(keyword, StringComparison.Ordinal))
+            if (ContainsKeyword(text, keyword) || modifierGroups.Any(group => ContainsKeyword(group, keyword)))
             {
                 values.Add(keyword);
-            }
-
-            foreach (var modifierGroup in modifierGroups)
-            {
-                if (modifierGroup.Any(modifier => modifier.Contains(keyword, StringComparison.Ordinal)))
-                {
-                    values.Add(keyword);
-                }
             }
         }
 
         return values.OrderBy(value => value, StringComparer.Ordinal).ToArray();
+    }
+
+    /// <summary>
+    /// True when the text carries this keyword in any spelling the glossary knows. Card text
+    /// arrives in whatever language the game is running in, so the English spellings count too.
+    /// </summary>
+    private static bool ContainsKeyword(string? text, string keyword)
+    {
+        if (string.IsNullOrWhiteSpace(text))
+        {
+            return false;
+        }
+
+        if (text.Contains(keyword, StringComparison.Ordinal))
+        {
+            return true;
+        }
+
+        if (!AgentKeywordAliases.TryGetValue(keyword, out var aliases))
+        {
+            return false;
+        }
+
+        return aliases.Any(alias => text.Contains(alias, StringComparison.OrdinalIgnoreCase));
+    }
+
+    private static bool ContainsKeyword(IEnumerable<string> texts, string keyword)
+    {
+        return texts.Any(text => ContainsKeyword(text, keyword));
+    }
+
+    /// <summary>
+    /// The keyword labels the model reads follow the game language, and the glossary is built from
+    /// the same spellings so the two stay in step. Chinese is the identity case.
+    /// </summary>
+    private static string[] TranslateKeywords(string[] keywords)
+    {
+        if (Loc.IsChinese || keywords.Length == 0)
+        {
+            return keywords;
+        }
+
+        return keywords.Select(keyword => Loc.T(keyword)).ToArray();
     }
 
     private static void CollectGlossaryTerms(HashSet<string> glossaryTerms, string? text, params string[][] modifierGroups)
@@ -3945,7 +3988,7 @@ internal static class GameStateService
         {
             if (glossaryTerms.Contains(keyword))
             {
-                glossary[keyword] = definition;
+                glossary[Loc.T(keyword)] = Loc.T(definition);
             }
         }
 
@@ -3993,6 +4036,32 @@ internal static class GameStateService
         ("附魔", "附魔是卡牌附着的额外词条或效果层。"),
         ("灌注", "灌注表示卡牌带有额外附着效果。"),
         ("临时", "临时牌通常会在回合结束或打出后离开牌组流转。")
+    };
+
+    /// <summary>
+    /// Latin spellings the same keywords take in the English card text. The Chinese spelling stays
+    /// the key everywhere else; these only widen the search so an English client still matches.
+    /// </summary>
+    private static readonly Dictionary<string, string[]> AgentKeywordAliases = new(StringComparer.Ordinal)
+    {
+        ["力量"] = new[] { "Strength" },
+        ["敏捷"] = new[] { "Dexterity" },
+        ["易伤"] = new[] { "Vulnerable" },
+        ["虚弱"] = new[] { "Weak" },
+        ["脆弱"] = new[] { "Frail" },
+        ["格挡"] = new[] { "Block" },
+        ["消耗"] = new[] { "Exhaust" },
+        ["保留"] = new[] { "Retain" },
+        ["中毒"] = new[] { "Poison" },
+        ["眩晕"] = new[] { "Dazed" },
+        ["灼伤"] = new[] { "Burn" },
+        ["虚空"] = new[] { "Void" },
+        ["力量流失"] = new[] { "Strength Down" },
+        ["集中"] = new[] { "Focus" },
+        ["球位"] = new[] { "Orb Slot" },
+        ["附魔"] = new[] { "Enchantment", "Enchant" },
+        ["灌注"] = new[] { "Imbued", "Imbue", "Infused" },
+        ["临时"] = new[] { "Temporary" }
     };
 
     private static MultiplayerPayload? BuildMultiplayerPayload(IScreenContext? currentScreen, RunState? runState)

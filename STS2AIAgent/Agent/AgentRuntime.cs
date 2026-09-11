@@ -2,6 +2,7 @@ using MegaCrit.Sts2.Core.Logging;
 using STS2AIAgent.Config;
 using STS2AIAgent.Game;
 using STS2AIAgent.Llm;
+using STS2AIAgent.Localization;
 using STS2AIAgent.Multiplayer;
 using STS2AIAgent.Server;
 
@@ -22,7 +23,7 @@ internal sealed class AgentRuntime
     private readonly TeamConversation _teamConversation = new();
     private readonly SemaphoreSlim _teamMessageGate = new(1, 1);
     private volatile bool _teamMessagePending;
-    private string _teamStatus = "组队后，可以在这里和 AI 队友商量打法。";
+    private string? _teamStatus;
     private CancellationTokenSource _lifetime = new();
     private readonly AutoPlaySession _playSession = new();
     private CurrentRunBoundary _runBoundary = new();
@@ -32,16 +33,16 @@ internal sealed class AgentRuntime
     private readonly SemaphoreSlim _companionControlGate = new(1, 1);
     private readonly SemaphoreSlim _remoteControlGate = new(1, 1);
     private volatile bool _teamControlPending;
-    private string _teamControlStatus = "队友控制尚未连接。";
+    private string? _teamControlStatus;
     private volatile bool _companionReady;
     private volatile bool _companionAutoStartSuppressed;
     private AgentSettings _settings;
     private readonly AgentLoop _loop;
-    private string _status = "就绪";
+    private string? _status;
     private string _lastAction = "-";
     private string _lastThought = "-";
-    private string _dualStatus = "尚未启动双开。";
-    private string _mcpStatus = "MCP 已关闭，未对外暴露。";
+    private string? _dualStatus;
+    private string? _mcpStatus;
     private LlmUsage _sessionUsage = LlmUsage.Empty;
     private int _sessionRequests;
     private bool _sessionUsageKnown;
@@ -51,6 +52,7 @@ internal sealed class AgentRuntime
     private bool _waitingForGame;
     private bool _waitingForPlayer;
     private bool _requestingModel;
+    private volatile bool _requestingModelStatus;
     private readonly List<string> _diagnosticEvents = new();
     private SessionBudgetGuard _budgetGuard;
     private string? _proactiveSituationKey;
@@ -94,23 +96,25 @@ internal sealed class AgentRuntime
     public bool PlayRunning => _playSession.IsActive;
     public string PlayPhase => _playSession.Phase;
     public bool TeamControlPending => _teamControlPending;
-    public string TeamControlStatus => _teamControlStatus;
+    // The idle wording is resolved on read rather than stored, so switching the game language
+    // updates it too. Once real progress arrives, the recorded text takes over.
+    public string TeamControlStatus => _teamControlStatus ?? Loc.T("队友控制尚未连接。");
 
     public async Task ControlTeammateAsync(bool running, CancellationToken cancellationToken)
     {
         if (!await _remoteControlGate.WaitAsync(0, cancellationToken)) return;
         _teamControlPending = true;
-        _teamControlStatus = running ? "正在请求队友继续…" : "正在等待队友暂停；已提交的动作会先完成。";
+        _teamControlStatus = running ? Loc.T("正在请求队友继续…") : Loc.T("正在等待队友暂停；已提交的动作会先完成。");
         RaiseChanged();
         try
         {
-            if (_dualLaunching) throw new InvalidOperationException("请等待组队完成。");
+            if (_dualLaunching) throw new InvalidOperationException(Loc.T("请等待组队完成。"));
             if (LocalDualInstanceLauncher.CompanionProcessExited)
             {
-                throw new InvalidOperationException("队友进程已退出。请回到主菜单重新邀请。");
+                throw new InvalidOperationException(Loc.T("队友进程已退出。请回到主菜单重新邀请。"));
             }
 
-            var connection = LocalDualInstanceLauncher.Connection ?? throw new InvalidOperationException("请先邀请 AI 队友。");
+            var connection = LocalDualInstanceLauncher.Connection ?? throw new InvalidOperationException(Loc.T("请先邀请 AI 队友。"));
             if (running)
             {
                 var firstRun = FirstRunSetup.Evaluate(Settings);
@@ -123,14 +127,14 @@ internal sealed class AgentRuntime
             var phase = await connection.ControlAsync(running, cancellationToken);
             _teamControlStatus = phase switch
             {
-                "paused" => "队友已暂停。仍然可以聊天，点击继续后才会自动行动。",
-                "running" => "队友正在自动游玩。",
-                _ => "队友仍在停止当前任务，请稍后再次确认暂停。"
+                "paused" => Loc.T("队友已暂停。仍然可以聊天，点击继续后才会自动行动。"),
+                "running" => Loc.T("队友正在自动游玩。"),
+                _ => Loc.T("队友仍在停止当前任务，请稍后再次确认暂停。")
             };
         }
         catch (Exception ex)
         {
-            _teamControlStatus = "未确认队友控制结果：" + ex.Message;
+            _teamControlStatus = Loc.T("未确认队友控制结果：{0}", ex.Message);
         }
         finally
         {
@@ -149,13 +153,13 @@ internal sealed class AgentRuntime
             _companionAutoStartSuppressed = true;
             if (running)
             {
-                if (!_companionReady) throw new InvalidOperationException("队友尚未完成组队，请稍后继续。");
+                if (!_companionReady) throw new InvalidOperationException(Loc.T("队友尚未完成组队，请稍后继续。"));
                 StartAutoPlay();
             }
             else
             {
                 var stopping = _playSession.RequestPause();
-                SetStatus(stopping.IsCompleted ? "已暂停自动游玩" : "正在暂停，等待当前任务完成…");
+                SetStatus(stopping.IsCompleted ? Loc.T("已暂停自动游玩") : Loc.T("正在暂停，等待当前任务完成…"));
                 NoteEvent(Status);
                 try
                 {
@@ -165,14 +169,14 @@ internal sealed class AgentRuntime
                 {
                     // The loop already ended; treat that as a completed pause.
                 }
-                if (PlayPhase == "paused") SetStatus("已暂停自动游玩");
+                if (PlayPhase == "paused") SetStatus(Loc.T("已暂停自动游玩"));
             }
             return PlayPhase;
         }
         finally { _companionControlGate.Release(); }
     }
 
-    public string Status => _status;
+    public string Status => _status ?? Loc.T("就绪");
 
     public string LastAction => _lastAction;
 
@@ -197,7 +201,7 @@ internal sealed class AgentRuntime
     {
         if (!SessionBudgetLimits.CanResetSessionStats(PlayRunning, PlayPhase))
         {
-            message = "自动游玩进行中，不能清零本会话统计。请先暂停。暂停/继续不会清零累计。";
+            message = Loc.T("自动游玩进行中，不能清零本会话统计。请先暂停。暂停/继续不会清零累计。");
             SetStatus(message);
             RaiseChanged();
             return false;
@@ -212,16 +216,16 @@ internal sealed class AgentRuntime
             _proactiveChat.Reset();
         }
 
-        message = "已清零本会话统计。预算上限未改；继续游玩将重新计数。";
+        message = Loc.T("已清零本会话统计。预算上限未改；继续游玩将重新计数。");
         SetStatus(message);
         RaiseChanged();
         return true;
     }
 
-    public string DualStatus => _dualStatus;
+    public string DualStatus => _dualStatus ?? Loc.T("尚未启动双开。");
     public bool DualLaunching => _dualLaunching;
     public bool TeamMessagePending => _teamMessagePending;
-    public string TeamStatus => _teamStatus;
+    public string TeamStatus => _teamStatus ?? Loc.T("组队后，可以在这里和 AI 队友商量打法。");
     public IReadOnlyList<ChatTurn> TeamHistory => _teamConversation.Snapshot();
 
     public async Task SendTeamMessageAsync(string text, CancellationToken cancellationToken)
@@ -230,19 +234,19 @@ internal sealed class AgentRuntime
         _teamMessagePending = true;
         try
         {
-            if (_dualLaunching) throw new InvalidOperationException("正在组队，请等待连接完成后发送消息。");
+            if (_dualLaunching) throw new InvalidOperationException(Loc.T("正在组队，请等待连接完成后发送消息。"));
             var connection = LocalDualInstanceLauncher.Connection
-                ?? throw new InvalidOperationException("请先邀请 AI 队友。此处消息只发送给本次邀请的队友。");
+                ?? throw new InvalidOperationException(Loc.T("请先邀请 AI 队友。此处消息只发送给本次邀请的队友。"));
             _teamConversation.Add("user", text);
-            _teamStatus = "消息正在送往队友；若它正在行动，会在本次行动完成后回复。";
+            _teamStatus = Loc.T("消息正在送往队友；若它正在行动，会在本次行动完成后回复。");
             RaiseChanged();
             var reply = await connection.SendMessageAsync(text, cancellationToken);
             _teamConversation.Add("assistant", reply.Length > TeamConversation.MaxMessageLength ? reply[..TeamConversation.MaxMessageLength] : reply);
-            _teamStatus = "队友已回复。你的建议会作为后续决策的参考。";
+            _teamStatus = Loc.T("队友已回复。你的建议会作为后续决策的参考。");
         }
         catch (Exception ex)
         {
-            _teamStatus = "队伍消息未确认完成：" + ex.Message;
+            _teamStatus = Loc.T("队伍消息未确认完成：{0}", ex.Message);
         }
         finally
         {
@@ -283,7 +287,7 @@ internal sealed class AgentRuntime
             }, cancellationToken);
             if (result.Error != null) throw new InvalidOperationException(result.Error);
             if (string.IsNullOrWhiteSpace(result.AssistantText))
-                throw new InvalidOperationException("队友未返回文本回复；建议已记录供后续决策参考。");
+                throw new InvalidOperationException(Loc.T("队友未返回文本回复；建议已记录供后续决策参考。"));
             var reply = result.AssistantText;
             if (reply.Length > TeamConversation.MaxMessageLength) reply = reply[..TeamConversation.MaxMessageLength];
             _teamConversation.Add("assistant", reply);
@@ -297,7 +301,7 @@ internal sealed class AgentRuntime
         }
     }
 
-    public string McpStatus => _mcpStatus;
+    public string McpStatus => _mcpStatus ?? Loc.T("MCP 已关闭，未对外暴露。");
 
     public string? McpUrl => NativeMcpServer.Runtime?.EndpointUrl;
 
@@ -327,7 +331,7 @@ internal sealed class AgentRuntime
         AppendLog($"API {Server.HttpServer.Instance.Prefix}  role={InstanceRole.Current}");
         if (InstanceRole.IsCompanion)
         {
-            SetStatus("同伴实例：正在加入大厅");
+            SetStatus(Loc.T("同伴实例：正在加入大厅"));
             _ = Task.Run(() => CompanionEntryAsync(_lifetime.Token));
         }
     }
@@ -370,7 +374,7 @@ internal sealed class AgentRuntime
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
-            SetStatus("设置保存失败，原配置文件未被覆盖。请检查磁盘空间或文件占用后重试。");
+            SetStatus(Loc.T("设置保存失败，原配置文件未被覆盖。请检查磁盘空间或文件占用后重试。"));
             NoteEvent("settings save failed: " + ex.GetType().Name);
         }
     }
@@ -451,7 +455,7 @@ internal sealed class AgentRuntime
     {
         if (_dualLaunching)
         {
-            SetStatus("正在组队，请等待 AI 队友连接完成。");
+            SetStatus(Loc.T("正在组队，请等待 AI 队友连接完成。"));
             return;
         }
 
@@ -483,7 +487,7 @@ internal sealed class AgentRuntime
             _requestingModel = true;
         }
 
-        SetStatus("自动游玩中");
+        SetStatus(Loc.T("自动游玩中"));
         _ = ObservePlayCompletionAsync(task, identity);
     }
 
@@ -491,7 +495,7 @@ internal sealed class AgentRuntime
     {
         if (InstanceRole.IsCompanion) _companionAutoStartSuppressed = true;
         var task = _playSession.RequestPause();
-        SetStatus(task.IsCompleted ? "已暂停自动游玩" : "正在暂停，等待当前任务完成…");
+        SetStatus(task.IsCompleted ? Loc.T("已暂停自动游玩") : Loc.T("正在暂停，等待当前任务完成…"));
         NoteEvent(Status);
     }
 
@@ -542,7 +546,7 @@ internal sealed class AgentRuntime
 
         if (PlayRunning)
         {
-            AddHistory("assistant", "自动游玩进行中。请先暂停，再对话或代打。");
+            AddHistory("assistant", Loc.T("自动游玩进行中。请先暂停，再对话或代打。"));
             return;
         }
 
@@ -561,7 +565,7 @@ internal sealed class AgentRuntime
 
         var prior = History;
         AddHistory("user", text);
-        SetStatus("正在请求模型…");
+        SetRequestingModelStatus();
         try
         {
             await _turnGate.WaitAsync(cancellationToken);
@@ -588,7 +592,7 @@ internal sealed class AgentRuntime
 
             var reply = result.Error != null
                 ? result.Error
-                : string.IsNullOrWhiteSpace(result.AssistantText) ? "(无文本回复)" : result.AssistantText;
+                : string.IsNullOrWhiteSpace(result.AssistantText) ? Loc.T("(无文本回复)") : result.AssistantText;
             AddHistory("assistant", reply);
             _lastThought = result.Reasoning ?? reply;
             if (!string.IsNullOrWhiteSpace(result.Acted))
@@ -596,22 +600,22 @@ internal sealed class AgentRuntime
                 _lastAction = result.Acted;
             }
 
-            SetStatus(result.Error == null ? "对话完成" : "对话出错");
+            SetStatus(result.Error == null ? Loc.T("对话完成") : Loc.T("对话出错"));
         }
         catch (OperationCanceledException)
         {
-            SetStatus("对话已取消");
+            SetStatus(Loc.T("对话已取消"));
         }
         catch (Exception ex)
         {
-            AddHistory("assistant", "请求失败：" + ex.Message);
-            SetStatus("对话失败");
+            AddHistory("assistant", Loc.T("请求失败：{0}", ex.Message));
+            SetStatus(Loc.T("对话失败"));
         }
     }
 
     private async Task<string> TestConnectionCoreAsync(bool force, CancellationToken cancellationToken)
     {
-        SetStatus("正在测试模型…会向配置的服务发送测试请求。");
+        SetStatus(Loc.T("正在测试模型…会向配置的服务发送测试请求。"));
         NoteEvent(Status);
         try
         {
@@ -633,17 +637,17 @@ internal sealed class AgentRuntime
             if (play.Record.Status == "failed")
             {
                 SetModelTestFailure(play.Record);
-                SetStatus("游玩模型测试失败");
+                SetStatus(Loc.T("游玩模型测试失败"));
             }
             else if (play.Record.Status == "verified")
             {
                 ClearModelTestFailure();
-                SetStatus("游玩模型连通成功（不等于工具/视觉已验证）");
+                SetStatus(Loc.T("游玩模型连通成功（不等于工具/视觉已验证）"));
                 MarkFirstRunGuideSeen();
             }
             else
             {
-                SetStatus("模型尚未验证");
+                SetStatus(Loc.T("模型尚未验证"));
             }
 
             NoteEvent(summary);
@@ -651,7 +655,7 @@ internal sealed class AgentRuntime
         }
         catch (Exception ex)
         {
-            SetStatus("连通失败");
+            SetStatus(Loc.T("连通失败"));
             ClassifyStop(ex.Message, ModelRoleNames.Play);
             return DiagnosticExport.Redact(ex.Message);
         }
@@ -661,11 +665,11 @@ internal sealed class AgentRuntime
     {
         if (PlayRunning)
         {
-            SetStatus("自动游玩中，请先暂停再单步");
+            SetStatus(Loc.T("自动游玩中，请先暂停再单步"));
             return;
         }
 
-        SetStatus("单步决策中");
+        SetStatus(Loc.T("单步决策中"));
         try
         {
             await _turnGate.WaitAsync(cancellationToken);
@@ -698,11 +702,11 @@ internal sealed class AgentRuntime
         }
         catch (OperationCanceledException)
         {
-            SetStatus("单步已取消");
+            SetStatus(Loc.T("单步已取消"));
         }
         catch (Exception ex)
         {
-            SetStatus("单步失败：" + ex.Message);
+            SetStatus(Loc.T("单步失败：{0}", ex.Message));
         }
     }
 
@@ -715,13 +719,13 @@ internal sealed class AgentRuntime
 
         _dualLaunching = true;
         var previousConnection = LocalDualInstanceLauncher.Connection;
-        _dualStatus = "正在检查组队条件…";
+        _dualStatus = Loc.T("正在检查组队条件…");
         RaiseChanged();
         try
         {
             if (_teamMessagePending || _teamControlPending)
             {
-                _dualStatus = "请等待当前队伍消息完成，再重新组队。";
+                _dualStatus = Loc.T("请等待当前队伍消息完成，再重新组队。");
                 return;
             }
             var screen = await new GameBridge().GetScreenAsync(cancellationToken);
@@ -735,24 +739,24 @@ internal sealed class AgentRuntime
             // The child reads settings at startup. Persist the edited model
             // selection before launching so both windows use the same choices.
             SaveSettings(settings);
-            _dualStatus = "正在邀请 AI 队友，等待游戏窗口连接…";
+            _dualStatus = Loc.T("正在邀请 AI 队友，等待游戏窗口连接…");
             RaiseChanged();
             _dualStatus = await DualInstanceCoordinator.HostLocalCoopAsync(cancellationToken);
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
-            _dualStatus = "已取消等待队友连接；若队友窗口已打开，请在该窗口确认状态。";
+            _dualStatus = Loc.T("已取消等待队友连接；若队友窗口已打开，请在该窗口确认状态。");
         }
         catch (Exception ex)
         {
-            _dualStatus = "邀请队友失败：" + ex.Message;
+            _dualStatus = Loc.T("邀请队友失败：{0}", ex.Message);
         }
         finally
         {
             if (!ReferenceEquals(previousConnection, LocalDualInstanceLauncher.Connection))
             {
                 _teamConversation.Clear();
-                _teamStatus = "队伍对话已重置。确认队友连接后，可以商量这次冒险的打法。";
+                _teamStatus = Loc.T("队伍对话已重置。确认队友连接后，可以商量这次冒险的打法。");
             }
             _dualLaunching = false;
             _dualLaunchGate.Release();
@@ -765,7 +769,7 @@ internal sealed class AgentRuntime
         var joined = await DualInstanceCoordinator.RunCompanionBootstrapAsync(cancellationToken);
         if (!joined)
         {
-            SetStatus("同伴实例加入大厅失败");
+            SetStatus(Loc.T("同伴实例加入大厅失败"));
             return;
         }
         await _companionControlGate.WaitAsync(cancellationToken);
@@ -794,7 +798,7 @@ internal sealed class AgentRuntime
                 if (!IsCurrentPlaySessionLocked(identity)) return;
 
                 _requestingModel = false;
-                if (PlayPhase == "paused" && _stopKind == null) SetStatus("已暂停自动游玩");
+                if (PlayPhase == "paused" && _stopKind == null) SetStatus(Loc.T("已暂停自动游玩"));
             }
         }
         catch (Exception ex)
@@ -806,7 +810,7 @@ internal sealed class AgentRuntime
                 Log.Warn($"{LogPrefix} Auto-play session ended: {ex.Message}");
                 ClassifyStop(ex, ModelRoleNames.Play);
                 _requestingModel = false;
-                if (PlayPhase == "paused") SetStatus("自动游玩已停止：" + DiagnosticExport.Redact(ex.Message));
+                if (PlayPhase == "paused") SetStatus(Loc.T("自动游玩已停止：{0}", DiagnosticExport.Redact(ex.Message)));
                 NoteEvent("stop " + (_stopKind ?? "failed") + ": " + ex.Message);
             }
         }
@@ -847,7 +851,7 @@ internal sealed class AgentRuntime
                         return immediate;
                     }
 
-                    SetStatus("正在请求模型…");
+                    SetRequestingModelStatus();
                     var turn = await _loop.PlayOnceAsync(token, boundary.Check);
                     await TryProactiveChatAsync(moment, token);
                     return turn;
@@ -888,7 +892,8 @@ internal sealed class AgentRuntime
             await Task.Delay(400, cancellationToken);
             return new AgentTurnResult
             {
-                Reasoning = "等待你选择地图节点，随后投同一格。",
+                Reasoning = Loc.T("等待你选择地图节点，随后投同一格。"),
+                WaitingForPlayer = true,
                 WaitingForGame = true,
                 ToolRounds = 0,
                 RequestsSpent = 0
@@ -914,8 +919,8 @@ internal sealed class AgentRuntime
         });
 
         var reasoning = string.Equals(acted, "confirm_modal", StringComparison.OrdinalIgnoreCase)
-            ? "确认阻挡操作的教学弹窗。"
-            : "跟随你的地图选择。";
+            ? Loc.T("确认阻挡操作的教学弹窗。")
+            : Loc.T("跟随你的地图选择。");
         return new AgentTurnResult
         {
             Acted = acted,
@@ -998,8 +1003,8 @@ internal sealed class AgentRuntime
         var url = McpEndpointUrl();
         NativeMcpServer.Runtime?.SetEnabled(enabled, url);
         _mcpStatus = enabled
-            ? "MCP 已打开。把下面的地址或配置贴进外部客户端。"
-            : "MCP 已关闭，未对外暴露。";
+            ? Loc.T("MCP 已打开。把下面的地址或配置贴进外部客户端。")
+            : null;
     }
 
     private static string McpEndpointUrl()
@@ -1029,7 +1034,7 @@ internal sealed class AgentRuntime
     {
         AccountTurn(result);
         _waitingForGame = result.WaitingForGame;
-        _waitingForPlayer = result.Reasoning != null && result.Reasoning.Contains("等待你", StringComparison.Ordinal);
+        _waitingForPlayer = result.WaitingForPlayer;
         _requestingModel = false;
 
         if (!string.IsNullOrWhiteSpace(result.Acted))
@@ -1045,11 +1050,11 @@ internal sealed class AgentRuntime
 
         if (result.RequiresConfiguration)
         {
-            ClassifyStop(result.Error ?? "配置错误", ModelRoleNames.Play);
+            ClassifyStop(result.Error ?? Loc.T("配置错误"), ModelRoleNames.Play);
         }
 
             SetStatus(result.Error == null
-            ? (result.Acted != null ? "已执行 " + result.Acted : result.WaitingForGame ? "等待游戏可操作" : "等待可操作状态")
+            ? (result.Acted != null ? Loc.T("已执行 {0}", result.Acted) : result.WaitingForGame ? Loc.T("等待游戏可操作") : Loc.T("等待可操作状态"))
             : DiagnosticExport.Redact(result.Error));
     }
 
@@ -1076,7 +1081,7 @@ internal sealed class AgentRuntime
             CompanionProcessExited = LocalDualInstanceLauncher.CompanionProcessExited,
             WaitingForGame = _waitingForGame,
             WaitingForPlayer = _waitingForPlayer,
-            RequestingModel = _requestingModel || Status.Contains("请求模型", StringComparison.Ordinal),
+            RequestingModel = _requestingModel || _requestingModelStatus,
             FinishingSubmittedAction = PlayPhase == "stopping",
             StopKind = _stopKind,
             StopDetail = _stopDetail,
@@ -1201,6 +1206,16 @@ internal sealed class AgentRuntime
     private void SetStatus(string status)
     {
         _status = status;
+        _requestingModelStatus = false;
+        RaiseChanged();
+    }
+
+    // The status line is the only player-visible record that a model request is in flight, and the
+    // chat path never sets _requestingModel, so the flag is kept next to the text it belongs to.
+    private void SetRequestingModelStatus()
+    {
+        _status = Loc.T("正在请求模型…");
+        _requestingModelStatus = true;
         RaiseChanged();
     }
 

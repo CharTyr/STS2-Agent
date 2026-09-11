@@ -1,6 +1,7 @@
 using System.Security.Cryptography;
 using System.Text;
 using STS2AIAgent.Llm;
+using STS2AIAgent.Localization;
 
 namespace STS2AIAgent.Config;
 
@@ -61,7 +62,7 @@ internal static class ModelRoleProbe
             Role = role,
             Status = "unused",
             CapabilityStatus = "unused",
-            NextStep = role == ModelRoleNames.Vision ? "未配置视觉模型，可跳过。" : null
+            NextStep = role == ModelRoleNames.Vision ? Loc.T("未配置视觉模型，可跳过。") : null
         };
     }
 
@@ -77,7 +78,7 @@ internal static class ModelRoleProbe
             ModelId = model?.Model.Id,
             ModelName = model?.Model.Model,
             Fingerprint = model == null ? null : Fingerprint(model),
-            NextStep = "在设置中测试该用途，确认服务可用后再邀请队友。"
+            NextStep = Loc.T("在设置中测试该用途，确认服务可用后再邀请队友。")
         };
     }
 
@@ -94,7 +95,7 @@ internal static class ModelRoleProbe
             ModelName = model.Model.Model,
             Fingerprint = Fingerprint(model),
             TestedAt = DateTimeOffset.UtcNow.ToString("o"),
-            NextStep = RoleLabel(role) + "连通成功。工具/视觉能力仍为未验证。"
+            NextStep = Loc.T("{0}连通成功。工具/视觉能力仍为未验证。", RoleLabel(role))
         };
     }
 
@@ -195,17 +196,17 @@ internal static class ModelRoleProbe
         var role = RoleLabel(record.Role);
         var connectivity = record.Status switch
         {
-            "verified" => "连通成功",
-            "failed" => "连通失败",
-            "unused" => "未使用",
-            _ => "尚未验证"
+            "verified" => Loc.T("连通成功"),
+            "failed" => Loc.T("连通失败"),
+            "unused" => Loc.T("未使用"),
+            _ => Loc.T("尚未验证")
         };
-        var capability = record.CapabilityStatus == "unused" ? "能力：未使用" : "能力：未验证";
+        var capability = record.CapabilityStatus == "unused" ? Loc.T("能力：未使用") : Loc.T("能力：未验证");
         var target = string.IsNullOrWhiteSpace(record.ModelName)
             ? ""
             : $" · {record.EndpointName ?? record.EndpointId} / {record.ModelName}";
         var error = string.IsNullOrWhiteSpace(record.Error) ? "" : " — " + record.Error;
-        return $"{role}：{connectivity}{target}。{capability}{error}";
+        return Loc.T("{0}：{1}{2}。{3}{4}", role, connectivity, target, capability, error);
     }
 
     public static string FailureKind(int? statusCode, string? message)
@@ -228,10 +229,26 @@ internal static class ModelRoleProbe
                 "credential",
                 "api key",
                 "apikey",
+                "api_key",
+                "api-key",
                 "模型名",
+                "model name",
                 "模型不存在",
+                "model not found",
+                "model missing",
+                "no such model",
+                "model does not exist",
+                "does not exist",
+                "unknown model",
+                "not found",
                 "端点配置",
+                "endpoint config",
+                "invalid endpoint",
                 "配置错误",
+                "config error",
+                "configuration error",
+                "invalid config",
+                "misconfigur",
                 "not configured",
                 "invalid model",
                 "unsupported model"))
@@ -239,14 +256,28 @@ internal static class ModelRoleProbe
             return "config";
         }
 
+        if (ContainsAny(text,
+                "timeout",
+                "timed out",
+                "rate limit",
+                "too many requests",
+                "temporarily unavailable",
+                "service unavailable",
+                "connection refused",
+                "connection reset",
+                "unreachable"))
+        {
+            return "network";
+        }
+
         return "network";
     }
 
     public static string RoleLabel(string role) => role.ToLowerInvariant() switch
     {
-        ModelRoleNames.Play => "游玩模型",
-        ModelRoleNames.Vision => "视觉模型",
-        _ => "对话模型"
+        ModelRoleNames.Play => Loc.T("游玩模型"),
+        ModelRoleNames.Vision => Loc.T("视觉模型"),
+        _ => Loc.T("对话模型")
     };
 
     public static ResolvedModel? Resolve(AgentSettings settings, string role)
@@ -270,29 +301,29 @@ internal static class ModelRoleProbe
         if (statusCode is 401 or 403)
         {
             return (
-                $"{endpoint} 返回 {statusCode}，认证失败。",
-                "检查该端点的 API Key。本地 Ollama / LM Studio 可以留空 Key；云端服务需要有效密钥。");
+                Loc.T("{0} 返回 {1}，认证失败。", endpoint, statusCode),
+                Loc.T("检查该端点的 API Key。本地 Ollama / LM Studio 可以留空 Key；云端服务需要有效密钥。"));
         }
 
         if (statusCode == 404)
         {
             return (
-                $"{endpoint} 返回 404，找不到模型 {modelName}。",
-                "核对模型名是否与服务商目录一致，以及 Base URL 是否指向 /v1。");
+                Loc.T("{0} 返回 404，找不到模型 {1}。", endpoint, modelName),
+                Loc.T("核对模型名是否与服务商目录一致，以及 Base URL 是否指向 /v1。"));
         }
 
         if (statusCode == 429)
         {
             return (
-                $"{endpoint} 返回 429，请求过于频繁或额度不足。",
-                "稍后再测，或检查服务商配额。不要连续重试。");
+                Loc.T("{0} 返回 429，请求过于频繁或额度不足。", endpoint),
+                Loc.T("稍后再测，或检查服务商配额。不要连续重试。"));
         }
 
         if (statusCode >= 500)
         {
             return (
-                $"{endpoint} 返回 {statusCode}，服务暂时不可用。",
-                "确认服务已启动后重试。这是临时错误，不是模型名填错。");
+                Loc.T("{0} 返回 {1}，服务暂时不可用。", endpoint, statusCode),
+                Loc.T("确认服务已启动后重试。这是临时错误，不是模型名填错。"));
         }
 
         if (message.Contains("timed out", StringComparison.OrdinalIgnoreCase) ||
@@ -300,8 +331,8 @@ internal static class ModelRoleProbe
             message.Contains("TaskCanceled", StringComparison.OrdinalIgnoreCase))
         {
             return (
-                $"连接 {endpoint} 超时。",
-                "检查网络、防火墙以及 Base URL 是否可从本机访问。");
+                Loc.T("连接 {0} 超时。", endpoint),
+                Loc.T("检查网络、防火墙以及 Base URL 是否可从本机访问。"));
         }
 
         if (message.Contains("failed", StringComparison.OrdinalIgnoreCase) ||
@@ -309,13 +340,13 @@ internal static class ModelRoleProbe
             message.Contains("Name or service", StringComparison.OrdinalIgnoreCase))
         {
             return (
-                $"无法连接 {endpoint}。",
-                "检查 Base URL、本机网络，以及本地服务是否已启动。");
+                Loc.T("无法连接 {0}。", endpoint),
+                Loc.T("检查 Base URL、本机网络，以及本地服务是否已启动。"));
         }
 
         return (
-            $"{RoleLabel(role)}请求 {endpoint} / {modelName} 失败：{Trim(message, 180)}",
-            "根据错误核对端点、模型名和网络后，再对该用途单独测试。");
+            Loc.T("{0}请求 {1} / {2} 失败：{3}", RoleLabel(role), endpoint, modelName, Trim(message, 180)),
+            Loc.T("根据错误核对端点、模型名和网络后，再对该用途单独测试。"));
     }
 
     private static bool ContainsAny(string value, params string[] candidates)

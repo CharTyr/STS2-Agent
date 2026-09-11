@@ -1,3 +1,5 @@
+using STS2AIAgent.Localization;
+
 namespace STS2AIAgent.Agent;
 
 // Owns retry policy for one automatic session; resuming creates a fresh instance.
@@ -8,7 +10,7 @@ internal sealed class AutoPlayRecovery
     public (string? StopReason, string? StopKind, TimeSpan Delay) Observe(AgentTurnResult result)
     {
         if (result.RequiresConfiguration)
-            return ("请检查模型、端点或凭据后再继续：" + result.Error, StopKindPolicy.Configuration, TimeSpan.Zero);
+            return (Loc.T("请检查模型、端点或凭据后再继续：{0}", result.Error), StopKindPolicy.Configuration, TimeSpan.Zero);
 
         // Waiting for the human player or an animation must not spend the model retry budget.
         // It also must not erase failures observed before the wait.
@@ -21,12 +23,12 @@ internal sealed class AutoPlayRecovery
             return (null, null, TimeSpan.Zero);
         }
 
-        var reason = result.Error ?? "模型未给出可执行动作";
+        var reason = result.Error ?? Loc.T("模型未给出可执行动作");
         _failures++;
         // The kind stays unset so the appended reason still supplies the useful distinction:
         // a dead endpoint should read as a network stop, a rejected key as a config stop.
         return _failures >= 3
-            ? ("连续 3 次决策未成功，已停止自动游玩。检查当前局面后可手动继续：" + reason, null, TimeSpan.Zero)
+            ? (Loc.T("连续 3 次决策未成功，已停止自动游玩。检查当前局面后可手动继续：{0}", reason), null, TimeSpan.Zero)
             : (null, null, TimeSpan.FromSeconds(Math.Pow(2, _failures)));
     }
 

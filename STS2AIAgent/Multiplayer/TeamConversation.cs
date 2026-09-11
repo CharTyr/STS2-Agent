@@ -1,5 +1,6 @@
 using System.Text.Json;
 using STS2AIAgent.Agent;
+using STS2AIAgent.Localization;
 
 namespace STS2AIAgent.Multiplayer;
 
@@ -19,7 +20,7 @@ internal sealed class TeamConversation
         if (role is not ("user" or "assistant")) throw new ArgumentException("Invalid team speaker.");
         text = text.Trim();
         if (text.Length == 0 || text.Length > MaxMessageLength)
-            throw new ArgumentException($"队伍消息需要包含 1–{MaxMessageLength} 个字符。");
+            throw new ArgumentException(Loc.T("队伍消息需要包含 1–{0} 个字符。", MaxMessageLength));
         lock (_gate)
         {
             _turns.Add(new ChatTurn { Role = role, Text = text });

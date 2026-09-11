@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using System.Net;
 using System.Net.Sockets;
+using STS2AIAgent.Localization;
 
 namespace STS2AIAgent.Agent;
 
@@ -89,7 +90,7 @@ internal static class McpProcessLauncher
     {
         if (!IsMcpRoot(mcpRoot))
         {
-            return new McpLaunchResult { Ok = false, Message = "mcp_server 目录无效。需要包含 pyproject.toml 和 src/sts2_mcp/server.py。" };
+            return new McpLaunchResult { Ok = false, Message = Loc.T("mcp_server 目录无效。需要包含 pyproject.toml 和 src/sts2_mcp/server.py。") };
         }
 
         var uv = FindUv();
@@ -98,7 +99,7 @@ internal static class McpProcessLauncher
             return new McpLaunchResult
             {
                 Ok = false,
-                Message = "未找到 uv。请先安装 https://docs.astral.sh/uv/ 并确保 uv 在 PATH 中。"
+                Message = Loc.T("未找到 uv。请先安装 https://docs.astral.sh/uv/ 并确保 uv 在 PATH 中。")
             };
         }
 
@@ -109,7 +110,7 @@ internal static class McpProcessLauncher
         }
         catch (Exception ex)
         {
-            return new McpLaunchResult { Ok = false, Message = "找不到空闲 MCP 端口：" + ex.Message };
+            return new McpLaunchResult { Ok = false, Message = Loc.T("找不到空闲 MCP 端口：{0}", ex.Message) };
         }
 
         var api = string.IsNullOrWhiteSpace(apiBaseUrl)
@@ -135,7 +136,7 @@ internal static class McpProcessLauncher
         }
         catch (Exception ex)
         {
-            return new McpLaunchResult { Ok = false, Message = "启动 MCP 失败：" + ex.Message };
+            return new McpLaunchResult { Ok = false, Message = Loc.T("启动 MCP 失败：{0}", ex.Message) };
         }
 
         var ready = await WaitForHealthAsync(port, TimeSpan.FromSeconds(40), cancellationToken);
@@ -148,8 +149,8 @@ internal static class McpProcessLauncher
                 Ok = false,
                 Port = port,
                 Message = string.IsNullOrWhiteSpace(stderr)
-                    ? $"MCP 进程已启动但 http://127.0.0.1:{port}/healthz 未就绪。请确认已 uv sync。"
-                    : "MCP 启动失败：" + stderr
+                    ? Loc.T("MCP 进程已启动但 http://127.0.0.1:{0}/healthz 未就绪。请确认已 uv sync。", port)
+                    : Loc.T("MCP 启动失败：{0}", stderr)
             };
         }
 
@@ -159,7 +160,7 @@ internal static class McpProcessLauncher
             Port = port,
             Url = $"http://127.0.0.1:{port}/mcp",
             Process = process,
-            Message = $"MCP 已启动：http://127.0.0.1:{port}/mcp"
+            Message = Loc.T("MCP 已启动：http://127.0.0.1:{0}/mcp", port)
         };
     }
 

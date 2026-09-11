@@ -4,6 +4,15 @@ namespace STS2AIAgent.Tests;
 
 internal static class AgentSourceFixture
 {
+    /// <summary>Repository root that holds both the mod and this test project.</summary>
+    public static string Root => FindAgentRoot();
+
+    /// <summary>Every C# file of the mod, for tests that audit the whole source tree.</summary>
+    public static IEnumerable<string> SourceFiles()
+    {
+        return Directory.EnumerateFiles(Path.Combine(Root, "STS2AIAgent"), "*.cs", SearchOption.AllDirectories);
+    }
+
     public static string Read(string relativePath)
     {
         var root = FindAgentRoot();

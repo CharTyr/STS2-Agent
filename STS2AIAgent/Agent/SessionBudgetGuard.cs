@@ -1,6 +1,7 @@
 namespace STS2AIAgent.Agent;
 
 using STS2AIAgent.Llm;
+using STS2AIAgent.Localization;
 
 internal sealed class SessionBudgetGuard
 {
@@ -28,12 +29,12 @@ internal sealed class SessionBudgetGuard
         var requests = RequestCount + extraRequests;
         if (MaxRequests.HasValue && requests >= MaxRequests.Value)
         {
-            return $"已达到会话请求次数上限（{requests}/{MaxRequests.Value} 次），已自动停止游玩。";
+            return Loc.T("已达到会话请求次数上限（{0}/{1} 次），已自动停止游玩。", requests, MaxRequests.Value);
         }
 
         if (MaxTokens.HasValue && ConsumedTokens >= MaxTokens.Value)
         {
-            return $"已达到会话 Token 预算上限（{ConsumedTokens:N0}/{MaxTokens.Value:N0} tokens），已自动停止游玩。";
+            return Loc.T("已达到会话 Token 预算上限（{0:N0}/{1:N0} tokens），已自动停止游玩。", ConsumedTokens, MaxTokens.Value);
         }
 
         return null;

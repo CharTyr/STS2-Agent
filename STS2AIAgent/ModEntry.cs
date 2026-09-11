@@ -5,6 +5,7 @@ using MegaCrit.Sts2.Core.Modding;
 using STS2AIAgent.Agent;
 using STS2AIAgent.Config;
 using STS2AIAgent.Game;
+using STS2AIAgent.Localization;
 using STS2AIAgent.Server;
 using STS2AIAgent.Ui;
 
@@ -21,6 +22,10 @@ public static class ModEntry
     {
         Log.Info($"{LogPrefix} Initializing");
         RegisterShutdownHooks();
+        // Reads the player's language before anything renders text. The game's own localization
+        // manager does not exist yet at this point, so this resolves through the settings file and
+        // the subscription is picked up once the overlay is built.
+        LocSource.Initialize();
         GameThread.Initialize();
         GameEventService.Instance.Start();
         HttpServer.Instance.Start();

@@ -1,3 +1,5 @@
+using STS2AIAgent.Localization;
+
 namespace STS2AIAgent.Config;
 
 internal readonly record struct SettingsBindingImpact(bool Blocked, string Message, IReadOnlyList<string> Roles)
@@ -26,14 +28,14 @@ internal static class SettingsBinding
             return SettingsBindingImpact.None;
         }
 
-        var detail = $"仍有 {models} 个模型绑定此端点";
+        var detail = Loc.T("仍有 {0} 个模型绑定此端点", models);
         if (roles.Count > 0)
         {
-            detail += "，其中 " + string.Join("、", roles) + " 正在使用";
+            detail += Loc.T("，其中 {0} 正在使用", string.Join(Loc.T("、"), roles));
         }
         return new SettingsBindingImpact(
             true,
-            "暂不能删除该端点（" + detail + "）。请先在设置中为这些模型选择其他端点并保存；重绑定完成后再删除。",
+            Loc.T("暂不能删除该端点（{0}）。请先在设置中为这些模型选择其他端点并保存；重绑定完成后再删除。", detail),
             roles);
     }
 
@@ -42,18 +44,18 @@ internal static class SettingsBinding
         var roles = new List<string>();
         if (string.Equals(settings.ConversationModelId, modelId, StringComparison.OrdinalIgnoreCase))
         {
-            roles.Add("对话模型");
+            roles.Add(Loc.T("对话模型"));
         }
 
         var playId = string.IsNullOrWhiteSpace(settings.PlayModelId) ? settings.ConversationModelId : settings.PlayModelId;
         if (string.Equals(playId, modelId, StringComparison.OrdinalIgnoreCase))
         {
-            roles.Add("游玩模型");
+            roles.Add(Loc.T("游玩模型"));
         }
 
         if (string.Equals(settings.VisionModelId, modelId, StringComparison.OrdinalIgnoreCase))
         {
-            roles.Add("视觉模型");
+            roles.Add(Loc.T("视觉模型"));
         }
 
         if (roles.Count == 0)
@@ -63,7 +65,7 @@ internal static class SettingsBinding
 
         return new SettingsBindingImpact(
             true,
-            "暂不能删除该模型（仍绑定 " + string.Join("、", roles) + "）。请先为这些用途选择其他模型并保存；重绑定完成后再删除。",
+            Loc.T("暂不能删除该模型（仍绑定 {0}）。请先为这些用途选择其他模型并保存；重绑定完成后再删除。", string.Join(Loc.T("、"), roles)),
             roles);
     }
 

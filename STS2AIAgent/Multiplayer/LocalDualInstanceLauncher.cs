@@ -3,6 +3,7 @@ using Godot;
 using MegaCrit.Sts2.Core.Logging;
 using MegaCrit.Sts2.Core.Helpers;
 using STS2AIAgent.Config;
+using STS2AIAgent.Localization;
 using STS2AIAgent.Server;
 
 namespace STS2AIAgent.Multiplayer;
@@ -151,7 +152,7 @@ internal static class LocalDualInstanceLauncher
     {
         if (!await LaunchGate.WaitAsync(0, cancellationToken))
         {
-            return new DualLaunchResult { Ok = false, Message = "正在邀请 AI 队友，请等待连接结果。" };
+            return new DualLaunchResult { Ok = false, Message = Loc.T("正在邀请 AI 队友，请等待连接结果。") };
         }
 
         try
@@ -162,7 +163,7 @@ internal static class LocalDualInstanceLauncher
                 {
                     Ok = false,
                     CompanionPid = _companionProcess.Id,
-                    Message = "AI 队友窗口已经在运行。请查看该窗口；若要重新组队，请先正常关闭它。"
+                    Message = Loc.T("AI 队友窗口已经在运行。请查看该窗口；若要重新组队，请先正常关闭它。")
                 };
             }
 
@@ -183,7 +184,7 @@ internal static class LocalDualInstanceLauncher
         var exe = ResolveGameExe();
         if (exe == null)
         {
-            return new DualLaunchResult { Ok = false, Message = "找不到游戏可执行文件。" };
+            return new DualLaunchResult { Ok = false, Message = Loc.T("找不到游戏可执行文件。") };
         }
 
         try
@@ -208,7 +209,7 @@ internal static class LocalDualInstanceLauncher
             return new DualLaunchResult
             {
                 Ok = false,
-                Message = "无法计算队友启动参数：" + argumentError
+                Message = Loc.T("无法计算队友启动参数：{0}", argumentError)
             };
         }
 
@@ -237,7 +238,7 @@ internal static class LocalDualInstanceLauncher
             return new DualLaunchResult
             {
                 Ok = false,
-                Message = "无法配置队友设置文件路径：" + ex.Message
+                Message = Loc.T("无法配置队友设置文件路径：{0}", ex.Message)
             };
         }
 
@@ -285,7 +286,7 @@ internal static class LocalDualInstanceLauncher
             return new DualLaunchResult
             {
                 Ok = false,
-                Message = "启动第二实例失败。Steam 可能阻止了双开：" + ex.Message
+                Message = Loc.T("启动第二实例失败。Steam 可能阻止了双开：{0}", ex.Message)
             };
         }
 
@@ -302,8 +303,8 @@ internal static class LocalDualInstanceLauncher
                 CompanionPort = companionPort,
                 CompanionPid = process.Id,
                 Message = process.HasExited
-                    ? $"AI 队友进程已退出（退出码 {process.ExitCode}）。请检查游戏日志与 Steam 双开限制后重试。"
-                    : $"AI 队友进程仍在运行（PID {process.Id}），但未能确认连接。请检查队友窗口和游戏日志，不要重复启动。"
+                    ? Loc.T("AI 队友进程已退出（退出码 {0}）。请检查游戏日志与 Steam 双开限制后重试。", process.ExitCode)
+                    : Loc.T("AI 队友进程仍在运行（PID {0}），但未能确认连接。请检查队友窗口和游戏日志，不要重复启动。", process.Id)
             };
         }
 
@@ -313,7 +314,7 @@ internal static class LocalDualInstanceLauncher
             Ok = true,
             CompanionPort = readyPort.Value,
             CompanionPid = process.Id,
-            Message = $"第二实例已就绪：PID {process.Id}，API {readyPort.Value}"
+            Message = Loc.T("第二实例已就绪：PID {0}，API {1}", process.Id, readyPort.Value)
         };
     }
 

@@ -2,6 +2,7 @@ using System.Text;
 using System.Text.Json;
 using System.Text.RegularExpressions;
 using STS2AIAgent.Config;
+using STS2AIAgent.Localization;
 
 namespace STS2AIAgent.Agent;
 
@@ -81,9 +82,9 @@ internal static class DiagnosticExport
     public static string Render(DiagnosticSnapshot snapshot)
     {
         var builder = new StringBuilder();
-        builder.AppendLine("STS2 AI Agent 诊断（已脱敏）");
-        builder.AppendLine(IncludesChatNotice);
-        builder.AppendLine("已排除 API Key、Authorization 头和会话令牌。");
+        builder.AppendLine(Loc.T("STS2 AI Agent 诊断（已脱敏）"));
+        builder.AppendLine(Loc.T(IncludesChatNotice));
+        builder.AppendLine(Loc.T("已排除 API Key、Authorization 头和会话令牌。"));
         builder.AppendLine("mod_version=" + Redact(snapshot.ModVersion));
         builder.AppendLine("instance_role=" + Redact(snapshot.Role));
         builder.AppendLine("play_phase=" + Redact(snapshot.PlayPhase));

@@ -1,4 +1,5 @@
 using System.Globalization;
+using STS2AIAgent.Localization;
 
 namespace STS2AIAgent.Config;
 
@@ -19,12 +20,12 @@ internal static class SessionBudgetLimits
 
         if (!int.TryParse(raw, NumberStyles.Integer, CultureInfo.InvariantCulture, out var parsed))
         {
-            return new SessionBudgetParse(false, null, InvalidInputMessage);
+            return new SessionBudgetParse(false, null, Loc.T(InvalidInputMessage));
         }
 
         if (parsed < 0)
         {
-            return new SessionBudgetParse(false, null, InvalidInputMessage);
+            return new SessionBudgetParse(false, null, Loc.T(InvalidInputMessage));
         }
 
         return parsed == 0
@@ -61,8 +62,8 @@ internal static class SessionBudgetLimits
     public static string BudgetRecoveryNextAction(bool canReset)
     {
         return canReset
-            ? "打开「设置」→ 显示高级选项以提高上限，或点「重置本会话统计」后再点「继续游玩」。重置只清零本会话计数，不会改预算上限；普通暂停/继续不会清零。"
-            : "自动游玩进行中不能清零统计。请先点「暂停队友」，再在「设置」→ 显示高级选项提高上限，或暂停后点「重置本会话统计」。暂停/继续不会清零累计。";
+            ? Loc.T("打开「设置」→ 显示高级选项以提高上限，或点「重置本会话统计」后再点「继续游玩」。重置只清零本会话计数，不会改预算上限；普通暂停/继续不会清零。")
+            : Loc.T("自动游玩进行中不能清零统计。请先点「暂停队友」，再在「设置」→ 显示高级选项提高上限，或暂停后点「重置本会话统计」。暂停/继续不会清零累计。");
     }
 
     public static bool TryHarvestBudget(AgentSettings target, string? tokensText, string? requestsText, out string? error)

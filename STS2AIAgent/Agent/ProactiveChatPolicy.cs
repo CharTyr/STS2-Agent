@@ -1,3 +1,5 @@
+using STS2AIAgent.Localization;
+
 namespace STS2AIAgent.Agent;
 
 /// <summary>
@@ -164,11 +166,15 @@ internal static class ProactiveChatTones
         "never invent actions, card or target indexes, or outcomes; do not mention being prompted, this being " +
         "automatic, or the message being proactive; never offer to play for the player.";
 
-    public static IReadOnlyList<(string Id, string Label)> Options { get; } = new[]
+    /// <summary>
+    /// Rebuilt on every read so the labels follow the game language; the ids stay fixed because
+    /// they are what gets stored in settings.
+    /// </summary>
+    public static IReadOnlyList<(string Id, string Label)> Options => new[]
     {
-        (Friendly, "轻松搭档"),
-        (Calm, "沉稳参谋"),
-        (Terse, "简短简报")
+        (Friendly, Loc.T("轻松搭档")),
+        (Calm, Loc.T("沉稳参谋")),
+        (Terse, Loc.T("简短简报"))
     };
 
     public static string Normalize(string? tone)

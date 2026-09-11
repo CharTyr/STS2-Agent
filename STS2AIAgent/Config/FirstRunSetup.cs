@@ -1,3 +1,5 @@
+using STS2AIAgent.Localization;
+
 namespace STS2AIAgent.Config;
 
 internal readonly record struct FirstRunStatus(
@@ -13,14 +15,14 @@ internal readonly record struct FirstRunStatus(
 
 internal static class FirstRunSetup
 {
-    public const string SettingsHint =
-        "请先在设置中填写 OpenAI 兼容接口地址和模型名称。本地 Ollama / LM Studio 可以留空 API Key。";
+    public static string SettingsHint =>
+        Loc.T("请先在设置中填写 OpenAI 兼容接口地址和模型名称。本地 Ollama / LM Studio 可以留空 API Key。");
 
-    public const string UnverifiedHint =
-        "配置已填写，但尚未验证游玩模型。点「测试连接」会向配置的服务发送测试请求；通过后再邀请队友。";
+    public static string UnverifiedHint =>
+        Loc.T("配置已填写，但尚未验证游玩模型。点「测试连接」会向配置的服务发送测试请求；通过后再邀请队友。");
 
-    public const string InviteHint =
-        "游玩模型已验证。回到主菜单打开「AI 队友」邀请。本地 1 人 + 1 AI 同一局：你打你的角色，AI 自动打另一个。大厅仍为 4 人位。";
+    public static string InviteHint =>
+        Loc.T("游玩模型已验证。回到主菜单打开「AI 队友」邀请。本地 1 人 + 1 AI 同一局：你打你的角色，AI 自动打另一个。大厅仍为 4 人位。");
 
     public static FirstRunStatus Evaluate(AgentSettings settings)
     {
@@ -36,7 +38,7 @@ internal static class FirstRunSetup
         if (!Uri.TryCreate(model.Endpoint.BaseUrl, UriKind.Absolute, out var endpoint) ||
             endpoint.Scheme is not ("http" or "https"))
         {
-            return new FirstRunStatus(false, "模型端点地址无效，请在设置中填写完整的 HTTP 或 HTTPS 地址。", "missing", conversation, play, vision);
+            return new FirstRunStatus(false, Loc.T("模型端点地址无效，请在设置中填写完整的 HTTP 或 HTTPS 地址。"), "missing", conversation, play, vision);
         }
 
         if (play.Status == "failed")
@@ -71,7 +73,7 @@ internal static class FirstRunSetup
         {
             return new FirstRunStatus(
                 false,
-                "模型端点地址无效，请在设置中填写完整的 HTTP 或 HTTPS 地址。",
+                Loc.T("模型端点地址无效，请在设置中填写完整的 HTTP 或 HTTPS 地址。"),
                 "missing",
                 ModelRoleProbe.Unverified(ModelRoleNames.Conversation, model),
                 ModelRoleProbe.Unverified(ModelRoleNames.Play, model),

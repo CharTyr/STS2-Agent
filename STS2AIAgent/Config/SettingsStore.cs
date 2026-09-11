@@ -1,5 +1,6 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using STS2AIAgent.Localization;
 
 namespace STS2AIAgent.Config;
 
@@ -98,7 +99,7 @@ internal sealed class SettingsStore
             {
                 LastNotice = new SettingsPersistenceNotice(
                     "save_failed",
-                    "保存失败，原配置文件未被覆盖。");
+                    Loc.T("保存失败，原配置文件未被覆盖。"));
                 throw;
             }
         }
@@ -113,7 +114,7 @@ internal sealed class SettingsStore
             {
                 LastNotice = new SettingsPersistenceNotice(
                     "restored",
-                    "配置读取失败，已备份原文件并恢复上次成功保存的配置。",
+                    Loc.T("配置读取失败，已备份原文件并恢复上次成功保存的配置。"),
                     backupPath,
                     LastGoodBackupPath());
                 return restored;
@@ -124,14 +125,14 @@ internal sealed class SettingsStore
             WriteUnlocked(fallback);
             LastNotice = new SettingsPersistenceNotice(
                 "fallback",
-                "配置读取失败，已备份原文件并改用默认配置。可用备份恢复。",
+                Loc.T("配置读取失败，已备份原文件并改用默认配置。可用备份恢复。"),
                 backupPath);
             return fallback;
         }
 
         LastNotice = new SettingsPersistenceNotice(
             "unrecovered",
-            "配置读取失败，且未能备份原文件，未覆盖现有配置。");
+            Loc.T("配置读取失败，且未能备份原文件，未覆盖现有配置。"));
         var memory = AgentSettings.CreateDefault();
         memory.EnsureValidShape();
         return memory;

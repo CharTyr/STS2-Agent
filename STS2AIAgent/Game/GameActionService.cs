@@ -51,6 +51,7 @@ using MegaCrit.Sts2.Core.Saves;
 using MegaCrit.Sts2.Core.Timeline;
 using STS2AIAgent.Agent;
 using STS2AIAgent.Config;
+using STS2AIAgent.Localization;
 using STS2AIAgent.Multiplayer;
 using STS2AIAgent.Server;
 
@@ -4367,7 +4368,7 @@ internal static class GameActionService
         var currentScreen = ActiveScreenContext.Instance.GetCurrentScreen();
         if (currentScreen is not NMainMenu mainMenu)
         {
-            throw new InvalidOperationException("请先回到主菜单，再邀请 AI 队友组队。");
+            throw new InvalidOperationException(Loc.T("请先回到主菜单，再邀请 AI 队友组队。"));
         }
 
         var submenu = mainMenu.SubmenuStack.GetSubmenuType<NMultiplayerSubmenu>();
@@ -4376,7 +4377,7 @@ internal static class GameActionService
             mainMenu.Call("OpenMultiplayerSubmenu");
             await WaitForMainMenuSubmenuOpenAsync<NMultiplayerSubmenu>(mainMenu, TimeSpan.FromSeconds(5));
             submenu = mainMenu.SubmenuStack.GetSubmenuType<NMultiplayerSubmenu>()
-                ?? throw new InvalidOperationException("找不到多人子菜单。");
+                ?? throw new InvalidOperationException(Loc.T("找不到多人子菜单。"));
         }
         else
         {
@@ -4401,7 +4402,7 @@ internal static class GameActionService
             .FirstOrDefault(candidate => candidate.Name == "FastHost");
         if (method == null)
         {
-            throw new InvalidOperationException("找不到 FastHost。");
+            throw new InvalidOperationException(Loc.T("找不到 FastHost。"));
         }
 
         var parameters = method.GetParameters();

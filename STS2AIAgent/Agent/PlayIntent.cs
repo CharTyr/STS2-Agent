@@ -23,6 +23,7 @@ internal static class PlayIntent
         "act for me"
     };
 
+
     public static bool Detect(string? text)
     {
         if (string.IsNullOrWhiteSpace(text))

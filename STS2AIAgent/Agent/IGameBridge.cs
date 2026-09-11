@@ -49,6 +49,12 @@ internal sealed class AgentTurnResult
 
     public bool WaitingForGame { get; init; }
 
+    /// <summary>
+    /// The turn stopped to let the human player act — the companion map-vote path yields to the
+    /// player's node choice — so the overlay reports a player wait instead of a stall.
+    /// </summary>
+    public bool WaitingForPlayer { get; init; }
+
     public bool RequiresConfiguration { get; init; }
 
     public int ToolRounds { get; init; }

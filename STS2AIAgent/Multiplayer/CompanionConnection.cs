@@ -1,6 +1,7 @@
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
+using STS2AIAgent.Localization;
 
 namespace STS2AIAgent.Multiplayer;
 
@@ -33,9 +34,9 @@ internal sealed class CompanionConnection
     public async Task<string> SendMessageAsync(string message, CancellationToken cancellationToken)
     {
         if (string.IsNullOrWhiteSpace(message) || message.Length > TeamConversation.MaxMessageLength)
-            throw new ArgumentException("请输入 1–2000 个字符的队伍消息。");
+            throw new ArgumentException(Loc.T("请输入 1–2000 个字符的队伍消息。"));
         var data = await SendAsync("message", new { message }, cancellationToken);
-        return data.GetProperty("reply").GetString() ?? "队友没有返回文本。";
+        return data.GetProperty("reply").GetString() ?? Loc.T("队友没有返回文本。");
     }
 
     public async Task<string> ControlAsync(bool running, CancellationToken cancellationToken)
@@ -54,14 +55,14 @@ internal sealed class CompanionConnection
         healthDeadline.CancelAfter(TimeSpan.FromSeconds(3));
         var health = await _http.GetStringAsync($"http://127.0.0.1:{_port}/health", healthDeadline.Token);
         if (!CompanionHealth.IsExpectedProcess(health, _port, _pid))
-            throw new InvalidOperationException("AI 队友连接已改变，请重新组队。");
+            throw new InvalidOperationException(Loc.T("AI 队友连接已改变，请重新组队。"));
         using var request = new HttpRequestMessage(HttpMethod.Post, $"http://127.0.0.1:{_port}/companion/{operation}");
         request.Headers.Add(TokenHeader, _token);
         request.Content = new StringContent(JsonSerializer.Serialize(payload), Encoding.UTF8, "application/json");
         using var response = await _http.SendAsync(request, cancellationToken);
         using var body = JsonDocument.Parse(await response.Content.ReadAsStringAsync(cancellationToken));
         if (!response.IsSuccessStatusCode || !body.RootElement.GetProperty("ok").GetBoolean())
-            throw new InvalidOperationException("队友未能确认请求，请查看队友窗口中的状态。请求不会自动重发。");
+            throw new InvalidOperationException(Loc.T("队友未能确认请求，请查看队友窗口中的状态。请求不会自动重发。"));
         return body.RootElement.GetProperty("data").Clone();
     }
 }

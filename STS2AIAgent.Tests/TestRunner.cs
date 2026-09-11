@@ -330,5 +330,17 @@ internal static class TestRunner
         yield return ("ProactiveChat.ResetClearsBounds", () => Task.Run(ProactiveChatSessionTests.ResetClearsTheBounds));
        yield return ("ProactiveChat.IntervalBoundaryInclusive", () => Task.Run(ProactiveChatSessionTests.IntervalBoundaryIsInclusive));
         yield return ("ProactiveChat.NewPlaySessionResetsCap", () => Task.Run(ProactiveChatSessionTests.NewPlaySessionHandsBackTheAllowanceButNotTheInterval));
+        yield return ("Loc.ChineseIsSource", () => Task.Run(LocalizationTests.ChineseReadsTheTextAsWritten));
+        yield return ("Loc.EnglishTable", () => Task.Run(LocalizationTests.EnglishLooksUpTheTable));
+        yield return ("Loc.UnknownKeyKeepsChinese", () => Task.Run(LocalizationTests.UnknownKeyFallsBackToChinese));
+        yield return ("Loc.BrokenPlaceholderSurvives", () => Task.Run(LocalizationTests.BrokenPlaceholderDoesNotThrow));
+        yield return ("Loc.LanguageCodeShapes", () => Task.Run(LocalizationTests.ReadsEveryLanguageCodeShape));
+        yield return ("Loc.ChangeNotification", () => Task.Run(LocalizationTests.ReportsLanguageChangesOnlyOnce));
+        yield return ("Loc.Coverage", () => Task.Run(LocalizationTests.EveryCallSiteHasAnEnglishEntry));
+        yield return ("Loc.SharedKeysAgree", () => Task.Run(LocalizationTests.NoKeyIsDefinedTwiceWithDifferentText));
+        yield return ("Loc.EnglishIsRealEnglish", () => Task.Run(LocalizationTests.EveryChineseEntryCarriesRealEnglish));
+        yield return ("Loc.NoFrozenText", () => Task.Run(LocalizationTests.NoTranslatedTextIsFrozenAtConstruction));
+        yield return ("Loc.GlossaryKeywords", () => Task.Run(LocalizationTests.GlossaryKeywordsStayAlignedWithTheirEnglishSpellings));
+        yield return ("Loc.StartupOrder", () => Task.Run(LocalizationTests.StartupReadsTheLanguageBeforeTheUiIsBuilt));
     }
 }

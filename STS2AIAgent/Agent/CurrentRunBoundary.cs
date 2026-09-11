@@ -1,4 +1,5 @@
 using System.Text.Json;
+using STS2AIAgent.Localization;
 
 namespace STS2AIAgent.Agent;
 
@@ -28,14 +29,14 @@ internal sealed class CurrentRunBoundary
             screen is "MAIN_MENU" or "CHARACTER_SELECT" or "MULTIPLAYER_LOBBY" ||
             phase is "character_select" or "multiplayer_lobby" or "menu"))
         {
-            throw new AutoPlayStoppedException(LeftRunMessage, StopKindPolicy.RunEnd);
+            throw new AutoPlayStoppedException(Loc.T(LeftRunMessage), StopKindPolicy.RunEnd);
         }
 
         // Unlock screens may outlive RunState; let the native unlock queue finish.
         if (phase == "run")
         {
             if (_seed != null && seed != null && seed != "run_unknown" && seed != _seed)
-                throw new AutoPlayStoppedException(RunIdentityChangedMessage, StopKindPolicy.RunEnd);
+                throw new AutoPlayStoppedException(Loc.T(RunIdentityChangedMessage), StopKindPolicy.RunEnd);
             _enteredRun = true;
             if (seed != "run_unknown") _seed ??= seed;
         }

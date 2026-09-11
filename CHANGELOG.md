@@ -2,6 +2,26 @@
 
 > Release attribution is recorded against tags or release commits. Post-tag maintenance is listed separately; current validation limits are maintained in [PRODUCT_PLAN_CURRENT.md](https://github.com/CharTyr/STS2-Agent/blob/main/PRODUCT_PLAN_CURRENT.md).
 
+## v0.11.0 - 2026-09-12
+
+> The overlay follows the language the game is running in. Chinese clients read exactly what they read before; English clients (and every other language) now read English instead of Chinese. Live evidence: [localization-2026-09-12.md](history/localization-2026-09-12.md).
+
+### Added
+
+- The overlay, the in-game status text and the model-facing state payload now follow the game's language setting and switch with it mid-session, with no restart. Chinese is the source text, so a Chinese client is unchanged; every other language reads the English table. A string with no English entry falls back to Chinese rather than going blank, so a half-translated build stays readable.
+- Card, relic, potion, orb and pet summary lines follow the language too: `{0}费` becomes `{0} Energy`, `(熔毁)` becomes `(Melted)`, and so on.
+- The combat glossary keys and explains its terms in the running language, e.g. `Strength` / "Each point of Strength usually adds 1 damage per attack."
+
+### Fixed
+
+- The glossary recognised only the Chinese keyword spellings, so on an English client card text matched nothing and the glossary came back empty. English spellings now match as well.
+- Failure classification read Chinese wording only (`失败` / `请先` / `找不到`, `等待你`, `请求模型`, 认证失败 / 配置错误 / 超时), so on an English client a failed co-op invite, a teammate map wait and a configuration error were all misread as success or as a different kind of stop. These now key off explicit flags and English candidates.
+- Text resolved while a field or a computed-once property is initialized used to freeze in whatever language was active at construction, so the overlay kept showing Chinese after the player switched the game to English. Idle wording is resolved on read now.
+
+### Changed
+
+- The Steam Workshop listing says the UI follows the game language.
+
 ## v0.10.7 - 2026-09-12
 
 > Distributed to the Steam Workshop on 2026-09-12 (item 3796486050, public, file_size 1088228). The in-tree version, the uploaded Workshop content and the build all come from commit `f9330ba`; no GitHub tag or release exists for this version yet. Live evidence: [validation-acceptance_2026-09-11.md](history/validation-acceptance_2026-09-11.md).

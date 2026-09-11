@@ -1,5 +1,6 @@
 using STS2AIAgent.Config;
 using STS2AIAgent.Llm;
+using STS2AIAgent.Localization;
 
 namespace STS2AIAgent.Agent;
 
@@ -91,9 +92,9 @@ internal static class PlayerFacingSession
         {
             return new PlayerFacingView(
                 "companion_lost",
-                "队友窗口已退出",
+                Loc.T("队友窗口已退出"),
                 s.DualStatus,
-                "关闭残留窗口后，回到主菜单再点「邀请 AI 队友」。",
+                Loc.T("关闭残留窗口后，回到主菜单再点「邀请 AI 队友」。"),
                 s.StopDetail);
         }
 
@@ -101,9 +102,9 @@ internal static class PlayerFacingSession
         {
             return new PlayerFacingView(
                 "pairing",
-                "正在组队",
+                Loc.T("正在组队"),
                 s.DualStatus,
-                "等待第二窗口连接。请勿重复点击邀请。",
+                Loc.T("等待第二窗口连接。请勿重复点击邀请。"),
                 null);
         }
 
@@ -112,7 +113,7 @@ internal static class PlayerFacingSession
             var canReset = SessionBudgetLimits.CanResetSessionStats(s.PlayRunning, s.PlayPhase);
             return new PlayerFacingView(
                 "budget",
-                "已达到会话预算",
+                Loc.T("已达到会话预算"),
                 s.BudgetReason,
                 SessionBudgetLimits.BudgetRecoveryNextAction(canReset),
                 null);
@@ -122,9 +123,9 @@ internal static class PlayerFacingSession
         {
             return new PlayerFacingView(
                 "needs_error",
-                "配置有误，已停止",
+                Loc.T("配置有误，已停止"),
                 s.StopDetail ?? s.Status,
-                "打开「设置」修正端点、模型名或 Key，测试通过后再点「继续游玩」。不会自动重试。",
+                Loc.T("打开「设置」修正端点、模型名或 Key，测试通过后再点「继续游玩」。不会自动重试。"),
                 s.StopDetail);
         }
 
@@ -132,9 +133,9 @@ internal static class PlayerFacingSession
         {
             return new PlayerFacingView(
                 "run_ended",
-                "对局已结束",
-                s.StopDetail ?? "已离开当前对局，不会自动开新局。",
-                "若要再打一局，先回到主菜单自行开局，再继续或重新邀请。",
+                Loc.T("对局已结束"),
+                s.StopDetail ?? Loc.T("已离开当前对局，不会自动开新局。"),
+                Loc.T("若要再打一局，先回到主菜单自行开局，再继续或重新邀请。"),
                 null);
         }
 
@@ -142,9 +143,9 @@ internal static class PlayerFacingSession
         {
             return new PlayerFacingView(
                 "needs_error",
-                "暂时连不上模型",
+                Loc.T("暂时连不上模型"),
                 s.StopDetail ?? s.Status,
-                "检查网络或服务后，点「继续游玩」恢复。配置类错误不会无限重试。",
+                Loc.T("检查网络或服务后，点「继续游玩」恢复。配置类错误不会无限重试。"),
                 s.StopDetail);
         }
 
@@ -152,9 +153,9 @@ internal static class PlayerFacingSession
         {
             return new PlayerFacingView(
                 "needs_error",
-                "自动游玩已停止",
+                Loc.T("自动游玩已停止"),
                 s.StopDetail ?? s.Status,
-                "查看当前局面后点「继续游玩」。",
+                Loc.T("查看当前局面后点「继续游玩」。"),
                 s.StopDetail);
         }
 
@@ -162,9 +163,9 @@ internal static class PlayerFacingSession
         {
             return new PlayerFacingView(
                 "pausing",
-                "正在暂停",
+                Loc.T("正在暂停"),
                 s.TeamControlStatus,
-                "已提交的动作会先完成，不会再派发新的游戏动作。",
+                Loc.T("已提交的动作会先完成，不会再派发新的游戏动作。"),
                 null);
         }
 
@@ -172,9 +173,9 @@ internal static class PlayerFacingSession
         {
             return new PlayerFacingView(
                 "finishing_action",
-                "正在完成已提交的动作",
+                Loc.T("正在完成已提交的动作"),
                 s.Status,
-                "请稍候。这不是已取消；完成后会显示已暂停。",
+                Loc.T("请稍候。这不是已取消；完成后会显示已暂停。"),
                 null);
         }
 
@@ -182,9 +183,9 @@ internal static class PlayerFacingSession
         {
             return new PlayerFacingView(
                 "paused",
-                "队友已暂停",
+                Loc.T("队友已暂停"),
                 s.TeamControlStatus,
-                "仍可聊天。确认配置与队友仍在后，点「继续游玩」。",
+                Loc.T("仍可聊天。确认配置与队友仍在后，点「继续游玩」。"),
                 null);
         }
 
@@ -192,8 +193,8 @@ internal static class PlayerFacingSession
         {
             var kind = s.FirstRun.Phase == "failed" ? "needs_error" : "unconfigured";
             var next = s.FirstRun.Phase == "failed"
-                ? "打开「设置」，按失败用途修正后再测试。"
-                : "打开「设置」：添加端点 → 添加模型并绑定 → 选择对话/游玩用途 → 测试 → 邀请队友。";
+                ? Loc.T("打开「设置」，按失败用途修正后再测试。")
+                : Loc.T("打开「设置」：添加端点 → 添加模型并绑定 → 选择对话/游玩用途 → 测试 → 邀请队友。");
             return new PlayerFacingView(kind, HeadlineForFirstRun(s.FirstRun), s.FirstRun.Hint, next, null);
         }
 
@@ -204,9 +205,9 @@ internal static class PlayerFacingSession
         {
             return new PlayerFacingView(
                 "ready_to_invite",
-                "可以邀请 AI 队友",
+                Loc.T("可以邀请 AI 队友"),
                 s.FirstRun.Hint,
-                "回到主菜单，点「邀请 AI 队友」。",
+                Loc.T("回到主菜单，点「邀请 AI 队友」。"),
                 null);
         }
 
@@ -214,9 +215,9 @@ internal static class PlayerFacingSession
         {
             return new PlayerFacingView(
                 "waiting_player",
-                "正在等你",
+                Loc.T("正在等你"),
                 s.Status,
-                "在你的窗口完成选择。这是正常等待，不是故障。",
+                Loc.T("在你的窗口完成选择。这是正常等待，不是故障。"),
                 null);
         }
 
@@ -224,9 +225,9 @@ internal static class PlayerFacingSession
         {
             return new PlayerFacingView(
                 "waiting_game",
-                "正在等游戏",
+                Loc.T("正在等游戏"),
                 s.Status,
-                "动画或转场结束后会继续。这是正常等待。",
+                Loc.T("动画或转场结束后会继续。这是正常等待。"),
                 null);
         }
 
@@ -237,9 +238,9 @@ internal static class PlayerFacingSession
         {
             return new PlayerFacingView(
                 "requesting_model",
-                "正在请求模型",
+                Loc.T("正在请求模型"),
                 s.Status,
-                "可点「暂停队友」。暂停不会取消已经发出的模型请求，但不会再派发新动作。",
+                Loc.T("可点「暂停队友」。暂停不会取消已经发出的模型请求，但不会再派发新动作。"),
                 null);
         }
 
@@ -247,58 +248,62 @@ internal static class PlayerFacingSession
         {
             return new PlayerFacingView(
                 "running",
-                "队友正在行动",
+                Loc.T("队友正在行动"),
                 s.Status,
-                "可随时暂停。你只操作自己的角色。",
+                Loc.T("可随时暂停。你只操作自己的角色。"),
                 null);
         }
 
         return new PlayerFacingView(
             "ready",
-            "队友已连接",
+            Loc.T("队友已连接"),
             s.DualStatus,
-            string.IsNullOrWhiteSpace(s.TeamControlStatus) ? "需要时点「暂停队友」或继续聊天。" : s.TeamControlStatus,
+            string.IsNullOrWhiteSpace(s.TeamControlStatus) ? Loc.T("需要时点「暂停队友」或继续聊天。") : s.TeamControlStatus,
             null);
     }
 
     public static string FormatUsage(bool known, LlmUsage usage, int requests)
     {
-        var requestText = $"请求：{requests} 次";
+        var requestText = Loc.T("请求：{0} 次", requests);
         if (!known)
         {
             return requests == 0
-                ? "Token 消耗：尚无（未收到 usage） | " + requestText
-                : "Token 消耗：未知（服务未返回 usage） | " + requestText;
+                ? Loc.T("Token 消耗：尚无（未收到 usage） | {0}", requestText)
+                : Loc.T("Token 消耗：未知（服务未返回 usage） | {0}", requestText);
         }
 
-        return $"Token 消耗：{usage.TotalTokens:N0} (Prompt: {usage.PromptTokens:N0}, Completion: {usage.CompletionTokens:N0}) | {requestText}";
+        return Loc.T("Token 消耗：{0} (Prompt: {1}, Completion: {2}) | {3}",
+            usage.TotalTokens.ToString("N0"),
+            usage.PromptTokens.ToString("N0"),
+            usage.CompletionTokens.ToString("N0"),
+            requestText);
     }
 
     private static PlayerFacingView ComposeCompanion(PlayerFacingSnapshot s)
     {
         if (s.PlayPhase == "stopping")
         {
-            return new PlayerFacingView("pausing", "正在暂停", s.Status, "等待当前任务结束。", null);
+            return new PlayerFacingView("pausing", Loc.T("正在暂停"), s.Status, Loc.T("等待当前任务结束。"), null);
         }
 
         if (s.PlayPhase == "paused")
         {
-            return new PlayerFacingView("paused", "已暂停自动游玩", s.Status, "主窗口点「继续游玩」后才会再行动。", null);
+            return new PlayerFacingView("paused", Loc.T("已暂停自动游玩"), s.Status, Loc.T("主窗口点「继续游玩」后才会再行动。"), null);
         }
 
         if (s.WaitingForGame)
         {
-            return new PlayerFacingView("waiting_game", "正在等游戏", s.Status, "正常等待。", null);
+            return new PlayerFacingView("waiting_game", Loc.T("正在等游戏"), s.Status, Loc.T("正常等待。"), null);
         }
 
-        return new PlayerFacingView("running", s.Status, s.Status, "由主窗口控制暂停与继续。", null);
+        return new PlayerFacingView("running", s.Status, s.Status, Loc.T("由主窗口控制暂停与继续。"), null);
     }
 
     private static string HeadlineForFirstRun(FirstRunStatus first) => first.Phase switch
     {
-        "failed" => "游玩配置验证失败",
-        "filled_unverified" => "配置尚未验证",
-        "verified" => "可以邀请队友",
-        _ => "还没有配好模型"
+        "failed" => Loc.T("游玩配置验证失败"),
+        "filled_unverified" => Loc.T("配置尚未验证"),
+        "verified" => Loc.T("可以邀请队友"),
+        _ => Loc.T("还没有配好模型")
     };
 }
