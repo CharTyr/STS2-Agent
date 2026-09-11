@@ -92,23 +92,66 @@
 
 ## `GET /health`
 
-返回 Mod 基础状态。用于确认游戏正在运行且 Mod 已加载。
+返回 Mod 基础状态、本次会话的运行计数与自动游玩状态。用于确认游戏正在运行且 Mod 已加载；自动游玩是否在跑、上次为什么停下，也读这里。
 
 ### 响应示例
 
 ```json
 {
   "ok": true,
-  "request_id": "req_20260310_120000_1234",
+  "request_id": "req_20260911_121549_7955_4",
   "data": {
     "service": "sts2-ai-agent",
-    "mod_version": "0.4.0",
+    "mod_version": "0.10.6",
     "protocol_version": "2026-03-11-v1",
-    "game_version": "v0.98.2",
-    "status": "ready"
+    "game_version": "v0.111.0",
+    "status": "ready",
+    "api_host": "127.0.0.1",
+    "api_port": 8080,
+    "process_id": 50708,
+    "instance_role": "human",
+    "mcp_enabled": false,
+    "mcp_url": null,
+    "play_running": false,
+    "play_phase": "paused",
+    "stop_kind": null,
+    "session_requests": 12,
+    "companion_process_alive": false,
+    "companion_process_exited": false,
+    "dual_status": "尚未启动双开。",
+    "team_control_status": "队友控制尚未连接。"
   }
 }
 ```
+
+### 字段说明
+
+| 字段 | 类型 | 说明 |
+| --- | --- | --- |
+| `mod_version` | string | Mod 版本号 |
+| `protocol_version` | string | HTTP 协议版本 |
+| `game_version` | string | 游戏版本；示例值随游戏更新变化 |
+| `status` | string | `ready` 表示可以接受请求 |
+| `process_id` | integer | 游戏进程 PID，用于核对双开窗口身份 |
+| `instance_role` | string | `human`（玩家窗口）或 `companion`（AI 队友实例） |
+| `mcp_enabled` / `mcp_url` | boolean / string\|null | 进程内 MCP 是否开启，以及开启时的地址 |
+| `play_running` | boolean | 自动游玩是否正在运行 |
+| `play_phase` | string | 自动游玩阶段，常见值 `running` / `paused` / `stopping` |
+| `stop_kind` | string\|null | 上次自动游玩停止的类别，未停止过为 `null` |
+| `session_requests` | integer | 本会话已消耗的模型请求次数（可由「重置本会话统计」清零） |
+| `companion_process_alive` / `companion_process_exited` | boolean | AI 队友进程是否在运行 / 是否已退出 |
+| `dual_status` / `team_control_status` | string | 双开与队友控制的人类可读状态 |
+
+### `stop_kind` 取值
+
+| 值 | 含义 |
+| --- | --- |
+| `null` | 本次自动游玩没有以停止收尾（仍在运行，或尚未开始） |
+| `budget` | 命中会话预算或请求次数上限 |
+| `run_end` | 已离开当前局，或对局标识发生变化 |
+| `config` | 模型配置或认证问题（401/402/403/404/422、密钥无效等） |
+| `network` | 网络或超时问题（408/429/5xx、连接被拒绝等） |
+| `failed` | 其它原因，包括连续 3 次决策未成功 |
 
 ---
 
@@ -1014,6 +1057,74 @@
 | `stable` | boolean | 状态是否已稳定 |
 | `message` | string | 人类可读的结果描述 |
 | `state` | object | 执行后的最新游戏状态快照（同 `GET /state` 的 `data`） |
+
+---
+
+## `POST /session/control`
+
+启动或暂停**本机角色**的自动游玩。游戏内悬浮窗的「开始自动游玩」按钮走的是同一个入口，脚本与验收流程用它替代鼠标点击。
+
+- 仅接受 loopback 请求，非本机来源返回 403 `local_only`
+- 请求体 `{"running": true}` 启动，`{"running": false}` 暂停；字段缺失或不是布尔值返回 400 `invalid_request`
+- 在 `companion` 实例上等价于控制该实例自身，见下方 `/companion/control`
+
+### 响应示例
+
+```json
+{
+  "ok": true,
+  "request_id": "req_20260911_121549_7955_4",
+  "data": {
+    "phase": "running",
+    "play_running": true,
+    "play_phase": "running"
+  }
+}
+```
+
+暂停请求在当轮任务尚未结束时返回 409 `pause_pending`；实例尚未进入可游玩状态时返回 409 `session_not_ready`。返回 `play_running: true` 只表示会话已启动，随后可能因为对局边界、预算或连续决策失败而停止，停止原因读 `/health` 的 `stop_kind`。
+
+### 典型用法
+
+```powershell
+Invoke-RestMethod -Uri 'http://127.0.0.1:8080/session/control' -Method POST `
+  -Body '{"running":true}' -ContentType 'application/json'
+```
+
+---
+
+## `GET /events/stream`
+
+服务端推送的事件流，用于等待状态变化，而不是反复轮询 `/state`。
+
+- `Content-Type: text/event-stream`，分块传输
+- 每条事件形如 `event: <type>` 加一至多行 `data: <json>`，以空行结束
+- 心跳：每 15 秒发送一行 SSE 注释（`:` 开头），连接保持打开
+
+事件类型：
+
+| 类型 | 触发时机 |
+| --- | --- |
+| `session_started` | 会话开始 |
+| `screen_changed` | 界面切换 |
+| `combat_started` / `combat_ended` | 进入 / 离开战斗 |
+| `combat_turn_changed` | 战斗回合变化 |
+| `player_action_window_opened` / `player_action_window_closed` | 玩家可操作窗口开 / 关 |
+| `route_decision_required` | 地图需要选路 |
+| `reward_decision_required` | 奖励需要选择 |
+| `event_state_changed` | 事件内部状态变化 |
+| `available_actions_changed` | 可用动作集合变化 |
+
+---
+
+## `POST /companion/control` 与 `POST /companion/message`
+
+AI 队友实例上的受控端点，由宿主进程在本地调用，普通玩家窗口不使用。
+
+- 仅在 `companion` 实例、loopback，且请求头 `X-STS2-Companion-Session` 与实例持有的会话令牌一致时可用；否则返回 403 `companion_session_required`
+- 令牌由宿主拉起队友进程时生成，通过环境变量传给队友，只存在于本机双开场景
+- `POST /companion/control`：请求体 `{"running": true|false}`，响应 `data.phase`；队友被远程暂停后不会再自行启动
+- `POST /companion/message`：请求体 `{"message": "..."}`（1–2000 字符），响应 `data.reply` 为队友的回复
 
 ---
 

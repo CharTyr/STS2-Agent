@@ -73,8 +73,18 @@ Offline coverage: 17 C# core tests (`ProactiveChatPolicyTests` plus two `AgentLo
 read-only guarantee and tone injection into the system prompt. The mod project compiles with 0 warnings and
 0 errors.
 
-Not verified: real in-game behaviour. Whether a live model produces a useful sentence at the right moment,
-whether the 75-second interval feels right, and whether the trigger fires correctly across real screen
-transitions all remain unverified until someone plays a live game. Do not describe the offline tests as
-in-game acceptance.
+Live behaviour is now verified in two rounds against a local zero-cost stub, which is what the prompts are
+written for; text quality from a real hosted model is still open.
+
+- 2026-09-10, isolated game copy: the COMBAT transition triggered, the prompt and the tone reached the
+  request, the chat path stayed read-only, and the reply was consumed. See
+  [validation-acceptance_2026-09-10.md](../history/validation-acceptance_2026-09-10.md).
+- 2026-09-11, same setup: the volume gates were exercised end to end. Combat start and combat end both
+  fired; nine sends landed 88–137 seconds apart with a forced transition 12 seconds after a send staying
+  silent; the seventh moment inside one auto-play session was refused at the six-message cap; and pausing
+  plus resuming auto-play handed the allowance back so the next moment was accepted. See
+  [validation-acceptance_2026-09-11.md](../history/validation-acceptance_2026-09-11.md).
+
+Still not verified: whether a hosted model produces a useful sentence at the right moment, and whether the
+75-second interval feels right to a human player over a long session.
 
