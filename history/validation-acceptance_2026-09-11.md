@@ -115,3 +115,5 @@ data: unknown            HTTP 404 ok=False code=collection_not_found
 - `/companion/control` 与 `/companion/message` 本轮只按源码与既有契约测试登记，未新增实机调用证据（`/events/stream` 的实机帧捕获见第 4 节）。
 - 第二轮修复中，「错误文案含关键词导致误分类」只在离线测试里构造，未在真实对局中制造该类错误文案。
 - `/mcp` 原生 MCP 端点本轮未实机调用，沿用 2026-09-08 的 Origin 契约与实机探测结论。
+- 审计提出的 `NativeMcpServer` body 上限只判 `> 1_000_000`、未判 `ContentLength64 == -1`（chunked）：未做改动。原因是拒绝 `-1` 可能直接破坏使用 chunked 传输的正常 MCP 客户端，而当前暴露面仅限本机 loopback；若要收紧，正确做法是改成有界读取（读满 1 MB + 1 字节即拒绝），而不是简单加一个比较。记录待后续判断。
+- 审计提出的 `McpPort` / `McpServerPath` 设置项在悬浮窗没有控件（写盘但不显示）、保存时 `ThinkingIntensity` 会被对话模型的取值覆盖：均为低危可用性问题，本轮未改。
