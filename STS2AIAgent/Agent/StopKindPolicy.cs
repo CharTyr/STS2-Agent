@@ -15,11 +15,23 @@ internal static class StopKindPolicy
     public static string Classify(string? message)
     {
         message ??= string.Empty;
-        if (message.Contains("预算", StringComparison.Ordinal) || message.Contains("上限", StringComparison.Ordinal))
-        {
-            return Budget;
-        }
+        return ClassifyBody(message);
+    }
 
+    /// <summary>
+    /// Prefers the kind a thrower stated over one derived from the message. Message matching is
+    /// the fallback for errors that only exist as text (transport and model failures).
+    /// </summary>
+    public static string Resolve(string? explicitKind, string? message)
+    {
+        return string.IsNullOrEmpty(explicitKind) ? Classify(message) : explicitKind;
+    }
+
+    private static string ClassifyBody(string message)
+    {
+        // Budget stops come from SessionBudgetGuard, which states the kind itself. Matching bare
+        // words here used to misread ordinary failures: a game error containing 上限 was reported as
+        // a budget stop and advised the player to reset their session stats.
         // Only the run boundary's own messages mean the run ended. Matching the bare word "当前局"
         // also caught the retry message "检查当前局面后可手动继续", so three failed decisions were
         // reported as a finished run, with advice to start a new run from the main menu.

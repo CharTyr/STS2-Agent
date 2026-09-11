@@ -248,6 +248,33 @@ internal static class PlayerExperienceTests
         Assert.Contains("测试", config.NextAction);
     }
 
+    /// <summary>
+    /// The running branch was unreachable: Phase is only paused/running/stopping, and stopping and
+    /// pausing are handled earlier, so a still-running session always matched the requesting-model
+    /// guard and the player never saw the designed "队友正在行动" wording.
+    /// </summary>
+    public static void RunningSessionReportsActionUnlessAModelRoundIsOpen()
+    {
+        var settings = AgentSettings.CreateDefault();
+        ModelRoleProbe.Upsert(settings, ModelRoleProbe.FromSuccess(ModelRoleNames.Play, settings.TryResolvePlayModel()!));
+        var verified = FirstRunSetup.Evaluate(settings);
+
+        var betweenRounds = PlayerFacingSession.Compose(BaseSnapshot(verified) with
+        {
+            PlayRunning = true,
+            PlayPhase = "running",
+            RequestingModel = false
+        });
+        Assert.Equal("running", betweenRounds.Kind);
+
+        var modelRound = PlayerFacingSession.Compose(BaseSnapshot(verified) with
+        {
+            PlayRunning = true,
+            PlayPhase = "running",
+            RequestingModel = true
+        });
+        Assert.Equal("requesting_model", modelRound.Kind);
+    }
     public static void NativeMcpToolsMatchGuidedActContract()
     {
         var names = AgentTools.Mcp.Select(tool => tool.Name).ToArray();

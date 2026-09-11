@@ -128,7 +128,8 @@ internal static class TestRunner
         yield return ("Probe.FailureKind", () => Task.Run(RuntimeExperienceRegressionTests.ModelRoleProbeClassifiesConfigAndNetworkFailures));
         yield return ("Session.RejectsStaleCompletion", () => Task.Run(RuntimeExperienceRegressionTests.CompletionIdentityRejectsLatePreviousSessionCallbacks));
         yield return ("Session.ClearOwnModelTestStop", () => Task.Run(RuntimeExperienceRegressionTests.SuccessfulModelTestClearsOnlyItsOwnTransientStop));
-        yield return ("Session.PauseAndConfigCopy", () => Task.Run(PlayerExperienceTests.PlayerFacingMapsPauseAndConfigError));
+       yield return ("Session.PauseAndConfigCopy", () => Task.Run(PlayerExperienceTests.PlayerFacingMapsPauseAndConfigError));
+        yield return ("Session.RunningBranchReachable", () => Task.Run(PlayerExperienceTests.RunningSessionReportsActionUnlessAModelRoundIsOpen));
         yield return ("Mcp.NativeActContract", () => Task.Run(PlayerExperienceTests.NativeMcpToolsMatchGuidedActContract));
         yield return ("CurrentRun.AllowsLobbyBeforeRun", () => Task.Run(CurrentRunBoundaryTests.AllowsLobbyBeforeRun));
         yield return ("CurrentRun.StopsWhenLeavingRunToMainMenu", () => Task.Run(CurrentRunBoundaryTests.StopsWhenLeavingRunToMainMenu));
@@ -140,7 +141,8 @@ internal static class TestRunner
         yield return ("CurrentRun.FreshSessionAcceptsNewRun", () => Task.Run(CurrentRunBoundaryTests.FreshSessionAcceptsARunThatStartedWhilePaused));
         yield return ("StopKind.RetryIsNotRunEnd", StopKindPolicyTests.RetryStopIsNotRunEnd);
         yield return ("StopKind.BoundaryIsRunEnd", () => Task.Run(StopKindPolicyTests.BoundaryStopsAreRunEnd));
-        yield return ("StopKind.OtherKindsSurvive", () => Task.Run(StopKindPolicyTests.BudgetConfigAndNetworkKindsSurvive));
+       yield return ("StopKind.OtherKindsSurvive", () => Task.Run(StopKindPolicyTests.BudgetConfigAndNetworkKindsSurvive));
+        yield return ("StopKind.ExplicitKindWins", () => Task.Run(StopKindPolicyTests.ExplicitKindBeatsTheMessage));
         yield return ("Recovery.NoActionStops", AutoPlayRecoveryTests.RepeatedNoActionStops);
         yield return ("Recovery.HttpStatus", AutoPlayRecoveryTests.HttpFailuresKeepStatusWithoutStreamReplay);
         yield return ("Recovery.Waiting", AutoPlayRecoveryTests.WaitingDoesNotHideFailures);

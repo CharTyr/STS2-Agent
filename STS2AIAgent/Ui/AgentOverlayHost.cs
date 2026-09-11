@@ -597,7 +597,7 @@ internal sealed class AgentOverlayHost
             SelectByText(_proactiveToneCombo, ProactiveChatTones.Label(settings.ProactiveChatTone));
             WatchCombo(_proactiveToneCombo);
             _settingsBody.AddChild(Labeled("交流风格", _proactiveToneCombo));
-            _settingsBody.AddChild(UiFactory.Label("默认关闭。开启后仅在战斗开始与结束时各说一句，最多 6 句、间隔至少 75 秒；不会代打，也遵守暂停和预算上限。", 11, muted: true));
+            _settingsBody.AddChild(UiFactory.Label("默认关闭。开启后仅在战斗开始与结束时各说一句，每次开始自动游玩最多 6 句，两句之间至少间隔 75 秒（暂停或继续自动游玩不会缩短这个间隔）；不会代打，也遵守预算上限。", 11, muted: true));
             _settingsBody.AddChild(UiFactory.Button("重置窗口位置", ResetPlacement));
             _settingsBody.AddChild(UiFactory.Label("拖动标题栏可移动窗口，位置会保存。", 11, muted: true));
             _settingsBody.AddChild(UiFactory.Label("配置文件：" + AgentRuntime.Instance.SettingsPath, 11, muted: true));

@@ -197,7 +197,10 @@ internal static class PlayerFacingSession
             return new PlayerFacingView(kind, HeadlineForFirstRun(s.FirstRun), s.FirstRun.Hint, next, null);
         }
 
-        if (!s.CompanionConnected && !s.CompanionProcessAlive)
+        // Inviting a teammate only makes sense before or after a session. While auto-play is running
+        // this guard used to win over every running branch, so a solo session showed "可以邀请 AI 队友"
+        // and never reported what the loop was actually doing.
+        if (!s.CompanionConnected && !s.CompanionProcessAlive && !s.PlayRunning)
         {
             return new PlayerFacingView(
                 "ready_to_invite",
@@ -227,7 +230,10 @@ internal static class PlayerFacingSession
                 null);
         }
 
-        if (s.RequestingModel || (s.PlayRunning && s.PlayPhase == "running"))
+        // Only a model round is "requesting the model". The earlier guards already cover stopping,
+        // pausing and waiting, so a plain PlayRunning here means the loop is between rounds and the
+        // player should see "队友正在行动" instead. The old extra clause made that branch dead code.
+        if (s.RequestingModel)
         {
             return new PlayerFacingView(
                 "requesting_model",

@@ -11,15 +11,23 @@
 - Card-grid selection panels (upgrade / transform / enchant) now report their real selection metadata instead of `1/1/0`, and the first pick settles instead of burning the 10-second timeout (`d77982a`, #82). Measured on an isolated copy: enchant `1/1/0` → `0/3/0`, first pick 10036 ms → 151 ms; transform 36 ms then 187 ms; upgrade 173 ms with no regression.
 - Proactive chat's six-message allowance is handed back when auto-play starts, so the feature no longer goes permanently silent after six lines; the 75-second interval still spans sessions.
 - Starting auto-play after a run that began while auto-play was paused no longer stops instantly as a run-identity change: the run boundary is reset per auto-play session.
+- Leaving the current run now stops auto-play again. The loop re-armed the run boundary at the top of every iteration and then checked it, so the "already entered a run" flag was always false and the stop never fired; the boundary is installed once per session now.
+- `POST /action` and `POST /session/control` answer malformed or oversized bodies with 400 `invalid_request`. Both used to surface `JsonException` as a 500 `internal_error`, and `/action` had no body size limit at all.
+- A failed decision is no longer reported as a budget stop. The retry hint appends the game's own error text, and the classifier matched bare words such as 上限 anywhere in that text, so the overlay advised resetting session stats; budget stops now carry their kind explicitly.
+- The overlay's "teammate is acting" view is reachable again: a still-running session always matched the requesting-model branch first, so the player only ever saw "requesting the model", and a solo session showed "you can invite a teammate" while auto-play was running.
+- Writing settings from overlay toggles no longer throws into the UI callback when the file is locked or the disk is full; the failure is reported in the status line instead.
 
 ### Added
 
 - Combat state reports the player's own pets (`pets[]`, `pet_missing`) in both the full and compact payloads (`7b02168`).
 - `docs/api.md` documents `POST /session/control`, `GET /events/stream`, `POST /companion/control` and `POST /companion/message`, plus the `/health` fields and the `stop_kind` value table.
+- `docs/api.md` also documents `GET /data/{collection}` and `POST /mcp`, and the error table now lists `local_only`, `companion_session_required`, `companion_not_ready`, `invite_failed`, `collection_not_found`, `export_error` and `origin_not_allowed`.
+- The MCP client waits 75 seconds for an action instead of 30, so `continue_game_over` (up to 60 seconds of native saving) no longer looks like a lost response; a refused connection is reported as a retryable `connection_error` rather than an unknown outcome, and a `status="failed"` action is no longer returned as a success.
 
 ### Changed
 
 - The status page and `docs/proactive-chat-review.md` no longer claim the proactive chat is unverified in-game, and the historical mechanic matrix flags the deck-selection row that #82 later contradicted.
+- The `act` tool text describes the compact view's own target fields; it used to tell the model to read `requires_target` / `target_index_space` / `valid_target_indices`, which only the full state and `rest.options` carry.
 
 ## v0.10.6 - 2026-09-11
 

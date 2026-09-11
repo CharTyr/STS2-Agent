@@ -35,11 +35,18 @@ def _set_socket_read_timeout(response: Any, timeout: float) -> None:
 
 
 _DEFAULT_READ_TIMEOUT = 10.0
-_DEFAULT_ACTION_TIMEOUT = 30.0
+# Actions wait for the game to settle before answering, and continue_game_over waits up to 60
+# seconds for the native summary save. A shorter client timeout than that turned a normal slow
+# path into a lost response.
+_DEFAULT_ACTION_TIMEOUT = 75.0
 _DEFAULT_MAX_RETRIES = 2
 _RETRY_BACKOFF_BASE = 0.5
 _ACTION_RESPONSE_READ_EXCEPTIONS = (OSError, ValueError, http.client.HTTPException)
 _ACTION_TRANSPORT_EXCEPTIONS = (OSError, http.client.HTTPException)
+# A refused or unresolvable endpoint means the request never reached the mod, so the action did
+# not run and the caller may retry. Any other transport failure happened after the request went
+# out, which stays uncertain.
+_ACTION_UNREACHABLE_REASONS = (ConnectionRefusedError, socket.gaierror)
 
 
 @dataclass(slots=True)
@@ -764,7 +771,8 @@ class Sts2Client:
                 raise last_error
             except error.URLError as exc:
                 if action_post:
-                    return self._build_uncertain_action_result(path, payload, exc)
+                    if not isinstance(exc.reason, _ACTION_UNREACHABLE_REASONS):
+                        return self._build_uncertain_action_result(path, payload, exc)
 
                 last_error = Sts2ApiError(
                     status_code=0,
@@ -933,6 +941,16 @@ class Sts2Client:
                 code="invalid_response",
                 message="Server response did not contain an object data payload.",
                 details=payload,
+            )
+
+        # docs/api.md allows status "failed" alongside "completed" and "pending". Returning it as a
+        # success would hide a failed action behind an ok envelope.
+        if isinstance(data, dict) and data.get("status") == "failed":
+            raise Sts2ApiError(
+                status_code=200,
+                code="action_failed",
+                message=str(data.get("message") or "The action reported failure."),
+                details=data,
             )
 
         return data

@@ -29,6 +29,7 @@
   - `03507dc` 修正状态页三处过期口径（停流超时为 10 分钟而非 3 分钟、主动发言实机状态、后置验证项边界）。
   - 2026-09-11 主动发言两处修复：每会话 6 条上限改为随自动游玩会话开始重新发放（此前只有手动「清零本会话统计」能恢复，说完 6 句后功能会永久沉默），75 秒间隔仍是跨会话全局约束；自动游玩开始时重置对局边界，修复「暂停期间开始新一局后，一按开始自动游玩就以 `run_end` 立即停止」。C# 核心测试 217 PASS / 0 FAIL。
   - 2026-09-11 `docs/api.md` 补登此前未记录的路由：`POST /session/control`、`GET /events/stream`、`POST /companion/control` 与 `POST /companion/message`，并补齐 `/health` 的 `stop_kind` 取值表。
+  - 2026-09-11 第二轮（四份只读审计后）：`POST /action` 与 `/session/control` 的畸形 body 现在返回 400 `invalid_request`（此前 500），`/action` 补上 body 上限；停止原因改为显式类型优先，预算不再靠「上限」等裸词误判；删除循环内对局边界重置，**恢复「离开对局即停止」**（实机：`save_and_quit` 回主菜单后 `stop_kind=run_end`）；悬浮窗写盘异常不再抛进 UI 回调；「队友正在行动」死分支与单人游玩时的邀请文案修正；MCP 行为超时 30s → 75s、拒绝连接改报可重试的 `connection_error`、`status="failed"` 不再当成功；`docs/api.md` 补登 `/data/{collection}` 与 `/mcp` 及 7 个错误码。C# 219 PASS / MCP 53 项。
 
 ## 2. 已有验收证据与边界
 

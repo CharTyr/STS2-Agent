@@ -359,13 +359,29 @@ internal sealed class AgentRuntime
         RaiseChanged();
     }
 
+    // These setters run straight from overlay callbacks. SettingsStore.Save rethrows IO and access
+    // failures, and an exception escaping a Godot signal callback would leave a toggle showing a
+    // state the file never recorded, so the failure is reported in the status line instead.
+    private void SaveSettingsQuietly()
+    {
+        try
+        {
+            _store.Save(_settings);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            SetStatus("设置保存失败，原配置文件未被覆盖。请检查磁盘空间或文件占用后重试。");
+            NoteEvent("settings save failed: " + ex.GetType().Name);
+        }
+    }
+
     public void PersistOverlayVisible(bool visible)
     {
         lock (_gate)
         {
             _settings.OverlayVisibleOnStart = visible;
             _settings.HasSeenFirstRunGuide = true;
-            _store.Save(_settings);
+            SaveSettingsQuietly();
         }
     }
 
@@ -379,7 +395,7 @@ internal sealed class AgentRuntime
             }
 
             _settings.HasSeenFirstRunGuide = true;
-            _store.Save(_settings);
+            SaveSettingsQuietly();
         }
     }
 
@@ -389,7 +405,7 @@ internal sealed class AgentRuntime
         {
             _settings.OverlayLeft = left;
             _settings.OverlayTop = top;
-            _store.Save(_settings);
+            SaveSettingsQuietly();
         }
     }
 
@@ -399,7 +415,7 @@ internal sealed class AgentRuntime
         {
             _settings.AttachStateInChat = attachState;
             _settings.AttachScreenshotInChat = attachScreenshot;
-            _store.Save(_settings);
+            SaveSettingsQuietly();
         }
     }
 
@@ -484,7 +500,7 @@ internal sealed class AgentRuntime
         lock (_gate)
         {
             _settings.McpEnabled = enabled;
-            _store.Save(_settings);
+            SaveSettingsQuietly();
         }
 
         ApplyMcpFromSettings();
@@ -773,7 +789,7 @@ internal sealed class AgentRuntime
                 if (!IsCurrentPlaySessionLocked(identity)) return;
 
                 Log.Warn($"{LogPrefix} Auto-play session ended: {ex.Message}");
-                ClassifyStop(ex.Message, ModelRoleNames.Play);
+                ClassifyStop(ex, ModelRoleNames.Play);
                 _requestingModel = false;
                 if (PlayPhase == "paused") SetStatus("自动游玩已停止：" + DiagnosticExport.Redact(ex.Message));
                 NoteEvent("stop " + (_stopKind ?? "failed") + ": " + ex.Message);
@@ -804,11 +820,9 @@ internal sealed class AgentRuntime
                         var payload = GameStateService.BuildStatePayload();
                         return (payload.screen, payload.session.phase, payload.run_id, payload.in_combat);
                     });
-                    if (snapshot.Item1 is "MAIN_MENU" or "CHARACTER_SELECT" or "MULTIPLAYER_LOBBY")
-                    {
-                        _runBoundary = new CurrentRunBoundary();
-                        boundary = _runBoundary;
-                    }
+                    // Do not re-arm the boundary here: replacing it before checking would clear the
+                    // "entered a run" flag that makes a return to the menu a stop. Starting auto-play
+                    // is what installs a fresh boundary (see StartAutoPlay).
                     boundary.Check(snapshot.Item1, snapshot.Item2, snapshot.Item3);
                     var moment = ObserveProactiveMoment(snapshot.Item1, snapshot.Item4);
                     var immediate = await TryCompanionImmediateAsync(token);
@@ -1113,7 +1127,20 @@ internal sealed class AgentRuntime
 
     private void ClassifyStop(string message, string? role = null)
     {
-        _stopKind = StopKindPolicy.Classify(message);
+        SetStop(StopKindPolicy.Classify(message), message, role);
+    }
+
+    private void ClassifyStop(Exception error, string? role = null)
+    {
+        var kind = error is AutoPlayStoppedException stopped
+            ? StopKindPolicy.Resolve(stopped.Kind, error.Message)
+            : StopKindPolicy.Classify(error.Message);
+        SetStop(kind, error.Message, role);
+    }
+
+    private void SetStop(string kind, string message, string? role)
+    {
+        _stopKind = kind;
         _stopDetail = DiagnosticExport.Redact(message);
         _stopRole = role;
     }

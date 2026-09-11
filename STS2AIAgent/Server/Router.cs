@@ -90,7 +90,7 @@ internal static class Router
                     throw new ApiException(400, "invalid_request", "A bounded JSON body is required.");
                 }
 
-                var control = await JsonHelper.DeserializeAsync<SessionControlRequest>(request.InputStream, cancellationToken);
+                var control = await ReadJsonBodyAsync<SessionControlRequest>(request, cancellationToken);
                 if (control?.running is null)
                 {
                     throw new ApiException(400, "invalid_request", "running must be a boolean.");
@@ -235,7 +235,8 @@ internal static class Router
             if (request.HttpMethod.Equals("POST", StringComparison.OrdinalIgnoreCase) &&
                 request.Url?.AbsolutePath == "/action")
             {
-                var actionRequest = await JsonHelper.DeserializeAsync<ActionRequest>(request.InputStream, cancellationToken);
+                RequireBoundedBody(request);
+                var actionRequest = await ReadJsonBodyAsync<ActionRequest>(request, cancellationToken);
                 if (actionRequest?.action == null)
                 {
                     throw new ApiException(400, "invalid_request", "Request body must contain an action field.");
@@ -337,6 +338,22 @@ internal static class Router
     private static async Task<System.Text.Json.JsonDocument> ReadCompanionBodyAsync(HttpListenerRequest request, CancellationToken cancellationToken)
     {
         try { return await System.Text.Json.JsonDocument.ParseAsync(request.InputStream, cancellationToken: cancellationToken); }
+        catch (System.Text.Json.JsonException) { throw new ApiException(400, "invalid_request", "Body must be valid JSON."); }
+    }
+
+    // Every JSON route needs the same two guarantees: a bounded body, and malformed JSON reported as
+    // a 400 request error instead of escaping as an unhandled 500.
+    private static void RequireBoundedBody(HttpListenerRequest request)
+    {
+        if (request.ContentLength64 < 0 || request.ContentLength64 > 16000)
+        {
+            throw new ApiException(400, "invalid_request", "A bounded JSON body is required.");
+        }
+    }
+
+    private static async Task<T?> ReadJsonBodyAsync<T>(HttpListenerRequest request, CancellationToken cancellationToken)
+    {
+        try { return await JsonHelper.DeserializeAsync<T>(request.InputStream, cancellationToken); }
         catch (System.Text.Json.JsonException) { throw new ApiException(400, "invalid_request", "Body must be valid JSON."); }
     }
 

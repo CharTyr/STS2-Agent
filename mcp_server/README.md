@@ -170,8 +170,15 @@ Modal：
 - `STS2_AGENT_KNOWLEDGE_DIR`
   - 默认：仓库根目录下的 `agent_knowledge/`
   - 作用：保存 combat / event 的运行时知识文件
-- `STS2_API_TIMEOUT_SECONDS`
-  - 默认：`10`
+- `STS2_API_READ_TIMEOUT`
+  - 默认：`10`（秒）
+  - 作用：`GET` 请求与状态对账的读取超时
+- `STS2_API_ACTION_TIMEOUT`
+  - 默认：`75`（秒）
+  - 作用：`POST /action` 的读取超时。动作会等游戏稳定后才返回（`continue_game_over` 最多等 60 秒原生存档），因此必须明显长于读取超时
+- `STS2_API_MAX_RETRIES`
+  - 默认：`2`
+  - 作用：可重试的读取类请求的重试次数；动作请求从不自动重放
 - `STS2_ENABLE_DEBUG_ACTIONS`
   - 默认：未设置 / `0`
   - 作用：启用开发期 debug 工具，例如 `run_console_command`

@@ -57,6 +57,13 @@
 | `session_not_ready` | 409 | 会话尚未就绪（如组队未完成） | 是 |
 | `pause_pending` | 409 | 暂停尚未完成，需稍后重试 | 是 |
 | `internal_error` | 500 | 服务内部异常 | 否 |
+| `local_only` | 403 | 该端点只接受本机（loopback）请求 | 否 |
+| `companion_session_required` | 403 | 需要有效的 AI 队友会话令牌（见下） | 否 |
+| `companion_not_ready` | 409 | 队友实例尚未就绪，无法响应控制 | 是 |
+| `invite_failed` | 409 | 邀请 AI 队友失败（主菜单状态或配置不满足） | 是 |
+| `collection_not_found` | 404 | `GET /data/{collection}` 的集合名不存在 | 否 |
+| `export_error` | 500 | 游戏元数据导出失败 | 是 |
+| `origin_not_allowed` | 403 | 原生 MCP 请求的 `Origin` 不受信任 | 否 |
 
 ---
 
@@ -1098,13 +1105,37 @@ Invoke-RestMethod -Uri 'http://127.0.0.1:8080/session/control' -Method POST `
 服务端推送的事件流，用于等待状态变化，而不是反复轮询 `/state`。
 
 - `Content-Type: text/event-stream`，分块传输
-- 每条事件形如 `event: <type>` 加一至多行 `data: <json>`，以空行结束
-- 心跳：每 15 秒发送一行 SSE 注释（`:` 开头），连接保持打开
+ - 心跳：每 15 秒发送一行 SSE 注释（`:` 开头），连接保持打开
+ - 建立连接时先发一行 `: stream opened` 注释
+
+### 帧格式
+
+一帧由四部分组成，以空行结束：
+
+```
+id: 897
+event: combat_started
+data: {
+data:   "event_id": 897,
+data:   "type": "combat_started",
+data:   "timestamp_utc": "2026-09-11T12:45:53.9202914Z",
+data:   "data": {
+data:     "run_id": "C9LRZTK3L1B4",
+data:     "turn": 1
+data:   }
+data: }
+
+```
+
+注意：JSON 是**多行**输出的，同一帧会有多行 `data:`。按 SSE 规范，客户端必须把所有 `data:` 行用换行符拼接后再整体解析，不能只读第一行。`mcp_server/src/sts2_mcp/client.py` 的 `wait_for_event` 就是这样处理的。
+
+帧内容：`id:` 为事件序号，`event:` 为事件类型，`data:` 为完整事件信封，含 `event_id`、`type`、`timestamp_utc` 与事件特有的 `data`。
 
 事件类型：
 
 | 类型 | 触发时机 |
 | --- | --- |
+| `stream_ready` | 连接建立后立刻补发一次当前状态（`run_id`、`screen`、`in_combat`、`turn`、`action_window_open`），让新客户端不必先轮询 `/state` |
 | `session_started` | 会话开始 |
 | `screen_changed` | 界面切换 |
 | `combat_started` / `combat_ended` | 进入 / 离开战斗 |
@@ -1114,6 +1145,8 @@ Invoke-RestMethod -Uri 'http://127.0.0.1:8080/session/control' -Method POST `
 | `reward_decision_required` | 奖励需要选择 |
 | `event_state_changed` | 事件内部状态变化 |
 | `available_actions_changed` | 可用动作集合变化 |
+
+2026-09-11 在隔离副本上实测：45 秒窗口内收到 `: stream opened`、2 次 `: heartbeat` 与 123 行帧内容，事件类型覆盖 `stream_ready`、`screen_changed`（SHOP→COMBAT）、`combat_started`、`player_action_window_opened`、`available_actions_changed`。证据 `build/validation-2026-09-11/sse-frames.jsonl`（gitignore）。
 
 ---
 
@@ -1127,6 +1160,40 @@ AI 队友实例上的受控端点，由宿主进程在本地调用，普通玩�
 - `POST /companion/message`：请求体 `{"message": "..."}`（1–2000 字符），响应 `data.reply` 为队友的回复
 
 ---
+
+## `GET /data/{collection}`
+
+导出游戏元数据集合，供 MCP 侧做卡牌 / 遗物 / 怪物等查询。集合名不区分大小写，未知集合返回 404 `collection_not_found`。
+
+| 集合 | 内容 |
+| --- | --- |
+| `cards` | 卡牌：id、名称、费用、稀有度、类型、关键词、标签、动态数值变量等 |
+| `relics` | 遗物：id、名称、稀有度、描述 |
+| `monsters` | 怪物：id、名称、生命范围、意图 |
+| `potions` | 药水：id、名称、稀有度、目标类型 |
+| `events` | 事件：id、标题、选项 |
+| `powers` | 增益 / 减益：id、名称、类型、描述 |
+| `characters` | 角色：id、名称、初始牌组、初始遗物、初始药水 |
+
+导出需要读取游戏对象，因此经游戏线程执行；数据规模较大（卡牌集合数百 KB），不适合每次决策都拉取。MCP 侧（`sts2_mcp.client.Sts2Client.get_game_data_collection`）会在进程内缓存。
+
+### 典型用法
+
+```powershell
+Invoke-RestMethod -Uri 'http://127.0.0.1:8080/data/cards' | ConvertTo-Json -Depth 3 -Compress
+```
+
+---
+
+## `POST /mcp`（原生 MCP）
+
+进程内 MCP 端点，路径为 `/mcp`（`/mcp/` 等价），与其它路由共用同一个 HTTP 监听端口，默认 `http://127.0.0.1:8080/mcp`。
+
+- 需在游戏内悬浮窗「接入」页勾选开启（settings 的 `mcpEnabled`）；未开启时返回 403 `mcp_disabled`
+- 走 MCP Streamable HTTP 语义：请求体为 JSON-RPC，响应为 JSON 或 SSE
+- **Origin 策略**：带 `Origin` 头的请求必须与端点 authority 一致（可另带 `Host` 头，同样需匹配），否则 403 `origin_not_allowed`。缺少 `Origin` 的请求放行（原生客户端）。`Origin: null` 一律拒绝
+- 该端点使用自己的错误信封（`{ok:false, error:{code,message}}`）与 JSON-RPC 错误码，不套用本文档其余路由的 `request_id` 信封
+
 
 ## 已实现动作详细说明
 

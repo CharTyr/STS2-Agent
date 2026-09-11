@@ -813,12 +813,16 @@ def create_server(client: Sts2Client | None = None, tool_profile: str | None = N
             - Use `card_index` for `play_card`.
             - Use `option_index` for map, reward, shop, event, rest, selection,
               and multiplayer-lobby actions.
-            - Use `target_index` when the latest state marks a card, potion, or rest option as `requires_target=true`.
+            - Use `target_index` when the latest state gives a card or potion a non-null
+              `target` together with a non-empty `targets` list; `rest.options` instead carry the
+              explicit `requires_target` / `target_index_space` / `valid_target_indices` triple.
             - Use `x` and `y` for `crystal_clear_cell`; optionally pass
               `tool="big"` or `tool="small"` atomically. Use `tool` alone
               with `crystal_set_tool`.
-            - Read `target_index_space` and `valid_target_indices` from state to know whether `target_index`
-              refers to `combat.enemies[]`, `combat.players[]`, or `run.players[]`.
+            - The compact `target` hint says which list `target_index` indexes into: `enemy` means
+              `combat.enemies[]`, `player` means the local player list, and `targets` lists the exact
+              indices that are legal right now. The full state spells the same thing out as
+              `target_index_space` and `valid_target_indices`.
             - `run_console_command` is intentionally excluded from this compact tool.
         """
         normalized = action.strip().lower()

@@ -20,14 +20,18 @@ internal static class StopKindPolicyTests
     {
         var recovery = new AutoPlayRecovery();
         string? stopReason = null;
+        string? stopKind = null;
         for (var attempt = 0; attempt < 3 && stopReason == null; attempt++)
         {
-            stopReason = recovery.Observe(new AgentTurnResult()).StopReason;
+            var next = recovery.Observe(new AgentTurnResult());
+            stopReason = next.StopReason;
+            stopKind = next.StopKind;
         }
 
         Assert.NotNull(stopReason);
         Assert.Contains("面后可手动继续", stopReason);
-        Assert.Equal(StopKindPolicy.Failed, StopKindPolicy.Classify(stopReason));
+        Assert.Null(stopKind);
+        Assert.Equal(StopKindPolicy.Failed, StopKindPolicy.Resolve(stopKind, stopReason));
         return Task.CompletedTask;
     }
 
@@ -37,25 +41,52 @@ internal static class StopKindPolicyTests
         leftRun.Check(State("COMBAT", "run", "run_1"));
         var left = Expect<AutoPlayStoppedException>(() =>
             leftRun.Check(State("MAIN_MENU", "menu", "run_unknown")));
-        Assert.Equal(StopKindPolicy.RunEnd, StopKindPolicy.Classify(left.Message));
+        Assert.Equal(StopKindPolicy.RunEnd, StopKindPolicy.Resolve(left.Kind, left.Message));
 
         var changedRun = new CurrentRunBoundary();
         changedRun.Check(State("COMBAT", "run", "run_1"));
         var changed = Expect<AutoPlayStoppedException>(() =>
             changedRun.Check(State("EVENT", "run", "run_2")));
-        Assert.Equal(StopKindPolicy.RunEnd, StopKindPolicy.Classify(changed.Message));
+        Assert.Equal(StopKindPolicy.RunEnd, StopKindPolicy.Resolve(changed.Kind, changed.Message));
     }
 
     public static void BudgetConfigAndNetworkKindsSurvive()
     {
         Assert.Equal(
             StopKindPolicy.Budget,
-            StopKindPolicy.Classify("已达到会话请求次数上限（12/10 次），已自动停止游玩。"));
+            StopKindPolicy.Resolve(StopKindPolicy.Budget, "已达到会话请求次数上限（12/10 次），已自动停止游玩。"));
         Assert.Equal(
             StopKindPolicy.Configuration,
             StopKindPolicy.Classify("请检查模型、端点或凭据后再继续：401 unauthorized"));
         Assert.Equal(StopKindPolicy.Network, StopKindPolicy.Classify("LLM request timed out."));
         Assert.Equal(StopKindPolicy.Failed, StopKindPolicy.Classify(null));
+    }
+
+    /// <summary>
+    /// A typed kind wins over message matching, and bare keywords no longer decide the budget kind:
+    /// a game error containing 上限 used to be reported as a budget stop, which advised the player
+    /// to reset session stats instead of looking at the failing decision.
+    /// </summary>
+    public static void ExplicitKindBeatsTheMessage()
+    {
+        var recovery = new AutoPlayRecovery();
+        string? stopKind = null;
+        for (var attempt = 0; attempt < 3 && stopKind == null; attempt++)
+        {
+            stopKind = recovery.Observe(new AgentTurnResult { Error = "手牌已达上限" }).StopKind;
+        }
+
+        Assert.Null(stopKind);
+        Assert.Equal(StopKindPolicy.Failed, StopKindPolicy.Classify("手牌已达上限"));
+
+        var configured = recovery.Observe(new AgentTurnResult { RequiresConfiguration = true, Error = "超时" });
+        Assert.Equal(StopKindPolicy.Configuration, configured.StopKind);
+        Assert.Equal(StopKindPolicy.Configuration, StopKindPolicy.Resolve(configured.StopKind, configured.StopReason));
+
+        // The reason still supplies the missing distinction for recovery stops.
+        Assert.Equal(
+            StopKindPolicy.Network,
+            StopKindPolicy.Resolve(null, "连续 3 次决策未成功：Cannot reach the mod, connection refused"));
     }
 
     private static T Expect<T>(Action action) where T : Exception

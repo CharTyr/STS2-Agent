@@ -148,6 +148,65 @@ class ActionReplaySafetyTests(unittest.TestCase):
             socket.timeout("response lost after server completed the action")
         )
 
+    # A refused connection means the request never reached the mod, so the action did not run and
+    # the caller may simply retry. Reporting that as outcome_unknown told the caller not to replay
+    # a request the server never saw.
+    def test_refused_connection_is_retryable_connection_error(self) -> None:
+        client = Sts2Client(base_url="http://127.0.0.1:18099", max_retries=0)
+        transport = ActionReconciliationTransport(
+            lambda http_request, timeout: (_ for _ in ()).throw(
+                error.URLError(ConnectionRefusedError(10061, "refused"))
+            ),
+        )
+
+        with patch("sts2_mcp.client.request.urlopen", new=transport.urlopen):
+            with self.assertRaises(Sts2ApiError) as raised:
+                client.execute_action("end_turn")
+
+        self.assertEqual(raised.exception.code, "connection_error")
+        self.assertTrue(raised.exception.retryable)
+        self.assertEqual(transport.action_calls, 1)
+
+    def test_lost_response_after_send_stays_uncertain(self) -> None:
+        client = Sts2Client(base_url="http://127.0.0.1:18099", max_retries=0)
+        transport = ActionReconciliationTransport(
+            lambda http_request, timeout: (_ for _ in ()).throw(
+                error.URLError(ConnectionResetError("reset after send"))
+            ),
+        )
+
+        with patch("sts2_mcp.client.request.urlopen", new=transport.urlopen):
+            result = client.execute_action("end_turn")
+
+        self.assertEqual(result["status"], "outcome_unknown")
+
+    # docs/api.md allows status="failed"; the client used to treat every ok envelope as success.
+    def test_failed_status_is_not_reported_as_success(self) -> None:
+        client = Sts2Client(base_url="http://127.0.0.1:8080", max_retries=0)
+        transport = ActionReconciliationTransport(
+            lambda http_request, timeout: JsonResponse(
+                {
+                    "ok": True,
+                    "data": {
+                        "action": "end_turn",
+                        "status": "failed",
+                        "stable": False,
+                        "message": "action rejected",
+                    },
+                }
+            ),
+        )
+
+        with patch("sts2_mcp.client.request.urlopen", new=transport.urlopen):
+            with self.assertRaises(Sts2ApiError) as raised:
+                client.execute_action("end_turn")
+
+        self.assertEqual(raised.exception.code, "action_failed")
+        self.assertEqual(raised.exception.message, "action rejected")
+
+    def test_action_timeout_covers_the_longest_server_wait(self) -> None:
+        self.assertGreaterEqual(Sts2Client()._action_timeout, 60.0)
+
     def test_continue_game_over_lost_response_posts_once_and_reconciles(self) -> None:
         self._execute_uncertain_action(
             self._lost_response,

@@ -6,9 +6,9 @@
 
 | 提交 | 内容 | 离线证据 |
 | --- | --- | --- |
-| 待提交 | 主动发言的 6 条上限改为随自动游玩会话开始重新发放（`ProactiveChatSession.BeginSession`，`AgentRuntime.StartAutoPlay` 调用）；75 秒间隔仍是跨会话全局约束 | `ProactiveChat.NewPlaySessionResetsCap` |
-| 待提交 | `StartAutoPlay` 重置 `CurrentRunBoundary`，使「暂停期间开始的新一局」属于新会话，而不是被判成对局标识变化 | `CurrentRun.FreshSessionAcceptsNewRun` |
-| 待提交 | `docs/api.md` 补登 `/session/control`、`/events/stream`、`/companion/control`、`/companion/message`，补齐 `/health` 字段与 `stop_kind` 取值表 | `scripts/check_verification_gates.py` 四闸门 |
+| deafa23 | 主动发言的 6 条上限改为随自动游玩会话开始重新发放（`ProactiveChatSession.BeginSession`，`AgentRuntime.StartAutoPlay` 调用）；75 秒间隔仍是跨会话全局约束 | `ProactiveChat.NewPlaySessionResetsCap` |
+| deafa23 | `StartAutoPlay` 重置 `CurrentRunBoundary`，使「暂停期间开始的新一局」属于新会话，而不是被判成对局标识变化 | `CurrentRun.FreshSessionAcceptsNewRun` |
+| e4c5797 | `docs/api.md` 补登 `/session/control`、`/events/stream`、`/companion/control`、`/companion/message`，补齐 `/health` 字段与 `stop_kind` 取值表 | `scripts/check_verification_gates.py` 四闸门 |
 
 C# 核心测试：**217 PASS / 0 FAIL**（本轮新增 2 项）。
 
@@ -61,9 +61,55 @@ C# 核心测试：**217 PASS / 0 FAIL**（本轮新增 2 项）。
 - 正式安装目录当前仍是 v0.10.6 的 `47CE0F90…`，本轮未重新部署到正式安装。
 
 ## 6. 未覆盖项
+## 7. 第二轮：审计发现的缺陷与修复（同日稍后）
+
+对 HTTP 服务层、自动游玩停止/恢复、悬浮窗文案与 MCP 契约做了四份只读审计，发现并修复以下真实缺陷。
+
+| 缺陷 | 触发条件与后果 | 修复 | 验证 |
+| --- | --- | --- | --- |
+| `POST /action` 无 body 上限、无 JSON 容错 | 非 JSON 或字段类型错误（如 `card_index` 传字符串）抛 `JsonException`，被通用 catch 接成 **500 `internal_error`**，而契约要求 400 `invalid_request`；chunked body 还会无界读取 | `Router.RequireBoundedBody` + `ReadJsonBodyAsync`，两条路由统一走这两个助手 | 实机探针：not-json / wrong-type / empty / missing 全部 HTTP 400 `invalid_request`（此前为 500） |
+| `POST /session/control` 非 JSON body → 500 | 同上 | 同上 | 同上 |
+| 停止原因靠中文关键词匹配 | 决策失败的包裹文案会拼上游戏原始错误串；错误串含「上限」时被报成 `budget`，界面建议「重置本会话统计」而不是查看局面 | `AutoPlayStoppedException` 带可选 `Kind`；预算守卫与对局边界显式声明类型；`StopKindPolicy.Resolve` 让显式类型优先 | 离线 `StopKind.ExplicitKindWins`；`StopKind.RetryIsNotRunEnd` |
+| 预算关键词误判 | `Classify` 对整串做 `Contains("上限")`，普通失败文案可能命中 | 移除裸词匹配：预算停止只由 `SessionBudgetGuard` 的显式类型产生 | 同上（`Classify("手牌已达上限")` 现为 `failed`） |
+| 循环内重置对局边界 | `AutoPlayLoopAsync` 每轮看到菜单屏幕就换新的 `CurrentRunBoundary` 再立刻 `Check`，`_enteredRun` 为 false，**离开对局永不触发停止** | 删除循环内重置，边界只在 `StartAutoPlay` 安装 | 实机：`save_and_quit` 回主菜单后 `play_running=false`、`stop_kind=run_end` |
+| 悬浮窗写盘异常逃逸 | `PersistOverlayVisible` / `PersistOverlayPlacement` / `PersistChatAttachFlags` / `SetMcpEnabled` 直接调用会 rethrow 的 `SettingsStore.Save`，磁盘满或被占用时异常抛进 Godot 信号回调，开关显示与实际不一致 | 新增 `SaveSettingsQuietly`，捕获 `IOException` / `UnauthorizedAccessException` 并写入状态行 | 代码路径 + 既有设置页文案 |
+| 「队友正在行动」为死分支 | `Phase` 只有 paused/running/stopping，running 被上一分支的 `PlayPhase == "running"` 抢先命中，玩家只会看到「正在请求模型」 | 该分支收窄为 `s.RequestingModel` | 离线 `Session.RunningBranchReachable` |
+| 单人自动游玩显示「可以邀请 AI 队友」 | ready_to_invite 分支排在所有运行中分支之前且不判断 `PlayRunning` | 条件加 `!s.PlayRunning` | 同上 |
+| MCP 动作超时短于 Mod 等待 | `_DEFAULT_ACTION_TIMEOUT = 30s`，而 `continue_game_over` 最多等 60s 原生存档 → 正常慢路径被当成响应丢失 | 默认提升到 75s | 离线 `test_action_timeout_covers_the_longest_server_wait` |
+| 连接被拒报成 outcome_unknown | 拒绝连接意味着请求从未到达 Mod，却被报成「可能已完成，不要重放」 | 仅 `ConnectionRefusedError` / `gaierror` 归为 `connection_error`（可重试）；已发出后丢失仍为 uncertain | 离线 `test_refused_connection_is_retryable_connection_error`、`test_lost_response_after_send_stays_uncertain` |
+| `status="failed"` 被当成功 | 契约允许该取值，客户端只看 `ok` | `_decode_action_success` 对该取值抛 `action_failed` | 离线 `test_failed_status_is_not_reported_as_success` |
+| 文档缺口 | `/data/{collection}` 与 `/mcp` 从未登记；7 个错误码未登记；README 的超时环境变量名不存在 | 补 `GET /data/{collection}`、`POST /mcp` 章节与错误码表；README 改为 `STS2_API_READ_TIMEOUT` / `STS2_API_ACTION_TIMEOUT` / `STS2_API_MAX_RETRIES` | 四闸门通过 |
+| 工具文案指向 compact 视图不存在的字段 | `act` 说明要求读 `requires_target` / `target_index_space` / `valid_target_indices`，但 `agent_view` 只有 `target` / `targets`（仅 `rest.options` 是三件套） | 文案改为按 compact 视图描述，并说明全量状态里的对应名字 | 对照 `GameStateService` 的 compact 构建代码 |
+
+实机验证（隔离副本，DLL `315ED550…` 之后重建为最终构建）：
+
+```
+action: not json         HTTP 400 ok=False code=invalid_request
+action: wrong type       HTTP 400 ok=False code=invalid_request
+action: empty            HTTP 400 ok=False code=invalid_request
+action: missing field    HTTP 400 ok=False code=invalid_request
+action: unknown verb     HTTP 409 ok=False code=invalid_action
+session: not json        HTTP 400 ok=False code=invalid_request
+session: wrong type      HTTP 400 ok=False code=invalid_request
+session: missing field   HTTP 400 ok=False code=invalid_request
+data: unknown            HTTP 404 ok=False code=collection_not_found
+```
+
+对局边界实机序列（本轮修复的核心证据）：
+
+1. `continue_run` → REWARD（在局内）
+2. `POST /session/control {"running":true}` → `play_running=true`、`stop_kind=null`（此前该场景会立刻以 `run_end` 停止）
+3. 在自动游玩进行中执行 `save_and_quit` → 回到 MAIN_MENU
+4. 8 秒后：`play_running=false`、`stop_kind=run_end` —— 离开对局的停止判定仍然有效
+
+测试计数：C# 核心 **219 PASS / 0 FAIL**（本轮新增 3 项）；MCP **53 项**通过（本轮新增 4 项）。
+
+证据文件：`build/validation-2026-09-11/http-contract-probe.py`、`boundary-ledger.jsonl`、本轮 `/health` 读数。
+
 
 - 真实模型连通与发言质量：本轮仍用本地桩，未调用真实上游、未消耗预算。
 - 6 条上限的跨会话语义只在单进程内验证；未测「长时间多局游玩后是否仍会给出 6 条」的实际体感。
 - 阻断测试依赖控制台 `fight` / `win` 制造转移，未覆盖玩家正常推进节奏下的间隔表现。
-- `/events/stream` 与 `/companion/control` 本轮只按源码与既有契约测试登记，未新增实机调用证据。
-
+- `/companion/control` 与 `/companion/message` 本轮只按源码与既有契约测试登记，未新增实机调用证据（`/events/stream` 的实机帧捕获见第 4 节）。
+- 第二轮修复中，「错误文案含关键词导致误分类」只在离线测试里构造，未在真实对局中制造该类错误文案。
+- `/mcp` 原生 MCP 端点本轮未实机调用，沿用 2026-09-08 的 Origin 契约与实机探测结论。

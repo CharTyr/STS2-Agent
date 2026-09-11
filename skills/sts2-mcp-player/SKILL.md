@@ -110,7 +110,7 @@ For detailed per-screen sequences and pitfalls, read [references/screen-playbook
 - `skip_reward_cards` closes the overlay but may leave the underlying reward item claimable.
 - Multi-select overlays may require `confirm_selection`; do not assume one click is enough.
 - Potion targeting depends on `target_type`; some potions need no `target_index`.
-- Multiplayer targeting still controls only the local player. Use `target_index_space` and `valid_target_indices`; never assume teammate control.
+- Multiplayer targeting still controls only the local player. In the compact view the `target` hint (`enemy` / `player`) plus the `targets` index list tell you what `target_index` may address; the full state names the same fields `target_index_space` and `valid_target_indices`. Never assume teammate control.
 - `shop.is_open = true` means inner inventory, not room completion.
 - Timeline gates can block run start until the overlay is confirmed or the submenu is closed.
 - `return_to_main_menu` on `GAME_OVER` before `continue_game_over` skips score, unlock, and save.
