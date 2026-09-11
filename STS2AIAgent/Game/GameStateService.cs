@@ -2751,6 +2751,8 @@ internal static class GameStateService
             orb_capacity = orbQueue.Capacity,
             empty_orb_slots = Math.Max(0, orbQueue.Capacity - orbs.Count),
             orbs = orbs.Select((orb, index) => BuildCombatOrbPayload(orb, index)).ToArray(),
+            pets = me.PlayerCombatState.Pets.Select(BuildCombatPetPayload).ToArray(),
+            pet_missing = PlayerSpawnsPets(me) && me.PlayerCombatState.Pets.Count == 0,
             cards_played_this_turn = GameActionService.CardsPlayedThisTurn,
             attacks_played_this_turn = GameActionService.AttacksPlayedThisTurn,
             skills_played_this_turn = GameActionService.SkillsPlayedThisTurn
@@ -3032,6 +3034,8 @@ internal static class GameStateService
                 stars = combat.player.stars,
                 focus = combat.player.focus,
                 orbs = combat.player.orbs.Select(orb => FormatOrbLine(orb)).ToArray(),
+                pets = combat.player.pets.Select(pet => FormatPetLine(pet)).ToArray(),
+                pet_missing = combat.player.pet_missing,
                 cards_played_this_turn = combat.player.cards_played_this_turn,
                 attacks_played_this_turn = combat.player.attacks_played_this_turn,
                 skills_played_this_turn = combat.player.skills_played_this_turn
@@ -3678,6 +3682,11 @@ internal static class GameStateService
     private static string FormatOrbLine(CombatOrbPayload orb)
     {
         return $"{orb.name} 被动{orb.passive_value}/激发{orb.evoke_value}";
+    }
+
+    private static string FormatPetLine(CombatPetPayload pet)
+    {
+        return $"{pet.name} {pet.current_hp}/{pet.max_hp} 格挡{pet.block}";
     }
 
     private static string FormatPotionLine(RunPotionPayload potion)
@@ -4944,6 +4953,30 @@ internal static class GameStateService
         }
 
         return result.ToArray();
+    }
+
+    // A pet (Necrobinder's Osty, a Byrdpip bird) is a creature on the player's own side, so it never
+    // appears in the enemies list and the raw player payload used to say nothing about it. Report pets
+    // from the player's combat state, and report that one is missing separately: the game removes a dead
+    // pet from that list, so an empty list alone cannot tell "it died" apart from "this character never
+    // had one". SpawnsPets comes from the relics that create the pet and is stable across its death.
+    private static bool PlayerSpawnsPets(Player player)
+    {
+        return player.Relics.Any(relic => relic.SpawnsPets);
+    }
+
+    private static CombatPetPayload BuildCombatPetPayload(Creature pet, int index)
+    {
+        return new CombatPetPayload
+        {
+            index = index,
+            pet_id = pet.Monster?.Id.Entry ?? string.Empty,
+            name = pet.Name,
+            current_hp = pet.CurrentHp,
+            max_hp = pet.MaxHp,
+            block = pet.Block,
+            powers = BuildCreaturePowerPayloads(pet)
+        };
     }
 
     private static CombatEnemyIntentPayload[] BuildEnemyIntentPayloads(Creature enemy)
@@ -7402,6 +7435,10 @@ internal sealed class CombatPlayerPayload
 
     public CombatOrbPayload[] orbs { get; init; } = Array.Empty<CombatOrbPayload>();
 
+    public CombatPetPayload[] pets { get; init; } = Array.Empty<CombatPetPayload>();
+
+    public bool pet_missing { get; init; }
+
     public int cards_played_this_turn { get; init; }
 
     public int attacks_played_this_turn { get; init; }
@@ -7459,6 +7496,23 @@ internal sealed class RunPlayerSummaryPayload
     public int gold { get; init; }
 
     public bool is_alive { get; init; }
+}
+
+internal sealed class CombatPetPayload
+{
+    public int index { get; init; }
+
+    public string pet_id { get; init; } = string.Empty;
+
+    public string name { get; init; } = string.Empty;
+
+    public int current_hp { get; init; }
+
+    public int max_hp { get; init; }
+
+    public int block { get; init; }
+
+    public CombatPowerPayload[] powers { get; init; } = Array.Empty<CombatPowerPayload>();
 }
 
 internal sealed class CombatOrbPayload

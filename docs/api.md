@@ -151,7 +151,42 @@
 | `block` | number | 当前格挡值 |
 | `energy` | number | 当前能量 |
 | `stars` | number | 当前星星数 |
+| `focus` | number | 当前集中（Defect 的球加值；无该资源的角色为 0） |
 | `powers` | object[] | 玩家当前持有的 Power / Buff / Debuff 列表 |
+| `base_orb_slots` | number | 角色的基础球槽数（Defect 为 3，其余角色为 0） |
+| `orb_capacity` | number | 本场战斗的实际球槽容量（含增益后） |
+| `empty_orb_slots` | number | 当前空余球槽数 |
+| `orbs` | object[] | 当前球列表，见下 |
+| `pets` | object[] | 玩家己方的宠物列表（亡灵契约师的奥斯提、鸟宠等），见下 |
+| `pet_missing` | bool | 该角色的遗物会生成宠物、但此刻场上没有宠物时为 true（宠物已阵亡或尚未召唤）。不会凭空判断"本来就没有宠物"的角色 |
+| `cards_played_this_turn` | number | 本回合已打出的牌数 |
+| `attacks_played_this_turn` | number | 本回合已打出的攻击牌数 |
+| `skills_played_this_turn` | number | 本回合已打出的技能牌数 |
+
+#### `combat.player.orbs[]`
+
+| 字段 | 类型 | 说明 |
+| --- | --- | --- |
+| `slot_index` | number | 球槽序号，0 在最左 |
+| `orb_id` | string | 球的模型 id（如 `LIGHTNING_ORB`） |
+| `name` | string | 球的显示名 |
+| `passive_value` | number | 被动数值 |
+| `evoke_value` | number | 激发数值 |
+| `is_front` | bool | 是否为最前面的球（会被下一个激发效果取用） |
+
+#### `combat.player.pets[]`
+
+己方宠物不会出现在 `combat.enemies[]` 里，因此单独列出。
+
+| 字段 | 类型 | 说明 |
+| --- | --- | --- |
+| `index` | number | 列表序号 |
+| `pet_id` | string | 宠物的模型 id（如 `OSTY`） |
+| `name` | string | 宠物显示名 |
+| `current_hp` | number | 当前生命值 |
+| `max_hp` | number | 最大生命值 |
+| `block` | number | 当前格挡值 |
+| `powers` | object[] | 宠物身上的 Power（如 `DIE_FOR_YOU_POWER`） |
 
 #### `combat.player.powers[]`
 

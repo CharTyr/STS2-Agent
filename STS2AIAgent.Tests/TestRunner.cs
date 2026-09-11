@@ -255,6 +255,7 @@ internal static class TestRunner
         yield return ("Map.NoVoteDuringCombat", () => Task.Run(MapCombatGatingTests.ChooseMapNodeHiddenWhileCombatInProgress));
         yield return ("CombatDiagnostics.Readiness", () => Task.Run(CombatDiagnosticsContractTests.CombatPayloadDistinguishesQueueModalAndSnapshotLocks));
         yield return ("CombatDiagnostics.CancelPlayCard", () => Task.Run(CombatDiagnosticsContractTests.PlayCardTimeoutCancelsNativeGameAction));
+        yield return ("CombatDiagnostics.OwnPets", () => Task.Run(CombatDiagnosticsContractTests.CombatPayloadExposesOwnPets));
         yield return ("ProfileSelection.NativeSwitch", () => Task.Run(ProfileSelectionContractTests.NativeProfileIdentityAndSwitchAreWiredEndToEnd));
         yield return ("AgentLoop.PlayOnce", AgentLoopTests.PlayOnce_ExecutesSingleValidatedAct);
         yield return ("AgentLoop.CrystalArgs", AgentLoopTests.PlayOnce_ForwardsCrystalSphereArguments);

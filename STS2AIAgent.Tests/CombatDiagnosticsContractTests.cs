@@ -64,6 +64,38 @@ internal static class CombatDiagnosticsContractTests
         Assert.Contains("GameActionService.TryCancelRunningPlayerAction()", bridgeSource, StringComparison.Ordinal);
     }
 
+    public static void CombatPayloadExposesOwnPets()
+    {
+        var rawStateSource = ReadSource("STS2AIAgent/Game/GameStateService.cs");
+        var combatBody = WithoutWhitespace(MethodBody(rawStateSource, "BuildCombatPayload"));
+        var agentCombatBody = WithoutWhitespace(MethodBody(rawStateSource, "BuildAgentCombatPayload"));
+        var petBody = WithoutWhitespace(MethodBody(rawStateSource, "BuildCombatPetPayload"));
+        var spawnsBody = WithoutWhitespace(MethodBody(rawStateSource, "PlayerSpawnsPets"));
+
+        // A pet fights on the player's own side, so it never reaches the enemies list. Without these
+        // fields the raw payload said nothing at all about Necrobinder's Osty: its health and whether
+        // it was still alive were invisible to the agent.
+        Assert.Contains(
+            "pets=me.PlayerCombatState.Pets.Select(BuildCombatPetPayload).ToArray()",
+            combatBody,
+            StringComparison.Ordinal);
+        Assert.Contains(
+            "pet_missing=PlayerSpawnsPets(me)&&me.PlayerCombatState.Pets.Count==0",
+            combatBody,
+            StringComparison.Ordinal);
+        // A dead pet leaves the list, so the list alone cannot say "it died" versus "never had one".
+        Assert.Contains("relic.SpawnsPets", spawnsBody, StringComparison.Ordinal);
+        Assert.Contains("current_hp=pet.CurrentHp", petBody, StringComparison.Ordinal);
+        Assert.Contains("max_hp=pet.MaxHp", petBody, StringComparison.Ordinal);
+        Assert.Contains("block=pet.Block", petBody, StringComparison.Ordinal);
+        Assert.Contains("powers=BuildCreaturePowerPayloads(pet)", petBody, StringComparison.Ordinal);
+        Assert.Contains(
+            "pets=combat.player.pets.Select(pet=>FormatPetLine(pet)).ToArray()",
+            agentCombatBody,
+            StringComparison.Ordinal);
+        Assert.Contains("pet_missing=combat.player.pet_missing", agentCombatBody, StringComparison.Ordinal);
+    }
+
     private static string ReadSource(string relativePath)
     {
         foreach (var start in new[] { Directory.GetCurrentDirectory(), AppContext.BaseDirectory })
