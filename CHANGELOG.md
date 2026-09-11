@@ -20,7 +20,7 @@
 
 ### Changed
 
-- The Steam Workshop listing says the UI follows the game language.
+- The Workshop listing text in `steam-workshop/` says the UI follows the game language. The listing itself still needs an upload; the v0.11.0 Workshop update did not go through.
 
 ## v0.10.7 - 2026-09-12
 
