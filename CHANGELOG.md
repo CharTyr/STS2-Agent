@@ -2,11 +2,33 @@
 
 > Release attribution is recorded against tags or release commits. Post-tag maintenance is listed separately; current validation limits are maintained in [PRODUCT_PLAN_CURRENT.md](https://github.com/CharTyr/STS2-Agent/blob/main/PRODUCT_PLAN_CURRENT.md).
 
-## Unreleased
+## v0.10.6 - 2026-09-11
 
-### Publishing
+> Release attribution: git tag `v0.10.6` points to the release commit; covers the post-`v0.10.5` work on `main`, including PR #81 (`1b7236a`, `27fa223`).
 
-- Existing Steam Workshop item updates default to public visibility; first uploads with item ID 0 default to private, and explicit visibility overrides take precedence (`96bd410`). This publishing-script change is not included in the v0.10.5 tag; pass `-Visibility public` when updating a public item from that tag.
+### Fixed
+
+- Simple card multi-select panels (the events and rewards that ask for N cards) now report the real `min_select` / `max_select` / `selected_count` and per-card `selected` flags, and advertise `confirm_selection`. `/state` used to report `1/1/0` for them, so an accepted pick looked unacknowledged: the agent re-clicked the same card, toggled it back off, and never left the screen (#81).
+- `select_deck_card` on a combat-hand multi-select reports `pending` until the pick is confirmed, matching the play contract and the sibling `use_potion` path; it used to report `completed` while the overlay was still open for more picks.
+- Three failed decisions in a row are no longer reported as a finished run. Stop-kind classification matched the bare word 当前局, which also appears in the retry hint, so the overlay claimed the run had ended and told the player to start a new one while the run was still live.
+- fastmcp 3.1.0 → 3.4.7 (CVE-2026-32871, fixed in 3.2.0) and fast-uri 3.1.0 → 3.1.7 (CVE-2026-13676, fixed in 3.1.6) via refreshed lockfiles; npm audit drops from 9 advisories to 0 (#50, #51).
+- The verification gates work in a fresh checkout, and the gate self-test is parseable under any Windows ANSI code page. Non-ASCII PowerShell scripts must now carry a UTF-8 BOM, enforced by a new `script-encoding` gate.
+
+### Added
+
+- Opt-in proactive teammate chat: the agent may speak on its own at combat start and combat end, with the tone picked in the settings tab. Off by default, read-only (it cannot dispatch a game action even when the model answers with play wording), bounded to 6 messages per session and at least 75 seconds apart, and billed against the session budget.
+
+### Changed
+
+- Card-grid selection metadata and the click-settle path read from the shared `NCardGridSelectionScreen` base, so deck and simple panels use one code path instead of two (#81).
+- `docs/api.md` now documents every action; the stale coverage list was archived.
+- Existing Steam Workshop item updates default to public visibility; first uploads with item ID 0 default to private, and an explicit `-Visibility` wins (`96bd410`).
+
+### Validation
+
+- Merged build (`ee308ff`, DLL `47CE0F90`) on an isolated game copy: the event multi-select reported `2/2/0` and completed in two clicks (30 ms then 131 ms) with the native `Player 1 chose cards [...]` line; the Sea Glass panel (min 0 / max 15) advertised `confirm_selection` and finished in 168 ms.
+- Measured on the same build: the upgrade / transform / enchant panels still report `1/1/0` and burn a full 10-second timeout on the first pick. Tracked as #82 with the evidence.
+- 214 core tests pass, 0 failures; 49 MCP tests pass; verification gates, gate self-test, and release preflight pass.
 
 ## v0.10.5 - 2026-09-08
 
