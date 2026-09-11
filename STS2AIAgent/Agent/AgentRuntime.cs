@@ -680,6 +680,21 @@ internal sealed class AgentRuntime
             }
 
             ApplyPlayResult(result);
+
+            // The step button spends the same session budget as auto-play. Without recording the
+            // turn here the guard's request count never grew, so repeated steps could run past the
+            // configured cap while auto-play would have stopped at it.
+            string? budgetStop;
+            lock (_gate)
+            {
+                budgetStop = _budgetGuard.Observe(result) ?? _budgetGuard.CheckBudget();
+            }
+
+            if (!string.IsNullOrWhiteSpace(budgetStop))
+            {
+                SetStop(StopKindPolicy.Budget, budgetStop, ModelRoleNames.Play);
+                SetStatus(budgetStop);
+            }
         }
         catch (OperationCanceledException)
         {

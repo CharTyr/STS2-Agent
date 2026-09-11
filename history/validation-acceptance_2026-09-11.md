@@ -81,6 +81,7 @@ C# 核心测试：**217 PASS / 0 FAIL**（本轮新增 2 项）。
 | 文档缺口 | `/data/{collection}` 与 `/mcp` 从未登记；7 个错误码未登记；README 的超时环境变量名不存在 | 补 `GET /data/{collection}`、`POST /mcp` 章节与错误码表；README 改为 `STS2_API_READ_TIMEOUT` / `STS2_API_ACTION_TIMEOUT` / `STS2_API_MAX_RETRIES` | 四闸门通过 |
 | 工具文案指向 compact 视图不存在的字段 | `act` 说明要求读 `requires_target` / `target_index_space` / `valid_target_indices`，但 `agent_view` 只有 `target` / `targets`（仅 `rest.options` 是三件套） | 文案改为按 compact 视图描述，并说明全量状态里的对应名字 | 对照 `GameStateService` 的 compact 构建代码 |
 | `full` profile 缺 9 个动作工具 | 文档称 full 暴露「每个动作的独立工具」，实际 55 个动作里只有 45 个有 legacy 工具，其余只能走 `act` | 补 `switch_profile`、`dismiss_game_over_wait`、`confirm_unlock`、`close_cards_view`、四个 multiplayer-lobby 动作与 `invite_ai_teammate`，并补对应 client 方法 | 离线 `test_legacy_action_coverage`（覆盖度与 client 方法双断言） |
+| 「单步」不计入会话预算 | `StepOnceCoreAsync` → `ApplyPlayResult` 只累加展示用的 `_sessionRequests`，不喂 `SessionBudgetGuard`，因此守卫的请求计数永不增长，反复单步可越过 `MaxSessionRequests`；`AgentLoop` 的前置检查形同虚设 | 单步路径记录该轮并检查预算，越限时以 `budget` 类型停止并在状态行说明 | 源码契约测试 `Session.StepOnceRecordsBudget` |
 
 实机验证（隔离副本，DLL `315ED550…` 之后重建为最终构建）：
 

@@ -129,7 +129,8 @@ internal static class TestRunner
         yield return ("Session.RejectsStaleCompletion", () => Task.Run(RuntimeExperienceRegressionTests.CompletionIdentityRejectsLatePreviousSessionCallbacks));
         yield return ("Session.ClearOwnModelTestStop", () => Task.Run(RuntimeExperienceRegressionTests.SuccessfulModelTestClearsOnlyItsOwnTransientStop));
        yield return ("Session.PauseAndConfigCopy", () => Task.Run(PlayerExperienceTests.PlayerFacingMapsPauseAndConfigError));
-        yield return ("Session.RunningBranchReachable", () => Task.Run(PlayerExperienceTests.RunningSessionReportsActionUnlessAModelRoundIsOpen));
+       yield return ("Session.RunningBranchReachable", () => Task.Run(PlayerExperienceTests.RunningSessionReportsActionUnlessAModelRoundIsOpen));
+        yield return ("Session.StepOnceRecordsBudget", () => Task.Run(SessionControlContractTests.StepOnceRecordsTheSessionBudget));
         yield return ("Mcp.NativeActContract", () => Task.Run(PlayerExperienceTests.NativeMcpToolsMatchGuidedActContract));
         yield return ("CurrentRun.AllowsLobbyBeforeRun", () => Task.Run(CurrentRunBoundaryTests.AllowsLobbyBeforeRun));
         yield return ("CurrentRun.StopsWhenLeavingRunToMainMenu", () => Task.Run(CurrentRunBoundaryTests.StopsWhenLeavingRunToMainMenu));

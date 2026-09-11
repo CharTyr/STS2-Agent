@@ -21,4 +21,16 @@ internal static class SessionControlContractTests
         var workshopLookup = source.IndexOf("FindSubscribedWorkshopModDir()", StringComparison.Ordinal);
         Assert.True(localGuard >= 0 && workshopLookup > localGuard, "local candidate guard must run before Workshop staging");
     }
+
+    /// <summary>
+    /// The step button spends session budget too. It used to record only the display counter, so the
+    /// guard never advanced and stepping repeatedly could pass the configured request cap.
+    /// </summary>
+    public static void StepOnceRecordsTheSessionBudget()
+    {
+        var source = AgentSourceFixture.Read("STS2AIAgent/Agent/AgentRuntime.cs");
+        var step = AgentSourceFixture.MethodBody(source, "StepOnceCoreAsync");
+        Assert.Contains("_budgetGuard.Observe(result)", step, StringComparison.Ordinal);
+        Assert.Contains("SetStop(StopKindPolicy.Budget", step, StringComparison.Ordinal);
+    }
 }
