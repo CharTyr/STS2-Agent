@@ -101,6 +101,16 @@ _LEGACY_ACTION_TOOLS: tuple[ActionToolSpec, ...] = (
     ActionToolSpec("dismiss_modal", "no_args", "Dismiss or cancel the currently open modal."),
     ActionToolSpec("return_to_main_menu", "no_args", "Leave the game over screen and return to the main menu."),
     ActionToolSpec("proceed", "no_args", "Click the current Proceed or Continue button."),
+    ActionToolSpec("switch_profile", "option_index", "Switch the active native profile (1-3)."),
+    ActionToolSpec("dismiss_game_over_wait", "no_args", "Stop waiting on the native game-over summary and continue."),
+    ActionToolSpec("confirm_unlock", "no_args", "Confirm the unlock reveal screen."),
+    ActionToolSpec("close_cards_view", "no_args", "Close the open card list view."),
+    ActionToolSpec("host_multiplayer_lobby", "no_args", "Host a local multiplayer lobby."),
+    ActionToolSpec("join_multiplayer_lobby", "no_args", "Join the available local multiplayer lobby."),
+    ActionToolSpec("ready_multiplayer_lobby", "no_args", "Mark the local player ready in the multiplayer lobby."),
+    ActionToolSpec("disconnect_multiplayer_lobby", "no_args", "Leave the multiplayer lobby."),
+    ActionToolSpec("invite_ai_teammate", "no_args", "Invite the AI teammate and launch the companion instance."),
+
 )
 
 

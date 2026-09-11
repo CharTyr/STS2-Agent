@@ -28,6 +28,7 @@
 
 - The status page and `docs/proactive-chat-review.md` no longer claim the proactive chat is unverified in-game, and the historical mechanic matrix flags the deck-selection row that #82 later contradicted.
 - The `act` tool text describes the compact view's own target fields; it used to tell the model to read `requires_target` / `target_index_space` / `valid_target_indices`, which only the full state and `rest.options` carry.
+- The `full` profile now registers a legacy tool for every mod action, not 45 of 55: `switch_profile`, `dismiss_game_over_wait`, `confirm_unlock`, `close_cards_view`, `host_multiplayer_lobby`, `join_multiplayer_lobby`, `ready_multiplayer_lobby`, `disconnect_multiplayer_lobby` and `invite_ai_teammate` were reachable only through `act`. `run_console_command` stays debug-gated, and a test now holds the coverage.
 
 ## v0.10.6 - 2026-09-11
 

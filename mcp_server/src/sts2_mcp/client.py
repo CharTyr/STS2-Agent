@@ -308,6 +308,97 @@ class Sts2Client:
             },
         )
 
+    def switch_profile(self, option_index: int) -> dict[str, Any]:
+        return self.execute_action(
+            "switch_profile",
+            option_index=option_index,
+            client_context={
+                "source": "mcp",
+                "tool_name": "switch_profile",
+            },
+        )
+
+    def dismiss_game_over_wait(self) -> dict[str, Any]:
+        return self.execute_action(
+            "dismiss_game_over_wait",
+            client_context={
+                "source": "mcp",
+                "tool_name": "dismiss_game_over_wait",
+            },
+        )
+
+    def confirm_unlock(self) -> dict[str, Any]:
+        return self.execute_action(
+            "confirm_unlock",
+            client_context={
+                "source": "mcp",
+                "tool_name": "confirm_unlock",
+            },
+        )
+
+    def close_cards_view(self) -> dict[str, Any]:
+        return self.execute_action(
+            "close_cards_view",
+            client_context={
+                "source": "mcp",
+                "tool_name": "close_cards_view",
+            },
+        )
+
+    def host_multiplayer_lobby(self) -> dict[str, Any]:
+        return self.execute_action(
+            "host_multiplayer_lobby",
+            client_context={
+                "source": "mcp",
+                "tool_name": "host_multiplayer_lobby",
+            },
+        )
+
+    def join_multiplayer_lobby(self) -> dict[str, Any]:
+        return self.execute_action(
+            "join_multiplayer_lobby",
+            client_context={
+                "source": "mcp",
+                "tool_name": "join_multiplayer_lobby",
+            },
+        )
+
+    def ready_multiplayer_lobby(self) -> dict[str, Any]:
+        return self.execute_action(
+            "ready_multiplayer_lobby",
+            client_context={
+                "source": "mcp",
+                "tool_name": "ready_multiplayer_lobby",
+            },
+        )
+
+    def disconnect_multiplayer_lobby(self) -> dict[str, Any]:
+        return self.execute_action(
+            "disconnect_multiplayer_lobby",
+            client_context={
+                "source": "mcp",
+                "tool_name": "disconnect_multiplayer_lobby",
+            },
+        )
+
+    def invite_ai_teammate(self) -> dict[str, Any]:
+        return self.execute_action(
+            "invite_ai_teammate",
+            client_context={
+                "source": "mcp",
+                "tool_name": "invite_ai_teammate",
+            },
+        )
+
+        return self.execute_action(
+            "choose_timeline_epoch",
+            option_index=option_index,
+            client_context={
+                "source": "mcp",
+                "tool_name": "choose_timeline_epoch",
+            },
+        )
+
     def choose_timeline_epoch(self, option_index: int) -> dict[str, Any]:
         return self.execute_action(
             "choose_timeline_epoch",
