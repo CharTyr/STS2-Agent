@@ -256,4 +256,34 @@ internal static class ProactiveChatSessionTests
         var exactly = session.Decide(true, true, null, ProactiveChatMoment.CombatEnd, Start + ProactiveChatPolicy.MinInterval);
         Assert.True(exactly.Send);
     }
+
+    /// <summary>
+    /// Regression: the process keeps one session object for its whole life, so a cap that
+    /// only the manual stats reset cleared silenced the feature permanently after six lines.
+    /// Starting auto-play hands the allowance back, while the interval still spans sessions.
+    /// </summary>
+    public static void NewPlaySessionHandsBackTheAllowanceButNotTheInterval()
+    {
+        var session = new ProactiveChatSession();
+        var now = Start;
+        for (var i = 0; i < ProactiveChatPolicy.MaxMessagesPerSession; i++)
+        {
+            Assert.True(session.Decide(true, true, null, ProactiveChatMoment.CombatStart, now).Send);
+            now += ProactiveChatPolicy.MinInterval;
+        }
+
+        Assert.Equal("session cap", session.Decide(true, true, null, ProactiveChatMoment.CombatEnd, now).Reason);
+
+        session.BeginSession();
+        Assert.Equal(0, session.MessagesSent);
+        Assert.Equal(now - ProactiveChatPolicy.MinInterval, session.LastSentAt);
+
+        var stillTooSoon = session.Decide(
+            true, true, null, ProactiveChatMoment.CombatStart,
+            now - ProactiveChatPolicy.MinInterval + TimeSpan.FromSeconds(1));
+        Assert.False(stillTooSoon.Send);
+        Assert.Equal("min interval", stillTooSoon.Reason);
+
+        Assert.True(session.Decide(true, true, null, ProactiveChatMoment.CombatStart, now).Send);
+    }
 }

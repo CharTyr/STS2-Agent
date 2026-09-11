@@ -136,7 +136,8 @@ internal static class TestRunner
         yield return ("CurrentRun.StopsWhenRunIdChanges", () => Task.Run(CurrentRunBoundaryTests.StopsWhenRunIdChanges));
         yield return ("CurrentRun.AllowsGameOverAndUnlock", () => Task.Run(CurrentRunBoundaryTests.AllowsGameOverAndUnlock));
         yield return ("CurrentRun.StopsMainMenuEvenIfSessionPhaseStillRun", () => Task.Run(CurrentRunBoundaryTests.StopsMainMenuEvenIfSessionPhaseStillRun));
-        yield return ("CurrentRun.StopsCharacterSelectByScreenName", () => Task.Run(CurrentRunBoundaryTests.StopsCharacterSelectByScreenName));
+       yield return ("CurrentRun.StopsCharacterSelectByScreenName", () => Task.Run(CurrentRunBoundaryTests.StopsCharacterSelectByScreenName));
+        yield return ("CurrentRun.FreshSessionAcceptsNewRun", () => Task.Run(CurrentRunBoundaryTests.FreshSessionAcceptsARunThatStartedWhilePaused));
         yield return ("StopKind.RetryIsNotRunEnd", StopKindPolicyTests.RetryStopIsNotRunEnd);
         yield return ("StopKind.BoundaryIsRunEnd", () => Task.Run(StopKindPolicyTests.BoundaryStopsAreRunEnd));
         yield return ("StopKind.OtherKindsSurvive", () => Task.Run(StopKindPolicyTests.BudgetConfigAndNetworkKindsSurvive));
@@ -324,6 +325,7 @@ internal static class TestRunner
         yield return ("ProactiveChat.SessionCap", () => Task.Run(ProactiveChatSessionTests.StopsAtTheSessionCap));
         yield return ("ProactiveChat.RefusalsKeepTheCap", () => Task.Run(ProactiveChatSessionTests.RefusalsDoNotConsumeTheCap));
         yield return ("ProactiveChat.ResetClearsBounds", () => Task.Run(ProactiveChatSessionTests.ResetClearsTheBounds));
-        yield return ("ProactiveChat.IntervalBoundaryInclusive", () => Task.Run(ProactiveChatSessionTests.IntervalBoundaryIsInclusive));
+       yield return ("ProactiveChat.IntervalBoundaryInclusive", () => Task.Run(ProactiveChatSessionTests.IntervalBoundaryIsInclusive));
+        yield return ("ProactiveChat.NewPlaySessionResetsCap", () => Task.Run(ProactiveChatSessionTests.NewPlaySessionHandsBackTheAllowanceButNotTheInterval));
     }
 }

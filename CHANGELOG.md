@@ -2,6 +2,25 @@
 
 > Release attribution is recorded against tags or release commits. Post-tag maintenance is listed separately; current validation limits are maintained in [PRODUCT_PLAN_CURRENT.md](https://github.com/CharTyr/STS2-Agent/blob/main/PRODUCT_PLAN_CURRENT.md).
 
+## Unreleased (post-`v0.10.6` main line)
+
+> Not covered by tag `v0.10.6`; recorded here until the next release tag exists. Live evidence: [validation-acceptance_2026-09-11.md](history/validation-acceptance_2026-09-11.md).
+
+### Fixed
+
+- Card-grid selection panels (upgrade / transform / enchant) now report their real selection metadata instead of `1/1/0`, and the first pick settles instead of burning the 10-second timeout (`d77982a`, #82). Measured on an isolated copy: enchant `1/1/0` → `0/3/0`, first pick 10036 ms → 151 ms; transform 36 ms then 187 ms; upgrade 173 ms with no regression.
+- Proactive chat's six-message allowance is handed back when auto-play starts, so the feature no longer goes permanently silent after six lines; the 75-second interval still spans sessions.
+- Starting auto-play after a run that began while auto-play was paused no longer stops instantly as a run-identity change: the run boundary is reset per auto-play session.
+
+### Added
+
+- Combat state reports the player's own pets (`pets[]`, `pet_missing`) in both the full and compact payloads (`7b02168`).
+- `docs/api.md` documents `POST /session/control`, `GET /events/stream`, `POST /companion/control` and `POST /companion/message`, plus the `/health` fields and the `stop_kind` value table.
+
+### Changed
+
+- The status page and `docs/proactive-chat-review.md` no longer claim the proactive chat is unverified in-game, and the historical mechanic matrix flags the deck-selection row that #82 later contradicted.
+
 ## v0.10.6 - 2026-09-11
 
 > Release attribution: git tag `v0.10.6` points to the release commit; covers the post-`v0.10.5` work on `main`, including PR #81 (`1b7236a`, `27fa223`).

@@ -140,6 +140,16 @@ internal sealed class ProactiveChatSession
         _messagesSent = 0;
         _lastSentAt = null;
     }
+
+    /// <summary>
+    /// Opens a new auto-play session: the speech allowance is handed back, but the
+    /// last-send timestamp survives so restarting auto-play cannot be used to speak
+    /// again inside the minimum interval.
+    /// </summary>
+    public void BeginSession()
+    {
+        _messagesSent = 0;
+    }
 }
 
 internal static class ProactiveChatTones
@@ -205,4 +215,3 @@ internal static class ProactiveChatTones
         return voice + "\n" + SharedRules;
     }
 }
-

@@ -448,6 +448,9 @@ internal sealed class AgentRuntime
         PlaySessionIdentity identity;
         lock (_playLifecycleGate)
         {
+            // The boundary is scoped to one automatic session, so a run that started while
+            // auto-play was paused is the session's run rather than an identity change.
+            _runBoundary = new CurrentRunBoundary();
             var started = _playSession.TryStart(AutoPlayLoopAsync, _lifetime.Token);
             if (started == null) return;
 
@@ -455,6 +458,7 @@ internal sealed class AgentRuntime
 
             identity = new PlaySessionIdentity(++_playGeneration, task);
             _playSessionIdentity = identity;
+            _proactiveChat.BeginSession();
             _stopKind = null;
             _stopDetail = null;
             _stopRole = null;

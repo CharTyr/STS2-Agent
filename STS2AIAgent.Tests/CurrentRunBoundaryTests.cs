@@ -79,4 +79,25 @@ internal static class CurrentRunBoundaryTests
         catch (T error) { return error; }
         throw new Exception($"Expected {typeof(T).Name}.");
     }
+
+    /// <summary>
+    /// StartAutoPlay installs a fresh boundary, which is what makes the class comment
+    /// ("scoped to one automatic session") true: a run that begins while auto-play is
+    /// paused belongs to the new session instead of reading as an identity change
+    /// against the run the previous session watched.
+    /// </summary>
+    public static void FreshSessionAcceptsARunThatStartedWhilePaused()
+    {
+        var finished = new CurrentRunBoundary();
+        finished.Check(State("COMBAT", "run", "run_1"));
+        finished.Check(State("GAME_OVER", "run", "run_1"));
+
+        var nextSession = new CurrentRunBoundary();
+        nextSession.Check(State("EVENT", "run", "run_2"));
+        nextSession.Check(State("MAP", "run", "run_2"));
+
+        var ex = Expect<AutoPlayStoppedException>(() =>
+            finished.Check(State("EVENT", "run", "run_2")));
+        Assert.Contains("对局标识变化", ex.Message);
+    }
 }
