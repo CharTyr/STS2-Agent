@@ -1,8 +1,8 @@
 # STS2 AI Agent：当前状态页
 
-> 本页是仓库唯一的当前状态入口。更新日期：2026-09-09（发布、Workshop 可见性、P3 与文档归档核对）。
-> 发布代码基准：v0.10.5 @ 04d2466；标签后主线变更单列在下方，不把文档更新视为新版本发布。
-> 发布基准：[GitHub Release v0.10.5](https://github.com/CharTyr/STS2-Agent/releases/tag/v0.10.5)，2026-09-08 发布。2026-09-09 通过 GitHub API 核对标签指向 04d2466，Windows ZIP 已上传。#78 / #79 / #80 已随该版本发布。
+> 本页是仓库唯一的当前状态入口。更新日期：2026-09-11（v0.10.6 发布与 Workshop 上传核对）。
+> 发布代码基准：v0.10.6 @ 2f75e4a；标签后主线变更单列在下方，不把文档更新视为新版本发布。
+> 发布基准：[GitHub Release v0.10.6](https://github.com/CharTyr/STS2-Agent/releases/tag/v0.10.6)，2026-09-11 发布；上一版 [v0.10.5](https://github.com/CharTyr/STS2-Agent/releases/tag/v0.10.5)，2026-09-08。2026-09-11 通过 Steam Web API 核对 Workshop 物品 result=1、visibility=0（公开）、file_size 1083108 与本地内容一致。#81 与 #50/#51 已随 v0.10.6 发布。
 
 旧路线图见 [PRODUCT_ROADMAP.md](PRODUCT_ROADMAP.md)（历史），旧交付原文见 [history/PRODUCT_PLAN_CURRENT_2026-09-07.md](history/PRODUCT_PLAN_CURRENT_2026-09-07.md) 和 [history/COOP_DELIVERY_2026-09-07.md](history/COOP_DELIVERY_2026-09-07.md)。[COOP_DELIVERY.md](COOP_DELIVERY.md) 现在只是历史证据索引。本页不继承历史文档中的审批、工作树或测试前执行约束。
 
@@ -21,7 +21,8 @@
 - c69d3b3 只忽略本地 mod-uploader.log；374d7fd 只记录 Trellis journal。
 - 本轮仓库卫生：90s continue 超时与不重复 Continue 已提交；Trellis spec/skills/platform 文件已纳入版本控制；stash@{0} 已 drop（ai-companion 旧脏树，功能已在 main）；00-bootstrap-guidelines 已归档。.trellis/.template-hashes.json 保持本地、不入库。
 - v0.10.5 GitHub ZIP 已发布并安装到 Steam mods/；Workshop 内容已上传，本地订阅清单为 0.10.5。2026-09-09 查询物品详情 result=1、visibility=0（公开）。用户启用重启后，Workshop 加载来源、窗口及运行接口已核对通过，见验收记录。
-- 主线未进入 v0.10.5 标签：96bd410 修复已有 Workshop 物品更新默认 public；15e483c、2838250 为发布/P3 文档记录，4f1ec66 为收尾日志。没有因此发布 v0.10.6。更新工坊应使用包含 96bd410 的打包脚本，并明确绑定目标发布版本。
+- 曾未进入 v0.10.5 标签的提交（96bd410 工坊更新默认 public、15e483c/2838250 发布与 P3 记录、4f1ec66 收尾日志）现已随 v0.10.6 发布，见 P2.6。
+- 2026-09-11：v0.10.6 已发布（GitHub Release + tag 2f75e4a）；真实 Steam 安装已更新到合并后构建（DLL 47CE0F90）；Workshop 物品 3796486050 已更新到 0.10.6，公开、file_size 1083108 与本地内容一致、标签 Tools & APIs / Utility / QoL 在位。
 
 ## 2. 已有验收证据与边界
 
@@ -54,9 +55,10 @@
 | 恢复、预算与暂停 | v0.10.4 + #80 | 已发布 v0.10.5 | 暂停探测 ok；P1.3 超限 UI 已看 | 真实上游超长停流仍后置 |
 | 空奖励 overlay | 19710ad | 已发布 v0.10.5 | 180 PASS；发布预检与 ZIP 检查通过 | Workshop 订阅加载冒烟已通过；不代表完整对局验收 |
 | GAME_OVER 等待原生结算 | 4b4da6e（#79） | 已发布 v0.10.5 | 2026-09-08 20:28 隔离双开 continue 4.22s/2.42s，save_verified，progress mtime 更新 | total_losses 未观察到 +1 |
-| 主动发言与交流风格 | 2026-09-10 主线未发布 | 未发布（未进 v0.10.5 标签） | C# 核心离线测试 17 项（策略/语气/只读）；mod 编译 0 警告 0 错误 | 默认关闭的可选功能；仅战斗开始/结束触发，最多 6 句、间隔 ≥75 秒；实机发言质量未验收 |
-| 依赖安全（#50 / #51） | 2026-09-10 主线未发布 | 未发布 | fastmcp 3.4.7、fast-uri 3.1.7；npm audit total 0；MCP 49 项单测通过 | 只覆盖这两条报告与 npm 树，不是完整的第三方审计 |
-| 文档契约与验证闸门 | 2026-09-10 主线未发布 | 未发布 | `check_verification_gates.py` 四闸门全绿；自测 9 个漂移场景全部被拒；preflight 端到端 exit 0 | 静态检查，不能替代实机行为验证 |
+| 简单选牌屏状态与确认（#81） | 1b7236a、27fa223 | 已发布 v0.10.6 | 合并构建隔离实机：事件多选报 2/2/0、两次点击 30ms/131ms 完成、原生 chose cards 记录；Sea Glass（0/15 手动确认）暴露 confirm_selection 并 168ms 完成 | 升级/变形/附魔三个屏仍报 1/1/0 且首次点击跑满 10s 超时，见 #82 |
+| 主动发言与交流风格 | a9d4478 | 已发布 v0.10.6 | C# 核心离线测试 17 项（策略/语气/只读）；mod 编译 0 警告 0 错误 | 默认关闭的可选功能；仅战斗开始/结束触发，最多 6 句、间隔 ≥75 秒；实机发言质量未验收 |
+| 依赖安全（#50 / #51） | cd55fe1 | 已发布 v0.10.6 | fastmcp 3.4.7、fast-uri 3.1.7；npm audit total 0；MCP 49 项单测通过 | 只覆盖这两条报告与 npm 树，不是完整的第三方审计 |
+| 文档契约与验证闸门 | c212594、6aabb4f | 已发布 v0.10.6 | `check_verification_gates.py` 四闸门全绿；自测漂移场景全部被拒；preflight 端到端 exit 0 | 静态检查，不能替代实机行为验证 |
 
 ## 4. 待办任务
 
@@ -75,6 +77,8 @@ P2 发布与安装
 - P2.3 完成：preflight-release 全绿；package-release 生成 sts2-ai-agent-v0.10.5-windows.zip；artifact check 通过。
 - P2.4 完成：安装前备份保留在 build/backup-steam-mods-2026-09-08/；v0.10.5 已安装到 Steam mods/（DLL 哈希匹配 release）；旧嵌套目录已备份并清理。
 - P2.5 完成（订阅加载冒烟范围）：Steam mods/ 与 Workshop 本地订阅清单均为 v0.10.5；2026-09-09 Workshop result=1、visibility=0（公开）。96bd410 将已有物品更新默认设为 public，首次 ID=0 仍 private，显式 Visibility 优先。用户启用重启后，截图确认窗口显示；本次日志第 40–41 行从 Workshop 目录加载 DLL/PCK，未发现重复加载错误；/health 为 0.10.5、ready，/state 和动作接口为 MAIN_MENU。证据见 [验收记录](history/workshop-load-acceptance_2026-09-09.md)。
+- P2.6 完成（v0.10.6 发布）：版本号五处同步（mod_manifest.json、mod_id.json、Router.cs、pyproject.toml、uv.lock），`check_release_metadata.py` 通过；CHANGELOG 的 Unreleased 条目并入 v0.10.6 段；preflight、四闸门、C# 214 PASS / 0 FAIL、MCP 49 项通过；tag v0.10.6 指向发布提交 2f75e4a，GitHub Release 资产 `sts2-ai-agent-v0.10.6-windows.zip` 已上传。
+- P2.7 完成（Workshop 更新）：打包工作区 build/steam-workshop/sts2-ai-agent-v0.10.6，用 ModUploader 以 `--id 3796486050` 更新已有物品（不新建）。上传后 Steam Web API 复核 result=1、visibility=0、file_size 1083108 与本地一致、标签在位；工作区已写入 mod_id.txt。操作要点：上传前必须重启 Steam 客户端，否则 SubmitItemUpdate 长期停在 PreparingConfig/PreparingContent——本次两次未重启的尝试都卡死，重启后同一条命令 16 秒完成。该现象与系统代理（本机 127.0.0.1:10808）无关：直连与走代理对 Steam 域名都时通时断，重启后即可成功。
 
 P3 支持范围与卫生
 

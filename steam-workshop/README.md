@@ -55,6 +55,10 @@ Prefer the official ModUploader. It writes tags, optional extra previews, and th
 ModUploader.exe upload -w "<absolute path to sts2-ai-agent-vX.Y.Z>"
 ```
 
+Restart the Steam client immediately before uploading. Without a restart, `SubmitItemUpdate` can sit in `k_EItemUpdateStatusPreparingConfig` / `k_EItemUpdateStatusPreparingContent` indefinitely and never reach `UploadingContent`; on 2026-09-11 the same command finished in 16 seconds right after a Steam restart. This is not a proxy problem: Steam-facing domains were intermittently unreachable both directly and through the local proxy, and the restart alone was the fix.
+
+Updates must target the existing item. Pass `--id <item ID>` or keep `mod_id.txt` in the workspace — the uploader creates a new item when neither is present, and it writes `mod_id.txt` after a successful upload. Current item: `3796486050`.
+
 SteamCMD also works, but does not set tags:
 
 ```text
