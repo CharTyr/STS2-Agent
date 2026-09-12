@@ -53,6 +53,40 @@ internal static class DualInstanceCoordinator
         return (true, Loc.T("{0}。本机已创建 4 人大厅，请选角色后 Ready 开局。你打自己的角色；AI 会自动加入、点开局并打另一个角色。", launch.Message));
     }
 
+    /// <summary>
+    /// Host side: inject fastmp so the saved multiplayer run is hosted over local ENet, load it, then launch the companion to rejoin.
+    /// </summary>
+    public static async Task<(bool Ok, string Message)> ContinueLocalCoopResultAsync(CancellationToken cancellationToken)
+    {
+        if (await GetScreenAsync() != "MAIN_MENU")
+        {
+            return (false, Loc.T("请先回到主菜单，再继续联机对局。"));
+        }
+
+        try
+        {
+            EnableFastMpENetHost();
+            await GameThread.InvokeAsync(async () => await GameActionService.StartLocalLoadAsync(cancellationToken));
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch (Exception ex)
+        {
+            Log.Warn($"{LogPrefix} Continue local coop failed: {ex.Message}");
+            return (false, Loc.T("读档开房失败：{0}", ex.Message));
+        }
+
+        var launch = await LocalDualInstanceLauncher.LaunchCompanionAsync(cancellationToken);
+        if (!launch.Ok)
+        {
+            return (false, launch.Message);
+        }
+
+        return (true, Loc.T("{0}。已按存档开好本地房，等队友窗口连回来后两边各点一次出发。", launch.Message));
+    }
+
     public static async Task<bool> RunCompanionBootstrapAsync(CancellationToken cancellationToken)
     {
         if (!InstanceRole.IsCompanion)

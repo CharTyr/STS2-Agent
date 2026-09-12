@@ -97,6 +97,11 @@ internal static class CompanionStartupTests
             "CHARACTER_SELECT",
             new[] { "unready" },
             hasLobby: true) == null);
+        // Continuing a saved co-op run: the load screen only needs Embark.
+        Assert.Equal("embark", CoopLaunchPolicy.NextCompanionBootstrapAction(
+            "MULTIPLAYER_LOAD",
+            new[] { "embark", "unready" },
+            hasLobby: true));
         Assert.Equal("choose_bundle", CoopLaunchPolicy.NextCompanionBootstrapAction(
             "BUNDLE_SELECTION",
             new[] { "choose_bundle" },

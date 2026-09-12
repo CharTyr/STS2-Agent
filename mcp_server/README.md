@@ -110,6 +110,7 @@
 - `ready_multiplayer_lobby`
 - `disconnect_multiplayer_lobby`
 - `invite_ai_teammate`
+- `continue_ai_teammate`
 
 奖励 / 选牌：
 

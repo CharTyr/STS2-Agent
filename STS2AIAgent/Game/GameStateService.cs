@@ -57,6 +57,7 @@ using MegaCrit.Sts2.Core.Saves;
 using MegaCrit.Sts2.Core.Saves.Managers;
 using MegaCrit.Sts2.Core.Timeline;
 using MegaCrit.Sts2.addons.mega_text;
+using STS2AIAgent.Config;
 using STS2AIAgent.Localization;
 using STS2AIAgent.Multiplayer;
 
@@ -182,6 +183,17 @@ internal static class GameStateService
             {
                 mode = characterSelectScreen.Lobby.NetService.Type.IsMultiplayer() ? "multiplayer" : "singleplayer",
                 phase = "character_select",
+                control_scope = "local_player"
+            };
+        }
+
+        // The multiplayer load screen is a lobby over a saved run: players ready up before the run resumes.
+        if (GetMultiplayerLoadScreen(currentScreen) != null)
+        {
+            return new SessionPayload
+            {
+                mode = "multiplayer",
+                phase = "multiplayer_lobby",
                 control_scope = "local_player"
             };
         }
@@ -354,6 +366,16 @@ internal static class GameStateService
             descriptors.Add(new ActionDescriptor
             {
                 name = "invite_ai_teammate",
+                requires_target = false,
+                requires_index = false
+            });
+        }
+
+        if (CanContinueAiTeammate(currentScreen))
+        {
+            descriptors.Add(new ActionDescriptor
+            {
+                name = "continue_ai_teammate",
                 requires_target = false,
                 requires_index = false
             });
@@ -1455,6 +1477,25 @@ internal static class GameStateService
 
         var submenuStack = GetSubmenuStack(submenu);
         return submenuStack != null && submenuStack.SubmenusOpen;
+    }
+
+    /// <summary>
+    /// Host main menu with a saved multiplayer run on disk: the same gate the game uses to show
+    /// "Load" instead of "Host" in its multiplayer submenu. The companion never continues a run itself.
+    /// </summary>
+    public static bool CanContinueAiTeammate(IScreenContext? currentScreen)
+    {
+        if (InstanceRole.IsCompanion)
+        {
+            return false;
+        }
+
+        if (currentScreen is not NMainMenu mainMenu || !mainMenu.IsVisibleInTree())
+        {
+            return false;
+        }
+
+        return SaveManager.Instance.HasMultiplayerRunSave;
     }
 
     public static bool CanEmbark(IScreenContext? currentScreen)
@@ -2619,6 +2660,11 @@ internal static class GameStateService
         if (currentScreen is NMainMenu mainMenu && mainMenu.IsVisibleInTree())
         {
             names.Add("invite_ai_teammate");
+        }
+
+        if (CanContinueAiTeammate(currentScreen))
+        {
+            names.Add("continue_ai_teammate");
         }
 
         if (CanChooseTimelineEpoch(currentScreen))
@@ -6152,11 +6198,19 @@ internal static class GameStateService
             .ToArray();
     }
 
+    public static NMultiplayerLoadGameScreen? GetMultiplayerLoadScreen(IScreenContext? currentScreen)
+    {
+        return currentScreen as NMultiplayerLoadGameScreen;
+    }
+
     public static NConfirmButton? GetCharacterEmbarkButton(IScreenContext? currentScreen)
     {
+        var load = GetMultiplayerLoadScreen(currentScreen);
+        if (load != null) return load.GetNodeOrNull<NConfirmButton>("ConfirmButton");
         return GetCharacterSelectScreen(currentScreen)?.GetNodeOrNull<NConfirmButton>("ConfirmButton");
     }
 
+    // Only the character-select screen advertises unready: the executor has no load-screen path for it.
     public static NBackButton? GetCharacterUnreadyButton(IScreenContext? currentScreen)
     {
         return GetCharacterSelectScreen(currentScreen)?.GetNodeOrNull<NBackButton>("UnreadyButton");
@@ -6890,6 +6944,7 @@ internal static class GameStateService
             NCombatRoom => "COMBAT",
             NMapScreen or NMapRoom => "MAP",
             NCharacterSelectScreen => "CHARACTER_SELECT",
+            NMultiplayerLoadGameScreen => "MULTIPLAYER_LOAD",
             NChooseABundleSelectionScreen => "BUNDLE_SELECTION",
             NCapstoneSubmenuStack => "CAPSTONE_SELECTION",
             NCrystalSphereScreen => "CRYSTAL_SPHERE",

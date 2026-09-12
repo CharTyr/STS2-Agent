@@ -20,6 +20,16 @@ internal static partial class Loc
         map["跟随你的地图选择。"] = "Following your map choice.";
         map["确认阻挡操作的教学弹窗。"] = "Confirmed the tutorial popup that was blocking the action.";
 
+        // Continue a saved co-op run (Multiplayer/DualInstanceCoordinator.cs, Game/GameActionService.cs).
+        map["请先回到主菜单，再继续联机对局。"] = "Return to the main menu before continuing the co-op run.";
+        map["读档开房失败：{0}"] = "Loading the saved run failed: {0}";
+        map["正在继续联机存档，等待队友窗口连回…"] = "Continuing the saved co-op run; waiting for the teammate window to reconnect…";
+        map["继续联机存档失败：{0}"] = "Continuing the saved co-op run failed: {0}";
+        map["{0}。已按存档开好本地房，等队友窗口连回来后两边各点一次出发。"] = "{0}. The saved run is hosted locally; once the teammate window reconnects, both sides click Embark once.";
+        map["找不到读档方法 StartLoad。"] = "Could not find the StartLoad method.";
+        map["读档开房失败（多半是本地直连端口 33771 还被上一局占着）：重启游戏后再试。"] = "Loading the saved run failed (local port 33771 is most likely still held by the previous run): restart the game and try again.";
+        map["读档后没有进入多人读档界面。"] = "The multiplayer load screen did not open after loading the save.";
+
         // Single step.
         map["单步决策中"] = "Deciding the single step";
         map["单步已取消"] = "Single step cancelled";
