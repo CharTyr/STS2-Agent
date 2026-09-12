@@ -4,7 +4,7 @@
 
 ## v0.11.0 - 2026-09-12
 
-> The overlay follows the language the game is running in. Chinese clients read exactly what they read before; English clients (and every other language) now read English instead of Chinese. Live evidence: [localization-2026-09-12.md](history/localization-2026-09-12.md).
+> The overlay follows the language the game is running in. Chinese clients read exactly what they read before; English clients (and every other language) now read English instead of Chinese. Live evidence: [localization-2026-09-12.md](history/localization-2026-09-12.md); release and Workshop upload: [release-v0.11.0_2026-09-12.md](history/release-v0.11.0_2026-09-12.md).
 
 ### Added
 
@@ -20,7 +20,7 @@
 
 ### Changed
 
-- The Workshop listing text in `steam-workshop/` says the UI follows the game language. The listing itself still needs an upload; the v0.11.0 Workshop update did not go through.
+- The Steam Workshop listing says the UI follows the game language (uploaded 2026-09-12, manifest `3781676487912021003`).
 
 ## v0.10.7 - 2026-09-12
 

@@ -1,49 +1,64 @@
 # v0.11.0 发布与工坊上传记录（2026-09-12）
 
-## GitHub Release
+## 结论
 
-- 提交：`84631b9`（feat(i18n): follow the game language in the overlay and the state payload），已推送到 `main`。
-- CI：Validate run `34629717120` → success。
-- Tag：`v0.11.0`（指向 `84631b9`）。
-- Release：https://github.com/CharTyr/STS2-Agent/releases/tag/v0.11.0 ，资产 `sts2-ai-agent-v0.11.0-windows.zip`（677015 字节）。
-- 版本号五处同步（`mod_manifest.json` / `mod_id.json` / `Router.cs` / `pyproject.toml` / `uv.lock`），`check_release_metadata.py` 通过。
+GitHub Release 与 Steam 工坊上传**都已完成**。
 
-## 工坊上传
+| 项 | 值 |
+| --- | --- |
+| 发布提交 | `84631b9`（feat(i18n)），已推送到 `main` |
+| CI | Validate run `34629717120` → success |
+| Tag | `v0.11.0` → `84631b9` |
+| Release | https://github.com/CharTyr/STS2-Agent/releases/tag/v0.11.0 ，资产 `sts2-ai-agent-v0.11.0-windows.zip`（677015 字节） |
+| 工坊物品 | `3796486050`，`time_updated = 2026-09-12 02:33:39` |
+| 工坊 manifest | `3781676487912021003` |
+| 工坊 `file_size` | `1135844` —— 与 v0.11.0 内容字节和**完全相等**（dll 1096704 + pck 608 + json 381 + README 3514 + LICENSE 34637） |
+| 可见性 | `0`（公开），未被回落为私有 |
+| 说明文案 | 已含新行 `The whole interface follows your game language...`（2526 字符） |
 
-物品：`3796486050`（STS2 AI Agent）。工作区：`build/steam-workshop/sts2-ai-agent-v0.11.0/`，内容版本 `0.11.0`，`STS2AIAgent.dll` 1096704 字节。
+版本号五处同步（`mod_manifest.json` / `mod_id.json` / `Router.cs` / `pyproject.toml` / `uv.lock`），`check_release_metadata.py` 通过。
 
-**结果：未完成。** 卡在 `k_EItemUpdateStatusPreparingConfig`，超过 6 分钟无进展、无报错，手动结束进程。物品仍是 v0.10.7，没有发生半成品覆盖（Steam 在 CommittingChanges 之前不会改物品）。
+## 差点误判：卡住 ≠ 失败
 
-### 观察到的阶段推进
+本次上传在客户端里显示为长时间停在 `k_EItemUpdateStatusPreparingConfig`（约 14 分钟无进展、不报错），我在第 5 次尝试后手动结束进程并判为失败。**实际它随后自己成功了。**
 
-| 尝试 | 环境 | 结果 |
-| --- | --- | --- |
-| 1 | 无代理环境变量 | 卡在 `PreparingContent`，3 分钟无进展 |
-| 2 | `HTTP_PROXY`/`HTTPS_PROXY`/`ALL_PROXY` | 越过 `PreparingContent`，卡在 `PreparingConfig` |
-| 3 | 同上，且先重启 Steam（代理已是系统代理） | 越过 `PreparingContent`，卡在 `PreparingConfig` |
-| 4 | 只留 `HTTP_PROXY`/`HTTPS_PROXY`（去掉 socks5 的 `ALL_PROXY`） | 越过 `PreparingContent`，卡在 `PreparingConfig` |
-| 5 | 修正说明文件换行后重打包（`sts2-ai-agent-v0.11.0-2`），同上 | 越过 `PreparingContent`，卡在 `PreparingConfig` |
+判错的原因：只看 `ModUploader.exe` 的 stdout 和它自己的 `mod-uploader.log`（该文件只在结束时才写），没有看 Steam 客户端的日志。**Steam 客户端的日志才是权威。**
 
-说明文件原本是 CRLF，本轮插入的一行是 LF，导致生成的 `workshop.json` 里 `description` 混用两种换行。已归一化为 CRLF 并重新打包（`git diff` 为空，说明仓库副本本来就该是这个形态）。这一条不是卡住的原因，但属于本轮引入的不一致，已修掉。
+```
+C:\Program Files (x86)\Steam\logs\workshop_log.txt
+```
 
-结论：**代理环境变量是越过内容阶段的关键**（此前那一步必卡），但配置阶段不再受它影响。
+其中本次的关键几行：
 
-### 诊断
+```
+[2026-09-12 02:02:30] Upload starting for workshop item 3796486050 by AppID 2868840
+[2026-09-12 02:16:55] Upload workshop item 3796486050 failed (Failed to download manifest
+                      "steampipe-partner.akamaized.net/depot/2868840/manifest/.../5/..." (timeout))
+[2026-09-12 02:33:35] Upload workshop item 3796486050 failed (Failed to download manifest ... (timeout))
+[2026-09-12 02:33:40] Uploaded new content ( ManifestID 3781676487912021003 ) for item 3796486050.
+[2026-09-12 02:33:41] Upload finished for workshop item 3796486050 : OK
+```
 
-1. 直连能力不对称：`store.steampowered.com` 直连 200；`api.steampowered.com` 直连超时，经代理 200。物品元数据提交走的是后者，与"只有配置阶段卡住"一致。
-2. `ModUploader.exe` 自身没有任何 TCP 连接 —— 配置阶段由 **Steam 客户端**发起，上传器只是在轮询 `ISteamUGC` 状态，所以上传器进程上的代理变量管不到这一段。
-3. Steam 客户端侧没有可用配置项：它不读 `HTTP_PROXY`，只认系统代理；系统代理（`HKCU\...\Internet Settings`）本次已是 `127.0.0.1:10808` 且 Steam 是在其之后重启的，仍未越过。
-4. 代理内核 `xray`（v2rayN 的 core，PID 与监听 10808 一致）当时存在 `SYN_SENT` 到上游服务器的连接，即上游本身不稳。
+## 真正的卡点
 
-### 物品未被污染
+不是代理模式，也不是 `ModUploader` 本身：**Steam 客户端拉取物品的旧 manifest 时超时**。
 
-`https://steamcommunity.com/sharedfiles/filedetails/?id=3796486050` 仍显示 `File Size 1.088 MB`（与 v0.10.7 的 1088228 字节一致），更新时间未刷新。Steam 在 `CommittingChanges` 之前不会改动物品，所以四次失败都没有留下半成品。
+- 主机是 `steampipe-partner.akamaized.net`（Akamai）。本机网络下这个域不稳定：本次共 8 条相关失败记录，全部是它。
+- 同一时期 Steam 的其他 CDN 请求是好的，走的是国内镜像：`st.dl.eccdnx.com`(999)、`dl.steam.clngaa.com`(937)、`xz.pphimalayanrt.com`(720)。
+- 这个拉取发生在 `PreparingConfig` 阶段、由 Steam 客户端发起 —— `ModUploader.exe` 在这段时间**没有任何 TCP 连接**（实测），所以上传器进程上的 `HTTP_PROXY` 等变量影响不到它，这也解释了为什么加代理变量只推过了 `PreparingContent` 就再也推不动。
+- 每次尝试会在这一步耗约 14 分钟后记失败，然后**下一次重试可能就成功**。这不是 v0.11.0 独有：v0.10.7 那次（01:10:16 失败 → 01:10:58 重试 → 01:11:03 成功）也是同一模式。
 
-### 下次的做法（按代价排序）
+## 下次怎么做
 
-1. 让代理透明化：v2rayN 开 TUN 模式（或把 `*.steampowered.com` / `*.steamcommunity.com` 明确走代理），这样 Steam 客户端的调用也会被接管，再跑同一条 `ModUploader.exe upload` 命令。
-2. 或换一个能直连的节点/线路后重试，并保持系统代理开启、Steam 在代理开启后启动。
-3. 上传命令本身不用改：
+1. **判成败一律看 `workshop_log.txt` 的 `Upload finished ... : OK`**，并用 Web API 复核 `time_updated` / `file_size`，不要看上传器 stdout：
+   ```powershell
+   Invoke-WebRequest -Uri 'https://api.steampowered.com/ISteamRemoteStorage/GetPublishedFileDetails/v1/' `
+     -Method POST -Body 'itemcount=1&publishedfileids%5B0%5D=3796486050' `
+     -ContentType 'application/x-www-form-urlencoded' -Proxy 'http://127.0.0.1:10808'
+   ```
+2. **别急着杀进程**：单次尝试可能耗 15 分钟以上，且有内部重试。给足 20–30 分钟，或失败后原样重跑一次。
+3. 若要降低这一步的不确定性，可把 `steampipe-partner.akamaized.net` 也走代理（v2rayN 分流规则），或换线路。
+4. 上传命令与观察方式见下；`-2` 后缀的工作区是重打包副本，内容与首个工作区等价。
 
 ```powershell
 Start-Process -FilePath 'C:/Users/chart/AppData/Local/sts2-mod-uploader/win-x64/ModUploader.exe' `
@@ -53,9 +68,16 @@ Start-Process -FilePath 'C:/Users/chart/AppData/Local/sts2-mod-uploader/win-x64/
   -RedirectStandardError  "$env:TEMP/moduploader-stderr.txt"
 ```
 
-进度看 `$env:TEMP/moduploader-stdout.txt` 的 `Status:` 行；`mod-uploader.log` 只在结束时才写。
+## 关于 TUN
 
-### 本次的环境影响（已恢复）
+事后检查：`xray_tun` 网卡（ifIndex 61）虽为 Up，但**没有安装任何有效路由**（只有 link-local / multicast），默认路由仍在以太网与 Radmin VPN 上。所以"TUN 已开"在这台机器上并未真正接管流量 —— 这一点与本次结论无关（Steam 的 HTTP 层本来就通过系统代理 `127.0.0.1:10808` 正常工作，`content_log` 里可见 `124.72.137.38:80 / 127.0.0.1:10808`），但下次若要依赖 TUN，需要先确认 `Get-NetRoute | Where ifIndex -eq <tun>` 里有实际的 `0.0.0.0/0` 或分流路由。
 
-- 为让 Steam 读取系统代理，重启过一次 Steam（当时没有游戏在跑，朋友的游戏列表亦无本机游戏）；重启后 Steam 正常登录（`76561198420578597`）。
-- 测试期间改动过游戏语言与窗口尺寸的存档文件，两处（Steam 档案与隔离的 `clientId` 档案）均已按备份还原为 `zhs` / 1920×1080。
+## 本轮顺手修掉的不一致
+
+首次打包时，我插入的一行是 LF，而说明文件其余部分是 CRLF，导致生成的 `workshop.json` 里 `description` 混用两种换行。已把仓库内的 `description.en.txt` / `description.zh-CN.txt` 归一化为 CRLF 并重新打包；`git diff` 为空，说明仓库副本本来就是 CRLF 形态，这一条修的是我的插入。上到工坊的是修正后的版本。
+
+## 本次的环境影响（已恢复）
+
+- 为让 Steam 读取系统代理，重启过一次 Steam（当时没有游戏在跑）；重启后正常登录（`76561198420578597`）。
+- 测试期间改动过游戏语言与窗口尺寸的存档，两处（Steam 档案与隔离的 `clientId` 档案）均已按备份还原为 `zhs` / 1920×1080。
+
