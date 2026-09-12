@@ -1,0 +1,3 @@
+{"file": ".trellis/spec/mod/game-actions.md", "reason": "The screen/available-action contract this change has to keep honest."}
+{"file": ".trellis/spec/mod/index.md", "reason": "Offline C# contract-test conventions and the mod build command."}
+{"file": ".trellis/tasks/09-12-card-viewer-screens/research/viewer-screens.md", "reason": "Reachability, the per-action analysis, and the class hierarchy behind the stack fix."}

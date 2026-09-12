@@ -114,6 +114,8 @@ Do not trust memory over the current payload. The game mutates screens in place,
 - `UNLOCK`: `confirm_unlock` repeatedly until the screen closes; never bypass it with a menu-return action. The compact top level mirrors the raw block under `unlock` (`unlock_type`, `items`).
 - `FAKE_MERCHANT`: the Fake Merchant event screen. `open_shop_inventory` opens its inventory and `proceed` leaves the screen.
 - `PATCH_NOTES`: patch notes shown from the main menu. `close_main_menu_submenu` closes it.
+- `CARD_LIBRARY`: the deck / compendium card viewer. `close_main_menu_submenu` returns to the previous screen, both from the main menu and from inside a run.
+- `CARD_PILE`: a combat card pile (draw / discard / exhaust). `close_cards_view` returns to combat.
 - `CARD_INSPECT` / `RELIC_INSPECT`: inspect overlays. The same `close_cards_view` action that closes the card list also closes these.
 - `FEEDBACK`: the feedback form. No mod action closes it yet, so only open it when the task asks and let the player finish it.
 

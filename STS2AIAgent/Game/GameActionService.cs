@@ -640,7 +640,7 @@ internal static class GameActionService
                 });
             }
 
-            var submenuStack = GameStateService.GetMainMenuSubmenuStack(submenu)
+            var submenuStack = GameStateService.GetSubmenuStack(submenu)
                 ?? throw new ApiException(503, "state_unavailable", "Main menu submenu stack is unavailable.", new
                 {
                     action = "close_main_menu_submenu",
@@ -2328,6 +2328,13 @@ internal static class GameActionService
         if (closedScreen is NInspectCardScreen or NInspectRelicScreen)
         {
             return !ReferenceEquals(currentScreen, closedScreen);
+        }
+
+        // NCardPileScreen joined close_cards_view, so the widened viewer set has to be consulted
+        // before the original cards-view test. The final line still settles plain NCardsViewScreen.
+        if (GameStateService.IsClosableCardViewer(currentScreen) && currentScreen is not NCardsViewScreen)
+        {
+            return false;
         }
 
         return currentScreen is not NCardsViewScreen;
@@ -5842,7 +5849,7 @@ internal static class GameActionService
     }
 
     private static async Task<bool> WaitForMainMenuSubmenuCloseAsync(
-        NMainMenuSubmenuStack submenuStack,
+        NSubmenuStack submenuStack,
         NSubmenu submenu,
         TimeSpan timeout)
     {

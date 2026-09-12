@@ -1,0 +1,2 @@
+{"file": ".trellis/tasks/09-12-card-viewer-screens/research/viewer-screens.md", "reason": "Confirm both screens now name themselves and offer a real way out."}
+{"file": ".trellis/spec/mod/game-actions.md", "reason": "Verify the state/action contract still holds for the new screen names."}

@@ -458,5 +458,8 @@ internal static class TestRunner
         yield return ("SurfacedAction.ChooseRewardCardCollection", () => Task.Run(SurfacedActionParityTests.ChooseRewardCardStaysOnTheExecutorCollection));
         yield return ("SurfacedAction.CrystalSphereScreenGuard", () => Task.Run(SurfacedActionParityTests.CrystalSphereExposureStaysOnTheScreenTypeGuard));
         yield return ("SurfacedAction.SkipTargetsEnabledAlternative", () => Task.Run(SurfacedActionParityTests.SkipTargetsEnabledAlternative));
+        yield return ("CardViewer.BranchesPrecedeGrid", () => Task.Run(CardViewerScreenContractTests.ViewerBranchesPrecedeTheVisibleGrid));
+        yield return ("CardViewer.ClosableViewerSameSource", () => Task.Run(CardViewerScreenContractTests.ClosableViewerSetIsSharedByProbeAndExecutor));
+        yield return ("CardViewer.SubmenuStackBase", () => Task.Run(CardViewerScreenContractTests.SubmenuStackLookupUsesTheBaseClass));
     }
 }

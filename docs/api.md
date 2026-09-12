@@ -85,7 +85,9 @@
 | `REWARD` | 奖励结算 / 卡牌奖励选择 |
 | `CHEST` | 宝箱房 |
 | `CARD_SELECTION` | 牌库选牌界面（删牌等） |
-| `CARDS_VIEW` | 看牌浮层（用 `close_cards_view` 关闭） |
+| `CARDS_VIEW` | 看牌浮层，属于可关闭的看牌屏（用 `close_cards_view` 关闭） |
+| `CARD_LIBRARY` | 牌库 / 图鉴查看屏（用 `close_main_menu_submenu` 返回，主菜单侧与局内侧一致） |
+| `CARD_PILE` | 战斗中打开的抽牌堆 / 弃牌堆 / 消耗堆查看屏（用 `close_cards_view` 返回） |
 | `MODAL` | 阻塞中的弹窗 / FTUE |
 | `GAME_OVER` | 游戏结束 |
 | `UNLOCK` | 解锁弹窗界面（用 `confirm_unlock` 逐层关闭） |
@@ -1046,7 +1048,7 @@ compact 里的位置与 `/state` 不同，但同名同源、同为新增键；`/
 - `choose_reward_card` — 选择奖励卡（`option_index`）
 - `skip_reward_cards` — 跳过卡牌奖励
 - `select_deck_card` — 选择牌组中的牌（`option_index`）
-- `close_cards_view` — 关闭看牌界面（也关闭 `CARD_INSPECT` / `RELIC_INSPECT` 浮层）
+- `close_cards_view` — 关闭可关闭的看牌屏 `CARDS_VIEW` / `CARD_PILE`（也关闭 `CARD_INSPECT` / `RELIC_INSPECT` 浮层）
 - `confirm_selection` — 确认选择
 - `proceed` — 推进到下一步
 - `open_chest` — 打开宝箱
@@ -1649,12 +1651,12 @@ Invoke-RestMethod -Uri 'http://127.0.0.1:8080/data/cards' | ConvertTo-Json -Dept
 
 ### `close_cards_view`
 
-关闭看牌界面。
+关闭可关闭的看牌屏。
 
-- **前提**：看牌界面存在可用的返回按钮，或当前是 `CARD_INSPECT` / `RELIC_INSPECT` 浮层
+- **前提**：当前是可关闭的看牌屏 `CARDS_VIEW` / `CARD_PILE` 且存在可用的返回按钮，或当前是 `CARD_INSPECT` / `RELIC_INSPECT` 浮层
 - **参数**：无
-- **行为**：普通看牌界面点返回按钮；`CARD_INSPECT` / `RELIC_INSPECT` 两个查看浮层也由这个动作关闭（调用浮层自身的 `Close()`）
-- **稳定条件**：离开原界面 / 浮层不再是当前界面
+- **行为**：`CARDS_VIEW` / `CARD_PILE` 点各自的返回按钮（两屏的按钮节点都是 `BackButton`）；`CARD_INSPECT` / `RELIC_INSPECT` 两个查看浮层也由这个动作关闭（调用浮层自身的 `Close()`）
+- **稳定条件**：离开原界面 / 浮层不再是当前界面；`CARDS_VIEW` / `CARD_PILE` 仍为当前屏时返回 `pending` 而不是 `completed`
 - **超时**：10 秒
 
 ---

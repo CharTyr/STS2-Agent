@@ -37,6 +37,7 @@ using MegaCrit.Sts2.Core.Nodes.GodotExtensions;
 using MegaCrit.Sts2.Core.Nodes.Rewards;
 using MegaCrit.Sts2.Core.Nodes.Rooms;
 using MegaCrit.Sts2.Core.Nodes.Screens;
+using MegaCrit.Sts2.Core.Nodes.Screens.CardLibrary;
 using MegaCrit.Sts2.Core.Nodes.Screens.CardSelection;
 using MegaCrit.Sts2.Core.Nodes.Screens.CharacterSelect;
 using MegaCrit.Sts2.Core.Nodes.Screens.FeedbackScreen;
@@ -945,6 +946,16 @@ internal static class GameStateService
         return GetCardsViewBackButton(currentScreen) != null;
     }
 
+    /// <summary>
+    /// Screens that draw the same visible card grid and are left with their own BackButton. They
+    /// share <c>close_cards_view</c>, so the availability probe, the back-button lookup, and the
+    /// executor's settled check all agree on this one set.
+    /// </summary>
+    public static bool IsClosableCardViewer(IScreenContext? screen)
+    {
+        return screen is NCardsViewScreen or NCardPileScreen;
+    }
+
     public static bool CanConfirmSelection(IScreenContext? currentScreen)
     {
         if (TryGetCombatHandSelectionMetadata(currentScreen, out _, out var combatMetadata) &&
@@ -1442,7 +1453,7 @@ internal static class GameStateService
             return false;
         }
 
-        var submenuStack = GetMainMenuSubmenuStack(submenu);
+        var submenuStack = GetSubmenuStack(submenu);
         return submenuStack != null && submenuStack.SubmenusOpen;
     }
 
@@ -2118,12 +2129,12 @@ internal static class GameStateService
 
     public static NButton? GetCardsViewBackButton(IScreenContext? currentScreen)
     {
-        if (currentScreen is not NCardsViewScreen cardsViewScreen)
+        if (currentScreen is not Node screenNode || !IsClosableCardViewer(currentScreen))
         {
             return null;
         }
 
-        var backButton = cardsViewScreen.GetNodeOrNull<NButton>("BackButton");
+        var backButton = screenNode.GetNodeOrNull<NButton>("BackButton");
         return backButton != null &&
             GodotObject.IsInstanceValid(backButton) &&
             backButton.IsVisibleInTree() &&
@@ -6560,12 +6571,12 @@ internal static class GameStateService
         return GetTimelineUnlockScreen(currentScreen)?.GetNodeOrNull<NButton>("ConfirmButton");
     }
 
-    public static NMainMenuSubmenuStack? GetMainMenuSubmenuStack(Node? node)
+    public static NSubmenuStack? GetSubmenuStack(Node? node)
     {
         var current = node;
         while (current != null)
         {
-            if (current is NMainMenuSubmenuStack submenuStack)
+            if (current is NSubmenuStack submenuStack)
             {
                 return submenuStack;
             }
@@ -6824,6 +6835,18 @@ internal static class GameStateService
         if (currentScreen is NCardsViewScreen)
         {
             return "CARDS_VIEW";
+        }
+
+        // Both of these carry visible grid card holders, so the generic grid branch below would call them
+        // CARD_SELECTION and send the model after select_deck_card, an action they deliberately do not offer.
+        if (currentScreen is NCardLibrary)
+        {
+            return "CARD_LIBRARY";
+        }
+
+        if (currentScreen is NCardPileScreen)
+        {
+            return "CARD_PILE";
         }
 
         // The reward-card overlay carries visible grid card holders, so the generic grid branch below
