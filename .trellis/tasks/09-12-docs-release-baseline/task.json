@@ -3,7 +3,7 @@
   "name": "docs-release-baseline",
   "title": "Sync the state page, release baseline, and doc/CI gates",
   "description": "",
-  "status": "planning",
+  "status": "in_progress",
   "dev_type": null,
   "scope": null,
   "package": null,

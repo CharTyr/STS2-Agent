@@ -152,6 +152,9 @@ The mod runs an embedded HTTP server on `http://127.0.0.1:8080` (with dynamic fa
 - `GET /actions/available`: Currently available legal actions and schema.
 - `GET /events/stream`: Real-time SSE stream for game events.
 - `POST /action`: Dispatch an action (e.g., `play_card`, `choose_map_node`, `proceed`).
+- `GET /data/{collection}`: Export a bundled game metadata collection (`cards`, `relics`, `monsters`, `potions`, `events`, `powers`, `characters`).
+- `POST /session/control`: Start or pause autoplay for this instance (`{"running": true|false}`).
+- `POST /companion/control` / `POST /companion/message`: Control or message the AI teammate instance (local dual-instance only).
 - `POST /mcp`: Optional MCP (Streamable HTTP). Off by default; enable it on the overlay Connect tab.
 
 ### Which MCP entry to use
@@ -209,6 +212,7 @@ powershell -ExecutionPolicy Bypass -File ".\scripts\build-mod.ps1" -Configuratio
   ```powershell
   dotnet run --project STS2AIAgent.Tests/STS2AIAgent.Tests.csproj
   ```
+  Covers the session budget guard, autoplay recovery backoff, run-boundary interception, offline dual-instance isolation, HTTP port fallback, and native save switching, among others.
 - **Python MCP Contract Tests**:
   ```powershell
   cd mcp_server

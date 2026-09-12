@@ -84,6 +84,11 @@
 | `CARD_SELECTION` | 牌库选牌界面（删牌等） |
 | `MODAL` | 阻塞中的弹窗 / FTUE |
 | `GAME_OVER` | 游戏结束 |
+| `FAKE_MERCHANT` | 假商人事件里的商店界面（`open_shop_inventory` 可用） |
+| `PATCH_NOTES` | 补丁说明页（用 `close_main_menu_submenu` 关闭） |
+| `CARD_INSPECT` | 卡牌查看浮层（用 `close_cards_view` 关闭） |
+| `RELIC_INSPECT` | 遗物查看浮层（用 `close_cards_view` 关闭） |
+| `FEEDBACK` | 反馈提交页；不提供关闭动作，仅用于诊断 |
 | `UNKNOWN` | 无法识别的界面 |
 
 ## Action Status
@@ -94,6 +99,7 @@
 | --- | --- |
 | `completed` | 动作已完成，返回的 `state` 已稳定 |
 | `pending` | 动作已提交，但游戏状态尚在过渡中（等待动画/队列清空） |
+| `failed` | 动作已执行但失败；`mcp_server/src/sts2_mcp/client.py` 读到该值会抛 `action_failed`，不能当成功处理 |
 
 ---
 
@@ -109,7 +115,7 @@
   "request_id": "req_20260911_121549_7955_4",
   "data": {
     "service": "sts2-ai-agent",
-    "mod_version": "0.10.6",
+    "mod_version": "0.11.0",
     "protocol_version": "2026-03-11-v1",
     "game_version": "v0.111.0",
     "status": "ready",
@@ -135,7 +141,7 @@
 
 | 字段 | 类型 | 说明 |
 | --- | --- | --- |
-| `mod_version` | string | Mod 版本号 |
+| `mod_version` | string | Mod 版本号，与 `STS2AIAgent/Server/Router.cs` 的 `ModVersion` 常量一致 |
 | `protocol_version` | string | HTTP 协议版本 |
 | `game_version` | string | 游戏版本；示例值随游戏更新变化 |
 | `status` | string | `ready` 表示可以接受请求 |
@@ -945,6 +951,10 @@
 | `name` | string | 动作名称 |
 | `requires_target` | boolean | 是否需要 `target_index` |
 | `requires_index` | boolean | 是否需要 `card_index` 或 `option_index` |
+| `requires_coordinates` | boolean | 是否需要 `x` / `y`（目前只有 `crystal_clear_cell` 为 true） |
+| `requires_tool` | boolean | 是否需要 `tool`（目前只有 `crystal_set_tool` 为 true） |
+
+每个 descriptor 都会带上全部五个字段，缺省一律为 `false`。
 
 ### 响应示例
 
@@ -958,12 +968,16 @@
       {
         "name": "end_turn",
         "requires_target": false,
-        "requires_index": false
+        "requires_index": false,
+        "requires_coordinates": false,
+        "requires_tool": false
       },
       {
         "name": "play_card",
         "requires_target": false,
-        "requires_index": true
+        "requires_index": true,
+        "requires_coordinates": false,
+        "requires_tool": false
       }
     ]
   }
@@ -980,7 +994,7 @@
 
 ### 动作总表（与代码强一致）
 
-+<!-- BEGIN ACTION CONTRACT -->
+<!-- BEGIN ACTION CONTRACT -->
 本区块由 `scripts/check_verification_gates.py` 与 `GameActionService.ExecuteAsync` 的 action switch 做集合比对：代码新增动作而这里没有登记时，预检与 CI 会失败。
 
 - `resolve_rewards` — 奖励结算界面（可带 `option_index`，或 `card_index`）
@@ -995,8 +1009,8 @@
 - `open_character_select` — 打开角色选择
 - `open_timeline` — 打开时间线
 - `confirm_unlock` — 确认解锁弹窗
-- `close_main_menu_submenu` — 关闭主菜单子菜单
-- `choose_timeline_epoch` — 选择时间线纪元（`option_index`）
+- `close_main_menu_submenu` — 关闭主菜单子菜单（也关闭补丁说明页 `PATCH_NOTES`）
+- `choose_timeline_epoch` — 选择时间线纪元（`option_index` = `timeline.slots[].index`）
 - `confirm_timeline_overlay` — 确认时间线浮层
 - `choose_map_node` — 选择地图节点（`option_index`）
 - `collect_rewards_and_proceed` — 领取后继续
@@ -1004,7 +1018,7 @@
 - `choose_reward_card` — 选择奖励卡（`option_index`）
 - `skip_reward_cards` — 跳过卡牌奖励
 - `select_deck_card` — 选择牌组中的牌（`option_index`）
-- `close_cards_view` — 关闭看牌界面
+- `close_cards_view` — 关闭看牌界面（也关闭 `CARD_INSPECT` / `RELIC_INSPECT` 浮层）
 - `confirm_selection` — 确认选择
 - `proceed` — 推进到下一步
 - `open_chest` — 打开宝箱
@@ -1187,7 +1201,7 @@ Invoke-RestMethod -Uri 'http://127.0.0.1:8080/data/cards' | ConvertTo-Json -Dept
 
 ## `POST /mcp`（原生 MCP）
 
-进程内 MCP 端点，路径为 `/mcp`（`/mcp/` 等价），与其它路由共用同一个 HTTP 监听端口，默认 `http://127.0.0.1:8080/mcp`。
+进程内 MCP 端点，路径为 `/mcp`（`/mcp/` 等价，路由匹配不区分大小写，也不限制 HTTP 方法；客户端按 Streamable HTTP 语义发 `POST` 即可），与其它路由共用同一个 HTTP 监听端口，默认 `http://127.0.0.1:8080/mcp`。
 
 - 需在游戏内悬浮窗「接入」页勾选开启（settings 的 `mcpEnabled`）；未开启时返回 403 `mcp_disabled`
 - 走 MCP Streamable HTTP 语义：请求体为 JSON-RPC，响应为 JSON 或 SSE
@@ -1563,6 +1577,37 @@ Invoke-RestMethod -Uri 'http://127.0.0.1:8080/data/cards' | ConvertTo-Json -Dept
 请求: { "action": "proceed" }
 ```
 
+### `choose_timeline_epoch`
+
+在时间线界面选择一个纪元。
+
+- **前提**：`timeline.can_choose_epoch = true`（界面里存在状态为 `obtained` / `complete` 的槽位）
+- **参数**：`option_index`（必填）：`timeline.slots[].index`，即完整槽位列表中的位置；紧凑视图里同一个位置是 `slots[].i`。执行侧读的是同一份列表，不再套用"只含可操作槽位"的过滤下标
+- **行为**：点击该槽位并要求点击后状态稳定
+- **错误**：缺 `option_index` 返回 400 `invalid_request`；越界或槽位不可操作（`timeline.slots[].is_actionable = false`）返回 409 `invalid_target`，两种情况都带 `option_index` 与 `option_index_space: "timeline.slots[].index"`（越界另带 `slot_count`，槽位不可操作另带 `slot_state` 与 `is_actionable: false`），且在点击之前抛出
+- **稳定条件**：槽位状态不再变化
+- **超时**：15 秒
+
+### `close_main_menu_submenu`
+
+关闭主菜单子菜单。
+
+- **前提**：`screen = "MAIN_MENU"` 且子菜单打开（存在可弹出的子菜单栈），或 `screen = "PATCH_NOTES"`
+- **参数**：无
+- **行为**：子菜单弹出子菜单栈栈顶；补丁说明页 `PATCH_NOTES` 也由这个动作关闭（优先点返回按钮，按钮不可用时调界面自身的 `Close()`）
+- **稳定条件**：子菜单栈收起 / 离开补丁说明页；关闭无效时返回 `pending` 而不是 `completed`
+- **超时**：10 秒
+
+### `close_cards_view`
+
+关闭看牌界面。
+
+- **前提**：看牌界面存在可用的返回按钮，或当前是 `CARD_INSPECT` / `RELIC_INSPECT` 浮层
+- **参数**：无
+- **行为**：普通看牌界面点返回按钮；`CARD_INSPECT` / `RELIC_INSPECT` 两个查看浮层也由这个动作关闭（调用浮层自身的 `Close()`）
+- **稳定条件**：离开原界面 / 浮层不再是当前界面
+- **超时**：10 秒
+
 ---
 
 ## 典型调用流程
@@ -1681,8 +1726,10 @@ Invoke-RestMethod -Uri 'http://127.0.0.1:8080/data/cards' | ConvertTo-Json -Dept
 | --- | --- | --- |
 | 主菜单续局 / 放弃 | `continue_run` / `abandon_run` | 已实现，待实机验证 |
 | 主菜单开局入口 | `open_character_select` | 已实现，待实机验证 |
-| 主菜单时间线入口 | `open_timeline` / `close_main_menu_submenu` | 已实现，待实机验证 |
-| 时间线交互 | `timeline` / `choose_timeline_epoch` / `confirm_timeline_overlay` | 已实现，待实机验证 |
+| 主菜单时间线入口 | `open_timeline` / `close_main_menu_submenu`（也关闭补丁说明页 `PATCH_NOTES`） | 已实现，待实机验证 |
+| 时间线交互 | `timeline` / `choose_timeline_epoch`（索引空间 = `timeline.slots[].index`） / `confirm_timeline_overlay` | 已实现，待实机验证 |
+| 查看浮层 | `CARD_INSPECT` / `RELIC_INSPECT`；用 `close_cards_view` 关闭 | 已实现，待实机验证 |
+| 假商人事件商店 | `FAKE_MERCHANT`；`open_shop_inventory` 可打开 | 已实现，待实机验证 |
 | 角色选择 | `character_select` / `select_character` / `embark` | 已实现，待实机验证 |
 | 药水系统 | `run.potions[*].can_use` / `use_potion` / `discard_potion` | 已实现，待实机验证 |
 | 阻塞弹窗 | `modal` / `confirm_modal` / `dismiss_modal` | 已实现，待实机验证 |

@@ -1,7 +1,7 @@
 {
   "title": "STS2 AI Agent",
   "visibility": "public",
-  "changeNote": "v0.10.4 timeline unlocks, stuck FTUE confirm, locked event options",
+  "changeNote": "v0.11.0: the overlay and the model-facing state now follow your in-game language",
   "tags": [
     "Tools & APIs",
     "Utility",

@@ -41,14 +41,15 @@ the API doc contradicts itself about the `failed` action status.
 
 ## Acceptance Criteria
 
-- [ ] `PRODUCT_PLAN_CURRENT.md` contains no v0.10.6-as-current claim and no "unreleased" entry whose commit is an ancestor of `v0.11.0`.
-- [ ] `AGENTS.md` lists five version files and the correct constant declaration.
-- [ ] All three route lists match the routes in `Router.HandleAsync`.
-- [ ] `docs/api.md` documents `failed`, the current `mod_version`, the new descriptor fields, the new screens, and the widened close actions.
-- [ ] Both READMEs contain the same two mirrored blocks.
-- [ ] `preflight-release.ps1` still exits 0 and now covers the CI-only gates.
-- [ ] `python scripts/check_verification_gates.py` and the doc-mark gate still pass.
-- [ ] `python scripts/check_release_package.py --source-root .` still passes.
+- [x] `PRODUCT_PLAN_CURRENT.md` contains no v0.10.6-as-current claim and no "unreleased" entry whose commit is an ancestor of `v0.11.0` (verified per line with `git tag --contains` / `git merge-base --is-ancestor`).
+- [x] `AGENTS.md` lists the five version files and the correct `internal const string ModVersion` declaration. (It is a gitignored local file; the edit stays in the working tree by repository policy.)
+- [x] All route lists match the routes in `Router.HandleAsync` ("/mcp" now listed too).
+- [x] `docs/api.md` documents `failed`, the current `mod_version`, the new descriptor fields, the new screens, the timeline index contract, and the widened close actions.
+- [x] Both READMEs contain the same two mirrored blocks and the four added routes.
+- [x] `preflight-release.ps1` still exits 0 and now runs the two CI-only gates (12 OK steps).
+- [x] `python scripts/check_verification_gates.py` and the doc-mark gate still pass.
+- [x] `python scripts/check_release_package.py --source-root .` still passes.
+- [x] Reviewer correction: the timeline 409 contract now separates "index out of range" from "slot not actionable", and the release-flow sentence states only what the history proves.
 
 ## Constraints
 

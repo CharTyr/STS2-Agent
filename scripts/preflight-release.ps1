@@ -41,6 +41,8 @@ $mcpToolProfileScript = Join-Path $ProjectRoot "scripts/test-mcp-tool-profile.ps
 $multiplayerFlowScript = Join-Path $ProjectRoot "scripts/test-multiplayer-lobby-flow.ps1"
 $packageChecker = Join-Path $ProjectRoot "scripts/check_release_package.py"
 $verificationGates = Join-Path $ProjectRoot "scripts/check_verification_gates.py"
+$verificationGateSelfTest = Join-Path $ProjectRoot "scripts/test-verification-gates.ps1"
+$nativeExitPropagationTest = Join-Path $ProjectRoot "scripts/test-native-exit-propagation.ps1"
 $changelogPath = Join-Path $ProjectRoot "CHANGELOG.md"
 $releaseDoc = Join-Path $ProjectRoot "docs/release-readiness.md"
 $modManifestPath = Join-Path $ProjectRoot "STS2AIAgent/mod_manifest.json"
@@ -129,6 +131,14 @@ Invoke-Step -Name "Check release packaging source contract" -Action {
 
 Invoke-Step -Name "Run dependency, API-doc, and doc-snapshot gates" -Action {
     Invoke-CheckedNative -FilePath "python" -Arguments @($verificationGates, "--repo-root", $ProjectRoot)
+}
+
+Invoke-Step -Name "Self-test the verification gates" -Action {
+    Invoke-CheckedNative -FilePath "powershell" -Arguments @("-ExecutionPolicy", "Bypass", "-File", $verificationGateSelfTest)
+}
+
+Invoke-Step -Name "Check Windows PowerShell failure propagation" -Action {
+    Invoke-CheckedNative -FilePath "powershell" -Arguments @("-ExecutionPolicy", "Bypass", "-File", $nativeExitPropagationTest)
 }
 
 Invoke-Step -Name "Check release documents" -Action {

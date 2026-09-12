@@ -152,6 +152,9 @@ Mod 默认在本地启动 HTTP 服务（默认端口 `8080`，遇冲突自动动
 - `GET /actions/available`：获取当前所有合法动作清单与参数 Schema。
 - `GET /events/stream`：订阅游戏状态转换的 SSE 长连接流。
 - `POST /action`：执行具体游戏动作（例如 `play_card`、`choose_map_node`、`proceed` 等）。
+- `GET /data/{collection}`：导出打包的游戏元数据集合（`cards`、`relics`、`monsters`、`potions`、`events`、`powers`、`characters`）。
+- `POST /session/control`：启动 / 暂停本机角色的自动游玩（`{"running": true|false}`）。
+- `POST /companion/control` / `POST /companion/message`：控制 AI 队友实例 / 给队友发消息（仅本地双开）。
 - `POST /mcp`：可选 MCP（Streamable HTTP）。默认关闭，在悬浮窗「接入」页打开。
 
 ### MCP 怎么选
@@ -165,6 +168,19 @@ Mod 默认在本地启动 HTTP 服务（默认端口 `8080`，遇冲突自动动
 外部客户端步骤：F8 → **接入** → 勾选 **打开 MCP 服务** → 复制页面地址或 JSON。地址与 HTTP API 同一端口，只监听 `127.0.0.1`。不要写死 `8080` 或 `8765`。
 
 Python sidecar 不是玩家必装，也不再作为推荐入口。
+
+默认形态（把端口换成「接入」页上显示的那个）：
+   ```json
+   {
+     "mcpServers": {
+       "sts2-ai-agent": {
+         "type": "http",
+         "url": "http://127.0.0.1:8080/mcp"
+       }
+     }
+   }
+   ```
+内置工具与游戏内自动游玩一致：`health_check`、`get_game_state`、`get_available_actions`、`act`、`get_game_data_*`、`wait_until_actionable`。
 
 游戏内自动游玩已经按配套 skill 的合同在打。若用 **外部** Agent 经 MCP 操作游戏（Cursor / Claude / Codex，或可选的 Python sidecar），请同时加载 [`sts2-mcp-player`](./skills/sts2-mcp-player/SKILL.md)。只接工具、不加载 skill，也能点合法动作；要接近游戏内自动游玩的效果，需要这份配套 skill。
 
