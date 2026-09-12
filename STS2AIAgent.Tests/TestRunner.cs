@@ -423,5 +423,9 @@ internal static class TestRunner
         yield return ("HttpServerPort.FallbackGate", () => Task.Run(HttpServerPortPolicyTests.FallbackPolicyGateIsPresent));
         yield return ("DeckSelectionAvailability.MatchesExecutableSet", () => Task.Run(DeckSelectionAvailabilityTests.AvailabilityMatchesTheExecutableSet));
         yield return ("DeckSelectionAvailability.ExecutorKeepsGuard", () => Task.Run(DeckSelectionAvailabilityTests.ExecutorKeepsItsGuard));
+        yield return ("CompactViewFidelity.Powers", () => Task.Run(CompactViewFidelityTests.PowersReachTheCompactCombatView));
+        yield return ("CompactViewFidelity.IntentNumbers", () => Task.Run(CompactViewFidelityTests.IntentNumbersReachTheCompactCombatView));
+        yield return ("CompactViewFidelity.CardAndRelicIds", () => Task.Run(CompactViewFidelityTests.CardAndRelicIdsReachTheCompactViews));
+        yield return ("CompactViewFidelity.OverlayAndParty", () => Task.Run(CompactViewFidelityTests.OverlayAndPartyReachTheCompactView));
     }
 }

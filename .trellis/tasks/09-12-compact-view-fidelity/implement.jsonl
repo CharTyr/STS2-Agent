@@ -1,0 +1,4 @@
+{"file": ".trellis/spec/mod/architecture.md", "reason": "Where the compact view sits relative to the raw state and who consumes it."}
+{"file": ".trellis/spec/mod/agent-and-ui.md", "reason": "Agent-facing payload conventions and the in-game loop that reads agent_view."}
+{"file": ".trellis/spec/mod/index.md", "reason": "Offline test conventions and the mod build command used for type checking."}
+{"file": ".trellis/tasks/09-12-compact-view-fidelity/research/compact-gap-audit.md", "reason": "Each missing field with its compact line and the raw counterpart that already computes it."}

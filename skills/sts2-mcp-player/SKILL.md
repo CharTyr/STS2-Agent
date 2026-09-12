@@ -56,6 +56,10 @@ The in-game overlay agent loads the shared play contract below plus references/s
    `get_relevant_game_data` (default, scene-aware minimal context) ->
    `get_game_data_item` (single-entity lookup) ->
    `get_game_data_items` (batch compare/filter).
+   The compact view carries the ids those lookups key on: `combat.hand[].card_id`,
+   `combat.enemies[].enemy_id`, `run.deck[].card_ids`, `run.relic_ids`,
+   `selection.cards[].card_id`, `reward.cards[].card_id`, `shop.cards[].card_id`,
+   `bundles[].cards[].card_id`, and `chest.relics[].relic_id`.
 4. Before every decision, call `get_game_state`.
 5. Route by `state.session` first:
    `session.mode` distinguishes `singleplayer` vs `multiplayer`, and
@@ -80,9 +84,15 @@ Do not trust memory over the current payload. The game mutates screens in place,
 
 - Treat `UNKNOWN` as transient only once. Re-read state once; if it persists, stop guessing and inspect the payload.
 - Treat `state.session` as the source of truth for singleplayer vs multiplayer. Do not infer mode from screen names or tool names alone.
-- Resolve overlays before room flow. `MODAL`, `CARD_SELECTION`, reward-card overlays, and timeline overlays take priority over map or combat planning.
+- Resolve overlays before room flow. `MODAL`, `CARD_SELECTION`, reward-card overlays, and timeline overlays take priority over map or combat planning; `modal.underlying_screen` names the room underneath.
 - Treat `pending` responses as an instruction to stay inside the returned screen flow.
 - Treat `proceed` as a room action, not a universal fallback.
+
+## Action Failure Rules
+
+- A failed action (or failed game-data call) returns an `error` object. Read `error.code` before deciding what to do: `invalid_request`, `invalid_action`, and `invalid_target` mean the request itself was wrong, so re-read state and fix the action or its indexes instead of repeating it.
+- Retry only when `error.retryable` is `true` (for example `state_unavailable` while a transition is still settling). When it is false, change your approach rather than retrying the same call.
+- `error.status_code` mirrors the API status when present; `internal_error` means an unexpected failure, not a legal move you can reach by retrying.
 
 ## Screen Routing
 
@@ -90,7 +100,7 @@ Do not trust memory over the current payload. The game mutates screens in place,
 - `CHARACTER_SELECT`: choose an unlocked character, wait for `character_select.embark = true`, then `embark`.
 - `MULTIPLAYER_LOBBY`: stay on the same compact tool surface; use `available_actions` for `host_multiplayer_lobby`, `join_multiplayer_lobby`, `select_character`, `ready_multiplayer_lobby`, or `disconnect_multiplayer_lobby`.
 - `MAP`: use `choose_map_node` with `map.options[].i`. In multiplayer, if `map.local_vote` is set, `wait_until_actionable` instead of voting again; if `map.votes` exist and you have not voted, follow that option.
-- `COMBAT`: stay inside combat actions unless a selection overlay interrupts.
+- `COMBAT`: stay inside combat actions unless a selection overlay interrupts. Budget block and pick targets from `combat.enemies[].intents[]` (`damage` / `hits` / `total_damage`) and both sides' `powers` lines, not from `lethal_risks` alone.
 - `REWARD`: prefer `collect_rewards_and_proceed` unless making deliberate reward choices.
 - `CARD_SELECTION`: finish the selection with `select_deck_card` and, when exposed, `confirm_selection`.
 - `SHOP`: `open_shop_inventory` first, then buy/remove actions, then `close_shop_inventory`, then `proceed`.
@@ -101,7 +111,7 @@ Do not trust memory over the current payload. The game mutates screens in place,
 - `EVENT`: use `choose_event_option` even after combat returns to a finished event.
 - `CRYSTAL_SPHERE`: `crystal_clear_cell` until divinations are spent, then `proceed`.
 - `GAME_OVER`: `continue_game_over` first. Wait while `game_over.phase=summary_animating`. Use `return_to_main_menu` only when it is exposed.
-- `UNLOCK`: `confirm_unlock` repeatedly until the screen closes; never bypass it with a menu-return action.
+- `UNLOCK`: `confirm_unlock` repeatedly until the screen closes; never bypass it with a menu-return action. The compact top level mirrors the raw block under `unlock` (`unlock_type`, `items`).
 - `FAKE_MERCHANT`: the Fake Merchant event screen. `open_shop_inventory` opens its inventory and `proceed` leaves the screen.
 - `PATCH_NOTES`: patch notes shown from the main menu. `close_main_menu_submenu` closes it.
 - `CARD_INSPECT` / `RELIC_INSPECT`: inspect overlays. The same `close_cards_view` action that closes the card list also closes these.
