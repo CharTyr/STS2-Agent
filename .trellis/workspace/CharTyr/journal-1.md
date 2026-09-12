@@ -425,3 +425,40 @@ Four residuals closed: docs/ became a controlled directory with a docs-tracked g
 ### Next Steps
 
 - 用户拍板：累积提交是否 push、mcp_server/data/eng 快照去留、准孤儿脚本、NCardPileScreen/NCardLibrary 是否新增屏幕名
+
+
+## Session 13: 移除随包游戏数据快照（v0.5.0 遗留、v0.6.1 已被 Mod 导出取代）
+
+**Date**: 2026-09-12
+**Task**: 移除随包游戏数据快照（v0.5.0 遗留、v0.6.1 已被 Mod 导出取代）
+**Branch**: `main`
+
+### Summary
+
+考证 mcp_server/data/ 的设计意图后按用户决定移除：删目录与唯一校验它的测试，拆掉四处打包挂钩，README 与 AGENTS.md 的陈旧表述同步修正；用解包 wheel/sdist 断言产物里确实没有它。
+
+### Main Changes
+
+- 删除 mcp_server/data/（21 个文件）与 tests/test_packaged_game_data.py
+- pyproject.toml 去掉两个 hatch force-include；package-release.ps1 去掉复制 data 的行
+- check_release_package.py 删除 ARTIFACT_DIRECTORIES 与其遍历循环（has_directory 保留）
+- README 两语目录树、mcp_server/README.md 数据来源说明、AGENTS.md 本地指引同步
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `5cc314f` | (see git log) |
+
+### Testing
+
+- [OK] 构建产物解包断言：wheel 11 项 / sdist 29 项，零 data/ 路径
+- [OK] 干净 worktree 验证：C# 0 FAIL、6 gate 绿、package source 契约通过、MCP 165 OK
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- 用户拍板：累积提交是否 push（本地 main 已领先 origin/main）
