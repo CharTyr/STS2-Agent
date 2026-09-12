@@ -298,3 +298,50 @@ Eight tasks from the residual audit: invite_ai_teammate now classifies on a stru
 
 - Residual small issues: zero-reference scripts, mcp_server/data/eng packaging, select_deck_card availability asymmetry, crystal_clear_cell doc gap
 - Decide whether to push the 26 commits and whether to tag v0.10.7
+
+
+## Session 10: Give the compact view what it needs, keep errors truthful, and gate the drift
+
+**Date**: 2026-09-12
+**Task**: Give the compact view what it needs, keep errors truthful, and gate the drift
+**Branch**: `main`
+
+### Summary
+
+Six tasks: two residual audit gaps (select_deck_card availability, the crystal_clear_cell doc exemption), the compact agent view finally carries powers / intent numbers / card and relic ids / overlay context / party, the in-game path keeps ApiException code and retryable, autoplay stops both spinning and false-stopping, three drift-prone facts got gates, and the scene field tables agree across languages.
+
+### Main Changes
+
+- compact agent_view gains powers (both sides), enemy intents with numbers, card_id/relic_ids/card_ids, modal.underlying_screen, unlock, and party summaries
+- GetDeckSelectionOptions loses its generic subtree fallback so availability equals executability; the executor guard stays as defence
+- AgentErrorEnvelope gives the in-process path the same error fields as the HTTP envelope; skills contract explains how to use them
+- NoProgressPolicy + AutoPlayRecovery: repeat threshold on (action, state fingerprint) and a bounded unsettled budget instead of counting pending as failure
+- check_verification_gates.py gains api-facts (mod_version, screen enum, default port); README tool list bound to the registry; static packaging check now runs in CI
+- Cross-language scene field alignment test closed the C#/Python drift; data/eng README now says it is a snapshot, not a source
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `ca12a4f` | (see git log) |
+| `79d8747` | (see git log) |
+| `f7dccfe` | (see git log) |
+| `40735b5` | (see git log) |
+| `ed1b810` | (see git log) |
+| `98fca75` | (see git log) |
+
+### Testing
+
+- [OK] C# offline runner: 335 PASS / 0 FAIL (was 313); every commit re-verified in a detached worktree (313/317/325/335/335/335)
+- [OK] MCP unittest: 167 OK (was 159); stage commits verified at 159/159/159/159/160/167
+- [OK] verification gates (now 5), check_release_package, preflight all pass
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- Deferred to the user: whether to delete mcp_server/data/eng (1.2 MiB, no reader, now honestly documented), whether to keep the zero-reference scripts, and whether to push the accumulated commits or tag v0.10.7
+- ResolveNonModalScreen still shadows NCardRewardSelectionScreen => REWARD behind a generic CARD_SELECTION branch; changing it moves /state.screen semantics and needs live confirmation
+- Live-only: compact field values, invite outcome, timeline overlays, and the port/dual-instance paths

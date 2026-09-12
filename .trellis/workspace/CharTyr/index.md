@@ -8,7 +8,7 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-1.md`
-- **Total Sessions**: 9
+- **Total Sessions**: 10
 - **Last Active**: 2026-09-12
 <!-- @@@/auto:current-status -->
 
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-1.md` | ~300 | Active |
+| `journal-1.md` | ~347 | Active |
 <!-- @@@/auto:active-documents -->
 
 ---
@@ -29,6 +29,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 10 | 2026-09-12 | Give the compact view what it needs, keep errors truthful, and gate the drift | `ca12a4f`, `79d8747`, `f7dccfe`, `40735b5`, `ed1b810`, `98fca75` | `main` |
 | 9 | 2026-09-12 | Close seven audit gaps and harden the offline test floor | `206a0e8`, `adcb49b`, `f57cb04`, `c08d764`, `92f67a2`, `52bafd0`, `26da6bc`, `e373c90` | `main` |
 | 8 | 2026-09-12 | Reward skip scope: bind the skip intent to the reward set that recorded it | `fa7ffbe` | `main` |
 | 7 | 2026-09-12 | Reward choice threading: remove the cross-request static card choice | `abc195f` | `main` |
