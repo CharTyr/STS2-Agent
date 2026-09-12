@@ -151,6 +151,16 @@ internal static class TestRunner
         yield return ("Recovery.SuccessResets", AutoPlayRecoveryTests.SuccessfulActionResetsFailures);
         yield return ("Recovery.CancelBackoff", AutoPlayRecoveryTests.CancelDuringBackoffPreventsNextTurn);
         yield return ("Recovery.TimeoutNotCancel", AutoPlayRecoveryTests.TimeoutFailureDoesNotLookLikeUserCancel);
+        yield return ("Recovery.UnchangedActionStops", AutoPlayRecoveryTests.UnchangedActionStopsTheLoop);
+        yield return ("Recovery.ProgressResetsRepeat", AutoPlayRecoveryTests.ProgressResetsTheRepeatRun);
+        yield return ("Recovery.UnsettledBudget", AutoPlayRecoveryTests.UnsettledTurnsDoNotSpendTheRetryBudget);
+        yield return ("Recovery.UnsettledLimit", AutoPlayRecoveryTests.UnsettledRunStopsAtItsLimit);
+        yield return ("Recovery.UnsettledRunCleared", AutoPlayRecoveryTests.SettledTurnClearsTheUnsettledRun);
+        yield return ("Recovery.UnsettledKeepsFailures", AutoPlayRecoveryTests.UnsettledTurnsDoNotEraseEarlierFailures);
+        yield return ("Recovery.PendingReturnShape", () => Task.Run(AutoPlayRecoveryTests.PendingActReturnsWithoutAnError));
+        yield return ("NoProgressPolicy.IsRepeatTruthTable", () => Task.Run(NoProgressPolicyTests.IsRepeatNeedsBothTheSameActionAndTheSameState));
+        yield return ("NoProgressPolicy.Thresholds", () => Task.Run(NoProgressPolicyTests.ThresholdsAreNamedConstants));
+        yield return ("NoProgressPolicy.Fingerprint", () => Task.Run(NoProgressPolicyTests.FingerprintOnlyTracksTheCompactStateText));
         yield return ("TeamControl.WaitForCommittedWork", AutoPlaySessionTests.PauseWaitsForCommittedWorkAndBlocksRestart);
         yield return ("TeamControl.CancelModel", AutoPlaySessionTests.PauseCancelsWaitingModel);
         yield return ("TeamControl.NoOverlappingLoops", AutoPlaySessionTests.ImmediatePauseNeverOverlapsGenerations);

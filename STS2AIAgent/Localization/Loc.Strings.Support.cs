@@ -101,6 +101,10 @@ internal static partial class Loc
         map["模型未给出可执行动作"] = "The model did not return a usable action";
         map["连续 3 次决策未成功，已停止自动游玩。检查当前局面后可手动继续：{0}"] =
             "3 decisions in a row failed, so auto-play stopped. Review the current situation, then resume manually: {0}";
+        map["连续 {0} 次重复同一个动作且状态没有变化，已停止自动游玩。检查当前局面后可手动继续：{1}"] =
+            "{0} identical actions in a row left the state unchanged, so auto-play stopped. Review the current situation, then resume manually: {1}";
+        map["连续 {0} 次动作已执行但界面一直没有稳定，已停止自动游玩。检查当前局面后可手动继续：{1}"] =
+            "{0} actions in a row executed but the game never settled, so auto-play stopped. Review the current situation, then resume manually: {1}";
 
         // Agent/CurrentRunBoundary.cs (constants stay Chinese; wrapped at the throw site)
         map["当前局已离开，自动游玩已停止。开始另一局需要手动继续。"] =
