@@ -13,9 +13,21 @@ internal static class DualInstanceCoordinator
 
     public static async Task<string> HostLocalCoopAsync(CancellationToken cancellationToken)
     {
+        var result = await HostLocalCoopResultAsync(cancellationToken);
+        return result.Message;
+    }
+
+    /// <summary>
+    /// Structured form of <see cref="HostLocalCoopAsync"/>: the boolean says whether the teammate
+    /// instance actually started, and the message carries the unchanged user-facing text. Callers
+    /// that need to distinguish success from failure must read <c>Ok</c> instead of parsing the
+    /// localized message. Cancellation still propagates.
+    /// </summary>
+    public static async Task<(bool Ok, string Message)> HostLocalCoopResultAsync(CancellationToken cancellationToken)
+    {
         if (await GetScreenAsync() != "MAIN_MENU")
         {
-            return Loc.T("请先回到主菜单，再邀请 AI 队友组队。");
+            return (false, Loc.T("请先回到主菜单，再邀请 AI 队友组队。"));
         }
 
         try
@@ -29,16 +41,16 @@ internal static class DualInstanceCoordinator
         catch (Exception ex)
         {
             Log.Warn($"{LogPrefix} Local lobby failed: {ex.Message}");
-            return Loc.T("创建 4 人大厅失败：{0}", ex.Message);
+            return (false, Loc.T("创建 4 人大厅失败：{0}", ex.Message));
         }
 
         var launch = await LocalDualInstanceLauncher.LaunchCompanionAsync(cancellationToken);
         if (!launch.Ok)
         {
-            return launch.Message;
+            return (false, launch.Message);
         }
 
-        return Loc.T("{0}。本机已创建 4 人大厅，请选角色后 Ready 开局。你打自己的角色；AI 会自动加入、点开局并打另一个角色。", launch.Message);
+        return (true, Loc.T("{0}。本机已创建 4 人大厅，请选角色后 Ready 开局。你打自己的角色；AI 会自动加入、点开局并打另一个角色。", launch.Message));
     }
 
     public static async Task<bool> RunCompanionBootstrapAsync(CancellationToken cancellationToken)

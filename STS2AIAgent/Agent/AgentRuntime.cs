@@ -42,6 +42,7 @@ internal sealed class AgentRuntime
     private string _lastAction = "-";
     private string _lastThought = "-";
     private string? _dualStatus;
+    private DualLaunchOutcome _dualLaunchOutcome = DualLaunchOutcome.Idle;
     private string? _mcpStatus;
     private LlmUsage _sessionUsage = LlmUsage.Empty;
     private int _sessionRequests;
@@ -223,6 +224,7 @@ internal sealed class AgentRuntime
     }
 
     public string DualStatus => _dualStatus ?? Loc.T("尚未启动双开。");
+    public DualLaunchOutcome DualLaunchOutcome => _dualLaunchOutcome;
     public bool DualLaunching => _dualLaunching;
     public bool TeamMessagePending => _teamMessagePending;
     public string TeamStatus => _teamStatus ?? Loc.T("组队后，可以在这里和 AI 队友商量打法。");
@@ -714,6 +716,9 @@ internal sealed class AgentRuntime
     {
         if (!await _dualLaunchGate.WaitAsync(0, cancellationToken))
         {
+            // A concurrent launch already holds the gate. This attempt neither started nor
+            // failed, and the previous outcome must not be reported as this attempt's result.
+            _dualLaunchOutcome = DualLaunchOutcome.InProgress;
             return;
         }
 
@@ -726,6 +731,7 @@ internal sealed class AgentRuntime
             if (_teamMessagePending || _teamControlPending)
             {
                 _dualStatus = Loc.T("请等待当前队伍消息完成，再重新组队。");
+                _dualLaunchOutcome = DualLaunchOutcome.Rejected;
                 return;
             }
             var screen = await new GameBridge().GetScreenAsync(cancellationToken);
@@ -733,6 +739,7 @@ internal sealed class AgentRuntime
             if (error != null)
             {
                 _dualStatus = error;
+                _dualLaunchOutcome = DualLaunchOutcome.Rejected;
                 return;
             }
 
@@ -741,15 +748,19 @@ internal sealed class AgentRuntime
             SaveSettings(settings);
             _dualStatus = Loc.T("正在邀请 AI 队友，等待游戏窗口连接…");
             RaiseChanged();
-            _dualStatus = await DualInstanceCoordinator.HostLocalCoopAsync(cancellationToken);
+            var launchResult = await DualInstanceCoordinator.HostLocalCoopResultAsync(cancellationToken);
+            _dualStatus = launchResult.Message;
+            _dualLaunchOutcome = launchResult.Ok ? DualLaunchOutcome.Succeeded : DualLaunchOutcome.Failed;
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
             _dualStatus = Loc.T("已取消等待队友连接；若队友窗口已打开，请在该窗口确认状态。");
+            _dualLaunchOutcome = DualLaunchOutcome.Canceled;
         }
         catch (Exception ex)
         {
             _dualStatus = Loc.T("邀请队友失败：{0}", ex.Message);
+            _dualLaunchOutcome = DualLaunchOutcome.Failed;
         }
         finally
         {

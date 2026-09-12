@@ -5100,16 +5100,29 @@ internal static class GameActionService
         }
 
         await AgentRuntime.Instance.LaunchDualInstanceAsync(AgentRuntime.Instance.Settings, CancellationToken.None);
-        var message = AgentRuntime.Instance.DualStatus ?? string.Empty;
-        var failed = message.Contains("失败", StringComparison.Ordinal) ||
-                     message.Contains("请先", StringComparison.Ordinal) ||
-                     message.Contains("找不到", StringComparison.Ordinal);
-        if (failed)
+        // Classify on the structured outcome. DualStatus is localized display text, so matching
+        // substrings in it misreports every failure as success in a non-Chinese client.
+        var outcome = AgentRuntime.Instance.DualLaunchOutcome;
+        var message = AgentRuntime.Instance.DualStatus;
+        if (DualLaunchOutcomePolicy.IsInProgress(outcome))
+        {
+            return new ActionResponsePayload
+            {
+                action = "invite_ai_teammate",
+                status = "pending",
+                stable = false,
+                message = message,
+                state = GameStateService.BuildStatePayload()
+            };
+        }
+
+        if (DualLaunchOutcomePolicy.IsFailure(outcome) || outcome == DualLaunchOutcome.Idle)
         {
             throw new ApiException(409, "invite_failed", message, new
             {
                 action = "invite_ai_teammate",
-                screen = GameStateService.BuildStatePayload().screen
+                screen = GameStateService.BuildStatePayload().screen,
+                outcome = outcome.ToString()
             });
         }
 

@@ -1,0 +1,4 @@
+{"file": ".trellis/spec/mod/game-actions.md", "reason": "Action-handler shape, error categories and response semantics the invite handler must keep."}
+{"file": ".trellis/spec/mod/index.md", "reason": "Mod-layer checklist and the offline C# test runner command."}
+{"file": ".trellis/spec/guides/code-reuse-thinking-guide.md", "reason": "Where the new outcome enum/policy belongs relative to the existing CoopLaunchPolicy."}
+{"file": ".trellis/tasks/09-12-launch-outcome-truth/research/launch-outcome-audit.md", "reason": "Every failure string and assignment point the structured outcome must cover."}

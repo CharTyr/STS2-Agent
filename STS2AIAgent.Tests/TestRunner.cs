@@ -400,5 +400,11 @@ internal static class TestRunner
         yield return ("TimelineIndex.OneSpace", () => Task.Run(TimelineIndexContractTests.ExecutorIndexesTheSameSlotListTheStateExposes));
         yield return ("TimelineIndex.NonActionableRejected", () => Task.Run(TimelineIndexContractTests.NonActionableSlotsAreRejectedExplicitly));
         yield return ("TimelineIndex.DescriptorFlags", () => Task.Run(TimelineIndexContractTests.CrystalDescriptorsCarryTheirRequirements));
+        yield return ("DualLaunchOutcome.TruthTable", () => Task.Run(DualLaunchOutcomeTests.EveryOutcomeHasAPinnedClassification));
+        yield return ("DualLaunchOutcome.OnlySuccessCompletes", () => Task.Run(DualLaunchOutcomeTests.OnlyAConfirmedLaunchIsNeitherFailureNorInProgress));
+        yield return ("DualLaunchOutcome.LanguageIndependent", () => Task.Run(DualLaunchOutcomeTests.HandlerClassifiesOnTheOutcomeNotOnDisplayText));
+        yield return ("DualLaunchOutcome.EveryBranchRecords", () => Task.Run(DualLaunchOutcomeTests.EveryLaunchBranchRecordsAnOutcome));
+        yield return ("DualLaunchOutcome.CoordinatorContract", () => Task.Run(DualLaunchOutcomeTests.CoordinatorExposesAStructuredResult));
+        yield return ("DualLaunchOutcome.OfflineCompilable", () => Task.Run(DualLaunchOutcomeTests.TheOutcomeTypeStaysOfflineCompilable));
     }
 }
