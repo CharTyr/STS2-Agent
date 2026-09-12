@@ -35,6 +35,8 @@
 [*]游戏里直接设模型和聊天
 [*]可以一直自动打，也可以一步一步打
 [*]同一台电脑邀请 AI 当队友
+[*]继续上次没打完的联机局：读档后 AI 队友自己连回来
+[*]也可以不让队友自己选角，让它停在选角界面等你来选
 [*]界面跟随游戏语言：中文客户端显示中文，其他语言显示英文
 [*]外部 Agent（Cursor / Claude / Codex）：F8 -> 接入，打开 MCP，复制地址。要用外部 AI 经 MCP 代打，请同时加载配套 skill [url=https://github.com/CharTyr/STS2-Agent/tree/main/skills/sts2-mcp-player]sts2-mcp-player[/url]，效果才接近游戏内自动游玩。只接工具也能点合法动作。不用装 Python。
 [*]不加新牌、不改数值、不动你的存档

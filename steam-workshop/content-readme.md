@@ -17,7 +17,7 @@ After you subscribe, you do not copy any files.
 5. Press **F8** or the **AI** tab on the right.
 6. In Settings, fill in the model web address, the model name, and your key. Ollama / LM Studio on this PC can leave the key empty.
 7. Chat or Play for your own character.
-8. From the **main menu**, open **AI teammate** and invite. The room has 4 seats; you two take two of them.
+8. From the **main menu**, open **AI teammate** and invite. The room has 4 seats; you two take two of them. If you already have a saved co-op run, **Continue AI teammate** loads it and the teammate rejoins.
 9. Optional MCP for Cursor / Claude / Codex: F8 -> **Connect**, copy the address. For best results when an external agent plays over MCP, also load sts2-mcp-player from https://github.com/CharTyr/STS2-Agent/tree/main/skills/sts2-mcp-player . No Python.
 
 If you used to copy this mod into the game folder by hand, delete those files and keep only the Workshop subscription.
@@ -41,6 +41,7 @@ Needs Slay the Spire 2 v0.111.0 or newer.
 - 你在主窗口操作自己的角色。
 - 邀请后会弹出第二窗口。AI 只打它自己那份：自己点开局、跟着你投地图、轮到它时自动出牌。
 - 房间仍是 4 人位。本地 1 人 + 1 AI，还留 2 个位置给线上朋友。
+- 上次没打完的联机局可以接着打：主菜单点「继续 AI 队友」，AI 会连回原来的角色。
 
 ## 怎么开始
 
@@ -53,7 +54,7 @@ Needs Slay the Spire 2 v0.111.0 or newer.
 5. 按 **F8**，或点屏幕右边的 **AI**。
 6. 在设置里填：模型网址、模型名字、Key。电脑上的 Ollama / LM Studio 可以不填 Key。
 7. 用「对话」或「游玩」打你自己这号。
-8. 回到 **主菜单**，打开 **AI 队友** 点邀请。两边选角、Ready 后开局。你打你的，AI 打它的。
+8. 回到 **主菜单**，打开 **AI 队友** 点邀请。两边选角、Ready 后开局。你打你的，AI 打它的。已经有联机存档的话，点「继续 AI 队友」就能接着打。
 9. 要用 Cursor / Claude / Codex 经 MCP 代打：F8 -> **接入**，打开 MCP，复制地址，并加载配套 skill sts2-mcp-player（https://github.com/CharTyr/STS2-Agent/tree/main/skills/sts2-mcp-player）。只接工具也能点动作；要接近游戏内自动游玩，需要这份 skill。不用装 Python。
 
 如果以前手动放过这个 Mod，请删掉那些文件，只保留工坊订阅。
