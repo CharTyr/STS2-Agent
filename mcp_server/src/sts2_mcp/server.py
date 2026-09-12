@@ -114,6 +114,7 @@ _LEGACY_ACTION_TOOLS: tuple[ActionToolSpec, ...] = (
     ActionToolSpec("ready_multiplayer_lobby", "no_args", "Mark the local player ready in the multiplayer lobby."),
     ActionToolSpec("disconnect_multiplayer_lobby", "no_args", "Leave the multiplayer lobby."),
     ActionToolSpec("invite_ai_teammate", "no_args", "Invite the AI teammate and launch the companion instance."),
+    ActionToolSpec("continue_ai_teammate", "no_args", "Continue the saved multiplayer run from the main menu and relaunch the AI teammate to rejoin it."),
 
 )
 

@@ -433,6 +433,11 @@ internal static class TestRunner
         yield return ("HttpServerPort.FallbackGate", () => Task.Run(HttpServerPortPolicyTests.FallbackPolicyGateIsPresent));
         yield return ("DeckSelectionAvailability.MatchesExecutableSet", () => Task.Run(DeckSelectionAvailabilityTests.AvailabilityMatchesTheExecutableSet));
         yield return ("DeckSelectionAvailability.ExecutorKeepsGuard", () => Task.Run(DeckSelectionAvailabilityTests.ExecutorKeepsItsGuard));
+        yield return ("ContinueCoop.Advertised", () => Task.Run(ContinueCoopContractTests.ActionIsAdvertisedBehindTheSaveProbe));
+        yield return ("ContinueCoop.ExecutorGuard", () => Task.Run(ContinueCoopContractTests.ExecutorRechecksTheProbeAndFailsRetryably));
+        yield return ("ContinueCoop.LoadScreenSurface", () => Task.Run(ContinueCoopContractTests.LoadScreenAdvertisesOnlyWhatTheExecutorHandles));
+        yield return ("ContinueCoop.LoadEmbarkWait", () => Task.Run(ContinueCoopContractTests.LoadEmbarkWaitIsBoundedAndSettlesOnEveryExit));
+        yield return ("ContinueCoop.LoadCancellation", () => Task.Run(ContinueCoopContractTests.StartLocalLoadWaitsHonourTheCoordinatorToken));
         yield return ("AgentErrorEnvelope.ApiExceptionKeepsItsHttpMetadata", () => Task.Run(AgentErrorEnvelopeTests.ApiExceptionKeepsItsHttpMetadata));
         yield return ("AgentErrorEnvelope.ApiExceptionDefaultsArePreserved", () => Task.Run(AgentErrorEnvelopeTests.ApiExceptionDefaultsArePreserved));
         yield return ("AgentErrorEnvelope.UnexpectedFailureIsClassifiedNotDropped", () => Task.Run(AgentErrorEnvelopeTests.UnexpectedFailureIsClassifiedNotDropped));

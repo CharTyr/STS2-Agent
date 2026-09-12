@@ -170,6 +170,12 @@ internal static class CoopLaunchPolicy
             return null;
         }
 
+        if (string.Equals(screen, "MULTIPLAYER_LOAD", StringComparison.OrdinalIgnoreCase))
+        {
+            if (Contains(actions, "embark")) return "embark";
+            return null;
+        }
+
         if (string.Equals(screen, "CHARACTER_SELECT", StringComparison.OrdinalIgnoreCase))
         {
             if (Contains(actions, "embark")) return "embark";

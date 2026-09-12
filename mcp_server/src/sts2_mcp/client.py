@@ -390,6 +390,15 @@ class Sts2Client:
             },
         )
 
+    def continue_ai_teammate(self) -> dict[str, Any]:
+        return self.execute_action(
+            "continue_ai_teammate",
+            client_context={
+                "source": "mcp",
+                "tool_name": "continue_ai_teammate",
+            },
+        )
+
     def choose_timeline_epoch(self, option_index: int) -> dict[str, Any]:
         return self.execute_action(
             "choose_timeline_epoch",

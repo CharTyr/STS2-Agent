@@ -26,7 +26,7 @@ internal sealed class CurrentRunBoundary
     public void Check(string? screen, string? phase, string? seed)
     {
         if (_enteredRun && (
-            screen is "MAIN_MENU" or "CHARACTER_SELECT" or "MULTIPLAYER_LOBBY" ||
+            screen is "MAIN_MENU" or "CHARACTER_SELECT" or "MULTIPLAYER_LOBBY" or "MULTIPLAYER_LOAD" ||
             phase is "character_select" or "multiplayer_lobby" or "menu"))
         {
             throw new AutoPlayStoppedException(Loc.T(LeftRunMessage), StopKindPolicy.RunEnd);

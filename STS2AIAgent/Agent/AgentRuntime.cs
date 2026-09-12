@@ -520,7 +520,12 @@ internal sealed class AgentRuntime
 
     public Task LaunchDualInstanceAsync(AgentSettings settings, CancellationToken cancellationToken)
     {
-        return Task.Run(() => LaunchDualInstanceCoreAsync(settings, cancellationToken), cancellationToken);
+        return Task.Run(() => LaunchDualInstanceCoreAsync(settings, cancellationToken, continueRun: false), cancellationToken);
+    }
+
+    public Task ContinueDualInstanceAsync(AgentSettings settings, CancellationToken cancellationToken)
+    {
+        return Task.Run(() => LaunchDualInstanceCoreAsync(settings, cancellationToken, continueRun: true), cancellationToken);
     }
 
     public void ClearChat()
@@ -712,7 +717,7 @@ internal sealed class AgentRuntime
         }
     }
 
-    private async Task LaunchDualInstanceCoreAsync(AgentSettings settings, CancellationToken cancellationToken)
+    private async Task LaunchDualInstanceCoreAsync(AgentSettings settings, CancellationToken cancellationToken, bool continueRun)
     {
         if (!await _dualLaunchGate.WaitAsync(0, cancellationToken))
         {
@@ -746,9 +751,13 @@ internal sealed class AgentRuntime
             // The child reads settings at startup. Persist the edited model
             // selection before launching so both windows use the same choices.
             SaveSettings(settings);
-            _dualStatus = Loc.T("正在邀请 AI 队友，等待游戏窗口连接…");
+            _dualStatus = continueRun
+                ? Loc.T("正在继续联机存档，等待队友窗口连回…")
+                : Loc.T("正在邀请 AI 队友，等待游戏窗口连接…");
             RaiseChanged();
-            var launchResult = await DualInstanceCoordinator.HostLocalCoopResultAsync(cancellationToken);
+            var launchResult = continueRun
+                ? await DualInstanceCoordinator.ContinueLocalCoopResultAsync(cancellationToken)
+                : await DualInstanceCoordinator.HostLocalCoopResultAsync(cancellationToken);
             _dualStatus = launchResult.Message;
             _dualLaunchOutcome = launchResult.Ok ? DualLaunchOutcome.Succeeded : DualLaunchOutcome.Failed;
         }
@@ -759,7 +768,9 @@ internal sealed class AgentRuntime
         }
         catch (Exception ex)
         {
-            _dualStatus = Loc.T("邀请队友失败：{0}", ex.Message);
+            _dualStatus = continueRun
+                ? Loc.T("继续联机存档失败：{0}", ex.Message)
+                : Loc.T("邀请队友失败：{0}", ex.Message);
             _dualLaunchOutcome = DualLaunchOutcome.Failed;
         }
         finally

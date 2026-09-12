@@ -187,6 +187,7 @@ internal static class GameActionService
             "dismiss_modal" => ExecuteDismissModalAsync(),
             "return_to_main_menu" => ExecuteReturnToMainMenuAsync(),
             "invite_ai_teammate" => ExecuteInviteAiTeammateAsync(),
+            "continue_ai_teammate" => ExecuteContinueAiTeammateAsync(),
             _ => throw new ApiException(409, "invalid_action", "Action is not supported yet.", new
             {
                 action = request.action
@@ -4400,6 +4401,30 @@ internal static class GameActionService
         var currentScreen = ActiveScreenContext.Instance.GetCurrentScreen();
         var screen = GameStateService.ResolveScreen(currentScreen);
 
+        if (GameStateService.CanEmbark(currentScreen) && currentScreen is NMultiplayerLoadGameScreen loadScreen)
+        {
+            var loadEmbark = GameStateService.GetCharacterEmbarkButton(currentScreen)
+                ?? throw new ApiException(503, "state_unavailable", "Embark button is unavailable.", new
+                {
+                    action = "embark",
+                    screen
+                }, retryable: true);
+
+            loadEmbark.ForceClick();
+            var loadStable = await WaitForLoadEmbarkTransitionAsync(loadScreen, TimeSpan.FromSeconds(10));
+
+            return new ActionResponsePayload
+            {
+                action = "embark",
+                status = loadStable ? "completed" : "pending",
+                stable = loadStable,
+                message = loadStable
+                    ? "Action completed."
+                    : MenuTransitionPolicy.DescribeUnsettled("embark", CurrentModalName()),
+                state = GameStateService.BuildStatePayload()
+            };
+        }
+
         if (!GameStateService.CanEmbark(currentScreen) || currentScreen is not NCharacterSelectScreen characterSelectScreen)
         {
             throw new ApiException(409, "invalid_action", "Action is not available in the current state.", new
@@ -5153,6 +5178,117 @@ internal static class GameActionService
         return await ExecuteModalButtonAsync("dismiss_modal", GameStateService.GetModalCancelButton);
     }
 
+    /// <summary>
+    /// Host side: reload the saved multiplayer run over local ENet (fastmp host_standard) and launch the companion so it rejoins as its saved player.
+    /// </summary>
+    private static async Task<ActionResponsePayload> ExecuteContinueAiTeammateAsync()
+    {
+        var payload = GameStateService.BuildStatePayload();
+        var error = CoopLaunchPolicy.GetError(
+            InstanceRole.IsCompanion,
+            AgentRuntime.Instance.PlayRunning,
+            payload.screen,
+            AgentRuntime.Instance.Settings);
+        if (error != null)
+        {
+            throw new ApiException(409, "invalid_action", error, new
+            {
+                action = "continue_ai_teammate",
+                screen = payload.screen
+            });
+        }
+
+        if (!GameStateService.CanContinueAiTeammate(ActiveScreenContext.Instance.GetCurrentScreen()))
+        {
+            throw new ApiException(409, "invalid_action", "No saved multiplayer run to continue.", new
+            {
+                action = "continue_ai_teammate",
+                screen = payload.screen
+            });
+        }
+
+        await AgentRuntime.Instance.ContinueDualInstanceAsync(AgentRuntime.Instance.Settings, CancellationToken.None);
+        // Same classification as invite_ai_teammate: read the structured outcome, never the localized text.
+        var outcome = AgentRuntime.Instance.DualLaunchOutcome;
+        var message = AgentRuntime.Instance.DualStatus;
+        if (DualLaunchOutcomePolicy.IsInProgress(outcome))
+        {
+            return new ActionResponsePayload
+            {
+                action = "continue_ai_teammate",
+                status = "pending",
+                stable = false,
+                message = message,
+                state = GameStateService.BuildStatePayload()
+            };
+        }
+
+        if (DualLaunchOutcomePolicy.IsFailure(outcome) || outcome == DualLaunchOutcome.Idle)
+        {
+            // Retryable: the usual cause is port 33771 still held by the previous run in this process,
+            // which a game restart clears.
+            throw new ApiException(409, "continue_failed", message, new
+            {
+                action = "continue_ai_teammate",
+                screen = GameStateService.BuildStatePayload().screen,
+                outcome = outcome.ToString()
+            }, retryable: true);
+        }
+
+        return new ActionResponsePayload
+        {
+            action = "continue_ai_teammate",
+            status = "completed",
+            stable = true,
+            message = message,
+            state = GameStateService.BuildStatePayload()
+        };
+    }
+
+    /// <summary>
+    /// Opens the multiplayer submenu and presses its private "load run" button. With fastmp injected the game hosts the saved run on ENet:33771.
+    /// </summary>
+    internal static async Task<bool> StartLocalLoadAsync(CancellationToken cancellationToken = default)
+    {
+        var currentScreen = ActiveScreenContext.Instance.GetCurrentScreen();
+        if (currentScreen is not NMainMenu mainMenu)
+        {
+            throw new InvalidOperationException(Loc.T("请先回到主菜单，再继续联机对局。"));
+        }
+
+        var submenu = mainMenu.SubmenuStack.GetSubmenuType<NMultiplayerSubmenu>();
+        if (submenu == null)
+        {
+            mainMenu.Call("OpenMultiplayerSubmenu");
+            await WaitForMainMenuSubmenuOpenAsync<NMultiplayerSubmenu>(mainMenu, TimeSpan.FromSeconds(5), cancellationToken);
+            submenu = mainMenu.SubmenuStack.GetSubmenuType<NMultiplayerSubmenu>()
+                ?? throw new InvalidOperationException(Loc.T("找不到多人子菜单。"));
+        }
+        else
+        {
+            mainMenu.SubmenuStack.Push(submenu);
+            await WaitForMainMenuSubmenuOpenAsync<NMultiplayerSubmenu>(mainMenu, TimeSpan.FromSeconds(5), cancellationToken);
+        }
+
+        const BindingFlags flags = BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic;
+        var startLoad = typeof(NMultiplayerSubmenu).GetMethod("StartLoad", flags)
+            ?? throw new InvalidOperationException(Loc.T("找不到读档方法 StartLoad。"));
+        startLoad.Invoke(submenu, new object?[] { null });
+
+        var opened = await WaitForMainMenuSubmenuOpenAsync<NMultiplayerLoadGameScreen>(mainMenu, TimeSpan.FromSeconds(10), cancellationToken);
+        if (!opened)
+        {
+            var modal = GameStateService.GetOpenModal();
+            if (modal != null)
+            {
+                throw new InvalidOperationException(Loc.T("读档开房失败（多半是本地直连端口 33771 还被上一局占着）：重启游戏后再试。"));
+            }
+            throw new TimeoutException(Loc.T("读档后没有进入多人读档界面。"));
+        }
+
+        return true;
+    }
+
     private static async Task<ActionResponsePayload> ExecuteInviteAiTeammateAsync()
     {
         var payload = GameStateService.BuildStatePayload();
@@ -5690,12 +5826,13 @@ internal static class GameActionService
         return false;
     }
 
-    private static async Task<bool> WaitForMainMenuSubmenuOpenAsync<TSubmenu>(NMainMenu screen, TimeSpan timeout)
+    private static async Task<bool> WaitForMainMenuSubmenuOpenAsync<TSubmenu>(NMainMenu screen, TimeSpan timeout, CancellationToken cancellationToken = default)
         where TSubmenu : NSubmenu
     {
         var deadline = DateTime.UtcNow + timeout;
         while (DateTime.UtcNow < deadline)
         {
+            cancellationToken.ThrowIfCancellationRequested();
             await WaitForNextFrameAsync();
 
             var currentScreen = ActiveScreenContext.Instance.GetCurrentScreen();
@@ -5928,6 +6065,37 @@ internal static class GameActionService
 
         return GodotObject.IsInstanceValid(screen) &&
             screen.Lobby.LocalPlayer.character.Id.Entry == currentCharacterId;
+    }
+
+    /// <summary>
+    /// The load screen disables its Embark button the moment the local player is marked ready and
+    /// swaps it for Unready; leaving the screen (run started, modal, menu torn down) also counts.
+    /// </summary>
+    private static async Task<bool> WaitForLoadEmbarkTransitionAsync(NMultiplayerLoadGameScreen screen, TimeSpan timeout)
+    {
+        var deadline = DateTime.UtcNow + timeout;
+        while (DateTime.UtcNow < deadline)
+        {
+            await WaitForNextFrameAsync();
+
+            if (IsLoadEmbarkSettled(screen))
+            {
+                return true;
+            }
+        }
+
+        return IsLoadEmbarkSettled(screen);
+    }
+
+    private static bool IsLoadEmbarkSettled(NMultiplayerLoadGameScreen screen)
+    {
+        var currentScreen = ActiveScreenContext.Instance.GetCurrentScreen();
+        if (!ReferenceEquals(currentScreen, screen) || !GodotObject.IsInstanceValid(screen))
+        {
+            return true;
+        }
+
+        return GameStateService.GetOpenModal() != null || !GameStateService.CanEmbark(currentScreen);
     }
 
     private static async Task<bool> WaitForEmbarkTransitionAsync(NCharacterSelectScreen screen, TimeSpan timeout)

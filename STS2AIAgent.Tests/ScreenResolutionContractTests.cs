@@ -24,6 +24,7 @@ internal static class ScreenResolutionContractTests
         ("NCombatRoom", "COMBAT"),
         ("NMapScreen or NMapRoom", "MAP"),
         ("NCharacterSelectScreen", "CHARACTER_SELECT"),
+        ("NMultiplayerLoadGameScreen", "MULTIPLAYER_LOAD"),
         ("NChooseABundleSelectionScreen", "BUNDLE_SELECTION"),
         ("NCapstoneSubmenuStack", "CAPSTONE_SELECTION"),
         ("NCrystalSphereScreen", "CRYSTAL_SPHERE"),
@@ -52,7 +53,7 @@ internal static class ScreenResolutionContractTests
             Assert.Equal(screenName, resolved);
         }
 
-        // The five new names are the exact strings the sibling skill/documentation tasks publish.
+        // These names are the exact strings the sibling skill/documentation tasks publish.
         Assert.Equal("FAKE_MERCHANT", actual["NFakeMerchant"]);
         Assert.Equal("PATCH_NOTES", actual["NPatchNotesScreen"]);
         Assert.Equal("CARD_INSPECT", actual["NInspectCardScreen"]);

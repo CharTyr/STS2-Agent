@@ -18,6 +18,7 @@ internal static class CurrentRunBoundaryTests
         var boundary = new CurrentRunBoundary();
         boundary.Check(State("CHARACTER_SELECT", "character_select"));
         boundary.Check(State("MULTIPLAYER_LOBBY", "multiplayer_lobby"));
+        boundary.Check(State("MULTIPLAYER_LOAD", "menu"));
     }
 
     public static void StopsWhenLeavingRunToMainMenu()

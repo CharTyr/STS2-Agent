@@ -61,6 +61,7 @@
 | `companion_session_required` | 403 | 需要有效的 AI 队友会话令牌（见下） | 否 |
 | `companion_not_ready` | 409 | 队友实例尚未就绪，无法响应控制 | 是 |
 | `invite_failed` | 409 | 邀请 AI 队友失败（主菜单状态或配置不满足） | 是 |
+| `continue_failed` | 409 | 读档开房流程启动后失败（读档界面没打开，或本地直连端口 33771 仍被上一局占用，重启游戏后可重试）；前置条件不满足（不在主菜单、没有联机存档、模型未验证）仍返回 `invalid_action` | 是 |
 | `collection_not_found` | 404 | `GET /data/{collection}` 的集合名不存在 | 否 |
 | `export_error` | 500 | 游戏元数据导出失败 | 是 |
 | `origin_not_allowed` | 403 | 原生 MCP 请求的 `Origin` 不受信任 | 否 |
@@ -74,6 +75,7 @@
 | `MAIN_MENU` | 主菜单、补丁说明、子菜单、Logo 动画 |
 | `CHARACTER_SELECT` | 角色选择界面 |
 | `MULTIPLAYER_LOBBY` | 多人联机房间界面（`host_multiplayer_lobby` / `join_multiplayer_lobby` / `ready_multiplayer_lobby` / `disconnect_multiplayer_lobby`） |
+| `MULTIPLAYER_LOAD` | 多人读档界面（`continue_ai_teammate` 读入联机存档后、各玩家 `embark` 之前） |
 | `BUNDLE_SELECTION` | 开局卡包选择界面（用 `choose_bundle` / `confirm_bundle`） |
 | `CAPSTONE_SELECTION` | Capstone 选项界面（用 `choose_capstone_option`） |
 | `MAP` | 地图界面 |
@@ -1082,6 +1084,7 @@ compact 里的位置与 `/state` 不同，但同名同源、同为新增键；`/
 - `dismiss_modal` — 关闭阻塞弹窗
 - `return_to_main_menu` — 返回主菜单
 - `invite_ai_teammate` — 邀请 AI 队友
+- `continue_ai_teammate` — 继续上次的联机存档并重新拉起 AI 队友（仅主机主菜单且存在联机存档时出现在 `available_actions`；读档流程失败返回 `continue_failed`）
 <!-- END ACTION CONTRACT -->
 
 ### 请求体
@@ -1782,6 +1785,7 @@ Invoke-RestMethod -Uri 'http://127.0.0.1:8080/data/cards' | ConvertTo-Json -Dept
 | 查看浮层 | `CARD_INSPECT` / `RELIC_INSPECT`；用 `close_cards_view` 关闭 | 已实现，待实机验证 |
 | 假商人事件商店 | `FAKE_MERCHANT`；`open_shop_inventory` 可打开 | 已实现，待实机验证 |
 | 角色选择 | `character_select` / `select_character` / `embark` | 已实现，待实机验证 |
+| 继续联机存档 | `MULTIPLAYER_LOAD` / `continue_ai_teammate` / `embark` | 已实现，2026-09-12 本地双实例实测通过 |
 | 药水系统 | `run.potions[*].can_use` / `use_potion` / `discard_potion` | 已实现，待实机验证 |
 | 阻塞弹窗 | `modal` / `confirm_modal` / `dismiss_modal` | 已实现，待实机验证 |
 | 游戏结束 | `game_over` / `return_to_main_menu` | 已实现，待实机验证 |
