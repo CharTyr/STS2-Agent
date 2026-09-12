@@ -8,7 +8,7 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-1.md`
-- **Total Sessions**: 8
+- **Total Sessions**: 9
 - **Last Active**: 2026-09-12
 <!-- @@@/auto:current-status -->
 
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-1.md` | ~253 | Active |
+| `journal-1.md` | ~300 | Active |
 <!-- @@@/auto:active-documents -->
 
 ---
@@ -29,6 +29,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 9 | 2026-09-12 | Close seven audit gaps and harden the offline test floor | `206a0e8`, `adcb49b`, `f57cb04`, `c08d764`, `92f67a2`, `52bafd0`, `26da6bc`, `e373c90` | `main` |
 | 8 | 2026-09-12 | Reward skip scope: bind the skip intent to the reward set that recorded it | `fa7ffbe` | `main` |
 | 7 | 2026-09-12 | Reward choice threading: remove the cross-request static card choice | `abc195f` | `main` |
 | 6 | 2026-09-12 | Agent trust hardening: 5 goals from the 2026-09-12 audit | `3f55a3f` | `main` |

@@ -251,3 +251,50 @@ Second follow-up to the action-trust work, chosen by the user as option B. The c
 ### Status
 
 [OK] **Completed**
+
+
+## Session 9: Close seven audit gaps and harden the offline test floor
+
+**Date**: 2026-09-12
+**Task**: Close seven audit gaps and harden the offline test floor
+**Branch**: `main`
+
+### Summary
+
+Eight tasks from the residual audit: invite_ai_teammate now classifies on a structured DualLaunchOutcome instead of Chinese substrings, three menu waits stop treating a destroyed node as proof of success, the scene field sets match the real export schema, the dead client.py block is gone, the knowledge root no longer guesses outside a checkout, and the previously untested ApiException/JsonHelper/HttpServer-policy/network_server/knowledge/handoff surfaces have tests.
+
+### Main Changes
+
+- AgentRuntime records a per-branch DualLaunchOutcome; the invite handler maps it to completed/pending/409 invite_failed (was: substring match on localized text)
+- MenuTransitionPolicy gains IsSubmenuObserved/IsFlagObserved; select_deck_card, confirm_timeline_overlay, crystal_set_tool and run_console_command stop reporting optimistic success
+- GameDataFilter scene fields corrected against a new GameDataExportSchema constant, pinned by a bidirectional drift test
+- knowledge.py stops guessing the repo root (parents[3]) and degrades reference_files to an empty list outside a checkout
+- Removed an unreachable execute_action block in client.py; added an AST guard for all 55 per-action methods
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `206a0e8` | (see git log) |
+| `adcb49b` | (see git log) |
+| `f57cb04` | (see git log) |
+| `c08d764` | (see git log) |
+| `92f67a2` | (see git log) |
+| `52bafd0` | (see git log) |
+| `26da6bc` | (see git log) |
+| `e373c90` | (see git log) |
+
+### Testing
+
+- [OK] C# offline runner: 311 PASS / 0 FAIL (was 290); each of the eight commits re-verified in a detached worktree (296/300/303/311)
+- [OK] MCP unittest: 159 OK (was 76); stage commits verified at 82/121/156/159
+- [OK] check_verification_gates.py, check_release_package.py --source-root ., preflight-release.ps1 all pass
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- Residual small issues: zero-reference scripts, mcp_server/data/eng packaging, select_deck_card availability asymmetry, crystal_clear_cell doc gap
+- Decide whether to push the 26 commits and whether to tag v0.10.7
