@@ -29,17 +29,17 @@
 
 ## 验收标准
 
-- [ ] `test-main-menu-active-run.ps1` 与 python 版对活动存档主菜单的 timeline 结论一致
+- [x] `test-main-menu-active-run.ps1` 与 python 版对活动存档主菜单的 timeline 结论一致
       （两边都不断言 `open_timeline` 必可用），并保留 `open_timeline_available` 这类诊断输出。
-- [ ] `choose_timeline_epoch` 的 index 取自 state 的 `timeline.slots[].index` 中 `is_actionable`
+- [x] `choose_timeline_epoch` 的 index 取自 state 的 `timeline.slots[].index` 中 `is_actionable`
       的第一个槽，不再写死；脚本里留注释指向 `TimelineIndexContractTests`。
-- [ ] `test-multiplayer-lobby-flow.ps1` 的屏幕 switch 覆盖正常推图会遇到的屏幕
+- [x] `test-multiplayer-lobby-flow.ps1` 的屏幕 switch 覆盖正常推图会遇到的屏幕
       （至少 `CAPSTONE_SELECTION`、`UNLOCK`），兜底错误带屏幕名与可用动作。
-- [ ] python 侧把会在正常流程出现的屏幕补上处理或显式说明（写进脚本注释）；
+- [x] python 侧把会在正常流程出现的屏幕补上处理或显式说明（写进脚本注释）；
       最终"哪个屏幕由哪条流程消费"的清单写进 evidence。
-- [ ] PowerShell 脚本含非 ASCII 时保持 UTF-8 BOM（`script-encoding` gate），
+- [x] PowerShell 脚本含非 ASCII 时保持 UTF-8 BOM（`script-encoding` gate），
       `python -m py_compile` 通过，全量门禁绿。
-- [ ] C# / MCP 全量测试、gates、preflight 通过。
+- [x] C# / MCP 全量测试、gates、preflight 通过。
 
 ## 范围外
 
