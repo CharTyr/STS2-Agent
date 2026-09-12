@@ -1,0 +1,2 @@
+{"file": ".trellis/spec/mcp/contracts-and-tests.md", "reason": "Verify the deepened assertions actually compare parameters and branch coverage, not just names."}
+{"file": ".trellis/spec/mcp/index.md", "reason": "Re-run the MCP test suite and the verification gates."}

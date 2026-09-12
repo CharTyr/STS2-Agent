@@ -1,0 +1,2 @@
+{"file": ".trellis/spec/mcp/contracts-and-tests.md", "reason": "The alignment contract between C# actions, native MCP tools and Python tools."}
+{"file": ".trellis/spec/mcp/index.md", "reason": "MCP test conventions and the gate command to re-run."}
