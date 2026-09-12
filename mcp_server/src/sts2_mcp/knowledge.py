@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 import os
 import re
 from collections import Counter
@@ -9,17 +10,23 @@ from pathlib import Path
 from typing import Any
 
 
-def _repo_root() -> Path:
+def _repo_root(start: Path | None = None) -> Path | None:
+    """Return the repository checkout root, or ``None`` when it cannot be known.
+
+    A wheel/pipx install lives under ``site-packages`` and has no checkout to
+    walk up to, so callers must handle an unknown root instead of guessing one
+    (a guess used to land the knowledge root inside the interpreter install).
+    """
     configured = os.getenv("STS2_AGENT_REPO_ROOT", "").strip()
     if configured:
         return Path(configured).expanduser().resolve()
 
-    current = Path(__file__).resolve()
-    for parent in current.parents:
+    origin = Path(start) if start is not None else Path(__file__)
+    for parent in origin.resolve().parents:
         if (parent / "mcp_server" / "pyproject.toml").is_file():
             return parent
 
-    return current.parents[3]
+    return None
 
 
 def _default_knowledge_root() -> Path:
@@ -27,7 +34,26 @@ def _default_knowledge_root() -> Path:
     if configured:
         return Path(configured).expanduser().resolve()
 
-    return _repo_root() / "agent_knowledge"
+    repo_root = _repo_root()
+    if repo_root is not None:
+        return repo_root / "agent_knowledge"
+
+    fallback = (Path.cwd() / "agent_knowledge").resolve()
+    logging.getLogger(__name__).warning(
+        "STS2 knowledge root is not inside a repository checkout; using %s. "
+        "Set STS2_AGENT_KNOWLEDGE_DIR to pin a writable location.",
+        fallback,
+    )
+    return fallback
+
+
+def _reference_files(relative_paths: dict[str, str]) -> dict[str, str] | list[Any]:
+    """Resolve knowledge reference files, or an empty list outside a checkout."""
+    repo_root = _repo_root()
+    if repo_root is None:
+        return []
+
+    return {name: str(repo_root / relative) for name, relative in relative_paths.items()}
 
 
 def _utc_timestamp() -> str:
@@ -187,6 +213,9 @@ def _append_section_line(content: str, heading: str, line: str) -> str:
     section_end = section_start + next_section_match.start() if next_section_match else len(content)
 
     existing = content[section_start:section_end].rstrip("\n")
+    if f"- {line}" in existing.splitlines():
+        return content
+
     updated_section = f"{existing}\n- {line}\n" if existing else f"- {line}\n"
     return content[:section_start] + updated_section + content[section_end:].lstrip("\n")
 
@@ -331,12 +360,14 @@ class Sts2KnowledgeBase:
             "rest": state.get("rest"),
             "shop": state.get("shop"),
             "event_knowledge": event_entry,
-            "reference_files": {
-                "playbook": str(_repo_root() / "docs" / "game-knowledge" / "playbook.md"),
-                "events": str(_repo_root() / "docs" / "game-knowledge" / "events.md"),
-                "cards": str(_repo_root() / "docs" / "game-knowledge" / "cards.md"),
-                "characters": str(_repo_root() / "docs" / "game-knowledge" / "characters.md"),
-            },
+            "reference_files": _reference_files(
+                {
+                    "playbook": "docs/game-knowledge/playbook.md",
+                    "events": "docs/game-knowledge/events.md",
+                    "cards": "docs/game-knowledge/cards.md",
+                    "characters": "docs/game-knowledge/characters.md",
+                }
+            ),
         }
 
     def build_combat_context(
@@ -363,12 +394,14 @@ class Sts2KnowledgeBase:
                 **entry.to_payload(),
                 "content": entry.content if include_knowledge else "",
             },
-            "reference_files": {
-                "playbook": str(_repo_root() / "docs" / "game-knowledge" / "playbook.md"),
-                "monsters": str(_repo_root() / "docs" / "game-knowledge" / "monsters.md"),
-                "monster_behaviors": str(_repo_root() / "docs" / "game-knowledge" / "monster-behaviors.md"),
-                "potions": str(_repo_root() / "docs" / "game-knowledge" / "potions.md"),
-            },
+            "reference_files": _reference_files(
+                {
+                    "playbook": "docs/game-knowledge/playbook.md",
+                    "monsters": "docs/game-knowledge/monsters.md",
+                    "monster_behaviors": "docs/game-knowledge/monster-behaviors.md",
+                    "potions": "docs/game-knowledge/potions.md",
+                }
+            ),
         }
 
     def append_combat_note(self, state: dict[str, Any], note: str, section: str = "observations") -> dict[str, Any]:

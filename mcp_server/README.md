@@ -176,8 +176,12 @@ Modal：
 
 - `STS2_API_BASE_URL`
   - 默认：`http://127.0.0.1:8080`
+- `STS2_AGENT_REPO_ROOT`
+  - 默认：自动探测（从 `sts2_mcp` 包位置向上查找含 `mcp_server/pyproject.toml` 的目录）
+  - 作用：定位仓库根，进而定位默认知识库与 `reference_files` 里的 `docs/game-knowledge/*.md`
+  - wheel / pipx 安装态探测不到仓库根时不再猜测路径，`reference_files` 会返回空列表
 - `STS2_AGENT_KNOWLEDGE_DIR`
-  - 默认：仓库根目录下的 `agent_knowledge/`
+  - 默认：仓库根目录下的 `agent_knowledge/`；不在仓库检出内时回退到当前工作目录的 `agent_knowledge/`，并打一条 WARNING 日志（不会写进 Python 安装目录）
   - 作用：保存 combat / event 的运行时知识文件
 - `STS2_API_READ_TIMEOUT`
   - 默认：`10`（秒）
@@ -216,6 +220,7 @@ agent_knowledge/
 - 事件文件按 `event_id` 命名
 - 当前还没有 chapter 字段时，目录先落在 `global/`
 - 追加内容时会自动带上 `run_id`、`floor`、`screen`、UTC 时间戳
+- 不在仓库检出内时（wheel / pipx 安装态）不再猜测路径：知识库落到当前工作目录的 `agent_knowledge/`，并用 `STS2_AGENT_KNOWLEDGE_DIR` 可固定到指定位置
 
 ## 主 / 副 Agent 交接
 
