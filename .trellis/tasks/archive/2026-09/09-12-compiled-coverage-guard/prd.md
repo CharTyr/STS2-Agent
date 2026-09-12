@@ -36,12 +36,12 @@ CI 对每个 tracked `.cs` 至少做一次语法解析；新文件不能同时�
 
 ## 验收标准
 
-- [ ] `STS2AIAgent.Tests.csproj` 引用 SDK 自带 Roslyn（零 NuGet），干净机器 `dotnet run` 可用。
-- [ ] 新增语法测试：对 `AgentSourceFixture.SourceFiles()` 的每个文件
+- [x] `STS2AIAgent.Tests.csproj` 引用 SDK 自带 Roslyn（零 NuGet），干净机器 `dotnet run` 可用。
+- [x] 新增语法测试：对 `AgentSourceFixture.SourceFiles()` 的每个文件
       `CSharpSyntaxTree.ParseText(...)` 断言 0 error；可否证（给任一未编译文件注入语法错误 → 红 → 还原）。
-- [ ] `AgentSourceFixture.SourceFiles()` 过滤 `obj/` 与 `bin/`（否则本地会多出生成文件）。
-- [ ] 覆盖面断言：csproj 未编译的文件集合 == 显式白名单（上表 16 个）；新增未注册文件时测试红。
-- [ ] 全量 C# 测试 / gates / preflight 绿。
+- [x] `AgentSourceFixture.SourceFiles()` 过滤 `obj/` 与 `bin/`（否则本地会多出生成文件）。
+- [x] 覆盖面断言：csproj 未编译的文件集合 == 显式白名单（上表 16 个）；新增未注册文件时测试红。
+- [x] 全量 C# 测试 / gates / preflight 绿。
 
 ## 范围外
 
