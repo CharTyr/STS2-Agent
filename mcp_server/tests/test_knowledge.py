@@ -21,6 +21,18 @@ from sts2_mcp.knowledge import (
 KNOWLEDGE_ENV_KEYS = ("STS2_AGENT_REPO_ROOT", "STS2_AGENT_KNOWLEDGE_DIR")
 
 
+def canonical(path: str | os.PathLike[str]) -> str:
+    """One spelling for a file path, whatever form the OS handed back.
+
+    Windows can name the same file two ways: the temp root the test builds from
+    tempfile uses the long profile name, while the resolver hands back the 8.3
+    short form of it (on the GitHub runner that is RUNNER~1). Comparing the two
+    spellings fails on a machine where resolving collapses them, so every path
+    comparison here goes through the same normalization.
+    """
+    return os.path.normcase(os.path.realpath(path))
+
+
 def cleared_knowledge_env():
     """Disable both knowledge env overrides without touching the rest of os.environ."""
     return patch.dict(os.environ, {key: "" for key in KNOWLEDGE_ENV_KEYS}, clear=False)
@@ -156,8 +168,14 @@ class ReferenceFileTests(unittest.TestCase):
                 combat = knowledge_base.build_combat_context(combat_state([{"enemy_id": "cultist"}]))
 
             docs = checkout / "docs" / "game-knowledge"
-            self.assertEqual(planner["reference_files"]["playbook"], str(docs / "playbook.md"))
-            self.assertEqual(combat["reference_files"]["monsters"], str(docs / "monsters.md"))
+            self.assertEqual(
+                canonical(planner["reference_files"]["playbook"]),
+                canonical(docs / "playbook.md"),
+            )
+            self.assertEqual(
+                canonical(combat["reference_files"]["monsters"]),
+                canonical(docs / "monsters.md"),
+            )
 
 
 class CombatKeyTests(unittest.TestCase):
