@@ -1,0 +1,2 @@
+{"file": ".trellis/spec/mcp/contracts-and-tests.md", "reason": "How MCP-side tools, actions and payload keys are expected to line up."}
+{"file": ".trellis/spec/mcp/index.md", "reason": "MCP layer test conventions (stdlib unittest, no new deps)."}

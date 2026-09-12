@@ -390,15 +390,6 @@ class Sts2Client:
             },
         )
 
-        return self.execute_action(
-            "choose_timeline_epoch",
-            option_index=option_index,
-            client_context={
-                "source": "mcp",
-                "tool_name": "choose_timeline_epoch",
-            },
-        )
-
     def choose_timeline_epoch(self, option_index: int) -> dict[str, Any]:
         return self.execute_action(
             "choose_timeline_epoch",

@@ -1,0 +1,2 @@
+{"file": ".trellis/spec/mcp/contracts-and-tests.md", "reason": "Verify every per-action method posts exactly one action with the right payload keys."}
+{"file": ".trellis/spec/mcp/index.md", "reason": "Confirm the new test file follows discovery/dependency rules."}
