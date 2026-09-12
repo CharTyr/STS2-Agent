@@ -1,0 +1,3 @@
+{"file": ".trellis/spec/operations/index.md", "reason": "Verification conventions for the operations layer and the script-encoding rule."}
+{"file": ".trellis/spec/mcp/contracts-and-tests.md", "reason": "Confirm the README binding test is a real two-way check, not a smoke test."}
+{"file": ".trellis/tasks/09-12-contract-drift-gates/research/drift-audit.md", "reason": "Confirm each previously unguarded fact now fails loudly when broken."}

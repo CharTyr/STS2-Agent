@@ -14,6 +14,12 @@ lockfile   Dependency security floors plus manifest/lock agreement. Prevents the
 api-doc    Every action the mod accepts in POST /action must appear in the
            action contract block in docs/api.md, and the block must not list
            actions the code no longer supports.
+api-facts  Facts that docs/api.md states and that code owns must still agree:
+           the documented `mod_version` against mod_manifest.json, the screen
+           enum against the screens GameStateService.ResolveNonModalScreen can
+           emit, and the documented default port against HttpServer.DefaultPort.
+           The action contract only covers action names, so these would
+           otherwise drift silently on the next version bump or screen change.
 doc-marks  Date-stamped validation records must carry a historical marker, and
            archived topic pages must keep their redirect to history/.
 script-encoding
@@ -50,6 +56,30 @@ ROOT_SENTINELS = ("STS2AIAgent/mod_manifest.json", "mcp_server/pyproject.toml")
 
 API_CONTRACT_BEGIN = "<!-- BEGIN ACTION CONTRACT -->"
 API_CONTRACT_END = "<!-- END ACTION CONTRACT -->"
+
+# --- api-facts sources of truth --------------------------------------------
+
+# The health example claims a mod version; docs/api.md itself says the value tracks the
+# mod, so the manifest is the thing it has to agree with.
+MOD_VERSION_PATTERN = re.compile(r'"mod_version"\s*:\s*"([^"]+)"')
+MANIFEST_VERSION_PATH = "STS2AIAgent/mod_manifest.json"
+
+# The "## Screen 枚举" table is the client-facing screen vocabulary.
+SCREEN_SECTION_HEADING = "## Screen 枚举"
+DOC_SCREEN_ROW = re.compile(r"^\|\s*\`([A-Z][A-Z0-9_]*)\`", re.MULTILINE)
+
+# GameStateService.ResolveNonModalScreen is the single producer of these names: early
+# guards `return "X";`, then the switch expression's `=> "X"` arms.
+RESOLVE_SCREEN_SIGNATURE = "private static string ResolveNonModalScreen(IScreenContext? currentScreen)"
+CODE_SCREEN_SWITCH_ARM = re.compile(r'=>\s*"([A-Z][A-Z0-9_]*)"')
+CODE_SCREEN_EARLY_RETURN = re.compile(r'return\s+"([A-Z][A-Z0-9_]*)"')
+# A near-total parse failure (renamed method, rewritten in another style) must fail loudly
+# instead of silently reading as "no screens to check".
+MIN_CODE_SCREENS = 20
+
+CODE_DEFAULT_PORT = re.compile(r"private\s+const\s+int\s+DefaultPort\s*=\s*(\d+)\s*;")
+DOC_DEFAULT_PORT = re.compile(r"默认[^\n]*127\.0\.0\.1:(\d+)")
+HTTP_SERVER_PATH = "STS2AIAgent/Server/HttpServer.cs"
 
 # A date-stamped record inside docs/ is a snapshot, not a statement about today.
 DATED_DOC_PATTERN = re.compile(r"\d{4}-\d{2}-\d{2}")
@@ -355,6 +385,130 @@ def check_api_doc(repo_root: Path) -> list[str]:
     return [f"{len(code)} actions match between GameActionService.cs and docs/api.md"]
 
 
+def slice_section(text: str, heading: str, source: str) -> str:
+    """Return the text between a level-2 heading and the next level-2 heading."""
+    start = text.find(heading)
+    if start < 0:
+        raise GateError(f"{source} no longer contains the '{heading}' section")
+    rest = text[start + len(heading):]
+    following = re.search(r"^## ", rest, re.MULTILINE)
+    return rest[: following.start()] if following else rest
+
+
+def slice_method_body(text: str, signature: str, source: str) -> str:
+    """Return the brace-matched body of a method, so literals elsewhere cannot leak in."""
+    start = text.find(signature)
+    if start < 0:
+        raise GateError(f"{source} no longer declares '{signature}'")
+    opening = text.find("{", start)
+    if opening < 0:
+        raise GateError(f"{source}: '{signature}' has no body brace")
+    depth = 0
+    for index in range(opening, len(text)):
+        character = text[index]
+        if character == "{":
+            depth += 1
+        elif character == "}":
+            depth -= 1
+            if depth == 0:
+                return text[opening:index]
+    raise GateError(f"{source}: '{signature}' body braces never balanced")
+
+
+def parse_code_screens(repo_root: Path) -> set[str]:
+    """Screen names GameStateService.ResolveNonModalScreen can emit."""
+    text = read_text(repo_root, "STS2AIAgent/Game/GameStateService.cs")
+    body = slice_method_body(text, RESOLVE_SCREEN_SIGNATURE, "STS2AIAgent/Game/GameStateService.cs")
+    screens = set(CODE_SCREEN_SWITCH_ARM.findall(body)) | set(CODE_SCREEN_EARLY_RETURN.findall(body))
+    if len(screens) < MIN_CODE_SCREENS:
+        raise GateError(
+            "GameStateService.ResolveNonModalScreen yielded "
+            f"{len(screens)} screen names, below the {MIN_CODE_SCREENS} expected. The extraction "
+            "in check_verification_gates.py no longer matches the method; fix it before trusting "
+            "this gate."
+        )
+    return screens
+
+
+def parse_doc_screens(api_doc: str) -> set[str]:
+    """Screen names declared in the docs/api.md '## Screen 枚举' table."""
+    section = slice_section(api_doc, SCREEN_SECTION_HEADING, "docs/api.md")
+    screens = set(DOC_SCREEN_ROW.findall(section))
+    if not screens:
+        raise GateError(
+            "the docs/api.md '## Screen 枚举' table lists no screens, so the documented screen "
+            "vocabulary cannot be checked."
+        )
+    return screens
+
+
+def check_api_facts(repo_root: Path) -> list[str]:
+    """Documented facts that a code constant owns must still agree with it."""
+    notes: list[str] = []
+
+    manifest = json.loads(read_text(repo_root, MANIFEST_VERSION_PATH))
+    manifest_version = str(manifest.get("version", "")).strip()
+    if not manifest_version:
+        raise GateError(f"{MANIFEST_VERSION_PATH} carries no version to check docs/api.md against")
+
+    api_doc = read_text(repo_root, "docs/api.md")
+
+    documented_versions = MOD_VERSION_PATTERN.findall(api_doc)
+    if not documented_versions:
+        raise GateError(
+            'docs/api.md no longer states a "mod_version" value, so the documented version '
+            "cannot be checked against the manifest."
+        )
+    stale = sorted({value for value in documented_versions if value != manifest_version})
+    if stale:
+        raise GateError(
+            "docs/api.md states mod_version " + ", ".join(stale) + " but " + MANIFEST_VERSION_PATH
+            + " declares " + manifest_version + ". Update the docs/api.md example so it still "
+            "describes the current build."
+        )
+    notes.append(f"docs/api.md mod_version {manifest_version} matches {MANIFEST_VERSION_PATH}")
+
+    code_screens = parse_code_screens(repo_root)
+    doc_screens = parse_doc_screens(api_doc)
+    missing = sorted(code_screens - doc_screens)
+    if missing:
+        raise GateError(
+            "GameStateService.ResolveNonModalScreen can emit screens missing from the docs/api.md "
+            "'## Screen 枚举' table: " + ", ".join(missing) + ". Add them so clients can branch on "
+            "the documented vocabulary."
+        )
+    notes.append(
+        f"{len(code_screens)} screens from GameStateService.ResolveNonModalScreen all appear in "
+        "the docs/api.md enum"
+    )
+    documented_only = sorted(doc_screens - code_screens)
+    if documented_only:
+        notes.append(
+            "documented but not produced by ResolveNonModalScreen (expected for other producers): "
+            + ", ".join(documented_only)
+        )
+
+    port_match = CODE_DEFAULT_PORT.search(read_text(repo_root, HTTP_SERVER_PATH))
+    if not port_match:
+        raise GateError(f"{HTTP_SERVER_PATH} no longer declares 'private const int DefaultPort = ...'")
+    default_port = port_match.group(1)
+    documented_ports = sorted(set(DOC_DEFAULT_PORT.findall(api_doc)))
+    if not documented_ports:
+        raise GateError(
+            "docs/api.md no longer states the default listen port, so it cannot be checked against "
+            f"{HTTP_SERVER_PATH}."
+        )
+    wrong_ports = sorted({port for port in documented_ports if port != default_port})
+    if wrong_ports:
+        raise GateError(
+            "docs/api.md states default port " + ", ".join(wrong_ports) + " but " + HTTP_SERVER_PATH
+            + " declares DefaultPort = " + default_port + ". Update the documented address."
+        )
+    notes.append(f"docs/api.md default port {default_port} matches {HTTP_SERVER_PATH} DefaultPort")
+
+    return notes
+
+
 def check_doc_marks(repo_root: Path) -> list[str]:
     notes: list[str] = []
 
@@ -415,6 +569,7 @@ def check_script_encoding(repo_root: Path) -> list[str]:
 GATES = {
     "lockfile": check_lockfile,
     "api-doc": check_api_doc,
+    "api-facts": check_api_facts,
     "doc-marks": check_doc_marks,
     "script-encoding": check_script_encoding,
 }

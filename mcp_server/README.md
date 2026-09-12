@@ -53,6 +53,11 @@
 - `append_event_knowledge`（layered / full）
 - `complete_event_handoff`（layered / full）
 
+<!-- BEGIN LEGACY ACTION TOOLS -->
+<!-- The bullets below are the full profile's per-action tools. They are bound to
+     _LEGACY_ACTION_TOOLS in src/sts2_mcp/server.py by tests/test_legacy_action_coverage.py,
+     so adding or removing a legacy tool without updating both sides fails the MCP tests. -->
+
 战斗：
 
 - `play_card`
@@ -63,6 +68,7 @@
 房间 / 流程推进：
 
 - `continue_run`
+- `continue_game_over`
 - `abandon_run`
 - `save_and_quit`
 - `open_character_select`
@@ -72,8 +78,15 @@
 - `confirm_timeline_overlay`
 - `select_character`
 - `embark`
+- `unready`
+- `increase_ascension`
+- `decrease_ascension`
+- `switch_profile`
 - `choose_map_node`
 - `proceed`
+- `dismiss_game_over_wait`
+- `confirm_unlock`
+- `close_cards_view`
 - `open_chest`
 - `choose_treasure_relic`
 - `choose_event_option`
@@ -88,6 +101,14 @@
 - `remove_card_at_shop`
 - `return_to_main_menu`
 
+多人 / 组队：
+
+- `host_multiplayer_lobby`
+- `join_multiplayer_lobby`
+- `ready_multiplayer_lobby`
+- `disconnect_multiplayer_lobby`
+- `invite_ai_teammate`
+
 奖励 / 选牌：
 
 - `claim_reward`
@@ -97,6 +118,7 @@
 - `resolve_rewards`
   - 可省略 `option_index`（默认取第一张奖励牌），也可改用向后兼容的 `card_index` 别名
 - `select_deck_card`
+- `confirm_selection`
 - `choose_capstone_option`
 - `choose_bundle`
 - `confirm_bundle`
@@ -105,6 +127,7 @@ Modal：
 
 - `confirm_modal`
 - `dismiss_modal`
+<!-- END LEGACY ACTION TOOLS -->
 
 开发期调试：
 

@@ -1,0 +1,3 @@
+{"file": ".trellis/spec/operations/validation-and-release.md", "reason": "Which gates run where (CI vs preflight) and what the release contract expects."}
+{"file": ".trellis/spec/mcp/contracts-and-tests.md", "reason": "The tool-surface contract the README must match."}
+{"file": ".trellis/tasks/09-12-contract-drift-gates/research/drift-audit.md", "reason": "The exact unguarded facts with file:line and the unguarded-list evidence."}

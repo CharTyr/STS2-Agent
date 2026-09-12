@@ -76,6 +76,11 @@ try {
     $fixtureAction = Join-Path $fixture "STS2AIAgent/Game"
     New-Item -ItemType Directory -Path $fixtureAction -Force | Out-Null
     Copy-Item -LiteralPath (Join-Path $repoRoot "STS2AIAgent/Game/GameActionService.cs") -Destination $fixtureAction
+    Copy-Item -LiteralPath (Join-Path $repoRoot "STS2AIAgent/Game/GameStateService.cs") -Destination $fixtureAction
+
+    $fixtureServerSource = Join-Path $fixture "STS2AIAgent/Server"
+    New-Item -ItemType Directory -Path $fixtureServerSource -Force | Out-Null
+    Copy-Item -LiteralPath (Join-Path $repoRoot "STS2AIAgent/Server/HttpServer.cs") -Destination $fixtureServerSource
 
     $sourceDocs = Join-Path $repoRoot "docs"
     $fixtureDocs = Join-Path $fixture "docs"
@@ -186,6 +191,31 @@ try {
     Write-Utf8 $encodingScript $fixtureBody
     Assert-Case -Name "script-encoding gate rejects non-ASCII without a BOM" -Only "script-encoding"
     Remove-Item -LiteralPath $encodingScript -Force
+
+    # 7. The mod version documented in docs/api.md drifting away from the manifest.
+    $factsDoc = Join-Path $fixtureDocs "api.md"
+    $originalFactsDoc = Read-Utf8 $factsDoc
+    $mutated = $originalFactsDoc -replace '"mod_version": "[^"]+"', '"mod_version": "0.0.1"'
+    if ($mutated -eq $originalFactsDoc) { throw "fixture setup failed: docs/api.md has no mod_version value to rewrite" }
+    Write-Utf8 $factsDoc $mutated
+    Assert-Case -Name "api-facts gate rejects a stale documented mod_version" -Only "api-facts"
+    Write-Utf8 $factsDoc $originalFactsDoc
+
+    # 8. A screen the code can emit but the docs enum no longer lists.
+    $mutated = ($originalFactsDoc -split "\r?\n" | Where-Object { $_ -notmatch ('^\| ' + [char]96 + 'CARDS_VIEW' + [char]96) }) -join [char]10
+    if ($mutated -eq $originalFactsDoc) { throw "fixture setup failed: docs/api.md has no CARDS_VIEW screen row" }
+    Write-Utf8 $factsDoc $mutated
+    Assert-Case -Name "api-facts gate rejects a screen missing from the docs enum" -Only "api-facts"
+    Write-Utf8 $factsDoc $originalFactsDoc
+
+    # 9. The documented default port drifting away from HttpServer.DefaultPort.
+    $httpServer = Join-Path $fixture "STS2AIAgent/Server/HttpServer.cs"
+    $originalHttpServer = Read-Utf8 $httpServer
+    $mutated = $originalHttpServer -replace 'const int DefaultPort = \d+', 'const int DefaultPort = 9999'
+    if ($mutated -eq $originalHttpServer) { throw "fixture setup failed: HttpServer.cs has no DefaultPort constant to rewrite" }
+    Write-Utf8 $httpServer $mutated
+    Assert-Case -Name "api-facts gate rejects a default port the docs do not state" -Only "api-facts"
+    Write-Utf8 $httpServer $originalHttpServer
 
     $restored = Invoke-Gate -Fixture $fixture -Only $null
     if ($restored.ExitCode -ne 0) {

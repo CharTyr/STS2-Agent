@@ -15,6 +15,7 @@ from sts2_mcp.client import Sts2Client
 from sts2_mcp.server import _LEGACY_ACTION_TOOLS
 
 _ACTION_BRANCH = re.compile(r'\"([a-z_]+)\"\s*=>')
+_README_TOOL = re.compile(r"^- `([a-z][a-z0-9_]*)`", re.MULTILINE)
 
 
 def _find_source_root() -> Path:
@@ -49,4 +50,36 @@ class LegacyActionCoverageTests(unittest.TestCase):
         missing = [spec.name for spec in _LEGACY_ACTION_TOOLS if not hasattr(client, spec.name)]
         self.assertEqual([], missing, "client methods missing for: " + ", ".join(missing))
 
+    def test_readme_legacy_tool_list_matches_server(self) -> None:
+        """The README's full-profile inventory is a contract, not prose.
 
+        It is written for developers who read the file instead of registering a server, so a
+        tool added to _LEGACY_ACTION_TOOLS but left out of the README (or the reverse) is a
+        silent doc drift. The list is delimited by HTML comment markers so this stays a
+        targeted comparison rather than a scrape of every backticked word in the file.
+        """
+        readme = (_find_source_root() / "mcp_server/README.md").read_text(encoding="utf-8")
+        begin = readme.find("<!-- BEGIN LEGACY ACTION TOOLS -->")
+        end = readme.find("<!-- END LEGACY ACTION TOOLS -->")
+        self.assertTrue(
+            begin >= 0 and end > begin,
+            "mcp_server/README.md lost the legacy-tool contract markers that scope this test",
+        )
+
+        block = readme[begin:end]
+        documented = set(_README_TOOL.findall(block))
+        self.assertGreater(len(documented), 40, "README legacy-tool block parse looks wrong")
+
+        shipped = {spec.name for spec in _LEGACY_ACTION_TOOLS}
+        self.assertEqual(
+            set(),
+            shipped - documented,
+            "mcp_server/README.md does not list these legacy tools: "
+            + ", ".join(sorted(shipped - documented)),
+        )
+        self.assertEqual(
+            set(),
+            documented - shipped,
+            "mcp_server/README.md lists names that are not legacy tools: "
+            + ", ".join(sorted(documented - shipped)),
+        )
