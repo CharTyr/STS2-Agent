@@ -8,7 +8,7 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-1.md`
-- **Total Sessions**: 11
+- **Total Sessions**: 12
 - **Last Active**: 2026-09-12
 <!-- @@@/auto:current-status -->
 
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-1.md` | ~385 | Active |
+| `journal-1.md` | ~427 | Active |
 <!-- @@@/auto:active-documents -->
 
 ---
@@ -29,6 +29,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 12 | 2026-09-12 | 五个新目标：屏幕名遮蔽、内嵌契约、实机资产、编译覆盖、暴露口径 | `eec80b9`, `c060554`, `335ba0a`, `94765bc`, `492722a` | `main` |
 | 11 | 2026-09-12 | Take docs under version control, wire the orphan self-test, guard packaging | `6e56e1d` | `main` |
 | 10 | 2026-09-12 | Give the compact view what it needs, keep errors truthful, and gate the drift | `ca12a4f`, `79d8747`, `f7dccfe`, `40735b5`, `ed1b810`, `98fca75` | `main` |
 | 9 | 2026-09-12 | Close seven audit gaps and harden the offline test floor | `206a0e8`, `adcb49b`, `f57cb04`, `c08d764`, `92f67a2`, `52bafd0`, `26da6bc`, `e373c90` | `main` |

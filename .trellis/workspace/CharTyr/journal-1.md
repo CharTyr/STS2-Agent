@@ -383,3 +383,45 @@ Four residuals closed: docs/ became a controlled directory with a docs-tracked g
 
 - Screen-name truth: ResolveNonModalScreen's generic grid-holder branch returns CARD_SELECTION for the reward-card overlay, shadowing its own REWARD arm and telling the model to use an action that screen no longer offers
 - Live-only: compact field values, invite outcome, package-rollout paths
+
+
+## Session 12: 五个新目标：屏幕名遮蔽、内嵌契约、实机资产、编译覆盖、暴露口径
+
+**Date**: 2026-09-12
+**Task**: 五个新目标：屏幕名遮蔽、内嵌契约、实机资产、编译覆盖、暴露口径
+**Branch**: `main`
+
+### Summary
+
+把探子给出的 5 个发现逐个立项、派 worker 实现、按任务拆提交，并在临时 worktree 里逐个提交验证树可构建；全部归档。
+
+### Main Changes
+
+- ResolveNonModalScreen：奖励选牌浮层改报 REWARD（此前被通用网格分支遮蔽成 CARD_SELECTION）
+- 内嵌游玩契约不再要求游戏内调用 health_check，debug 指令标注为外部 MCP 专用，README 两语对齐
+- 新增 Roslyn 语法覆盖：16 个未编译源文件（18k 行）进入 CI 保护，未编译集合由白名单断言钉住
+- 三个实机脚本与当前契约对齐（open_timeline 断言、timeline 索引、lobby flow 屏幕分支）
+- payload 派生值与执行口径同源；skip_reward_cards 两端都改为只认 enabled 的替代按钮
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `eec80b9` | (see git log) |
+| `c060554` | (see git log) |
+| `335ba0a` | (see git log) |
+| `94765bc` | (see git log) |
+| `492722a` | (see git log) |
+
+### Testing
+
+- [OK] 5 个提交各在临时 worktree 验证：336/339/341/341/348 PASS，0 FAIL；6 gate 全绿
+- [OK] 最终态：C# 348 PASS/0 FAIL、MCP 167 OK、gates 6 道、check_release_package 通过、preflight exit 0
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- 用户拍板：累积提交是否 push、mcp_server/data/eng 快照去留、准孤儿脚本、NCardPileScreen/NCardLibrary 是否新增屏幕名
