@@ -74,6 +74,46 @@ internal static class AgentSourceFixture
         throw new InvalidOperationException($"Method body is unterminated: {methodName}");
     }
 
+    /// <summary>
+    /// Braced body that follows a declaration, located by its full declaration text. Unlike
+    /// <see cref="MethodBody"/>, this never resolves to a call site, so it also works for a member
+    /// whose name is called later in the file than its declaration.
+    /// </summary>
+    public static string DeclarationBody(string source, string declaration)
+    {
+        var start = source.IndexOf(declaration, StringComparison.Ordinal);
+        if (start < 0)
+        {
+            throw new InvalidOperationException($"Declaration is missing: {declaration}");
+        }
+
+        var openBrace = source.IndexOf('{', start);
+        if (openBrace < 0)
+        {
+            throw new InvalidOperationException($"Declaration body is missing: {declaration}");
+        }
+
+        var depth = 0;
+        for (var index = openBrace; index < source.Length; index++)
+        {
+            switch (source[index])
+            {
+                case '{':
+                    depth++;
+                    break;
+                case '}':
+                    depth--;
+                    if (depth == 0)
+                    {
+                        return source[openBrace..(index + 1)];
+                    }
+                    break;
+            }
+        }
+
+        throw new InvalidOperationException($"Declaration body is unterminated: {declaration}");
+    }
+
     private static string FindAgentRoot()
     {
         foreach (var candidate in new[] { Directory.GetCurrentDirectory(), AppContext.BaseDirectory })

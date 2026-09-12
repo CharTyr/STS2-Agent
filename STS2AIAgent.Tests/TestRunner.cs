@@ -375,5 +375,12 @@ internal static class TestRunner
         yield return ("Loc.NoFrozenText", () => Task.Run(LocalizationTests.NoTranslatedTextIsFrozenAtConstruction));
         yield return ("Loc.GlossaryKeywords", () => Task.Run(LocalizationTests.GlossaryKeywordsStayAlignedWithTheirEnglishSpellings));
         yield return ("Loc.StartupOrder", () => Task.Run(LocalizationTests.StartupReadsTheLanguageBeforeTheUiIsBuilt));
+        yield return ("ScreenResolution.MappingTable", () => Task.Run(ScreenResolutionContractTests.EveryScreenMappingIsPinned));
+        yield return ("ScreenResolution.FakeMerchant", () => Task.Run(ScreenResolutionContractTests.FakeMerchantOpensThroughTheSharedButton));
+        yield return ("ScreenResolution.PatchNotes", () => Task.Run(ScreenResolutionContractTests.PatchNotesClosePathIsWidenedWithoutWeakeningSubmenus));
+        yield return ("ScreenResolution.InspectOverlays", () => Task.Run(ScreenResolutionContractTests.InspectOverlaysCloseThroughTheirOwnClose));
+        yield return ("TimelineIndex.OneSpace", () => Task.Run(TimelineIndexContractTests.ExecutorIndexesTheSameSlotListTheStateExposes));
+        yield return ("TimelineIndex.NonActionableRejected", () => Task.Run(TimelineIndexContractTests.NonActionableSlotsAreRejectedExplicitly));
+        yield return ("TimelineIndex.DescriptorFlags", () => Task.Run(TimelineIndexContractTests.CrystalDescriptorsCarryTheirRequirements));
     }
 }

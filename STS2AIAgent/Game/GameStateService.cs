@@ -30,6 +30,7 @@ using MegaCrit.Sts2.Core.Nodes.Combat;
 using MegaCrit.Sts2.Core.Nodes.CommonUi;
 using MegaCrit.Sts2.Core.Nodes.Debug.Multiplayer;
 using MegaCrit.Sts2.Core.Nodes.Events;
+using MegaCrit.Sts2.Core.Nodes.Events.Custom;
 using MegaCrit.Sts2.Core.Nodes.Events.Custom.CrystalSphere;
 using MegaCrit.Sts2.Core.Nodes.Ftue;
 using MegaCrit.Sts2.Core.Nodes.GodotExtensions;
@@ -38,7 +39,9 @@ using MegaCrit.Sts2.Core.Nodes.Rooms;
 using MegaCrit.Sts2.Core.Nodes.Screens;
 using MegaCrit.Sts2.Core.Nodes.Screens.CardSelection;
 using MegaCrit.Sts2.Core.Nodes.Screens.CharacterSelect;
+using MegaCrit.Sts2.Core.Nodes.Screens.FeedbackScreen;
 using MegaCrit.Sts2.Core.Nodes.Screens.GameOverScreen;
+using MegaCrit.Sts2.Core.Nodes.Screens.InspectScreens;
 using MegaCrit.Sts2.Core.Nodes.Screens.MainMenu;
 using MegaCrit.Sts2.Core.Nodes.Screens.Map;
 using MegaCrit.Sts2.Core.Nodes.Screens.ScreenContext;
@@ -517,13 +520,15 @@ internal static class GameStateService
             {
                 name = "crystal_set_tool",
                 requires_target = false,
-                requires_index = false
+                requires_index = false,
+                requires_tool = true
             });
             descriptors.Add(new ActionDescriptor
             {
                 name = "crystal_clear_cell",
                 requires_target = false,
-                requires_index = false
+                requires_index = false,
+                requires_coordinates = true
             });
         }
 
@@ -920,6 +925,16 @@ internal static class GameStateService
 
     public static bool CanCloseCardsView(IScreenContext? currentScreen)
     {
+        if (currentScreen is NInspectCardScreen inspectCard)
+        {
+            return GodotObject.IsInstanceValid(inspectCard) && inspectCard.IsVisibleInTree();
+        }
+
+        if (currentScreen is NInspectRelicScreen inspectRelic)
+        {
+            return GodotObject.IsInstanceValid(inspectRelic) && inspectRelic.IsVisibleInTree();
+        }
+
         return GetCardsViewBackButton(currentScreen) != null;
     }
 
@@ -1225,8 +1240,36 @@ internal static class GameStateService
 
     public static bool CanOpenShopInventory(IScreenContext? currentScreen)
     {
-        var room = GetMerchantRoom(currentScreen);
-        return room != null && room.Inventory != null && !room.Inventory.IsOpen && currentScreen is NMerchantRoom;
+        if (currentScreen is NMerchantRoom room)
+        {
+            return room.Inventory != null && !room.Inventory.IsOpen;
+        }
+
+        return GetFakeMerchantButton(currentScreen) != null;
+    }
+
+    /// <summary>
+    /// The Fake Merchant event screen opens the same inventory as a merchant room, but only through
+    /// its <c>%MerchantButton</c>. The predicate and the executor share this helper so the button the
+    /// state advertises is the button the action clicks. <c>NMerchantButton.OnRelease</c> refuses to
+    /// emit <c>MerchantOpened</c> while the local player is dead, so a dead local player means the
+    /// shop cannot be opened at all; advertising the action then would be a stuck action rather than
+    /// a legal one.
+    /// </summary>
+    public static NMerchantButton? GetFakeMerchantButton(IScreenContext? currentScreen)
+    {
+        if (currentScreen is not NFakeMerchant fakeMerchant ||
+            fakeMerchant.MerchantButton is not { } merchantButton ||
+            !GodotObject.IsInstanceValid(merchantButton) ||
+            !merchantButton.IsVisibleInTree() ||
+            !merchantButton.IsEnabled ||
+            merchantButton.IsLocalPlayerDead)
+        {
+            return null;
+        }
+
+        var inventory = fakeMerchant.GetNodeOrNull<NMerchantInventory>("%Inventory");
+        return inventory != null && inventory.IsOpen ? null : merchantButton;
     }
 
     public static bool CanCloseShopInventory(IScreenContext? currentScreen)
@@ -1382,6 +1425,11 @@ internal static class GameStateService
 
     public static bool CanCloseMainMenuSubmenu(IScreenContext? currentScreen)
     {
+        if (currentScreen is NPatchNotesScreen patchNotes)
+        {
+            return GodotObject.IsInstanceValid(patchNotes) && patchNotes.IsVisibleInTree();
+        }
+
         if (currentScreen is not NSubmenu submenu || !submenu.IsVisibleInTree())
         {
             return false;
@@ -6691,7 +6739,11 @@ internal static class GameStateService
             NCapstoneSubmenuStack => "CAPSTONE_SELECTION",
             NCrystalSphereScreen => "CRYSTAL_SPHERE",
             NTimelineScreen => "TIMELINE",
-            NPatchNotesScreen => "MAIN_MENU",
+            NFakeMerchant => "FAKE_MERCHANT",
+            NPatchNotesScreen => "PATCH_NOTES",
+            NInspectCardScreen => "CARD_INSPECT",
+            NInspectRelicScreen => "RELIC_INSPECT",
+            NSendFeedbackScreen => "FEEDBACK",
             NSubmenu => "MAIN_MENU",
             NLogoAnimation => "MAIN_MENU",
             NMainMenu => "MAIN_MENU",
@@ -7986,4 +8038,8 @@ internal sealed class ActionDescriptor
     public bool requires_target { get; init; }
 
     public bool requires_index { get; init; }
+
+    public bool requires_coordinates { get; init; }
+
+    public bool requires_tool { get; init; }
 }

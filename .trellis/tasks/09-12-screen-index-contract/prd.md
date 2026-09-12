@@ -36,14 +36,14 @@ usable action. One item is a silent mis-target risk, the others are dead ends.
 
 ## Acceptance Criteria
 
-- [ ] `choose_timeline_epoch` accepts exactly the `timeline.slots[].index` the same response printed; a non-actionable slot returns `409 invalid_target` with `is_actionable: false` and the slot's state.
-- [ ] `/actions/available` reports `crystal_clear_cell` with the coordinate requirement; no other descriptor changes value.
-- [ ] On `FAKE_MERCHANT`, `open_shop_inventory` clicks the merchant button, reports `completed` once the inventory is open, and normal shop actions then work; `proceed` still leaves the event.
-- [ ] On `PATCH_NOTES`, `close_main_menu_submenu` is available and closes the screen; `screen` reads `PATCH_NOTES`.
-- [ ] On `CARD_INSPECT` / `RELIC_INSPECT`, `close_cards_view` is available and closes the overlay.
-- [ ] The five new screen names are the exact strings above (the sibling skill/doc tasks document these names).
-- [ ] Contract tests pin each new screen mapping and each widened predicate; the full C# suite passes.
-- [ ] No existing action name, response field, or descriptor value is removed.
+- [x] `choose_timeline_epoch` accepts exactly the `timeline.slots[].index` the same response printed; a non-actionable slot returns `409 invalid_target` with `is_actionable: false` and the slot's state, thrown before the click.
+- [x] `/actions/available` reports `crystal_clear_cell` with `requires_coordinates` and `crystal_set_tool` with `requires_tool`; no other descriptor value changed.
+- [x] On `FAKE_MERCHANT`, `open_shop_inventory` clicks the merchant button and normal shop actions then apply; `proceed` still leaves the event. The predicate is false when the merchant button cannot actually open the inventory (hidden, disabled, or the local player is dead).
+- [x] On `PATCH_NOTES`, `close_main_menu_submenu` is available and closes the screen; `screen` reads `PATCH_NOTES`, and an ineffective close reports `pending` rather than `completed`.
+- [x] On `CARD_INSPECT` / `RELIC_INSPECT`, `close_cards_view` is available and calls the screen's `Close()`.
+- [x] The five new screen names are the exact strings above; the sibling skill task already documents the same names.
+- [x] Contract tests pin each new screen mapping, each widened predicate, and the resolve-before-click order; the full C# suite passes (272 PASS / 0 FAIL).
+- [x] No existing action name, response field, or descriptor value is removed.
 
 ## Constraints
 
@@ -57,3 +57,6 @@ usable action. One item is a silent mis-target risk, the others are dead ends.
 
 - Evidence: `research/screen-index-audit.md`; the decompiled game classes are
   under `extraction/decompiled/` and were used to confirm the close/open hooks.
+- Verification record: `evidence.md`.
+- `/actions/available` now carries `requires_coordinates` / `requires_tool` on every
+  descriptor (default `false`); `09-12-docs-release-baseline` documents them.

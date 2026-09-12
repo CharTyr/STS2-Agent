@@ -20,12 +20,14 @@ using MegaCrit.Sts2.Core.Nodes.Combat;
 using MegaCrit.Sts2.Core.Nodes.CommonUi;
 using MegaCrit.Sts2.Core.Nodes.Debug;
 using MegaCrit.Sts2.Core.Nodes.Debug.Multiplayer;
+using MegaCrit.Sts2.Core.Nodes.Events.Custom;
 using MegaCrit.Sts2.Core.Nodes.GodotExtensions;
 using MegaCrit.Sts2.Core.Nodes.Rewards;
 using MegaCrit.Sts2.Core.Nodes.Screens;
 using MegaCrit.Sts2.Core.Nodes.Screens.CardSelection;
 using MegaCrit.Sts2.Core.Nodes.Screens.CharacterSelect;
 using MegaCrit.Sts2.Core.Nodes.Screens.GameOverScreen;
+using MegaCrit.Sts2.Core.Nodes.Screens.InspectScreens;
 using MegaCrit.Sts2.Core.Nodes.Screens.MainMenu;
 using MegaCrit.Sts2.Core.Nodes.Screens.Map;
 using MegaCrit.Sts2.Core.Nodes.Screens.Overlays;
@@ -607,7 +609,7 @@ internal static class GameActionService
         var currentScreen = ActiveScreenContext.Instance.GetCurrentScreen();
         var screen = GameStateService.ResolveScreen(currentScreen);
 
-        if (currentScreen is not NSubmenu submenu || !GameStateService.CanCloseMainMenuSubmenu(currentScreen))
+        if (!GameStateService.CanCloseMainMenuSubmenu(currentScreen))
         {
             throw new ApiException(409, "invalid_action", "Action is not available in the current state.", new
             {
@@ -616,15 +618,45 @@ internal static class GameActionService
             });
         }
 
-        var submenuStack = GameStateService.GetMainMenuSubmenuStack(submenu)
-            ?? throw new ApiException(503, "state_unavailable", "Main menu submenu stack is unavailable.", new
+        bool stable;
+        if (currentScreen is NPatchNotesScreen patchNotes)
+        {
+            var backButton = GetPrivateField<NButton>(patchNotes, "_backButton");
+            if (backButton != null &&
+                GodotObject.IsInstanceValid(backButton) &&
+                backButton.IsVisibleInTree() &&
+                backButton.IsEnabled)
             {
-                action = "close_main_menu_submenu",
-                screen
-            }, retryable: true);
+                backButton.ForceClick();
+            }
+            else
+            {
+                ((Node)patchNotes).Call("Close");
+            }
 
-        submenuStack.Pop();
-        var stable = await WaitForMainMenuSubmenuCloseAsync(submenuStack, submenu, TimeSpan.FromSeconds(10));
+            stable = await WaitForPatchNotesCloseAsync(patchNotes, TimeSpan.FromSeconds(10));
+        }
+        else
+        {
+            if (currentScreen is not NSubmenu submenu)
+            {
+                throw new ApiException(409, "invalid_action", "Action is not available in the current state.", new
+                {
+                    action = "close_main_menu_submenu",
+                    screen
+                });
+            }
+
+            var submenuStack = GameStateService.GetMainMenuSubmenuStack(submenu)
+                ?? throw new ApiException(503, "state_unavailable", "Main menu submenu stack is unavailable.", new
+                {
+                    action = "close_main_menu_submenu",
+                    screen
+                }, retryable: true);
+
+            submenuStack.Pop();
+            stable = await WaitForMainMenuSubmenuCloseAsync(submenuStack, submenu, TimeSpan.FromSeconds(10));
+        }
 
         return new ActionResponsePayload
         {
@@ -2139,15 +2171,27 @@ internal static class GameActionService
             });
         }
 
-        var backButton = GameStateService.GetCardsViewBackButton(currentScreen)
-            ?? throw new ApiException(503, "state_unavailable", "Cards view back button is unavailable.", new
-            {
-                action = "close_cards_view",
-                screen
-            }, retryable: true);
+        if (currentScreen is NInspectCardScreen inspectCard)
+        {
+            inspectCard.Close();
+        }
+        else if (currentScreen is NInspectRelicScreen inspectRelic)
+        {
+            inspectRelic.Close();
+        }
+        else
+        {
+            var backButton = GameStateService.GetCardsViewBackButton(currentScreen)
+                ?? throw new ApiException(503, "state_unavailable", "Cards view back button is unavailable.", new
+                {
+                    action = "close_cards_view",
+                    screen
+                }, retryable: true);
 
-        backButton.ForceClick();
-        var stable = await WaitForCardsViewCloseAsync(TimeSpan.FromSeconds(10));
+            backButton.ForceClick();
+        }
+
+        var stable = await WaitForCardsViewCloseAsync(currentScreen, TimeSpan.FromSeconds(10));
 
         return new ActionResponsePayload
         {
@@ -2197,20 +2241,35 @@ internal static class GameActionService
         return false;
     }
 
-    private static async Task<bool> WaitForCardsViewCloseAsync(TimeSpan timeout)
+    private static async Task<bool> WaitForCardsViewCloseAsync(IScreenContext? closedScreen, TimeSpan timeout)
     {
         var deadline = DateTime.UtcNow + timeout;
         while (DateTime.UtcNow < deadline)
         {
             await WaitForNextFrameAsync();
 
-            if (ActiveScreenContext.Instance.GetCurrentScreen() is not NCardsViewScreen)
+            if (IsCardsViewClosed(closedScreen))
             {
                 return true;
             }
         }
 
-        return ActiveScreenContext.Instance.GetCurrentScreen() is not NCardsViewScreen;
+        return IsCardsViewClosed(closedScreen);
+    }
+
+    /// <summary>
+    /// The card list is closed once it is no longer the current screen. The inspect overlays share
+    /// <c>close_cards_view</c> but are their own screen types, so they settle the same way.
+    /// </summary>
+    private static bool IsCardsViewClosed(IScreenContext? closedScreen)
+    {
+        var currentScreen = ActiveScreenContext.Instance.GetCurrentScreen();
+        if (closedScreen is NInspectCardScreen or NInspectRelicScreen)
+        {
+            return !ReferenceEquals(currentScreen, closedScreen);
+        }
+
+        return currentScreen is not NCardsViewScreen;
     }
 
     private static async Task<bool> WaitForCombatHandSelectionResolutionAsync(TimeSpan timeout)
@@ -3727,7 +3786,7 @@ internal static class GameActionService
         var currentScreen = ActiveScreenContext.Instance.GetCurrentScreen();
         var screen = GameStateService.ResolveScreen(currentScreen);
 
-        if (!GameStateService.CanOpenShopInventory(currentScreen) || currentScreen is not NMerchantRoom merchantRoom)
+        if (!GameStateService.CanOpenShopInventory(currentScreen))
         {
             throw new ApiException(409, "invalid_action", "Action is not available in the current state.", new
             {
@@ -3736,7 +3795,24 @@ internal static class GameActionService
             });
         }
 
-        merchantRoom.OpenInventory();
+        var fakeMerchantButton = GameStateService.GetFakeMerchantButton(currentScreen);
+        if (currentScreen is NMerchantRoom merchantRoom)
+        {
+            merchantRoom.OpenInventory();
+        }
+        else if (fakeMerchantButton != null)
+        {
+            fakeMerchantButton.ForceClick();
+        }
+        else
+        {
+            throw new ApiException(503, "state_unavailable", "Shop inventory control is unavailable.", new
+            {
+                action = "open_shop_inventory",
+                screen
+            }, retryable: true);
+        }
+
         var stable = await WaitForShopInventoryOpenAsync(TimeSpan.FromSeconds(10));
 
         return new ActionResponsePayload
@@ -5424,20 +5500,35 @@ internal static class GameActionService
 
     private static NEpochSlot ResolveTimelineSlot(IScreenContext? currentScreen, int optionIndex)
     {
-        var slots = GameStateService.GetTimelineSlots(currentScreen)
-            .Where(slot => slot.State is EpochSlotState.Obtained or EpochSlotState.Complete)
-            .ToArray();
+        // The state exposes timeline.slots[].index / agent_view i against the full slot list, so the
+        // executor must read the same space instead of its own filtered subset.
+        var slots = GameStateService.GetTimelineSlots(currentScreen);
 
-        if (optionIndex < 0 || optionIndex >= slots.Length)
+        if (optionIndex < 0 || optionIndex >= slots.Count)
         {
-            throw new ApiException(409, "invalid_target", "option_index is out of range.", new
+            throw new ApiException(409, "invalid_target", "option_index is out of range for timeline.slots[].", new
             {
                 action = "choose_timeline_epoch",
-                option_index = optionIndex
+                option_index = optionIndex,
+                option_index_space = "timeline.slots[].index",
+                slot_count = slots.Count
             });
         }
 
-        return slots[optionIndex];
+        var slot = slots[optionIndex];
+        if (slot.State is not (EpochSlotState.Obtained or EpochSlotState.Complete))
+        {
+            throw new ApiException(409, "invalid_target", "The requested timeline slot is not actionable in the current state.", new
+            {
+                action = "choose_timeline_epoch",
+                option_index = optionIndex,
+                option_index_space = "timeline.slots[].index",
+                slot_state = slot.State.ToString().ToLowerInvariant(),
+                is_actionable = false
+            });
+        }
+
+        return slot;
     }
 
     private static async Task<bool> WaitForCharacterSelectOpenAsync(TimeSpan timeout)
@@ -5685,6 +5776,33 @@ internal static class GameActionService
 
         var finalScreen = ActiveScreenContext.Instance.GetCurrentScreen();
         return !ReferenceEquals(finalScreen, submenu) || !submenuStack.SubmenusOpen;
+    }
+
+    /// <summary>
+    /// Patch notes are a main-menu submenu that is not an <see cref="NSubmenu"/>: closing it tween-fades
+    /// the screen and then hides it, so "closed" means the screen is hidden or is no longer current.
+    /// </summary>
+    private static async Task<bool> WaitForPatchNotesCloseAsync(NPatchNotesScreen patchNotes, TimeSpan timeout)
+    {
+        var deadline = DateTime.UtcNow + timeout;
+        while (DateTime.UtcNow < deadline)
+        {
+            await WaitForNextFrameAsync();
+
+            if (IsPatchNotesClosed(patchNotes))
+            {
+                return true;
+            }
+        }
+
+        return IsPatchNotesClosed(patchNotes);
+    }
+
+    private static bool IsPatchNotesClosed(NPatchNotesScreen patchNotes)
+    {
+        return !GodotObject.IsInstanceValid(patchNotes) ||
+            !patchNotes.IsVisibleInTree() ||
+            !ReferenceEquals(ActiveScreenContext.Instance.GetCurrentScreen(), patchNotes);
     }
 
     private static async Task<bool> WaitForCharacterSelectionTransitionAsync(
