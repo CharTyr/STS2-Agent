@@ -1,0 +1,3 @@
+{"file": ".trellis/spec/mod/game-actions.md", "reason": "The state/action contract that says available_actions, descriptors and payload fields must agree."}
+{"file": ".trellis/spec/mod/index.md", "reason": "Offline C# test conventions and the source-contract test style used for GameStateService."}
+{"file": ".trellis/tasks/09-12-surfaced-action-parity/research/payload-vs-executor-audit.md", "reason": "The five mismatches with file:line evidence and the direction chosen for each."}

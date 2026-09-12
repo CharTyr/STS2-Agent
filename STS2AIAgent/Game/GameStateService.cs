@@ -394,7 +394,7 @@ internal static class GameStateService
             {
                 name = "resolve_rewards",
                 requires_target = false,
-                requires_index = true
+                requires_index = false
             });
 
             descriptors.Add(new ActionDescriptor
@@ -906,12 +906,18 @@ internal static class GameStateService
 
     public static bool CanChooseRewardCard(IScreenContext? currentScreen)
     {
+        // NCardHolder is a plain Control with no enabled/enabled-in-tree state, and
+        // ExecuteChooseRewardCardAsync selects a holder by emitting NCardHolder.Pressed directly.
+        // The holders this probe returns are therefore exactly the set the executor can resolve; any
+        // extra filter here would advertise a gate the executor never applies.
         return GetCardRewardOptions(currentScreen).Count > 0;
     }
 
     public static bool CanSkipRewardCards(IScreenContext? currentScreen)
     {
-        return GetCardRewardAlternativeButtons(currentScreen).Count > 0;
+        // NCardRewardAlternativeButton is an NButton, so IsEnabled is the same signal CanClaimReward
+        // reads from NRewardButton; the getter already drops alternatives that are not visible.
+        return GetCardRewardAlternativeButtons(currentScreen).Any(button => button.IsEnabled);
     }
 
     public static bool CanSelectDeckCard(IScreenContext? currentScreen)
@@ -4436,9 +4442,10 @@ internal static class GameStateService
             requires_confirmation = hasCombatHandSelection
                 ? combatHandSelection.RequiresConfirmation
                 : hasCardGridSelection && cardGridSelection.RequiresConfirmation,
-            can_confirm = hasCombatHandSelection
-                ? combatHandSelection.CanConfirm
-                : hasCardGridSelection && cardGridSelection.CanConfirm,
+            // Same predicate that exposes confirm_selection: a single-select grid that settles on the
+            // click must not advertise can_confirm, or the model would look for a confirmation the
+            // executor rejects.
+            can_confirm = CanConfirmSelection(currentScreen),
             cards = cards.Select((holder, index) => BuildSelectionCardPayload(
                 holder.CardModel!,
                 index,
@@ -4943,7 +4950,9 @@ internal static class GameStateService
             underlying_screen = currentScreen is Node node && ReferenceEquals(node, modalNode)
                 ? ResolveUnderlyingScreen(modalNode)
                 : null,
-            can_confirm = confirmButton != null,
+            // Same predicate that exposes confirm_modal: a FTUE popup without its own button is still
+            // confirmable (the executor closes it directly), so a bare button check under-reports it.
+            can_confirm = CanConfirmModal(currentScreen),
             can_dismiss = cancelButton != null,
             confirm_label = GetButtonLabel(confirmButton),
             dismiss_label = GetButtonLabel(cancelButton)

@@ -451,5 +451,12 @@ internal static class TestRunner
         yield return ("Parity.McpSurfaceKeepsHealthCheck", () => Task.Run(HealthCheckParityTests.McpSurfaceStillDocumentsHealthCheck));
         yield return ("SourceCoverage.ModSourcesParse", () => Task.Run(SourceCoverageTests.EveryModSourceParsesWithoutSyntaxErrors));
         yield return ("SourceCoverage.UncompiledWhitelist", () => Task.Run(SourceCoverageTests.UncompiledSourcesMatchTheDeclaredWhitelist));
+        yield return ("SurfacedAction.SelectionConfirmSameSource", () => Task.Run(SurfacedActionParityTests.SelectionCanConfirmComesFromTheExecutorProbe));
+        yield return ("SurfacedAction.ModalConfirmSameSource", () => Task.Run(SurfacedActionParityTests.ModalCanConfirmComesFromTheExecutorProbe));
+        yield return ("SurfacedAction.ResolveRewardsIndexOptional", () => Task.Run(SurfacedActionParityTests.ResolveRewardsDescriptorDoesNotRequireAnIndex));
+        yield return ("SurfacedAction.SkipRewardCardsEnabledFilter", () => Task.Run(SurfacedActionParityTests.SkipRewardCardsFiltersOnAlternativeButtonEnablement));
+        yield return ("SurfacedAction.ChooseRewardCardCollection", () => Task.Run(SurfacedActionParityTests.ChooseRewardCardStaysOnTheExecutorCollection));
+        yield return ("SurfacedAction.CrystalSphereScreenGuard", () => Task.Run(SurfacedActionParityTests.CrystalSphereExposureStaysOnTheScreenTypeGuard));
+        yield return ("SurfacedAction.SkipTargetsEnabledAlternative", () => Task.Run(SurfacedActionParityTests.SkipTargetsEnabledAlternative));
     }
 }

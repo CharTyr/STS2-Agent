@@ -2046,7 +2046,11 @@ internal static class GameActionService
         }
 
         var alternatives = GameStateService.GetCardRewardAlternativeButtons(currentScreen);
-        var selected = alternatives.First();
+        // Deliberately the same enabled-filtered set CanSkipRewardCards gates on: its
+        // Any(button => button.IsEnabled) probe is what let this action through, so clicking the
+        // first *enabled* alternative keeps the executed target inside the collection the guard
+        // just proved non-empty; the unfiltered First() could pick a disabled button instead.
+        var selected = alternatives.First(button => button.IsEnabled);
         selected.ForceClick();
         CardRewardSkips.MarkSkipped(GameStateService.GetRewardSetId(currentScreen));
         var stable = await WaitForRewardCardResolutionAsync(currentScreen, GameStateService.GetCardRewardOptions(currentScreen).Count, TimeSpan.FromSeconds(10));

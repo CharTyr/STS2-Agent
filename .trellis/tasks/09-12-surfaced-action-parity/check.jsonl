@@ -1,0 +1,2 @@
+{"file": ".trellis/spec/mod/game-actions.md", "reason": "Verify the surfaced signals now match what the executor accepts."}
+{"file": ".trellis/tasks/09-12-surfaced-action-parity/research/payload-vs-executor-audit.md", "reason": "Confirm each of the five rows was resolved or explicitly re-judged."}
