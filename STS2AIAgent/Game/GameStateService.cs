@@ -156,6 +156,7 @@ internal static class GameStateService
                 reward,
                 bundles,
                 capstone,
+                unlock,
                 modal,
                 gameOver)
         };
@@ -1715,13 +1716,12 @@ internal static class GameStateService
                 .ToArray();
         }
 
-        if (currentScreen is Node rootNode)
-        {
-            return GetVisibleGridCardHolders(rootNode)
-                .Cast<NCardHolder>()
-                .ToArray();
-        }
-
+        // No generic "any visible grid holder in the screen subtree" fallback here on purpose.
+        // ExecuteSelectDeckCardAsync only accepts the three shapes above (native card-grid metadata,
+        // the choose-a-card screen, or combat-hand metadata) and rejects everything else with 409.
+        // A subtree scan would advertise select_deck_card on viewer screens whose holders never react
+        // (NCardRewardSelectionScreen, NCardPileScreen, NCardLibrary) and on /state.selection would
+        // synthesize a 1/1 deck_card_select, so availability must stay inside the executable set.
         return Array.Empty<NCardHolder>();
     }
 
@@ -2995,6 +2995,7 @@ internal static class GameStateService
         RewardPayload? reward,
         BundlePayload[]? bundles,
         object? capstone,
+        UnlockPayload? unlock,
         ModalPayload? modal,
         GameOverPayload? gameOver)
     {
@@ -3032,6 +3033,14 @@ internal static class GameStateService
             reward = BuildAgentRewardPayload(reward, glossaryTerms),
             bundles = BuildAgentBundlePayload(bundles, glossaryTerms),
             capstone,
+            unlock = unlock == null
+                ? null
+                : new
+                {
+                    unlock_type = unlock.unlock_type,
+                    items = unlock.items,
+                    can_confirm = unlock.can_confirm
+                },
             modal = BuildAgentModalPayload(modal),
             game_over = BuildAgentGameOverPayload(gameOver),
             glossary = BuildAgentGlossary(glossaryTerms)
@@ -3124,8 +3133,25 @@ internal static class GameStateService
                 pet_missing = combat.player.pet_missing,
                 cards_played_this_turn = combat.player.cards_played_this_turn,
                 attacks_played_this_turn = combat.player.attacks_played_this_turn,
-                skills_played_this_turn = combat.player.skills_played_this_turn
+                skills_played_this_turn = combat.player.skills_played_this_turn,
+                powers = combat.player.powers.Select(power => FormatPowerLine(power)).ToArray()
             },
+            players = combat.players.Select(other => new
+            {
+                player_id = other.player_id,
+                slot_index = other.slot_index,
+                is_local = other.is_local,
+                is_connected = other.is_connected,
+                character_id = other.character_id,
+                character_name = other.character_name,
+                current_hp = other.current_hp,
+                max_hp = other.max_hp,
+                block = other.block,
+                energy = other.energy,
+                stars = other.stars,
+                focus = other.focus,
+                is_alive = other.is_alive
+            }).ToArray(),
             end_turn_will_kill_player = combat.end_turn_will_kill_player,
             lethal_risks = combat.lethal_risks.Select(risk => new
             {
@@ -3160,6 +3186,17 @@ internal static class GameStateService
                 block = enemy.block,
                 intent = enemy.intent,
                 move_id = enemy.move_id,
+                powers = enemy.powers.Select(power => FormatPowerLine(power)).ToArray(),
+                intents = enemy.intents.Select(intent => new
+                {
+                    i = intent.index,
+                    intent_type = intent.intent_type,
+                    label = intent.label,
+                    damage = intent.damage,
+                    hits = intent.hits,
+                    total_damage = intent.total_damage,
+                    status_card_count = intent.status_card_count
+                }).ToArray(),
                 alive = enemy.is_alive,
                 hittable = enemy.is_hittable
             }).ToArray()
@@ -3205,6 +3242,20 @@ internal static class GameStateService
             relics = run.relics
                 .Select(relic => relic.is_melted ? Loc.T("{0} (熔毁)", relic.name) : relic.name)
                 .ToArray(),
+            relic_ids = run.relics.Select(relic => relic.relic_id).ToArray(),
+            players = run.players.Select(other => new
+            {
+                player_id = other.player_id,
+                slot_index = other.slot_index,
+                is_local = other.is_local,
+                is_connected = other.is_connected,
+                character_id = other.character_id,
+                character_name = other.character_name,
+                current_hp = other.current_hp,
+                max_hp = other.max_hp,
+                gold = other.gold,
+                is_alive = other.is_alive
+            }).ToArray(),
             potions = run.potions.Select(potion => new
             {
                 i = potion.index,
@@ -3244,7 +3295,7 @@ internal static class GameStateService
             max = selection.max_select,
             selected = selection.selected_count,
             confirm = selection.can_confirm,
-            cards = selection.cards.Select(card => BuildAgentChoiceCardPayload(card.index, card.name, card.upgraded, card.energy_cost, card.star_cost, card.costs_x, card.star_costs_x, GetPreferredCardRulesText(card.rules_text, card.resolved_rules_text), glossaryTerms, card.selected)).ToArray()
+            cards = selection.cards.Select(card => BuildAgentChoiceCardPayload(card.index, card.card_id, card.name, card.upgraded, card.energy_cost, card.star_cost, card.costs_x, card.star_costs_x, GetPreferredCardRulesText(card.rules_text, card.resolved_rules_text), glossaryTerms, card.selected)).ToArray()
         };
     }
 
@@ -3270,7 +3321,7 @@ internal static class GameStateService
                 line = $"{option.reward_type}: {option.description}",
                 claimable = option.claimable
             }).ToArray(),
-            cards = reward.card_options.Select(card => BuildAgentChoiceCardPayload(card.index, card.name, card.upgraded, null, null, false, false, GetPreferredCardRulesText(card.rules_text, card.resolved_rules_text), glossaryTerms)).ToArray(),
+            cards = reward.card_options.Select(card => BuildAgentChoiceCardPayload(card.index, card.card_id, card.name, card.upgraded, null, null, false, false, GetPreferredCardRulesText(card.rules_text, card.resolved_rules_text), glossaryTerms)).ToArray(),
             alternatives = reward.alternatives.Select(option => new
             {
                 i = option.index,
@@ -3291,7 +3342,7 @@ internal static class GameStateService
             i = bundle.index,
             cards = bundle.cards.Select(card =>
                 BuildAgentChoiceCardPayload(
-                    card.index, card.name, card.upgraded,
+                    card.index, card.card_id, card.name, card.upgraded,
                     card.energy_cost, null, false, false,
                     GetPreferredCardRulesText(card.rules_text, card.resolved_rules_text),
                     glossaryTerms)).ToArray()
@@ -3336,6 +3387,7 @@ internal static class GameStateService
             cards = shop.cards.Select(card =>
                 BuildAgentPricedCardPayload(
                     card.index,
+                    card.card_id,
                     card.name,
                     card.upgraded,
                     card.energy_cost,
@@ -3487,6 +3539,7 @@ internal static class GameStateService
             relics = chest.relic_options.Select(relic => new
             {
                 i = relic.index,
+                relic_id = relic.relic_id,
                 line = $"{relic.name} [{relic.rarity}]"
             }).ToArray()
         };
@@ -3502,6 +3555,7 @@ internal static class GameStateService
         return new
         {
             type = modal.type_name,
+            underlying_screen = modal.underlying_screen,
             confirm = modal.can_confirm,
             dismiss = modal.can_dismiss,
             confirm_label = modal.confirm_label,
@@ -3544,6 +3598,7 @@ internal static class GameStateService
         return new
         {
             i = card.index,
+            card_id = card.card_id,
             line = FormatCardLine(card.name, card.upgraded, 1, card.energy_cost, card.star_cost, card.costs_x, card.star_costs_x, displayRulesText),
             playable = card.playable,
             can_play_result = card.can_play_result,
@@ -3561,6 +3616,7 @@ internal static class GameStateService
 
     private static object BuildAgentChoiceCardPayload(
         int index,
+        string cardId,
         string name,
         bool upgraded,
         int? energyCost,
@@ -3577,6 +3633,7 @@ internal static class GameStateService
         return new
         {
             i = index,
+            card_id = cardId,
             line = FormatCardLine(name, upgraded, 1, energyCost, starCost, costsX, starCostsX, rulesText),
             selected,
             keywords = TranslateKeywords(keywords),
@@ -3618,6 +3675,7 @@ internal static class GameStateService
 
     private static object BuildAgentPricedCardPayload(
         int index,
+        string cardId,
         string name,
         bool upgraded,
         int energyCost,
@@ -3635,6 +3693,7 @@ internal static class GameStateService
         return new
         {
             i = index,
+            card_id = cardId,
             line = $"{FormatCardLine(name, upgraded, 1, energyCost, starCost, costsX, starCostsX, rulesText)} | {price}g",
             affordable = enoughGold,
             keywords = TranslateKeywords(keywords),
@@ -3672,6 +3731,12 @@ internal static class GameStateService
                 return new
                 {
                     line,
+                    card_ids = group
+                        .Select(descriptor => descriptor.card_id)
+                        .Where(id => !string.IsNullOrWhiteSpace(id))
+                        .Distinct(StringComparer.Ordinal)
+                        .OrderBy(id => id, StringComparer.Ordinal)
+                        .ToArray(),
                     keywords = TranslateKeywords(first.keywords),
                     mods = first.mods
                 };
@@ -3697,7 +3762,8 @@ internal static class GameStateService
             card.HasStarCostX,
             rulesText,
             keywords,
-            mods);
+            mods,
+            card.Id.Entry);
     }
 
     private static AgentCardDescriptor BuildAgentCardDescriptor(DeckCardPayload card, HashSet<string> glossaryTerms)
@@ -3715,7 +3781,8 @@ internal static class GameStateService
             card.star_costs_x,
             rulesText,
             keywords,
-            Array.Empty<string>());
+            Array.Empty<string>(),
+            card.card_id);
     }
 
     private static string FormatCardLine(
@@ -3773,6 +3840,16 @@ internal static class GameStateService
     private static string FormatPetLine(CombatPetPayload pet)
     {
         return Loc.T("{0} {1}/{2} 格挡{3}", pet.name, pet.current_hp, pet.max_hp, pet.block);
+    }
+
+    // Powers decide combat math (Strength scales every hit, Vulnerable/Weak move the numbers,
+    // Thorns punishes multi-hit lines), so the compact view reports them as short id+amount lines
+    // rather than dropping them. The raw payload keeps the full object shape for /state consumers.
+    private static string FormatPowerLine(CombatPowerPayload power)
+    {
+        var amount = power.amount is int value ? $" {value}" : string.Empty;
+        var debuff = power.is_debuff ? " [debuff]" : string.Empty;
+        return $"{power.power_id}{amount}{debuff}";
     }
 
     private static string FormatPotionLine(RunPotionPayload potion)
@@ -8053,7 +8130,8 @@ internal readonly record struct AgentCardDescriptor(
     bool star_costs_x,
     string rules_text,
     string[] keywords,
-    string[] mods)
+    string[] mods,
+    string card_id)
 {
     public string GroupKey =>
         string.Join(

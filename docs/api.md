@@ -635,6 +635,28 @@
 | `price` | number | 当前删牌服务价格 |
 | `available` | boolean | 当前是否可购买删牌服务 |
 
+### compact `agent_view` 的增补字段
+
+默认 MCP `get_game_state` 返回 compact `agent_view`。它不是 `/state` 的字段子集，而是同一份状态
+的文本化重写（例如 `combat.player.hp` 是 `"12/70"`、`run.relics` 只有名字），因此下表字段在
+compact 里的位置与 `/state` 不同，但同名同源、同为新增键；`/state` 既有字段与 compact 既有键
+的形状都没有变化。
+
+| compact 位置 | 字段 | 说明 |
+| --- | --- | --- |
+| `combat.player` | `powers` | 己方 Power 短行：`power_id` + 层数，Debuff 追加 `[debuff]` |
+| `combat.enemies[]` | `powers` | 敌方 Power 短行，同上 |
+| `combat.enemies[]` | `intents[]` | 怪物下一招的数值拆解：`i`（意图序号）、`intent_type`、`label`、`damage`、`hits`、`total_damage`、`status_card_count` |
+| `combat.players[]` | `player_id` / `slot_index` / `is_local` / `is_connected` / `character_id` / `character_name` / `current_hp` / `max_hp` / `block` / `energy` / `stars` / `focus` / `is_alive` | 队伍血线（含本地玩家），用于判断队友是否需要救援 |
+| `combat.hand[]` | `card_id` | 手牌内部 ID，用于 `get_game_data_item` 精确查询 |
+| `combat.draw[]` / `combat.discard[]` / `combat.exhaust[]` / `run.deck[]` / `run.piles.*` | `card_ids` | 合并组代表的卡牌 ID（去重、升序）；组内若含不同 ID 会全部列出，`line` 仍带 `*N` 数量后缀 |
+| `selection.cards[]` / `reward.cards[]` / `shop.cards[]` / `bundles[].cards[]` | `card_id` | 选择屏 / 奖励 / 商店 / 卡包的卡牌 ID |
+| `run` | `relic_ids` | 与 `run.relics` 同序、等长的遗物 ID 列表（`relics` 保持原有名字数组不变） |
+| `run` | `players[]` | 队伍摘要，字段同 `combat.players[]`，另有 `gold` |
+| `chest.relics[]` | `relic_id` | 宝箱遗物 ID，配合 `i` 供 `choose_treasure_relic` 使用 |
+| `modal` | `underlying_screen` | 覆盖层底下的逻辑界面名，用于「先解覆盖层再规划房间」 |
+| 顶层 | `unlock` | 解锁覆盖层快照（`unlock_type` / `items` / `can_confirm`）；无解锁覆盖层时为 `null` |
+
 ### 状态示例：战斗中
 
 ```json
@@ -1031,7 +1053,7 @@
 - `choose_treasure_relic` — 选择宝箱遗物（`option_index`）
 - `choose_event_option` — 选择事件选项（`option_index`）
 - `crystal_set_tool` — 设置水晶球工具（`tool`：`big` / `small`）
-- `crystal_clear_cell` — 清理水晶球格子（`x`、`y`）
+- `crystal_clear_cell` — 清理水晶球格子（`x`、`y`，可选 `tool`：`big` / `small`）
 - `choose_capstone_option` — 选择 Capstone 选项（`option_index`）
 - `choose_bundle` — 选择卡包（`option_index`）
 - `confirm_bundle` — 确认卡包

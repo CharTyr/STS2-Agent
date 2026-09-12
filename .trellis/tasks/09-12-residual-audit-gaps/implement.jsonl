@@ -1,0 +1,3 @@
+{"file": ".trellis/spec/mcp/contracts-and-tests.md", "reason": "How the documented action arguments are expected to line up with the registered tools."}
+{"file": ".trellis/spec/mod/index.md", "reason": "Mod-layer conventions: pure-policy placement, offline test registration, build command."}
+{"file": ".trellis/tasks/09-12-residual-audit-gaps/research/residual-evidence.md", "reason": "Both gaps with exact file:line evidence and the invariant scripts that constrain the fix."}

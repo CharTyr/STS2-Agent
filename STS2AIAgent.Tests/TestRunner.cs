@@ -421,5 +421,7 @@ internal static class TestRunner
         yield return ("HttpServerPort.ExplicitNeverDrifts", () => Task.Run(HttpServerPortPolicyTests.ExplicitPortNeverDrifts));
         yield return ("HttpServerPort.AutoIncrementFlagged", () => Task.Run(HttpServerPortPolicyTests.AutoIncrementedPortIsFlagged));
         yield return ("HttpServerPort.FallbackGate", () => Task.Run(HttpServerPortPolicyTests.FallbackPolicyGateIsPresent));
+        yield return ("DeckSelectionAvailability.MatchesExecutableSet", () => Task.Run(DeckSelectionAvailabilityTests.AvailabilityMatchesTheExecutableSet));
+        yield return ("DeckSelectionAvailability.ExecutorKeepsGuard", () => Task.Run(DeckSelectionAvailabilityTests.ExecutorKeepsItsGuard));
     }
 }

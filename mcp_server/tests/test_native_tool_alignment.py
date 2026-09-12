@@ -282,13 +282,12 @@ def _documented_action_arguments(source_root: Path) -> dict[str, set[str]]:
     return documented
 
 
-# crystal_clear_cell also accepts an optional "tool" (mirroring the guided act
-# docstring and _register_crystal_cell_tool), but the frozen contract block only spells
-# out x/y. The gap is listed here explicitly rather than silently tolerated; the test
-# also fails if this exemption becomes stale.
-_DOC_ARGUMENT_EXEMPTIONS: dict[str, set[str]] = {
-    "crystal_clear_cell": {"tool"},
-}
+# Kept as the single place to declare a deliberate documented/registered argument gap.
+# Both sides now agree for every action (crystal_clear_cell spells out its optional
+# tool in the contract block), so the mapping is empty; the test below still fails if an
+# entry becomes stale, which is how an exemption gets removed the moment it stops being
+# needed.
+_DOC_ARGUMENT_EXEMPTIONS: dict[str, set[str]] = {}
 
 # run_console_command is documented but deliberately not a legacy per-action tool: it is
 # registered separately and only when STS2_ENABLE_DEBUG_ACTIONS is truthy.
