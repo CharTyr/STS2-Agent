@@ -1,0 +1,3 @@
+{"file": ".trellis/spec/mod/agent-and-ui.md", "reason": "Agent-facing payload conventions: what the in-game loop hands the model and how errors surface."}
+{"file": ".trellis/spec/mod/architecture.md", "reason": "The in-process bridge vs the HTTP router: two consumers of the same action contract."}
+{"file": ".trellis/tasks/09-12-agent-error-fidelity/research/error-fidelity-audit.md", "reason": "Where the error fields are dropped today and what still needs checking at implementation time."}

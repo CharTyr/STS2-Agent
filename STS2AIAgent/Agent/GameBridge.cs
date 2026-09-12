@@ -73,30 +73,39 @@ internal sealed class GameBridge : IGameBridge
         return GameThread.InvokeAsync(async () =>
         {
             cancellationToken.ThrowIfCancellationRequested();
-            var response = await GameActionService.ExecuteAsync(new ActionRequest
+            try
             {
-                action = action,
-                card_index = cardIndex,
-                target_index = targetIndex,
-                option_index = optionIndex,
-                x = x,
-                y = y,
-                tool = tool,
-                client_context = new
+                var response = await GameActionService.ExecuteAsync(new ActionRequest
                 {
-                    source = "in_game_agent",
-                    instance_role = Config.InstanceRole.Current
-                }
-            });
+                    action = action,
+                    card_index = cardIndex,
+                    target_index = targetIndex,
+                    option_index = optionIndex,
+                    x = x,
+                    y = y,
+                    tool = tool,
+                    client_context = new
+                    {
+                        source = "in_game_agent",
+                        instance_role = Config.InstanceRole.Current
+                    }
+                });
 
-            return JsonSerializer.Serialize(new
+                return JsonSerializer.Serialize(new
+                {
+                    response.action,
+                    response.status,
+                    response.stable,
+                    response.message,
+                    state = response.state.agent_view ?? (object)response.state
+                }, JsonOptions);
+            }
+            catch (ApiException ex)
             {
-                response.action,
-                response.status,
-                response.stable,
-                response.message,
-                state = response.state.agent_view ?? (object)response.state
-            }, JsonOptions);
+                // A deliberate game failure already carries the same code/details/retryable the HTTP
+                // boundary would send; keep it observable in-process through the shared envelope.
+                return AgentErrorEnvelope.Serialize(ex, JsonOptions);
+            }
         });
     }
 

@@ -13,6 +13,8 @@
     <Compile Include="..\STS2AIAgent\Agent\CurrentRunBoundary.cs" Link="Agent\CurrentRunBoundary.cs" />
     <Compile Include="..\STS2AIAgent\Agent\StopKindPolicy.cs" Link="Agent\StopKindPolicy.cs" />
     <Compile Include="..\STS2AIAgent\Agent\DualLaunchOutcome.cs" Link="Agent\DualLaunchOutcome.cs" />
+    <Compile Include="..\STS2AIAgent\Agent\AgentErrorEnvelope.cs" Link="Agent\AgentErrorEnvelope.cs" />
+    <Compile Include="..\STS2AIAgent\Agent\NoProgressPolicy.cs" Link="Agent\NoProgressPolicy.cs" />
     <Compile Include="..\STS2AIAgent\Agent\SessionBudgetGuard.cs" Link="Agent\SessionBudgetGuard.cs" />
     <Compile Include="..\STS2AIAgent\Agent\PlayerFacingSession.cs" Link="Agent\PlayerFacingSession.cs" />
     <Compile Include="..\STS2AIAgent\Agent\DiagnosticExport.cs" Link="Agent\DiagnosticExport.cs" />

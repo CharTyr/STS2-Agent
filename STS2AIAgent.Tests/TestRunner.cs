@@ -423,6 +423,14 @@ internal static class TestRunner
         yield return ("HttpServerPort.FallbackGate", () => Task.Run(HttpServerPortPolicyTests.FallbackPolicyGateIsPresent));
         yield return ("DeckSelectionAvailability.MatchesExecutableSet", () => Task.Run(DeckSelectionAvailabilityTests.AvailabilityMatchesTheExecutableSet));
         yield return ("DeckSelectionAvailability.ExecutorKeepsGuard", () => Task.Run(DeckSelectionAvailabilityTests.ExecutorKeepsItsGuard));
+        yield return ("AgentErrorEnvelope.ApiExceptionKeepsItsHttpMetadata", () => Task.Run(AgentErrorEnvelopeTests.ApiExceptionKeepsItsHttpMetadata));
+        yield return ("AgentErrorEnvelope.ApiExceptionDefaultsArePreserved", () => Task.Run(AgentErrorEnvelopeTests.ApiExceptionDefaultsArePreserved));
+        yield return ("AgentErrorEnvelope.UnexpectedFailureIsClassifiedNotDropped", () => Task.Run(AgentErrorEnvelopeTests.UnexpectedFailureIsClassifiedNotDropped));
+        yield return ("AgentErrorEnvelope.CancellationIsClassifiedWithoutRetry", () => Task.Run(AgentErrorEnvelopeTests.CancellationIsClassifiedWithoutRetry));
+        yield return ("AgentErrorEnvelope.EnvelopeReadsBackAsTheFailureText", () => Task.Run(AgentErrorEnvelopeTests.EnvelopeReadsBackAsTheFailureText));
+        yield return ("AgentErrorEnvelope.EnvelopeFieldNamesMatchTheHttpRouter", () => Task.Run(AgentErrorEnvelopeTests.EnvelopeFieldNamesMatchTheHttpRouter));
+        yield return ("AgentErrorEnvelope.GameBridgeActFailureCarriesTheEnvelope", () => Task.Run(AgentErrorEnvelopeTests.GameBridgeActFailureCarriesTheEnvelope));
+        yield return ("AgentErrorEnvelope.AgentLoopFailureCarriesTheEnvelope", () => Task.Run(AgentErrorEnvelopeTests.AgentLoopFailureCarriesTheEnvelope));
         yield return ("CompactViewFidelity.Powers", () => Task.Run(CompactViewFidelityTests.PowersReachTheCompactCombatView));
         yield return ("CompactViewFidelity.IntentNumbers", () => Task.Run(CompactViewFidelityTests.IntentNumbersReachTheCompactCombatView));
         yield return ("CompactViewFidelity.CardAndRelicIds", () => Task.Run(CompactViewFidelityTests.CardAndRelicIdsReachTheCompactViews));

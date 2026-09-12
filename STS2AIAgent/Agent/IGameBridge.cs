@@ -50,6 +50,19 @@ internal sealed class AgentTurnResult
     public bool WaitingForGame { get; init; }
 
     /// <summary>
+    /// The turn executed an action but the game never reported a settled result inside the wait
+    /// window. The action response stays "pending", so the retry policy must not treat this as a
+    /// failure -- it only stops a session after a run of them.
+    /// </summary>
+    public bool ExecutedUnsettled { get; init; }
+
+    /// <summary>
+    /// Fingerprint of the compact state observed right after the action, for the no-progress guard.
+    /// Null when the turn executed nothing or no state could be read.
+    /// </summary>
+    public string? StateFingerprint { get; init; }
+
+    /// <summary>
     /// The turn stopped to let the human player act — the companion map-vote path yields to the
     /// player's node choice — so the overlay reports a player wait instead of a stall.
     /// </summary>

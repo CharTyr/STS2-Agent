@@ -247,6 +247,8 @@ internal sealed class AgentLoop
         string? acted = null;
         string? actResult = null;
         string? lastActError = null;
+        string? actFingerprint = null;
+        var actUnsettled = false;
         var rounds = 0;
         var accumulatedUsage = initialUsage;
         var requestsSpent = initialRequests;
@@ -324,6 +326,8 @@ internal sealed class AgentLoop
                     {
                         acted = parsedAct.Action;
                         actResult = parsedAct.ResultJson;
+                        actFingerprint = parsedAct.Fingerprint;
+                        actUnsettled = parsedAct.Unsettled;
                         lastActError = null;
                         if (stopAfterAct)
                         {
@@ -333,6 +337,8 @@ internal sealed class AgentLoop
                                 Reasoning = lastReasoning,
                                 Acted = acted,
                                 ActResultJson = actResult,
+                                StateFingerprint = actFingerprint,
+                                ExecutedUnsettled = actUnsettled,
                                 ToolRounds = rounds,
                                 Usage = accumulatedUsage,
                                 RequestsSpent = requestsSpent
@@ -356,6 +362,8 @@ internal sealed class AgentLoop
                     Acted = acted,
                     ActResultJson = actResult,
                     Error = acted == null ? lastActError : null,
+                    StateFingerprint = actFingerprint,
+                    ExecutedUnsettled = actUnsettled,
                     ToolRounds = rounds,
                     Usage = accumulatedUsage,
                     RequestsSpent = requestsSpent
@@ -386,6 +394,8 @@ internal sealed class AgentLoop
                     {
                         acted = actOutcome.Action;
                         actResult = actOutcome.ResultJson;
+                        actFingerprint = actOutcome.Fingerprint;
+                        actUnsettled = actOutcome.Unsettled;
                         lastActError = null;
                         if (stopAfterAct)
                         {
@@ -395,6 +405,8 @@ internal sealed class AgentLoop
                                 Reasoning = lastReasoning,
                                 Acted = acted,
                                 ActResultJson = actResult,
+                                StateFingerprint = actFingerprint,
+                                ExecutedUnsettled = actUnsettled,
                                 ToolRounds = rounds,
                                 Usage = accumulatedUsage,
                                 RequestsSpent = requestsSpent
@@ -423,6 +435,8 @@ internal sealed class AgentLoop
             Error = acted == null && lastActError != null
                 ? lastActError
                 : "Reached the tool-call round limit without a final answer.",
+            StateFingerprint = actFingerprint,
+            ExecutedUnsettled = actUnsettled,
             ToolRounds = rounds,
             Usage = accumulatedUsage,
             RequestsSpent = requestsSpent
@@ -539,7 +553,7 @@ internal sealed class AgentLoop
         }
         catch (Exception ex)
         {
-            return JsonSerializer.Serialize(new { error = ex.Message }, JsonOptions);
+            return AgentErrorEnvelope.Serialize(ex, JsonOptions);
         }
     }
 
@@ -562,7 +576,7 @@ internal sealed class AgentLoop
         }, JsonOptions);
     }
 
-    private async Task<(string? Action, string ResultJson, string? Error)> ExecuteActAsync(
+    private async Task<(string? Action, string ResultJson, string? Fingerprint, bool Unsettled, string? Error)> ExecuteActAsync(
         string argumentsJson,
         CancellationToken cancellationToken,
         Action<string>? checkState = null)
@@ -573,7 +587,7 @@ internal sealed class AgentLoop
             var action = ReadString(args, "action")?.Trim().ToLowerInvariant();
             if (string.IsNullOrWhiteSpace(action))
             {
-                return (null, """{"error":"action is required"}""", "action is required");
+                return (null, """{"error":"action is required"}""", null, false, "action is required");
             }
 
             var legal = await _bridge.GetAvailableActionNamesAsync(cancellationToken);
@@ -585,7 +599,7 @@ internal sealed class AgentLoop
                     action,
                     available_actions = legal
                 }, JsonOptions);
-                return (null, json, "illegal action");
+                return (null, json, null, false, "illegal action");
             }
 
             var cardIndex = ReadInt(args, "card_index");
@@ -617,7 +631,7 @@ internal sealed class AgentLoop
                     y,
                     tool
                 }, JsonOptions);
-                return (null, json, indexError);
+                return (null, json, null, false, indexError);
             }
 
             cancellationToken.ThrowIfCancellationRequested();
@@ -630,6 +644,11 @@ internal sealed class AgentLoop
                 y,
                 tool,
                 cancellationToken);
+            if (AgentErrorEnvelope.TryReadError(result, out var bridgeError))
+            {
+                return (null, result, null, false, bridgeError ?? "act failed");
+            }
+
             if (ActIndexValidator.IsUnsettled(result))
             {
                 var settled = await _bridge.WaitUntilActionableAsync(TimeSpan.FromSeconds(20), cancellationToken);
@@ -643,16 +662,16 @@ internal sealed class AgentLoop
                     previous = JsonSerializer.Deserialize<JsonElement>(result),
                     state = JsonSerializer.Deserialize<JsonElement>(latest)
                 }, JsonOptions);
-                if (!settled)
-                {
-                    return (action, result, "Timed out waiting for a stable state after act.");
-                }
-
-                return (action, result, null);
+                // A pending response tells the agent to stay inside this screen flow, not that the
+                // act failed: the game accepted it. Return it without an error so the retry policy
+                // does not spend the failure budget, and carry the unsettled flag so a long run of
+                // them can still be stopped.
+                return (action, result, NoProgressPolicy.Fingerprint(latest), !settled, null);
             }
 
-            checkState?.Invoke(await _bridge.GetCompactStateJsonAsync(cancellationToken));
-            return (action, result, null);
+            var settledState = await _bridge.GetCompactStateJsonAsync(cancellationToken);
+            checkState?.Invoke(settledState);
+            return (action, result, NoProgressPolicy.Fingerprint(settledState), false, null);
         }
         catch (AutoPlayStoppedException)
         {
@@ -664,7 +683,7 @@ internal sealed class AgentLoop
         }
         catch (Exception ex)
         {
-            return (null, JsonSerializer.Serialize(new { error = ex.Message }, JsonOptions), ex.Message);
+            return (null, AgentErrorEnvelope.Serialize(ex, JsonOptions), null, false, ex.Message);
         }
     }
 
