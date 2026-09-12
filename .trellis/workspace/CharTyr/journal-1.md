@@ -345,3 +345,41 @@ Six tasks: two residual audit gaps (select_deck_card availability, the crystal_c
 - Deferred to the user: whether to delete mcp_server/data/eng (1.2 MiB, no reader, now honestly documented), whether to keep the zero-reference scripts, and whether to push the accumulated commits or tag v0.10.7
 - ResolveNonModalScreen still shadows NCardRewardSelectionScreen => REWARD behind a generic CARD_SELECTION branch; changing it moves /state.screen semantics and needs live confirmation
 - Live-only: compact field values, invite outcome, timeline overlays, and the port/dual-instance paths
+
+
+## Session 11: Take docs under version control, wire the orphan self-test, guard packaging
+
+**Date**: 2026-09-12
+**Task**: Take docs under version control, wire the orphan self-test, guard packaging
+**Branch**: `main`
+
+### Summary
+
+Four residuals closed: docs/ became a controlled directory with a docs-tracked gate (two documents had drifted out of version control and the local doc-marks gate was checking a file CI could not see), the operations spec was refreshed against the six gates and five version sources, the zero-reference budget-proxy self-test was wired into preflight and CI, and package-release now refuses to build on a version mismatch. Wiring the self-test surfaced that it was 5-8 percent flaky - the mock upstream spoke HTTP/1.0 and never read the request body, which Windows turns into an RST the proxy reports as a 502.
+
+### Main Changes
+
+- docs-tracked gate plus .gitignore cleanup; the two untracked pages are now committed
+- preflight gains a budget-proxy step (12 to 13 OK steps) and CI runs the same command
+- selftest harness fixed: MockUpstream protocol_version HTTP/1.1 plus _drain_body; 0 failures in 400 posts and 15/15 full runs, versus 2/40 and 2/150 before
+- package-release.ps1 asserts five-way version agreement before building anything
+- operations spec and index refreshed: six gates, five version sources, a script inventory naming the deliberately unwired scripts
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `6e56e1d` | (see git log) |
+
+### Testing
+
+- [OK] C# 335 PASS / 0 FAIL; MCP 167 OK; six gates pass in a clean checkout; preflight 353 PASS / 0 FAIL with 13 OK steps
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- Screen-name truth: ResolveNonModalScreen's generic grid-holder branch returns CARD_SELECTION for the reward-card overlay, shadowing its own REWARD arm and telling the model to use an action that screen no longer offers
+- Live-only: compact field values, invite outcome, package-rollout paths
