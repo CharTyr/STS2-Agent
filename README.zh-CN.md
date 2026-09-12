@@ -249,7 +249,7 @@ powershell -ExecutionPolicy Bypass -File ".\scripts\build-mod.ps1" -Configuratio
 STS2-Agent/
 ├── STS2AIAgent/          # C# 游戏内 Mod（Godot UI 悬浮窗、决策循环、预算守卫、HTTP 服务）
 ├── STS2AIAgent.Tests/    # C# 核心单元测试（无游戏依赖）
-├── mcp_server/           # FastMCP Server 封装（Python）及离线游戏元数据
+├── mcp_server/           # FastMCP Server 封装（Python）
 ├── scripts/              # 构建、部署、启动与全量预检脚本
 ├── skills/               # 面向 MCP 外部 Agent 的策略 Skill 规范
 ├── docs/                 # 开发设计文档与 API 接口参考

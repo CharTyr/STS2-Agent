@@ -58,7 +58,6 @@ ARTIFACT_FILES = (
     "scripts/test-mcp-tool-profile.ps1",
 )
 
-ARTIFACT_DIRECTORIES = ("mcp_server/data/eng",)
 PACKAGED_DOCUMENTS = ("README.md", "README.zh-CN.md", "mcp_server/README.md")
 
 _MARKDOWN_LINK = re.compile(r"(?<!!)\[[^\]]+\]\(([^)\s]+)(?:\s+[^)]*)?\)")
@@ -248,12 +247,6 @@ def _check_artifact_reader(reader: ArtifactReader, label: str) -> None:
         if not reader.has_file(relative_path):
             raise PackageCheckError(
                 f"{label} is missing required file '{relative_path}'"
-            )
-
-    for relative_path in ARTIFACT_DIRECTORIES:
-        if not reader.has_directory(relative_path):
-            raise PackageCheckError(
-                f"{label} is missing required directory '{relative_path}'"
             )
 
     for forbidden in ("docs/release-readiness.md", "docs/game-knowledge/"):

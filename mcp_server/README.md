@@ -53,6 +53,8 @@
 - `append_event_knowledge`（layered / full）
 - `complete_event_handoff`（layered / full）
 
+`get_game_data_item`、`get_game_data_items`、`get_relevant_game_data` 读取的元数据全部来自运行中的 Mod（`GET /data/{collection}`），包内不再附带任何游戏数据快照。
+
 <!-- BEGIN LEGACY ACTION TOOLS -->
 <!-- The bullets below are the full profile's per-action tools. They are bound to
      _LEGACY_ACTION_TOOLS in src/sts2_mcp/server.py by tests/test_legacy_action_coverage.py,

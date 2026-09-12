@@ -164,7 +164,6 @@ Copy-Item -Path (Join-Path $mcpSourceDir "README.md") -Destination (Join-Path $m
 Rewrite-PackagedReadmeLinks -Path (Join-Path $mcpOutputDir "README.md")
 Copy-Item -Path (Join-Path $mcpSourceDir "pyproject.toml") -Destination (Join-Path $mcpOutputDir "pyproject.toml") -Force
 Copy-Item -Path (Join-Path $mcpSourceDir "uv.lock") -Destination (Join-Path $mcpOutputDir "uv.lock") -Force
-Copy-Item -Path (Join-Path $mcpSourceDir "data") -Destination (Join-Path $mcpOutputDir "data") -Recurse -Force
 Get-ChildItem -Path (Join-Path $mcpSourceDir "src/sts2_mcp") -Recurse -File |
     Where-Object { $_.FullName -notmatch "\\__pycache__\\" } |
     ForEach-Object {

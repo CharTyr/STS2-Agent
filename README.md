@@ -250,7 +250,7 @@ powershell -ExecutionPolicy Bypass -File ".\scripts\build-mod.ps1" -Configuratio
 STS2-Agent/
 ├── STS2AIAgent/          # C# In-Game Mod (Overlay UI, LLM Client, Decision Loop, Budget Guard)
 ├── STS2AIAgent.Tests/    # Standalone C# tests (no game client required)
-├── mcp_server/           # FastMCP Server implementation and offline game data
+├── mcp_server/           # FastMCP Server implementation
 ├── scripts/              # Build, packaging, startup, and preflight scripts
 ├── skills/               # State-first gameplay skill specifications
 ├── docs/                 # Developer reference and API documentation
