@@ -1,0 +1,3 @@
+{"file": ".trellis/spec/mod/index.md", "reason": "Mod-layer test runner and the compile-include convention for pure files."}
+{"file": ".trellis/spec/operations/validation-and-release.md", "reason": "Which gates must pass before handoff (preflight, package check)."}
+{"file": ".trellis/tasks/09-12-offline-test-depth/research/coverage-audit.md", "reason": "Per-file dependency verdicts: what can be compiled into the test project and what cannot."}

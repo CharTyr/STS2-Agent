@@ -73,6 +73,9 @@
 | --- | --- |
 | `MAIN_MENU` | 主菜单、补丁说明、子菜单、Logo 动画 |
 | `CHARACTER_SELECT` | 角色选择界面 |
+| `MULTIPLAYER_LOBBY` | 多人联机房间界面（`host_multiplayer_lobby` / `join_multiplayer_lobby` / `ready_multiplayer_lobby` / `disconnect_multiplayer_lobby`） |
+| `BUNDLE_SELECTION` | 开局卡包选择界面（用 `choose_bundle` / `confirm_bundle`） |
+| `CAPSTONE_SELECTION` | Capstone 选项界面（用 `choose_capstone_option`） |
 | `MAP` | 地图界面 |
 | `COMBAT` | 战斗中 |
 | `EVENT` | 事件交互 |
@@ -82,8 +85,11 @@
 | `REWARD` | 奖励结算 / 卡牌奖励选择 |
 | `CHEST` | 宝箱房 |
 | `CARD_SELECTION` | 牌库选牌界面（删牌等） |
+| `CARDS_VIEW` | 看牌浮层（用 `close_cards_view` 关闭） |
 | `MODAL` | 阻塞中的弹窗 / FTUE |
 | `GAME_OVER` | 游戏结束 |
+| `UNLOCK` | 解锁弹窗界面（用 `confirm_unlock` 逐层关闭） |
+| `TIMELINE` | 时间线界面（用 `choose_timeline_epoch` / `confirm_timeline_overlay`） |
 | `FAKE_MERCHANT` | 假商人事件里的商店界面（`open_shop_inventory` 可用） |
 | `PATCH_NOTES` | 补丁说明页（用 `close_main_menu_submenu` 关闭） |
 | `CARD_INSPECT` | 卡牌查看浮层（用 `close_cards_view` 关闭） |

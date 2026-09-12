@@ -413,5 +413,13 @@ internal static class TestRunner
         yield return ("GameDataExportSchema.SceneFields", () => Task.Run(GameDataExportSchemaTests.SceneFieldsExistInTheExportSchema));
         yield return ("GameDataExportSchema.ExportCode", () => Task.Run(GameDataExportSchemaTests.ExportSchemaFieldsAppearInTheExportCode));
         yield return ("GameDataExportSchema.KnownCollections", () => Task.Run(GameDataExportSchemaTests.KnownCollectionsMatchTheExportSchema));
+        yield return ("ApiException.CarriesStatusAndCode", () => Task.Run(ApiExceptionTests.CarriesStatusAndCode));
+        yield return ("ApiException.RetryableDefaultsToFalse", () => Task.Run(ApiExceptionTests.RetryableDefaultsToFalse));
+        yield return ("ApiException.DetailsAreOptional", () => Task.Run(ApiExceptionTests.DetailsAreOptional));
+        yield return ("JsonHelper.PascalCaseIndented", () => Task.Run(JsonHelperTests.SerializationKeepsPascalCaseAndIndentation));
+        yield return ("JsonHelper.CaseInsensitiveRead", () => Task.Run(JsonHelperTests.DeserializationIgnoresCase));
+        yield return ("HttpServerPort.ExplicitNeverDrifts", () => Task.Run(HttpServerPortPolicyTests.ExplicitPortNeverDrifts));
+        yield return ("HttpServerPort.AutoIncrementFlagged", () => Task.Run(HttpServerPortPolicyTests.AutoIncrementedPortIsFlagged));
+        yield return ("HttpServerPort.FallbackGate", () => Task.Run(HttpServerPortPolicyTests.FallbackPolicyGateIsPresent));
     }
 }

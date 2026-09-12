@@ -53,6 +53,8 @@
     <Compile Include="..\STS2AIAgent\Game\ProgressSaveVerification.cs" Link="Game\ProgressSaveVerification.cs" />
     <Compile Include="..\STS2AIAgent\Game\EventOptionLocalization.cs" Link="Game\EventOptionLocalization.cs" />
     <Compile Include="..\STS2AIAgent\Agent\GameDataExportSchema.cs" Link="Agent\GameDataExportSchema.cs" />
+    <Compile Include="..\STS2AIAgent\Server\ApiException.cs" Link="Server\ApiException.cs" />
+    <Compile Include="..\STS2AIAgent\Server\JsonHelper.cs" Link="Server\JsonHelper.cs" />
   </ItemGroup>
   <ItemGroup>
     <EmbeddedResource Include="../skills/sts2-mcp-player/SKILL.md" LogicalName="STS2AIAgent.Sts2McpPlayer.Skill.md" />
