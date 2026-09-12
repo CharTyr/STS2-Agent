@@ -1,0 +1,2 @@
+{"file": ".trellis/spec/mcp/index.md", "reason": "MCP layer test conventions: stdlib unittest, tempfile isolation, no new deps."}
+{"file": ".trellis/spec/mcp/contracts-and-tests.md", "reason": "Network transport config (host/port/path/token) and layered tool contracts to assert."}

@@ -1,0 +1,2 @@
+{"file": ".trellis/spec/mcp/index.md", "reason": "Confirm the new tests are offline, isolated and discovered by the CI command."}
+{"file": ".trellis/spec/mcp/contracts-and-tests.md", "reason": "Verify layered tool payload shapes and that no knowledge writes land in the repo."}
