@@ -1,0 +1,32 @@
+{
+  "id": "agent-trust-hardening",
+  "name": "agent-trust-hardening",
+  "title": "Agent trust hardening: 5 goals from the 2026-09-12 audit",
+  "description": "",
+  "status": "planning",
+  "dev_type": null,
+  "scope": null,
+  "package": null,
+  "priority": "P2",
+  "creator": "CharTyr",
+  "assignee": "CharTyr",
+  "createdAt": "2026-09-12",
+  "completedAt": null,
+  "branch": null,
+  "base_branch": "main",
+  "worktree_path": null,
+  "commit": null,
+  "pr_url": null,
+  "subtasks": [],
+  "children": [
+    "09-12-action-trust",
+    "09-12-bounded-game-waits",
+    "09-12-agent-contract-compact",
+    "09-12-screen-index-contract",
+    "09-12-docs-release-baseline"
+  ],
+  "parent": null,
+  "relatedFiles": [],
+  "notes": "",
+  "meta": {}
+}

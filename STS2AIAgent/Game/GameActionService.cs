@@ -96,6 +96,22 @@ internal static class GameActionService
         LastTurnNumber = currentTurn;
     }
 
+    /// <summary>
+    /// Rolls the optimistic mid-turn counters back when a play_card never left the hand.
+    /// </summary>
+    private static void RollBackCardPlayCounters(string cardType)
+    {
+        CardsPlayedThisTurn = Math.Max(0, CardsPlayedThisTurn - 1);
+        if (cardType == "Attack")
+        {
+            AttacksPlayedThisTurn = Math.Max(0, AttacksPlayedThisTurn - 1);
+        }
+        else if (cardType == "Skill")
+        {
+            SkillsPlayedThisTurn = Math.Max(0, SkillsPlayedThisTurn - 1);
+        }
+    }
+
     public static Task<ActionResponsePayload> ExecuteAsync(ActionRequest request)
     {
         var actionName = request.action?.Trim().ToLowerInvariant();
@@ -484,6 +500,14 @@ internal static class GameActionService
             }
         }
 
+        if (CardPlayCounterPolicy.ShouldRollBack(
+                playSettled: stable,
+                combatInProgress: CombatManager.Instance.IsInProgress,
+                cardStillInHand: card.Pile?.Type == PileType.Hand))
+        {
+            RollBackCardPlayCounters(cardType);
+        }
+
         return new ActionResponsePayload
         {
             action = "play_card",
@@ -544,7 +568,9 @@ internal static class GameActionService
             action = "open_character_select",
             status = stable ? "completed" : "pending",
             stable = stable,
-            message = stable ? "Action completed." : "Action queued but state is still transitioning.",
+            message = stable
+                ? "Action completed."
+                : MenuTransitionPolicy.DescribeUnsettled("open_character_select", CurrentModalName()),
             state = GameStateService.BuildStatePayload()
         };
     }
@@ -898,7 +924,9 @@ internal static class GameActionService
             action = "continue_run",
             status = stable ? "completed" : "pending",
             stable = stable,
-            message = stable ? "Action completed." : "Action queued but state is still transitioning.",
+            message = stable
+                ? "Action completed."
+                : MenuTransitionPolicy.DescribeUnsettled("continue_run", CurrentModalName()),
             state = GameStateService.BuildStatePayload()
         };
     }
@@ -1692,29 +1720,58 @@ internal static class GameActionService
 
         // option_index: -1 = skip card, 0/1/2 = pick that card, absent = auto (first card)
         // card_index is accepted as a backwards-compatible alias for picking a card.
+        int pendingChoice;
         if (request.option_index.HasValue)
         {
-            if (request.option_index.Value == -1)
-            {
-                _pendingCardRewardChoice = -2;
-                _cardRewardSkipped = true;
-            }
-            else
-            {
-                _pendingCardRewardChoice = request.option_index.Value;
-                _cardRewardSkipped = false;
-            }
+            pendingChoice = request.option_index.Value == -1
+                ? RewardChoicePolicy.SkipChoice
+                : request.option_index.Value;
+            _cardRewardSkipped = request.option_index.Value == -1;
         }
         else if (request.card_index.HasValue)
         {
-            _pendingCardRewardChoice = request.card_index.Value;
+            if (request.card_index.Value < 0)
+            {
+                throw new ApiException(409, "invalid_target", "card_index is out of range.", new
+                {
+                    action = "resolve_rewards",
+                    card_index = request.card_index.Value,
+                    screen
+                });
+            }
+
+            pendingChoice = request.card_index.Value;
             _cardRewardSkipped = false;
         }
         else
         {
-            _pendingCardRewardChoice = -1;
+            pendingChoice = RewardChoicePolicy.AutoChoice;
             _cardRewardSkipped = false;
         }
+
+        // Reject an explicit index that cannot exist before anything is clicked. Only a
+        // non-empty option list is authoritative: a card reward screen that just opened
+        // exposes no holders for a few frames (TryResolveCardRewardAsync waits 24 frames
+        // for the same reason), so rejecting an empty list would fail a legal pick. An
+        // empty list (or no open screen) defers to the consume-time re-check, which still
+        // throws before selecting any card.
+        if (currentScreen is NCardRewardSelectionScreen openCardRewardScreen)
+        {
+            var optionCount = GameStateService.GetCardRewardOptions(openCardRewardScreen).Count;
+            var resolution = RewardChoicePolicy.Resolve(pendingChoice, optionCount);
+            if (optionCount > 0 && !resolution.IsValid)
+            {
+                throw new ApiException(409, "invalid_target", resolution.Reason ?? "option_index is out of range.", new
+                {
+                    action = "resolve_rewards",
+                    option_index = pendingChoice,
+                    option_count = optionCount,
+                    screen
+                });
+            }
+        }
+
+        _pendingCardRewardChoice = pendingChoice;
 
         var stable = await DrainRewardFlowAsync(TimeSpan.FromSeconds(20));
 
@@ -2385,10 +2442,32 @@ internal static class GameActionService
             await WaitForNextFrameAsync();
         }
 
-        // If resolve_rewards requested a skip, click the skip alternative
-        if (_pendingCardRewardChoice == -2)
+        var options = GameStateService.GetCardRewardOptions(cardRewardScreen);
+        var resolution = RewardChoicePolicy.Resolve(_pendingCardRewardChoice, options.Count);
+
+        // An explicit index missing from the live option list must fail instead of
+        // silently falling back to the first option. "No choice given" with no options
+        // yet keeps waiting, matching the documented auto behavior.
+        if (!resolution.IsValid)
         {
-            _pendingCardRewardChoice = -1;
+            if (resolution.Kind != RewardChoiceKind.Pick)
+            {
+                return false;
+            }
+
+            _pendingCardRewardChoice = RewardChoicePolicy.AutoChoice;
+            throw new ApiException(409, "invalid_target", resolution.Reason ?? "option_index is out of range.", new
+            {
+                action = "resolve_rewards",
+                option_index = resolution.Index,
+                option_count = options.Count
+            });
+        }
+
+        // If resolve_rewards requested a skip, click the skip alternative
+        if (resolution.Kind == RewardChoiceKind.Skip)
+        {
+            _pendingCardRewardChoice = RewardChoicePolicy.AutoChoice;
             var alternatives = GameStateService.GetCardRewardAlternativeButtons(cardRewardScreen);
             if (alternatives.Count > 0)
             {
@@ -2405,23 +2484,8 @@ internal static class GameActionService
             return false;
         }
 
-        var options = GameStateService.GetCardRewardOptions(cardRewardScreen);
-
-        // If resolve_rewards specified a card index, use it
-        NCardHolder? selected;
-        if (_pendingCardRewardChoice >= 0 && _pendingCardRewardChoice < options.Count)
-        {
-            selected = options[_pendingCardRewardChoice];
-            _pendingCardRewardChoice = -1;
-        }
-        else
-        {
-            selected = options.FirstOrDefault();
-        }
-        if (selected == null)
-        {
-            return false;
-        }
+        _pendingCardRewardChoice = RewardChoicePolicy.AutoChoice;
+        var selected = options[resolution.Index];
 
         selected.EmitSignal(NCardHolder.SignalName.Pressed, selected);
         while (DateTime.UtcNow < deadline)
@@ -3083,6 +3147,26 @@ internal static class GameActionService
         };
     }
 
+    /// <summary>
+    /// Builds the post-action state or fails honestly. An action that reports
+    /// <c>completed</c> must never carry a fabricated empty state snapshot.
+    /// </summary>
+    private static GameStatePayload BuildActionState(string action, string? screen)
+    {
+        try
+        {
+            return GameStateService.BuildStatePayload();
+        }
+        catch (Exception)
+        {
+            throw new ApiException(503, "state_unavailable", "Game state is unavailable after the action.", new
+            {
+                action,
+                screen
+            }, retryable: true);
+        }
+    }
+
     private static async Task<ActionResponsePayload> ExecuteChooseBundleAsync(ActionRequest request)
     {
         var currentScreen = ActiveScreenContext.Instance.GetCurrentScreen();
@@ -3137,16 +3221,13 @@ internal static class GameActionService
             }
         }
 
-        GameStatePayload? bundleState = null;
-        try { bundleState = GameStateService.BuildStatePayload(); } catch { }
-
         return new ActionResponsePayload
         {
             action = "choose_bundle",
             status = stable ? "completed" : "pending",
             stable = stable,
             message = stable ? "Action completed." : "Action queued but state is still transitioning.",
-            state = bundleState ?? new GameStatePayload()
+            state = BuildActionState("choose_bundle", screen)
         };
     }
 
@@ -3211,16 +3292,13 @@ internal static class GameActionService
             }
         }
 
-        GameStatePayload? state = null;
-        try { state = GameStateService.BuildStatePayload(); } catch { }
-
         return new ActionResponsePayload
         {
             action = "confirm_bundle",
             status = stable ? "completed" : "pending",
             stable = stable,
             message = stable ? "Action completed." : "Action queued but state is still transitioning.",
-            state = state ?? new GameStatePayload()
+            state = BuildActionState("confirm_bundle", screen)
         };
     }
 
@@ -3791,9 +3869,25 @@ internal static class GameActionService
             }, retryable: true);
 
         // Fire-and-forget: merchant card removal opens deck selection and blocks
-        // until the player confirms a card. Do not await the full task here.
-        ObserveBackgroundResult(entry.OnTryPurchaseWrapper(inventory), "remove_card_at_shop");
+        // until the player confirms a card. Do not await the full task here, but a
+        // purchase that already failed must not look like a pending transition.
+        var purchaseTask = entry.OnTryPurchaseWrapper(inventory);
+        ObserveBackgroundResult(purchaseTask, "remove_card_at_shop");
         var stable = await WaitForShopCardRemovalTransitionAsync(TimeSpan.FromSeconds(10));
+
+        var purchaseFailure = BackgroundTaskOutcome.DescribeFailure(
+            isCompleted: purchaseTask.IsCompleted,
+            isFaulted: purchaseTask.IsFaulted,
+            isCanceled: purchaseTask.IsCanceled,
+            result: purchaseTask.Status == TaskStatus.RanToCompletion ? purchaseTask.Result : null);
+        if (!stable && purchaseFailure != null)
+        {
+            throw new ApiException(409, "invalid_action", $"Card removal failed: {purchaseFailure}.", new
+            {
+                action = "remove_card_at_shop",
+                screen
+            });
+        }
 
         return new ActionResponsePayload
         {
@@ -3967,7 +4061,9 @@ internal static class GameActionService
             action = "embark",
             status = stable ? "completed" : "pending",
             stable = stable,
-            message = stable ? "Action completed." : "Action queued but state is still transitioning.",
+            message = stable
+                ? "Action completed."
+                : MenuTransitionPolicy.DescribeUnsettled("embark", CurrentModalName()),
             state = GameStateService.BuildStatePayload()
         };
     }
@@ -5062,24 +5158,23 @@ internal static class GameActionService
         while (DateTime.UtcNow < deadline)
         {
             await WaitForNextFrameAsync();
-            if (IsCharacterSelectOpenOrActionableModal())
+            if (IsCharacterSelectOpen())
             {
                 return true;
             }
         }
 
-        return IsCharacterSelectOpenOrActionableModal();
+        return IsCharacterSelectOpen();
     }
 
-    private static bool IsCharacterSelectOpenOrActionableModal()
+    private static bool IsCharacterSelectOpen()
     {
         var currentScreen = ActiveScreenContext.Instance.GetCurrentScreen();
-        if (currentScreen is NCharacterSelectScreen)
-        {
-            return true;
-        }
-
-        return GameStateService.CanConfirmModal(currentScreen) || GameStateService.CanDismissModal(currentScreen);
+        // An open modal is its own resolved screen (MODAL) with its own actions, so the
+        // transition is not settled even when the character-select screen sits underneath it.
+        return MenuTransitionPolicy.IsCharacterSelectSettled(
+            characterSelectScreenVisible: currentScreen is NCharacterSelectScreen,
+            modalOpen: GameStateService.GetOpenModal() != null);
     }
 
     private static void ClickSingleplayerStandardButton(NSingleplayerSubmenu submenu)
@@ -5160,22 +5255,28 @@ internal static class GameActionService
         {
             await WaitForNextFrameAsync();
 
-            if (GameStateService.GetOpenModal() != null)
-            {
-                return true;
-            }
-
-            var currentScreen = ActiveScreenContext.Instance.GetCurrentScreen();
-            if (!ReferenceEquals(currentScreen, screen) &&
-                GameStateService.ResolveScreen(currentScreen) != "UNKNOWN")
+            if (IsMenuExitSettled(screen))
             {
                 return true;
             }
         }
 
-        var finalScreen = ActiveScreenContext.Instance.GetCurrentScreen();
-        return !ReferenceEquals(finalScreen, screen) &&
-               GameStateService.ResolveScreen(finalScreen) != "UNKNOWN";
+        return IsMenuExitSettled(screen);
+    }
+
+    private static bool IsMenuExitSettled(NMainMenu screen)
+    {
+        var currentScreen = ActiveScreenContext.Instance.GetCurrentScreen();
+        return MenuTransitionPolicy.IsMenuExited(
+            menuScreenStillCurrent: ReferenceEquals(currentScreen, screen),
+            modalOpen: GameStateService.GetOpenModal() != null,
+            resolvedScreenUnknown: GameStateService.ResolveScreen(currentScreen) == "UNKNOWN");
+    }
+
+    /// <summary>Type name of the open modal, when one is blocking a transition.</summary>
+    private static string? CurrentModalName()
+    {
+        return GameStateService.GetOpenModal()?.GetType().Name;
     }
 
     private static async Task<bool> WaitForMainMenuModalAsync(TimeSpan timeout)
@@ -5335,32 +5436,30 @@ internal static class GameActionService
         {
             await WaitForNextFrameAsync();
 
-            if (GameStateService.GetOpenModal() != null)
-            {
-                return true;
-            }
-
-            if (screen.Lobby.NetService.Type.IsMultiplayer() && screen.Lobby.LocalPlayer.isReady)
-            {
-                return true;
-            }
-
-            var currentScreen = ActiveScreenContext.Instance.GetCurrentScreen();
-            if (!ReferenceEquals(currentScreen, screen) &&
-                GameStateService.ResolveScreen(currentScreen) != "UNKNOWN")
+            if (IsEmbarkSettled(screen))
             {
                 return true;
             }
         }
 
-        var finalScreen = ActiveScreenContext.Instance.GetCurrentScreen();
-        if (screen.Lobby.NetService.Type.IsMultiplayer() && screen.Lobby.LocalPlayer.isReady)
+        return IsEmbarkSettled(screen);
+    }
+
+    private static bool IsEmbarkSettled(NCharacterSelectScreen screen)
+    {
+        var modal = GameStateService.GetOpenModal();
+        var currentScreen = ActiveScreenContext.Instance.GetCurrentScreen();
+        var multiplayerReady = false;
+        if (modal == null && GodotObject.IsInstanceValid(screen))
         {
-            return true;
+            multiplayerReady = screen.Lobby.NetService.Type.IsMultiplayer() && screen.Lobby.LocalPlayer.isReady;
         }
 
-        return !ReferenceEquals(finalScreen, screen) &&
-               GameStateService.ResolveScreen(finalScreen) != "UNKNOWN";
+        return MenuTransitionPolicy.IsEmbarkSettled(
+            multiplayerReady: multiplayerReady,
+            menuScreenStillCurrent: ReferenceEquals(currentScreen, screen),
+            modalOpen: modal != null,
+            resolvedScreenUnknown: GameStateService.ResolveScreen(currentScreen) == "UNKNOWN");
     }
 
     private static async Task<bool> WaitForLobbyReadyTransitionAsync(NCharacterSelectScreen screen, bool ready, TimeSpan timeout)

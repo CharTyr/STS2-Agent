@@ -1,0 +1,4 @@
+{"file": ".trellis/spec/mod/game-actions.md", "reason": "Contract to check the changed handlers against: error categories, pending vs completed semantics, bounded waits."}
+{"file": ".trellis/spec/mod/index.md", "reason": "Quality-check section that names the C# runner, the MCP runner, and the state/action co-inspection rule."}
+{"file": ".trellis/spec/guides/code-reuse-thinking-guide.md", "reason": "Check that the new policy classes belong in the shared helper layer instead of duplicating existing predicates."}
+{"file": ".trellis/tasks/09-12-action-trust/research/action-trust-audit.md", "reason": "Evidence list to verify that each reported defect is actually closed and no line drifted."}

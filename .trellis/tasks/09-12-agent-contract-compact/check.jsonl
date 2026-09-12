@@ -1,0 +1,3 @@
+{"file": ".trellis/spec/mcp/contracts-and-tests.md", "reason": "Check the new tool kind against the registration contract and the answer-envelope rules."}
+{"file": ".trellis/spec/mcp/index.md", "reason": "Quality-check section: profile preservation, one-shot actions, unittest conventions."}
+{"file": ".trellis/tasks/09-12-agent-contract-compact/research/agent-contract-audit.md", "reason": "Evidence list to confirm each mismatch is fixed and no new one was introduced."}

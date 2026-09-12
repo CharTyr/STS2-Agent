@@ -1,0 +1,4 @@
+{"file": ".trellis/spec/mod/game-actions.md", "reason": "Transition and response semantics: bounded waiting, pending vs completed, error categories."}
+{"file": ".trellis/spec/mod/architecture.md", "reason": "Game-thread ownership and the WaitForNextFrameAsync frame primitive that must stay the only frame sync inside handlers."}
+{"file": ".trellis/spec/mod/index.md", "reason": "Layer checklist and the C# runner command."}
+{"file": ".trellis/tasks/09-12-bounded-game-waits/research/bounded-waits-audit.md", "reason": "Per-site evidence with file:line for the nine unbounded awaits."}

@@ -1,0 +1,4 @@
+{"file": ".trellis/spec/mcp/contracts-and-tests.md", "reason": "Tool registration contract, profile gates, test patterns (DummyClient/RecordingClient), and the one-shot action rule."}
+{"file": ".trellis/spec/mcp/index.md", "reason": "Layer checklist plus the profile-normalizer and one-shot-action preservation rules."}
+{"file": ".trellis/spec/guides/cross-layer-thinking-guide.md", "reason": "The state field the skill reads crosses mod → MCP → skill; this guide lists the consumers to trace."}
+{"file": ".trellis/tasks/09-12-agent-contract-compact/research/agent-contract-audit.md", "reason": "Evidence: the five field mismatches and the two returned-shape divergences with file:line."}

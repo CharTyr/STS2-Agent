@@ -1,0 +1,4 @@
+{"file": ".trellis/spec/operations/validation-and-release.md", "reason": "Exact preflight/package commands, their side effects, and the release-metadata contract this task edits."}
+{"file": ".trellis/spec/operations/index.md", "reason": "Operations layer checklist, including the rule that a static preflight is not gameplay proof."}
+{"file": ".trellis/spec/guides/cross-layer-thinking-guide.md", "reason": "Release metadata and multi-surface consistency questions that drive the version-file list."}
+{"file": ".trellis/tasks/09-12-docs-release-baseline/research/docs-baseline-audit.md", "reason": "Evidence: stale claims, missing routes, version-file list, and the preflight/CI command diff."}

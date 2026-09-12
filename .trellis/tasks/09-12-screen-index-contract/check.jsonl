@@ -1,0 +1,3 @@
+{"file": ".trellis/spec/mod/game-actions.md", "reason": "Verify each widened predicate and the new errors against the documented contract."}
+{"file": ".trellis/spec/mod/index.md", "reason": "Quality-check commands and the state/action co-inspection rule."}
+{"file": ".trellis/tasks/09-12-screen-index-contract/research/screen-index-audit.md", "reason": "Evidence list to confirm every dead end is closed and no screen mapping regressed."}

@@ -1,0 +1,5 @@
+{"file": ".trellis/spec/mod/index.md", "reason": "Layer pre-development checklist: which guide to follow for a state/action change and which quality checks to run."}
+{"file": ".trellis/spec/mod/game-actions.md", "reason": "Action-handler shape, error categories, transition/response semantics, and the rule that a click returning is not proof of completion."}
+{"file": ".trellis/spec/mod/architecture.md", "reason": "Game-thread ownership and the state/action separation that the new policy classes must respect."}
+{"file": ".trellis/spec/operations/validation-and-release.md", "reason": "Exact offline validation commands and the side effects of each script."}
+{"file": ".trellis/tasks/09-12-action-trust/research/action-trust-audit.md", "reason": "Scout evidence with file:line for each of the five defects this task fixes."}

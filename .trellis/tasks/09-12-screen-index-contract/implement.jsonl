@@ -1,0 +1,4 @@
+{"file": ".trellis/spec/mod/game-actions.md", "reason": "Action availability predicates, descriptor rules, error categories, and the state/action split this change must respect."}
+{"file": ".trellis/spec/mod/index.md", "reason": "Layer checklist and the C# test runner command."}
+{"file": ".trellis/spec/mod/architecture.md", "reason": "State ownership and the game-thread boundary for the new close/open calls."}
+{"file": ".trellis/tasks/09-12-screen-index-contract/research/screen-index-audit.md", "reason": "Evidence: the index-space mismatch, the dead-end screens, and the decompiled open/close hooks."}
