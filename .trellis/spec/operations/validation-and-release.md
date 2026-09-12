@@ -9,11 +9,11 @@ Run the commands below from the repository root (`C:\Users\chart\Documents\proje
 | `Push-Location mcp_server; uv run --locked python -m unittest discover -s tests -v; Pop-Location` | Python MCP unit tests using the standard-library `unittest` runner | No game required; tests use fakes and patched transport where appropriate |
 | `dotnet run --project STS2AIAgent.Tests/STS2AIAgent.Tests.csproj` | The custom executable C# core test harness | No game required; this is not a live Mod validation |
 | `powershell -ExecutionPolicy Bypass -File scripts/test-mcp-tool-profile.ps1` | Offline MCP tool-profile checks | No game required; keep the repository-root working directory |
-| `python scripts/check_verification_gates.py` | Six offline gates: `lockfile`, `api-doc`, `api-facts`, `doc-marks`, `docs-tracked`, and `script-encoding` (each is described in the gate table below) | No game, no network, standard library only. Exits 1 with the failing gate named on stderr; select one or more gates with `--only api-doc\|api-facts\|doc-marks\|docs-tracked\|lockfile\|script-encoding`. When the repository root has no `.git` directory, `docs-tracked` prints a skip note instead of failing |
+| `python scripts/check_verification_gates.py` | Seven offline gates: `lockfile`, `api-doc`, `api-facts`, `doc-marks`, `docs-tracked`, `script-encoding`, and `ps1-syntax` (each is described in the gate table below) | No game, no network, standard library only. Exits 1 with the failing gate named on stderr; select one or more gates with `--only api-doc\|api-facts\|doc-marks\|docs-tracked\|lockfile\|ps1-syntax\|script-encoding`. When the repository root has no `.git` directory, `docs-tracked` prints a skip note (and `ps1-syntax` skips when `scripts/` holds no `.ps1` or no interpreter is on `PATH`) instead of failing |
 | `powershell -ExecutionPolicy Bypass -File scripts/test-verification-gates.ps1` | Proves the gates above actually fail on drift, using a throwaway fixture in the temp directory | No game, no network; creates and removes its own fixture only |
 | `powershell -ExecutionPolicy Bypass -File scripts/preflight-release.ps1` | Build, Python compile/import, offline profile, unit-test, version, packaging-source, and release-document checks | Produces static preflight output. Its final “manual validation next” list means live gameplay still needs separate checks; see [preflight-release.ps1](../../../scripts/preflight-release.ps1#L158) |
 
-The six gates are:
+The seven gates are:
 
 | Gate | What it verifies |
 | --- | --- |
@@ -23,6 +23,7 @@ The six gates are:
 | `doc-marks` | Date-stamped validation records carry a historical marker, and archived topic pages keep their redirect to `history/` |
 | `docs-tracked` | Every Markdown page under `docs/` is tracked by git, so a newly written page cannot fall out of a fresh checkout (which is what CI builds). Skips with a note when the repository root has no `.git` |
 | `script-encoding` | PowerShell scripts containing non-ASCII text carry a UTF-8 BOM |
+| `ps1-syntax` | Every `.ps1` under `scripts/` parses without a syntax error, checked with the PowerShell AST parser so each script is read but never executed. Skips with a note when `scripts/` holds no `.ps1` or no PowerShell interpreter is on `PATH` |
 
 The profile command runs [test-mcp-tool-profile.ps1](../../../scripts/test-mcp-tool-profile.ps1); the C# command targets [STS2AIAgent.Tests.csproj](../../../STS2AIAgent.Tests/STS2AIAgent.Tests.csproj).
 
@@ -34,7 +35,7 @@ These are the offline check entry points, plus the scripts that are deliberately
 
 | Entry point | Command | What it checks |
 | --- | --- | --- |
-| Offline verification gates | `python scripts/check_verification_gates.py` | The six gates above; `--only <gate>` narrows the run |
+| Offline verification gates | `python scripts/check_verification_gates.py` | The seven gates above; `--only <gate>` narrows the run |
 | Release metadata | `python scripts/check_release_metadata.py` | The five version sources below still agree |
 | Packaging source contract | `python scripts/check_release_package.py --source-root .` | The packaging script still collects the player-facing files (source mode; artifact mode inspects a real release directory or zip and is not an offline check) |
 | Budget proxy self-test | `python scripts/sts2-model-budget-proxy-selftest.py` | No-cost offline self-test of the validation budget proxy; asserts the real ledger is untouched and never calls the paid upstream |

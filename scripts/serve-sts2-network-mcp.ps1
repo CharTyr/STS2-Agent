@@ -55,7 +55,7 @@ if ($JsonResponse.IsPresent) {
     $arguments += "--json-response"
 }
 
-Write-Host "Starting STS2 network MCP server on http://$BindHost:$Port$Path"
+Write-Host "Starting STS2 network MCP server on http://$BindHost`:$Port$Path"
 Write-Host "Transport: $Transport | Tool profile: $ToolProfile | Auth: $([bool](-not [string]::IsNullOrWhiteSpace($BearerToken)))"
 
 & $pythonExe @arguments

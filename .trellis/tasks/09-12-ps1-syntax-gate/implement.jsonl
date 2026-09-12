@@ -1,0 +1,2 @@
+{"file": ".trellis/spec/operations/validation-and-release.md", "reason": "The gate table, counts and --only list this task extends."}
+{"file": ".trellis/tasks/09-12-ps1-syntax-gate/research/ps1-coverage-gap.md", "reason": "What already covers scripts today and why that leaves syntax unchecked."}

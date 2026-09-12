@@ -219,6 +219,42 @@ try {
     Assert-Case -Name "script-encoding gate rejects non-ASCII without a BOM" -Only "script-encoding"
     Remove-Item -LiteralPath $encodingScript -Force
 
+    # 6b. No .ps1 to parse at all. The fixture scripts/ holds only the gate copy at this point, so
+    # this pins the branch the other cases depend on: a tree with no PowerShell script has to skip
+    # and explain, not fail and not pass silently. Without it every case above would turn red.
+    $ps1Empty = Invoke-Gate -Fixture $fixture -Only "ps1-syntax"
+    if ($ps1Empty.ExitCode -ne 0 -or $ps1Empty.Output -notmatch "no PowerShell scripts under scripts/ to parse") {
+        Write-Host "FAIL  ps1-syntax gate skips a scripts/ that holds no .ps1"
+        Write-Host $ps1Empty.Output
+        $script:failures++
+    }
+    else {
+        Write-Host "PASS  ps1-syntax gate skips a scripts/ that holds no .ps1"
+    }
+
+    # 6c. A well-formed .ps1 the parser must accept. The gate reads the AST, so an accepted script
+    # is reported by name and count rather than run.
+    $validPs1 = Join-Path (Join-Path $fixture "scripts") "fixture-valid-probe.ps1"
+    Write-Utf8 $validPs1 ("Write-Host 'fixture probe'" + [char]10)
+    $ps1Valid = Invoke-Gate -Fixture $fixture -Only "ps1-syntax"
+    if ($ps1Valid.ExitCode -ne 0 -or $ps1Valid.Output -notmatch "PowerShell scripts parse cleanly") {
+        Write-Host "FAIL  ps1-syntax gate accepts a well-formed script"
+        Write-Host $ps1Valid.Output
+        $script:failures++
+    }
+    else {
+        Write-Host "PASS  ps1-syntax gate accepts a well-formed script"
+    }
+    Remove-Item -LiteralPath $validPs1 -Force
+
+    # 6d. An unbalanced script. A stray brace or quote aborts a script on launch, and these scripts
+    # are build, packaging, and real-machine entry points that nothing else parses, so this is the
+    # failure the gate exists to catch.
+    $brokenPs1 = Join-Path (Join-Path $fixture "scripts") "fixture-broken-probe.ps1"
+    Write-Utf8 $brokenPs1 ("if (" + [char]10)
+    Assert-Case -Name "ps1-syntax gate rejects a script with a syntax error" -Only "ps1-syntax"
+    Remove-Item -LiteralPath $brokenPs1 -Force
+
     # 7. The mod version documented in docs/api.md drifting away from the manifest.
     $factsDoc = Join-Path $fixtureDocs "api.md"
     $originalFactsDoc = Read-Utf8 $factsDoc

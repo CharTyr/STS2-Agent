@@ -1,0 +1,2 @@
+{"file": ".trellis/spec/operations/validation-and-release.md", "reason": "Confirm the documented gate set matches the implemented registry."}
+{"file": ".trellis/tasks/09-12-ps1-syntax-gate/research/ps1-coverage-gap.md", "reason": "Re-check the claimed coverage gap is closed after the change."}

@@ -29,6 +29,12 @@ docs-tracked
            which is what CI builds from.
 script-encoding
            PowerShell scripts containing non-ASCII text must carry a UTF-8 BOM.
+ps1-syntax Every PowerShell script under scripts/ must parse without a syntax error.
+           Each one is a build, packaging, validation, or CI entry point that nothing
+           else compiles, so a stray brace or quote would only surface when a release
+           or a real-machine run finally invoked it. Parsing goes through the
+           PowerShell AST parser, which reads a script without executing it. Skips
+           with a note when scripts/ holds no .ps1 or no interpreter is on PATH.
 
 Exit code 0 means every selected gate passed. Exit code 1 means at least one
 gate failed and the failure detail has been printed to stderr. Standard library
@@ -39,6 +45,7 @@ from __future__ import annotations
 import argparse
 import json
 import re
+import shutil
 import subprocess
 import sys
 from pathlib import Path
@@ -115,6 +122,41 @@ DOCS_MARKDOWN_GLOB = "*.md"
 # error. A UTF-8 BOM removes the ambiguity, so non-ASCII PowerShell scripts have to carry one.
 SCRIPT_ENCODING_GLOBS = ("scripts/*.ps1",)
 UTF8_BOM = b"\xef\xbb\xbf"
+
+# Every PowerShell script under scripts/ is a build, packaging, validation, or CI entry point and
+# nothing else in the repository parses one: script-encoding only inspects BOMs, preflight compiles
+# Python, and CI runs a handful by name. A stray brace or quote therefore stays invisible until a
+# release or a real-machine run invokes the script, which is the worst moment to discover it. A
+# parse is the cheapest static backstop; ParseFile returns the AST and error list without running
+# the file, and the count is read from disk so it keeps up as scripts are added.
+PS1_GLOB = "*.ps1"
+
+# Read by the interpreter below with -Command. It reads newline-separated paths on stdin, parses
+# each one with the PowerShell parser, and prints one JSON report to stdout. It deliberately uses
+# single-quoted strings only so the command survives the Windows argument round-trip, and it is
+# parsing only -- it never invokes, dot-sources, or -File's the scripts it reads.
+PS1_PARSE_PROBE = """
+$ErrorActionPreference = 'Stop'
+try { [Console]::OutputEncoding = [System.Text.Encoding]::UTF8 } catch { }
+$results = [System.Collections.Generic.List[object]]::new()
+foreach ($line in ([Console]::In.ReadToEnd() -split ([string][char]10))) {
+    $file = $line.Trim()
+    if ($file.Length -eq 0) { continue }
+    $tokens = $null
+    $parseErrors = $null
+    [void][System.Management.Automation.Language.Parser]::ParseFile($file, [ref]$tokens, [ref]$parseErrors)
+    $messages = [System.Collections.Generic.List[object]]::new()
+    foreach ($parseError in $parseErrors) {
+        $messages.Add([ordered]@{
+            line = $parseError.Extent.StartLineNumber
+            column = $parseError.Extent.StartColumnNumber
+            message = $parseError.Message
+        })
+    }
+    $results.Add([ordered]@{ file = $file; errors = $messages })
+}
+[Console]::Out.Write(([ordered]@{ files = $results } | ConvertTo-Json -Depth 6 -Compress))
+"""
 
 
 class GateError(Exception):
@@ -627,6 +669,78 @@ def check_script_encoding(repo_root: Path) -> list[str]:
     return notes
 
 
+def check_ps1_syntax(repo_root: Path) -> list[str]:
+    """Every PowerShell script under scripts/ must parse without a syntax error.
+
+    Parsing only: the interpreter is handed the file list and asked for the parser's error
+    list. Nothing here executes, dot-sources, or -File's a repository script. The check
+    degrades to a printed skip -- never a silent pass and never a failure -- when there is
+    no .ps1 to read or no PowerShell interpreter on PATH.
+    """
+    scripts_dir = repo_root / "scripts"
+    paths = sorted(path for path in scripts_dir.rglob(PS1_GLOB) if path.is_file())
+    if not paths:
+        return [f"no PowerShell scripts under {scripts_dir.name}/ to parse"]
+
+    interpreter = shutil.which("pwsh") or shutil.which("powershell")
+    if interpreter is None:
+        return ["no PowerShell interpreter on PATH; skipping the PowerShell syntax check"]
+
+    try:
+        result = subprocess.run(
+            [interpreter, "-NoProfile", "-NonInteractive", "-Command", PS1_PARSE_PROBE],
+            input="\n".join(str(path) for path in paths).encode("utf-8"),
+            capture_output=True,
+        )
+    except FileNotFoundError as exc:
+        raise GateError(
+            f"'{interpreter}' could not be executed, so the PowerShell syntax check cannot run. "
+            "Install PowerShell or run this gate where an interpreter is available."
+        ) from exc
+
+    if result.returncode != 0:
+        detail = result.stderr.decode("utf-8", "replace").strip()
+        raise GateError(
+            "the PowerShell parser did not run (exit "
+            f"{result.returncode}): {detail or 'no error output'}"
+        )
+
+    stdout = result.stdout.decode("utf-8", "replace").strip()
+    try:
+        report = json.loads(stdout)
+    except json.JSONDecodeError as exc:
+        raise GateError(
+            f"the PowerShell parser produced no readable report: {stdout[:200]!r}"
+        ) from exc
+
+    # ConvertTo-Json collapses a one-element list to a bare object, so normalize before pairing.
+    entries = report.get("files", [])
+    if isinstance(entries, dict):
+        entries = [entries]
+    if len(entries) != len(paths):
+        raise GateError(
+            f"the PowerShell parser reported {len(entries)} files for {len(paths)} inputs, "
+            "so its output cannot be trusted."
+        )
+
+    problems: list[str] = []
+    for path, entry in zip(paths, entries):
+        relative = path.relative_to(repo_root).as_posix()
+        errors = entry.get("errors") or []
+        if isinstance(errors, dict):
+            errors = [errors]
+        for error in errors:
+            message = str(error.get("message", "")).strip()
+            problems.append(
+                f"{relative}:{error.get('line')}:{error.get('column')}: {message}"
+            )
+    if problems:
+        raise GateError(
+            "these PowerShell scripts have syntax errors:\n  " + "\n  ".join(problems)
+        )
+    return [f"{len(paths)} PowerShell scripts parse cleanly"]
+
+
 GATES = {
     "lockfile": check_lockfile,
     "api-doc": check_api_doc,
@@ -634,6 +748,7 @@ GATES = {
     "doc-marks": check_doc_marks,
     "docs-tracked": check_docs_tracked,
     "script-encoding": check_script_encoding,
+    "ps1-syntax": check_ps1_syntax,
 }
 
 
