@@ -79,6 +79,7 @@ $mcpOutputDir = Join-Path $releaseDir "mcp_server"
 $scriptOutputDir = Join-Path $releaseDir "scripts"
 $mcpSourceDir = Join-Path $ProjectRoot "mcp_server"
 $packageChecker = Join-Path $ProjectRoot "scripts/check_release_package.py"
+$metadataChecker = Join-Path $ProjectRoot "scripts/check_release_metadata.py"
 
 function Rewrite-PackagedReadmeLinks {
     param([string]$Path)
@@ -106,6 +107,24 @@ function Invoke-ArtifactCheck {
         throw "Release artifact check failed for '$ArtifactPath' with exit code $LASTEXITCODE."
     }
 }
+
+function Assert-ReleaseMetadataConsistent {
+    param([string]$CheckerPath)
+
+    if (-not (Test-Path $CheckerPath)) {
+        throw "Release metadata checker not found: $CheckerPath. Refusing to package a release."
+    }
+
+    $report = & python $CheckerPath
+    if ($LASTEXITCODE -ne 0) {
+        throw "Release version metadata is inconsistent (see the error above), so no package was built. Run 'powershell -ExecutionPolicy Bypass -File scripts/preflight-release.ps1' to find the file that drifted."
+    }
+
+    $report | Out-Host
+}
+
+Write-Host "[package-release] Validating release version metadata before packaging..."
+Assert-ReleaseMetadataConsistent -CheckerPath $metadataChecker
 
 Write-Host "[package-release] Building release mod artifacts..."
 $buildArgs = @(

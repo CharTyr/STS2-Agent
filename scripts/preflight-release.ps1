@@ -43,6 +43,7 @@ $packageChecker = Join-Path $ProjectRoot "scripts/check_release_package.py"
 $verificationGates = Join-Path $ProjectRoot "scripts/check_verification_gates.py"
 $verificationGateSelfTest = Join-Path $ProjectRoot "scripts/test-verification-gates.ps1"
 $nativeExitPropagationTest = Join-Path $ProjectRoot "scripts/test-native-exit-propagation.ps1"
+$budgetProxySelfTest = Join-Path $ProjectRoot "scripts/sts2-model-budget-proxy-selftest.py"
 $changelogPath = Join-Path $ProjectRoot "CHANGELOG.md"
 $releaseDoc = Join-Path $ProjectRoot "docs/release-readiness.md"
 $modManifestPath = Join-Path $ProjectRoot "STS2AIAgent/mod_manifest.json"
@@ -91,6 +92,10 @@ Invoke-Step -Name "MCP unit tests" -Action {
     Push-Location $mcpRoot
     try { Invoke-CheckedNative -FilePath "uv" -Arguments @("run", "--locked", "python", "-m", "unittest", "discover", "-s", "tests", "-v") }
     finally { Pop-Location }
+}
+
+Invoke-Step -Name "Check the model budget proxy (no-cost self-test)" -Action {
+    Invoke-CheckedNative -FilePath "python" -Arguments @($budgetProxySelfTest)
 }
 
 Invoke-Step -Name "Validate release version metadata" -Action {

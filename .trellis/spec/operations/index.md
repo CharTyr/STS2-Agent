@@ -16,7 +16,7 @@ Operations scripts are the repository's executable boundary for offline checks, 
 - Check [build-mod.ps1](../../../scripts/build-mod.ps1) before building. Default mode copies artifacts into the game's `mods/` directory; `-SkipInstall` limits the operation to build/staging.
 - Check [package-release.ps1](../../../scripts/package-release.ps1) before packaging. It invokes the mod build with `-SkipInstall`, creates a release directory and zip, and validates both artifacts.
 - Confirm the game is closed before any build that overwrites a DLL currently loaded by the game.
-- Confirm the three release version sources stay synchronized: [`mod_manifest.json`](../../../STS2AIAgent/mod_manifest.json), [`Router.cs`](../../../STS2AIAgent/Server/Router.cs), and [`pyproject.toml`](../../../mcp_server/pyproject.toml). The repository guidance records this contract in [`AGENTS.md`](../../../AGENTS.md).
+- Confirm the five release version sources stay synchronized: [`mod_manifest.json`](../../../STS2AIAgent/mod_manifest.json), [`mod_id.json`](../../../STS2AIAgent/mod_id.json), [`Router.cs`](../../../STS2AIAgent/Server/Router.cs), [`pyproject.toml`](../../../mcp_server/pyproject.toml), and the `sts2-ai-agent-mcp` entry in [`uv.lock`](../../../mcp_server/uv.lock). [`check_release_metadata.py`](../../../scripts/check_release_metadata.py) is the authority; `package-release.ps1` refuses to build a package while they disagree.
 
 ## Quality Check
 

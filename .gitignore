@@ -12,7 +12,6 @@ mcp_server/.venv/
 __pycache__/
 *.pyc
 # doc
-docs/
 sts2-ai-agent-mod-requirements.md
 AGENTS.md
 CLAUDE.md

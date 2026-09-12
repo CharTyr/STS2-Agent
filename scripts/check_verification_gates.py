@@ -22,6 +22,11 @@ api-facts  Facts that docs/api.md states and that code owns must still agree:
            otherwise drift silently on the next version bump or screen change.
 doc-marks  Date-stamped validation records must carry a historical marker, and
            archived topic pages must keep their redirect to history/.
+docs-tracked
+           Every Markdown page under docs/ must be tracked by git. docs/ used to
+           be gitignored, so a new page could be written, pass the local
+           doc-marks gate, and still be missing from every fresh checkout --
+           which is what CI builds from.
 script-encoding
            PowerShell scripts containing non-ASCII text must carry a UTF-8 BOM.
 
@@ -34,6 +39,7 @@ from __future__ import annotations
 import argparse
 import json
 import re
+import subprocess
 import sys
 from pathlib import Path
 
@@ -95,6 +101,12 @@ REQUIRED_SNAPSHOT_MARKERS = {
 REQUIRED_REDIRECTS = {
     "docs/sts2-coverage-gaps.md": "history/sts2-coverage-gaps_2026-03-10.md",
 }
+
+# The docs/ directory used to be gitignored, so pages could be written that no fresh
+# checkout (and therefore no CI run) would ever contain. Every page on disk has to be in
+# the index instead. A source tarball has no .git and no index to compare against, so the
+# check degrades to a printed skip there rather than inventing a failure.
+DOCS_MARKDOWN_GLOB = "*.md"
 
 # Windows PowerShell 5.1 — what `powershell` resolves to on the CI runner and on most developer
 # machines — reads a BOM-less script with the machine's ANSI code page. The same bytes therefore
@@ -545,6 +557,55 @@ def check_doc_marks(repo_root: Path) -> list[str]:
     return notes
 
 
+def list_tracked_docs(repo_root: Path) -> set[str]:
+    """Paths under docs/ that the git index tracks, as repo-root-relative posix strings."""
+    try:
+        result = subprocess.run(
+            # -z prints pathnames verbatim (no quoting), so non-ASCII filenames compare as-is.
+            ["git", "-C", str(repo_root), "ls-files", "-z", "--", "docs"],
+            capture_output=True,
+            check=True,
+        )
+    except FileNotFoundError as exc:
+        raise GateError(
+            f"{repo_root} is a git work tree but 'git' could not be executed, so the "
+            "docs/ tracking check cannot run. Install git or run this gate from a checkout."
+        ) from exc
+    except subprocess.CalledProcessError as exc:
+        detail = exc.stderr.decode("utf-8", "replace").strip()
+        raise GateError(f"'git ls-files' failed in {repo_root}: {detail}") from exc
+    return {item for item in result.stdout.decode("utf-8", "replace").split("\0") if item}
+
+
+def check_docs_tracked(repo_root: Path) -> list[str]:
+    """Every Markdown page under docs/ must be tracked, so none can fall out of the repo."""
+    if not (repo_root / ".git").exists():
+        return [
+            f"{repo_root} has no .git directory, so it is not a git work tree: "
+            "skipping the docs/ tracking check"
+        ]
+
+    on_disk = sorted(
+        path.relative_to(repo_root).as_posix()
+        for path in (repo_root / "docs").rglob(DOCS_MARKDOWN_GLOB)
+        if path.is_file()
+    )
+    if not on_disk:
+        return ["docs/ holds no Markdown files to check"]
+
+    tracked = list_tracked_docs(repo_root)
+    untracked = [relative for relative in on_disk if relative not in tracked]
+    if untracked:
+        raise GateError(
+            "these files exist under docs/ but git does not track them: "
+            + ", ".join(untracked)
+            + ". docs/ is no longer gitignored, so run 'git add' on them "
+            "(docs/ 已不再被忽略，请 git add) -- a fresh checkout, and therefore CI, "
+            "would not contain them."
+        )
+    return [f"all {len(on_disk)} Markdown pages under docs/ are tracked by git"]
+
+
 def check_script_encoding(repo_root: Path) -> list[str]:
     notes: list[str] = []
 
@@ -571,6 +632,7 @@ GATES = {
     "api-doc": check_api_doc,
     "api-facts": check_api_facts,
     "doc-marks": check_doc_marks,
+    "docs-tracked": check_docs_tracked,
     "script-encoding": check_script_encoding,
 }
 

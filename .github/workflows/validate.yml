@@ -25,6 +25,8 @@ jobs:
       - name: MCP tests
         working-directory: mcp_server
         run: uv run --locked python -m unittest discover -s tests -v
+      - name: Check the model budget proxy (no-cost self-test)
+        run: python scripts/sts2-model-budget-proxy-selftest.py
       - name: MCP tool contracts
         run: powershell -NoProfile -ExecutionPolicy Bypass -File scripts/test-mcp-tool-profile.ps1
       - name: Release metadata

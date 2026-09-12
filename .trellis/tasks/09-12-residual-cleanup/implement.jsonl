@@ -1,0 +1,3 @@
+{"file": ".trellis/spec/operations/validation-and-release.md", "reason": "The gate/preflight contract this task has to bring back in line with the scripts."}
+{"file": ".trellis/spec/operations/index.md", "reason": "Operations layer scope and which artifacts belong in this spec."}
+{"file": ".trellis/tasks/09-12-residual-cleanup/research/residual-evidence.md", "reason": "The four residuals with exact file:line evidence and what is deliberately out of scope."}

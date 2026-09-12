@@ -9,17 +9,52 @@ Run the commands below from the repository root (`C:\Users\chart\Documents\proje
 | `Push-Location mcp_server; uv run --locked python -m unittest discover -s tests -v; Pop-Location` | Python MCP unit tests using the standard-library `unittest` runner | No game required; tests use fakes and patched transport where appropriate |
 | `dotnet run --project STS2AIAgent.Tests/STS2AIAgent.Tests.csproj` | The custom executable C# core test harness | No game required; this is not a live Mod validation |
 | `powershell -ExecutionPolicy Bypass -File scripts/test-mcp-tool-profile.ps1` | Offline MCP tool-profile checks | No game required; keep the repository-root working directory |
-| `python scripts/check_verification_gates.py` | Dependency security floors, manifest/lock agreement, the `docs/api.md` action contract, and doc-snapshot markers | No game, no network, standard library only. Exits 1 with the failing gate named on stderr; select one gate with `--only lockfile\|api-doc\|doc-marks` |
+| `python scripts/check_verification_gates.py` | Six offline gates: `lockfile`, `api-doc`, `api-facts`, `doc-marks`, `docs-tracked`, and `script-encoding` (each is described in the gate table below) | No game, no network, standard library only. Exits 1 with the failing gate named on stderr; select one or more gates with `--only api-doc\|api-facts\|doc-marks\|docs-tracked\|lockfile\|script-encoding`. When the repository root has no `.git` directory, `docs-tracked` prints a skip note instead of failing |
 | `powershell -ExecutionPolicy Bypass -File scripts/test-verification-gates.ps1` | Proves the gates above actually fail on drift, using a throwaway fixture in the temp directory | No game, no network; creates and removes its own fixture only |
-| `powershell -ExecutionPolicy Bypass -File scripts/preflight-release.ps1` | Build, Python compile/import, offline profile, unit-test, version, packaging-source, and release-document checks | Produces static preflight output. Its final “manual validation next” list means live gameplay still needs separate checks; see [preflight-release.ps1](../../../scripts/preflight-release.ps1#L142) |
+| `powershell -ExecutionPolicy Bypass -File scripts/preflight-release.ps1` | Build, Python compile/import, offline profile, unit-test, version, packaging-source, and release-document checks | Produces static preflight output. Its final “manual validation next” list means live gameplay still needs separate checks; see [preflight-release.ps1](../../../scripts/preflight-release.ps1#L158) |
+
+The six gates are:
+
+| Gate | What it verifies |
+| --- | --- |
+| `lockfile` | Dependency security floors (`fastmcp`, `fast-uri`) plus manifest/lock agreement for `mcp_server/uv.lock` and `package-lock.json` |
+| `api-doc` | Every action the `POST /action` switch accepts appears in the `docs/api.md` action contract block, and the block lists no retired action |
+| `api-facts` | Facts `docs/api.md` states that code owns: the documented `mod_version` vs `mod_manifest.json`, the screen enum vs `GameStateService.ResolveNonModalScreen`, and the documented default port vs `HttpServer.DefaultPort` |
+| `doc-marks` | Date-stamped validation records carry a historical marker, and archived topic pages keep their redirect to `history/` |
+| `docs-tracked` | Every Markdown page under `docs/` is tracked by git, so a newly written page cannot fall out of a fresh checkout (which is what CI builds). Skips with a note when the repository root has no `.git` |
+| `script-encoding` | PowerShell scripts containing non-ASCII text carry a UTF-8 BOM |
 
 The profile command runs [test-mcp-tool-profile.ps1](../../../scripts/test-mcp-tool-profile.ps1); the C# command targets [STS2AIAgent.Tests.csproj](../../../STS2AIAgent.Tests/STS2AIAgent.Tests.csproj).
 
-The preflight script is the canonical source for the Python test command: it enters `mcp_server/` and runs `uv run --locked python -m unittest discover -s tests -v` ([source](../../../scripts/preflight-release.ps1#L87)).
+The preflight script is the canonical source for the Python test command: it enters `mcp_server/` and runs `uv run --locked python -m unittest discover -s tests -v` ([source](../../../scripts/preflight-release.ps1#L92)).
+
+## Script inventory
+
+These are the offline check entry points, plus the scripts that are deliberately left out of every automated check.
+
+| Entry point | Command | What it checks |
+| --- | --- | --- |
+| Offline verification gates | `python scripts/check_verification_gates.py` | The six gates above; `--only <gate>` narrows the run |
+| Release metadata | `python scripts/check_release_metadata.py` | The five version sources below still agree |
+| Packaging source contract | `python scripts/check_release_package.py --source-root .` | The packaging script still collects the player-facing files (source mode; artifact mode inspects a real release directory or zip and is not an offline check) |
+| Budget proxy self-test | `python scripts/sts2-model-budget-proxy-selftest.py` | No-cost offline self-test of the validation budget proxy; asserts the real ledger is untouched and never calls the paid upstream |
+| Gate drift self-test | `powershell -ExecutionPolicy Bypass -File scripts/test-verification-gates.ps1` | Proves the gates fail on drift, using a throwaway fixture |
+| MCP tool profiles | `powershell -ExecutionPolicy Bypass -File scripts/test-mcp-tool-profile.ps1` | `guided` / `layered` / `full` tool registration |
+| PowerShell failure propagation | `powershell -ExecutionPolicy Bypass -File scripts/test-native-exit-propagation.ps1` | A failing native command propagates as a script failure |
+| Static preflight | `powershell -ExecutionPolicy Bypass -File scripts/preflight-release.ps1` | Aggregates the offline checks plus build, compile, version, package-source, and release-document checks |
+
+The release path guards the version contract twice: [preflight-release.ps1](../../../scripts/preflight-release.ps1#L96) re-checks the metadata inline, and [package-release.ps1](../../../scripts/package-release.ps1#L82) aborts before building when [check_release_metadata.py](../../../scripts/check_release_metadata.py) reports an inconsistency.
+
+Some scripts are deliberately not wired into any automated check. They are not dead code; they are manual or real-machine entry points:
+
+- [scripts/scan-assembly-strings.ps1](../../../scripts/scan-assembly-strings.ps1#L1) requires a real `sts2.dll` — its `$AssemblyPath` parameter is mandatory ([L2](../../../scripts/scan-assembly-strings.ps1#L2)) — so it only runs on a machine with the game installed. Its invocation is recorded in [docs/reverse-engineering.md](../../../docs/reverse-engineering.md#L297).
+- [scripts/generate-sts2-knowledge.ps1](../../../scripts/generate-sts2-knowledge.ps1#L15) regenerates `docs/game-knowledge/*.md` from `extraction/decompiled`, which is gitignored and absent from CI, so it cannot run in a fresh checkout.
+- [scripts/sts2-coop-full-run-acceptance.ps1](../../../scripts/sts2-coop-full-run-acceptance.ps1#L28) and [scripts/test-coop-play-together.ps1](../../../scripts/test-coop-play-together.ps1#L1) are two-instance (host + companion) acceptance orchestration: they need a live game, two Mod API ports ([L2](../../../scripts/test-coop-play-together.ps1#L2)), and the model key.
+- [scripts/sts2-validation-secrets.ps1](../../../scripts/sts2-validation-secrets.ps1#L3) only supplies that DPAPI-protected key material, and is dot-sourced by the coop acceptance script alone ([L33](../../../scripts/sts2-coop-full-run-acceptance.ps1#L33)).
 
 ## Game-connected validation
 
-The shared validation entry point registers these subcommands in [build_parser](../../../scripts/run_sts2_validation.py#L2598):
+The shared validation entry point registers these subcommands in [build_parser](../../../scripts/run_sts2_validation.py#L2728):
 
 ```powershell
 python scripts/run_sts2_validation.py mod-load
@@ -45,10 +80,18 @@ powershell -ExecutionPolicy Bypass -File scripts/package-release.ps1 -Configurat
 
 - The default [build script](../../../scripts/build-mod.ps1#L110) builds the C# DLL, packs the PCK, and copies the mod artifacts into the game's `mods/` directory. Close the game before using this mode so a loaded DLL is not locked.
 - `-SkipInstall` still builds and stages the DLL/PCK but skips copying into the game directory ([install gate](../../../scripts/build-mod.ps1#L145)). Use it for packaging or a build-only check.
-- The [package script](../../../scripts/package-release.ps1#L110) calls `build-mod.ps1 -SkipInstall`, copies the release contents, creates a zip, and validates both the release directory and zip ([artifact checks](../../../scripts/package-release.ps1#L164)).
+- The [package script](../../../scripts/package-release.ps1#L130) calls `build-mod.ps1 -SkipInstall`, copies the release contents, creates a zip, and validates both the release directory and zip ([artifact checks](../../../scripts/package-release.ps1#L183)).
 
 ## Release metadata
 
-Keep the release version synchronized in [`STS2AIAgent/mod_manifest.json`](../../../STS2AIAgent/mod_manifest.json), [`STS2AIAgent/Server/Router.cs`](../../../STS2AIAgent/Server/Router.cs), and [`mcp_server/pyproject.toml`](../../../mcp_server/pyproject.toml), as required by [`AGENTS.md`](../../../AGENTS.md). The preflight script also checks `mod_id.json` and the MCP lockfile, so a release can fail even when those three primary values match.
+[check_release_metadata.py](../../../scripts/check_release_metadata.py) is the source of truth for this contract. It reads all five version sources, requires the version to match `major.minor.patch[-suffix]`, and exits nonzero unless every one of them is identical:
+
+1. [STS2AIAgent/mod_manifest.json](../../../STS2AIAgent/mod_manifest.json) → `"version"` (the value the others are compared against)
+2. [STS2AIAgent/mod_id.json](../../../STS2AIAgent/mod_id.json) → `"version"`
+3. [STS2AIAgent/Server/Router.cs](../../../STS2AIAgent/Server/Router.cs) → `internal const string ModVersion = "x.y.z";` (a `private` const is also accepted)
+4. [mcp_server/pyproject.toml](../../../mcp_server/pyproject.toml) → `project.version`
+5. [mcp_server/uv.lock](../../../mcp_server/uv.lock) → the `version` of the `[[package]]` named `sts2-ai-agent-mcp`
+
+[AGENTS.md](../../../AGENTS.md) lists the same five files, [preflight-release.ps1](../../../scripts/preflight-release.ps1#L96) re-checks them inline, and [package-release.ps1](../../../scripts/package-release.ps1#L82) runs the checker before it starts building, so a package cannot be produced from drifted metadata.
 
 Static checks and package inspection do not prove that the Mod loads in the real game. Use the game-connected commands and the manual release checklist only when the task authorizes those side effects.

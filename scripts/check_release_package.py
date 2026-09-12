@@ -19,6 +19,9 @@ from pathlib import Path
 from typing import Iterable, Protocol
 
 
+# Files a source checkout must contain: player-facing docs and launchers, the build and
+# packaging inputs, and the offline validation entry points the gates invoke. Entries here do
+# not have to ship in the release zip; ARTIFACT_FILES below is the shipped set.
 SOURCE_FILES = (
     "README.md",
     "README.zh-CN.md",
@@ -32,6 +35,7 @@ SOURCE_FILES = (
     "scripts/start-mcp-stdio.ps1",
     "scripts/start-mcp-network.ps1",
     "scripts/test-mcp-tool-profile.ps1",
+    "scripts/sts2-model-budget-proxy-selftest.py",
 )
 
 ARTIFACT_FILES = (

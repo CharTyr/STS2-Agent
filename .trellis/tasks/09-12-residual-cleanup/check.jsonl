@@ -1,0 +1,2 @@
+{"file": ".trellis/spec/operations/validation-and-release.md", "reason": "Verify the refreshed gate table, --only list and version-file count match the scripts."}
+{"file": ".trellis/tasks/09-12-residual-cleanup/research/residual-evidence.md", "reason": "Confirm each residual is actually closed and nothing destructive was done."}

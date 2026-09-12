@@ -34,6 +34,33 @@ function Invoke-Gate([string]$Fixture, [string]$Only) {
     return @{ ExitCode = $LASTEXITCODE; Output = $output }
 }
 
+function Invoke-Git([string]$Path, [string[]]$Arguments) {
+    # git writes progress and line-ending warnings to stderr; that is not a script error.
+    $previous = $ErrorActionPreference
+    $ErrorActionPreference = "Continue"
+    try {
+        $output = & git -C $Path @Arguments 2>&1 | Out-String
+    }
+    finally {
+        $ErrorActionPreference = $previous
+    }
+
+    return @{ ExitCode = $LASTEXITCODE; Output = $output }
+}
+
+function Remove-Fixture([string]$Path) {
+    if (-not (Test-Path -LiteralPath $Path)) { return }
+    try {
+        Remove-Item -LiteralPath $Path -Recurse -Force -ErrorAction Stop
+    }
+    catch {
+        # git marks its object files read-only on Windows; clear the attribute and retry once.
+        Get-ChildItem -LiteralPath $Path -Recurse -Force -ErrorAction SilentlyContinue |
+            ForEach-Object { $_.Attributes = "Normal" }
+        Remove-Item -LiteralPath $Path -Recurse -Force -ErrorAction Stop
+    }
+}
+
 $fixture = Join-Path ([System.IO.Path]::GetTempPath()) ("sts2-verification-gates-" + [Guid]::NewGuid().ToString("N").Substring(0, 8))
 $failures = 0
 
@@ -217,6 +244,43 @@ try {
     Assert-Case -Name "api-facts gate rejects a default port the docs do not state" -Only "api-facts"
     Write-Utf8 $httpServer $originalHttpServer
 
+    # 10. A docs/*.md that is on disk but that git does not track. docs/ used to be gitignored,
+    # so a new page could pass the local doc-marks gate and still be absent from every fresh
+    # checkout -- which is exactly what CI builds from. The gate compares against the git index,
+    # so outside a work tree it has to skip with a note instead of failing: a source tarball has
+    # no .git and no index.
+    $noRepo = Invoke-Gate -Fixture $fixture -Only "docs-tracked"
+    if ($noRepo.ExitCode -ne 0 -or $noRepo.Output -notmatch "skipping the docs/ tracking check") {
+        Write-Host "FAIL  docs-tracked gate skips a tree without .git"
+        Write-Host $noRepo.Output
+        $script:failures++
+    }
+    else {
+        Write-Host "PASS  docs-tracked gate skips a tree without .git"
+    }
+
+    # The fixture is not a repository, so give it one and track everything in it. That is the
+    # state a developer is in after the docs/ ignore rule is gone and the pages are added.
+    $gitInit = Invoke-Git -Path $fixture -Arguments @("init", "--quiet")
+    if ($gitInit.ExitCode -ne 0) { throw "fixture setup failed: git init`n$($gitInit.Output)" }
+    $gitAdd = Invoke-Git -Path $fixture -Arguments @("add", "-A")
+    if ($gitAdd.ExitCode -ne 0) { throw "fixture setup failed: git add -A`n$($gitAdd.Output)" }
+
+    $trackedRepo = Invoke-Gate -Fixture $fixture -Only "docs-tracked"
+    if ($trackedRepo.ExitCode -ne 0) {
+        Write-Host "FAIL  docs-tracked gate rejects a fully tracked docs tree"
+        Write-Host $trackedRepo.Output
+        $script:failures++
+    }
+    else {
+        Write-Host "PASS  docs-tracked gate accepts a fully tracked docs tree"
+    }
+
+    $untrackedDoc = Join-Path $fixtureDocs "fixture-untracked-page.md"
+    Write-Utf8 $untrackedDoc "# Fixture page`n"
+    Assert-Case -Name "docs-tracked gate rejects a docs file git does not track" -Only "docs-tracked"
+    Remove-Item -LiteralPath $untrackedDoc -Force
+
     $restored = Invoke-Gate -Fixture $fixture -Only $null
     if ($restored.ExitCode -ne 0) {
         Write-Host "FAIL  restored fixture (every mutation must be reverted)"
@@ -228,9 +292,7 @@ try {
     }
 }
 finally {
-    if (Test-Path -LiteralPath $fixture) {
-        Remove-Item -LiteralPath $fixture -Recurse -Force
-    }
+    Remove-Fixture $fixture
 }
 
 if ($failures -gt 0) {

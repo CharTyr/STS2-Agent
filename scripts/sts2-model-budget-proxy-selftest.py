@@ -155,8 +155,21 @@ def test_concurrency(dir_path: Path) -> str:
 
 
 class MockUpstream(BaseHTTPRequestHandler):
+    # Keep-alive framing matters here, not just tidiness: with the default HTTP/1.0 the
+    # server closes the socket right after the response, and Windows turns that close into
+    # a reset while the proxy is still reading -> ConnectionAbortedError -> a spurious 502.
+    # HTTP/1.1 plus a drained request body keeps every exchange framed so the proxy never
+    # sees an aborted read.
+    protocol_version = "HTTP/1.1"
+
     def log_message(self, fmt: str, *args: object) -> None:
         return
+
+    def _drain_body(self) -> None:
+        """Consume the request body so a kept-alive connection stays usable."""
+        length = int(self.headers.get("Content-Length") or 0)
+        if length > 0:
+            self.rfile.read(length)
 
     def do_GET(self) -> None:  # noqa: N802
         body = json.dumps({"data": [{"id": "MiniMaxAI/MiniMax-M3"}], "usage": {"total_tokens": 1}}).encode()
@@ -167,6 +180,7 @@ class MockUpstream(BaseHTTPRequestHandler):
         self.wfile.write(body)
 
     def do_POST(self) -> None:  # noqa: N802
+        self._drain_body()
         mode = getattr(self.server, "mode", "json")
         if mode == "sse":
             payload = (
