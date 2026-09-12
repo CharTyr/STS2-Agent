@@ -1589,9 +1589,12 @@ def suite_assert_active_run_main_menu(args: argparse.Namespace) -> dict[str, Any
         delay_ms=args.poll_delay_ms,
     )
     assert_action_available(state, "abandon_run")
-    # The main menu disables its timeline button while a run save exists
-    # (NMainMenu.UpdateTimelineButtonBehavior), so open_timeline is not part of the active-run
-    # contract; it is only reported here and exercised from a menu without a run.
+    # The timeline button's state follows the profile's timeline progress rather than the run save
+    # alone: NMainMenu.UpdateTimelineButtonBehavior enables it in one branch (epochs discovered and
+    # no run save) and in another can enable it while a save exists, when no epoch has been
+    # discovered yet. So nothing may assume it is either present or absent here - it is reported as
+    # a diagnostic. Observed on a live run on 2026-09-12: with an active run save and many complete
+    # epochs, open_timeline was available and opened the timeline screen.
     return {
         "screen": state.get("screen"),
         "available_actions": list(state.get("available_actions") or []),

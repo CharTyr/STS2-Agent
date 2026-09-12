@@ -90,10 +90,11 @@ $state = Wait-ForState -Description "active-run MAIN_MENU" -Condition {
 
 Assert-ActionAvailable -State $state -ActionName "abandon_run"
 
-# The main menu disables its timeline button while a run save exists
-# (NMainMenu.UpdateTimelineButtonBehavior), so open_timeline is not part of the active-run menu
-# contract. run_sts2_validation.py suite_new_run_lifecycle asserts the same thing: it opens the
-# timeline only from a menu without a run. Record it as a diagnostic instead of asserting it.
+# The timeline button follows the profile's timeline progress, not the run save alone
+# (NMainMenu.UpdateTimelineButtonBehavior has a branch that enables it while a save exists, when no
+# epoch has been discovered yet). Live run 2026-09-12: with an active run save and many complete
+# epochs, open_timeline was available and worked, so asserting either way would be wrong. Record it
+# as a diagnostic; the interactive sequence itself lives in run_sts2_validation.py's lifecycle suite.
 $openTimelineAvailable = @($state.available_actions) -contains "open_timeline"
 
 $abandonResponse = Invoke-Action -Payload @{ action = "abandon_run" }
