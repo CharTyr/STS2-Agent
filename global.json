@@ -1,0 +1,14 @@
+{
+  // The mod and the offline test project both target net9.0, and the test project
+  // references the Roslyn assemblies that ship inside the SDK
+  // ($(MSBuildSDKsPath)/../Roslyn/bincore) to parse the mod sources it cannot
+  // compile. A newer SDK hands over a newer Roslyn: the .NET 10 SDK's copy is
+  // built against System.Runtime 10.0.0.0, which a net9.0 consumer cannot
+  // reference (CS1705). Pin the feature band so the CI image's newer SDK cannot
+  // be selected by accident. rollForward stays inside 9.0.x on purpose.
+  "sdk": {
+    "version": "9.0.100",
+    "rollForward": "latestFeature"
+  }
+}
+
