@@ -1,6 +1,7 @@
 using System.Reflection;
 using MegaCrit.Sts2.Core.Helpers;
 using MegaCrit.Sts2.Core.Logging;
+using STS2AIAgent.Agent;
 using STS2AIAgent.Config;
 using STS2AIAgent.Game;
 using STS2AIAgent.Localization;
@@ -97,7 +98,8 @@ internal static class DualInstanceCoordinator
         try
         {
             Log.Info($"{LogPrefix} Companion bootstrap starting");
-            var deadline = DateTime.UtcNow + TimeSpan.FromMinutes(5);
+            var budget = TimeSpan.FromMinutes(5);
+            var deadline = DateTime.UtcNow + budget;
             string? lastLog = null;
             while (DateTime.UtcNow < deadline)
             {
@@ -108,10 +110,18 @@ internal static class DualInstanceCoordinator
                     return true;
                 });
                 var snapshot = await GetBootstrapSnapshotAsync();
+                var autoSelectCharacter = AgentRuntime.Instance?.Settings?.CompanionAutoSelectCharacter ?? true;
                 var next = CoopLaunchPolicy.NextCompanionBootstrapAction(
                     snapshot.Screen,
                     snapshot.Actions,
-                    snapshot.HasLobby);
+                    snapshot.HasLobby,
+                    autoSelectCharacter);
+                if (CoopLaunchPolicy.WaitsForHumanChoice(snapshot.Screen, snapshot.Actions, snapshot.HasLobby, autoSelectCharacter))
+                {
+                    // The five-minute budget covers machine steps only. While a person is choosing
+                    // the character the clock is held, so the companion never times itself out.
+                    deadline = DateTime.UtcNow + budget;
+                }
                 var log = snapshot.Screen + "|" + (next ?? "-") + "|" + string.Join(",", snapshot.Actions);
                 if (!string.Equals(log, lastLog, StringComparison.Ordinal))
                 {

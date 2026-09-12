@@ -189,6 +189,7 @@ internal static class TestRunner
         yield return ("CoopStartup.SettingsIsolation", () => Task.Run(CompanionStartupTests.SettingsPathCanBeIsolated));
         yield return ("CoopStartup.PortFile", () => Task.Run(CompanionStartupTests.CompanionPortFileRoundTrip));
         yield return ("CoopStartup.CompanionDoesNotHost", () => Task.Run(CompanionStartupTests.CompanionBootstrapDoesNotHostLobby));
+        yield return ("CoopStartup.HumanChoiceHoldsClock", () => Task.Run(CompanionStartupTests.BootstrapHoldsTheClockOnlyWhileAHumanChooses));
         yield return ("CoopStartup.Identity", () => Task.Run(CompanionStartupTests.HealthRequiresExactCompanionIdentity));
         yield return ("CoopStartup.Preconditions", () => Task.Run(CompanionStartupTests.LaunchPreconditionsProtectHumanRun));
         yield return ("SettingsStore.RoundTrip", () => Task.Run(SettingsStoreTests.RoundTrip_PreservesEndpointsModelsAndRoles));

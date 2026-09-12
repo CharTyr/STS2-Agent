@@ -85,6 +85,7 @@ https://github.com/user-attachments/assets/89353468-a299-4315-9516-e520bcbfbd4b
 - 系统会自动拉起第二个游戏实例并加入本地联机大厅！你控制主角色，AI 队友控制副角色。
 - 主窗口会显示队友是否在连、正在等你/等游戏/请求模型，或为什么停、下一步点哪里。点 **暂停队友** 会立刻反馈；已提交的动作会先完成。
 - 可以直接用文字和队友商量路线与集火策略。
+- 队友默认拿大厅预选的角色并自动准备。想自己给它选角（在队友窗口里选，或通过队友 API 先 `select_character` 再 `embark`），把 mod 的 `settings.json` 里 `companionAutoSelectCharacter` 设为 `false`；此时队友会停在选角界面等你，没有超时。
 
 ---
 

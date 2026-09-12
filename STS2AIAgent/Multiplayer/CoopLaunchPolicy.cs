@@ -157,10 +157,44 @@ internal static class CoopLaunchPolicy
         return null;
     }
 
+    /// <summary>
+    /// True while the bootstrap is idle only because a human (or an external agent) has to pick
+    /// the character: the flag is off and the companion sits on a screen where that choice is
+    /// made. The bootstrap deadline must not run during this wait; it was sized for machine
+    /// steps, and the person may be away from the companion window for a while.
+    /// </summary>
+    public static bool WaitsForHumanChoice(
+        string screen,
+        IReadOnlyList<string> availableActions,
+        bool hasLobby,
+        bool autoSelectCharacter)
+    {
+        if (autoSelectCharacter)
+        {
+            return false;
+        }
+
+        if (string.Equals(screen, "CHARACTER_SELECT", StringComparison.OrdinalIgnoreCase))
+        {
+            return Contains(availableActions, "select_character")
+                || Contains(availableActions, "ready_multiplayer_lobby")
+                || Contains(availableActions, "embark");
+        }
+
+        if (string.Equals(screen, "MULTIPLAYER_LOBBY", StringComparison.OrdinalIgnoreCase))
+        {
+            return hasLobby
+                && (Contains(availableActions, "select_character") || Contains(availableActions, "ready_multiplayer_lobby"));
+        }
+
+        return false;
+    }
+
     public static string? NextCompanionBootstrapAction(
         string screen,
         IReadOnlyList<string> availableActions,
-        bool hasLobby)
+        bool hasLobby,
+        bool autoSelectCharacter = true)
     {
         var actions = availableActions ?? Array.Empty<string>();
         if (string.Equals(screen, "MODAL", StringComparison.OrdinalIgnoreCase))
@@ -178,6 +212,10 @@ internal static class CoopLaunchPolicy
 
         if (string.Equals(screen, "CHARACTER_SELECT", StringComparison.OrdinalIgnoreCase))
         {
+            // The lobby preselects the first character, so auto-ready locks it in. With
+            // CompanionAutoSelectCharacter=false the choice and Ready are left to a human or
+            // the external agent (select_character + embark on the companion API).
+            if (!autoSelectCharacter) return null;
             if (Contains(actions, "embark")) return "embark";
             if (Contains(actions, "ready_multiplayer_lobby")) return "ready_multiplayer_lobby";
             if (Contains(actions, "select_character")) return "select_character";
@@ -225,7 +263,10 @@ internal static class CoopLaunchPolicy
 
         if (string.Equals(screen, "MULTIPLAYER_LOBBY", StringComparison.OrdinalIgnoreCase))
         {
+            // Joining is machine work and always happens; picking and readying are the same
+            // human decision as on CHARACTER_SELECT and follow the same flag.
             if (!hasLobby && Contains(actions, "join_multiplayer_lobby")) return "join_multiplayer_lobby";
+            if (!autoSelectCharacter) return null;
             if (Contains(actions, "ready_multiplayer_lobby")) return "ready_multiplayer_lobby";
             if (Contains(actions, "select_character")) return "select_character";
             return null;

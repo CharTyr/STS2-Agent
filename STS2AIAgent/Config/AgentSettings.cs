@@ -24,6 +24,9 @@ internal sealed class AgentSettings
 
     public bool HasSeenFirstRunGuide { get; set; }
 
+    /// <summary>Companion picks the preselected character and readies up by itself. Set false to choose for it via the companion API.</summary>
+    public bool CompanionAutoSelectCharacter { get; set; } = true;
+
     public List<ModelRoleTestRecord> RoleTests { get; set; } = new();
 
     public float? OverlayLeft { get; set; }
