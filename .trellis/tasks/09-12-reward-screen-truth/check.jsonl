@@ -1,0 +1,2 @@
+{"file": ".trellis/spec/mod/game-actions.md", "reason": "Verify the screen name change keeps the state contract the agent relies on."}
+{"file": ".trellis/tasks/09-12-reward-screen-truth/research/screen-shadow-audit.md", "reason": "Confirm the new branch precedes the generic one and no other arm changed value."}

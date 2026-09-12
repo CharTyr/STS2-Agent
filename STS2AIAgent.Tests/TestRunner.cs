@@ -445,5 +445,6 @@ internal static class TestRunner
         yield return ("CompactViewFidelity.IntentNumbers", () => Task.Run(CompactViewFidelityTests.IntentNumbersReachTheCompactCombatView));
         yield return ("CompactViewFidelity.CardAndRelicIds", () => Task.Run(CompactViewFidelityTests.CardAndRelicIdsReachTheCompactViews));
         yield return ("CompactViewFidelity.OverlayAndParty", () => Task.Run(CompactViewFidelityTests.OverlayAndPartyReachTheCompactView));
+        yield return ("RewardScreen.BranchPrecedesGrid", () => Task.Run(RewardScreenContractTests.RewardOverlayBranchPrecedesTheVisibleGrid));
     }
 }

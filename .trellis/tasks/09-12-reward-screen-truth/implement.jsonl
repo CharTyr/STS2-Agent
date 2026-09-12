@@ -1,0 +1,3 @@
+{"file": ".trellis/spec/mod/game-actions.md", "reason": "Action/state contract and how screen resolution feeds the agent's action choices."}
+{"file": ".trellis/spec/mod/index.md", "reason": "Offline C# test conventions and the build command used for type checking."}
+{"file": ".trellis/tasks/09-12-reward-screen-truth/research/screen-shadow-audit.md", "reason": "The shadowing evidence, the same-value arms, and which existing assets stay green."}

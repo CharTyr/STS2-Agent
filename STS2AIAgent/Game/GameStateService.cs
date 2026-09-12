@@ -6817,6 +6817,15 @@ internal static class GameStateService
             return "CARDS_VIEW";
         }
 
+        // The reward-card overlay carries visible grid card holders, so the generic grid branch below
+        // would name it CARD_SELECTION and send the model after select_deck_card, an action this screen
+        // deliberately does not offer. Its own switch arm (REWARD) can only be reached from here, the
+        // same way NUnlockScreen claims UNLOCK ahead of the same generic branch.
+        if (currentScreen is NCardRewardSelectionScreen)
+        {
+            return "REWARD";
+        }
+
         if (currentScreen is Node rootNode &&
             currentScreen is not NChooseABundleSelectionScreen &&
             GetVisibleGridCardHolders(rootNode).Count > 0)
