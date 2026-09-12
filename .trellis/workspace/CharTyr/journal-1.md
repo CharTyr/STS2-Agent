@@ -230,3 +230,24 @@ Follow-up to the action-trust child, chosen by the user as option A. resolve_rew
 ### Status
 
 [OK] **Completed**
+
+
+## Session 8: Reward skip scope: bind the skip intent to the reward set that recorded it
+
+**Date**: 2026-09-12
+**Task**: Reward skip scope: bind the skip intent to the reward set that recorded it
+**Branch**: `main`
+
+### Summary
+
+Second follow-up to the action-trust work, chosen by the user as option B. The card-reward skip lived in a process-wide bool that only the drain branch observing a screen change cleared; a drain ending through its own proceed click, the empty-reward escape, or the timeout left it set, and the reward-button filter then excluded the CardReward button from the next reward set, silently dropping that set card reward. The intent genuinely must outlive its request (skip_reward_cards is one call and the collect that follows is another), so instead of threading it the fix keys it to the owning NRewardsScreen instance id: recorded on the selection screen by finding the sibling that shares the overlay stack, honored only for that same set, and ignored when the owner cannot be resolved. The fail-safe direction is deliberate: a missing identity re-shows a visible card reward rather than dropping one. Decompiled evidence confirms the selection overlay is pushed onto the same stack while the owning rewards screen stays there as a live sibling, so the recorded and read ids name the same object. Review found no defect and used mutation probes to prove the new tests are not vacuous (renaming the predicate to an unscoped bool still fails; removing the id-zero guard fails). C# 290 PASS, MCP 76 OK, gates and a 12-step preflight green.
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `fa7ffbe` | (see git log) |
+
+### Status
+
+[OK] **Completed**
