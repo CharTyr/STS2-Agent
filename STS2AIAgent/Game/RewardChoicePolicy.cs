@@ -53,3 +53,35 @@ internal static class RewardChoicePolicy
             : new RewardChoiceResolution(RewardChoiceKind.Pick, pending, false, "option_index is out of range");
     }
 }
+
+/// <summary>
+/// One reward-drain invocation's card-choice intent. Created per request and never
+/// stored statically, so a drain that finished, timed out, or never reached a card
+/// reward cannot influence a later call.
+/// </summary>
+internal sealed class RewardFlowChoiceState
+{
+    private int _pendingChoice;
+
+    public RewardFlowChoiceState(int pendingChoice)
+    {
+        _pendingChoice = pendingChoice;
+    }
+
+    /// <summary>
+    /// The choice this request still has to spend. After a consumption it reflects the
+    /// automatic behavior, not the value the request originally carried.
+    /// </summary>
+    public int PendingChoice => _pendingChoice;
+
+    /// <summary>
+    /// Returns the pending choice and resets it to the automatic behavior, so a second
+    /// card-reward screen inside the same drain takes the first card.
+    /// </summary>
+    public int ConsumePendingChoice()
+    {
+        var pending = _pendingChoice;
+        _pendingChoice = RewardChoicePolicy.AutoChoice;
+        return pending;
+    }
+}

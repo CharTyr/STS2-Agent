@@ -78,13 +78,6 @@ internal static class GameActionService
     internal static int SkillsPlayedThisTurn { get; private set; }
     internal static int LastTurnNumber { get; private set; }
 
-    /// <summary>
-    /// When set by resolve_rewards, TryResolveCardRewardAsync picks this
-    /// card index instead of the first option. -2 means skip.
-    /// -1 means no pending choice (use default behavior).
-    /// </summary>
-    private static int _pendingCardRewardChoice = -1;
-
     internal static void SyncCardPlayCounters(int currentTurn)
     {
         if (currentTurn == LastTurnNumber)
@@ -1846,9 +1839,9 @@ internal static class GameActionService
             }
         }
 
-        _pendingCardRewardChoice = pendingChoice;
+        var choice = new RewardFlowChoiceState(pendingChoice);
 
-        var stable = await DrainRewardFlowAsync(TimeSpan.FromSeconds(20));
+        var stable = await DrainRewardFlowAsync(TimeSpan.FromSeconds(20), choice);
 
         return new ActionResponsePayload
         {
@@ -1874,7 +1867,9 @@ internal static class GameActionService
             });
         }
 
-        var stable = await DrainRewardFlowAsync(TimeSpan.FromSeconds(20));
+        var stable = await DrainRewardFlowAsync(
+            TimeSpan.FromSeconds(20),
+            new RewardFlowChoiceState(RewardChoicePolicy.AutoChoice));
 
         return new ActionResponsePayload
         {
@@ -2359,7 +2354,7 @@ internal static class GameActionService
         return confirmButton != null && GodotObject.IsInstanceValid(confirmButton);
     }
 
-    private static async Task<bool> DrainRewardFlowAsync(TimeSpan timeout)
+    private static async Task<bool> DrainRewardFlowAsync(TimeSpan timeout, RewardFlowChoiceState choice)
     {
         if (NGame.Instance == null)
         {
@@ -2380,7 +2375,7 @@ internal static class GameActionService
 
             if (currentScreen is NCardRewardSelectionScreen cardRewardScreen)
             {
-                if (!await TryResolveCardRewardAsync(cardRewardScreen, deadline))
+                if (!await TryResolveCardRewardAsync(cardRewardScreen, deadline, choice))
                 {
                     return false;
                 }
@@ -2537,7 +2532,10 @@ internal static class GameActionService
         }
     }
 
-    private static async Task<bool> TryResolveCardRewardAsync(NCardRewardSelectionScreen cardRewardScreen, DateTime deadline)
+    private static async Task<bool> TryResolveCardRewardAsync(
+        NCardRewardSelectionScreen cardRewardScreen,
+        DateTime deadline,
+        RewardFlowChoiceState choice)
     {
         for (var i = 0; i < 24 && DateTime.UtcNow < deadline; i++)
         {
@@ -2545,7 +2543,7 @@ internal static class GameActionService
         }
 
         var options = GameStateService.GetCardRewardOptions(cardRewardScreen);
-        var resolution = RewardChoicePolicy.Resolve(_pendingCardRewardChoice, options.Count);
+        var resolution = RewardChoicePolicy.Resolve(choice.ConsumePendingChoice(), options.Count);
 
         // An explicit index missing from the live option list must fail instead of
         // silently falling back to the first option. "No choice given" with no options
@@ -2557,7 +2555,6 @@ internal static class GameActionService
                 return false;
             }
 
-            _pendingCardRewardChoice = RewardChoicePolicy.AutoChoice;
             throw new ApiException(409, "invalid_target", resolution.Reason ?? "option_index is out of range.", new
             {
                 action = "resolve_rewards",
@@ -2569,7 +2566,6 @@ internal static class GameActionService
         // If resolve_rewards requested a skip, click the skip alternative
         if (resolution.Kind == RewardChoiceKind.Skip)
         {
-            _pendingCardRewardChoice = RewardChoicePolicy.AutoChoice;
             var alternatives = GameStateService.GetCardRewardAlternativeButtons(cardRewardScreen);
             if (alternatives.Count > 0)
             {
@@ -2586,7 +2582,6 @@ internal static class GameActionService
             return false;
         }
 
-        _pendingCardRewardChoice = RewardChoicePolicy.AutoChoice;
         var selected = options[resolution.Index];
 
         selected.EmitSignal(NCardHolder.SignalName.Pressed, selected);

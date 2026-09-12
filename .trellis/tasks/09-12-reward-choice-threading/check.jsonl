@@ -1,0 +1,3 @@
+{"file": ".trellis/spec/mod/game-actions.md", "reason": "Contract to check the changed handlers against: response semantics, bounded waits, error categories."}
+{"file": ".trellis/spec/mod/index.md", "reason": "Quality-check commands for the mod layer."}
+{"file": ".trellis/tasks/09-12-reward-choice-threading/research/static-choice-leak.md", "reason": "Evidence list to confirm the leak is closed and the skip flag was not disturbed."}

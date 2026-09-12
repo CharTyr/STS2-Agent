@@ -1,0 +1,4 @@
+{"file": ".trellis/spec/mod/game-actions.md", "reason": "Action-handler shape, error categories, and the state/action split the refactor must keep."}
+{"file": ".trellis/spec/mod/index.md", "reason": "Layer checklist and the offline C# runner command."}
+{"file": ".trellis/spec/guides/code-reuse-thinking-guide.md", "reason": "Where the new state type belongs, next to the policy that already owns the sentinels."}
+{"file": ".trellis/tasks/09-12-reward-choice-threading/research/static-choice-leak.md", "reason": "Evidence for the leak paths and for the second static field that is deliberately left alone."}

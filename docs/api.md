@@ -1285,6 +1285,26 @@ Invoke-RestMethod -Uri 'http://127.0.0.1:8080/data/cards' | ConvertTo-Json -Dept
 }
 ```
 
+### `resolve_rewards`
+
+一次性推进整个奖励流程：逐个领取可领取的奖励、处理遇到的卡牌奖励选择、最后点击继续。
+
+- **前提**：`screen = "REWARD"`（`reward.rewards[]` 中有可领取项，或已处于卡牌奖励子界面）
+- **参数**（两者都可省略）
+  - `option_index`：`-1` 跳过卡牌奖励；`0/1/2...` 选择对应位置的卡牌；缺省为自动（第一张）
+  - `card_index`：`option_index` 的向后兼容别名，语义相同
+- **行为**：与 `collect_rewards_and_proceed` 共用同一套奖励推进流程；显式选择只作用于本次调用遇到的第一处卡牌奖励选择，同一次调用内后续卡牌奖励按自动（第一张）处理
+- **稳定条件**：奖励流程结束或界面切换
+- **超时**：20 秒
+- **重试语义**：显式选择属于**携带它的那一次调用**。若本次调用返回 `pending`，用相同参数重试 `resolve_rewards` 会重新携带该选择；若改用 `collect_rewards_and_proceed` 重试，卡牌奖励按**自动（第一张）**处理，显式选择不会跨调用保留
+
+```json
+{
+  "action": "resolve_rewards",
+  "option_index": 1
+}
+```
+
 ### `claim_reward`
 
 > Note (`2026-03-11`): when the claimed reward is a card reward, `skip_reward_cards` only closes the current card-selection overlay. The underlying reward may still remain in `reward.rewards[]`, so callers should always re-read state after skipping.

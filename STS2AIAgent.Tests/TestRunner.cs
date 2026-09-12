@@ -302,6 +302,12 @@ internal static class TestRunner
         yield return ("RewardChoice.AutoFirstCard", () => Task.Run(RewardChoicePolicyTests.MissingIndexKeepsFirstCardBehavior));
         yield return ("RewardChoice.SkipAnyCount", () => Task.Run(RewardChoicePolicyTests.SkipIsValidWithoutOptions));
         yield return ("RewardChoice.AutoWithoutOptions", () => Task.Run(RewardChoicePolicyTests.AutoWithoutOptionsIsNotAPick));
+        yield return ("RewardFlowChoice.ExplicitChoiceSpentOnce", () => Task.Run(RewardFlowChoiceStateTests.ExplicitChoiceIsSpentOnce));
+        yield return ("RewardFlowChoice.SkipSentinelSpentOnce", () => Task.Run(RewardFlowChoiceStateTests.SkipSentinelIsSpentOnce));
+        yield return ("RewardFlowChoice.StatesDoNotShare", () => Task.Run(RewardFlowChoiceStateTests.StatesDoNotShareChoice));
+        yield return ("RewardChoiceThreading.NoStaticState", () => Task.Run(RewardChoiceThreadingContractTests.RewardChoiceIsNeverStaticState));
+        yield return ("RewardChoiceThreading.DrainForwardsChoice", () => Task.Run(RewardChoiceThreadingContractTests.DrainTakesAndForwardsTheChoice));
+        yield return ("RewardChoiceThreading.CollectAsksAuto", () => Task.Run(RewardChoiceThreadingContractTests.CollectRewardsAsksForTheAutomaticChoice));
         yield return ("MenuTransition.ModalNotExit", () => Task.Run(MenuTransitionPolicyTests.ABlockingModalIsNotAMenuExit));
         yield return ("MenuTransition.UnchangedScreen", () => Task.Run(MenuTransitionPolicyTests.UnchangedOrUnknownScreenIsNotAMenuExit));
         yield return ("MenuTransition.ModalNotEmbark", () => Task.Run(MenuTransitionPolicyTests.AModalDoesNotSettleASingleplayerEmbark));
