@@ -44,16 +44,16 @@ if (currentScreen is Node rootNode &&
 
 ## 验收标准
 
-- [ ] `ResolveNonModalScreen` 里 `NCardRewardSelectionScreen` 的判定早于通用网格分支。
-- [ ] 源码契约测试钉住这条顺序（与 `UnlockScreenContractTests` 同款断言形态），并可否证
+- [x] `ResolveNonModalScreen` 里 `NCardRewardSelectionScreen` 的判定早于通用网格分支。
+- [x] 源码契约测试钉住这条顺序（与 `UnlockScreenContractTests` 同款断言形态），并可否证
       （把新分支挪到通用分支之后 → 变红）。
-- [ ] 其它被遮蔽的 arm 值不变（`NChooseACardSelectionScreen`、四个 `NDeck*Select`、
+- [x] 其它被遮蔽的 arm 值不变（`NChooseACardSelectionScreen`、四个 `NDeck*Select`、
       `NCardGridSelectionScreen` 都仍解析为 `CARD_SELECTION`），有测试或断言证明没有连带改动。
-- [ ] 既有测试全绿：`ScreenResolutionContractTests`（它只解析 switch 之后的 arm，不应受影响）、
+- [x] 既有测试全绿：`ScreenResolutionContractTests`（它只解析 switch 之后的 arm，不应受影响）、
       `UnlockScreenContractTests`、`check_verification_gates.py` 的 `api-facts`（屏幕集合与文档一致性）。
-- [ ] 文档与脚本核对结论写进 evidence：`docs/api.md`、`SKILL.md` 的既有措辞在修改后**变准**，
+- [x] 文档与脚本核对结论写进 evidence：`docs/api.md`、`SKILL.md` 的既有措辞在修改后**变准**，
       因此不需要改文档；若发现需要改的，一并改并说明。
-- [ ] C# / MCP 全量测试、gates、preflight 通过。
+- [x] C# / MCP 全量测试、gates、preflight 通过。
 
 ## 范围外
 
