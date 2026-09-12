@@ -188,3 +188,24 @@ Continued the thread that started in Session 4: acceptance hardening (card-grid 
 - The English wording is machine-translated and was not reviewed by a native speaker; only Chinese and English were exercised.
 - v0.10.7 has no GitHub tag - its Workshop upload predates the release, so the Releases list jumps from v0.10.6 to v0.11.0. Backfill the tag if the list should be contiguous.
 - Steam Workshop uploads stall on manifest fetches from steampipe-partner.akamaized.net; judge success from Steam workshop_log.txt, never from the uploader stdout.
+
+
+## Session 6: Agent trust hardening: 5 goals from the 2026-09-12 audit
+
+**Date**: 2026-09-12
+**Task**: Agent trust hardening: 5 goals from the 2026-09-12 audit
+**Branch**: `main`
+
+### Summary
+
+Ran six parallel scouts over the mod, MCP sidecar, docs, tests, and gameplay skill, then turned the findings into five independently verified deliverables executed in importance order. 1) Action trust: resolve_rewards rejects an explicit out-of-range index instead of quietly taking the first card, an open modal no longer counts as a finished continue_run/embark/open_character_select transition, remove_card_at_shop surfaces a failed purchase, bundle actions fail with 503 instead of a fabricated empty state, and a play_card that never left the hand rolls its counters back (72c96fd). 2) Bounded waits: nine handlers awaited a native task with no deadline while Router waits on the handler; each now goes through WaitForGameTaskAsync with a background observer and an honest pending, plus a source contract proven by mutation probe (12c35b3). 3) Agent contract: get_game_state carries compact_agent_view, wait_until_actionable returns actionable on every path, the full-profile resolve_rewards stops requiring option_index, and the gameplay skill stops naming raw-only fields for the compact view it reads (33b137e). 4) Screens and indexes: choose_timeline_epoch shares the state index space, and FAKE_MERCHANT / PATCH_NOTES / CARD_INSPECT / RELIC_INSPECT / FEEDBACK stop being dead ends (5457e0d). 5) Docs baseline: the state page cites v0.11.0, AGENTS.md lists all five version files, the route lists match the router, and preflight now runs the CI-only gate self-tests (3f55a3f). C# tests 232 -> 272, MCP tests 55 -> 76, gates and a 12-step preflight green. No version bump, tag, or Workshop upload.
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `3f55a3f` | (see git log) |
+
+### Status
+
+[OK] **Completed**
