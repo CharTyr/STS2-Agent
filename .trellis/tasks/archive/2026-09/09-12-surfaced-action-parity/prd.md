@@ -19,11 +19,11 @@
 
 ## 验收标准
 
-- [ ] ① ② 的 payload 与动作判定同源（同一函数/同一表达式），并有可否证的源码契约测试。
-- [ ] ③ 修正为 `requires_index = false`。
-- [ ] ④ 过滤条件与同文件惯例一致（`IsEnabled`，必要时 `IsVisibleInTree`）；可否证。
-- [ ] ⑤ 给出结论（改或不改 + 理由）并写进 evidence。
-- [ ] 全量 C# 测试 / gates / preflight 绿。
+- [x] ① ② 的 payload 与动作判定同源（同一函数/同一表达式），并有可否证的源码契约测试。
+- [x] ③ 修正为 `requires_index = false`。
+- [x] ④ 过滤条件与同文件惯例一致（`IsEnabled`，必要时 `IsVisibleInTree`）；可否证。
+- [x] ⑤ 给出结论（改或不改 + 理由）并写进 evidence。
+- [x] 全量 C# 测试 / gates / preflight 绿。
 
 ## 范围外
 
