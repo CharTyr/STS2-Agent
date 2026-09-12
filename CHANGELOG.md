@@ -4,7 +4,7 @@
 
 ## v0.12.0 - 2026-09-13
 
-> Co-op is the headline: a saved multiplayer run can be continued with the AI teammate, and the teammate's character can be left for you to pick. The rest is a trust pass over the agent-facing state — every signal it surfaces now matches what the executor accepts, and no game-side wait can hang a request.
+> Co-op is the headline: a saved multiplayer run can be continued with the AI teammate, and the teammate's character can be left for you to pick. The rest is a trust pass over the agent-facing state — every signal it surfaces now matches what the executor accepts, and no game-side wait can hang a request. Release and Workshop upload: [release-v0.12.0_2026-09-13.md](history/release-v0.12.0_2026-09-13.md).
 
 ### Added
 

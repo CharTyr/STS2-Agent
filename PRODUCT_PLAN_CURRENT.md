@@ -1,14 +1,15 @@
 # STS2 AI Agent：当前状态页
 
-> 本页是仓库唯一的当前状态入口。更新日期：2026-09-12（v0.11.0 发布与工坊上传核对、09-12 五项目标收口）。
-> 发布代码基准：tag `v0.11.0` @ `84631b9`；标签后主线变更单列在下方，不把文档更新视为新版本发布。
-> 发布基准：[GitHub Release v0.11.0](https://github.com/CharTyr/STS2-Agent/releases/tag/v0.11.0)，2026-09-12 发布；上一版 [v0.10.6](https://github.com/CharTyr/STS2-Agent/releases/tag/v0.10.6)，2026-09-11。2026-09-12 通过 Steam Web API 核对工坊物品 3796486050：visibility=0（公开）、file_size 1135844 与本地内容字节和相等、time_updated 即时刷新。#81 与 #50/#51 已随 v0.10.6 发布，#82、宠物/球槽状态与主动发言会话收敛随 v0.11.0 发布。
+> 本页是仓库唯一的当前状态入口。更新日期：2026-09-13（v0.12.0 发布与工坊上传）。
+> 发布代码基准：tag `v0.12.0` @ `69887a3`；标签后主线变更单列在下方，不把文档更新视为新版本发布。
+> 发布基准：[GitHub Release v0.12.0](https://github.com/CharTyr/STS2-Agent/releases/tag/v0.12.0)，2026-09-13 发布；上一版 [v0.11.0](https://github.com/CharTyr/STS2-Agent/releases/tag/v0.11.0)，2026-09-12。2026-09-13 通过 Steam Web API 核对工坊物品 3796486050：visibility=0（公开）、file_size 1202181 与本地内容字节和相等、time_updated 即时刷新。**工坊简体中文列表仍是旧版，未随本次或 v0.11.0 更新**，待手工粘贴 `steam-workshop/description.zh-CN.txt`。
 
 旧路线图见 [PRODUCT_ROADMAP.md](PRODUCT_ROADMAP.md)（历史），旧交付原文见 [history/PRODUCT_PLAN_CURRENT_2026-09-07.md](history/PRODUCT_PLAN_CURRENT_2026-09-07.md) 和 [history/COOP_DELIVERY_2026-09-07.md](history/COOP_DELIVERY_2026-09-07.md)。[COOP_DELIVERY.md](COOP_DELIVERY.md) 现在只是历史证据索引。本页不继承历史文档中的审批、工作树或测试前执行约束。
 
 ## 1. 当前基线
 
-- **v0.11.0（当前发布基准）**：2026-09-12 发布，发布提交 `84631b9`（`feat(i18n): follow the game language in the overlay and the state payload`），GitHub Release 资产 `sts2-ai-agent-v0.11.0-windows.zip`（677015 字节），CI Validate `34629717120` success。工坊物品 3796486050 已更新：公开、`file_size` 1135844 与本地内容字节和相等、`time_updated` 2026-09-12 02:33:39。见 [v0.11.0 发布记录](history/release-v0.11.0_2026-09-12.md) 与 [本地化验收](history/localization-2026-09-12.md)。只更新工坊的 v0.10.7 发布提交 `f9330ba` 已包含在 `v0.11.0` 里。
+- **v0.12.0（当前发布基准）**：2026-09-13 发布，发布提交 `69602c9`（`Release v0.12.0`）经 PR #86 合并为 `69887a3`（tag 指向合并提交，两者树内容相同），GitHub Release 资产 `sts2-ai-agent-v0.12.0-windows.zip`（533493 字节，SHA256 `C2B1F3229D6CF8E7D757D571AAF717004DDBCAFD4F8AAE1276A86A54A3AFA685`），CI 在 `69602c9` 上的 push 与 pull_request 两个 Validate run 均 success。工坊物品 3796486050 已更新：公开、`file_size` 1202181 与本地内容字节和相等、`time_updated` 2026-09-13 02:25:02、manifest `3382317012139913714`。见 [v0.12.0 发布记录](history/release-v0.12.0_2026-09-13.md)。新增 `continue_ai_teammate` / `CompanionAutoSelectCharacter`（#83 / #84）与状态可信度收口（`72c96fd`、`12c35b3`、`492722a`、`ca12a4f` 等）随本版发布。**本版发布前未做完整实机验收**，待办项见 `docs/live-validation-checklist.md`。
+- **v0.11.0（上一版）**：2026-09-12 发布，发布提交 `84631b9`（`feat(i18n): follow the game language in the overlay and the state payload`），GitHub Release 资产 `sts2-ai-agent-v0.11.0-windows.zip`（677015 字节），CI Validate `34629717120` success。工坊物品 3796486050 当时更新为 `file_size` 1135844、`time_updated` 2026-09-12 02:33:39。见 [v0.11.0 发布记录](history/release-v0.11.0_2026-09-12.md) 与 [本地化验收](history/localization-2026-09-12.md)。只更新工坊的 v0.10.7 发布提交 `f9330ba` 已包含在 `v0.11.0` 里。
 - **已随 v0.11.0 发布**（`git log 2f75e4a..84631b9`，共 13 个提交）：
   - `d77982a` 卡牌网格选择元数据改读基类 `NCardGridSelectionScreen`，修复 #82 的升级/变形/附魔选牌屏（隔离副本实测：附魔 1/1/0 → 0/3/0、首次点击 10s 超时 → 151ms；变形 36ms/187ms；升级 173ms 无回归；事件多选 2/2/0 无回归）。
   - `7b02168` 战斗状态暴露自家宠物（`pets[]` / `pet_missing`），紧凑视图同步；Necrobinder 实测奥斯提 1/1 与 `DIE_FOR_YOU_POWER`。同批补测 Defect 球槽（`orbs[]`/`orb_capacity`/`empty_orb_slots`、DUALCAST 后清空）。
@@ -16,13 +17,15 @@
 - **已随 v0.10.5 发布**（2026-09-08，tag `04d2466`）：v0.10.4 之后合入的产品提交 19710ad（#78 空奖励 overlay 不再卡 pending）、4b4da6e（#79 continue_game_over 等待原生结算写入）、22907b0（#80 会话预算 / 损坏配置恢复 / MCP Origin / 停流超时 / play_card 取消）；v0.10.5 GitHub ZIP 已发布并安装到 Steam mods/，Workshop 订阅加载验收见 [验收记录](history/workshop-load-acceptance_2026-09-09.md)。
 - **已随 v0.10.6 发布**（2026-09-11，tag `2f75e4a`）：`bd93662` 停止原因分类；`a9d4478` 主动发言与可选语气（默认关闭）；依赖安全 #50/#51（`cd55fe1`：`fastmcp` → 3.4.7、`fast-uri` → 3.1.7，`npm audit` 0 项）；离线验证闸门 `scripts/check_verification_gates.py` 与自测（`c212594`、`6aabb4f`）；`34c6e91` 归档 `docs/sts2-coverage-gaps.md` 至 `history/sts2-coverage-gaps_2026-03-10.md` 并给带日期的验证记录补历史快照标记。曾未进入 v0.10.5 标签的提交（96bd410 工坊更新默认 public、15e483c/2838250 发布与 P3 记录、4f1ec66 收尾日志）也已随 v0.10.6 发布。
 - **仓库卫生（已入库，不构成发布）**：90s continue 超时与不重复 Continue；Trellis spec/skills/platform 纳入版本控制，00-bootstrap-guidelines 已归档；stash@{0}（ai-companion 旧脏树）已 drop；`.trellis/.template-hashes.json` 保持本地不入库；`c69d3b3` 只忽略本地 mod-uploader.log，`374d7fd` 只记录 Trellis journal。
-- **2026-09-12 标签后主线未发布变更**（下一个 release tag 之前都按此单列；本轮为 09-12 五项目标，任务树 `.trellis/tasks/09-12-agent-trust-hardening`，各子任务归档在 `.trellis/tasks/archive/2026-09/`）：
+- **已随 v0.12.0 发布：2026-09-12 的五项目标**（任务树 `.trellis/tasks/09-12-agent-trust-hardening`，各子任务归档在 `.trellis/tasks/archive/2026-09/`）：
   - `72c96fd`（action-trust）动作可信度收口：`resolve_rewards` 显式越界索引改报 409 `invalid_target` 且不再点错牌；`continue_run` / `embark` / `open_character_select` 遇到阻塞弹窗返回 `pending`，不再拿「有弹窗」当成功；`remove_card_at_shop` 的购买失败不再被吞成 `pending`；bundle 动作不再配空 state 报 `completed`；`play_card` 未离手时回滚回合计数。
   - `12c35b3`（bounded-game-waits）九处游戏侧 `await` 全部加上期限：超时返回 `pending` 并点名动作与超时；任务以 false 或异常收尾时返回 409 `invalid_action`；`GameActionService.cs` 的裸 `await` 由源码契约测试拦截。
   - `33b137e`（agent-contract-compact）skill 改读紧凑状态字段名（`selection.min|max|selected|confirm`、`shop.open`、`chest.claimed`、`character_select.embark`、`timeline.slots[].i|line|actionable`）；`get_game_state` 增加 `compact_agent_view`；`wait_until_actionable` 增加 `actionable`；full profile 的 `resolve_rewards` 允许不带索引。
   - `5457e0d`（screen-index-contract）`choose_timeline_epoch` 按 `timeline.slots[].index` 取槽、不可操作槽返回 409 `invalid_target`；`crystal_clear_cell` / `crystal_set_tool` 的 descriptor 分别暴露 `requires_coordinates` / `requires_tool`；新增 `FAKE_MERCHANT`（`open_shop_inventory` 可用）、`PATCH_NOTES`（`close_main_menu_submenu` 可关）、`CARD_INSPECT` / `RELIC_INSPECT`（`close_cards_view` 可关）、`FEEDBACK` 五个屏幕名。
   - 本次文档收口（docs-release-baseline）：本文件改为 v0.11.0 基准；`AGENTS.md` 版本号列全五个文件并改成与 `.github/CONTRIBUTING.md` 一致的 PR 发布流程；`docs/api.md` 补 `failed` 状态、`requires_coordinates` / `requires_tool`、五个屏幕名、时间线索引契约与两个关闭动作的扩大范围；两个 README 补路由与对称段落；`steam-workshop/workshop.json` 的 changeNote 更新到 0.11.0；`scripts/preflight-release.ps1` 补跑 CI-only 的 `test-verification-gates.ps1` 与 `test-native-exit-propagation.ps1`。
   - 以上五项只有离线证据：2026-09-12 本次收口后 `dotnet run --project STS2AIAgent.Tests -c Release` 272 PASS / 0 FAIL、`mcp_server` 单测 76 项 OK，`scripts/check_verification_gates.py` 四闸门全绿，`preflight-release.ps1` exit 0；没有实机复验。逐项记录见各子任务归档的 `prd.md` / `evidence.md`。
+
+- **v0.12.0 标签后主线未发布变更**：暂无（v0.12.0 刚发布）。
 
 ## 2. 已有验收证据与边界
 
