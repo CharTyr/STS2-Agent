@@ -446,5 +446,8 @@ internal static class TestRunner
         yield return ("CompactViewFidelity.CardAndRelicIds", () => Task.Run(CompactViewFidelityTests.CardAndRelicIdsReachTheCompactViews));
         yield return ("CompactViewFidelity.OverlayAndParty", () => Task.Run(CompactViewFidelityTests.OverlayAndPartyReachTheCompactView));
         yield return ("RewardScreen.BranchPrecedesGrid", () => Task.Run(RewardScreenContractTests.RewardOverlayBranchPrecedesTheVisibleGrid));
+        yield return ("Parity.PlaySurfaceExcludesHealthCheck", () => Task.Run(HealthCheckParityTests.InGamePlaySurfaceKeepsNoConnectionCheck));
+        yield return ("Parity.EmbeddedPromptUsesOnlyPlayTools", () => Task.Run(HealthCheckParityTests.EmbeddedPromptOnlyInstructsPlaySurfaceTools));
+        yield return ("Parity.McpSurfaceKeepsHealthCheck", () => Task.Run(HealthCheckParityTests.McpSurfaceStillDocumentsHealthCheck));
     }
 }

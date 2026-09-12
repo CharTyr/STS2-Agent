@@ -1,0 +1,2 @@
+{"file": ".trellis/spec/mod/agent-and-ui.md", "reason": "Verify the in-game system prompt still matches the tool surface it advertises."}
+{"file": ".trellis/tasks/09-12-contract-in-game-parity/research/embedded-contract-audit.md", "reason": "Re-check each remaining contract requirement against the in-game tool set after the edit."}

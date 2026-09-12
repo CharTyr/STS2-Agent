@@ -49,8 +49,8 @@ The in-game overlay agent loads the shared play contract below plus references/s
 
 ## Quick Start
 
-1. Call `health_check` once at session start.
-2. Prefer the guided decision loop: `get_game_state -> get_available_actions -> act` (with `health_check` only at session start).
+1. Connection checking belongs to the external MCP client or orchestrator that launched the session; the in-game play loop has no `health_check`, so it reads live state instead.
+2. Prefer the guided decision loop: `get_game_state -> get_available_actions -> act`.
    Use `wait_until_actionable` across animations and screen changes. Use `get_raw_game_state` only if compact state is missing a needed field.
 3. For cards, monsters, relics, potions, shop items, and event options, prioritize game-data tools before using memory:
    `get_relevant_game_data` (default, scene-aware minimal context) ->

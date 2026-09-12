@@ -180,7 +180,7 @@ Default shape (replace the port with the one on the Connect tab):
      }
    }
    ```
-Built-in tools match in-game autoplay: `health_check`, `get_game_state`, `get_available_actions`, `act`, `get_game_data_*`, `wait_until_actionable`.
+Built-in MCP tools add `health_check` on top of the surface in-game Auto-Play uses: `get_game_state`, `get_available_actions`, `act`, `get_game_data_*`, `wait_until_actionable`.
 
 In-game Auto-Play already follows the bundled play contract. If you drive the game from an **external** agent over MCP (Cursor, Claude, Codex, or the optional Python sidecar), also load the companion skill [`sts2-mcp-player`](./skills/sts2-mcp-player/SKILL.md). Connecting tools without that skill can click legal actions; the skill is what matches in-game play quality.
 

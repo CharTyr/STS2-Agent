@@ -90,7 +90,7 @@ Use this reference when the active screen is clear and you need the exact action
 - Use `choose_event_option` for both normal branches and finished synthetic proceed options.
 - Never send a locked option. Read `event.options`, skip the compact `locked=true` entries (raw state spells it `is_locked`), and use the first unlocked option `i`. Option 0 is often locked.
 - Skip options marked compact `kill=true` (raw state spells it `will_kill_player`) unless the run is intentionally ending.
-- `THE_ARCHITECT` EVENT `PROCEED` is lethal even with godmode. Enter the fight with debug `fight THE_ARCHITECT_EVENT_ENCOUNTER` instead of proceeding the event.
+- `THE_ARCHITECT` EVENT `PROCEED` is lethal even with godmode. The `fight THE_ARCHITECT_EVENT_ENCOUNTER` debug shortcut is **external MCP only** (it needs `STS2_ENABLE_DEBUG_ACTIONS=1` plus the console/command path, which the in-game play loop does not have). In-game there is no shortcut into that encounter: resolve the event through its own unlocked, non-lethal options and never send the lethal `PROCEED` entry.
 - `available_actions` can still contain `choose_event_option` when the first option is locked; that is not permission to pick index 0.
 - Expect event flows like `EVENT -> COMBAT -> EVENT` or `EVENT -> COMBAT -> MAP`.
 - Re-read state after every branch because events mutate in place.
