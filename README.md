@@ -85,6 +85,7 @@ This mod is still in development. Some things may be unfinished or break. Please
 - A second game window will launch automatically and join the co-op lobby. You play your character; the AI controls its character!
 - The main window shows whether the teammate is connected, waiting on you/the game/the model, or why it stopped and what to click next. **Pause teammate** gives immediate feedback; already submitted actions still finish.
 - Use team chat to coordinate in plain English or Chinese.
+- By default the teammate takes the preselected character and readies up by itself. To pick its character yourself (in the teammate window, or through the companion API with `select_character` then `embark`), set `companionAutoSelectCharacter` to `false` in the mod's `settings.json`; the teammate then waits on the character screen without a timeout.
 
 ---
 

@@ -248,6 +248,7 @@ internal static class SettingsStoreTests
         source.OverlayLeft = 12;
         source.OverlayTop = 34;
         source.Endpoints[0].ApiKey = "sk-clone";
+        source.CompanionAutoSelectCharacter = false;
 
         var clone = SettingsClone.Clone(source);
 
@@ -262,6 +263,7 @@ internal static class SettingsStoreTests
         Assert.Equal(12f, clone.OverlayLeft);
         Assert.Equal(34f, clone.OverlayTop);
         Assert.Equal("sk-clone", clone.Endpoints[0].ApiKey);
+        Assert.False(clone.CompanionAutoSelectCharacter);
         Assert.Equal(source.ConversationModelId, clone.ConversationModelId);
     }
 

@@ -97,6 +97,23 @@ internal static class CompanionStartupTests
             "CHARACTER_SELECT",
             new[] { "unready" },
             hasLobby: true) == null);
+        // CompanionAutoSelectCharacter=false: leave pick + Ready to the human/agent, on both
+        // screens where that choice is made. Joining the lobby is still done by the companion.
+        Assert.True(CoopLaunchPolicy.NextCompanionBootstrapAction(
+            "CHARACTER_SELECT",
+            new[] { "select_character", "ready_multiplayer_lobby", "embark" },
+            hasLobby: true,
+            autoSelectCharacter: false) == null);
+        Assert.True(CoopLaunchPolicy.NextCompanionBootstrapAction(
+            "MULTIPLAYER_LOBBY",
+            new[] { "select_character", "ready_multiplayer_lobby" },
+            hasLobby: true,
+            autoSelectCharacter: false) == null);
+        Assert.Equal("join_multiplayer_lobby", CoopLaunchPolicy.NextCompanionBootstrapAction(
+            "MULTIPLAYER_LOBBY",
+            new[] { "join_multiplayer_lobby" },
+            hasLobby: false,
+            autoSelectCharacter: false));
         // Continuing a saved co-op run: the load screen only needs Embark.
         Assert.Equal("embark", CoopLaunchPolicy.NextCompanionBootstrapAction(
             "MULTIPLAYER_LOAD",
@@ -372,10 +389,31 @@ internal static class CompanionStartupTests
         var body = source[open..(end + 1)];
         Assert.False(body.Contains("OpenMultiplayerTestAsync", StringComparison.Ordinal));
         Assert.Contains("NextCompanionBootstrapAction", body, StringComparison.Ordinal);
+        // The flag must reach the policy from settings (not a literal), and the bootstrap
+        // deadline must be held while a human is choosing the character.
+        Assert.Contains("Settings?.CompanionAutoSelectCharacter ?? true", body, StringComparison.Ordinal);
+        Assert.Contains("CoopLaunchPolicy.WaitsForHumanChoice(", body, StringComparison.Ordinal);
+        Assert.Contains("deadline = DateTime.UtcNow + budget;", body, StringComparison.Ordinal);
         Assert.Equal("join_multiplayer_lobby", CoopLaunchPolicy.NextCompanionBootstrapAction(
             "MULTIPLAYER_LOBBY",
             new[] { "join_multiplayer_lobby" },
             hasLobby: false));
+    }
+
+    public static void BootstrapHoldsTheClockOnlyWhileAHumanChooses()
+    {
+        // Flag on: never a human wait.
+        Assert.False(CoopLaunchPolicy.WaitsForHumanChoice("CHARACTER_SELECT", new[] { "select_character", "embark" }, hasLobby: true, autoSelectCharacter: true));
+        // Flag off: the two screens where the character is chosen hold the clock.
+        Assert.True(CoopLaunchPolicy.WaitsForHumanChoice("CHARACTER_SELECT", new[] { "select_character", "embark" }, hasLobby: true, autoSelectCharacter: false));
+        Assert.True(CoopLaunchPolicy.WaitsForHumanChoice("MULTIPLAYER_LOBBY", new[] { "select_character", "ready_multiplayer_lobby" }, hasLobby: true, autoSelectCharacter: false));
+        // Machine steps keep the deadline: joining, main menu, the load screen, the run itself.
+        Assert.False(CoopLaunchPolicy.WaitsForHumanChoice("MULTIPLAYER_LOBBY", new[] { "join_multiplayer_lobby" }, hasLobby: false, autoSelectCharacter: false));
+        Assert.False(CoopLaunchPolicy.WaitsForHumanChoice("MAIN_MENU", Array.Empty<string>(), hasLobby: false, autoSelectCharacter: false));
+        Assert.False(CoopLaunchPolicy.WaitsForHumanChoice("MULTIPLAYER_LOAD", new[] { "embark" }, hasLobby: true, autoSelectCharacter: false));
+        Assert.False(CoopLaunchPolicy.WaitsForHumanChoice("COMBAT", new[] { "play_card", "end_turn" }, hasLobby: true, autoSelectCharacter: false));
+        // Already readied (only unready left): nothing to choose, the clock runs.
+        Assert.False(CoopLaunchPolicy.WaitsForHumanChoice("CHARACTER_SELECT", new[] { "unready" }, hasLobby: true, autoSelectCharacter: false));
     }
 
     public static void HealthRequiresExactCompanionIdentity()

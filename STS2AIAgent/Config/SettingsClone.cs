@@ -42,6 +42,7 @@ internal static class SettingsClone
             AttachScreenshotInChat = source.AttachScreenshotInChat,
             OverlayVisibleOnStart = source.OverlayVisibleOnStart,
             HasSeenFirstRunGuide = source.HasSeenFirstRunGuide,
+            CompanionAutoSelectCharacter = source.CompanionAutoSelectCharacter,
             OverlayLeft = source.OverlayLeft,
             OverlayTop = source.OverlayTop,
             McpServerPath = source.McpServerPath,
