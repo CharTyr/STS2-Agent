@@ -209,3 +209,24 @@ Ran six parallel scouts over the mod, MCP sidecar, docs, tests, and gameplay ski
 ### Status
 
 [OK] **Completed**
+
+
+## Session 7: Reward choice threading: remove the cross-request static card choice
+
+**Date**: 2026-09-12
+**Task**: Reward choice threading: remove the cross-request static card choice
+**Branch**: `main`
+
+### Summary
+
+Follow-up to the action-trust child, chosen by the user as option A. resolve_rewards kept its card choice in a process-wide static field that only the card-reward consumer cleared; a drain that never reached a card-reward screen left the value behind, so a later collect_rewards_and_proceed could inherit it and silently skip a card reward or pick a card the caller never asked for. The choice now lives in a per-request RewardFlowChoiceState passed down through DrainRewardFlowAsync, collect_rewards_and_proceed asks for the automatic choice explicitly, and consuming once per drain keeps the within-call behavior identical including the out-of-range 409. _cardRewardSkipped was deliberately left byte-identical because the skip flow needs it to outlive the request; its timeout-exit staleness is recorded as a separate follow-up. A semantic change is documented in docs/api.md: an explicit choice belongs to the call that carries it, so retrying a pending resolve_rewards with collect_rewards_and_proceed resolves automatically. Review fixed two vacuous tests, one of which would have let the explicit index be dropped silently. C# 278 PASS, MCP 76 OK, gates and a 12-step preflight green.
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `abc195f` | (see git log) |
+
+### Status
+
+[OK] **Completed**

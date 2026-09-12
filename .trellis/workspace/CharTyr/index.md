@@ -8,7 +8,7 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-1.md`
-- **Total Sessions**: 6
+- **Total Sessions**: 7
 - **Last Active**: 2026-09-12
 <!-- @@@/auto:current-status -->
 
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-1.md` | ~211 | Active |
+| `journal-1.md` | ~232 | Active |
 <!-- @@@/auto:active-documents -->
 
 ---
@@ -29,6 +29,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 7 | 2026-09-12 | Reward choice threading: remove the cross-request static card choice | `abc195f` | `main` |
 | 6 | 2026-09-12 | Agent trust hardening: 5 goals from the 2026-09-12 audit | `3f55a3f` | `main` |
 | 5 | 2026-09-12 | v0.10.6/v0.10.7/v0.11.0 releases, acceptance hardening, and game-language localization | `2f75e4a`, `f9330ba`, `84631b9`, `d77982a`, `e565073`, `bd93662`, `1ce254b`, `6aabb4f`, `a1bd5b5`, `06924e4`, `ed1c65f`, `dd71769` | `main` |
 | 4 | 2026-09-10 | Repo hardening: dep security, proactive chat, doc contract, verification gates | `2bc857d` | `main` |
