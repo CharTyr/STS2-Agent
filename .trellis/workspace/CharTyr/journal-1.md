@@ -499,3 +499,41 @@ Four residuals closed: docs/ became a controlled directory with a docs-tracked g
 ### Next Steps
 
 - 可选：是否为本轮补 tag / 是否把分支保护改成允许直推
+
+
+## Session 15: 牌库/牌堆查看屏正名与逃逸 + PowerShell 语法 gate
+
+**Date**: 2026-09-12
+**Task**: 牌库/牌堆查看屏正名与逃逸 + PowerShell 语法 gate
+**Branch**: `main`
+
+### Summary
+
+两屏不再冒充 CARD_SELECTION，并各自获得真实可用的关闭动作；新增 ps1-syntax gate 覆盖全部 30 个 .ps1，它首次运行就抓到 serve-sts2-network-mcp.ps1 一个自提交起就存在的真实语法错误。
+
+### Main Changes
+
+- NCardLibrary/NCardPileScreen 早退报 CARD_LIBRARY/CARD_PILE，不再被通用网格分支遮蔽
+- submenu 栈查找上移到基类 NSubmenuStack，局内图鉴因此可关闭
+- 可关闭看牌屏收敛为单一判定，探针/执行端/等待条件同源，牌堆屏经 close_cards_view 可退
+- 新增 ps1-syntax gate（只解析不执行，无 .ps1 或无解释器时跳过说明）并修复它抓到的真实故障脚本
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `5b3439c` | (see git log) |
+| `abb99c5` | (see git log) |
+
+### Testing
+
+- [OK] 5 组改坏-红-还原-绿；C# 351 PASS/0 FAIL；MCP 165 OK；7 gate 全绿；preflight 372 PASS/0 FAIL
+- [OK] 两个提交各在临时 worktree 验证树可构建
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- 推送两个提交；实机确认牌堆屏 BackButton 与局内图鉴 Pop 的行为，以及顺带修好的其它局内 submenu
