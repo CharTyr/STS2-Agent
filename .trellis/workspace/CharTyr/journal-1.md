@@ -462,3 +462,40 @@ Four residuals closed: docs/ became a controlled directory with a docs-tracked g
 ### Next Steps
 
 - 用户拍板：累积提交是否 push（本地 main 已领先 origin/main）
+
+
+## Session 14: 首次推送与 CI 暴露的两个环境耦合问题（.NET SDK 选择、8.3 短路径）
+
+**Date**: 2026-09-12
+**Task**: 首次推送与 CI 暴露的两个环境耦合问题（.NET SDK 选择、8.3 短路径）
+**Branch**: `main`
+
+### Summary
+
+推送 64 个提交后 CI 连红两次：Roslyn 覆盖测试被 .NET 10 SDK 的 CS1705 打断、knowledge 路径测试撞上 Windows 8.3 短名。两者都只在真实 CI 暴露，均已修复并可否证验证，最终 CI 全绿 13/13。
+
+### Main Changes
+
+- 新增 global.json：把 SDK feature band 钉到工作流声明的 9.0.x，避免 pick 到 .NET 10 的 Roslyn
+- knowledge 参考文件路径测试改为两侧统一 realpath+normcase 比较（真实 8.3 别名下复现并验证）
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `82c804f` | (see git log) |
+| `61146a5` | (see git log) |
+| `746f154` | (see git log) |
+
+### Testing
+
+- [OK] CI 746f154c 全绿：13 步全过（含此前从未在 CI 运行的 11 步）
+- [OK] local：C# 348/0 FAIL、MCP 165 OK、6 gate、mod build、package source 契约全绿
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- 可选：是否为本轮补 tag / 是否把分支保护改成允许直推
