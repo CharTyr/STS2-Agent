@@ -37,19 +37,19 @@ SKILL.md:53  ... with `health_check` only at session start ...
 
 ## 验收标准
 
-- [ ] 游戏内系统提示不再要求调用游戏内不存在的工具：`health_check` 的措辞从"必须调用"
+- [x] 游戏内系统提示不再要求调用游戏内不存在的工具：`health_check` 的措辞从"必须调用"
       改为对 in-game 循环成立的说法（例如说明该检查由外部 MCP 客户端/orchestrator 负责），
       且**不删除** `health_check` 在 MCP 侧的存在与文档。
-- [ ] 内嵌文本里的工具名集合 ⊆ `AgentTools.Play` 的设备名集合（新增一条可否证的测试）。
-- [ ] playbooks 里的 debug-only 指令明确标注"仅外部 MCP / 需 `STS2_ENABLE_DEBUG_ACTIONS=1`"，
+- [x] 内嵌文本里的工具名集合 ⊆ `AgentTools.Play` 的设备名集合（新增一条可否证的测试）。
+- [x] playbooks 里的 debug-only 指令明确标注"仅外部 MCP / 需 `STS2_ENABLE_DEBUG_ACTIONS=1`"，
       不再以游戏内可达的语气出现。
-- [ ] `McpPlayerSkillTests`（`STS2AIAgent.Tests/McpPlayerSkillTests.cs:7-36`，断言 SKILL.md 与
+- [x] `McpPlayerSkillTests`（`STS2AIAgent.Tests/McpPlayerSkillTests.cs:7-36`，断言 SKILL.md 与
       `PlayPrompt.PlayContract` 一致）保持绿，或按其真实约束更新。
-- [ ] `skills/sts2-mcp-player/SKILL.md:25`（MCP 侧工具列表）与 README 的相应表述（若也不实）
+- [x] `skills/sts2-mcp-player/SKILL.md:25`（MCP 侧工具列表）与 README 的相应表述（若也不实）
       一并核对；`README.md:183`/`README.zh-CN.md:183` 声称"内置工具与游戏内自动游玩一致并含 health_check"
       与 `AgentTools.cs:70-78` 不符，需修正或说明。
-- [ ] 两个 marker 行保持存在且成对（`PlayPrompt.ExtractSharedContract` 依赖它们）。
-- [ ] C# / MCP 全量测试、gates、preflight 通过。
+- [x] 两个 marker 行保持存在且成对（`PlayPrompt.ExtractSharedContract` 依赖它们）。
+- [x] C# / MCP 全量测试、gates、preflight 通过。
 
 ## 范围外
 
