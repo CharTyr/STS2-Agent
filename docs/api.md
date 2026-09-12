@@ -1349,6 +1349,7 @@ Invoke-RestMethod -Uri 'http://127.0.0.1:8080/data/cards' | ConvertTo-Json -Dept
 - **前提**：`screen = "REWARD"`，`reward.pending_card_choice = true`，`reward.alternatives[]` 非空
 - **参数**：无
 - **行为**：点击第一个替代按钮（通常是"跳过"）
+- **跳过范围**：跳过意图绑定到记录它的那次奖励集合（同一个奖励屏实例），不会影响之后其他奖励集合的卡牌奖励；若无法解析出所属奖励集合，该意图不生效——宁可不跳过（重新出现选牌屏，可恢复），也不静默丢弃奖励
 - **超时**：10 秒
 
 ```

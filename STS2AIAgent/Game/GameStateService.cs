@@ -1648,6 +1648,43 @@ internal static class GameStateService
             .ToArray();
     }
 
+    /// <summary>
+    /// Identity of the reward set a reward-related screen belongs to. Returns 0 when it
+    /// cannot be resolved, which callers treat as "no scope": an unresolved owner never
+    /// honors a recorded skip, so a missing identity re-shows the reward instead of
+    /// silently dropping it.
+    /// </summary>
+    public static ulong GetRewardSetId(IScreenContext? currentScreen)
+    {
+        if (currentScreen is NRewardsScreen rewardsScreen)
+        {
+            return GodotObject.IsInstanceValid(rewardsScreen) ? rewardsScreen.GetInstanceId() : 0;
+        }
+
+        if (currentScreen is NCardRewardSelectionScreen cardRewardScreen)
+        {
+            if (!GodotObject.IsInstanceValid(cardRewardScreen))
+            {
+                return 0;
+            }
+
+            // The selection overlay is pushed onto the shared overlay stack while the owning
+            // rewards screen stays there as a live sibling, so the owner is found under the
+            // selection screen's parent. Any other shape resolves to 0 and is not honored.
+            var parent = cardRewardScreen.GetParent();
+            if (parent == null)
+            {
+                return 0;
+            }
+
+            var owner = FindDescendants<NRewardsScreen>(parent)
+                .FirstOrDefault(screen => GodotObject.IsInstanceValid(screen));
+            return owner != null ? owner.GetInstanceId() : 0;
+        }
+
+        return 0;
+    }
+
     public static IReadOnlyList<NCardHolder> GetDeckSelectionOptions(IScreenContext? currentScreen)
     {
         if (currentScreen is NCardsViewScreen)

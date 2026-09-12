@@ -62,11 +62,11 @@ namespace STS2AIAgent.Game;
 internal static class GameActionService
 {
     /// <summary>
-    /// Tracks whether the agent explicitly skipped the card reward via skip_reward_cards.
-    /// When set, DrainRewardFlowAsync will not auto-claim card rewards.
-    /// Reset when leaving the reward screen.
+    /// Remembers an explicit skip_reward_cards so the drain that follows does not re-open the
+    /// card reward. Scoped to the reward set that recorded the skip, so it can never suppress
+    /// a different reward set's card reward after the drain exits.
     /// </summary>
-    private static bool _cardRewardSkipped;
+    private static readonly RewardSkipScope CardRewardSkips = new();
 
     /// <summary>
     /// Mid-turn card play counters. Maintained by the mod since the game's
@@ -1794,7 +1794,14 @@ internal static class GameActionService
             pendingChoice = request.option_index.Value == -1
                 ? RewardChoicePolicy.SkipChoice
                 : request.option_index.Value;
-            _cardRewardSkipped = request.option_index.Value == -1;
+            if (request.option_index.Value == -1)
+            {
+                CardRewardSkips.MarkSkipped(GameStateService.GetRewardSetId(currentScreen));
+            }
+            else
+            {
+                CardRewardSkips.Clear();
+            }
         }
         else if (request.card_index.HasValue)
         {
@@ -1809,12 +1816,12 @@ internal static class GameActionService
             }
 
             pendingChoice = request.card_index.Value;
-            _cardRewardSkipped = false;
+            CardRewardSkips.Clear();
         }
         else
         {
             pendingChoice = RewardChoicePolicy.AutoChoice;
-            _cardRewardSkipped = false;
+            CardRewardSkips.Clear();
         }
 
         // Reject an explicit index that cannot exist before anything is clicked. Only a
@@ -1975,7 +1982,7 @@ internal static class GameActionService
         var selected = options[request.option_index.Value];
         var previousOptionCount = options.Count;
         selected.EmitSignal(NCardHolder.SignalName.Pressed, selected);
-        _cardRewardSkipped = false; // Card was taken, clear any prior skip
+        CardRewardSkips.Clear(); // Card was taken, clear any prior skip
         var stable = await WaitForRewardCardResolutionAsync(currentScreen, previousOptionCount, TimeSpan.FromSeconds(10));
 
         return new ActionResponsePayload
@@ -2005,7 +2012,7 @@ internal static class GameActionService
         var alternatives = GameStateService.GetCardRewardAlternativeButtons(currentScreen);
         var selected = alternatives.First();
         selected.ForceClick();
-        _cardRewardSkipped = true;
+        CardRewardSkips.MarkSkipped(GameStateService.GetRewardSetId(currentScreen));
         var stable = await WaitForRewardCardResolutionAsync(currentScreen, GameStateService.GetCardRewardOptions(currentScreen).Count, TimeSpan.FromSeconds(10));
 
         return new ActionResponsePayload
@@ -2385,7 +2392,7 @@ internal static class GameActionService
 
             if (currentScreen is not NRewardsScreen rewardsScreen)
             {
-                _cardRewardSkipped = false;
+                CardRewardSkips.Clear();
                 return true;
             }
 
@@ -2504,7 +2511,7 @@ internal static class GameActionService
                 button.IsEnabled &&
                 !attemptedRewardButtons.Contains(button.GetInstanceId()) &&
                 (button.Reward is not PotionReward || hasPotionSlots) &&
-                (!_cardRewardSkipped || button.Reward is not CardReward));
+                (!CardRewardSkips.AppliesTo(rewardsScreen.GetInstanceId()) || button.Reward is not CardReward));
 
         return rewardButton != null;
     }
@@ -2570,7 +2577,7 @@ internal static class GameActionService
             if (alternatives.Count > 0)
             {
                 alternatives.First().ForceClick();
-                _cardRewardSkipped = true;
+                CardRewardSkips.MarkSkipped(GameStateService.GetRewardSetId(cardRewardScreen));
             }
             while (DateTime.UtcNow < deadline)
             {

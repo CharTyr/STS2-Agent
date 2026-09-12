@@ -1,0 +1,4 @@
+{"file": ".trellis/spec/mod/game-actions.md", "reason": "Action-handler shape and the state/action split the write-site changes must keep."}
+{"file": ".trellis/spec/mod/index.md", "reason": "Layer checklist and the offline C# runner command."}
+{"file": ".trellis/spec/guides/code-reuse-thinking-guide.md", "reason": "Where the new scope type and the id-resolution helper belong relative to existing helpers."}
+{"file": ".trellis/tasks/09-12-reward-skip-scope/research/skip-scope-identity.md", "reason": "Evidence: the leak paths, the decompiled overlay-stack flow, and the fail-safe argument."}

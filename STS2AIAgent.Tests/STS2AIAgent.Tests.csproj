@@ -44,6 +44,7 @@
     <Compile Include="..\STS2AIAgent\Game\FtueModalPolicy.cs" Link="Game\FtueModalPolicy.cs" />
     <Compile Include="..\STS2AIAgent\Game\CrystalSphereSettlePolicy.cs" Link="Game\CrystalSphereSettlePolicy.cs" />
     <Compile Include="..\STS2AIAgent\Game\RewardChoicePolicy.cs" Link="Game\RewardChoicePolicy.cs" />
+    <Compile Include="..\STS2AIAgent\Game\RewardSkipScope.cs" Link="Game\RewardSkipScope.cs" />
     <Compile Include="..\STS2AIAgent\Game\MenuTransitionPolicy.cs" Link="Game\MenuTransitionPolicy.cs" />
     <Compile Include="..\STS2AIAgent\Game\BackgroundTaskOutcome.cs" Link="Game\BackgroundTaskOutcome.cs" />
     <Compile Include="..\STS2AIAgent\Game\CardPlayCounterPolicy.cs" Link="Game\CardPlayCounterPolicy.cs" />
