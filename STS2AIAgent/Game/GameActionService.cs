@@ -1006,10 +1006,27 @@ internal static class GameActionService
             }, retryable: true);
         }
 
+        var closeTimeout = TimeSpan.FromSeconds(20);
+        var closeTimedOut = false;
         var closeTask = InvokePrivateTask(pauseMenu, "CloseToMenu");
         if (closeTask != null)
         {
-            await closeTask;
+            var completedCloseTask = await WaitForGameTaskAsync(closeTask, closeTimeout);
+            var closeOutcome = ClassifyGameTaskWait(closeTask, completedCloseTask == null);
+            if (closeOutcome == GameTaskWaitOutcome.Failed)
+            {
+                throw new ApiException(409, "invalid_action", $"Save and quit failed: {DescribeGameTaskFailure(closeTask)}.", new
+                {
+                    action = "save_and_quit",
+                    screen
+                });
+            }
+
+            closeTimedOut = closeOutcome == GameTaskWaitOutcome.TimedOut;
+            if (closeTimedOut)
+            {
+                ObserveBackgroundTask(closeTask, "save_and_quit");
+            }
         }
         else
         {
@@ -1026,14 +1043,18 @@ internal static class GameActionService
             saveAndQuitButton.ForceClick();
         }
 
-        var stable = await WaitForMainMenuAfterSaveAndQuitAsync(TimeSpan.FromSeconds(20));
+        var stable = await WaitForMainMenuAfterSaveAndQuitAsync(closeTimeout);
 
         return new ActionResponsePayload
         {
             action = "save_and_quit",
             status = stable ? "completed" : "pending",
             stable = stable,
-            message = stable ? "Action completed." : "Action queued but state is still transitioning.",
+            message = stable
+                ? "Action completed."
+                : closeTimedOut
+                    ? GameTaskWaitPolicy.DescribeTimeout("save_and_quit", closeTimeout)
+                    : "Action queued but state is still transitioning.",
             state = GameStateService.BuildStatePayload()
         };
     }
@@ -1645,16 +1666,38 @@ internal static class GameActionService
         }
 
         var divinationsBefore = minigame.DivinationCount;
-        await minigame.CellClicked(minigame.cells[x, y]);
-        var stable = await WaitForCrystalSphereSettleAsync(
-            currentScreen, divinationsBefore, TimeSpan.FromSeconds(10));
+        var cellTimeout = TimeSpan.FromSeconds(10);
+        var cellClickTask = minigame.CellClicked(minigame.cells[x, y]);
+        var completedCellClickTask = await WaitForGameTaskAsync(cellClickTask, cellTimeout);
+        var cellClickOutcome = ClassifyGameTaskWait(cellClickTask, completedCellClickTask == null);
+        if (cellClickOutcome == GameTaskWaitOutcome.Failed)
+        {
+            throw new ApiException(409, "invalid_action", $"Crystal sphere cell clear failed: {DescribeGameTaskFailure(cellClickTask)}.", new
+            {
+                action = "crystal_clear_cell",
+                screen,
+                x,
+                y
+            });
+        }
+
+        if (cellClickOutcome == GameTaskWaitOutcome.TimedOut)
+        {
+            ObserveBackgroundTask(cellClickTask, "crystal_clear_cell");
+        }
+
+        var stable = await WaitForCrystalSphereSettleAsync(currentScreen, divinationsBefore, cellTimeout);
 
         return new ActionResponsePayload
         {
             action = "crystal_clear_cell",
             status = stable ? "completed" : "pending",
             stable = stable,
-            message = stable ? "Action completed." : "Action queued but state is still transitioning.",
+            message = stable
+                ? "Action completed."
+                : cellClickOutcome == GameTaskWaitOutcome.TimedOut
+                    ? GameTaskWaitPolicy.DescribeTimeout("crystal_clear_cell", cellTimeout)
+                    : "Action queued but state is still transitioning.",
             state = GameStateService.BuildStatePayload()
         };
     }
@@ -2963,15 +3006,37 @@ internal static class GameActionService
                 });
             }
 
-            await NEventRoom.Proceed();
-            var stable = await WaitForEventScreenTransitionAsync(TimeSpan.FromSeconds(10));
+            var proceedTimeout = TimeSpan.FromSeconds(10);
+            var proceedTask = NEventRoom.Proceed();
+            var completedProceedTask = await WaitForGameTaskAsync(proceedTask, proceedTimeout);
+            var proceedOutcome = ClassifyGameTaskWait(proceedTask, completedProceedTask == null);
+            if (proceedOutcome == GameTaskWaitOutcome.Failed)
+            {
+                throw new ApiException(409, "invalid_action", $"Event proceed failed: {DescribeGameTaskFailure(proceedTask)}.", new
+                {
+                    action = "choose_event_option",
+                    screen,
+                    option_index = request.option_index
+                });
+            }
+
+            if (proceedOutcome == GameTaskWaitOutcome.TimedOut)
+            {
+                ObserveBackgroundTask(proceedTask, "choose_event_option");
+            }
+
+            var stable = await WaitForEventScreenTransitionAsync(proceedTimeout);
 
             return new ActionResponsePayload
             {
                 action = "choose_event_option",
                 status = stable ? "completed" : "pending",
                 stable = stable,
-                message = stable ? "Event proceeded." : "Proceed queued but state is still transitioning.",
+                message = stable
+                    ? "Event proceeded."
+                    : proceedOutcome == GameTaskWaitOutcome.TimedOut
+                        ? GameTaskWaitPolicy.DescribeTimeout("choose_event_option", proceedTimeout)
+                        : "Proceed queued but state is still transitioning.",
                 state = GameStateService.BuildStatePayload()
             };
         }
@@ -3358,6 +3423,7 @@ internal static class GameActionService
         var chooseTask = RunManager.Instance.RestSiteSynchronizer.ChooseLocalOption(request.option_index.Value);
 
         bool stable;
+        string? timeoutMessage = null;
         if (requiresTarget)
         {
             stable = await CompleteRestOptionTargetSelectionAsync(chooseTask, targetPlayer!, TimeSpan.FromSeconds(10));
@@ -3371,7 +3437,26 @@ internal static class GameActionService
         }
         else
         {
-            stable = await chooseTask;
+            var chooseTimeout = TimeSpan.FromSeconds(10);
+            var completedChooseTask = await WaitForGameTaskAsync(chooseTask, chooseTimeout);
+            var chooseOutcome = ClassifyGameTaskWait(chooseTask, completedChooseTask == null);
+            if (chooseOutcome == GameTaskWaitOutcome.Failed)
+            {
+                throw new ApiException(409, "invalid_action", $"Rest option failed: {DescribeGameTaskFailure(chooseTask)}.", new
+                {
+                    action = "choose_rest_option",
+                    option_index = request.option_index,
+                    option_id = selectedOption.OptionId
+                });
+            }
+
+            stable = chooseOutcome == GameTaskWaitOutcome.Completed && (await completedChooseTask!);
+            if (chooseOutcome == GameTaskWaitOutcome.TimedOut)
+            {
+                ObserveBackgroundResult(chooseTask, "choose_rest_option");
+                timeoutMessage = GameTaskWaitPolicy.DescribeTimeout("choose_rest_option", chooseTimeout);
+            }
+
             var transitionStable = await WaitForRestOptionTransitionAsync(TimeSpan.FromSeconds(stable ? 2 : 10));
             if (!stable)
             {
@@ -3388,7 +3473,7 @@ internal static class GameActionService
             action = "choose_rest_option",
             status = stable ? "completed" : "pending",
             stable = stable,
-            message = stable ? "Action completed." : "Action queued but state is still transitioning.",
+            message = stable ? "Action completed." : timeoutMessage ?? "Action queued but state is still transitioning.",
             state = GameStateService.BuildStatePayload()
         };
     }
@@ -3507,15 +3592,92 @@ internal static class GameActionService
         return character != null && GodotObject.IsInstanceValid(character) ? character : null;
     }
 
-    private static async Task<bool?> WaitForTaskResultAsync(Task<bool> task, TimeSpan timeout)
+    /// <summary>
+    /// Bounded wait on a game task. Returns the original task when it finished before the
+    /// deadline, or <c>null</c> when the deadline passed while it was still running. The
+    /// task object is handed back so the caller can keep observing it in the background.
+    /// </summary>
+    private static async Task<Task<T>?> WaitForGameTaskAsync<T>(Task<T> task, TimeSpan timeout)
     {
         var completedTask = await Task.WhenAny(task, Task.Delay(timeout));
-        if (completedTask != task)
+        if (completedTask == task)
+        {
+            return task;
+        }
+
+        // The delay can win the race by a hair even when the game task has already
+        // finished. Reporting a finished task as a timeout would also make the
+        // "await the completed task" sites dereference null, so treat a completed
+        // task as completed.
+        return task.IsCompleted ? task : null;
+    }
+
+    /// <summary>
+    /// Bounded wait on a task without a result, mirroring the generic overload.
+    /// </summary>
+    private static async Task<Task?> WaitForGameTaskAsync(Task task, TimeSpan timeout)
+    {
+        var completedTask = await Task.WhenAny(task, Task.Delay(timeout));
+        if (completedTask == task)
+        {
+            return task;
+        }
+
+        return task.IsCompleted ? task : null;
+    }
+
+    /// <summary>
+    /// Classifies a wait that already returned. <paramref name="deadlineReached"/> is true
+    /// when the bounded wait returned <c>null</c>.
+    /// </summary>
+    private static GameTaskWaitOutcome ClassifyGameTaskWait(Task task, bool deadlineReached)
+    {
+        return GameTaskWaitPolicy.Classify(
+            taskCompleted: task.IsCompleted,
+            taskFaulted: task.IsFaulted || task.IsCanceled,
+            deadlineReached: deadlineReached);
+    }
+
+    /// <summary>
+    /// Failure reason for a game task that already finished unsuccessfully, without re-reading
+    /// <c>Task.Exception</c> at the call site. Kept neutral instead of reusing
+    /// <c>BackgroundTaskOutcome.DescribeFailure</c>: that helper's wording is scoped to shop
+    /// purchases, while these sites span save, rest, event, lobby, and console actions.
+    /// </summary>
+    private static string DescribeGameTaskFailure(Task task)
+    {
+        if (task.IsCanceled)
+        {
+            return "the game task was canceled";
+        }
+
+        return task.IsFaulted ? "the game task faulted" : "the game task failed";
+    }
+
+    /// <summary>
+    /// Honest pending response for a game task that is still running after its deadline.
+    /// </summary>
+    private static ActionResponsePayload BuildGameTaskTimeoutResponse(string action, TimeSpan timeout)
+    {
+        return new ActionResponsePayload
+        {
+            action = action,
+            status = "pending",
+            stable = false,
+            message = GameTaskWaitPolicy.DescribeTimeout(action, timeout),
+            state = GameStateService.BuildStatePayload()
+        };
+    }
+
+    private static async Task<bool?> WaitForTaskResultAsync(Task<bool> task, TimeSpan timeout)
+    {
+        var completedTask = await WaitForGameTaskAsync<bool>(task, timeout);
+        if (completedTask == null)
         {
             return null;
         }
 
-        return await task;
+        return await completedTask;
     }
 
     /// <summary>
@@ -3673,7 +3835,26 @@ internal static class GameActionService
 
         var previousGold = inventory.Player.Gold;
         var previousCardId = entry.CreationResult?.Card.Id.Entry;
-        var success = await entry.OnTryPurchaseWrapper(inventory);
+        var purchaseTimeout = TimeSpan.FromSeconds(10);
+        var purchaseTask = entry.OnTryPurchaseWrapper(inventory);
+        var completedPurchaseTask = await WaitForGameTaskAsync(purchaseTask, purchaseTimeout);
+        var purchaseOutcome = ClassifyGameTaskWait(purchaseTask, completedPurchaseTask == null);
+        if (purchaseOutcome == GameTaskWaitOutcome.TimedOut)
+        {
+            ObserveBackgroundResult(purchaseTask, "buy_card");
+            return BuildGameTaskTimeoutResponse("buy_card", purchaseTimeout);
+        }
+
+        if (purchaseOutcome == GameTaskWaitOutcome.Failed)
+        {
+            throw new ApiException(409, "invalid_action", $"Card purchase failed: {DescribeGameTaskFailure(purchaseTask)}.", new
+            {
+                action = "buy_card",
+                option_index = request.option_index
+            });
+        }
+
+        var success = await completedPurchaseTask!;
         if (!success)
         {
             throw new ApiException(409, "invalid_action", "Card purchase failed in the current state.", new
@@ -3683,7 +3864,7 @@ internal static class GameActionService
             });
         }
 
-        var stable = await WaitForMerchantCardPurchaseAsync(inventory.Player, entry, previousGold, previousCardId, TimeSpan.FromSeconds(10));
+        var stable = await WaitForMerchantCardPurchaseAsync(inventory.Player, entry, previousGold, previousCardId, purchaseTimeout);
         return new ActionResponsePayload
         {
             action = "buy_card",
@@ -3746,7 +3927,26 @@ internal static class GameActionService
 
         var previousGold = inventory.Player.Gold;
         var previousRelicId = entry.Model?.Id.Entry;
-        var success = await entry.OnTryPurchaseWrapper(inventory);
+        var purchaseTimeout = TimeSpan.FromSeconds(10);
+        var purchaseTask = entry.OnTryPurchaseWrapper(inventory);
+        var completedPurchaseTask = await WaitForGameTaskAsync(purchaseTask, purchaseTimeout);
+        var purchaseOutcome = ClassifyGameTaskWait(purchaseTask, completedPurchaseTask == null);
+        if (purchaseOutcome == GameTaskWaitOutcome.TimedOut)
+        {
+            ObserveBackgroundResult(purchaseTask, "buy_relic");
+            return BuildGameTaskTimeoutResponse("buy_relic", purchaseTimeout);
+        }
+
+        if (purchaseOutcome == GameTaskWaitOutcome.Failed)
+        {
+            throw new ApiException(409, "invalid_action", $"Relic purchase failed: {DescribeGameTaskFailure(purchaseTask)}.", new
+            {
+                action = "buy_relic",
+                option_index = request.option_index
+            });
+        }
+
+        var success = await completedPurchaseTask!;
         if (!success)
         {
             throw new ApiException(409, "invalid_action", "Relic purchase failed in the current state.", new
@@ -3756,7 +3956,7 @@ internal static class GameActionService
             });
         }
 
-        var stable = await WaitForMerchantRelicPurchaseAsync(inventory.Player, entry, previousGold, previousRelicId, TimeSpan.FromSeconds(10));
+        var stable = await WaitForMerchantRelicPurchaseAsync(inventory.Player, entry, previousGold, previousRelicId, purchaseTimeout);
         return new ActionResponsePayload
         {
             action = "buy_relic",
@@ -3819,7 +4019,26 @@ internal static class GameActionService
 
         var previousGold = inventory.Player.Gold;
         var previousPotionId = entry.Model?.Id.Entry;
-        var success = await entry.OnTryPurchaseWrapper(inventory);
+        var purchaseTimeout = TimeSpan.FromSeconds(10);
+        var purchaseTask = entry.OnTryPurchaseWrapper(inventory);
+        var completedPurchaseTask = await WaitForGameTaskAsync(purchaseTask, purchaseTimeout);
+        var purchaseOutcome = ClassifyGameTaskWait(purchaseTask, completedPurchaseTask == null);
+        if (purchaseOutcome == GameTaskWaitOutcome.TimedOut)
+        {
+            ObserveBackgroundResult(purchaseTask, "buy_potion");
+            return BuildGameTaskTimeoutResponse("buy_potion", purchaseTimeout);
+        }
+
+        if (purchaseOutcome == GameTaskWaitOutcome.Failed)
+        {
+            throw new ApiException(409, "invalid_action", $"Potion purchase failed: {DescribeGameTaskFailure(purchaseTask)}.", new
+            {
+                action = "buy_potion",
+                option_index = request.option_index
+            });
+        }
+
+        var success = await completedPurchaseTask!;
         if (!success)
         {
             throw new ApiException(409, "invalid_action", "Potion purchase failed in the current state.", new
@@ -3829,7 +4048,7 @@ internal static class GameActionService
             });
         }
 
-        var stable = await WaitForMerchantPotionPurchaseAsync(inventory.Player, entry, previousGold, previousPotionId, TimeSpan.FromSeconds(10));
+        var stable = await WaitForMerchantPotionPurchaseAsync(inventory.Player, entry, previousGold, previousPotionId, purchaseTimeout);
         return new ActionResponsePayload
         {
             action = "buy_potion",
@@ -4149,7 +4368,25 @@ internal static class GameActionService
                 screen
             }, retryable: true);
 
-        var hostStarted = await startHostTask;
+        var hostTimeout = TimeSpan.FromSeconds(10);
+        var completedHostTask = await WaitForGameTaskAsync(startHostTask, hostTimeout);
+        var hostOutcome = ClassifyGameTaskWait(startHostTask, completedHostTask == null);
+        if (hostOutcome == GameTaskWaitOutcome.TimedOut)
+        {
+            ObserveBackgroundResult(startHostTask, "host_multiplayer_lobby");
+            return BuildGameTaskTimeoutResponse("host_multiplayer_lobby", hostTimeout);
+        }
+
+        if (hostOutcome == GameTaskWaitOutcome.Failed)
+        {
+            throw new ApiException(409, "invalid_action", $"Failed to host the multiplayer lobby: {DescribeGameTaskFailure(startHostTask)}.", new
+            {
+                action = "host_multiplayer_lobby",
+                screen
+            });
+        }
+
+        var hostStarted = await completedHostTask!;
         if (!hostStarted)
         {
             throw new ApiException(409, "invalid_action", "Failed to host the multiplayer lobby.", new
@@ -4159,7 +4396,7 @@ internal static class GameActionService
             });
         }
 
-        var stable = await WaitForMultiplayerLobbyHostTransitionAsync(scene, TimeSpan.FromSeconds(10));
+        var stable = await WaitForMultiplayerLobbyHostTransitionAsync(scene, hostTimeout);
 
         return new ActionResponsePayload
         {
@@ -4190,7 +4427,27 @@ internal static class GameActionService
         var joinPort = (ushort)GameStateService.GetMultiplayerLobbyJoinPort();
         var joinNetId = GameStateService.GetMultiplayerLobbyJoinNetIdHint();
         var initializer = new ENetClientConnectionInitializer(joinNetId, joinHost, joinPort);
-        await scene.JoinToHost(initializer);
+        var joinTimeout = TimeSpan.FromSeconds(10);
+        var joinTask = scene.JoinToHost(initializer);
+        var completedJoinTask = await WaitForGameTaskAsync(joinTask, joinTimeout);
+        var joinOutcome = ClassifyGameTaskWait(joinTask, completedJoinTask == null);
+        if (joinOutcome == GameTaskWaitOutcome.TimedOut)
+        {
+            ObserveBackgroundTask(joinTask, "join_multiplayer_lobby");
+            return BuildGameTaskTimeoutResponse("join_multiplayer_lobby", joinTimeout);
+        }
+
+        if (joinOutcome == GameTaskWaitOutcome.Failed)
+        {
+            throw new ApiException(409, "invalid_action", $"Failed to join the multiplayer lobby: {DescribeGameTaskFailure(joinTask)}.", new
+            {
+                action = "join_multiplayer_lobby",
+                screen,
+                join_host = joinHost,
+                join_port = joinPort,
+                net_id = joinNetId
+            });
+        }
 
         if (GameStateService.GetMultiplayerTestLobby(scene) == null)
         {
@@ -4204,7 +4461,7 @@ internal static class GameActionService
             });
         }
 
-        var stable = await WaitForMultiplayerLobbyJoinTransitionAsync(scene, TimeSpan.FromSeconds(10));
+        var stable = await WaitForMultiplayerLobbyJoinTransitionAsync(scene, joinTimeout);
 
         return new ActionResponsePayload
         {
@@ -4493,6 +4750,7 @@ internal static class GameActionService
 
     private static async Task<bool> InvokeFastHostAsync(NMultiplayerSubmenu submenu)
     {
+        var fastHostTimeout = TimeSpan.FromSeconds(10);
         const BindingFlags flags = BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic;
         var method = typeof(NMultiplayerSubmenu).GetMethods(flags)
             .FirstOrDefault(candidate => candidate.Name == "FastHost");
@@ -4509,7 +4767,12 @@ internal static class GameActionService
                 var result = method.Invoke(submenu, new[] { mode });
                 if (result is Task task)
                 {
-                    await task;
+                    var completedHostTask = await WaitForGameTaskAsync(task, fastHostTimeout);
+                    if (ClassifyGameTaskWait(task, completedHostTask == null) != GameTaskWaitOutcome.Completed)
+                    {
+                        ObserveBackgroundTask(task, "invite_ai_teammate");
+                        return false;
+                    }
                 }
 
                 if (await WaitForCharacterSelectOpenAsync(TimeSpan.FromSeconds(8)))
@@ -4523,7 +4786,12 @@ internal static class GameActionService
             var result = method.Invoke(submenu, Array.Empty<object>());
             if (result is Task task)
             {
-                await task;
+                var completedHostTask = await WaitForGameTaskAsync(task, fastHostTimeout);
+                if (ClassifyGameTaskWait(task, completedHostTask == null) != GameTaskWaitOutcome.Completed)
+                {
+                    ObserveBackgroundTask(task, "invite_ai_teammate");
+                    return false;
+                }
             }
 
             return await WaitForCharacterSelectOpenAsync(TimeSpan.FromSeconds(8));
@@ -4619,12 +4887,30 @@ internal static class GameActionService
             });
         }
 
+        var consoleTimeout = TimeSpan.FromSeconds(10);
+        var consoleTimedOut = false;
         if (result.task != null)
         {
-            await result.task;
+            var commandTask = result.task;
+            var completedCommandTask = await WaitForGameTaskAsync(commandTask, consoleTimeout);
+            var commandOutcome = ClassifyGameTaskWait(commandTask, completedCommandTask == null);
+            if (commandOutcome == GameTaskWaitOutcome.Failed)
+            {
+                throw new ApiException(409, "invalid_action", $"Console command failed: {DescribeGameTaskFailure(commandTask)}.", new
+                {
+                    action = "run_console_command",
+                    command
+                });
+            }
+
+            consoleTimedOut = commandOutcome == GameTaskWaitOutcome.TimedOut;
+            if (consoleTimedOut)
+            {
+                ObserveBackgroundTask(commandTask, "run_console_command");
+            }
         }
 
-        var stable = await WaitForConsoleCommandStabilityAsync(TimeSpan.FromSeconds(10));
+        var stable = await WaitForConsoleCommandStabilityAsync(consoleTimeout);
 
         return new ActionResponsePayload
         {
@@ -4633,7 +4919,9 @@ internal static class GameActionService
             stable = stable,
             message = stable
                 ? string.IsNullOrWhiteSpace(result.msg) ? "Console command executed." : result.msg
-                : "Console command executed but state is still transitioning.",
+                : consoleTimedOut
+                    ? GameTaskWaitPolicy.DescribeTimeout("run_console_command", consoleTimeout)
+                    : "Console command executed but state is still transitioning.",
             state = GameStateService.BuildStatePayload()
         };
     }
@@ -5948,6 +6236,27 @@ internal static class GameActionService
     private static void ObserveBackgroundResult(Task<bool> task, string actionName)
     {
         _ = ObserveBackgroundResultCore(task, actionName);
+    }
+
+    /// <summary>
+    /// Keeps a game task that outlived its deadline observed so a later fault is logged
+    /// instead of surfacing as an unobserved task exception.
+    /// </summary>
+    private static void ObserveBackgroundTask(Task task, string actionName)
+    {
+        _ = ObserveBackgroundTaskCore(task, actionName);
+    }
+
+    private static async Task ObserveBackgroundTaskCore(Task task, string actionName)
+    {
+        try
+        {
+            await task;
+        }
+        catch (Exception ex)
+        {
+            Log.Error($"[STS2AIAgent] Background task {actionName} failed: {ex}");
+        }
     }
 
     private static Task<T>? InvokePrivateTask<T>(object target, string methodName, params object?[] args)

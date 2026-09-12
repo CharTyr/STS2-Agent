@@ -3,7 +3,7 @@
   "name": "bounded-game-waits",
   "title": "Bound every game-side await so no action can hang the HTTP request",
   "description": "",
-  "status": "planning",
+  "status": "in_progress",
   "dev_type": null,
   "scope": null,
   "package": null,

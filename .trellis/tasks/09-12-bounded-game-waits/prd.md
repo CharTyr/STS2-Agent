@@ -25,12 +25,12 @@ forever. The caller sees a hang, not an error and not `pending`. Nine such
 
 ## Acceptance Criteria
 
-- [ ] These call sites no longer await a game task without a deadline: `choose_rest_option` (GameActionService.cs:3296), `crystal_clear_cell` (:1620), `choose_event_option` finished branch (:2902), `buy_card` / `buy_relic` / `buy_potion` (:3598 / :3671 / :3744), `save_and_quit` (:984), `host_multiplayer_lobby` (:4056), `join_multiplayer_lobby` (:4097), `run_console_command` (:4528), `invite_ai_teammate` FastHost path (:4416 / :4430).
-- [ ] A timed-out wait returns `status="pending"`, `stable=false`, and a message that names the action and the timeout.
-- [ ] A wait whose task completed with `false` or with an exception returns the established error envelope (`409 invalid_action` / `503 state_unavailable`), never a silent `pending`.
-- [ ] A source-contract test fails if any of the nine bare `await` shapes reappears in `GameActionService.cs`.
-- [ ] A pure policy unit test pins the timeout decision (still running at deadline ⇒ timeout even if the task completes later).
-- [ ] Full offline sweep green.
+- [x] These call sites no longer await a game task without a deadline: `choose_rest_option`, `crystal_clear_cell`, `choose_event_option` finished branch, `buy_card` / `buy_relic` / `buy_potion`, `save_and_quit`, `host_multiplayer_lobby`, `join_multiplayer_lobby`, `run_console_command`, `invite_ai_teammate` FastHost path.
+- [x] A timed-out wait returns `status="pending"`, `stable=false`, and a message that names the action and the timeout (the FastHost path returns its pre-existing failure result instead, by design).
+- [x] A wait whose task completed with `false` or with an exception returns the established error envelope (`409 invalid_action`), never a silent `pending`.
+- [x] A source-contract test fails if any bare `await <expr>;` reappears anywhere in `GameActionService.cs` outside the two background observers and the `WaitForTaskResultAsync` wrapper; proven with a mutation probe.
+- [x] A pure policy unit test pins the timeout decision (still running at deadline ⇒ timeout even if the task completes later), including the unreachable-call guard.
+- [x] Full offline sweep green: C# 265 PASS / 0 FAIL, build 0 warning / 0 error, gates pass, preflight exit 0 (recorded in `evidence.md`).
 
 ## Constraints
 
@@ -41,3 +41,6 @@ forever. The caller sees a hang, not an error and not `pending`. Nine such
 ## Notes
 
 - Evidence and the per-site timeout table are in `research/bounded-waits-audit.md`.
+- Verification record: `evidence.md`.
+- Spec sync: the bounded-game-task contract is now recorded in
+  `.trellis/spec/mod/game-actions.md` §"Waiting and frame safety".

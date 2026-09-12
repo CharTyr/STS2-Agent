@@ -47,6 +47,7 @@
     <Compile Include="..\STS2AIAgent\Game\MenuTransitionPolicy.cs" Link="Game\MenuTransitionPolicy.cs" />
     <Compile Include="..\STS2AIAgent\Game\BackgroundTaskOutcome.cs" Link="Game\BackgroundTaskOutcome.cs" />
     <Compile Include="..\STS2AIAgent\Game\CardPlayCounterPolicy.cs" Link="Game\CardPlayCounterPolicy.cs" />
+    <Compile Include="..\STS2AIAgent\Game\GameTaskWaitPolicy.cs" Link="Game\GameTaskWaitPolicy.cs" />
     <Compile Include="..\STS2AIAgent\Game\ProgressSaveVerification.cs" Link="Game\ProgressSaveVerification.cs" />
     <Compile Include="..\STS2AIAgent\Game\EventOptionLocalization.cs" Link="Game\EventOptionLocalization.cs" />
   </ItemGroup>

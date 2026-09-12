@@ -322,6 +322,14 @@ internal static class TestRunner
         yield return ("ActionTrust.EmbarkModal", () => Task.Run(GameActionTrustContractTests.EmbarkWaitDoesNotTreatAModalAsSuccess));
         yield return ("ActionTrust.CharacterSelectScreen", () => Task.Run(GameActionTrustContractTests.CharacterSelectNeedsTheScreenItself));
         yield return ("ActionTrust.NoEmptyState", () => Task.Run(GameActionTrustContractTests.BundleHandlersNeverFabricateAnEmptyState));
+        yield return ("GameTaskWait.Completed", () => Task.Run(GameTaskWaitPolicyTests.AFinishedTaskIsCompleted));
+        yield return ("GameTaskWait.Failed", () => Task.Run(GameTaskWaitPolicyTests.AFaultedTaskIsFailed));
+        yield return ("GameTaskWait.TimedOut", () => Task.Run(GameTaskWaitPolicyTests.AStillRunningTaskPastItsDeadlineTimesOut));
+        yield return ("GameTaskWait.Unreachable", () => Task.Run(GameTaskWaitPolicyTests.AStillRunningTaskBeforeItsDeadlineCannotBeClassified));
+        yield return ("GameTaskWait.TimeoutMessage", () => Task.Run(GameTaskWaitPolicyTests.TimeoutMessageNamesTheActionAndTheTimeout));
+        yield return ("GameTaskBounding.AllSites", () => Task.Run(GameTaskBoundingContractTests.EveryGameTaskAwaitIsBounded));
+        yield return ("GameTaskBounding.Observer", () => Task.Run(GameTaskBoundingContractTests.TheBackgroundObserverStaysUnbounded));
+        yield return ("GameTaskBounding.TaskHandedBack", () => Task.Run(GameTaskBoundingContractTests.TheBoundedWaitHandsTheTaskBackForObservation));
         yield return ("EventOptionLocalization.DynamicVars", () => Task.Run(EventOptionLocalizationTests.AddsEventVariablesBeforeFormatting));
         yield return ("EventOptionLocalization.Null", () => Task.Run(EventOptionLocalizationTests.MissingLocStringReturnsEmpty));
         yield return ("EventOptionLocalization.Signature", () => Task.Run(EventOptionLocalizationTests.FormatsSignatureFieldsWithEventVariables));
