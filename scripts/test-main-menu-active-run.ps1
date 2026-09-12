@@ -89,7 +89,12 @@ $state = Wait-ForState -Description "active-run MAIN_MENU" -Condition {
 }
 
 Assert-ActionAvailable -State $state -ActionName "abandon_run"
-Assert-ActionAvailable -State $state -ActionName "open_timeline"
+
+# The main menu disables its timeline button while a run save exists
+# (NMainMenu.UpdateTimelineButtonBehavior), so open_timeline is not part of the active-run menu
+# contract. run_sts2_validation.py suite_new_run_lifecycle asserts the same thing: it opens the
+# timeline only from a menu without a run. Record it as a diagnostic instead of asserting it.
+$openTimelineAvailable = @($state.available_actions) -contains "open_timeline"
 
 $abandonResponse = Invoke-Action -Payload @{ action = "abandon_run" }
 if (-not $abandonResponse.ok) {
@@ -111,55 +116,13 @@ if (-not $dismissResponse.ok) {
 
 $menuState = Wait-ForState -Description "return to MAIN_MENU after dismiss_modal" -Condition {
     param($CurrentState)
-    $CurrentState.screen -eq "MAIN_MENU" -and @($CurrentState.available_actions) -contains "open_timeline"
-}
-
-$timelineResponse = Invoke-Action -Payload @{ action = "open_timeline" }
-if (-not $timelineResponse.ok) {
-    throw "open_timeline failed: $($timelineResponse | ConvertTo-Json -Depth 8 -Compress)"
-}
-
-$timelineState = $timelineResponse.data.state
-Assert-ActionAvailable -State $timelineState -ActionName "choose_timeline_epoch"
-Assert-ActionAvailable -State $timelineState -ActionName "close_main_menu_submenu"
-
-$chooseEpochResponse = Invoke-Action -Payload @{ action = "choose_timeline_epoch"; option_index = 0 }
-if (-not $chooseEpochResponse.ok) {
-    throw "choose_timeline_epoch failed: $($chooseEpochResponse | ConvertTo-Json -Depth 8 -Compress)"
-}
-
-$epochState = $chooseEpochResponse.data.state
-if (-not [bool]$epochState.timeline.inspect_open -and -not [bool]$epochState.timeline.unlock_screen_open) {
-    throw "Expected choose_timeline_epoch to open an inspect or unlock overlay, but received: $($chooseEpochResponse | ConvertTo-Json -Depth 8 -Compress)"
-}
-
-if (-not [bool]$epochState.timeline.can_confirm_overlay) {
-    throw "Expected choose_timeline_epoch response state to expose timeline.can_confirm_overlay=true, but received: $($chooseEpochResponse | ConvertTo-Json -Depth 8 -Compress)"
-}
-
-Assert-ActionAvailable -State $epochState -ActionName "confirm_timeline_overlay"
-
-$confirmEpochResponse = Invoke-Action -Payload @{ action = "confirm_timeline_overlay" }
-if (-not $confirmEpochResponse.ok) {
-    throw "confirm_timeline_overlay failed: $($confirmEpochResponse | ConvertTo-Json -Depth 8 -Compress)"
-}
-
-$timelineAfterConfirm = Wait-ForState -Description "timeline overlay close" -Condition {
-    param($CurrentState)
-    $CurrentState.screen -eq "MAIN_MENU" -and $null -ne $CurrentState.timeline -and -not [bool]$CurrentState.timeline.inspect_open -and -not [bool]$CurrentState.timeline.unlock_screen_open
-}
-
-Assert-ActionAvailable -State $timelineAfterConfirm -ActionName "close_main_menu_submenu"
-
-$closeTimelineResponse = Invoke-Action -Payload @{ action = "close_main_menu_submenu" }
-if (-not $closeTimelineResponse.ok) {
-    throw "close_main_menu_submenu failed: $($closeTimelineResponse | ConvertTo-Json -Depth 8 -Compress)"
-}
-
-$menuAfterTimeline = Wait-ForState -Description "return to MAIN_MENU after closing timeline" -Condition {
-    param($CurrentState)
     $CurrentState.screen -eq "MAIN_MENU" -and @($CurrentState.available_actions) -contains "continue_run"
 }
+
+# The timeline interaction sequence (open_timeline / choose_timeline_epoch / confirm_timeline_overlay /
+# close_main_menu_submenu) lives in run_sts2_validation.py suite_new_run_lifecycle, which walks it from
+# a menu with no run save. Walking it here would contradict the disabled open_timeline above, so the
+# active-run suite stops at the menu and hands off to continue_run.
 
 $continueResponse = Invoke-Action -Payload @{ action = "continue_run" }
 if (-not $continueResponse.ok) {
@@ -173,7 +136,8 @@ $runState = Wait-ForState -Description "leave MAIN_MENU via continue_run" -Condi
 
 [pscustomobject]@{
     initial_menu_actions = @($state.available_actions)
-    timeline_epoch_state = if ([bool]$epochState.timeline.inspect_open) { "inspect" } else { "unlock" }
+    open_timeline_available_with_active_run = $openTimelineAvailable
+    menu_after_dismiss_actions = @($menuState.available_actions)
     continue_run_destination = $runState.screen
     final_available_actions = @($runState.available_actions)
 } | ConvertTo-Json -Depth 6

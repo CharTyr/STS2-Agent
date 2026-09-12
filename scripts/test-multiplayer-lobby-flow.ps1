@@ -728,9 +728,22 @@ function Invoke-LocalRunProgressionStep {
         "MAP" {
             return $null
         }
+        "CAPSTONE_SELECTION" {
+            if ($actions -contains "choose_capstone_option" -and $null -ne $State.capstone -and @($State.capstone.options).Count -ge 1) {
+                return Invoke-Action -BaseUrl $BaseUrl -Payload @{
+                    action = "choose_capstone_option"
+                    option_index = [int]$State.capstone.options[0].i
+                }
+            }
+        }
+        "UNLOCK" {
+            if ($actions -contains "confirm_unlock") {
+                return Invoke-Action -BaseUrl $BaseUrl -Payload @{ action = "confirm_unlock" }
+            }
+        }
     }
 
-    throw "Unsupported run progression state at ${BaseUrl}: $($State | ConvertTo-Json -Depth 8 -Compress)"
+    throw "Unsupported run progression state at ${BaseUrl}: screen=$($State.screen); available_actions=[$($actions -join ', ')]; state=$($State | ConvertTo-Json -Depth 8 -Compress)"
 }
 
 function Resolve-RunIntroToMap {

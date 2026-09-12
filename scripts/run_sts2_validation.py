@@ -1246,6 +1246,41 @@ def dismiss_blocking_modal(client: ApiClient, state: dict[str, Any] | None = Non
     return False
 
 
+# Screen coverage for the run-progression helpers below.
+#
+# GameStateService.ResolveNonModalScreen is the single producer of state["screen"] (the docs/api.md
+# "Screen 枚举" table mirrors it) and can return 24 names. This block records how each one is reached
+# so a screen without a branch here reads as a deliberate choice, not a gap.
+#
+# Consumed through the Mod API by the helpers below and the suites that call them:
+#   MAIN_MENU         settle_main_menu / settle_game_over / continue_from_main_menu_if_needed /
+#                     wait_until_main_menu_ready / suite_main_menu_active_run
+#   CHARACTER_SELECT  wait_for_character_select / suite_bootstrap_active_run
+#   COMBAT            ensure_combat and the combat suites
+#   CARD_SELECTION    the card-selection suites
+#   REWARD            collect_rewards_if_needed
+#   GAME_OVER         settle_game_over
+#   MULTIPLAYER_LOBBY suite_multiplayer_lobby_flow
+#   TIMELINE          settle_main_menu (confirm_timeline_overlay / close_main_menu_submenu)
+#   UNLOCK            settle_main_menu (confirm_unlock: slotting a timeline epoch opens NUnlockScreen)
+#   UNKNOWN           treated as "not blocked": no action is offered, so helpers return instead of polling
+#
+# MODAL is the one surface these helpers drive that ResolveNonModalScreen does not name: the docs
+# table lists it as produced by the modal path, and dismiss_blocking_modal/resolve_modals own it.
+#
+# Not entered by these suites: the run is moved with debug console commands
+# (run_console_command "room ..." / "fight ..." / "die"), so there is no branch to write.
+#   MAP, EVENT, CHEST, REST, SHOP, FAKE_MERCHANT, CAPSTONE_SELECTION, BUNDLE_SELECTION, CRYSTAL_SPHERE
+#   (suite_new_run_lifecycle waits for MAP and then dies; state-invariants only reads MAP's indexes.)
+#
+# Player-driven surfaces no suite opens, so no branch belongs here:
+#   CARDS_VIEW, CARD_INSPECT, RELIC_INSPECT  opened by the player; close_cards_view closes them
+#   PATCH_NOTES                              main-menu submenu; close_main_menu_submenu closes it, and
+#                                            settle_main_menu already drives that action
+#   FEEDBACK                                 user-triggered only; nothing closes it, and these
+#                                            scripts must not enter it
+
+
 def settle_game_over(client: ApiClient, *, attempts: int, delay_ms: int) -> dict[str, Any]:
     """Drive the death summary with fresh reads instead of a captured payload.
 
@@ -1295,6 +1330,14 @@ def settle_main_menu(client: ApiClient, *, attempts: int, delay_ms: int) -> dict
             return state
         if screen == "MODAL":
             dismiss_blocking_modal(client, state)
+        elif "confirm_unlock" in actions:
+            # The timeline slot flow opens NUnlockScreen (screen UNLOCK, action confirm_unlock). It is
+            # not a MODAL and exposes neither confirm_timeline_overlay nor close_main_menu_submenu, so
+            # without this arm the loop polls until it times out.
+            try:
+                client.action("confirm_unlock")
+            except ValidationError:
+                pass
         elif "confirm_timeline_overlay" in actions or "close_main_menu_submenu" in actions:
             action = "confirm_timeline_overlay" if "confirm_timeline_overlay" in actions else "close_main_menu_submenu"
             try:
@@ -1310,7 +1353,8 @@ def settle_main_menu(client: ApiClient, *, attempts: int, delay_ms: int) -> dict
 def continue_from_main_menu_if_needed(client: ApiClient, state: dict[str, Any], *, attempts: int, delay_ms: int) -> dict[str, Any]:
     if state.get("screen") != "MAIN_MENU":
         actions = list(state.get("available_actions") or [])
-        if "confirm_timeline_overlay" in actions or "close_main_menu_submenu" in actions:
+        # settle_main_menu also clears a UNLOCK overlay (confirm_unlock), not just the timeline ones.
+        if {"confirm_unlock", "confirm_timeline_overlay", "close_main_menu_submenu"} & set(actions):
             state = settle_main_menu(client, attempts=attempts, delay_ms=delay_ms)
         else:
             return state
@@ -1933,8 +1977,22 @@ def suite_new_run_lifecycle(args: argparse.Namespace) -> dict[str, Any]:
         assert_action_available(timeline_state, "close_main_menu_submenu")
 
         if "choose_timeline_epoch" in list(timeline_state.get("available_actions") or []):
+            # TimelineIndexContractTests.ExecutorIndexesTheSameSlotListTheStateExposes pins the
+            # contract: the executor indexes timeline.slots[] with the same list the state exposes
+            # (GetTimelineSlots filters only NotObtained), and
+            # TimelineIndexContractTests.NonActionableSlotsAreRejectedExplicitly rejects a
+            # non-actionable slot with 409 invalid_target (option_index_space =
+            # "timeline.slots[].index"). Index 0 is therefore not guaranteed to be actionable, so take
+            # the first slot that reports is_actionable.
+            timeline_slots = list((timeline_state.get("timeline") or {}).get("slots") or [])
+            actionable_slot = next((slot for slot in timeline_slots if slot.get("is_actionable")), None)
+            if actionable_slot is None:
+                raise ValidationError(
+                    "choose_timeline_epoch is available but no timeline.slots[] entry reports "
+                    f"is_actionable: {json.dumps(timeline_state, ensure_ascii=False)}"
+                )
             timeline_state = ensure_action_ok(
-                client.action("choose_timeline_epoch", option_index=0),
+                client.action("choose_timeline_epoch", option_index=int(actionable_slot["index"])),
                 "choose_timeline_epoch",
             )["data"]["state"]
             timeline_payload = timeline_state.get("timeline") or {}
