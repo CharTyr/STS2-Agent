@@ -410,5 +410,8 @@ internal static class TestRunner
         yield return ("MenuWaitObservation.SurvivingSource", () => Task.Run(MenuWaitObservationTests.FlagIsOnlyObservedWhenTheSourceNodeSurvives));
         yield return ("MenuWaitObservation.NoLostNodeSuccess", () => Task.Run(MenuWaitObservationTests.MenuWaitsDoNotTreatALostNodeAsSuccess));
         yield return ("MenuWaitObservation.ConsoleTimeout", () => Task.Run(MenuWaitObservationTests.ConsoleTimeoutNeverReportsCompletion));
+        yield return ("GameDataExportSchema.SceneFields", () => Task.Run(GameDataExportSchemaTests.SceneFieldsExistInTheExportSchema));
+        yield return ("GameDataExportSchema.ExportCode", () => Task.Run(GameDataExportSchemaTests.ExportSchemaFieldsAppearInTheExportCode));
+        yield return ("GameDataExportSchema.KnownCollections", () => Task.Run(GameDataExportSchemaTests.KnownCollectionsMatchTheExportSchema));
     }
 }

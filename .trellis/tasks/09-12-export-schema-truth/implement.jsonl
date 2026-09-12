@@ -1,0 +1,4 @@
+{"file": ".trellis/spec/mod/architecture.md", "reason": "Where the export schema constant belongs and how mod-side data flow is layered."}
+{"file": ".trellis/spec/mcp/contracts-and-tests.md", "reason": "Cross-language data contract expectations for get_relevant_game_data."}
+{"file": ".trellis/spec/mod/index.md", "reason": "Offline C# test runner and registration convention."}
+{"file": ".trellis/tasks/09-12-export-schema-truth/research/field-set-audit.md", "reason": "Exact field diff per scene/collection plus why the packaged data files are not a schema."}

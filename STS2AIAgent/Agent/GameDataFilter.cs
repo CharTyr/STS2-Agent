@@ -13,21 +13,28 @@ internal static class GameDataFilter
     {
         ["combat"] = new Dictionary<string, string[]>(StringComparer.OrdinalIgnoreCase)
         {
-            ["cards"] = new[] { "id", "name", "description", "type", "rarity", "target", "cost", "is_x_cost", "star_cost", "damage", "block", "keywords", "tags", "vars", "upgrade" },
-            ["monsters"] = new[] { "id", "name", "type", "hp", "moves", "damage", "block" },
-            ["powers"] = new[] { "id", "name", "description", "type", "stack_type" }
+            ["cards"] = new[] { "id", "name", "description", "type", "rarity", "target", "cost", "is_x_cost", "star_cost", "is_x_star_cost", "damage", "block", "keywords", "tags", "vars", "upgrade" },
+            ["monsters"] = new[] { "id", "name", "type", "min_hp", "max_hp", "moves", "damage_values", "block_values" },
+            ["powers"] = new[] { "id", "name", "description", "type", "stack_type", "allow_negative" },
+            ["potions"] = new[] { "id", "name", "description", "rarity", "pool", "usage", "target_type" }
         },
         ["shop"] = new Dictionary<string, string[]>(StringComparer.OrdinalIgnoreCase)
         {
-            ["cards"] = new[] { "id", "name", "description", "type", "rarity", "cost", "keywords" },
-            ["relics"] = new[] { "id", "name", "description", "rarity" },
-            ["potions"] = new[] { "id", "name", "description", "rarity", "target" }
+            ["cards"] = new[] { "id", "name", "description", "type", "rarity", "target", "cost", "is_x_cost", "star_cost", "is_x_star_cost", "keywords" },
+            ["relics"] = new[] { "id", "name", "description", "rarity", "pool", "is_melted" },
+            ["potions"] = new[] { "id", "name", "description", "rarity", "pool", "usage", "target_type" }
         },
         ["event"] = new Dictionary<string, string[]>(StringComparer.OrdinalIgnoreCase)
         {
-            ["events"] = new[] { "id", "name", "description", "options" }
+            ["events"] = new[] { "id", "name", "type", "act", "description", "options" }
         }
     };
+
+    /// <summary>
+    /// Read-only view of <see cref="SceneFieldSets"/> for source-level contract tests. Kept
+    /// internal so the filter's public surface does not grow.
+    /// </summary>
+    internal static IReadOnlyDictionary<string, Dictionary<string, string[]>> SceneFieldSetView => SceneFieldSets;
 
     public static string DetectScene(string? screen)
     {

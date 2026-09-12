@@ -891,3 +891,81 @@ internal static class AgentLoopTests
         public Task<string> PingAsync(string model, CancellationToken cancellationToken) => Task.FromResult("pong");
     }
 }
+
+internal static class GameDataExportSchemaTests
+{
+    /// <summary>
+    /// Every (scene, collection, field) the filter projects must be a field the game really
+    /// exports. Silent skipping in <c>ProjectFields</c> is exactly why a typo here costs the
+    /// model its most important combat numbers, so collect every violation at once.
+    /// </summary>
+    public static void SceneFieldsExistInTheExportSchema()
+    {
+        var violations = new List<string>();
+        foreach (var scene in GameDataFilter.SceneFieldSetView)
+        {
+            foreach (var collection in scene.Value)
+            {
+                if (!GameDataExportSchema.TryGetFields(collection.Key, out var exported))
+                {
+                    violations.Add($"{scene.Key}/{collection.Key}: collection is not an exported /data collection");
+                    continue;
+                }
+
+                var exportedSet = new HashSet<string>(exported, StringComparer.Ordinal);
+                foreach (var field in collection.Value)
+                {
+                    if (!exportedSet.Contains(field))
+                    {
+                        violations.Add(
+                            $"{scene.Key}/{collection.Key}: '{field}' is not exported (exports: {string.Join(", ", exported)})");
+                    }
+                }
+            }
+        }
+
+        Assert.True(
+            violations.Count == 0,
+            "Scene field sets reference fields the game never exports: " + string.Join(" | ", violations));
+    }
+
+    /// <summary>
+    /// Reverse drift guard: every field named in the inventory must still be assigned inside the
+    /// matching <c>ExportXxx()</c> method body of <c>GameDataExportService</c>. Scoping to the
+    /// method body keeps an unrelated name elsewhere in the file from satisfying the assertion.
+    /// </summary>
+    public static void ExportSchemaFieldsAppearInTheExportCode()
+    {
+        var source = AgentSourceFixture.Read("STS2AIAgent/Game/GameDataExportService.cs");
+        var missing = new List<string>();
+        foreach (var pair in GameDataExportSchema.Collections)
+        {
+            var methodName = "Export" + char.ToUpperInvariant(pair.Key[0]) + pair.Key[1..];
+            var body = AgentSourceFixture.MethodBody(source, methodName);
+            foreach (var field in pair.Value)
+            {
+                if (!System.Text.RegularExpressions.Regex.IsMatch(body, $@"\b{System.Text.RegularExpressions.Regex.Escape(field)}\s*="))
+                {
+                    missing.Add($"{pair.Key}.{field} ({methodName})");
+                }
+            }
+        }
+
+        Assert.True(
+            missing.Count == 0,
+            "Export schema lists fields GameDataExportService never assigns: " + string.Join(", ", missing));
+    }
+
+    /// <summary>
+    /// The filter's known collection list must stay the same set as the export contract.
+    /// </summary>
+    public static void KnownCollectionsMatchTheExportSchema()
+    {
+        var known = new HashSet<string>(GameDataFilter.KnownCollections, StringComparer.Ordinal);
+        var exported = new HashSet<string>(GameDataExportSchema.Collections.Keys, StringComparer.Ordinal);
+
+        Assert.True(
+            known.SetEquals(exported),
+            $"KnownCollections [{string.Join(", ", known.OrderBy(value => value, StringComparer.Ordinal))}] does not match export schema [{string.Join(", ", exported.OrderBy(value => value, StringComparer.Ordinal))}]");
+    }
+}
