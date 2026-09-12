@@ -7,10 +7,32 @@ internal static class AgentSourceFixture
     /// <summary>Repository root that holds both the mod and this test project.</summary>
     public static string Root => FindAgentRoot();
 
-    /// <summary>Every C# file of the mod, for tests that audit the whole source tree.</summary>
+    /// <summary>
+    /// Every C# source file of the mod, for tests that audit the whole source tree. Generated
+    /// build output is skipped so a local <c>obj/</c> or <c>bin/</c> tree cannot inject files the
+    /// audit never meant to see; a fresh checkout contains neither.
+    /// </summary>
     public static IEnumerable<string> SourceFiles()
     {
-        return Directory.EnumerateFiles(Path.Combine(Root, "STS2AIAgent"), "*.cs", SearchOption.AllDirectories);
+        var modRoot = Path.Combine(Root, "STS2AIAgent");
+        return Directory
+            .EnumerateFiles(modRoot, "*.cs", SearchOption.AllDirectories)
+            .Where(path => !IsBuildOutputPath(Path.GetRelativePath(modRoot, path)));
+    }
+
+    /// <summary>Build output under <c>obj/</c> or <c>bin/</c> is generated, never mod source.</summary>
+    private static bool IsBuildOutputPath(string relativePath)
+    {
+        foreach (var segment in relativePath.Split(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar))
+        {
+            if (segment.Equals("bin", StringComparison.OrdinalIgnoreCase) ||
+                segment.Equals("obj", StringComparison.OrdinalIgnoreCase))
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     public static string Read(string relativePath)

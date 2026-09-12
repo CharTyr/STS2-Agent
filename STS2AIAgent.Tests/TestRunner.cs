@@ -449,5 +449,7 @@ internal static class TestRunner
         yield return ("Parity.PlaySurfaceExcludesHealthCheck", () => Task.Run(HealthCheckParityTests.InGamePlaySurfaceKeepsNoConnectionCheck));
         yield return ("Parity.EmbeddedPromptUsesOnlyPlayTools", () => Task.Run(HealthCheckParityTests.EmbeddedPromptOnlyInstructsPlaySurfaceTools));
         yield return ("Parity.McpSurfaceKeepsHealthCheck", () => Task.Run(HealthCheckParityTests.McpSurfaceStillDocumentsHealthCheck));
+        yield return ("SourceCoverage.ModSourcesParse", () => Task.Run(SourceCoverageTests.EveryModSourceParsesWithoutSyntaxErrors));
+        yield return ("SourceCoverage.UncompiledWhitelist", () => Task.Run(SourceCoverageTests.UncompiledSourcesMatchTheDeclaredWhitelist));
     }
 }

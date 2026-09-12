@@ -62,4 +62,16 @@
     <EmbeddedResource Include="../skills/sts2-mcp-player/SKILL.md" LogicalName="STS2AIAgent.Sts2McpPlayer.Skill.md" />
     <EmbeddedResource Include="../skills/sts2-mcp-player/references/screen-playbooks.md" LogicalName="STS2AIAgent.Sts2McpPlayer.ScreenPlaybooks.md" />
   </ItemGroup>
+  <ItemGroup>
+    <!--
+      Roslyn ships inside the .NET SDK, so the source-coverage tests can parse the mod files the
+      test project cannot compile (they reference the game assemblies). No NuGet package is added.
+    -->
+    <Reference Include="Microsoft.CodeAnalysis">
+      <HintPath>$(MSBuildSDKsPath)/../Roslyn/bincore/Microsoft.CodeAnalysis.dll</HintPath>
+    </Reference>
+    <Reference Include="Microsoft.CodeAnalysis.CSharp">
+      <HintPath>$(MSBuildSDKsPath)/../Roslyn/bincore/Microsoft.CodeAnalysis.CSharp.dll</HintPath>
+    </Reference>
+  </ItemGroup>
 </Project>
