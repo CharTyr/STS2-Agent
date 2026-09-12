@@ -8,8 +8,8 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-1.md`
-- **Total Sessions**: 4
-- **Last Active**: 2026-09-10
+- **Total Sessions**: 5
+- **Last Active**: 2026-09-12
 <!-- @@@/auto:current-status -->
 
 ---
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-1.md` | ~138 | Active |
+| `journal-1.md` | ~190 | Active |
 <!-- @@@/auto:active-documents -->
 
 ---
@@ -29,6 +29,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 5 | 2026-09-12 | v0.10.6/v0.10.7/v0.11.0 releases, acceptance hardening, and game-language localization | `2f75e4a`, `f9330ba`, `84631b9`, `d77982a`, `e565073`, `bd93662`, `1ce254b`, `6aabb4f`, `a1bd5b5`, `06924e4`, `ed1c65f`, `dd71769` | `main` |
 | 4 | 2026-09-10 | Repo hardening: dep security, proactive chat, doc contract, verification gates | `2bc857d` | `main` |
 | 3 | 2026-09-09 | Documentation archive and Workshop loading acceptance | `5ff7303` | `main` |
 | 2 | 2026-09-09 | v0.10.5 release, Workshop public visibility and P3 closeout | `e3412eb`, `04d2466`, `15e483c`, `2838250`, `96bd410` | `main` |

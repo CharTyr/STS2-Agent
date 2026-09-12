@@ -136,3 +136,55 @@ Closed issues #50/#51 by refreshing uv.lock (fastmcp 3.4.7) and package-lock.jso
 ### Status
 
 [OK] **Completed**
+
+
+## Session 5: v0.10.6/v0.10.7/v0.11.0 releases, acceptance hardening, and game-language localization
+
+**Date**: 2026-09-12
+**Task**: v0.10.6/v0.10.7/v0.11.0 releases, acceptance hardening, and game-language localization
+**Branch**: `main`
+
+### Summary
+
+Continued the thread that started in Session 4: acceptance hardening (card-grid selection metadata, combat-hand pick settling, run-boundary stop, locale-proof gate self-test), then three releases. v0.11.0 makes the mod follow the games language - Chinese stays the source text, every other language reads an English table, and the overlay rebuilds on a mid-session language change. Three places that keyed behaviour off Chinese wording were fixed. All three releases went to GitHub and the Steam Workshop; the v0.11.0 Workshop upload was first misjudged as failed, then confirmed by Steam own workshop_log.
+
+### Main Changes
+
+- v0.11.0 localization: Loc (table, language detection) split from LocSource (Godot side) so the lookup stays testable offline; five shards, ~336 entries; a call-site coverage test fails any Chinese literal with no English entry; a frozen-text test fails any field or computed-once property that resolves text at construction.
+- Three behaviour bugs that only surfaced on an English client: the glossary keyword match, the co-op invite result, and the failure classifier all read Chinese wording; they now key off explicit flags and English candidates.
+- Acceptance hardening: card-grid selection metadata read from the base screen type (enchant 1/1/0 -> 0/3/0, first pick 10036 ms -> 151 ms); a combat-hand pick reports pending until confirmed; the run-boundary stop restored; the gate self-test made locale-proof; the pytest-style invocation replaced with the runner the project actually uses.
+- Three releases shipped to GitHub and the Steam Workshop: v0.10.6, v0.10.7, v0.11.0 (Workshop manifest 3781676487912021003).
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `2f75e4a` | (see git log) |
+| `f9330ba` | (see git log) |
+| `84631b9` | (see git log) |
+| `d77982a` | (see git log) |
+| `e565073` | (see git log) |
+| `bd93662` | (see git log) |
+| `1ce254b` | (see git log) |
+| `6aabb4f` | (see git log) |
+| `a1bd5b5` | (see git log) |
+| `06924e4` | (see git log) |
+| `ed1c65f` | (see git log) |
+| `dd71769` | (see git log) |
+
+### Testing
+
+- [OK] dotnet run --project STS2AIAgent.Tests -c Release: 232 PASS, exit 0
+- [OK] uv run --locked python -m unittest discover -s tests: 55 tests OK
+- [OK] check_verification_gates.py pass; preflight-release.ps1 exit 0
+- [OK] Live on an isolated game copy: Chinese regression reads as before; English cold start and mid-session language switch verified by screenshot; state payload glossary and deck lines read English
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- The English wording is machine-translated and was not reviewed by a native speaker; only Chinese and English were exercised.
+- v0.10.7 has no GitHub tag - its Workshop upload predates the release, so the Releases list jumps from v0.10.6 to v0.11.0. Backfill the tag if the list should be contiguous.
+- Steam Workshop uploads stall on manifest fetches from steampipe-partner.akamaized.net; judge success from Steam workshop_log.txt, never from the uploader stdout.
