@@ -406,5 +406,9 @@ internal static class TestRunner
         yield return ("DualLaunchOutcome.EveryBranchRecords", () => Task.Run(DualLaunchOutcomeTests.EveryLaunchBranchRecordsAnOutcome));
         yield return ("DualLaunchOutcome.CoordinatorContract", () => Task.Run(DualLaunchOutcomeTests.CoordinatorExposesAStructuredResult));
         yield return ("DualLaunchOutcome.OfflineCompilable", () => Task.Run(DualLaunchOutcomeTests.TheOutcomeTypeStaysOfflineCompilable));
+        yield return ("MenuWaitObservation.SubmenuType", () => Task.Run(MenuWaitObservationTests.SubmenuIsOnlyObservedWhenTheTargetTypeIsCurrent));
+        yield return ("MenuWaitObservation.SurvivingSource", () => Task.Run(MenuWaitObservationTests.FlagIsOnlyObservedWhenTheSourceNodeSurvives));
+        yield return ("MenuWaitObservation.NoLostNodeSuccess", () => Task.Run(MenuWaitObservationTests.MenuWaitsDoNotTreatALostNodeAsSuccess));
+        yield return ("MenuWaitObservation.ConsoleTimeout", () => Task.Run(MenuWaitObservationTests.ConsoleTimeoutNeverReportsCompletion));
     }
 }

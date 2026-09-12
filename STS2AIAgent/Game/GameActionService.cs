@@ -729,8 +729,20 @@ internal static class GameActionService
                 await WaitForNextFrameAsync();
             }
 
-            tutorialButton ??= GameStateService.GetTimelineTutorialAcknowledgeButton(currentScreen);
-            tutorialButton?.ForceClick();
+            // Re-read the button immediately before clicking. The tutorial animates in, so the
+            // reference held by the wait loop may be stale; a missing or disabled button means there
+            // is nothing to confirm, so surface it instead of clicking nothing and guessing pending.
+            tutorialButton = GameStateService.GetTimelineTutorialAcknowledgeButton(currentScreen);
+            if (tutorialButton == null || !tutorialButton.IsEnabled)
+            {
+                throw new ApiException(503, "state_unavailable", "Timeline tutorial acknowledge button is unavailable.", new
+                {
+                    action = "confirm_timeline_overlay",
+                    screen
+                }, retryable: true);
+            }
+
+            tutorialButton.ForceClick();
 
             var tutorialGone = await WaitForTimelineTutorialClosedAsync(tutorial, TimeSpan.FromSeconds(15));
             return new ActionResponsePayload
@@ -746,12 +758,20 @@ internal static class GameActionService
         var unlockScreen = GameStateService.GetTimelineUnlockScreen(currentScreen);
         if (unlockScreen != null)
         {
-            var confirmButton = GameStateService.GetTimelineUnlockConfirmButton(currentScreen)
-                ?? throw new ApiException(503, "state_unavailable", "Timeline unlock confirm button is unavailable.", new
+            // Revalidate the target right before the click: the overlay can close or the button can
+            // become disabled between the availability guard at the top of the handler and here.
+            var confirmButton = GameStateService.GetTimelineUnlockConfirmButton(currentScreen);
+            if (confirmButton == null ||
+                !GodotObject.IsInstanceValid(confirmButton) ||
+                !confirmButton.IsVisibleInTree() ||
+                !confirmButton.IsEnabled)
+            {
+                throw new ApiException(503, "state_unavailable", "Timeline unlock confirm button is unavailable.", new
                 {
                     action = "confirm_timeline_overlay",
                     screen
                 }, retryable: true);
+            }
 
             confirmButton.ForceClick();
             var unlockType = unlockScreen.GetType();
@@ -767,12 +787,20 @@ internal static class GameActionService
             };
         }
 
-        var closeButton = GameStateService.GetTimelineInspectCloseButton(currentScreen)
-            ?? throw new ApiException(503, "state_unavailable", "Timeline inspect close button is unavailable.", new
+        // Revalidate the close target right before the click so a closed or disabled overlay is not
+        // clicked blindly; the getter reads live node state, not the guard's earlier snapshot.
+        var closeButton = GameStateService.GetTimelineInspectCloseButton(currentScreen);
+        if (closeButton == null ||
+            !GodotObject.IsInstanceValid(closeButton) ||
+            !closeButton.IsVisibleInTree() ||
+            !closeButton.IsEnabled)
+        {
+            throw new ApiException(503, "state_unavailable", "Timeline inspect close button is unavailable.", new
             {
                 action = "confirm_timeline_overlay",
                 screen
             }, retryable: true);
+        }
 
         closeButton.ForceClick();
         var inspectScreen = GameStateService.GetTimelineInspectScreen(currentScreen);
@@ -1630,12 +1658,20 @@ internal static class GameActionService
 
         await WaitForNextFrameAsync();
 
+        // Evidence: the model tool is the observable source of truth. TrySetCrystalSphereTool assigns
+        // CrystalSphereMinigame.CrystalSphereTool before returning true, so re-reading the live
+        // minigame confirms the requested tool is actually active instead of trusting the call alone.
+        var confirmed = GameStateService.GetCrystalSphereMinigame(ActiveScreenContext.Instance.GetCurrentScreen())
+            is { } liveMinigame && liveMinigame.CrystalSphereTool == tool;
+
         return new ActionResponsePayload
         {
             action = "crystal_set_tool",
-            status = "completed",
-            stable = true,
-            message = $"Crystal sphere tool set to {tool.ToString().ToLowerInvariant()}.",
+            status = confirmed ? "completed" : "pending",
+            stable = confirmed,
+            message = confirmed
+                ? $"Crystal sphere tool set to {tool.ToString().ToLowerInvariant()}."
+                : $"Crystal sphere tool was not observed as {tool.ToString().ToLowerInvariant()} after the request.",
             state = GameStateService.BuildStatePayload()
         };
     }
@@ -2061,6 +2097,25 @@ internal static class GameActionService
         var isCombatHandSelection = GameStateService.TryGetCombatHandSelectionMetadata(currentScreen, out var combatHand, out var combatHandSelection);
         var isCardGridSelection = GameStateService.TryGetCardGridSelectionMetadata(
             currentScreen, out var cardGridSelection);
+
+        // CanSelectDeckCard only proves that *some* card holder is visible: it also returns true for
+        // screens whose holders are discovered by a generic descendant scan. Without the native
+        // selection metadata (combat hand / card grid) or the choose-a-card screen that has its own
+        // resolution wait, there is no click target we can prove reacts, so answer with an honest
+        // invalid_action instead of clicking an unknown node and reporting pending forever.
+        if (!isCombatHandSelection &&
+            !isCardGridSelection &&
+            currentScreen is not NChooseACardSelectionScreen)
+        {
+            throw new ApiException(409, "invalid_action", "No clickable card selection target is available for the current screen.", new
+            {
+                action = "select_deck_card",
+                screen,
+                option_index = request.option_index,
+                option_count = options.Count
+            });
+        }
+
         var selected = options[request.option_index.Value];
         if (isCombatHandSelection)
         {
@@ -4988,14 +5043,19 @@ internal static class GameActionService
             }
         }
 
-        var stable = await WaitForConsoleCommandStabilityAsync(consoleTimeout);
+        var screenStable = await WaitForConsoleCommandStabilityAsync(consoleTimeout);
+
+        // A stable screen is not proof that a command the game handed back as a task finished: when
+        // the task timed out it is still running in the background, so the response must not claim
+        // completion - and it must not claim a stable state either.
+        var completed = screenStable && !consoleTimedOut;
 
         return new ActionResponsePayload
         {
             action = "run_console_command",
-            status = stable ? "completed" : "pending",
-            stable = stable,
-            message = stable
+            status = completed ? "completed" : "pending",
+            stable = completed,
+            message = completed
                 ? string.IsNullOrWhiteSpace(result.msg) ? "Console command executed." : result.msg
                 : consoleTimedOut
                     ? GameTaskWaitPolicy.DescribeTimeout("run_console_command", consoleTimeout)
@@ -5633,13 +5693,18 @@ internal static class GameActionService
                 return true;
             }
 
+            // Losing the pushed submenu node (for example because the whole main menu was replaced
+            // by another screen) only removes our observation point. It is not proof that the
+            // requested submenu opened, so stop waiting and judge the active screen below.
             if (!GodotObject.IsInstanceValid(screen))
             {
-                return true;
+                break;
             }
         }
 
-        return ActiveScreenContext.Instance.GetCurrentScreen() is TSubmenu;
+        return MenuTransitionPolicy.IsSubmenuObserved(
+            ActiveScreenContext.Instance.GetCurrentScreen()?.GetType(),
+            typeof(TSubmenu));
     }
 
     private static async Task<bool> WaitForMainMenuExitAsync(NMainMenu screen, TimeSpan timeout)
@@ -5836,9 +5901,12 @@ internal static class GameActionService
         {
             await WaitForNextFrameAsync();
 
+            // The character-select node disappearing (for example because the run started) removes
+            // our ability to read the local character. It is not evidence that the requested
+            // character was selected, so stop waiting and judge below.
             if (!GodotObject.IsInstanceValid(screen))
             {
-                return true;
+                break;
             }
 
             if (screen.Lobby.LocalPlayer.character.Id.Entry == currentCharacterId)
@@ -5847,7 +5915,8 @@ internal static class GameActionService
             }
         }
 
-        return screen.Lobby.LocalPlayer.character.Id.Entry == currentCharacterId;
+        return GodotObject.IsInstanceValid(screen) &&
+            screen.Lobby.LocalPlayer.character.Id.Entry == currentCharacterId;
     }
 
     private static async Task<bool> WaitForEmbarkTransitionAsync(NCharacterSelectScreen screen, TimeSpan timeout)
@@ -5890,9 +5959,11 @@ internal static class GameActionService
         {
             await WaitForNextFrameAsync();
 
+            // A destroyed lobby node only removes our ability to read isReady. Reporting the last
+            // requested value would be a fabricated success, so stop waiting and judge below.
             if (!GodotObject.IsInstanceValid(screen))
             {
-                return ready;
+                break;
             }
 
             if (screen.Lobby.LocalPlayer.isReady == ready)
@@ -5901,7 +5972,10 @@ internal static class GameActionService
             }
         }
 
-        return GodotObject.IsInstanceValid(screen) && screen.Lobby.LocalPlayer.isReady == ready;
+        var sourceNodeValid = GodotObject.IsInstanceValid(screen);
+        // isReady can only be read while the node is alive: touching a destroyed Godot object throws.
+        var observedReady = sourceNodeValid && screen.Lobby.LocalPlayer.isReady;
+        return MenuTransitionPolicy.IsFlagObserved(sourceNodeValid, observedReady, ready);
     }
 
     private static async Task<bool> WaitForLobbyAscensionTransitionAsync(NCharacterSelectScreen screen, int targetAscension, TimeSpan timeout)

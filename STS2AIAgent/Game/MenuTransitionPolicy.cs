@@ -29,6 +29,31 @@ internal static class MenuTransitionPolicy
         return characterSelectScreenVisible && !modalOpen;
     }
 
+    /// <summary>
+    /// A pushed main-menu submenu only counts as open when the screen that is actually current is
+    /// the requested submenu type (or a subclass). Losing the source node removes our ability to
+    /// observe the transition; it is never evidence that the target submenu became current.
+    /// </summary>
+    public static bool IsSubmenuObserved(Type? observedScreenType, Type targetSubmenuType)
+    {
+        if (observedScreenType == null || targetSubmenuType == null)
+        {
+            return false;
+        }
+
+        return targetSubmenuType.IsAssignableFrom(observedScreenType);
+    }
+
+    /// <summary>
+    /// A boolean lobby/screen flag only counts as observed while the source node that carries the
+    /// flag still exists. A destroyed source node makes the observed value unreadable, so the
+    /// request stays unconfirmed even when the last read happened to equal the requested value.
+    /// </summary>
+    public static bool IsFlagObserved(bool sourceNodeValid, bool observedValue, bool requestedValue)
+    {
+        return sourceNodeValid && observedValue == requestedValue;
+    }
+
     /// <summary>Truthful pending message that names the blocking modal when one is open.</summary>
     public static string DescribeUnsettled(string action, string? blockingModal)
     {
