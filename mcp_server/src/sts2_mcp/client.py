@@ -437,10 +437,15 @@ class Sts2Client:
             },
         )
 
-    def resolve_rewards(self, option_index: int | None = None) -> dict[str, Any]:
+    def resolve_rewards(
+        self,
+        option_index: int | None = None,
+        card_index: int | None = None,
+    ) -> dict[str, Any]:
         return self.execute_action(
             "resolve_rewards",
             option_index=option_index,
+            card_index=card_index,
             client_context={
                 "source": "mcp",
                 "tool_name": "resolve_rewards",

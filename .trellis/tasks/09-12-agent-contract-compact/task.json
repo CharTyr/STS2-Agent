@@ -3,7 +3,7 @@
   "name": "agent-contract-compact",
   "title": "Align the agent-facing contract: compact-state skill fields, get_game_state fallback, wait_until_actionable shape",
   "description": "",
-  "status": "planning",
+  "status": "in_progress",
   "dev_type": null,
   "scope": null,
   "package": null,

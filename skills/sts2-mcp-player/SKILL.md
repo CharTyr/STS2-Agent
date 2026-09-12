@@ -22,7 +22,7 @@ Use a conservative SubAgent profile for STS2. The goal is to keep the tool surfa
 
 - Recommended plugin settings: `max_concurrent = 1`, `auto_discover = false`, `broadcast_iteration_progress = false`, `inject_status_to_main_prompt = false`
 - Recommended retention settings: `inject_completed_for_seconds = 120`, `status_retention_seconds = 900`
-- Recommended skill settings: `allowed_tool_names = ["health_check", "get_game_state", "get_raw_game_state", "get_available_actions", "act", "get_game_data_item", "get_game_data_items", "get_relevant_game_data", "wait_until_actionable"]`, `max_mcp_tools_per_iteration = 1`, `share_to_main_chat = false`
+- Recommended skill settings: `allowed_tool_names = ["health_check", "get_game_state", "get_raw_game_state", "get_available_actions", "act", "get_game_data_item", "get_game_data_items", "get_relevant_game_data", "wait_for_event", "wait_until_actionable"]`, `max_mcp_tools_per_iteration = 1`, `share_to_main_chat = false`
 
 ### Simplified Config
 
@@ -87,7 +87,7 @@ Do not trust memory over the current payload. The game mutates screens in place,
 ## Screen Routing
 
 - `MAIN_MENU`: prefer `continue_run`; if unavailable, finish timeline gates (slot obtained epochs, confirm unlock overlays) or start a run from `open_character_select`. Character unlocks happen on the timeline, not on `GAME_OVER`. Do not call `switch_profile` unless asked; `option_index` is the native profile id 1..3.
-- `CHARACTER_SELECT`: choose an unlocked character, wait for `can_embark = true`, then `embark`.
+- `CHARACTER_SELECT`: choose an unlocked character, wait for `character_select.embark = true`, then `embark`.
 - `MULTIPLAYER_LOBBY`: stay on the same compact tool surface; use `available_actions` for `host_multiplayer_lobby`, `join_multiplayer_lobby`, `select_character`, `ready_multiplayer_lobby`, or `disconnect_multiplayer_lobby`.
 - `MAP`: use `choose_map_node` with `map.options[].i`. In multiplayer, if `map.local_vote` is set, `wait_until_actionable` instead of voting again; if `map.votes` exist and you have not voted, follow that option.
 - `COMBAT`: stay inside combat actions unless a selection overlay interrupts.
@@ -102,6 +102,10 @@ Do not trust memory over the current payload. The game mutates screens in place,
 - `CRYSTAL_SPHERE`: `crystal_clear_cell` until divinations are spent, then `proceed`.
 - `GAME_OVER`: `continue_game_over` first. Wait while `game_over.phase=summary_animating`. Use `return_to_main_menu` only when it is exposed.
 - `UNLOCK`: `confirm_unlock` repeatedly until the screen closes; never bypass it with a menu-return action.
+- `FAKE_MERCHANT`: the Fake Merchant event screen. `open_shop_inventory` opens its inventory and `proceed` leaves the screen.
+- `PATCH_NOTES`: patch notes shown from the main menu. `close_main_menu_submenu` closes it.
+- `CARD_INSPECT` / `RELIC_INSPECT`: inspect overlays. The same `close_cards_view` action that closes the card list also closes these.
+- `FEEDBACK`: the feedback form. No mod action closes it yet, so only open it when the task asks and let the player finish it.
 
 For detailed per-screen sequences and pitfalls, read [references/screen-playbooks.md](references/screen-playbooks.md).
 
@@ -111,7 +115,7 @@ For detailed per-screen sequences and pitfalls, read [references/screen-playbook
 - Multi-select overlays may require `confirm_selection`; do not assume one click is enough.
 - Potion targeting depends on `target_type`; some potions need no `target_index`.
 - Multiplayer targeting still controls only the local player. In the compact view the `target` hint (`enemy` / `player`) plus the `targets` index list tell you what `target_index` may address; the full state names the same fields `target_index_space` and `valid_target_indices`. Never assume teammate control.
-- `shop.is_open = true` means inner inventory, not room completion.
+- `shop.open = true` means inner inventory, not room completion (raw state spells it `shop.is_open`).
 - Timeline gates can block run start until the overlay is confirmed or the submenu is closed.
 - `return_to_main_menu` on `GAME_OVER` before `continue_game_over` skips score, unlock, and save.
 - `UNLOCK` is not a card-selection screen; only `confirm_unlock`.

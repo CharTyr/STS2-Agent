@@ -35,14 +35,14 @@ name than the native server. Each item makes an agent read `undefined`.
 
 ## Acceptance Criteria
 
-- [ ] No compact/raw field-name mismatch remains in `skills/sts2-mcp-player/`; every field the skill names exists in the view the skill tells the agent to read.
-- [ ] `mcp_server/README.md` project-name example for the shop flag matches the compact name.
-- [ ] `get_game_state` returns `agent_view` plus `compact_agent_view: true` when the mod exposes it, and the raw payload plus `compact_agent_view: false` otherwise.
-- [ ] `wait_until_actionable` returns `actionable` on every return path, still returning `matched` for compatibility.
-- [ ] `full`-profile `resolve_rewards` accepts a call with no index and a call with `card_index`.
-- [ ] New Python unit tests cover all four behaviors; the existing 55 tests still pass.
-- [ ] The C# suites still pass (the skill files are read by `McpPlayerSkillTests`).
-- [ ] Screen names and actions referenced by the skill stay consistent with the mod: new names `FAKE_MERCHANT`, `PATCH_NOTES`, `CARD_INSPECT`, `RELIC_INSPECT`, `FEEDBACK` are documented as implemented by `09-12-screen-index-contract`, and `close_main_menu_submenu` / `close_cards_view` are described with their widened scope.
+- [x] No compact/raw field-name mismatch remains in `skills/sts2-mcp-player/`; the reviewer also caught `is_locked` / `will_kill_player` in the event recipe and `index` where the compact option key is `i`. Every remaining raw-only name is labelled raw, and a contract test enforces it.
+- [x] The shop flag examples use the compact name in `skills/sts2-mcp-player/README.md`; `mcp_server/README.md` gained a "state views and waits" section carrying the compact contract.
+- [x] `get_game_state` returns `agent_view` plus `compact_agent_view: true` when the mod exposes it, and the raw payload plus `compact_agent_view: false` otherwise (including when `agent_view` is present but not a dict).
+- [x] `wait_until_actionable` returns `actionable` on every return path (immediate, event hit, timeout, and SSE-failure polling), still returning `matched` for compatibility.
+- [x] `full`-profile `resolve_rewards` accepts a call with no index, a `card_index`, and `option_index: -1`.
+- [x] New Python unit tests cover all four behaviors (21 added); the suite grew from 55 to 76 tests, all passing.
+- [x] The C# suites still pass (265 PASS / 0 FAIL, including `Skill.McpPlayerContract`).
+- [x] Screen names and actions referenced by the skill stay consistent with the mod: `FAKE_MERCHANT`, `PATCH_NOTES`, `CARD_INSPECT`, `RELIC_INSPECT`, `FEEDBACK` are documented, and `close_main_menu_submenu` / `close_cards_view` are described with their widened scope. **Dependency:** `09-12-screen-index-contract` must implement exactly these five strings, or the skill text must be re-synced.
 
 ## Constraints
 
@@ -55,3 +55,4 @@ name than the native server. Each item makes an agent read `undefined`.
 - Evidence: `research/agent-contract-audit.md`.
 - This task owns `mcp_server/**` and `skills/**`; the sibling
   `09-12-screen-index-contract` owns `STS2AIAgent/**` and `docs/api.md`.
+- Verification record: `evidence.md`.

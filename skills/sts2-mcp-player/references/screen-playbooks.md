@@ -8,7 +8,7 @@ Use this reference when the active screen is clear and you need the exact action
 - If only `open_character_select` and `open_timeline` are available, there is no active run.
 - If `open_timeline` is available and a run is blocked, finish the flow:
   - `open_timeline`
-  - `choose_timeline_epoch` on an obtained, unslotted epoch (`timeline.slots[].state` like `obtained`)
+  - `choose_timeline_epoch` on a slot whose compact `timeline.slots[].actionable` is `true` (compact slots expose only `i`, `line`, and `actionable`; the epoch state text is folded into `line`, while only raw state carries a separate `state`)
   - `confirm_timeline_overlay` or `confirm_unlock` until the overlay is gone
   - slot any newly granted epochs (slotting `NEOW_EPOCH` grants `SILENT1_EPOCH`)
   - `close_main_menu_submenu` only after unlock overlays are finished
@@ -19,7 +19,7 @@ Use this reference when the active screen is clear and you need the exact action
 ## CHARACTER_SELECT
 
 - Use the first unlocked character unless the task specifies otherwise.
-- After `select_character`, wait for `character_select.can_embark = true`.
+- After `select_character`, wait for `character_select.embark = true`.
 - `embark` can be a heavy transition. Prefer a longer request timeout and tolerate a short retry window.
 - If a `MODAL` appears after `open_character_select` or `embark`, resolve it before making any gameplay decision.
 
@@ -51,7 +51,8 @@ Use this reference when the active screen is clear and you need the exact action
 
 ## CARD_SELECTION
 
-- Always read `selection.min_select`, `selection.max_select`, `selection.selected_count`, `selection.requires_confirmation`, and `selection.can_confirm`.
+- Always read the compact selection fields `selection.min`, `selection.max`, `selection.selected`, and `selection.confirm`.
+- The mod confirms a selection when the raw metadata has `CanConfirm` true and either `RequiresConfirmation` is true or `MinSelect < MaxSelect`; that is the rule behind compact `selection.confirm`, so a `min < max` multi-select can confirm even when `RequiresConfirmation` is false.
 - Single-select flows usually end with `select_deck_card`.
 - Multi-select flows may stay `pending` until `confirm_selection` becomes available.
 - Card-selection variants are broader than deck remove and upgrade. Handle combat-hand overlays, transforms, enchants, and simple-grid selections the same way: trust the current selection payload.
@@ -67,7 +68,7 @@ Use this reference when the active screen is clear and you need the exact action
 ## SHOP
 
 - Enter the inventory with `open_shop_inventory`.
-- While `shop.is_open = true`, use `buy_card`, `buy_relic`, `buy_potion`, and `remove_card_at_shop`.
+- While `shop.open = true`, use `buy_card`, `buy_relic`, `buy_potion`, and `remove_card_at_shop`.
 - Leave inner inventory with `close_shop_inventory`.
 - Leave the shop room with `proceed`.
 - If potion slots are full, do not expect `buy_potion` to remain available.
@@ -81,14 +82,14 @@ Use this reference when the active screen is clear and you need the exact action
 
 - `open_chest`
 - `choose_treasure_relic`
-- Wait until `chest.has_relic_been_claimed = true`
+- Wait until `chest.claimed = true` (raw state spells it `chest.has_relic_been_claimed`)
 - `proceed`
 
 ## EVENT
 
 - Use `choose_event_option` for both normal branches and finished synthetic proceed options.
-- Never send a locked option. Read `event.options`, skip `is_locked=true` / compact `locked=true`, and use the first unlocked `index`. Option 0 is often locked.
-- Skip options marked `will_kill_player` / compact `kill=true` unless the run is intentionally ending.
+- Never send a locked option. Read `event.options`, skip the compact `locked=true` entries (raw state spells it `is_locked`), and use the first unlocked option `i`. Option 0 is often locked.
+- Skip options marked compact `kill=true` (raw state spells it `will_kill_player`) unless the run is intentionally ending.
 - `THE_ARCHITECT` EVENT `PROCEED` is lethal even with godmode. Enter the fight with debug `fight THE_ARCHITECT_EVENT_ENCOUNTER` instead of proceeding the event.
 - `available_actions` can still contain `choose_event_option` when the first option is locked; that is not permission to pick index 0.
 - Expect event flows like `EVENT -> COMBAT -> EVENT` or `EVENT -> COMBAT -> MAP`.
@@ -115,6 +116,29 @@ Use this reference when the active screen is clear and you need the exact action
 - On `GAME_OVER`, use `continue_game_over` first so the native summary, score, and save flow runs. Wait while `game_over.phase=summary_animating`. Use `return_to_main_menu` only when `game_over.can_return` is true and the action is in `available_actions`. Death/victory summary itself does not show character unlocks.
 - After returning to `MAIN_MENU`, open the timeline and slot obtained epochs. That is where `UNLOCK` / `confirm_unlock` appears.
 - On `UNLOCK`, use `confirm_unlock` repeatedly until the unlock screen closes. Do not call `select_deck_card` or `return_to_main_menu` here.
+
+## FAKE_MERCHANT
+
+- The Fake Merchant event opens as screen `FAKE_MERCHANT`; it is not the normal `SHOP` room.
+- `open_shop_inventory` opens its inventory, then the usual `buy_card` / `buy_relic` / `buy_potion` / `remove_card_at_shop` actions apply against compact `shop.open = true`.
+- `close_shop_inventory` leaves the inventory and `proceed` leaves the event screen.
+
+## PATCH_NOTES
+
+- Patch notes appear as screen `PATCH_NOTES` from the main menu.
+- `close_main_menu_submenu` closes them; its scope now covers the patch-notes view as well as the timeline submenu.
+- Do not treat patch notes as a run-blocking gate: closing them is enough.
+
+## CARD_INSPECT and RELIC_INSPECT
+
+- `CARD_INSPECT` and `RELIC_INSPECT` are inspect overlays that can cover a room or a menu.
+- `close_cards_view` closes them; its scope now covers the plain card list plus both inspect overlays.
+- Resolve them before choosing a room action, then re-read state because the underlying screen resumes underneath.
+
+## FEEDBACK
+
+- Screen `FEEDBACK` is the feedback form.
+- No mod action closes it yet, so it is user-triggered only: do not enter it during autonomous play, and if the player opened it, wait instead of guessing an action.
 
 ## Potion Targeting
 

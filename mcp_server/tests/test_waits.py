@@ -147,6 +147,7 @@ class WaitBehaviorTests(unittest.TestCase):
 
         self.assertEqual(result["source"], "state")
         self.assertFalse(result["matched"])
+        self.assertTrue(result["actionable"])
         self.assertEqual(client.wait_calls, 0)
 
     def test_wait_until_actionable_ignores_passive_actions(self) -> None:
@@ -251,6 +252,7 @@ class WaitBehaviorTests(unittest.TestCase):
 
         self.assertEqual(result["source"], "polling")
         self.assertEqual(result["state"]["available_actions"], ["proceed"])
+        self.assertTrue(result["actionable"])
 
 
 if __name__ == "__main__":

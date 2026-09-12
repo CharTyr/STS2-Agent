@@ -143,7 +143,7 @@ debug 模式：
 - 不要把 `completed` 当成绝对完成，仍然要看返回的 `state`
 - 不要在 reward 流程里乱用 `proceed`
 - 不要假设一次 `select_deck_card` 就一定结束多选流程
-- 不要在 `shop.is_open=true` 时直接认为商店已经处理完
+- 不要在 compact `shop.open=true` 时直接认为商店已经处理完（raw state 里才叫 `shop.is_open`）
 - 不要在 debug 不可用时依赖 `run_console_command`
 
 ## 相关文件

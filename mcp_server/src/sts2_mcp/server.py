@@ -59,7 +59,11 @@ _LEGACY_ACTION_TOOLS: tuple[ActionToolSpec, ...] = (
     ActionToolSpec("end_turn", "no_args", "End the player's turn during combat."),
     ActionToolSpec("play_card", "card_target", "Play a card from the current hand."),
     ActionToolSpec("choose_map_node", "option_index", "Travel to a map node."),
-    ActionToolSpec("resolve_rewards", "option_index", "Resolve all rewards; use option_index -1 to skip card rewards."),
+    ActionToolSpec(
+        "resolve_rewards",
+        "reward_choice",
+        "Resolve all rewards. Omit option_index to take the first card reward, or pass card_index instead.",
+    ),
     ActionToolSpec("collect_rewards_and_proceed", "no_args", "Auto-collect rewards and advance."),
     ActionToolSpec("claim_reward", "option_index", "Claim a single reward item."),
     ActionToolSpec("choose_reward_card", "option_index", "Pick a card from a reward screen."),
@@ -392,6 +396,15 @@ def _register_card_target_tool(mcp: FastMCP, name: str, description: str, handle
     mcp.tool(name=name, description=description)(tool)
 
 
+def _register_reward_choice_tool(mcp: FastMCP, name: str, description: str, handler: ToolHandler) -> None:
+    def tool(option_index: int | None = None, card_index: int | None = None) -> dict[str, Any]:
+        return handler(option_index=option_index, card_index=card_index)
+
+    tool.__name__ = name
+    tool.__doc__ = description
+    mcp.tool(name=name, description=description)(tool)
+
+
 def _register_option_target_tool(mcp: FastMCP, name: str, description: str, handler: ToolHandler) -> None:
     def tool(option_index: int, target_index: int | None = None) -> dict[str, Any]:
         return handler(option_index=option_index, target_index=target_index)
@@ -432,6 +445,10 @@ def _register_legacy_action_tools(mcp: FastMCP, sts2: Sts2Client) -> None:
 
         if spec.kind == "card_target":
             _register_card_target_tool(mcp, spec.name, spec.description, handler)
+            continue
+
+        if spec.kind == "reward_choice":
+            _register_reward_choice_tool(mcp, spec.name, spec.description, handler)
             continue
 
         if spec.kind == "option_target":
@@ -486,9 +503,10 @@ def create_server(client: Sts2Client | None = None, tool_profile: str | None = N
                 return {
                     **agent_view,
                     "available_actions": agent_view["actions"],
+                    "compact_agent_view": True,
                 }
-            return agent_view
-        return state
+            return {**agent_view, "compact_agent_view": True}
+        return {**state, "compact_agent_view": False}
 
     def _state_actions(state: dict[str, Any]) -> list[Any] | None:
         actions = state.get("available_actions")
@@ -526,6 +544,7 @@ def create_server(client: Sts2Client | None = None, tool_profile: str | None = N
         if _is_actionable_state(state):
             return {
                 "matched": False,
+                "actionable": True,
                 "event": None,
                 "state": state,
                 "actions": sts2.get_available_actions(),
@@ -564,6 +583,7 @@ def create_server(client: Sts2Client | None = None, tool_profile: str | None = N
 
         return {
             "matched": event is not None,
+            "actionable": _is_actionable_state(state),
             "event": event,
             "state": state,
             "actions": sts2.get_available_actions(),
@@ -578,7 +598,18 @@ def create_server(client: Sts2Client | None = None, tool_profile: str | None = N
 
     @mcp.tool
     def get_game_state() -> dict[str, Any]:
-        """Read the compact agent-facing game state snapshot."""
+        """Read the compact agent-facing game state snapshot.
+
+        Two shapes are possible and compact_agent_view tells them apart:
+
+        - compact_agent_view: true - the mod exposed agent_view, so this is that
+          compact view (plus available_actions when only actions was sent).
+        - compact_agent_view: false - the mod did not expose agent_view and the
+          full raw /state payload is returned as a fallback. Treat it as a
+          degraded signal rather than the normal compact contract.
+
+        Use get_raw_game_state when you deliberately want the full payload.
+        """
         return _agent_state()
 
     @mcp.tool
@@ -788,6 +819,13 @@ def create_server(client: Sts2Client | None = None, tool_profile: str | None = N
         This reduces high-frequency polling between enemy turns, map transitions,
         and reward animations. Falls back to basic polling when SSE events are
         unavailable or no matching event arrives in time.
+
+        Two boolean keys are returned:
+
+        - matched: an SSE event matched. This keeps its original meaning.
+        - actionable: the fresh state exposes at least one non-passive action.
+          This is the portable key shared with the native server wait_until_actionable,
+          so prefer it when you only need to know whether you can act now.
         """
         return _wait_until_actionable_impl(timeout_seconds)
 

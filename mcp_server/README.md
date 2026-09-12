@@ -95,6 +95,7 @@
 - `skip_reward_cards`
 - `collect_rewards_and_proceed`
 - `resolve_rewards`
+  - 可省略 `option_index`（默认取第一张奖励牌），也可改用向后兼容的 `card_index` 别名
 - `select_deck_card`
 - `choose_capstone_option`
 - `choose_bundle`
@@ -111,6 +112,14 @@ Modal：
   - 仅当 `STS2_ENABLE_DEBUG_ACTIONS=1` 时注册
   - 默认关闭
   - 只用于开发和验证，不应成为正式游玩流程的常规依赖
+
+## 状态视图与等待
+
+- `get_game_state` 返回 compact `agent_view`，并附带 `compact_agent_view: true`
+- Mod 未暴露 `agent_view` 时回退返回完整 `/state`，并附带 `compact_agent_view: false`；这是降级信号，不是常规 compact 契约
+- 需要完整原始状态时用 `get_raw_game_state`
+- compact 商店打开标志是 `shop.open`（raw state 里才是 `shop.is_open`）
+- `wait_until_actionable` 同时返回 `matched`（是否有事件命中）和 `actionable`（新状态是否已有非被动动作）；`actionable` 与原生 MCP server 的字段名一致
 
 ## 降低模型误调用的建议
 
