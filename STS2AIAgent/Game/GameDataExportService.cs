@@ -77,7 +77,7 @@ internal static class GameDataExportService
             .Select(relic => new
             {
                 id = relic.Id.Entry,
-                name = relic.Title.GetFormattedText(),
+                name = ResolveText(relic.Title),
                 description = GetDynamicFormattedTextProperty(relic, "DynamicDescription", "Description"),
                 rarity = relic.Rarity.ToString(),
                 pool = relic.Pool.ToString().ToLowerInvariant(),
@@ -93,7 +93,7 @@ internal static class GameDataExportService
             .Select(potion => new
             {
                 id = potion.Id.Entry,
-                name = potion.Title.GetFormattedText(),
+                name = ResolveText(potion.Title),
                 description = GetDynamicFormattedTextProperty(potion, "DynamicDescription", "Description"),
                 rarity = potion.Rarity.ToString(),
                 pool = potion.Pool.ToString().ToLowerInvariant(),
@@ -110,10 +110,10 @@ internal static class GameDataExportService
             .Select(eventModel => new
             {
                 id = eventModel.Id.Entry,
-                name = eventModel.Title.GetFormattedText(),
+                name = ResolveText(eventModel.Title),
                 type = eventModel is AncientEventModel ? "Ancient" : "Event",
                 act = ResolveEventAct(eventModel),
-                description = eventModel.InitialDescription.GetFormattedText(),
+                description = ResolveText(eventModel.InitialDescription),
                 options = BuildEventOptions(eventModel)
             })
             .ToArray();
@@ -126,8 +126,8 @@ internal static class GameDataExportService
             .Select(power => new
             {
                 id = power.Id.Entry,
-                name = power.Title.GetFormattedText(),
-                description = power.Description.GetFormattedText(),
+                name = ResolveText(power.Title),
+                description = ResolveText(power.Description),
                 type = power.Type.ToString(),
                 stack_type = power.StackType.ToString(),
                 allow_negative = power.AllowNegative
@@ -142,7 +142,7 @@ internal static class GameDataExportService
             .Select(character => new
             {
                 id = character.Id.Entry,
-                name = character.Title.GetFormattedText(),
+                name = ResolveText(character.Title),
                 description = LocString.GetIfExists("characters", character.Id.Entry + ".description")?.GetFormattedText(),
                 starting_hp = character.StartingHp,
                 starting_gold = character.StartingGold,
@@ -164,7 +164,7 @@ internal static class GameDataExportService
             .Select(monster => new
             {
                 id = monster.Id.Entry,
-                name = monster.Title.GetFormattedText(),
+                name = ResolveText(monster.Title),
                 type = ResolveMonsterType(monster),
                 min_hp = monster.MinInitialHp,
                 max_hp = monster.MaxInitialHp,
@@ -188,7 +188,7 @@ internal static class GameDataExportService
     private static string ResolveEventAct(EventModel eventModel)
     {
         var act = ModelDb.Acts.FirstOrDefault(candidate => candidate.AllEvents.Contains(eventModel));
-        return act?.Title.GetFormattedText() ?? "Shared";
+        return act == null ? "Shared" : ResolveText(act.Title) ?? "Shared";
     }
 
     private static string ResolveMonsterType(MonsterModel monster)
@@ -238,11 +238,24 @@ internal static class GameDataExportService
             ?? string.Empty;
     }
 
+    /// <summary>
+    /// Formats a localized string, or returns null when its table has no entry for it.
+    /// <para>
+    /// ModelDb carries entries the localization tables do not cover - a MOCK_ power, for example -
+    /// and <c>GetFormattedText</c> throws for those. Formatting one such entry used to turn the whole
+    /// collection into a 500, so every exported name goes through this check instead.
+    /// </para>
+    /// </summary>
+    private static string? ResolveText(LocString? locString)
+    {
+        return locString != null && locString.Exists() ? locString.GetFormattedText() : null;
+    }
+
     private static string GetFormattedLocString(object value)
     {
         if (value is LocString locString)
         {
-            return locString.GetFormattedText();
+            return ResolveText(locString) ?? string.Empty;
         }
 
         return value.GetType().GetMethod("GetFormattedText", BindingFlags.Public | BindingFlags.Instance, null, Type.EmptyTypes, null)
@@ -264,8 +277,8 @@ internal static class GameDataExportService
                 .Select(key => new
                 {
                     id = ExtractKeySegment(key, prefix),
-                    title = eventModel.GetOptionTitle(key)?.GetFormattedText() ?? string.Empty,
-                    description = eventModel.GetOptionDescription(key)?.GetFormattedText() ?? string.Empty
+                    title = ResolveText(eventModel.GetOptionTitle(key)) ?? string.Empty,
+                    description = ResolveText(eventModel.GetOptionDescription(key)) ?? string.Empty
                 })
                 .ToArray<object>();
         }
