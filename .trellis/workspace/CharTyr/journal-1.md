@@ -537,3 +537,41 @@ Four residuals closed: docs/ became a controlled directory with a docs-tracked g
 ### Next Steps
 
 - 推送两个提交；实机确认牌堆屏 BackButton 与局内图鉴 Pop 的行为，以及顺带修好的其它局内 submenu
+
+
+## Session 16: 第一次真机实机会话：清单整理 + 两个只有实机能暴露的发现
+
+**Date**: 2026-09-12
+**Task**: 第一次真机实机会话：清单整理 + 两个只有实机能暴露的发现
+**Branch**: `main`
+
+### Summary
+
+汇总实机清单成文档，并真跑一次实机会话：验证了奖励屏 REWARD 正名、timeline 全路径与索引契约、7 个数据集合；顺带发现并修复 /data/powers 整集合 500 与两处错误的 timeline 注释。
+
+### Main Changes
+
+- 修 /data/powers 500（本地化键缺失打断整集合导出）
+- 修正脚本里错误的 timeline 按钮规则注释
+- 新增 docs/live-validation-checklist.md 汇总实机项
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `7888566` | (see git log) |
+| `6478dae` | (see git log) |
+| `4554c8d` | (see git log) |
+
+### Testing
+
+- [OK] 实机：奖励屏 REWARD 正名、timeline 全路径与索引契约负例、7 集合可达、两个脚本通过
+- [OK] 离线：C# 351/0、MCP 165 OK、7 gate 绿、preflight 372/0；CI 4554c8d 全绿
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- card-viewer-screens 的实机项（牌堆屏/图鉴）需玩家点击或新增 mod 动作；存档待选一张奖励卡

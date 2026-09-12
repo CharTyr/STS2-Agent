@@ -8,7 +8,7 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-1.md`
-- **Total Sessions**: 15
+- **Total Sessions**: 16
 - **Last Active**: 2026-09-12
 <!-- @@@/auto:current-status -->
 
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-1.md` | ~539 | Active |
+| `journal-1.md` | ~577 | Active |
 <!-- @@@/auto:active-documents -->
 
 ---
@@ -29,6 +29,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 16 | 2026-09-12 | 第一次真机实机会话：清单整理 + 两个只有实机能暴露的发现 | `7888566`, `6478dae`, `4554c8d` | `main` |
 | 15 | 2026-09-12 | 牌库/牌堆查看屏正名与逃逸 + PowerShell 语法 gate | `5b3439c`, `abb99c5` | `main` |
 | 14 | 2026-09-12 | 首次推送与 CI 暴露的两个环境耦合问题（.NET SDK 选择、8.3 短路径） | `82c804f`, `61146a5`, `746f154` | `main` |
 | 13 | 2026-09-12 | 移除随包游戏数据快照（v0.5.0 遗留、v0.6.1 已被 Mod 导出取代） | `5cc314f` | `main` |
