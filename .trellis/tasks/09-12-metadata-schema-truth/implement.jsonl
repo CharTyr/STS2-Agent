@@ -1,0 +1,4 @@
+{"file": ".trellis/spec/mcp/contracts-and-tests.md", "reason": "The cross-language data contract between the mod export and the MCP tools."}
+{"file": ".trellis/spec/mcp/index.md", "reason": "MCP layer test conventions: stdlib unittest, no new deps, no CWD assumptions."}
+{"file": ".trellis/spec/guides/cross-layer-thinking-guide.md", "reason": "How to keep one fact from being maintained twice across layers."}
+{"file": ".trellis/tasks/09-12-metadata-schema-truth/research/schema-drift-audit.md", "reason": "Both tables, the measured drift, and why the current tests cannot see it."}

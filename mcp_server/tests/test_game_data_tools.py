@@ -6,7 +6,21 @@ from unittest.mock import patch
 
 import sts2_mcp.server as server_module
 from sts2_mcp.client import Sts2ApiError
-from sts2_mcp.server import _SCENE_FIELD_SETS, create_server, get_game_data_items_fields
+from sts2_mcp.server import create_server, get_game_data_items_fields
+
+# Independent snapshots of the scene field sets, deliberately spelled out as literals.
+# Deriving them from _SCENE_FIELD_SETS would make every assertion below self-referential:
+# editing the table would also edit the expectation, so a wrong or missing field could
+# never turn a test red. tests/test_scene_field_alignment.py pins these same fields to the
+# C# GameDataFilter.SceneFieldSets, so a real table change has to update all three places.
+_COMBAT_CARD_FIELDS = (
+    "id,name,description,type,rarity,target,cost,is_x_cost,star_cost,is_x_star_cost,"
+    "damage,block,keywords,tags,vars,upgrade"
+)
+_SHOP_CARD_FIELDS = (
+    "id,name,description,type,rarity,target,cost,is_x_cost,star_cost,is_x_star_cost,keywords"
+)
+_EVENT_FIELDS = "id,name,type,act,description,options"
 
 
 class DummyClient:
@@ -116,7 +130,7 @@ class GameDataToolsTests(unittest.TestCase):
         server = create_server(client=client)
         tool = asyncio.run(server.get_tool("get_relevant_game_data"))
         expected = {"ABRASIVE": {"id": "ABRASIVE"}}
-        expected_fields = ",".join(_SCENE_FIELD_SETS["combat"]["cards"])
+        expected_fields = _COMBAT_CARD_FIELDS
 
         with patch(
             "sts2_mcp.server.get_game_data_items_fields",
@@ -136,7 +150,7 @@ class GameDataToolsTests(unittest.TestCase):
         server = create_server(client=client)
         tool = asyncio.run(server.get_tool("get_relevant_game_data"))
         expected = {"JOLT": {"id": "JOLT"}}
-        expected_fields = ",".join(_SCENE_FIELD_SETS["shop"]["cards"])
+        expected_fields = _SHOP_CARD_FIELDS
 
         with patch(
             "sts2_mcp.server.get_game_data_items_fields",
@@ -156,7 +170,7 @@ class GameDataToolsTests(unittest.TestCase):
         server = create_server(client=client)
         tool = asyncio.run(server.get_tool("get_relevant_game_data"))
         expected = {"MYSTERY": {"id": "MYSTERY"}}
-        expected_fields = ",".join(_SCENE_FIELD_SETS["event"]["events"])
+        expected_fields = _EVENT_FIELDS
 
         with patch(
             "sts2_mcp.server.get_game_data_items_fields",
@@ -217,11 +231,14 @@ class GameDataToolsTests(unittest.TestCase):
             {
                 "id": "MYSTERY",
                 "name": "Mystery Event",
+                "type": "Event",
                 "description": "A strange encounter.",
                 "options": [{"id": "LEAVE"}],
             },
         )
         self.assertNotIn("title", result["MYSTERY"])
+        # act is in the event field set but absent from this item, so it is still dropped.
+        self.assertNotIn("act", result["MYSTERY"])
 
     def test_get_game_data_items_fields_filters_fields(self) -> None:
         with patch(

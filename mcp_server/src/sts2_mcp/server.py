@@ -147,6 +147,9 @@ _GAME_DATA_LOCK = threading.RLock()
 
 # Default field sets per scene/context. These are used by `get_relevant_game_data` to
 # minimize token usage by returning only the most relevant fields.
+# Mirrors STS2AIAgent/Agent/GameDataFilter.cs SceneFieldSets, the reference side that the
+# C# tests keep aligned with the export contract. tests/test_scene_field_alignment.py
+# asserts both tables stay equal, so a change here needs the same change there.
 _SCENE_FIELD_SETS: dict[str, dict[str, list[str]]] = {
     SCENE_COMBAT: {
         "cards": [
@@ -183,6 +186,16 @@ _SCENE_FIELD_SETS: dict[str, dict[str, list[str]]] = {
             "description",
             "type",
             "stack_type",
+            "allow_negative",
+        ],
+        "potions": [
+            "id",
+            "name",
+            "description",
+            "rarity",
+            "pool",
+            "usage",
+            "target_type",
         ],
     },
     SCENE_SHOP: {
@@ -192,7 +205,12 @@ _SCENE_FIELD_SETS: dict[str, dict[str, list[str]]] = {
             "description",
             "type",
             "rarity",
+            "target",
             "cost",
+            "is_x_cost",
+            "star_cost",
+            "is_x_star_cost",
+            "keywords",
         ],
         "relics": [
             "id",
@@ -200,18 +218,24 @@ _SCENE_FIELD_SETS: dict[str, dict[str, list[str]]] = {
             "description",
             "rarity",
             "pool",
+            "is_melted",
         ],
         "potions": [
             "id",
             "name",
             "description",
             "rarity",
+            "pool",
+            "usage",
+            "target_type",
         ],
     },
     SCENE_EVENT: {
         "events": [
             "id",
             "name",
+            "type",
+            "act",
             "description",
             "options",
         ],
