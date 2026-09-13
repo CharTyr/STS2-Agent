@@ -1274,8 +1274,9 @@ internal static class GameActionService
             running.Cancel();
             canceled = true;
         }
-        catch
+        catch (Exception ex)
         {
+            Log.Warn($"[STS2AIAgent] TryCancelRunningPlayerAction: running.Cancel() failed: {ex}");
         }
 
         try
@@ -1285,8 +1286,9 @@ internal static class GameActionService
             executor.Cancel();
             canceled = true;
         }
-        catch
+        catch (Exception ex)
         {
+            Log.Warn($"[STS2AIAgent] TryCancelRunningPlayerAction: executor.Cancel() failed: {ex}");
         }
 
         if (ReferenceEquals(executor.CurrentlyRunningAction, running))
@@ -1299,8 +1301,9 @@ internal static class GameActionService
                 setter?.Invoke(executor, new object?[] { null });
                 canceled = true;
             }
-            catch
+            catch (Exception ex)
             {
+                Log.Warn($"[STS2AIAgent] TryCancelRunningPlayerAction: clearing CurrentlyRunningAction failed: {ex}");
             }
         }
 
@@ -2535,8 +2538,9 @@ internal static class GameActionService
             {
                 rewardsScreen.Call("TryEnableProceedButton");
             }
-            catch
+            catch (Exception ex)
             {
+                Log.Warn($"[STS2AIAgent] DrainRewardFlowAsync: TryEnableProceedButton failed: {ex}");
             }
 
             proceedButton = GameStateService.GetRewardProceedButton(rewardsScreen);
@@ -2559,8 +2563,9 @@ internal static class GameActionService
             {
                 NOverlayStack.Instance?.Remove(rewardsScreen);
             }
-            catch
+            catch (Exception ex)
             {
+                Log.Warn($"[STS2AIAgent] DrainRewardFlowAsync: NOverlayStack.Remove failed: {ex}");
             }
 
             if (await WaitForRewardFlowExitAsync(rewardsScreen, deadline))
@@ -2572,8 +2577,9 @@ internal static class GameActionService
             {
                 _ = RunManager.Instance.ProceedFromTerminalRewardsScreen();
             }
-            catch
+            catch (Exception ex)
             {
+                Log.Warn($"[STS2AIAgent] DrainRewardFlowAsync: ProceedFromTerminalRewardsScreen failed: {ex}");
             }
 
             return await WaitForRewardFlowExitAsync(rewardsScreen, deadline);
@@ -3480,14 +3486,20 @@ internal static class GameActionService
                 Log.Info("[STS2AIAgent] confirm_bundle: trying OnConfirmPressed");
                 ((Node)bundleScreen2).Call("OnConfirmPressed");
             }
-            catch { }
+            catch (Exception ex)
+            {
+                Log.Warn($"[STS2AIAgent] confirm_bundle: OnConfirmPressed failed: {ex}");
+            }
 
             // Also try emitting the button's signal with no args
             try
             {
                 confirmBtn.EmitSignal("pressed");
             }
-            catch { }
+            catch (Exception ex)
+            {
+                Log.Warn($"[STS2AIAgent] confirm_bundle: emitting the pressed signal failed: {ex}");
+            }
         }
 
         var deadline = DateTime.UtcNow + TimeSpan.FromSeconds(5);
@@ -5188,8 +5200,9 @@ internal static class GameActionService
                 return godotValue;
             }
         }
-        catch
+        catch (Exception ex)
         {
+            Log.Warn($"[STS2AIAgent] reading environment variable {name} through Godot failed: {ex}");
         }
 
         var userValue = System.Environment.GetEnvironmentVariable(name, System.EnvironmentVariableTarget.User);
@@ -6797,8 +6810,9 @@ internal static class GameActionService
                 var method = button.GetType().GetMethod(name, flags, binder: null, types: Type.EmptyTypes, modifiers: null);
                 method?.Invoke(button, null);
             }
-            catch
+            catch (Exception ex)
             {
+                Log.Warn($"[STS2AIAgent] continue_game_over: invoking {name} failed: {ex}");
             }
         }
 
@@ -6818,16 +6832,18 @@ internal static class GameActionService
                 }), "continue_game_over");
             }
         }
-        catch
+        catch (Exception ex)
         {
+            Log.Warn($"[STS2AIAgent] continue_game_over: invoking OnContinueButtonPressedAsync failed: {ex}");
         }
 
         try
         {
             button.EmitSignal(Button.SignalName.Pressed);
         }
-        catch
+        catch (Exception ex)
         {
+            Log.Warn($"[STS2AIAgent] continue_game_over: emitting the pressed signal failed: {ex}");
         }
     }
 
