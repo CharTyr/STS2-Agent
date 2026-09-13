@@ -287,6 +287,92 @@ def _load_game_data_collection(collection: str) -> Any:
     return data
 
 
+# Scene-scoped id sources for get_relevant_game_data: (scene, collection) -> JSON paths into the
+# /state payload, each ending in the collection id field. When the caller omits item_ids, these are
+# the ids the current screen is about, so the tool matches its own description instead of requiring
+# the caller to already know them. Mirrors STS2AIAgent/Agent/GameDataFilter.cs SceneItemSources;
+# tests/test_scene_field_alignment.py keeps the two equal.
+_SCENE_ITEM_SOURCES: dict[str, dict[str, list[str]]] = {
+    SCENE_COMBAT: {
+        "cards": ["combat.hand[].card_id"],
+        "monsters": ["combat.enemies[].enemy_id"],
+        "powers": ["combat.player.powers[].power_id", "combat.enemies[].powers[].power_id"],
+        "potions": ["run.potions[].potion_id"],
+    },
+    SCENE_SHOP: {
+        "cards": ["shop.cards[].card_id"],
+        "relics": ["shop.relics[].relic_id"],
+        "potions": ["shop.potions[].potion_id"],
+    },
+    SCENE_EVENT: {
+        "events": ["event.event_id"],
+    },
+}
+
+# Used when the current scene declares no source for the collection: the run-level ids the player
+# already owns, so a deck or relic lookup still answers on a screen that is about something else.
+_FALLBACK_ITEM_SOURCES: dict[str, list[str]] = {
+    "cards": ["run.deck[].card_id"],
+    "relics": ["run.relics[].relic_id"],
+    "potions": ["run.potions[].potion_id"],
+    "monsters": ["combat.enemies[].enemy_id"],
+    "powers": ["combat.player.powers[].power_id", "combat.enemies[].powers[].power_id"],
+    "events": ["event.event_id"],
+}
+
+
+def _collect_path_ids(node: Any, tokens: list[str], ids: list[str], seen: set[str]) -> None:
+    """Walk one a.b[].c path, appending ids in order and skipping what is not there."""
+    if not tokens:
+        return
+    token = tokens[0]
+    is_array = token.endswith("[]")
+    name = token[:-2] if is_array else token
+    if not isinstance(node, dict) or name not in node:
+        return
+    value = node[name]
+    if len(tokens) == 1:
+        if isinstance(value, str) and value and value not in seen:
+            seen.add(value)
+            ids.append(value)
+        return
+    if is_array:
+        if isinstance(value, list):
+            for item in value:
+                _collect_path_ids(item, tokens[1:], ids, seen)
+        return
+    _collect_path_ids(value, tokens[1:], ids, seen)
+
+
+def derive_relevant_item_ids(state: Any, collection: str, screen: str) -> list[str]:
+    """Ids the current screen is about for one collection, deduplicated and in surface order.
+
+    Empty when the collection is unknown or the state carries none of its ids, which is what an
+    unprojected answer looks like rather than an error.
+    """
+    scene = _detect_scene_from_screen(screen)
+    paths = _SCENE_ITEM_SOURCES.get(scene, {}).get(collection)
+    ids = _collect_ids_from_paths(state, paths)
+    if not ids:
+        # A scene can name a source whose payload is absent on that screen: FAKE_MERCHANT is
+        # classified as shop, but the shop payload is null there because the merchant room the ids
+        # come from does not exist. An empty scene answer therefore still falls back to the
+        # run-level ids instead of reporting nothing at all.
+        ids = _collect_ids_from_paths(state, _FALLBACK_ITEM_SOURCES.get(collection))
+    return ids
+
+
+def _collect_ids_from_paths(state: Any, paths: list[str] | None) -> list[str]:
+    """Run every path of one source list over the state, deduplicated and in source order."""
+    if not paths:
+        return []
+    ids: list[str] = []
+    seen: set[str] = set()
+    for path in paths:
+        _collect_path_ids(state, path.split("."), ids, seen)
+    return ids
+
+
 def _add_case_insensitive_item_id(index: dict[str, Any], item_id: str, item: Any) -> None:
     normalized = item_id.strip()
     if not normalized:
@@ -780,14 +866,15 @@ def create_server(client: Sts2Client | None = None, tool_profile: str | None = N
             return _build_game_data_tool_error(collection=collection, exc=exc)
 
     @mcp.tool
-    def get_relevant_game_data(collection: str, item_ids: str) -> dict[str, Any]:
+    def get_relevant_game_data(collection: str, item_ids: str = "") -> dict[str, Any]:
         """Return items with only the most relevant fields for the current game context.
 
         This automatically detects the current scene (combat/shop/event/menu) and returns
         only the fields most useful for AI decision-making in that context, minimizing token usage.
 
         - `collection`: e.g. `cards`, `relics`, `monsters`, `events`
-        - `item_ids`: comma-separated ids
+        - `item_ids`: comma-separated ids. Omit to use the ids this screen is about (the cards in
+          hand, the enemies in combat, the shop stock), which is the usual call.
 
         Recommended for most queries to save tokens and reduce uncertainty.
         """
@@ -795,15 +882,18 @@ def create_server(client: Sts2Client | None = None, tool_profile: str | None = N
         state = sts2.get_state()
         screen = state.get("screen", "")
         scene = _detect_scene_from_screen(screen)
+        resolved_ids = item_ids or ITEM_IDS_SEPARATOR.join(
+            derive_relevant_item_ids(state, collection, screen)
+        )
         try:
             suggested_fields = _SCENE_FIELD_SETS.get(scene, {}).get(collection)
             if not suggested_fields:
                 # Fallback to basic query if no scene-specific fields defined
-                return get_game_data_items(collection=collection, item_ids=item_ids)
+                return get_game_data_items(collection=collection, item_ids=resolved_ids)
 
             return get_game_data_items_fields(
                 collection=collection,
-                item_ids=item_ids,
+                item_ids=resolved_ids,
                 fields=",".join(suggested_fields),
             )
         except (KeyError, RuntimeError, TypeError) as exc:

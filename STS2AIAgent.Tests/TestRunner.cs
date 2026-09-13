@@ -184,6 +184,7 @@ internal static class TestRunner
         yield return ("CoopStartup.JoinBootstrap", () => Task.Run(CompanionStartupTests.CompanionBootstrapJoinsAsExtraPlayerThenReady));
         yield return ("CoopStartup.CombatFtueConfirm", () => Task.Run(CompanionStartupTests.CombatRulesFtueIsConfirmedImmediately));
         yield return ("Ftue.CombatRulesWithoutButton", () => Task.Run(FtueModalPolicyTests.CombatRulesFtueWithoutButtonIsConfirmable));
+        yield return ("Ftue.MultiPageStaysOpen", () => Task.Run(FtueModalPolicyTests.MultiPageFtueKeepsTheModalOpen));
         yield return ("CoopStartup.FirstRunProvider", () => Task.Run(CompanionStartupTests.FirstRunProviderConfigIsReachable));
         yield return ("CoopStartup.ProfileMods", () => Task.Run(CompanionStartupTests.CompanionProfileEnablesTheMod));
         yield return ("CoopStartup.SettingsIsolation", () => Task.Run(CompanionStartupTests.SettingsPathCanBeIsolated));
@@ -245,6 +246,16 @@ internal static class TestRunner
         yield return ("Budget.SettingsCarriesInitialCounters", () => Task.Run(SessionBudgetGuardTests.Settings_CreateBudgetGuard_CarriesInitialCounters));
         yield return ("GameData.DetectScene", () => Task.Run(GameDataFilterTests.DetectScene_MatchesGuidedMcpRules));
         yield return ("GameData.ProjectRelevant", () => Task.Run(GameDataFilterTests.ProjectRelevant_KeepsCombatCardFields));
+        yield return ("GameDataFilter.CombatHandIds", () => Task.Run(GameDataFilterItemSourceTests.CombatHandAndEnemyIdsFollowTheSurfaceOrder));
+        yield return ("GameDataFilter.CombatPowers", () => Task.Run(GameDataFilterItemSourceTests.CombatPowersMergePlayerPowersThenEnemyPowers));
+        yield return ("GameDataFilter.NullPotionId", () => Task.Run(GameDataFilterItemSourceTests.NullPotionIdYieldsNoIdsInsteadOfAnError));
+        yield return ("GameDataFilter.NonCombatDeckFallback", () => Task.Run(GameDataFilterItemSourceTests.NonCombatScreenFallsBackToTheDeck));
+        yield return ("GameDataFilter.UnknownCollection", () => Task.Run(GameDataFilterItemSourceTests.UnknownCollectionYieldsNoIds));
+        yield return ("GameDataFilter.DuplicateIds", () => Task.Run(GameDataFilterItemSourceTests.DuplicateIdsAppearOnceInFirstSeenOrder));
+        yield return ("GameDataFilter.CaseInsensitive", () => Task.Run(GameDataFilterItemSourceTests.CollectionAndScreenMatchingIsCaseInsensitive));
+        yield return ("GameDataFilter.EmptyStringId", () => Task.Run(GameDataFilterItemSourceTests.EmptyStringIdsAreSkipped));
+        yield return ("GameDataFilter.CombatRelicFallback", () => Task.Run(GameDataFilterItemSourceTests.CombatRelicsFallBackToTheRunRelics));
+        yield return ("GameDataFilter.EmptySceneFallsBack", () => Task.Run(GameDataFilterItemSourceTests.SceneSourceWithoutItsPayloadFallsBack));
         yield return ("PlayIntent.Detect", () => Task.Run(PlayIntentTests.DetectsPlayPhrasesAndIgnoresQuestions));
         yield return ("ActIndex.Validate", () => Task.Run(ActIndexValidatorTests.RejectsMissingAndStaleIndexes));
         yield return ("ActIndex.Unsettled", () => Task.Run(ActIndexValidatorTests.DetectsUnsettledActResults));
@@ -462,6 +473,9 @@ internal static class TestRunner
         yield return ("CompactViewFidelity.IntentNumbers", () => Task.Run(CompactViewFidelityTests.IntentNumbersReachTheCompactCombatView));
         yield return ("CompactViewFidelity.CardAndRelicIds", () => Task.Run(CompactViewFidelityTests.CardAndRelicIdsReachTheCompactViews));
         yield return ("CompactViewFidelity.OverlayAndParty", () => Task.Run(CompactViewFidelityTests.OverlayAndPartyReachTheCompactView));
+        yield return ("EnemyBaseHp.RawPayload", () => Task.Run(EnemyBaseHpContractTests.RawEnemyPayloadCarriesTheBaseRoll));
+        yield return ("EnemyBaseHp.CompactView", () => Task.Run(EnemyBaseHpContractTests.CompactEnemyPayloadMirrorsTheBaseRoll));
+        yield return ("EnemyBaseHp.PayloadType", () => Task.Run(EnemyBaseHpContractTests.EnemyPayloadTypeDeclaresNullableBaseMaxHp));
         yield return ("RewardScreen.BranchPrecedesGrid", () => Task.Run(RewardScreenContractTests.RewardOverlayBranchPrecedesTheVisibleGrid));
         yield return ("Parity.PlaySurfaceExcludesHealthCheck", () => Task.Run(HealthCheckParityTests.InGamePlaySurfaceKeepsNoConnectionCheck));
         yield return ("Parity.EmbeddedPromptUsesOnlyPlayTools", () => Task.Run(HealthCheckParityTests.EmbeddedPromptOnlyInstructsPlaySurfaceTools));

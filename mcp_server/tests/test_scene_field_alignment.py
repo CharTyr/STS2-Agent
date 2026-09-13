@@ -26,7 +26,12 @@ import re
 import unittest
 from pathlib import Path
 
-from sts2_mcp.server import _SCENE_FIELD_SETS
+from sts2_mcp.server import (
+    _FALLBACK_ITEM_SOURCES,
+    _SCENE_FIELD_SETS,
+    _SCENE_ITEM_SOURCES,
+    derive_relevant_item_ids,
+)
 
 _CSHARP_FILTER = "STS2AIAgent/Agent/GameDataFilter.cs"
 _CSHARP_EXPORT_SCHEMA = "STS2AIAgent/Agent/GameDataExportSchema.cs"
@@ -41,6 +46,14 @@ _QUOTED = re.compile(r'"([^"]*)"')
 
 # public static readonly IReadOnlyDictionary<string, string[]> Collections =
 _EXPORT_TABLE = re.compile(r"\bCollections\s*=\s*new\s+Dictionary<string,\s*string\[\]>")
+
+# public static readonly IReadOnlyDictionary<...> SceneItemSources = new(...)
+# The declaration wraps onto the next line and the type carries generics, so the marker stops at
+# `new` and _initializer_block finds the brace that opens the dictionary.
+_CSHARP_ITEM_SOURCES = re.compile(r"SceneItemSources\s*=\s*new")
+_CSHARP_FALLBACK_SOURCES = re.compile(r"FallbackItemSources\s*=\s*new")
+# ["cards"] = new[] { "combat.hand[].card_id" },
+_PATH_ENTRY = re.compile(r'\["(\w+)"\]\s*=\s*new\[\]\s*\{([^}]*)\}')
 
 
 def _find_source_root() -> Path:
@@ -105,6 +118,52 @@ def _parse_csharp_scene_field_sets(source_root: Path) -> dict[tuple[str, str], l
             pairs[(scene, collection)] = fields
 
     return pairs
+
+
+def _parse_csharp_item_sources(source_root: Path) -> tuple[dict[tuple[str, str], list[str]], dict[str, list[str]]]:
+    """Parse GameDataFilter.SceneItemSources and FallbackItemSources into path lists.
+
+    Returns ((scene, collection) -> paths, collection -> paths). The paths themselves are compared,
+    not just their keys: a source that drifts to a different field is a different answer.
+    """
+    source = (source_root / _CSHARP_FILTER).read_text(encoding="utf-8")
+    block_text = _initializer_block(source, _CSHARP_ITEM_SOURCES, "GameDataFilter.SceneItemSources")
+
+    scene_matches = list(_SCENE_ENTRY.finditer(block_text))
+    if not scene_matches:
+        raise AssertionError(
+            "GameDataFilter.cs SceneItemSources parsed to no scenes; the table shape changed"
+        )
+
+    scenes: dict[tuple[str, str], list[str]] = {}
+    for index, match in enumerate(scene_matches):
+        scene = match.group(1)
+        end = scene_matches[index + 1].start() if index + 1 < len(scene_matches) else len(block_text)
+        entries = _PATH_ENTRY.findall(block_text[match.end() : end])
+        if not entries:
+            raise AssertionError(f"GameDataFilter.cs scene {scene!r} parsed to no id sources")
+        for collection, raw in entries:
+            paths = _QUOTED.findall(raw)
+            if not paths:
+                raise AssertionError(f"GameDataFilter.cs {scene}/{collection} parsed to no paths")
+            scenes[(scene, collection)] = paths
+
+    fallback_block = _initializer_block(source, _CSHARP_FALLBACK_SOURCES, "GameDataFilter.FallbackItemSources")
+    fallback = {name: _QUOTED.findall(raw) for name, raw in _PATH_ENTRY.findall(fallback_block)}
+    if not fallback:
+        raise AssertionError("GameDataFilter.cs FallbackItemSources parsed to no collections")
+
+    return scenes, fallback
+
+
+def _python_item_source_pairs() -> tuple[dict[tuple[str, str], list[str]], dict[str, list[str]]]:
+    scenes = {
+        (scene, collection): list(paths)
+        for scene, collections in _SCENE_ITEM_SOURCES.items()
+        for collection, paths in collections.items()
+    }
+    fallback = {collection: list(paths) for collection, paths in _FALLBACK_ITEM_SOURCES.items()}
+    return scenes, fallback
 
 
 def _parse_csharp_export_schema(source_root: Path) -> dict[str, list[str]]:
@@ -218,6 +277,102 @@ class SceneFieldAlignmentTests(unittest.TestCase):
             diffs,
             "Scene field sets diverge between GameDataFilter.SceneFieldSets (C#) and "
             "_SCENE_FIELD_SETS (Python):\n  - " + "\n  - ".join(diffs),
+        )
+
+    def test_item_sources_match_in_both_directions(self) -> None:
+        csharp_scenes, csharp_fallback = _parse_csharp_item_sources(self.source_root)
+        python_scenes, python_fallback = _python_item_source_pairs()
+
+        only_in_csharp = set(csharp_scenes) - set(python_scenes)
+        only_in_python = set(python_scenes) - set(csharp_scenes)
+        self.assertEqual(
+            set(),
+            only_in_csharp,
+            "(scene, collection) id sources defined in C# but missing from Python "
+            "_SCENE_ITEM_SOURCES: " + ", ".join(f"{s}/{c}" for s, c in sorted(only_in_csharp)),
+        )
+        self.assertEqual(
+            set(),
+            only_in_python,
+            "(scene, collection) id sources defined in Python _SCENE_ITEM_SOURCES but absent "
+            "from C# GameDataFilter.SceneItemSources: "
+            + ", ".join(f"{s}/{c}" for s, c in sorted(only_in_python)),
+        )
+
+        # The paths are the answer, so a pair whose paths differ is a divergence too.
+        diffs = [
+            f"{scene}/{collection}: csharp={csharp_scenes[(scene, collection)]} "
+            f"python={python_scenes[(scene, collection)]}"
+            for scene, collection in sorted(set(csharp_scenes) & set(python_scenes))
+            if csharp_scenes[(scene, collection)] != python_scenes[(scene, collection)]
+        ]
+        self.assertEqual(
+            [],
+            diffs,
+            "Scene item sources diverge between GameDataFilter.SceneItemSources (C#) and "
+            "_SCENE_ITEM_SOURCES (Python):\n  - " + "\n  - ".join(diffs),
+        )
+
+        self.assertEqual(
+            python_fallback,
+            csharp_fallback,
+            "FallbackItemSources diverges between GameDataFilter.cs and _FALLBACK_ITEM_SOURCES",
+        )
+
+        # Both tables must actually carry the ids the earlier tests rely on, so a parse that
+        # silently returned {} cannot make the comparisons above vacuous.
+        self.assertTrue(csharp_scenes, "GameDataFilter.SceneItemSources parsed to nothing")
+        self.assertTrue(python_scenes, "_SCENE_ITEM_SOURCES is empty")
+        self.assertTrue(csharp_fallback, "GameDataFilter.FallbackItemSources parsed to nothing")
+
+    def test_derived_ids_come_from_live_state(self) -> None:
+        # The scene-aware call has to read the ids off the state payload, not off a constant:
+        # the same collection answers differently on the map and in a fight.
+        combat_state = {
+            "screen": "COMBAT",
+            "combat": {
+                "hand": [{"card_id": "STRIKE_IRONCLAD"}, {"card_id": "DEFEND_IRONCLAD"}],
+                "enemies": [{"enemy_id": "FUZZY_WURM_CRAWLER"}, {"enemy_id": "SHRINKER_BEETLE"}],
+                "player": {"powers": []},
+            },
+            "run": {"deck": [{"card_id": "BASH"}], "potions": [{"potion_id": None}]},
+            "shop": None,
+            "event": None,
+        }
+        self.assertEqual(
+            ["STRIKE_IRONCLAD", "DEFEND_IRONCLAD"],
+            derive_relevant_item_ids(combat_state, "cards", "COMBAT"),
+        )
+        self.assertEqual(
+            ["FUZZY_WURM_CRAWLER", "SHRINKER_BEETLE"],
+            derive_relevant_item_ids(combat_state, "monsters", "COMBAT"),
+        )
+        # No potion ids in the state means no ids, not an error.
+        self.assertEqual([], derive_relevant_item_ids(combat_state, "potions", "COMBAT"))
+        # A deck lookup still answers on a screen that is about something else.
+        self.assertEqual(
+            ["BASH"],
+            derive_relevant_item_ids(combat_state, "cards", "MAP"),
+        )
+        # An unknown collection derives nothing rather than guessing.
+        self.assertEqual([], derive_relevant_item_ids(combat_state, "nonsense", "COMBAT"))
+
+        # A screen can classify into a scene whose payload is absent on that screen: FAKE_MERCHANT
+        # reads as shop, but there is no shop block, so the answer must fall back to the run-level
+        # ids instead of coming back empty.
+        shop_less_state = {
+            "screen": "FAKE_MERCHANT",
+            "shop": None,
+            "combat": None,
+            "run": {"deck": [{"card_id": "BASH"}], "relics": [{"relic_id": "BURNING_BLOOD"}]},
+        }
+        self.assertEqual(
+            ["BASH"],
+            derive_relevant_item_ids(shop_less_state, "cards", "FAKE_MERCHANT"),
+        )
+        self.assertEqual(
+            ["BURNING_BLOOD"],
+            derive_relevant_item_ids(shop_less_state, "relics", "FAKE_MERCHANT"),
         )
 
     def test_python_scene_fields_are_exported_by_the_mod(self) -> None:

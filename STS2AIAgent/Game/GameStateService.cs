@@ -3367,6 +3367,8 @@ internal static class GameStateService
                 enemy_id = enemy.enemy_id,
                 name = enemy.name,
                 hp = $"{enemy.current_hp}/{enemy.max_hp}",
+                // Unscaled base roll (same dimension as monsters.min_hp/max_hp metadata); hp above is scaled live.
+                base_max_hp = enemy.base_max_hp,
                 block = enemy.block,
                 intent = enemy.intent,
                 move_id = enemy.move_id,
@@ -5300,6 +5302,9 @@ internal static class GameStateService
             name = enemy.Name,
             current_hp = enemy.CurrentHp,
             max_hp = enemy.MaxHp,
+            // Unscaled base roll: multiplayer scaling is applied before the live MaxHp is set, so this
+            // value shares its dimension with the monsters.min_hp/max_hp metadata while max_hp is scaled.
+            base_max_hp = enemy.MonsterMaxHpBeforeModification,
             block = enemy.Block,
             is_alive = enemy.IsAlive,
             is_hittable = enemy.IsHittable,
@@ -8061,6 +8066,8 @@ internal sealed class CombatEnemyPayload
     public int current_hp { get; init; }
 
     public int max_hp { get; init; }
+
+    public int? base_max_hp { get; init; }
 
     public int block { get; init; }
 

@@ -225,6 +225,48 @@ the raw `/action` endpoint. Evidence: `external-agent-log.jsonl` (84 lines), `ex
   they are inert on a companion; the fields that matter there (`instance_role`, `play_running`,
   `play_phase`, `session_requests`) are correct.
 
+### Those three findings, fixed and re-verified in the game (2026-09-13)
+
+Re-run on the isolated offline host (`--clientId 2026091001`, API `18080`) with the patched build
+deployed. The Steam profile's 183 files were hashed before and after and came out identical; nothing
+touched the real save.
+
+- **The paged combat-rules FTUE was correct behaviour; the contract now says so.** `NCombatRulesFtue`
+  really is three pages (`build/sts2-decompiled/MegaCrit.Sts2.Core.Nodes.Ftue/NCombatRulesFtue.cs:165`
+  `_totalPages = 3`, and only the click after the last page calls `CloseFtue`) — so three calls were
+  always the right number. What was missing is that `pending` looked like a stall. A non-final page now
+  answers with `Tutorial page advanced; the modal is still open. Call confirm_modal again.` Live:
+  `modal=NCombatRulesFtue` → click 1 `pending`, click 2 `pending`, click 3 `completed`, after which
+  `modal` was empty and `screen` had moved to `COMBAT`. Every other modal keeps the old
+  `Action queued but state is still transitioning.` wording.
+- **`get_relevant_game_data` no longer needs `item_ids`.** Omitting them derives the ids the current
+  screen is about from live state, in both mirrors (`GameDataFilter.SceneItemSources` and
+  `_SCENE_ITEM_SOURCES`); `tests/test_scene_field_alignment.py` keeps the two tables — keys and paths —
+  equal, the same way the scene field sets are kept. Live in the host's fight, over the bundled MCP tool
+  surface: `{"collection":"monsters"}` returned exactly the three enemies in that room
+  (TWIG_SLIME_S / LEAF_SLIME_M / LEAF_SLIME_S), `{"collection":"cards"}` returned the hand
+  (DEFEND_IRONCLAD / STRIKE_IRONCLAD), and `relics` fell back to the run relic (BURNING_BLOOD). Passing
+  `item_ids` explicitly still answers as before, and a screen with no ids of that collection to offer
+  (combat `potions` with empty slots) answers `{}` rather than inventing one.
+- **The payload separates the base roll from the scaled HP.** `combat.enemies[].base_max_hp` carries
+  `Creature.MonsterMaxHpBeforeModification` — the same dimension as `monsters.min_hp` / `max_hp` — while
+  `max_hp` stays the scaled live value. Live in the two-player run, with both instances reporting the
+  same numbers: TWIG_SLIME_S `base=9` (metadata 7–11) → `max_hp=19`; LEAF_SLIME_M `base=33` (32–35) →
+  `72`; LEAF_SLIME_S `base=13` (11–15) → `28`. Each is `base × players(2) × act-0 factor(1.1)`,
+  truncated. Single-player is the degenerate case — `ScaleMonsterHpForMultiplayer` returns early when
+  `playerCount == 1` — which is why the original report had to come from a co-op fight.
+
+Two things surfaced while verifying the derivation, and both are fixed in the same pass:
+
+- **A scene can classify into a scene whose payload is null on that screen.** `FAKE_MERCHANT` reads as
+  shop (`DetectScene` matches "merchant"), but `BuildShopPayload` answers `null` there because the
+  merchant room it reads does not exist on that screen, so walking `shop.cards[].card_id` stepped into a
+  JSON null. The walk is now kind-guarded like its Python twin, and an empty scene answer falls back to
+  the run-level ids instead of stopping at `{}`.
+- **The two mirrors disagreed on empty ids.** C# accepted an empty-string id that Python skipped; both
+  now skip it (the C# path list is only ever fed by the state, but a divergence here would have shown up
+  as two different answers for the same screen).
+
 ### Environment note for isolated runs
 
 A brand-new `--clientId` directory gets a default `settings.save` whose `mod_settings` is `null`, and the

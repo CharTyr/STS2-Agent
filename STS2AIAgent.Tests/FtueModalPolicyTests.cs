@@ -62,4 +62,26 @@ internal static class FtueModalPolicyTests
         Assert.True(!kick.Contains("AfterAllPlayersReadyToEndTurn"));
         Assert.True(!kick.Contains("method.Invoke"));
     }
+
+    /// <summary>
+    /// The combat-rules FTUE is paged: one confirm advances a page and leaves the modal open, so the
+    /// response has to explain the next click instead of looking like the action stalled. Every other
+    /// FTUE (and a non-FTUE) is not paged, and the generic transition message must survive unchanged.
+    /// </summary>
+    public static void MultiPageFtueKeepsTheModalOpen()
+    {
+        Assert.True(FtueModalPolicy.IsMultiPageFtue("NCombatRulesFtue"));
+        Assert.True(FtueModalPolicy.IsMultiPageFtue("ncombatrulesftue"));
+        Assert.False(FtueModalPolicy.IsMultiPageFtue("NRelicRewardFtue"));
+        Assert.False(FtueModalPolicy.IsMultiPageFtue("NCanPlayCardsFtue"));
+        Assert.False(FtueModalPolicy.IsMultiPageFtue("NVerticalPopup"));
+        Assert.False(FtueModalPolicy.IsMultiPageFtue(null));
+        Assert.False(FtueModalPolicy.IsMultiPageFtue(""));
+
+        var actionSource = AgentSourceFixture.Read("STS2AIAgent/Game/GameActionService.cs");
+        var confirmModal = AgentSourceFixture.MethodBody(actionSource, "ExecuteModalButtonAsync");
+        Assert.Contains("IsMultiPageFtue", confirmModal);
+        Assert.Contains("Tutorial page advanced; the modal is still open. Call confirm_modal again.", confirmModal);
+        Assert.Contains("Action queued but state is still transitioning.", confirmModal);
+    }
 }
