@@ -2,10 +2,12 @@
 
 > Release attribution is recorded against tags or release commits. Post-tag maintenance is listed separately; current validation limits are maintained in [PRODUCT_PLAN_CURRENT.md](https://github.com/CharTyr/STS2-Agent/blob/main/PRODUCT_PLAN_CURRENT.md).
 
-## Unreleased
+## v0.12.3 - 2026-09-13
 
-> The external-takeover route from #85 reached `POST /action` but not the F8 window's own Invite button,
-> so the button a person actually clicks was the one that could not start that route. It now chooses the
+> Distributed to the Steam Workshop on 2026-09-13: the in-tree version, the uploaded Workshop content and
+> the build all come from the same commit. No GitHub tag or release for this version yet. The
+> external-takeover route from #85 reached `POST /action` but not the F8 window's own Invite button, so
+> the button a person actually clicks was the one that could not start that route; it now chooses the
 > route the way the API does, and the tab says which one will run.
 
 ### Fixed
