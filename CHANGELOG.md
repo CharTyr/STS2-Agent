@@ -4,10 +4,11 @@
 
 ## v0.12.3 - 2026-09-13
 
-> Distributed to the Steam Workshop on 2026-09-13: the in-tree version, the uploaded Workshop content and
-> the build all come from the same commit. No GitHub tag or release for this version yet. The
-> external-takeover route from #85 reached `POST /action` but not the F8 window's own Invite button, so
-> the button a person actually clicks was the one that could not start that route; it now chooses the
+> Distributed to the Steam Workshop on 2026-09-13, with the GitHub release following the same day: the
+> in-tree version, the uploaded Workshop content, the build and the release all come from the same commit.
+> Release and Workshop upload: [release-v0.12.3_2026-09-13.md](history/release-v0.12.3_2026-09-13.md).
+> The external-takeover route from #85 reached `POST /action` but not the F8 window's own Invite button,
+> so the button a person actually clicks was the one that could not start that route; it now chooses the
 > route the way the API does, and the tab says which one will run.
 
 ### Fixed
