@@ -109,12 +109,6 @@ internal static class CoopRouteTests
     }
 
     /// <summary>
-    /// Every way of starting the in-process loop is one decision, so all of them answer to the same
-    /// model gate. The companion's own /session/control used to skip it, which left a caller able to
-    /// start a model loop that the host's Resume button, /companion/control and /teammate/control all
-    /// refuse. Pausing stays ungated: nothing should be stuck unable to stop it.
-    /// </summary>
-    /// <summary>
     /// The route split reached POST /action but not the overlay: the Invite button kept calling the
     /// auto-play overload, so with no verified play model the click was refused at the old model
     /// gate while the same request over the API launched the teammate for external takeover. The
@@ -140,6 +134,12 @@ internal static class CoopRouteTests
         Assert.Contains("_dualHint.Text = DualHintText();", overlay);
     }
 
+    /// <summary>
+    /// Every way of starting the in-process loop is one decision, so all of them answer to the same
+    /// model gate. The companion's own /session/control used to skip it, which left a caller able to
+    /// start a model loop that the host's Resume button, /companion/control and /teammate/control all
+    /// refuse. Pausing stays ungated: nothing should be stuck unable to stop it.
+    /// </summary>
     public static void EveryStartEntryPointSharesTheModelGate()
     {
         var runtime = AgentSourceFixture.Read("STS2AIAgent/Agent/AgentRuntime.cs");
