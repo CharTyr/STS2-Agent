@@ -2,7 +2,7 @@
 
 > Release attribution is recorded against tags or release commits. Post-tag maintenance is listed separately; current validation limits are maintained in [PRODUCT_PLAN_CURRENT.md](https://github.com/CharTyr/STS2-Agent/blob/main/PRODUCT_PLAN_CURRENT.md).
 
-## v0.12.3 - 2026-09-13 (republished 2026-09-14)
+## v0.12.3 - 2026-09-13 (republished twice on 2026-09-14)
 
 > Distributed to the Steam Workshop on 2026-09-13, with the GitHub release following the same day: the
 > in-tree version, the uploaded Workshop content, the build and the release all come from the same commit.
@@ -16,6 +16,15 @@
 > The external-takeover route from #85 reached `POST /action` but not the F8 window's own Invite button,
 > so the button a person actually clicks was the one that could not start that route; it now chooses the
 > route the way the API does, and the tab says which one will run.
+>
+> **The same version was re-cut a second time later on 2026-09-14**, onto the live-validation follow-up
+> and the diagnostics work below. The one player-facing item in it is the Continue button fix; the rest
+> is log lines on paths that used to fail silently, release tooling and offline contract tests. Three
+> builds now answer to `0.12.3`, so tell them apart by size or hash — Workshop `file_size` 1227269 /
+> GitHub asset 549933 bytes `B9DC1A07…` for the first, 1229829 / 552014 bytes `B7684C9F…` for the
+> second — and by the version string never. Every upload is recorded with its own numbers in
+> [release-v0.12.3_2026-09-13.md](history/release-v0.12.3_2026-09-13.md) and
+> [PRODUCT_PLAN_CURRENT.md](PRODUCT_PLAN_CURRENT.md).
 
 ### Added
 
@@ -33,6 +42,12 @@
 
 ### Fixed
 
+- **The Continue button no longer stays grey until you leave the tab.** It was refreshed when the AI
+  Teammate page came into view and nowhere else, so a button that was correctly disabled while the
+  launch dialog was up stayed disabled after the dialog closed: the action was available over the API
+  the whole time, but the window did not re-read it until the tab was left and re-entered. The panel
+  tick now re-reads the button's availability whenever that page is visible (live: grey at brightness
+  364 with the dialog up, enabled at 660 four seconds after it cleared, with no tab switch).
 - **The overlay's Invite button uses the same route as the API.** It called the auto-play overload, so with
   no verified play model the click was refused at the old model gate while the identical request over
   `POST /action` launched the teammate for external takeover — backwards for a route meant to be driven
@@ -42,6 +57,31 @@
   for external takeover without calling a model at all.
 - The two lines under the **AI Teammate** tab describe that route instead of asking for a connection test,
   so the hint and the button can no longer contradict each other.
+
+### Diagnostics, tooling and tests (second re-cut)
+
+- **A probe that throws is no longer indistinguishable from a room with nothing to offer.**
+  `CanChooseEventOption` and `CanChooseRestOption` answered every failure, including a thrown probe,
+  with a bare catch that returned false, so a room whose probe threw simply lost its action from
+  `available_actions` with nothing anywhere saying why. They still fail closed; the exception is logged.
+- **Twelve empty catch blocks in `GameActionService.cs` now say what failed** — the cancel chain, the
+  reward-drain fallbacks (`TryEnableProceedButton`, `NOverlayStack.Remove`, `ProceedFromTerminalRewardsScreen`),
+  the two `confirm_bundle` press fallbacks, the three `continue_game_over` hooks and the Godot
+  environment lookup. Returns and control flow are unchanged; a recovery that keeps failing is now
+  visible in the log instead of only in a stuck action.
+- **The bounded-await contract reads the syntax tree instead of a normalized line shape.** It could not
+  see `await entry.OnTryPurchaseWrapper(player, timeout);` (the argument list is where the pattern wanted
+  a semicolon) or `await completedTask!;` (the null-forgiving operator), and it only ever scanned
+  `GameActionService.cs`. It now walks every await expression in the game-driving files — adding
+  `DualInstanceCoordinator.cs`, `LocalDualInstanceLauncher.cs` and `AgentOverlayHost.cs` — and accepts a
+  call only when it targets a mod member, a `Task.` race, or a live `CancellationToken`.
+- **`get_game_data_*` keeps the mod's error envelope on a failure** (`code` / `status_code` / `retryable`
+  were being dropped on the game-data path), and **`wait_until_actionable` no longer reports a broken event
+  stream as an ordinary timeout** — its broad `except Exception` turned a dead stream into "nothing
+  happened", which is the one thing a caller cannot act on.
+- Release tooling: the `packaged-links` gate finally has a destructive case like the other seven;
+  preflight runs the shared `check_release_metadata.py` instead of its own drifted copy; and the artifact
+  check now reads the three version sources inside the artifact and refuses an inconsistent one.
 
 ## v0.12.2 - 2026-09-13
 
