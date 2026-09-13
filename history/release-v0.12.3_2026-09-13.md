@@ -122,3 +122,55 @@ DLL 比 v0.12.2 的 1186304 大 1536 字节，差额来自 #106 的代码。
 - **这是本仓库第一次同号重发**。代价是「版本号 → 构建」不再一一对应：`0.12.3` 指两份构建，只能靠大小或哈希区分，所以 CHANGELOG 与状态页都显式写了这件事，而不是留给读者自己发现。
 - 删除并重建 tag / Release 不会触发任何工作流：`.github/workflows/validate.yml` 只监听 `pull_request` 与 `main` / `dev` / `codex/**` 的 push，没有 tag 或 release 事件。
 
+
+## 2026-09-14 同号重发（第三次上传，第二次重切）
+
+版本号仍是 `0.12.3`：这次换构建，是把当天实机验收的产物与随之而来的收口工作带给订阅者——**一处玩家可见修复**（Continue 按钮待机不刷新）加上一批诊断、发布工具与离线契约测试。
+
+| 项 | 值 |
+| --- | --- |
+| 发布分支 / PR | `codex/republish-v0.12.3-2` → #123 |
+| 发布提交（= 新 tag 目标） | `c2630a8`（`Release v0.12.3 (second re-cut): carry the Continue fix and the diagnostics work`） |
+| CI | #123 的 push（34774014272）与 pull_request（34774022312）两个 Validate run 均 success |
+| Tag | `v0.12.3` 删除后重建：上一个 tag 对象 `ad15562` → `0f60ec4`；新 tag 对象 `4eb2806` → `c2630a8`（仍然是 annotated；远端 `refs/tags/v0.12.3` 复核为 `4eb2806` → `c2630a8`） |
+| Release | 同一 URL 重建：资产 `sts2-ai-agent-v0.12.3-windows.zip`（555061 字节，SHA256 `E882B653B48B15EF278CFD9E20CC443FDCA3E5D69A51E362A40B934E29E167DF`；GitHub 上报的 `sha256:e882b653…` 与本地一致），GitHub 标记为 Latest |
+| 工坊物品 | `3796486050`，`time_updated = 2026-09-14 02:17:15`，内容 id `hcontent_file = 6689158800196895712` |
+| 工坊 `file_size` | `1232901` —— 与本地内容字节和**完全相等**（dll 1193472 + pck 608 + json 382 + README 3802 + LICENSE 34637） |
+| 可见性 / 标签 / 英文说明 | `0`（公开）/ 未变 / 未被上传覆盖 |
+
+内容构成（第三次）：`STS2AIAgent.dll` 1193472（比第二次的 1190400 大 3072 字节，差额来自 #116 与 #120 / #121 的代码）、`STS2AIAgent.pck` 608、`STS2AIAgent.json` 382、`README.md` 3802、`LICENSE` 34637；后四项与前两次逐字节相同。
+
+### 载荷交叉核对（第三次）
+
+这一轮的发布目录与工坊内容里的 `STS2AIAgent.dll` 与 `STS2AIAgent.pck` **SHA256 完全相等**（`49F45EA96A01…` / `281945DC0424…`），`mod_id.json` 与工坊的 `STS2AIAgent.json` 也都是 302 字节——两者是 `package-release.ps1` 与 `package-steam-workshop.ps1` 各自构建出来的，同一次会话里编译两次却得到同一份 DLL，这点与前两次（两次编译之间必然有时间戳 / MVID 差异）不同，记在这里免得被当成异常。
+
+### 说明文档
+
+- CHANGELOG 的 v0.12.3 段首改为 `## v0.12.3 - 2026-09-13 (republished twice on 2026-09-14)`，新增第二段横幅说明这次重切的内容与「三份构建都叫 0.12.3、只能靠大小或哈希区分」，并列出前两次的 `file_size` / 资产字节数 / SHA256 前缀。
+- 同一段里补了两块：`### Fixed` 顶部加 Continue 按钮那条（含实机亮度数字），新增 `### Diagnostics, tooling and tests (second re-cut)` 记录 #117 / #120 / #121 / #122 与发布工具的两条。
+- `steam-workshop/workshop.json` 的 changeNote 改为以 Continue 按钮修复打头，并保留上一版的两条界面入口说明。
+- 五处版本号**一处未动**（与上一次重发同理）。
+
+### 上传过程
+
+1. 把上一次的产物改名留档：`build/release/sts2-ai-agent-v0.12.3-windows`（目录与 zip）与 `build/steam-workshop/sts2-ai-agent-v0.12.3` → 同名加 `-upload-2026-09-14a`。
+2. `scripts/preflight-release.ps1` 先跑一遍：exit 0，C# 386 PASS / 0 FAIL，MCP 单测通过，八道 gate 与 gate 自测全绿，发布元数据一致。
+3. `package-release.ps1 -Configuration Release`：0 警告 0 错误，目录与 zip 产物检查均通过。
+4. `package-steam-workshop.ps1 -PublishedFileId 3796486050 -Visibility public -ChangeNote <新 changeNote>`：内容字节和 1232901。
+5. 游戏未运行；`Start-Process -WindowStyle Hidden` 分离启动 `ModUploader.exe upload -w <workspace> -i 3796486050`，进程环境带 `HTTP_PROXY` / `HTTPS_PROXY`（`127.0.0.1:10808`）。02:16:5x 启动，一次成功（`Successfully uploaded 'STS2 AI Agent' to the workshop with id 3796486050`）。
+6. 工坊复核：Steam Web API `GetPublishedFileDetails` 核对 `file_size` / `time_updated` / `visibility`，`file_size` 与本地内容字节和完全相等。
+7. GitHub 侧：`gh release delete v0.12.3 --cleanup-tag --yes` → `git tag -a v0.12.3 c2630a8` → 推送 → `gh release create v0.12.3 --title v0.12.3 --notes-file build/release/notes-v0.12.3-recut-2.md --latest <zip>`。发布说明是这一版新写的 `notes-v0.12.3-recut-2.md`（中文，含三份构建的区分表）。
+
+### 未做
+
+- **工坊简体中文列表仍未更新**（自 v0.11.0 起），仍然只能在工坊网页端手工粘贴 `steam-workshop/description.zh-CN.txt`。
+- 外部接管路线仍未在 Steam 双开路径复跑（与前两次相同的遗留缺口）。
+- 本版**没有单独跑一轮实机**：唯一的实机素材是 2026-09-14 对 #111 两个界面入口的点击验收（那次发现的 Continue 缺陷就是本版修掉的那一处），其余为离线证据。
+
+### 注记
+
+- 这是本仓库**第三次发布同一个版本号**（首发 + 两次重切）。同号重发的代价在第二次已经写明：`0.12.3` 现在指三份构建，CHANGELOG、状态页与 GitHub 发布说明都各自列了区分用的数字。
+- 这次没有删掉旧产物，而是改名留档，三份构建在本地都能找到：`*-windows`（本次）、`*-windows-upload-2026-09-13`（首发）、`*-windows-upload-2026-09-14a`（第二次）。
+- 与第二次相同：删除并重建 tag / Release 不触发任何工作流（`validate.yml` 只监听 `pull_request` 与 `main` / `dev` / `codex/**` 的 push）。
+
+
