@@ -1,7 +1,7 @@
 {
   "title": "STS2 AI Agent",
   "visibility": "public",
-  "changeNote": "v0.12.3: the Invite AI teammate button in the F8 window now takes the same route as the API - with no verified model it still invites, and the teammate joins the run then waits to be taken over instead of refusing the click and asking for a connection test",
+  "changeNote": "v0.12.3 (re-cut): the F8 window's AI Teammate tab gains Continue the saved co-op run and Disable automatic character pick. Both use the same runtime path as the API, so a saved local co-op run can be reloaded over the local connection - the game's own Load button opens it over Steam networking, rejects the local player ids and renames the save as corrupt. Also in this build: the Invite AI teammate button takes the same route as the API, so with no verified model it still invites, and the teammate joins the run and then waits to be taken over instead of refusing the click.",
   "tags": [
     "Tools & APIs",
     "Utility",
