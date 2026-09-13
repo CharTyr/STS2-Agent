@@ -15,7 +15,7 @@ internal static class Router
 {
     private const string ServiceName = "sts2-ai-agent";
     private const string ProtocolVersion = "2026-03-11-v1";
-    internal const string ModVersion = "0.12.0";
+    internal const string ModVersion = "0.12.1";
     private const string LogPrefix = "[STS2AIAgent.Router]";
 
     private static long _requestCounter;
