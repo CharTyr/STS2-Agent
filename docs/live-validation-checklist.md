@@ -11,6 +11,70 @@ A session that walks this list needs the game installed, the mod built and deplo
 Legend: **[mod]** Mod API online only · **[combat]** needs a fight · **[room]** needs a specific
 screen · **[coop]** needs two instances · **[eye]** needs a human or model to watch behaviour.
 
+## Status as of 2026-09-13
+
+Verified against the released v0.12.0 build (`mod_version=0.12.0`, game `v0.111.0`). The host was an
+isolated offline copy of the game (`--windowed --force-steam off --clientId <id>`, API on `18080`) driven
+over HTTP, with a zero-cost local stub model on `127.0.0.1:18098` answering the agent's model calls. No
+real model quota was spent, and the Steam profile's save files were left byte-identical (hashes compared
+before and after).
+
+- All seven `GET /data/{collection}` endpoints answer — cards 596 / relics 299 / monsters 107 / potions 66 /
+  events 57 / powers 283 / characters 5. `powers` answering 200 with 283 entries is the live confirmation
+  of the guarded-localization fix: previously the whole collection failed with a 500.
+- `resolve_rewards` takes the card named by `option_index` (0 and 1 both picked the matching card rather
+  than always the first), so the choice really does travel with the request. An out-of-range index is 409
+  `invalid_target` carrying `option_count`, and the reward survives untouched (deck stayed at 10 cards).
+- The reward overlay reports `REWARD` after the Card reward is claimed, with `pending_card_choice = true`,
+  `choose_reward_card` / `skip_reward_cards` offered, `collect_rewards_and_proceed` still able to finish the
+  screen, and no `select_deck_card` on offer.
+- `CARD_PILE` is its own screen name and `close_cards_view` really pops it — the executor's `ForceClick` on
+  the screen's own BackButton is enough. Clicking the draw pile in a fight reported `CARD_PILE` with
+  `close_cards_view` offered; the action returned `completed` back on `COMBAT`. The top-bar deck button
+  (`CARDS_VIEW`) closes the same way.
+- `PATCH_NOTES` and `close_main_menu_submenu` round-trip: the main menu's patch-notes button reports
+  `PATCH_NOTES` with only `close_main_menu_submenu` offered, and that action returns to `MAIN_MENU`.
+- `run.relic_ids` and `run.relics` come back the same length and in the same order (3 / 3).
+- A live combat enemy carried `intents[]` with `damage` / `hits` / `total_damage` (12 / 1 / 12) alongside the
+  legacy `intent` / `move_id` pair, and combat `players[]` carried both the local and the remote player.
+- `invite_ai_teammate` with `CompanionAutoSelectCharacter = true` (the default): the teammate joined the
+  lobby, picked its character and readied itself — `character_select.players[]` showed the teammate's slot
+  with `is_ready = true` while the host's own slot stayed unready.
+- `invite_ai_teammate` with `CompanionAutoSelectCharacter = false`: the teammate reached
+  `CHARACTER_SELECT` and **stopped** — the companion's own bootstrap logged
+  `Companion bootstrap CHARACTER_SELECT|-|close_main_menu_submenu,select_character,embark`, an empty action,
+  and both `character_select.players[]` entries stayed `is_ready = false`. Across a 6 m 30 s dwell the
+  teammate process stayed alive and on `CHARACTER_SELECT`, well past the five-minute bootstrap budget, with
+  no `Timed out joining the local room.` in the log. So the clock really is held while a person chooses.
+  The actions stay advertised on the companion's API — that is the supported path for a human or an external
+  agent to drive `select_character` + `embark`; what the bootstrap withholds is its own input.
+
+### Found in this session
+
+Two things only a live game shows, both still open:
+
+- **The pause menu is reported as an open `capstone` and offered as `choose_capstone_option`.** Opening the
+  pause menu in a fight (top-bar button, and also via Escape) leaves `/state.screen` at `COMBAT`, fills
+  `capstone.options` with that menu's own buttons — `继续` / `设置` / `放弃` / `保存并退出` / `BackButton` — and
+  advertises `choose_capstone_option` in `available_actions`. Calling it returns 200 `pending` and does
+  nothing: the menu stays put and the screen never leaves `COMBAT`. The state is wrong in the direction that
+  matters, since one of those options abandons the run. Root cause is in the game's own class hierarchy —
+  the pause menu is an `NCapstoneSubmenuStack`, which is exactly what `GetCapstoneButtons` matches on — so
+  the fix has to tell the pause menu apart from a real capstone screen rather than removing the capstone
+  path.
+- **`run_console_command bestiary` answers 500 `internal_error`.** The game's own
+  `BestiaryConsoleCmd.Process` throws a `NullReferenceException`; the mod surfaces it as an unhandled server
+  error with `details: null`. It is a debug-only path (and the game labels the command WIP), but a 500 with
+  no context is not an honest envelope for a console command that was accepted and then threw.
+
+### Environment note for isolated runs
+
+A brand-new `--clientId` directory gets a default `settings.save` whose `mod_settings` is `null`, and the
+game then refuses to load the mod at all (`Skipping loading mod STS2AIAgent, user has not yet seen the mods
+warning`) — `/health` never comes up. Pre-seed the client dir's `settings.save` with `mod_settings`
+(`mods_enabled` plus a `mod_list` entry for `STS2AIAgent`) before launching, or reuse a client dir that has
+already run the mod.
+
 ## Status as of 2026-09-12
 
 Verified in a live session on a profile with an active run save:
@@ -47,6 +111,10 @@ Open the pile screen in a fight (click the draw/discard/exhaust pile) and open t
 
 - `/state.screen` reports `CARD_PILE` / `CARD_LIBRARY` rather than `CARD_SELECTION`
   (`GameStateService.ResolveNonModalScreen`).
+  `CARD_PILE` was verified live on 2026-09-13 (clicking the draw pile in a fight reported `CARD_PILE` with
+  `close_cards_view` offered, and the action really popped the screen back to `COMBAT`). `CARD_LIBRARY` was
+  not reached: neither the main menu nor the in-run pause menu offered a compendium entry in this build, and
+  no console command opens one.
 - `close_cards_view` closes the pile screen: the executor clicks the screen's own `BackButton` with
   `ForceClick()`, which bypasses input state, so only the live game shows whether the `Released`
   signal really pops it.
@@ -114,6 +182,29 @@ mod-side action.
 
 - `invite_ai_teammate` returns `completed` on a real dual launch, 409 `invite_failed` when the client
   is on English, and `pending` for a concurrent invite.
+  Verified 2026-09-13 on an isolated offline host: the invite started the second instance itself (API on
+  host port + 1), and with the default settings the teammate auto-selected and readied on its own.
+  With `CompanionAutoSelectCharacter = false` the teammate reached `CHARACTER_SELECT` and stayed there for
+  6 m 30 s without acting and without timing out (see the 2026-09-13 status section above).
+- `continue_ai_teammate` end to end on a Steam-hosted save (verified 2026-09-13): the host reaches
+  `MULTIPLAYER_LOAD`, the launcher starts the companion, the companion's bootstrap presses Embark, the host's
+  own `embark` completes, and the run resumes on the **same** `run_id` with both players connected.
+- `continue_ai_teammate` on an isolated offline host needs the save's player NetIds to line up, and nothing
+  checks that for you. The host's NetId in the local path is always **1**, while the game validates the
+  *loading instance's* NetId against `players[].net_id` in the save. Two ways it fails, both seen live:
+  - Host started with `--clientId <N>` where `N != 1`: the game refuses the load (`Save is invalid! Players
+    does not contain local player Id`), **renames `current_run_mp.save` to
+    `current_run_mp.<unix>.VAL.corrupt`**, disables the continue button, and the action returns 409
+    `continue_failed` whose message blames port 33771. The save is moved aside, not restored, so a failed
+    attempt is destructive to that save file.
+  - Host started with `--clientId 1` (the NetId the save expects): the load succeeds and reaches
+    `MULTIPLAYER_LOAD`, but the launcher starts the companion with clientId `2`, which is not the NetId the
+    save recorded for the teammate (an earlier run under `--clientId 2026091301` had written `2026091302`),
+    so the host drops the join with `JoinFlow: Disconnected during join flow, reason: NotInSaveGame` and the
+    companion falls back to the main menu.
+  The isolated path therefore only works when the save was created by a host whose NetId equals the clientId
+  the host is started with, and whose teammate NetId equals that clientId + 1. The Steam path has neither
+  problem because the host's NetId is the account id.
 - `scripts/test-multiplayer-lobby-flow.ps1` crosses `CAPSTONE_SELECTION` and `UNLOCK` without
   throwing `Unsupported run progression state`.
 - Multiplayer `players[]` and `target_index` share one index space.
