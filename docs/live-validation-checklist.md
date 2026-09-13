@@ -176,7 +176,7 @@ invite was a real call, not a resumed session.
   the last session handle so a retry cannot start a third window, and the discovery block inherited that
   persistence. It now returns `null` once `CompanionProcessExited` is set.
 
-+### External-takeover route driven by a real external agent (issue #85)
+### External-takeover route driven by a real external agent (issue #85)
 
 Verified 2026-09-13 on the same isolated dual-instance host (dead model endpoint on `127.0.0.1:18199`,
 `roleTests` empty), but this pass answers the stronger question: not "can a script poke the API" but
@@ -295,7 +295,7 @@ Verified in a live session on a profile with an active run save:
 
 Found and fixed during that session (both were invisible offline):
 
-+ `GET /data/powers` returned 500 for the whole collection: a `MOCK_*` power the localization tables
+- `GET /data/powers` returned 500 for the whole collection: a `MOCK_*` power the localization tables
   do not cover made `GetFormattedText` throw while the export streamed. Exported names now go through
   a guarded lookup and a missing entry yields null.
 - The "the main menu disables its timeline button while a run save exists" comments in

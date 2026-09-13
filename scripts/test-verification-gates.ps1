@@ -293,6 +293,33 @@ try {
     Assert-Case -Name "api-facts gate rejects a default port the docs do not state" -Only "api-facts"
     Write-Utf8 $httpServer $originalHttpServer
 
+    # 9b. A packaged README linking to a file the release does not ship, at a target no rewrite
+    # rule covers. This is the shape #105 shipped: the link was new, the rewrite table did not
+    # know it, and the artifact builder copied the file through untouched. packaged-links was the
+    # only gate with no destructive case, so nothing proved it could still catch that.
+    $readmePath = Join-Path $fixture "README.md"
+    $originalReadme = Read-Utf8 $readmePath
+    $slash = [char]47
+    $leak = "[fixture leak](." + $slash + "docs" + $slash + "roadmap-current.md)"
+    Write-Utf8 $readmePath ($originalReadme.TrimEnd() + [char]10 + [char]10 + $leak + [char]10)
+    $leakResult = Invoke-Gate -Fixture $fixture -Only "packaged-links"
+    if ($leakResult.ExitCode -eq 0) {
+        Write-Host "FAIL  packaged-links gate rejects a link the release does not ship (gate accepted a drifted input)"
+        Write-Host $leakResult.Output
+        $script:failures++
+    }
+    elseif ($leakResult.Output -notmatch "roadmap-current") {
+        Write-Host "FAIL  packaged-links gate names the unshipped target"
+        Write-Host $leakResult.Output
+        $script:failures++
+    }
+    else {
+        Write-Host "PASS  packaged-links gate rejects a link the release does not ship"
+        $leakMessage = ($leakResult.Output -split "\r?\n" | Where-Object { $_ -match "verification gates failed" } | Select-Object -First 1)
+        Write-Host ("      " + $leakMessage.Trim())
+    }
+    Write-Utf8 $readmePath $originalReadme
+
     # 10. A docs/*.md that is on disk but that git does not track. docs/ used to be gitignored,
     # so a new page could pass the local doc-marks gate and still be absent from every fresh
     # checkout -- which is exactly what CI builds from. The gate compares against the git index,

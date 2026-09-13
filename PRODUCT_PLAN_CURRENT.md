@@ -1,6 +1,6 @@
 # STS2 AI Agent：当前状态页
 
-> 本页是仓库唯一的当前状态入口。更新日期：2026-09-14（v0.12.3 同号重发：版本号不变，工坊与 GitHub 两侧各用含 #111 的新构建重新发布了一次）。
+> 本页是仓库唯一的当前状态入口。更新日期：2026-09-14（v0.12.3 同号重发；随后 #111 的两个联机界面入口完成实机点击验收，验收中发现并修掉一处 Continue 按钮刷新缺陷）。历史快照标记：本页为当前状态页，非历史快照。
 > 发布代码基准：tag `v0.12.3` @ `0f60ec4`（2026-09-14 重切；2026-09-13 首发时曾指向 `b0217b0`）；工坊与 GitHub 两侧同为 `0.12.3`。
 > 发布基准：[GitHub Release v0.12.3](https://github.com/CharTyr/STS2-Agent/releases/tag/v0.12.3)，2026-09-13 首发、2026-09-14 同号重发；上一版 [v0.12.2](https://github.com/CharTyr/STS2-Agent/releases/tag/v0.12.2)，同日。Steam 工坊物品 3796486050 已更新至 `0.12.3`（重发）：visibility=0（公开）、`file_size` 1229829 与本地内容字节和相等、`time_updated` 2026-09-14 00:09:26、内容 id `6028841468497339213`；首发那次是 `file_size` 1227269、`time_updated` 2026-09-13 22:31:22、内容 id `5284257893537057643`，两次都记在发布记录里。**工坊简体中文列表仍是旧版**（缺 v0.11.0 起的多条列表项），待手工粘贴 `steam-workshop/description.zh-CN.txt`——`ModUploader` 没有语言参数，这一步只能在工坊网页端做。
 
@@ -90,8 +90,8 @@
 | 依赖安全（#50 / #51） | cd55fe1 | 已发布 v0.10.6 | fastmcp 3.4.7、fast-uri 3.1.7；npm audit total 0；MCP 49 项单测通过 | 只覆盖这两条报告与 npm 树，不是完整的第三方审计 |
 | 文档契约与验证闸门 | c212594、6aabb4f | 已发布 v0.10.6 | `check_verification_gates.py` 四闸门全绿；自测漂移场景全部被拒；preflight 端到端 exit 0 | 静态检查，不能替代实机行为验证 |
 | 暂停与局内菜单页的屏幕名（#88 / #93） | `31296bd`（#88/#89）、`3cf347a`（#92）、`04748f6`（#93） | 已随 v0.12.1 发布 | 2026-09-13 隔离实机两轮逐屏核对：`PAUSE_MENU` / `SETTINGS` / `COMPENDIUM` / `CARD_LIBRARY` / `RELIC_COLLECTION` / `POTION_LAB` / `STATS` / `RUN_HISTORY` 各自报名、动作面只剩 `close_main_menu_submenu`、`choose_capstone_option` 全 409，FAILURES: 0 | `BESTIARY` 未实机开屏（该存档 hub 不画磁贴）；`save_and_quit` 的 409 是实机发现后补的 |
-| 外部 agent 接管队友窗口（#85） | `d80a19d`（PR #97）+ `7a371c7`（PR #99） | **主线未发布**（晚于 tag `v0.12.1`） | 2026-09-13 隔离实机：死模型端点 + 空 `roleTests` 下 `invite_ai_teammate` 仍 200 `completed`，队友 `auto_play:false`、进图 20 秒 `session_requests=0`，`/teammate/control` 暂停 200 / 未验证开始 409，`/health.companion` 可发现队友 API；队友自身 `/session/control` 过同一道门禁（`running:true` 409 / `false` 200）；外部 agent（Grok 4.6，只给 MCP 工具面）在无模型队友窗口上打完一整场战斗；真档 183 文件哈希不变 | 未在 Steam 双开路径复跑（只在隔离离线主机验过） |
-| 三处实机发现收尾：分页 FTUE 文案 / 场景派生元数据 id / 联机基础血量 | `d826935`（PR #101） | **主线未发布**（晚于 tag `v0.12.1`） | 2026-09-13 隔离实机：FTUE 三击 `pending`/`pending`/`completed` 后回 `COMBAT`；MCP 面省略 `item_ids` 按屏返回手牌 / 敌人 / 遗物，显式 id 与空集合行为不变；双人局 `base_max_hp` 9/33/13 对实况 19/72/28（`×2×1.1`），两实例一致；真档 183 文件哈希不变 | FTUE 只在单人档复现（联机档该 FTUE 已完成）；`FAKE_MERCHANT` 的回落只有离线单测（未实机走到该屏） |
+| 外部 agent 接管队友窗口（#85） | `d80a19d`（PR #97）+ `7a371c7`（PR #99） | **已随 v0.12.2 发布** | 2026-09-13 隔离实机：死模型端点 + 空 `roleTests` 下 `invite_ai_teammate` 仍 200 `completed`，队友 `auto_play:false`、进图 20 秒 `session_requests=0`，`/teammate/control` 暂停 200 / 未验证开始 409，`/health.companion` 可发现队友 API；队友自身 `/session/control` 过同一道门禁（`running:true` 409 / `false` 200）；外部 agent（Grok 4.6，只给 MCP 工具面）在无模型队友窗口上打完一整场战斗；真档 183 文件哈希不变 | 未在 Steam 双开路径复跑（只在隔离离线主机验过） |
+| 三处实机发现收尾：分页 FTUE 文案 / 场景派生元数据 id / 联机基础血量 | `d826935`（PR #101） | **已随 v0.12.2 发布** | 2026-09-13 隔离实机：FTUE 三击 `pending`/`pending`/`completed` 后回 `COMBAT`；MCP 面省略 `item_ids` 按屏返回手牌 / 敌人 / 遗物，显式 id 与空集合行为不变；双人局 `base_max_hp` 9/33/13 对实况 19/72/28（`×2×1.1`），两实例一致；真档 183 文件哈希不变 | FTUE 只在单人档复现（联机档该 FTUE 已完成）；`FAKE_MERCHANT` 的回落只有离线单测（未实机走到该屏） |
 
 ## 4. 待办任务
 
