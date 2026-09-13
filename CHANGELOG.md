@@ -6,7 +6,8 @@
 
 > The co-op handoff: the player who wants to fight their own character while an outside agent drives the
 > teammate window no longer has to fake a passing model test to get there, and the state that agent reads
-> stopped contradicting itself. Live:
+> stopped contradicting itself. Release and Workshop upload:
+> [release-v0.12.2_2026-09-13.md](history/release-v0.12.2_2026-09-13.md). Live:
 > [docs/live-validation-checklist.md](docs/live-validation-checklist.md).
 
 ### Added
