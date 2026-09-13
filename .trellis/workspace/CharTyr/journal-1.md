@@ -744,3 +744,44 @@ Four residuals closed: docs/ became a controlled directory with a docs-tracked g
 
 - sachi4clover 的后续 PR（游戏内 Continue 按钮 + 选角勾选框）到位后，把 #106 与它攒一起做 GitHub 发布，或单独回填 v0.12.3 tag
 - 工坊简体中文列表仍未更新，需在工坊网页端粘贴 steam-workshop/description.zh-CN.txt
+
+
+## Session 21: 补发 v0.12.3 的 GitHub Release（工坊先行的完整化）
+
+**Date**: 2026-09-13
+**Task**: 补发 v0.12.3 的 GitHub Release（工坊先行的完整化）
+**Branch**: `main`
+
+### Summary
+
+v0.12.3 先是只发工坊，本轮补上 tag 与 GitHub Release，把「工坊先行」变成一次完整发布。发布产物的 DLL 与工坊那份大小相同、PCK 字节一致，仅 70 字节构建元数据不同（PE 时间戳 / MVID / 调试目录），已记进发布记录以免后续把两渠道哈希差异误读成不同构建。
+
+### Main Changes
+
+- git tag -a v0.12.3 b0217b0 并推送；package-release 打包（目录与 zip 产物检查均通过）；gh release create 带 zip 与中文发布说明，GitHub 标记为 Latest
+- history/workshop-upload-v0.12.3 合并重写为 history/release-v0.12.3，同时覆盖工坊与 GitHub 两次发布，并记录两渠道产物的 70 字节差异成因
+- CHANGELOG 的 v0.12.3 段不再写「尚无 GitHub tag」，改为指向发布记录
+- 状态页：v0.12.3 成为双渠道基线、v0.12.2 降为上一版，原「标签后未发布」小节改题为「v0.12.3 的内容」并补一行真正的标签后变更
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `b0217b0` | (see git log) |
+| `10c9135` | (see git log) |
+
+### Testing
+
+- [OK] Release 资产 digest 与本地 zip 一致（549933 字节，sha256 b9dc1a07…），asset 已上传、release 标记 Latest
+- [OK] 八道离线 gate 全绿、check_release_metadata 报 0.12.3；#108 与 #110 的 CI 均 success
+- [OK] DLL 逐字节比对：1187840 字节中仅 70 字节不同、7 段连续区间，PCK 完全一致
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- 工坊简体中文列表仍未更新，需在工坊网页端手工粘贴 steam-workshop/description.zh-CN.txt
+- sachi4clover 叠在 #106 之上的后续 PR（游戏内 Continue 按钮 + 选角勾选框）尚未合并，将是下一版内容
+- 若希望两渠道 DLL 哈希完全一致，可给 STS2AIAgent.csproj 开确定性构建后验证
