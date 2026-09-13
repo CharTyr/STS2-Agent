@@ -1,7 +1,7 @@
 {
   "title": "STS2 AI Agent",
   "visibility": "public",
-  "changeNote": "v0.12.0: continue a saved co-op run with the AI teammate, and let the teammate leave the character pick to you",
+  "changeNote": "v0.12.1: pausing is safe again. The pause menu and the pages opened from it (compendium, card library, settings) no longer read as a live room, so the agent stops offering actions the pause swallows and a page's own buttons stop arriving as options; a wrong --clientId can no longer eat a co-op save",
   "tags": [
     "Tools & APIs",
     "Utility",

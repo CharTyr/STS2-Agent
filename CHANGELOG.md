@@ -2,6 +2,27 @@
 
 > Release attribution is recorded against tags or release commits. Post-tag maintenance is listed separately; current validation limits are maintained in [PRODUCT_PLAN_CURRENT.md](https://github.com/CharTyr/STS2-Agent/blob/main/PRODUCT_PLAN_CURRENT.md).
 
+## v0.12.1 - 2026-09-13
+
+> The pause boundary: once a person presses pause, the agent no longer reads the run underneath. The pause menu and every page reached from it report their own screen, their action surfaces stay closed, and no page's own furniture — the pause menu's "abandon" entry among it — arrives as a capstone option any more.
+
+### Fixed
+
+- The in-game pause menu is no longer mistaken for an open capstone screen (#88, `31296bd`). The menu rides in the same `NCapstoneSubmenuStack` container the capstone path matches, so `/state.screen` stayed `COMBAT`, `capstone.options` listed the menu's own buttons (`继续` / `设置` / `放弃` / `保存并退出` / `BackButton`) and `choose_capstone_option` was advertised on a screen where it did nothing — one of those options abandons the run. The container now resolves to `PAUSE_MENU` before the combat and visible-grid branches, `GetCapstoneButtons` excludes it, and both action surfaces stay empty while it is up. Live: pausing in a fight reports `PAUSE_MENU` with an empty action list and a null `capstone`, and Escape resumes.
+- `continue_ai_teammate` refuses before a mismatched `--clientId` can destroy the co-op save (#89, `31296bd`). The game canonicalizes the run it loads against the loading process's player id and, on a mismatch, renames `current_run_mp.save` and its backup to `*.VAL.corrupt` without restoring them. The action now reads `players[].net_id` from the save and compares this host's NetId and the NetId the teammate would be launched with before it loads anything: a mismatch is 409 `invalid_action` naming both ids, the save is left byte-identical, and no second process is started.
+- The pages reached from the pause menu report themselves instead of the room underneath (#93, `04748f6`): the compendium hub read as `COMBAT` and the card library as `CARD_SELECTION`, each carrying the run's own actions and the page's furniture as `capstone.options` — 51 entries on the card library screen, the first 25 of them labelled `Hitbox`. `SETTINGS`, `COMPENDIUM`, `CARD_LIBRARY`, `RELIC_COLLECTION`, `POTION_LAB`, `BESTIARY`, `STATS` and `RUN_HISTORY` now name themselves when the container's stack holds them, none advertises a room action or `save_and_quit`, `capstone` stays null, and `choose_capstone_option` answers 409 `invalid_action` on every one of them.
+- Those pages have a working way out again: `close_main_menu_submenu` pops the container's stack, which is the call the game wires to each page's own BackButton (`CARD_LIBRARY` → `COMPENDIUM` → `PAUSE_MENU`). The action the play skill documented for them, `close_cards_view`, was 409 there — the page sits in the container rather than on a card-viewer screen — so an agent that followed the skill had nothing it could do. The pause page itself is never closable: popping it resumes a run a person paused.
+- `save_and_quit` no longer executes from a page whose surface never offered it (`04748f6`). The pause overlay emptied both action lists, but the availability predicate still allowed the action, so it saved and quit the run. The capstone overlay is now part of that predicate.
+- A deeper page pushed above the pause menu is no longer reported as a frozen game (#92, `3cf347a`). Matching the container's type alone reported `PAUSE_MENU` for the compendium and the card library opened from it, which also hid the `CARD_LIBRARY` branch behind an inert screen.
+- A throwing console command answers honestly: `run_console_command bestiary` is 409 `invalid_action` carrying `Console command failed: NullReferenceException: …` and the command name, where it used to be a bare 500 `internal_error` with `details: null` for a command the game had accepted.
+
+### Changed
+
+- `docs/api.md` documents the new screen names and what those pages offer; `docs/live-validation-checklist.md` records the two live passes that found and confirmed the behaviour, including the two defects the issue had assumed were fine (the documented `close_cards_view` return and the reachable `save_and_quit`).
+- The play skill — `skills/sts2-mcp-player/SKILL.md` and its screen playbooks, both embedded in the mod's own prompt — now states what the in-run menu pages really offer instead of claiming a return path that returned 409.
+- `scripts/test-multiplayer-lobby-flow.ps1` treats the in-run menu pages as "wait for the human" instead of failing with `Unsupported run progression state`; `PAUSE_MENU` had always thrown there. `scripts/run_sts2_validation.py`'s screen-coverage note names the pages too.
+
+
 ## v0.12.0 - 2026-09-13
 
 > Co-op is the headline: a saved multiplayer run can be continued with the AI teammate, and the teammate's character can be left for you to pick. The rest is a trust pass over the agent-facing state — every signal it surfaces now matches what the executor accepts, and no game-side wait can hang a request. Release and Workshop upload: [release-v0.12.0_2026-09-13.md](history/release-v0.12.0_2026-09-13.md).
