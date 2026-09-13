@@ -148,7 +148,12 @@ internal static class LocalDualInstanceLauncher
         }
     }
 
-    public static async Task<DualLaunchResult> LaunchCompanionAsync(CancellationToken cancellationToken)
+    /// <summary>
+    /// <paramref name="companionAutoPlay"/> is written to the child as <c>STS2_AGENT_AUTOPLAY</c>.
+    /// False is the external-takeover route: the companion joins the run and then waits, because
+    /// nothing in that route calls the play model.
+    /// </summary>
+    public static async Task<DualLaunchResult> LaunchCompanionAsync(CancellationToken cancellationToken, bool companionAutoPlay = true)
     {
         if (!await LaunchGate.WaitAsync(0, cancellationToken))
         {
@@ -170,7 +175,7 @@ internal static class LocalDualInstanceLauncher
             _companionProcess?.Dispose();
             _companionProcess = null;
             Connection = null;
-            return await LaunchCoreAsync(cancellationToken);
+            return await LaunchCoreAsync(cancellationToken, companionAutoPlay);
         }
         finally
         {
@@ -178,7 +183,7 @@ internal static class LocalDualInstanceLauncher
         }
     }
 
-    private static async Task<DualLaunchResult> LaunchCoreAsync(CancellationToken cancellationToken)
+    private static async Task<DualLaunchResult> LaunchCoreAsync(CancellationToken cancellationToken, bool companionAutoPlay)
     {
         cancellationToken.ThrowIfCancellationRequested();
         var exe = ResolveGameExe();
@@ -265,7 +270,7 @@ internal static class LocalDualInstanceLauncher
         startInfo.Environment["STS2_MULTIPLAYER_HOST_IP"] = "127.0.0.1";
         startInfo.Environment["STS2_MULTIPLAYER_NET_ID"] = companionClientId
             .ToString(System.Globalization.CultureInfo.InvariantCulture);
-        startInfo.Environment["STS2_AGENT_AUTOPLAY"] = "1";
+        startInfo.Environment["STS2_AGENT_AUTOPLAY"] = companionAutoPlay ? "1" : "0";
         startInfo.Environment["STS2_AGENT_SETTINGS_PATH"] = companionSettingsPath;
         var sessionToken = CompanionConnection.CreateToken();
         startInfo.Environment[CompanionConnection.TokenEnvironment] = sessionToken;

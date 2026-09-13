@@ -130,6 +130,52 @@ the page's furniture as `capstone.options`. Verified live in two passes on one i
 - `BESTIARY` was not opened live: this profile's compendium hub draws no bestiary tile (`NBestiary.CanBeShown()`
   gates it). The mapping and the exclusion from decision screens exist for the build that shows it.
 
+### External-takeover route (issue #85)
+
+Verified 2026-09-13 against a build carrying the issue-#85 change, on the same isolated offline host
+(`--windowed --force-steam off --clientId 2026091001`, API on `18080`) driven entirely over HTTP, with
+a settings file whose endpoint points at a **dead** port (`127.0.0.1:18199`) and **no `roleTests` entries
+at all** — nothing configured and nothing verified. Script: `build/validation-2026-09-13/verify-takeover.ps1`,
+evidence `takeover-evidence.jsonl` (both gitignored). Every step below is one run of that script; the
+invite was a real call, not a resumed session.
+
+- **`invite_ai_teammate` launches with nothing verified.** It returned 200 `completed` on the first call,
+  the second process came up as `role=companion` on `18081`, and its message no longer promises auto-play:
+  「第二实例已就绪…本机已创建 4 人大厅，请选角色后 Ready 开局。你打自己的角色；AI 会自动加入并点开局，
+  然后停在原地等待外部接管，不会自己出牌。」 The model gate is what the route switch drops, not the launch.
+- **The host discovers the companion API.** `GET /health` on the host carried
+  `"companion": {"api_host":"127.0.0.1","api_port":18081,"process_id":64872,"auto_play":false}`, and that port
+  answered `role=companion` / `status=ready`. No session token appears anywhere in the response.
+- **The teammate really is idle, and really never called a model.** After the shared run was reached
+  (`MAP`) and 20 s of dwell: `play_running=false`, `play_phase="paused"`, `session_requests=0`,
+  `stop_kind=null`. Zero requests is the part that matters — the endpoint was dead, so a single model call
+  would have shown up as a config/network stop instead of passing quietly.
+- **It is drivable by an outside agent.** The companion advertised `choose_map_node` on `MAP`, so the
+  external path is `GET /state` + `POST /action` against `18081`, exactly as the issue described.
+- **`POST /teammate/control` is the supported start/pause.** `{"running":false}` → 200 with
+  `phase:"paused"`, `play_running:false`, `play_phase:"paused"`, `companion_auto_play:false`.
+  `{"running":true}` → 409 `teammate_control_failed` naming the unverified play model, which is the
+  intended behaviour: this route can park the teammate, and starting the in-process loop still needs the
+  verified model the in-game “Resume” button requires. `{"running":"yes"}` → 400 `invalid_request`.
+- **The companion window has no overlay at all** (`ModEntry` skips it for companions), which is why the
+  route is reported on `/health` and the host status line rather than in the second window.
+- **After the companion process is killed**, `/health` drops the `companion` block back to `null` while
+  `companion_process_exited` turns `true` — the discovery block never points at a dead port.
+
+### Found in this session
+
+- **The route flag was recorded before the attempt, not after it.** A rejected retry — the usual one being
+  “the teammate window is already running” — overwrote `_companionAutoPlay` before the launch was even
+  attempted, so `/health` would report `auto_play:false` for a teammate that the in-process loop was
+  actively playing, inviting an external agent to take over a seat already in use. The flag is now written
+  only when the attempt established a new connection (`CoopRoute.SupportedSurfaces` pins the ordering).
+- **`teammate_control_failed` was documented retryable but returned `retryable:false`.** The usual causes
+  (a launch still in progress, an unfinished previous control, an unconfirmed pause) all clear on their own,
+  so the code now sets `retryable: true` to match the documented contract.
+- **`/health` kept advertising a companion port after that process exited.** The launcher deliberately keeps
+  the last session handle so a retry cannot start a third window, and the discovery block inherited that
+  persistence. It now returns `null` once `CompanionProcessExited` is set.
+
 ### Environment note for isolated runs
 
 A brand-new `--clientId` directory gets a default `settings.save` whose `mod_settings` is `null`, and the

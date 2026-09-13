@@ -8,6 +8,13 @@ using STS2AIAgent.Server;
 
 namespace STS2AIAgent.Agent;
 
+/// <summary>
+/// Outcome of a teammate start/pause request. <see cref="Phase"/> is the companion's own play phase
+/// ("running", "paused", "stopping") or a transport-level word ("busy", "refused"); <see cref="Ok"/>
+/// is the field to branch on, because <see cref="Message"/> is localized display text.
+/// </summary>
+internal readonly record struct TeammateControlResult(bool Ok, string Phase, string Message);
+
 internal sealed class AgentRuntime
 {
     private const string LogPrefix = "[STS2AIAgent.Runtime]";
@@ -36,6 +43,7 @@ internal sealed class AgentRuntime
     private string? _teamControlStatus;
     private volatile bool _companionReady;
     private volatile bool _companionAutoStartSuppressed;
+    private volatile bool _companionAutoPlay = true;
     private AgentSettings _settings;
     private readonly AgentLoop _loop;
     private string? _status;
@@ -97,13 +105,35 @@ internal sealed class AgentRuntime
     public bool PlayRunning => _playSession.IsActive;
     public string PlayPhase => _playSession.Phase;
     public bool TeamControlPending => _teamControlPending;
+
+    /// <summary>
+    /// False when the running teammate was launched for an external agent instead of for auto-play,
+    /// which is what an unverified play model selects. Reported on /health so a caller can tell
+    /// "paused on purpose, waiting for me" from "stopped by itself".
+    /// </summary>
+    public bool CompanionAutoPlay => _companionAutoPlay;
+
     // The idle wording is resolved on read rather than stored, so switching the game language
     // updates it too. Once real progress arrives, the recorded text takes over.
     public string TeamControlStatus => _teamControlStatus ?? Loc.T("队友控制尚未连接。");
 
     public async Task ControlTeammateAsync(bool running, CancellationToken cancellationToken)
     {
-        if (!await _remoteControlGate.WaitAsync(0, cancellationToken)) return;
+        await ControlTeammateResultAsync(running, cancellationToken);
+    }
+
+    /// <summary>
+    /// Asks the teammate window to start or pause. The structured result exists for
+    /// <c>POST /teammate/control</c>: a caller outside this process cannot read the localized
+    /// <see cref="TeamControlStatus"/> to tell a confirmed pause from a refused one.
+    /// </summary>
+    public async Task<TeammateControlResult> ControlTeammateResultAsync(bool running, CancellationToken cancellationToken)
+    {
+        if (!await _remoteControlGate.WaitAsync(0, cancellationToken))
+        {
+            return new TeammateControlResult(false, "busy", Loc.T("上一次队友控制还没有完成，请稍后重试。"));
+        }
+
         _teamControlPending = true;
         _teamControlStatus = running ? Loc.T("正在请求队友继续…") : Loc.T("正在等待队友暂停；已提交的动作会先完成。");
         RaiseChanged();
@@ -132,10 +162,12 @@ internal sealed class AgentRuntime
                 "running" => Loc.T("队友正在自动游玩。"),
                 _ => Loc.T("队友仍在停止当前任务，请稍后再次确认暂停。")
             };
+            return new TeammateControlResult(true, phase, _teamControlStatus);
         }
         catch (Exception ex)
         {
             _teamControlStatus = Loc.T("未确认队友控制结果：{0}", ex.Message);
+            return new TeammateControlResult(false, "refused", ex.Message);
         }
         finally
         {
@@ -520,12 +552,30 @@ internal sealed class AgentRuntime
 
     public Task LaunchDualInstanceAsync(AgentSettings settings, CancellationToken cancellationToken)
     {
-        return Task.Run(() => LaunchDualInstanceCoreAsync(settings, cancellationToken, continueRun: false), cancellationToken);
+        return LaunchDualInstanceAsync(settings, companionAutoPlay: true, cancellationToken);
+    }
+
+    /// <summary>
+    /// <paramref name="companionAutoPlay"/> false is the external-takeover route: the teammate is
+    /// launched for an outside agent, so no play model is required and it comes up paused.
+    /// </summary>
+    public Task LaunchDualInstanceAsync(AgentSettings settings, bool companionAutoPlay, CancellationToken cancellationToken)
+    {
+        return Task.Run(
+            () => LaunchDualInstanceCoreAsync(settings, cancellationToken, continueRun: false, companionAutoPlay),
+            cancellationToken);
     }
 
     public Task ContinueDualInstanceAsync(AgentSettings settings, CancellationToken cancellationToken)
     {
-        return Task.Run(() => LaunchDualInstanceCoreAsync(settings, cancellationToken, continueRun: true), cancellationToken);
+        return ContinueDualInstanceAsync(settings, companionAutoPlay: true, cancellationToken);
+    }
+
+    public Task ContinueDualInstanceAsync(AgentSettings settings, bool companionAutoPlay, CancellationToken cancellationToken)
+    {
+        return Task.Run(
+            () => LaunchDualInstanceCoreAsync(settings, cancellationToken, continueRun: true, companionAutoPlay),
+            cancellationToken);
     }
 
     public void ClearChat()
@@ -717,7 +767,11 @@ internal sealed class AgentRuntime
         }
     }
 
-    private async Task LaunchDualInstanceCoreAsync(AgentSettings settings, CancellationToken cancellationToken, bool continueRun)
+    private async Task LaunchDualInstanceCoreAsync(
+        AgentSettings settings,
+        CancellationToken cancellationToken,
+        bool continueRun,
+        bool companionAutoPlay)
     {
         if (!await _dualLaunchGate.WaitAsync(0, cancellationToken))
         {
@@ -740,7 +794,12 @@ internal sealed class AgentRuntime
                 return;
             }
             var screen = await new GameBridge().GetScreenAsync(cancellationToken);
-            var error = CoopLaunchPolicy.GetError(InstanceRole.IsCompanion, PlayRunning, screen, settings);
+            var error = CoopLaunchPolicy.GetError(
+                InstanceRole.IsCompanion,
+                PlayRunning,
+                screen,
+                settings,
+                requireVerifiedPlayModel: companionAutoPlay);
             if (error != null)
             {
                 _dualStatus = error;
@@ -756,8 +815,8 @@ internal sealed class AgentRuntime
                 : Loc.T("正在邀请 AI 队友，等待游戏窗口连接…");
             RaiseChanged();
             var launchResult = continueRun
-                ? await DualInstanceCoordinator.ContinueLocalCoopResultAsync(cancellationToken)
-                : await DualInstanceCoordinator.HostLocalCoopResultAsync(cancellationToken);
+                ? await DualInstanceCoordinator.ContinueLocalCoopResultAsync(cancellationToken, companionAutoPlay)
+                : await DualInstanceCoordinator.HostLocalCoopResultAsync(cancellationToken, companionAutoPlay);
             _dualStatus = launchResult.Message;
             _dualLaunchOutcome = launchResult.Ok ? DualLaunchOutcome.Succeeded : DualLaunchOutcome.Failed;
         }
@@ -777,6 +836,12 @@ internal sealed class AgentRuntime
         {
             if (!ReferenceEquals(previousConnection, LocalDualInstanceLauncher.Connection))
             {
+                // The route belongs to the teammate session that is actually running, so it is only
+                // recorded when this attempt established a new connection. A rejected retry -- most
+                // often "the teammate window is already running" -- must not relabel a teammate that
+                // was launched the other way, or /health would tell an external agent to take over a
+                // seat that is already being played by the in-process loop.
+                _companionAutoPlay = companionAutoPlay;
                 _teamConversation.Clear();
                 _teamStatus = Loc.T("队伍对话已重置。确认队友连接后，可以商量这次冒险的打法。");
             }
@@ -805,6 +870,15 @@ internal sealed class AgentRuntime
                 string.IsNullOrWhiteSpace(autoPlay)))
             {
                 StartAutoPlay();
+            }
+            else
+            {
+                // External-takeover launch: this process is a seat an outside agent drives. A
+                // companion window has no overlay (ModEntry skips it for companions), so the route is
+                // reported where it can actually be observed: play_phase stays "paused" with zero
+                // model requests, and the host window's dual status names the route.
+                SetStatus(Loc.T("等待外部接管：队友窗口已就绪，未自动开始游玩。"));
+                NoteEvent(Status);
             }
         }
         finally { _companionControlGate.Release(); }

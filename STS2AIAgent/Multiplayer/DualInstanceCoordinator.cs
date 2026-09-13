@@ -12,9 +12,9 @@ internal static class DualInstanceCoordinator
 {
     private const string LogPrefix = "[STS2AIAgent.DualInstance]";
 
-    public static async Task<string> HostLocalCoopAsync(CancellationToken cancellationToken)
+    public static async Task<string> HostLocalCoopAsync(CancellationToken cancellationToken, bool companionAutoPlay = true)
     {
-        var result = await HostLocalCoopResultAsync(cancellationToken);
+        var result = await HostLocalCoopResultAsync(cancellationToken, companionAutoPlay);
         return result.Message;
     }
 
@@ -24,7 +24,9 @@ internal static class DualInstanceCoordinator
     /// that need to distinguish success from failure must read <c>Ok</c> instead of parsing the
     /// localized message. Cancellation still propagates.
     /// </summary>
-    public static async Task<(bool Ok, string Message)> HostLocalCoopResultAsync(CancellationToken cancellationToken)
+    public static async Task<(bool Ok, string Message)> HostLocalCoopResultAsync(
+        CancellationToken cancellationToken,
+        bool companionAutoPlay = true)
     {
         if (await GetScreenAsync() != "MAIN_MENU")
         {
@@ -45,19 +47,24 @@ internal static class DualInstanceCoordinator
             return (false, Loc.T("创建 4 人大厅失败：{0}", ex.Message));
         }
 
-        var launch = await LocalDualInstanceLauncher.LaunchCompanionAsync(cancellationToken);
+        var launch = await LocalDualInstanceLauncher.LaunchCompanionAsync(cancellationToken, companionAutoPlay);
         if (!launch.Ok)
         {
             return (false, launch.Message);
         }
 
-        return (true, Loc.T("{0}。本机已创建 4 人大厅，请选角色后 Ready 开局。你打自己的角色；AI 会自动加入、点开局并打另一个角色。", launch.Message));
+        var howItPlays = companionAutoPlay
+            ? Loc.T("AI 会自动加入、点开局并打另一个角色。")
+            : Loc.T("AI 会自动加入并点开局，然后停在原地等待外部接管，不会自己出牌。");
+        return (true, Loc.T("{0}。本机已创建 4 人大厅，请选角色后 Ready 开局。你打自己的角色；{1}", launch.Message, howItPlays));
     }
 
     /// <summary>
     /// Host side: inject fastmp so the saved multiplayer run is hosted over local ENet, load it, then launch the companion to rejoin.
     /// </summary>
-    public static async Task<(bool Ok, string Message)> ContinueLocalCoopResultAsync(CancellationToken cancellationToken)
+    public static async Task<(bool Ok, string Message)> ContinueLocalCoopResultAsync(
+        CancellationToken cancellationToken,
+        bool companionAutoPlay = true)
     {
         if (await GetScreenAsync() != "MAIN_MENU")
         {
@@ -101,13 +108,16 @@ internal static class DualInstanceCoordinator
             return (false, Loc.T("读档开房失败：{0}", ex.Message));
         }
 
-        var launch = await LocalDualInstanceLauncher.LaunchCompanionAsync(cancellationToken);
+        var launch = await LocalDualInstanceLauncher.LaunchCompanionAsync(cancellationToken, companionAutoPlay);
         if (!launch.Ok)
         {
             return (false, launch.Message);
         }
 
-        return (true, Loc.T("{0}。已按存档开好本地房，等队友窗口连回来后两边各点一次出发。", launch.Message));
+        var howItPlays = companionAutoPlay
+            ? Loc.T("队友连回来后会自己出牌。")
+            : Loc.T("队友连回来后停在原地等待外部接管，不会自己出牌。");
+        return (true, Loc.T("{0}。已按存档开好本地房，等队友窗口连回来后两边各点一次出发；{1}", launch.Message, howItPlays));
     }
 
     public static async Task<bool> RunCompanionBootstrapAsync(CancellationToken cancellationToken)

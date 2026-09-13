@@ -60,6 +60,8 @@
 | `local_only` | 403 | 该端点只接受本机（loopback）请求 | 否 |
 | `companion_session_required` | 403 | 需要有效的 AI 队友会话令牌（见下） | 否 |
 | `companion_not_ready` | 409 | 队友实例尚未就绪，无法响应控制 | 是 |
+| `not_host` | 409 | 在 `companion` 实例上调用了只属于主窗口的 `POST /teammate/control` | 否 |
+| `teammate_control_failed` | 409 | `POST /teammate/control` 未能确认队友的开始 / 暂停：还没有组队、队友进程已退出、上一条控制未完成，或队友没有确认。失败原因在 `error.message` 里 | 是 |
 | `invite_failed` | 409 | 邀请 AI 队友失败（主菜单状态或配置不满足） | 是 |
 | `continue_failed` | 409 | 读档开房流程启动后失败（读档界面没打开，或本地直连端口 33771 仍被上一局占用，重启游戏后可重试）；前置条件不满足（不在主菜单、没有联机存档、模型未验证）仍返回 `invalid_action` | 是 |
 | `invalid_action`（`continue_ai_teammate` 的 NetId 前置检查） | 409 | 读档**之前**的只读比对不通过：本机 NetId 不在联机存档 `players[].net_id` 里（游戏会拒绝读档，并把这局存档改名成 `*.VAL.corrupt` 挪走且不还原），或本次要拉起的 AI 队友 NetId 不在存档里（加入会被 `NotInSaveGame` 拒绝）。详情带 `save_player_net_ids`，以及 `local_player_id` 或 `companion_client_id` | 否 |
@@ -157,6 +159,7 @@
     "session_requests": 12,
     "companion_process_alive": false,
     "companion_process_exited": false,
+    "companion": null,
     "dual_status": "尚未启动双开。",
     "team_control_status": "队友控制尚未连接。"
   }
@@ -179,6 +182,7 @@
 | `stop_kind` | string\|null | 上次自动游玩停止的类别，未停止过为 `null` |
 | `session_requests` | integer | 本会话已消耗的模型请求次数（可由「重置本会话统计」清零） |
 | `companion_process_alive` / `companion_process_exited` | boolean | AI 队友进程是否在运行 / 是否已退出 |
+| `companion` | object\|null | 仅主窗口、且本次组队的队友进程仍在运行时存在（队友退出后回到 `null`）。`api_host` / `api_port` / `process_id` 是队友实例的 HTTP API，用来直接对队友的 `GET /state` 与 `POST /action` 编程；`auto_play` 说明这次组队走的是 AI 自走（`true`）还是外部接管（`false`）。队友会话令牌**不会**出现在任何响应里 |
 | `dual_status` / `team_control_status` | string | 双开与队友控制的人类可读状态 |
 
 ### `stop_kind` 取值
@@ -1099,9 +1103,11 @@ compact 里的位置与 `/state` 不同，但同名同源、同为新增键；`/
 - `confirm_modal` — 确认阻塞弹窗
 - `dismiss_modal` — 关闭阻塞弹窗
 - `return_to_main_menu` — 返回主菜单
-- `invite_ai_teammate` — 邀请 AI 队友
+- `invite_ai_teammate` — 邀请 AI 队友（拉起第二个游戏实例）。游玩模型已验证时队友自动打；未配置或未验证时队友照常拉起、照常进图，但停在原地等外部接管，见「两条组队路线」。
 - `continue_ai_teammate` — 继续上次的联机存档并重新拉起 AI 队友（仅主机主菜单且存在联机存档时出现在 `available_actions`；读档流程失败返回 `continue_failed`）。读档前会只读比对存档 `players[].net_id` 与本机 NetId（离线／`-fastmp` 主机即启动参数 `--clientId`，未传为 1）和队友 NetId（主机 id + 1）：任一不匹配返回**不可重试**的 `invalid_action`，以免触发游戏把该存档改名成 `*.VAL.corrupt` 的破坏性读档。
 <!-- END ACTION CONTRACT -->
+
+这两个动作共用同一档拆分：游玩模型未验证时，`invite_ai_teammate` 与 `continue_ai_teammate` 照常拉起队友，只是队友不自动开始游玩，等你接管。两条路线各自的前置要求见「两条组队路线」。
 
 ### 请求体
 
@@ -1210,6 +1216,64 @@ data: }
 | `available_actions_changed` | 可用动作集合变化 |
 
 2026-09-11 在隔离副本上实测：45 秒窗口内收到 `: stream opened`、2 次 `: heartbeat` 与 123 行帧内容，事件类型覆盖 `stream_ready`、`screen_changed`（SHOP→COMBAT）、`combat_started`、`player_action_window_opened`、`available_actions_changed`。证据 `build/validation-2026-09-11/sse-frames.jsonl`（gitignore）。
+
+---
+
+## 两条组队路线
+
+「邀请 AI 队友」有两条路线，前置要求不同。走哪条由**游玩模型是否已验证**决定（代码里就是 `FirstRunSetup.Evaluate(settings).ReadyToInvite`），调用方不需要额外参数。
+
+| | AI 自走 | 外部接管 |
+| --- | --- | --- |
+| 前置要求 | 主菜单、本窗口不是队友实例、当前角色没有自动游玩，**并且**游玩模型已配置、端点合法、`测试连接` 已通过 | 只要前三条结构条件；**模型可以完全没配** |
+| 队友进程 | 加入大厅 → 点开局 → 进图后自动出牌 | 加入大厅 → 点开局 → 进图后**停在原地**：子进程拿到 `STS2_AGENT_AUTOPLAY=0`，`/health` 报 `play_phase: "paused"` 与 `session_requests: 0`，从不出牌也从不调用模型 |
+| 谁在打 | 队友进程里的模型循环 | 外部 agent 自己调队友实例的 `GET /state` 与 `POST /action` |
+| 开始 / 暂停 | 主窗口的「暂停队友 / 继续游玩」，或 `POST /teammate/control` | 同上；之后若补齐并验证了游玩模型，`running: true` 会让队友开始自己打 |
+| 怎么识别 | `/health` 的 `companion.auto_play` 为 `true` | 同一字段为 `false` |
+
+两条路线共用同一组结构条件，所以拆分只在模型这一档，不构成绕过：不是队友实例、当前角色没有正在跑的自动游玩、必须在主菜单，缺一条都拉不起来。
+
+外部接管路线下，队友自己的 `POST /action` 一直可用，并且只作用于**它自己的角色**（`CompanionActPolicy`，越界返回 403 `forbidden_actor`）。队友起来后也不会因为没有模型而报错：这条路线根本不调用模型。
+
+```powershell
+# 未配置任何模型也能拉起队友；它起来后停在原地等接管
+Invoke-RestMethod -Uri 'http://127.0.0.1:8080/action' -Method POST -ContentType 'application/json' `
+  -Body '{"action":"invite_ai_teammate"}'
+
+# 找到队友实例的 HTTP API（端口通常不是 8080，以响应为准）
+(Invoke-RestMethod -Uri 'http://127.0.0.1:8080/health').data.companion
+
+# 让队友开始 / 暂停自动游玩：走主窗口，不需要队友会话令牌
+Invoke-RestMethod -Uri 'http://127.0.0.1:8080/teammate/control' -Method POST -ContentType 'application/json' `
+  -Body '{"running":true}'
+```
+
+---
+
+## `POST /teammate/control`
+
+主窗口上的受支持队友控制入口：外部 agent 用它开始 / 暂停本次组队的队友实例，**不需要**持有 `X-STS2-Companion-Session`——主窗口自己拿着该令牌，并由它去调队友实例的 `POST /companion/control`。
+
+- 鉴权：仅 loopback（非本机 403 `local_only`），且仅主窗口（在 `companion` 实例上 409 `not_host`）。与其他本机端点同级；令牌不下发给调用方，也不出现在任何响应里。
+- 请求体：`{"running": true|false}`，`running` 必须是布尔值
+- 响应：`data.phase` 是队友回报的阶段（`running` / `paused` / `stopping`），`data.play_running` / `data.play_phase` 是主窗口视角，`data.companion_auto_play` 是本次组队的路线
+- 失败：未组队、队友进程已退出、上一条控制未完成、或队友没有确认时返回 409 `teammate_control_failed`（可重试）
+- `running: true` 需要已验证的游玩模型，与游戏内「继续游玩」按钮同一道门禁；未验证时该请求失败，队友保持暂停
+
+### 响应示例
+
+```json
+{
+  "ok": true,
+  "request_id": "req_20260913_101500_0001_7",
+  "data": {
+    "phase": "paused",
+    "play_running": false,
+    "play_phase": "paused",
+    "companion_auto_play": false
+  }
+}
+```
 
 ---
 

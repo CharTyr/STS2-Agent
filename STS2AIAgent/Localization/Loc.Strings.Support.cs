@@ -46,8 +46,12 @@ internal static partial class Loc
 
         // Multiplayer/DualInstanceCoordinator.cs
         map["创建 4 人大厅失败：{0}"] = "Could not create the 4-player lobby: {0}";
-        map["{0}。本机已创建 4 人大厅，请选角色后 Ready 开局。你打自己的角色；AI 会自动加入、点开局并打另一个角色。"] =
-            "{0}. A 4-player local lobby is ready. Pick your character and press Ready to start; you play your own character while the AI joins, starts the run, and plays the other one.";
+        map["{0}。本机已创建 4 人大厅，请选角色后 Ready 开局。你打自己的角色；{1}"] =
+            "{0}. A 4-player local lobby is ready. Pick your character and press Ready to start; you play your own character while {1}";
+        map["AI 会自动加入、点开局并打另一个角色。"] =
+            "the AI joins, starts the run, and plays the other one.";
+        map["AI 会自动加入并点开局，然后停在原地等待外部接管，不会自己出牌。"] =
+            "the AI joins and starts the run, then waits to be taken over from outside instead of playing its own cards.";
         map["找不到 FastHost 命令行参数表。"] = "Could not find the FastHost command-line argument table.";
         map["FastHost 命令行参数表类型无法写入：{0}"] =
             "Cannot write to the FastHost command-line argument table type: {0}";
