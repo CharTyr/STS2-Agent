@@ -868,3 +868,50 @@ v0.12.3 先是只发工坊，本轮补上 tag 与 GitHub Release，把「工坊�
 - #111 的两个界面入口仍缺实机点击验收：按钮时机、读档接回队友、子进程读到的勾选值
 - 工坊简体中文列表仍未更新（自 v0.11.0 起），待工坊网页端粘贴 steam-workshop/description.zh-CN.txt
 - 同号重发的代价已写进 CHANGELOG 与状态页：0.12.3 指两份构建，下一版若升号即可恢复一一对应
+
+
+## Session 24: 2026-09-14 v0.12.3 third build: live-pass fix plus the ten-goal sweep
+
+**Date**: 2026-09-14
+**Task**: 2026-09-14 v0.12.3 third build: live-pass fix plus the ten-goal sweep
+**Branch**: `main`
+
+### Summary
+
+Finished the ten goals, merged seven PRs (#116-#122), then republished v0.12.3 a third time to both channels and recorded it.
+
+### Main Changes
+
+- MCP: keep the error envelope on game-data failures, stop hiding a broken event stream behind wait_until_actionable, correct the skill AnyPlayer target rule (#117)
+- Release tooling: destructive case for the packaged-links gate, preflight runs the shared metadata checker, artifact check compares the three version sources inside the artifact (#118, #119)
+- Diagnostics: a thrown room probe no longer looks like an empty room, and twelve empty catches in GameActionService now log with their chain name (#120, #121)
+- Await contract reads the syntax tree across four game-driving files instead of one line shape in one file (#122)
+- Republished v0.12.3 a third time: CHANGELOG second-re-cut paragraph, Workshop changeNote, tag moved to c2630a8, asset 555061 bytes, Workshop file_size 1232901 (#123, #124)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `6a4b3a0` | (see git log) |
+| `3d2eefb` | (see git log) |
+| `74d03c9` | (see git log) |
+| `052dac8` | (see git log) |
+| `68bbd0a` | (see git log) |
+| `c2630a8` | (see git log) |
+| `0d42f94` | (see git log) |
+
+### Testing
+
+- [OK] dotnet run --project STS2AIAgent.Tests -c Release: 386 PASS / 0 FAIL; three destructive checks red before restore
+- [OK] preflight-release.ps1 exit 0; eight verification gates green including their self-tests
+- [OK] Steam Web API GetPublishedFileDetails: file_size 1232901 equals the local content byte sum; GitHub asset digest matches the local SHA256
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- Paste steam-workshop/description.zh-CN.txt in the Workshop web editor; ModUploader cannot set a language
+- The Steam-networked save path still has no live evidence; the 2026-09-14 pass covered the local-connection path only
+- GameStateService.cs keeps seven empty catches of its own kind; read them one by one before extending the no-wordless-catch rule
