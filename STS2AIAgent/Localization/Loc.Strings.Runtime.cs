@@ -27,8 +27,12 @@ internal static partial class Loc
         map["继续联机存档失败：{0}"] = "Continuing the saved co-op run failed: {0}";
         map["{0}。已按存档开好本地房，等队友窗口连回来后两边各点一次出发。"] = "{0}. The saved run is hosted locally; once the teammate window reconnects, both sides click Embark once.";
         map["找不到读档方法 StartLoad。"] = "Could not find the StartLoad method.";
-        map["读档开房失败（多半是本地直连端口 33771 还被上一局占着）：重启游戏后再试。"] = "Loading the saved run failed (local port 33771 is most likely still held by the previous run): restart the game and try again.";
+        map["读档开房失败：当前弹窗是 {0}。常见原因是本地直连端口 33771 仍被上一局占着；可重启游戏后再试。"] = "Loading the saved run failed: the open modal is {0}. The usual cause is the local direct port 33771 still held by the previous run; restart the game and try again.";
         map["读档后没有进入多人读档界面。"] = "The multiplayer load screen did not open after loading the save.";
+        // The two NetId prechecks in Multiplayer/CoopSavePrecheckPolicy.cs. Both fire before the
+        // game is allowed to load, because a failed load renames the co-op save to *.VAL.corrupt.
+        map["主机的 NetId {0} 不在联机存档的玩家列表（{1}）里：游戏会拒绝读档，并把这局存档改名成 .VAL.corrupt 挪走且不还原，所以现在开不了房。离线主机的 NetId 就是启动参数 --clientId 的值（未传时默认为 1），请改用它重开主机；或者先删掉这份存档再开。"] = "Host NetId {0} is not in the saved co-op run's player list ({1}): the game refuses to load it and renames this run's save to *.VAL.corrupt without restoring it, so no lobby is hosted. An offline host's NetId is the --clientId launch argument (1 when omitted); restart the host with that value, or delete this save first.";
+        map["本次会用 NetId {0} 拉起 AI 队友，但联机存档的玩家列表（{1}）里没有这个 id：队友加入会被游戏拒绝（NotInSaveGame）退回主菜单，主机则卡在读档界面。队友 id 是主机 id + 1，请把主机启动参数 --clientId 改成「存档里队友的 id 减一」后重开。"] = "This attempt would launch the AI teammate with NetId {0}, but that id is not in the saved co-op run's player list ({1}): the game rejects the join (NotInSaveGame) and sends the teammate back to the main menu while the host stays stuck on the load screen. The teammate id is host id + 1, so restart the host with --clientId set to the saved teammate id minus one.";
 
         // Single step.
         map["单步决策中"] = "Deciding the single step";

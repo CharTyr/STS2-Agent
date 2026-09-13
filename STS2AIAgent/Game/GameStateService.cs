@@ -252,6 +252,17 @@ internal static class GameStateService
             };
         }
 
+        // The pause menu is a human overlay: nothing is actionable while it is up, so the descriptor
+        // list stays empty instead of advertising the paused combat actions.
+        if (currentScreen is NCapstoneSubmenuStack { Type: CapstoneSubmenuType.PauseMenu })
+        {
+            return new AvailableActionsPayload
+            {
+                screen = ResolveScreen(currentScreen),
+                actions = descriptors.ToArray()
+            };
+        }
+
         if (currentScreen is NUnlockScreen)
         {
             if (CanConfirmUnlock(currentScreen))
@@ -1194,7 +1205,11 @@ internal static class GameStateService
 
     public static IReadOnlyList<NButton> GetCapstoneButtons(IScreenContext? currentScreen)
     {
-        if (currentScreen is not NCapstoneSubmenuStack capstoneScreen)
+        // Only the Settings/Compendium/Feedback overlays are capstone decision lists now; the pause
+        // menu shares the container but its own buttons include "放弃" and "保存并退出", so it must
+        // never read as a capstone option list.
+        if (currentScreen is not NCapstoneSubmenuStack capstoneScreen ||
+            capstoneScreen.Type == CapstoneSubmenuType.PauseMenu)
         {
             return Array.Empty<NButton>();
         }
@@ -2599,6 +2614,13 @@ internal static class GameStateService
                 names.Add("dismiss_modal");
             }
 
+            return names.ToArray();
+        }
+
+        // The human paused the game: combat actions are swallowed while paused and the overlay's own
+        // buttons (including "放弃") are not agent decisions, so advertise nothing.
+        if (currentScreen is NCapstoneSubmenuStack { Type: CapstoneSubmenuType.PauseMenu })
+        {
             return names.ToArray();
         }
 
@@ -6875,6 +6897,15 @@ internal static class GameStateService
 
     private static string ResolveNonModalScreen(IScreenContext? currentScreen)
     {
+        // The capstone container hosts every overlay and tells them apart by its own Type; the
+        // in-game pause menu rides in it too. It has to claim PAUSE_MENU before the combat and
+        // visible-grid branches below can name the paused scene COMBAT or CARD_SELECTION, which
+        // would advertise a live action list over a game the human just paused.
+        if (currentScreen is NCapstoneSubmenuStack { Type: CapstoneSubmenuType.PauseMenu })
+        {
+            return "PAUSE_MENU";
+        }
+
         if (currentScreen is NUnlockScreen)
         {
             return "UNLOCK";

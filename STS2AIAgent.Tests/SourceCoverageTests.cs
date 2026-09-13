@@ -32,6 +32,7 @@ internal static class SourceCoverageTests
         "STS2AIAgent/Multiplayer/LocalDualInstanceLauncher.cs",
         "STS2AIAgent/Agent/GameBridge.cs",
         "STS2AIAgent/Multiplayer/DualInstanceCoordinator.cs",
+        "STS2AIAgent/Multiplayer/CoopSaveProbe.cs",
         "STS2AIAgent/Server/HttpServer.cs",
         "STS2AIAgent/Ui/UiFactory.cs",
         "STS2AIAgent/Game/GameThread.cs",

@@ -64,6 +64,28 @@ internal static class DualInstanceCoordinator
             return (false, Loc.T("请先回到主菜单，再继续联机对局。"));
         }
 
+        // Backstop for callers that do not go through the HTTP executor: the game renames the
+        // multiplayer save to *.VAL.corrupt when the save does not contain the local player id, so
+        // both ids have to be checked before EnableFastMpENetHost/StartLocalLoadAsync can fire.
+        CoopSaveProbe.TryReadMultiplayerSaveNetIds(out var saveNetIds, out _);
+        var localPlayerId = CoopSaveProbe.ResolveLoadLocalPlayerId();
+        var hostMismatch = CoopSavePrecheckPolicy.DescribeHostMismatch(saveNetIds, localPlayerId);
+        if (hostMismatch != null)
+        {
+            return (false, hostMismatch);
+        }
+
+        if (!CoopSaveProbe.TryResolveCompanionClientId(out var companionClientId, out var companionIdError))
+        {
+            return (false, companionIdError!);
+        }
+
+        var companionMismatch = CoopSavePrecheckPolicy.DescribeCompanionMismatch(saveNetIds, companionClientId);
+        if (companionMismatch != null)
+        {
+            return (false, companionMismatch);
+        }
+
         try
         {
             EnableFastMpENetHost();

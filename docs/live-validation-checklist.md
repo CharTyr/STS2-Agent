@@ -51,7 +51,8 @@ before and after).
 
 ### Found in this session
 
-Two things only a live game shows, both still open:
+Two things only a live game shows. Both were fixed and re-verified in the same session (issues #88 and
+#89):
 
 - **The pause menu is reported as an open `capstone` and offered as `choose_capstone_option`.** Opening the
   pause menu in a fight (top-bar button, and also via Escape) leaves `/state.screen` at `COMBAT`, fills
@@ -66,6 +67,37 @@ Two things only a live game shows, both still open:
   `BestiaryConsoleCmd.Process` throws a `NullReferenceException`; the mod surfaces it as an unhandled server
   error with `details: null`. It is a debug-only path (and the game labels the command WIP), but a 500 with
   no context is not an honest envelope for a console command that was accepted and then threw.
+
+### Fixes verified in the same session
+
+All three were re-run against the patched build on the same isolated instance.
+
+- **The pause menu is its own screen and stops being a decision screen.** The container tells its overlays
+  apart by its own `Type` (`CapstoneSubmenuType` is `None` / `Settings` / `Compendium` / `Feedback` /
+  `PauseMenu` — there is no boss-reward option screen in this build), and `GetCapstoneButtons` now excludes
+  `PauseMenu`. With the pause menu open, `/state` reports `screen = PAUSE_MENU`, `available_actions = []`,
+  `/actions/available` answers with an empty list and `capstone` is null, `choose_capstone_option` is 409
+  `invalid_action`, and Escape returns the run to the screen underneath. The teammate's own bootstrap logged
+  `Companion bootstrap PAUSE_MENU|-|`, so the companion sees the same picture. `CAPSTONE_SELECTION` keeps its
+  switch arm for the settings / compendium / feedback overlays.
+- **`continue_ai_teammate` refuses before the game can damage the save.** The action reads `players[].net_id`
+  out of the co-op save and compares it against this host's NetId (the `--clientId` launch argument, 1 when
+  omitted) and against the NetId the teammate would be launched with (host + 1), both **before** the load.
+  Three live runs:
+  - Ids matching (`1,2`, host started with `--clientId 1`): `continue_ai_teammate` returns 200 `completed` on
+    `MULTIPLAYER_LOAD`, the launcher starts the second instance (two game processes), and the log shows the
+    companion handshaking as NetId 2 and receiving `ClientLoadJoinResponseMessage` — the rejoin that used to
+    fail with `NotInSaveGame`.
+  - Host id missing (host `--clientId 2026091099`, save `1,2`): 409 `invalid_action`, `retryable: false`, with
+    `save_player_net_ids: [1, 2]` and `local_player_id: 2026091099` in the details, and a message that names
+    both ids, the consequence and the way out. The save's hash is **unchanged** afterwards, no
+    `*.VAL.corrupt` appears, and no second process is started — the destructive load never runs.
+  - Teammate id missing (host `--clientId 2`, save `1,2`, so the teammate would be 3): 409 `invalid_action`
+    with `companion_client_id: 3`, same unchanged save and single-process evidence.
+- **A throwing console command answers honestly.** In a run, `run_console_command bestiary` is now 409
+  `invalid_action` carrying `Console command failed: NullReferenceException: Object reference not set to an
+  instance of an object.` and `command: bestiary` in the details — where it used to be a bare 500
+  `internal_error` with `details: null`. The run is left untouched (`COMBAT`, same action list).
 
 ### Environment note for isolated runs
 
