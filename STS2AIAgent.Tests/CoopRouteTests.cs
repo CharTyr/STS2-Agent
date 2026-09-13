@@ -152,6 +152,15 @@ internal static class CoopRouteTests
         Assert.Contains("settings.CompanionAutoSelectCharacter = !on;", overlay);
         Assert.Contains("current.CompanionAutoSelectCharacter = !_companionChoiceToggle.ButtonPressed;", overlay);
         Assert.Contains("SetPressedNoSignal(!AgentRuntime.Instance.Settings.CompanionAutoSelectCharacter)", overlay);
+
+        // Continue is the only control on this page whose availability depends on the *game screen*,
+        // and that changes with no runtime event to subscribe to. Refreshing on tab entry alone left
+        // the button greyed out for a panel that was already open when the boot modal cleared; the
+        // live pass found it, and the panel tick that already polls the play page now re-reads it too.
+        Assert.Contains("RefreshContinueAvailability();", overlay);
+        var tick = AgentSourceFixture.MethodBody(overlay, "OnProcessFrame");
+        Assert.Contains("if (_dualPage?.Visible == true)", tick);
+        Assert.Contains("RefreshContinueAvailability();", tick);
     }
 
     /// <summary>
