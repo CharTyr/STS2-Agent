@@ -32,6 +32,7 @@ using MegaCrit.Sts2.Core.Nodes.Debug.Multiplayer;
 using MegaCrit.Sts2.Core.Nodes.Events;
 using MegaCrit.Sts2.Core.Nodes.Events.Custom;
 using MegaCrit.Sts2.Core.Nodes.Events.Custom.CrystalSphere;
+using MegaCrit.Sts2.Core.Nodes.Screens.PauseMenu;
 using MegaCrit.Sts2.Core.Nodes.Ftue;
 using MegaCrit.Sts2.Core.Nodes.GodotExtensions;
 using MegaCrit.Sts2.Core.Nodes.Rewards;
@@ -254,7 +255,7 @@ internal static class GameStateService
 
         // The pause menu is a human overlay: nothing is actionable while it is up, so the descriptor
         // list stays empty instead of advertising the paused combat actions.
-        if (currentScreen is NCapstoneSubmenuStack { Type: CapstoneSubmenuType.PauseMenu })
+        if (IsPauseMenuOverlay(currentScreen))
         {
             return new AvailableActionsPayload
             {
@@ -1203,13 +1204,25 @@ internal static class GameStateService
         Log.Warn($"[STS2AIAgent] Crystal Sphere tool button state could not be synchronized: {reason}.");
     }
 
+    /// <summary>
+    /// True only while the shared capstone container is actually showing the in-game pause menu.
+    /// The container also hosts settings, the compendium and the card library, and it keeps its own
+    /// Type while one of those pages is pushed on top, so the container type alone would report
+    /// those pages as a paused game the agent cannot act in.
+    /// </summary>
+    public static bool IsPauseMenuOverlay(IScreenContext? currentScreen)
+    {
+        return currentScreen is NCapstoneSubmenuStack { Type: CapstoneSubmenuType.PauseMenu } pauseMenu
+            && pauseMenu.Stack?.Peek() is NPauseMenu;
+    }
+
     public static IReadOnlyList<NButton> GetCapstoneButtons(IScreenContext? currentScreen)
     {
         // Only the Settings/Compendium/Feedback overlays are capstone decision lists now; the pause
         // menu shares the container but its own buttons include "放弃" and "保存并退出", so it must
         // never read as a capstone option list.
         if (currentScreen is not NCapstoneSubmenuStack capstoneScreen ||
-            capstoneScreen.Type == CapstoneSubmenuType.PauseMenu)
+            IsPauseMenuOverlay(capstoneScreen))
         {
             return Array.Empty<NButton>();
         }
@@ -2619,7 +2632,7 @@ internal static class GameStateService
 
         // The human paused the game: combat actions are swallowed while paused and the overlay's own
         // buttons (including "放弃") are not agent decisions, so advertise nothing.
-        if (currentScreen is NCapstoneSubmenuStack { Type: CapstoneSubmenuType.PauseMenu })
+        if (IsPauseMenuOverlay(currentScreen))
         {
             return names.ToArray();
         }
@@ -6901,7 +6914,7 @@ internal static class GameStateService
         // in-game pause menu rides in it too. It has to claim PAUSE_MENU before the combat and
         // visible-grid branches below can name the paused scene COMBAT or CARD_SELECTION, which
         // would advertise a live action list over a game the human just paused.
-        if (currentScreen is NCapstoneSubmenuStack { Type: CapstoneSubmenuType.PauseMenu })
+        if (IsPauseMenuOverlay(currentScreen))
         {
             return "PAUSE_MENU";
         }
