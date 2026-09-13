@@ -2,6 +2,24 @@
 
 > Release attribution is recorded against tags or release commits. Post-tag maintenance is listed separately; current validation limits are maintained in [PRODUCT_PLAN_CURRENT.md](https://github.com/CharTyr/STS2-Agent/blob/main/PRODUCT_PLAN_CURRENT.md).
 
+## Unreleased
+
+> The external-takeover route from #85 reached `POST /action` but not the F8 window's own Invite button,
+> so the button a person actually clicks was the one that could not start that route. It now chooses the
+> route the way the API does, and the tab says which one will run.
+
+### Fixed
+
+- **The overlay's Invite button uses the same route as the API.** It called the auto-play overload, so with
+  no verified play model the click was refused at the old model gate while the identical request over
+  `POST /action` launched the teammate for external takeover — backwards for a route meant to be driven
+  from outside, since the button a person clicks was the one that could not be used. The button now
+  evaluates `FirstRunSetup.Evaluate(settings).ReadyToInvite` exactly as `invite_ai_teammate` does: a
+  verified play model means auto-play, otherwise the teammate launches, joins the run and comes up paused
+  for external takeover without calling a model at all.
+- The two lines under the **AI Teammate** tab describe that route instead of asking for a connection test,
+  so the hint and the button can no longer contradict each other.
+
 ## v0.12.2 - 2026-09-13
 
 > The co-op handoff: the player who wants to fight their own character while an outside agent drives the

@@ -58,6 +58,10 @@ internal static partial class Loc
         map["邀请 AI 队友"] = "Invite AI teammate";
         map["正在邀请队友…"] = "Inviting teammate…";
         map["队友尚未加入。"] = "No teammate has joined yet.";
+        map["请从主菜单邀请。第二窗口打开后，AI 会加入并进图，然后停在原地等待外部接管，不会自己出牌；你继续在这个窗口操作自己的角色。"] =
+            "Invite from the main menu. Once the second window opens, the AI joins and enters the run, then waits where it is to be taken over from outside and plays nothing by itself; keep playing your character in this window.";
+        map["游玩模型未配置或未验证：仍然可以邀请，队友会加入并进图，然后停在原地等待外部接管，不会自己出牌。想让它自己打，先在设置里配好模型并通过「测试连接」。"] =
+            "No verified play model: you can still invite. The teammate joins and enters the run, then waits where it is to be taken over from outside and plays nothing by itself. To let it play on its own, configure a model in Settings and pass Test connection first.";
         map["暂停队友"] = "Pause teammate";
         map["继续游玩"] = "Resume";
         map["队伍交流"] = "Team chat";
