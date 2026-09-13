@@ -27,6 +27,12 @@ docs-tracked
            be gitignored, so a new page could be written, pass the local
            doc-marks gate, and still be missing from every fresh checkout --
            which is what CI builds from.
+packaged-links
+           Every local link in a packaged document (README.md, README.zh-CN.md,
+           mcp_server/README.md) must resolve inside the release artifact. The
+           relative ones are rewritten to absolute URLs by the hand-kept table in
+           package-release.ps1, so a newly added relative link could ship
+           unrewritten and only fail the artifact check after packaging.
 script-encoding
            PowerShell scripts containing non-ASCII text must carry a UTF-8 BOM.
 ps1-syntax Every PowerShell script under scripts/ must parse without a syntax error.
@@ -43,6 +49,7 @@ only: preflight invokes this with the system Python.
 from __future__ import annotations
 
 import argparse
+import importlib.util
 import json
 import re
 import shutil
@@ -157,6 +164,19 @@ foreach ($line in ([Console]::In.ReadToEnd() -split ([string][char]10))) {
 }
 [Console]::Out.Write(([ordered]@{ files = $results } | ConvertTo-Json -Depth 6 -Compress))
 """
+
+
+# --- packaged-links sources of truth ---------------------------------------
+
+# package-release.ps1 rewrites the relative links in the packaged READMEs with a hand-kept
+# hashtable, and check_release_package.py re-checks the result in --artifact mode. A relative
+# link that is neither rewritten nor shipped only fails at packaging time, so this gate replays
+# the same rewrite on the source documents and then applies the same link rules.
+PACKAGE_RELEASE_SCRIPT = "scripts/package-release.ps1"
+RELEASE_PACKAGE_CHECKER = "scripts/check_release_package.py"
+REWRITE_FUNCTION_SIGNATURE = "function Rewrite-PackagedReadmeLinks"
+# One hashtable entry inside Rewrite-PackagedReadmeLinks: "(<relative target>)" = "(<url>)".
+REWRITE_ENTRY = re.compile(r'^\s*"\(([^"]+)\)"\s*=\s*"([^"]+)"\s*$', re.MULTILINE)
 
 
 class GateError(Exception):
@@ -648,6 +668,94 @@ def check_docs_tracked(repo_root: Path) -> list[str]:
     return [f"all {len(on_disk)} Markdown pages under docs/ are tracked by git"]
 
 
+def load_release_package_module(repo_root: Path):
+    """Import check_release_package.py so both checks share one link rule set.
+
+    Importing (instead of re-declaring the lists and regexes) keeps this gate honest when that
+    module's ARTIFACT_FILES, PACKAGED_DOCUMENTS, or link helpers change.
+    """
+    module_path = repo_root / RELEASE_PACKAGE_CHECKER
+    if not module_path.is_file():
+        raise GateError(f"missing required file: {RELEASE_PACKAGE_CHECKER}")
+    spec = importlib.util.spec_from_file_location("sts2_release_package_checker", module_path)
+    if spec is None or spec.loader is None:
+        raise GateError(
+            f"{RELEASE_PACKAGE_CHECKER} could not be imported, so its link rules cannot be reused."
+        )
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def parse_packaged_link_rewrites(repo_root: Path) -> list[tuple[str, str]]:
+    """The (relative target, absolute URL) pairs Rewrite-PackagedReadmeLinks replaces."""
+    text = read_text(repo_root, PACKAGE_RELEASE_SCRIPT)
+    body = slice_method_body(text, REWRITE_FUNCTION_SIGNATURE, PACKAGE_RELEASE_SCRIPT)
+    entries = REWRITE_ENTRY.findall(body)
+    if not entries:
+        raise GateError(
+            f'{PACKAGE_RELEASE_SCRIPT} declares no \'"(<target>)" = "(<url>)"\' replacement inside '
+            "Rewrite-PackagedReadmeLinks, so the packaged-links gate cannot tell which relative "
+            "links packaging rewrites. Fix the extraction in check_verification_gates.py or "
+            "restore the rewrite table."
+        )
+    # The table stores both sides parenthesised, matching the '(<target>)' token it replaces.
+    return [
+        (target, url[1:-1] if url.startswith("(") and url.endswith(")") else url)
+        for target, url in entries
+    ]
+
+
+def check_packaged_links(repo_root: Path) -> list[str]:
+    """Replay the packaging rewrite on the source docs, then check every remaining local link."""
+    module = load_release_package_module(repo_root)
+    rewrites = parse_packaged_link_rewrites(repo_root)
+
+    artifact_files = tuple(module.ARTIFACT_FILES)
+    packaged_documents = tuple(module.PACKAGED_DOCUMENTS)
+    if not artifact_files or not packaged_documents:
+        raise GateError(
+            f"{RELEASE_PACKAGE_CHECKER} declares no PACKAGED_DOCUMENTS or ARTIFACT_FILES, so the "
+            "packaged-links gate has nothing to compare against."
+        )
+
+    notes: list[str] = []
+    for document_path in packaged_documents:
+        text = read_text(repo_root, document_path)
+        applied = 0
+        for target, url in rewrites:
+            source = f"({target})"
+            if source in text:
+                text = text.replace(source, f"({url})")
+                applied += 1
+
+        local_links = 0
+        for link in module._iter_markdown_targets(text):
+            try:
+                resolved = module._local_link_path(document_path, link)
+            except module.PackageCheckError as exc:
+                raise GateError(
+                    f"{exc} A packaged document may only link to files the release ships: either add "
+                    f"this link to the Rewrite-PackagedReadmeLinks table in {PACKAGE_RELEASE_SCRIPT} or "
+                    "ship the target in the release artifact."
+                ) from exc
+            if resolved is None:
+                continue
+            local_links += 1
+            if resolved not in artifact_files:
+                raise GateError(
+                    f"{document_path} links to '{link}', which resolves to '{resolved}', and that file "
+                    f"is not shipped in the release artifact. Either add the link to the "
+                    f"Rewrite-PackagedReadmeLinks table in {PACKAGE_RELEASE_SCRIPT} so packaging rewrites "
+                    f"it to an absolute URL, or add '{resolved}' to the release artifact."
+                )
+        notes.append(
+            f"{document_path}: {local_links} local link(s) resolve inside the artifact "
+            f"({applied} rewrite rule(s) applied)"
+        )
+    return notes
+
+
 def check_script_encoding(repo_root: Path) -> list[str]:
     notes: list[str] = []
 
@@ -747,6 +855,7 @@ GATES = {
     "api-facts": check_api_facts,
     "doc-marks": check_doc_marks,
     "docs-tracked": check_docs_tracked,
+    "packaged-links": check_packaged_links,
     "script-encoding": check_script_encoding,
     "ps1-syntax": check_ps1_syntax,
 }

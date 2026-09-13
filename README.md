@@ -93,7 +93,7 @@ This mod is still in development. Some things may be unfinished or break. Please
 - Drive that character from outside with the teammate instance's own `GET /state` and `POST /action`. Find its HTTP API through `data.companion.api_port` on the main window's `GET /health` (that port is usually not 8080). The teammate can only act for its own character; acting outside it returns 403 `forbidden_actor`. On this route `data.companion.auto_play` is `false`.
 - Start and pause it with `POST /teammate/control` on the **main window**, body `{"running": true|false}`. This is the supported entry point and it needs no session token (the main window holds the teammate session token itself). `running: true` still requires a verified play model, exactly like the in-game **Continue Auto-Play** button; `running: false` works at any time.
 
-Both routes enforce the same structural conditions (you are on the main menu, this is not the teammate instance, and the character has no auto-play already running); only the model gate differs. Full contract: [docs/api.md](docs/api.md).
+Both routes enforce the same structural conditions (you are on the main menu, this is not the teammate instance, and the character has no auto-play already running); only the model gate differs. Full contract: [docs/api.md](./docs/api.md).
 
 ---
 

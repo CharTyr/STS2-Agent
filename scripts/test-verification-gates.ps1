@@ -86,6 +86,13 @@ try {
     New-Item -ItemType Directory -Path (Join-Path $fixture "scripts") | Out-Null
     $fixtureScript = Join-Path $fixture "scripts/check_verification_gates.py"
     Copy-Item -LiteralPath $gateScript -Destination $fixtureScript
+    # packaged-links reads the packaging script, the release checker, and the packaged documents,
+    # so the fixture mirrors them for the baseline (all-gates) run to stay green.
+    $fixtureScripts = Join-Path $fixture "scripts"
+    Copy-Item -LiteralPath (Join-Path $repoRoot "scripts/package-release.ps1") -Destination $fixtureScripts
+    Copy-Item -LiteralPath (Join-Path $repoRoot "scripts/check_release_package.py") -Destination $fixtureScripts
+    Copy-Item -LiteralPath (Join-Path $repoRoot "README.md") -Destination $fixture
+    Copy-Item -LiteralPath (Join-Path $repoRoot "README.zh-CN.md") -Destination $fixture
     # Mirror the root sentinels the gate looks for, using tracked files only: AGENTS.md is
     # gitignored, so a fresh checkout (and therefore CI) does not contain it.
     $fixtureAgent = Join-Path $fixture "STS2AIAgent"
@@ -99,6 +106,7 @@ try {
     New-Item -ItemType Directory -Path $fixtureMcp | Out-Null
     Copy-Item -LiteralPath (Join-Path $repoRoot "mcp_server/pyproject.toml") -Destination $fixtureMcp
     Copy-Item -LiteralPath (Join-Path $repoRoot "mcp_server/uv.lock") -Destination $fixtureMcp
+    Copy-Item -LiteralPath (Join-Path $repoRoot "mcp_server/README.md") -Destination $fixtureMcp
 
     $fixtureAction = Join-Path $fixture "STS2AIAgent/Game"
     New-Item -ItemType Directory -Path $fixtureAction -Force | Out-Null
@@ -219,10 +227,15 @@ try {
     Assert-Case -Name "script-encoding gate rejects non-ASCII without a BOM" -Only "script-encoding"
     Remove-Item -LiteralPath $encodingScript -Force
 
-    # 6b. No .ps1 to parse at all. The fixture scripts/ holds only the gate copy at this point, so
-    # this pins the branch the other cases depend on: a tree with no PowerShell script has to skip
-    # and explain, not fail and not pass silently. Without it every case above would turn red.
+    # 6b. No .ps1 to parse at all. The fixture scripts/ holds the gate copy plus the packaged-links
+    # inputs at this point, so stash the copied packaging script to pin the branch the other cases
+    # depend on: a tree with no PowerShell script has to skip and explain, not fail and not pass
+    # silently. Without it every case above would turn red.
+    $packagingScript = Join-Path $fixture "scripts/package-release.ps1"
+    $stashedPackagingScript = Join-Path $fixture "package-release.ps1.stash"
+    Move-Item -LiteralPath $packagingScript -Destination $stashedPackagingScript
     $ps1Empty = Invoke-Gate -Fixture $fixture -Only "ps1-syntax"
+    Move-Item -LiteralPath $stashedPackagingScript -Destination $packagingScript
     if ($ps1Empty.ExitCode -ne 0 -or $ps1Empty.Output -notmatch "no PowerShell scripts under scripts/ to parse") {
         Write-Host "FAIL  ps1-syntax gate skips a scripts/ that holds no .ps1"
         Write-Host $ps1Empty.Output
