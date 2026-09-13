@@ -118,6 +118,8 @@ Do not trust memory over the current payload. The game mutates screens in place,
 - `CARD_PILE`: a combat card pile (draw / discard / exhaust). `close_cards_view` returns to combat.
 - `CARD_INSPECT` / `RELIC_INSPECT`: inspect overlays. The same `close_cards_view` action that closes the card list also closes these.
 - `FEEDBACK`: the feedback form. No mod action closes it yet, so only open it when the task asks and let the player finish it.
+- `PAUSE_MENU`, `SETTINGS`, `COMPENDIUM`, `RELIC_COLLECTION`, `POTION_LAB`, `BESTIARY`, `STATS`, `RUN_HISTORY` (and `CARD_LIBRARY` when it is opened from inside a run): the pages shown over a frozen run when a person presses pause. Room actions are suppressed and `capstone` is null on all of them; `close_main_menu_submenu` is the only action advertised, and it steps back one page (`CARD_LIBRARY` -> `COMPENDIUM` -> `PAUSE_MENU`). The pause menu itself offers nothing - a person resumes that one, so wait instead of trying to act.
+
 
 For detailed per-screen sequences and pitfalls, read [references/screen-playbooks.md](references/screen-playbooks.md).
 

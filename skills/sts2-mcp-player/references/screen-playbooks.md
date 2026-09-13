@@ -140,6 +140,12 @@ Use this reference when the active screen is clear and you need the exact action
 - Screen `FEEDBACK` is the feedback form.
 - No mod action closes it yet, so it is user-triggered only: do not enter it during autonomous play, and if the player opened it, wait instead of guessing an action.
 
+## In-Run Menu Pages (PAUSE_MENU, SETTINGS, COMPENDIUM, ...)
+
+- `PAUSE_MENU`, `SETTINGS`, `COMPENDIUM`, `CARD_LIBRARY` (opened from inside a run), `RELIC_COLLECTION`, `POTION_LAB`, `BESTIARY`, `STATS` and `RUN_HISTORY` are the pages a person opens from the in-run pause menu. They ride in one container, so `screen` names the page on top of it, not the room it covers.
+- While one is up the run is frozen: room actions and `save_and_quit` are gone from `available_actions`, `capstone` is null, and calling any of them answers 409 `invalid_action`.
+- `close_main_menu_submenu` is the only action here, and it steps back one page: `CARD_LIBRARY` -> `COMPENDIUM` -> `PAUSE_MENU`. Once the pause menu is on top, nothing is offered - do not try to resume the run, and wait for the person to leave the menu.
+
 ## Potion Targeting
 
 - `AnyEnemy`: requires `target_index`.
