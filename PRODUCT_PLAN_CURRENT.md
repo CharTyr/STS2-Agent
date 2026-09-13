@@ -1,6 +1,6 @@
 # STS2 AI Agent：当前状态页
 
-> 本页是仓库唯一的当前状态入口。更新日期：2026-09-13（v0.12.1 发布与工坊上传；随后 #85 合入主线未发布）。
+> 本页是仓库唯一的当前状态入口。更新日期：2026-09-13（v0.12.1 发布与工坊上传；随后 #85 与三处实机发现收尾先后合入主线，均未发布）。
 > 发布代码基准：tag `v0.12.1` @ `640c343`；标签后主线变更（#85）单列在下方，不把文档更新视为新版本发布。
 > 发布基准：[GitHub Release v0.12.1](https://github.com/CharTyr/STS2-Agent/releases/tag/v0.12.1)，2026-09-13 发布；上一版 [v0.12.0](https://github.com/CharTyr/STS2-Agent/releases/tag/v0.12.0)，2026-09-13。2026-09-13 通过 Steam Web API 核对工坊物品 3796486050：visibility=0（公开）、file_size 1213444 与本地内容字节和相等、time_updated 2026-09-13 12:41:42。**工坊简体中文列表仍是旧版**（缺 v0.11.0 与 v0.12.0 就写进仓库的两条列表项，2026-09-13 重新抓取工坊页面确认），待手工粘贴 `steam-workshop/description.zh-CN.txt`——`ModUploader` 没有语言参数，这一步只能在工坊网页端做。
 
@@ -32,7 +32,13 @@
   - 该 PR 还修掉三处实机发现：路线标记原先在启动校验**之前**写入，导致一次被拒的重试会把正在自走的队友误标成 `auto_play:false`；`/health` 在队友进程退出后仍继续报其端口；`teammate_control_failed` 文档写可重试、实现对 `retryable:false`。
   - `7a371c7`（PR #99）补齐开局门禁并记录真实外部 agent 验收：队友实例自己的 `POST /session/control {"running":true}` 此前会绕过模型验证直接启动进程内循环（宿主「继续游玩」/`/companion/control`/`/teammate/control` 都拒绝的同一请求它接受）——`SetCompanionRunningAsync` 现在同样过 `FirstRunSetup.ReadyToInvite`，暂停刻意不过门禁；实机确认队友侧 `running:true` 返回 409 `session_not_ready`、`running:false` 返回 200。
   - **真实外部 agent 端到端接管验收通过**：外部 agent（Grok 4.6，自带模型与上下文，只给仓库自带的 MCP 工具面与 play skill，不是进程内循环）在**未配置任何模型**的队友窗口上自己打完一场完整战斗——队友座位 16 次 `play_card` + 6 次 `end_turn` + 4 次 `confirm_modal` 加地图投票，`FUZZY_WURM_CRAWLER` 从 `121/121` 打到死（7 回合），领奖 `REWARD` → `MAP`，金币 `99` → `110`，第二场（`SHRINKER_BEETLE`）已开打时收工；全程队友 `play_running=false`、`play_phase=paused`、`session_requests=0`，日志 84 行机械核查 `/teammate/control`、`/session/control`、`run_console_command` 命中 0 次。证据 `build/validation-2026-09-13/external-agent-log.jsonl` + `external-agent-final-state.json`，驱动 `mcp-call.py`；玩家真档 183 文件哈希不变。
-  - 记录未改动的发现：`NCombatRulesFtue` 在队友侧要 3 次 `confirm_modal`（前两次 `pending`），而宿主此时已在 `COMBAT` 可出牌；`get_relevant_game_data` 实际要求 `collection` + `item_ids`，skill 却描述为可无参按场景取；怪物元数据不含联机缩放（`min_hp=55/max_hp=57` vs 实况 `121/121`）。
+  - 上面三条当轮「记录未改动」的发现，已由 `d826935`（PR #101）全部收尾，见下一条。
+  - `d826935`（PR #101）收尾三处实机发现，并修掉核对派生路径时新暴露的两个缺陷：
+    - **`NCombatRulesFtue` 三次 `confirm_modal` 本来就是对的**（`NCombatRulesFtue.cs:165` `_totalPages = 3`，第三页之后那一下才 `CloseFtue`），缺的是「非末页返回 `pending` 时说的还是通用过渡文案」，读起来像卡住。现在非末页回 `Tutorial page advanced; the modal is still open. Call confirm_modal again.`（`FtueModalPolicy.IsMultiPageFtue`），其它弹窗文案不变。实机：三次点击依次 `pending` / `pending` / `completed`，第三次之后 `modal` 清空、`screen` 回到 `COMBAT`。
+    - **`get_relevant_game_data` 的 `item_ids` 改为可省略**：省略时按当前屏幕从实况状态派生要查的 id（`GameDataFilter.SceneItemSources` ↔ MCP 侧 `_SCENE_ITEM_SOURCES`，两侧键与路径由 `test_scene_field_alignment.py` 钉死相等），场景没有对应内容时回落到牌库 / 遗物 / 药水这些角色级 id。实机走 MCP 工具面：`{"collection":"monsters"}` 正好返回该房间三只敌人、`{"collection":"cards"}` 返回手牌、`relics` 回落出 `BURNING_BLOOD`；显式传 `item_ids` 行为不变，空药水槽返回 `{}` 而不是臆造。
+    - **`combat.enemies[].base_max_hp` 新增**：携带缩放前的 `Creature.MonsterMaxHpBeforeModification`，与 `monsters.min_hp` / `max_hp` 同量纲；`max_hp` 仍是缩放后实况值。双人局实机（两个实例数字一致）：TWIG_SLIME_S 元数据 7–11 / `base=9` / 实况 19，LEAF_SLIME_M 32–35 / 33 / 72，LEAF_SLIME_S 11–15 / 13 / 28，即 `base × 人数 × act0 系数 1.1` 取整。单人局是退化情形（`playerCount == 1` 直接跳过缩放），所以原始症状只能在联机局复现。
+    - 顺带修掉：屏幕归类到的场景在这块屏上载荷为 `null` 时（`FAKE_MERCHANT` 归为商店却没有 `shop` 载荷）逐段走 JSON 路径会踩进 null 抛异常——路径遍历补上 kind 守卫，且场景侧派生为空时改回落到角色级 id；C# 与 Python 两份镜像对空串 id 的处理也统一（原先 C# 收、Python 跳）。
+    - 证据：`build/validation-2026-09-13/verify-round-3.jsonl`、`verify-fixes-3.log`、`verify-base-hp-mp.log`（gitignore）；记录写进 `docs/live-validation-checklist.md`「Those three findings, fixed and re-verified in the game」；`docs/api.md` 补 `base_max_hp` 与可省略的 `item_ids`。C# 382 PASS / 0 FAIL、Python 167 OK、七道闸门全绿、mod 构建 0 警告；玩家真档 183 文件哈希前后一致。
   - 尚未随任何 tag 发布；队友窗口本身没有 overlay（`ModEntry` 对 companion 跳过），这一点已写进文档。
 
 ## 2. 已有验收证据与边界
@@ -74,6 +80,7 @@
 | 文档契约与验证闸门 | c212594、6aabb4f | 已发布 v0.10.6 | `check_verification_gates.py` 四闸门全绿；自测漂移场景全部被拒；preflight 端到端 exit 0 | 静态检查，不能替代实机行为验证 |
 | 暂停与局内菜单页的屏幕名（#88 / #93） | `31296bd`（#88/#89）、`3cf347a`（#92）、`04748f6`（#93） | 已随 v0.12.1 发布 | 2026-09-13 隔离实机两轮逐屏核对：`PAUSE_MENU` / `SETTINGS` / `COMPENDIUM` / `CARD_LIBRARY` / `RELIC_COLLECTION` / `POTION_LAB` / `STATS` / `RUN_HISTORY` 各自报名、动作面只剩 `close_main_menu_submenu`、`choose_capstone_option` 全 409，FAILURES: 0 | `BESTIARY` 未实机开屏（该存档 hub 不画磁贴）；`save_and_quit` 的 409 是实机发现后补的 |
 | 外部 agent 接管队友窗口（#85） | `d80a19d`（PR #97） | **主线未发布**（晚于 tag `v0.12.1`） | 2026-09-13 隔离实机：死模型端点 + 空 `roleTests` 下 `invite_ai_teammate` 仍 200 `completed`，队友 `auto_play:false`、进图 20 秒 `session_requests=0`，`/teammate/control` 暂停 200 / 未验证开始 409，`/health.companion` 可发现队友 API；真档 183 文件哈希不变 | 未在 Steam 双开路径复跑；外部接管路线尚未用真实外部 agent 端到端扮演一次完整战斗 |
+| 三处实机发现收尾：分页 FTUE 文案 / 场景派生元数据 id / 联机基础血量 | `d826935`（PR #101） | **主线未发布**（晚于 tag `v0.12.1`） | 2026-09-13 隔离实机：FTUE 三击 `pending`/`pending`/`completed` 后回 `COMBAT`；MCP 面省略 `item_ids` 按屏返回手牌 / 敌人 / 遗物，显式 id 与空集合行为不变；双人局 `base_max_hp` 9/33/13 对实况 19/72/28（`×2×1.1`），两实例一致；真档 183 文件哈希不变 | FTUE 只在单人档复现（联机档该 FTUE 已完成）；`FAKE_MERCHANT` 的回落只有离线单测（未实机走到该屏） |
 
 ## 4. 待办任务
 
