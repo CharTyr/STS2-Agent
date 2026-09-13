@@ -8,7 +8,7 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-1.md`
-- **Total Sessions**: 21
+- **Total Sessions**: 22
 - **Last Active**: 2026-09-13
 <!-- @@@/auto:current-status -->
 
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-1.md` | ~787 | Active |
+| `journal-1.md` | ~828 | Active |
 <!-- @@@/auto:active-documents -->
 
 ---
@@ -29,6 +29,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 22 | 2026-09-13 | 审阅并合并 sachi4clover 的联机界面 PR #111（续档按钮 + 自动选角开关） | `6a327d3`, `044d117` | `main` |
 | 21 | 2026-09-13 | 补发 v0.12.3 的 GitHub Release（工坊先行的完整化） | `b0217b0`, `10c9135` | `main` |
 | 20 | 2026-09-13 | 工坊更新到 v0.12.3（只发工坊，不打 tag） | `b0217b0`, `00d1789` | `main` |
 | 19 | 2026-09-13 | 合并 sachi4clover 的 overlay 邀请路线修复（PR #106）+ 记录 | `0f63d6d`, `085c941` | `main` |

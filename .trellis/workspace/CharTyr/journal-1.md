@@ -785,3 +785,44 @@ v0.12.3 先是只发工坊，本轮补上 tag 与 GitHub Release，把「工坊�
 - 工坊简体中文列表仍未更新，需在工坊网页端手工粘贴 steam-workshop/description.zh-CN.txt
 - sachi4clover 叠在 #106 之上的后续 PR（游戏内 Continue 按钮 + 选角勾选框）尚未合并，将是下一版内容
 - 若希望两渠道 DLL 哈希完全一致，可给 STS2AIAgent.csproj 开确定性构建后验证
+
+
+## Session 22: 审阅并合并 sachi4clover 的联机界面 PR #111（续档按钮 + 自动选角开关）
+
+**Date**: 2026-09-13
+**Task**: 审阅并合并 sachi4clover 的联机界面 PR #111（续档按钮 + 自动选角开关）
+**Branch**: `main`
+
+### Summary
+
+审阅 #111：两个 overlay 入口接在同一条 runtime 路由与同一份存档保护上；Sourcery 的 blocking finding 判为误报并逐条回帖；head 上 384 PASS / 0 FAIL、八道 gate 全绿、破坏性验证三次都转红，squash 合入 6a327d3，随后 PR #112 把状态页与实机清单补上。
+
+### Main Changes
+
+- 审阅 PR #111（作者 sachi4clover）：AI 队友页在邀请按钮上方新增「禁用自动选角」勾选框（勾上 = CompanionAutoSelectCharacter false，toggle 即存）、下方新增「继续上次联机对局」按钮（走 AgentRuntime.ContinueDualInstanceAsync，仅在 host 主菜单且有联机存档时可用）
+- 反证 Sourcery 的 blocking finding 是误报：CoopLaunchPolicy.GetError 在 AgentRuntime.cs:804-815 就是同一份判断，两个 NetId 预检查在 DualInstanceCoordinator.cs:74-94 有 backstop，协调器还自己复核 MAIN_MENU——overlay 绕不开任何一处；已在 PR 下回帖并附原文
+- PR #112：状态页新增「v0.12.3 标签后主线未发布变更」段（含这一笔改了 mod 代码、0.12.3 产物里没有它的提醒），docs/live-validation-checklist.md 的 [coop] 段登记待实机点击两项
+- 验证细节：新增契约测试 CoopRoute.OverlayEntries 已注册、每个 <summary> 紧贴自己的方法、5 条新中文 key 都有英文词条、busy 只作用于被按下的按钮
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `6a327d3` | (see git log) |
+| `044d117` | (see git log) |
+
+### Testing
+
+- [OK] worktree b42bc5a：dotnet run --project STS2AIAgent.Tests = 384 PASS / 0 FAIL，scripts/preflight-release.ps1 全绿（八道 gate 逐条 OK）
+- [OK] CI：#111 与 #112 的 contracts 均 success；Sourcery 在 #111 上 pass
+- [OK] 破坏性验证三次（去掉勾选框回写 / Continue 改走非路线重载 / 勾选框语义取反）均让契约测试转红，随后文件逐字节还原
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- #111 改了 mod 代码，工坊与 GitHub 上的 0.12.3 里都没有它：是否发 v0.12.4（或攒一批）待定
+- Continue 按钮与勾选框需要一次实机（真实联机存档）点击验收：按钮时机、读档接回队友、子进程读到的勾选值
+- 工坊简体中文列表仍未更新（自 v0.11.0 起），待工坊网页端粘贴 steam-workshop/description.zh-CN.txt
