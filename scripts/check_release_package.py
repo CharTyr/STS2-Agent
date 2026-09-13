@@ -14,6 +14,7 @@ import json
 import posixpath
 import re
 import sys
+import tomllib
 import zipfile
 from pathlib import Path
 from typing import Iterable, Protocol
@@ -272,6 +273,35 @@ def _check_artifact_reader(reader: ArtifactReader, label: str) -> None:
     if not manifest.get("id") or not manifest.get("version"):
         raise PackageCheckError(
             f"{label} mod/mod_id.json must contain non-empty id and version"
+        )
+
+    # The artifact carries three independent version sources. A zip handed to someone else never
+    # sees the repository, so "the version matches" has to be provable from the artifact alone:
+    # a build that copied one stale file would otherwise ship a mod whose folder and MCP package
+    # disagree about what the release is, and nothing else in this check would notice.
+    versions = {"mod/mod_id.json": str(manifest.get("version"))}
+    try:
+        pyproject = tomllib.loads(reader.read_text("mcp_server/pyproject.toml"))
+        versions["mcp_server/pyproject.toml"] = str(pyproject["project"]["version"])
+    except (tomllib.TOMLDecodeError, KeyError, TypeError) as exc:
+        raise PackageCheckError(
+            f"{label} has an unreadable mcp_server/pyproject.toml version: {exc}"
+        ) from exc
+    try:
+        lock = tomllib.loads(reader.read_text("mcp_server/uv.lock"))
+        entry = next(item for item in lock["package"] if item["name"] == "sts2-ai-agent-mcp")
+        versions["mcp_server/uv.lock"] = str(entry["version"])
+    except (tomllib.TOMLDecodeError, KeyError, StopIteration, TypeError) as exc:
+        raise PackageCheckError(
+            f"{label} has no readable sts2-ai-agent-mcp entry in mcp_server/uv.lock: {exc}"
+        ) from exc
+
+    declared = set(versions.values())
+    if len(declared) != 1:
+        detail = ", ".join(f"{path} {version}" for path, version in versions.items())
+        raise PackageCheckError(
+            f"{label} ships conflicting versions across its own files ({detail}). "
+            "Rebuild the release from a consistent tree."
         )
 
     for document_path in PACKAGED_DOCUMENTS:
