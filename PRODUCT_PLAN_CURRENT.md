@@ -1,7 +1,7 @@
 # STS2 AI Agent：当前状态页
 
-> 本页是仓库唯一的当前状态入口。更新日期：2026-09-13（v0.12.3 发布：先发工坊、随后补 tag 与 GitHub Release）。
-> 发布代码基准：tag `v0.12.3` @ `b0217b0`；工坊与 GitHub 两侧同为 `0.12.3`。标签后主线变更单列在下方，不把文档更新视为新版本发布。
+> 本页是仓库唯一的当前状态入口。更新日期：2026-09-13（v0.12.3 发布：先发工坊、随后补 tag 与 GitHub Release；标签后另合入一处 overlay 联机界面改动，见 §1）。
+> 发布代码基准：tag `v0.12.3` @ `b0217b0`；工坊与 GitHub 两侧同为 `0.12.3`。标签后主线变更（#111 的 overlay 续档按钮与自动选角开关）单列在下方，不把文档更新视为新版本发布。
 > 发布基准：[GitHub Release v0.12.3](https://github.com/CharTyr/STS2-Agent/releases/tag/v0.12.3)，2026-09-13 发布；上一版 [v0.12.2](https://github.com/CharTyr/STS2-Agent/releases/tag/v0.12.2)，同日。Steam 工坊物品 3796486050 已更新至 `0.12.3`：visibility=0（公开）、`file_size` 1227269 与本地内容字节和相等、`time_updated` 2026-09-13 22:31:22、内容 id `5284257893537057643`。**工坊简体中文列表仍是旧版**（缺 v0.11.0 起的多条列表项），待手工粘贴 `steam-workshop/description.zh-CN.txt`——`ModUploader` 没有语言参数，这一步只能在工坊网页端做。
 
 旧路线图见 [PRODUCT_ROADMAP.md](PRODUCT_ROADMAP.md)（历史），旧交付原文见 [history/PRODUCT_PLAN_CURRENT_2026-09-07.md](history/PRODUCT_PLAN_CURRENT_2026-09-07.md) 和 [history/COOP_DELIVERY_2026-09-07.md](history/COOP_DELIVERY_2026-09-07.md)。[COOP_DELIVERY.md](COOP_DELIVERY.md) 现在只是历史证据索引。本页不继承历史文档中的审批、工作树或测试前执行约束。
@@ -47,7 +47,10 @@
   - `b64e7e7`（PR #105）打包 v0.12.2 时被产物检查拦下：README 里 #97 新增的相对链接没进打包改写表，产物中留下一个指向未打包文件的链接。两处 README 的链接改回带 `./` 的形态，并新增第八道离线 gate `packaged-links`——它从 `package-release.ps1` 解析改写表、从 `check_release_package.py` 直接 import 产物清单与链接规则（不复制粘贴，避免清单漂移后 gate 说谎），在源文档上重放打包时的改写再校验剩下的本地链接是否都在产物里。破坏性验证：写回裸链接即报错并点名目标，逐字节还原后转绿。**这一笔只动文档与脚本，不影响已发布的 DLL/PCK。**
   - `0f63d6d`（PR #106，作者 sachi4clover）把 #85 的路线拆分补进游戏内界面：F8 窗口的「邀请 AI 队友」按钮此前调的是只走自动游玩的重载，模型未验证时点它会被旧门禁拒掉，而同一个请求走 `POST /action` 却能拉起队友等待外部接管——**路线拆分到了 API，没到玩家真正会点的那一个按钮**。现在按钮按 `FirstRunSetup.Evaluate(settings).ReadyToInvite` 选路，tab 的两行说明随路线切换，并用源码契约测试 `CoopRoute.OverlayInviteRoute` 钉住（把旧写法还原回去，该测试立刻转红）。**这一笔改了 mod 代码**，所以它没有进 v0.12.2 的 GitHub 产物；已随下面的 v0.12.3 工坊更新发给订阅者。
   - **`b0217b0`（PR #108）把这两笔发成 v0.12.3**：版本号五处升到 `0.12.3`、`uv lock` 重新生成、CHANGELOG 的 `Unreleased` 段定版、`workshop.json` 的 changeNote 更新。工坊于 2026-09-13 22:31 先行上传（物品 3796486050，`file_size` 1227269 与本地内容字节和相等、内容 id `5284257893537057643`），同日补上 tag `v0.12.3` 与 GitHub Release（资产 549933 字节，SHA256 `B9DC1A07…`）。见 [v0.12.3 发布记录](history/release-v0.12.3_2026-09-13.md)。
-- **v0.12.3 标签后**：只有文档与 journal（#109 的工坊上传记录、本轮发布记录），不构成新版本。
+- **v0.12.3 标签后主线未发布变更**：
+  - `6a327d3`（PR #111，作者 sachi4clover，接 #83 / #84 / #106 的界面部分）把两个此前只存在于 API 的联机入口补进 F8 窗口的「AI 队友」页：邀请按钮**上方**新增 **「禁用自动选角」**勾选框（勾上 = `CompanionAutoSelectCharacter: false`；toggle 即刻写设置，因为这个 tab 没有独立 Save，而队友在启动时读设置），下面的说明行随两种状态切换——不勾时仍是原来的自动选角文案，勾上后变成「第二窗口停在选角界面，让 AI 自己决定，或你切过去替它选完点出发」；邀请按钮**下方**新增 **「继续上次联机对局」**，走与 `continue_ai_teammate` 相同的 runtime 入口（`ContinueDualInstanceAsync(settings, companionAutoPlay, CancellationToken.None)`），只在 host 主菜单且有联机存档时可用——游戏自带的读档按钮走 Steam 联网，认不出本地直连的 NetId，会把那份存档改名成 `.VAL.corrupt`。busy 文案只作用于被按下的那枚按钮，另一枚只是置灰；tab 进入视野时重读 Continue 的可用性。新增源码契约测试 `CoopRoute.OverlayEntries` 钉住接线，两个 README 与 CHANGELOG 的 `## Unreleased` 段同步。
+  - **绕开 HTTP 路由不等于绕开保护**（Sourcery 在 #111 上给了一条 blocking finding，判定为误报，已在 PR 下逐条回帖）：`CoopLaunchPolicy.GetError` 在 runtime 入口 `AgentRuntime.cs:804-815` 本来就有同一份判断（与 `GameActionService.cs:5224-5237` 同一调用、同一 `requireVerifiedPlayModel` 推导），两个存档 NetId 预检查也在 `DualInstanceCoordinator.ContinueLocalCoopResultAsync`（`DualInstanceCoordinator.cs:74-94`，注释明写是给不走 HTTP executor 的调用方的 backstop）里重做了一遍，协调器另外自己复核 `MAIN_MENU`（`DualInstanceCoordinator.cs:69`）。
+  - 离线证据（head `b42bc5a`）：C# 384 PASS / 0 FAIL；`scripts/preflight-release.ps1` 全绿，八道 gate（api-doc / api-facts / doc-marks / docs-tracked / lockfile / packaged-links / ps1-syntax / script-encoding）逐条 OK；CI contracts 与 Sourcery 均绿；破坏性验证三次都转红（去掉勾选框回写 / Continue 改走非路线重载 / 勾选框语义取反），随后逐字节还原。**这一笔改了 mod 代码，所以工坊与 GitHub 上 `0.12.3` 的产物里还没有它**——订阅者的 F8 里看不到这两项，要等下一次发版；Continue 按钮的实机点击仍是待办，见 `docs/live-validation-checklist.md` 的 `[coop]` 段。
 
 ## 2. 已有验收证据与边界
 

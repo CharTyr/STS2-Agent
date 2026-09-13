@@ -405,6 +405,17 @@ mod-side action.
   The isolated path therefore only works when the save was created by a host whose NetId equals the clientId
   the host is started with, and whose teammate NetId equals that clientId + 1. The Steam path has neither
   problem because the host's NetId is the account id.
+- **The AI Teammate tab's two new co-op controls are wired but not yet pressed on a real machine**
+  (added by #111, awaiting a live pass). **Continue the saved co-op run** goes through
+  `AgentRuntime.ContinueDualInstanceAsync` and is offered only where `continue_ai_teammate` is accepted
+  (`GameStateService.CanContinueAiTeammate`); **Disable automatic character pick** writes
+  `CompanionAutoSelectCharacter = false` on toggle. Offline, `CoopRoute.OverlayEntries` pins the wiring and the
+  shared guards stay where the HTTP route meets them: `CoopLaunchPolicy.GetError` inside
+  `AgentRuntime.LaunchDualInstanceCoreAsync`, and both NetId prechecks inside
+  `DualInstanceCoordinator.ContinueLocalCoopResultAsync` — so the overlay cannot reach the `*.VAL.corrupt`
+  rename either. What only a live pass can show: that the button is enabled at the right moment on a real main
+  menu, that pressing it hosts the saved run over local ENet and brings the teammate back onto the same
+  `run_id`, and that the value the companion reads at launch is the one the user ticked.
 - `scripts/test-multiplayer-lobby-flow.ps1` crosses `CAPSTONE_SELECTION` and `UNLOCK` without
   throwing `Unsupported run progression state`.
 - Multiplayer `players[]` and `target_index` share one index space.
