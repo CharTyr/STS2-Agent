@@ -4,7 +4,7 @@
 
 ## v0.12.1 - 2026-09-13
 
-> The pause boundary: once a person presses pause, the agent no longer reads the run underneath. The pause menu and every page reached from it report their own screen, their action surfaces stay closed, and no page's own furniture — the pause menu's "abandon" entry among it — arrives as a capstone option any more.
+> The pause boundary: once a person presses pause, the agent no longer reads the run underneath. The pause menu and every page reached from it report their own screen, their action surfaces stay closed, and no page's own furniture — the pause menu's "abandon" entry among it — arrives as a capstone option any more. Release and Workshop upload: [release-v0.12.1_2026-09-13.md](history/release-v0.12.1_2026-09-13.md).
 
 ### Fixed
 

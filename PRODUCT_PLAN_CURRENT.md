@@ -1,15 +1,16 @@
 # STS2 AI Agent：当前状态页
 
-> 本页是仓库唯一的当前状态入口。更新日期：2026-09-13（v0.12.0 发布与工坊上传）。
-> 发布代码基准：tag `v0.12.0` @ `69887a3`；标签后主线变更单列在下方，不把文档更新视为新版本发布。
-> 发布基准：[GitHub Release v0.12.0](https://github.com/CharTyr/STS2-Agent/releases/tag/v0.12.0)，2026-09-13 发布；上一版 [v0.11.0](https://github.com/CharTyr/STS2-Agent/releases/tag/v0.11.0)，2026-09-12。2026-09-13 通过 Steam Web API 核对工坊物品 3796486050：visibility=0（公开）、file_size 1202181 与本地内容字节和相等、time_updated 即时刷新。**工坊简体中文列表仍是旧版，未随本次或 v0.11.0 更新**，待手工粘贴 `steam-workshop/description.zh-CN.txt`。
+> 本页是仓库唯一的当前状态入口。更新日期：2026-09-13（v0.12.1 发布与工坊上传）。
+> 发布代码基准：tag `v0.12.1` @ `640c343`；标签后主线变更单列在下方，不把文档更新视为新版本发布。
+> 发布基准：[GitHub Release v0.12.1](https://github.com/CharTyr/STS2-Agent/releases/tag/v0.12.1)，2026-09-13 发布；上一版 [v0.12.0](https://github.com/CharTyr/STS2-Agent/releases/tag/v0.12.0)，2026-09-13。2026-09-13 通过 Steam Web API 核对工坊物品 3796486050：visibility=0（公开）、file_size 1213444 与本地内容字节和相等、time_updated 2026-09-13 12:41:42。**工坊简体中文列表仍是旧版**（缺 v0.11.0 与 v0.12.0 就写进仓库的两条列表项，2026-09-13 重新抓取工坊页面确认），待手工粘贴 `steam-workshop/description.zh-CN.txt`——`ModUploader` 没有语言参数，这一步只能在工坊网页端做。
 
 旧路线图见 [PRODUCT_ROADMAP.md](PRODUCT_ROADMAP.md)（历史），旧交付原文见 [history/PRODUCT_PLAN_CURRENT_2026-09-07.md](history/PRODUCT_PLAN_CURRENT_2026-09-07.md) 和 [history/COOP_DELIVERY_2026-09-07.md](history/COOP_DELIVERY_2026-09-07.md)。[COOP_DELIVERY.md](COOP_DELIVERY.md) 现在只是历史证据索引。本页不继承历史文档中的审批、工作树或测试前执行约束。
 
 ## 1. 当前基线
 
-- **v0.12.0（当前发布基准）**：2026-09-13 发布，发布提交 `69602c9`（`Release v0.12.0`）经 PR #86 合并为 `69887a3`（tag 指向合并提交，两者树内容相同），GitHub Release 资产 `sts2-ai-agent-v0.12.0-windows.zip`（533493 字节，SHA256 `C2B1F3229D6CF8E7D757D571AAF717004DDBCAFD4F8AAE1276A86A54A3AFA685`），CI 在 `69602c9` 上的 push 与 pull_request 两个 Validate run 均 success。工坊物品 3796486050 已更新：公开、`file_size` 1202181 与本地内容字节和相等、`time_updated` 2026-09-13 02:25:02、manifest `3382317012139913714`。见 [v0.12.0 发布记录](history/release-v0.12.0_2026-09-13.md)。新增 `continue_ai_teammate` / `CompanionAutoSelectCharacter`（#83 / #84）与状态可信度收口（`72c96fd`、`12c35b3`、`492722a`、`ca12a4f` 等）随本版发布。**本版发布前未做完整实机验收**，待办项见 `docs/live-validation-checklist.md`。
-- **v0.11.0（上一版）**：2026-09-12 发布，发布提交 `84631b9`（`feat(i18n): follow the game language in the overlay and the state payload`），GitHub Release 资产 `sts2-ai-agent-v0.11.0-windows.zip`（677015 字节），CI Validate `34629717120` success。工坊物品 3796486050 当时更新为 `file_size` 1135844、`time_updated` 2026-09-12 02:33:39。见 [v0.11.0 发布记录](history/release-v0.11.0_2026-09-12.md) 与 [本地化验收](history/localization-2026-09-12.md)。只更新工坊的 v0.10.7 发布提交 `f9330ba` 已包含在 `v0.11.0` 里。
+- **v0.12.1（当前发布基准）**：2026-09-13 发布，发布提交 `f0f3b2a`（`Release v0.12.1`）经 PR #95 合并为 `640c343`（tag 指向合并提交，两者树内容相同），GitHub Release 资产 `sts2-ai-agent-v0.12.1-windows.zip`（539550 字节，SHA256 `26C6FE8445BA730B193F7697A26EB09BCD52A7532A09F4D422E14F8769BC16C2`），CI 在 `f0f3b2a` 上的 push 与 pull_request 两个 Validate run 均 success（合并提交 `640c343` 上的 Validate run 也 success）。工坊物品 3796486050 已更新：公开、`file_size` 1213444 与本地内容字节和相等、`time_updated` 2026-09-13 12:41:42、内容 id `3644578850671780412`。见 [v0.12.1 发布记录](history/release-v0.12.1_2026-09-13.md)。本版内容是暂停边界（#88 / #89 / #92 / #93，提交 `31296bd`、`3cf347a`、`04748f6`），唯一实机证据是 #93 的两轮隔离验收（`verify-capstone-pages.log`，FAILURES: 0）。**本版未再做完整实机验收**，待办项见 `docs/live-validation-checklist.md`。
+- **v0.12.0（上一版）**：2026-09-13 发布，发布提交 `69602c9`（`Release v0.12.0`）经 PR #86 合并为 `69887a3`（tag 指向合并提交，两者树内容相同），GitHub Release 资产 `sts2-ai-agent-v0.12.0-windows.zip`（533493 字节，SHA256 `C2B1F3229D6CF8E7D757D571AAF717004DDBCAFD4F8AAE1276A86A54A3AFA685`），CI 在 `69602c9` 上的 push 与 pull_request 两个 Validate run 均 success。工坊物品 3796486050 已更新：公开、`file_size` 1202181 与本地内容字节和相等、`time_updated` 2026-09-13 02:25:02、manifest `3382317012139913714`。见 [v0.12.0 发布记录](history/release-v0.12.0_2026-09-13.md)。新增 `continue_ai_teammate` / `CompanionAutoSelectCharacter`（#83 / #84）与状态可信度收口（`72c96fd`、`12c35b3`、`492722a`、`ca12a4f` 等）随本版发布。
+- **v0.11.0**：2026-09-12 发布，发布提交 `84631b9`（`feat(i18n): follow the game language in the overlay and the state payload`），GitHub Release 资产 `sts2-ai-agent-v0.11.0-windows.zip`（677015 字节），CI Validate `34629717120` success。工坊物品 3796486050 当时更新为 `file_size` 1135844、`time_updated` 2026-09-12 02:33:39。见 [v0.11.0 发布记录](history/release-v0.11.0_2026-09-12.md) 与 [本地化验收](history/localization-2026-09-12.md)。只更新工坊的 v0.10.7 发布提交 `f9330ba` 已包含在 `v0.11.0` 里。
 - **已随 v0.11.0 发布**（`git log 2f75e4a..84631b9`，共 13 个提交）：
   - `d77982a` 卡牌网格选择元数据改读基类 `NCardGridSelectionScreen`，修复 #82 的升级/变形/附魔选牌屏（隔离副本实测：附魔 1/1/0 → 0/3/0、首次点击 10s 超时 → 151ms；变形 36ms/187ms；升级 173ms 无回归；事件多选 2/2/0 无回归）。
   - `7b02168` 战斗状态暴露自家宠物（`pets[]` / `pet_missing`），紧凑视图同步；Necrobinder 实测奥斯提 1/1 与 `DIE_FOR_YOU_POWER`。同批补测 Defect 球槽（`orbs[]`/`orb_capacity`/`empty_orb_slots`、DUALCAST 后清空）。
@@ -25,7 +26,7 @@
   - 本次文档收口（docs-release-baseline）：本文件改为 v0.11.0 基准；`AGENTS.md` 版本号列全五个文件并改成与 `.github/CONTRIBUTING.md` 一致的 PR 发布流程；`docs/api.md` 补 `failed` 状态、`requires_coordinates` / `requires_tool`、五个屏幕名、时间线索引契约与两个关闭动作的扩大范围；两个 README 补路由与对称段落；`steam-workshop/workshop.json` 的 changeNote 更新到 0.11.0；`scripts/preflight-release.ps1` 补跑 CI-only 的 `test-verification-gates.ps1` 与 `test-native-exit-propagation.ps1`。
   - 以上五项只有离线证据：2026-09-12 本次收口后 `dotnet run --project STS2AIAgent.Tests -c Release` 272 PASS / 0 FAIL、`mcp_server` 单测 76 项 OK，`scripts/check_verification_gates.py` 四闸门全绿，`preflight-release.ps1` exit 0；没有实机复验。逐项记录见各子任务归档的 `prd.md` / `evidence.md`。
 
-- **v0.12.0 标签后主线未发布变更**：暂无（v0.12.0 刚发布）。
+- **v0.12.1 标签后主线未发布变更**：暂无（v0.12.1 刚发布；#88 / #89 / #92 / #93 的修复都已随本版发出，其中 #93 的两处实机发现见 `docs/live-validation-checklist.md`）。
 
 ## 2. 已有验收证据与边界
 
@@ -64,6 +65,7 @@
 | 主动发言与交流风格 | a9d4478（v0.10.6）；会话配额与对局边界修复 deafa23（v0.11.0） | v0.10.6 已含基础实现；会话收敛随 v0.11.0 发布 | 2026-09-10 隔离实机 + 本地桩验证触发、提示词、语气注入、只读 chat 路径、回复消费五项；2026-09-11 再验闸门：开关关闭时 50 次请求 0 条主动发言、战斗开始与结束均触发、9 次发送间隔 88–137 秒、发送后 12 秒的强制转移保持沉默、6 条后第 7 个时刻被拒、暂停再继续后额度恢复。见 [09-10 验收](history/validation-acceptance_2026-09-10.md) 与 [09-11 验收](history/validation-acceptance_2026-09-11.md) | 默认关闭的可选功能；仅战斗开始/结束触发，最多 6 句（每自动游玩会话）、间隔 ≥75 秒（跨会话）。真实模型在真实对局中的发言质量仍未验收 |
 | 依赖安全（#50 / #51） | cd55fe1 | 已发布 v0.10.6 | fastmcp 3.4.7、fast-uri 3.1.7；npm audit total 0；MCP 49 项单测通过 | 只覆盖这两条报告与 npm 树，不是完整的第三方审计 |
 | 文档契约与验证闸门 | c212594、6aabb4f | 已发布 v0.10.6 | `check_verification_gates.py` 四闸门全绿；自测漂移场景全部被拒；preflight 端到端 exit 0 | 静态检查，不能替代实机行为验证 |
+| 暂停与局内菜单页的屏幕名（#88 / #93） | `31296bd`（#88/#89）、`3cf347a`（#92）、`04748f6`（#93） | 已随 v0.12.1 发布 | 2026-09-13 隔离实机两轮逐屏核对：`PAUSE_MENU` / `SETTINGS` / `COMPENDIUM` / `CARD_LIBRARY` / `RELIC_COLLECTION` / `POTION_LAB` / `STATS` / `RUN_HISTORY` 各自报名、动作面只剩 `close_main_menu_submenu`、`choose_capstone_option` 全 409，FAILURES: 0 | `BESTIARY` 未实机开屏（该存档 hub 不画磁贴）；`save_and_quit` 的 409 是实机发现后补的 |
 
 ## 4. 待办任务
 
@@ -77,6 +79,8 @@
 2. **真实浏览器页面加载的 Origin 场景**：证据止于 MCP Origin 离线契约与本机探测，不是完整浏览器页面利用。
 3. **英文文案母语审校**：v0.11.0 的英文界面与状态文案是机器翻译，未经母语者复核（见 [本地化验收](history/localization-2026-09-12.md) 的 "Not covered"）。
 4. **v0.10.7 是否补 GitHub tag**：v0.10.7（`f9330ba`）只更新了 Steam 工坊，未打 tag、未建 Release，而该提交已包含在 `v0.11.0` 里；是否回填 tag 由发布者决定。
+5. **工坊简体中文列表**：页面上仍是旧版文案，缺 v0.11.0 与 v0.12.0 就写进仓库的列表项（2026-09-13 抓取页面确认）。`ModUploader upload` 只有 `-w` / `-i`，没有语言参数，只能在工坊网页端手工粘贴 `steam-workshop/description.zh-CN.txt`。
+6. **外部 agent 接管队友窗口**（[issue #85](https://github.com/CharTyr/STS2-Agent/issues/85)）：拆开「邀请 AI 队友」的前置要求，让外部 agent 不必靠伪装模型就能接管队友窗口。目前是仓库里唯一未关闭的 issue。
 
 ### 剩余事项与证据边界
 
