@@ -40,6 +40,7 @@ $stateInvariantScript = Join-Path $ProjectRoot "scripts/test-state-invariants.ps
 $mcpToolProfileScript = Join-Path $ProjectRoot "scripts/test-mcp-tool-profile.ps1"
 $multiplayerFlowScript = Join-Path $ProjectRoot "scripts/test-multiplayer-lobby-flow.ps1"
 $packageChecker = Join-Path $ProjectRoot "scripts/check_release_package.py"
+$releaseMetadataChecker = Join-Path $ProjectRoot "scripts/check_release_metadata.py"
 $verificationGates = Join-Path $ProjectRoot "scripts/check_verification_gates.py"
 $verificationGateSelfTest = Join-Path $ProjectRoot "scripts/test-verification-gates.ps1"
 $nativeExitPropagationTest = Join-Path $ProjectRoot "scripts/test-native-exit-propagation.ps1"
@@ -99,35 +100,11 @@ Invoke-Step -Name "Check the model budget proxy (no-cost self-test)" -Action {
 }
 
 Invoke-Step -Name "Validate release version metadata" -Action {
-    $modManifest = Get-Content -LiteralPath $modManifestPath -Raw -Encoding UTF8 | ConvertFrom-Json
-    $modIdManifest = Get-Content -LiteralPath $modIdManifestPath -Raw -Encoding UTF8 | ConvertFrom-Json
-    $releaseVersion = [string]$modManifest.version
-
-    if ([string]::IsNullOrWhiteSpace($releaseVersion)) {
-        throw "mod_manifest.json must declare a release version."
-    }
-    if ($modIdManifest.version -ne $releaseVersion) {
-        throw "mod_id.json version '$($modIdManifest.version)' does not match mod_manifest.json version '$releaseVersion'."
-    }
-
-    $routerContents = Get-Content -LiteralPath $routerPath -Raw
-    $expectedRouterVersion = 'const string ModVersion = "' + $releaseVersion + '";'
-    if ($routerContents.IndexOf($expectedRouterVersion, [StringComparison]::Ordinal) -lt 0) {
-        throw "Router ModVersion does not match release version '$releaseVersion'."
-    }
-
-    $mcpProjectContents = Get-Content -LiteralPath $mcpProjectPath -Raw
-    $mcpVersion = [regex]::Match($mcpProjectContents, '(?m)^version = "([^"]+)"\r?$').Groups[1].Value
-    if ($mcpVersion -ne $releaseVersion) {
-        throw "mcp_server pyproject version '$mcpVersion' does not match release version '$releaseVersion'."
-    }
-
-    $mcpLockContents = Get-Content -LiteralPath $mcpLockPath -Raw
-    $lockPattern = '(?ms)^\[\[package\]\]\r?\nname = "sts2-ai-agent-mcp"\r?\nversion = "' +
-        [regex]::Escape($releaseVersion) + '"'
-    if (-not [regex]::IsMatch($mcpLockContents, $lockPattern)) {
-        throw "mcp_server uv.lock does not contain release version '$releaseVersion'. Run 'uv lock' from mcp_server."
-    }
+    # Run the same checker CI runs instead of a second implementation of it. The inline copy this
+    # replaced had drifted: it never validated the version format (the checker requires
+    # x.y.z[-suffix]), and it read the first "version =" line of pyproject rather than the
+    # project table, so a malformed version could pass preflight and fail in CI.
+    Invoke-CheckedNative -FilePath "python" -Arguments @($releaseMetadataChecker)
 }
 
 Invoke-Step -Name "Check release packaging source contract" -Action {
