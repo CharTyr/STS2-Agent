@@ -149,10 +149,11 @@ internal static class ScreenResolutionContractTests
         var resolveBody = Flat(AgentSourceFixture.MethodBody(rawState, "ResolveNonModalScreen"));
 
         // The pause menu rides in the same NCapstoneSubmenuStack as the Settings/Compendium/Feedback
-        // overlays and is told apart by Type, so it must claim PAUSE_MENU before the combat branch and
-        // the visible card grid can name a paused game COMBAT or CARD_SELECTION.
-        const string pauseGuard =
-            "if(currentScreenisNCapstoneSubmenuStack{Type:CapstoneSubmenuType.PauseMenu})";
+        // overlays, and the container keeps its PauseMenu Type while a deeper page (settings, compendium,
+        // card library) is pushed on top. The guard therefore has to ask for the pause menu itself, and it
+        // must claim PAUSE_MENU before the combat branch and the visible card grid can name a paused game
+        // COMBAT or CARD_SELECTION.
+        const string pauseGuard = "if(IsPauseMenuOverlay(currentScreen))";
         var pauseIndex = resolveBody.IndexOf(pauseGuard, StringComparison.Ordinal);
         var combatIndex = resolveBody.IndexOf("FindActiveCombatRoom(currentScreen)", StringComparison.Ordinal);
         var visibleGridIndex = resolveBody.IndexOf(
@@ -175,9 +176,17 @@ internal static class ScreenResolutionContractTests
             rawState,
             "public static IReadOnlyList<NButton> GetCapstoneButtons("));
         Assert.Contains(
-            "capstoneScreen.Type==CapstoneSubmenuType.PauseMenu",
+            "IsPauseMenuOverlay(capstoneScreen)",
             capstoneButtons,
             StringComparison.Ordinal);
+
+        // The overlay test itself has to prove the page on top of the stack, or a card library browsed
+        // from the pause menu would report a paused game the agent cannot act in.
+        var overlay = Flat(AgentSourceFixture.DeclarationBody(
+            rawState,
+            "public static bool IsPauseMenuOverlay("));
+        Assert.Contains("CapstoneSubmenuType.PauseMenu", overlay, StringComparison.Ordinal);
+        Assert.Contains("Stack?.Peek()isNPauseMenu", overlay, StringComparison.Ordinal);
 
         var names = Flat(AgentSourceFixture.MethodBody(rawState, "BuildAvailableActionNames"));
         var descriptors = Flat(AgentSourceFixture.MethodBody(rawState, "BuildAvailableActionsPayload"));
