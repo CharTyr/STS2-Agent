@@ -630,6 +630,22 @@ internal static class GameActionService
 
             stable = await WaitForPatchNotesCloseAsync(patchNotes, TimeSpan.FromSeconds(10));
         }
+        else if (currentScreen is NCapstoneSubmenuStack capstonePageContainer &&
+            GameStateService.GetClosableCapstonePage(capstonePageContainer) is { } capstonePage)
+        {
+            // The page is left the way its own BackButton leaves it: the game wires every submenu's back
+            // button to Stack.Pop(), which closes this page and shows the page below it again. Popping a
+            // page above the pause menu therefore cannot resume the run -- the pause menu is still on top.
+            var capstoneStack = capstonePageContainer.Stack
+                ?? throw new ApiException(503, "state_unavailable", "Capstone submenu stack is unavailable.", new
+                {
+                    action = "close_main_menu_submenu",
+                    screen
+                }, retryable: true);
+
+            capstoneStack.Pop();
+            stable = await WaitForCapstonePageCloseAsync(capstoneStack, capstonePage, TimeSpan.FromSeconds(10));
+        }
         else
         {
             if (currentScreen is not NSubmenu submenu)
@@ -6061,6 +6077,35 @@ internal static class GameActionService
 
         var finalScreen = ActiveScreenContext.Instance.GetCurrentScreen();
         return !ReferenceEquals(finalScreen, submenu) || !submenuStack.SubmenusOpen;
+    }
+
+    /// <summary>
+    /// A capstone container page is closed when the container's own stack no longer holds it. The screen
+    /// context never changes here: the container stays up with the page below it (the pause menu) and only
+    /// closes itself once the stack runs empty, so waiting on the screen would report settled too early.
+    /// </summary>
+    private static bool IsCapstonePageClosed(NSubmenuStack stack, NSubmenu page)
+    {
+        return !GodotObject.IsInstanceValid(page) || !ReferenceEquals(stack.Peek(), page);
+    }
+
+    private static async Task<bool> WaitForCapstonePageCloseAsync(
+        NSubmenuStack stack,
+        NSubmenu page,
+        TimeSpan timeout)
+    {
+        var deadline = DateTime.UtcNow + timeout;
+        while (DateTime.UtcNow < deadline)
+        {
+            await WaitForNextFrameAsync();
+
+            if (IsCapstonePageClosed(stack, page))
+            {
+                return true;
+            }
+        }
+
+        return IsCapstonePageClosed(stack, page);
     }
 
     /// <summary>

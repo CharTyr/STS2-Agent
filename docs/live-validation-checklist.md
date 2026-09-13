@@ -99,6 +99,37 @@ All three were re-run against the patched build on the same isolated instance.
   instance of an object.` and `command: bestiary` in the details — where it used to be a bare 500
   `internal_error` with `details: null`. The run is left untouched (`COMBAT`, same action list).
 
+### In-run menu pages (issue #93)
+
+The capstone container's pages used to be reported as the room underneath them: the pause menu's compendium hub
+read as `COMBAT`, the card library as `CARD_SELECTION`, and both handed the model the run's own actions plus
+the page's furniture as `capstone.options`. Verified live in two passes on one isolated instance, polling
+`/state` after every click:
+
+- **Before the fix** (shipped v0.12.0 and the #91 / #92 build): pause menu -> compendium hub reported `COMBAT`
+  with `available_actions = [end_turn, play_card, save_and_quit, choose_capstone_option]`; the card library
+  reported `CARD_SELECTION` with 51 capstone options whose first 25 labels were `Hitbox`.
+- **After the fix**: `PAUSE_MENU`, `SETTINGS`, `COMPENDIUM`, `CARD_LIBRARY`, `RELIC_COLLECTION`, `POTION_LAB`,
+  `STATS` and `RUN_HISTORY` each report their own name. None of them advertises a room action or
+  `save_and_quit`, `capstone` stays null, and `choose_capstone_option` answers 409 `invalid_action` on every
+  one of them. `close_main_menu_submenu` steps back one page (`CARD_LIBRARY` -> `COMPENDIUM` -> `PAUSE_MENU`)
+  and is 409 on the pause menu itself, which is where a person resumes. Escape returned the run to `COMBAT`
+  with `end_turn` / `play_card` offered again.
+- **The live run corrected the issue's own assumption about the way out.** The issue claimed `close_cards_view`
+  still worked on the card library because it looks for a `BackButton` regardless of type. It does not: the page
+  sits in the container rather than on a card-viewer screen, so both it and `close_main_menu_submenu` were 409,
+  before and after the naming fix, and an agent that followed the skill's "use `close_main_menu_submenu` inside
+  a run" line had nothing that worked. The fix widens `close_main_menu_submenu` to the container's stack
+  (`Stack.Pop()`, the call the game wires to every page's own BackButton) and deliberately excludes the pause
+  page, since popping that one resumes a paused run.
+- **Second live find: `save_and_quit` executed from a page whose surfaces advertised nothing.** #91 emptied both
+  action surfaces over the pause menu, but `CanSaveAndQuit` only excluded the main menu, game over, character
+  select and multiplayer, so the action still worked there and saved-and-quit the run during this session's
+  probing. The capstone overlay is now part of that predicate, so the executor refuses what the surface never
+  offered.
+- `BESTIARY` was not opened live: this profile's compendium hub draws no bestiary tile (`NBestiary.CanBeShown()`
+  gates it). The mapping and the exclusion from decision screens exist for the build that shows it.
+
 ### Environment note for isolated runs
 
 A brand-new `--clientId` directory gets a default `settings.save` whose `mod_settings` is `null`, and the

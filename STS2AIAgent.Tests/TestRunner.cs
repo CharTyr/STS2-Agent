@@ -414,7 +414,8 @@ internal static class TestRunner
         yield return ("ScreenResolution.FakeMerchant", () => Task.Run(ScreenResolutionContractTests.FakeMerchantOpensThroughTheSharedButton));
         yield return ("ScreenResolution.PatchNotes", () => Task.Run(ScreenResolutionContractTests.PatchNotesClosePathIsWidenedWithoutWeakeningSubmenus));
         yield return ("ScreenResolution.InspectOverlays", () => Task.Run(ScreenResolutionContractTests.InspectOverlaysCloseThroughTheirOwnClose));
-        yield return ("ScreenResolution.PauseMenu", () => Task.Run(ScreenResolutionContractTests.PauseMenuIsNotADecisionScreen));
+        yield return ("ScreenResolution.CapstoneContainerPages", () => Task.Run(ScreenResolutionContractTests.CapstoneContainerPagesAreNamedAndNotDecisionScreens));
+        yield return ("ScreenResolution.CapstonePagesOneBackStep", () => Task.Run(ScreenResolutionContractTests.CapstonePagesOfferOneBackStepAndNeverThePausePage));
         yield return ("TimelineIndex.OneSpace", () => Task.Run(TimelineIndexContractTests.ExecutorIndexesTheSameSlotListTheStateExposes));
         yield return ("TimelineIndex.NonActionableRejected", () => Task.Run(TimelineIndexContractTests.NonActionableSlotsAreRejectedExplicitly));
         yield return ("TimelineIndex.DescriptorFlags", () => Task.Run(TimelineIndexContractTests.CrystalDescriptorsCarryTheirRequirements));

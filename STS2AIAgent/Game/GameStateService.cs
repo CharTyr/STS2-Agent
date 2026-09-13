@@ -46,8 +46,14 @@ using MegaCrit.Sts2.Core.Nodes.Screens.GameOverScreen;
 using MegaCrit.Sts2.Core.Nodes.Screens.InspectScreens;
 using MegaCrit.Sts2.Core.Nodes.Screens.MainMenu;
 using MegaCrit.Sts2.Core.Nodes.Screens.Map;
+using MegaCrit.Sts2.Core.Nodes.Screens.Bestiary;
+using MegaCrit.Sts2.Core.Nodes.Screens.PotionLab;
+using MegaCrit.Sts2.Core.Nodes.Screens.RelicCollection;
+using MegaCrit.Sts2.Core.Nodes.Screens.RunHistoryScreen;
 using MegaCrit.Sts2.Core.Nodes.Screens.ScreenContext;
+using MegaCrit.Sts2.Core.Nodes.Screens.Settings;
 using MegaCrit.Sts2.Core.Nodes.Screens.Shops;
+using MegaCrit.Sts2.Core.Nodes.Screens.StatsScreen;
 using MegaCrit.Sts2.Core.Nodes.Screens.Timeline;
 using MegaCrit.Sts2.Core.Nodes.Screens.Timeline.UnlockScreens;
 using MegaCrit.Sts2.Core.Nodes.Screens.TreasureRoomRelic;
@@ -253,10 +259,22 @@ internal static class GameStateService
             };
         }
 
-        // The pause menu is a human overlay: nothing is actionable while it is up, so the descriptor
-        // list stays empty instead of advertising the paused combat actions.
-        if (IsPauseMenuOverlay(currentScreen))
+        // The container's pages are human menus over a frozen run: nothing in the run is actionable
+        // while one is up, so the descriptor list does not advertise the actions the pause swallows.
+        // Backing out one level is the page's own BackButton, and the only action an agent may take
+        // here; the pause menu itself has none, because resuming is the person's call, not the agent's.
+        if (IsCapstonePageOverlay(currentScreen))
         {
+            if (CanCloseMainMenuSubmenu(currentScreen))
+            {
+                descriptors.Add(new ActionDescriptor
+                {
+                    name = "close_main_menu_submenu",
+                    requires_target = false,
+                    requires_index = false
+                });
+            }
+
             return new AvailableActionsPayload
             {
                 screen = ResolveScreen(currentScreen),
@@ -1205,24 +1223,69 @@ internal static class GameStateService
     }
 
     /// <summary>
-    /// True only while the shared capstone container is actually showing the in-game pause menu.
-    /// The container also hosts settings, the compendium and the card library, and it keeps its own
-    /// Type while one of those pages is pushed on top, so the container type alone would report
-    /// those pages as a paused game the agent cannot act in.
+    /// True while the shared capstone container is showing one of the in-run human menus it exists
+    /// for (pause, settings, compendium, card library and their siblings).
     /// </summary>
-    public static bool IsPauseMenuOverlay(IScreenContext? currentScreen)
+    public static bool IsCapstonePageOverlay(IScreenContext? currentScreen)
     {
-        return currentScreen is NCapstoneSubmenuStack { Type: CapstoneSubmenuType.PauseMenu } pauseMenu
-            && pauseMenu.Stack?.Peek() is NPauseMenu;
+        return currentScreen is NCapstoneSubmenuStack container
+            && IsKnownCapstoneContainerPage(container.Stack?.Peek());
+    }
+
+    /// <summary>
+    /// The pages this build pushes into the container. Every one of them is a menu the player opened
+    /// (the container is only ever shown by the top-bar pause button), so none is a decision list and
+    /// the run underneath is frozen while one is up.
+    /// </summary>
+    private static bool IsKnownCapstoneContainerPage(NSubmenu? page)
+    {
+        return page is NPauseMenu
+            or NSettingsScreen
+            or NCompendiumSubmenu
+            or NCardLibrary
+            or NRelicCollection
+            or NPotionLab
+            or NBestiary
+            or NStatsScreen
+            or NRunHistory;
+    }
+
+    /// <summary>
+    /// The page on the container's stack that <c>close_main_menu_submenu</c> may pop, or null when
+    /// there is nothing an agent should close from here. Every page in the container is left by its own
+    /// BackButton, which the game wires to <c>Stack.Pop()</c>, so backing out one level is exactly what
+    /// the person sitting there would do. The pause menu itself is never one of them: that page is where
+    /// a person resumes the run, and the agent does not unpause a game on their behalf.
+    /// </summary>
+    public static NSubmenu? GetClosableCapstonePage(IScreenContext? currentScreen)
+    {
+        if (currentScreen is not NCapstoneSubmenuStack container)
+        {
+            return null;
+        }
+
+        var page = container.Stack?.Peek();
+        if (page == null || !IsKnownCapstoneContainerPage(page) || page is NPauseMenu || !page.IsVisibleInTree())
+        {
+            return null;
+        }
+
+        return page;
     }
 
     public static IReadOnlyList<NButton> GetCapstoneButtons(IScreenContext? currentScreen)
     {
-        // Only the Settings/Compendium/Feedback overlays are capstone decision lists now; the pause
-        // menu shares the container but its own buttons include "放弃" and "保存并退出", so it must
-        // never read as a capstone option list.
-        if (currentScreen is not NCapstoneSubmenuStack capstoneScreen ||
-            IsPauseMenuOverlay(capstoneScreen))
+        if (currentScreen is not NCapstoneSubmenuStack capstoneScreen)
+        {
+            return Array.Empty<NButton>();
+        }
+
+        // The container's pages are menus, not option lists: their buttons are navigation tiles,
+        // filter tickboxes and the pause menu's own "放弃", none of which is an agent decision. This
+        // build has no boss-reward option screen (CapstoneSubmenuType carries no such value), so the
+        // descendant scan only runs for a page this build does not know, which is what a real option
+        // screen would need if the game grows one back.
+        if (IsKnownCapstoneContainerPage(capstoneScreen.Stack?.Peek()))
         {
             return Array.Empty<NButton>();
         }
@@ -1433,6 +1496,14 @@ internal static class GameStateService
             return false;
         }
 
+        // A page of the in-run capstone container is a person's menu over a frozen run, and both action
+        // surfaces stay empty while one is up. The executor has to refuse the same surface -- the pause
+        // menu's own "save and quit" button belongs to the person sitting there, not to the agent.
+        if (IsCapstonePageOverlay(currentScreen))
+        {
+            return false;
+        }
+
         if (NGame.Instance == null || !GodotObject.IsInstanceValid(NGame.Instance))
         {
             return false;
@@ -1496,6 +1567,14 @@ internal static class GameStateService
         if (currentScreen is NPatchNotesScreen patchNotes)
         {
             return GodotObject.IsInstanceValid(patchNotes) && patchNotes.IsVisibleInTree();
+        }
+
+        // The in-run human pages are pages of the capstone container rather than NSubmenu screens of
+        // their own, so the submenu branch below never sees them; the container's stack is the thing to
+        // pop, and only while a page above the pause menu is the one being shown.
+        if (GetClosableCapstonePage(currentScreen) != null)
+        {
+            return true;
         }
 
         if (currentScreen is not NSubmenu submenu || !submenu.IsVisibleInTree())
@@ -2630,10 +2709,17 @@ internal static class GameStateService
             return names.ToArray();
         }
 
-        // The human paused the game: combat actions are swallowed while paused and the overlay's own
-        // buttons (including "放弃") are not agent decisions, so advertise nothing.
-        if (IsPauseMenuOverlay(currentScreen))
+        // A human menu is over a frozen run: the combat actions are swallowed while it is up and none
+        // of the page's own buttons (including the pause menu's "放弃") is an agent decision.
+        if (IsCapstonePageOverlay(currentScreen))
         {
+            // The page's own BackButton is the one action a human menu leaves an agent, and only for the
+            // pages above the pause menu. The pause page offers nothing: a person resumes that one.
+            if (CanCloseMainMenuSubmenu(currentScreen))
+            {
+                names.Add("close_main_menu_submenu");
+            }
+
             return names.ToArray();
         }
 
@@ -6910,13 +6996,27 @@ internal static class GameStateService
 
     private static string ResolveNonModalScreen(IScreenContext? currentScreen)
     {
-        // The capstone container hosts every overlay and tells them apart by its own Type; the
-        // in-game pause menu rides in it too. It has to claim PAUSE_MENU before the combat and
-        // visible-grid branches below can name the paused scene COMBAT or CARD_SELECTION, which
-        // would advertise a live action list over a game the human just paused.
-        if (IsPauseMenuOverlay(currentScreen))
+        // The capstone container hosts the in-run human menus and keeps its own Type while a page is
+        // pushed on top of the one that opened it, so the page on its stack is what has to be named.
+        // Naming the container instead reported the run underneath -- browsing the card library from a
+        // pause menu read as COMBAT, and the compendium hub as whatever room the run stood in -- while
+        // the combat and visible-grid branches below handed the model a live action list and a page's
+        // own furniture as capstone options. This has to run before both of them.
+        if (currentScreen is NCapstoneSubmenuStack container)
         {
-            return "PAUSE_MENU";
+            return container.Stack?.Peek() switch
+            {
+                NPauseMenu => "PAUSE_MENU",
+                NSettingsScreen => "SETTINGS",
+                NCompendiumSubmenu => "COMPENDIUM",
+                NCardLibrary => "CARD_LIBRARY",
+                NRelicCollection => "RELIC_COLLECTION",
+                NPotionLab => "POTION_LAB",
+                NBestiary => "BESTIARY",
+                NStatsScreen => "STATS",
+                NRunHistory => "RUN_HISTORY",
+                _ => "CAPSTONE_SELECTION",
+            };
         }
 
         if (currentScreen is NUnlockScreen)

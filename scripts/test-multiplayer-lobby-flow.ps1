@@ -652,6 +652,12 @@ function Invoke-LocalRunProgressionStep {
         return $null
     }
 
+    # The shared in-run capstone container (NCapstoneSubmenuStack): a person opened one of its menu pages
+    # over a frozen run, and the mod offers no action while one is up, so let the caller wait it out.
+    if ($State.screen -in @("PAUSE_MENU", "SETTINGS", "COMPENDIUM", "CARD_LIBRARY", "RELIC_COLLECTION", "POTION_LAB", "BESTIARY", "STATS", "RUN_HISTORY")) {
+        return $null
+    }
+
     switch ($State.screen) {
         "BUNDLE_SELECTION" {
             if ($actions -contains "confirm_bundle") {

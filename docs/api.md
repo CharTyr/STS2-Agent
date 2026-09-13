@@ -81,6 +81,13 @@
 | `BUNDLE_SELECTION` | 开局卡包选择界面（用 `choose_bundle` / `confirm_bundle`） |
 | `CAPSTONE_SELECTION` | Capstone 选项界面（用 `choose_capstone_option`） |
 | `PAUSE_MENU` | 暂停菜单叠加层（人工按下暂停；agent 在此期间没有可用动作，也拿不到 capstone 选项） |
+| `SETTINGS` | 设置页（暂停菜单里的「设置」；只有 `close_main_menu_submenu` 可退回上一级） |
+| `COMPENDIUM` | 百科大全 hub（暂停菜单里的「百科大全」，通向下面这些图鉴页） |
+| `RELIC_COLLECTION` | 遗物收集页（「百科大全」→「遗物收集」） |
+| `POTION_LAB` | 药水研究所页（「百科大全」→「药水研究所」） |
+| `BESTIARY` | 怪物图鉴页（「百科大全」→ 怪物图鉴）。hub 只在 `NBestiary.CanBeShown()` 为真时才画出这块磁贴 |
+| `STATS` | 角色数据页（「百科大全」→「角色数据」） |
+| `RUN_HISTORY` | 历史记录页（「百科大全」→「历史记录」） |
 | `MAP` | 地图界面 |
 | `COMBAT` | 战斗中 |
 | `EVENT` | 事件交互 |
@@ -104,7 +111,11 @@
 | `FEEDBACK` | 反馈提交页；不提供关闭动作，仅用于诊断 |
 | `UNKNOWN` | 无法识别的界面 |
 
-暂停菜单是人按下暂停后出现的叠加层（游戏用同一个 `NCapstoneSubmenuStack` 容器承载它，靠 `Type == PauseMenu` 区分）。暂停期间 agent 没有可用动作：`available_actions` 与 `/actions/available` 都为空，`capstone` 也不会出现。
+人按下暂停后出现的暂停菜单，以及从它进入的设置页与百科大全各页（卡牌总览、遗物收集、药水研究所、怪物图鉴、角色数据、历史记录）都由同一个 `NCapstoneSubmenuStack` 容器承载。`screen` 报的是容器栈顶那个页面的名字——`PAUSE_MENU`、`SETTINGS`、`COMPENDIUM`、`CARD_LIBRARY`、`RELIC_COLLECTION`、`POTION_LAB`、`BESTIARY`、`STATS`、`RUN_HISTORY`——而不是被这些页面盖住的房间；容器里出现未知页面时仍落到 `CAPSTONE_SELECTION`。
+
+这些都是人工菜单，被暂停吞掉的房间动作不再出现：`end_turn`、`play_card`、`choose_map_node`、`resolve_rewards`、`save_and_quit` 一律不广告，直接调用会得到 409 `invalid_action`；`capstone` 同样不出现——容器里的按钮是导航磁贴、筛选勾选框和控件命中区（`Hitbox`），不是 agent 的选项列表，所以 `choose_capstone_option` 既不广告也调用不了。
+
+除暂停菜单本身以外，这些页面各留一个动作：`close_main_menu_submenu` 退回上一级（等同页面自己的返回按钮 `Stack.Pop()`），例如 `CARD_LIBRARY` → `COMPENDIUM` → `PAUSE_MENU`；退到暂停菜单为止，那一页不再提供任何动作——恢复游戏是人的事，agent 不替人点「继续」。`close_cards_view` 在这里不适用，它只认战斗里的看牌屏与牌堆。
 
 ## Action Status
 

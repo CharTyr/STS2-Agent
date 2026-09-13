@@ -143,64 +143,94 @@ internal static class ScreenResolutionContractTests
         Assert.Contains("return currentScreen is not NCardsViewScreen;", closed, StringComparison.Ordinal);
     }
 
-    public static void PauseMenuIsNotADecisionScreen()
+    public static void CapstoneContainerPagesAreNamedAndNotDecisionScreens()
     {
         var rawState = AgentSourceFixture.Read("STS2AIAgent/Game/GameStateService.cs");
         var resolveBody = Flat(AgentSourceFixture.MethodBody(rawState, "ResolveNonModalScreen"));
 
-        // The pause menu rides in the same NCapstoneSubmenuStack as the Settings/Compendium/Feedback
-        // overlays, and the container keeps its PauseMenu Type while a deeper page (settings, compendium,
-        // card library) is pushed on top. The guard therefore has to ask for the pause menu itself, and it
-        // must claim PAUSE_MENU before the combat branch and the visible card grid can name a paused game
-        // COMBAT or CARD_SELECTION.
-        const string pauseGuard = "if(IsPauseMenuOverlay(currentScreen))";
-        var pauseIndex = resolveBody.IndexOf(pauseGuard, StringComparison.Ordinal);
+        // The container keeps its own Type while a page is pushed on top of the one that opened it, so the
+        // page on its stack is what has to be named. Naming the container instead reported the run
+        // underneath (COMBAT while a person browses the card library), so the branch has to come first.
+        const string containerGuard = "if(currentScreenisNCapstoneSubmenuStackcontainer)";
+        var containerIndex = resolveBody.IndexOf(containerGuard, StringComparison.Ordinal);
         var combatIndex = resolveBody.IndexOf("FindActiveCombatRoom(currentScreen)", StringComparison.Ordinal);
         var visibleGridIndex = resolveBody.IndexOf(
             "GetVisibleGridCardHolders(rootNode).Count>0", StringComparison.Ordinal);
 
-        Assert.True(pauseIndex >= 0, "ResolveNonModalScreen must claim PAUSE_MENU for the pause overlay.");
+        Assert.True(containerIndex >= 0, "ResolveNonModalScreen must name the page the container shows.");
         Assert.True(combatIndex >= 0, "The combat branch must remain covered by this contract.");
         Assert.True(visibleGridIndex >= 0, "The visible card-grid fallback must remain covered by this contract.");
-        Assert.True(pauseIndex < combatIndex, "PAUSE_MENU must resolve before FindActiveCombatRoom can report COMBAT.");
-        Assert.True(pauseIndex < visibleGridIndex, "PAUSE_MENU must resolve before the visible grid can report CARD_SELECTION.");
-        Assert.Contains("return\"PAUSE_MENU\";", resolveBody[pauseIndex..combatIndex], StringComparison.Ordinal);
+        Assert.True(containerIndex < combatIndex, "The container page must resolve before FindActiveCombatRoom can report COMBAT.");
+        Assert.True(containerIndex < visibleGridIndex, "The container page must resolve before the visible grid can report CARD_SELECTION.");
+
+        // Every page the container shows gets its own name, and the ones a person reaches from the pause
+        // menu are the pages this test pins. Anything unknown stays on the historical CAPSTONE_SELECTION.
+        var pageSlice = resolveBody[containerIndex..combatIndex];
+        var containerPages = new[]
+        {
+            ("NPauseMenu", "PAUSE_MENU"),
+            ("NSettingsScreen", "SETTINGS"),
+            ("NCompendiumSubmenu", "COMPENDIUM"),
+            ("NCardLibrary", "CARD_LIBRARY"),
+            ("NRelicCollection", "RELIC_COLLECTION"),
+            ("NPotionLab", "POTION_LAB"),
+            ("NBestiary", "BESTIARY"),
+            ("NStatsScreen", "STATS"),
+            ("NRunHistory", "RUN_HISTORY"),
+        };
+        foreach (var (pageType, screenName) in containerPages)
+        {
+            Assert.Contains(pageType + "=>\"" + screenName + "\"", pageSlice, StringComparison.Ordinal);
+        }
+
+        Assert.Contains("_=>\"CAPSTONE_SELECTION\"", pageSlice, StringComparison.Ordinal);
+        Assert.Contains("Stack?.Peek()", pageSlice, StringComparison.Ordinal);
         Assert.Contains(
             "NCapstoneSubmenuStack=>\"CAPSTONE_SELECTION\"",
             resolveBody,
             StringComparison.Ordinal);
 
-        // The pause menu is the one capstone-container type whose buttons are not a decision list, so
-        // the option getter drops it and both action lists stay empty while it is up.
+        // Every page in the container is a menu, so none of their buttons is a capstone option list.
         var capstoneButtons = Flat(AgentSourceFixture.DeclarationBody(
             rawState,
             "public static IReadOnlyList<NButton> GetCapstoneButtons("));
         Assert.Contains(
-            "IsPauseMenuOverlay(capstoneScreen)",
+            "IsKnownCapstoneContainerPage(capstoneScreen.Stack?.Peek())",
             capstoneButtons,
             StringComparison.Ordinal);
 
-        // The overlay test itself has to prove the page on top of the stack, or a card library browsed
-        // from the pause menu would report a paused game the agent cannot act in.
+        // The overlay test has to prove the page on top of the stack, or a page would be reported as a
+        // frozen run the agent cannot act in.
         var overlay = Flat(AgentSourceFixture.DeclarationBody(
             rawState,
-            "public static bool IsPauseMenuOverlay("));
-        Assert.Contains("CapstoneSubmenuType.PauseMenu", overlay, StringComparison.Ordinal);
-        Assert.Contains("Stack?.Peek()isNPauseMenu", overlay, StringComparison.Ordinal);
+            "public static bool IsCapstonePageOverlay("));
+        Assert.Contains("IsKnownCapstoneContainerPage(container.Stack?.Peek())", overlay, StringComparison.Ordinal);
+
+        var knownPages = Flat(AgentSourceFixture.DeclarationBody(
+            rawState,
+            "private static bool IsKnownCapstoneContainerPage("));
+        Assert.Contains("pageisNPauseMenu", knownPages, StringComparison.Ordinal);
+        // The predicate has to know every page the mapping names, or one of them would be reported as a
+        // frozen run whose own buttons read as capstone options.
+        foreach (var (pageType, _) in containerPages)
+        {
+            Assert.Contains(pageType, knownPages, StringComparison.Ordinal);
+        }
 
         var names = Flat(AgentSourceFixture.MethodBody(rawState, "BuildAvailableActionNames"));
         var descriptors = Flat(AgentSourceFixture.MethodBody(rawState, "BuildAvailableActionsPayload"));
-        Assert.Contains(pauseGuard, names, StringComparison.Ordinal);
-        Assert.Contains(pauseGuard, descriptors, StringComparison.Ordinal);
+        const string actionGuard = "if(IsCapstonePageOverlay(currentScreen))";
+        Assert.Contains(actionGuard, names, StringComparison.Ordinal);
+        Assert.Contains(actionGuard, descriptors, StringComparison.Ordinal);
 
-        // The pause branch returns ahead of the combat actions, so nothing is advertised while paused.
-        var pauseInNames = names.IndexOf(pauseGuard, StringComparison.Ordinal);
+        // The branch returns ahead of the combat actions, so nothing is advertised while a menu is up.
+        var guardInNames = names.IndexOf(actionGuard, StringComparison.Ordinal);
         var endTurnIndex = names.IndexOf(
             "if(CanEndTurn(currentScreen,combatState,requireButtonReady:false))",
             StringComparison.Ordinal);
         Assert.True(
-            endTurnIndex >= 0 && pauseInNames >= 0 && pauseInNames < endTurnIndex,
-            "The pause branch must return before the combat actions are advertised.");
+            endTurnIndex >= 0 && guardInNames >= 0 && guardInNames < endTurnIndex,
+            "The container-page branch must return before the combat actions are advertised.");
     }
 
     private static (string ScreenType, string ScreenName)[] SwitchMappings(string methodBody)
@@ -215,6 +245,77 @@ internal static class ScreenResolutionContractTests
         return Regex.Matches(slice, "([A-Za-z_][A-Za-z0-9_]*(?: or [A-Za-z_][A-Za-z0-9_]*)*)\\s*=>\\s*\"([A-Z_]+)\"")
             .Select(match => (ScreenType: match.Groups[1].Value, ScreenName: match.Groups[2].Value))
             .ToArray();
+    }
+
+    public static void CapstonePagesOfferOneBackStepAndNeverThePausePage()
+    {
+        var rawState = AgentSourceFixture.Read("STS2AIAgent/Game/GameStateService.cs");
+        var rawAction = AgentSourceFixture.Read("STS2AIAgent/Game/GameActionService.cs");
+
+        // The one action these pages have is backing out one level, and only from above the pause menu:
+        // the pause page is where a person resumes the run, so it is never the agent's to close.
+        var closable = Flat(AgentSourceFixture.DeclarationBody(
+            rawState,
+            "public static NSubmenu? GetClosableCapstonePage("));
+        Assert.Contains("currentScreenisnotNCapstoneSubmenuStackcontainer", closable, StringComparison.Ordinal);
+        Assert.Contains("IsKnownCapstoneContainerPage(page)", closable, StringComparison.Ordinal);
+        Assert.Contains("pageisNPauseMenu", closable, StringComparison.Ordinal);
+        Assert.Contains("returnpage;", closable, StringComparison.Ordinal);
+
+        // The container is not an NSubmenu, so the widened check has to run before that branch.
+        var canClose = Flat(AgentSourceFixture.DeclarationBody(
+            rawState,
+            "public static bool CanCloseMainMenuSubmenu("));
+        var closableIndex = canClose.IndexOf("GetClosableCapstonePage(currentScreen)!=null", StringComparison.Ordinal);
+        var submenuIndex = canClose.IndexOf("currentScreenisnotNSubmenusubmenu", StringComparison.Ordinal);
+        Assert.True(closableIndex >= 0, "close_main_menu_submenu must accept a capstone container page.");
+        Assert.True(submenuIndex >= 0, "The main-menu submenu branch must stay covered by this contract.");
+        Assert.True(closableIndex < submenuIndex, "The container branch has to run before the NSubmenu branch.");
+
+        // The executor pops the container's stack -- the call the game wires to every page's BackButton.
+        var close = Flat(AgentSourceFixture.DeclarationBody(
+            rawAction,
+            "private static async Task<ActionResponsePayload> ExecuteCloseMainMenuSubmenuAsync("));
+        Assert.Contains("currentScreenisNCapstoneSubmenuStackcapstonePageContainer", close, StringComparison.Ordinal);
+        Assert.Contains("GameStateService.GetClosableCapstonePage(capstonePageContainer)", close, StringComparison.Ordinal);
+        Assert.Contains("capstoneStack.Pop();", close, StringComparison.Ordinal);
+        Assert.Contains(
+            "WaitForCapstonePageCloseAsync(capstoneStack,capstonePage,TimeSpan.FromSeconds(10))",
+            close,
+            StringComparison.Ordinal);
+
+        // Both surfaces have to advertise it from inside the guard that suppresses the run actions, or the
+        // action would only be reachable by a client that ignores available_actions.
+        var names = Flat(AgentSourceFixture.MethodBody(rawState, "BuildAvailableActionNames"));
+        var descriptors = Flat(AgentSourceFixture.MethodBody(rawState, "BuildAvailableActionsPayload"));
+        Assert.Contains(
+            "if(CanCloseMainMenuSubmenu(currentScreen)){names.Add(\"close_main_menu_submenu\");}",
+            names,
+            StringComparison.Ordinal);
+        Assert.Contains(
+            "if(CanCloseMainMenuSubmenu(currentScreen)){descriptors.Add(newActionDescriptor{name=\"close_main_menu_submenu\","
+            + "requires_target=false,requires_index=false});}",
+            descriptors,
+            StringComparison.Ordinal);
+
+        // "Closed" is the stack no longer holding that page: the container screen itself never changes, so
+        // the main-menu waiter (which asks whether the screen changed) cannot be reused here.
+        var closed = Flat(AgentSourceFixture.DeclarationBody(
+            rawAction,
+            "private static bool IsCapstonePageClosed("));
+        Assert.Contains("!ReferenceEquals(stack.Peek(),page)", closed, StringComparison.Ordinal);
+        Assert.False(
+            closed.Contains("SubmenusOpen", StringComparison.Ordinal),
+            "The container stays open while a page below it is still there, so SubmenusOpen cannot tell a pop apart.");
+
+        // save_and_quit used to execute from a page whose surface never advertised it.
+        var canSave = Flat(AgentSourceFixture.DeclarationBody(
+            rawState,
+            "public static bool CanSaveAndQuit("));
+        var guardIndex = canSave.IndexOf("if(IsCapstonePageOverlay(currentScreen)){returnfalse;}", StringComparison.Ordinal);
+        var permissiveIndex = canSave.IndexOf("returncurrentScreenisnot(NMainMenuor", StringComparison.Ordinal);
+        Assert.True(guardIndex >= 0, "save_and_quit must refuse while a capstone page is up.");
+        Assert.True(permissiveIndex > guardIndex, "The capstone guard has to run before the permissive return.");
     }
 
     private static string Normalize(string source)
