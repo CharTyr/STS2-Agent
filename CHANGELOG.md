@@ -2,12 +2,12 @@
 
 > Release attribution is recorded against tags or release commits. Post-tag maintenance is listed separately; current validation limits are maintained in [PRODUCT_PLAN_CURRENT.md](https://github.com/CharTyr/STS2-Agent/blob/main/PRODUCT_PLAN_CURRENT.md).
 
-## Unreleased
+## v0.12.2 - 2026-09-13
 
-> Issue #85: the player who wants to fight their own character while an outside agent drives the
-> teammate window no longer has to fake a passing model test to get there. Inviting a teammate now
-> picks its route from whether the play model is verified, and the supported control entry moved to
-> the host window. Live: [docs/live-validation-checklist.md](docs/live-validation-checklist.md).
+> The co-op handoff: the player who wants to fight their own character while an outside agent drives the
+> teammate window no longer has to fake a passing model test to get there, and the state that agent reads
+> stopped contradicting itself. Live:
+> [docs/live-validation-checklist.md](docs/live-validation-checklist.md).
 
 ### Added
 
@@ -22,6 +22,12 @@
   `GET /state` and `POST /action` instead of guessing the port. The session token is not part of it.
 - `docs/api.md` documents the two co-op routes side by side, the new endpoint, and the new field; both
   READMEs gained an “Option C: hand the teammate window to an external agent”.
+- `combat.enemies[].base_max_hp` on both the raw and the compact enemy payload (#101). It carries
+  `Creature.MonsterMaxHpBeforeModification` — the same dimension as the `monsters` collection’s
+  `min_hp` / `max_hp` — while `max_hp` stays the scaled live value. Co-op multiplies monster HP by
+  `players × act factor` before it reaches the live creature, so a metadata lookup and a live enemy used to
+  read as a contradiction (metadata 7–11 next to a live 19) with nothing in the payload to resolve it.
+  Live two-player: `base_max_hp` 9 / 33 / 13 against live `max_hp` 19 / 72 / 28, both instances agreeing.
 
 ### Changed
 
@@ -34,6 +40,16 @@
 - The conditions both routes still enforce are unchanged and are now a named policy
   (`CoopLaunchPolicy.GetStructuralError`): not the companion instance, no auto-play already running on this
   character, main menu. The split is scoped to the model gate and is not a way around those.
+- **A paged tutorial now says where it is instead of looking stuck (#101).** `NCombatRulesFtue` is three
+  pages by design: one confirm advances a page and leaves the modal open, and only the click after the last
+  page closes it. A non-final page answered `pending` with the same wording as a stalled transition, which
+  reads as failure to a caller that treats `pending` that way. It now answers `Tutorial page advanced; the
+  modal is still open. Call confirm_modal again.`; every other modal keeps the old message.
+- **`get_relevant_game_data` works without `item_ids` (#101).** Omitting them derives the ids the current
+  screen is about from live state — the hand in a fight, the stock in a shop, the event you are in — and
+  falls back to the run-level ids when the scene has nothing to offer. Passing ids explicitly still answers
+  exactly those. The id sources exist once per implementation and a test keeps the two tables equal, keys and
+  paths, the same way the scene field sets are kept.
 
 ### Fixed
 
@@ -44,6 +60,16 @@
 - `/health` stopped advertising a companion API port after that process exited.
 - `teammate_control_failed` is `retryable: true`, matching what the docs already said; its causes (a launch in
   progress, an unfinished previous control, an unconfirmed pause) all clear on their own.
+- **The companion’s own `POST /session/control` skipped the play-model gate (#99).** The host’s Resume
+  button, `POST /companion/control` and `POST /teammate/control` all refused to start the loop without a
+  verified play model, while the teammate instance accepted `{"running": true}` and started one — the one
+  start entry that could begin a model loop every other entry rejects. Every start entry now shares
+  `FirstRunSetup.ReadyToInvite`; pausing is deliberately never gated, so nothing can be stuck unable to stop.
+- Deriving those ids stepped into JSON nulls (#101). `FAKE_MERCHANT` classifies as a shop screen, but the
+  `shop` payload is `null` there — the merchant room those ids come from does not exist on that screen — so
+  walking `shop.cards[].card_id` threw instead of answering. The walk is now guarded by JSON kind, and a
+  scene with nothing to offer falls back to the run-level ids rather than stopping at an empty answer. The two
+  derivations also agreed on empty-string ids, which they previously did not.
 
 ## v0.12.1 - 2026-09-13
 
