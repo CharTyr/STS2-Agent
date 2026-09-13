@@ -663,3 +663,44 @@ Four residuals closed: docs/ became a controlled directory with a docs-tracked g
 - 工坊简体中文列表仍未更新（自 v0.11.0 起），需在工坊网页端手工粘贴 steam-workshop/description.zh-CN.txt
 - 外部接管路线仍未在 Steam 双开路径复跑；FAKE_MERCHANT 的回落只有离线单测
 - 工坊上传若再报 No Connection，先重启 Steam 客户端（已记进发布记录）
+
+
+## Session 19: 合并 sachi4clover 的 overlay 邀请路线修复（PR #106）+ 记录
+
+**Date**: 2026-09-13
+**Task**: 合并 sachi4clover 的 overlay 邀请路线修复（PR #106）+ 记录
+**Branch**: `main`
+
+### Summary
+
+把社区 PR #106 补的小修推到作者分支后合并：overlay 的邀请按钮此前没跟上 #85 的路线拆分，模型未验证时点它会走旧门禁，而同一个请求走 API 却能拉起队友。顺带修了错位的注释并新建 Unreleased 段。
+
+### Main Changes
+
+- PR #106：F8 窗口的「邀请 AI 队友」按钮改为按 FirstRunSetup.Evaluate(settings).ReadyToInvite 选路，两条说明随路线切换
+- 把作者插错位置的 <summary> 移回 EveryStartEntryPointSharesTheModelGate（原实现让该测试失去注释、新测试挂了两段）
+- v0.12.2 用掉了上一段 Unreleased，新建一段并把这次改动写进去
+- 状态页：把误标的「v0.12.1 标签后未发布变更」标题改正，并补上 #105 / #106 两笔标签后变更
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `0f63d6d` | (see git log) |
+| `085c941` | (see git log) |
+
+### Testing
+
+- [OK] 在作者提交上开一次性 worktree：383 PASS / 0 FAIL、八道 gate 全绿
+- [OK] 守卫有效性：还原 bug 后 CoopRoute.OverlayInviteRoute 立刻转红，文件逐字节还原后恢复绿
+- [OK] CI：#106 与 #107 的 contracts 全绿
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- 工坊上的 v0.12.2 产物不含 #106 的 overlay 修复，需下次发版带上
+- sachi4clover 提到的后续 PR（Continue 按钮 + 选角勾选框）叠在 #106 之上，CHANGELOG 往新建的 Unreleased 段续写
+- 工坊简体中文列表仍未更新；工坊英文列表首屏「测试连接通过后再邀请」的措辞也待随下次上传调整

@@ -8,7 +8,7 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-1.md`
-- **Total Sessions**: 18
+- **Total Sessions**: 19
 - **Last Active**: 2026-09-13
 <!-- @@@/auto:current-status -->
 
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-1.md` | ~665 | Active |
+| `journal-1.md` | ~706 | Active |
 <!-- @@@/auto:active-documents -->
 
 ---
@@ -29,6 +29,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 19 | 2026-09-13 | 合并 sachi4clover 的 overlay 邀请路线修复（PR #106）+ 记录 | `0f63d6d`, `085c941` | `main` |
 | 18 | 2026-09-13 | 发布 v0.12.2：联机接力（外部接管路线）+ 工坊上传 | `40d1464`, `72b2a81`, `b64e7e7` | `main` |
 | 17 | 2026-09-13 | 实机遗留三处收尾：分页 FTUE、场景派生元数据 id、联机基础血量 | `d826935`, `7714f0b` | `main` |
 | 16 | 2026-09-12 | 第一次真机实机会话：清单整理 + 两个只有实机能暴露的发现 | `7888566`, `6478dae`, `4554c8d` | `main` |
