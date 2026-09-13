@@ -182,4 +182,29 @@ internal static class SurfacedActionParityTests
     }
 
     private static string Flat(string source) => AgentSourceFixture.WithoutWhitespace(source);
+
+    /// <summary>
+    /// A probe that throws must not be indistinguishable from a screen with nothing to offer. Both of
+    /// these answered through a bare catch that returned false without a trace, so a room whose probe
+    /// threw simply lost its action from available_actions and no caller could tell why. They still
+    /// fail closed, but the failure has to reach the log.
+    /// </summary>
+    public static void RoomProbesDoNotSwallowTheirFailures()
+    {
+        var source = AgentSourceFixture.Read(StatePath);
+
+        foreach (var (declaration, actionName) in new[]
+                 {
+                     ("public static bool CanChooseEventOption(", "choose_event_option"),
+                     ("public static bool CanChooseRestOption(", "choose_rest_option"),
+                 })
+        {
+            var probe = Flat(AgentSourceFixture.DeclarationBody(source, declaration));
+            var warning = "Log.Warn($\"[STS2AIAgent]" + actionName + "probefailed";
+
+            Assert.Contains("catch(Exceptionex)", probe, StringComparison.Ordinal);
+            Assert.Contains(warning, probe, StringComparison.Ordinal);
+            Assert.Contains("returnfalse;", probe, StringComparison.Ordinal);
+        }
+    }
 }

@@ -1099,8 +1099,11 @@ internal static class GameStateService
             // Non-finished events need at least one non-locked option
             return eventModel.CurrentOptions.Any(o => !o.IsLocked);
         }
-        catch
+        catch (Exception ex)
         {
+            // Fail closed but never silently: swallowing this hid the difference between "no legal
+            // option" and "the probe threw", and the action simply vanished from available_actions.
+            Log.Warn($"[STS2AIAgent] choose_event_option probe failed; treating it as unavailable: {ex}");
             return false;
         }
     }
@@ -1363,8 +1366,11 @@ internal static class GameStateService
             var options = RunManager.Instance.RestSiteSynchronizer.GetLocalOptions();
             return options != null && options.Any(o => o.IsEnabled);
         }
-        catch
+        catch (Exception ex)
         {
+            // Same rule as the event probe: unavailable, but say so, or a thrown probe looks
+            // exactly like a rest site with nothing to offer.
+            Log.Warn($"[STS2AIAgent] choose_rest_option probe failed; treating it as unavailable: {ex}");
             return false;
         }
     }
