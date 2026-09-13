@@ -12,7 +12,7 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-from sts2_mcp.client import Sts2Client
+from sts2_mcp.client import Sts2ApiError, Sts2Client
 from sts2_mcp.server import create_server
 
 RAW_ONLY_SKILL_FIELDS = (
@@ -81,11 +81,21 @@ class DummyClient:
 
 
 class FailingEventClient(DummyClient):
-    """Client whose SSE stream is unavailable, forcing the polling fallback."""
+    """Client whose SSE stream is unreachable, forcing the polling fallback.
+
+    The real client turns a lost stream into Sts2ApiError(code='connection_error'), so the stub
+    raises the same shape: the server's fallback is about a broken transport, not about any
+    exception at all.
+    """
 
     def wait_for_event(self, *, event_names=None, timeout=0.0) -> dict | None:
         self.wait_calls += 1
-        raise RuntimeError("SSE stream unavailable")
+        raise Sts2ApiError(
+            code="connection_error",
+            status_code=0,
+            message="SSE stream unavailable",
+            retryable=True,
+        )
 
 
 def _read_skill_text() -> str:

@@ -321,6 +321,47 @@ class GameDataToolsTests(unittest.TestCase):
         self.assertEqual(index["abrasive"]["id"], "ABRASIVE")
         self.assertEqual(server_module._lookup_game_data_item(index=index, item_id="Abrasive")["id"], "ABRASIVE")
 
+    def test_game_data_errors_carry_the_same_envelope_fields_as_action_errors(self) -> None:
+        """The play skill branches on error.code/retryable/status_code for any failed call.
+
+        Actions raise the mod's envelope straight through, so those three fields are present,
+        but game-data tools answer with an error object instead of raising. They used to carry
+        only type/collection/message, which made the skill's instruction silently false on this
+        one path.
+        """
+        client = DummyClient()
+        server = create_server(client=client)
+        item_tool = asyncio.run(server.get_tool("get_game_data_item"))
+        items_tool = asyncio.run(server.get_tool("get_game_data_items"))
+        relevant_tool = asyncio.run(server.get_tool("get_relevant_game_data"))
+
+        with patch("sts2_mcp.server._ensure_game_data_index", side_effect=KeyError("nope")):
+            unknown = item_tool.fn(collection="cards", item_id="ABRASIVE")
+
+        with patch(
+            "sts2_mcp.server._ensure_game_data_index",
+            side_effect=server_module.GameDataUnavailableError(
+                "boom", code="mod_unreachable", status_code=503, retryable=True),
+        ):
+            unavailable = items_tool.fn(collection="cards", item_ids="ABRASIVE")
+            # The ids are explicit here: an empty id list short-circuits before the index is
+            # built, and this case is about what a failed load reports.
+            relevant = relevant_tool.fn(collection="cards", item_ids="ABRASIVE")
+
+        for result in (unknown, unavailable, relevant):
+            error = result["error"]
+            for field in ("code", "status_code", "retryable", "type", "collection", "message"):
+                self.assertIn(field, error, f"{field} missing from {error!r}")
+
+        self.assertEqual(unknown["error"]["code"], "collection_not_found")
+        self.assertEqual(unknown["error"]["status_code"], 404)
+        self.assertIs(unknown["error"]["retryable"], False)
+
+        # A mod-side failure keeps what the mod said, so a caller can retry on the mod's terms.
+        self.assertEqual(unavailable["error"]["code"], "mod_unreachable")
+        self.assertEqual(unavailable["error"]["status_code"], 503)
+        self.assertIs(unavailable["error"]["retryable"], True)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -146,6 +146,24 @@ _GAME_DATA_INDEXES: dict[str, dict[str, Any]] = {}
 _GAME_DATA_LOADER: Callable[[str], Any] | None = None
 _GAME_DATA_LOCK = threading.RLock()
 
+
+class GameDataUnavailableError(RuntimeError):
+    """A game-data load failure that still knows what the mod said.
+
+    The three game-data tools answer with an `error` object instead of raising, and the play
+    skill tells an agent to branch on `error.code`, `error.retryable` and `error.status_code`
+    exactly as it does for a failed action. Flattening the mod's envelope into a bare RuntimeError
+    dropped those three fields for game-data calls only, so the skill's instruction was true for
+    actions and silently false here. This keeps them.
+    """
+
+    def __init__(self, message: str, *, code: str, status_code: int, retryable: bool) -> None:
+        super().__init__(message)
+        self.code = code
+        self.status_code = status_code
+        self.retryable = retryable
+
+
 # Default field sets per scene/context. These are used by `get_relevant_game_data` to
 # minimize token usage by returning only the most relevant fields.
 # Mirrors STS2AIAgent/Agent/GameDataFilter.cs SceneFieldSets, the reference side that the
@@ -274,9 +292,16 @@ def _load_game_data_collection(collection: str) -> Any:
     except Sts2ApiError as exc:
         if exc.status_code == 404 or exc.code == "collection_not_found":
             raise KeyError(f"Unknown game data collection: {normalized}") from exc
-        raise RuntimeError(str(exc)) from exc
+        # Keep the mod's envelope: the tools answer with an error object instead of raising, and
+        # an agent branches on code/retryable/status_code for a failed action and a failed
+        # game-data call alike. Flattening it here made those fields vanish for this path only.
+        raise GameDataUnavailableError(
+            str(exc), code=exc.code or "game_data_unavailable", status_code=exc.status_code,
+            retryable=exc.retryable) from exc
     except Exception as exc:
-        raise RuntimeError(f"Failed to load game data collection {normalized!r}: {exc}") from exc
+        raise GameDataUnavailableError(
+            f"Failed to load game data collection {normalized!r}: {exc}",
+            code="game_data_unavailable", status_code=0, retryable=False) from exc
 
     if not isinstance(data, (dict, list)):
         raise TypeError(f"Unsupported data type for collection {normalized!r}: {type(data)}")
@@ -422,20 +447,43 @@ def _lookup_game_data_item(index: dict[str, Any], item_id: str) -> Any:
 
 
 def _build_game_data_tool_error(collection: str, exc: Exception) -> dict[str, Any]:
+    # Every branch carries code/status_code/retryable, the same three fields a failed action
+    # exposes, so the play skill's "read error.code, retry only when error.retryable" holds here too.
     if isinstance(exc, KeyError):
         return {
             "error": {
                 "type": "unknown_collection",
+                "code": "collection_not_found",
+                "status_code": 404,
+                "retryable": False,
                 "collection": collection,
                 "message": str(exc),
                 "available_collections": list(KNOWN_GAME_DATA_COLLECTIONS),
             }
         }
 
+    if isinstance(exc, GameDataUnavailableError):
+        return {
+            "error": {
+                "type": "game_data_unavailable",
+                "code": exc.code,
+                "status_code": exc.status_code,
+                "retryable": exc.retryable,
+                "collection": collection,
+                "message": str(exc),
+            }
+        }
+
+    # Any other RuntimeError (for example a loader that was never configured) still answers as
+    # unavailable, with the fields present so the caller's branching never depends on which
+    # internal path produced the failure.
     if isinstance(exc, RuntimeError):
         return {
             "error": {
                 "type": "game_data_unavailable",
+                "code": "game_data_unavailable",
+                "status_code": 0,
+                "retryable": False,
                 "collection": collection,
                 "message": str(exc),
             }
@@ -444,6 +492,9 @@ def _build_game_data_tool_error(collection: str, exc: Exception) -> dict[str, An
     return {
         "error": {
             "type": "invalid_game_data",
+            "code": "invalid_game_data",
+            "status_code": 502,
+            "retryable": False,
             "collection": collection,
             "message": str(exc),
         }
@@ -661,17 +712,37 @@ def create_server(client: Sts2Client | None = None, tool_profile: str | None = N
                 "actions": sts2.get_available_actions(),
                 "timeout_seconds": timeout,
                 "source": "state",
+                "event_stream_error": None,
             }
 
         started_at = monotonic()
         event: dict[str, Any] | None = None
         source = "events"
+        event_stream_error: dict[str, Any] | None = None
 
         try:
             event = sts2.wait_for_event(event_names=actionable_events, timeout=timeout)
-        except Exception:
+        except Sts2ApiError as exc:
+            # The client already retries a lost SSE connection until the deadline, so reaching
+            # here means the mod answered and refused. Fall back to polling (the wait is still
+            # useful) but say so, instead of reporting the same "no event yet" as a healthy wait.
             event = None
             source = "polling"
+            event_stream_error = {
+                "code": exc.code,
+                "status_code": exc.status_code,
+                "retryable": exc.retryable,
+                "message": exc.message,
+            }
+        except (OSError, TimeoutError) as exc:
+            event = None
+            source = "polling"
+            event_stream_error = {
+                "code": "event_stream_unavailable",
+                "status_code": 0,
+                "retryable": True,
+                "message": str(exc),
+            }
 
         remaining = max(0.0, timeout - (monotonic() - started_at))
         state = sts2.get_state()
@@ -700,6 +771,7 @@ def create_server(client: Sts2Client | None = None, tool_profile: str | None = N
             "actions": sts2.get_available_actions(),
             "timeout_seconds": timeout,
             "source": source,
+            "event_stream_error": event_stream_error,
         }
 
     @mcp.tool

@@ -149,6 +149,9 @@ Use this reference when the active screen is clear and you need the exact action
 ## Potion Targeting
 
 - `AnyEnemy`: requires `target_index`.
-- `AnyPlayer`: does not require `target_index`.
+- `AnyPlayer`: requires `target_index` while the run has more than one living player (co-op),
+  and not otherwise. Read the potion's own payload: `requires_target` is true and
+  `target_index_space` is `players` exactly when a pick is needed, and `valid_target_indices`
+  lists what you may pass. Omitting `target_index` there is rejected with `invalid_target`.
 - `TargetedNoCreature`: does not require `target_index`.
 - If the payload marks a potion unusable, do not try to force it.
