@@ -405,17 +405,33 @@ mod-side action.
   The isolated path therefore only works when the save was created by a host whose NetId equals the clientId
   the host is started with, and whose teammate NetId equals that clientId + 1. The Steam path has neither
   problem because the host's NetId is the account id.
-- **The AI Teammate tab's two new co-op controls are wired but not yet pressed on a real machine**
-  (added by #111, awaiting a live pass). **Continue the saved co-op run** goes through
-  `AgentRuntime.ContinueDualInstanceAsync` and is offered only where `continue_ai_teammate` is accepted
-  (`GameStateService.CanContinueAiTeammate`); **Disable automatic character pick** writes
-  `CompanionAutoSelectCharacter = false` on toggle. Offline, `CoopRoute.OverlayEntries` pins the wiring and the
-  shared guards stay where the HTTP route meets them: `CoopLaunchPolicy.GetError` inside
-  `AgentRuntime.LaunchDualInstanceCoreAsync`, and both NetId prechecks inside
-  `DualInstanceCoordinator.ContinueLocalCoopResultAsync` — so the overlay cannot reach the `*.VAL.corrupt`
-  rename either. What only a live pass can show: that the button is enabled at the right moment on a real main
-  menu, that pressing it hosts the saved run over local ENet and brings the teammate back onto the same
-  `run_id`, and that the value the companion reads at launch is the one the user ticked.
+- **The AI Teammate tab's two co-op controls were pressed on a real machine on 2026-09-14** (#111), on an
+  isolated offline host (`--windowed --force-steam off --clientId 1`, API 18080) whose co-op save is the local
+  test save (players `1,2`). Both work:
+
+  - **Disable automatic character pick**: ticking it wrote `companionAutoSelectCharacter: false` to the settings
+    file at that instant, the line under it switched to the "waits on the character screen" wording, and the
+    teammate launched by the **mouse-clicked** Invite button came up on `CHARACTER_SELECT` with
+    `play_running=false`, still there 70s later with both slots `is_ready=false` — it did not pick for itself.
+  - **Continue the saved co-op run**: the mouse-clicked button launched the companion itself (PID 71620, API
+    18081); both sides reached `MULTIPLAYER_LOAD`, both `embark` presses completed, and the run resumed in
+    `COMBAT` with the save's numbers (80/80 HP, 113/112 gold, floor 2); the teammate stayed
+    `play_running=false / play_phase=paused / session_requests=0`, i.e. waiting for external takeover. Evidence
+    in `build/validation-2026-09-14/evidence/` (gitignored).
+
+  The pass also found and fixed a real defect, which is what a live pass is for: the Continue button is the only
+  control on that page whose availability depends on the *game screen*, and the page refreshed it only when the tab
+  came into view. A panel already open on this tab therefore kept the button greyed out for the whole boot modal —
+  the action was available over the API the entire time — and only a tab switch brought it back. The panel tick now
+  re-reads it (`RefreshContinueAvailability`), `CoopRoute.OverlayEntries` pins that, and the fix was re-verified on
+  the same live host: grey while the modal was up (brightness 364), bright 4 s after it cleared with no tab switch
+  (660).
+
+  Two things the pass deliberately did not cover: the Steam-hosted save path (this host is offline/local-connection,
+  which is the path this feature exists for), and `DamageMeter`, an unrelated 2026-05 mod in `mods/` that throws
+  `MissingMethodException: RunRngSet.get_Seed()` inside its own `OnRunStarted` when a run starts on game v0.111.0. It
+  was moved out for the pass and restored afterwards; nothing in this repository needs changing for it.
+
 - `scripts/test-multiplayer-lobby-flow.ps1` crosses `CAPSTONE_SELECTION` and `UNLOCK` without
   throwing `Unsupported run progression state`.
 - Multiplayer `players[]` and `target_index` share one index space.

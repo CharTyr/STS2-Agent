@@ -1226,6 +1226,24 @@ internal sealed class AgentOverlayHost
         }
     }
 
+    /// <summary>
+    /// The screen behind the button changes with no runtime event the overlay could subscribe to, so
+    /// availability is re-read on the panel tick as well as whenever the tab comes into view. Without
+    /// the tick, a panel already sitting on this tab kept the button greyed out across the boot modal
+    /// clearing, and only a tab switch brought it back.
+    /// </summary>
+    private void RefreshContinueAvailability()
+    {
+        if (_dualContinueButton == null)
+        {
+            return;
+        }
+
+        var canContinue = CanOfferContinue();
+        _dualContinueButton.Disabled = AgentRuntime.Instance.DualLaunching || !canContinue;
+        _dualContinueButton.TooltipText = canContinue ? "" : Loc.T("主菜单上有联机存档时可用。");
+    }
+
     private async Task SendTeamMessageAsync()
     {
         var text = _teamInput?.Text.Trim() ?? "";
@@ -1370,10 +1388,8 @@ internal sealed class AgentOverlayHost
 
         if (_dualContinueButton != null)
         {
-            var canContinue = CanOfferContinue();
-            _dualContinueButton.Disabled = AgentRuntime.Instance.DualLaunching || !canContinue;
+            RefreshContinueAvailability();
             _dualContinueButton.Text = AgentRuntime.Instance.DualLaunching && _continueLaunching ? Loc.T("正在读档接回队友…") : Loc.T("继续上次联机对局");
-            _dualContinueButton.TooltipText = canContinue ? "" : Loc.T("主菜单上有联机存档时可用。");
         }
 
         if (_companionChoiceToggle != null)
@@ -1487,6 +1503,13 @@ internal sealed class AgentOverlayHost
                     {
                         _playScreen.Text = Loc.T("屏幕：-");
                     }
+                }
+
+                // The tab-visible refresh in ShowTab covers switching into this page; this covers the
+                // page that is already open while the screen underneath changes on its own.
+                if (_dualPage?.Visible == true)
+                {
+                    RefreshContinueAvailability();
                 }
             }
         }
