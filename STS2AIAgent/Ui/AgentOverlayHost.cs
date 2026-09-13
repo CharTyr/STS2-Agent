@@ -46,6 +46,7 @@ internal sealed class AgentOverlayHost
     private Label? _apiLabel;
     private Label? _dualStatus;
     private Label? _firstRunHint;
+    private Label? _dualHint;
     private Label? _sessionHeadline;
     private Label? _sessionDetail;
     private Label? _sessionNext;
@@ -441,9 +442,10 @@ internal sealed class AgentOverlayHost
         page.AddChild(_sessionConfigNotice);
         _resetStatsButton = UiFactory.Button(Loc.T(SessionBudgetLimits.ResetStatsActionLabel), ResetSessionStatsFromUi);
         page.AddChild(_resetStatsButton);
-        _firstRunHint = UiFactory.Label(FirstRunSetup.Evaluate(AgentRuntime.Instance.Settings).Hint, 13, muted: true);
+        _firstRunHint = UiFactory.Label(FirstRunHintText(), 13, muted: true);
         page.AddChild(_firstRunHint);
-        page.AddChild(UiFactory.Label(Loc.T("请从主菜单邀请。第二窗口打开后，AI 会自己选角、点开局事件并进图。你继续在这个窗口操作自己的角色；轮到它时，它会自动出牌。"), 12, muted: true));
+        _dualHint = UiFactory.Label(DualHintText(), 12, muted: true);
+        page.AddChild(_dualHint);
         page.AddChild(UiFactory.Button(Loc.T("导出诊断"), CopyDiagnostics));
         _dualLaunchButton = UiFactory.Button(Loc.T("邀请 AI 队友"), () => _ = LaunchDualAsync());
         page.AddChild(_dualLaunchButton);
@@ -1131,8 +1133,29 @@ internal sealed class AgentOverlayHost
     private async Task LaunchDualAsync()
     {
         FlushSettingsIfDirty();
-        await AgentRuntime.Instance.LaunchDualInstanceAsync(HarvestSettings(), CancellationToken.None);
+        // Same route choice as POST /action invite_ai_teammate: a verified play model means the
+        // teammate plays by itself; otherwise it launches for external takeover and comes up paused.
+        var settings = HarvestSettings();
+        var companionAutoPlay = FirstRunSetup.Evaluate(settings).ReadyToInvite;
+        await AgentRuntime.Instance.LaunchDualInstanceAsync(settings, companionAutoPlay, CancellationToken.None);
         RefreshDynamic();
+    }
+
+    /// <summary>The line under the invite describes the route that will actually run, so it never contradicts the first-run hint above it.</summary>
+    private static string DualHintText()
+    {
+        return FirstRunSetup.Evaluate(AgentRuntime.Instance.Settings).ReadyToInvite
+            ? Loc.T("请从主菜单邀请。第二窗口打开后，AI 会自己选角、点开局事件并进图。你继续在这个窗口操作自己的角色；轮到它时，它会自动出牌。")
+            : Loc.T("请从主菜单邀请。第二窗口打开后，AI 会加入并进图，然后停在原地等待外部接管，不会自己出牌；你继续在这个窗口操作自己的角色。");
+    }
+
+    /// <summary>The tab's top line tells the truth about both routes: without a verified model the invite still works, the teammate just waits to be taken over.</summary>
+    private static string FirstRunHintText()
+    {
+        var firstRun = FirstRunSetup.Evaluate(AgentRuntime.Instance.Settings);
+        return firstRun.ReadyToInvite
+            ? firstRun.Hint
+            : Loc.T("游玩模型未配置或未验证：仍然可以邀请，队友会加入并进图，然后停在原地等待外部接管，不会自己出牌。想让它自己打，先在设置里配好模型并通过「测试连接」。");
     }
 
     private async Task SendTeamMessageAsync()
@@ -1267,8 +1290,10 @@ internal sealed class AgentOverlayHost
 
         if (_firstRunHint != null)
         {
-            _firstRunHint.Text = FirstRunSetup.Evaluate(AgentRuntime.Instance.Settings).Hint;
+            _firstRunHint.Text = FirstRunHintText();
         }
+
+        if (_dualHint != null) _dualHint.Text = DualHintText();
 
         if (_dualLaunchButton != null)
         {

@@ -114,6 +114,32 @@ internal static class CoopRouteTests
     /// start a model loop that the host's Resume button, /companion/control and /teammate/control all
     /// refuse. Pausing stays ungated: nothing should be stuck unable to stop it.
     /// </summary>
+    /// <summary>
+    /// The route split reached POST /action but not the overlay: the Invite button kept calling the
+    /// auto-play overload, so with no verified play model the click was refused at the old model
+    /// gate while the same request over the API launched the teammate for external takeover. The
+    /// button has to choose the route the way the API does, and the tab's first line has to
+    /// describe that route instead of asking for a connection test.
+    /// </summary>
+    public static void OverlayInviteFollowsTheApiRoute()
+    {
+        var overlay = AgentSourceFixture.Read("STS2AIAgent/Ui/AgentOverlayHost.cs");
+        var launch = AgentSourceFixture.DeclarationBody(overlay, "private async Task LaunchDualAsync()");
+        Assert.Contains("var companionAutoPlay = FirstRunSetup.Evaluate(settings).ReadyToInvite;", launch);
+        Assert.Contains("LaunchDualInstanceAsync(settings, companionAutoPlay, CancellationToken.None)", launch);
+        Assert.True(
+            !overlay.Contains("LaunchDualInstanceAsync(HarvestSettings(), CancellationToken.None)", StringComparison.Ordinal),
+            "the overlay must not call the auto-play-only overload any more.");
+
+        var hint = AgentSourceFixture.DeclarationBody(overlay, "private static string FirstRunHintText()");
+        Assert.Contains("firstRun.ReadyToInvite", hint);
+        Assert.Contains("_firstRunHint.Text = FirstRunHintText();", overlay);
+        // The description under the invite follows the same route, so the two lines never contradict each other.
+        var dualHint = AgentSourceFixture.DeclarationBody(overlay, "private static string DualHintText()");
+        Assert.Contains("ReadyToInvite", dualHint);
+        Assert.Contains("_dualHint.Text = DualHintText();", overlay);
+    }
+
     public static void EveryStartEntryPointSharesTheModelGate()
     {
         var runtime = AgentSourceFixture.Read("STS2AIAgent/Agent/AgentRuntime.cs");
