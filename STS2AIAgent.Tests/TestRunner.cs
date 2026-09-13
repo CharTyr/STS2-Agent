@@ -197,6 +197,7 @@ internal static class TestRunner
         yield return ("CoopRoute.SupportedSurfaces", () => Task.Run(CoopRouteTests.CompanionRouteReachesTheSupportedSurfaces));
         yield return ("CoopRoute.SharedModelGate", () => Task.Run(CoopRouteTests.EveryStartEntryPointSharesTheModelGate));
         yield return ("CoopRoute.OverlayInviteRoute", () => Task.Run(CoopRouteTests.OverlayInviteFollowsTheApiRoute));
+        yield return ("CoopRoute.OverlayEntries", () => Task.Run(CoopRouteTests.OverlayOffersContinueAndCharacterChoice));
         yield return ("CoopSave.ReadNetIds", () => Task.Run(CoopSavePrecheckTests.ReadsPlayerNetIdsFromTheSave));
         yield return ("CoopSave.NumericStringNetIds", () => Task.Run(CoopSavePrecheckTests.ReadsNumericStringNetIds));
         yield return ("CoopSave.UnreadableSaves", () => Task.Run(CoopSavePrecheckTests.UnreadableSavesYieldNoIds));

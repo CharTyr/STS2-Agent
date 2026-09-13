@@ -2,6 +2,22 @@
 
 > Release attribution is recorded against tags or release commits. Post-tag maintenance is listed separately; current validation limits are maintained in [PRODUCT_PLAN_CURRENT.md](https://github.com/CharTyr/STS2-Agent/blob/main/PRODUCT_PLAN_CURRENT.md).
 
+## Unreleased
+
+### Added
+
+- **The AI Teammate tab gains the two co-op controls that existed only through the API.** Above the Invite
+  button, **禁用自动选角** binds `companionAutoSelectCharacter` (ticked = `false`) and is saved on toggle,
+  because the companion reads settings at launch and this tab has no separate Save; the line under it says
+  what the second window will do either way: take the preselected character, or wait on the character
+  screen for the AI driving it (or a person at that window) to choose and embark. Under the Invite button,
+  **继续上次联机对局** goes through the same runtime entry as `continue_ai_teammate`, chooses the co-op
+  route the way the API does, and is enabled only where that action is accepted: host main menu with a
+  co-op save on disk. The game's own Load button opens a saved co-op run over Steam networking, rejects the
+  local-connection player ids and renames the save as corrupt, so the way back into a saved run lives here.
+  Only the pressed button reads as busy while a launch is in flight, and the tab re-reads Continue's
+  availability whenever it comes into view.
+
 ## v0.12.3 - 2026-09-13
 
 > Distributed to the Steam Workshop on 2026-09-13, with the GitHub release following the same day: the

@@ -58,6 +58,12 @@ internal static partial class Loc
         map["邀请 AI 队友"] = "Invite AI teammate";
         map["正在邀请队友…"] = "Inviting teammate…";
         map["队友尚未加入。"] = "No teammate has joined yet.";
+        map["禁用自动选角"] = "Disable automatic character pick";
+        map["请从主菜单邀请。第二窗口打开后，会停在选角界面让 AI 自己决定选角，也可以你切过去给它选好、点出发；之后它自己点开局事件并进图。"] =
+            "Invite from the main menu. The second window waits on the character screen for the AI to decide its character; you can also switch over, pick for it and press Embark. It then clears the opening event and enters the map on its own.";
+        map["继续上次联机对局"] = "Continue the saved co-op run";
+        map["正在读档接回队友…"] = "Loading the save and bringing the teammate back…";
+        map["主菜单上有联机存档时可用。"] = "Available on the main menu while a co-op save exists.";
         map["请从主菜单邀请。第二窗口打开后，AI 会加入并进图，然后停在原地等待外部接管，不会自己出牌；你继续在这个窗口操作自己的角色。"] =
             "Invite from the main menu. Once the second window opens, the AI joins and enters the run, then waits where it is to be taken over from outside and plays nothing by itself; keep playing your character in this window.";
         map["游玩模型未配置或未验证：仍然可以邀请，队友会加入并进图，然后停在原地等待外部接管，不会自己出牌。想让它自己打，先在设置里配好模型并通过「测试连接」。"] =
