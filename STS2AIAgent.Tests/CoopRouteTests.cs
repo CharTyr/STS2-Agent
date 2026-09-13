@@ -107,4 +107,35 @@ internal static class CoopRouteTests
         Assert.Contains("request.IsLocal", routeBody);
         Assert.Contains("InstanceRole.IsCompanion", routeBody);
     }
+
+    /// <summary>
+    /// Every way of starting the in-process loop is one decision, so all of them answer to the same
+    /// model gate. The companion's own /session/control used to skip it, which left a caller able to
+    /// start a model loop that the host's Resume button, /companion/control and /teammate/control all
+    /// refuse. Pausing stays ungated: nothing should be stuck unable to stop it.
+    /// </summary>
+    public static void EveryStartEntryPointSharesTheModelGate()
+    {
+        var runtime = AgentSourceFixture.Read("STS2AIAgent/Agent/AgentRuntime.cs");
+        var companion = AgentSourceFixture.MethodBody(runtime, "SetCompanionRunningAsync");
+
+        var gate = companion.IndexOf("FirstRunSetup.Evaluate(Settings)", StringComparison.Ordinal);
+        var start = companion.IndexOf("StartAutoPlay()", StringComparison.Ordinal);
+        var pause = companion.IndexOf("RequestPause()", StringComparison.Ordinal);
+        Assert.True(gate > 0, "The companion control path must check the play model before it starts the loop.");
+        Assert.True(start > gate, "The model gate must come before StartAutoPlay on the companion.");
+        Assert.True(pause > 0, "Pausing must stay available on the companion.");
+        Assert.False(
+            companion.IndexOf("FirstRunSetup.Evaluate(Settings)", pause, StringComparison.Ordinal) > 0 &&
+                companion.LastIndexOf("FirstRunSetup.Evaluate(Settings)", StringComparison.Ordinal) > pause,
+            "The pause branch must not be behind the model gate.");
+
+        // The two other starts keep their gates; a regression there is the same bug from the host side.
+        var host = AgentSourceFixture.MethodBody(runtime, "ControlTeammateResultAsync");
+        Assert.True(
+            host.IndexOf("FirstRunSetup.Evaluate(Settings)", StringComparison.Ordinal) > 0,
+            "POST /teammate/control must keep its model gate.");
+        var overlay = AgentSourceFixture.Read("STS2AIAgent/Ui/AgentOverlayHost.cs");
+        Assert.Contains("AgentRuntime.Instance.ControlTeammateAsync(true", overlay);
+    }
 }
