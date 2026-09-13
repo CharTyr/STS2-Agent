@@ -53,7 +53,8 @@ The in-game overlay agent loads the shared play contract below plus references/s
 2. Prefer the guided decision loop: `get_game_state -> get_available_actions -> act`.
    Use `wait_until_actionable` across animations and screen changes. Use `get_raw_game_state` only if compact state is missing a needed field.
 3. For cards, monsters, relics, potions, shop items, and event options, prioritize game-data tools before using memory:
-   `get_relevant_game_data` (default, scene-aware minimal context) ->
+   `get_relevant_game_data` (default, scene-aware minimal context; omit `item_ids` and the current
+   screen decides which ids to look up) ->
    `get_game_data_item` (single-entity lookup) ->
    `get_game_data_items` (batch compare/filter).
    The compact view carries the ids those lookups key on: `combat.hand[].card_id`,
@@ -76,6 +77,9 @@ Do not trust memory over the current payload. The game mutates screens in place,
 
 - Never guess static game facts (card text, potion targeting, monster metadata, relic effects, event option details) from memory when game-data tools are available.
 - Use `get_relevant_game_data` first for current-scene context in combat/shop/event/menu flows.
+  Passing `item_ids` is optional: without it the tool derives the ids the screen is about (the hand
+  in a fight, the shop stock in a shop, the event you are in). Pass them when you want to ask about
+  a specific id instead.
 - Use `get_game_data_item` when you need deep details for one entity id.
 - Use `get_game_data_items` when comparing multiple entities (for example, reward-card choices, shop candidates, potion options).
 - If state and metadata disagree, trust live state for legality and metadata for semantics; then re-read state.

@@ -47,6 +47,22 @@ internal static class AgentTools
         required = new[] { "collection", "item_ids" }
     };
 
+    /// <summary>
+    /// get_relevant_game_data names its ids optionally: the whole point of the tool is that the
+    /// current scene decides what is relevant, so omitting item_ids is the normal call and the
+    /// server derives them from live state.
+    /// </summary>
+    private static readonly object RelevantDataParameters = new
+    {
+        type = "object",
+        properties = new
+        {
+            collection = new { type = "string", description = "cards, relics, monsters, potions, events, powers, or characters." },
+            item_ids = new { type = "string", description = "Optional comma-separated ids. Omit to use the ids the current scene is about." }
+        },
+        required = new[] { "collection" }
+    };
+
     private static readonly object WaitParameters = new
     {
         type = "object",
@@ -63,7 +79,7 @@ internal static class AgentTools
         Tool("get_available_actions", "List currently legal actions with requires_index / requires_target hints."),
         Tool("get_game_data_item", "Look up one card/relic/monster/potion/event/power/character by id.", CollectionItemParameters),
         Tool("get_game_data_items", "Look up several metadata entities by comma-separated ids.", CollectionItemsParameters),
-        Tool("get_relevant_game_data", "Look up metadata with fields trimmed for the current screen.", CollectionItemsParameters),
+        Tool("get_relevant_game_data", "Look up metadata with fields trimmed for the current screen. Omit item_ids to use the ids this screen is about.", RelevantDataParameters),
         Tool("wait_until_actionable", "Wait until a non-passive action is available, then return fresh compact state. Use during animations and screen transitions.", WaitParameters)
     };
 

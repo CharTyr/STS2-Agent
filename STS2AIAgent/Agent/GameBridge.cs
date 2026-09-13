@@ -145,8 +145,18 @@ internal sealed class GameBridge : IGameBridge
                 return error;
             }
 
-            var screen = GameStateService.BuildStatePayload().screen;
-            return JsonSerializer.Serialize(GameDataFilter.ProjectRelevant(screen, collection, element, itemIds), JsonOptions);
+            var state = GameStateService.BuildStatePayload();
+            // An empty id list is the scene-aware call, not an empty answer: derive the ids this
+            // screen is about so the tool does what its name and description promise when the
+            // caller does not know them yet.
+            IReadOnlyList<string> ids = itemIds;
+            if (ids.Count == 0)
+            {
+                using var document = JsonSerializer.SerializeToDocument(state, JsonOptions);
+                ids = GameDataFilter.DeriveRelevantItemIds(state.screen, collection, document.RootElement);
+            }
+
+            return JsonSerializer.Serialize(GameDataFilter.ProjectRelevant(state.screen, collection, element, ids), JsonOptions);
         });
     }
 

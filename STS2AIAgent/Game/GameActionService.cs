@@ -6550,12 +6550,20 @@ internal static class GameActionService
             stable = await WaitForModalTransitionAsync(previousModal, TimeSpan.FromSeconds(8));
         }
 
+        var message = "Action completed.";
+        if (!stable)
+        {
+            message = FtueModalPolicy.IsMultiPageFtue(previousModal.GetType().Name)
+                ? "Tutorial page advanced; the modal is still open. Call confirm_modal again."
+                : "Action queued but state is still transitioning.";
+        }
+
         return new ActionResponsePayload
         {
             action = actionName,
             status = stable ? "completed" : "pending",
             stable = stable,
-            message = stable ? "Action completed." : "Action queued but state is still transitioning.",
+            message = message,
             state = GameStateService.BuildStatePayload()
         };
     }

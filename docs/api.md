@@ -234,6 +234,7 @@
 | --- | --- | --- |
 | `current_hp` | number | 当前生命值 |
 | `max_hp` | number | 最大生命值 |
+| `base_max_hp` | number \| null | **联机缩放之前**掷出的基础最大生命值，与 `GET /data/monsters` 的 `min_hp` / `max_hp` 同一量纲；`max_hp` 是缩放后的实时值。玩家、宠物或该值尚未设置时为 `null` |
 | `block` | number | 当前格挡值 |
 | `energy` | number | 当前能量 |
 | `stars` | number | 当前星星数 |
@@ -671,6 +672,7 @@ compact 里的位置与 `/state` 不同，但同名同源、同为新增键；`/
 | `combat.player` | `powers` | 己方 Power 短行：`power_id` + 层数，Debuff 追加 `[debuff]` |
 | `combat.enemies[]` | `powers` | 敌方 Power 短行，同上 |
 | `combat.enemies[]` | `intents[]` | 怪物下一招的数值拆解：`i`（意图序号）、`intent_type`、`label`、`damage`、`hits`、`total_damage`、`status_card_count` |
+| `combat.enemies[]` | `base_max_hp` | 联机缩放前的基础血量；元数据的 `min_hp` / `max_hp` 与它同量纲，实况 `max_hp` 是缩放后的值 |
 | `combat.players[]` | `player_id` / `slot_index` / `is_local` / `is_connected` / `character_id` / `character_name` / `current_hp` / `max_hp` / `block` / `energy` / `stars` / `focus` / `is_alive` | 队伍血线（含本地玩家），用于判断队友是否需要救援 |
 | `combat.hand[]` | `card_id` | 手牌内部 ID，用于 `get_game_data_item` 精确查询 |
 | `combat.draw[]` / `combat.discard[]` / `combat.exhaust[]` / `run.deck[]` / `run.piles.*` | `card_ids` | 合并组代表的卡牌 ID（去重、升序）；组内若含不同 ID 会全部列出，`line` 仍带 `*N` 数量后缀 |
@@ -1303,6 +1305,10 @@ AI 队友实例上的受控端点，由宿主进程在本地调用，普通玩�
 | `characters` | 角色：id、名称、初始牌组、初始遗物、初始药水 |
 
 导出需要读取游戏对象，因此经游戏线程执行；数据规模较大（卡牌集合数百 KB），不适合每次决策都拉取。MCP 侧（`sts2_mcp.client.Sts2Client.get_game_data_collection`）会在进程内缓存。
+
+**元数据是单机量纲。** `monsters` 的 `min_hp` / `max_hp` 是该怪掷出的基础血量范围，而联机对局里游戏会按 `玩家数 × 章节系数`（act 0 为 1.1、act 1 为 1.2、act 2 为 1.2，act 2 的 Boss 房为 1.3）放大后再落到实况敌人身上，所以两者常常对不上。要对齐时看实况 `combat.enemies[].base_max_hp`：它与元数据同量纲，`max_hp` 才是缩放后的值。
+
+MCP 侧的 `get_relevant_game_data` 读取这份元数据时，`item_ids` 可以省略：省略后由当前屏幕决定要查哪些 id（战斗看手牌与敌人、商店看货架、事件看当前事件），并把字段裁剪到该场景需要的子集。屏幕归类到某场景但该场景的载荷在这块屏上没有内容时（例如 `FAKE_MERCHANT` 归为商店却没有 `shop` 载荷），回落到牌库 / 遗物 / 药水这些角色级 id；确实没有该集合的 id 时返回 `{}`，不臆造。要问特定 id 时照常传 `item_ids`。
 
 ### 典型用法
 

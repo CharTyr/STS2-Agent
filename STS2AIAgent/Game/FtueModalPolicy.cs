@@ -15,6 +15,15 @@ internal static class FtueModalPolicy
         return string.Equals(typeName, CombatRulesTypeName, StringComparison.OrdinalIgnoreCase);
     }
 
+    /// <summary>
+    /// The combat-rules FTUE lays its text out over several pages: a confirm click advances one page
+    /// and leaves the modal open, so the caller has to keep confirming until the last page closes it.
+    /// </summary>
+    public static bool IsMultiPageFtue(string? typeName)
+    {
+        return IsCombatRulesFtue(typeName);
+    }
+
     public static bool ExposeConfirm(string? modalTypeName, bool hasUsableConfirmButton)
     {
         return hasUsableConfirmButton || IsFtueType(modalTypeName);
