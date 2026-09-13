@@ -1,7 +1,7 @@
 {
   "title": "STS2 AI Agent",
   "visibility": "public",
-  "changeNote": "v0.12.2: invite an AI teammate without configuring a model first - the teammate joins, then waits for you or an outside tool to drive it, and the main window's /teammate/control starts or pauses it. Also: enemy HP reports the pre-co-op roll next to the scaled one, metadata lookups work without naming ids, and the paged combat tutorial says so instead of looking stuck",
+  "changeNote": "v0.12.3: the Invite AI teammate button in the F8 window now takes the same route as the API - with no verified model it still invites, and the teammate joins the run then waits to be taken over instead of refusing the click and asking for a connection test",
   "tags": [
     "Tools & APIs",
     "Utility",
