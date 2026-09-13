@@ -2,7 +2,20 @@
 
 > Release attribution is recorded against tags or release commits. Post-tag maintenance is listed separately; current validation limits are maintained in [PRODUCT_PLAN_CURRENT.md](https://github.com/CharTyr/STS2-Agent/blob/main/PRODUCT_PLAN_CURRENT.md).
 
-## Unreleased
+## v0.12.3 - 2026-09-13 (republished 2026-09-14)
+
+> Distributed to the Steam Workshop on 2026-09-13, with the GitHub release following the same day: the
+> in-tree version, the uploaded Workshop content, the build and the release all come from the same commit.
+> **On 2026-09-14 the same version number was rebuilt and republished on both sides** — the Workshop item
+> was updated again and the `v0.12.3` tag and GitHub release were re-cut onto the new release commit — so
+> the two co-op controls below reach players without spending a version number on a one-day follow-up.
+> A build downloaded before that date is the earlier build of this same version and reports `0.12.3` as
+> well, so tell the two apart by size or hash (the first Workshop upload was file_size 1227269, the first
+> GitHub asset 549933 bytes / SHA256 `B9DC1A07…`) rather than by the version string. Both uploads are
+> recorded with their own numbers in [release-v0.12.3_2026-09-13.md](history/release-v0.12.3_2026-09-13.md).
+> The external-takeover route from #85 reached `POST /action` but not the F8 window's own Invite button,
+> so the button a person actually clicks was the one that could not start that route; it now chooses the
+> route the way the API does, and the tab says which one will run.
 
 ### Added
 
@@ -17,15 +30,6 @@
   local-connection player ids and renames the save as corrupt, so the way back into a saved run lives here.
   Only the pressed button reads as busy while a launch is in flight, and the tab re-reads Continue's
   availability whenever it comes into view.
-
-## v0.12.3 - 2026-09-13
-
-> Distributed to the Steam Workshop on 2026-09-13, with the GitHub release following the same day: the
-> in-tree version, the uploaded Workshop content, the build and the release all come from the same commit.
-> Release and Workshop upload: [release-v0.12.3_2026-09-13.md](history/release-v0.12.3_2026-09-13.md).
-> The external-takeover route from #85 reached `POST /action` but not the F8 window's own Invite button,
-> so the button a person actually clicks was the one that could not start that route; it now chooses the
-> route the way the API does, and the tab says which one will run.
 
 ### Fixed
 
