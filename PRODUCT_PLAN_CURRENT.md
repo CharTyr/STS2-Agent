@@ -1,7 +1,7 @@
 # STS2 AI Agent：当前状态页
 
-> 本页是仓库唯一的当前状态入口。更新日期：2026-09-13（v0.12.2 发布与工坊上传；标签后另有打包 gate 修复与一处 overlay 邀请路线修复，见 §1）。
-> 发布代码基准：tag `v0.12.2` @ `72b2a81`；标签后主线变更（打包 gate 修复、overlay 邀请路线修复）单列在下方，不把文档更新视为新版本发布。
+> 本页是仓库唯一的当前状态入口。更新日期：2026-09-13（v0.12.2 GitHub 发布 + v0.12.3 工坊更新；v0.12.3 未打 tag、未建 Release）。
+> 发布代码基准：GitHub 侧 tag `v0.12.2` @ `72b2a81`；工坊侧已到 `0.12.3`（`b0217b0`，无 tag）。标签后主线变更单列在下方，不把文档更新视为新版本发布。
 > 发布基准：[GitHub Release v0.12.2](https://github.com/CharTyr/STS2-Agent/releases/tag/v0.12.2)，2026-09-13 发布；上一版 [v0.12.1](https://github.com/CharTyr/STS2-Agent/releases/tag/v0.12.1)，2026-09-13。2026-09-13 通过 Steam Web API 核对工坊物品 3796486050：visibility=0（公开）、file_size 1225733 与本地内容字节和相等、time_updated 2026-09-13 16:51:04、内容 id `8439947284938535648`。**工坊简体中文列表仍是旧版**（缺 v0.11.0 起的多条列表项，2026-09-13 再次确认），待手工粘贴 `steam-workshop/description.zh-CN.txt`——`ModUploader` 没有语言参数，这一步只能在工坊网页端做。
 
 旧路线图见 [PRODUCT_ROADMAP.md](PRODUCT_ROADMAP.md)（历史），旧交付原文见 [history/PRODUCT_PLAN_CURRENT_2026-09-07.md](history/PRODUCT_PLAN_CURRENT_2026-09-07.md) 和 [history/COOP_DELIVERY_2026-09-07.md](history/COOP_DELIVERY_2026-09-07.md)。[COOP_DELIVERY.md](COOP_DELIVERY.md) 现在只是历史证据索引。本页不继承历史文档中的审批、工作树或测试前执行约束。
@@ -43,8 +43,9 @@
   - 已随 v0.12.2 发布；队友窗口本身没有 overlay（`ModEntry` 对 companion 跳过），这一点已写进文档。
 
 - **v0.12.2 标签后主线未发布变更**：
+  - **`b0217b0`（PR #108）把下面两笔发成 v0.12.3，且只更新工坊**（沿用 `f9330ba` 的 v0.10.7 先例）：版本号五处升到 `0.12.3`、`uv lock` 重新生成、CHANGELOG 的 `Unreleased` 段定版、`workshop.json` 的 changeNote 更新。工坊物品 3796486050 已更新：公开、`file_size` 1227269 与本地内容字节和相等、`time_updated` 2026-09-13 22:31:22、内容 id `5284257893537057643`。**未打 tag、未建 GitHub Release**——sachi4clover 那个叠在 #106 之上的后续 PR（游戏内「继续游玩」按钮与选角勾选框）到位后，把 #106 与它攒在一起做一次 GitHub 发布更自然；需要时也可随时单独回填 `v0.12.3` tag。见 [v0.12.3 工坊上传记录](history/workshop-upload-v0.12.3_2026-09-13.md)。
   - `b64e7e7`（PR #105）打包 v0.12.2 时被产物检查拦下：README 里 #97 新增的相对链接没进打包改写表，产物中留下一个指向未打包文件的链接。两处 README 的链接改回带 `./` 的形态，并新增第八道离线 gate `packaged-links`——它从 `package-release.ps1` 解析改写表、从 `check_release_package.py` 直接 import 产物清单与链接规则（不复制粘贴，避免清单漂移后 gate 说谎），在源文档上重放打包时的改写再校验剩下的本地链接是否都在产物里。破坏性验证：写回裸链接即报错并点名目标，逐字节还原后转绿。**这一笔只动文档与脚本，不影响已发布的 DLL/PCK。**
-  - `0f63d6d`（PR #106，作者 sachi4clover）把 #85 的路线拆分补进游戏内界面：F8 窗口的「邀请 AI 队友」按钮此前调的是只走自动游玩的重载，模型未验证时点它会被旧门禁拒掉，而同一个请求走 `POST /action` 却能拉起队友等待外部接管——**路线拆分到了 API，没到玩家真正会点的那一个按钮**。现在按钮按 `FirstRunSetup.Evaluate(settings).ReadyToInvite` 选路，tab 的两行说明随路线切换，并用源码契约测试 `CoopRoute.OverlayInviteRoute` 钉住（把旧写法还原回去，该测试立刻转红）。**这一笔改了 mod 代码，因此 v0.12.2 的产物里还没有它**：今天从工坊订阅到的版本，F8 里的邀请按钮仍是旧行为，要等下一次发版才带上。
+  - `0f63d6d`（PR #106，作者 sachi4clover）把 #85 的路线拆分补进游戏内界面：F8 窗口的「邀请 AI 队友」按钮此前调的是只走自动游玩的重载，模型未验证时点它会被旧门禁拒掉，而同一个请求走 `POST /action` 却能拉起队友等待外部接管——**路线拆分到了 API，没到玩家真正会点的那一个按钮**。现在按钮按 `FirstRunSetup.Evaluate(settings).ReadyToInvite` 选路，tab 的两行说明随路线切换，并用源码契约测试 `CoopRoute.OverlayInviteRoute` 钉住（把旧写法还原回去，该测试立刻转红）。**这一笔改了 mod 代码**，所以它没有进 v0.12.2 的 GitHub 产物；已随下面的 v0.12.3 工坊更新发给订阅者。
 
 ## 2. 已有验收证据与边界
 
