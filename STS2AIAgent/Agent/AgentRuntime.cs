@@ -187,6 +187,13 @@ internal sealed class AgentRuntime
             if (running)
             {
                 if (!_companionReady) throw new InvalidOperationException(Loc.T("队友尚未完成组队，请稍后继续。"));
+                // Starting the in-process loop is one decision no matter who asks for it, so the
+                // companion answers to the same model gate as the host's Resume button and
+                // POST /teammate/control. Without this, the companion's own /session/control was a
+                // way to start a model loop that every other entry point refuses. Pausing is always
+                // allowed: no caller should be stuck unable to stop it.
+                var firstRun = FirstRunSetup.Evaluate(Settings);
+                if (!firstRun.ReadyToInvite) throw new InvalidOperationException(firstRun.Hint);
                 StartAutoPlay();
             }
             else

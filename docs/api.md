@@ -1142,7 +1142,7 @@ compact 里的位置与 `/state` 不同，但同名同源、同为新增键；`/
 
 - 仅接受 loopback 请求，非本机来源返回 403 `local_only`
 - 请求体 `{"running": true}` 启动，`{"running": false}` 暂停；字段缺失或不是布尔值返回 400 `invalid_request`
-- 在 `companion` 实例上等价于控制该实例自身，见下方 `/companion/control`
+- 在 `companion` 实例上等价于控制该实例自身，见下方 `/companion/control`。`running: true` 与游戏内「继续游玩」、`POST /teammate/control` 是同一道门禁：游玩模型未验证时返回 409 `session_not_ready`，消息就是「测试连接」那条提示；`running: false` 任何时候都可用，暂停不受门禁影响
 
 ### 响应示例
 

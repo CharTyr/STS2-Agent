@@ -176,6 +176,55 @@ invite was a real call, not a resumed session.
   the last session handle so a retry cannot start a third window, and the discovery block inherited that
   persistence. It now returns `null` once `CompanionProcessExited` is set.
 
++### External-takeover route driven by a real external agent (issue #85)
+
+Verified 2026-09-13 on the same isolated dual-instance host (dead model endpoint on `127.0.0.1:18199`,
+`roleTests` empty), but this pass answers the stronger question: not "can a script poke the API" but
+"can an outside agent actually play the seat". An external agent (Grok 4.6, its own model and its own
+context — not the mod's in-process loop) was given only the repository's MCP tool surface and the
+bundled play skill, and told to fight the teammate's character itself.
+
+Driver: `build/validation-2026-09-13/mcp-call.py` — a thin caller over the bundled MCP server's tool
+surface (`create_server()` + `call_tool`), i.e. the same tools Cursor / Claude / Codex would get, not
+the raw `/action` endpoint. Evidence: `external-agent-log.jsonl` (84 lines), `external-agent-final-state.json`.
+
+- **A full battle was played and won by the outside agent.** Teammate side, all through MCP: 16 ×
+  `play_card` + 6 × `end_turn` + 4 × `confirm_modal` (the FTUE popups), plus `choose_map_node` to enter
+  and to leave. `FUZZY_WURM_CRAWLER` went `121/121` → dead over 7 turns, `screen` went `COMBAT` →
+  `REWARD` → `MAP`, gold `99` → `110`, and a second fight (`SHRINKER_BEETLE`) was already under way when
+  the session stopped.
+- **The teammate never took a turn by itself, and never called a model.** Across the whole run its
+  `/health` read `play_running=false`, `play_phase="paused"`, `session_requests=0`, `stop_kind=null`; the
+  host reported `companion.auto_play=false`. Every decision came from outside the game process.
+- **The two seats stayed independent.** The host window was driven alongside the teammate (same map vote,
+  `end_turn` each turn) because the run cannot advance otherwise; each side acted only for its own
+  character, which is `CompanionActPolicy` doing its job rather than a shared trigger.
+- **The supported entry really is the MCP surface.** No `/teammate/control`, no `/session/control`, no
+  `run_console_command` appears anywhere in the 84-line log — checked mechanically, not by reading.
+
+### Found in this session
+
+- **The companion's own `POST /session/control` skipped the play-model gate.** `POST /teammate/control`
+  and the overlay's Resume button both refuse to start the loop without a verified model, but the
+  companion instance accepted `{"running":true}` and started one. Live confirmation after the fix:
+  teammate `/session/control {running:true}` → 409 `session_not_ready` carrying the unverified-model hint,
+  while `{running:false}` stayed 200 — pausing is deliberately never gated. All start entries now share
+  `FirstRunSetup.ReadyToInvite`; `CoopRoute.SharedModelGate` pins the ordering.
+- **Three FTUE popups cost three `confirm_modal` calls each on the companion.** `NCombatRulesFtue`
+  returned `status=pending` twice before accepting, and at that moment the host window was already in
+  `COMBAT` with cards to play. The companion is not stuck (the third call lands), but an external agent
+  that treats the first `pending` as failure would stall there. Not changed in this pass.
+- **`get_relevant_game_data` needs `collection` and `item_ids`**, while
+  `skills/sts2-mcp-player/SKILL.md` describes it as scene-aware and callable without arguments. Calling
+  it the documented way fails with fastmcp `missing_argument`. Documentation gap, not a mod defect.
+- **Monster metadata does not carry multiplayer scaling.** `get_relevant_game_data monsters
+  FUZZY_WURM_CRAWLER` reported `min_hp=55 / max_hp=57`, while the live enemy was `121/121`. The skill
+  already says to trust live state; this is a concrete case where the metadata alone would mislead.
+- **On the companion instance, `/health`'s `dual_status` and `team_control_status` still read
+  「尚未启动双开」/「队友控制尚未连接」.** Those two fields describe the *host's* dual-launch bookkeeping, so
+  they are inert on a companion; the fields that matter there (`instance_role`, `play_running`,
+  `play_phase`, `session_requests`) are correct.
+
 ### Environment note for isolated runs
 
 A brand-new `--clientId` directory gets a default `settings.save` whose `mod_settings` is `null`, and the
