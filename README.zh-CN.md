@@ -70,7 +70,7 @@ https://github.com/user-attachments/assets/89353468-a299-4315-9516-e520bcbfbd4b
    4. 点 **测试连接**（会向配置的服务发测试请求）。对话通过 ≠ 游玩已通过。
    5. 点 **保存设置**。未保存的编辑切页时会自动保存，避免悄悄丢失。
 3. 思考强度、视觉、会话预算在 **显示高级选项** 里。
-4. 游玩模型显示「连通成功」后，再去 **「AI 队友」** 邀请。
+4. 游玩模型显示「连通成功」后，再去 **「AI 队友」** 邀请。这个前提只属于自走路线：未验证游玩模型时邀请队友，队友照样会拉起，只是会停在原地等待外部接管。见下方 **选项 C**。
 
 ### 第 4 步：开始体验！
 
@@ -87,6 +87,14 @@ https://github.com/user-attachments/assets/89353468-a299-4315-9516-e520bcbfbd4b
 - 可以直接用文字和队友商量路线与集火策略。
 - 队友默认拿大厅预选的角色并自动准备。想自己给它选角（在队友窗口里选，或通过队友 API 先 `select_character` 再 `embark`），把 mod 的 `settings.json` 里 `companionAutoSelectCharacter` 设为 `false`；此时队友会停在选角界面等你，没有超时。
 
+#### 选项 C：把队友窗口交给外部 Agent
+- 这条路线不需要配置或验证任何模型就能拉起队友——它根本不调用模型，所以没有模型也不会失败。队友照常拉起、照常加入大厅、照常准备。
+- 进图后队友会停在原地，不会自己出牌：它的 `/health` 报 `play_phase: "paused"` 与 `session_requests: 0`，因为这条路线根本不调用模型。
+- 从外部用队友实例自己的 `GET /state` 与 `POST /action` 驱动那个角色。通过主窗口 `GET /health` 的 `data.companion.api_port` 找到它的 HTTP API（该端口通常不是 8080）。队友只能操作自己的角色，越界会返回 403 `forbidden_actor`；这条路线下 `data.companion.auto_play` 为 `false`。
+- 用**主窗口**的 `POST /teammate/control`（请求体 `{"running": true|false}`）开始 / 暂停它。这是受支持入口，不需要会话令牌（主窗口自己持有队友会话令牌）。`running: true` 仍然需要已验证的游玩模型，与游戏内「继续游玩」按钮是同一道门禁；`running: false` 随时可用。
+
+两条路线共用同一组结构条件（必须在主菜单、这是人玩的窗口、当前角色没有正在跑的自动游玩），只有模型这一档不同。完整契约见 [docs/api.md](docs/api.md)。
+
 ---
 
 ## 🎮 核心玩法详解
@@ -97,6 +105,7 @@ https://github.com/user-attachments/assets/89353468-a299-4315-9516-e520bcbfbd4b
 - **实时看板**：游玩页面实时显示当前会话消耗的 Prompt Tokens、Completion Tokens、总 Token 数以及请求次数。
 
 ### 2. 双人本地联机 (Co-op Companion)
+- **两条组队路线**：游玩模型已验证时，队友直接自走；没有模型时，队友照样拉起并入队，但会停住等待外部接管（见 **选项 C**）。
 - **零干扰隔离启动**：离线模式下自动继承 `--force-steam off` 并分配增量 `clientId`；启动器自动为副实例派生并首次克隆独立的 `settings.companion.json` 配置文件。彻底杜绝两个实例共用存档或并发写入配置导致的踩踏与冲突。
 - **队伍交流机制 (Team Conversation)**：
   - 在人类窗口直接向 AI 队友发起讨论（如：“这回合我全力防御，你来输出”、“下层我们走问号房”）。
@@ -148,14 +157,15 @@ https://github.com/user-attachments/assets/89353468-a299-4315-9516-e520bcbfbd4b
 
 Mod 默认在本地启动 HTTP 服务（默认端口 `8080`，遇冲突自动动态选择）：
 
-- `GET /health`：服务健康检查，返回 `api_port`、`instance_role`、`mcp_enabled` 与进程 PID。
+- `GET /health`：服务健康检查，返回 `api_port`、`instance_role`、`mcp_enabled` 与进程 PID。在主窗口、且本次组队已连上队友时，还会额外返回 `companion` 块：队友的 `api_host`、`api_port`、`process_id`，以及本条路线的 `auto_play`。
 - `GET /state`：获取完整原始游戏状态 JSON。
 - `GET /actions/available`：获取当前所有合法动作清单与参数 Schema。
 - `GET /events/stream`：订阅游戏状态转换的 SSE 长连接流。
 - `POST /action`：执行具体游戏动作（例如 `play_card`、`choose_map_node`、`proceed` 等）。
 - `GET /data/{collection}`：导出打包的游戏元数据集合（`cards`、`relics`、`monsters`、`potions`、`events`、`powers`、`characters`）。
 - `POST /session/control`：启动 / 暂停本机角色的自动游玩（`{"running": true|false}`）。
-- `POST /companion/control` / `POST /companion/message`：控制 AI 队友实例 / 给队友发消息（仅本地双开）。
+- `POST /teammate/control`：在**主窗口**上开始 / 暂停 AI 队友（`{"running": true|false}`）。仅 loopback、仅主窗口；这是外部 agent 受支持的控制入口（对应选项 C）。
+- `POST /companion/control` / `POST /companion/message`：控制 AI 队友实例 / 给队友发消息（仅本地双开）。这是队友实例自身的受控端点，由主进程带本次会话令牌调用；外部调用方改用 `POST /teammate/control`。
 - `POST /mcp`：可选 MCP（Streamable HTTP）。默认关闭，在悬浮窗「接入」页打开。
 
 ### MCP 怎么选

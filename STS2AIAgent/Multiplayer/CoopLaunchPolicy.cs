@@ -135,9 +135,50 @@ internal static class CoopLaunchPolicy
 
     public static string? GetError(bool isCompanion, bool autoPlayRunning, string screen, ResolvedModel? model)
     {
+        var structural = GetStructuralError(isCompanion, autoPlayRunning, screen);
+        return structural ?? GetModelError(model);
+    }
+
+    public static string? GetError(bool isCompanion, bool autoPlayRunning, string screen, AgentSettings settings)
+    {
+        return GetError(isCompanion, autoPlayRunning, screen, settings, requireVerifiedPlayModel: true);
+    }
+
+    /// <summary>
+    /// The preconditions a launch request must meet. <paramref name="requireVerifiedPlayModel"/> is
+    /// the switch between the two supported routes: auto-play needs a play model that passed
+    /// 测试连接, while handing the window to an external agent never calls the model at all, so only
+    /// the structural conditions apply and the teammate comes up paused.
+    /// </summary>
+    public static string? GetError(
+        bool isCompanion,
+        bool autoPlayRunning,
+        string screen,
+        AgentSettings settings,
+        bool requireVerifiedPlayModel)
+    {
+        var structural = GetStructuralError(isCompanion, autoPlayRunning, screen);
+        if (structural != null) return structural;
+        if (!requireVerifiedPlayModel) return null;
+
+        var model = GetModelError(settings.TryResolvePlayModel());
+        if (model != null) return model;
+        var firstRun = FirstRunSetup.Evaluate(settings);
+        if (!firstRun.ReadyToInvite) return firstRun.Hint;
+        return null;
+    }
+
+    /// <summary>Conditions that hold for both routes: who is asking, from where, and into what.</summary>
+    public static string? GetStructuralError(bool isCompanion, bool autoPlayRunning, string screen)
+    {
         if (isCompanion) return Loc.T("当前窗口已是 AI 队友。请在你的主窗口邀请队友。");
         if (autoPlayRunning) return Loc.T("请先暂停当前角色的自动游玩，再邀请 AI 队友。");
         if (screen != "MAIN_MENU") return Loc.T("请先回到主菜单，再邀请 AI 队友组队。");
+        return null;
+    }
+
+    private static string? GetModelError(ResolvedModel? model)
+    {
         if (model == null || string.IsNullOrWhiteSpace(model.Model.Model)) return FirstRunSetup.SettingsHint;
         if (!Uri.TryCreate(model.Endpoint.BaseUrl, UriKind.Absolute, out var endpoint) ||
             endpoint.Scheme is not ("http" or "https"))
@@ -145,15 +186,6 @@ internal static class CoopLaunchPolicy
             return Loc.T("模型端点地址无效，请在设置中填写完整的 HTTP 或 HTTPS 地址。");
         }
 
-        return null;
-    }
-
-    public static string? GetError(bool isCompanion, bool autoPlayRunning, string screen, AgentSettings settings)
-    {
-        var structural = GetError(isCompanion, autoPlayRunning, screen, settings.TryResolvePlayModel());
-        if (structural != null) return structural;
-        var firstRun = FirstRunSetup.Evaluate(settings);
-        if (!firstRun.ReadyToInvite) return firstRun.Hint;
         return null;
     }
 

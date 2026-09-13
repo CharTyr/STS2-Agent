@@ -192,6 +192,8 @@ internal static class TestRunner
         yield return ("CoopStartup.HumanChoiceHoldsClock", () => Task.Run(CompanionStartupTests.BootstrapHoldsTheClockOnlyWhileAHumanChooses));
         yield return ("CoopStartup.Identity", () => Task.Run(CompanionStartupTests.HealthRequiresExactCompanionIdentity));
         yield return ("CoopStartup.Preconditions", () => Task.Run(CompanionStartupTests.LaunchPreconditionsProtectHumanRun));
+        yield return ("CoopRoute.ExternalTakeover", () => Task.Run(CoopRouteTests.UnverifiedPlayModelLaunchesForExternalTakeoverOnly));
+        yield return ("CoopRoute.SupportedSurfaces", () => Task.Run(CoopRouteTests.CompanionRouteReachesTheSupportedSurfaces));
         yield return ("CoopSave.ReadNetIds", () => Task.Run(CoopSavePrecheckTests.ReadsPlayerNetIdsFromTheSave));
         yield return ("CoopSave.NumericStringNetIds", () => Task.Run(CoopSavePrecheckTests.ReadsNumericStringNetIds));
         yield return ("CoopSave.UnreadableSaves", () => Task.Run(CoopSavePrecheckTests.UnreadableSavesYieldNoIds));

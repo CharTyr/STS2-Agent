@@ -5217,11 +5217,16 @@ internal static class GameActionService
     private static async Task<ActionResponsePayload> ExecuteContinueAiTeammateAsync()
     {
         var payload = GameStateService.BuildStatePayload();
+        var settings = AgentRuntime.Instance.Settings;
+        // Same route switch as invite_ai_teammate: an unverified play model no longer blocks the
+        // launch, it only means the teammate comes up paused for an external agent.
+        var companionAutoPlay = FirstRunSetup.Evaluate(settings).ReadyToInvite;
         var error = CoopLaunchPolicy.GetError(
             InstanceRole.IsCompanion,
             AgentRuntime.Instance.PlayRunning,
             payload.screen,
-            AgentRuntime.Instance.Settings);
+            settings,
+            requireVerifiedPlayModel: companionAutoPlay);
         if (error != null)
         {
             throw new ApiException(409, "invalid_action", error, new
@@ -5276,7 +5281,7 @@ internal static class GameActionService
             });
         }
 
-        await AgentRuntime.Instance.ContinueDualInstanceAsync(AgentRuntime.Instance.Settings, CancellationToken.None);
+        await AgentRuntime.Instance.ContinueDualInstanceAsync(settings, companionAutoPlay, CancellationToken.None);
         // Same classification as invite_ai_teammate: read the structured outcome, never the localized text.
         var outcome = AgentRuntime.Instance.DualLaunchOutcome;
         var message = AgentRuntime.Instance.DualStatus;
@@ -5365,11 +5370,17 @@ internal static class GameActionService
     private static async Task<ActionResponsePayload> ExecuteInviteAiTeammateAsync()
     {
         var payload = GameStateService.BuildStatePayload();
+        var settings = AgentRuntime.Instance.Settings;
+        // A play model that passed 测试连接 is what makes auto-play possible, so it also picks the
+        // route: without one the teammate still launches, it just waits for an external agent
+        // instead of starting the loop. See the two routes in docs/api.md.
+        var companionAutoPlay = FirstRunSetup.Evaluate(settings).ReadyToInvite;
         var error = CoopLaunchPolicy.GetError(
             InstanceRole.IsCompanion,
             AgentRuntime.Instance.PlayRunning,
             payload.screen,
-            AgentRuntime.Instance.Settings);
+            settings,
+            requireVerifiedPlayModel: companionAutoPlay);
         if (error != null)
         {
             throw new ApiException(409, "invalid_action", error, new
@@ -5379,7 +5390,7 @@ internal static class GameActionService
             });
         }
 
-        await AgentRuntime.Instance.LaunchDualInstanceAsync(AgentRuntime.Instance.Settings, CancellationToken.None);
+        await AgentRuntime.Instance.LaunchDualInstanceAsync(settings, companionAutoPlay, CancellationToken.None);
         // Classify on the structured outcome. DualStatus is localized display text, so matching
         // substrings in it misreports every failure as success in a non-Chinese client.
         var outcome = AgentRuntime.Instance.DualLaunchOutcome;

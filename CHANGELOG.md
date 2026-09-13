@@ -2,6 +2,49 @@
 
 > Release attribution is recorded against tags or release commits. Post-tag maintenance is listed separately; current validation limits are maintained in [PRODUCT_PLAN_CURRENT.md](https://github.com/CharTyr/STS2-Agent/blob/main/PRODUCT_PLAN_CURRENT.md).
 
+## Unreleased
+
+> Issue #85: the player who wants to fight their own character while an outside agent drives the
+> teammate window no longer has to fake a passing model test to get there. Inviting a teammate now
+> picks its route from whether the play model is verified, and the supported control entry moved to
+> the host window. Live: [docs/live-validation-checklist.md](docs/live-validation-checklist.md).
+
+### Added
+
+- `POST /teammate/control` on the host window starts or pauses the teammate, with no companion session
+  token: the host already holds that token and uses it against the companion’s own `POST /companion/control`
+  (#85). `{"running": true|false}` returns `phase` / `play_running` / `play_phase` / `companion_auto_play`;
+  it is loopback-only and host-only (403 `local_only`, 409 `not_host`), and a control that cannot be
+  confirmed is 409 `teammate_control_failed`. Until now the teammate could only be started or paused from
+  the in-game overlay, so an external agent had no supported way to do it.
+- `GET /health` carries a `companion` block on the host once a teammate is connected
+  (`api_host` / `api_port` / `process_id` / `auto_play`), so a caller can find the teammate’s own
+  `GET /state` and `POST /action` instead of guessing the port. The session token is not part of it.
+- `docs/api.md` documents the two co-op routes side by side, the new endpoint, and the new field; both
+  READMEs gained an “Option C: hand the teammate window to an external agent”.
+
+### Changed
+
+- **Inviting a teammate no longer requires a verified play model.** The route is chosen by
+  `FirstRunSetup.Evaluate(settings).ReadyToInvite`, which is the same signal the overlay already used: with a
+  verified play model the teammate auto-plays exactly as before, and without one it still joins the lobby and
+  starts the run, then parks — its process gets `STS2_AGENT_AUTOPLAY=0`, so it plays nothing and, more to the
+  point, never calls a model at all (#85). `invite_ai_teammate` and `continue_ai_teammate` share this switch,
+  and the launch status line now says which route is running instead of promising auto-play either way.
+- The conditions both routes still enforce are unchanged and are now a named policy
+  (`CoopLaunchPolicy.GetStructuralError`): not the companion instance, no auto-play already running on this
+  character, main menu. The split is scoped to the model gate and is not a way around those.
+
+### Fixed
+
+- The reported co-op route described the launch that was *attempted*, not the teammate that is *running*: a
+  rejected retry — usually “the teammate window is already running” — overwrote the flag before the launch
+  check, so `/health` could report `auto_play: false` for a teammate the in-process loop was actively playing,
+  inviting an external agent to take over a seat already in use.
+- `/health` stopped advertising a companion API port after that process exited.
+- `teammate_control_failed` is `retryable: true`, matching what the docs already said; its causes (a launch in
+  progress, an unfinished previous control, an unconfirmed pause) all clear on their own.
+
 ## v0.12.1 - 2026-09-13
 
 > The pause boundary: once a person presses pause, the agent no longer reads the run underneath. The pause menu and every page reached from it report their own screen, their action surfaces stay closed, and no page's own furniture — the pause menu's "abandon" entry among it — arrives as a capstone option any more. Release and Workshop upload: [release-v0.12.1_2026-09-13.md](history/release-v0.12.1_2026-09-13.md).

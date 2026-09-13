@@ -25,7 +25,15 @@ internal static partial class Loc
         map["读档开房失败：{0}"] = "Loading the saved run failed: {0}";
         map["正在继续联机存档，等待队友窗口连回…"] = "Continuing the saved co-op run; waiting for the teammate window to reconnect…";
         map["继续联机存档失败：{0}"] = "Continuing the saved co-op run failed: {0}";
-        map["{0}。已按存档开好本地房，等队友窗口连回来后两边各点一次出发。"] = "{0}. The saved run is hosted locally; once the teammate window reconnects, both sides click Embark once.";
+        map["{0}。已按存档开好本地房，等队友窗口连回来后两边各点一次出发；{1}"] = "{0}. The saved run is hosted locally; once the teammate window reconnects, both sides click Embark once; {1}";
+        map["队友连回来后会自己出牌。"] = "the teammate plays its own cards once it reconnects.";
+        map["队友连回来后停在原地等待外部接管，不会自己出牌。"] =
+            "the teammate waits to be taken over from outside once it reconnects instead of playing its own cards.";
+        // The two halves of the route switch (Agent/AgentRuntime.cs).
+        map["等待外部接管：队友窗口已就绪，未自动开始游玩。"] =
+            "Waiting for an external takeover: the teammate window is ready and has not started playing on its own.";
+        map["上一次队友控制还没有完成，请稍后重试。"] =
+            "The previous teammate control has not finished yet. Try again shortly.";
         map["找不到读档方法 StartLoad。"] = "Could not find the StartLoad method.";
         map["读档开房失败：当前弹窗是 {0}。常见原因是本地直连端口 33771 仍被上一局占着；可重启游戏后再试。"] = "Loading the saved run failed: the open modal is {0}. The usual cause is the local direct port 33771 still held by the previous run; restart the game and try again.";
         map["读档后没有进入多人读档界面。"] = "The multiplayer load screen did not open after loading the save.";

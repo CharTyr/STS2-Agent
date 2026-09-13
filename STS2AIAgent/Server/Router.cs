@@ -138,6 +138,55 @@ internal static class Router
                 return;
             }
 
+            if (request.HttpMethod == "POST" && request.Url?.AbsolutePath == "/teammate/control")
+            {
+                if (!request.IsLocal)
+                {
+                    throw new ApiException(403, "local_only", "Teammate control is only available on loopback.");
+                }
+
+                if (InstanceRole.IsCompanion)
+                {
+                    throw new ApiException(409, "not_host", "Only the host window can control the AI teammate.");
+                }
+
+                if (request.ContentLength64 < 0 || request.ContentLength64 > 16000)
+                {
+                    throw new ApiException(400, "invalid_request", "A bounded JSON body is required.");
+                }
+
+                var teammateControl = await ReadJsonBodyAsync<SessionControlRequest>(request, cancellationToken);
+                if (teammateControl?.running is null)
+                {
+                    throw new ApiException(400, "invalid_request", "running must be a boolean.");
+                }
+
+                var control = await AgentRuntime.Instance.ControlTeammateResultAsync(
+                    teammateControl.running.Value, cancellationToken);
+                if (!control.Ok)
+                {
+                    // Retryable on purpose: the usual causes are a launch still in progress, a
+                    // previous control that has not finished, or a pause the teammate has not
+                    // confirmed yet -- all of which clear on their own.
+                    throw new ApiException(409, "teammate_control_failed", control.Message, retryable: true);
+                }
+
+                await WriteJsonAsync(response, 200, new
+                {
+                    ok = true,
+                    request_id = requestId,
+                    data = new
+                    {
+                        phase = control.Phase,
+                        play_running = AgentRuntime.Instance.PlayRunning,
+                        play_phase = AgentRuntime.Instance.PlayPhase,
+                        companion_auto_play = AgentRuntime.Instance.CompanionAutoPlay
+                    }
+                });
+                statusCode = 200;
+                return;
+            }
+
             if (IsMcpPath(request.Url?.AbsolutePath))
             {
                 var mcp = NativeMcpServer.Runtime;
@@ -296,8 +345,35 @@ internal static class Router
             session_requests = AgentRuntime.Instance.SessionRequests,
             companion_process_alive = LocalDualInstanceLauncher.CompanionProcessAlive,
             companion_process_exited = LocalDualInstanceLauncher.CompanionProcessExited,
+            companion = BuildCompanionSessionData(),
             dual_status = AgentRuntime.Instance.DualStatus,
             team_control_status = AgentRuntime.Instance.TeamControlStatus
+        };
+    }
+
+    /// <summary>
+    /// Present on the host window once a teammate session exists, so a caller can find the
+    /// companion API and tell which route this launch took. The session token is deliberately
+    /// absent: it authorizes control from this process only, and POST /teammate/control is the
+    /// supported path for everyone else.
+    /// </summary>
+    private static object? BuildCompanionSessionData()
+    {
+        var connection = InstanceRole.IsCompanion ? null : LocalDualInstanceLauncher.Connection;
+        // The launcher keeps the last session handle so a retry cannot start a third window; that
+        // handle must not outlive the process it points at, or /health would advertise an API port
+        // nobody is listening on.
+        if (connection == null || LocalDualInstanceLauncher.CompanionProcessExited)
+        {
+            return null;
+        }
+
+        return new
+        {
+            api_host = "127.0.0.1",
+            api_port = connection.Port,
+            process_id = connection.ProcessId,
+            auto_play = AgentRuntime.Instance.CompanionAutoPlay
         };
     }
 

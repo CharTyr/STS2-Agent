@@ -70,7 +70,7 @@ This mod is still in development. Some things may be unfinished or break. Please
    4. Click **Test Connection** (sends a request to your configured service). Chat success is not play success.
    5. Click **Save Settings**. Unsaved edits are saved when you leave the tab so they are not dropped silently.
 3. Thinking intensity, vision, and session budgets are under **Show advanced options**.
-4. Invite a teammate only after the play model shows connectivity success.
+4. Invite a teammate only after the play model shows connectivity success. That requirement belongs to the auto-play route: a teammate invited without a verified play model still launches, it just waits to be taken over from outside. See **Option C** below.
 
 ### Step 4: Play!
 
@@ -87,6 +87,14 @@ This mod is still in development. Some things may be unfinished or break. Please
 - Use team chat to coordinate in plain English or Chinese.
 - By default the teammate takes the preselected character and readies up by itself. To pick its character yourself (in the teammate window, or through the companion API with `select_character` then `embark`), set `companionAutoSelectCharacter` to `false` in the mod's `settings.json`; the teammate then waits on the character screen without a timeout.
 
+#### Option C: Hand The Teammate Window To An External Agent
+- You do not need to configure or verify any model to invite a teammate on this route: it never calls a model, so a missing or broken model cannot make it fail. The teammate still launches, joins the lobby, and readies up on its own.
+- When the run starts, the teammate stops where it is and plays nothing by itself: its `/health` reports `play_phase: "paused"` with `session_requests: 0`, because this route never calls a model.
+- Drive that character from outside with the teammate instance's own `GET /state` and `POST /action`. Find its HTTP API through `data.companion.api_port` on the main window's `GET /health` (that port is usually not 8080). The teammate can only act for its own character; acting outside it returns 403 `forbidden_actor`. On this route `data.companion.auto_play` is `false`.
+- Start and pause it with `POST /teammate/control` on the **main window**, body `{"running": true|false}`. This is the supported entry point and it needs no session token (the main window holds the teammate session token itself). `running: true` still requires a verified play model, exactly like the in-game **Continue Auto-Play** button; `running: false` works at any time.
+
+Both routes enforce the same structural conditions (you are on the main menu, this is not the teammate instance, and the character has no auto-play already running); only the model gate differs. Full contract: [docs/api.md](docs/api.md).
+
 ---
 
 ## 🎮 Core Features
@@ -97,6 +105,7 @@ This mod is still in development. Some things may be unfinished or break. Please
 - **Real-Time Counters**: The overlay displays prompt, completion, total tokens, and request counts live.
 
 ### 2. Dual-Instance Local Co-op
+- **Two Co-op Routes**: With a verified play model the teammate auto-plays as before; with no model it still launches and joins, but stops and waits to be taken over from outside (see **Option C**).
 - **Zero-Collision Isolation**: Propagates `--force-steam off` and increments `clientId` in offline mode. Automatically derives and clones `settings.companion.json` so both instances never write over each other's configurations or save slots.
 - **Team Conversation**:
   - Chat directly with the AI teammate during multiplayer runs.
@@ -148,14 +157,15 @@ This mod is still in development. Some things may be unfinished or break. Please
 
 The mod runs an embedded HTTP server on `http://127.0.0.1:8080` (with dynamic fallback on port contention):
 
-- `GET /health`: Health check, returns `api_port`, `instance_role`, `mcp_enabled`, and process PID.
+- `GET /health`: Health check, returns `api_port`, `instance_role`, `mcp_enabled`, and process PID. On the main window, once this co-op session has connected to a teammate, it also returns a `companion` block: the teammate's `api_host`, `api_port`, and `process_id`, plus this route's `auto_play` flag.
 - `GET /state`: Full raw game state JSON.
 - `GET /actions/available`: Currently available legal actions and schema.
 - `GET /events/stream`: Real-time SSE stream for game events.
 - `POST /action`: Dispatch an action (e.g., `play_card`, `choose_map_node`, `proceed`).
 - `GET /data/{collection}`: Export a bundled game metadata collection (`cards`, `relics`, `monsters`, `potions`, `events`, `powers`, `characters`).
 - `POST /session/control`: Start or pause autoplay for this instance (`{"running": true|false}`).
-- `POST /companion/control` / `POST /companion/message`: Control or message the AI teammate instance (local dual-instance only).
+- `POST /teammate/control`: Start or pause the AI teammate from the **main window** (`{"running": true|false}`). Loopback only and main-window only; this is the supported entry point for an external agent (see **Option C** above).
+- `POST /companion/control` / `POST /companion/message`: Control or message the AI teammate instance (local dual-instance only). These are the teammate instance's own controlled endpoints, called by the main process with this session's token; external callers should use `POST /teammate/control` instead.
 - `POST /mcp`: Optional MCP (Streamable HTTP). Off by default; enable it on the overlay Connect tab.
 
 ### Which MCP entry to use

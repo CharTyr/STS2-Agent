@@ -114,7 +114,7 @@ internal static class DualLaunchOutcomeTests
         Assert.Contains("return (false,", structured);
         Assert.Contains("return (true,", structured);
         Assert.Contains("catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)", structured);
-        Assert.Contains("await HostLocalCoopResultAsync(cancellationToken)", legacy);
+        Assert.Contains("await HostLocalCoopResultAsync(cancellationToken, companionAutoPlay)", legacy);
         Assert.Contains("return result.Message;", legacy);
     }
 

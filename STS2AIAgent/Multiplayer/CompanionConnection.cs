@@ -23,6 +23,12 @@ internal sealed class CompanionConnection
         _http = http ?? Http;
     }
 
+    /// <summary>Loopback port the companion instance listens on.</summary>
+    public int Port => _port;
+
+    /// <summary>Process id this session was verified against.</summary>
+    public int ProcessId => _pid;
+
     public static string CreateToken() => Convert.ToHexString(RandomNumberGenerator.GetBytes(32));
 
     public static bool IsAuthorized(string? expected, string? supplied)
