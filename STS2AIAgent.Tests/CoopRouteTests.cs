@@ -135,6 +135,26 @@ internal static class CoopRouteTests
     }
 
     /// <summary>
+    /// The overlay's AI Teammate tab is the in-game face of both PR #83 and PR #84: a Continue
+    /// button that goes through the same runtime entry as continue_ai_teammate and is offered only
+    /// where that action would be accepted, and a checkbox that writes CompanionAutoSelectCharacter
+    /// straight into settings so the companion reads it at launch.
+    /// </summary>
+    public static void OverlayOffersContinueAndCharacterChoice()
+    {
+        var overlay = AgentSourceFixture.Read("STS2AIAgent/Ui/AgentOverlayHost.cs");
+
+        // Continue chooses the route the same way the invite does (see OverlayInviteFollowsTheApiRoute).
+        Assert.Contains("ContinueDualInstanceAsync(settings, companionAutoPlay, CancellationToken.None)", overlay);
+        Assert.Contains("GameStateService.CanContinueAiTeammate(ActiveScreenContext.Instance.GetCurrentScreen())", overlay);
+        Assert.Contains("_dualContinueButton.Disabled = AgentRuntime.Instance.DualLaunching || !canContinue;", overlay);
+
+        Assert.Contains("settings.CompanionAutoSelectCharacter = !on;", overlay);
+        Assert.Contains("current.CompanionAutoSelectCharacter = !_companionChoiceToggle.ButtonPressed;", overlay);
+        Assert.Contains("SetPressedNoSignal(!AgentRuntime.Instance.Settings.CompanionAutoSelectCharacter)", overlay);
+    }
+
+    /// <summary>
     /// Every way of starting the in-process loop is one decision, so all of them answer to the same
     /// model gate. The companion's own /session/control used to skip it, which left a caller able to
     /// start a model loop that the host's Resume button, /companion/control and /teammate/control all

@@ -1,6 +1,7 @@
 using Godot;
 using MegaCrit.Sts2.Core.Logging;
 using MegaCrit.Sts2.Core.Nodes;
+using MegaCrit.Sts2.Core.Nodes.Screens.ScreenContext;
 using STS2AIAgent.Agent;
 using STS2AIAgent.Config;
 using STS2AIAgent.Game;
@@ -46,11 +47,14 @@ internal sealed class AgentOverlayHost
     private Label? _apiLabel;
     private Label? _dualStatus;
     private Label? _firstRunHint;
-    private Label? _dualHint;
     private Label? _sessionHeadline;
     private Label? _sessionDetail;
     private Label? _sessionNext;
     private Button? _dualLaunchButton;
+    private Button? _dualContinueButton;
+    private bool _continueLaunching;
+    private CheckBox? _companionChoiceToggle;
+    private Label? _dualHint;
     private RichTextLabel? _teamChat;
     private TextEdit? _teamInput;
     private Button? _teamSend;
@@ -444,11 +448,29 @@ internal sealed class AgentOverlayHost
         page.AddChild(_resetStatsButton);
         _firstRunHint = UiFactory.Label(FirstRunHintText(), 13, muted: true);
         page.AddChild(_firstRunHint);
+        // The switch names the new behaviour: ticked = the companion no longer takes the preselected
+        // character; the AI driving it (or a human at that window) picks instead. It sits right above
+        // the invite button so the choice is visible before the second window exists, and is saved on
+        // toggle because the companion reads settings at launch and this tab has no separate Save.
+        _companionChoiceToggle = UiFactory.Check(Loc.T("禁用自动选角"), !AgentRuntime.Instance.Settings.CompanionAutoSelectCharacter);
+        _companionChoiceToggle.Toggled += on =>
+        {
+            var settings = CloneSettings(AgentRuntime.Instance.Settings);
+            settings.CompanionAutoSelectCharacter = !on;
+            AgentRuntime.Instance.SaveSettings(settings);
+            RefreshDynamic();
+        };
+        page.AddChild(_companionChoiceToggle);
         _dualHint = UiFactory.Label(DualHintText(), 12, muted: true);
         page.AddChild(_dualHint);
         page.AddChild(UiFactory.Button(Loc.T("导出诊断"), CopyDiagnostics));
         _dualLaunchButton = UiFactory.Button(Loc.T("邀请 AI 队友"), () => _ = LaunchDualAsync());
         page.AddChild(_dualLaunchButton);
+        // In-game entry for continue_ai_teammate: the game's own Load button opens a saved co-op run
+        // over Steam networking and rejects the local-connection NetIds, so the way back into a saved
+        // run has to live here, one row under the invite.
+        _dualContinueButton = UiFactory.Button(Loc.T("继续上次联机对局"), () => _ = ContinueDualAsync());
+        page.AddChild(_dualContinueButton);
         _dualStatus = UiFactory.Label(Loc.T("队友尚未加入。"), 13, muted: true);
         page.AddChild(_dualStatus);
         _teamPause = UiFactory.Button(Loc.T("暂停队友"), () => _ = AgentRuntime.Instance.ControlTeammateAsync(false, CancellationToken.None));
@@ -970,6 +992,11 @@ internal sealed class AgentOverlayHost
             current.ProactiveChatEnabled = _proactiveChatToggle.ButtonPressed;
         }
 
+        if (_companionChoiceToggle != null)
+        {
+            current.CompanionAutoSelectCharacter = !_companionChoiceToggle.ButtonPressed;
+        }
+
         if (_proactiveToneCombo != null)
         {
             current.ProactiveChatTone = ProactiveChatTones.Normalize(SelectedMetadata(_proactiveToneCombo));
@@ -1015,6 +1042,9 @@ internal sealed class AgentOverlayHost
         if (_dualPage != null) _dualPage.Visible = tab == "dual";
         if (_connectPage != null) _connectPage.Visible = tab == "connect";
         if (_chatFooter != null) _chatFooter.Visible = tab == "chat";
+        // The Continue button's availability follows the current screen, which changes without any
+        // runtime event; re-read it whenever this tab comes into view.
+        if (tab == "dual") RefreshDynamic();
     }
 
     private void ToggleVisible()
@@ -1031,6 +1061,7 @@ internal sealed class AgentOverlayHost
 
         _panel.Visible = !_panel.Visible;
         AgentRuntime.Instance.PersistOverlayVisible(_panel.Visible);
+        if (_panel.Visible) RefreshDynamic();
     }
 
     private void TogglePlay()
@@ -1141,12 +1172,22 @@ internal sealed class AgentOverlayHost
         RefreshDynamic();
     }
 
-    /// <summary>The line under the invite describes the route that will actually run, so it never contradicts the first-run hint above it.</summary>
-    private static string DualHintText()
+    private async Task ContinueDualAsync()
     {
-        return FirstRunSetup.Evaluate(AgentRuntime.Instance.Settings).ReadyToInvite
-            ? Loc.T("请从主菜单邀请。第二窗口打开后，AI 会自己选角、点开局事件并进图。你继续在这个窗口操作自己的角色；轮到它时，它会自动出牌。")
-            : Loc.T("请从主菜单邀请。第二窗口打开后，AI 会加入并进图，然后停在原地等待外部接管，不会自己出牌；你继续在这个窗口操作自己的角色。");
+        FlushSettingsIfDirty();
+        var settings = HarvestSettings();
+        var companionAutoPlay = FirstRunSetup.Evaluate(settings).ReadyToInvite;
+        _continueLaunching = true;
+        try
+        {
+            RefreshDynamic();
+            await AgentRuntime.Instance.ContinueDualInstanceAsync(settings, companionAutoPlay, CancellationToken.None);
+        }
+        finally
+        {
+            _continueLaunching = false;
+        }
+        RefreshDynamic();
     }
 
     /// <summary>The tab's top line tells the truth about both routes: without a verified model the invite still works, the teammate just waits to be taken over.</summary>
@@ -1156,6 +1197,33 @@ internal sealed class AgentOverlayHost
         return firstRun.ReadyToInvite
             ? firstRun.Hint
             : Loc.T("游玩模型未配置或未验证：仍然可以邀请，队友会加入并进图，然后停在原地等待外部接管，不会自己出牌。想让它自己打，先在设置里配好模型并通过「测试连接」。");
+    }
+
+    private static string DualHintText()
+    {
+        var settings = AgentRuntime.Instance.Settings;
+        if (!settings.CompanionAutoSelectCharacter)
+        {
+            return Loc.T("请从主菜单邀请。第二窗口打开后，会停在选角界面让 AI 自己决定选角，也可以你切过去给它选好、点出发；之后它自己点开局事件并进图。");
+        }
+
+        return FirstRunSetup.Evaluate(settings).ReadyToInvite
+            ? Loc.T("请从主菜单邀请。第二窗口打开后，AI 会自己选角、点开局事件并进图。你继续在这个窗口操作自己的角色；轮到它时，它会自动出牌。")
+            : Loc.T("请从主菜单邀请。第二窗口打开后，AI 会加入并进图，然后停在原地等待外部接管，不会自己出牌；你继续在这个窗口操作自己的角色。");
+    }
+
+    /// <summary>Continue is offered only where continue_ai_teammate would be accepted: host main menu with a co-op save on disk.</summary>
+    private static bool CanOfferContinue()
+    {
+        if (InstanceRole.IsCompanion) return false;
+        try
+        {
+            return GameStateService.CanContinueAiTeammate(ActiveScreenContext.Instance.GetCurrentScreen());
+        }
+        catch
+        {
+            return false;
+        }
     }
 
     private async Task SendTeamMessageAsync()
@@ -1293,13 +1361,28 @@ internal sealed class AgentOverlayHost
             _firstRunHint.Text = FirstRunHintText();
         }
 
-        if (_dualHint != null) _dualHint.Text = DualHintText();
-
         if (_dualLaunchButton != null)
         {
             _dualLaunchButton.Disabled = AgentRuntime.Instance.DualLaunching || InstanceRole.IsCompanion;
-            _dualLaunchButton.Text = AgentRuntime.Instance.DualLaunching ? Loc.T("正在邀请队友…") : Loc.T("邀请 AI 队友");
+            // Only the button that started the launch reads as busy; the other one just greys out.
+            _dualLaunchButton.Text = AgentRuntime.Instance.DualLaunching && !_continueLaunching ? Loc.T("正在邀请队友…") : Loc.T("邀请 AI 队友");
         }
+
+        if (_dualContinueButton != null)
+        {
+            var canContinue = CanOfferContinue();
+            _dualContinueButton.Disabled = AgentRuntime.Instance.DualLaunching || !canContinue;
+            _dualContinueButton.Text = AgentRuntime.Instance.DualLaunching && _continueLaunching ? Loc.T("正在读档接回队友…") : Loc.T("继续上次联机对局");
+            _dualContinueButton.TooltipText = canContinue ? "" : Loc.T("主菜单上有联机存档时可用。");
+        }
+
+        if (_companionChoiceToggle != null)
+        {
+            _companionChoiceToggle.Disabled = InstanceRole.IsCompanion || AgentRuntime.Instance.DualLaunching;
+            _companionChoiceToggle.SetPressedNoSignal(!AgentRuntime.Instance.Settings.CompanionAutoSelectCharacter);
+        }
+
+        if (_dualHint != null) _dualHint.Text = DualHintText();
 
         if (_teamSend != null)
         {
