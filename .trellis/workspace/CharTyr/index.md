@@ -8,8 +8,8 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-1.md`
-- **Total Sessions**: 22
-- **Last Active**: 2026-09-13
+- **Total Sessions**: 23
+- **Last Active**: 2026-09-14
 <!-- @@@/auto:current-status -->
 
 ---
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-1.md` | ~828 | Active |
+| `journal-1.md` | ~870 | Active |
 <!-- @@@/auto:active-documents -->
 
 ---
@@ -29,6 +29,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 23 | 2026-09-14 | v0.12.3 同号重发：把 #111 的两个联机界面入口补进已发布版本 | `6a327d3`, `0f60ec4`, `541734f` | `codex/record-recut-details` |
 | 22 | 2026-09-13 | 审阅并合并 sachi4clover 的联机界面 PR #111（续档按钮 + 自动选角开关） | `6a327d3`, `044d117` | `main` |
 | 21 | 2026-09-13 | 补发 v0.12.3 的 GitHub Release（工坊先行的完整化） | `b0217b0`, `10c9135` | `main` |
 | 20 | 2026-09-13 | 工坊更新到 v0.12.3（只发工坊，不打 tag） | `b0217b0`, `00d1789` | `main` |

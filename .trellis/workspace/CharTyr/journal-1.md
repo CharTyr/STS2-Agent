@@ -826,3 +826,45 @@ v0.12.3 先是只发工坊，本轮补上 tag 与 GitHub Release，把「工坊�
 - #111 改了 mod 代码，工坊与 GitHub 上的 0.12.3 里都没有它：是否发 v0.12.4（或攒一批）待定
 - Continue 按钮与勾选框需要一次实机（真实联机存档）点击验收：按钮时机、读档接回队友、子进程读到的勾选值
 - 工坊简体中文列表仍未更新（自 v0.11.0 起），待工坊网页端粘贴 steam-workshop/description.zh-CN.txt
+
+
+## Session 23: v0.12.3 同号重发：把 #111 的两个联机界面入口补进已发布版本
+
+**Date**: 2026-09-14
+**Task**: v0.12.3 同号重发：把 #111 的两个联机界面入口补进已发布版本
+**Branch**: `codex/record-recut-details`
+
+### Summary
+
+版本号保持 0.12.3，只换构建：工坊于 09-14 00:09 重新上传（file_size 1229829、内容 id 6028841468497339213），GitHub 的 v0.12.3 tag 与 Release 重切到 0f60ec4（新资产 552014 字节，SHA256 B7684C9F…）。五处版本号未动，CHANGELOG 的 Unreleased 段并入 v0.12.3 段并写明两份构建只能靠大小/哈希区分。
+
+### Main Changes
+
+- 发布准备：CHANGELOG 把 Unreleased 并入 v0.12.3 段（段首横幅记录 09-14 同号重发与区分口径）、workshop.json 的 changeNote 改为本轮文案；五处版本号刻意不动（check_release_metadata.py 只比对五处彼此一致，不比对 tag 与上一版）
+- 重发执行：把两次旧产物目录改名留档（两个打包脚本都用 Get-UniquePath，不清旧目录会打出 -2 后缀）→ package-steam-workshop.ps1 → 分离进程 ModUploader 上传（一次成功）→ 工坊 GetPublishedFileDetails 复核（file_size 与本地内容字节和 1229829 完全相等）→ package-release.ps1 → 删旧 tag/Release 并按 0f60ec4 重建
+- 载荷交叉核对：两渠道 DLL 大小相同（1190400），只有 72 字节、5 段不同（PE 时间戳与 MVID/调试目录），PCK 与 mod_id.json 逐字节一致
+- 文档：#113 是发布提交，记录由 #114 合入——状态页与 history/release-v0.12.3 都改成「第一次（09-13）/ 第二次（09-14）」两段口径，原「标签后未发布变更」段改为重发内容
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `6a327d3` | (see git log) |
+| `0f60ec4` | (see git log) |
+| `541734f` | (see git log) |
+
+### Testing
+
+- [OK] preflight-release.ps1 全绿（八道 gate 逐条 OK）；#113 与 #114 的 push / pull_request 四个 Validate run 均 success
+- [OK] 工坊复核：file_size 1229829 与本地内容字节和相等、time_updated 2026-09-14 00:09:26、visibility=0、tags 与英文说明未变
+- [OK] GitHub 复核：资产 552014 字节、上报 digest sha256:b7684c9f… 与本地一致、Latest 指向 v0.12.3；zip 内 CHANGELOG 已含 republished 2026-09-14 横幅
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- #111 的两个界面入口仍缺实机点击验收：按钮时机、读档接回队友、子进程读到的勾选值
+- 工坊简体中文列表仍未更新（自 v0.11.0 起），待工坊网页端粘贴 steam-workshop/description.zh-CN.txt
+- 同号重发的代价已写进 CHANGELOG 与状态页：0.12.3 指两份构建，下一版若升号即可恢复一一对应
