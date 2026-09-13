@@ -1,14 +1,14 @@
 # STS2 AI Agent：当前状态页
 
-> 本页是仓库唯一的当前状态入口。更新日期：2026-09-13（v0.12.2 发布与工坊上传；标签后只多了一处 README 链接修复与新增的 `packaged-links` gate）。
-> 发布代码基准：tag `v0.12.2` @ `72b2a81`；标签后主线变更（打包脚本与两道文档 gate）单列在下方，不把文档更新视为新版本发布。
+> 本页是仓库唯一的当前状态入口。更新日期：2026-09-13（v0.12.2 发布与工坊上传；标签后另有打包 gate 修复与一处 overlay 邀请路线修复，见 §1）。
+> 发布代码基准：tag `v0.12.2` @ `72b2a81`；标签后主线变更（打包 gate 修复、overlay 邀请路线修复）单列在下方，不把文档更新视为新版本发布。
 > 发布基准：[GitHub Release v0.12.2](https://github.com/CharTyr/STS2-Agent/releases/tag/v0.12.2)，2026-09-13 发布；上一版 [v0.12.1](https://github.com/CharTyr/STS2-Agent/releases/tag/v0.12.1)，2026-09-13。2026-09-13 通过 Steam Web API 核对工坊物品 3796486050：visibility=0（公开）、file_size 1225733 与本地内容字节和相等、time_updated 2026-09-13 16:51:04、内容 id `8439947284938535648`。**工坊简体中文列表仍是旧版**（缺 v0.11.0 起的多条列表项，2026-09-13 再次确认），待手工粘贴 `steam-workshop/description.zh-CN.txt`——`ModUploader` 没有语言参数，这一步只能在工坊网页端做。
 
 旧路线图见 [PRODUCT_ROADMAP.md](PRODUCT_ROADMAP.md)（历史），旧交付原文见 [history/PRODUCT_PLAN_CURRENT_2026-09-07.md](history/PRODUCT_PLAN_CURRENT_2026-09-07.md) 和 [history/COOP_DELIVERY_2026-09-07.md](history/COOP_DELIVERY_2026-09-07.md)。[COOP_DELIVERY.md](COOP_DELIVERY.md) 现在只是历史证据索引。本页不继承历史文档中的审批、工作树或测试前执行约束。
 
 ## 1. 当前基线
 
-- **v0.12.2（当前发布基准）**：2026-09-13 发布，发布提交 `40d1464`（`Release v0.12.2`）经 PR #104 合并为 `72b2a81`（tag 指向合并提交，两者树内容相同），GitHub Release 资产 `sts2-ai-agent-v0.12.2-windows.zip`（549033 字节，SHA256 `35C1F0FC0ED3C664C0F74A73B5759486E4CA2BE92295CC47062FCC65552B5D9D`），CI 在 `40d1464` 上的 push 与 pull_request 两个 Validate run 均 success。工坊物品 3796486050 已更新：公开、`file_size` 1225733 与本地内容字节和相等、`time_updated` 2026-09-13 16:51:04、内容 id `8439947284938535648`。见 [v0.12.2 发布记录](history/release-v0.12.2_2026-09-13.md)。本版内容是联机接力：#85 的外部接管路线与主窗口 `POST /teammate/control`、#99 的共享模型门禁、#101 的三处实机收尾。**代码与实机跑过的那份逐字节相同**（实机证据即 #85 / #99 / #101 的隔离验收），标签之后只多了 README 链接修复与新增的 `packaged-links` gate。**本版未再单独做完整实机验收**，待办项见 `docs/live-validation-checklist.md`。
+- **v0.12.2（当前发布基准）**：2026-09-13 发布，发布提交 `40d1464`（`Release v0.12.2`）经 PR #104 合并为 `72b2a81`（tag 指向合并提交，两者树内容相同），GitHub Release 资产 `sts2-ai-agent-v0.12.2-windows.zip`（549033 字节，SHA256 `35C1F0FC0ED3C664C0F74A73B5759486E4CA2BE92295CC47062FCC65552B5D9D`），CI 在 `40d1464` 上的 push 与 pull_request 两个 Validate run 均 success。工坊物品 3796486050 已更新：公开、`file_size` 1225733 与本地内容字节和相等、`time_updated` 2026-09-13 16:51:04、内容 id `8439947284938535648`。见 [v0.12.2 发布记录](history/release-v0.12.2_2026-09-13.md)。本版内容是联机接力：#85 的外部接管路线与主窗口 `POST /teammate/control`、#99 的共享模型门禁、#101 的三处实机收尾。**代码与实机跑过的那份逐字节相同**（实机证据即 #85 / #99 / #101 的隔离验收），标签之后只多了 README 链接修复、新增的 `packaged-links` gate 与一处 overlay 邀请路线修复（后两笔见「v0.12.2 标签后主线未发布变更」）。**本版未再单独做完整实机验收**，待办项见 `docs/live-validation-checklist.md`。
 - **v0.12.1（上一版）**：2026-09-13 发布，发布提交 `f0f3b2a`（`Release v0.12.1`）经 PR #95 合并为 `640c343`。本版内容是暂停边界（#88 / #89 / #92 / #93），唯一实机证据是 #93 的两轮隔离验收（`verify-capstone-pages.log`，FAILURES: 0）。见 [v0.12.1 发布记录](history/release-v0.12.1_2026-09-13.md)。工坊当时为 `file_size` 1213444、`time_updated` 2026-09-13 12:41:42。
 - **v0.12.0**：2026-09-13 发布，发布提交 `69602c9`（`Release v0.12.0`）经 PR #86 合并为 `69887a3`（tag 指向合并提交，两者树内容相同），GitHub Release 资产 `sts2-ai-agent-v0.12.0-windows.zip`（533493 字节，SHA256 `C2B1F3229D6CF8E7D757D571AAF717004DDBCAFD4F8AAE1276A86A54A3AFA685`），CI 在 `69602c9` 上的 push 与 pull_request 两个 Validate run 均 success。工坊物品 3796486050 已更新：公开、`file_size` 1202181 与本地内容字节和相等、`time_updated` 2026-09-13 02:25:02、manifest `3382317012139913714`。见 [v0.12.0 发布记录](history/release-v0.12.0_2026-09-13.md)。新增 `continue_ai_teammate` / `CompanionAutoSelectCharacter`（#83 / #84）与状态可信度收口（`72c96fd`、`12c35b3`、`492722a`、`ca12a4f` 等）随本版发布。
 - **v0.11.0**：2026-09-12 发布，发布提交 `84631b9`（`feat(i18n): follow the game language in the overlay and the state payload`），GitHub Release 资产 `sts2-ai-agent-v0.11.0-windows.zip`（677015 字节），CI Validate `34629717120` success。工坊物品 3796486050 当时更新为 `file_size` 1135844、`time_updated` 2026-09-12 02:33:39。见 [v0.11.0 发布记录](history/release-v0.11.0_2026-09-12.md) 与 [本地化验收](history/localization-2026-09-12.md)。只更新工坊的 v0.10.7 发布提交 `f9330ba` 已包含在 `v0.11.0` 里。
@@ -27,7 +27,7 @@
   - 本次文档收口（docs-release-baseline）：本文件改为 v0.11.0 基准；`AGENTS.md` 版本号列全五个文件并改成与 `.github/CONTRIBUTING.md` 一致的 PR 发布流程；`docs/api.md` 补 `failed` 状态、`requires_coordinates` / `requires_tool`、五个屏幕名、时间线索引契约与两个关闭动作的扩大范围；两个 README 补路由与对称段落；`steam-workshop/workshop.json` 的 changeNote 更新到 0.11.0；`scripts/preflight-release.ps1` 补跑 CI-only 的 `test-verification-gates.ps1` 与 `test-native-exit-propagation.ps1`。
   - 以上五项只有离线证据：2026-09-12 本次收口后 `dotnet run --project STS2AIAgent.Tests -c Release` 272 PASS / 0 FAIL、`mcp_server` 单测 76 项 OK，`scripts/check_verification_gates.py` 四闸门全绿，`preflight-release.ps1` exit 0；没有实机复验。逐项记录见各子任务归档的 `prd.md` / `evidence.md`。
 
-- **v0.12.1 标签后主线未发布变更**：
+- **v0.12.2 的内容（已随该版发布）**：
   - `d80a19d`（PR #97，[issue #85](https://github.com/CharTyr/STS2-Agent/issues/85)）把「邀请 AI 队友」的前置要求按路线拆开——游玩模型已验证时队友照旧自走；未配置 / 未验证 / 验证失败时队友照样拉起、照样进图，但子进程拿到 `STS2_AGENT_AUTOPLAY=0`，停在原地等待外部接管，且这条路线根本不调用模型。两条路线共用的结构条件（不是队友实例、该角色没有正在跑的自动游玩、必须在主菜单）抽成 `CoopLaunchPolicy.GetStructuralError`，拆分只作用在模型这一档。同一 PR 新增主窗口的 `POST /teammate/control`（外部 agent 的开始 / 暂停入口，不需要队友会话令牌）与 `GET /health` 的 `companion` 区块（`api_host` / `api_port` / `process_id` / `auto_play`，不含令牌）。
   - 实机证据：2026-09-13 隔离主机（`--clientId 2026091001`、API `18080`）全程 HTTP 驱动，模型端点指向**死端口** `127.0.0.1:18199` 且 `roleTests` 为空。一次完整跑通：`invite_ai_teammate` 首次调用即 200 `completed`；队友以 `role=companion` 起在 `18081`；进图 20 秒后 `play_running=false`、`play_phase=paused`、`session_requests=0`、`stop_kind=null`；队友 API 暴露 `choose_map_node` 可被外部驱动；`/teammate/control` 暂停 200、未验证时开始 409、非布尔 400。玩家 Steam 真实存档 183 个文件哈希前后一致。脚本与证据：`build/validation-2026-09-13/verify-takeover.ps1`、`takeover-evidence.jsonl`（gitignore）。记录见 `docs/live-validation-checklist.md` 的「External-takeover route (issue #85)」。
   - 该 PR 还修掉三处实机发现：路线标记原先在启动校验**之前**写入，导致一次被拒的重试会把正在自走的队友误标成 `auto_play:false`；`/health` 在队友进程退出后仍继续报其端口；`teammate_control_failed` 文档写可重试、实现对 `retryable:false`。
@@ -40,7 +40,11 @@
     - **`combat.enemies[].base_max_hp` 新增**：携带缩放前的 `Creature.MonsterMaxHpBeforeModification`，与 `monsters.min_hp` / `max_hp` 同量纲；`max_hp` 仍是缩放后实况值。双人局实机（两个实例数字一致）：TWIG_SLIME_S 元数据 7–11 / `base=9` / 实况 19，LEAF_SLIME_M 32–35 / 33 / 72，LEAF_SLIME_S 11–15 / 13 / 28，即 `base × 人数 × act0 系数 1.1` 取整。单人局是退化情形（`playerCount == 1` 直接跳过缩放），所以原始症状只能在联机局复现。
     - 顺带修掉：屏幕归类到的场景在这块屏上载荷为 `null` 时（`FAKE_MERCHANT` 归为商店却没有 `shop` 载荷）逐段走 JSON 路径会踩进 null 抛异常——路径遍历补上 kind 守卫，且场景侧派生为空时改回落到角色级 id；C# 与 Python 两份镜像对空串 id 的处理也统一（原先 C# 收、Python 跳）。
     - 证据：`build/validation-2026-09-13/verify-round-3.jsonl`、`verify-fixes-3.log`、`verify-base-hp-mp.log`（gitignore）；记录写进 `docs/live-validation-checklist.md`「Those three findings, fixed and re-verified in the game」；`docs/api.md` 补 `base_max_hp` 与可省略的 `item_ids`。C# 382 PASS / 0 FAIL、Python 167 OK、七道闸门全绿、mod 构建 0 警告；玩家真档 183 文件哈希前后一致。
-  - 尚未随任何 tag 发布；队友窗口本身没有 overlay（`ModEntry` 对 companion 跳过），这一点已写进文档。
+  - 已随 v0.12.2 发布；队友窗口本身没有 overlay（`ModEntry` 对 companion 跳过），这一点已写进文档。
+
+- **v0.12.2 标签后主线未发布变更**：
+  - `b64e7e7`（PR #105）打包 v0.12.2 时被产物检查拦下：README 里 #97 新增的相对链接没进打包改写表，产物中留下一个指向未打包文件的链接。两处 README 的链接改回带 `./` 的形态，并新增第八道离线 gate `packaged-links`——它从 `package-release.ps1` 解析改写表、从 `check_release_package.py` 直接 import 产物清单与链接规则（不复制粘贴，避免清单漂移后 gate 说谎），在源文档上重放打包时的改写再校验剩下的本地链接是否都在产物里。破坏性验证：写回裸链接即报错并点名目标，逐字节还原后转绿。**这一笔只动文档与脚本，不影响已发布的 DLL/PCK。**
+  - `0f63d6d`（PR #106，作者 sachi4clover）把 #85 的路线拆分补进游戏内界面：F8 窗口的「邀请 AI 队友」按钮此前调的是只走自动游玩的重载，模型未验证时点它会被旧门禁拒掉，而同一个请求走 `POST /action` 却能拉起队友等待外部接管——**路线拆分到了 API，没到玩家真正会点的那一个按钮**。现在按钮按 `FirstRunSetup.Evaluate(settings).ReadyToInvite` 选路，tab 的两行说明随路线切换，并用源码契约测试 `CoopRoute.OverlayInviteRoute` 钉住（把旧写法还原回去，该测试立刻转红）。**这一笔改了 mod 代码，因此 v0.12.2 的产物里还没有它**：今天从工坊订阅到的版本，F8 里的邀请按钮仍是旧行为，要等下一次发版才带上。
 
 ## 2. 已有验收证据与边界
 
