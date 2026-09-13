@@ -62,6 +62,8 @@
 | `companion_not_ready` | 409 | 队友实例尚未就绪，无法响应控制 | 是 |
 | `invite_failed` | 409 | 邀请 AI 队友失败（主菜单状态或配置不满足） | 是 |
 | `continue_failed` | 409 | 读档开房流程启动后失败（读档界面没打开，或本地直连端口 33771 仍被上一局占用，重启游戏后可重试）；前置条件不满足（不在主菜单、没有联机存档、模型未验证）仍返回 `invalid_action` | 是 |
+| `invalid_action`（`continue_ai_teammate` 的 NetId 前置检查） | 409 | 读档**之前**的只读比对不通过：本机 NetId 不在联机存档 `players[].net_id` 里（游戏会拒绝读档，并把这局存档改名成 `*.VAL.corrupt` 挪走且不还原），或本次要拉起的 AI 队友 NetId 不在存档里（加入会被 `NotInSaveGame` 拒绝）。详情带 `save_player_net_ids`，以及 `local_player_id` 或 `companion_client_id` | 否 |
+| `invalid_action`（`run_console_command` 的命令抛异常） | 409 | 命令被游戏接受后实现抛异常（例如 `bestiary` 会 `NullReferenceException`）。消息为 `Console command failed: <异常类型>: <异常消息>`，详情带 `command` | 否 |
 | `collection_not_found` | 404 | `GET /data/{collection}` 的集合名不存在 | 否 |
 | `export_error` | 500 | 游戏元数据导出失败 | 是 |
 | `origin_not_allowed` | 403 | 原生 MCP 请求的 `Origin` 不受信任 | 否 |
@@ -78,6 +80,7 @@
 | `MULTIPLAYER_LOAD` | 多人读档界面（`continue_ai_teammate` 读入联机存档后、各玩家 `embark` 之前） |
 | `BUNDLE_SELECTION` | 开局卡包选择界面（用 `choose_bundle` / `confirm_bundle`） |
 | `CAPSTONE_SELECTION` | Capstone 选项界面（用 `choose_capstone_option`） |
+| `PAUSE_MENU` | 暂停菜单叠加层（人工按下暂停；agent 在此期间没有可用动作，也拿不到 capstone 选项） |
 | `MAP` | 地图界面 |
 | `COMBAT` | 战斗中 |
 | `EVENT` | 事件交互 |
@@ -100,6 +103,8 @@
 | `RELIC_INSPECT` | 遗物查看浮层（用 `close_cards_view` 关闭） |
 | `FEEDBACK` | 反馈提交页；不提供关闭动作，仅用于诊断 |
 | `UNKNOWN` | 无法识别的界面 |
+
+暂停菜单是人按下暂停后出现的叠加层（游戏用同一个 `NCapstoneSubmenuStack` 容器承载它，靠 `Type == PauseMenu` 区分）。暂停期间 agent 没有可用动作：`available_actions` 与 `/actions/available` 都为空，`capstone` 也不会出现。
 
 ## Action Status
 
@@ -1084,7 +1089,7 @@ compact 里的位置与 `/state` 不同，但同名同源、同为新增键；`/
 - `dismiss_modal` — 关闭阻塞弹窗
 - `return_to_main_menu` — 返回主菜单
 - `invite_ai_teammate` — 邀请 AI 队友
-- `continue_ai_teammate` — 继续上次的联机存档并重新拉起 AI 队友（仅主机主菜单且存在联机存档时出现在 `available_actions`；读档流程失败返回 `continue_failed`）
+- `continue_ai_teammate` — 继续上次的联机存档并重新拉起 AI 队友（仅主机主菜单且存在联机存档时出现在 `available_actions`；读档流程失败返回 `continue_failed`）。读档前会只读比对存档 `players[].net_id` 与本机 NetId（离线／`-fastmp` 主机即启动参数 `--clientId`，未传为 1）和队友 NetId（主机 id + 1）：任一不匹配返回**不可重试**的 `invalid_action`，以免触发游戏把该存档改名成 `*.VAL.corrupt` 的破坏性读档。
 <!-- END ACTION CONTRACT -->
 
 ### 请求体

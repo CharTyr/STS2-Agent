@@ -192,6 +192,12 @@ internal static class TestRunner
         yield return ("CoopStartup.HumanChoiceHoldsClock", () => Task.Run(CompanionStartupTests.BootstrapHoldsTheClockOnlyWhileAHumanChooses));
         yield return ("CoopStartup.Identity", () => Task.Run(CompanionStartupTests.HealthRequiresExactCompanionIdentity));
         yield return ("CoopStartup.Preconditions", () => Task.Run(CompanionStartupTests.LaunchPreconditionsProtectHumanRun));
+        yield return ("CoopSave.ReadNetIds", () => Task.Run(CoopSavePrecheckTests.ReadsPlayerNetIdsFromTheSave));
+        yield return ("CoopSave.NumericStringNetIds", () => Task.Run(CoopSavePrecheckTests.ReadsNumericStringNetIds));
+        yield return ("CoopSave.UnreadableSaves", () => Task.Run(CoopSavePrecheckTests.UnreadableSavesYieldNoIds));
+        yield return ("CoopSave.HostMismatch", () => Task.Run(CoopSavePrecheckTests.HostMismatchNamesBothIdsAndTheConsequence));
+        yield return ("CoopSave.CompanionMismatch", () => Task.Run(CoopSavePrecheckTests.CompanionMismatchNamesBothIdsAndTheRejection));
+        yield return ("CoopSave.FailOpenWhenUnreadable", () => Task.Run(CoopSavePrecheckTests.UnreadableIdsFailOpen));
         yield return ("SettingsStore.RoundTrip", () => Task.Run(SettingsStoreTests.RoundTrip_PreservesEndpointsModelsAndRoles));
         yield return ("ProactiveChat.LegacySettingsStayOff", () => Task.Run(SettingsStoreTests.ProactiveChat_LegacyFileLoadsDisabledWithDefaultTone));
         yield return ("ProactiveChat.StoredToneRepaired", () => Task.Run(SettingsStoreTests.ProactiveChat_UnknownStoredToneIsRepaired));
@@ -408,6 +414,7 @@ internal static class TestRunner
         yield return ("ScreenResolution.FakeMerchant", () => Task.Run(ScreenResolutionContractTests.FakeMerchantOpensThroughTheSharedButton));
         yield return ("ScreenResolution.PatchNotes", () => Task.Run(ScreenResolutionContractTests.PatchNotesClosePathIsWidenedWithoutWeakeningSubmenus));
         yield return ("ScreenResolution.InspectOverlays", () => Task.Run(ScreenResolutionContractTests.InspectOverlaysCloseThroughTheirOwnClose));
+        yield return ("ScreenResolution.PauseMenu", () => Task.Run(ScreenResolutionContractTests.PauseMenuIsNotADecisionScreen));
         yield return ("TimelineIndex.OneSpace", () => Task.Run(TimelineIndexContractTests.ExecutorIndexesTheSameSlotListTheStateExposes));
         yield return ("TimelineIndex.NonActionableRejected", () => Task.Run(TimelineIndexContractTests.NonActionableSlotsAreRejectedExplicitly));
         yield return ("TimelineIndex.DescriptorFlags", () => Task.Run(TimelineIndexContractTests.CrystalDescriptorsCarryTheirRequirements));

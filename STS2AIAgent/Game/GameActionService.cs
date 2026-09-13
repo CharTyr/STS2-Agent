@@ -5044,9 +5044,26 @@ internal static class GameActionService
                 command
             }, retryable: true);
 
-        var runState = RunManager.Instance.DebugOnlyGetState();
-        var player = GameStateService.GetLocalPlayer(runState);
-        var result = devConsole.ProcessNetCommand(player, command);
+        // A command implementation can throw (BestiaryConsoleCmd.Process does on a null model) and the
+        // exception used to reach the HTTP layer as a bare 500 internal_error. Report it as a
+        // client-visible, non-retryable invalid_action, keeping the original type and message so the
+        // cause is still visible instead of being swallowed or dressed up as success.
+        CmdResult result;
+        try
+        {
+            var runState = RunManager.Instance.DebugOnlyGetState();
+            var player = GameStateService.GetLocalPlayer(runState);
+            result = devConsole.ProcessNetCommand(player, command);
+        }
+        catch (Exception ex)
+        {
+            throw new ApiException(409, "invalid_action", $"Console command failed: {ex.GetType().Name}: {ex.Message}", new
+            {
+                action = "run_console_command",
+                command
+            });
+        }
+
         if (!result.success)
         {
             throw new ApiException(409, "invalid_action", string.IsNullOrWhiteSpace(result.msg) ? "Console command failed." : result.msg, new
@@ -5207,6 +5224,42 @@ internal static class GameActionService
             });
         }
 
+        // The load path canonicalizes the save against this process's local player id and, on a
+        // mismatch, renames current_run_mp.save and its .backup to *.VAL.corrupt without restoring
+        // them. Check both ids against the save first: a mismatched --clientId must not be allowed to
+        // destroy the only co-op save slot, and retrying it cannot succeed, so this is invalid_action.
+        CoopSaveProbe.TryReadMultiplayerSaveNetIds(out var saveNetIds, out _);
+        var localPlayerId = CoopSaveProbe.ResolveLoadLocalPlayerId();
+        var hostMismatch = CoopSavePrecheckPolicy.DescribeHostMismatch(saveNetIds, localPlayerId);
+        if (hostMismatch != null)
+        {
+            throw new ApiException(409, "invalid_action", hostMismatch, new
+            {
+                action = "continue_ai_teammate",
+                save_player_net_ids = saveNetIds,
+                local_player_id = localPlayerId
+            });
+        }
+
+        if (!CoopSaveProbe.TryResolveCompanionClientId(out var companionClientId, out var companionIdError))
+        {
+            throw new ApiException(409, "invalid_action", companionIdError!, new
+            {
+                action = "continue_ai_teammate"
+            });
+        }
+
+        var companionMismatch = CoopSavePrecheckPolicy.DescribeCompanionMismatch(saveNetIds, companionClientId);
+        if (companionMismatch != null)
+        {
+            throw new ApiException(409, "invalid_action", companionMismatch, new
+            {
+                action = "continue_ai_teammate",
+                save_player_net_ids = saveNetIds,
+                companion_client_id = companionClientId
+            });
+        }
+
         await AgentRuntime.Instance.ContinueDualInstanceAsync(AgentRuntime.Instance.Settings, CancellationToken.None);
         // Same classification as invite_ai_teammate: read the structured outcome, never the localized text.
         var outcome = AgentRuntime.Instance.DualLaunchOutcome;
@@ -5281,7 +5334,11 @@ internal static class GameActionService
             var modal = GameStateService.GetOpenModal();
             if (modal != null)
             {
-                throw new InvalidOperationException(Loc.T("读档开房失败（多半是本地直连端口 33771 还被上一局占着）：重启游戏后再试。"));
+                // The open modal is what is actually observable here; the port is only the usual
+                // cause, so it is reported as a possibility instead of being asserted as the reason.
+                throw new InvalidOperationException(Loc.T(
+                    "读档开房失败：当前弹窗是 {0}。常见原因是本地直连端口 33771 仍被上一局占着；可重启游戏后再试。",
+                    modal.GetType().Name));
             }
             throw new TimeoutException(Loc.T("读档后没有进入多人读档界面。"));
         }

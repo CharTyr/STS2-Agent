@@ -143,6 +143,57 @@ internal static class ScreenResolutionContractTests
         Assert.Contains("return currentScreen is not NCardsViewScreen;", closed, StringComparison.Ordinal);
     }
 
+    public static void PauseMenuIsNotADecisionScreen()
+    {
+        var rawState = AgentSourceFixture.Read("STS2AIAgent/Game/GameStateService.cs");
+        var resolveBody = Flat(AgentSourceFixture.MethodBody(rawState, "ResolveNonModalScreen"));
+
+        // The pause menu rides in the same NCapstoneSubmenuStack as the Settings/Compendium/Feedback
+        // overlays and is told apart by Type, so it must claim PAUSE_MENU before the combat branch and
+        // the visible card grid can name a paused game COMBAT or CARD_SELECTION.
+        const string pauseGuard =
+            "if(currentScreenisNCapstoneSubmenuStack{Type:CapstoneSubmenuType.PauseMenu})";
+        var pauseIndex = resolveBody.IndexOf(pauseGuard, StringComparison.Ordinal);
+        var combatIndex = resolveBody.IndexOf("FindActiveCombatRoom(currentScreen)", StringComparison.Ordinal);
+        var visibleGridIndex = resolveBody.IndexOf(
+            "GetVisibleGridCardHolders(rootNode).Count>0", StringComparison.Ordinal);
+
+        Assert.True(pauseIndex >= 0, "ResolveNonModalScreen must claim PAUSE_MENU for the pause overlay.");
+        Assert.True(combatIndex >= 0, "The combat branch must remain covered by this contract.");
+        Assert.True(visibleGridIndex >= 0, "The visible card-grid fallback must remain covered by this contract.");
+        Assert.True(pauseIndex < combatIndex, "PAUSE_MENU must resolve before FindActiveCombatRoom can report COMBAT.");
+        Assert.True(pauseIndex < visibleGridIndex, "PAUSE_MENU must resolve before the visible grid can report CARD_SELECTION.");
+        Assert.Contains("return\"PAUSE_MENU\";", resolveBody[pauseIndex..combatIndex], StringComparison.Ordinal);
+        Assert.Contains(
+            "NCapstoneSubmenuStack=>\"CAPSTONE_SELECTION\"",
+            resolveBody,
+            StringComparison.Ordinal);
+
+        // The pause menu is the one capstone-container type whose buttons are not a decision list, so
+        // the option getter drops it and both action lists stay empty while it is up.
+        var capstoneButtons = Flat(AgentSourceFixture.DeclarationBody(
+            rawState,
+            "public static IReadOnlyList<NButton> GetCapstoneButtons("));
+        Assert.Contains(
+            "capstoneScreen.Type==CapstoneSubmenuType.PauseMenu",
+            capstoneButtons,
+            StringComparison.Ordinal);
+
+        var names = Flat(AgentSourceFixture.MethodBody(rawState, "BuildAvailableActionNames"));
+        var descriptors = Flat(AgentSourceFixture.MethodBody(rawState, "BuildAvailableActionsPayload"));
+        Assert.Contains(pauseGuard, names, StringComparison.Ordinal);
+        Assert.Contains(pauseGuard, descriptors, StringComparison.Ordinal);
+
+        // The pause branch returns ahead of the combat actions, so nothing is advertised while paused.
+        var pauseInNames = names.IndexOf(pauseGuard, StringComparison.Ordinal);
+        var endTurnIndex = names.IndexOf(
+            "if(CanEndTurn(currentScreen,combatState,requireButtonReady:false))",
+            StringComparison.Ordinal);
+        Assert.True(
+            endTurnIndex >= 0 && pauseInNames >= 0 && pauseInNames < endTurnIndex,
+            "The pause branch must return before the combat actions are advertised.");
+    }
+
     private static (string ScreenType, string ScreenName)[] SwitchMappings(string methodBody)
     {
         var normalized = Normalize(methodBody);
@@ -161,4 +212,6 @@ internal static class ScreenResolutionContractTests
     {
         return Regex.Replace(source, "\\s+", " ");
     }
+
+    private static string Flat(string source) => AgentSourceFixture.WithoutWhitespace(source);
 }

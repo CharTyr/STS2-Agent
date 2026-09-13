@@ -25,6 +25,7 @@
     <Compile Include="..\STS2AIAgent\Multiplayer\CompanionPlayPolicy.cs" Link="Multiplayer\CompanionPlayPolicy.cs" />
     <Compile Include="..\STS2AIAgent\Multiplayer\CompanionProfileBootstrap.cs" Link="Multiplayer\CompanionProfileBootstrap.cs" />
     <Compile Include="..\STS2AIAgent\Multiplayer\CoopLaunchPolicy.cs" Link="Multiplayer\CoopLaunchPolicy.cs" />
+    <Compile Include="..\STS2AIAgent\Multiplayer\CoopSavePrecheckPolicy.cs" Link="Multiplayer\CoopSavePrecheckPolicy.cs" />
     <Compile Include="..\STS2AIAgent\Multiplayer\TeamConversation.cs" Link="Multiplayer\TeamConversation.cs" />
     <Compile Include="..\STS2AIAgent\Multiplayer\CompanionConnection.cs" Link="Multiplayer\CompanionConnection.cs" />
     <Compile Include="..\STS2AIAgent\Config\*.cs" Link="Config\%(Filename)%(Extension)" />
