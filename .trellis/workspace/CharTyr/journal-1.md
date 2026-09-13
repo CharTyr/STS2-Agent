@@ -619,3 +619,47 @@ Four residuals closed: docs/ became a controlled directory with a docs-tracked g
 - FAKE_MERCHANT 的回落目前只有离线单测，未实机走到该屏
 - 分页 FTUE 只在单人档复现（联机档该教学已完成）
 - 三处修复尚未随任何 tag 发布（晚于 v0.12.1），下次发版时随包验证
+
+
+## Session 18: 发布 v0.12.2：联机接力（外部接管路线）+ 工坊上传
+
+**Date**: 2026-09-13
+**Task**: 发布 v0.12.2：联机接力（外部接管路线）+ 工坊上传
+**Branch**: `main`
+
+### Summary
+
+把主线积压的三批改动（#85 外部接管路线、#99 共享模型门禁、#101 三处实机收尾）发成 v0.12.2，并把工坊更新到同一版。打包时被产物检查拦下一个真实缺陷：README 里新增的相对链接没进打包改写表，于是补了链接修复与第八道离线 gate（packaged-links）。工坊上传因 Steam 客户端与 UGC 后端失联失败六次，重启 Steam 后一次成功。
+
+### Main Changes
+
+- 五个版本号文件升到 0.12.2，CHANGELOG 的 Unreleased 定为 v0.12.2 并补齐 #99 / #101 的条目
+- 修 README 里没被打包改写的相对链接（#97 引入），不改改写表以免掩盖同类问题
+- 新增 packaged-links gate：解析打包改写表 + import 产物清单与链接规则，在源文档上重放改写后校验本地链接是否都在产物里
+- history/release-v0.12.2_2026-09-13.md 记录发布、上传与那次 Steam 失联故障的处置
+- 状态页基线切到 v0.12.2
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `40d1464` | (see git log) |
+| `72b2a81` | (see git log) |
+| `b64e7e7` | (see git log) |
+
+### Testing
+
+- [OK] preflight 全部步骤通过；八道 gate 全绿；gate 自测通过；打包产物检查（目录与 zip）通过
+- [OK] gate 破坏性验证：README 写回裸 docs/api.md 时以退出码 1 报出该目标，逐字节还原后恢复通过
+- [OK] CI：#104 与 #105 的 contracts 全绿（#105 首次失败是 runner 未能获取，重跑即绿）
+- [OK] 工坊复核：file_size 1225733 与本地内容字节和相等、visibility=0、time_updated 2026-09-13 16:51:04、标签不变、英文说明未被覆盖
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- 工坊简体中文列表仍未更新（自 v0.11.0 起），需在工坊网页端手工粘贴 steam-workshop/description.zh-CN.txt
+- 外部接管路线仍未在 Steam 双开路径复跑；FAKE_MERCHANT 的回落只有离线单测
+- 工坊上传若再报 No Connection，先重启 Steam 客户端（已记进发布记录）
