@@ -575,3 +575,47 @@ Four residuals closed: docs/ became a controlled directory with a docs-tracked g
 ### Next Steps
 
 - card-viewer-screens 的实机项（牌堆屏/图鉴）需玩家点击或新增 mod 动作；存档待选一张奖励卡
+
+
+## Session 17: 实机遗留三处收尾：分页 FTUE、场景派生元数据 id、联机基础血量
+
+**Date**: 2026-09-13
+**Task**: 实机遗留三处收尾：分页 FTUE、场景派生元数据 id、联机基础血量
+**Branch**: `main`
+
+### Summary
+
+收尾 v0.12.1 实机验收留下的三处发现：分页 FTUE 本是正确行为（改为自解释契约）、get_relevant_game_data 的 item_ids 可省略、新增 base_max_hp 分离基础掷血与联机缩放。核对派生路径时又抓出两个缺陷（场景载荷为 null 时踩空崩溃、两份镜像对空串 id 的分歧），一并修掉并实机复验。
+
+### Main Changes
+
+- NCombatRulesFtue 非末页返回 pending 时改为自解释文案（三页是游戏设计，三次点击本来就是对的行为）
+- get_relevant_game_data 的 item_ids 可省略：按当前屏幕从实况派生，场景无内容时回落角色级 id，C# 与 MCP 两份表由对齐测试钉死相等
+- combat.enemies[].base_max_hp 新增：联机缩放前的基础掷血，与 monsters.min_hp/max_hp 同量纲
+- 修掉派生路径踩 JSON null（FAKE_MERCHANT 归为商店却无 shop 载荷）与 C#/Python 对空串 id 的处理分歧
+- 证据与契约写进 docs/live-validation-checklist.md 与 docs/api.md，状态页补 PR #101/#102
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `d826935` | (see git log) |
+| `7714f0b` | (see git log) |
+
+### Testing
+
+- [OK] 实机（隔离档 clientId 2026091001）：FTUE 三击 pending/pending/completed 后 modal 清空、回到 COMBAT
+- [OK] 实机：MCP 工具面省略 item_ids 返回手牌/敌人/遗物，显式 id 与空集合行为不变
+- [OK] 实机双人局：base_max_hp 9/33/13 对实况 19/72/28（base×人数×act0 系数），两个实例数字一致
+- [OK] 离线：C# 382 PASS/0 FAIL、Python 167 OK、七道 gate 全绿、mod 构建 0 警告；玩家真档 183 文件哈希前后一致
+- [OK] CI：#101 与 #102 的 contracts + Sourcery 全绿
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- FAKE_MERCHANT 的回落目前只有离线单测，未实机走到该屏
+- 分页 FTUE 只在单人档复现（联机档该教学已完成）
+- 三处修复尚未随任何 tag 发布（晚于 v0.12.1），下次发版时随包验证
