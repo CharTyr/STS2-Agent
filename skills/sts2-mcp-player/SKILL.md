@@ -97,6 +97,9 @@ Do not trust memory over the current payload. The game mutates screens in place,
 - A failed action (or failed game-data call) returns an `error` object. Read `error.code` before deciding what to do: `invalid_request`, `invalid_action`, and `invalid_target` mean the request itself was wrong, so re-read state and fix the action or its indexes instead of repeating it.
 - Retry only when `error.retryable` is `true` (for example `state_unavailable` while a transition is still settling). When it is false, change your approach rather than retrying the same call.
 - `error.status_code` mirrors the API status when present; `internal_error` means an unexpected failure, not a legal move you can reach by retrying.
+- The three game-data tools answer with the same envelope: `collection_not_found` (a bad name, so fix the call),
+  `game_data_unavailable` (the mod could not be reached, so `retryable` tells you whether to wait), and
+  `invalid_game_data` (the payload shape was wrong; do not retry).
 
 ## Screen Routing
 

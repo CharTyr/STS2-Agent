@@ -10,9 +10,11 @@ Use this reference when the task is not ordinary play, but smoke testing, protoc
   - `get_raw_game_state`
   - `get_available_actions`
   - `get_relevant_game_data` / `get_game_data_item` / `get_game_data_items`
+  - `wait_for_event`
   - `wait_until_actionable`
   - `act`
-- Guided profile exposes `run_console_command` only when debug actions are enabled.
+- `run_console_command` is not part of any profile: it appears in every profile when
+  debug actions are enabled, and in none when they are not.
 - Full profile exposes legacy per-action tools and is appropriate only when a harness explicitly needs them.
 
 ## Debug Policy
