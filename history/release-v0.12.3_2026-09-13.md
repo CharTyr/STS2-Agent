@@ -1,5 +1,8 @@
 # v0.12.3 发布与工坊上传记录（2026-09-13）
 
+> 本文件记两次发布：下面的「结论」与各小节是 **2026-09-13 的第一次**（tag 当时指向 `b0217b0`）；
+> 文末「2026-09-14 同号重发」是 **第二次**，tag 已重切到 `0f60ec4`，两侧产物与工坊内容以那一次的数为准。
+
 ## 结论
 
 **先发的 Steam 工坊，GitHub Release 随后跟上**，两边同代码。这一版是本仓库第一次把「工坊先行」的 v0.10.7 形式补成完整发布：版本号在 #108 就升好了，工坊 22:31 上传并复核，GitHub tag 与 Release 在 22:39 补上。
@@ -70,5 +73,48 @@ DLL 比 v0.12.2 的 1186304 大 1536 字节，差额来自 #106 的代码。
 
 - 本轮与 v0.12.0 / v0.12.1 / v0.12.2 不同：先发工坊、后补 tag 与 Release，因此 tag 指向的是**发布提交本身** `b0217b0`（未被后续合并改写），而不是某个合并提交的等价物。
 - 标签后目前只有文档与 journal（#109 的工坊上传记录、本轮记录），不构成新版本。
-- sachi4clover 还有一个叠在 #106 之上的后续 PR（游戏内「继续游玩」按钮与选角勾选框）尚未合并，将是下一版的内容。
+- sachi4clover 叠在 #106 之上的后续 PR（游戏内「继续游玩」按钮与选角勾选框）已作为 #111 合并，并随下面的同号重发发布。
+
+
+## 2026-09-14 同号重发（第二次上传）
+
+版本号仍是 `0.12.3`：这次只换构建，把 #111 的两个界面入口（「继续上次联机对局」与「禁用自动选角」）带给订阅者，不占版本号。
+
+| 项 | 值 |
+| --- | --- |
+| 发布分支 / PR | `codex/republish-v0.12.3` → #113 |
+| 发布提交（= 新 tag 目标） | `0f60ec4`（`Release v0.12.3 (re-cut): republish the same version with the co-op overlay entries`） |
+| CI | #113 的 push（34767592154）与 pull_request（34767602272）两个 Validate run 均 success |
+| Tag | `v0.12.3` 删除后重建：旧 tag 对象 `f74291a` → `b0217b0`；新 tag 对象 `ad15562` → `0f60ec4`（两者都是 annotated） |
+| Release | 同一 URL 重建：资产 `sts2-ai-agent-v0.12.3-windows.zip`（552014 字节，SHA256 `B7684C9F2E8EAF7F43D9009EC5B6E0683033E9BC7088B52AEFDE5AE090DE5ADE`；GitHub 上报的 `sha256:b7684c9f…` 与本地一致），GitHub 标记为 Latest |
+| 工坊物品 | `3796486050`，`time_updated = 2026-09-14 00:09:26`，内容 id `hcontent_file = 6028841468497339213` |
+| 工坊 `file_size` | `1229829` —— 与本地内容字节和**完全相等**（dll 1190400 + pck 608 + json 382 + README 3802 + LICENSE 34637） |
+| 可见性 / 标签 / 英文说明 | `0`（公开）/ Tools & APIs、Utility、QoL（未变）/ 2672 字节（未被上传覆盖） |
+
+内容构成（第二次）：`STS2AIAgent.dll` 1190400、`STS2AIAgent.pck` 608、`STS2AIAgent.json` 382、`README.md` 3802、`LICENSE` 34637。DLL 比第一次的 1187840 大 2560 字节，差额来自 #111 的代码；PCK 与另外三个文件逐字节不变。
+
+### 说明文档
+
+- CHANGELOG 的 `## Unreleased` 段并入 v0.12.3 段，段首横幅写明「2026-09-14 同号重发」，并明确**两份构建的版本字符串相同、只能靠大小或哈希区分**。
+- `steam-workshop/workshop.json` 的 changeNote 改为 `v0.12.3 (re-cut): the F8 window's AI Teammate tab gains Continue the saved co-op run and Disable automatic character pick. …`（保留邀请路线那一句）。
+- 五处版本号**一处未动**：`check_release_metadata.py` 只比对它们彼此一致，不比对 tag、不比对上一版，所以同号重发在这套校验里是受支持形状。
+
+### 上传过程
+
+1. 把上一次的产物改名留档：`build/steam-workshop/sts2-ai-agent-v0.12.3` → `…-upload-2026-09-13`；`build/release/sts2-ai-agent-v0.12.3-windows` 与同名 zip → 同名加 `-upload-2026-09-13`。两个打包脚本都用 `Get-UniquePath`，不清旧目录会打出 `-2` 后缀。
+2. `package-steam-workshop.ps1 -PublishedFileId 3796486050 -Visibility public -ChangeNote <新 changeNote>`：内容字节和 1229829。
+3. 游戏未运行、Steam 在运行；`Start-Process -WindowStyle Hidden` 分离启动 `ModUploader.exe upload -w <workspace> -i 3796486050`，进程环境带 `HTTP_PROXY` / `HTTPS_PROXY`（`127.0.0.1:10808`）。00:09:19 启动，一次成功（`Successfully uploaded 'STS2 AI Agent' to the workshop with id 3796486050`）。
+4. 工坊复核：Steam Web API `GetPublishedFileDetails` 核对 `file_size` / `time_updated` / `visibility` / `tags` / `description`，`file_size` 与本地内容字节和完全相等。
+5. GitHub 侧：`gh release delete v0.12.3 --cleanup-tag --yes` 删掉旧 Release 与旧 tag → `git tag -a v0.12.3 0f60ec4` → 推送 → `package-release.ps1`（0 警告 0 错误，目录与 zip 产物检查均通过）→ `gh release create v0.12.3 --latest`。
+
+### 未做
+
+- **工坊简体中文列表仍未更新**（自 v0.11.0 起）。`ModUploader upload` 没有语言参数，只能在工坊网页端手工粘贴 `steam-workshop/description.zh-CN.txt`。
+- **#111 的两个界面入口没有实机点击验收**：按钮时机、读档接回队友、子进程读到的勾选值，都待一次真实联机存档的实机；离线证据是 head `b42bc5a` 上的 384 PASS / 0 FAIL、八道 gate 全绿与三次破坏性验证。
+- 外部接管路线仍未在 Steam 双开路径复跑（与第一次相同的遗留缺口）。
+
+### 注记
+
+- **这是本仓库第一次同号重发**。代价是「版本号 → 构建」不再一一对应：`0.12.3` 指两份构建，只能靠大小或哈希区分，所以 CHANGELOG 与状态页都显式写了这件事，而不是留给读者自己发现。
+- 删除并重建 tag / Release 不会触发任何工作流：`.github/workflows/validate.yml` 只监听 `pull_request` 与 `main` / `dev` / `codex/**` 的 push，没有 tag 或 release 事件。
 
