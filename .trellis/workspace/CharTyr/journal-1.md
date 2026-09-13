@@ -704,3 +704,43 @@ Four residuals closed: docs/ became a controlled directory with a docs-tracked g
 - 工坊上的 v0.12.2 产物不含 #106 的 overlay 修复，需下次发版带上
 - sachi4clover 提到的后续 PR（Continue 按钮 + 选角勾选框）叠在 #106 之上，CHANGELOG 往新建的 Unreleased 段续写
 - 工坊简体中文列表仍未更新；工坊英文列表首屏「测试连接通过后再邀请」的措辞也待随下次上传调整
+
+
+## Session 20: 工坊更新到 v0.12.3（只发工坊，不打 tag）
+
+**Date**: 2026-09-13
+**Task**: 工坊更新到 v0.12.3（只发工坊，不打 tag）
+**Branch**: `main`
+
+### Summary
+
+把 #106 的 overlay 邀请路线修复发到工坊。因为 #106 改了 mod 代码，沿用 v0.10.7 先例升补丁号后只更新工坊、不打 tag、不建 Release；一次上传成功并用 Steam Web API 复核。
+
+### Main Changes
+
+- 五个版本号文件升到 0.12.3，CHANGELOG 的 Unreleased 定版为 v0.12.3 并写明「只发工坊、无 tag」
+- workshop.json 的 changeNote 更新为 v0.12.3
+- history/workshop-upload-v0.12.3_2026-09-13.md 记录上传与复核
+- 状态页：基线改为「GitHub 在 v0.12.2、工坊在 0.12.3」，并修正 #106 那条「尚未发布」的过期说法
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `b0217b0` | (see git log) |
+| `00d1789` | (see git log) |
+
+### Testing
+
+- [OK] preflight 全部步骤通过；八道 gate 全绿；check_release_metadata 报 0.12.3
+- [OK] 工坊复核：file_size 1227269 与本地内容字节和相等、visibility=0、time_updated 22:31:22、标签与英文说明未变
+- [OK] 上传一次成功（前置 HTTP_PROXY/HTTPS_PROXY），未复现 v0.12.2 的 No Connection
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- sachi4clover 的后续 PR（游戏内 Continue 按钮 + 选角勾选框）到位后，把 #106 与它攒一起做 GitHub 发布，或单独回填 v0.12.3 tag
+- 工坊简体中文列表仍未更新，需在工坊网页端粘贴 steam-workshop/description.zh-CN.txt

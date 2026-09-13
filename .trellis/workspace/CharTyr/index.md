@@ -8,7 +8,7 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-1.md`
-- **Total Sessions**: 19
+- **Total Sessions**: 20
 - **Last Active**: 2026-09-13
 <!-- @@@/auto:current-status -->
 
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-1.md` | ~706 | Active |
+| `journal-1.md` | ~746 | Active |
 <!-- @@@/auto:active-documents -->
 
 ---
@@ -29,6 +29,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 20 | 2026-09-13 | 工坊更新到 v0.12.3（只发工坊，不打 tag） | `b0217b0`, `00d1789` | `main` |
 | 19 | 2026-09-13 | 合并 sachi4clover 的 overlay 邀请路线修复（PR #106）+ 记录 | `0f63d6d`, `085c941` | `main` |
 | 18 | 2026-09-13 | 发布 v0.12.2：联机接力（外部接管路线）+ 工坊上传 | `40d1464`, `72b2a81`, `b64e7e7` | `main` |
 | 17 | 2026-09-13 | 实机遗留三处收尾：分页 FTUE、场景派生元数据 id、联机基础血量 | `d826935`, `7714f0b` | `main` |
