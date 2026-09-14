@@ -1,5 +1,7 @@
 # Localization acceptance - 2026-09-12
 
+> Historical snapshot: this records the 2026-09-12 localization run, not current state. Current status: [PRODUCT_PLAN_CURRENT.md](../PRODUCT_PLAN_CURRENT.md).
+
 The overlay follows the game language. This records what was actually observed, not what the code
 looks like it should do.
 

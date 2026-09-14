@@ -1,5 +1,7 @@
 # PR #56 native profile switch live test
 
+> Historical snapshot: this records the 2026-09-05 PR #56 profile-switch live test, not current state. Current status: [PRODUCT_PLAN_CURRENT.md](../../PRODUCT_PLAN_CURRENT.md).
+
 Tested on 2026-09-05 against Slay the Spire 2 v0.111.0 with the PR head
 `a14d41fc2d637d424ff32d9bc8d7f85f9684ebb6` deployed as STS2AIAgent v0.9.2.
 The deployed DLL and the local Release build both had SHA-256

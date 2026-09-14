@@ -9,10 +9,11 @@
 > **On 2026-09-14 the same version number was rebuilt and republished on both sides** — the Workshop item
 > was updated again and the `v0.12.3` tag and GitHub release were re-cut onto the new release commit — so
 > the two co-op controls below reach players without spending a version number on a one-day follow-up.
-> A build downloaded before that date is the earlier build of this same version and reports `0.12.3` as
-> well, so tell the two apart by size or hash (the first Workshop upload was file_size 1227269, the first
-> GitHub asset 549933 bytes / SHA256 `B9DC1A07…`) rather than by the version string. Both uploads are
-> recorded with their own numbers in [release-v0.12.3_2026-09-13.md](history/release-v0.12.3_2026-09-13.md).
+> A build downloaded before that date is an earlier build of this same version and reports `0.12.3` as
+> well, so tell builds apart by size or hash rather than by the version string: this first re-cut was
+> Workshop `file_size` 1229829 / GitHub asset 552014 bytes `B7684C9F…`, against the original's 1227269 /
+> 549933 bytes `B9DC1A07…`. Every upload is recorded with its own numbers in
+> [release-v0.12.3_2026-09-13.md](https://github.com/CharTyr/STS2-Agent/blob/main/history/release-v0.12.3_2026-09-13.md).
 > The external-takeover route from #85 reached `POST /action` but not the F8 window's own Invite button,
 > so the button a person actually clicks was the one that could not start that route; it now chooses the
 > route the way the API does, and the tab says which one will run.
@@ -20,11 +21,12 @@
 > **The same version was re-cut a second time later on 2026-09-14**, onto the live-validation follow-up
 > and the diagnostics work below. The one player-facing item in it is the Continue button fix; the rest
 > is log lines on paths that used to fail silently, release tooling and offline contract tests. Three
-> builds now answer to `0.12.3`, so tell them apart by size or hash — Workshop `file_size` 1227269 /
-> GitHub asset 549933 bytes `B9DC1A07…` for the first, 1229829 / 552014 bytes `B7684C9F…` for the
-> second — and by the version string never. Every upload is recorded with its own numbers in
-> [release-v0.12.3_2026-09-13.md](history/release-v0.12.3_2026-09-13.md) and
-> [PRODUCT_PLAN_CURRENT.md](PRODUCT_PLAN_CURRENT.md).
+> builds now answer to `0.12.3`, and the version string never tells them apart, so use size or hash —
+> Workshop `file_size` 1227269 / GitHub asset 549933 bytes `B9DC1A07…` for the first,
+> 1229829 / 552014 bytes `B7684C9F…` for the second, and 1232901 / 555061 bytes `E882B653…` for the
+> third, which is the current one. Every upload is recorded with its own numbers in
+> [release-v0.12.3_2026-09-13.md](https://github.com/CharTyr/STS2-Agent/blob/main/history/release-v0.12.3_2026-09-13.md) and
+> [PRODUCT_PLAN_CURRENT.md](https://github.com/CharTyr/STS2-Agent/blob/main/PRODUCT_PLAN_CURRENT.md).
 
 ### Added
 
@@ -88,8 +90,8 @@
 > The co-op handoff: the player who wants to fight their own character while an outside agent drives the
 > teammate window no longer has to fake a passing model test to get there, and the state that agent reads
 > stopped contradicting itself. Release and Workshop upload:
-> [release-v0.12.2_2026-09-13.md](history/release-v0.12.2_2026-09-13.md). Live:
-> [docs/live-validation-checklist.md](docs/live-validation-checklist.md).
+> [release-v0.12.2_2026-09-13.md](https://github.com/CharTyr/STS2-Agent/blob/main/history/release-v0.12.2_2026-09-13.md). Live:
+> [docs/live-validation-checklist.md](https://github.com/CharTyr/STS2-Agent/blob/main/docs/live-validation-checklist.md).
 
 ### Added
 
@@ -155,7 +157,7 @@
 
 ## v0.12.1 - 2026-09-13
 
-> The pause boundary: once a person presses pause, the agent no longer reads the run underneath. The pause menu and every page reached from it report their own screen, their action surfaces stay closed, and no page's own furniture — the pause menu's "abandon" entry among it — arrives as a capstone option any more. Release and Workshop upload: [release-v0.12.1_2026-09-13.md](history/release-v0.12.1_2026-09-13.md).
+> The pause boundary: once a person presses pause, the agent no longer reads the run underneath. The pause menu and every page reached from it report their own screen, their action surfaces stay closed, and no page's own furniture — the pause menu's "abandon" entry among it — arrives as a capstone option any more. Release and Workshop upload: [release-v0.12.1_2026-09-13.md](https://github.com/CharTyr/STS2-Agent/blob/main/history/release-v0.12.1_2026-09-13.md).
 
 ### Fixed
 
@@ -176,7 +178,7 @@
 
 ## v0.12.0 - 2026-09-13
 
-> Co-op is the headline: a saved multiplayer run can be continued with the AI teammate, and the teammate's character can be left for you to pick. The rest is a trust pass over the agent-facing state — every signal it surfaces now matches what the executor accepts, and no game-side wait can hang a request. Release and Workshop upload: [release-v0.12.0_2026-09-13.md](history/release-v0.12.0_2026-09-13.md).
+> Co-op is the headline: a saved multiplayer run can be continued with the AI teammate, and the teammate's character can be left for you to pick. The rest is a trust pass over the agent-facing state — every signal it surfaces now matches what the executor accepts, and no game-side wait can hang a request. Release and Workshop upload: [release-v0.12.0_2026-09-13.md](https://github.com/CharTyr/STS2-Agent/blob/main/history/release-v0.12.0_2026-09-13.md).
 
 ### Added
 
@@ -205,11 +207,11 @@
 - `resolve_rewards` accepts an optional `option_index` and a `card_index` alias, so the full profile no longer requires an index that the compact view does not promise (`33b137e`, `abc195f`).
 - The packaged game-data snapshot under `mcp_server/data/` is gone (`5cc314f`). Its schema had already diverged from the live export and the loader that read it was removed in v0.6.1; this only affects the wheel and sdist contents.
 - Offline gates got both wider and self-checking: every `.ps1` under `scripts/` is parsed on every gate run (`abb99c5`, which also fixed `serve-sts2-network-mcp.ps1`, a script that had never parsed), the 16 mod sources outside the compiled test project have a Roslyn syntax net (`335ba0a`), `docs/` is tracked with a gate against untracked pages, and `package-release.ps1` now refuses to package when the five version sources disagree (`6e56e1d`). CI pins the .NET SDK in `global.json` so the coverage test stops building net9.0 with a .NET 10 Roslyn (`61146a5`).
-- `docs/api.md`, both READMEs and the play skill are back in sync with the shipped contracts, including the bounded-wait envelopes and the new screen names (`3f55a3f`, `c060554`). [docs/live-validation-checklist.md](docs/live-validation-checklist.md) collects the checks that only a live game can settle (`4554c8d`).
+- `docs/api.md`, both READMEs and the play skill are back in sync with the shipped contracts, including the bounded-wait envelopes and the new screen names (`3f55a3f`, `c060554`). [docs/live-validation-checklist.md](https://github.com/CharTyr/STS2-Agent/blob/main/docs/live-validation-checklist.md) collects the checks that only a live game can settle (`4554c8d`).
 
 ## v0.11.0 - 2026-09-12
 
-> The overlay follows the language the game is running in. Chinese clients read exactly what they read before; English clients (and every other language) now read English instead of Chinese. Live evidence: [localization-2026-09-12.md](history/localization-2026-09-12.md); release and Workshop upload: [release-v0.11.0_2026-09-12.md](history/release-v0.11.0_2026-09-12.md).
+> The overlay follows the language the game is running in. Chinese clients read exactly what they read before; English clients (and every other language) now read English instead of Chinese. Live evidence: [localization-2026-09-12.md](https://github.com/CharTyr/STS2-Agent/blob/main/history/localization-2026-09-12.md); release and Workshop upload: [release-v0.11.0_2026-09-12.md](https://github.com/CharTyr/STS2-Agent/blob/main/history/release-v0.11.0_2026-09-12.md).
 
 ### Added
 
@@ -229,7 +231,7 @@
 
 ## v0.10.7 - 2026-09-12
 
-> Distributed to the Steam Workshop on 2026-09-12 (item 3796486050, public, file_size 1088228). The in-tree version, the uploaded Workshop content and the build all come from commit `f9330ba`; no GitHub tag or release exists for this version yet. Live evidence: [validation-acceptance_2026-09-11.md](history/validation-acceptance_2026-09-11.md).
+> Distributed to the Steam Workshop on 2026-09-12 (item 3796486050, public, file_size 1088228). The in-tree version, the uploaded Workshop content and the build all come from commit `f9330ba`; no GitHub tag or release exists for this version yet. Live evidence: [validation-acceptance_2026-09-11.md](https://github.com/CharTyr/STS2-Agent/blob/main/history/validation-acceptance_2026-09-11.md).
 
 ### Fixed
 

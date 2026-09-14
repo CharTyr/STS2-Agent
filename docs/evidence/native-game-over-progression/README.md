@@ -1,5 +1,7 @@
 # Native game-over progression live evidence
 
+> Historical snapshot: this records the 2026-08-31 native game-over regression, not current state. Current status: [PRODUCT_PLAN_CURRENT.md](../../../PRODUCT_PLAN_CURRENT.md).
+
 This directory records the real-game regression performed on 2026-08-31 for
 PR #53 (`fix/native-game-over-progression`), including the follow-up unlock
 screen classification fix at commit `16e97cf`.
@@ -99,3 +101,6 @@ screen as generic `CARD_SELECTION`, which exposed the wrong deck-card action
 and left automation unable to complete the unlock queue:
 
 ![Pre-fix native unlock misclassified as CARD_SELECTION](01-pre-fix-stuck-unlock.png)
+
+An additional crop of the same stuck screen lives at
+[../../assets/unlock-screen-stuck.png](../../assets/unlock-screen-stuck.png).
