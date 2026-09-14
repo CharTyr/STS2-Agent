@@ -9,14 +9,19 @@
 - Do not push directly to `main`.
 
 One habit keeps the two branches from drifting apart: after anything lands in `main` -- a
-`dev -> main` merge, or a pull request that had to target `main` -- fast-forward `dev` back to it.
+`dev -> main` merge, or a pull request that had to target `main` -- bring it into `dev`.
 
 ```bash
 git fetch origin
-git push origin origin/main:dev
+git checkout dev
+git merge origin/main
+git push origin dev
 ```
 
-That push is a fast-forward, so nothing is rewritten and nothing is lost. Skipping it is how `dev`
+A merge rather than a rebase, so published history is only ever added to. When `dev` has no commits
+of its own yet, that merge resolves as a fast-forward and the two branches stay identical.
+
+The invariant worth keeping is that `dev` contains everything `main` has. Skipping it is how `dev`
 quietly becomes a fork of an older `main` instead of the integration branch: every merge into `main`
 adds a commit `dev` does not have, and a pull request aimed straight at `main` adds all of its own.
 It had fallen 196 commits behind before it was brought back on 2026-09-14.
