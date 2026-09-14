@@ -37,7 +37,10 @@
 - `STS2AIAgent.csproj` 支持从 `STS2_DATA_DIR` 读取数据目录。
 - `scripts/` 下需要游戏的脚本（`build-mod.ps1`、`start-game-session.ps1`、`test-mod-load.ps1`、`test-debug-console-gating.ps1`）按同一顺序解析路径：**命令行参数 → 上面的环境变量 → 探测 → 约定俗成的 Steam 默认路径**，Windows 侧的共享实现在 `scripts/lib-sts2-paths.ps1`。
 - Windows 侧的探测会读注册表里的 Steam 安装位置，再顺着 `libraryfolders.vdf` 枚举所有 Steam 库，所以换盘符、第二个库里装的游戏都能自动找到；只有探测全部落空时才回落到约定俗成的默认安装路径。
-- POSIX 侧（`scripts/lib-sts2.sh`）与上面共用 `STS2_GAME_ROOT`、`STS2_EXE_PATH`、`STS2_APP_MANIFEST` 三个变量名（`STS2_STEAM_EXE` 只有 Windows 侧读），但探测只覆盖 macOS 的两个约定路径、也没有库列表枚举；macOS 上换库要把路径显式给出来，没有默认回落。
+ - POSIX 侧（`scripts/lib-sts2-paths.sh`，由 `scripts/lib-sts2.sh` 引入）用同一顺序解析，共用 `STS2_GAME_ROOT`、`STS2_EXE_PATH`、`STS2_APP_MANIFEST` 三个变量名（`STS2_STEAM_EXE` 只有 Windows 侧读）。探测覆盖 macOS 与 Linux 的约定 Steam 根目录，并读取每个安装的 `libraryfolders.vdf`，所以第二个库里装的游戏同样能找到；只有全部落空时才回落到约定路径。
+ - 这套解析有离线测试：`bash scripts/test-lib-sts2-paths.sh`（也可用 `python scripts/check_verification_gates.py --only sh-syntax`，CI 与 preflight 都会执行）。它不需要游戏、Steam 或联网，把 `$HOME` 指向夹具即可验证解析顺序、vdf 解析、`.app` bundle 布局与第二个库。
+- 需要真机才能确认的部分（游戏能否启动、PCK 能否打包、运行中的游戏进程能否被识别）不在该测试的声明范围内，仍按平台验收清单执行。
+ - Windows 上请用 `.ps1` 脚本。从 Git Bash 运行 `.sh` 虽然能过语法与解析（离线测试就是在 Git Bash 里跑的），但 `cd`/`pwd` 返回的是 MSYS 形式路径，.NET 读不了，`dotnet build` 一步会失败。
 
 ## 3. Build And Deploy Mod
 

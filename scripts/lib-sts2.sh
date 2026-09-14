@@ -2,6 +2,11 @@
 
 sts2_lib_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 
+# Path resolution lives in its own file so the offline test can exercise it without the
+# game, a socket, or a running process.
+# shellcheck source=scripts/lib-sts2-paths.sh
+. "$sts2_lib_dir/lib-sts2-paths.sh"
+
 sts2_require_command() {
   local command_name="$1"
   local install_hint="${2:-}"
@@ -27,89 +32,18 @@ sts2_resolve_repo_root() {
   cd -- "$input_root" && pwd
 }
 
-sts2_detect_game_root() {
-  local candidate=""
+# Everything that knows where the game is lives in lib-sts2-paths.sh, sourced above:
+# sts2_detect_game_root, sts2_detect_app_bundle, sts2_detect_game_executable,
+# sts2_infer_game_root_from_executable and sts2_default_app_manifest. Same names and the same
+# contracts (a path, or a non-zero status the callers already handle with || true) -- but
+# every Steam library is searched instead of two conventional paths, and a second library is
+# found through libraryfolders.vdf.
 
-  for candidate in \
-    "$HOME/Library/Application Support/Steam/steamapps/common/Slay the Spire 2" \
-    "$HOME/.steam/steam/steamapps/common/Slay the Spire 2"; do
-    if [[ -d "$candidate" ]]; then
-      printf '%s\n' "$candidate"
-      return 0
-    fi
-  done
 
-  return 1
-}
 
-sts2_detect_app_bundle() {
-  local game_root="$1"
-  local candidate=""
 
-  for candidate in \
-    "$game_root/Slay the Spire 2.app" \
-    "$game_root/SlayTheSpire2.app" \
-    "$game_root"; do
-    if [[ -d "$candidate/Contents/MacOS" ]]; then
-      printf '%s\n' "$candidate"
-      return 0
-    fi
-  done
-
-  return 1
-}
-
-sts2_detect_game_executable() {
-  local game_root="$1"
-  local app_bundle=""
-  local candidate=""
-
-  app_bundle="$(sts2_detect_app_bundle "$game_root" || true)"
-  if [[ -n "$app_bundle" ]]; then
-    for candidate in \
-      "$app_bundle/Contents/MacOS/Slay the Spire 2" \
-      "$app_bundle/Contents/MacOS/SlayTheSpire2"; do
-      if [[ -x "$candidate" ]]; then
-        printf '%s\n' "$candidate"
-        return 0
-      fi
-    done
-  fi
-
-  for candidate in \
-    "$game_root/Slay the Spire 2" \
-    "$game_root/SlayTheSpire2"; do
-    if [[ -x "$candidate" ]]; then
-      printf '%s\n' "$candidate"
-      return 0
-    fi
-  done
-
-  return 1
-}
-
-sts2_infer_game_root_from_executable() {
-  local exe_path="$1"
-  local exe_dir=""
-
-  if [[ -z "$exe_path" ]]; then
-    return 1
-  fi
-
-  exe_dir="$(cd -- "$(dirname -- "$exe_path")" && pwd)"
-  case "$exe_dir" in
-    */Contents/MacOS)
-      cd -- "$exe_dir/../../.." && pwd
-      ;;
-    *)
-      printf '%s\n' "$exe_dir"
-      ;;
-  esac
-}
-
-sts2_default_app_manifest() {
-  printf '%s\n' "$HOME/Library/Application Support/Steam/steamapps/appmanifest_2868840.acf"
-}
+# sts2_default_app_manifest now lives in lib-sts2-paths.sh, where the manifest is looked for
+# in every library before the conventional location is named as the last resort.
 
 sts2_resolve_app_id() {
   local explicit_app_id="${1:-}"
@@ -223,73 +157,62 @@ sts2_stop_pid() {
 sts2_running_game_pids() {
   local exe_path="${1:-${STS2_EXE_PATH:-}}"
   local game_root="${STS2_GAME_ROOT:-}"
+  local targets=""
+  local pattern=""
 
   if [[ -z "$exe_path" && -n "$game_root" ]]; then
     exe_path="$(sts2_detect_game_executable "$game_root" || true)"
   fi
 
-  python3 - "$exe_path" <<'PY'
-import pathlib
+  # Which paths count as the game is a question about the install, so it is answered out of the
+  # path library. The loose pattern is the no-answer-yet case: it is what lets a stray process
+  # still be recognised when the caller did not say which executable to look for.
+  if [[ -n "$exe_path" ]]; then
+    targets="$(sts2_game_executable_variants "$exe_path")"
+  else
+    targets="$(sts2_game_executable_candidates)
+$(sts2_game_binary_names)"
+    pattern="$(sts2_game_command_pattern)"
+  fi
+
+  python3 - "$targets" "$pattern" <<'PY'
 import os
 import re
 import subprocess
 import sys
 
-exe_path = sys.argv[1].strip()
-binary_names = ("Slay the Spire 2", "SlayTheSpire2")
+targets = {line.strip() for line in sys.argv[1].splitlines() if line.strip()}
+pattern = sys.argv[2].strip()
 
 
-def executable_variants(path: pathlib.Path) -> set[str]:
-    variants = {str(path)}
-    for name in binary_names:
-        variants.add(str(path.with_name(name)))
-    return variants
+def matching_pids(command: str) -> bool:
+    if not pattern:
+        return False
+    return re.search(pattern, command) is not None
 
 
-def default_candidates() -> set[str]:
-    candidates: set[str] = set()
-    roots = [
-        pathlib.Path.home() / "Library/Application Support/Steam/steamapps/common/Slay the Spire 2",
-        pathlib.Path.home() / ".steam/steam/steamapps/common/Slay the Spire 2",
-    ]
-    bundle_names = ("Slay the Spire 2.app", "SlayTheSpire2.app")
-
-    for root in roots:
-        for bundle_name in bundle_names:
-            bundle = root / bundle_name / "Contents" / "MacOS"
-            for binary_name in binary_names:
-                candidates.add(str(bundle / binary_name))
-
-        for binary_name in binary_names:
-            candidates.add(str(root / binary_name))
-
-    return candidates
-
-
-def command_matches_known_binary(command: str) -> bool:
-    return re.search(r"(^|/)(Slay the Spire 2|SlayTheSpire2)(\s|$)", command) is not None
-
-
-if exe_path:
-    targets = executable_variants(pathlib.Path(exe_path))
-else:
-    targets = default_candidates()
-    targets.update(binary_names)
+# ps is the primary source; when it is missing or refuses the flags, pgrep has to stand in for it.
+# That fallback needs a pattern of its own when the caller gave us exact paths instead of a loose
+# name, which is the case whenever the caller already knows which executable it is looking for.
+fallback_pattern = pattern or "|".join(re.escape(target) for target in sorted(targets))
 
 try:
     process_table = subprocess.check_output(["ps", "-axww", "-o", "pid=,command="], text=True)
 except (OSError, subprocess.CalledProcessError):
-    pattern = "|".join(re.escape(target) for target in sorted(targets))
-    if not pattern:
-        raise SystemExit(0)
+    process_table = None
 
+if process_table is None:
+    if not fallback_pattern:
+        raise SystemExit(0)
     try:
-        fallback_output = subprocess.check_output(["pgrep", "-f", pattern], stderr=subprocess.DEVNULL, text=True)
+        fallback_output = subprocess.check_output(
+            ["pgrep", "-f", fallback_pattern], stderr=subprocess.DEVNULL, text=True
+        )
     except (OSError, subprocess.CalledProcessError):
         raise SystemExit(0)
 
     excluded = {os.getpid(), os.getppid()}
-    seen: set[int] = set()
+    seen = set()
     for line in fallback_output.splitlines():
         line = line.strip()
         if not line.isdigit():
@@ -316,10 +239,11 @@ for line in process_table.splitlines():
         print(pid_text)
         continue
 
-    if not exe_path and command_matches_known_binary(command):
+    if matching_pids(command):
         print(pid_text)
 PY
 }
+
 
 sts2_stop_running_games() {
   local exe_path="${1:-}"
