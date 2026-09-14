@@ -51,8 +51,8 @@ Some scripts are deliberately not wired into any automated check. They are not d
 
 - [scripts/scan-assembly-strings.ps1](../../../scripts/scan-assembly-strings.ps1#L1) requires a real `sts2.dll` — its `$AssemblyPath` parameter is mandatory ([L2](../../../scripts/scan-assembly-strings.ps1#L2)) — so it only runs on a machine with the game installed. Its invocation is recorded in [docs/reverse-engineering.md](../../../docs/reverse-engineering.md#L297).
 - [scripts/generate-sts2-knowledge.ps1](../../../scripts/generate-sts2-knowledge.ps1#L15) regenerates `docs/game-knowledge/*.md` from `extraction/decompiled`, which is gitignored and absent from CI, so it cannot run in a fresh checkout.
-- [scripts/sts2-coop-full-run-acceptance.ps1](../../../scripts/sts2-coop-full-run-acceptance.ps1#L28) and [scripts/test-coop-play-together.ps1](../../../scripts/test-coop-play-together.ps1#L1) are two-instance (host + companion) acceptance orchestration: they need a live game, two Mod API ports ([L2](../../../scripts/test-coop-play-together.ps1#L2)), and the model key.
-- [scripts/sts2-validation-secrets.ps1](../../../scripts/sts2-validation-secrets.ps1#L3) only supplies that DPAPI-protected key material, and is dot-sourced by the coop acceptance script alone ([L33](../../../scripts/sts2-coop-full-run-acceptance.ps1#L33)).
+- [scripts/sts2-coop-full-run-acceptance.ps1](../../../scripts/sts2-coop-full-run-acceptance.ps1#L29) and [scripts/test-coop-play-together.ps1](../../../scripts/test-coop-play-together.ps1#L1) are two-instance (host + companion) acceptance orchestration: they need a live game, two Mod API ports ([L2](../../../scripts/test-coop-play-together.ps1#L2)), and the model key. Which Steam profile counts as "do not touch" is detected from the machine or given with `-SteamAccountId`; no account id is baked into the script.
+- [scripts/sts2-validation-secrets.ps1](../../../scripts/sts2-validation-secrets.ps1#L3) only supplies that DPAPI-protected key material, and is dot-sourced by the coop acceptance script alone ([L34](../../../scripts/sts2-coop-full-run-acceptance.ps1#L34)).
 
 ## Game-connected validation
 

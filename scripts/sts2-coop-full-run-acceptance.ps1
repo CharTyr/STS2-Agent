@@ -5,6 +5,7 @@
     [string]$RepoRoot = '',
     [string]$HostClientId = '2026090801',
     [string]$CompanionClientId = '2026090802',
+    [string]$SteamAccountId = '',
     [int]$HostApiPort = 18080,
     [string]$ProxyListen = '127.0.0.1:18090',
     [int]$MaxRequests = 100,
@@ -34,7 +35,28 @@ $Secrets = Join-Path $RepoRoot 'scripts\sts2-validation-secrets.ps1'
 $ProxyPy = Join-Path $RepoRoot 'scripts\sts2-model-budget-proxy.py'
 $StartGame = Join-Path $RepoRoot 'scripts\start-game-session.ps1'
 $ProtectedSnapshot = Join-Path $Evidence 'protected-save-snapshot.json'
-$SteamSaveRoot = Join-Path $env:APPDATA 'SlayTheSpire2\steam\76561198420578597'
+$SteamRoot = Join-Path $env:APPDATA 'SlayTheSpire2\steam'
+# A Steam account id belongs to whoever runs the validation, not to the repository, so it is never
+# baked in. Take the one that was passed; otherwise use the single profile this machine has, and
+# refuse to guess when there are several. Finding none is not an error: this machine then has no
+# real Steam save to protect, and the snapshot below already tolerates a missing root.
+$SteamSaveRoot = if ($SteamAccountId) {
+    $explicit = Join-Path $SteamRoot $SteamAccountId
+    if (-not (Test-Path -LiteralPath $explicit)) {
+        throw "No Steam profile at $explicit. Fix -SteamAccountId or drop it to detect the profile."
+    }
+    $explicit
+} else {
+    $steamProfiles = @(Get-ChildItem -LiteralPath $SteamRoot -Directory -ErrorAction SilentlyContinue |
+        Where-Object { $_.Name -match '^\d{17}$' })
+    if ($steamProfiles.Count -eq 1) {
+        $steamProfiles[0].FullName
+    } elseif ($steamProfiles.Count -eq 0) {
+        ''
+    } else {
+        throw "Found $($steamProfiles.Count) Steam profiles under $SteamRoot. Pass -SteamAccountId to say which one this run must protect."
+    }
+}
 $Default1 = Join-Path $env:APPDATA 'SlayTheSpire2\default\1'
 $Default1001 = Join-Path $env:APPDATA 'SlayTheSpire2\default\1001'
 $AgentSettingsRoot = Join-Path $env:APPDATA 'STS2AIAgent'
@@ -64,11 +86,13 @@ function Copy-FileNoLink {
     return $dst
 }
 
-function Get-ProtectedRoots { @($SteamSaveRoot, $Default1, $Default1001, $AgentSettingsRoot) }
+function Get-ProtectedRoots {
+    return @(@($SteamSaveRoot, $Default1, $Default1001, $AgentSettingsRoot) | Where-Object { $_ })
+}
 
 function Save-ProtectedSnapshot {
     $items = @()
-    foreach ($root in Get-ProtectedRoots) {
+    foreach ($root in @(Get-ProtectedRoots)) {
         if (-not (Test-Path -LiteralPath $root)) { continue }
         Get-ChildItem -LiteralPath $root -Recurse -File -Force -ErrorAction SilentlyContinue | ForEach-Object {
             $h = Get-FileHash -LiteralPath $_.FullName -Algorithm SHA256
@@ -141,6 +165,7 @@ function Start-BudgetProxy {
         '--max-tokens', [string]$MaxTokens,
         '--fixture', $Fixture,
         '--allowed-model', (& $quoted $ExpectedModel),
+        '--dump-last-completion', (& $quoted (Join-Path $Evidence 'last-llm.json')),
         '--upstream-timeout', '720'
     )
     $psi = New-Object System.Diagnostics.ProcessStartInfo
@@ -289,7 +314,10 @@ function Write-PrepareEvidence {
             isolation = 'new offline clientIds, not Steam profile switch'
             host_dir = (Join-Path $env:APPDATA "SlayTheSpire2\default\$HostClientId")
             companion_dir = (Join-Path $env:APPDATA "SlayTheSpire2\default\$CompanionClientId")
-            do_not_touch = @( $SteamSaveRoot, $Default1, $Default1001, $AgentSettingsRoot )
+            do_not_touch = @(Get-ProtectedRoots)
+            # Truthful rather than declared: an account id that resolved to a directory which is not
+            # there protects nothing, and the snapshot below silently skips missing roots.
+            steam_profile_protected = [bool]($SteamSaveRoot -and (Test-Path -LiteralPath $SteamSaveRoot))
         }
         budget = @{
             max_requests = $MaxRequests

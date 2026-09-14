@@ -240,7 +240,7 @@ class Budget:
 
 
 
-def dump_last_completion(parsed: dict[str, Any], entry: dict[str, Any]) -> None:
+def dump_last_completion(parsed: dict[str, Any], entry: dict[str, Any], path: Path) -> None:
     choice = {}
     choices = parsed.get("choices") if isinstance(parsed, dict) else None
     if isinstance(choices, list) and choices and isinstance(choices[0], dict):
@@ -263,7 +263,11 @@ def dump_last_completion(parsed: dict[str, Any], entry: dict[str, Any]) -> None:
         "tool_count": len(tool_calls),
         "usage": parsed.get("usage") if isinstance(parsed, dict) else None,
     }
-    path = Path(r"C:\Users\chart\Documents\project\sp\build\validation-2026-09-08\last-llm.json")
+    # Where the dump goes is the caller's decision, not a property of this repository: a validation
+    # run points it at its own evidence directory. Making the parent directory is what keeps the
+    # dump from failing silently on a machine that has never run that validation (the call site
+    # below only writes one line to stderr when this raises).
+    path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
 
 
@@ -396,10 +400,12 @@ class Handler(BaseHTTPRequestHandler):
                 try:
                     parsed = json.loads(raw.decode("utf-8"))
                     tokens = parse_usage(parsed)
-                    try:
-                        dump_last_completion(parsed, entry_or_snap)
-                    except Exception as dump_err:
-                        sys.stderr.write("[budget-proxy] dump failed " + type(dump_err).__name__ + "\n")
+                    dump_path = getattr(self.server, "dump_last_completion", None)
+                    if dump_path is not None:
+                        try:
+                            dump_last_completion(parsed, entry_or_snap, dump_path)
+                        except Exception as dump_err:
+                            sys.stderr.write("[budget-proxy] dump failed " + type(dump_err).__name__ + "\n")
                 except (UnicodeDecodeError, json.JSONDecodeError):
                     tokens = parse_sse_usage(raw)
                 self.server.budget.finish(entry_or_snap, tokens)
@@ -439,6 +445,13 @@ def main() -> int:
     parser.add_argument("--fixture", choices=["none", "401", "429", "timeout"], default="none")
     parser.add_argument("--fixture-timeout", type=float, default=2.0)
     parser.add_argument("--upstream-timeout", type=float, default=720.0)
+    parser.add_argument(
+        "--dump-last-completion",
+        default="",
+        metavar="PATH",
+        help="Write the last upstream completion to PATH as JSON. Off by default; a validation run "
+        "points this at its own evidence directory.",
+    )
     args = parser.parse_args()
     ledger_path = Path(args.ledger)
     try:
@@ -454,6 +467,7 @@ def main() -> int:
     httpd.fixture_timeout = args.fixture_timeout
     httpd.upstream_timeout = args.upstream_timeout
     httpd.allowed_model = args.allowed_model
+    httpd.dump_last_completion = Path(args.dump_last_completion) if args.dump_last_completion else None
     sys.stderr.write(
         "[budget-proxy] listen="
         + args.listen
@@ -463,6 +477,8 @@ def main() -> int:
         + str(ledger_path)
         + " allowed_model="
         + args.allowed_model
+        + " dump_last_completion="
+        + (str(httpd.dump_last_completion) if httpd.dump_last_completion else "off")
         + "\n"
     )
     try:
