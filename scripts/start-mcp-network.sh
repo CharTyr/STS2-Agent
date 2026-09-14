@@ -50,17 +50,9 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 
-resolve_repo_root() {
-  local input_root="$1"
-  if [[ -z "$input_root" ]]; then
-    cd -- "$script_dir/.." && pwd
-    return
-  fi
+. "$script_dir/lib-sts2.sh"
 
-  cd -- "$input_root" && pwd
-}
-
-repo_root="$(resolve_repo_root "$repo_root_input")"
+repo_root="$(sts2_resolve_repo_root "$repo_root_input")"
 mcp_root="$repo_root/mcp_server"
 
 if [[ ! -d "$mcp_root" ]]; then

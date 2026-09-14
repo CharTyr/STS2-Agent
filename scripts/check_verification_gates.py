@@ -849,6 +849,81 @@ def check_ps1_syntax(repo_root: Path) -> list[str]:
     return [f"{len(paths)} PowerShell scripts parse cleanly"]
 
 
+SH_GLOB = "*.sh"
+
+# Windows ships a bash that is a WSL launcher: it resolves on PATH and then disagrees with the
+# filesystem about what a path is. A Git Bash install is the one that can parse these scripts, so
+# the candidates are tried in order and the first that runs a trivial command wins. No candidate
+# means a printed skip, which is the shape the PowerShell gate already uses.
+# Git Bash first: on Windows a bare "bash" is often the WSL launcher, which resolves on PATH,
+# answers a trivial command, and then cannot see a C:/ path at all. The probe below asks the real
+# question -- can this interpreter read a file in this repository -- so a launcher that cannot is
+# skipped rather than trusted.
+BASH_CANDIDATES = (
+    r"C:\Program Files\Git\bin\bash.exe",
+    r"C:\Program Files (x86)\Git\bin\bash.exe",
+    "bash",
+)
+
+
+def find_bash(repo_root: Path) -> str | None:
+    probe_target = (repo_root / "scripts" / "lib-sts2-paths.sh").as_posix()
+    for candidate in BASH_CANDIDATES:
+        resolved = shutil.which(candidate) or (candidate if Path(candidate).is_file() else None)
+        if resolved is None:
+            continue
+        try:
+            probe = subprocess.run([resolved, "-n", probe_target], capture_output=True, timeout=60)
+        except (OSError, subprocess.SubprocessError):
+            continue
+        if probe.returncode == 0:
+            return resolved
+    return None
+
+
+def check_sh_syntax(repo_root: Path) -> list[str]:
+    """Every bash script under scripts/ must parse, and the resolver test must pass."""
+    scripts_dir = repo_root / "scripts"
+    paths = sorted(path for path in scripts_dir.rglob(SH_GLOB) if path.is_file())
+    if not paths:
+        return [f"no bash scripts under {scripts_dir.name}/ to parse"]
+
+    interpreter = find_bash(repo_root)
+    if interpreter is None:
+        return ["no usable bash on this machine; skipping the bash syntax check"]
+
+    failures: list[str] = []
+    for path in paths:
+        # Forward slashes: bash reads a backslash as an escape, so a Windows path arrives mangled.
+        result = subprocess.run([interpreter, "-n", path.as_posix()], capture_output=True)
+        if result.returncode != 0:
+            detail = result.stderr.decode("utf-8", "replace").strip()
+            relative = path.relative_to(repo_root).as_posix()
+            failures.append(f"{relative}: {detail or 'syntax error'}")
+    if failures:
+        raise GateError("these bash scripts have syntax errors:\n  " + "\n  ".join(failures))
+
+    notes = [f"{len(paths)} bash scripts parse cleanly"]
+
+    test_path = scripts_dir / "test-lib-sts2-paths.sh"
+    if not test_path.is_file():
+        raise GateError(
+            "scripts/test-lib-sts2-paths.sh is missing, so the path resolver has no offline "
+            "coverage left. Restore it, or record where that coverage moved."
+        )
+
+    result = subprocess.run(
+        [interpreter, test_path.as_posix()], capture_output=True, cwd=str(repo_root)
+    )
+    if result.returncode != 0:
+        stdout = result.stdout.decode("utf-8", "replace").strip()
+        detail = result.stderr.decode("utf-8", "replace").strip()
+        raise GateError("the offline path-resolver test failed:\n" + stdout + "\n" + detail)
+    summary = result.stdout.decode("utf-8", "replace").strip().splitlines()
+    notes.append("resolver test: " + (summary[-1] if summary else "passed"))
+    return notes
+
+
 GATES = {
     "lockfile": check_lockfile,
     "api-doc": check_api_doc,
@@ -858,6 +933,7 @@ GATES = {
     "packaged-links": check_packaged_links,
     "script-encoding": check_script_encoding,
     "ps1-syntax": check_ps1_syntax,
+    "sh-syntax": check_sh_syntax,
 }
 
 

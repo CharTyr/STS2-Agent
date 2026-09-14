@@ -55,26 +55,10 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 
-resolve_existing_dir() {
-  local path="$1"
-  cd -- "$path" && pwd
-}
-
-candidate_exists() {
-  local candidate="$1"
-  [[ -n "$candidate" && -d "$candidate" ]]
-}
-
-first_existing_dir() {
-  local candidate
-  for candidate in "$@"; do
-    if candidate_exists "$candidate"; then
-      printf '%s\n' "$candidate"
-      return 0
-    fi
-  done
-  return 1
-}
+# Path work lives in lib-sts2-paths.sh: one owner for where the game is, shared with the
+# validation scripts and exercised offline by scripts/test-lib-sts2-paths.sh. This file keeps
+# only what is specific to building.
+. "$script_dir/lib-sts2-paths.sh"
 
 resolve_repo_root() {
   local input_root="$1"
@@ -83,13 +67,7 @@ resolve_repo_root() {
     return
   fi
 
-  resolve_existing_dir "$input_root"
-}
-
-detect_game_root() {
-  first_existing_dir \
-    "$HOME/Library/Application Support/Steam/steamapps/common/Slay the Spire 2" \
-    "$HOME/.steam/steam/steamapps/common/Slay the Spire 2"
+  sts2_resolve_existing_dir "$input_root"
 }
 
 detect_godot_exe() {
@@ -154,25 +132,24 @@ if ! command -v dotnet >/dev/null 2>&1; then
   exit 1
 fi
 
-game_root="$game_root_input"
-if [[ -z "$game_root" ]]; then
-  game_root="$(detect_game_root || true)"
+# Argument, then STS2_GAME_ROOT, then detection across every Steam library, then the
+# conventional location -- one order, shared with the Windows scripts.
+game_root="$(sts2_resolve_game_root "$game_root_input")"
+
+# A path that is not there used to be inherited silently: everything downstream fell back to
+# an empty string and the run ended much later with a message about the data directory. Say
+# it here instead, unless the caller supplied the directories the build actually needs.
+if [[ ! -d "$game_root" && -z "$data_dir_input" ]]; then
+  echo "Slay the Spire 2 install not found at '$game_root'." >&2
+  echo "Pass --game-root PATH, set STS2_GAME_ROOT, or pass --data-dir (and --mods-dir) to build without the game." >&2
+  exit 1
 fi
 
-if [[ -n "$game_root" ]]; then
-  game_root="$(resolve_existing_dir "$game_root")"
+if [[ -d "$game_root" ]]; then
+  game_root="$(sts2_resolve_existing_dir "$game_root")"
 fi
 
-app_bundle=""
-if [[ -n "$game_root" ]]; then
-  if [[ "$game_root" == *.app ]]; then
-    app_bundle="$game_root"
-  elif [[ -d "$game_root/Slay the Spire 2.app" ]]; then
-    app_bundle="$game_root/Slay the Spire 2.app"
-  elif [[ -d "$game_root/SlayTheSpire2.app" ]]; then
-    app_bundle="$game_root/SlayTheSpire2.app"
-  fi
-fi
+app_bundle="$(sts2_detect_app_bundle "$game_root" || true)"
 
 godot_exe="$(detect_godot_exe || true)"
 if [[ -z "$godot_exe" ]]; then
@@ -182,25 +159,8 @@ if [[ -z "$godot_exe" ]]; then
 fi
 
 data_dir="$data_dir_input"
-if [[ -z "$data_dir" && -n "$game_root" ]]; then
-  data_dir="$(first_existing_dir \
-    "$game_root/data_sts2_windows_x86_64" \
-    "$game_root/data_sts2_osx_arm64" \
-    "$game_root/data_sts2_osx_x86_64" \
-    "$game_root/data_sts2_macos" \
-    "$game_root/data_sts2_macos_arm64" \
-    "$game_root/data_sts2_macos_x86_64" \
-    "$app_bundle/Contents/Resources/data_sts2_osx_arm64" \
-    "$app_bundle/Contents/Resources/data_sts2_osx_x86_64" \
-    "$app_bundle/Contents/Resources/data_sts2_macos" \
-    "$app_bundle/Contents/Resources/data_sts2_macos_arm64" \
-    "$app_bundle/Contents/Resources/data_sts2_macos_x86_64" \
-    "$app_bundle/Contents/MacOS/data_sts2_osx_arm64" \
-    "$app_bundle/Contents/MacOS/data_sts2_osx_x86_64" \
-    "$app_bundle/Contents/MacOS/data_sts2_macos" \
-    "$app_bundle/Contents/MacOS/data_sts2_macos_arm64" \
-    "$app_bundle/Contents/MacOS/data_sts2_macos_x86_64" \
-  || true)"
+if [[ -z "$data_dir" ]]; then
+  data_dir="$(sts2_detect_data_dir "$game_root" "$app_bundle" || true)"
 fi
 
 if [[ -z "$data_dir" ]]; then
@@ -209,14 +169,17 @@ if [[ -z "$data_dir" ]]; then
   exit 1
 fi
 
-data_dir="$(resolve_existing_dir "$data_dir")"
+if [[ ! -d "$data_dir" ]]; then
+  echo "Game data directory not found: $data_dir" >&2
+  echo "Check --data-dir / STS2_DATA_DIR; it has to be the directory holding sts2.dll." >&2
+  exit 1
+fi
+
+data_dir="$(sts2_resolve_existing_dir "$data_dir")"
 
 mods_dir="$mods_dir_input"
-if [[ -z "$mods_dir" && -n "$app_bundle" ]]; then
-  mods_dir="$app_bundle/Contents/MacOS/mods"
-fi
-if [[ -z "$mods_dir" && -n "$game_root" ]]; then
-  mods_dir="$game_root/mods"
+if [[ -z "$mods_dir" && -d "$game_root" ]]; then
+  mods_dir="$(sts2_mods_dir_for "$app_bundle" "$game_root" || true)"
 fi
 
 if [[ -z "$mods_dir" ]]; then
