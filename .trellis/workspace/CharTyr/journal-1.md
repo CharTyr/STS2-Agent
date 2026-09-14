@@ -999,3 +999,60 @@ Turned the macOS/Linux path handling from three unexercised copies into one reso
 - Real-machine macOS acceptance is still the only way to promote path resolution to proven script usability
 - lib-sts2.sh still hardcodes python3 in six places; on macOS and Linux that name is the one that exists, so it was left alone
 - CONTRIBUTING.md still describes feature -> dev -> main while dev is 196 commits behind main and the last three PRs went straight to main
+
+
+## Session 26: Revive dev: fast-forward it back and write down the rule that keeps it from drifting
+
+**Date**: 2026-09-14
+**Task**: Revive dev: fast-forward it back and write down the rule that keeps it from drifting
+**Branch**: `main`
+
+### Summary
+
+Fast-forwarded dev from 196 commits behind main, added the resync rule to CONTRIBUTING, and merged the change through the revived flow (PR #129 targeting dev).
+
+### Main Changes
+
+用户选择「把 dev 重新拉起来」而不是改文档 —— 也就是让 CONTRIBUTING 描述的那套流程重新成立。
+
+先前的事实：`origin/dev` 落后 `origin/main` 196 个提交，且 0 个独有提交 —— 严格祖先，所以快进
+是无损的。CI（validate.yml）本来就覆盖 `dev` 的 push，没有 PR 指向 dev，dev 也没有分支保护。
+
+做法：
+
+- 先把本地那个未推送的 journal 提交推上 main（`4a01e22`）
+- `dev` 快进到 main（`22907b0..4a01e22`），验证 origin/main 与 origin/dev 的 tree 完全相同、
+  且旧 tip `22907b0` 仍是祖先（什么都没丢）
+- 补上「何时把 dev 拉回来」这条规则：CONTRIBUTING.md 里写明每次有东西进 main 之后要
+  `git push origin origin/main:dev`，并写清原因（每次合进 main 都会多出一个 dev 没有的提交，
+  直接进 main 的 PR 更是把它的全部提交都加进去 —— 这就是 dev 变成旧 main 分叉的机制）
+- 两处文档：CONTRIBUTING.md（受版本控制，走 PR）与 AGENTS.md（本地 gitignore，直接改）
+- 这条改动走**恢复后的流程**提交：分支 → PR #129 → base 是 `dev` → 合入。也是第一个进 dev 的 PR
+
+教训：规则要连原因一起写，否则第一个被丢掉的就是它。196 个提交的漂移之所以发生，是因为仓库里
+没有任何地方说过什么时候该把 dev 拉回来。
+
+
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `4a01e22` | (see git log) |
+| `a92f5a6` | (see git log) |
+
+### Testing
+
+- [OK] git merge-base --is-ancestor 22907b0 origin/dev: exit 0, so the old dev tip is still reachable and the fast-forward lost nothing
+- [OK] origin/main and origin/dev trees are identical after the fast-forward
+- [OK] check_verification_gates.py on dev: nine gates pass; offline resolver test 29/29
+- [OK] PR #129 CI: contracts and Sourcery both green, merged into dev
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- Next release goes dev -> main; after that merge, fast-forward dev back (the new rule)
+- dev has no branch protection while main has a PR requirement; worth deciding whether dev should require the contracts check too
