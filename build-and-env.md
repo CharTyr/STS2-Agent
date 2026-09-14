@@ -141,6 +141,8 @@ uv run python -c "from sts2_mcp.client import Sts2Client; import json; print(jso
 
 ## 6. Troubleshooting
 
+- 其它启动与环境问题（例如启动时报 `No appID found`）：
+  - 见 [docs/troubleshooting.md](./docs/troubleshooting.md)。
 - `connection refused`:
   - 游戏未启动，或 Mod 未加载成功。
   - 首次加载时需在游戏内确认 mods warning。

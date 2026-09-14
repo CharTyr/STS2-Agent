@@ -117,7 +117,7 @@
 
 这些都是人工菜单，被暂停吞掉的房间动作不再出现：`end_turn`、`play_card`、`choose_map_node`、`resolve_rewards`、`save_and_quit` 一律不广告，直接调用会得到 409 `invalid_action`；`capstone` 同样不出现——容器里的按钮是导航磁贴、筛选勾选框和控件命中区（`Hitbox`），不是 agent 的选项列表，所以 `choose_capstone_option` 既不广告也调用不了。
 
-除暂停菜单本身以外，这些页面各留一个动作：`close_main_menu_submenu` 退回上一级（等同页面自己的返回按钮 `Stack.Pop()`），例如 `CARD_LIBRARY` → `COMPENDIUM` → `PAUSE_MENU`；退到暂停菜单为止，那一页不再提供任何动作——恢复游戏是人的事，agent 不替人点「继续」。`close_cards_view` 在这里不适用，它只认战斗里的看牌屏与牌堆。
+除暂停菜单本身以外，这些页面各留一个动作：`close_main_menu_submenu` 退回上一级（等同页面自己的返回按钮 `Stack.Pop()`），例如 `CARD_LIBRARY` → `COMPENDIUM` → `PAUSE_MENU`；退到暂停菜单为止，那一页不再提供任何动作——恢复游戏是人的事，agent 不替人点「继续」。`close_cards_view` 在这些页面上用不上：容器页不是看牌屏，而它的管辖范围只有战斗里的看牌屏、牌堆，以及 `CARD_INSPECT` / `RELIC_INSPECT` 浮层（见下面的动作表）。
 
 ## Action Status
 

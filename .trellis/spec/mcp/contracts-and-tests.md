@@ -21,14 +21,14 @@ Action responses must be JSON objects with a boolean `ok`. A failed envelope mus
 
 ## Tool registration contract
 
-The [server profile normalizer](../../../mcp_server/src/sts2_mcp/server.py#L115) defaults to `guided`, maps `planner` and `multi-agent` to `layered`, and maps `legacy` to `full`.
+The [server profile normalizer](../../../mcp_server/src/sts2_mcp/server.py#L130) defaults to `guided`, maps `planner` and `multi-agent` to `layered`, and maps `legacy` to `full`.
 
 - Base tools are registered for every profile.
 - Planner, combat handoff, and knowledge tools are registered for `layered` and `full`.
 - Legacy per-action tools are registered only for `full`.
 - `run_console_command` is a separate debug tool enabled only when `STS2_ENABLE_DEBUG_ACTIONS` is truthy; it is deliberately excluded from compact `act`.
 
-These gates live in [server registration](../../../mcp_server/src/sts2_mcp/server.py#L564) and [debug/legacy registration](../../../mcp_server/src/sts2_mcp/server.py#L843). Keep the public profile names and the debug boundary stable when changing the tool surface.
+These gates live in [server registration](../../../mcp_server/src/sts2_mcp/server.py#L534) and [debug/legacy registration](../../../mcp_server/src/sts2_mcp/server.py#L1082). Keep the public profile names and the debug boundary stable when changing the tool surface.
 
 Tool functions are ordinary synchronous `def` functions. FastMCP's tool listing is asynchronous, so tests commonly call `asyncio.run(server.get_tool("..."))` and then invoke `tool.fn(...)`. The [wait tests](../../../mcp_server/tests/test_waits.py#L142), [game-data tests](../../../mcp_server/tests/test_game_data_tools.py#L42), and [crystal-sphere tests](../../../mcp_server/tests/test_crystal_sphere_tools.py#L45) demonstrate this pattern.
 

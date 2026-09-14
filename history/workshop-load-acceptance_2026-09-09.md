@@ -1,5 +1,7 @@
 # Workshop 订阅加载验收
 
+> 历史快照：本文件是 2026-09-09 的工坊订阅加载验收记录，不代表当前状态；当前状态见 [PRODUCT_PLAN_CURRENT.md](../PRODUCT_PLAN_CURRENT.md)。
+
 记录日期：2026-09-09。用户完成启用和重启，主代理只读核对本次进程、日志和 HTTP 接口。
 
 - 用户截图一：游戏 Mods 列表中 STS2 AI Agent 显示 Steam 图标，确认来源为创意工坊。

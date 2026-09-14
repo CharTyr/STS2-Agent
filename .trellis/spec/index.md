@@ -11,7 +11,7 @@ STS2 AI Agent combines a C# Godot mod, an optional Python MCP server, and build/
 
 ## Pre-Development Checklist
 
-Read [AGENTS.md](../../AGENTS.md), then the applicable layer index and linked contracts. Source references and named symbols are the evidence for these guidelines. Consult shared guides before changing action/state contracts, tool surfaces, constants, or helpers. Check the [gameplay skill](../../skills/sts2-mcp-player/SKILL.md) when changing gameplay workflows.
+Read [AGENTS.md](../../AGENTS.md) (a local working file, deliberately untracked), then the applicable layer index and linked contracts. Source references and named symbols are the evidence for these guidelines. Consult shared guides before changing action/state contracts, tool surfaces, constants, or helpers. Check the [gameplay skill](../../skills/sts2-mcp-player/SKILL.md) when changing gameplay workflows.
 
 ## Quality Check
 

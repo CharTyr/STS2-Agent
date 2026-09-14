@@ -11,9 +11,9 @@ The current knowledge base has two layers:
 
 ## Current Files
 
-- [README.md](/Users/chart/Documents/project/sp/docs/game-knowledge/README.md)
-- [agent-reference.md](/Users/chart/Documents/project/sp/docs/game-knowledge/agent-reference.md)
-- [playbook.md](/Users/chart/Documents/project/sp/docs/game-knowledge/playbook.md)
+- [README.md](./README.md)
+- [agent-reference.md](./agent-reference.md)
+- [playbook.md](./playbook.md)
 - Generated indexes:
   - `characters.md`
   - `cards.md`
@@ -27,7 +27,7 @@ The current knowledge base has two layers:
 ## Regeneration
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File "C:/Users/chart/Documents/project/sp/scripts/generate-sts2-knowledge.ps1"
+powershell -ExecutionPolicy Bypass -File "scripts/generate-sts2-knowledge.ps1"
 ```
 
 ## Next Steps

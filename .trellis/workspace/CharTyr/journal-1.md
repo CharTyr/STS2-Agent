@@ -720,7 +720,7 @@ Four residuals closed: docs/ became a controlled directory with a docs-tracked g
 
 - 五个版本号文件升到 0.12.3，CHANGELOG 的 Unreleased 定版为 v0.12.3 并写明「只发工坊、无 tag」
 - workshop.json 的 changeNote 更新为 v0.12.3
-- history/workshop-upload-v0.12.3_2026-09-13.md 记录上传与复核
+- history/release-v0.12.3_2026-09-13.md 记录上传与复核
 - 状态页：基线改为「GitHub 在 v0.12.2、工坊在 0.12.3」，并修正 #106 那条「尚未发布」的过期说法
 
 ### Git Commits

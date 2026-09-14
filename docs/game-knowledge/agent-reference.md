@@ -11,18 +11,18 @@ This file is not a gameplay guide. It is a lookup order for agents using the MCP
 ## Recommended Mapping
 
 - `combat.hand[].card_id` or `run.deck[].card_id`
-  - [cards.md](/Users/chart/Documents/project/sp/docs/game-knowledge/cards.md)
-  - [card-behaviors.md](/Users/chart/Documents/project/sp/docs/game-knowledge/card-behaviors.md)
+  - [cards.md](./cards.md)
+  - [card-behaviors.md](./card-behaviors.md)
 - `combat.enemies[].enemy_id`
-  - [monsters.md](/Users/chart/Documents/project/sp/docs/game-knowledge/monsters.md)
-  - [monster-behaviors.md](/Users/chart/Documents/project/sp/docs/game-knowledge/monster-behaviors.md)
+  - [monsters.md](./monsters.md)
+  - [monster-behaviors.md](./monster-behaviors.md)
 - `event.event_id`
-  - [events.md](/Users/chart/Documents/project/sp/docs/game-knowledge/events.md)
+  - [events.md](./events.md)
 - `run.potions[].potion_id`
-  - [potions.md](/Users/chart/Documents/project/sp/docs/game-knowledge/potions.md)
-  - [potion-behaviors.md](/Users/chart/Documents/project/sp/docs/game-knowledge/potion-behaviors.md)
+  - [potions.md](./potions.md)
+  - [potion-behaviors.md](./potion-behaviors.md)
 - character opening state
-  - [characters.md](/Users/chart/Documents/project/sp/docs/game-knowledge/characters.md)
+  - [characters.md](./characters.md)
 
 ## Decision Notes
 

@@ -1,5 +1,7 @@
 # v0.10.7 Workshop 上传记录（2026-09-12）
 
+> 历史快照：本文件是只更新工坊那一次（v0.10.7，未打 tag）的记录，不代表当前状态；当前状态见 [PRODUCT_PLAN_CURRENT.md](../PRODUCT_PLAN_CURRENT.md)。
+
 上传时间：2026-09-12 01:11（本地）。物品：`3796486050`（STS2 AI Agent），更新既有物品，未新建。
 
 ## 结果（Steam Web API 复核）

@@ -1,5 +1,7 @@
 # v0.11.0 发布与工坊上传记录（2026-09-12）
 
+> 历史快照：本文件是 v0.11.0 的发布与工坊上传记录，不代表当前状态；当前状态见 [PRODUCT_PLAN_CURRENT.md](../PRODUCT_PLAN_CURRENT.md)。
+
 ## 结论
 
 GitHub Release 与 Steam 工坊上传**都已完成**。
