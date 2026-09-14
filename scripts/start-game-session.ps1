@@ -1,5 +1,5 @@
 param(
-    [string]$ExePath = "C:/Program Files (x86)/Steam/steamapps/common/Slay the Spire 2/SlayTheSpire2.exe",
+    [string]$ExePath = "",
     [int]$Attempts = 180,
     [int]$DelaySeconds = 1,
     [switch]$EnableDebugActions,
@@ -13,6 +13,7 @@ param(
 )
 
 $ErrorActionPreference = "Stop"
+. (Join-Path $PSScriptRoot "lib-sts2-paths.ps1")
 
 function Wait-ForHealth {
     param(
@@ -110,6 +111,14 @@ function Wait-ForPortRelease {
     }
 }
 
+if ([string]::IsNullOrWhiteSpace($ExePath)) {
+    $ExePath = Resolve-Sts2Executable
+}
+
+if (-not (Test-Path -LiteralPath $ExePath)) {
+    throw "Slay the Spire 2 executable not found at '$ExePath'. Pass -ExePath or set STS2_EXE_PATH."
+}
+
 $baseUrl = "http://127.0.0.1:$ApiPort"
 $launchDir = Split-Path -Parent $ExePath
 
@@ -125,22 +134,12 @@ if (-not $KeepExistingProcesses) {
 function Resolve-SteamExe {
     param([string]$ExplicitPath)
 
-    if (-not [string]::IsNullOrWhiteSpace($ExplicitPath) -and (Test-Path -LiteralPath $ExplicitPath)) {
-        return (Resolve-Path -LiteralPath $ExplicitPath).Path
+    $resolved = Get-Sts2SteamExe -Explicit $ExplicitPath
+    if ($resolved) {
+        return $resolved
     }
 
-    $candidates = @(
-        "${env:ProgramFiles(x86)}\Steam\steam.exe",
-        "$env:ProgramFiles\Steam\steam.exe",
-        "C:\Program Files (x86)\Steam\steam.exe"
-    )
-    foreach ($candidate in $candidates) {
-        if (Test-Path -LiteralPath $candidate) {
-            return $candidate
-        }
-    }
-
-    throw "Steam executable not found. Pass -SteamExe."
+    throw "Steam executable not found. Pass -SteamExe or set STS2_STEAM_EXE."
 }
 
 function Get-ExtraArgumentList {

@@ -45,6 +45,8 @@ These are the offline check entry points, plus the scripts that are deliberately
 | PowerShell failure propagation | `powershell -ExecutionPolicy Bypass -File scripts/test-native-exit-propagation.ps1` | A failing native command propagates as a script failure |
 | Static preflight | `powershell -ExecutionPolicy Bypass -File scripts/preflight-release.ps1` | Aggregates the offline checks plus build, compile, version, package-source, and release-document checks |
 
+The scripts that need the installed game share one resolver, [lib-sts2-paths.ps1](../../../scripts/lib-sts2-paths.ps1): an explicit argument wins, then `STS2_GAME_ROOT` / `STS2_EXE_PATH` / `STS2_APP_MANIFEST` / `STS2_STEAM_EXE`, then detection through the registry and Steam's own `libraryfolders.vdf`, and only then the conventional `C:/Program Files (x86)/Steam` path -- so an install on another drive or in a second library is found without editing anything. The POSIX scripts share three of those names (`scripts/lib-sts2.sh` reads the root and the executable, the callers read `STS2_APP_MANIFEST`), but their detection covers only the two conventional macOS locations and has no last-resort default: on macOS a moved library has to be named explicitly.
+
 The release path guards the version contract twice: [preflight-release.ps1](../../../scripts/preflight-release.ps1#L102) runs the same metadata checker CI runs, and [package-release.ps1](../../../scripts/package-release.ps1#L127) aborts before building when [check_release_metadata.py](../../../scripts/check_release_metadata.py) reports an inconsistency.
 
 Some scripts are deliberately not wired into any automated check. They are not dead code; they are manual or real-machine entry points:
@@ -53,6 +55,8 @@ Some scripts are deliberately not wired into any automated check. They are not d
 - [scripts/generate-sts2-knowledge.ps1](../../../scripts/generate-sts2-knowledge.ps1#L15) regenerates `docs/game-knowledge/*.md` from `extraction/decompiled`, which is gitignored and absent from CI, so it cannot run in a fresh checkout.
 - [scripts/sts2-coop-full-run-acceptance.ps1](../../../scripts/sts2-coop-full-run-acceptance.ps1#L29) and [scripts/test-coop-play-together.ps1](../../../scripts/test-coop-play-together.ps1#L1) are two-instance (host + companion) acceptance orchestration: they need a live game, two Mod API ports ([L2](../../../scripts/test-coop-play-together.ps1#L2)), and the model key. Which Steam profile counts as "do not touch" is detected from the machine or given with `-SteamAccountId`; no account id is baked into the script.
 - [scripts/sts2-validation-secrets.ps1](../../../scripts/sts2-validation-secrets.ps1#L3) only supplies that DPAPI-protected key material, and is dot-sourced by the coop acceptance script alone ([L34](../../../scripts/sts2-coop-full-run-acceptance.ps1#L34)).
+
+Three defects came out of the same sweep and are fixed with the resolver: `build-mod.ps1` used to let `New-Item -Force` absorb a wrong install path by creating an empty tree ([L90](../../../scripts/build-mod.ps1#L90)), a truncated `libraryfolders.vdf` used to throw inside the resolver rather than fall through, and `test-debug-console-gating.ps1` takes an `-ApiPort` that it now hands to the game it launches through `STS2_API_PORT`, the variable the mod actually reads ([HttpServer.cs](../../../STS2AIAgent/Server/HttpServer.cs#L175)).
 
 ## Game-connected validation
 
@@ -80,8 +84,8 @@ powershell -ExecutionPolicy Bypass -File scripts/build-mod.ps1 -Configuration Re
 powershell -ExecutionPolicy Bypass -File scripts/package-release.ps1 -Configuration Release
 ```
 
-- The default [build script](../../../scripts/build-mod.ps1#L110) builds the C# DLL, packs the PCK, and copies the mod artifacts into the game's `mods/` directory. Close the game before using this mode so a loaded DLL is not locked.
-- `-SkipInstall` still builds and stages the DLL/PCK but skips copying into the game directory ([install gate](../../../scripts/build-mod.ps1#L145)). Use it for packaging or a build-only check.
+- The default [build script](../../../scripts/build-mod.ps1#L122) builds the C# DLL, packs the PCK, and copies the mod artifacts into the game's `mods/` directory. Close the game before using this mode so a loaded DLL is not locked. The install location is resolved rather than assumed — argument, then `STS2_GAME_ROOT`, then detection through Steam's own library list — and a location that does not exist is refused up front ([install target check](../../../scripts/build-mod.ps1#L90)), so a typo can no longer create an empty directory tree.
+- `-SkipInstall` still builds and stages the DLL/PCK but skips copying into the game directory ([install gate](../../../scripts/build-mod.ps1#L156)). Use it for packaging or a build-only check, and note that it is the one mode that does not need the game to be installed.
 - The [package script](../../../scripts/package-release.ps1#L130) calls `build-mod.ps1 -SkipInstall`, copies the release contents, creates a zip, and validates both the release directory and zip ([artifact checks](../../../scripts/package-release.ps1#L183)).
 
 ## Release metadata

@@ -1,20 +1,30 @@
 param(
-    [string]$ExePath = "C:/Program Files (x86)/Steam/steamapps/common/Slay the Spire 2/SlayTheSpire2.exe",
+    [string]$ExePath = "",
     [int]$Attempts = 40,
     [int]$DelaySeconds = 2,
     [string]$Command = "help",
     [string]$ProjectRoot = "",
+    [int]$ApiPort = 8080,
     [switch]$EnableDebugActions
 )
 
 $ErrorActionPreference = "Stop"
 $scriptRoot = $PSScriptRoot
+. (Join-Path $scriptRoot "lib-sts2-paths.ps1")
 
 if ([string]::IsNullOrWhiteSpace($ProjectRoot)) {
     $ProjectRoot = (Resolve-Path (Join-Path $scriptRoot "..")).Path
 }
 else {
     $ProjectRoot = (Resolve-Path $ProjectRoot).Path
+}
+
+if ([string]::IsNullOrWhiteSpace($ExePath)) {
+    $ExePath = Resolve-Sts2Executable
+}
+
+if (-not (Test-Path -LiteralPath $ExePath)) {
+    throw "Slay the Spire 2 executable not found at '$ExePath'. Pass -ExePath or set STS2_EXE_PATH."
 }
 
 function Wait-ForHealth {
@@ -28,7 +38,7 @@ function Wait-ForHealth {
         Start-Sleep -Seconds $SleepSeconds
 
         try {
-            $response = Invoke-WebRequest -Uri "http://127.0.0.1:8080/health" -UseBasicParsing -TimeoutSec 2
+            $response = Invoke-WebRequest -Uri "http://127.0.0.1:$ApiPort/health" -UseBasicParsing -TimeoutSec 2
             if ($response.StatusCode -eq 200) {
                 return
             }
@@ -55,7 +65,7 @@ function Invoke-ActionJson {
     } | ConvertTo-Json
 
     try {
-        $response = Invoke-WebRequest -Method Post -Uri "http://127.0.0.1:8080/action" -ContentType "application/json" -Body $body -UseBasicParsing -TimeoutSec 5
+        $response = Invoke-WebRequest -Method Post -Uri "http://127.0.0.1:$ApiPort/action" -ContentType "application/json" -Body $body -UseBasicParsing -TimeoutSec 5
         return $response.Content | ConvertFrom-Json
     } catch {
         if ($_.ErrorDetails -and $_.ErrorDetails.Message) {
@@ -88,7 +98,7 @@ function Invoke-McpDebugSmoke {
         Push-Location $mcpRoot
 
         try {
-            $pythonScript = @'
+            $pythonScript = @"
 import asyncio
 import json
 import os
@@ -99,7 +109,7 @@ from sts2_mcp.server import create_server
 
 class CapturingClient(Sts2Client):
     def __init__(self) -> None:
-        super().__init__(base_url="http://127.0.0.1:8080")
+        super().__init__(base_url="http://127.0.0.1:$ApiPort")
         self.last_request = None
 
     def _request(self, method, path, payload=None, *, is_action=False):
@@ -135,7 +145,7 @@ async def main() -> None:
 
 
 asyncio.run(main())
-'@
+"@
 
             return ($pythonScript | uv run python - | ConvertFrom-Json)
         }
@@ -177,6 +187,10 @@ if ($EnableDebugActions) {
 } else {
     $startInfo.EnvironmentVariables.Remove("STS2_ENABLE_DEBUG_ACTIONS")
 }
+
+# The mod reads its port from this variable, so a run on another port has to tell it: the script
+# polls $ApiPort, and a game left on the default would only fail ~80s later on /health.
+$startInfo.EnvironmentVariables["STS2_API_PORT"] = [string]$ApiPort
 
 $proc = [System.Diagnostics.Process]::Start($startInfo)
 

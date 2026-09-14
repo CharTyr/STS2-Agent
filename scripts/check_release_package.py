@@ -32,6 +32,8 @@ SOURCE_FILES = (
     "mcp_server/pyproject.toml",
     "mcp_server/uv.lock",
     "scripts/build-mod.ps1",
+    # build-mod.ps1 dot-sources this on its first line, so a checkout without it cannot build.
+    "scripts/lib-sts2-paths.ps1",
     "scripts/package-release.ps1",
     "scripts/start-mcp-stdio.ps1",
     "scripts/start-mcp-network.ps1",

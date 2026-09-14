@@ -1,6 +1,6 @@
 param(
-    [string]$ExePath = "C:/Program Files (x86)/Steam/steamapps/common/Slay the Spire 2/SlayTheSpire2.exe",
-    [string]$AppManifestPath = "C:/Program Files (x86)/Steam/steamapps/appmanifest_2868840.acf",
+    [string]$ExePath = "",
+    [string]$AppManifestPath = "",
     [string]$AppId = "",
     [int]$Attempts = 180,
     [int]$DelaySeconds = 1,
@@ -10,6 +10,7 @@ param(
 )
 
 $ErrorActionPreference = "Stop"
+. (Join-Path $PSScriptRoot "lib-sts2-paths.ps1")
 
 function Resolve-AppId {
     param(
@@ -26,6 +27,12 @@ function Resolve-AppId {
     }
 
     $manifest = Get-Content -Path $ManifestPath -Raw
+    if ($null -eq $manifest) {
+        # Steam rewrites the manifest in place, so an empty read is possible. A regex built on a
+        # null input throws, which would replace the message below with an argument error.
+        $manifest = ""
+    }
+
     $match = [regex]::Match($manifest, '"appid"\s+"(?<appid>\d+)"')
 
     if (-not $match.Success) {
@@ -62,6 +69,18 @@ function Invoke-JsonEndpoint {
         StatusCode = 200
         Json = Invoke-RestMethod -Uri $Uri -TimeoutSec 2
     }
+}
+
+if ([string]::IsNullOrWhiteSpace($ExePath)) {
+    $ExePath = Resolve-Sts2Executable
+}
+
+if (-not (Test-Path -LiteralPath $ExePath)) {
+    throw "Slay the Spire 2 executable not found at '$ExePath'. Pass -ExePath or set STS2_EXE_PATH."
+}
+
+if ([string]::IsNullOrWhiteSpace($AppManifestPath)) {
+    $AppManifestPath = Resolve-Sts2AppManifest
 }
 
 $gameRoot = Split-Path -Path $ExePath -Parent

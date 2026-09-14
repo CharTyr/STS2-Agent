@@ -26,13 +26,18 @@
 - `STS2_GAME_ROOT`: 游戏根目录（可选）
 - `STS2_DATA_DIR`: 游戏数据目录 `data_sts2_*`（可选）
 - `STS2_MODS_DIR`: 游戏 `mods` 目录（可选）
+- `STS2_EXE_PATH`: 游戏可执行文件 `SlayTheSpire2.exe`（可选）
+- `STS2_APP_MANIFEST`: Steam 的 `appmanifest_2868840.acf`（可选）
+- `STS2_STEAM_EXE`: Steam 客户端 `steam.exe`（可选，只有 `-ViaSteam` 启动才需要）
 - `GODOT_BIN`: Godot 可执行文件路径（可选）
 - `STS2_API_BASE_URL`: Mod API 地址，默认 `http://127.0.0.1:8080`
 
 说明：
 
 - `STS2AIAgent.csproj` 支持从 `STS2_DATA_DIR` 读取数据目录。
-- 未设置变量时，脚本会自动探测常见安装路径。
+- `scripts/` 下需要游戏的脚本（`build-mod.ps1`、`start-game-session.ps1`、`test-mod-load.ps1`、`test-debug-console-gating.ps1`）按同一顺序解析路径：**命令行参数 → 上面的环境变量 → 探测 → 约定俗成的 Steam 默认路径**，Windows 侧的共享实现在 `scripts/lib-sts2-paths.ps1`。
+- Windows 侧的探测会读注册表里的 Steam 安装位置，再顺着 `libraryfolders.vdf` 枚举所有 Steam 库，所以换盘符、第二个库里装的游戏都能自动找到；只有探测全部落空时才回落到约定俗成的默认安装路径。
+- POSIX 侧（`scripts/lib-sts2.sh`）与上面共用 `STS2_GAME_ROOT`、`STS2_EXE_PATH`、`STS2_APP_MANIFEST` 三个变量名（`STS2_STEAM_EXE` 只有 Windows 侧读），但探测只覆盖 macOS 的两个约定路径、也没有库列表枚举；macOS 上换库要把路径显式给出来，没有默认回落。
 
 ## 3. Build And Deploy Mod
 

@@ -36,7 +36,7 @@ C:/Program Files (x86)/Steam/steamapps/common/Slay the Spire 2
 
 ### 项目内脚本行为
 
-- `scripts/test-mod-load.ps1` 现在会优先从 `C:/Program Files (x86)/Steam/steamapps/appmanifest_2868840.acf` 解析 AppID。
+- `scripts/test-mod-load.ps1` 解析 AppID 时按「`-AppManifestPath` 参数 → `STS2_APP_MANIFEST` 环境变量 → 探测本机 Steam 库 → 默认安装路径」的顺序找 `appmanifest_2868840.acf`，所以游戏装在别的盘也能直接用。
 - 如果游戏目录缺少 `steam_appid.txt`，脚本会自动创建，避免短启动测试直接失败。
 - 如果日志里出现 `user has not yet seen the mods warning`，说明这是 Steam 存档路径上的首次 Mod 加载确认；脚本会给出提示，这时再运行一次即可。
 
