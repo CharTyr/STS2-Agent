@@ -915,3 +915,87 @@ Finished the ten goals, merged seven PRs (#116-#122), then republished v0.12.3 a
 - Paste steam-workshop/description.zh-CN.txt in the Workshop web editor; ModUploader cannot set a language
 - The Steam-networked save path still has no live evidence; the 2026-09-14 pass covered the local-connection path only
 - GameStateService.cs keeps seven empty catches of its own kind; read them one by one before extending the no-wordless-catch rule
+
+
+## Session 25: POSIX path parity: one resolver, 29 offline assertions, and the defects that exposed
+
+**Date**: 2026-09-14
+**Task**: POSIX path parity: one resolver, 29 offline assertions, and the defects that exposed
+**Branch**: `main`
+
+### Summary
+
+Turned the macOS/Linux path handling from three unexercised copies into one resolver with an offline test that CI enforces, fixed five real defects on the way, and merged both PRs.
+
+### Main Changes
+
+这轮把 macOS/Linux 的路径解析从「三个副本、从未运行过」变成「一份实现 + 29 条离线断言 + CI 闸门」，
+并在过程中修掉 5 个真缺陷（其中 1 个是我自己引入的）。
+
+起因是用户问「macOS 那两条默认路径是不是早期一个兼容 PR 带来的」。查证结果比预期散：
+
+- `build-mod.sh:91-92` 来自 PR #3（cherry-pick 了从未合并的 PR #2，外部贡献者 Vinluo），
+  该文件从落地至今只被一个 commit 碰过
+- `lib-sts2.sh:34-35` 来自 PR #9（外部贡献者 WILLOSCAR，分支上提交署名是占位符 test@example.com）
+- 同一串路径还有第三份，在进程匹配器的内嵌 Python heredoc 里
+- 引入后路径文本一字未改，CI 只有 windows-latest，全仓找不到任何 macOS 实机证据
+
+关键技术发现：整条 macOS 探测链可以在 Windows 的 Git Bash 上真跑（把 $HOME 指向夹具即可）。
+这是「可验证」的落脚点 —— 不需要 Mac、不需要游戏、不需要联网。
+
+实现：
+
+- `scripts/lib-sts2-paths.sh`（新）：唯一知道安装布局的地方。解析顺序与 Windows 侧一致
+  （参数 → 环境变量 → 探测 → 约定默认），探测覆盖三个约定 Steam 根 + 每个安装自己的
+  `libraryfolders.vdf`（所以第二个库里装的游戏也能找到）。不起游戏、不开 socket。
+- `scripts/test-lib-sts2-paths.sh`（新）：29 条断言。precedence、vdf 读取（转义反斜杠/尾斜杠/
+  空文件/垃圾内容）、.app bundle 布局、data 与 mods 目录、进程匹配候选路径。
+- `sh-syntax` 闸门：所有 .sh 过 bash -n，并执行上面那个测试。CI 与 preflight 都跑。
+  选 bash 时优先 Git Bash —— Windows 上裸 `bash` 常是 WSL 启动器，能在 PATH 上解析成功、
+  却读不了 C:/ 路径。
+- `mcp_server/tests/test_posix_script_portability.py`（新）：Windows 侧守卫的镜像。安装布局
+  只允许出现在解析器里；每个脚本必须 source 共享库而不是「提到」它；四条破坏性用例。
+
+修掉的缺陷：
+
+- 空/截断的 libraryfolders.vdf 直接进正则 → 抛异常，四个脚本全废
+- 进程匹配器的 pgrep 回退在「已知 exe 路径」时没有 pattern → 无 ps 的机器上静默返回空
+  （这一条是我自己在重构中引入的，被复核探子抓到）
+- build-mod.sh 继承一个不存在的安装路径：下游全部退化成空串，报错说的是 data 目录
+- 候选列表不去重，同一库经两个根列两次
+- sts2_infer_game_root_from_executable 目录不存在时返回空串却算成功
+
+两个独立探子复核第一版，除了上面的 pgrep 回归，还找出若干「注释声称 A、代码实际 B」的地方
+（已逐条改）以及两处弱断言（已加强并补破坏性用例）。变异验证真的改坏源码再还原，五条变异
+全部被对应层抓到。
+
+合并时的一个坑：本地实测证明 squash 合 #127 会让 #128 在两个文档文件上冲突（两个 PR 改了同
+一段），而 rebase/merge 零冲突。于是 #127 用 rebase 合、#128 本地 rebase 到新 main（git 自动
+跳过已应用的提交）后改 base 再合，main 保持线性历史。
+
+
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `5d53d50` | (see git log) |
+| `ca0a9cd` | (see git log) |
+
+### Testing
+
+- [OK] bash scripts/test-lib-sts2-paths.sh: all 29 checks passed (needs no game, Steam or network)
+- [OK] check_verification_gates.py: nine gates pass, including the new sh-syntax which parses 19 scripts and runs that test
+- [OK] MCP suite 198 tests OK; C# suite 386 PASS; preflight exits 0
+- [OK] Mutation check against the real sources: five mutations, each turned the responsible guard red
+- [OK] Merge rehearsal: squash of #127 conflicts with #128 in two files, rebase/merge is conflict-free
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- Real-machine macOS acceptance is still the only way to promote path resolution to proven script usability
+- lib-sts2.sh still hardcodes python3 in six places; on macOS and Linux that name is the one that exists, so it was left alone
+- CONTRIBUTING.md still describes feature -> dev -> main while dev is 196 commits behind main and the last three PRs went straight to main

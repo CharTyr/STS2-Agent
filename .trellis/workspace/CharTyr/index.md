@@ -8,7 +8,7 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-1.md`
-- **Total Sessions**: 24
+- **Total Sessions**: 25
 - **Last Active**: 2026-09-14
 <!-- @@@/auto:current-status -->
 
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-1.md` | ~917 | Active |
+| `journal-1.md` | ~1001 | Active |
 <!-- @@@/auto:active-documents -->
 
 ---
@@ -29,6 +29,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 25 | 2026-09-14 | POSIX path parity: one resolver, 29 offline assertions, and the defects that exposed | `5d53d50`, `ca0a9cd` | `main` |
 | 24 | 2026-09-14 | 2026-09-14 v0.12.3 third build: live-pass fix plus the ten-goal sweep | `6a4b3a0`, `3d2eefb`, `74d03c9`, `052dac8`, `68bbd0a`, `c2630a8`, `0d42f94` | `main` |
 | 23 | 2026-09-14 | v0.12.3 同号重发：把 #111 的两个联机界面入口补进已发布版本 | `6a327d3`, `0f60ec4`, `541734f` | `codex/record-recut-details` |
 | 22 | 2026-09-13 | 审阅并合并 sachi4clover 的联机界面 PR #111（续档按钮 + 自动选角开关） | `6a327d3`, `044d117` | `main` |
