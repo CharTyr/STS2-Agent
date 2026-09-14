@@ -1,13 +1,14 @@
 param(
     [string]$Configuration = "Debug",
     [string]$ProjectRoot = "",
-    [string]$GameRoot = "C:/Program Files (x86)/Steam/steamapps/common/Slay the Spire 2",
+    [string]$GameRoot = "",
     [string]$GodotExe = "",
     [switch]$SkipInstall
 )
 
 $ErrorActionPreference = "Stop"
 $scriptRoot = $PSScriptRoot
+. (Join-Path $scriptRoot "lib-sts2-paths.ps1")
 
 function Resolve-ProjectRoot {
     param([string]$InputRoot)
@@ -79,6 +80,16 @@ function Resolve-GodotExe {
 }
 
 $ProjectRoot = Resolve-ProjectRoot -InputRoot $ProjectRoot
+
+if ([string]::IsNullOrWhiteSpace($GameRoot)) {
+    $GameRoot = Resolve-Sts2GameRoot
+}
+
+# The install target is checked instead of created on the way past: a wrong path used to be absorbed
+# by New-Item -Force below, which built a tree of empty directories and copied the mod into it.
+if (-not $SkipInstall -and -not (Test-Path -LiteralPath $GameRoot)) {
+    throw "Slay the Spire 2 install not found at '$GameRoot'. Pass -GameRoot, set STS2_GAME_ROOT, or use -SkipInstall to build without installing."
+}
 
 if ([string]::IsNullOrWhiteSpace($GodotExe)) {
     $GodotExe = Resolve-GodotExe -ExplicitPath $GodotExe
