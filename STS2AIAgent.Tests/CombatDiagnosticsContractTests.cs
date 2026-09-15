@@ -37,8 +37,10 @@ internal static class CombatDiagnosticsContractTests
         var agentCombatBody = WithoutWhitespace(MethodBody(rawStateSource, "BuildAgentCombatPayload"));
 
         Assert.Contains("GetOpenModal()", stateSource, StringComparison.Ordinal);
-        Assert.Contains("ActionExecutor.CurrentlyRunningAction", stateSource, StringComparison.Ordinal);
-        Assert.Contains("ActionQueueSet.GetReadyAction()", stateSource, StringComparison.Ordinal);
+        // The gate reads the queue only inside a fight, and both members are null-guarded there, so the
+        // payload cannot fail on the main menu (where RunManager has no executor at all).
+        Assert.Contains("ActionExecutor?.CurrentlyRunningAction", stateSource, StringComparison.Ordinal);
+        Assert.Contains("ActionQueueSet?.GetReadyAction()", stateSource, StringComparison.Ordinal);
         Assert.Contains("\"modal_open\"", stateSource, StringComparison.Ordinal);
         Assert.Contains("\"game_action_running\"", stateSource, StringComparison.Ordinal);
         Assert.Contains("\"game_action_queued\"", stateSource, StringComparison.Ordinal);
