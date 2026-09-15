@@ -4,6 +4,11 @@
 
 ## v0.12.4 - 2026-09-15
 
+> Distributed to the Steam Workshop on 2026-09-15 (item 3796486050, public, `file_size` 1233413 equal to the local
+> content bytes, `time_updated` 19:38:00). The in-tree version, the uploaded Workshop content and the build all come
+> from commit `4b8e7c5`; no GitHub tag or release exists for this version yet. Upload record:
+> [workshop-upload-v0.12.4_2026-09-15.md](https://github.com/CharTyr/STS2-Agent/blob/main/history/workshop-upload-v0.12.4_2026-09-15.md).
+
 ### Fixed
 
 - Settings changes keep the same session budget guard: new token/request caps apply immediately while
