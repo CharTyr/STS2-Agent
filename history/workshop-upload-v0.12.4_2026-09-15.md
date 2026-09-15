@@ -74,6 +74,7 @@
 修复内容：在第二次的基础上，把动作队列的读取限制在战斗内
 （`combatState != null && CombatManager.Instance.IsInProgress`），主菜单 `/state` 恢复 200；其余与第二次相同。
 
+- 源码：`dev` 合并提交 `d0c6fbd`（PR #136 把两条修复一起合入）；上传的二进制由与该树相同的源码构建。
 | 字段 | 值 | 与本地对照 |
 | --- | --- | --- |
 | `result` | 1 | 物品存在 |
