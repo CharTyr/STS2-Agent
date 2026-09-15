@@ -674,5 +674,29 @@ class PosixStartGameSessionContractTests(unittest.TestCase):
             self.assertEqual(settings_path.read_bytes(), original)
 
 
+class WindowsSeedScopingTests(unittest.TestCase):
+    """The PowerShell seeder must decide is_enabled inside the agent's own entry.
+
+    A fixed character window around the agent id reaches the next entry: the Steam template's
+    list continues with DamageMeter, whose is_enabled is false, so a windowed check called a
+    perfectly good clone unready, sent it to the repair path, and made the repair flip the wrong
+    mod before the caller fell back to the sparse settings file the game will not accept.
+    """
+
+    def ps_script(self) -> str:
+        return (SCRIPTS / "start-game-session.ps1").read_text(encoding="utf-8")
+
+    def test_agent_entry_is_scoped_to_its_own_object(self) -> None:
+        script = self.ps_script()
+        self.assertIn("function Get-IsolatedAgentEntryBody", script)
+        # definition plus the readiness probe and the repair
+        self.assertGreaterEqual(script.count("Get-IsolatedAgentEntryBody"), 3)
+
+    def test_no_fixed_character_window_decides_is_enabled(self) -> None:
+        script = self.ps_script()
+        self.assertNotIn(r'\"id\"\s*:\s*\"STS2AIAgent\"[\s\S]{0,200}', script)
+        self.assertNotIn(r'\"is_enabled\"\s*:\s*false[\s\S]{0,200}', script)
+
+
 if __name__ == "__main__":
     unittest.main()

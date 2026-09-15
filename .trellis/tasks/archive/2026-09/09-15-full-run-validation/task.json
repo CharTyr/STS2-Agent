@@ -1,0 +1,29 @@
+{
+  "id": "09-15-full-run-validation",
+  "name": "09-15-full-run-validation",
+  "title": "Full live validation of v0.12.4 and the seeding regression it exposed",
+  "description": "Fresh-clientId first boot, a full co-op run with in-combat invariants, and the PowerShell seeder window bug that stopped the mod from loading.",
+  "status": "completed",
+  "dev_type": null,
+  "scope": null,
+  "package": null,
+  "priority": "P1",
+  "creator": "CharTyr",
+  "assignee": "CharTyr",
+  "createdAt": "2026-09-15",
+  "completedAt": "2026-09-15",
+  "branch": null,
+  "base_branch": "dev",
+  "worktree_path": null,
+  "commit": null,
+  "pr_url": null,
+  "subtasks": [],
+  "children": [],
+  "parent": "09-14-five-priority-goals",
+  "relatedFiles": [
+    "scripts/start-game-session.ps1",
+    "mcp_server/tests/test_posix_script_portability.py"
+  ],
+  "notes": "Live evidence, the fixed seeding regression and one unfixed one-frame state inconsistency are in evidence.md",
+  "meta": {}
+}
