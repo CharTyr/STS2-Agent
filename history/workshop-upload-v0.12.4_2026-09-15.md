@@ -1,6 +1,6 @@
 # v0.12.4 Workshop 上传记录（2026-09-15）
 
-> 历史快照：本文件是只更新工坊那一次（v0.12.4，未打 tag）的记录，不代表当前状态；当前状态见 [PRODUCT_PLAN_CURRENT.md](../PRODUCT_PLAN_CURRENT.md)。
+> 历史快照：本文件记录 v0.12.4 的工坊首发与同日两次同号重发（2026-09-15 / 16），以及随后于 2026-09-16 补上的 GitHub tag 与 Release；当前状态见 [PRODUCT_PLAN_CURRENT.md](../PRODUCT_PLAN_CURRENT.md)。
 
 上传时间：2026-09-15 19:37:54 → 19:38:00（本地）。物品：`3796486050`（STS2 AI Agent），更新既有物品，未新建。
 
@@ -99,4 +99,4 @@
   均为 `failure_count=0`（`checked_actions=3`）。
 - 离线：C# 测试 408 PASS / 0 FAIL（含 `GameStateCombatGateContractTests` 三条），`mcp_server` 222 测试 OK，
   `scripts/check_verification_gates.py` 九道 gate 全绿，`scripts/check_release_metadata.py` 五处版本号一致。
-- GitHub 侧：仍未打 tag、未建 Release。
+- GitHub 侧：2026-09-16 补上 `v0.12.4` tag 与 Release；资产 `sts2-ai-agent-v0.12.4-windows.zip` 557906 字节、SHA256 `AD970DB1204A0DC37602A2751935E87E5B87FC502B21B00E47B2699C4A98EC57`，tag 指向发布用的 `dev → main` 合并提交。
