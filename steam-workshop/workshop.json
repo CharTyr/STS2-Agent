@@ -1,7 +1,7 @@
 {
   "title": "STS2 AI Agent",
   "visibility": "public",
-  "changeNote": "v0.12.3 (re-cut again, same version number): fix a Continue button that stayed grey while the AI Teammate tab was open - once the launch dialog closed the button kept waiting for you to leave the tab and come back, even though the action was ready. Kept from the previous build: Continue the saved co-op run and Disable automatic character pick on the AI Teammate tab, and an Invite button that takes the same route as the API, so with no verified model it still invites and the teammate waits to be taken over instead of refusing the click. The rest of this build is diagnostics: paths that used to fail silently now say so in the log, so a stuck action can be told apart from an action that had nothing to do.",
+  "changeNote": "v0.12.4: invite and resume now answer immediately while the teammate window is still starting, so a slow launch reads as pending instead of a client timeout, and a second click can no longer report a success that never happened - the invite and resume actions also stop being offered while a launch is in flight. The AI teammate's launch state is reported by /health instead of only as display text. Session accounting now counts every model call that was actually sent, so the request cap in the play tab matches what was spent.",
   "tags": [
     "Tools & APIs",
     "Utility",
