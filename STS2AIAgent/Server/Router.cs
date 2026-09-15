@@ -326,6 +326,7 @@ internal static class Router
     internal static object BuildHealthData()
     {
         var mcp = NativeMcpServer.Runtime;
+        var dualLaunchOutcome = AgentRuntime.Instance.DualLaunchOutcome;
         return new
         {
             service = ServiceName,
@@ -347,6 +348,9 @@ internal static class Router
             companion_process_exited = LocalDualInstanceLauncher.CompanionProcessExited,
             companion = BuildCompanionSessionData(),
             dual_status = AgentRuntime.Instance.DualStatus,
+            dual_launch_outcome = dualLaunchOutcome == DualLaunchOutcome.Idle
+                ? null
+                : dualLaunchOutcome.ToString(),
             team_control_status = AgentRuntime.Instance.TeamControlStatus
         };
     }

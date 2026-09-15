@@ -296,7 +296,7 @@ internal sealed class AgentLoop
             {
                 throw;
             }
-            catch (Exception ex) when (ex is LlmException or HttpRequestException or TaskCanceledException)
+            catch (Exception ex)
             {
                 return new AgentTurnResult
                 {

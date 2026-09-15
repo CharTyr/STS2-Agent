@@ -1226,6 +1226,20 @@ internal sealed class AgentOverlayHost
         }
     }
 
+    /// <summary>Invite is offered only where invite_ai_teammate would be advertised, including DualLaunching and PlayRunning.</summary>
+    private static bool CanOfferInvite()
+    {
+        if (InstanceRole.IsCompanion) return false;
+        try
+        {
+            return GameStateService.CanInviteAiTeammate(ActiveScreenContext.Instance.GetCurrentScreen());
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
     /// <summary>
     /// The screen behind the button changes with no runtime event the overlay could subscribe to, so
     /// availability is re-read on the panel tick as well as whenever the tab comes into view. Without
@@ -1234,6 +1248,12 @@ internal sealed class AgentOverlayHost
     /// </summary>
     private void RefreshContinueAvailability()
     {
+        if (_dualLaunchButton != null)
+        {
+            var canInvite = CanOfferInvite();
+            _dualLaunchButton.Disabled = AgentRuntime.Instance.DualLaunching || !canInvite;
+        }
+
         if (_dualContinueButton == null)
         {
             return;
@@ -1381,14 +1401,14 @@ internal sealed class AgentOverlayHost
 
         if (_dualLaunchButton != null)
         {
-            _dualLaunchButton.Disabled = AgentRuntime.Instance.DualLaunching || InstanceRole.IsCompanion;
             // Only the button that started the launch reads as busy; the other one just greys out.
             _dualLaunchButton.Text = AgentRuntime.Instance.DualLaunching && !_continueLaunching ? Loc.T("正在邀请队友…") : Loc.T("邀请 AI 队友");
         }
 
+        RefreshContinueAvailability();
+
         if (_dualContinueButton != null)
         {
-            RefreshContinueAvailability();
             _dualContinueButton.Text = AgentRuntime.Instance.DualLaunching && _continueLaunching ? Loc.T("正在读档接回队友…") : Loc.T("继续上次联机对局");
         }
 

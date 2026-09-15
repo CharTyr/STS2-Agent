@@ -10,7 +10,11 @@ internal enum DualLaunchOutcome
     /// <summary>No launch has been attempted yet; an untouched value is never a success.</summary>
     Idle,
 
-    /// <summary>A concurrent launch is already in flight; this attempt is neither success nor failure.</summary>
+    /// <summary>
+    /// The gate owner claimed the launch and it has not finished yet, so the attempt is neither
+    /// success nor failure. Only the claiming thread writes this value; a caller that failed to
+    /// take the gate owns no attempt and must report pending from the null launch entry instead.
+    /// </summary>
     InProgress,
 
     /// <summary>The teammate instance was launched and its API connection was confirmed.</summary>
@@ -40,7 +44,7 @@ internal static class DualLaunchOutcomePolicy
             or DualLaunchOutcome.Canceled;
     }
 
-    /// <summary>A concurrent launch is still in flight; the caller must not report completion.</summary>
+    /// <summary>The launch that owns the gate has not finished; the caller must not report completion.</summary>
     public static bool IsInProgress(DualLaunchOutcome outcome)
     {
         return outcome == DualLaunchOutcome.InProgress;

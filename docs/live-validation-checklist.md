@@ -139,8 +139,10 @@ at all** — nothing configured and nothing verified. Script: `build/validation-
 evidence `takeover-evidence.jsonl` (both gitignored). Every step below is one run of that script; the
 invite was a real call, not a resumed session.
 
-- **`invite_ai_teammate` launches with nothing verified.** It returned 200 `completed` on the first call,
-  the second process came up as `role=companion` on `18081`, and its message no longer promises auto-play:
+- **`invite_ai_teammate` launches with nothing verified.** The first call returns 200 `pending`
+  (`LaunchDualInstanceAsync` is `Task.Run` and does not wait). Watch host `GET /health` for
+  `companion_process_alive`, `dual_status`, then the `companion` block until the second process
+  is up; on 2026-09-13 that was `role=companion` on `18081`, and its message no longer promises auto-play:
   「第二实例已就绪…本机已创建 4 人大厅，请选角色后 Ready 开局。你打自己的角色；AI 会自动加入并点开局，
   然后停在原地等待外部接管，不会自己出牌。」 The model gate is what the route switch drops, not the launch.
 - **The host discovers the companion API.** `GET /health` on the host carried
@@ -380,8 +382,17 @@ mod-side action.
 
 ## [coop] Two instances
 
-- `invite_ai_teammate` returns `completed` on a real dual launch, 409 `invite_failed` when the client
-  is on English, and `pending` for a concurrent invite.
+- `invite_ai_teammate` returns 200 `pending` on the first call of a real dual launch
+  (`LaunchDualInstanceAsync` is `Task.Run`, so the action does not wait for the second process).
+  Do not expect `completed` on that HTTP response; watch host `GET /health` for
+  `companion_process_alive`, `dual_status`, and the `companion` discovery block
+  (`api_host`/`api_port`/`process_id`). A concurrent invite while that launch is in flight also
+  returns `pending` (`DualLaunchOutcome.InProgress`) and must not be read as `completed` or
+  `invite_failed`. A repeat invite after the teammate window is already running likewise returns
+  `pending` on the HTTP call; the background attempt then fails and `dual_status` shows the
+  already-running refusal. `409 invite_failed` only appears if that launch task has already
+  finished in failure when the handler inspects it. Client language is not a success/failure
+  signal; classification is on `DualLaunchOutcome`, not localized `dual_status` text.
   Verified 2026-09-13 on an isolated offline host: the invite started the second instance itself (API on
   host port + 1), and with the default settings the teammate auto-selected and readied on its own.
   With `CompanionAutoSelectCharacter = false` the teammate reached `CHARACTER_SELECT` and stayed there for

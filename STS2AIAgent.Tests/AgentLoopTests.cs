@@ -717,6 +717,87 @@ internal static class AgentLoopTests
         Assert.Equal(0, bridge.ActCalls);
     }
 
+    public static async Task PlayOnce_UnexpectedExceptionAfterTheRequestStillCountsIt()
+    {
+        var factory = new ScriptedClientFactory(Array.Empty<LlmCompletion>())
+        {
+            CompleteThrows = new JsonException("truncated stream")
+        };
+        var loop = new AgentLoop(new FakeBridge(), factory, AgentSettings.CreateDefault);
+
+        var result = await loop.PlayOnceAsync(CancellationToken.None);
+
+        Assert.NotNull(result.Error);
+        Assert.Contains("truncated stream", result.Error);
+        Assert.True(result.RequestsSpent >= 1, "a request that already left the client must still be counted");
+        Assert.False(result.RequiresConfiguration);
+
+        factory = new ScriptedClientFactory(Array.Empty<LlmCompletion>())
+        {
+            CompleteThrows = new LlmException("HTTP 401", 401)
+        };
+        result = await new AgentLoop(new FakeBridge(), factory, AgentSettings.CreateDefault)
+            .PlayOnceAsync(CancellationToken.None);
+        Assert.True(result.RequiresConfiguration);
+        Assert.True(result.RequestsSpent >= 1);
+
+        factory = new ScriptedClientFactory(Array.Empty<LlmCompletion>())
+        {
+            CompleteThrows = new LlmException("HTTP 500", 500)
+        };
+        result = await new AgentLoop(new FakeBridge(), factory, AgentSettings.CreateDefault)
+            .PlayOnceAsync(CancellationToken.None);
+        Assert.False(result.RequiresConfiguration);
+        Assert.True(result.RequestsSpent >= 1);
+    }
+
+    public static async Task Chat_ErrorPathRecordsTheSpentRequestOnTheBudgetGuard()
+    {
+        var guard = new SessionBudgetGuard(maxRequests: 8);
+        Assert.Equal(0, guard.RequestCount);
+        var factory = new ScriptedClientFactory(Array.Empty<LlmCompletion>())
+        {
+            CompleteThrows = new LlmException("provider 500", 500)
+        };
+        var loop = new AgentLoop(
+            new FakeBridge(),
+            factory,
+            AgentSettings.CreateDefault,
+            budgetGuard: () => guard);
+
+        var result = await loop.ChatAsync(
+            "hello",
+            Array.Empty<ChatTurn>(),
+            new ChatOptions
+            {
+                TeammateConversation = true,
+                AttachState = true,
+                AttachScreenshot = false
+            },
+            CancellationToken.None);
+
+        Assert.NotNull(result.Error);
+        Assert.True(result.RequestsSpent >= 1, "a failed chat turn still spent a request");
+        Assert.False(result.RequiresConfiguration);
+        Assert.Null(guard.Observe(result));
+        Assert.Equal(result.RequestsSpent, guard.RequestCount);
+
+        var source = AgentSourceFixture.Read("STS2AIAgent/Agent/AgentRuntime.cs");
+        var reply = AgentSourceFixture.MethodBody(source, "ReplyToTeammateAsync");
+        var replyAccount = reply.IndexOf("AccountTurn(result, recordBudget: true)", StringComparison.Ordinal);
+        var replyError = reply.IndexOf("if (result.Error != null)", StringComparison.Ordinal);
+        Assert.True(
+            replyAccount >= 0 && replyError >= 0 && replyAccount < replyError,
+            "ReplyToTeammateAsync must record the turn before throwing on result.Error.");
+
+        var proactive = AgentSourceFixture.MethodBody(source, "TryProactiveChatAsync");
+        var proactiveAccount = proactive.IndexOf("AccountTurn(result, recordBudget: true)", StringComparison.Ordinal);
+        var proactiveError = proactive.IndexOf("if (result.Error != null)", StringComparison.Ordinal);
+        Assert.True(
+            proactiveAccount >= 0 && proactiveError >= 0 && proactiveAccount < proactiveError,
+            "TryProactiveChatAsync must record the turn before returning on result.Error.");
+    }
+
     public static void McpRoot_DetectsValidLayout()
     {
         var root = Path.Combine(Path.GetTempPath(), "sts2-agent-tests", Guid.NewGuid().ToString("N"), "mcp_server");
@@ -854,9 +935,14 @@ internal static class AgentLoopTests
 
         public bool CancelCompletions { get; set; }
         public Action? OnRequest { get; set; }
+        public Exception? CompleteThrows { get; set; }
 
         public ILlmClient Create(LlmEndpoint endpoint) =>
-            new ScriptedClient(_completions, request => { LastRequest = request; OnRequest?.Invoke(); }, CancelCompletions);
+            new ScriptedClient(
+                _completions,
+                request => { LastRequest = request; OnRequest?.Invoke(); },
+                CancelCompletions,
+                CompleteThrows);
     }
 
     private sealed class ScriptedClient : ILlmClient
@@ -864,12 +950,18 @@ internal static class AgentLoopTests
         private readonly Queue<LlmCompletion> _completions;
         private readonly Action<LlmRequest> _onRequest;
         private readonly bool _cancelCompletions;
+        private readonly Exception? _completeThrows;
 
-        public ScriptedClient(Queue<LlmCompletion> completions, Action<LlmRequest> onRequest, bool cancelCompletions)
+        public ScriptedClient(
+            Queue<LlmCompletion> completions,
+            Action<LlmRequest> onRequest,
+            bool cancelCompletions,
+            Exception? completeThrows)
         {
             _completions = completions;
             _onRequest = onRequest;
             _cancelCompletions = cancelCompletions;
+            _completeThrows = completeThrows;
         }
 
         public Task<LlmCompletion> CompleteAsync(LlmRequest request, CancellationToken cancellationToken)
@@ -880,6 +972,10 @@ internal static class AgentLoopTests
             }
 
             _onRequest(request);
+            if (_completeThrows != null)
+            {
+                throw _completeThrows;
+            }
             if (_completions.Count == 0)
             {
                 return Task.FromResult(new LlmCompletion { Content = "done" });

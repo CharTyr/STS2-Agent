@@ -76,28 +76,79 @@ internal static class DualLaunchOutcomeTests
         Assert.False(
             handler.Contains("message.Contains(", StringComparison.Ordinal),
             "The invite handler must not classify by matching the localized message.");
+        Assert.Contains(
+            "TryLaunchDualInstanceAsync(settings, companionAutoPlay, CancellationToken.None)",
+            handler,
+            StringComparison.Ordinal);
+        Assert.Contains("if (launch == null || !launch.IsCompleted)", handler, StringComparison.Ordinal);
+        Assert.Contains("status = \"pending\"", handler, StringComparison.Ordinal);
+        Assert.Contains("ObserveBackgroundTask(launch, \"invite_ai_teammate\")", handler, StringComparison.Ordinal);
     }
 
     /// <summary>
-    /// Contract: every branch of the launch core records an outcome, and the gate-contention
-    /// branch records <c>InProgress</c> instead of leaving the previous attempt's result behind.
+    /// Contract: every branch of the launch core records an outcome, the gate owner advertises
+    /// <c>InProgress</c> when it claims the gate, and only the owner ever writes that field.
     /// </summary>
     public static void EveryLaunchBranchRecordsAnOutcome()
     {
         var source = AgentSourceFixture.Read("STS2AIAgent/Agent/AgentRuntime.cs");
         var core = AgentSourceFixture.MethodBody(source, "LaunchDualInstanceCoreAsync");
+        var begin = AgentSourceFixture.MethodBody(source, "TryBeginDualLaunch");
 
         var writes = core.Split("_dualLaunchOutcome =", StringSplitOptions.None).Length - 1;
         Assert.True(
-            writes >= 6,
+            writes >= 5,
             $"Every launch branch must record an outcome; found {writes} assignments.");
 
         Assert.Contains("DualLaunchOutcome _dualLaunchOutcome = DualLaunchOutcome.Idle", source);
-        Assert.Contains("_dualLaunchOutcome = DualLaunchOutcome.InProgress", core);
+        Assert.Contains("_dualLaunchOutcome = DualLaunchOutcome.InProgress", begin);
         Assert.Contains("_dualLaunchOutcome = DualLaunchOutcome.Rejected", core);
         Assert.Contains("_dualLaunchOutcome = DualLaunchOutcome.Canceled", core);
         Assert.Contains("_dualLaunchOutcome = DualLaunchOutcome.Failed", core);
         Assert.Contains("DualLaunchOutcome.Succeeded", core);
+        Assert.Contains("_dualLaunching = false", core);
+        Assert.Contains("_dualLaunchGate.Release()", core);
+        Assert.False(
+            core.Contains("_dualLaunchOutcome = DualLaunchOutcome.InProgress", StringComparison.Ordinal),
+            "Core must not rewrite a finished launch as InProgress when it no longer owns the gate.");
+    }
+
+    /// <summary>
+    /// The launch entry used to queue work first and mark DualLaunching only after the background
+    /// core acquired the gate, so a pending observer still read the idle DualStatus. The claiming
+    /// thread must advertise InProgress before Task.Run, and the entry must hand a caller that
+    /// cannot take the gate an explicit null -- never someone else's terminal outcome.
+    /// </summary>
+    public static void PublicEntryAdvertisesInProgressBeforeTaskRun()
+    {
+        var source = AgentSourceFixture.Read("STS2AIAgent/Agent/AgentRuntime.cs");
+        foreach (var declaration in new[]
+        {
+            "public Task? TryLaunchDualInstanceAsync(AgentSettings settings, bool companionAutoPlay, CancellationToken cancellationToken)",
+            "public Task? TryContinueDualInstanceAsync(AgentSettings settings, bool companionAutoPlay, CancellationToken cancellationToken)"
+        })
+        {
+            var body = AgentSourceFixture.DeclarationBody(source, declaration);
+            var begin = body.IndexOf("TryBeginDualLaunch()", StringComparison.Ordinal);
+            var taskRun = body.IndexOf("Task.Run", StringComparison.Ordinal);
+            Assert.True(
+                begin >= 0 && taskRun >= 0 && begin < taskRun,
+                declaration + " must mark DualLaunching before returning the background Task.");
+            Assert.Contains("if (!TryBeginDualLaunch())", body);
+            Assert.Contains("return null;", body);
+        }
+
+        var beginBody = AgentSourceFixture.MethodBody(source, "TryBeginDualLaunch");
+        var wait = beginBody.IndexOf("_dualLaunchGate.Wait(0)", StringComparison.Ordinal);
+        var retFalse = beginBody.IndexOf("return false;", StringComparison.Ordinal);
+        var launching = beginBody.IndexOf("_dualLaunching = true", StringComparison.Ordinal);
+        var inProgress = beginBody.IndexOf("DualLaunchOutcome.InProgress", StringComparison.Ordinal);
+        Assert.True(wait >= 0 && retFalse >= 0 && launching >= 0 && inProgress >= 0);
+        Assert.True(
+            wait < retFalse && retFalse < launching && launching < inProgress,
+            "A failed gate claim must return before writing DualLaunching or InProgress.");
+        Assert.Contains("正在检查组队条件", beginBody);
+        Assert.Contains("RaiseChanged()", beginBody);
     }
 
     /// <summary>
