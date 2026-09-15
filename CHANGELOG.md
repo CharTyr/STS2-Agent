@@ -2,6 +2,61 @@
 
 > Release attribution is recorded against tags or release commits. Post-tag maintenance is listed separately; current validation limits are maintained in [PRODUCT_PLAN_CURRENT.md](https://github.com/CharTyr/STS2-Agent/blob/main/PRODUCT_PLAN_CURRENT.md).
 
+## v0.12.4 - 2026-09-15
+
+> Distributed to the Steam Workshop on 2026-09-15 (item 3796486050, public, `file_size` 1233413 equal to the local
+> content bytes, `time_updated` 19:38:00), from commit `4b8e7c5`. The GitHub tag and release for `v0.12.4` followed
+> on 2026-09-16, pointing at the `dev -> main` merge that carries both re-cuts below;
+> the release asset is 557906 bytes, SHA256 `AD970DB1204A0DC37602A2751935E87E5B87FC502B21B00E47B2699C4A98EC57`.
+>
+> **The same version number was rebuilt twice.** The first build could contradict itself inside one
+> `/state` response: its in-combat action list and its readiness report were evaluated
+> separately around a 200 ms stability sampler, so a snapshot that answered `ready` could omit
+> `play_card` and `end_turn`. That fix was re-cut into `0.12.4` instead of spending a version
+> number on it, and a second re-cut followed the same day because the first one read the action queue
+> outside combat, where `RunManager` has no executor: every `/state` request failed on the main
+> menu. Three builds answer to `0.12.4` and only size or hash tells them apart - `file_size`
+> 1233413 / `time_updated` 2026-09-15 19:38:00 for the first, 1236997 / 2026-09-15 23:34:57 for the
+> second (superseded within the hour), and 1236997 / 2026-09-16 00:42:43 for the current one, whose DLL
+> is SHA256 `0A8FBA67...`. The second and third share a byte count, so use the hash to tell those two
+> apart. Every upload is recorded with its own numbers in
+> [workshop-upload-v0.12.4_2026-09-15.md](https://github.com/CharTyr/STS2-Agent/blob/main/history/workshop-upload-v0.12.4_2026-09-15.md).
+
+### Fixed
+
+- **One `/state` response can no longer contradict itself about combat actions.** `available_actions`,
+  `combat.action_readiness` and the potion flags of one payload now come from a single combat-action
+  gate, because the gate advances a shared 200 ms stability sampler: evaluating it per action let a response
+  straddle that window and say "not yet" in the action list while readiness - built later from the same live
+  state - said `ready`. A snapshot that reports `ready` therefore always carries `play_card`/`end_turn`,
+  the read-only twin probe is gone, and the gate now also honours `modal_open` and `combat_paused`,
+  which only the readiness report used to check.
+- Settings changes keep the same session budget guard: new token/request caps apply immediately while
+  accumulated usage stays, and in-game actions that spend no model request no longer count against the
+  request cap.
+- `invite_ai_teammate` and `continue_ai_teammate` answer `pending` while a dual-instance launch is still
+  running instead of holding the HTTP request open, so a slow launch no longer reads as a client timeout.
+- `select_character` is no longer advertised once the local player is already ready; `unready` is the
+  action for that state.
+- `wait_until_actionable` polls `/state` when the event stream cannot be opened instead of retrying a dead
+  stream until the deadline.
+- Isolated `--clientId` launches seed a complete `settings.save` (cloned from the Steam profile, or patched
+  in place when `mod_settings` is null) so the mod loads on the first start.
+- A second `invite_ai_teammate` or `continue_ai_teammate` that arrives while a launch already owns the gate
+  answers 200 `pending` instead of classifying on an outcome it does not own: a concurrent invite could report
+  the previous attempt's `completed`, and a concurrent continue answered a misleading "no saved run" 409.
+- `state-invariants` requires `play_card` only where the executor advertises a ready combat action surface, so a
+  snapshot taken while a played card is still resolving is no longer reported as a missing action.
+- POSIX `start-game-session.sh` seeds the isolated profile under `%APPDATA%\SlayTheSpire2` on Git Bash and
+  MSYS instead of an XDG path the Windows game never reads, honours `STS2_SLAY_USER_ROOT` on both platforms,
+  and warns when the resolved save root does not exist.
+
+### Added
+
+- `scripts/start-game-session.ps1` / `.sh` forward extra game arguments, seed the isolated profile for
+  `--clientId`, and export `STS2_API_PORT`; the POSIX `build-mod.sh` gains `--skip-install` and stages
+  `mod_id.json`.
+
 ## v0.12.3 - 2026-09-13 (republished twice on 2026-09-14)
 
 > Distributed to the Steam Workshop on 2026-09-13, with the GitHub release following the same day: the

@@ -194,7 +194,7 @@ class Sts2Client:
                     f"Timed out while reading the STS2 mod event stream at {self._base_url}. "
                     "The client will retry until the overall wait deadline expires."
                 ),
-                details={"reason": str(exc), "path": "/events/stream"},
+                details={"reason": str(exc), "path": "/events/stream", "kind": "read_timeout"},
                 retryable=True,
             ) from exc
 
@@ -221,6 +221,11 @@ class Sts2Client:
                 return None
             except Sts2ApiError as exc:
                 if exc.code != "connection_error":
+                    raise
+                # Idle read/deadline timeouts on an opened stream stay inside this wait.
+                # Transport failures never opened the stream and must surface immediately
+                # so wait_until_actionable can poll /state.
+                if (exc.details or {}).get("kind") != "read_timeout":
                     raise
                 if time.monotonic() >= deadline:
                     return None

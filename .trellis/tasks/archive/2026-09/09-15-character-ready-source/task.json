@@ -1,0 +1,31 @@
+{
+  "id": "character-ready-source",
+  "name": "character-ready-source",
+  "title": "Gate select_character after local ready in source",
+  "description": "CanSelectCharacter must not advertise select_character when the local player is ready. Align the multiplayer_lobby invariant.",
+  "status": "completed",
+  "dev_type": null,
+  "scope": null,
+  "package": null,
+  "priority": "P2",
+  "creator": "CharTyr",
+  "assignee": "CharTyr",
+  "createdAt": "2026-09-15",
+  "completedAt": "2026-09-15",
+  "branch": null,
+  "base_branch": "main",
+  "worktree_path": null,
+  "commit": null,
+  "pr_url": null,
+  "subtasks": [],
+  "children": [],
+  "parent": "09-14-five-priority-goals",
+  "relatedFiles": [
+    "STS2AIAgent/Game/GameStateService.cs",
+    "STS2AIAgent.Tests/CharacterSelectReadyContractTests.cs",
+    "STS2AIAgent.Tests/TestRunner.cs",
+    "scripts/run_sts2_validation.py"
+  ],
+  "notes": "CanSelectCharacter closes on CanUnready / local isReady before button and lobby probes. multiplayer_lobby invariant skips select_character when ready.",
+  "meta": {}
+}

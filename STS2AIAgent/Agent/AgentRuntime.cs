@@ -50,7 +50,7 @@ internal sealed class AgentRuntime
     private string _lastAction = "-";
     private string _lastThought = "-";
     private string? _dualStatus;
-    private DualLaunchOutcome _dualLaunchOutcome = DualLaunchOutcome.Idle;
+    private volatile DualLaunchOutcome _dualLaunchOutcome = DualLaunchOutcome.Idle;
     private string? _mcpStatus;
     private LlmUsage _sessionUsage = LlmUsage.Empty;
     private int _sessionRequests;
@@ -326,13 +326,20 @@ internal sealed class AgentRuntime
                 TeammateConversation = true,
                 AttachState = true
             }, cancellationToken);
-            if (result.Error != null) throw new InvalidOperationException(result.Error);
+            AccountTurn(result, recordBudget: true);
+            if (result.Error != null)
+            {
+                RaiseChanged();
+                throw new InvalidOperationException(result.Error);
+            }
             if (string.IsNullOrWhiteSpace(result.AssistantText))
+            {
+                RaiseChanged();
                 throw new InvalidOperationException(Loc.T("队友未返回文本回复；建议已记录供后续决策参考。"));
+            }
             var reply = result.AssistantText;
             if (reply.Length > TeamConversation.MaxMessageLength) reply = reply[..TeamConversation.MaxMessageLength];
             _teamConversation.Add("assistant", reply);
-            AccountTurn(result, recordBudget: true);
             RaiseChanged();
             return reply;
         }
@@ -397,7 +404,7 @@ internal sealed class AgentRuntime
         lock (_gate)
         {
             _settings = settings;
-            _budgetGuard = settings.CreateBudgetGuard(_sessionUsage.TotalTokens, _sessionRequests);
+            _budgetGuard.UpdateLimits(settings.MaxSessionTokens, settings.MaxSessionRequests);
         }
 
         ApplyMcpFromSettings();
@@ -470,7 +477,7 @@ internal sealed class AgentRuntime
         lock (_gate)
         {
             _settings = loaded;
-            _budgetGuard = loaded.CreateBudgetGuard(_sessionUsage.TotalTokens, _sessionRequests);
+            _budgetGuard.UpdateLimits(loaded.MaxSessionTokens, loaded.MaxSessionRequests);
         }
 
         RaiseChanged();
@@ -566,11 +573,28 @@ internal sealed class AgentRuntime
     /// <paramref name="companionAutoPlay"/> false is the external-takeover route: the teammate is
     /// launched for an outside agent, so no play model is required and it comes up paused.
     /// </summary>
-    public Task LaunchDualInstanceAsync(AgentSettings settings, bool companionAutoPlay, CancellationToken cancellationToken)
+    /// <summary>
+    /// Starts a launch, or returns null when another attempt already owns the gate. A caller that
+    /// cannot claim the gate owns no attempt and must not read <see cref="DualLaunchOutcome"/>:
+    /// the winning thread writes that field after claiming, and a failed claim is not ordered after
+    /// that write, so a loser can still observe Idle or the previous attempt's terminal outcome.
+    /// Null is the only reliable "this attempt is not mine" signal.
+    /// </summary>
+    public Task? TryLaunchDualInstanceAsync(AgentSettings settings, bool companionAutoPlay, CancellationToken cancellationToken)
     {
+        if (!TryBeginDualLaunch())
+        {
+            return null;
+        }
+
         return Task.Run(
             () => LaunchDualInstanceCoreAsync(settings, cancellationToken, continueRun: false, companionAutoPlay),
-            cancellationToken);
+            CancellationToken.None);
+    }
+
+    public Task LaunchDualInstanceAsync(AgentSettings settings, bool companionAutoPlay, CancellationToken cancellationToken)
+    {
+        return TryLaunchDualInstanceAsync(settings, companionAutoPlay, cancellationToken) ?? Task.CompletedTask;
     }
 
     public Task ContinueDualInstanceAsync(AgentSettings settings, CancellationToken cancellationToken)
@@ -578,11 +602,25 @@ internal sealed class AgentRuntime
         return ContinueDualInstanceAsync(settings, companionAutoPlay: true, cancellationToken);
     }
 
-    public Task ContinueDualInstanceAsync(AgentSettings settings, bool companionAutoPlay, CancellationToken cancellationToken)
+    /// <summary>
+    /// Continue-route twin of <see cref="TryLaunchDualInstanceAsync"/>: null means the gate is
+    /// already owned, so the caller reports pending instead of classifying someone else's outcome.
+    /// </summary>
+    public Task? TryContinueDualInstanceAsync(AgentSettings settings, bool companionAutoPlay, CancellationToken cancellationToken)
     {
+        if (!TryBeginDualLaunch())
+        {
+            return null;
+        }
+
         return Task.Run(
             () => LaunchDualInstanceCoreAsync(settings, cancellationToken, continueRun: true, companionAutoPlay),
-            cancellationToken);
+            CancellationToken.None);
+    }
+
+    public Task ContinueDualInstanceAsync(AgentSettings settings, bool companionAutoPlay, CancellationToken cancellationToken)
+    {
+        return TryContinueDualInstanceAsync(settings, companionAutoPlay, cancellationToken) ?? Task.CompletedTask;
     }
 
     public void ClearChat()
@@ -774,24 +812,33 @@ internal sealed class AgentRuntime
         }
     }
 
+    /// <summary>
+    /// Marks the launch in-progress on the calling thread so a pending observer does not still
+    /// read DualLaunching=false or the idle DualStatus. A concurrent caller that cannot take the
+    /// gate leaves a terminal outcome untouched: rewriting Succeeded/Failed/Rejected/Canceled as
+    /// InProgress would make a finished attempt look like it never completed.
+    /// </summary>
+    private bool TryBeginDualLaunch()
+    {
+        if (!_dualLaunchGate.Wait(0))
+        {
+            return false;
+        }
+
+        _dualLaunching = true;
+        _dualStatus = Loc.T("正在检查组队条件…");
+        _dualLaunchOutcome = DualLaunchOutcome.InProgress;
+        RaiseChanged();
+        return true;
+    }
+
     private async Task LaunchDualInstanceCoreAsync(
         AgentSettings settings,
         CancellationToken cancellationToken,
         bool continueRun,
         bool companionAutoPlay)
     {
-        if (!await _dualLaunchGate.WaitAsync(0, cancellationToken))
-        {
-            // A concurrent launch already holds the gate. This attempt neither started nor
-            // failed, and the previous outcome must not be reported as this attempt's result.
-            _dualLaunchOutcome = DualLaunchOutcome.InProgress;
-            return;
-        }
-
-        _dualLaunching = true;
         var previousConnection = LocalDualInstanceLauncher.Connection;
-        _dualStatus = Loc.T("正在检查组队条件…");
-        RaiseChanged();
         try
         {
             if (_teamMessagePending || _teamControlPending)
@@ -1029,7 +1076,8 @@ internal sealed class AgentRuntime
             Acted = acted,
             ActResultJson = json,
             Reasoning = reasoning,
-            ToolRounds = 0
+            ToolRounds = 0,
+            RequestsSpent = 0
         };
     }
 
@@ -1077,16 +1125,16 @@ internal sealed class AgentRuntime
                 {
                     AttachState = true,
                     ReadOnly = true,
-                    ExtraSystemInstruction = ProactiveChatTones.BuildSystemInstruction(tone)
-                },
-                cancellationToken);
+                ExtraSystemInstruction = ProactiveChatTones.BuildSystemInstruction(tone)
+            },
+            cancellationToken);
+            AccountTurn(result, recordBudget: true);
             if (result.Error != null)
             {
                 NoteEvent("proactive chat: " + DiagnosticExport.Redact(result.Error));
                 return;
             }
 
-            AccountTurn(result, recordBudget: true);
             if (!string.IsNullOrWhiteSpace(result.AssistantText))
             {
                 AddHistory("assistant", result.AssistantText);

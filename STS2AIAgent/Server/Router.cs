@@ -15,7 +15,7 @@ internal static class Router
 {
     private const string ServiceName = "sts2-ai-agent";
     private const string ProtocolVersion = "2026-03-11-v1";
-    internal const string ModVersion = "0.12.3";
+    internal const string ModVersion = "0.12.4";
     private const string LogPrefix = "[STS2AIAgent.Router]";
 
     private static long _requestCounter;
@@ -326,6 +326,7 @@ internal static class Router
     internal static object BuildHealthData()
     {
         var mcp = NativeMcpServer.Runtime;
+        var dualLaunchOutcome = AgentRuntime.Instance.DualLaunchOutcome;
         return new
         {
             service = ServiceName,
@@ -347,6 +348,9 @@ internal static class Router
             companion_process_exited = LocalDualInstanceLauncher.CompanionProcessExited,
             companion = BuildCompanionSessionData(),
             dual_status = AgentRuntime.Instance.DualStatus,
+            dual_launch_outcome = dualLaunchOutcome == DualLaunchOutcome.Idle
+                ? null
+                : dualLaunchOutcome.ToString(),
             team_control_status = AgentRuntime.Instance.TeamControlStatus
         };
     }

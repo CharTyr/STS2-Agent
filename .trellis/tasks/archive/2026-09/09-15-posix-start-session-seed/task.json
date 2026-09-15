@@ -1,0 +1,29 @@
+{
+  "id": "posix-start-session-seed",
+  "name": "posix-start-session-seed",
+  "title": "POSIX start-game-session seed and extra args",
+  "description": "start-game-session.sh should seed isolated clientId settings and forward extra launch args, matching the PowerShell contract.",
+  "status": "completed",
+  "dev_type": null,
+  "scope": null,
+  "package": null,
+  "priority": "P2",
+  "creator": "CharTyr",
+  "assignee": "CharTyr",
+  "createdAt": "2026-09-15",
+  "completedAt": "2026-09-15",
+  "branch": "codex/five-priority-reliability",
+  "base_branch": "main",
+  "worktree_path": null,
+  "commit": null,
+  "pr_url": null,
+  "subtasks": [],
+  "children": [],
+  "parent": "09-14-five-priority-goals",
+  "relatedFiles": [
+    "scripts/start-game-session.sh",
+    "mcp_server/tests/test_posix_script_portability.py"
+  ],
+  "notes": "",
+  "meta": {}
+}

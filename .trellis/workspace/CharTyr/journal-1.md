@@ -1056,3 +1056,22 @@ Fast-forwarded dev from 196 commits behind main, added the resync rule to CONTRI
 
 - Next release goes dev -> main; after that merge, fast-forward dev back (the new rule)
 - dev has no branch protection while main has a PR requirement; worth deciding whether dev should require the contracts check too
+
+### Correction (same day)
+
+那条规则的第一版是错的，而且**在写下的几分钟内就被现实驳回**。第一版说的是拿 ref 直接快进：
+`git push origin origin/main:dev`。这只在 `dev` 是 `main` 的严格祖先时成立 —— 一旦有 feature PR
+合进 dev（那正是 dev 存在的意义），dev 就有了 main 没有的提交，推送被拒：
+
+```text
+! [rejected]        origin/main -> dev (non-fast-forward)
+```
+
+修正后（PR #130）改成陈述不变式「dev 包含 main 的全部提交」配一个永远可用的操作：
+`git fetch origin; git checkout dev; git merge origin/main; git push origin dev`。用 merge 不用
+rebase，所以已发布的历史只会被追加；而当 dev 恰好没有独有提交时，这个 merge 自己会退化成快进，
+也就是旧措辞描述的那个场景 —— 现在是被覆盖而不是被假设。
+
+教训：规则要连原因一起写，而且**写完要真跑一次**。我这轮两个错都是同一类 —— 先写结论、后验证，
+结果第一个错（squash 会让叠放的 PR 冲突）是在动手前实测发现的，第二个错（这条规则）是在应用时
+被 git 拒绝发现的。两次都是「跑一次」救的，不是「想一遍」救的。

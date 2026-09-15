@@ -226,7 +226,7 @@ internal static class ScreenResolutionContractTests
         // The branch returns ahead of the combat actions, so nothing is advertised while a menu is up.
         var guardInNames = names.IndexOf(actionGuard, StringComparison.Ordinal);
         var endTurnIndex = names.IndexOf(
-            "if(CanEndTurn(currentScreen,combatState,requireButtonReady:false))",
+            "if(CanEndTurn(currentScreen,combatState,requireButtonReady:false,combatActionGate:combatActionGate))",
             StringComparison.Ordinal);
         Assert.True(
             endTurnIndex >= 0 && guardInNames >= 0 && guardInNames < endTurnIndex,

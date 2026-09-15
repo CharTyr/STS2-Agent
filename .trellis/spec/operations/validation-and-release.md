@@ -60,6 +60,8 @@ Some scripts are deliberately not wired into any automated check. They are not d
 
 Three defects came out of the same sweep and are fixed with the resolver: `build-mod.ps1` used to let `New-Item -Force` absorb a wrong install path by creating an empty tree ([L90](../../../scripts/build-mod.ps1#L90)), a truncated `libraryfolders.vdf` used to throw inside the resolver rather than fall through, and `test-debug-console-gating.ps1` takes an `-ApiPort` that it now hands to the game it launches through `STS2_API_PORT`, the variable the mod actually reads ([HttpServer.cs](../../../STS2AIAgent/Server/HttpServer.cs#L175)).
 
+The isolated-profile seeder has its own root, one level below those game paths: `start-game-session` writes `SlayTheSpire2/default/<clientId>/settings.save`, and on Windows the game only reads it from `%APPDATA%\SlayTheSpire2`. PowerShell already defaulted there; the POSIX script answered with the XDG location on every non-macOS system, so under Git Bash or MSYS it seeded a directory the game never opens while still reporting a successful seed. It now resolves `STS2_SLAY_USER_ROOT`, then `%APPDATA%` when `uname` reports MINGW/MSYS/CYGWIN, then the platform default, and warns when the resolved root does not exist.
+
 ## Game-connected validation
 
 The shared validation entry point registers these subcommands in [build_parser](../../../scripts/run_sts2_validation.py#L2728):
@@ -77,6 +79,8 @@ uv run --project mcp_server python scripts/run_sts2_validation.py mcp-tool-profi
 ```
 
 Other lifecycle, combat, multiplayer, and debug-gating subcommands are also registered by the same parser. Some suites can start or stop processes or mutate a game run; inspect the selected suite before execution and report those prerequisites and effects.
+
+`state-invariants` demands an action exactly where the executor would accept it. Its combat branch requires `play_card` only while `combat.action_readiness.can_use_combat_actions` is true, which is the executor's whole readiness chain, not merely `player_action_phase`: a snapshot taken while a played card is still resolving reports the local player's turn with playable cards in hand, so gating on the turn predicate alone reports a missing action that was never expected. Payloads without the readiness field fall back to `player_action_phase`, and payloads with neither keep the old demand.
 
 ## Build and package behavior
 

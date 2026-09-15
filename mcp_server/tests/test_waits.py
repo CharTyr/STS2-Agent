@@ -5,6 +5,8 @@ import socket
 import unittest
 from unittest.mock import patch
 
+from urllib.error import URLError
+
 from sts2_mcp.client import Sts2ApiError, Sts2Client
 from sts2_mcp.server import create_server
 
@@ -253,6 +255,93 @@ class WaitBehaviorTests(unittest.TestCase):
         self.assertEqual(result["source"], "polling")
         self.assertEqual(result["state"]["available_actions"], ["proceed"])
         self.assertTrue(result["actionable"])
+
+    def test_wait_until_actionable_real_client_polls_when_event_stream_refused(self) -> None:
+        clock = FakeClock()
+        client = Sts2Client(base_url="http://127.0.0.1:8080")
+        states = [
+            {"available_actions": []},
+            {"available_actions": []},
+            {"available_actions": ["proceed"]},
+        ]
+        state_calls = 0
+        event_opens = 0
+
+        def fake_urlopen(http_request, timeout=None):
+            nonlocal event_opens
+            url = getattr(http_request, "full_url", str(http_request))
+            if "/events/stream" in url:
+                event_opens += 1
+                # A refused transport must surface on the first attempt. The fake clock only
+                # advances when the server sleeps, so a regression that retried in place would
+                # spin forever instead of failing; the cap turns that hang into an assertion.
+                if event_opens > 5:
+                    raise AssertionError("a refused event stream must not be reopened in a retry loop")
+                raise URLError(ConnectionRefusedError("refused"))
+            raise AssertionError(f"unexpected urlopen: {url}")
+
+        def fake_get_state():
+            nonlocal state_calls
+            state_calls += 1
+            if len(states) > 1:
+                return states.pop(0)
+            return states[0]
+
+        def fake_get_available_actions():
+            return [{"name": "proceed"}]
+
+        client.get_state = fake_get_state  # type: ignore[method-assign]
+        client.get_available_actions = fake_get_available_actions  # type: ignore[method-assign]
+        server = create_server(client=client)
+        tool = asyncio.run(server.get_tool("wait_until_actionable"))
+
+        with patch("sts2_mcp.client.request.urlopen", new=fake_urlopen):
+            with patch("sts2_mcp.client.time.monotonic", new=clock.monotonic):
+                with patch("sts2_mcp.server.time.monotonic", new=clock.monotonic):
+                    with patch("sts2_mcp.server.time.sleep", new=clock.sleep):
+                        result = tool.fn(timeout_seconds=2.0)
+
+        self.assertEqual(result["source"], "polling")
+        self.assertTrue(result["actionable"])
+        self.assertFalse(result["matched"])
+        self.assertEqual(result["event_stream_error"]["code"], "connection_error")
+        self.assertGreaterEqual(state_calls, 2)
+        self.assertEqual(event_opens, 1)
+        self.assertLess(clock.now, 2.0)
+
+    def test_wait_for_event_keeps_read_timeouts_inside_the_wait(self) -> None:
+        """The other half of the contract: an idle stream is retried, never raised out.
+
+        wait_until_actionable must only fall back to polling on transport failures. A read
+        timeout means the stream opened fine and simply had nothing to say, so it stays inside
+        wait_for_event until the deadline instead of surfacing as connection_error.
+        """
+
+        client = Sts2Client(base_url="http://127.0.0.1:8080")
+        opens = 0
+        ticks = [0.0]
+
+        def fake_monotonic() -> float:
+            # Advancing on every read keeps the loop bounded without real waiting: the deadline
+            # arithmetic below is deterministic, and any raise-on-read-timeout regression is
+            # caught by the assertRaises-free call itself.
+            ticks[0] += 1.0
+            return ticks[0]
+
+        def fake_urlopen(http_request, timeout=None):
+            nonlocal opens
+            url = getattr(http_request, "full_url", str(http_request))
+            if "/events/stream" in url:
+                opens += 1
+                raise TimeoutError("idle")
+            raise AssertionError(f"unexpected urlopen: {url}")
+
+        with patch("sts2_mcp.client.request.urlopen", new=fake_urlopen):
+            with patch("sts2_mcp.client.time.monotonic", new=fake_monotonic):
+                result = client.wait_for_event(timeout=5.0)
+
+        self.assertIsNone(result)
+        self.assertEqual(opens, 2)
 
 
 if __name__ == "__main__":

@@ -63,7 +63,7 @@
 | `not_host` | 409 | 在 `companion` 实例上调用了只属于主窗口的 `POST /teammate/control` | 否 |
 | `teammate_control_failed` | 409 | `POST /teammate/control` 未能确认队友的开始 / 暂停：还没有组队、队友进程已退出、上一条控制未完成，或队友没有确认。失败原因在 `error.message` 里 | 是 |
 | `invite_failed` | 409 | 邀请 AI 队友失败（主菜单状态或配置不满足） | 是 |
-| `continue_failed` | 409 | 读档开房流程启动后失败（读档界面没打开，或本地直连端口 33771 仍被上一局占用，重启游戏后可重试）；前置条件不满足（不在主菜单、没有联机存档、模型未验证）仍返回 `invalid_action` | 是 |
+| `continue_failed` | 409 | 读档开房流程**已经启动后**失败（读档界面没打开，或本地直连端口 33771 仍被上一局占用，重启游戏后可重试）。前置条件不满足（不是主机主菜单、当前是队友实例、本机角色正在自动游玩、没有联机存档）仍返回 `invalid_action`；双开已经进行中时改为返回 200 `pending`，与并发 `invite_ai_teammate` 一致。游玩模型未验证**不会**挡 `continue_ai_teammate`：与邀请相同，`requireVerifiedPlayModel` 跟 `ReadyToInvite` 走两条路线，未验证时照常拉起队友、只是不自动游玩 | 是 |
 | `invalid_action`（`continue_ai_teammate` 的 NetId 前置检查） | 409 | 读档**之前**的只读比对不通过：本机 NetId 不在联机存档 `players[].net_id` 里（游戏会拒绝读档，并把这局存档改名成 `*.VAL.corrupt` 挪走且不还原），或本次要拉起的 AI 队友 NetId 不在存档里（加入会被 `NotInSaveGame` 拒绝）。详情带 `save_player_net_ids`，以及 `local_player_id` 或 `companion_client_id` | 否 |
 | `invalid_action`（`run_console_command` 的命令抛异常） | 409 | 命令被游戏接受后实现抛异常（例如 `bestiary` 会 `NullReferenceException`）。消息为 `Console command failed: <异常类型>: <异常消息>`，详情带 `command` | 否 |
 | `collection_not_found` | 404 | `GET /data/{collection}` 的集合名不存在 | 否 |
@@ -143,7 +143,7 @@
   "request_id": "req_20260911_121549_7955_4",
   "data": {
     "service": "sts2-ai-agent",
-    "mod_version": "0.12.3",
+    "mod_version": "0.12.4",
     "protocol_version": "2026-03-11-v1",
     "game_version": "v0.111.0",
     "status": "ready",
@@ -161,6 +161,7 @@
     "companion_process_exited": false,
     "companion": null,
     "dual_status": "尚未启动双开。",
+    "dual_launch_outcome": null,
     "team_control_status": "队友控制尚未连接。"
   }
 }
@@ -184,6 +185,7 @@
 | `companion_process_alive` / `companion_process_exited` | boolean | AI 队友进程是否在运行 / 是否已退出 |
 | `companion` | object\|null | 仅主窗口、且本次组队的队友进程仍在运行时存在（队友退出后回到 `null`）。`api_host` / `api_port` / `process_id` 是队友实例的 HTTP API，用来直接对队友的 `GET /state` 与 `POST /action` 编程；`auto_play` 说明这次组队走的是 AI 自走（`true`）还是外部接管（`false`）。队友会话令牌**不会**出现在任何响应里 |
 | `dual_status` / `team_control_status` | string | 双开与队友控制的人类可读状态 |
+| `dual_launch_outcome` | string\|null | 双开结构化结果，给外部客户端做成败分类，**不要**用 `dual_status` 文本。尚未尝试过为 `null`；否则为 `InProgress` / `Succeeded` / `Failed` / `Rejected` / `Canceled`（`DualLaunchOutcome` 枚举名，不含 `Idle`） |
 
 ### `stop_kind` 取值
 
@@ -1105,8 +1107,8 @@ compact 里的位置与 `/state` 不同，但同名同源、同为新增键；`/
 - `confirm_modal` — 确认阻塞弹窗
 - `dismiss_modal` — 关闭阻塞弹窗
 - `return_to_main_menu` — 返回主菜单
-- `invite_ai_teammate` — 邀请 AI 队友（拉起第二个游戏实例）。游玩模型已验证时队友自动打；未配置或未验证时队友照常拉起、照常进图，但停在原地等外部接管，见「两条组队路线」。
-- `continue_ai_teammate` — 继续上次的联机存档并重新拉起 AI 队友（仅主机主菜单且存在联机存档时出现在 `available_actions`；读档流程失败返回 `continue_failed`）。读档前会只读比对存档 `players[].net_id` 与本机 NetId（离线／`-fastmp` 主机即启动参数 `--clientId`，未传为 1）和队友 NetId（主机 id + 1）：任一不匹配返回**不可重试**的 `invalid_action`，以免触发游戏把该存档改名成 `*.VAL.corrupt` 的破坏性读档。
+- `invite_ai_teammate` — 邀请 AI 队友（拉起第二个游戏实例）。游玩模型已验证时队友自动打；未配置或未验证时队友照常拉起、照常进图，但停在原地等外部接管，见「两条组队路线」。首次调用若双开尚未完成，会立刻返回 200、`status: "pending"`、`stable: false`，不必等队友窗口连上；`message` 是「进行中」语义，不要把可能过期的 `dual_status` 当做成败。双开进行中不再出现在 `available_actions`。
+- `continue_ai_teammate` — 继续上次的联机存档并重新拉起 AI 队友。出现在 `available_actions` 的条件：主机（非 companion）主菜单、当前角色没有自动游玩、没有正在进行的双开、且磁盘上有联机存档。读档流程已经启动后失败返回 `continue_failed`。读档前会只读比对存档 `players[].net_id` 与本机 NetId（离线／`-fastmp` 主机即启动参数 `--clientId`，未传为 1）和队友 NetId（主机 id + 1）：任一不匹配返回**不可重试**的 `invalid_action`，以免触发游戏把该存档改名成 `*.VAL.corrupt` 的破坏性读档。首次调用同样可能立刻返回 200 `pending`。
 <!-- END ACTION CONTRACT -->
 
 这两个动作共用同一档拆分：游玩模型未验证时，`invite_ai_teammate` 与 `continue_ai_teammate` 照常拉起队友，只是队友不自动开始游玩，等你接管。两条路线各自的前置要求见「两条组队路线」。
