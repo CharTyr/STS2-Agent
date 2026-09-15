@@ -11,9 +11,11 @@ data_dir_input="${STS2_DATA_DIR:-}"
 mods_dir_input="${STS2_MODS_DIR:-}"
 godot_exe_input="${GODOT_BIN:-}"
 
+skip_install=0
+
 usage() {
   cat <<'EOF'
-Usage: build-mod.sh [--configuration Debug|Release] [--repo-root PATH] [--game-root PATH] [--data-dir PATH] [--mods-dir PATH] [--godot-exe PATH]
+Usage: build-mod.sh [--configuration Debug|Release] [--repo-root PATH] [--game-root PATH] [--data-dir PATH] [--mods-dir PATH] [--godot-exe PATH] [--skip-install]
 EOF
 }
 
@@ -42,6 +44,10 @@ while [[ $# -gt 0 ]]; do
     --godot-exe)
       godot_exe_input="${2:-}"
       shift 2
+      ;;
+    --skip-install)
+      skip_install=1
+      shift
       ;;
     -h|--help)
       usage
@@ -115,9 +121,12 @@ mod_project="$repo_root/STS2AIAgent/STS2AIAgent.csproj"
 build_output_dir="$repo_root/STS2AIAgent/bin/$configuration/net9.0"
 staging_dir="$repo_root/build/mods/$mod_name"
 manifest_source="$repo_root/STS2AIAgent/mod_manifest.json"
+mod_id_source="$repo_root/STS2AIAgent/mod_id.json"
 dll_source="$build_output_dir/$mod_name.dll"
 pck_output="$staging_dir/$mod_name.pck"
 dll_target="$staging_dir/$mod_name.dll"
+mod_id_target="$staging_dir/mod_id.json"
+legacy_manifest_target="$staging_dir/$mod_name.json"
 builder_project_dir="$repo_root/tools/pck_builder"
 builder_script="$builder_project_dir/build_pck.gd"
 
@@ -188,8 +197,16 @@ if [[ -z "$mods_dir" ]]; then
   exit 1
 fi
 
+if [[ "$skip_install" -eq 0 ]]; then
+  mods_parent="$(dirname -- "$mods_dir")"
+  if [[ ! -d "$mods_parent" ]]; then
+    echo "Install location not found at '$mods_parent'." >&2
+    echo "Pass --game-root PATH, set STS2_GAME_ROOT, or use --skip-install to build without installing." >&2
+    exit 1
+  fi
+fi
+
 mkdir -p "$staging_dir"
-mkdir -p "$mods_dir"
 
 echo "[build-mod] Building C# mod project..."
 dotnet build "$mod_project" -c "$configuration" /p:Sts2DataDir="$data_dir"
@@ -206,6 +223,11 @@ if [[ ! -f "$manifest_source" ]]; then
   exit 1
 fi
 
+if [[ ! -f "$mod_id_source" ]]; then
+  echo "Mod ID manifest not found: $mod_id_source" >&2
+  exit 1
+fi
+
 echo "[build-mod] Packing mod_manifest.json into PCK..."
 "$godot_exe" --headless --path "$builder_project_dir" --script "$builder_script" -- "$manifest_source" "$pck_output"
 
@@ -214,14 +236,31 @@ if [[ ! -f "$pck_output" ]]; then
   exit 1
 fi
 
-echo "[build-mod] Preparing game mods directory..."
-cp -f "$dll_target" "$mods_dir/$mod_name.dll"
-cp -f "$pck_output" "$mods_dir/$mod_name.pck"
+cp -f "$mod_id_source" "$mod_id_target"
+if [[ -f "$legacy_manifest_target" ]]; then
+  rm -f "$legacy_manifest_target"
+fi
+
+if [[ "$skip_install" -eq 0 ]]; then
+  echo "[build-mod] Preparing game mods directory..."
+  mkdir -p "$mods_dir"
+  cp -f "$dll_target" "$mods_dir/$mod_name.dll"
+  cp -f "$pck_output" "$mods_dir/$mod_name.pck"
+  cp -f "$mod_id_target" "$mods_dir/mod_id.json"
+  if [[ -f "$mods_dir/$mod_name.json" ]]; then
+    rm -f "$mods_dir/$mod_name.json"
+  fi
+fi
 
 echo "[build-mod] Done."
 echo "[build-mod] Using data dir: $data_dir"
 echo "[build-mod] Using mods dir: $mods_dir"
 echo "[build-mod] Using Godot: $godot_exe"
-echo "[build-mod] Installed files:"
-echo "  $mods_dir/$mod_name.dll"
-echo "  $mods_dir/$mod_name.pck"
+if [[ "$skip_install" -eq 1 ]]; then
+  echo "[build-mod] Skipped installation; staged files are in: $staging_dir"
+else
+  echo "[build-mod] Installed files:"
+  echo "  $mods_dir/$mod_name.dll"
+  echo "  $mods_dir/$mod_name.pck"
+  echo "  $mods_dir/mod_id.json"
+fi

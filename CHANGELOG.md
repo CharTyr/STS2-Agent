@@ -2,6 +2,36 @@
 
 > Release attribution is recorded against tags or release commits. Post-tag maintenance is listed separately; current validation limits are maintained in [PRODUCT_PLAN_CURRENT.md](https://github.com/CharTyr/STS2-Agent/blob/main/PRODUCT_PLAN_CURRENT.md).
 
+## Unreleased
+
+### Fixed
+
+- Settings changes keep the same session budget guard: new token/request caps apply immediately while
+  accumulated usage stays, and in-game actions that spend no model request no longer count against the
+  request cap.
+- `invite_ai_teammate` and `continue_ai_teammate` answer `pending` while a dual-instance launch is still
+  running instead of holding the HTTP request open, so a slow launch no longer reads as a client timeout.
+- `select_character` is no longer advertised once the local player is already ready; `unready` is the
+  action for that state.
+- `wait_until_actionable` polls `/state` when the event stream cannot be opened instead of retrying a dead
+  stream until the deadline.
+- Isolated `--clientId` launches seed a complete `settings.save` (cloned from the Steam profile, or patched
+  in place when `mod_settings` is null) so the mod loads on the first start.
+- A second `invite_ai_teammate` or `continue_ai_teammate` that arrives while a launch already owns the gate
+  answers 200 `pending` instead of classifying on an outcome it does not own: a concurrent invite could report
+  the previous attempt's `completed`, and a concurrent continue answered a misleading "no saved run" 409.
+- `state-invariants` requires `play_card` only where the executor advertises a ready combat action surface, so a
+  snapshot taken while a played card is still resolving is no longer reported as a missing action.
+- POSIX `start-game-session.sh` seeds the isolated profile under `%APPDATA%\SlayTheSpire2` on Git Bash and
+  MSYS instead of an XDG path the Windows game never reads, honours `STS2_SLAY_USER_ROOT` on both platforms,
+  and warns when the resolved save root does not exist.
+
+### Added
+
+- `scripts/start-game-session.ps1` / `.sh` forward extra game arguments, seed the isolated profile for
+  `--clientId`, and export `STS2_API_PORT`; the POSIX `build-mod.sh` gains `--skip-install` and stages
+  `mod_id.json`.
+
 ## v0.12.3 - 2026-09-13 (republished twice on 2026-09-14)
 
 > Distributed to the Steam Workshop on 2026-09-13, with the GitHub release following the same day: the

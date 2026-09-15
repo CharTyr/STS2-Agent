@@ -723,9 +723,12 @@ def create_server(client: Sts2Client | None = None, tool_profile: str | None = N
         try:
             event = sts2.wait_for_event(event_names=actionable_events, timeout=timeout)
         except Sts2ApiError as exc:
-            # The client already retries a lost SSE connection until the deadline, so reaching
-            # here means the mod answered and refused. Fall back to polling (the wait is still
-            # useful) but say so, instead of reporting the same "no event yet" as a healthy wait.
+            # Two ways in: the mod answered and refused the stream, or the stream could not be
+            # opened at all (connection refused, DNS, TLS). Only idle read timeouts stay inside
+            # the client's wait loop; a transport failure surfaces immediately so this wait can
+            # keep its deadline by polling /state. Either way the wait is still useful, so fall
+            # back to polling and say so instead of reporting the same "no event yet" as a
+            # healthy wait.
             event = None
             source = "polling"
             event_stream_error = {

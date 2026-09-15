@@ -234,6 +234,22 @@ def add_forbidden_action_failure(failures: list[str], action_set: set[str], acti
         failures.append(f"unexpected action '{action_name}': {reason}")
 
 
+def is_local_combat_action_window(combat: Any) -> bool:
+    # Demand play_card only where the executor itself would accept it. can_use_combat_actions is
+    # the executor's whole readiness chain (player turn, playable hand mode, settled action queue,
+    # stable snapshot); player_action_phase is only the first link. A snapshot taken while a played
+    # card is still resolving has playable cards in hand and an action table that has not been
+    # rebuilt yet, so gating on the turn predicate alone reports a missing action that never was.
+    readiness = combat.get("action_readiness") if isinstance(combat, dict) else None
+    if not isinstance(readiness, dict):
+        return True
+    if "can_use_combat_actions" in readiness:
+        return bool(readiness.get("can_use_combat_actions"))
+    if "player_action_phase" in readiness:
+        return bool(readiness.get("player_action_phase"))
+    return True
+
+
 def test_card_runtime_metadata(failures: list[str], card: Any, label: str) -> None:
     if not isinstance(card, dict):
         failures.append(f"{label} should be an object")
@@ -707,7 +723,13 @@ def evaluate_state_invariants(client: ApiClient) -> dict[str, Any]:
             failures.append("state.session.mode should match character_select.is_multiplayer")
 
         if any(not item.get("is_locked") for item in list(character_select.get("characters") or [])):
-            add_missing_action_failure(failures, action_set, "select_character", "character_select has unlocked choices")
+            if not character_select.get("local_ready") and not character_select.get("can_unready"):
+                add_missing_action_failure(
+                    failures,
+                    action_set,
+                    "select_character",
+                    "character_select has unlocked choices",
+                )
         if character_select.get("can_embark"):
             add_missing_action_failure(failures, action_set, "embark", "character_select.can_embark=true")
         if character_select.get("can_unready"):
@@ -805,7 +827,13 @@ def evaluate_state_invariants(client: ApiClient) -> dict[str, Any]:
             ):
                 failures.append("multiplayer_lobby.local_ready should match the local multiplayer_lobby.players entry")
 
-            add_missing_action_failure(failures, action_set, "select_character", "multiplayer_lobby has active character options")
+            if not multiplayer_lobby.get("local_ready") and not multiplayer_lobby.get("can_unready"):
+                add_missing_action_failure(
+                    failures,
+                    action_set,
+                    "select_character",
+                    "multiplayer_lobby has active character options",
+                )
 
             if multiplayer_lobby.get("can_ready"):
                 add_missing_action_failure(failures, action_set, "ready_multiplayer_lobby", "multiplayer_lobby.can_ready=true")
@@ -1003,7 +1031,7 @@ def evaluate_state_invariants(client: ApiClient) -> dict[str, Any]:
                     "play_card",
                     "combat card-selection overlay should suspend play_card",
                 )
-            else:
+            elif is_local_combat_action_window(combat):
                 add_missing_action_failure(failures, action_set, "play_card", "combat.hand[] has playable cards")
         elif not combat_selection_active:
             add_forbidden_action_failure(failures, action_set, "play_card", "combat.hand[] has no playable cards")

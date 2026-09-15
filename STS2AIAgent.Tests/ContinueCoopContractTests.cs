@@ -23,6 +23,9 @@ internal static class ContinueCoopContractTests
         var probe = AgentSourceFixture.MethodBody(state, "CanContinueAiTeammate");
         Assert.Contains("InstanceRole.IsCompanion", probe, StringComparison.Ordinal);
         Assert.Contains("currentScreen is not NMainMenu mainMenu || !mainMenu.IsVisibleInTree()", probe, StringComparison.Ordinal);
+        Assert.Contains("CoopLaunchPolicy.GetStructuralError", probe, StringComparison.Ordinal);
+        Assert.Contains("PlayRunning", probe, StringComparison.Ordinal);
+        Assert.Contains("AgentRuntime.Instance?.DualLaunching == true", probe, StringComparison.Ordinal);
         Assert.Contains("return SaveManager.Instance.HasMultiplayerRunSave;", probe, StringComparison.Ordinal);
 
         // Each exposure list must carry its own guard: a descriptor without the name entry (or the
@@ -129,5 +132,45 @@ internal static class ContinueCoopContractTests
 
         var coordinator = AgentSourceFixture.Read("STS2AIAgent/Multiplayer/DualInstanceCoordinator.cs");
         Assert.Contains("GameActionService.StartLocalLoadAsync(cancellationToken)", coordinator, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// After the pending-observer change the handler has no await. Keep it a synchronous
+    /// <c>Task</c> method so Release builds do not warn CS1998, and keep failures as throws.
+    /// </summary>
+    public static void PendingExecutorReturnsTaskWithoutAsync()
+    {
+        var action = AgentSourceFixture.Read(ActionPath);
+        Assert.Contains(
+            "private static Task<ActionResponsePayload> ExecuteContinueAiTeammateAsync()",
+            action,
+            StringComparison.Ordinal);
+        Assert.True(
+            !action.Contains("private static async Task<ActionResponsePayload> ExecuteContinueAiTeammateAsync()", StringComparison.Ordinal),
+            "ExecuteContinueAiTeammateAsync must not be async; CS1998 fires in Release without an await.");
+
+        var body = AgentSourceFixture.MethodBody(action, "ExecuteContinueAiTeammateAsync");
+        Assert.Contains(@"ObserveBackgroundTask(launch, ""continue_ai_teammate"")", body, StringComparison.Ordinal);
+        Assert.Contains("Task.FromResult(new ActionResponsePayload", body, StringComparison.Ordinal);
+        Assert.Contains(@"status = ""pending""", body, StringComparison.Ordinal);
+        Assert.Contains(@"status = ""completed""", body, StringComparison.Ordinal);
+        Assert.Contains("throw new ApiException", body, StringComparison.Ordinal);
+        Assert.Contains("DualLaunchOutcomePolicy.IsInProgress(outcome)", body, StringComparison.Ordinal);
+        Assert.Contains("DualLaunchOutcomePolicy.IsFailure(outcome)", body, StringComparison.Ordinal);
+        Assert.True(
+            !body.Contains("Task.FromException", StringComparison.Ordinal),
+            "Continue failures must throw, not wrap in Task.FromException.");
+        Assert.True(
+            !body.Contains("await ", StringComparison.Ordinal),
+            "The pending continue executor must not await the launch.");
+        Assert.True(
+            !body.Contains("FromSeconds(20)", StringComparison.Ordinal),
+            "Do not restore the 20s launch wait.");
+
+        Assert.True(
+            !body.Contains("message = AgentRuntime.Instance.DualStatus,", StringComparison.Ordinal),
+            "Pending continue responses must not copy DualStatus, which can still say the idle dual-launch text.");
+        Assert.Contains("var message = AgentRuntime.Instance.DualStatus", body, StringComparison.Ordinal);
+        Assert.Contains("正在读档接回队友…", body, StringComparison.Ordinal);
     }
 }

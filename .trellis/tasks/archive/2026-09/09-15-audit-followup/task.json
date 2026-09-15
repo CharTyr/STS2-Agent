@@ -1,0 +1,31 @@
+{
+  "id": "09-15-audit-followup",
+  "name": "09-15-audit-followup",
+  "title": "Audit the grok-delivered change set and close the gaps it left",
+  "description": "Re-audited every grok-authored claim in the working tree: dual-launch loser classification, concurrent continue status, wait-test failure mode, state-invariants readiness gate, and the POSIX isolated-seed root.",
+  "status": "completed",
+  "dev_type": null,
+  "scope": null,
+  "package": null,
+  "priority": "P1",
+  "creator": "CharTyr",
+  "assignee": "CharTyr",
+  "createdAt": "2026-09-15",
+  "completedAt": "2026-09-15",
+  "branch": null,
+  "base_branch": "dev",
+  "worktree_path": null,
+  "commit": null,
+  "pr_url": null,
+  "subtasks": [],
+  "children": [],
+  "parent": "09-14-five-priority-goals",
+  "relatedFiles": [
+    "STS2AIAgent/Agent/AgentRuntime.cs",
+    "STS2AIAgent/Game/GameActionService.cs",
+    "scripts/run_sts2_validation.py",
+    "scripts/start-game-session.sh"
+  ],
+  "notes": "Live evidence in evidence.md",
+  "meta": {}
+}

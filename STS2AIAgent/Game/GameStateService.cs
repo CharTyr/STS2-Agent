@@ -64,6 +64,7 @@ using MegaCrit.Sts2.Core.Saves;
 using MegaCrit.Sts2.Core.Saves.Managers;
 using MegaCrit.Sts2.Core.Timeline;
 using MegaCrit.Sts2.addons.mega_text;
+using STS2AIAgent.Agent;
 using STS2AIAgent.Config;
 using STS2AIAgent.Localization;
 using STS2AIAgent.Multiplayer;
@@ -391,7 +392,7 @@ internal static class GameStateService
             });
         }
 
-        if (currentScreen is NMainMenu inviteMenu && inviteMenu.IsVisibleInTree())
+        if (CanInviteAiTeammate(currentScreen))
         {
             descriptors.Add(new ActionDescriptor
             {
@@ -1446,10 +1447,24 @@ internal static class GameStateService
 
     public static bool CanSelectCharacter(IScreenContext? currentScreen)
     {
+        if (CanUnready(currentScreen))
+        {
+            return false;
+        }
+
         var multiplayerTestScene = GetMultiplayerTestScene();
         if (multiplayerTestScene != null)
         {
-            return GetMultiplayerTestLobby(multiplayerTestScene) != null && GetMultiplayerLobbyCharacters().Length > 0;
+            var lobby = GetMultiplayerTestLobby(multiplayerTestScene);
+            return lobby != null
+                && !lobby.LocalPlayer.isReady
+                && GetMultiplayerLobbyCharacters().Length > 0;
+        }
+
+        var characterSelect = GetCharacterSelectScreen(currentScreen);
+        if (characterSelect != null && characterSelect.Lobby.LocalPlayer.isReady)
+        {
+            return false;
         }
 
         return GetCharacterSelectButtons(currentScreen)
@@ -1593,8 +1608,31 @@ internal static class GameStateService
     }
 
     /// <summary>
+    /// Host main menu, not the companion window, autoplay not running, and no dual-instance
+    /// launch already in flight. Advertising does not require a verified play model: the
+    /// unverified route still launches the teammate paused for external takeover.
+    /// </summary>
+    public static bool CanInviteAiTeammate(IScreenContext? currentScreen)
+    {
+        if (currentScreen is not NMainMenu mainMenu || !mainMenu.IsVisibleInTree())
+        {
+            return false;
+        }
+
+        if (AgentRuntime.Instance?.DualLaunching == true)
+        {
+            return false;
+        }
+
+        var autoPlayRunning = AgentRuntime.Instance?.PlayRunning == true;
+        return CoopLaunchPolicy.GetStructuralError(InstanceRole.IsCompanion, autoPlayRunning, "MAIN_MENU") == null;
+    }
+
+    /// <summary>
     /// Host main menu with a saved multiplayer run on disk: the same gate the game uses to show
-    /// "Load" instead of "Host" in its multiplayer submenu. The companion never continues a run itself.
+    /// "Load" instead of "Host" in its multiplayer submenu. The companion never continues a run
+    /// itself. Continue also uses the autoplay / companion structural probe, and DualLaunching so a
+    /// launch already in flight is not advertised again.
     /// </summary>
     public static bool CanContinueAiTeammate(IScreenContext? currentScreen)
     {
@@ -1604,6 +1642,17 @@ internal static class GameStateService
         }
 
         if (currentScreen is not NMainMenu mainMenu || !mainMenu.IsVisibleInTree())
+        {
+            return false;
+        }
+
+        if (AgentRuntime.Instance?.DualLaunching == true)
+        {
+            return false;
+        }
+
+        var autoPlayRunning = AgentRuntime.Instance?.PlayRunning == true;
+        if (CoopLaunchPolicy.GetStructuralError(InstanceRole.IsCompanion, autoPlayRunning, "MAIN_MENU") != null)
         {
             return false;
         }
@@ -2784,7 +2833,7 @@ internal static class GameStateService
             names.Add("close_main_menu_submenu");
         }
 
-        if (currentScreen is NMainMenu mainMenu && mainMenu.IsVisibleInTree())
+        if (CanInviteAiTeammate(currentScreen))
         {
             names.Add("invite_ai_teammate");
         }

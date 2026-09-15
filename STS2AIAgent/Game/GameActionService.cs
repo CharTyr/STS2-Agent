@@ -5227,8 +5227,23 @@ internal static class GameActionService
     /// <summary>
     /// Host side: reload the saved multiplayer run over local ENet (fastmp host_standard) and launch the companion so it rejoins as its saved player.
     /// </summary>
-    private static async Task<ActionResponsePayload> ExecuteContinueAiTeammateAsync()
+    private static Task<ActionResponsePayload> ExecuteContinueAiTeammateAsync()
     {
+        // A launch that already owns the gate is authoritative. Answer pending up front: re-running
+        // the menu and save probes below would hand a concurrent caller a misleading
+        // "No saved multiplayer run to continue." 409 while the first attempt is still working.
+        if (AgentRuntime.Instance.DualLaunching)
+        {
+            return Task.FromResult(new ActionResponsePayload
+            {
+                action = "continue_ai_teammate",
+                status = "pending",
+                stable = false,
+                message = Loc.T("正在读档接回队友…"),
+                state = GameStateService.BuildStatePayload()
+            });
+        }
+
         var payload = GameStateService.BuildStatePayload();
         var settings = AgentRuntime.Instance.Settings;
         // Same route switch as invite_ai_teammate: an unverified play model no longer blocks the
@@ -5294,22 +5309,40 @@ internal static class GameActionService
             });
         }
 
-        await AgentRuntime.Instance.ContinueDualInstanceAsync(settings, companionAutoPlay, CancellationToken.None);
-        // Same classification as invite_ai_teammate: read the structured outcome, never the localized text.
-        var outcome = AgentRuntime.Instance.DualLaunchOutcome;
-        var message = AgentRuntime.Instance.DualStatus;
-        if (DualLaunchOutcomePolicy.IsInProgress(outcome))
+        var launch = AgentRuntime.Instance.TryContinueDualInstanceAsync(settings, companionAutoPlay, CancellationToken.None);
+        // Null means another attempt already owns the gate; that attempt owns the outcome, so this
+        // call answers pending instead of classifying on a result it did not produce.
+        if (launch == null || !launch.IsCompleted)
         {
-            return new ActionResponsePayload
+            if (launch != null)
+            {
+                ObserveBackgroundTask(launch, "continue_ai_teammate");
+            }
+
+            return Task.FromResult(new ActionResponsePayload
             {
                 action = "continue_ai_teammate",
                 status = "pending",
                 stable = false,
-                message = message,
+                message = Loc.T("正在读档接回队友…"),
                 state = GameStateService.BuildStatePayload()
-            };
+            });
+        }
+        // Same classification as invite_ai_teammate: read the structured outcome, never the localized text.
+        var outcome = AgentRuntime.Instance.DualLaunchOutcome;
+        if (DualLaunchOutcomePolicy.IsInProgress(outcome))
+        {
+            return Task.FromResult(new ActionResponsePayload
+            {
+                action = "continue_ai_teammate",
+                status = "pending",
+                stable = false,
+                message = Loc.T("正在读档接回队友…"),
+                state = GameStateService.BuildStatePayload()
+            });
         }
 
+        var message = AgentRuntime.Instance.DualStatus;
         if (DualLaunchOutcomePolicy.IsFailure(outcome) || outcome == DualLaunchOutcome.Idle)
         {
             // Retryable: the usual cause is port 33771 still held by the previous run in this process,
@@ -5322,14 +5355,14 @@ internal static class GameActionService
             }, retryable: true);
         }
 
-        return new ActionResponsePayload
+        return Task.FromResult(new ActionResponsePayload
         {
             action = "continue_ai_teammate",
             status = "completed",
             stable = true,
             message = message,
             state = GameStateService.BuildStatePayload()
-        };
+        });
     }
 
     /// <summary>
@@ -5380,7 +5413,7 @@ internal static class GameActionService
         return true;
     }
 
-    private static async Task<ActionResponsePayload> ExecuteInviteAiTeammateAsync()
+    private static Task<ActionResponsePayload> ExecuteInviteAiTeammateAsync()
     {
         var payload = GameStateService.BuildStatePayload();
         var settings = AgentRuntime.Instance.Settings;
@@ -5403,23 +5436,41 @@ internal static class GameActionService
             });
         }
 
-        await AgentRuntime.Instance.LaunchDualInstanceAsync(settings, companionAutoPlay, CancellationToken.None);
-        // Classify on the structured outcome. DualStatus is localized display text, so matching
-        // substrings in it misreports every failure as success in a non-Chinese client.
-        var outcome = AgentRuntime.Instance.DualLaunchOutcome;
-        var message = AgentRuntime.Instance.DualStatus;
-        if (DualLaunchOutcomePolicy.IsInProgress(outcome))
+        var launch = AgentRuntime.Instance.TryLaunchDualInstanceAsync(settings, companionAutoPlay, CancellationToken.None);
+        // Null means another attempt already owns the gate; that attempt owns the outcome, so this
+        // call answers pending instead of classifying on a result it did not produce.
+        if (launch == null || !launch.IsCompleted)
         {
-            return new ActionResponsePayload
+            if (launch != null)
+            {
+                ObserveBackgroundTask(launch, "invite_ai_teammate");
+            }
+
+            return Task.FromResult(new ActionResponsePayload
             {
                 action = "invite_ai_teammate",
                 status = "pending",
                 stable = false,
-                message = message,
+                message = Loc.T("正在邀请队友…"),
                 state = GameStateService.BuildStatePayload()
-            };
+            });
+        }
+        // Classify on the structured outcome. DualStatus is localized display text, so matching
+        // substrings in it misreports every failure as success in a non-Chinese client.
+        var outcome = AgentRuntime.Instance.DualLaunchOutcome;
+        if (DualLaunchOutcomePolicy.IsInProgress(outcome))
+        {
+            return Task.FromResult(new ActionResponsePayload
+            {
+                action = "invite_ai_teammate",
+                status = "pending",
+                stable = false,
+                message = Loc.T("正在邀请队友…"),
+                state = GameStateService.BuildStatePayload()
+            });
         }
 
+        var message = AgentRuntime.Instance.DualStatus;
         if (DualLaunchOutcomePolicy.IsFailure(outcome) || outcome == DualLaunchOutcome.Idle)
         {
             throw new ApiException(409, "invite_failed", message, new
@@ -5430,14 +5481,14 @@ internal static class GameActionService
             });
         }
 
-        return new ActionResponsePayload
+        return Task.FromResult(new ActionResponsePayload
         {
             action = "invite_ai_teammate",
             status = "completed",
             stable = true,
             message = message,
             state = GameStateService.BuildStatePayload()
-        };
+        });
     }
 
     private static async Task<ActionResponsePayload> ExecuteReturnToMainMenuAsync()

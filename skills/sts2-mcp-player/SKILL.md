@@ -105,7 +105,7 @@ Do not trust memory over the current payload. The game mutates screens in place,
 
 - `MAIN_MENU`: prefer `continue_run`; if unavailable, finish timeline gates (slot obtained epochs, confirm unlock overlays) or start a run from `open_character_select`. Character unlocks happen on the timeline, not on `GAME_OVER`. Do not call `switch_profile` unless asked; `option_index` is the native profile id 1..3.
 - `CHARACTER_SELECT`: choose an unlocked character, wait for `character_select.embark = true`, then `embark`.
-- `MULTIPLAYER_LOBBY`: stay on the same compact tool surface; use `available_actions` for `host_multiplayer_lobby`, `join_multiplayer_lobby`, `select_character`, `ready_multiplayer_lobby`, or `disconnect_multiplayer_lobby`.
+- `MULTIPLAYER_LOBBY`: stay on the same compact tool surface; use `available_actions` for `host_multiplayer_lobby`, `join_multiplayer_lobby`, `select_character`, `ready_multiplayer_lobby`, or `disconnect_multiplayer_lobby`. Once the local player is ready, `select_character` disappears and `unready` takes its place -- re-picking a character means unreadying first.
 - `MAP`: use `choose_map_node` with `map.options[].i`. In multiplayer, if `map.local_vote` is set, `wait_until_actionable` instead of voting again; if `map.votes` exist and you have not voted, follow that option.
 - `COMBAT`: stay inside combat actions unless a selection overlay interrupts. Budget block and pick targets from `combat.enemies[].intents[]` (`damage` / `hits` / `total_damage`) and both sides' `powers` lines, not from `lethal_risks` alone.
 - `REWARD`: prefer `collect_rewards_and_proceed` unless making deliberate reward choices.
