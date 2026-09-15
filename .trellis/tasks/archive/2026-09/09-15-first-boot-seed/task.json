@@ -1,0 +1,30 @@
+{
+  "id": "first-boot-seed",
+  "name": "first-boot-seed",
+  "title": "First-boot isolated seed must survive game overwrite",
+  "description": "Sparse settings.save is replaced by a full SettingsSave with mod_settings null. Clone a complete template like CompanionProfileBootstrap.",
+  "status": "completed",
+  "dev_type": null,
+  "scope": null,
+  "package": null,
+  "priority": "P1",
+  "creator": "CharTyr",
+  "assignee": "CharTyr",
+  "createdAt": "2026-09-15",
+  "completedAt": "2026-09-15",
+  "branch": null,
+  "base_branch": "main",
+  "worktree_path": null,
+  "commit": null,
+  "pr_url": null,
+  "subtasks": [],
+  "children": [],
+  "parent": "09-14-five-priority-goals",
+  "relatedFiles": [
+    "scripts/start-game-session.ps1",
+    "scripts/start-game-session.sh",
+    "mcp_server/tests/test_posix_script_portability.py"
+  ],
+  "notes": "",
+  "meta": {}
+}
