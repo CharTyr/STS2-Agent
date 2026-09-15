@@ -5,12 +5,31 @@
 ## v0.12.4 - 2026-09-15
 
 > Distributed to the Steam Workshop on 2026-09-15 (item 3796486050, public, `file_size` 1233413 equal to the local
-> content bytes, `time_updated` 19:38:00). The in-tree version, the uploaded Workshop content and the build all come
-> from commit `4b8e7c5`; no GitHub tag or release exists for this version yet. Upload record:
+> content bytes, `time_updated` 19:38:00), from commit `4b8e7c5`; no GitHub tag or release exists for this
+> version yet.
+>
+> **The same version number was rebuilt twice.** The first build could contradict itself inside one
+> `/state` response: its in-combat action list and its readiness report were evaluated
+> separately around a 200 ms stability sampler, so a snapshot that answered `ready` could omit
+> `play_card` and `end_turn`. That fix was re-cut into `0.12.4` instead of spending a version
+> number on it, and a second re-cut followed the same day because the first one read the action queue
+> outside combat, where `RunManager` has no executor: every `/state` request failed on the main
+> menu. Three builds answer to `0.12.4` and only size or hash tells them apart - `file_size`
+> 1233413 / `time_updated` 2026-09-15 19:38:00 for the first, 1236997 / 2026-09-15 23:34:57 for the
+> second (superseded within the hour), and 1236997 / 2026-09-16 00:42:43 for the current one, whose DLL
+> is SHA256 `0A8FBA67...`. The second and third share a byte count, so use the hash to tell those two
+> apart. Every upload is recorded with its own numbers in
 > [workshop-upload-v0.12.4_2026-09-15.md](https://github.com/CharTyr/STS2-Agent/blob/main/history/workshop-upload-v0.12.4_2026-09-15.md).
 
 ### Fixed
 
+- **One `/state` response can no longer contradict itself about combat actions.** `available_actions`,
+  `combat.action_readiness` and the potion flags of one payload now come from a single combat-action
+  gate, because the gate advances a shared 200 ms stability sampler: evaluating it per action let a response
+  straddle that window and say "not yet" in the action list while readiness - built later from the same live
+  state - said `ready`. A snapshot that reports `ready` therefore always carries `play_card`/`end_turn`,
+  the read-only twin probe is gone, and the gate now also honours `modal_open` and `combat_paused`,
+  which only the readiness report used to check.
 - Settings changes keep the same session budget guard: new token/request caps apply immediately while
   accumulated usage stays, and in-game actions that spend no model request no longer count against the
   request cap.

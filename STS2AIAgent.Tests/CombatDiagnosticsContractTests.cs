@@ -43,8 +43,12 @@ internal static class CombatDiagnosticsContractTests
         Assert.Contains("\"game_action_running\"", stateSource, StringComparison.Ordinal);
         Assert.Contains("\"game_action_queued\"", stateSource, StringComparison.Ordinal);
         Assert.Contains("\"snapshot_stabilizing\"", stateSource, StringComparison.Ordinal);
-        Assert.Contains("hand_in_card_play=hand?.InCardPlay", stateSource, StringComparison.Ordinal);
-        Assert.Contains("hand_in_card_selection=hand?.IsInCardSelection", stateSource, StringComparison.Ordinal);
+        // Both flags are sampled once inside the gate and then projected, so the payload cannot
+        // report a hand lock from one read and a ready snapshot from another.
+        Assert.Contains("HandInCardPlay=hand?.InCardPlay", stateSource, StringComparison.Ordinal);
+        Assert.Contains("HandInCardSelection=hand?.IsInCardSelection", stateSource, StringComparison.Ordinal);
+        Assert.Contains("hand_in_card_play=gate.HandInCardPlay", stateSource, StringComparison.Ordinal);
+        Assert.Contains("hand_in_card_selection=gate.HandInCardSelection", stateSource, StringComparison.Ordinal);
         Assert.Contains("action_readiness=BuildCombatActionReadinessPayload", combatBody, StringComparison.Ordinal);
         Assert.Contains("action_readiness=combat.action_readiness", agentCombatBody, StringComparison.Ordinal);
     }

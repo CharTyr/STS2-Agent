@@ -32,7 +32,9 @@ internal static class UnlockScreenContractTests
             resolveBody[unlockScreenIndex..visibleGridIndex],
             StringComparison.Ordinal);
 
-        var unlockNameBranch = SliceUnlockBranch(actionNamesBody, "if(CanEndTurn(currentScreen,combatState,requireButtonReady:false))");
+        var unlockNameBranch = SliceUnlockBranch(
+            actionNamesBody,
+            "if(CanEndTurn(currentScreen,combatState,requireButtonReady:false,combatActionGate:combatActionGate))");
         Assert.Contains(
             "if(CanConfirmUnlock(currentScreen)){names.Add(\"confirm_unlock\");}",
             unlockNameBranch,
@@ -44,7 +46,7 @@ internal static class UnlockScreenContractTests
 
         var unlockDescriptorBranch = SliceUnlockBranch(
             actionDescriptorsBody,
-            "if(CanEndTurn(currentScreen,combatState,requireButtonReady:false))");
+            "if(CanEndTurn(currentScreen,combatState,requireButtonReady:false,combatActionGate:combatActionGate))");
         Assert.Contains("name=\"confirm_unlock\"", unlockDescriptorBranch, StringComparison.Ordinal);
         Assert.Contains("returnnewAvailableActionsPayload", unlockDescriptorBranch, StringComparison.Ordinal);
         Assert.False(

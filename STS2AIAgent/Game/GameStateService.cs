@@ -91,9 +91,14 @@ internal static class GameStateService
         var runState = RunManager.Instance.DebugOnlyGetState();
         var screen = ResolveScreen(currentScreen);
         var session = BuildSessionPayload(currentScreen, runState);
-        var availableActions = BuildAvailableActionNames(currentScreen, combatState, runState);
-        var combat = BuildCombatPayload(currentScreen, combatState);
-        var run = BuildRunPayload(currentScreen, combatState, runState);
+        // One state build evaluates the combat gate once and shares it. The gate advances a shared
+        // 200ms stability sampler, so evaluating it per action let one response straddle that window
+        // and contradict itself: the actions serialized first said "not yet" while the readiness
+        // payload built later in the same response said "ready".
+        var combatActionGate = EvaluateCombatActionGate(currentScreen, combatState);
+        var availableActions = BuildAvailableActionNames(currentScreen, combatState, runState, combatActionGate);
+        var combat = BuildCombatPayload(combatState, combatActionGate);
+        var run = BuildRunPayload(currentScreen, combatState, runState, combatActionGate);
         var multiplayer = BuildMultiplayerPayload(currentScreen, runState);
         var multiplayerLobby = BuildMultiplayerLobbyPayload(currentScreen);
         var map = BuildMapPayload(currentScreen, runState);
@@ -230,6 +235,7 @@ internal static class GameStateService
         var combatState = CombatManager.Instance.DebugOnlyGetState();
         var runState = RunManager.Instance.DebugOnlyGetState();
         var descriptors = new List<ActionDescriptor>();
+        var combatActionGate = EvaluateCombatActionGate(currentScreen, combatState);
 
         if (GetOpenModal() != null)
         {
@@ -302,7 +308,7 @@ internal static class GameStateService
             };
         }
 
-        if (CanEndTurn(currentScreen, combatState, requireButtonReady: false))
+        if (CanEndTurn(currentScreen, combatState, requireButtonReady: false, combatActionGate: combatActionGate))
         {
             descriptors.Add(new ActionDescriptor
             {
@@ -312,7 +318,7 @@ internal static class GameStateService
             });
         }
 
-        if (CanPlayAnyCard(currentScreen, combatState))
+        if (CanPlayAnyCard(currentScreen, combatState, combatActionGate))
         {
             descriptors.Add(new ActionDescriptor
             {
@@ -767,7 +773,7 @@ internal static class GameStateService
             });
         }
 
-        if (CanUsePotion(currentScreen, combatState, runState))
+        if (CanUsePotion(currentScreen, combatState, runState, combatActionGate))
         {
             descriptors.Add(new ActionDescriptor
             {
@@ -884,9 +890,13 @@ internal static class GameStateService
         }
     }
 
-    public static bool CanEndTurn(IScreenContext? currentScreen, CombatState? combatState, bool requireButtonReady = true)
+    public static bool CanEndTurn(
+        IScreenContext? currentScreen,
+        CombatState? combatState,
+        bool requireButtonReady = true,
+        CombatActionGate? combatActionGate = null)
     {
-        if (!CanUseCombatActions(currentScreen, combatState, out _, out var combatRoom))
+        if (!CanUseCombatActions(currentScreen, combatState, out _, out var combatRoom, combatActionGate))
         {
             return false;
         }
@@ -899,9 +909,9 @@ internal static class GameStateService
         return !requireButtonReady || IsEndTurnButtonReady(GetEndTurnButton(combatRoom));
     }
 
-    public static bool CanPlayAnyCard(IScreenContext? currentScreen, CombatState? combatState)
+    public static bool CanPlayAnyCard(IScreenContext? currentScreen, CombatState? combatState, CombatActionGate? combatActionGate = null)
     {
-        if (!CanUseCombatActions(currentScreen, combatState, out var me, out _))
+        if (!CanUseCombatActions(currentScreen, combatState, out var me, out _, combatActionGate))
         {
             return false;
         }
@@ -1736,7 +1746,11 @@ internal static class GameStateService
         return inspectCloseButton != null && inspectCloseButton.IsVisibleInTree() && inspectCloseButton.IsEnabled;
     }
 
-    public static bool CanUsePotion(IScreenContext? currentScreen, CombatState? combatState, RunState? runState)
+    public static bool CanUsePotion(
+        IScreenContext? currentScreen,
+        CombatState? combatState,
+        RunState? runState,
+        CombatActionGate? combatActionGate = null)
     {
         var player = GetLocalPlayer(runState);
         if (player == null)
@@ -1744,7 +1758,7 @@ internal static class GameStateService
             return false;
         }
 
-        return player.PotionSlots.Any(potion => IsPotionUsable(currentScreen, combatState, player, potion));
+        return player.PotionSlots.Any(potion => IsPotionUsable(currentScreen, combatState, player, potion, combatActionGate));
     }
 
     public static bool CanUsePotionAtIndex(IScreenContext? currentScreen, CombatState? combatState, RunState? runState, int optionIndex)
@@ -2490,72 +2504,22 @@ internal static class GameStateService
         return CanUseCombatActions(currentScreen, combatState, out _, out _);
     }
 
-    private static bool CanUseCombatActions(IScreenContext? currentScreen, CombatState? combatState, out Player? me, out NCombatRoom? combatRoom)
+        private static bool CanUseCombatActions(
+        IScreenContext? currentScreen,
+        CombatState? combatState,
+        out Player? me,
+        out NCombatRoom? combatRoom,
+        CombatActionGate? combatActionGate = null)
     {
-        me = null;
-        combatRoom = null;
-
-        if (combatState == null)
-        {
-            ResetCombatActionReadiness();
-            return false;
-        }
-
-        combatRoom = FindActiveCombatRoom(currentScreen);
-        if (combatRoom == null)
-        {
-            ResetCombatActionReadiness();
-            return false;
-        }
-
-        if (!CombatManager.Instance.IsInProgress ||
-            CombatManager.Instance.IsOverOrEnding ||
-            CombatManager.Instance.PlayerActionsDisabled)
-        {
-            ResetCombatActionReadiness();
-            return false;
-        }
-
-        if (combatRoom.Mode != CombatRoomMode.ActiveCombat)
-        {
-            ResetCombatActionReadiness();
-            return false;
-        }
-
-        var hand = combatRoom.Ui?.Hand;
-        if (hand == null || hand.InCardPlay || hand.IsInCardSelection || hand.CurrentMode != MegaCrit.Sts2.Core.Nodes.Combat.NPlayerHand.Mode.Play)
-        {
-            ResetCombatActionReadiness();
-            return false;
-        }
-
-        me = GetLocalPlayer(combatState);
-        if (me == null || !me.Creature.IsAlive)
-        {
-            ResetCombatActionReadiness();
-            return false;
-        }
-
-        GameActionService.SyncCardPlayCounters(combatState.RoundNumber);
-        if (!IsLocalCombatTurnReady(me))
-        {
-            ResetCombatActionReadiness();
-            return false;
-        }
-
-        if (!IsCombatActionSnapshotStable(combatState, me))
-        {
-            return false;
-        }
-
-        if (!IsPlayerActionPhase(combatState, me))
-        {
-            ResetCombatActionReadiness();
-            return false;
-        }
-
-        return true;
+        // Callers inside one state build hand in the gate they already evaluated. The gate advances
+        // a shared stability sampler, so evaluating it a second time would answer from a later
+        // moment than the payload around it and could disagree with that payload.
+        var gate = combatActionGate ?? EvaluateCombatActionGate(currentScreen, combatState);
+        me = gate.Me;
+        combatRoom = gate.Room;
+        return gate.Usable;
     }
+
 
     private static bool IsLocalCombatTurnReady(Player me)
     {
@@ -2572,6 +2536,193 @@ internal static class GameStateService
         }
 
         return true;
+    }
+
+    /// <summary>
+    /// Every combat-action answer one state build reports -- available_actions, the readiness payload
+    /// and the potion flags -- comes from this one evaluation. The readiness probe advances a shared
+    /// 200ms stability sampler, so evaluating it more than once per payload let a response straddle
+    /// that window and contradict itself: the actions serialized first said "not yet" while the
+    /// readiness payload built later in the same response said "ready".
+    /// </summary>
+    public sealed class CombatActionGate
+    {
+        /// <summary>Combat state this gate was evaluated against; null outside a running fight.</summary>
+        public CombatState? Source { get; init; }
+
+        public bool Usable { get; init; }
+
+        public string Reason { get; init; } = "combat_screen_unavailable";
+
+        public Player? Me { get; init; }
+
+        public NCombatRoom? Room { get; init; }
+
+        public bool ModalOpen { get; init; }
+
+        public string? ModalType { get; init; }
+
+        public bool ActionsSettled { get; init; }
+
+        public string? RunningActionType { get; init; }
+
+        public string? ReadyActionType { get; init; }
+
+        public bool? HandInCardPlay { get; init; }
+
+        public bool? HandInCardSelection { get; init; }
+
+        public string? HandMode { get; init; }
+
+        public bool LocalTurnReady { get; init; }
+
+        public bool SnapshotStable { get; init; }
+
+        public bool PlayerActionPhase { get; init; }
+    }
+
+    private static CombatActionGate EvaluateCombatActionGate(IScreenContext? currentScreen, CombatState? combatState)
+    {
+        var modal = GetOpenModal();
+        var room = FindActiveCombatRoom(currentScreen);
+        var hand = room?.Ui?.Hand;
+        var me = GetLocalPlayer(combatState);
+        // Outside a fight there is no action queue to read: RunManager's executor and queue set are
+        // empty on the main menu, and reading them there failed every /state request with a
+        // NullReferenceException. The old readiness probe only ever ran inside combat, but this gate
+        // runs before the screen checks, so the queue is only touched when a fight is up.
+        MegaCrit.Sts2.Core.GameActions.GameAction? runningAction = null;
+        MegaCrit.Sts2.Core.GameActions.GameAction? readyAction = null;
+        var actionQueueHasExecutingAction = false;
+        if (combatState != null && CombatManager.Instance.IsInProgress)
+        {
+            runningAction = RunManager.Instance.ActionExecutor?.CurrentlyRunningAction;
+            try
+            {
+                readyAction = RunManager.Instance.ActionQueueSet?.GetReadyAction();
+            }
+            catch (InvalidOperationException)
+            {
+                actionQueueHasExecutingAction = true;
+            }
+        }
+
+        var actionsSettled = !actionQueueHasExecutingAction && runningAction == null && readyAction == null;
+        var localTurnReady = me != null && IsLocalCombatTurnReady(me);
+        var playerActionPhase = IsPlayerActionPhase(combatState, me);
+        var snapshotStable = false;
+        string reason;
+
+        if (modal != null)
+        {
+            reason = "modal_open";
+        }
+        else if (combatState == null || room == null)
+        {
+            ResetCombatActionReadiness();
+            reason = "combat_screen_unavailable";
+        }
+        else if (!CombatManager.Instance.IsInProgress)
+        {
+            ResetCombatActionReadiness();
+            reason = "combat_not_in_progress";
+        }
+        else if (CombatManager.Instance.IsOverOrEnding)
+        {
+            ResetCombatActionReadiness();
+            reason = "combat_over_or_ending";
+        }
+        else if (CombatManager.Instance.IsPaused)
+        {
+            ResetCombatActionReadiness();
+            reason = "combat_paused";
+        }
+        else if (CombatManager.Instance.PlayerActionsDisabled)
+        {
+            ResetCombatActionReadiness();
+            reason = "player_actions_disabled";
+        }
+        else if (room.Mode != CombatRoomMode.ActiveCombat)
+        {
+            ResetCombatActionReadiness();
+            reason = "combat_room_not_active";
+        }
+        else if (hand == null)
+        {
+            ResetCombatActionReadiness();
+            reason = "hand_unavailable";
+        }
+        else if (hand.InCardPlay)
+        {
+            ResetCombatActionReadiness();
+            reason = "hand_in_card_play";
+        }
+        else if (hand.IsInCardSelection)
+        {
+            ResetCombatActionReadiness();
+            reason = "hand_in_card_selection";
+        }
+        else if (hand.CurrentMode != MegaCrit.Sts2.Core.Nodes.Combat.NPlayerHand.Mode.Play)
+        {
+            ResetCombatActionReadiness();
+            reason = "hand_mode_not_play";
+        }
+        else if (me == null || !me.Creature.IsAlive)
+        {
+            ResetCombatActionReadiness();
+            reason = "local_player_dead";
+        }
+        else if (!localTurnReady)
+        {
+            ResetCombatActionReadiness();
+            reason = "local_turn_not_ready";
+        }
+        else if (runningAction != null)
+        {
+            reason = "game_action_running";
+        }
+        else if (readyAction != null)
+        {
+            reason = "game_action_queued";
+        }
+        else if (!actionsSettled)
+        {
+            reason = "action_queue_unsettled";
+        }
+        else if (!playerActionPhase)
+        {
+            ResetCombatActionReadiness();
+            reason = "not_player_action_phase";
+        }
+        else if (!IsCombatActionSnapshotStable(combatState, me!))
+        {
+            reason = "snapshot_stabilizing";
+        }
+        else
+        {
+            snapshotStable = true;
+            reason = "ready";
+        }
+
+        return new CombatActionGate
+        {
+            Source = combatState,
+            Usable = reason == "ready",
+            Reason = reason,
+            Me = me,
+            Room = room,
+            ModalOpen = modal != null,
+            ModalType = modal?.GetType().FullName,
+            ActionsSettled = actionsSettled,
+            RunningActionType = runningAction?.GetType().FullName,
+            ReadyActionType = readyAction?.GetType().FullName,
+            HandInCardPlay = hand?.InCardPlay,
+            HandInCardSelection = hand?.IsInCardSelection,
+            HandMode = hand?.CurrentMode.ToString(),
+            LocalTurnReady = localTurnReady,
+            SnapshotStable = snapshotStable,
+            PlayerActionPhase = playerActionPhase
+        };
     }
 
     private static bool IsCombatActionSnapshotStable(CombatState combatState, Player me)
@@ -2595,108 +2746,40 @@ internal static class GameStateService
         return now - _lastCombatActionReadinessSinceUtc >= CombatActionSnapshotStableDelay;
     }
 
-    private static bool IsCombatActionSnapshotCurrentlyStable(CombatState combatState, Player me)
+    
+
+        private static CombatActionReadinessPayload BuildCombatActionReadinessPayload(CombatActionGate gate)
     {
-        if (!GameActionService.AreGameActionsSettled())
-        {
-            return false;
-        }
-
-        var signature = BuildCombatActionReadinessSignature(combatState, me);
-        return string.Equals(signature, _lastCombatActionReadinessSignature, StringComparison.Ordinal) &&
-            DateTime.UtcNow - _lastCombatActionReadinessSinceUtc >= CombatActionSnapshotStableDelay;
-    }
-
-    private static CombatActionReadinessPayload BuildCombatActionReadinessPayload(
-        IScreenContext? currentScreen,
-        CombatState combatState,
-        Player me)
-    {
-        var modal = GetOpenModal();
-        var room = FindActiveCombatRoom(currentScreen);
-        var hand = room?.Ui?.Hand;
-        var runningAction = RunManager.Instance.ActionExecutor.CurrentlyRunningAction;
-        MegaCrit.Sts2.Core.GameActions.GameAction? readyAction = null;
-        var actionQueueHasExecutingAction = false;
-        try
-        {
-            readyAction = RunManager.Instance.ActionQueueSet.GetReadyAction();
-        }
-        catch (InvalidOperationException)
-        {
-            actionQueueHasExecutingAction = true;
-        }
-
-        var actionsSettled = !actionQueueHasExecutingAction && runningAction == null && readyAction == null;
-        var localTurnReady = IsLocalCombatTurnReady(me);
-        var snapshotStable = actionsSettled && IsCombatActionSnapshotCurrentlyStable(combatState, me);
-        var playerActionPhase = IsPlayerActionPhase(combatState, me);
-
-        var reason = modal != null
-            ? "modal_open"
-            : room == null
-                ? "combat_screen_unavailable"
-                : !CombatManager.Instance.IsInProgress
-                    ? "combat_not_in_progress"
-                    : CombatManager.Instance.IsOverOrEnding
-                        ? "combat_over_or_ending"
-                        : CombatManager.Instance.IsPaused
-                            ? "combat_paused"
-                            : CombatManager.Instance.PlayerActionsDisabled
-                                ? "player_actions_disabled"
-                            : room.Mode != CombatRoomMode.ActiveCombat
-                                ? "combat_room_not_active"
-                                : hand == null
-                                    ? "hand_unavailable"
-                                    : hand.InCardPlay
-                                        ? "hand_in_card_play"
-                                        : hand.IsInCardSelection
-                                            ? "hand_in_card_selection"
-                                            : hand.CurrentMode != MegaCrit.Sts2.Core.Nodes.Combat.NPlayerHand.Mode.Play
-                                                ? "hand_mode_not_play"
-                                                : !me.Creature.IsAlive
-                                                    ? "local_player_dead"
-                                                    : !localTurnReady
-                                                        ? "local_turn_not_ready"
-                                                        : runningAction != null
-                                                            ? "game_action_running"
-                                                            : readyAction != null
-                                                                ? "game_action_queued"
-                                                                : !actionsSettled
-                                                                    ? "action_queue_unsettled"
-                                                                    : !playerActionPhase
-                                                                        ? "not_player_action_phase"
-                                                                        : !snapshotStable
-                                                                            ? "snapshot_stabilizing"
-                                                                            : "ready";
+        var me = gate.Me;
 
         return new CombatActionReadinessPayload
         {
-            can_use_combat_actions = reason == "ready",
-            reason = reason,
-            actions_settled = actionsSettled,
-            running_action_type = runningAction?.GetType().FullName,
-            ready_action_type = readyAction?.GetType().FullName,
-            modal_open = modal != null,
-            modal_type = modal?.GetType().FullName,
+            can_use_combat_actions = gate.Usable,
+            reason = gate.Reason,
+            actions_settled = gate.ActionsSettled,
+            running_action_type = gate.RunningActionType,
+            ready_action_type = gate.ReadyActionType,
+            modal_open = gate.ModalOpen,
+            modal_type = gate.ModalType,
             player_actions_disabled = CombatManager.Instance.PlayerActionsDisabled,
             is_paused = CombatManager.Instance.IsPaused,
-            local_ready_to_end_turn = CombatManager.Instance.IsPlayerReadyToEndTurn(me),
+            local_ready_to_end_turn = me != null && CombatManager.Instance.IsPlayerReadyToEndTurn(me),
             all_players_ready_to_end_turn = CombatManager.Instance.AllPlayersReadyToEndTurn(),
             ending_turn_phase_one = CombatManager.Instance.EndingPlayerTurnPhaseOne,
             ending_turn_phase_two = CombatManager.Instance.EndingPlayerTurnPhaseTwo,
             end_turn_kick = GameActionService.EndTurnKickDetail,
             combat_in_progress = CombatManager.Instance.IsInProgress,
             combat_over_or_ending = CombatManager.Instance.IsOverOrEnding,
-            combat_room_mode = room?.Mode.ToString(),
-            hand_in_card_play = hand?.InCardPlay,
-            hand_in_card_selection = hand?.IsInCardSelection,
-            hand_mode = hand?.CurrentMode.ToString(),
-            local_turn_ready = localTurnReady,
-            snapshot_stable = snapshotStable,
-            player_action_phase = playerActionPhase
+            combat_room_mode = gate.Room?.Mode.ToString(),
+            hand_in_card_play = gate.HandInCardPlay,
+            hand_in_card_selection = gate.HandInCardSelection,
+            hand_mode = gate.HandMode,
+            local_turn_ready = gate.LocalTurnReady,
+            snapshot_stable = gate.SnapshotStable,
+            player_action_phase = gate.PlayerActionPhase
         };
     }
+
 
     private static string BuildCombatActionReadinessSignature(CombatState combatState, Player me)
     {
@@ -2745,7 +2828,11 @@ internal static class GameStateService
         return property?.GetValue(button) is not bool canTurnBeEnded || canTurnBeEnded;
     }
 
-    private static string[] BuildAvailableActionNames(IScreenContext? currentScreen, CombatState? combatState, RunState? runState)
+    private static string[] BuildAvailableActionNames(
+        IScreenContext? currentScreen,
+        CombatState? combatState,
+        RunState? runState,
+        CombatActionGate combatActionGate)
     {
         var names = new List<string>();
 
@@ -2788,12 +2875,12 @@ internal static class GameStateService
             return names.ToArray();
         }
 
-        if (CanEndTurn(currentScreen, combatState, requireButtonReady: false))
+        if (CanEndTurn(currentScreen, combatState, requireButtonReady: false, combatActionGate: combatActionGate))
         {
             names.Add("end_turn");
         }
 
-        if (CanPlayAnyCard(currentScreen, combatState))
+        if (CanPlayAnyCard(currentScreen, combatState, combatActionGate))
         {
             names.Add("play_card");
         }
@@ -3015,7 +3102,7 @@ internal static class GameStateService
             names.Add("decrease_ascension");
         }
 
-        if (CanUsePotion(currentScreen, combatState, runState))
+        if (CanUsePotion(currentScreen, combatState, runState, combatActionGate))
         {
             names.Add("use_potion");
         }
@@ -3048,7 +3135,7 @@ internal static class GameStateService
         return names.ToArray();
     }
 
-    private static CombatPayload? BuildCombatPayload(IScreenContext? currentScreen, CombatState? combatState)
+    private static CombatPayload? BuildCombatPayload(CombatState? combatState, CombatActionGate combatActionGate)
     {
         var me = GetLocalPlayer(combatState);
         if (combatState == null || me?.PlayerCombatState == null)
@@ -3087,7 +3174,7 @@ internal static class GameStateService
 
         return new CombatPayload
         {
-            action_readiness = BuildCombatActionReadinessPayload(currentScreen, combatState, me),
+            action_readiness = BuildCombatActionReadinessPayload(combatActionGate),
             player = playerPayload,
             players = GetOrderedCombatPlayers(combatState)
                 .Select(player => BuildCombatPlayerSummaryPayload(player, combatState, connectedPlayerIds, me.NetId))
@@ -3158,7 +3245,11 @@ internal static class GameStateService
             || string.Equals(power.name, "沙坑", StringComparison.OrdinalIgnoreCase);
     }
 
-    private static RunPayload? BuildRunPayload(IScreenContext? currentScreen, CombatState? combatState, RunState? runState)
+    private static RunPayload? BuildRunPayload(
+        IScreenContext? currentScreen,
+        CombatState? combatState,
+        RunState? runState,
+        CombatActionGate combatActionGate)
     {
         if (runState == null)
         {
@@ -3195,7 +3286,7 @@ internal static class GameStateService
                 .Select(otherPlayer => BuildRunPlayerSummaryPayload(runState, otherPlayer, connectedPlayerIds, player.NetId))
                 .ToArray(),
             potions = player.PotionSlots.Select((potion, index) =>
-                BuildRunPotionPayload(currentScreen, combatState, player, potion, index)).ToArray()
+                BuildRunPotionPayload(currentScreen, combatState, player, potion, index, combatActionGate)).ToArray()
         };
     }
 
@@ -5747,7 +5838,8 @@ internal static class GameStateService
         CombatState? combatState,
         Player player,
         PotionModel? potion,
-        int index)
+        int index,
+        CombatActionGate combatActionGate)
     {
         var requiresTarget = potion != null && PotionRequiresTarget(combatState, potion);
         var targetIndexSpace = potion != null ? GetPotionTargetIndexSpace(combatState, potion) : null;
@@ -5767,7 +5859,7 @@ internal static class GameStateService
             requires_target = requiresTarget,
             target_index_space = targetIndexSpace,
             valid_target_indices = validTargetIndices,
-            can_use = IsPotionUsable(currentScreen, combatState, player, potion),
+            can_use = IsPotionUsable(currentScreen, combatState, player, potion, combatActionGate),
             can_discard = CanDiscardPotionsInCurrentScreen(currentScreen) && IsPotionDiscardable(player, potion)
         };
     }
@@ -6130,7 +6222,12 @@ internal static class GameStateService
         };
     }
 
-    private static bool IsPotionUsable(IScreenContext? currentScreen, CombatState? combatState, Player player, PotionModel? potion)
+    private static bool IsPotionUsable(
+        IScreenContext? currentScreen,
+        CombatState? combatState,
+        Player player,
+        PotionModel? potion,
+        CombatActionGate? combatActionGate = null)
     {
         if (potion == null || !IsPotionDiscardable(player, potion))
         {
@@ -6145,7 +6242,7 @@ internal static class GameStateService
         return potion.Usage switch
         {
             PotionUsage.AnyTime => true,
-            PotionUsage.CombatOnly => CanUseCombatActions(currentScreen, combatState, out _, out _),
+            PotionUsage.CombatOnly => CanUseCombatActions(currentScreen, combatState, out _, out _, combatActionGate),
             _ => false
         };
     }
