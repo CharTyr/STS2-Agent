@@ -31,18 +31,26 @@ AI 队友条目后面紧跟着 `DamageMeter`，其 `is_enabled` 是 `false`，�
 该对象内进行；`scripts/start-game-session.ps1`。修复后同一模板 `ready_before=True`（无需修复），全新 clientId 拿到完整克隆。
 回归测试：`mcp_server/tests/test_posix_script_portability.py` 新增 2 条（入口函数存在并被两处调用；不再有固定字符窗口判定 `is_enabled`）。
 
-## 发现但**未**修的缺陷：单帧状态自相矛盾
+## 已修的缺陷：单帧状态自相矛盾（0.12.4 同号重发修复）
 
 自动化采样在 146 个战斗快照中抓到 1 次（`ready` 且手上有可出牌的样本里 36 次中 1 次）：
 同一份 `/state` 响应内，`combat.action_readiness` 说 `can_use_combat_actions=true`（`reason=ready`、`snapshot_stable=true`、
 `hand_mode=Play`），手牌两张都 `playable=true` / `can_play_result=true`，但 `available_actions` 只有
-`discard_potion` / `use_potion`——没有 `play_card`，也没有 `end_turn`，并且 `combat.energy` 是 `null`。
+`discard_potion` / `use_potion`——没有 `play_card`，也没有 `end_turn`。
 完整快照存于 `%TEMP%/sts2_mismatch_dump.json`（当场捕获，非推断）。
 
-判读：`combat.energy=null` 指向同一份响应里战斗载荷与动作表来自两次不同的读取，属于一帧竞态而非稳定状态。
+判读（2026-09-15 更正）：早前把 dump 顶层的 `"energy": null` 读成「`combat.energy` 为 null、战斗载荷只装了半份」是**错误**的：
+`CombatPayload` 本来就没有顶层 `energy` 字段（能量在 `combat.player.energy`），那个 `null` 是采集脚本自己写进 dump 的探针字段，
+它不构成任何证据。真正的根因是**同一份响应内对战斗门禁求值了多次**：`BuildAvailableActionNames`（end_turn → play_card → … → 药水）
+与随后 `BuildCombatPayload` 里的 readiness 各自独立调用 `CanUseCombatActions`，而其中的稳定采样器带 200ms 窗口、签名变化即重置。
+响应跨过那个窗口时，前半段判「未稳定」而不给 `play_card`/`end_turn`，后半段的药水与 readiness 判「已稳定」——同一份响应自我矛盾。
 影响：轮询方可能看到一帧没有出牌入口（下一次轮询即恢复）；`state-invariants` 若正好采到那一帧会报
-`missing action 'play_card'`——本轮所有不变量调用都没踩中，两侧 0 失败。**本次未修**：需要单独看
-`BuildStatePayload` 里战斗载荷与 `available_actions` 的装配路径，属于另一个改动集。
+`missing action 'play_card'`——本轮所有不变量调用都没踩中，两侧 0 失败。
+
+修复（0.12.4 同号重发）：`BuildStatePayload` 现在只求值一次 `CombatActionGate`，把同一份结果传给
+`BuildAvailableActionNames`、`BuildCombatPayload`、`BuildRunPayload`；`combat.action_readiness` 变成这份门禁的纯投影，
+只读的 `IsCombatActionSnapshotCurrentlyStable` 被删除（它正是能在同一响应内「改口」的那一半），门禁同时补上了此前只在
+readiness 里检查的 `modal_open` 与 `combat_paused` 两个锁。契约测试见 `STS2AIAgent.Tests/GameStateCombatGateContractTests.cs`。
 
 ## 未覆盖
 
