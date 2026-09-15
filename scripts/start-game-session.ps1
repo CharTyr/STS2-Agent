@@ -163,12 +163,49 @@ function Test-IsolatedSettingsTextReady {
     if ($body -notmatch '"id"\s*:\s*"STS2AIAgent"') {
         return $false
     }
-    # is_enabled may sit before or after the id inside the same entry, so check both directions.
-    if ($body -match '"id"\s*:\s*"STS2AIAgent"[\s\S]{0,200}?"is_enabled"\s*:\s*false' -or
-        $body -match '"is_enabled"\s*:\s*false[\s\S]{0,200}?"id"\s*:\s*"STS2AIAgent"') {
+    # Scope the flag to the agent's own object. A fixed character window leaks into the next
+    # entry, so a disabled sibling mod read as a disabled AI teammate and the whole clone was
+    # thrown away in favour of the fallback.
+    $entry = Get-IsolatedAgentEntryBody -Raw $body
+    if ($null -eq $entry) {
+        return $false
+    }
+    if ($entry.Body -match '"is_enabled"\s*:\s*false') {
         return $false
     }
     return $true
+}
+
+function Get-IsolatedAgentEntryBody {
+    param([string]$Raw)
+
+    $match = [regex]::Match($Raw, '"id"\s*:\s*"STS2AIAgent"')
+    if (-not $match.Success) {
+        return $null
+    }
+
+    $open = $Raw.LastIndexOf('{', $match.Index)
+    if ($open -lt 0) {
+        return $null
+    }
+
+    $depth = 0
+    for ($i = $open; $i -lt $Raw.Length; $i++) {
+        $ch = $Raw[$i]
+        if ($ch -eq '{') { $depth++ }
+        elseif ($ch -eq '}') {
+            $depth--
+            if ($depth -eq 0) {
+                $length = $i - $open + 1
+                return [pscustomobject]@{
+                    Start = $open
+                    Length = $length
+                    Body = $Raw.Substring($open, $length)
+                }
+            }
+        }
+    }
+    return $null
 }
 
 function Get-IsolatedModSettingsBody {
@@ -250,8 +287,17 @@ function Repair-IsolatedSettingsText {
         }
     }
 
-    $fixed = [regex]::Replace($fixed, '("id"\s*:\s*"STS2AIAgent"[\s\S]{0,200}?"is_enabled"\s*:\s*)false', '${1}true', 1)
-    $fixed = [regex]::Replace($fixed, '("is_enabled"\s*:\s*)false([\s\S]{0,200}?"id"\s*:\s*"STS2AIAgent")', '${1}true${2}', 1)
+    # Flip only the agent's own entry. The same fixed character window used to reach the next
+    # mod's "is_enabled": false and turn a mod the operator had disabled back on.
+    $entry = Get-IsolatedAgentEntryBody -Raw $fixed
+    if ($null -ne $entry) {
+        $entryFixed = if ($entry.Body -match '"is_enabled"\s*:\s*(true|false)') {
+            [regex]::Replace($entry.Body, '("is_enabled"\s*:\s*)false', '${1}true', 1)
+        } else {
+            [regex]::Replace($entry.Body, '^(\{\s*)', '$1"is_enabled": true, ', 1)
+        }
+        $fixed = $fixed.Substring(0, $entry.Start) + $entryFixed + $fixed.Substring($entry.Start + $entry.Length)
+    }
 
     return $patched.Substring(0, $shape.Start) + $fixed + $patched.Substring($shape.Start + $shape.Length)
 }
