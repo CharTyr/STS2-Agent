@@ -6,7 +6,7 @@
 
 > Distributed to the Steam Workshop on 2026-09-15 (item 3796486050, public, `file_size` 1233413 equal to the local
 > content bytes, `time_updated` 19:38:00), from commit `4b8e7c5`. The GitHub tag and release for `v0.12.4` followed
-> on 2026-09-16, pointing at the `dev -> main` merge that carries both re-cuts below;
+> on 2026-09-16, pointing at the `dev -> main` merge `3a4ec95` (PR #139) that carries both re-cuts below;
 > the release asset is 557906 bytes, SHA256 `AD970DB1204A0DC37602A2751935E87E5B87FC502B21B00E47B2699C4A98EC57`.
 >
 > **The same version number was rebuilt twice.** The first build could contradict itself inside one
