@@ -42,6 +42,24 @@
   `undefined` rather than an error. The mapping existed only in the builder methods.
 - `GET /health` documents `service`, `api_host` and `api_port`, which had only ever appeared in the
   example JSON.
+- Two contracts now guard the shape of the codebase itself, because nothing was counting. Two files
+  hold 49% of the mod's C# (`GameStateService.cs` at 8,559 lines and `GameActionService.cs` at
+  7,008, against 31,632 across 82 files), and neither got there by a decision.
+  `SourceShapeContractTests` and `mcp_server/tests/test_source_shape.py` give every file a line
+  budget -- named budgets for the four largest, a default for the rest -- and budgets only go down.
+  A second check fails when a budget drifts far above the file it guards, so shrinking a file
+  tightens its ratchet instead of leaving room to regrow.
+- `ActionSurface.SameActionsOnBothSurfaces` and `ActionSurface.SamePredicatesOnBothSurfaces` pin the
+  two action surfaces to each other. `GET /state`'s `available_actions` and
+  `GET /actions/available`'s descriptors are one decision written twice -- 301 and 609 lines
+  consulting the same 50 `Can*` predicates to emit the same 55 action names, verified field for
+  field -- so adding an action to one alone now fails by the name of the action that was forgotten.
+  The duplication itself is not removed: it decides what an agent is allowed to do, and rewriting it
+  on offline evidence alone is how the 0.12.4 regression happened. ADR 0001 records the plan and the
+  live-validation it waits for.
+- `.trellis/spec/mod/architecture.md` gains a "Code shape and its known debts" section with the
+  measurements, what distinguishes the two monoliths (one is repetition, one is three fused
+  concerns), and where new code belongs.
 - The `api-facts` gate grew to match: sixteen payload records checked field-for-field against their
   own table, every `GET /health` key against its table, the compact rename table against the
   renames the `BuildAgent*Payload` methods actually perform, and under all of it a coarse net
@@ -57,6 +75,8 @@
   buy this".
 - The `run` field table was split in two by a stray blank line, so `ascension` and
   `ascension_effects[]` rendered as a separate headerless table.
+- `AGENTS.md`'s "add a new action" walkthrough sent readers to `BuildAvailableActionDescriptors`,
+  a method that does not exist. The real one is `BuildAvailableActionsPayload`.
 - The gate's C# property extractor missed identifiers escaped with `@`, so `public EventPayload?
   @event` read as "the docs list a field the code does not have".
 - A source contract now pins the in-combat guard around the action-queue read in
