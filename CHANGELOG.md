@@ -31,9 +31,34 @@
 - The play skill tells an agent what `combat.action_readiness` means: a `COMBAT` screen missing
   `play_card` is one of the gate's reasons, not a lost turn, and the reason says whether to clear a
   modal, wait, or leave a paused run alone. The in-game agent reads the same contract.
+- `docs/api.md` now describes the whole `/state` surface. Seven sub-structures had no section at
+  all -- `session`, `multiplayer`, `multiplayer_lobby`, `character_select`, `timeline`, `modal` and
+  `game_over` -- and nine top-level fields were missing from its own field table. 91 fields across
+  23 payload records were named nowhere a client could read, including three screens an agent has
+  to drive and the `session` block the play skill tells agents to route on first.
+- `docs/api.md` documents the compact `agent_view` renames. That view is what MCP `get_game_state`
+  returns by default and it renames 43 keys (`can_embark` becomes `embark`, `enough_gold` becomes
+  `affordable`, every `index` becomes `i`), so a client following the `/state` names reads
+  `undefined` rather than an error. The mapping existed only in the builder methods.
+- `GET /health` documents `service`, `api_host` and `api_port`, which had only ever appeared in the
+  example JSON.
+- The `api-facts` gate grew to match: sixteen payload records checked field-for-field against their
+  own table, every `GET /health` key against its table, the compact rename table against the
+  renames the `BuildAgent*Payload` methods actually perform, and under all of it a coarse net
+  requiring every serialized field of every `/state` payload record to be named somewhere in
+  `docs/api.md`. Six destructive cases in the gate self-test cover the new paths.
 
 ### Fixed
 
+- `docs/api.md` said `shop.cards[]`, `shop.relics[]` and `shop.potions[]` carry an `available`
+  field. None of those three records has ever had one -- only `shop.card_removal` does -- so an
+  agent branching on it read `undefined` and could not tell a sold-out slot from an affordable one.
+  The three tables now document `is_stocked` and `enough_gold`, and say which one answers "can I
+  buy this".
+- The `run` field table was split in two by a stray blank line, so `ascension` and
+  `ascension_effects[]` rendered as a separate headerless table.
+- The gate's C# property extractor missed identifiers escaped with `@`, so `public EventPayload?
+  @event` read as "the docs list a field the code does not have".
 - A source contract now pins the in-combat guard around the action-queue read in
   `EvaluateCombatActionGate` (`CombatGate.QueueReadIsCombatOnly`). That guard is what the second
   v0.12.4 re-cut had to add: reading `RunManager.ActionExecutor` / `ActionQueueSet` outside a fight

@@ -150,9 +150,30 @@
    不是丢了回合；reason 说明该关弹窗、该等、还是该让开一个被人暂停的对局。游戏内 agent 读同一份契约
    （SKILL.md 是嵌入资源，`Skill.McpPlayerContract` 钉住两者相等）。
 
+7. **`docs/api.md` 第一次完整描述 `/state`**。盘点发现**七个子结构整段没有文档**——`session`、
+   `multiplayer`、`multiplayer_lobby`、`character_select`、`timeline`、`modal`、`game_over`——
+   顶层字段表还漏了 9 个字段，合计 **91 个字段在文档里搜不到任何痕迹**。其中三块是 agent 必须亲自
+   驱动的屏（选角 / 联机大厅 / 结算），而 `session` 正是游玩 skill 要求「路由的第一依据」的那个块。
+   现已全部补齐，盘点脚本复测 91 → 0。
+8. **compact `agent_view` 的改名表**。MCP `get_game_state` 默认返回 compact，而它**改了 43 个键名**
+   （`can_embark`→`embark`、`enough_gold`→`affordable`、所有 `index`→`i`……）。这套映射此前只存在于
+   `BuildAgent*Payload` 方法里，文档零字：外部客户端照 `/state` 名去取会读到 `undefined` 而不是报错。
+9. **修掉一处文档写错**（不是缺，是错）：`shop.cards[]` / `relics[]` / `potions[]` 被写成有 `available`
+   字段，这三个记录从来没有过它——只有 `shop.card_removal` 有。照旧文档分支的 agent 分不清「卖光了」
+   和「买得起」。现改为记录 `is_stocked` 与 `enough_gold`，并写明哪一个才是「现在能不能买」。
+   同时修掉 `run` 字段表被空行截断成两个表格的渲染缺陷。
+10. **`api-facts` 闸门随之扩容**：16 个载荷记录逐字段对表、`GET /health` 的 21 个键对表、
+    改名表对 `BuildAgent*Payload` 的实际改名、外加一张兜底网——**每个 `/state` 载荷记录的每个字段
+    都必须在 `docs/api.md` 里被提到**（现覆盖 56 个记录 488 个字段）。闸门自测从 22 条增到 28 条。
+    顺带修掉闸门自己的一个提取缺陷：C# 用 `@` 转义的关键字标识符（`public EventPayload? @event`）
+    此前会被误判成「文档里有、代码里没有」。
+
+**闸门自测在这一轮真的拦下了一次**：新增的 `/health` 检查要读 `Router.cs`，而 CI 用的 fixture 里
+没有它——基线用例立刻转红，在合并前就暴露了「本机能跑、CI 会挂」。
+
 离线证据（本轮收口后全量重跑）：C# **409 PASS / 0 FAIL**；`mcp_server` **222 项 OK**；
-`check_verification_gates.py` **九道闸门全绿**；`test-verification-gates.ps1` **闸门自测 25 条全过**
-（含本轮新增三条，此前 22 条）；`check_release_metadata.py` 五处版本号一致；`preflight-release.ps1` exit 0。
+`check_verification_gates.py` **九道闸门全绿**；`test-verification-gates.ps1` **闸门自测 28 条全过**
+（本轮新增六条，此前 22 条）；`check_release_metadata.py` 五处版本号一致；`preflight-release.ps1` exit 0。
 **没有实机复验**——本批不含运行时代码改动，实机结论沿用 0.12.4 第三次构建那次。
 
 ### 后置（本轮不做，留到下一次发布前复核）

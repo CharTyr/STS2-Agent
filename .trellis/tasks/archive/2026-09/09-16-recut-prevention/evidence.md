@@ -15,6 +15,41 @@ the gate returned to green. Cases 3-5 are now permanent cases in
 `scripts/test-verification-gates.ps1` (9c / 9d / 9e), which previously had three api-facts cases
 covering only the version string, the screen enum and the default port.
 
+## Second pass: destructive verification of the widened gate
+
+Re-run after the gate was extended from three records to the whole `/state` surface. Every case
+turned red with a message naming the specific field, code or rename, and both mutated files were
+restored byte-identically (`cmp` clean).
+
+| # | What was broken | Which check caught it |
+| --- | --- | --- |
+| A | `lethal_risks` row removed from the `combat` table | per-table (`CombatPayload`) |
+| B | `save_verified` row removed from the `game_over` table | per-table (`GameOverPayload`) |
+| C | `native_profile_id` row removed from the top-level table | per-table (`GameStatePayload`) |
+| D | `snapshot_stabilizing` removed from the `reason` table | reason vocabulary |
+| E | a `ghost` row added to the `combat` table | per-table, stale direction |
+| F | a field added to `CombatOrbPayload`, which owns no table | coarse coverage net |
+| G | the rename table changed to claim `can_embark -> disembark` | rename table vs builders |
+| H | `service` row removed from the `/health` table | `GET /health` keys |
+
+F is the one that matters most: it is the only check that catches a field on a record nobody wrote
+a table for, which is exactly how 91 of them shipped.
+
+**The self-test caught a real defect in this round's own work.** The new `/health` check reads
+`Router.cs`, which the CI fixture did not copy, so the baseline case went red immediately -- "passes
+on my machine, fails in CI", found before the commit rather than after.
+
+## Audit, before and after
+
+`GameStateService.cs` payload records against `docs/api.md`, matching inline code after stripping
+fenced blocks:
+
+- Before: **91 fields across 23 records** named nowhere. Whole sub-structures missing:
+  `multiplayer_lobby` (16/18), `character_select` (14/17), `game_over` (8/11), `timeline` (5/7),
+  `modal` (4/6), `multiplayer` (4/5), `session` (2/3).
+- After: **0**. The gate now reports 488 fields across 56 records, 16 per-table matches, 19 reason
+  codes, 43 compact renames and 21 `/health` keys.
+
 ## Offline suites, after the round
 
 | Check | Result |
@@ -22,7 +57,7 @@ covering only the version string, the screen enum and the default port.
 | `dotnet run --project STS2AIAgent.Tests -c Release` | **409 PASS / 0 FAIL** (408 before; `CombatGate.QueueReadIsCombatOnly` is the new one) |
 | `cd mcp_server && uv run --locked python -m unittest discover -s tests` | **222 tests OK** |
 | `python scripts/check_verification_gates.py` | **9 gates green** (api-doc, api-facts, doc-marks, docs-tracked, lockfile, packaged-links, ps1-syntax, script-encoding, sh-syntax) |
-| `scripts/test-verification-gates.ps1` | **25 cases pass** (22 before) |
+| `scripts/test-verification-gates.ps1` | **28 cases pass** (22 before) |
 | `python scripts/check_release_metadata.py` | `Release metadata consistent: 0.12.4` |
 | `scripts/preflight-release.ps1` | exit 0 |
 | `dotnet build STS2AIAgent/STS2AIAgent.csproj -c Release --no-incremental` | 0 warnings, 0 errors |

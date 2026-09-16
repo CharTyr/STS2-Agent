@@ -39,6 +39,31 @@ Three separate things were missing, and each is independently worth closing:
 - The play skill tells an agent how to read `action_readiness`.
 - No runtime mod code changes, so the published build is untouched.
 
+## Second pass: the rest of the /state contract
+
+Writing the combat tables raised the obvious question -- if `combat` was undocumented, what else is?
+An audit of every payload record against `docs/api.md` answered it: **91 fields across 23 records
+were named nowhere a client could read**, including seven sub-structures with no section at all
+(`session`, `multiplayer`, `multiplayer_lobby`, `character_select`, `timeline`, `modal`,
+`game_over`) and nine fields missing from the top-level table. Three of those are screens an agent
+has to drive itself, and `session` is the block the play skill names as the first routing decision.
+
+Two more gaps came out of the same audit:
+
+- The compact `agent_view` renames 43 keys and is what MCP `get_game_state` returns by default. A
+  client following the documented `/state` names reads `undefined`, not an error. The mapping lived
+  only in the builder methods.
+- `docs/api.md` documented an `available` field on `shop.cards[]` / `relics[]` / `potions[]` that
+  none of those records has ever had. That one is a documentation *error*, not a gap.
+
+### Additional acceptance criteria
+
+- The audit reports 0 undocumented fields.
+- The gate covers the whole surface, not the three combat records: per-table checks for sixteen
+  records, `GET /health` keys, the rename table against the builders, and a coarse net over every
+  field of every record.
+- Six new destructive cases, and the existing ones still pass.
+
 ## Out of scope
 
 - Live validation. This round changes documentation, tests and scripts only; the live conclusions

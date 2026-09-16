@@ -116,6 +116,8 @@ try {
     $fixtureServerSource = Join-Path $fixture "STS2AIAgent/Server"
     New-Item -ItemType Directory -Path $fixtureServerSource -Force | Out-Null
     Copy-Item -LiteralPath (Join-Path $repoRoot "STS2AIAgent/Server/HttpServer.cs") -Destination $fixtureServerSource
+    # api-facts also reads BuildHealthData, so the router has to be in the fixture too.
+    Copy-Item -LiteralPath (Join-Path $repoRoot "STS2AIAgent/Server/Router.cs") -Destination $fixtureServerSource
 
     $sourceDocs = Join-Path $repoRoot "docs"
     $fixtureDocs = Join-Path $fixture "docs"
@@ -322,6 +324,46 @@ try {
     if ($mutated -eq $originalFactsDoc) { throw "fixture setup failed: docs/api.md has no snapshot_stabilizing reason row" }
     Write-Utf8 $factsDoc $mutated
     Assert-Case -Name "api-facts gate rejects an undocumented action_readiness reason" -Only "api-facts"
+    Write-Utf8 $factsDoc $originalFactsDoc
+
+    # 9f. A payload field that no table owns and that docs/api.md never names. The per-table cases
+    # above only cover records that have a table; this is the coarse net under them, and it is the
+    # one that was missing while 91 fields -- whole screens, including character select, the
+    # multiplayer lobby and game over -- shipped undocumented.
+    $stateService = Join-Path $fixture "STS2AIAgent/Game/GameStateService.cs"
+    $originalStateService = Read-Utf8 $stateService
+    $nl = if ($originalStateService.Contains([char]13 + [char]10)) { [char]13 + [char]10 } else { [char]10 }
+    $orbAnchor = "internal sealed class CombatOrbPayload"
+    if ($originalStateService.IndexOf($orbAnchor) -lt 0) { throw "fixture setup failed: GameStateService.cs has no CombatOrbPayload record" }
+    $strayRecord = "internal sealed class FixtureStrayPayload" + $nl + "{" + $nl + "    public int fixture_undocumented_field { get; init; }" + $nl + "}" + $nl + $nl + $orbAnchor
+    $mutated = $originalStateService.Replace($orbAnchor, $strayRecord)
+    if ($mutated -eq $originalStateService) { throw "fixture setup failed: could not inject a stray payload record" }
+    Write-Utf8 $stateService $mutated
+    Assert-Case -Name "api-facts gate rejects a payload field docs/api.md never names" -Only "api-facts"
+    Write-Utf8 $stateService $originalStateService
+
+    # 9g. The compact rename table claiming a rename the agent view does not perform. The compact
+    # view is what MCP get_game_state returns by default, so a wrong compact key sends a client to a
+    # property that is simply not there -- it reads as an empty state rather than as an error.
+    $tick = [char]96
+    $renameRow = '| ' + $tick + 'character_select' + $tick + ' | ' + $tick + 'can_embark' + $tick +
+        ' / ' + $tick + 'selected_character_id' + $tick + ' | ' + $tick + 'embark' + $tick +
+        ' / ' + $tick + 'selected' + $tick + ' |'
+    if ($originalFactsDoc.IndexOf($renameRow) -lt 0) { throw "fixture setup failed: docs/api.md has no character_select compact rename row" }
+    $brokenRow = $renameRow.Replace($tick + 'embark' + $tick + ' / ', $tick + 'disembark' + $tick + ' / ')
+    if ($brokenRow -eq $renameRow) { throw "fixture setup failed: could not rewrite the compact rename row" }
+    Write-Utf8 $factsDoc $originalFactsDoc.Replace($renameRow, $brokenRow)
+    Assert-Case -Name "api-facts gate rejects a compact rename the agent view does not perform" -Only "api-facts"
+    Write-Utf8 $factsDoc $originalFactsDoc
+
+    # 9h. A GET /health key that only appears in the example JSON. /health is the first call any
+    # client makes and the one a person checks when something is wrong, so a key nobody documents is
+    # a key nobody reads.
+    $tick = [char]96
+    $serviceRow = ($originalFactsDoc -split ([char]10) | Where-Object { $_ -match ('^\| ' + $tick + 'service' + $tick + ' \|') } | Select-Object -First 1)
+    if (-not $serviceRow) { throw "fixture setup failed: docs/api.md has no service row in the /health table" }
+    Write-Utf8 $factsDoc $originalFactsDoc.Replace($serviceRow + [char]10, "")
+    Assert-Case -Name "api-facts gate rejects an undocumented GET /health key" -Only "api-facts"
     Write-Utf8 $factsDoc $originalFactsDoc
 
     # 9b. A packaged README linking to a file the release does not ship, at a target no rewrite

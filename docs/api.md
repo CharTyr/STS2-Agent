@@ -171,10 +171,12 @@
 
 | 字段 | 类型 | 说明 |
 | --- | --- | --- |
+| `service` | string | 固定为 `sts2-ai-agent`，用于确认应答的确实是本 Mod 而不是同端口上的别的服务 |
 | `mod_version` | string | Mod 版本号，与 `STS2AIAgent/Server/Router.cs` 的 `ModVersion` 常量一致 |
 | `protocol_version` | string | HTTP 协议版本 |
 | `game_version` | string | 游戏版本；示例值随游戏更新变化 |
 | `status` | string | `ready` 表示可以接受请求 |
+| `api_host` / `api_port` | string / integer | **本实例**自己的 HTTP API 地址。端口被占用时会自动递增，所以不要写死 8080——以这里为准 |
 | `process_id` | integer | 游戏进程 PID，用于核对双开窗口身份 |
 | `instance_role` | string | `human`（玩家窗口）或 `companion`（AI 队友实例） |
 | `mcp_enabled` / `mcp_url` | boolean / string\|null | 进程内 MCP 是否开启，以及开启时的地址 |
@@ -209,13 +211,17 @@
 | 字段 | 类型 | 说明 |
 | --- | --- | --- |
 | `state_version` | number | 状态模型版本（当前固定为 11） |
+| `native_profile_id` | number | 游戏原生存档档位 id（1..3），与 `switch_profile` 的 `option_index` 同一空间 |
 | `run_id` | string | 本局运行标识（种子字符串） |
 | `screen` | string | 当前逻辑界面（见 Screen 枚举） |
+| `session` | object | 对局归属：单人/联机、所处阶段、控制范围。**路由的第一依据**，见下 |
 | `in_combat` | boolean | 是否处于战斗流程 |
 | `turn` | number \| null | 当前回合数（非战斗时为 null） |
 | `available_actions` | string[] | 当前可执行动作名列表 |
 | `combat` | object \| null | 战斗状态（仅战斗中存在） |
 | `run` | object \| null | 本局运行状态 |
+| `multiplayer` | object \| null | 联机连接摘要（仅局内存在） |
+| `multiplayer_lobby` | object \| null | 联机大厅状态（仅大厅界面存在） |
 | `map` | object \| null | 地图状态（仅地图界面存在） |
 | `reward` | object \| null | 奖励状态（仅奖励界面存在） |
 | `selection` | object \| null | 选牌状态（仅选牌界面存在） |
@@ -225,8 +231,117 @@
 | `shop` | object \| null | 商店状态（仅商店房存在） |
 | `rest` | object \| null | 休息点状态（仅休息点存在） |
 | `character_select` | object \| null | 角色选择状态（仅角色选择界面存在） |
+| `timeline` | object \| null | 时间线状态（仅时间线界面存在） |
+| `unlock` | object \| null | 解锁覆盖层状态（仅解锁覆盖层存在） |
+| `bundles` | object[] \| null | 卡包选择（仅出现卡包时存在） |
+| `capstone` | object \| null | 决策型覆盖层的选项集（仅该覆盖层存在；暂停菜单与其页面**不**在此列） |
 | `modal` | object \| null | 阻塞弹窗状态（仅 MODAL 界面存在） |
 | `game_over` | object \| null | 游戏结束状态（仅 GAME_OVER 界面存在） |
+| `agent_view` | object \| null | 同一份状态的紧凑文本化改写，仅在请求时附带；见「compact `agent_view`」一节 |
+
+### `session` 子结构
+
+**这是路由的第一依据**，不要从屏幕名或工具名反推单人 / 联机。`/state` 永远带 `session`，包括主菜单。
+
+| 字段 | 类型 | 说明 |
+| --- | --- | --- |
+| `mode` | string | `singleplayer` 或 `multiplayer` |
+| `phase` | string | `menu` / `character_select` / `multiplayer_lobby` / `run` |
+| `control_scope` | string | 本实例能替谁做决定。目前恒为 `local_player`：即使在联机局里，也只操作自己的角色 |
+
+`mode` 在主菜单阶段固定报 `singleplayer`（还没有连接可言）；进入选角或局内后由该屏自己的
+`NetService.Type` 决定。
+
+### `multiplayer` 子结构
+
+局内的联机连接摘要。单人局也会带（`is_multiplayer = false`），大厅阶段请改看 `multiplayer_lobby`。
+
+| 字段 | 类型 | 说明 |
+| --- | --- | --- |
+| `is_multiplayer` | boolean | 本局是否为联机局 |
+| `net_game_type` | string | 游戏自己的连接类型名 |
+| `local_player_id` | string \| null | 本地玩家 id，与 `combat.players[].player_id` 同一空间 |
+| `player_count` | number | 当前玩家数 |
+| `connected_player_ids` | string[] | 已连接玩家的 id 列表 |
+
+`combat.players[]` / `run.players[]` 与 `target_index` **共用同一个下标空间**：要对第 N 个玩家生效的
+动作，`target_index` 就取该玩家在这两个数组里的位置，而不是 `player_id`。
+
+### `multiplayer_lobby` 子结构
+
+仅在 `MULTIPLAYER_LOBBY` 屏存在。`can_*` 是**这一刻按钮真的可点**，不是「原则上允许」——
+直接用它决定下一步，不要自己推。
+
+| 字段 | 类型 | 说明 |
+| --- | --- | --- |
+| `net_game_type` | string | 连接类型名 |
+| `join_host` | string | 加入用的主机地址 |
+| `join_port` | number | 加入用的端口 |
+| `local_net_id_hint` | string \| null | 本实例的 NetId 提示。本地直连路径下它来自启动参数 `--clientId`，读联机存档时游戏会拿它和存档里的 `players[].net_id` 比对 |
+| `has_lobby` | boolean | 大厅是否已建立 |
+| `is_host` | boolean | 本实例是否为房主 |
+| `is_client` | boolean | 本实例是否为客户端 |
+| `local_ready` | boolean | 本地玩家是否已准备 |
+| `can_host` | boolean | 此刻可执行「建立房间」 |
+| `can_join` | boolean | 此刻可执行「加入」 |
+| `can_ready` | boolean | 此刻可执行「准备」 |
+| `can_unready` | boolean | 此刻可执行「取消准备」 |
+| `can_disconnect` | boolean | 此刻可执行「断开」 |
+| `selected_character_id` | string \| null | 本地玩家已选角色 id |
+| `player_count` | number | 当前玩家数 |
+| `max_players` | number | 房间容量（4） |
+| `players` | object[] | 各槽位玩家，字段同 `character_select.players[]` |
+| `characters` | object[] | 可选角色，字段同 `character_select.characters[]` |
+
+### `character_select` 子结构
+
+仅在 `CHARACTER_SELECT` 屏存在。联机局里**两侧都要各自选角并 Ready** 才能开局，所以
+`is_waiting_for_players` 为 true 时正确动作是等待而不是重复点 `embark`。
+
+| 字段 | 类型 | 说明 |
+| --- | --- | --- |
+| `selected_character_id` | string \| null | 本地玩家已选角色 id；未选时为 null |
+| `is_multiplayer` | boolean | 本次选角是否属于联机局 |
+| `net_game_type` | string | 连接类型名 |
+| `can_embark` | boolean | 此刻可执行 `embark`（出发） |
+| `can_unready` | boolean | 此刻可执行 `unready`。本地玩家已 Ready 之后 `select_character` 不再被广告，`unready` 才是该状态下的动作 |
+| `can_increase_ascension` | boolean | 此刻可提升进阶等级 |
+| `can_decrease_ascension` | boolean | 此刻可降低进阶等级 |
+| `local_ready` | boolean | 本地玩家是否已准备 |
+| `is_waiting_for_players` | boolean | 本地已就绪、正在等其他玩家 |
+| `player_count` | number | 当前玩家数 |
+| `max_players` | number | 房间容量 |
+| `ascension` | number | 当前进阶等级 |
+| `max_ascension` | number | 本地玩家可选的最高进阶等级 |
+| `seed` | string \| null | 指定的种子；未指定时为 null |
+| `modifier_ids` | string[] | 已启用的对局修正 id |
+| `players` | object[] | 各槽位玩家，见下 |
+| `characters` | object[] | 可选角色，见下 |
+
+#### `character_select.characters[]`
+
+| 字段 | 类型 | 说明 |
+| --- | --- | --- |
+| `index` | number | 下标，`select_character` 的 `option_index` 取这里 |
+| `character_id` | string | 角色 id |
+| `name` | string | 角色显示名 |
+| `is_locked` | boolean | 未解锁；选它会被拒 |
+| `is_selected` | boolean | 本地玩家当前选中的就是它 |
+| `is_random` | boolean | 这一项是「随机」而不是具体角色 |
+
+#### `character_select.players[]`
+
+`multiplayer_lobby.players[]` 用同一组字段。
+
+| 字段 | 类型 | 说明 |
+| --- | --- | --- |
+| `player_id` | string | 玩家 id |
+| `slot_index` | number | 槽位下标 |
+| `is_local` | boolean | 是否为本实例操作的玩家 |
+| `character_id` | string \| null | 该玩家已选角色 id |
+| `character_name` | string \| null | 该玩家已选角色名 |
+| `is_ready` | boolean | 该玩家是否已准备 |
+| `max_multiplayer_ascension_unlocked` | number | 该玩家已解锁的最高联机进阶等级 |
 
 ### `combat` 子结构
 
@@ -394,7 +509,13 @@
 | `resolved_rules_text` | string | 按当前实例动态变量展开后的规则文本 |
 | `dynamic_values` | object[] | 当前实例的动态变量列表 |
 | `playable` | boolean | **当前是否可打出** |
-| `unplayable_reason` | string \| null | 不可打出原因（`not_enough_energy`, `not_enough_stars`, `no_living_allies`, `blocked_by_hook`, `unplayable`） |
+| `unplayable_reason` | string \| null | 不可打出原因（`not_enough_energy`, `not_enough_stars`, `no_living_allies`, `blocked_by_hook`, `unplayable`, `unsupported_target_type`） |
+| `unplayable_reason_raw` | string \| null | 游戏侧 `UnplayableReason` 枚举的原始名，供排查用；稳定分支请用 `unplayable_reason` |
+| `unplayable_preventer_id` | string \| null | 阻止出牌的来源 id（某个 Power 或遗物） |
+| `unplayable_preventer_type` | string \| null | 该来源的游戏侧类型全名，排查用 |
+| `can_play_result` | boolean | 游戏自己的可打出判定。与 `playable` 的区别是它**不含目标类型是否受支持**这一层：`target_type` 本 mod 尚未支持时 `can_play_result` 仍为 true 而 `playable` 为 false。**决策请用 `playable`** |
+| `target_index_space` | string \| null | `target_index` 落在哪个数组的下标空间（如 `combat.enemies[].index` / `combat.players[].slot_index`）。需要目标时才有值 |
+| `valid_target_indices` | number[] | 在上述空间里此刻合法的 `target_index`。传这个列表之外的值是 409 `invalid_target` |
 
 #### `*.dynamic_values[]`（适用于 `combat.hand[]`、`run.deck[]`、`selection.cards[]`、`reward.card_options[]`、`shop.cards[]`）
 
@@ -455,12 +576,14 @@
 | `max_hp` | number | 最大生命值 |
 | `gold` | number | 当前金币 |
 | `max_energy` | number | 基础最大能量 |
+| `act_id` | string \| null | 当前 Act 序号 |
+| `boss_id` | string \| null | 本 Act 的 Boss id；尚未确定时为 null |
 | `deck[]` | object[] | 当前牌库 |
 | `relics[]` | object[] | 当前遗物 |
 | `potions[]` | object[] | 当前药水槽 |
-
 | `ascension` | number | 当前 run 的 Ascension 等级 |
 | `ascension_effects[]` | object[] | 当前 Ascension 等级已生效的累计效果列表 |
+| `players[]` | object[] | 队伍摘要（含本地玩家），字段同 `combat.players[]` 另加 `gold` |
 
 #### `run.ascension_effects[]`
 
@@ -515,6 +638,8 @@
 | `requires_target` | boolean | 是否需要额外目标 |
 | `can_use` | boolean | 当前是否可手动使用 |
 | `can_discard` | boolean | 当前是否可丢弃 |
+| `target_index_space` | string \| null | `target_index` 落在哪个数组的下标空间；需要目标时才有值 |
+| `valid_target_indices` | number[] | 在上述空间里此刻合法的 `target_index` |
 
 ### `map` 子结构
 
@@ -531,6 +656,8 @@
 | `second_boss_node` | object \| null | 双 Boss Act 的第二个 Boss |
 | `available_nodes[]` | object[] | 当前可前往的节点 |
 | `nodes[]` | object[] | 完整地图图结构 |
+| `local_vote` | object \| null | 本地玩家已投的坐标 `{ row, col }`；**非 null 就表示已投票，此时应等待而不是再投一次** |
+| `player_votes[]` | object[] | 联机局各玩家的投票，见下 |
 
 #### `map.available_nodes[]`
 
@@ -541,6 +668,9 @@
 | `col` | number | 列坐标 |
 | `node_type` | string | 节点类型（`Monster`, `Elite`, `Boss`, `Rest`, `Shop`, `Event`, `Treasure` 等） |
 | `state` | string | 节点状态（`Travelable`, `Traveled` 等） |
+| `vote_count` | number | 投给该节点的玩家数（联机局） |
+| `has_local_vote` | boolean | 本地玩家投的就是这个节点 |
+| `voted_player_ids` | string[] | 投给该节点的玩家 id 列表 |
 
 #### `map.nodes[]`
 
@@ -560,6 +690,17 @@
 | `is_second_boss` | boolean | 是否为第二 Boss 节点 |
 | `parents[]` | object[] | 父节点坐标列表 `[{ row, col }]` |
 | `children[]` | object[] | 子节点坐标列表 `[{ row, col }]` |
+
+#### `map.player_votes[]`
+
+仅联机局非空。地图推进需要**全员投票**，所以本地投完之后要等其他人，不要重复 `choose_map_node`。
+
+| 字段 | 类型 | 说明 |
+| --- | --- | --- |
+| `player_id` | string | 玩家 id |
+| `slot_index` | number | 槽位下标 |
+| `is_local` | boolean | 是否为本地玩家 |
+| `coord` | object \| null | 该玩家投的坐标 `{ row, col }`；尚未投票为 null |
 
 ### `reward` 子结构
 
@@ -612,6 +753,7 @@
 | 字段 | 类型 | 说明 |
 | --- | --- | --- |
 | `index` | number | 用于 `select_deck_card` 的 `option_index` |
+| `selected` | boolean | 该卡当前是否已被选中（多选屏用它对照 `selection.selected_count`） |
 | `card_id` | string | 卡牌 ID |
 | `name` | string | 卡牌名称 |
 | `upgraded` | boolean | 是否已升级 |
@@ -704,6 +846,10 @@
 | `title` | string | 操作标题 |
 | `description` | string | 操作描述 |
 | `is_enabled` | boolean | 操作是否可用（如 `SMITH` 需要有可升级卡牌） |
+| `requires_target` | boolean | 该操作是否需要指定目标（联机局的部分休息点操作要选队友） |
+| `target_index_space` | string \| null | `target_index` 落在哪个数组的下标空间；需要目标时才有值 |
+| `valid_target_indices` | number[] | 在上述空间里此刻合法的 `target_index` |
+| `valid_target_player_ids` | string[] | 与上一行同序的玩家 id，便于核对选中的是谁 |
 
 ### `shop` 子结构
 
@@ -726,12 +872,19 @@
 | `index` | number | 对应 `buy_card` / `buy_relic` / `buy_potion` 的 `option_index` |
 | `name` | string | 商品名称 |
 | `price` | number | 当前价格 |
-| `available` | boolean | 当前是否仍可购买 |
+| `is_stocked` | boolean | 该货位还有货（买走之后为 false） |
+| `enough_gold` | boolean | 还有货**且**金币够。**这一项才是「现在能不能买」**；单看 `is_stocked` 会在钱不够时报 409 |
+
+> 这三张表此前写的是一个 `available` 字段。`shop.cards[]` / `shop.relics[]` / `shop.potions[]`
+> 从来没有过这个字段——只有 `shop.card_removal` 有。按旧文档分支会读到 `undefined`，
+> 请改用 `enough_gold`。
 
 #### `shop.cards[]` 附加字段
 
 | 字段 | 类型 | 说明 |
 | --- | --- | --- |
+| `category` | string | 该卡所在的货架分类 |
+| `on_sale` | boolean | 该卡正在打折 |
 | `card_id` | string | 卡牌内部 ID |
 | `upgraded` | boolean | 是否已升级 |
 | `card_type` | string | 卡牌类型 |
@@ -746,10 +899,105 @@
 
 #### `shop.card_removal`
 
+`available` 在这里**是**真实字段（上面三张商品表没有它）。
+
 | 字段 | 类型 | 说明 |
 | --- | --- | --- |
 | `price` | number | 当前删牌服务价格 |
 | `available` | boolean | 当前是否可购买删牌服务 |
+| `used` | boolean | 本次商店的删牌服务已用掉（每家商店一次） |
+| `enough_gold` | boolean | 还可用**且**金币够 |
+
+### `timeline` 子结构
+
+仅在时间线界面存在。角色解锁走时间线，不走 `GAME_OVER`。
+
+| 字段 | 类型 | 说明 |
+| --- | --- | --- |
+| `back_enabled` | boolean | 返回按钮可用 |
+| `inspect_open` | boolean | 详情覆盖层打开中 |
+| `unlock_screen_open` | boolean | 解锁界面打开中 |
+| `tutorial_open` | boolean | 教学覆盖层打开中 |
+| `can_choose_epoch` | boolean | 此刻可执行 `choose_timeline_epoch` |
+| `can_confirm_overlay` | boolean | 此刻可执行 `confirm_timeline_overlay` |
+| `slots` | object[] | 时间线槽位，见下 |
+
+#### `timeline.slots[]`
+
+| 字段 | 类型 | 说明 |
+| --- | --- | --- |
+| `index` | number | 槽位下标。**`choose_timeline_epoch` 的 `option_index` 取的就是这个值**，不是数组位置；越界返回 409 `invalid_target` 并带 `option_index_space = "timeline.slots[].index"` |
+| `epoch_id` | string | 该槽位的纪元 id |
+| `title` | string | 槽位标题 |
+| `state` | string | 槽位状态（游戏自身枚举的小写形式） |
+| `is_actionable` | boolean | 该槽位此刻可选；不可选的槽位传进去是 409 `invalid_target` |
+
+### `unlock` 子结构
+
+解锁覆盖层。死亡后回主菜单的路径上会连续出现多层，逐层 `confirm_unlock` 直到它变回 null。
+
+| 字段 | 类型 | 说明 |
+| --- | --- | --- |
+| `unlock_type` | string | 解锁类型 |
+| `items` | string[] | 本层展示的解锁条目 |
+| `can_confirm` | boolean | 此刻可执行 `confirm_unlock` |
+
+### `bundles` 子结构
+
+卡包选择。存在时为数组，每个元素是一个卡包。
+
+| 字段 | 类型 | 说明 |
+| --- | --- | --- |
+| `index` | number | 卡包下标，`confirm_bundle` 的 `option_index` 取这里 |
+| `cards` | object[] | 包内卡牌，字段同 `reward.card_options[]` |
+
+### `capstone` 子结构
+
+决策型覆盖层（设置 / 图鉴 / 反馈这类容器页）的选项集，`choose_capstone_option` 的 `option_index`
+取选项在数组里的位置。
+
+**暂停菜单与它的各个页面不属于这里**：它们各自有自己的屏幕名（`PAUSE_MENU` / `SETTINGS` /
+`COMPENDIUM` / `CARD_LIBRARY` / `RELIC_COLLECTION` / `POTION_LAB` / `BESTIARY` / `STATS` /
+`RUN_HISTORY`），`capstone` 在这些屏上是 `null`，`choose_capstone_option` 返回 409 `invalid_action`。
+曾经不是这样——暂停菜单一度被报成 `capstone`，把「放弃本局」当成一个可选项交给模型。
+
+### `modal` 子结构
+
+阻塞弹窗。它盖住的房间仍在下面，所以**先解弹窗再规划房间**。
+
+| 字段 | 类型 | 说明 |
+| --- | --- | --- |
+| `type_name` | string | 弹窗类型名（游戏侧类名） |
+| `underlying_screen` | string \| null | 弹窗底下的逻辑界面名，用于「先解覆盖层再规划房间」 |
+| `can_confirm` | boolean | 此刻可执行 `confirm_modal` |
+| `can_dismiss` | boolean | 此刻可执行 `dismiss_modal` |
+| `confirm_label` | string \| null | 确认按钮文案 |
+| `dismiss_label` | string \| null | 取消按钮文案 |
+
+分页教学弹窗（`NCombatRulesFtue` 共三页）需要**三次** `confirm_modal`：前两次返回 200 `pending`
+并附文案 `Tutorial page advanced; the modal is still open. Call confirm_modal again.`，第三次才
+`completed`。把第一个 `pending` 当失败会卡在这里。
+
+### `game_over` 子结构
+
+仅在 `GAME_OVER` 屏存在。这一屏分三个阶段，`phase` 说的就是现在在哪个阶段。
+
+| 字段 | 类型 | 说明 |
+| --- | --- | --- |
+| `is_victory` | boolean | 本局是否通关 |
+| `floor` | number \| null | 结束时的总层数 |
+| `character_id` | string \| null | 本局角色 id |
+| `phase` | string | `intro`（结算动画尚未播完，可 `continue_game_over` 推进）/ `summary_animating`（两个按钮都不可点，只能等）/ `summary_ready`（结算已写盘，可回主菜单） |
+| `can_continue` | boolean | 此刻可执行 `continue_game_over` |
+| `can_return_to_main_menu` | boolean | 此刻可执行回主菜单 |
+| `showing_summary` | boolean | 结算摘要已显示 |
+| `waiting_for_other_players` | boolean | 联机局里在等其他玩家推进 |
+| `save_status` | string | 存档写入核对结果：`pending`（尚未到核对时机）/ `verified`（已确认落盘）/ `error`（核对失败，原因见 `save_error`） |
+| `save_verified` | boolean | `save_status == "verified"` 的布尔投影 |
+| `save_error` | string \| null | 核对失败原因，例如 `progress_profile_not_initialized` / `progress_save_missing` |
+
+`continue_game_over` 会**等到原生结算真的写进 progress 存档**才返回，所以它比其它动作慢；
+不要因为一次超时就重复点。判断是否真的收尾完成看 `save_verified`，不要只看屏幕变化。
 
 ### compact `agent_view` 的增补字段
 
@@ -777,6 +1025,41 @@ compact 的 `combat` 原样携带 `/state` 的 `action_readiness`、`end_turn_wi
 | `chest.relics[]` | `relic_id` | 宝箱遗物 ID，配合 `i` 供 `choose_treasure_relic` 使用 |
 | `modal` | `underlying_screen` | 覆盖层底下的逻辑界面名，用于「先解覆盖层再规划房间」 |
 | 顶层 | `unlock` | 解锁覆盖层快照（`unlock_type` / `items` / `can_confirm`）；无解锁覆盖层时为 `null` |
+
+#### compact 的字段改名对照表
+
+compact 不是 `/state` 的子集，**很多键换了名字**。MCP `get_game_state` 默认返回的就是 compact，
+所以按本文档其余部分的 `/state` 名去取 compact 的值会取到 `undefined`。下表是全部改名；
+未列出的键与 `/state` 同名。
+
+| compact 位置 | `/state` 字段 | compact 键 |
+| --- | --- | --- |
+| 所有带下标的数组元素 | `index` | `i` |
+| `combat.enemies[]` | `is_alive` / `is_hittable` | `alive` / `hittable` |
+| `run` | `character_name` | `character` |
+| `run.potions[]` | `can_use` / `can_discard` / `valid_target_indices` | `usable` / `discard` / `targets` |
+| `run.piles.*` / `run.deck[]` | 合并组 | `card_ids`（组代表的卡牌 ID，去重升序） |
+| `map` | `player_votes` | `votes` |
+| `map.votes[]` | `is_local` | `local` |
+| `selection` | `min_select` / `max_select` / `selected_count` / `can_confirm` | `min` / `max` / `selected` / `confirm` |
+| `shop` | `is_open` | `open` |
+| `shop.*[]` | `is_stocked` / `enough_gold` | `stocked` / `affordable` |
+| `rest.options[]` | `is_enabled` | `enabled` |
+| `chest` | `is_opened` / `has_relic_been_claimed` | `opened` / `claimed` |
+| `event` | `event_id` / `is_finished` | `id` / `finished` |
+| `event.options[]` | `is_locked` / `is_proceed` / `will_kill_player` | `locked` / `proceed` / `kill` |
+| `reward.alternatives[]` | `label` | `line` |
+| `character_select` | `can_embark` / `selected_character_id` | `embark` / `selected` |
+| `character_select.characters[]` | `is_locked` / `is_selected` | `locked` / `selected` |
+| `multiplayer_lobby.*[]` | `name` / `is_locked` / `is_ready` / `is_selected` | `line` / `locked` / `ready` / `selected` |
+| `timeline` | `back_enabled` / `tutorial_open` / `can_confirm_overlay` | `back` / `tutorial` / `confirm` |
+| `timeline.slots[]` | `is_actionable` | `actionable` |
+| `modal` | `type_name` / `can_confirm` / `can_dismiss` | `type` / `confirm` / `dismiss` |
+| `game_over` | `is_victory` / `character_id` / `can_return_to_main_menu` | `victory` / `character` / `can_return` |
+
+`timeline.slots[].i` 仍然是 `/state` 里 `timeline.slots[].index` 的那个值——
+**`choose_timeline_epoch` 取的就是它，不是数组位置**。同理 `map.options[].i` 是
+`map.available_nodes[].index`。
 
 ### 状态示例：战斗中
 
