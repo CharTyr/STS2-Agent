@@ -54,8 +54,8 @@ fenced blocks:
 
 | Check | Result |
 | --- | --- |
-| `dotnet run --project STS2AIAgent.Tests -c Release` | **409 PASS / 0 FAIL** (408 before; `CombatGate.QueueReadIsCombatOnly` is the new one) |
-| `cd mcp_server && uv run --locked python -m unittest discover -s tests` | **222 tests OK** |
+| `dotnet run --project STS2AIAgent.Tests -c Release` | **413 PASS / 0 FAIL** (408 at the start) |
+| `cd mcp_server && uv run --locked python -m unittest discover -s tests` | **224 tests OK** (222 at the start) |
 | `python scripts/check_verification_gates.py` | **9 gates green** (api-doc, api-facts, doc-marks, docs-tracked, lockfile, packaged-links, ps1-syntax, script-encoding, sh-syntax) |
 | `scripts/test-verification-gates.ps1` | **28 cases pass** (22 before) |
 | `python scripts/check_release_metadata.py` | `Release metadata consistent: 0.12.4` |
@@ -70,6 +70,46 @@ The api-facts gate now reports, in addition to its three existing facts:
   - #### `combat.lethal_risks[]`: 10 field(s) match internal sealed class CombatLethalRiskPayload
   - 19 action_readiness reason code(s) from EvaluateCombatActionGate are documented
 ```
+
+## Third pass: the codebase's own shape
+
+Measured 2026-09-16 over 82 mod source files, 31,632 lines.
+
+| | Lines | Share |
+| --- | ---: | ---: |
+| `GameStateService.cs` | 8,559 | 27.1% |
+| `GameActionService.cs` | 7,008 | 22.2% |
+| both | 15,567 | **49.2%** |
+
+Inside them: `GameStateService` is one 7,290-line class of 318 methods with three concerns fused
+(raw `/state` builders 40%, compact `agent_view` 11%, action availability, plus 176 small
+predicates); `GameActionService` is 60 `Execute*` handlers and 62 `WaitFor*` stabilizers, one
+pattern repeated, nothing tangled.
+
+**The largest single debt, found by comparing the two action surfaces mechanically:**
+
+| | Lines | `Can*` predicates | action names |
+| --- | ---: | ---: | ---: |
+| `BuildAvailableActionNames` | 301 | 50 | 55 |
+| `BuildAvailableActionsPayload` | 609 | 50 | 55 |
+| intersection | — | **50, identical** | **55, identical** |
+
+910 lines answering one question twice, agreeing today only because someone has kept them agreeing.
+Emission order already diverges from the 28th entry. Not rewritten this round -- see
+`docs/adr/0001-single-action-surface.md` -- because those lines decide what an agent may do and the
+0.12.4 regression is what rewriting such code on offline evidence looks like.
+
+### Destructive verification, third pass
+
+| # | What was broken | Result |
+| --- | --- | --- |
+| I | `names.Add("brand_new_action")` added to one surface only | `FAIL ActionSurface.SameActionsOnBothSurfaces`, naming `brand_new_action` |
+| J | `CanOpenChest` replaced with `true` in the descriptor surface | `FAIL ActionSurface.SamePredicatesOnBothSurfaces`, naming `CanOpenChest` |
+| K | `AgentLoop.cs` (768 lines) padded past the 1000-line default | `FAIL SourceShape.FilesStayWithinBudget`, naming the file and its budget |
+| L | `AgentRuntime.cs` budget raised from 1450 to 5000 | `FAIL SourceShape.BudgetsTrackTheirFiles`: "lower the budget to match" |
+| M | `knowledge.py` (574 lines) padded past the 700-line default | Python ratchet fails, naming the module |
+
+All restored byte-identically.
 
 ## Health sweep (beyond the round's own scope)
 
