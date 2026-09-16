@@ -77,6 +77,11 @@
   `ascension_effects[]` rendered as a separate headerless table.
 - `AGENTS.md`'s "add a new action" walkthrough sent readers to `BuildAvailableActionDescriptors`,
   a method that does not exist. The real one is `BuildAvailableActionsPayload`.
+- The verification gates crashed instead of reporting on a console that is not UTF-8. Gate messages
+  quote the Chinese section headings of `docs/api.md`, and the Windows CI runner's stdout is cp1252,
+  so printing one raised `UnicodeEncodeError`: a gate that **passed** still exited 1, and a gate that
+  failed would have had its real message replaced by an encoding traceback. The gates now write
+  UTF-8 with a replacing error handler, and the self-test runs the suite under `PYTHONIOENCODING=cp1252`.
 - The gate's C# property extractor missed identifiers escaped with `@`, so `public EventPayload?
   @event` read as "the docs list a field the code does not have".
 - A source contract now pins the in-combat guard around the action-queue read in

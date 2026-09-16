@@ -188,12 +188,17 @@
     一节，带上述测量数据、两个巨型文件的区别、以及「新代码该放哪」。顺带修掉 `AGENTS.md`
     「新增动作」步骤里指向一个**不存在的方法**（`BuildAvailableActionDescriptors`）。
 
+**CI 抓到本轮引入的一个真实缺陷，已修**：闸门的提示与错误消息会引用 `docs/api.md` 的中文章节标题，
+而 Windows CI 的 stdout 是 cp1252——`print` 直接抛 `UnicodeEncodeError`，于是**判断通过的闸门仍然 exit 1**；
+更糟的是闸门真失败时，真实原因会被编码 traceback 顶掉。现在闸门统一以 UTF-8 输出（`errors="replace"`），
+自测新增一条在 `PYTHONIOENCODING=cp1252` 下跑全套的用例，撤掉修复即转红。
+
 **闸门自测在这一轮真的拦下了一次**：新增的 `/health` 检查要读 `Router.cs`，而 CI 用的 fixture 里
 没有它——基线用例立刻转红，在合并前就暴露了「本机能跑、CI 会挂」。
 
 离线证据（本轮收口后全量重跑）：C# **409 PASS / 0 FAIL**；`mcp_server` **222 项 OK**；
-`check_verification_gates.py` **九道闸门全绿**；`test-verification-gates.ps1` **闸门自测 28 条全过**
-（本轮新增六条，此前 22 条）；`check_release_metadata.py` 五处版本号一致；`preflight-release.ps1` exit 0。
+`check_verification_gates.py` **九道闸门全绿**；`test-verification-gates.ps1` **闸门自测 29 条全过**
+（本轮新增七条，此前 22 条）；`check_release_metadata.py` 五处版本号一致；`preflight-release.ps1` exit 0。
 **没有实机复验**——本批不含运行时代码改动，实机结论沿用 0.12.4 第三次构建那次。
 
 ### 后置（本轮不做，留到下一次发布前复核）

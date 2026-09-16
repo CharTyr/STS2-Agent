@@ -366,6 +366,29 @@ try {
     Assert-Case -Name "api-facts gate rejects an undocumented GET /health key" -Only "api-facts"
     Write-Utf8 $factsDoc $originalFactsDoc
 
+    # 9i. The gate's own output on a console that is not UTF-8. Gate messages quote the Chinese
+    # section headings of docs/api.md, and the Windows CI runner's stdout is cp1252: printing one
+    # raised UnicodeEncodeError, so a gate that PASSED still exited 1, and a gate that failed would
+    # have had its real message replaced by an encoding traceback. This case runs the whole suite
+    # the way CI does and requires it to survive.
+    $previousIoEncoding = $env:PYTHONIOENCODING
+    $env:PYTHONIOENCODING = "cp1252"
+    try {
+        $cp1252Result = Invoke-Gate -Fixture $fixture -Only "api-facts"
+    }
+    finally {
+        if ($null -eq $previousIoEncoding) { Remove-Item Env:PYTHONIOENCODING -ErrorAction SilentlyContinue }
+        else { $env:PYTHONIOENCODING = $previousIoEncoding }
+    }
+    if ($cp1252Result.ExitCode -ne 0 -or $cp1252Result.Output -match "UnicodeEncodeError") {
+        Write-Host "FAIL  gate output survives a non-UTF-8 console"
+        Write-Host "      $($cp1252Result.Output.Trim())"
+        $failures++
+    }
+    else {
+        Write-Host "PASS  gate output survives a non-UTF-8 console"
+    }
+
     # 9b. A packaged README linking to a file the release does not ship, at a target no rewrite
     # rule covers. This is the shape #105 shipped: the link was new, the rewrite table did not
     # know it, and the artifact builder copied the file through untouched. packaged-links was the

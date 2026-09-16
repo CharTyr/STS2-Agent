@@ -1275,7 +1275,30 @@ GATES = {
 }
 
 
+def use_utf8_streams() -> None:
+    """Make the gate's own output survive a console that is not UTF-8.
+
+    Gate messages quote what they check, and what they check includes Chinese section headings from
+    docs/api.md. On the Windows CI runner stdout defaults to cp1252, where printing one of those
+    raises UnicodeEncodeError -- so a gate that passed still exited 1, and, worse, a gate that failed
+    would have had its real message replaced by an encoding traceback. Writing UTF-8 bytes keeps the
+    heading readable in the CI log viewer; `errors="replace"` means no console can ever turn a
+    verification result into a crash.
+    """
+    for stream in (sys.stdout, sys.stderr):
+        reconfigure = getattr(stream, "reconfigure", None)
+        if reconfigure is None:
+            continue
+        try:
+            reconfigure(encoding="utf-8", errors="replace")
+        except (ValueError, OSError):
+            # A stream that refuses to be reconfigured (a pipe already in text mode on an exotic
+            # host) is not worth failing the run over; the gates themselves are unaffected.
+            pass
+
+
 def main() -> int:
+    use_utf8_streams()
     parser = argparse.ArgumentParser(description="Run the offline verification gates.")
     parser.add_argument("--repo-root", type=Path, default=Path(__file__).resolve().parent.parent)
     parser.add_argument("--only", choices=sorted(GATES), action="append", help="run only the named gate(s)")

@@ -57,7 +57,7 @@ fenced blocks:
 | `dotnet run --project STS2AIAgent.Tests -c Release` | **413 PASS / 0 FAIL** (408 at the start) |
 | `cd mcp_server && uv run --locked python -m unittest discover -s tests` | **224 tests OK** (222 at the start) |
 | `python scripts/check_verification_gates.py` | **9 gates green** (api-doc, api-facts, doc-marks, docs-tracked, lockfile, packaged-links, ps1-syntax, script-encoding, sh-syntax) |
-| `scripts/test-verification-gates.ps1` | **28 cases pass** (22 before) |
+| `scripts/test-verification-gates.ps1` | **29 cases pass** (22 before) |
 | `python scripts/check_release_metadata.py` | `Release metadata consistent: 0.12.4` |
 | `scripts/preflight-release.ps1` | exit 0 |
 | `dotnet build STS2AIAgent/STS2AIAgent.csproj -c Release --no-incremental` | 0 warnings, 0 errors |
@@ -110,6 +110,28 @@ Emission order already diverges from the 28th entry. Not rewritten this round --
 | M | `knowledge.py` (574 lines) padded past the 700-line default | Python ratchet fails, naming the module |
 
 All restored byte-identically.
+
+## Found by CI, fixed in this branch
+
+The `contracts` job failed on the first push, and the failure was this round's own:
+
+```
+[gate] api-facts: ok
+  - docs/api.md mod_version 0.12.4 matches ...
+UnicodeEncodeError: 'charmap' codec can't encode characters in position 18-21
+```
+
+Gate notes quote what they check, and what they check now includes Chinese section headings from
+`docs/api.md`. The Windows CI runner's stdout is cp1252, so `print` raised -- **a gate that passed
+still exited 1**. The worse case never fired but was already possible: a gate that genuinely failed
+would have had its message replaced by an encoding traceback, and `doc-marks` has carried Chinese in
+its failure text since long before this branch.
+
+Fixed by reconfiguring the gate's own streams to UTF-8 with `errors="replace"`. Reproduced locally
+with `PYTHONIOENCODING=cp1252`, both paths checked: a passing run now exits 0, and a deliberately
+failed `api-facts` prints its message with the heading intact instead of a traceback. Self-test case
+9i runs the suite under cp1252 and requires exit 0 with no `UnicodeEncodeError`; removing
+`use_utf8_streams()` turns it red.
 
 ## Health sweep (beyond the round's own scope)
 
