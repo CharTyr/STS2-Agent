@@ -68,6 +68,18 @@
 
 ### Fixed
 
+- **`/state.screen` reports `GAME_OVER` again after a death.** Death leaves the combat room active,
+  so `ResolveNonModalScreen`'s `FindActiveCombatRoom => "COMBAT"` guard claimed every game-over
+  screen and its own `NGameOverScreen` switch arm was unreachable. A live pass caught eight samples
+  whose only offered action was `continue_game_over` and all eight reported `COMBAT`; across 2,346
+  samples the name `GAME_OVER` never appeared once. `docs/api.md` documents it, the play skill routes
+  on it and `run_sts2_validation.py` branches on it, so an agent following the contract waited for a
+  screen it would never see and recovered only through the action list. Re-verified live on the
+  patched build: two independent deaths, 10 game-over samples, all reporting `GAME_OVER`, with
+  `continue_game_over` and `return_to_main_menu` still settling the run and `save_verified` still
+  reaching `true`. All 12 screens the baseline covered were re-sampled and none changed name.
+  `ScreenResolution.GameOverBeforeCombatRoom` pins the ordering.
+
 - `docs/api.md` said `shop.cards[]`, `shop.relics[]` and `shop.potions[]` carry an `available`
   field. None of those three records has ever had one -- only `shop.card_removal` does -- so an
   agent branching on it read `undefined` and could not tell a sold-out slot from an affordable one.

@@ -443,6 +443,7 @@ internal static class TestRunner
         yield return ("ScreenResolution.PatchNotes", () => Task.Run(ScreenResolutionContractTests.PatchNotesClosePathIsWidenedWithoutWeakeningSubmenus));
         yield return ("ScreenResolution.InspectOverlays", () => Task.Run(ScreenResolutionContractTests.InspectOverlaysCloseThroughTheirOwnClose));
         yield return ("ScreenResolution.CapstoneContainerPages", () => Task.Run(ScreenResolutionContractTests.CapstoneContainerPagesAreNamedAndNotDecisionScreens));
+        yield return ("ScreenResolution.GameOverBeforeCombatRoom", () => Task.Run(ScreenResolutionContractTests.GameOverIsNamedBeforeTheCombatRoomClaimsIt));
         yield return ("ScreenResolution.CapstonePagesOneBackStep", () => Task.Run(ScreenResolutionContractTests.CapstonePagesOfferOneBackStepAndNeverThePausePage));
         yield return ("TimelineIndex.OneSpace", () => Task.Run(TimelineIndexContractTests.ExecutorIndexesTheSameSlotListTheStateExposes));
         yield return ("TimelineIndex.NonActionableRejected", () => Task.Run(TimelineIndexContractTests.NonActionableSlotsAreRejectedExplicitly));
