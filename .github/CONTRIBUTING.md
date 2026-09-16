@@ -49,8 +49,30 @@ For MCP server changes:
 
 ## Release flow
 
-1. Merge tested work into `dev`.
+1. Merge tested work into `dev`, recording each user-visible change under `## Unreleased` in
+   `CHANGELOG.md`.
 2. Validate release candidates from `dev`.
 3. Open a `dev -> main` pull request.
 4. Merge to `main` after final review.
-5. Tag and publish the release from `main`.
+5. Rename `## Unreleased` to the version being released, bump the five version files, and tag and
+   publish from `main`.
+6. Keep the `build-fingerprint.json` each packaging run writes: it is what the release record cites.
+
+### Why `## Unreleased` is not optional
+
+The same version number has been rebuilt and republished four times (v0.12.3 twice and v0.12.4
+twice, all within three days). Every one of them started as a small fix that landed after the tag,
+with nowhere in the changelog to record it -- so the choice each time was between spending a version
+number on a one-line follow-up and re-cutting the one already published. Re-cutting won, and the
+cost is permanent: three builds answer to `0.12.4` and the version string never tells them apart.
+
+A post-tag change with a section to live in is a change that can wait for the next version.
+
+### Telling two builds of one version apart
+
+When a version is republished, `mod_version` is no longer enough to identify a build. Every
+packaging run writes a `build-fingerprint.json` beside the artifact (`scripts/package-release.ps1`
+and `scripts/package-steam-workshop.ps1`, both through `scripts/lib-build-fingerprint.ps1`) holding
+each file's SHA256, the summed byte count Steam reports as `file_size`, and the source commit with a
+dirty flag. Copy those numbers into the release record rather than collecting them by hand
+afterwards, and quote them when asking a reporter which build they are running.

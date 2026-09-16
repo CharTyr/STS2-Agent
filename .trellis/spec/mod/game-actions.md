@@ -10,13 +10,13 @@ Do not rebuild state in a caller by reaching into native managers. Use `BuildSta
 
 ## Available actions are the legal action source
 
-`BuildAvailableActionNames` is the canonical name list used in raw state and compact state. `BuildAvailableActionsPayload` adds descriptors such as `requires_index` and `requires_target` for clients that need parameter hints. Both methods use the same `Can*` predicates and early modal/unlock guards in [GameStateService](../../../STS2AIAgent/Game/GameStateService.cs).
+`BuildAvailableActionNames` is the canonical name list used in raw state and compact state. `BuildAvailableActionsPayload` adds descriptors such as `requires_index` and `requires_target` for clients that need parameter hints. **They are one decision written twice** -- 301 and 609 lines consulting the same 50 `Can*` predicates to emit the same 55 action names, verified mechanically -- so every action has to be added to both. `ActionSurface.SameActionsOnBothSurfaces` and `ActionSurface.SamePredicatesOnBothSurfaces` fail by name when only one is updated; [ADR 0001](../../../docs/adr/0001-single-action-surface.md) records the plan to collapse them and why it waits for a session that can validate against the running game.
 
 Agent and MCP callers must select an action from the latest `available_actions` and recompute indexes from that same state. This is encoded in [AgentTools](../../../STS2AIAgent/Agent/AgentTools.cs), [AgentLoop.ExecuteActAsync](../../../STS2AIAgent/Agent/AgentLoop.cs), and the native/Python `act` implementations. A screen name alone is not permission to act; stale or guessed action names must be rejected.
 
 When adding an action, make the whole path explicit:
 
-1. Add the name and its `CanX` condition to `BuildAvailableActionNames`.
+1. Add the name and its `CanX` condition to `BuildAvailableActionNames`. This is step one of two; skipping the other turns `ActionSurface.*` red.
 2. Add a corresponding descriptor to `BuildAvailableActionsPayload` for every exposed action, including actions without arguments. `ActionDescriptor` contains only `name`, `requires_index`, and `requires_target`; coordinate/tool requirements belong in the action request schema and handler validation.
 3. Add the normalized action name to the `GameActionService.ExecuteAsync` switch.
 4. Implement an `ExecuteXxxAsync` method that checks current availability first, validates request fields next, invokes native controls, waits for a stable condition, and returns `ActionResponsePayload` with a fresh `GameStatePayload`.

@@ -66,3 +66,58 @@ The Python sidecar is a separate implementation. [Sts2Client](../../../mcp_serve
 ## Cross-layer change rule
 
 For a change crossing state, action, agent, UI, or MCP, trace it in both directions before editing. A useful local example is the `play_card` path: `GameStateService` advertises it, `AgentTools` describes its indexes, `AgentLoop` validates against the latest state and delegates through `IGameBridge`, `GameBridge` calls `GameActionService`, and the action handler returns `status`, `stable`, `message`, and a fresh state. Contract tests in [AgentLoopTests](../../../STS2AIAgent.Tests/AgentLoopTests.cs), [McpServiceTests](../../../STS2AIAgent.Tests/McpServiceTests.cs), and [CombatDiagnosticsContractTests](../../../STS2AIAgent.Tests/CombatDiagnosticsContractTests.cs) show the expected seams.
+
+## Code shape and its known debts
+
+Measured 2026-09-16 across 82 mod source files totalling 31,632 lines. These numbers are here
+because nobody was counting, and that is how a codebase stops being navigable -- not through a bad
+commit, but through a thousand good ones.
+
+| File | Lines | Share of the mod |
+| --- | ---: | ---: |
+| [GameStateService.cs](../../../STS2AIAgent/Game/GameStateService.cs) | 8,559 | 27.1% |
+| [GameActionService.cs](../../../STS2AIAgent/Game/GameActionService.cs) | 7,008 | 22.2% |
+| [AgentOverlayHost.cs](../../../STS2AIAgent/Ui/AgentOverlayHost.cs) | 1,829 | 5.8% |
+| [AgentRuntime.cs](../../../STS2AIAgent/Agent/AgentRuntime.cs) | 1,377 | 4.4% |
+| the other 78 files | 12,859 | 40.6% |
+
+**Two files hold 49% of the mod.** `SourceShapeContractTests` now caps every file, with named
+budgets for the four above; budgets go down, never up. Needing more room than a budget allows is the
+signal to move something out, not to raise the number.
+
+The two are not the same kind of large, and the difference decides what to do about each.
+
+### `GameActionService.cs` is repetition, not tangle
+
+193 methods: 60 `Execute*` handlers (57% of the body) and 62 `WaitFor*` stabilizers (20%). That is
+one clear pattern -- validate the screen, act on the game thread, wait for the transition with a
+deadline -- repeated once per action. Nothing is fused; it is simply all in one file. Splitting it
+by room (combat / map / shop / co-op / menus) is mechanical, needs no design, and can happen
+whenever someone wants the navigability. The longest handler is 136 lines.
+
+### `GameStateService.cs` is three concerns in one 7,290-line class
+
+318 methods in a single class, plus 57 payload records (1,100 lines) in the same file:
+
+- `Build*` -- the raw `/state` payload builders (2,495 lines, 40%)
+- `BuildAgent*` -- the compact `agent_view` rewrite (687 lines, 11%), a **separable concern** that
+  shares nothing with the raw builders except their output
+- `Can*` / `Get*` / `Is*` -- 176 small predicates and accessors (1,862 lines)
+- the action surface: `BuildAvailableActionNames` (301) and `BuildAvailableActionsPayload` (609)
+
+Those last two are **910 lines answering one question twice**, verified identical field for field:
+the same 50 predicates, the same 55 action names. See
+[ADR 0001](../../../docs/adr/0001-single-action-surface.md) for the decision to collapse them, why
+it waits for a session that can validate against the running game, and the
+`ActionSurface.*` contracts that keep the duplication loud until then.
+
+### Where new code goes
+
+- A new **action**: handler and stabilizer in `GameActionService.cs`, following the existing
+  `Execute*` / `WaitFor*` pair. Its availability goes in **both** action surfaces until ADR 0001
+  lands; `ActionSurface.*` fails by name if only one is updated.
+- A new **state field**: the payload record and its builder in `GameStateService.cs`, the compact
+  projection in the matching `BuildAgent*` method, and a row in `docs/api.md` -- the `api-facts`
+  gate refuses a field that no table names.
+- Anything **not** state-building or action-executing: a new file. Both monoliths are already past
+  the point where adding to them is free, and the budgets say so out loud.

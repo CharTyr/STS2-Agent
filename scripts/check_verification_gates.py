@@ -17,9 +17,21 @@ api-doc    Every action the mod accepts in POST /action must appear in the
 api-facts  Facts that docs/api.md states and that code owns must still agree:
            the documented `mod_version` against mod_manifest.json, the screen
            enum against the screens GameStateService.ResolveNonModalScreen can
-           emit, and the documented default port against HttpServer.DefaultPort.
-           The action contract only covers action names, so these would
-           otherwise drift silently on the next version bump or screen change.
+           emit, the documented default port against HttpServer.DefaultPort, and
+           the /state payload surface against the docs/api.md tables that
+           describe it. Sixteen payload records are checked field-for-field
+           against their own table, every action_readiness reason code
+           EvaluateCombatActionGate can answer with must be documented, the
+           compact agent_view rename table must match the renames the
+           BuildAgent*Payload methods actually perform, and under all of it sits
+           a coarse net: every serialized field of every /state payload record
+           has to be named somewhere in docs/api.md.
+           The action contract only covers action names, so all of this would
+           otherwise drift silently -- which is what happened. 91 fields across
+           23 records had shipped with no mention anywhere a client could read,
+           including whole screens an agent has to drive (character_select,
+           multiplayer_lobby, game_over) and the session block the play skill
+           tells agents to route on first.
 doc-marks  Date-stamped validation records must carry a historical marker, and
            archived topic pages must keep their redirect to history/.
 docs-tracked
@@ -100,6 +112,70 @@ MIN_CODE_SCREENS = 20
 CODE_DEFAULT_PORT = re.compile(r"private\s+const\s+int\s+DefaultPort\s*=\s*(\d+)\s*;")
 DOC_DEFAULT_PORT = re.compile(r"默认[^\n]*127\.0\.0\.1:(\d+)")
 HTTP_SERVER_PATH = "STS2AIAgent/Server/HttpServer.cs"
+
+# The /state combat payload is the surface an agent reads before every decision, and it is also
+# the one that has drifted: `action_readiness`, `players[]`, `end_turn_will_kill_player` and
+# `lethal_risks[]` all shipped and reached the compact agent_view while docs/api.md documented
+# none of them. The action contract covers action names only, so nothing noticed. These two C#
+# records are the producers; the docs/api.md tables below are what clients are told to expect.
+GAME_STATE_PATH = "STS2AIAgent/Game/GameStateService.cs"
+# The leading @ is C#'s escape for a keyword used as an identifier -- `public EventPayload? @event`
+# serializes as "event". Missing it would read as "the docs list a field the code does not have".
+CSHARP_PAYLOAD_PROPERTY = re.compile(
+    r"^\s*public\s+[^\s].*?\s@?([a-z][a-z0-9_]*)\s*\{\s*get;\s*init;", re.MULTILINE
+)
+DOC_FIELD_ROW = re.compile(r"^\|\s*\`([a-z][a-z0-9_]*)\`\s*\|", re.MULTILINE)
+COMBAT_PAYLOAD_TABLES = (
+    ("internal sealed class CombatPayload", "#### `combat` 顶层字段"),
+    ("internal sealed class CombatActionReadinessPayload", "#### `combat.action_readiness`"),
+    ("internal sealed class CombatLethalRiskPayload", "#### `combat.lethal_risks[]`"),
+    ("internal sealed class GameStatePayload", "### 顶层字段"),
+    ("internal sealed class SessionPayload", "### `session` 子结构"),
+    ("internal sealed class MultiplayerPayload", "### `multiplayer` 子结构"),
+    ("internal sealed class MultiplayerLobbyPayload", "### `multiplayer_lobby` 子结构"),
+    ("internal sealed class CharacterSelectPayload", "### `character_select` 子结构"),
+    ("internal sealed class CharacterSelectOptionPayload", "#### `character_select.characters[]`"),
+    ("internal sealed class CharacterSelectPlayerPayload", "#### `character_select.players[]`"),
+    ("internal sealed class TimelinePayload", "### `timeline` 子结构"),
+    ("internal sealed class TimelineSlotPayload", "#### `timeline.slots[]`"),
+    ("internal sealed class UnlockPayload", "### `unlock` 子结构"),
+    ("internal sealed class ModalPayload", "### `modal` 子结构"),
+    ("internal sealed class GameOverPayload", "### `game_over` 子结构"),
+    ("internal sealed class MapPlayerVotePayload", "#### `map.player_votes[]`"),
+)
+
+# Every reason the gate can answer with has to be spelled out for clients, because each one tells
+# an agent something different about whether to wait, to clear a modal, or to stop asking. The
+# producer is one method, so the list cannot be assembled from anywhere else.
+COMBAT_GATE_SIGNATURE = (
+    "private static CombatActionGate EvaluateCombatActionGate(IScreenContext? currentScreen, "
+    "CombatState? combatState)"
+)
+CODE_GATE_REASON = re.compile(r'reason\s*=\s*"([a-z][a-z0-9_]*)"')
+DOC_REASON_SECTION = "#### `combat.action_readiness`"
+MIN_GATE_REASONS = 15
+
+STATE_PAYLOAD_RECORD = re.compile(r"internal sealed class (\w*Payload)\b")
+DOC_FENCE = re.compile(r"```.*?```", re.DOTALL)
+DOC_INLINE_CODE = re.compile(r"`([^`\n]+)`")
+# A near-total parse failure must fail loudly rather than read as "nothing to check".
+MIN_STATE_PAYLOAD_RECORDS = 40
+
+# The compact agent_view renames roughly sixty keys, and that view is what MCP get_game_state
+# returns by default. The mapping lives in the BuildAgent*Payload methods and nowhere else.
+AGENT_BUILDER_SIGNATURE = re.compile(r"private static [^\n(]*\sBuildAgent\w*\(")
+COMPACT_RENAME_HEADING = "#### compact 的字段改名对照表"
+DOC_RENAME_ROW = re.compile(r"^\|[^|]*\|([^|]*)\|([^|]*)\|\s*$", re.MULTILINE)
+DOC_CODE_NAME = re.compile(r"`([a-z_][a-z0-9_]*)`")
+MIN_COMPACT_RENAMES = 35
+
+HTTP_ROUTER_PATH = "STS2AIAgent/Server/Router.cs"
+HEALTH_BUILDER_SIGNATURE = "internal static object BuildHealthData"
+# BuildHealthData returns one anonymous object; its keys are the assignments at that object's
+# indentation, which is what a client receives under "data".
+HEALTH_PAYLOAD_KEY = re.compile(r"^\s{8,12}([a-z][a-z0-9_]*)\s*=", re.MULTILINE)
+HEALTH_SECTION_HEADING = "## `GET /health`"
+MIN_HEALTH_KEYS = 15
 
 # A date-stamped record inside docs/ is a snapshot, not a statement about today.
 DATED_DOC_PATTERN = re.compile(r"\d{4}-\d{2}-\d{2}")
@@ -516,6 +592,263 @@ def parse_doc_screens(api_doc: str) -> set[str]:
     return screens
 
 
+def slice_class_body(text: str, declaration: str, source: str) -> str:
+    """Return the brace-matched body of a type declaration."""
+    return slice_method_body(text, declaration, source)
+
+
+def slice_doc_subsection(text: str, heading: str, source: str) -> str:
+    """Return the text under a '####' heading, up to the next heading of the same or higher level."""
+    start = text.find(heading)
+    if start < 0:
+        raise GateError(f"{source} no longer contains the '{heading}' section")
+    rest = text[start + len(heading):]
+    following = re.search(r"^#{1,4} ", rest, re.MULTILINE)
+    return rest[: following.start()] if following else rest
+
+
+def first_doc_table(section: str, heading: str) -> str:
+    """Return only the first Markdown table in a section.
+
+    A section can carry more than one table -- `combat.action_readiness` documents its fields and
+    then its `reason` vocabulary -- and the field check must not read the second one's first column
+    as field names.
+    """
+    lines = section.splitlines()
+    start = next((index for index, line in enumerate(lines) if line.startswith("|")), None)
+    if start is None:
+        raise GateError(f"the docs/api.md '{heading}' section carries no Markdown table")
+    end = start
+    while end < len(lines) and lines[end].startswith("|"):
+        end += 1
+    return "\n".join(lines[start:end])
+
+
+def parse_code_payload_fields(game_state: str, declaration: str) -> set[str]:
+    """Serialized property names of a payload record, which are the JSON keys clients receive."""
+    body = slice_class_body(game_state, declaration, GAME_STATE_PATH)
+    fields = set(CSHARP_PAYLOAD_PROPERTY.findall(body))
+    if not fields:
+        raise GateError(
+            f"{GAME_STATE_PATH}: '{declaration}' yielded no serialized properties. The extraction "
+            "in check_verification_gates.py no longer matches the record; fix it before trusting "
+            "this gate."
+        )
+    return fields
+
+
+def parse_code_gate_reasons(game_state: str) -> set[str]:
+    """Reason codes EvaluateCombatActionGate can put in combat.action_readiness.reason."""
+    body = slice_method_body(game_state, COMBAT_GATE_SIGNATURE, GAME_STATE_PATH)
+    reasons = set(CODE_GATE_REASON.findall(body))
+    if len(reasons) < MIN_GATE_REASONS:
+        raise GateError(
+            f"EvaluateCombatActionGate yielded {len(reasons)} reason codes, below the "
+            f"{MIN_GATE_REASONS} expected. The extraction in check_verification_gates.py no longer "
+            "matches the method; fix it before trusting this gate."
+        )
+    return reasons
+
+
+def check_combat_payload_docs(repo_root: Path, api_doc: str) -> list[str]:
+    """The /state combat payload records and the docs/api.md tables that describe them."""
+    notes: list[str] = []
+    game_state = read_text(repo_root, GAME_STATE_PATH)
+
+    for declaration, heading in COMBAT_PAYLOAD_TABLES:
+        code_fields = parse_code_payload_fields(game_state, declaration)
+        section = slice_doc_subsection(api_doc, heading, "docs/api.md")
+        documented = set(DOC_FIELD_ROW.findall(first_doc_table(section, heading)))
+        missing = sorted(code_fields - documented)
+        if missing:
+            raise GateError(
+                f"{declaration} serializes fields the docs/api.md '{heading}' table does not list: "
+                + ", ".join(missing)
+                + ". An undocumented payload field reaches every agent through the compact "
+                "agent_view without anything telling clients it exists."
+            )
+        stale = sorted(documented - code_fields)
+        if stale:
+            raise GateError(
+                f"the docs/api.md '{heading}' table lists fields {declaration} no longer "
+                "serializes: " + ", ".join(stale) + ". Remove them so clients stop branching on a "
+                "key the mod never sends."
+            )
+        notes.append(f"{heading}: {len(code_fields)} field(s) match {declaration}")
+
+    code_reasons = parse_code_gate_reasons(game_state)
+    reason_section = slice_doc_subsection(api_doc, DOC_REASON_SECTION, "docs/api.md")
+    documented_reasons = {
+        value for value in re.findall(r"\`([a-z][a-z0-9_]*)\`", reason_section)
+    }
+    missing_reasons = sorted(code_reasons - documented_reasons)
+    if missing_reasons:
+        raise GateError(
+            "EvaluateCombatActionGate can answer with reason codes the docs/api.md "
+            f"'{DOC_REASON_SECTION}' section never mentions: " + ", ".join(missing_reasons)
+            + ". Each code tells an agent something different about whether to wait, so an "
+            "undocumented one reads as an unknown failure."
+        )
+    notes.append(
+        f"{len(code_reasons)} action_readiness reason code(s) from EvaluateCombatActionGate are "
+        "documented"
+    )
+    return notes
+
+
+def check_state_payload_coverage(repo_root: Path, api_doc: str) -> list[str]:
+    """Every serialized field of every /state payload record is named somewhere in docs/api.md.
+
+    Coarse on purpose: it does not say a field is described in the right table, only that a client
+    can discover it exists at all. The per-table checks carry the precision. This net is what was
+    missing when 91 fields -- whole screens, including character select, the multiplayer lobby and
+    game over -- shipped with no mention anywhere a client could read.
+    """
+    game_state = read_text(repo_root, GAME_STATE_PATH)
+    records = sorted(set(STATE_PAYLOAD_RECORD.findall(game_state)))
+    if len(records) < MIN_STATE_PAYLOAD_RECORDS:
+        raise GateError(
+            f"{GAME_STATE_PATH} yielded {len(records)} payload records, below the "
+            f"{MIN_STATE_PAYLOAD_RECORDS} expected. The extraction in check_verification_gates.py "
+            "no longer matches the file; fix it before trusting this gate."
+        )
+
+    # Fenced code blocks have to go first: their fences pair with each other and would swallow the
+    # inline code around them, which silently turns this check into "nothing is documented".
+    prose = DOC_FENCE.sub("\n", api_doc)
+    named: set[str] = set()
+    for span in DOC_INLINE_CODE.findall(prose):
+        for part in re.split(r"[.\[\]/ ]+", span):
+            if part:
+                named.add(part)
+
+    undocumented: list[str] = []
+    checked = 0
+    for record in records:
+        body = slice_class_body(game_state, f"internal sealed class {record}", GAME_STATE_PATH)
+        fields = sorted(set(CSHARP_PAYLOAD_PROPERTY.findall(body)))
+        if not fields:
+            continue
+        checked += len(fields)
+        undocumented.extend(f"{record}.{field}" for field in fields if field not in named)
+
+    if undocumented:
+        raise GateError(
+            "these /state payload fields are not named anywhere in docs/api.md: "
+            + ", ".join(undocumented)
+            + ". Every one of them reaches clients, and the compact agent_view carries most of them "
+            "to every agent, so an undocumented field is a surface nobody can branch on."
+        )
+    return [
+        f"{checked} field(s) across {len(records)} /state payload record(s) are named in docs/api.md"
+    ]
+
+
+def agent_view_builder_bodies(game_state: str) -> str:
+    """The bodies of every BuildAgent*Payload method, concatenated.
+
+    Scoping the rename check to these bodies is what keeps it honest: a compact key like `i`, `min`
+    or `open` would match a loop variable or an unrelated assignment anywhere else in an 8k-line
+    file.
+    """
+    bodies: list[str] = []
+    for match in AGENT_BUILDER_SIGNATURE.finditer(game_state):
+        opening = game_state.find("{", match.end())
+        if opening < 0:
+            continue
+        depth = 0
+        for index in range(opening, len(game_state)):
+            if game_state[index] == "{":
+                depth += 1
+            elif game_state[index] == "}":
+                depth -= 1
+                if depth == 0:
+                    bodies.append(game_state[opening:index + 1])
+                    break
+    return "".join(bodies)
+
+
+def check_compact_rename_table(repo_root: Path, api_doc: str) -> list[str]:
+    """The documented compact renames are the ones the agent view actually performs.
+
+    The compact view is what MCP `get_game_state` returns by default, and it renames about sixty
+    keys. Reading a `/state` name out of a compact payload yields undefined, so this mapping is the
+    difference between an agent that can read the state and one that silently sees nothing -- and it
+    was written down nowhere until this table existed.
+    """
+    section = slice_doc_subsection(api_doc, COMPACT_RENAME_HEADING, "docs/api.md")
+    pairs: list[tuple[str, str]] = []
+    for state_column, compact_column in DOC_RENAME_ROW.findall(section):
+        state_names = DOC_CODE_NAME.findall(state_column)
+        compact_names = DOC_CODE_NAME.findall(compact_column)
+        # Rows that describe a mapping in prose rather than name-for-name are skipped on purpose;
+        # the ones that do line up are pinned exactly.
+        if state_names and len(state_names) == len(compact_names):
+            pairs.extend(zip(state_names, compact_names))
+
+    if len(pairs) < MIN_COMPACT_RENAMES:
+        raise GateError(
+            f"the docs/api.md '{COMPACT_RENAME_HEADING}' table yielded {len(pairs)} rename pairs, "
+            f"below the {MIN_COMPACT_RENAMES} expected. The table or the extraction in "
+            "check_verification_gates.py has changed shape; fix it before trusting this gate."
+        )
+
+    builders = agent_view_builder_bodies(read_text(repo_root, GAME_STATE_PATH))
+    if not builders:
+        raise GateError(
+            f"{GAME_STATE_PATH} no longer declares any BuildAgent*Payload method, so the compact "
+            "rename table cannot be checked."
+        )
+
+    broken = [
+        f"{state} -> {compact}"
+        for state, compact in pairs
+        if not re.search(rf"\b{re.escape(compact)}\s*=\s*[^=;]*\b{re.escape(state)}\b", builders)
+    ]
+    if broken:
+        raise GateError(
+            "the docs/api.md compact rename table claims renames the agent view does not perform: "
+            + ", ".join(broken)
+            + ". A client told to read the compact key would get undefined."
+        )
+    return [f"{len(pairs)} compact rename(s) match the BuildAgent*Payload methods"]
+
+
+def check_health_payload_docs(repo_root: Path, api_doc: str) -> list[str]:
+    """Every key GET /health answers with is described in its own docs/api.md table.
+
+    /health is the first call any client makes and the one a person is told to check when something
+    is wrong, so a key that only exists in the example JSON is a key nobody knows to read.
+    """
+    router = read_text(repo_root, HTTP_ROUTER_PATH)
+    body = slice_method_body(router, HEALTH_BUILDER_SIGNATURE, HTTP_ROUTER_PATH)
+    keys = sorted(set(HEALTH_PAYLOAD_KEY.findall(body)))
+    if len(keys) < MIN_HEALTH_KEYS:
+        raise GateError(
+            f"{HTTP_ROUTER_PATH}: BuildHealthData yielded {len(keys)} keys, below the "
+            f"{MIN_HEALTH_KEYS} expected. The extraction in check_verification_gates.py no longer "
+            "matches the method; fix it before trusting this gate."
+        )
+
+    section = slice_section(api_doc, HEALTH_SECTION_HEADING, "docs/api.md")
+    # Only the field table counts. The example JSON above it names every key by construction, so
+    # reading that too would make this check unable to fail.
+    table_rows = "\n".join(line for line in section.splitlines() if line.startswith("|"))
+    described = {
+        name
+        for cell in re.findall(r"^\|([^|]*)\|", table_rows, re.MULTILINE)
+        for name in DOC_CODE_NAME.findall(cell)
+    }
+    missing = [key for key in keys if key not in described]
+    if missing:
+        raise GateError(
+            "GET /health answers with keys the docs/api.md field table does not describe: "
+            + ", ".join(missing)
+            + ". A key that appears only in the example JSON is one no client knows to read."
+        )
+    return [f"{len(keys)} GET /health key(s) are described in the docs/api.md field table"]
+
+
 def check_api_facts(repo_root: Path) -> list[str]:
     """Documented facts that a code constant owns must still agree with it."""
     notes: list[str] = []
@@ -579,6 +912,11 @@ def check_api_facts(repo_root: Path) -> list[str]:
             + " declares DefaultPort = " + default_port + ". Update the documented address."
         )
     notes.append(f"docs/api.md default port {default_port} matches {HTTP_SERVER_PATH} DefaultPort")
+
+    notes.extend(check_combat_payload_docs(repo_root, api_doc))
+    notes.extend(check_state_payload_coverage(repo_root, api_doc))
+    notes.extend(check_compact_rename_table(repo_root, api_doc))
+    notes.extend(check_health_payload_docs(repo_root, api_doc))
 
     return notes
 
@@ -937,7 +1275,30 @@ GATES = {
 }
 
 
+def use_utf8_streams() -> None:
+    """Make the gate's own output survive a console that is not UTF-8.
+
+    Gate messages quote what they check, and what they check includes Chinese section headings from
+    docs/api.md. On the Windows CI runner stdout defaults to cp1252, where printing one of those
+    raises UnicodeEncodeError -- so a gate that passed still exited 1, and, worse, a gate that failed
+    would have had its real message replaced by an encoding traceback. Writing UTF-8 bytes keeps the
+    heading readable in the CI log viewer; `errors="replace"` means no console can ever turn a
+    verification result into a crash.
+    """
+    for stream in (sys.stdout, sys.stderr):
+        reconfigure = getattr(stream, "reconfigure", None)
+        if reconfigure is None:
+            continue
+        try:
+            reconfigure(encoding="utf-8", errors="replace")
+        except (ValueError, OSError):
+            # A stream that refuses to be reconfigured (a pipe already in text mode on an exotic
+            # host) is not worth failing the run over; the gates themselves are unaffected.
+            pass
+
+
 def main() -> int:
+    use_utf8_streams()
     parser = argparse.ArgumentParser(description="Run the offline verification gates.")
     parser.add_argument("--repo-root", type=Path, default=Path(__file__).resolve().parent.parent)
     parser.add_argument("--only", choices=sorted(GATES), action="append", help="run only the named gate(s)")

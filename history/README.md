@@ -4,6 +4,8 @@
 
 当前状态唯一入口：[PRODUCT_PLAN_CURRENT.md](../PRODUCT_PLAN_CURRENT.md)。现行发布入口：[发布验收](../docs/release-readiness.md)。
 
+跨版本构建指纹（同一个版本号发过几次、怎么区分）：[构建指纹索引](build-fingerprints.md)。
+
 | 文档 | 原记录时间 | 归档原因 |
 | --- | --- | --- |
 | [Phase 1C 状态](phase-1c-status_2026-03-10.md) | 2026-03-10 | 早期接口与待验证项快照 |
