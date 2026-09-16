@@ -230,6 +230,95 @@
 
 ### `combat` 子结构
 
+#### `combat` 顶层字段
+
+| 字段 | 类型 | 说明 |
+| --- | --- | --- |
+| `action_readiness` | object | 执行器此刻是否接受战斗动作，不接受时卡在哪一步。见下 |
+| `player` | object | 本地玩家的战斗状态 |
+| `players` | object[] | 本局全部玩家的战斗血线（含本地玩家）。联机时用来判断队友是否需要救援；单人局只有一项 |
+| `hand` | object[] | 本地玩家手牌 |
+| `enemies` | object[] | 场上敌人 |
+| `end_turn_will_kill_player` | boolean | 此刻直接结束回合是否会打死本地玩家 |
+| `lethal_risks` | object[] | 致命风险逐条拆解，见下 |
+
+#### `combat.action_readiness`
+
+一份 `/state` 响应里，`available_actions`、`combat.action_readiness` 与药水可用标记**出自同一次门禁求值**
+（v0.12.4 起）。门禁带 200ms 稳定采样窗口，此前它被逐个动作重复求值，同一份响应会跨过采样窗口而自相矛盾。
+因此现在：`can_use_combat_actions = true` 的快照必然同时带着 `play_card` / `end_turn`，反之亦然——**不要把这
+两者当成两个独立信号去交叉验证**，它们是同一个结论的两种投影。
+
+| 字段 | 类型 | 说明 |
+| --- | --- | --- |
+| `can_use_combat_actions` | boolean | 执行器此刻是否接受出牌 / 结束回合 |
+| `reason` | string | 门禁结论的原因码，取值见下表 |
+| `actions_settled` | boolean | 动作队列已排空（无正在执行、无就绪、无执行中占用） |
+| `running_action_type` | string \| null | 正在执行的 GameAction 类型名 |
+| `ready_action_type` | string \| null | 队列里已就绪待执行的 GameAction 类型名 |
+| `modal_open` | boolean | 是否有阻塞弹窗盖在战斗上 |
+| `modal_type` | string \| null | 该弹窗的类型名 |
+| `player_actions_disabled` | boolean | 战斗管理器禁用了玩家输入 |
+| `is_paused` | boolean | 战斗被暂停 |
+| `local_ready_to_end_turn` | boolean | 本地玩家已按下结束回合 |
+| `all_players_ready_to_end_turn` | boolean | 全部玩家都已结束回合（联机） |
+| `ending_turn_phase_one` | boolean | 回合结算第一阶段进行中 |
+| `ending_turn_phase_two` | boolean | 回合结算第二阶段进行中 |
+| `end_turn_kick` | string \| null | 结束回合被外力触发时的来源说明 |
+| `combat_in_progress` | boolean | `CombatManager.IsInProgress` |
+| `combat_over_or_ending` | boolean | 战斗已结束或正在收尾 |
+| `combat_room_mode` | string \| null | 战斗房当前模式名 |
+| `hand_in_card_play` | boolean \| null | 手牌处于出牌动画中；手牌不可读时为 null |
+| `hand_in_card_selection` | boolean \| null | 手牌处于选牌模式中；手牌不可读时为 null |
+| `hand_mode` | string \| null | 手牌当前模式名 |
+| `local_turn_ready` | boolean | 本地玩家的回合已开始（`TurnNumber > 0`） |
+| `snapshot_stable` | boolean | 连续两次采样一致，已越过 200ms 稳定窗口 |
+| `player_action_phase` | boolean | 当前处于玩家行动阶段 |
+
+`reason` 取值（按门禁的求值顺序列出，先命中先返回；只有全部不命中才是 `ready`）：
+
+| 取值 | 含义 |
+| --- | --- |
+| `modal_open` | 有阻塞弹窗盖着，先 `confirm_modal` |
+| `combat_screen_unavailable` | 不在战斗屏，或战斗状态为空 |
+| `combat_not_in_progress` | 战斗未开始 |
+| `combat_over_or_ending` | 战斗已结束或正在收尾 |
+| `combat_paused` | 战斗被暂停（例如打开了暂停菜单） |
+| `player_actions_disabled` | 战斗管理器暂时禁用了玩家输入 |
+| `combat_room_not_active` | 战斗房不在活动模式 |
+| `hand_unavailable` | 手牌节点不可读 |
+| `hand_in_card_play` | 上一张牌的出牌动画还没放完 |
+| `hand_in_card_selection` | 手牌处在选牌模式（例如弃牌、消耗选择） |
+| `hand_mode_not_play` | 手牌模式不是「可出牌」 |
+| `local_player_dead` | 本地玩家已阵亡 |
+| `local_turn_not_ready` | 本地玩家的回合尚未开始 |
+| `game_action_running` | 有 GameAction 正在执行 |
+| `game_action_queued` | 队列里有已就绪的 GameAction |
+| `action_queue_unsettled` | 队列报告仍有执行中的动作 |
+| `not_player_action_phase` | 不在玩家行动阶段（敌方回合、结算中） |
+| `snapshot_stabilizing` | 其余条件都满足，但还没越过 200ms 稳定窗口 |
+| `ready` | 可以出牌 / 结束回合 |
+
+以上除 `ready` 外都是**暂时**状态，正确反应是等待（`wait_until_actionable`）而不是重试或换动作；
+`scripts/run_sts2_validation.py state-invariants` 也按 `can_use_combat_actions` 判断该不该要求 `play_card`。
+
+#### `combat.lethal_risks[]`
+
+`end_turn_will_kill_player` 的逐条依据。没有风险时为空数组。
+
+| 字段 | 类型 | 说明 |
+| --- | --- | --- |
+| `risk_id` | string | 风险标识 |
+| `source` | string | 风险来源（敌人意图 / 自身 Power 等） |
+| `will_kill_player` | boolean | 这一条是否单独就足以致死 |
+| `reason` | string | 判定说明 |
+| `incoming_damage` | number \| null | 来袭伤害 |
+| `damage_after_block` | number \| null | 扣除格挡后的伤害 |
+| `player_hp` | number \| null | 结算时的玩家生命值 |
+| `player_block` | number \| null | 结算时的玩家格挡 |
+| `power_id` | string \| null | 来源 Power 的 ID（来源是 Power 时） |
+| `power_amount` | number \| null | 该 Power 的层数 |
+
 #### `combat.player`
 
 | 字段 | 类型 | 说明 |
@@ -668,6 +757,10 @@
 的文本化重写（例如 `combat.player.hp` 是 `"12/70"`、`run.relics` 只有名字），因此下表字段在
 compact 里的位置与 `/state` 不同，但同名同源、同为新增键；`/state` 既有字段与 compact 既有键
 的形状都没有变化。
+
+compact 的 `combat` 原样携带 `/state` 的 `action_readiness`、`end_turn_will_kill_player` 与
+`lethal_risks[]`（这三处不做文本化改写，字段名与类型逐一相同），因此上面 [`combat.action_readiness`](#combataction_readiness)
+一节对 MCP `get_game_state` 的返回同样适用——**这是 agent 判断「该等还是该动」的首选字段**。
 
 | compact 位置 | 字段 | 说明 |
 | --- | --- | --- |

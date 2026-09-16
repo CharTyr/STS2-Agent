@@ -2,6 +2,45 @@
 
 > Release attribution is recorded against tags or release commits. Post-tag maintenance is listed separately; current validation limits are maintained in [PRODUCT_PLAN_CURRENT.md](https://github.com/CharTyr/STS2-Agent/blob/main/PRODUCT_PLAN_CURRENT.md).
 
+## Unreleased
+
+> Post-tag maintenance on `dev`, not in any build a player can download. This section exists so a
+> change that lands after a tag has somewhere to be recorded: four same-version re-cuts in three
+> days (v0.12.3 twice, v0.12.4 twice) all started as "a small fix after the tag" with no section to
+> write it in. It is renamed to the version on release.
+
+### Added
+
+- `docs/api.md` documents the `/state` `combat` object's own fields for the first time.
+  `action_readiness`, `players[]`, `end_turn_will_kill_player` and `lethal_risks[]` all shipped and
+  all reach agents through the compact `agent_view`, and none of them were described anywhere a
+  client could read. The new tables cover the three payload records and every `reason` code
+  `action_readiness` can answer with, together with what each one means for an agent deciding
+  whether to wait.
+- The `api-facts` gate now pins those tables to the records that produce them: `CombatPayload`,
+  `CombatActionReadinessPayload` and `CombatLethalRiskPayload` field-for-field, plus every reason
+  code `EvaluateCombatActionGate` can emit. A field added to the payload without a documentation
+  row, or a documented field the mod no longer sends, fails the gate by name. Three destructive
+  cases in `scripts/test-verification-gates.ps1` prove it.
+- `scripts/lib-build-fingerprint.ps1` writes a `build-fingerprint.json` next to every packaged
+  artifact: each file with its byte count and SHA256, the summed byte count Steam reports as
+  `file_size`, and the commit the tree was built from with a dirty flag. Republishing one version
+  number means size and hash are the only way to tell builds apart, and until now those numbers
+  were collected by hand after the upload. Both `package-release.ps1` and
+  `package-steam-workshop.ps1` emit one.
+- The play skill tells an agent what `combat.action_readiness` means: a `COMBAT` screen missing
+  `play_card` is one of the gate's reasons, not a lost turn, and the reason says whether to clear a
+  modal, wait, or leave a paused run alone. The in-game agent reads the same contract.
+
+### Fixed
+
+- A source contract now pins the in-combat guard around the action-queue read in
+  `EvaluateCombatActionGate` (`CombatGate.QueueReadIsCombatOnly`). That guard is what the second
+  v0.12.4 re-cut had to add: reading `RunManager.ActionExecutor` / `ActionQueueSet` outside a fight
+  failed every `/state` request with a `NullReferenceException`, and 408 offline tests and nine
+  gates all passed that build. The contract also keeps the gate the only place in the state builder
+  that touches those two members, so the same failure cannot return through a second call site.
+
 ## v0.12.4 - 2026-09-15
 
 > Distributed to the Steam Workshop on 2026-09-15 (item 3796486050, public, `file_size` 1233413 equal to the local

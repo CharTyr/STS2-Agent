@@ -9,7 +9,8 @@
 
 ## 1. 当前基线
 
-- **v0.12.4（工坊先行，随后补 GitHub 发布，当日两次同号重发）**：2026-09-15 更新到 Steam 工坊（物品 3796486050，公开，`file_size` 1233413，`time_updated` 2026-09-15 19:38:00，来源提交 `4b8e7c5`）。内容是 PR #132 的可靠性修复：邀请 / 继续队友立刻返回 `pending` 且并发第二发不再误报、请求计费补上此前漏记的路径、`state-invariants` 只在执行器 ready 时要求 `play_card`、首次 `--clientId` 启动的隔离档种子在两个平台都写进游戏真正读取的目录。GitHub 侧随 2026-09-16 的 `v0.12.4` tag 与 Release 一并补齐（资产 `sts2-ai-agent-v0.12.4-windows.zip` 557906 字节 / SHA256 `AD970DB1…`，与工坊第三次构建同源）。见 [Workshop 上传记录](history/workshop-upload-v0.12.4_2026-09-15.md)。（**同号重发**：修掉一份 `/state` 响应里 `available_actions` 与 `combat.action_readiness` 自相矛盾的一帧竞态——战斗门禁改为一次载荷只求值一次并沿调用链共享，readiness 成为它的纯投影；重发后 `file_size` 1236997、`time_updated` 2026-09-15 23:34:57。）
+- **v0.12.4（工坊先行，随后补 GitHub 发布，当日两次同号重发）**：2026-09-15 更新到 Steam 工坊（物品 3796486050，公开，`file_size` 1233413，`time_updated` 2026-09-15 19:38:00，来源提交 `4b8e7c5`）。内容是 PR #132 的可靠性修复：邀请 / 继续队友立刻返回 `pending` 且并发第二发不再误报、请求计费补上此前漏记的路径、`state-invariants` 只在执行器 ready 时要求 `play_card`、首次 `--clientId` 启动的隔离档种子在两个平台都写进游戏真正读取的目录。GitHub 侧随 2026-09-16 的 `v0.12.4` tag 与 Release 一并补齐（资产 `sts2-ai-agent-v0.12.4-windows.zip` 557906 字节 / SHA256 `AD970DB1…`，与工坊第三次构建同源）。见 [Workshop 上传记录](history/workshop-upload-v0.12.4_2026-09-15.md)。
+（**同号重发**：修掉一份 `/state` 响应里 `available_actions` 与 `combat.action_readiness` 自相矛盾的一帧竞态——战斗门禁改为一次载荷只求值一次并沿调用链共享，readiness 成为它的纯投影；重发后 `file_size` 1236997、`time_updated` 2026-09-15 23:34:57。）
 
 - **v0.12.3（当前发布基准）**：2026-09-13 首发、**2026-09-14 两次同号重发**——版本号始终不变，只换构建，所以工坊与 GitHub 两侧各发布了三次。首发发布提交 `b0217b0`（`Release v0.12.3 for the Steam Workshop`，经 PR #108 合并，tag 当时指向它，先发工坊 22:31、后补 tag 与 Release）；第一次重发把 tag 与 Release 重切到 `0f60ec4`（PR #113 的合并提交，内容 = #105 + #106 + #111），同日 00:09 重新上传工坊；第二次重发把 tag 与 Release 重切到 `c2630a8`（PR #123 的合并提交，内容 = #116 + #117 + #118 + #119 + #120 + #121 + #122），同日 02:17 重新上传工坊。GitHub Release 资产 `sts2-ai-agent-v0.12.3-windows.zip` 现为 555061 字节、SHA256 `E882B653B48B15EF278CFD9E20CC443FDCA3E5D69A51E362A40B934E29E167DF`（第二次那次 552014 字节 / `B7684C9F…`，首发 549933 字节 / `B9DC1A07…`）；工坊 `file_size` 现为 1232901（前两次 1229829 / 1227269）。三份构建的**版本字符串相同**，只能靠大小或哈希区分——这是反复同号重发的代价，CHANGELOG 的 v0.12.3 段顶部写明了这件事。见 [v0.12.3 发布记录](history/release-v0.12.3_2026-09-13.md)。第三次构建相对上一份**只有一处玩家可见变化**（Continue 按钮待机不刷新），其余是日志、发布工具与离线契约测试；**本版未单独做完整实机验收**：#106 的实机证据随身带来（未配置模型时真实点击拉起队友、`/health` 报 `companion.auto_play: false`），#111 的两个界面入口已在 2026-09-14 完成实机点击验收（见 `docs/live-validation-checklist.md` 的 `[coop]` 段），正是那次验收发现了本版修掉的 Continue 缺陷。
 - **v0.12.2（上一版）**：2026-09-13 发布，发布提交 `40d1464`（`Release v0.12.2`）经 PR #104 合并为 `72b2a81`（tag 指向合并提交，两者树内容相同），GitHub Release 资产 `sts2-ai-agent-v0.12.2-windows.zip`（549033 字节，SHA256 `35C1F0FC0ED3C664C0F74A73B5759486E4CA2BE92295CC47062FCC65552B5D9D`），CI 在 `40d1464` 上的 push 与 pull_request 两个 Validate run 均 success。工坊物品 3796486050 已更新：公开、`file_size` 1225733 与本地内容字节和相等、`time_updated` 2026-09-13 16:51:04、内容 id `8439947284938535648`。见 [v0.12.2 发布记录](history/release-v0.12.2_2026-09-13.md)。本版内容是联机接力：#85 的外部接管路线与主窗口 `POST /teammate/control`、#99 的共享模型门禁、#101 的三处实机收尾。**代码与实机跑过的那份逐字节相同**（实机证据即 #85 / #99 / #101 的隔离验收），标签之后只多了 README 链接修复、新增的 `packaged-links` gate 与一处 overlay 邀请路线修复（后两笔见「v0.12.2 标签后主线未发布变更」）。**本版未再单独做完整实机验收**，待办项见 `docs/live-validation-checklist.md`。
@@ -112,6 +113,47 @@
 优先级从高到低。没有明确负责人时记为“未分配”。不要把盘点或收尾做成完整 13 层自然通关。
 
 已完成、移出待办的里程碑（不再单列）：v0.10.5 / v0.10.6 / v0.10.7 / v0.11.0 的发布、安装与工坊更新；90s continue 超时与只点一次；Trellis 纳入版本控制并归档 bootstrap；旧 stash 已 drop；依赖安全 #50/#51；验证闸门与自测；模型兼容矩阵；外部 streamable-http 客户端核查；非法预算安全上限、损坏配置备份恢复、MCP Origin 契约、停流超时契约、play_card 取消、空奖励 overlay、continue_game_over 等待原生结算；外部 agent 接管队友窗口（[issue #85](https://github.com/CharTyr/STS2-Agent/issues/85)，PR #97 合入 main `d80a19d`，2026-09-13 隔离实机验收通过）。原始记录保留在提交历史与 `history/` 下（[v0.11.0 发布记录](history/release-v0.11.0_2026-09-12.md)、[v0.10.7 工坊上传](history/workshop-upload-v0.10.7_2026-09-12.md)、[v0.10.5 订阅加载验收](history/workshop-load-acceptance_2026-09-09.md)）。
+
+### v0.12.4 标签后主线未发布变更（2026-09-16）
+
+按 §5 规则 3 单列。**这一批只动文档、测试与脚本，不改任何随 mod 发布的运行时代码**，所以工坊上的
+0.12.4 第三次构建与 GitHub Release 资产都不受影响；已发布的 DLL/PCK 未变。
+
+本轮的出发点是同一件事：**连续四次同号重发**（v0.12.3 两次、v0.12.4 两次）里，第二次 v0.12.4 重发修的
+是第一次重发自己引入的回归——战斗门禁在主菜单读 `RunManager.ActionExecutor`（那里没有 executor），
+让每个 `/state` 都 500，mod 在战斗外完全不可用；而当时 408 条 C# 测试与九道闸门**一条都没拦住**。
+所以这一轮做的是把「当时没人看着」的三处补上防回归机制，而不是加功能。
+
+1. **门禁的战斗内守卫有了源码契约**（`CombatGate.QueueReadIsCombatOnly`）：`EvaluateCombatActionGate`
+   对 `RunManager.ActionExecutor` / `ActionQueueSet` 的读取必须待在
+   `if (combatState != null && CombatManager.Instance.IsInProgress)` 里面，且整个状态构建器里只有门禁
+   这一处碰这两个成员——第二条防的是「换个调用点再犯一次」。两次破坏性验证：把读取上提到守卫之外转红、
+   在文件别处加第二处无守卫读取也转红，随后逐字节还原。C# 测试 408 → **409 PASS / 0 FAIL**。
+2. **`docs/api.md` 第一次写下 `/state` 的 `combat` 顶层字段**。`action_readiness`、`players[]`、
+   `end_turn_will_kill_player`、`lethal_risks[]` 四个字段早已发布、且都通过 compact `agent_view` 发给
+   每一个外部 agent，而文档里一个字都没有；其中 `action_readiness` 正是本版头条修复的对象，也是
+   `state-invariants` 判定依据。新增三张表（三个载荷记录）与 `reason` 的全部 19 个取值，并写明每个取值
+   对 agent 意味着「等」还是「先关弹窗」。
+3. **`api-facts` 闸门把这三张表钉在产生它们的记录上**：`CombatPayload` / `CombatActionReadinessPayload`
+   / `CombatLethalRiskPayload` 逐字段，外加 `EvaluateCombatActionGate` 能给出的每个 `reason`。少写一个
+   字段、多写一个代码里没有的字段、漏掉一个 reason，都会点名报错。`test-verification-gates.ps1` 新增三条
+   破坏性用例（此前 api-facts 只有三条，覆盖版本号 / 屏幕名 / 端口）。
+4. **打包产出构建指纹**（`scripts/lib-build-fingerprint.ps1`，两个打包脚本各调一次）：逐文件 SHA256、
+   Steam 用作 `file_size` 的字节总和、构建所用提交与 working tree 是否干净，写成产物旁的
+   `build-fingerprint.json`。同号重发时这是唯一能区分构建的东西，而此前每次都是上传完再手工补抓。
+   跨版本索引新建在 [history/build-fingerprints.md](history/build-fingerprints.md)，并给出「玩家报 bug 时
+   怎么确认他跑的是哪个构建」的四步做法。
+5. **`CHANGELOG.md` 建立 `## Unreleased` 段的约定**，写进 `.github/CONTRIBUTING.md`、`AGENTS.md` 与
+   `.trellis/spec/operations/validation-and-release.md`。四次重发全都始于「tag 之后来了个小修复、
+   变更日志里没地方写」——有地方写的改动才等得到下一个版本号。
+6. **游玩 skill 补上 `action_readiness` 的读法**：`COMBAT` 上没有 `play_card` 是门禁的某个 reason，
+   不是丢了回合；reason 说明该关弹窗、该等、还是该让开一个被人暂停的对局。游戏内 agent 读同一份契约
+   （SKILL.md 是嵌入资源，`Skill.McpPlayerContract` 钉住两者相等）。
+
+离线证据（本轮收口后全量重跑）：C# **409 PASS / 0 FAIL**；`mcp_server` **222 项 OK**；
+`check_verification_gates.py` **九道闸门全绿**；`test-verification-gates.ps1` **闸门自测 25 条全过**
+（含本轮新增三条，此前 22 条）；`check_release_metadata.py` 五处版本号一致；`preflight-release.ps1` exit 0。
+**没有实机复验**——本批不含运行时代码改动，实机结论沿用 0.12.4 第三次构建那次。
 
 ### 后置（本轮不做，留到下一次发布前复核）
 

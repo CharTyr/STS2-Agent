@@ -514,6 +514,7 @@ internal static class TestRunner
         yield return ("CombatGate.OneEvaluationPerStateBuild", () => Task.Run(GameStateCombatGateContractTests.OneStateBuildEvaluatesTheGateOnce));
         yield return ("CombatGate.ActionsAskTheSharedGate", () => Task.Run(GameStateCombatGateContractTests.AvailableActionsAskTheSharedGate));
         yield return ("CombatGate.ReadinessProjectsTheGate", () => Task.Run(GameStateCombatGateContractTests.ReadinessIsAProjectionOfTheGate));
+        yield return ("CombatGate.QueueReadIsCombatOnly", () => Task.Run(GameStateCombatGateContractTests.TheActionQueueIsReadOnlyInsideCombat));
         yield return ("ActionDiagnostics.NoWordlessRecoveryCatch", () => Task.Run(ActionDiagnosticsContractTests.NoRecoveryCatchSwallowsWithoutSayingSo));
         yield return ("CardViewer.BranchesPrecedeGrid", () => Task.Run(CardViewerScreenContractTests.ViewerBranchesPrecedeTheVisibleGrid));
         yield return ("CardViewer.ClosableViewerSameSource", () => Task.Run(CardViewerScreenContractTests.ClosableViewerSetIsSharedByProbeAndExecutor));

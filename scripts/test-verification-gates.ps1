@@ -293,6 +293,37 @@ try {
     Assert-Case -Name "api-facts gate rejects a default port the docs do not state" -Only "api-facts"
     Write-Utf8 $httpServer $originalHttpServer
 
+    # 9c. The /state combat payload records drifting away from the docs/api.md tables that
+    # describe them. Every field here reaches agents through the compact agent_view, and the
+    # action contract only covers action names, so this is the drift nothing else would notice.
+    $mutated = ($originalFactsDoc -split "?
+" | Where-Object { $_ -notmatch ('^\| ' + [char]96 + 'lethal_risks' + [char]96 + ' \|') }) -join [char]10
+    if ($mutated -eq $originalFactsDoc) { throw "fixture setup failed: docs/api.md has no lethal_risks field row" }
+    Write-Utf8 $factsDoc $mutated
+    Assert-Case -Name "api-facts gate rejects a combat payload field the docs stop listing" -Only "api-facts"
+    Write-Utf8 $factsDoc $originalFactsDoc
+
+    # 9d. The other direction: a documented field the record never serializes, which is what a
+    # client would branch on and never receive.
+    $playerRow = ($originalFactsDoc -split "?
+" | Where-Object { $_ -match ('^\| ' + [char]96 + 'player' + [char]96 + ' \| object \|') } | Select-Object -First 1)
+    if (-not $playerRow) { throw "fixture setup failed: docs/api.md has no combat player field row" }
+    $ghostRow = '| ' + [char]96 + 'ghost_field' + [char]96 + ' | object | fixture |'
+    $mutated = $originalFactsDoc.Replace($playerRow, $playerRow + [char]10 + $ghostRow)
+    Write-Utf8 $factsDoc $mutated
+    Assert-Case -Name "api-facts gate rejects a documented field the payload never serializes" -Only "api-facts"
+    Write-Utf8 $factsDoc $originalFactsDoc
+
+    # 9e. A reason code EvaluateCombatActionGate can answer with that the docs never mention.
+    # Each code tells an agent something different about whether to wait, so an undocumented one
+    # reads as an unknown failure rather than "keep polling".
+    $mutated = ($originalFactsDoc -split "?
+" | Where-Object { $_ -notmatch ('^\| ' + [char]96 + 'snapshot_stabilizing' + [char]96 + ' \|') }) -join [char]10
+    if ($mutated -eq $originalFactsDoc) { throw "fixture setup failed: docs/api.md has no snapshot_stabilizing reason row" }
+    Write-Utf8 $factsDoc $mutated
+    Assert-Case -Name "api-facts gate rejects an undocumented action_readiness reason" -Only "api-facts"
+    Write-Utf8 $factsDoc $originalFactsDoc
+
     # 9b. A packaged README linking to a file the release does not ship, at a target no rewrite
     # rule covers. This is the shape #105 shipped: the link was new, the rewrite table did not
     # know it, and the artifact builder copied the file through untouched. packaged-links was the

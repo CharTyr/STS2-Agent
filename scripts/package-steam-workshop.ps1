@@ -12,6 +12,7 @@ param(
 
 $ErrorActionPreference = "Stop"
 $scriptRoot = $PSScriptRoot
+. (Join-Path $scriptRoot "lib-build-fingerprint.ps1")
 
 # Updates to an existing item must not silently flip it back to private.
 # Default public downstream unless the caller explicitly chooses visibility
@@ -192,7 +193,16 @@ $workshopConfig.visibility = $visibilityForUploader
 $workshopConfig.changeNote = $ChangeNote
 Write-Utf8NoBomFile -Path (Join-Path $releaseDirectory "workshop.json") -Content ($workshopConfig | ConvertTo-Json -Depth 8)
 
+Write-BuildFingerprint `
+    -RepositoryRoot $ProjectRoot `
+    -ArtifactKind "steam-workshop-content" `
+    -Version $manifest.version `
+    -ContentRoot $contentDirectory `
+    -OutputPath (Join-Path $releaseDirectory "build-fingerprint.json") `
+    -Label "steam-workshop" | Out-Null
+
 Write-Host "[steam-workshop] Content folder: $contentDirectory"
+
 Write-Host "[steam-workshop] Upload VDF: $vdfPath"
 Write-Host "[steam-workshop] ModUploader workspace: $releaseDirectory"
 Write-Host "[steam-workshop] After upload, paste Simplified Chinese listing from: $chineseDescriptionPath"

@@ -17,9 +17,17 @@ api-doc    Every action the mod accepts in POST /action must appear in the
 api-facts  Facts that docs/api.md states and that code owns must still agree:
            the documented `mod_version` against mod_manifest.json, the screen
            enum against the screens GameStateService.ResolveNonModalScreen can
-           emit, and the documented default port against HttpServer.DefaultPort.
+           emit, the documented default port against HttpServer.DefaultPort, and
+           the /state combat payload records (CombatPayload,
+           CombatActionReadinessPayload, CombatLethalRiskPayload) plus every
+           action_readiness reason EvaluateCombatActionGate can answer with,
+           against the docs/api.md tables that describe them.
            The action contract only covers action names, so these would
-           otherwise drift silently on the next version bump or screen change.
+           otherwise drift silently on the next version bump, screen change or
+           payload field -- which is how action_readiness, combat.players[],
+           end_turn_will_kill_player and lethal_risks[] all reached every agent
+           through the compact agent_view while docs/api.md documented none of
+           them.
 doc-marks  Date-stamped validation records must carry a historical marker, and
            archived topic pages must keep their redirect to history/.
 docs-tracked
@@ -100,6 +108,33 @@ MIN_CODE_SCREENS = 20
 CODE_DEFAULT_PORT = re.compile(r"private\s+const\s+int\s+DefaultPort\s*=\s*(\d+)\s*;")
 DOC_DEFAULT_PORT = re.compile(r"默认[^\n]*127\.0\.0\.1:(\d+)")
 HTTP_SERVER_PATH = "STS2AIAgent/Server/HttpServer.cs"
+
+# The /state combat payload is the surface an agent reads before every decision, and it is also
+# the one that has drifted: `action_readiness`, `players[]`, `end_turn_will_kill_player` and
+# `lethal_risks[]` all shipped and reached the compact agent_view while docs/api.md documented
+# none of them. The action contract covers action names only, so nothing noticed. These two C#
+# records are the producers; the docs/api.md tables below are what clients are told to expect.
+GAME_STATE_PATH = "STS2AIAgent/Game/GameStateService.cs"
+CSHARP_PAYLOAD_PROPERTY = re.compile(
+    r"^\s*public\s+[^\s].*?\s([a-z][a-z0-9_]*)\s*\{\s*get;\s*init;", re.MULTILINE
+)
+DOC_FIELD_ROW = re.compile(r"^\|\s*\`([a-z][a-z0-9_]*)\`\s*\|", re.MULTILINE)
+COMBAT_PAYLOAD_TABLES = (
+    ("internal sealed class CombatPayload", "#### `combat` 顶层字段"),
+    ("internal sealed class CombatActionReadinessPayload", "#### `combat.action_readiness`"),
+    ("internal sealed class CombatLethalRiskPayload", "#### `combat.lethal_risks[]`"),
+)
+
+# Every reason the gate can answer with has to be spelled out for clients, because each one tells
+# an agent something different about whether to wait, to clear a modal, or to stop asking. The
+# producer is one method, so the list cannot be assembled from anywhere else.
+COMBAT_GATE_SIGNATURE = (
+    "private static CombatActionGate EvaluateCombatActionGate(IScreenContext? currentScreen, "
+    "CombatState? combatState)"
+)
+CODE_GATE_REASON = re.compile(r'reason\s*=\s*"([a-z][a-z0-9_]*)"')
+DOC_REASON_SECTION = "#### `combat.action_readiness`"
+MIN_GATE_REASONS = 15
 
 # A date-stamped record inside docs/ is a snapshot, not a statement about today.
 DATED_DOC_PATTERN = re.compile(r"\d{4}-\d{2}-\d{2}")
@@ -516,6 +551,110 @@ def parse_doc_screens(api_doc: str) -> set[str]:
     return screens
 
 
+def slice_class_body(text: str, declaration: str, source: str) -> str:
+    """Return the brace-matched body of a type declaration."""
+    return slice_method_body(text, declaration, source)
+
+
+def slice_doc_subsection(text: str, heading: str, source: str) -> str:
+    """Return the text under a '####' heading, up to the next heading of the same or higher level."""
+    start = text.find(heading)
+    if start < 0:
+        raise GateError(f"{source} no longer contains the '{heading}' section")
+    rest = text[start + len(heading):]
+    following = re.search(r"^#{1,4} ", rest, re.MULTILINE)
+    return rest[: following.start()] if following else rest
+
+
+def first_doc_table(section: str, heading: str) -> str:
+    """Return only the first Markdown table in a section.
+
+    A section can carry more than one table -- `combat.action_readiness` documents its fields and
+    then its `reason` vocabulary -- and the field check must not read the second one's first column
+    as field names.
+    """
+    lines = section.splitlines()
+    start = next((index for index, line in enumerate(lines) if line.startswith("|")), None)
+    if start is None:
+        raise GateError(f"the docs/api.md '{heading}' section carries no Markdown table")
+    end = start
+    while end < len(lines) and lines[end].startswith("|"):
+        end += 1
+    return "\n".join(lines[start:end])
+
+
+def parse_code_payload_fields(game_state: str, declaration: str) -> set[str]:
+    """Serialized property names of a payload record, which are the JSON keys clients receive."""
+    body = slice_class_body(game_state, declaration, GAME_STATE_PATH)
+    fields = set(CSHARP_PAYLOAD_PROPERTY.findall(body))
+    if not fields:
+        raise GateError(
+            f"{GAME_STATE_PATH}: '{declaration}' yielded no serialized properties. The extraction "
+            "in check_verification_gates.py no longer matches the record; fix it before trusting "
+            "this gate."
+        )
+    return fields
+
+
+def parse_code_gate_reasons(game_state: str) -> set[str]:
+    """Reason codes EvaluateCombatActionGate can put in combat.action_readiness.reason."""
+    body = slice_method_body(game_state, COMBAT_GATE_SIGNATURE, GAME_STATE_PATH)
+    reasons = set(CODE_GATE_REASON.findall(body))
+    if len(reasons) < MIN_GATE_REASONS:
+        raise GateError(
+            f"EvaluateCombatActionGate yielded {len(reasons)} reason codes, below the "
+            f"{MIN_GATE_REASONS} expected. The extraction in check_verification_gates.py no longer "
+            "matches the method; fix it before trusting this gate."
+        )
+    return reasons
+
+
+def check_combat_payload_docs(repo_root: Path, api_doc: str) -> list[str]:
+    """The /state combat payload records and the docs/api.md tables that describe them."""
+    notes: list[str] = []
+    game_state = read_text(repo_root, GAME_STATE_PATH)
+
+    for declaration, heading in COMBAT_PAYLOAD_TABLES:
+        code_fields = parse_code_payload_fields(game_state, declaration)
+        section = slice_doc_subsection(api_doc, heading, "docs/api.md")
+        documented = set(DOC_FIELD_ROW.findall(first_doc_table(section, heading)))
+        missing = sorted(code_fields - documented)
+        if missing:
+            raise GateError(
+                f"{declaration} serializes fields the docs/api.md '{heading}' table does not list: "
+                + ", ".join(missing)
+                + ". An undocumented payload field reaches every agent through the compact "
+                "agent_view without anything telling clients it exists."
+            )
+        stale = sorted(documented - code_fields)
+        if stale:
+            raise GateError(
+                f"the docs/api.md '{heading}' table lists fields {declaration} no longer "
+                "serializes: " + ", ".join(stale) + ". Remove them so clients stop branching on a "
+                "key the mod never sends."
+            )
+        notes.append(f"{heading}: {len(code_fields)} field(s) match {declaration}")
+
+    code_reasons = parse_code_gate_reasons(game_state)
+    reason_section = slice_doc_subsection(api_doc, DOC_REASON_SECTION, "docs/api.md")
+    documented_reasons = {
+        value for value in re.findall(r"\`([a-z][a-z0-9_]*)\`", reason_section)
+    }
+    missing_reasons = sorted(code_reasons - documented_reasons)
+    if missing_reasons:
+        raise GateError(
+            "EvaluateCombatActionGate can answer with reason codes the docs/api.md "
+            f"'{DOC_REASON_SECTION}' section never mentions: " + ", ".join(missing_reasons)
+            + ". Each code tells an agent something different about whether to wait, so an "
+            "undocumented one reads as an unknown failure."
+        )
+    notes.append(
+        f"{len(code_reasons)} action_readiness reason code(s) from EvaluateCombatActionGate are "
+        "documented"
+    )
+    return notes
+
+
 def check_api_facts(repo_root: Path) -> list[str]:
     """Documented facts that a code constant owns must still agree with it."""
     notes: list[str] = []
@@ -579,6 +718,8 @@ def check_api_facts(repo_root: Path) -> list[str]:
             + " declares DefaultPort = " + default_port + ". Update the documented address."
         )
     notes.append(f"docs/api.md default port {default_port} matches {HTTP_SERVER_PATH} DefaultPort")
+
+    notes.extend(check_combat_payload_docs(repo_root, api_doc))
 
     return notes
 

@@ -7,6 +7,7 @@ param(
 
 $ErrorActionPreference = "Stop"
 $scriptRoot = $PSScriptRoot
+. (Join-Path $scriptRoot "lib-build-fingerprint.ps1")
 
 function Resolve-FullPath {
     param([string]$PathValue)
@@ -181,6 +182,14 @@ Copy-Item -Path (Join-Path $ProjectRoot "scripts/test-mcp-tool-profile.ps1") -De
 
 Write-Host "[package-release] Checking release directory artifact..."
 Invoke-ArtifactCheck -ArtifactPath $releaseDir
+Write-BuildFingerprint `
+    -RepositoryRoot $ProjectRoot `
+    -ArtifactKind "github-release-directory" `
+    -Version $version `
+    -ContentRoot $releaseDir `
+    -OutputPath (Join-Path (Split-Path -Parent $releaseDir) ((Split-Path -Leaf $releaseDir) + "-fingerprint.json")) `
+    -Label "package-release" | Out-Null
+
 Compress-Archive -Path (Join-Path $releaseDir "*") -DestinationPath $zipPath
 Write-Host "[package-release] Checking release zip artifact..."
 Invoke-ArtifactCheck -ArtifactPath $zipPath
