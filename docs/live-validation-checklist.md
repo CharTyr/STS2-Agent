@@ -99,7 +99,13 @@ The player's real Steam profile was hashed before and after: 184 files, aggregat
 - **A console command that succeeded reads as a failure when retried.** Re-issuing `room Treasure`
   while already standing in a treasure room answers 409 `Console command failed: the game task
   faulted.`, although the first call had worked. The retry loop in `run_debug_command` therefore
-  reports a failure for a command that did what was asked.
+  reports a failure for a command that did what was asked. **Fixed**: the message was the real
+  problem -- the fault's own exception was being discarded, so a rejected request and a broken one
+  read identically. `DescribeGameTaskFailure` now names the exception, which covers all eleven
+  actions that answer through it, and `remove_card_at_shop` gets the same detail through the shared
+  describer. The retry loop itself was left alone: with a real message its `last_error` finally says
+  something, and changing retry semantics on a guess about the exception text is the sort of thing
+  this project has been burned by.
 - **After a death settles, the main menu offers `continue_run` / `abandon_run` while `state.run` is
   `null`.** The pre-fix baseline recorded the same action set, so this is not new, but the
   combination is odd enough to deserve its own look.

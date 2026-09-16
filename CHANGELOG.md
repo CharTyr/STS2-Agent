@@ -68,6 +68,18 @@
 
 ### Fixed
 
+- **A faulted game task now names the exception that faulted it.** Eleven actions answer 409 through
+  `DescribeGameTaskFailure` -- save and quit, the crystal sphere, event proceed, rest options, three
+  purchases, both lobby operations and `run_console_command` -- and every one of them said the same
+  sentence for a request the game legitimately rejected and a request that broke the mod. A live pass
+  hit it: `run_console_command room Treasure`, issued while already standing in a treasure room,
+  answered `Console command failed: the game task faulted.` with nothing to act on, and the bounded
+  retry loop in `run_sts2_validation.py` then repeated it twenty times. That handler's *synchronous*
+  branch already named its exception -- the same dishonesty was fixed there once, for `bestiary` --
+  and its asynchronous twin was missed. `remove_card_at_shop`, which reaches its 409 through the pure
+  `BackgroundTaskOutcome` decision layer rather than that helper, gets the same detail from the same
+  shared describer, so the twelfth path cannot drift from the other eleven.
+
 - **`/state.screen` reports `GAME_OVER` again after a death.** Death leaves the combat room active,
   so `ResolveNonModalScreen`'s `FindActiveCombatRoom => "COMBAT"` guard claimed every game-over
   screen and its own `NGameOverScreen` switch arm was unreachable. A live pass caught eight samples

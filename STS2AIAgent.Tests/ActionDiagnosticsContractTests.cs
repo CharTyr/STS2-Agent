@@ -15,6 +15,66 @@ internal static class ActionDiagnosticsContractTests
     private const string ActionPath = "STS2AIAgent/Game/GameActionService.cs";
 
     /// <summary>
+    /// A faulted game task reports the exception that faulted it.
+    /// </summary>
+    /// <remarks>
+    /// Eleven actions answer 409 through <c>DescribeGameTaskFailure</c> -- save and quit, the
+    /// crystal sphere, event proceed, rest options, three purchases, both lobby operations and
+    /// <c>run_console_command</c>. While the helper discarded <c>Task.Exception</c>, every one of
+    /// them said the same sentence for a request the game legitimately rejected and a request that
+    /// broke the mod.
+    ///
+    /// A 2026-09-17 live pass hit it: `run_console_command room Treasure`, issued while already
+    /// standing in a treasure room, answered `Console command failed: the game task faulted.` with
+    /// nothing to act on, and the bounded retry loop in run_sts2_validation.py then repeated it
+    /// twenty times. The synchronous branch of that same handler had already been taught to name its
+    /// exception, for `bestiary`; this is its asynchronous twin.
+    /// </remarks>
+    public static void FaultedGameTasksNameTheirException()
+    {
+        var source = AgentSourceFixture.Read(ActionPath);
+        var body = AgentSourceFixture.WithoutWhitespace(
+            AgentSourceFixture.DeclarationBody(source, "private static string DescribeGameTaskFailure(Task task)"));
+
+        Assert.Contains("DescribeTaskFault(task)", body, StringComparison.Ordinal);
+
+        // A task that carries no exception still has to answer something, and a canceled task keeps
+        // its own wording: those are different outcomes, not different phrasings of one.
+        Assert.Contains("\"thegametaskfaulted\"", body, StringComparison.Ordinal);
+        Assert.Contains("\"thegametaskwascanceled\"", body, StringComparison.Ordinal);
+        Assert.Contains("\"thegametaskfailed\"", body, StringComparison.Ordinal);
+
+        // The shared describer is the one place Task.Exception is read, and it names the type and
+        // the message rather than restating that something faulted.
+        var describer = AgentSourceFixture.WithoutWhitespace(
+            AgentSourceFixture.DeclarationBody(source, "private static string DescribeTaskFault(Task task)"));
+        Assert.True(
+            describer.Contains("task.Exception", StringComparison.Ordinal),
+            "DescribeTaskFault must read Task.Exception. Without it every faulted action -- console "
+            + "commands, purchases, lobby joins -- reports the same contextless sentence, and a caller "
+            + "cannot tell a rejected request from a broken one.");
+        Assert.Contains("failure.GetType().Name", describer, StringComparison.Ordinal);
+        Assert.Contains("failure.Message", describer, StringComparison.Ordinal);
+
+        // remove_card_at_shop reaches its 409 through the pure BackgroundTaskOutcome decision layer
+        // instead of DescribeGameTaskFailure, so it is the one path that would otherwise keep the old
+        // contextless wording. Fixing eleven call sites and leaving the twelfth is how the two drift.
+        var flatSource = AgentSourceFixture.WithoutWhitespace(source);
+        Assert.Contains(
+            "$\"Cardremovalfailed:{purchaseFailure}{DescribeTaskFault(purchaseTask)}.\"",
+            flatSource,
+            StringComparison.Ordinal);
+
+        // The console handler's synchronous branch is where this honesty was established; it must
+        // keep naming its own exception too, so the two branches of one handler stay consistent.
+        var flat = AgentSourceFixture.WithoutWhitespace(source);
+        Assert.Contains(
+            "$\"Consolecommandfailed:{ex.GetType().Name}:{ex.Message}\"",
+            flat,
+            StringComparison.Ordinal);
+    }
+
+    /// <summary>
     /// <c>catch {}</c>, <c>catch { }</c> and <c>catch (Exception) { }</c> all flatten to the same
     /// shape, so one pattern covers every spelling.
     /// </summary>
