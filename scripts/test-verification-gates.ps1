@@ -660,6 +660,27 @@ try {
         Remove-Item -LiteralPath $untrackedDirectory -Recurse -Force
         Remove-Item -LiteralPath $ignoreFile -Force
 
+        # A #L anchor past the end of the file it points at. This is the quiet half of link rot:
+        # the link still opens, it just lands somewhere else, so nothing looks wrong. Six anchors
+        # into client.py and server.py went stale the moment those modules were split, and the
+        # only reason anyone noticed was that someone went looking.
+        Write-Utf8 (Join-Path $linkFixture "docs/guide.md") ("# Guide" + [char]10 + [char]10 + "[back](../README.md)" + [char]10 + [char]10 + "[past the end](../README.md#L99999)" + [char]10)
+        $linkAddAnchor = Invoke-Git -Path $linkFixture -Arguments @("add", "-A")
+        if ($linkAddAnchor.ExitCode -ne 0) { throw "fixture setup failed: git add -A before the line-anchor case" }
+        $linkAnchor = Invoke-Gate -Fixture $linkFixture -Only "doc-links"
+        if ($linkAnchor.ExitCode -eq 0) {
+            Write-Host "FAIL  doc-links gate rejects a line anchor past the end of the file (gate accepted a drifted input)"
+            $script:failures++
+        }
+        elseif (((($linkAnchor.Output -join "") -replace "[\s]", "")) -notmatch "L99999") {
+            Write-Host "FAIL  doc-links gate names the dangling line anchor"
+            Write-Host $linkAnchor.Output
+            $script:failures++
+        }
+        else {
+            Write-Host "PASS  doc-links gate rejects a line anchor past the end of the file"
+        }
+
         Write-Utf8 (Join-Path $linkFixture "docs/guide.md") ("# Guide" + [char]10 + [char]10 + "[back](../README.md)" + [char]10 + [char]10 + "[moved](./fixture-no-such-page.md)" + [char]10)
         $linkAdd2 = Invoke-Git -Path $linkFixture -Arguments @("add", "-A")
         if ($linkAdd2.ExitCode -ne 0) { throw "fixture setup failed: git add -A after the doc-links mutation" }

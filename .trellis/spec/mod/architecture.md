@@ -115,6 +115,23 @@ A pure relocation is verifiable, and both were verified the same way: the base f
 exactly one genuinely new line (the `partial` keyword), and every removed non-blank line appears
 verbatim in exactly one new file.
 
+### `AgentOverlayHost.cs` is not going to be split, and that is a decision
+
+It is 1,829 lines and the table above names it, which makes it look like an oversight. It is not.
+The two files that came apart could come apart because their parts did not share mutable state:
+`GameActionService`'s sixty handlers touch the game, not each other.
+
+This one was measured rather than guessed. Of its **85 instance fields, 78 are touched by more
+than one method**, 2.6 methods each on average; only 7 belong to a single method, and `_panel`
+alone is touched by twelve. That is one stateful Godot object, not several concerns sharing a
+file. Splitting it into partials would scatter shared mutable state across files and make every
+one of those 78 fields harder to reason about -- worse to read, and easier to break, in exchange
+for smaller files.
+
+If it is ever worth changing, the move is to extract a *tab* into its own class with its own
+state and a narrow interface to the host -- which is design work with a behaviour risk, not a
+mechanical split. Do not do it to satisfy a line count.
+
 ### What the splits broke, which is the part worth remembering
 
 Moving members between the files of one class is invisible to the compiler and **not** invisible to
