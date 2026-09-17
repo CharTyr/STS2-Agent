@@ -10,7 +10,7 @@ internal static class GameOverContractTests
     public static void DedicatedContinueActionIsWiredEndToEnd()
     {
         var actionSource = AgentSourceFixture.WithoutWhitespace(
-            AgentSourceFixture.Read("STS2AIAgent/Game/GameActionService.cs"));
+            AgentSourceFixture.ReadActionService());
         var stateSource = AgentSourceFixture.WithoutWhitespace(
             AgentSourceFixture.ReadStateService());
         var promptSource = AgentSourceFixture.Read("skills/sts2-mcp-player/SKILL.md");
@@ -51,7 +51,7 @@ internal static class GameOverContractTests
 
     public static void ContinueAndReturnUseNativeButtonsWithoutSkippingSummary()
     {
-        var rawActionSource = AgentSourceFixture.Read("STS2AIAgent/Game/GameActionService.cs");
+        var rawActionSource = AgentSourceFixture.ReadActionService();
         var actionSource = AgentSourceFixture.WithoutWhitespace(rawActionSource);
         var rawStateSource = AgentSourceFixture.ReadStateService();
         var continueBody = AgentSourceFixture.WithoutWhitespace(
@@ -90,7 +90,7 @@ internal static class GameOverContractTests
 
     public static void ContinueWaitsForNativeSummaryReadiness()
     {
-        var rawActionSource = AgentSourceFixture.Read("STS2AIAgent/Game/GameActionService.cs");
+        var rawActionSource = AgentSourceFixture.ReadActionService();
         var waitBody = AgentSourceFixture.WithoutWhitespace(
             AgentSourceFixture.MethodBody(rawActionSource, "WaitForGameOverSummaryReadyAsync"));
 
@@ -105,7 +105,7 @@ internal static class GameOverContractTests
 
     public static void ContinueDoesNotForceEnableReturnBeforeNativeSave()
     {
-        var rawActionSource = AgentSourceFixture.Read("STS2AIAgent/Game/GameActionService.cs");
+        var rawActionSource = AgentSourceFixture.ReadActionService();
         var continueBody = AgentSourceFixture.WithoutWhitespace(
             AgentSourceFixture.MethodBody(rawActionSource, "ExecuteContinueGameOverAsync"));
         var stateSource = AgentSourceFixture.ReadStateService();

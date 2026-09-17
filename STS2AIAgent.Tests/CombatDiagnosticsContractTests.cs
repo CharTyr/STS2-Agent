@@ -57,7 +57,7 @@ internal static class CombatDiagnosticsContractTests
 
     public static void PlayCardTimeoutCancelsNativeGameAction()
     {
-        var actionSource = ReadSource("STS2AIAgent/Game/GameActionService.cs");
+        var actionSource = AgentSourceFixture.ReadActionService();
         var cancelBody = WithoutWhitespace(MethodBody(actionSource, "TryCancelRunningPlayerAction"));
         var playCardBody = WithoutWhitespace(MethodBody(actionSource, "ExecutePlayCardAsync"));
         var bridgeSource = WithoutWhitespace(ReadSource("STS2AIAgent/Agent/GameBridge.cs"));

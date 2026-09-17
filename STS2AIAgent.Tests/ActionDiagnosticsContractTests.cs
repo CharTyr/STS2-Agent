@@ -12,7 +12,6 @@ namespace STS2AIAgent.Tests;
 /// </summary>
 internal static class ActionDiagnosticsContractTests
 {
-    private const string ActionPath = "STS2AIAgent/Game/GameActionService.cs";
 
     /// <summary>
     /// A faulted game task reports the exception that faulted it.
@@ -32,7 +31,7 @@ internal static class ActionDiagnosticsContractTests
     /// </remarks>
     public static void FaultedGameTasksNameTheirException()
     {
-        var source = AgentSourceFixture.Read(ActionPath);
+        var source = AgentSourceFixture.ReadActionService();
         var body = AgentSourceFixture.WithoutWhitespace(
             AgentSourceFixture.DeclarationBody(source, "private static string DescribeGameTaskFailure(Task task)"));
 
@@ -89,7 +88,7 @@ internal static class ActionDiagnosticsContractTests
 
     public static void NoRecoveryCatchSwallowsWithoutSayingSo()
     {
-        var source = AgentSourceFixture.WithoutWhitespace(AgentSourceFixture.Read(ActionPath));
+        var source = AgentSourceFixture.WithoutWhitespace(AgentSourceFixture.ReadActionService());
 
         var match = EmptyCatch.Match(source);
         Assert.False(

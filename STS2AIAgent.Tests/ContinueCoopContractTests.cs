@@ -10,7 +10,6 @@ namespace STS2AIAgent.Tests;
 /// </summary>
 internal static class ContinueCoopContractTests
 {
-    private const string ActionPath = "STS2AIAgent/Game/GameActionService.cs";
     private const string Guard = "if (CanContinueAiTeammate(currentScreen))";
 
     public static void ActionIsAdvertisedBehindTheSaveProbe()
@@ -39,7 +38,7 @@ internal static class ContinueCoopContractTests
 
     public static void ExecutorRechecksTheProbeAndFailsRetryably()
     {
-        var action = AgentSourceFixture.Read(ActionPath);
+        var action = AgentSourceFixture.ReadActionService();
         var body = AgentSourceFixture.MethodBody(action, "ExecuteContinueAiTeammateAsync");
 
         Assert.Contains("CoopLaunchPolicy.GetError(", body, StringComparison.Ordinal);
@@ -61,7 +60,7 @@ internal static class ContinueCoopContractTests
     public static void LoadScreenAdvertisesOnlyWhatTheExecutorHandles()
     {
         var state = AgentSourceFixture.ReadStateService();
-        var action = AgentSourceFixture.Read(ActionPath);
+        var action = AgentSourceFixture.ReadActionService();
 
         // embark: the load screen resolves the button and the executor waits for the ready
         // transition instead of reporting completion after a single frame.
@@ -81,7 +80,7 @@ internal static class ContinueCoopContractTests
 
     public static void LoadEmbarkWaitIsBoundedAndSettlesOnEveryExit()
     {
-        var action = AgentSourceFixture.Read(ActionPath);
+        var action = AgentSourceFixture.ReadActionService();
 
         var wait = AgentSourceFixture.MethodBody(action, "WaitForLoadEmbarkTransitionAsync");
         Assert.Contains("var deadline = DateTime.UtcNow + timeout;", wait, StringComparison.Ordinal);
@@ -101,7 +100,7 @@ internal static class ContinueCoopContractTests
     {
         // Scope: the coordinator's token reaches every wait inside StartLocalLoadAsync. The HTTP
         // executor itself still passes CancellationToken.None, the same as invite_ai_teammate.
-        var action = AgentSourceFixture.Read(ActionPath);
+        var action = AgentSourceFixture.ReadActionService();
         Assert.Contains(
             "StartLocalLoadAsync(CancellationToken cancellationToken",
             action,
@@ -138,7 +137,7 @@ internal static class ContinueCoopContractTests
     /// </summary>
     public static void PendingExecutorReturnsTaskWithoutAsync()
     {
-        var action = AgentSourceFixture.Read(ActionPath);
+        var action = AgentSourceFixture.ReadActionService();
         Assert.Contains(
             "private static Task<ActionResponsePayload> ExecuteContinueAiTeammateAsync()",
             action,

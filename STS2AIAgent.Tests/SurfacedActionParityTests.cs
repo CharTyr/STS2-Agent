@@ -8,7 +8,6 @@ namespace STS2AIAgent.Tests;
 /// </summary>
 internal static class SurfacedActionParityTests
 {
-    private const string ActionPath = "STS2AIAgent/Game/GameActionService.cs";
 
     public static void SelectionCanConfirmComesFromTheExecutorProbe()
     {
@@ -97,7 +96,7 @@ internal static class SurfacedActionParityTests
 
         // Availability and the executor must read the same alternative list.
         var executor = Flat(AgentSourceFixture.MethodBody(
-            AgentSourceFixture.Read(ActionPath),
+            AgentSourceFixture.ReadActionService(),
             "ExecuteSkipRewardCardsAsync"));
         Assert.Contains("GameStateService.CanSkipRewardCards(currentScreen)", executor, StringComparison.Ordinal);
         Assert.Contains("GameStateService.GetCardRewardAlternativeButtons(currentScreen)", executor, StringComparison.Ordinal);
@@ -122,7 +121,7 @@ internal static class SurfacedActionParityTests
             StringComparison.Ordinal);
 
         var executor = Flat(AgentSourceFixture.MethodBody(
-            AgentSourceFixture.Read(ActionPath),
+            AgentSourceFixture.ReadActionService(),
             "ExecuteChooseRewardCardAsync"));
         Assert.Contains("GameStateService.CanChooseRewardCard(currentScreen)", executor, StringComparison.Ordinal);
         Assert.Contains("GameStateService.GetCardRewardOptions(currentScreen)", executor, StringComparison.Ordinal);
@@ -159,7 +158,7 @@ internal static class SurfacedActionParityTests
     public static void SkipTargetsEnabledAlternative()
     {
         var executor = Flat(AgentSourceFixture.MethodBody(
-            AgentSourceFixture.Read(ActionPath),
+            AgentSourceFixture.ReadActionService(),
             "ExecuteSkipRewardCardsAsync"));
         var probe = Flat(AgentSourceFixture.DeclarationBody(
             AgentSourceFixture.ReadStateService(),

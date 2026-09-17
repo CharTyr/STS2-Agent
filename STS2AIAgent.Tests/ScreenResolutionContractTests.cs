@@ -83,7 +83,7 @@ internal static class ScreenResolutionContractTests
         Assert.Contains("NMerchantInventory>(\"%Inventory\")", helper, StringComparison.Ordinal);
         Assert.Contains("inventory != null && inventory.IsOpen ? null : merchantButton", helper, StringComparison.Ordinal);
 
-        var rawAction = AgentSourceFixture.Read("STS2AIAgent/Game/GameActionService.cs");
+        var rawAction = AgentSourceFixture.ReadActionService();
         var open = Normalize(AgentSourceFixture.MethodBody(rawAction, "ExecuteOpenShopInventoryAsync"));
         Assert.Contains("if (!GameStateService.CanOpenShopInventory(currentScreen))", open, StringComparison.Ordinal);
         Assert.Contains("var fakeMerchantButton = GameStateService.GetFakeMerchantButton(currentScreen);", open, StringComparison.Ordinal);
@@ -101,7 +101,7 @@ internal static class ScreenResolutionContractTests
         Assert.Contains("currentScreen is not NSubmenu submenu || !submenu.IsVisibleInTree()", canClose, StringComparison.Ordinal);
         Assert.Contains("submenuStack != null && submenuStack.SubmenusOpen", canClose, StringComparison.Ordinal);
 
-        var rawAction = AgentSourceFixture.Read("STS2AIAgent/Game/GameActionService.cs");
+        var rawAction = AgentSourceFixture.ReadActionService();
         var close = Normalize(AgentSourceFixture.MethodBody(rawAction, "ExecuteCloseMainMenuSubmenuAsync"));
         Assert.Contains("currentScreen is NPatchNotesScreen patchNotes", close, StringComparison.Ordinal);
         Assert.Contains("GetPrivateField<NButton>(patchNotes, \"_backButton\")", close, StringComparison.Ordinal);
@@ -130,7 +130,7 @@ internal static class ScreenResolutionContractTests
         Assert.Contains("currentScreen is NInspectRelicScreen inspectRelic", canClose, StringComparison.Ordinal);
         Assert.Contains("return GetCardsViewBackButton(currentScreen) != null;", canClose, StringComparison.Ordinal);
 
-        var rawAction = AgentSourceFixture.Read("STS2AIAgent/Game/GameActionService.cs");
+        var rawAction = AgentSourceFixture.ReadActionService();
         var close = Normalize(AgentSourceFixture.MethodBody(rawAction, "ExecuteCloseCardsViewAsync"));
         Assert.Contains("inspectCard.Close();", close, StringComparison.Ordinal);
         Assert.Contains("inspectRelic.Close();", close, StringComparison.Ordinal);
@@ -289,7 +289,7 @@ internal static class ScreenResolutionContractTests
     public static void CapstonePagesOfferOneBackStepAndNeverThePausePage()
     {
         var rawState = AgentSourceFixture.ReadStateService();
-        var rawAction = AgentSourceFixture.Read("STS2AIAgent/Game/GameActionService.cs");
+        var rawAction = AgentSourceFixture.ReadActionService();
 
         // The one action these pages have is backing out one level, and only from above the pause menu:
         // the pause page is where a person resumes the run, so it is never the agent's to close.

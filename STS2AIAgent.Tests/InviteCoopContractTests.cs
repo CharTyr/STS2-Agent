@@ -37,7 +37,7 @@ internal static class InviteCoopContractTests
     /// </summary>
     public static void PendingExecutorReturnsTaskWithoutAsync()
     {
-        var source = AgentSourceFixture.Read("STS2AIAgent/Game/GameActionService.cs");
+        var source = AgentSourceFixture.ReadActionService();
         Assert.Contains(
             "private static Task<ActionResponsePayload> ExecuteInviteAiTeammateAsync()",
             source,

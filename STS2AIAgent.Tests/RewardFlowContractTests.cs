@@ -6,7 +6,7 @@ internal static class RewardFlowContractTests
 {
     public static void EmptyRewardsScreenEscapesInsteadOfPending()
     {
-        var actionSource = AgentSourceFixture.Read("STS2AIAgent/Game/GameActionService.cs");
+        var actionSource = AgentSourceFixture.ReadActionService();
         var drain = AgentSourceFixture.MethodBody(actionSource, "DrainRewardFlowAsync");
         Assert.Contains("TryEscapeEmptyRewardsScreenAsync", drain);
 

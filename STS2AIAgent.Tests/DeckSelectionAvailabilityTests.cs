@@ -10,7 +10,6 @@ namespace STS2AIAgent.Tests;
 /// </summary>
 internal static class DeckSelectionAvailabilityTests
 {
-    private const string ActionPath = "STS2AIAgent/Game/GameActionService.cs";
     private const string AvailabilityDeclaration =
         "public static IReadOnlyList<NCardHolder> GetDeckSelectionOptions(";
 
@@ -41,7 +40,7 @@ internal static class DeckSelectionAvailabilityTests
     public static void ExecutorKeepsItsGuard()
     {
         var body = Flat(AgentSourceFixture.MethodBody(
-            AgentSourceFixture.Read(ActionPath),
+            AgentSourceFixture.ReadActionService(),
             "ExecuteSelectDeckCardAsync"));
 
         // Deleting the fallback alone would be undone by a later "just drop the 409 guard" change:

@@ -9,7 +9,6 @@ namespace STS2AIAgent.Tests;
 /// </summary>
 internal static class CharacterSelectReadyContractTests
 {
-    private const string ActionPath = "STS2AIAgent/Game/GameActionService.cs";
     private const string SelectGuard = "if (CanSelectCharacter(currentScreen))";
     private const string UnreadyGuard = "if (CanUnready(currentScreen))";
 
@@ -62,7 +61,7 @@ internal static class CharacterSelectReadyContractTests
 
     public static void ExecutorStillUsesCanSelectCharacter()
     {
-        var action = AgentSourceFixture.Read(ActionPath);
+        var action = AgentSourceFixture.ReadActionService();
         var characterSelect = AgentSourceFixture.MethodBody(action, "ExecuteSelectCharacterAsync");
         Assert.Contains("GameStateService.CanSelectCharacter(currentScreen)", characterSelect, StringComparison.Ordinal);
 

@@ -45,8 +45,7 @@ internal static class DeckSelectionContractTests
 
     public static void CardGridClickSettlesInEitherDirectionBeforeConfirming()
     {
-        var rawActionSource = ReadSource(
-            "STS2AIAgent/Game/GameActionService.cs");
+        var rawActionSource = AgentSourceFixture.ReadActionService();
         var selectBody = WithoutWhitespace(
             MethodBody(rawActionSource, "ExecuteSelectDeckCardAsync"));
         var settleBody = WithoutWhitespace(
@@ -89,8 +88,7 @@ internal static class DeckSelectionContractTests
 
     public static void CardGridConfirmationUsesSharedExecutor()
     {
-        var rawActionSource = ReadSource(
-            "STS2AIAgent/Game/GameActionService.cs");
+        var rawActionSource = AgentSourceFixture.ReadActionService();
         var confirmBody = WithoutWhitespace(
             MethodBody(rawActionSource, "ExecuteConfirmSelectionAsync"));
 

@@ -29,7 +29,7 @@ internal static class FtueModalPolicyTests
         Assert.Contains("TryCloseOpenFtue", stateSource);
         Assert.Contains("CloseFtue", stateSource);
         Assert.True(!stateSource.Contains("GameActionService.EnsureEndTurnPhaseStarts()"));
-        var actionSource = AgentSourceFixture.Read("STS2AIAgent/Game/GameActionService.cs");
+        var actionSource = AgentSourceFixture.ReadActionService();
         Assert.Contains("GameStateService.TryCloseOpenFtue()", actionSource);
         Assert.Contains("FtueModalPolicy.CloseFtueDirectly", actionSource);
         Assert.Contains("FtueModalPolicy.ForceCloseIfStuck", actionSource);
@@ -78,7 +78,7 @@ internal static class FtueModalPolicyTests
         Assert.False(FtueModalPolicy.IsMultiPageFtue(null));
         Assert.False(FtueModalPolicy.IsMultiPageFtue(""));
 
-        var actionSource = AgentSourceFixture.Read("STS2AIAgent/Game/GameActionService.cs");
+        var actionSource = AgentSourceFixture.ReadActionService();
         var confirmModal = AgentSourceFixture.MethodBody(actionSource, "ExecuteModalButtonAsync");
         Assert.Contains("IsMultiPageFtue", confirmModal);
         Assert.Contains("Tutorial page advanced; the modal is still open. Call confirm_modal again.", confirmModal);

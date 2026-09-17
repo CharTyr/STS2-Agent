@@ -13,7 +13,6 @@ namespace STS2AIAgent.Tests;
 /// </summary>
 internal static class CardViewerScreenContractTests
 {
-    private const string ActionPath = "STS2AIAgent/Game/GameActionService.cs";
 
     public static void ViewerBranchesPrecedeTheVisibleGrid()
     {
@@ -46,7 +45,7 @@ internal static class CardViewerScreenContractTests
     public static void ClosableViewerSetIsSharedByProbeAndExecutor()
     {
         var stateSource = AgentSourceFixture.ReadStateService();
-        var actionSource = AgentSourceFixture.Read(ActionPath);
+        var actionSource = AgentSourceFixture.ReadActionService();
 
         // One predicate owns the widened set: NCardsViewScreen plus NCardPileScreen. Narrowing it
         // back to NCardsViewScreen alone has to turn this test red.
@@ -81,7 +80,7 @@ internal static class CardViewerScreenContractTests
     public static void SubmenuStackLookupUsesTheBaseClass()
     {
         var stateSource = AgentSourceFixture.ReadStateService();
-        var actionSource = AgentSourceFixture.Read(ActionPath);
+        var actionSource = AgentSourceFixture.ReadActionService();
 
         var lookup = Flat(AgentSourceFixture.DeclarationBody(
             stateSource,

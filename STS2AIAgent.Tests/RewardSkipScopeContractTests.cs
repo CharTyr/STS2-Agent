@@ -9,7 +9,7 @@ internal static class RewardSkipScopeContractTests
 {
     public static void TheUnscopedSkipFieldIsGone()
     {
-        var actionSource = AgentSourceFixture.Read("STS2AIAgent/Game/GameActionService.cs");
+        var actionSource = AgentSourceFixture.ReadActionService();
 
         Assert.False(
             actionSource.Contains("_cardRewardSkipped", StringComparison.Ordinal),
@@ -19,7 +19,7 @@ internal static class RewardSkipScopeContractTests
 
     public static void TheButtonFilterGoesThroughTheScope()
     {
-        var actionSource = AgentSourceFixture.Read("STS2AIAgent/Game/GameActionService.cs");
+        var actionSource = AgentSourceFixture.ReadActionService();
         var filter = AgentSourceFixture.MethodBody(actionSource, "TryGetNextClaimableRewardButton");
 
         Assert.Contains("CardRewardSkips.AppliesTo(rewardsScreen.GetInstanceId())", filter);
@@ -40,7 +40,7 @@ internal static class RewardSkipScopeContractTests
 
     public static void SkipRewardCardsRecordsTheScope()
     {
-        var actionSource = AgentSourceFixture.Read("STS2AIAgent/Game/GameActionService.cs");
+        var actionSource = AgentSourceFixture.ReadActionService();
         var skip = AgentSourceFixture.MethodBody(actionSource, "ExecuteSkipRewardCardsAsync");
 
         Assert.Contains("CardRewardSkips.MarkSkipped(GameStateService.GetRewardSetId(currentScreen))", skip);
@@ -48,7 +48,7 @@ internal static class RewardSkipScopeContractTests
 
     public static void TheDrainRecordsAndClearsTheScope()
     {
-        var actionSource = AgentSourceFixture.Read("STS2AIAgent/Game/GameActionService.cs");
+        var actionSource = AgentSourceFixture.ReadActionService();
         var cardResolution = AgentSourceFixture.MethodBody(actionSource, "TryResolveCardRewardAsync");
         var drain = AgentSourceFixture.MethodBody(actionSource, "DrainRewardFlowAsync");
 
@@ -60,7 +60,7 @@ internal static class RewardSkipScopeContractTests
 
     public static void ExplicitPicksClearTheScope()
     {
-        var actionSource = AgentSourceFixture.Read("STS2AIAgent/Game/GameActionService.cs");
+        var actionSource = AgentSourceFixture.ReadActionService();
         var resolve = AgentSourceFixture.MethodBody(actionSource, "ExecuteResolveRewardsAsync");
         var choose = AgentSourceFixture.MethodBody(actionSource, "ExecuteChooseRewardCardAsync");
 

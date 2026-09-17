@@ -12,7 +12,7 @@ internal static class TimelineIndexContractTests
     public static void ExecutorIndexesTheSameSlotListTheStateExposes()
     {
         var rawState = AgentSourceFixture.ReadStateService();
-        var rawAction = AgentSourceFixture.Read("STS2AIAgent/Game/GameActionService.cs");
+        var rawAction = AgentSourceFixture.ReadActionService();
 
         var stateSlots = Normalize(AgentSourceFixture.MethodBody(rawState, "BuildTimelinePayload"));
         Assert.Contains("var slots = GetTimelineSlots(currentScreen)", stateSlots, StringComparison.Ordinal);
@@ -34,7 +34,7 @@ internal static class TimelineIndexContractTests
 
     public static void NonActionableSlotsAreRejectedExplicitly()
     {
-        var rawAction = AgentSourceFixture.Read("STS2AIAgent/Game/GameActionService.cs");
+        var rawAction = AgentSourceFixture.ReadActionService();
         var resolve = Normalize(AgentSourceFixture.MethodBody(rawAction, "ResolveTimelineSlot"));
 
         Assert.Contains("slot.State is not (EpochSlotState.Obtained or EpochSlotState.Complete)", resolve, StringComparison.Ordinal);

@@ -36,7 +36,7 @@ internal static class AgentSourceFixture
     }
 
     /// <summary>
-    /// Every file that declares <c>GameStateService</c>, concatenated in path order.
+    /// Every file that declares <c>GameStateService</c>, concatenated in reading order.
     /// </summary>
     /// <remarks>
     /// <c>GameStateService</c> is one <c>partial</c> class split across files -- the raw
@@ -44,28 +44,48 @@ internal static class AgentSourceFixture
     /// rewrite in <c>GameStateService.AgentView.cs</c>. A source contract that asks what the class
     /// says must read all of it, or a member that simply moved between its own files reads as
     /// deleted. Tests that mean one specific file still name that file.
-    ///
-    /// At least two files are required, so merging the class back into one file fails here rather
-    /// than quietly halving what every contract above sees.
     /// </remarks>
-    public static string ReadStateService()
+    public static string ReadStateService() => ReadPartialClass("GameStateService");
+
+    /// <summary>
+    /// Every file that declares <c>GameActionService</c>, concatenated in reading order.
+    /// </summary>
+    /// <remarks>
+    /// One 7,061-line file until 2026-09-17, now the base file plus one partial per room. The
+    /// reasoning is the same as <see cref="ReadStateService"/>: these contracts ask what the class
+    /// says, not which of its own files a member currently sits in.
+    /// </remarks>
+    public static string ReadActionService() => ReadPartialClass("GameActionService");
+
+    /// <summary>
+    /// Reads every file declaring one partial class, base file first.
+    /// </summary>
+    /// <remarks>
+    /// Order is not cosmetic: <see cref="MethodBody"/> resolves a name by its *last* occurrence, so
+    /// a method has to be declared after it is called. The base file holds the call sites into the
+    /// partials, so it comes first -- otherwise <c>MethodBody("BuildAgentViewPayload")</c> returns
+    /// the body of whatever encloses its call.
+    ///
+    /// At least two files are required, so merging one of these classes back into a single file
+    /// fails here rather than quietly halving what every contract above it can see.
+    /// </remarks>
+    private static string ReadPartialClass(string className)
     {
         var directory = Path.Combine(Root, "STS2AIAgent", "Game");
-        // GameStateService.cs first, then the partials. Order is not cosmetic here: MethodBody
-        // resolves a name by its *last* occurrence, so a method must be declared after it is
-        // called. The base file holds the call sites into the partials, so it has to come first
-        // or MethodBody("BuildAgentViewPayload") returns the body of whatever encloses its call.
+        var baseFile = className + ".cs";
         var files = Directory
-            .EnumerateFiles(directory, "GameStateService*.cs", SearchOption.TopDirectoryOnly)
-            .OrderBy(path => Path.GetFileName(path) == "GameStateService.cs" ? 0 : 1)
+            .EnumerateFiles(directory, className + ".*.cs", SearchOption.TopDirectoryOnly)
+            .Append(Path.Combine(directory, baseFile))
+            .Where(File.Exists)
+            .OrderBy(path => Path.GetFileName(path) == baseFile ? 0 : 1)
             .ThenBy(path => path, StringComparer.Ordinal)
             .ToArray();
 
         if (files.Length < 2)
         {
             throw new InvalidOperationException(
-                $"GameStateService is declared in {files.Length} file(s) under {directory}. The class "
-                + "was split on purpose; if it is being merged back, update the source contracts that "
+                $"{className} is declared in {files.Length} file(s) under {directory}. The class was "
+                + "split on purpose; if it is being merged back, update the source contracts that "
                 + "read it instead of leaving them reading part of a class.");
         }
 
@@ -98,9 +118,20 @@ internal static class AgentSourceFixture
         return builder.ToString();
     }
 
+    /// <summary>
+    /// Body of the method declared as <paramref name="methodName"/>.
+    /// </summary>
+    /// <remarks>
+    /// This used to take the name's last occurrence, which worked only because a method in a
+    /// single file is declared before it is called. Across the files of a partial class that stops
+    /// being true, and the failure is quiet in the worst way: the body of whatever encloses a call
+    /// site comes back, so the contract still asserts -- against the wrong method. Declarations are
+    /// now preferred, and only when none is found does the old rule apply, for a local function
+    /// whose line carries no modifier.
+    /// </remarks>
     public static string MethodBody(string source, string methodName)
     {
-        var nameIndex = source.LastIndexOf($" {methodName}(", StringComparison.Ordinal);
+        var nameIndex = FindDeclarationIndex(source, methodName);
         if (nameIndex < 0)
         {
             throw new InvalidOperationException($"Method declaration is missing: {methodName}");
@@ -131,6 +162,36 @@ internal static class AgentSourceFixture
         }
 
         throw new InvalidOperationException($"Method body is unterminated: {methodName}");
+    }
+
+    /// <summary>
+    /// Index of the last occurrence of <paramref name="methodName"/> that opens a declaration
+    /// rather than a call, or the last occurrence of any kind when none does.
+    /// </summary>
+    private static int FindDeclarationIndex(string source, string methodName)
+    {
+        var needle = $" {methodName}(";
+        var fallback = -1;
+        var declaration = -1;
+
+        for (var index = source.IndexOf(needle, StringComparison.Ordinal);
+             index >= 0;
+             index = source.IndexOf(needle, index + 1, StringComparison.Ordinal))
+        {
+            fallback = index;
+
+            var lineStart = source.LastIndexOf('\n', index) + 1;
+            var prefix = source[lineStart..index];
+            if (prefix.Contains("private ", StringComparison.Ordinal) ||
+                prefix.Contains("public ", StringComparison.Ordinal) ||
+                prefix.Contains("internal ", StringComparison.Ordinal) ||
+                prefix.Contains("protected ", StringComparison.Ordinal))
+            {
+                declaration = index;
+            }
+        }
+
+        return declaration >= 0 ? declaration : fallback;
     }
 
     /// <summary>

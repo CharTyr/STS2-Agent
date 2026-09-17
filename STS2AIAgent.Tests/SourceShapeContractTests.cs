@@ -40,10 +40,15 @@ internal static class SourceShapeContractTests
         // raw payloads, so it grows when they do -- which is the reason to watch it separately
         // rather than let it grow inside a file already too big to notice.
         ["STS2AIAgent/Game/GameStateService.AgentView.cs"] = 1400,
-        // 60 Execute* handlers and 62 WaitFor* stabilizers. Unlike the file above this one is not
-        // tangled -- it is one clear pattern repeated sixty times -- so splitting it by room
-        // (combat / map / shop / co-op / menus) is mechanical whenever someone wants the room.
-        ["STS2AIAgent/Game/GameActionService.cs"] = 7100,
+        // 7,061 lines until it was split by room on 2026-09-17. What is left in the base file is
+        // the dispatch switch and the helpers more than one room reaches; six of the eight room
+        // files came in under the default budget and so have no entry at all, which is the shape
+        // to aim for.
+        ["STS2AIAgent/Game/GameActionService.cs"] = 1300,
+        // Chests, events, rest sites, the crystal sphere, capstones and bundles. The largest room
+        // because it is really six small ones that share their settle-and-proceed helpers; if it
+        // grows again, it splits rather than the number going up.
+        ["STS2AIAgent/Game/GameActionService.Rooms.cs"] = 1250,
         ["STS2AIAgent/Ui/AgentOverlayHost.cs"] = 1900,
         ["STS2AIAgent/Agent/AgentRuntime.cs"] = 1450,
     };
