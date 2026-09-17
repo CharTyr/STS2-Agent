@@ -8,12 +8,10 @@ namespace STS2AIAgent.Tests;
 /// </summary>
 internal static class SurfacedActionParityTests
 {
-    private const string StatePath = "STS2AIAgent/Game/GameStateService.cs";
-    private const string ActionPath = "STS2AIAgent/Game/GameActionService.cs";
 
     public static void SelectionCanConfirmComesFromTheExecutorProbe()
     {
-        var source = AgentSourceFixture.Read(StatePath);
+        var source = AgentSourceFixture.ReadStateService();
         var payload = Flat(AgentSourceFixture.MethodBody(source, "BuildSelectionPayload"));
         var probe = Flat(AgentSourceFixture.DeclarationBody(
             source,
@@ -41,7 +39,7 @@ internal static class SurfacedActionParityTests
 
     public static void ModalCanConfirmComesFromTheExecutorProbe()
     {
-        var source = AgentSourceFixture.Read(StatePath);
+        var source = AgentSourceFixture.ReadStateService();
         var payload = Flat(AgentSourceFixture.MethodBody(source, "BuildModalPayload"));
         var probe = Flat(AgentSourceFixture.DeclarationBody(
             source,
@@ -67,7 +65,7 @@ internal static class SurfacedActionParityTests
     public static void ResolveRewardsDescriptorDoesNotRequireAnIndex()
     {
         var payload = Flat(AgentSourceFixture.DeclarationBody(
-            AgentSourceFixture.Read(StatePath),
+            AgentSourceFixture.ReadStateService(),
             "private static List<ActionDescriptor> EnumerateAvailableActions("));
 
         // ExecuteResolveRewardsAsync treats option_index/card_index as optional (absent means
@@ -84,7 +82,7 @@ internal static class SurfacedActionParityTests
 
     public static void SkipRewardCardsFiltersOnAlternativeButtonEnablement()
     {
-        var source = AgentSourceFixture.Read(StatePath);
+        var source = AgentSourceFixture.ReadStateService();
         var probe = Flat(AgentSourceFixture.DeclarationBody(
             source,
             "public static bool CanSkipRewardCards("));
@@ -98,7 +96,7 @@ internal static class SurfacedActionParityTests
 
         // Availability and the executor must read the same alternative list.
         var executor = Flat(AgentSourceFixture.MethodBody(
-            AgentSourceFixture.Read(ActionPath),
+            AgentSourceFixture.ReadActionService(),
             "ExecuteSkipRewardCardsAsync"));
         Assert.Contains("GameStateService.CanSkipRewardCards(currentScreen)", executor, StringComparison.Ordinal);
         Assert.Contains("GameStateService.GetCardRewardAlternativeButtons(currentScreen)", executor, StringComparison.Ordinal);
@@ -106,7 +104,7 @@ internal static class SurfacedActionParityTests
 
     public static void ChooseRewardCardStaysOnTheExecutorCollection()
     {
-        var source = AgentSourceFixture.Read(StatePath);
+        var source = AgentSourceFixture.ReadStateService();
         var probe = Flat(AgentSourceFixture.DeclarationBody(
             source,
             "public static bool CanChooseRewardCard("));
@@ -123,7 +121,7 @@ internal static class SurfacedActionParityTests
             StringComparison.Ordinal);
 
         var executor = Flat(AgentSourceFixture.MethodBody(
-            AgentSourceFixture.Read(ActionPath),
+            AgentSourceFixture.ReadActionService(),
             "ExecuteChooseRewardCardAsync"));
         Assert.Contains("GameStateService.CanChooseRewardCard(currentScreen)", executor, StringComparison.Ordinal);
         Assert.Contains("GameStateService.GetCardRewardOptions(currentScreen)", executor, StringComparison.Ordinal);
@@ -132,7 +130,7 @@ internal static class SurfacedActionParityTests
 
     public static void CrystalSphereExposureStaysOnTheScreenTypeGuard()
     {
-        var source = AgentSourceFixture.Read(StatePath);
+        var source = AgentSourceFixture.ReadStateService();
         var probe = Flat(AgentSourceFixture.DeclarationBody(
             source,
             "public static bool CanPlayCrystalSphere("));
@@ -160,10 +158,10 @@ internal static class SurfacedActionParityTests
     public static void SkipTargetsEnabledAlternative()
     {
         var executor = Flat(AgentSourceFixture.MethodBody(
-            AgentSourceFixture.Read(ActionPath),
+            AgentSourceFixture.ReadActionService(),
             "ExecuteSkipRewardCardsAsync"));
         var probe = Flat(AgentSourceFixture.DeclarationBody(
-            AgentSourceFixture.Read(StatePath),
+            AgentSourceFixture.ReadStateService(),
             "public static bool CanSkipRewardCards("));
 
         // Exposure and execution have to pick from the same enabled-filtered set. The 409 guard only
@@ -191,7 +189,7 @@ internal static class SurfacedActionParityTests
     /// </summary>
     public static void RoomProbesDoNotSwallowTheirFailures()
     {
-        var source = AgentSourceFixture.Read(StatePath);
+        var source = AgentSourceFixture.ReadStateService();
 
         foreach (var (declaration, actionName) in new[]
                  {

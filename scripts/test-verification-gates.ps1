@@ -15,10 +15,13 @@ function Write-Utf8([string]$Path, [string]$Text) {
     [System.IO.File]::WriteAllText($Path, $Text, $utf8)
 }
 
-function Invoke-Gate([string]$Fixture, [string]$Only) {
+function Invoke-Gate([string]$Fixture, [string]$Only, [string]$Skip) {
     $arguments = @("--repo-root", $Fixture)
     if ($Only) {
         $arguments += @("--only", $Only)
+    }
+    if ($Skip) {
+        $arguments += @("--skip", $Skip)
     }
 
     # A failing gate writes to stderr; that is the expected path here, not a script error.
@@ -64,7 +67,19 @@ function Remove-Fixture([string]$Path) {
 $fixture = Join-Path ([System.IO.Path]::GetTempPath()) ("sts2-verification-gates-" + [Guid]::NewGuid().ToString("N").Substring(0, 8))
 $failures = 0
 
-function Assert-Case([string]$Name, [string]$Only, [scriptblock]$Mutate) {
+# $Expect is the point of this function, not decoration. Until 2026-09-17 a case passed on a
+# non-zero exit alone, so a gate that died for an unrelated reason -- a missing fixture file, an
+# import error, an encoding traceback -- read as "rejected the drifted input". That happened:
+# after GameStateService was split into three files, three api-facts cases reported PASS while
+# the gate was really failing with "missing required file". A case now names what it expects to
+# be told, and saying nothing is itself a failure.
+function Assert-Case([string]$Name, [string]$Only, [string]$Expect) {
+    if ([string]::IsNullOrWhiteSpace($Expect)) {
+        Write-Host "FAIL  $Name (the case declares no expected message)"
+        $script:failures++
+        return
+    }
+
     $result = Invoke-Gate -Fixture $fixture -Only $Only
     if ($result.ExitCode -eq 0) {
         Write-Host "FAIL  $Name (gate accepted a drifted input)"
@@ -75,6 +90,20 @@ function Assert-Case([string]$Name, [string]$Only, [scriptblock]$Mutate) {
     $message = ($result.Output -split "\r?\n" | Where-Object { $_ -match "verification gates failed" } | Select-Object -First 1)
     if (-not $message) {
         $message = $result.Output.Trim()
+    }
+
+    # Compared with all whitespace removed, against the whole output rather than one line.
+    # PowerShell wraps a native command's stderr at the console width, and it wraps mid-word: the
+    # name this case exists to see can arrive as "totally_" on one line and "made_up_action" on the
+    # next. Dropping whitespace is the same trick the C# source contracts use for the same reason.
+    $haystack = (($result.Output -join "") -replace "[\s]", "")
+    $needle = ($Expect -replace "[\s]", "")
+    if ($haystack -notmatch [regex]::Escape($needle)) {
+        Write-Host "FAIL  $Name (rejected, but not for the expected reason)"
+        Write-Host "      expected to contain: $Expect"
+        Write-Host "      got: $($message.Trim())"
+        $script:failures++
+        return
     }
 
     Write-Host "PASS  $Name"
@@ -112,6 +141,10 @@ try {
     New-Item -ItemType Directory -Path $fixtureAction -Force | Out-Null
     Copy-Item -LiteralPath (Join-Path $repoRoot "STS2AIAgent/Game/GameActionService.cs") -Destination $fixtureAction
     Copy-Item -LiteralPath (Join-Path $repoRoot "STS2AIAgent/Game/GameStateService.cs") -Destination $fixtureAction
+    # GameStateService is a partial class in three files: the builders, the compact agent_view
+    # and the payload declarations. api-facts reads all three, so the fixture mirrors all three.
+    Copy-Item -LiteralPath (Join-Path $repoRoot "STS2AIAgent/Game/GameStateService.AgentView.cs") -Destination $fixtureAction
+    Copy-Item -LiteralPath (Join-Path $repoRoot "STS2AIAgent/Game/GameStateService.Payloads.cs") -Destination $fixtureAction
 
     $fixtureServerSource = Join-Path $fixture "STS2AIAgent/Server"
     New-Item -ItemType Directory -Path $fixtureServerSource -Force | Out-Null
@@ -119,16 +152,39 @@ try {
     # api-facts also reads BuildHealthData, so the router has to be in the fixture too.
     Copy-Item -LiteralPath (Join-Path $repoRoot "STS2AIAgent/Server/Router.cs") -Destination $fixtureServerSource
 
+    # arch-facts measures the whole mod, not a handful of files: it counts every source file and
+    # then insists that each one over 1,000 lines appears in the architecture page's table. A
+    # fixture holding five files would make it measure a mod that does not exist, so the tree is
+    # mirrored whole. It is text and it is small.
+    $sourceMod = Join-Path $repoRoot "STS2AIAgent"
+    Get-ChildItem -Path $sourceMod -Recurse -File -Filter *.cs |
+        Where-Object { $_.FullName -notmatch "[\/](bin|obj)[\/]" } |
+        ForEach-Object {
+            $relative = $_.FullName.Substring($sourceMod.Length).TrimStart([char]92, [char]47)
+            $destination = Join-Path $fixtureAgent $relative
+            $parent = Split-Path -Parent $destination
+            if (-not (Test-Path -LiteralPath $parent)) { New-Item -ItemType Directory -Path $parent -Force | Out-Null }
+            Copy-Item -LiteralPath $_.FullName -Destination $destination -Force
+        }
+
+    $fixtureArchDir = Join-Path $fixture ".trellis/spec/mod"
+    New-Item -ItemType Directory -Path $fixtureArchDir -Force | Out-Null
+    Copy-Item -LiteralPath (Join-Path $repoRoot ".trellis/spec/mod/architecture.md") -Destination $fixtureArchDir
+
     $sourceDocs = Join-Path $repoRoot "docs"
     $fixtureDocs = Join-Path $fixture "docs"
-    Get-ChildItem -Path $sourceDocs -Recurse -File -Filter *.md | ForEach-Object {
+    # Every file, not only the Markdown: doc-links resolves links to screenshots and to the root
+    # status page, and a fixture holding the prose but not what it points at would make the gate
+    # report dangling links that are perfectly fine in the real tree. docs/ is 13 MB.
+    Copy-Item -LiteralPath (Join-Path $repoRoot "PRODUCT_PLAN_CURRENT.md") -Destination $fixture
+    Get-ChildItem -Path $sourceDocs -Recurse -File | ForEach-Object {
         $relative = $_.FullName.Substring($sourceDocs.Length).TrimStart([char]92, [char]47)
         $destination = Join-Path $fixtureDocs $relative
         New-Item -ItemType Directory -Path (Split-Path $destination) -Force | Out-Null
         Copy-Item -LiteralPath $_.FullName -Destination $destination
     }
 
-    $baseline = Invoke-Gate -Fixture $fixture -Only $null
+    $baseline = Invoke-Gate -Fixture $fixture -Only $null -Skip "doc-links"
     if ($baseline.ExitCode -ne 0) {
         Write-Host "FAIL  baseline (an unmodified fixture must pass)"
         Write-Host $baseline.Output
@@ -143,7 +199,7 @@ try {
     $original = Read-Utf8 $apiDoc
     $mutated = ($original -split "\r?\n" | Where-Object { $_ -notmatch '^- `choose_bundle`' }) -join "`n"
     Write-Utf8 $apiDoc $mutated
-    Assert-Case -Name "api-doc drift rejects undocumented action" -Only "api-doc"
+    Assert-Case -Name "api-doc drift rejects undocumented action" -Only "api-doc" -Expect "does not document these actions"
     Write-Utf8 $apiDoc $original
 
     # 2. A documented action the code does not accept.
@@ -154,7 +210,7 @@ try {
     $mutated = $original.Replace("<!-- END ACTION CONTRACT -->", $phantom + [char]10 + "<!-- END ACTION CONTRACT -->")
     if ($mutated -eq $original) { throw "fixture setup failed: the action contract end marker was not found in docs/api.md" }
     Write-Utf8 $apiDoc $mutated
-    Assert-Case -Name "api-doc drift rejects phantom action" -Only "api-doc"
+    Assert-Case -Name "api-doc drift rejects phantom action" -Only "api-doc" -Expect "totally_made_up_action"
     Write-Utf8 $apiDoc $original
 
     # 3. A lockfile below the security floor.
@@ -163,7 +219,7 @@ try {
     $mutated = $originalLock -replace '(?m)^(name = "fastmcp"\r?\nversion = ")[^"]+(")', '${1}3.1.0${2}'
     if ($mutated -eq $originalLock) { throw "fixture setup failed: could not rewrite the fastmcp version in uv.lock" }
     Write-Utf8 $uvLock $mutated
-    Assert-Case -Name "lockfile gate rejects a version below the security floor" -Only "lockfile"
+    Assert-Case -Name "lockfile gate rejects a version below the security floor" -Only "lockfile" -Expect "below the safe floor"
     Write-Utf8 $uvLock $originalLock
 
     # 3b. A manifest that demands more than the lock resolves (the lock is stale, not unsafe).
@@ -172,7 +228,7 @@ try {
     $mutated = $originalPyproject -replace 'fastmcp>=3\.1\.0,<4\.0\.0', 'fastmcp>=9.0.0,<10.0.0'
     if ($mutated -eq $originalPyproject) { throw "fixture setup failed: could not rewrite the fastmcp range in pyproject.toml" }
     Write-Utf8 $pyproject $mutated
-    Assert-Case -Name "lockfile gate rejects a stale uv.lock against its manifest" -Only "lockfile"
+    Assert-Case -Name "lockfile gate rejects a stale uv.lock against its manifest" -Only "lockfile" -Expect "uv.lock is out of sync"
     Write-Utf8 $pyproject $originalPyproject
 
     # 3c. An npm manifest that demands a version the lock cannot satisfy.
@@ -181,7 +237,7 @@ try {
     $mutated = $originalNpmManifest -replace '"@sammysnake/fast-context-mcp": "\^1\.2\.0"', '"@sammysnake/fast-context-mcp": "^99.0.0"'
     if ($mutated -eq $originalNpmManifest) { throw "fixture setup failed: could not rewrite the npm dependency range" }
     Write-Utf8 $npmManifest $mutated
-    Assert-Case -Name "lockfile gate rejects a stale package-lock against its manifest" -Only "lockfile"
+    Assert-Case -Name "lockfile gate rejects a stale package-lock against its manifest" -Only "lockfile" -Expect "package-lock.json is out of sync"
     Write-Utf8 $npmManifest $originalNpmManifest
 
     # 4. A date-stamped record without its historical marker.
@@ -189,7 +245,7 @@ try {
     $originalDated = Read-Utf8 $datedDoc
     $mutated = ($originalDated -split "\r?\n" | Where-Object { $_ -notmatch 'Historical snapshot|历史快照' }) -join "`n"
     Write-Utf8 $datedDoc $mutated
-    Assert-Case -Name "doc-marks gate rejects an unmarked snapshot" -Only "doc-marks"
+    Assert-Case -Name "doc-marks gate rejects an unmarked snapshot" -Only "doc-marks" -Expect "phase-8-validation-2026-03-11.md"
     Write-Utf8 $datedDoc $originalDated
 
     $matrixDoc = Join-Path $fixtureDocs "mechanic-coverage-matrix.md"
@@ -197,7 +253,7 @@ try {
     $mutated = ($originalMatrix -split "\r?\n" | Where-Object { $_ -notmatch 'Historical snapshot|历史快照' }) -join "`n"
     if ($mutated -eq $originalMatrix) { throw "fixture setup failed: the matrix header holds no marker to remove" }
     Write-Utf8 $matrixDoc $mutated
-    Assert-Case -Name "doc-marks gate rejects an unmarked date-less snapshot" -Only "doc-marks"
+    Assert-Case -Name "doc-marks gate rejects an unmarked date-less snapshot" -Only "doc-marks" -Expect "mechanic-coverage-matrix.md"
     Write-Utf8 $matrixDoc $originalMatrix
 
    # 5. An archived topic page that lost its redirect.
@@ -205,7 +261,7 @@ try {
     $originalRedirect = Read-Utf8 $redirectDoc
     $mutated = $originalRedirect -replace 'history/sts2-coverage-gaps_2026-03-10.md', 'somewhere-else.md'
     Write-Utf8 $redirectDoc $mutated
-    Assert-Case -Name "doc-marks gate rejects a broken archive redirect" -Only "doc-marks"
+    Assert-Case -Name "doc-marks gate rejects a broken archive redirect" -Only "doc-marks" -Expect "must redirect to history/"
     Write-Utf8 $redirectDoc $originalRedirect
 
     # 6. A PowerShell script with non-ASCII text saved without a UTF-8 BOM. Windows PowerShell 5.1
@@ -226,7 +282,7 @@ try {
     }
 
     Write-Utf8 $encodingScript $fixtureBody
-    Assert-Case -Name "script-encoding gate rejects non-ASCII without a BOM" -Only "script-encoding"
+    Assert-Case -Name "script-encoding gate rejects non-ASCII without a BOM" -Only "script-encoding" -Expect "fixture-non-ascii.ps1"
     Remove-Item -LiteralPath $encodingScript -Force
 
     # 6b. No .ps1 to parse at all. The fixture scripts/ holds the gate copy plus the packaged-links
@@ -267,7 +323,7 @@ try {
     # failure the gate exists to catch.
     $brokenPs1 = Join-Path (Join-Path $fixture "scripts") "fixture-broken-probe.ps1"
     Write-Utf8 $brokenPs1 ("if (" + [char]10)
-    Assert-Case -Name "ps1-syntax gate rejects a script with a syntax error" -Only "ps1-syntax"
+    Assert-Case -Name "ps1-syntax gate rejects a script with a syntax error" -Only "ps1-syntax" -Expect "fixture-broken-probe.ps1"
     Remove-Item -LiteralPath $brokenPs1 -Force
 
     # 7. The mod version documented in docs/api.md drifting away from the manifest.
@@ -276,14 +332,14 @@ try {
     $mutated = $originalFactsDoc -replace '"mod_version": "[^"]+"', '"mod_version": "0.0.1"'
     if ($mutated -eq $originalFactsDoc) { throw "fixture setup failed: docs/api.md has no mod_version value to rewrite" }
     Write-Utf8 $factsDoc $mutated
-    Assert-Case -Name "api-facts gate rejects a stale documented mod_version" -Only "api-facts"
+    Assert-Case -Name "api-facts gate rejects a stale documented mod_version" -Only "api-facts" -Expect "states mod_version 0.0.1"
     Write-Utf8 $factsDoc $originalFactsDoc
 
     # 8. A screen the code can emit but the docs enum no longer lists.
     $mutated = ($originalFactsDoc -split "\r?\n" | Where-Object { $_ -notmatch ('^\| ' + [char]96 + 'CARDS_VIEW' + [char]96) }) -join [char]10
     if ($mutated -eq $originalFactsDoc) { throw "fixture setup failed: docs/api.md has no CARDS_VIEW screen row" }
     Write-Utf8 $factsDoc $mutated
-    Assert-Case -Name "api-facts gate rejects a screen missing from the docs enum" -Only "api-facts"
+    Assert-Case -Name "api-facts gate rejects a screen missing from the docs enum" -Only "api-facts" -Expect "can emit screens missing from"
     Write-Utf8 $factsDoc $originalFactsDoc
 
     # 9. The documented default port drifting away from HttpServer.DefaultPort.
@@ -292,7 +348,7 @@ try {
     $mutated = $originalHttpServer -replace 'const int DefaultPort = \d+', 'const int DefaultPort = 9999'
     if ($mutated -eq $originalHttpServer) { throw "fixture setup failed: HttpServer.cs has no DefaultPort constant to rewrite" }
     Write-Utf8 $httpServer $mutated
-    Assert-Case -Name "api-facts gate rejects a default port the docs do not state" -Only "api-facts"
+    Assert-Case -Name "api-facts gate rejects a default port the docs do not state" -Only "api-facts" -Expect "states default port 8080"
     Write-Utf8 $httpServer $originalHttpServer
 
     # 9c. The /state combat payload records drifting away from the docs/api.md tables that
@@ -302,7 +358,7 @@ try {
 " | Where-Object { $_ -notmatch ('^\| ' + [char]96 + 'lethal_risks' + [char]96 + ' \|') }) -join [char]10
     if ($mutated -eq $originalFactsDoc) { throw "fixture setup failed: docs/api.md has no lethal_risks field row" }
     Write-Utf8 $factsDoc $mutated
-    Assert-Case -Name "api-facts gate rejects a combat payload field the docs stop listing" -Only "api-facts"
+    Assert-Case -Name "api-facts gate rejects a combat payload field the docs stop listing" -Only "api-facts" -Expect "CombatPayload serializes fields"
     Write-Utf8 $factsDoc $originalFactsDoc
 
     # 9d. The other direction: a documented field the record never serializes, which is what a
@@ -313,7 +369,7 @@ try {
     $ghostRow = '| ' + [char]96 + 'ghost_field' + [char]96 + ' | object | fixture |'
     $mutated = $originalFactsDoc.Replace($playerRow, $playerRow + [char]10 + $ghostRow)
     Write-Utf8 $factsDoc $mutated
-    Assert-Case -Name "api-facts gate rejects a documented field the payload never serializes" -Only "api-facts"
+    Assert-Case -Name "api-facts gate rejects a documented field the payload never serializes" -Only "api-facts" -Expect "table lists fields"
     Write-Utf8 $factsDoc $originalFactsDoc
 
     # 9e. A reason code EvaluateCombatActionGate can answer with that the docs never mention.
@@ -323,23 +379,23 @@ try {
 " | Where-Object { $_ -notmatch ('^\| ' + [char]96 + 'snapshot_stabilizing' + [char]96 + ' \|') }) -join [char]10
     if ($mutated -eq $originalFactsDoc) { throw "fixture setup failed: docs/api.md has no snapshot_stabilizing reason row" }
     Write-Utf8 $factsDoc $mutated
-    Assert-Case -Name "api-facts gate rejects an undocumented action_readiness reason" -Only "api-facts"
+    Assert-Case -Name "api-facts gate rejects an undocumented action_readiness reason" -Only "api-facts" -Expect "reason codes the docs/api.md"
     Write-Utf8 $factsDoc $originalFactsDoc
 
     # 9f. A payload field that no table owns and that docs/api.md never names. The per-table cases
     # above only cover records that have a table; this is the coarse net under them, and it is the
     # one that was missing while 91 fields -- whole screens, including character select, the
     # multiplayer lobby and game over -- shipped undocumented.
-    $stateService = Join-Path $fixture "STS2AIAgent/Game/GameStateService.cs"
+    $stateService = Join-Path $fixture "STS2AIAgent/Game/GameStateService.Payloads.cs"
     $originalStateService = Read-Utf8 $stateService
     $nl = if ($originalStateService.Contains([char]13 + [char]10)) { [char]13 + [char]10 } else { [char]10 }
     $orbAnchor = "internal sealed class CombatOrbPayload"
-    if ($originalStateService.IndexOf($orbAnchor) -lt 0) { throw "fixture setup failed: GameStateService.cs has no CombatOrbPayload record" }
+    if ($originalStateService.IndexOf($orbAnchor) -lt 0) { throw "fixture setup failed: GameStateService.Payloads.cs has no CombatOrbPayload record" }
     $strayRecord = "internal sealed class FixtureStrayPayload" + $nl + "{" + $nl + "    public int fixture_undocumented_field { get; init; }" + $nl + "}" + $nl + $nl + $orbAnchor
     $mutated = $originalStateService.Replace($orbAnchor, $strayRecord)
     if ($mutated -eq $originalStateService) { throw "fixture setup failed: could not inject a stray payload record" }
     Write-Utf8 $stateService $mutated
-    Assert-Case -Name "api-facts gate rejects a payload field docs/api.md never names" -Only "api-facts"
+    Assert-Case -Name "api-facts gate rejects a payload field docs/api.md never names" -Only "api-facts" -Expect "fixture_undocumented_field"
     Write-Utf8 $stateService $originalStateService
 
     # 9g. The compact rename table claiming a rename the agent view does not perform. The compact
@@ -353,7 +409,7 @@ try {
     $brokenRow = $renameRow.Replace($tick + 'embark' + $tick + ' / ', $tick + 'disembark' + $tick + ' / ')
     if ($brokenRow -eq $renameRow) { throw "fixture setup failed: could not rewrite the compact rename row" }
     Write-Utf8 $factsDoc $originalFactsDoc.Replace($renameRow, $brokenRow)
-    Assert-Case -Name "api-facts gate rejects a compact rename the agent view does not perform" -Only "api-facts"
+    Assert-Case -Name "api-facts gate rejects a compact rename the agent view does not perform" -Only "api-facts" -Expect "compact rename table claims"
     Write-Utf8 $factsDoc $originalFactsDoc
 
     # 9h. A GET /health key that only appears in the example JSON. /health is the first call any
@@ -363,7 +419,7 @@ try {
     $serviceRow = ($originalFactsDoc -split ([char]10) | Where-Object { $_ -match ('^\| ' + $tick + 'service' + $tick + ' \|') } | Select-Object -First 1)
     if (-not $serviceRow) { throw "fixture setup failed: docs/api.md has no service row in the /health table" }
     Write-Utf8 $factsDoc $originalFactsDoc.Replace($serviceRow + [char]10, "")
-    Assert-Case -Name "api-facts gate rejects an undocumented GET /health key" -Only "api-facts"
+    Assert-Case -Name "api-facts gate rejects an undocumented GET /health key" -Only "api-facts" -Expect "GET /health answers with keys"
     Write-Utf8 $factsDoc $originalFactsDoc
 
     # 9i. The gate's own output on a console that is not UTF-8. Gate messages quote the Chinese
@@ -388,6 +444,38 @@ try {
     else {
         Write-Host "PASS  gate output survives a non-UTF-8 console"
     }
+
+    # 11a-c. The architecture page's measurements. This page went stale once already: it carried
+    # pre-ADR-0001 line counts for a month and, worse, kept telling readers to add every new action
+    # to *both* action surfaces after that duplication was gone. Numbers nobody checks are numbers
+    # that drift, and a page that is confidently wrong about the shape of the code is worse than no
+    # page at all.
+    $archDoc = Join-Path $fixture ".trellis/spec/mod/architecture.md"
+    $originalArch = Read-Utf8 $archDoc
+    $archNl = if ($originalArch.Contains([char]13 + [char]10)) { [char]13 + [char]10 } else { [char]10 }
+
+    $archRow = ($originalArch -split "`r?`n" | Where-Object { $_ -match "^\| \[GameStateService\.cs\]" } | Select-Object -First 1)
+    if (-not $archRow) { throw "fixture setup failed: architecture.md has no GameStateService.cs row" }
+    $staleRow = $archRow -replace "\| [\d,]+ \|", "| 8,559 |"
+    if ($staleRow -eq $archRow) { throw "fixture setup failed: could not rewrite the line count" }
+    Write-Utf8 $archDoc $originalArch.Replace($archRow, $staleRow)
+    Assert-Case -Name "arch-facts gate rejects a stale line count" -Only "arch-facts" -Expect "is 8,559 lines; it is"
+    Write-Utf8 $archDoc $originalArch
+
+    # A big file the table simply does not mention. This is the failure that matters most: the table
+    # is how someone finds out where the mod's weight is, so a monolith missing from it is one
+    # nobody is watching.
+    $roomsRow = ($originalArch -split "`r?`n" | Where-Object { $_ -match "^\| \[GameActionService\.Rooms\.cs\]" } | Select-Object -First 1)
+    if (-not $roomsRow) { throw "fixture setup failed: architecture.md has no GameActionService.Rooms.cs row" }
+    Write-Utf8 $archDoc $originalArch.Replace($roomsRow + $archNl, "")
+    Assert-Case -Name "arch-facts gate rejects a large file the table omits" -Only "arch-facts" -Expect "GameActionService.Rooms.cs"
+    Write-Utf8 $archDoc $originalArch
+
+    # Renaming the section is how a check like this gets turned off by accident rather than on
+    # purpose, so the gate refuses to pass when it cannot find what it reads.
+    Write-Utf8 $archDoc $originalArch.Replace("## Code shape and its known debts", "## Code shape")
+    Assert-Case -Name "arch-facts gate rejects a renamed section" -Only "arch-facts" -Expect "turns the check off"
+    Write-Utf8 $archDoc $originalArch
 
     # 9b. A packaged README linking to a file the release does not ship, at a target no rewrite
     # rule covers. This is the shape #105 shipped: the link was new, the rewrite table did not
@@ -450,10 +538,111 @@ try {
 
     $untrackedDoc = Join-Path $fixtureDocs "fixture-untracked-page.md"
     Write-Utf8 $untrackedDoc "# Fixture page`n"
-    Assert-Case -Name "docs-tracked gate rejects a docs file git does not track" -Only "docs-tracked"
+    Assert-Case -Name "docs-tracked gate rejects a docs file git does not track" -Only "docs-tracked" -Expect "fixture-untracked-page.md"
     Remove-Item -LiteralPath $untrackedDoc -Force
 
-    $restored = Invoke-Gate -Fixture $fixture -Only $null
+    # 12. A relative Markdown link pointing at a file that is not there. This is the dullest way a
+    # repository decays -- someone moves a file and the pages that pointed at it keep pointing --
+    # and until 2026-09-17 nothing checked it outside the three packaged documents. A specification
+    # that sends a reader to a 404 stops being trusted and then stops being read.
+    #
+    # It gets its own tree. doc-links asks a question about a whole repository, and the fixture
+    # above is deliberately a handful of files: every link in README.md that points at LICENSE or
+    # the skills directory dangles there and is perfectly fine in the real checkout. Running it
+    # against a partial tree would mean a gate that reports problems it invented, so the two
+    # whole-suite runs skip it and this tree is built to hold exactly the links it declares.
+    $linkFixture = Join-Path ([System.IO.Path]::GetTempPath()) ("sts2-doc-links-" + [Guid]::NewGuid().ToString("N").Substring(0, 8))
+    try {
+        New-Item -ItemType Directory -Path $linkFixture | Out-Null
+        New-Item -ItemType Directory -Path (Join-Path $linkFixture "docs") | Out-Null
+        New-Item -ItemType Directory -Path (Join-Path $linkFixture "scripts") | Out-Null
+        Copy-Item -LiteralPath $gateScript -Destination (Join-Path $linkFixture "scripts/check_verification_gates.py")
+        Copy-Item -LiteralPath (Join-Path $repoRoot "README.md") -Destination $linkFixture
+        # The gate script refuses a directory that does not look like the repository root.
+        New-Item -ItemType Directory -Path (Join-Path $linkFixture "STS2AIAgent") | Out-Null
+        New-Item -ItemType Directory -Path (Join-Path $linkFixture "mcp_server") | Out-Null
+        Copy-Item -LiteralPath (Join-Path $repoRoot "STS2AIAgent/mod_manifest.json") -Destination (Join-Path $linkFixture "STS2AIAgent")
+        Copy-Item -LiteralPath (Join-Path $repoRoot "mcp_server/pyproject.toml") -Destination (Join-Path $linkFixture "mcp_server")
+        # README.md came from the real repo and links all over it, so replace it with one that
+        # points only at what this tree holds.
+        Write-Utf8 (Join-Path $linkFixture "README.md") ("# Fixture" + [char]10 + [char]10 + "[guide](./docs/guide.md)" + [char]10)
+        Write-Utf8 (Join-Path $linkFixture "docs/guide.md") ("# Guide" + [char]10 + [char]10 + "[back](../README.md)" + [char]10)
+        $linkInit = Invoke-Git -Path $linkFixture -Arguments @("init", "--quiet")
+        if ($linkInit.ExitCode -ne 0) { throw "fixture setup failed: git init for doc-links" }
+        $linkAdd = Invoke-Git -Path $linkFixture -Arguments @("add", "-A")
+        if ($linkAdd.ExitCode -ne 0) { throw "fixture setup failed: git add -A for doc-links" }
+
+        $linkClean = Invoke-Gate -Fixture $linkFixture -Only "doc-links"
+        if ($linkClean.ExitCode -ne 0) {
+            Write-Host "FAIL  doc-links gate accepts a tree whose links all resolve"
+            Write-Host $linkClean.Output
+            $script:failures++
+        }
+        else {
+            Write-Host "PASS  doc-links gate accepts a tree whose links all resolve"
+        }
+
+        # Links to targets that are on disk but that git does not track. This is not hypothetical:
+        # the gate first shipped asking the filesystem, passed locally and failed on CI, because
+        # AGENTS.md and extraction/decompiled/ are both gitignored and both present on a developer's
+        # machine. A link only works for the reader who clones, so tracked is the question.
+        $untrackedTarget = Join-Path $linkFixture "docs/fixture-untracked-target.md"
+        Write-Utf8 $untrackedTarget ("# Present but untracked" + [char]10)
+        $untrackedDirectory = Join-Path $linkFixture "docs/fixture-untracked-directory"
+        New-Item -ItemType Directory -Path $untrackedDirectory | Out-Null
+        Write-Utf8 (Join-Path $untrackedDirectory "README.md") ("# Present but untracked" + [char]10)
+        $ignoreFile = Join-Path $linkFixture ".gitignore"
+        Write-Utf8 $ignoreFile ("docs/fixture-untracked-target.md" + [char]10 + "docs/fixture-untracked-directory/" + [char]10)
+        Write-Utf8 (Join-Path $linkFixture "docs/guide.md") ("# Guide" + [char]10 + [char]10 + "[back](../README.md)" + [char]10 + [char]10 + "[present but untracked](./fixture-untracked-target.md)" + [char]10 + [char]10 + "[directory present but untracked](./fixture-untracked-directory/)" + [char]10)
+        $linkAddUntracked = Invoke-Git -Path $linkFixture -Arguments @("add", "-A")
+        if ($linkAddUntracked.ExitCode -ne 0) { throw "fixture setup failed: git add -A before the untracked-target case" }
+        $linkUntracked = Invoke-Gate -Fixture $linkFixture -Only "doc-links"
+        if ($linkUntracked.ExitCode -eq 0) {
+            Write-Host "FAIL  doc-links gate rejects a link to a file git does not track (gate accepted a drifted input)"
+            $script:failures++
+        }
+        elseif (((($linkUntracked.Output -join "") -replace "[\s]", "")) -notmatch "fixture-untracked-target.md") {
+            Write-Host "FAIL  doc-links gate names the untracked target"
+            Write-Host $linkUntracked.Output
+            $script:failures++
+        }
+        elseif (((($linkUntracked.Output -join "") -replace "[\s]", "")) -notmatch "fixture-untracked-directory/") {
+            Write-Host "FAIL  doc-links gate names the untracked directory"
+            Write-Host $linkUntracked.Output
+            $script:failures++
+        }
+        else {
+            Write-Host "PASS  doc-links gate rejects a link to a file git does not track"
+        }
+        Remove-Item -LiteralPath $untrackedTarget -Force
+        Remove-Item -LiteralPath $untrackedDirectory -Recurse -Force
+        Remove-Item -LiteralPath $ignoreFile -Force
+
+        Write-Utf8 (Join-Path $linkFixture "docs/guide.md") ("# Guide" + [char]10 + [char]10 + "[back](../README.md)" + [char]10 + [char]10 + "[moved](./fixture-no-such-page.md)" + [char]10)
+        $linkAdd2 = Invoke-Git -Path $linkFixture -Arguments @("add", "-A")
+        if ($linkAdd2.ExitCode -ne 0) { throw "fixture setup failed: git add -A after the doc-links mutation" }
+        $linkBroken = Invoke-Gate -Fixture $linkFixture -Only "doc-links"
+        if ($linkBroken.ExitCode -eq 0) {
+            Write-Host "FAIL  doc-links gate rejects a link to a file that is not there (gate accepted a drifted input)"
+            $script:failures++
+        }
+        elseif ((($linkBroken.Output -join "") -replace "[\s]", "") -notmatch "fixture-no-such-page.md") {
+            Write-Host "FAIL  doc-links gate names the dangling target"
+            Write-Host $linkBroken.Output
+            $script:failures++
+        }
+        else {
+            Write-Host "PASS  doc-links gate rejects a link to a file that is not there"
+            $linkMessage = ($linkBroken.Output -split "?
+" | Where-Object { $_ -match "verification gates failed" } | Select-Object -First 1)
+            Write-Host ("      " + $linkMessage.Trim())
+        }
+    }
+    finally {
+        Remove-Fixture -Path $linkFixture
+    }
+
+    $restored = Invoke-Gate -Fixture $fixture -Only $null -Skip "doc-links"
     if ($restored.ExitCode -ne 0) {
         Write-Host "FAIL  restored fixture (every mutation must be reverted)"
         Write-Host $restored.Output

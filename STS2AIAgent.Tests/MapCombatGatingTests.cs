@@ -6,7 +6,7 @@ internal static class MapCombatGatingTests
     public static void ChooseMapNodeHiddenWhileCombatInProgress()
     {
         var source = AgentSourceFixture.WithoutWhitespace(
-            AgentSourceFixture.Read("STS2AIAgent/Game/GameStateService.cs"));
+            AgentSourceFixture.ReadStateService());
         var start = source.IndexOf("publicstaticboolCanChooseMapNode", StringComparison.Ordinal);
         Assert.True(start >= 0);
         var method = source.Substring(start, Math.Min(400, source.Length - start));

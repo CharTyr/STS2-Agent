@@ -10,9 +10,9 @@ internal static class GameOverContractTests
     public static void DedicatedContinueActionIsWiredEndToEnd()
     {
         var actionSource = AgentSourceFixture.WithoutWhitespace(
-            AgentSourceFixture.Read("STS2AIAgent/Game/GameActionService.cs"));
+            AgentSourceFixture.ReadActionService());
         var stateSource = AgentSourceFixture.WithoutWhitespace(
-            AgentSourceFixture.Read("STS2AIAgent/Game/GameStateService.cs"));
+            AgentSourceFixture.ReadStateService());
         var promptSource = AgentSourceFixture.Read("skills/sts2-mcp-player/SKILL.md");
 
         Assert.Contains(
@@ -30,7 +30,7 @@ internal static class GameOverContractTests
     public static void ReturnActionRequiresVisibleAndEnabledMainMenuButton()
     {
         var stateSource = AgentSourceFixture.WithoutWhitespace(
-            AgentSourceFixture.Read("STS2AIAgent/Game/GameStateService.cs"));
+            AgentSourceFixture.ReadStateService());
 
         Assert.Contains(
             "can_return_to_main_menu=mainMenuButton?.Visible==true&&mainMenuButton?.IsEnabled==true",
@@ -51,9 +51,9 @@ internal static class GameOverContractTests
 
     public static void ContinueAndReturnUseNativeButtonsWithoutSkippingSummary()
     {
-        var rawActionSource = AgentSourceFixture.Read("STS2AIAgent/Game/GameActionService.cs");
+        var rawActionSource = AgentSourceFixture.ReadActionService();
         var actionSource = AgentSourceFixture.WithoutWhitespace(rawActionSource);
-        var rawStateSource = AgentSourceFixture.Read("STS2AIAgent/Game/GameStateService.cs");
+        var rawStateSource = AgentSourceFixture.ReadStateService();
         var continueBody = AgentSourceFixture.WithoutWhitespace(
             AgentSourceFixture.MethodBody(rawActionSource, "ExecuteContinueGameOverAsync"));
         var returnBody = AgentSourceFixture.WithoutWhitespace(
@@ -90,7 +90,7 @@ internal static class GameOverContractTests
 
     public static void ContinueWaitsForNativeSummaryReadiness()
     {
-        var rawActionSource = AgentSourceFixture.Read("STS2AIAgent/Game/GameActionService.cs");
+        var rawActionSource = AgentSourceFixture.ReadActionService();
         var waitBody = AgentSourceFixture.WithoutWhitespace(
             AgentSourceFixture.MethodBody(rawActionSource, "WaitForGameOverSummaryReadyAsync"));
 
@@ -105,10 +105,10 @@ internal static class GameOverContractTests
 
     public static void ContinueDoesNotForceEnableReturnBeforeNativeSave()
     {
-        var rawActionSource = AgentSourceFixture.Read("STS2AIAgent/Game/GameActionService.cs");
+        var rawActionSource = AgentSourceFixture.ReadActionService();
         var continueBody = AgentSourceFixture.WithoutWhitespace(
             AgentSourceFixture.MethodBody(rawActionSource, "ExecuteContinueGameOverAsync"));
-        var stateSource = AgentSourceFixture.Read("STS2AIAgent/Game/GameStateService.cs");
+        var stateSource = AgentSourceFixture.ReadStateService();
 
         Assert.Contains("WaitForGameOverContinueOrSummaryAsync", continueBody, StringComparison.Ordinal);
         Assert.Contains("TimeSpan.FromSeconds(60)", continueBody, StringComparison.Ordinal);
@@ -129,7 +129,7 @@ internal static class GameOverContractTests
     public static void GameOverPayloadKeepsContinueSummaryAndReturnAsDistinctPhases()
     {
         var stateSource = AgentSourceFixture.WithoutWhitespace(
-            AgentSourceFixture.Read("STS2AIAgent/Game/GameStateService.cs"));
+            AgentSourceFixture.ReadStateService());
 
         Assert.True(
             stateSource.Contains("can_continue=continueButton?.Visible==true&&continueButton?.IsEnabled==true", StringComparison.Ordinal) ||
@@ -151,7 +151,7 @@ internal static class GameOverContractTests
 
     public static void GameOverPayloadReportsPhysicalProgressSaveVerification()
     {
-        var rawStateSource = AgentSourceFixture.Read("STS2AIAgent/Game/GameStateService.cs");
+        var rawStateSource = AgentSourceFixture.ReadStateService();
         var stateSource = AgentSourceFixture.WithoutWhitespace(rawStateSource);
         var verificationBody = AgentSourceFixture.WithoutWhitespace(
             AgentSourceFixture.MethodBody(rawStateSource, "VerifyGameOverProgressSave"));

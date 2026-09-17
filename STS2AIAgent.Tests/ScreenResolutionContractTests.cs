@@ -42,7 +42,7 @@ internal static class ScreenResolutionContractTests
 
     public static void EveryScreenMappingIsPinned()
     {
-        var rawState = AgentSourceFixture.Read("STS2AIAgent/Game/GameStateService.cs");
+        var rawState = AgentSourceFixture.ReadStateService();
         var body = AgentSourceFixture.MethodBody(rawState, "ResolveNonModalScreen");
         var actual = SwitchMappings(body).ToDictionary(pair => pair.ScreenType, pair => pair.ScreenName);
 
@@ -63,7 +63,7 @@ internal static class ScreenResolutionContractTests
 
     public static void FakeMerchantOpensThroughTheSharedButton()
     {
-        var rawState = AgentSourceFixture.Read("STS2AIAgent/Game/GameStateService.cs");
+        var rawState = AgentSourceFixture.ReadStateService();
         var canOpen = Normalize(
             AgentSourceFixture.DeclarationBody(rawState, "public static bool CanOpenShopInventory("));
         Assert.Contains("currentScreen is NMerchantRoom room", canOpen, StringComparison.Ordinal);
@@ -83,7 +83,7 @@ internal static class ScreenResolutionContractTests
         Assert.Contains("NMerchantInventory>(\"%Inventory\")", helper, StringComparison.Ordinal);
         Assert.Contains("inventory != null && inventory.IsOpen ? null : merchantButton", helper, StringComparison.Ordinal);
 
-        var rawAction = AgentSourceFixture.Read("STS2AIAgent/Game/GameActionService.cs");
+        var rawAction = AgentSourceFixture.ReadActionService();
         var open = Normalize(AgentSourceFixture.MethodBody(rawAction, "ExecuteOpenShopInventoryAsync"));
         Assert.Contains("if (!GameStateService.CanOpenShopInventory(currentScreen))", open, StringComparison.Ordinal);
         Assert.Contains("var fakeMerchantButton = GameStateService.GetFakeMerchantButton(currentScreen);", open, StringComparison.Ordinal);
@@ -94,14 +94,14 @@ internal static class ScreenResolutionContractTests
 
     public static void PatchNotesClosePathIsWidenedWithoutWeakeningSubmenus()
     {
-        var rawState = AgentSourceFixture.Read("STS2AIAgent/Game/GameStateService.cs");
+        var rawState = AgentSourceFixture.ReadStateService();
         var canClose = Normalize(AgentSourceFixture.MethodBody(rawState, "CanCloseMainMenuSubmenu"));
         Assert.Contains("currentScreen is NPatchNotesScreen patchNotes", canClose, StringComparison.Ordinal);
         Assert.Contains("GodotObject.IsInstanceValid(patchNotes) && patchNotes.IsVisibleInTree()", canClose, StringComparison.Ordinal);
         Assert.Contains("currentScreen is not NSubmenu submenu || !submenu.IsVisibleInTree()", canClose, StringComparison.Ordinal);
         Assert.Contains("submenuStack != null && submenuStack.SubmenusOpen", canClose, StringComparison.Ordinal);
 
-        var rawAction = AgentSourceFixture.Read("STS2AIAgent/Game/GameActionService.cs");
+        var rawAction = AgentSourceFixture.ReadActionService();
         var close = Normalize(AgentSourceFixture.MethodBody(rawAction, "ExecuteCloseMainMenuSubmenuAsync"));
         Assert.Contains("currentScreen is NPatchNotesScreen patchNotes", close, StringComparison.Ordinal);
         Assert.Contains("GetPrivateField<NButton>(patchNotes, \"_backButton\")", close, StringComparison.Ordinal);
@@ -124,13 +124,13 @@ internal static class ScreenResolutionContractTests
 
     public static void InspectOverlaysCloseThroughTheirOwnClose()
     {
-        var rawState = AgentSourceFixture.Read("STS2AIAgent/Game/GameStateService.cs");
+        var rawState = AgentSourceFixture.ReadStateService();
         var canClose = Normalize(AgentSourceFixture.MethodBody(rawState, "CanCloseCardsView"));
         Assert.Contains("currentScreen is NInspectCardScreen inspectCard", canClose, StringComparison.Ordinal);
         Assert.Contains("currentScreen is NInspectRelicScreen inspectRelic", canClose, StringComparison.Ordinal);
         Assert.Contains("return GetCardsViewBackButton(currentScreen) != null;", canClose, StringComparison.Ordinal);
 
-        var rawAction = AgentSourceFixture.Read("STS2AIAgent/Game/GameActionService.cs");
+        var rawAction = AgentSourceFixture.ReadActionService();
         var close = Normalize(AgentSourceFixture.MethodBody(rawAction, "ExecuteCloseCardsViewAsync"));
         Assert.Contains("inspectCard.Close();", close, StringComparison.Ordinal);
         Assert.Contains("inspectRelic.Close();", close, StringComparison.Ordinal);
@@ -160,7 +160,7 @@ internal static class ScreenResolutionContractTests
     /// </remarks>
     public static void GameOverIsNamedBeforeTheCombatRoomClaimsIt()
     {
-        var rawState = AgentSourceFixture.Read("STS2AIAgent/Game/GameStateService.cs");
+        var rawState = AgentSourceFixture.ReadStateService();
         var resolveBody = Flat(AgentSourceFixture.MethodBody(rawState, "ResolveNonModalScreen"));
 
         const string gameOverGuard = "if(currentScreenisNGameOverScreen)";
@@ -184,7 +184,7 @@ internal static class ScreenResolutionContractTests
 
     public static void CapstoneContainerPagesAreNamedAndNotDecisionScreens()
     {
-        var rawState = AgentSourceFixture.Read("STS2AIAgent/Game/GameStateService.cs");
+        var rawState = AgentSourceFixture.ReadStateService();
         var resolveBody = Flat(AgentSourceFixture.MethodBody(rawState, "ResolveNonModalScreen"));
 
         // The container keeps its own Type while a page is pushed on top of the one that opened it, so the
@@ -288,8 +288,8 @@ internal static class ScreenResolutionContractTests
 
     public static void CapstonePagesOfferOneBackStepAndNeverThePausePage()
     {
-        var rawState = AgentSourceFixture.Read("STS2AIAgent/Game/GameStateService.cs");
-        var rawAction = AgentSourceFixture.Read("STS2AIAgent/Game/GameActionService.cs");
+        var rawState = AgentSourceFixture.ReadStateService();
+        var rawAction = AgentSourceFixture.ReadActionService();
 
         // The one action these pages have is backing out one level, and only from above the pause menu:
         // the pause page is where a person resumes the run, so it is never the agent's to close.

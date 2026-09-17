@@ -68,6 +68,7 @@ import shutil
 import subprocess
 import sys
 from pathlib import Path
+from urllib.parse import unquote
 
 # --- Gate configuration -----------------------------------------------------
 
@@ -119,6 +120,12 @@ HTTP_SERVER_PATH = "STS2AIAgent/Server/HttpServer.cs"
 # none of them. The action contract covers action names only, so nothing noticed. These two C#
 # records are the producers; the docs/api.md tables below are what clients are told to expect.
 GAME_STATE_PATH = "STS2AIAgent/Game/GameStateService.cs"
+# GameStateService is one partial class in two files. The raw payload records and the screen
+# resolver live in the file above; the compact agent_view rewrite was split out on 2026-09-17
+# so the size ratchet could watch it separately. A check reads whichever file owns what it
+# asks about, and each one fails loudly when its extraction comes back empty.
+AGENT_VIEW_PATH = "STS2AIAgent/Game/GameStateService.AgentView.cs"
+PAYLOADS_PATH = "STS2AIAgent/Game/GameStateService.Payloads.cs"
 # The leading @ is C#'s escape for a keyword used as an identifier -- `public EventPayload? @event`
 # serializes as "event". Missing it would read as "the docs list a field the code does not have".
 CSHARP_PAYLOAD_PROPERTY = re.compile(
@@ -626,11 +633,11 @@ def first_doc_table(section: str, heading: str) -> str:
 
 def parse_code_payload_fields(game_state: str, declaration: str) -> set[str]:
     """Serialized property names of a payload record, which are the JSON keys clients receive."""
-    body = slice_class_body(game_state, declaration, GAME_STATE_PATH)
+    body = slice_class_body(game_state, declaration, PAYLOADS_PATH)
     fields = set(CSHARP_PAYLOAD_PROPERTY.findall(body))
     if not fields:
         raise GateError(
-            f"{GAME_STATE_PATH}: '{declaration}' yielded no serialized properties. The extraction "
+            f"{PAYLOADS_PATH}: '{declaration}' yielded no serialized properties. The extraction "
             "in check_verification_gates.py no longer matches the record; fix it before trusting "
             "this gate."
         )
@@ -653,10 +660,12 @@ def parse_code_gate_reasons(game_state: str) -> set[str]:
 def check_combat_payload_docs(repo_root: Path, api_doc: str) -> list[str]:
     """The /state combat payload records and the docs/api.md tables that describe them."""
     notes: list[str] = []
+    # Two files, on purpose: the records are declarations and the gate that fills them is logic.
+    payloads = read_text(repo_root, PAYLOADS_PATH)
     game_state = read_text(repo_root, GAME_STATE_PATH)
 
     for declaration, heading in COMBAT_PAYLOAD_TABLES:
-        code_fields = parse_code_payload_fields(game_state, declaration)
+        code_fields = parse_code_payload_fields(payloads, declaration)
         section = slice_doc_subsection(api_doc, heading, "docs/api.md")
         documented = set(DOC_FIELD_ROW.findall(first_doc_table(section, heading)))
         missing = sorted(code_fields - documented)
@@ -704,11 +713,11 @@ def check_state_payload_coverage(repo_root: Path, api_doc: str) -> list[str]:
     missing when 91 fields -- whole screens, including character select, the multiplayer lobby and
     game over -- shipped with no mention anywhere a client could read.
     """
-    game_state = read_text(repo_root, GAME_STATE_PATH)
+    game_state = read_text(repo_root, PAYLOADS_PATH)
     records = sorted(set(STATE_PAYLOAD_RECORD.findall(game_state)))
     if len(records) < MIN_STATE_PAYLOAD_RECORDS:
         raise GateError(
-            f"{GAME_STATE_PATH} yielded {len(records)} payload records, below the "
+            f"{PAYLOADS_PATH} yielded {len(records)} payload records, below the "
             f"{MIN_STATE_PAYLOAD_RECORDS} expected. The extraction in check_verification_gates.py "
             "no longer matches the file; fix it before trusting this gate."
         )
@@ -725,7 +734,7 @@ def check_state_payload_coverage(repo_root: Path, api_doc: str) -> list[str]:
     undocumented: list[str] = []
     checked = 0
     for record in records:
-        body = slice_class_body(game_state, f"internal sealed class {record}", GAME_STATE_PATH)
+        body = slice_class_body(game_state, f"internal sealed class {record}", PAYLOADS_PATH)
         fields = sorted(set(CSHARP_PAYLOAD_PROPERTY.findall(body)))
         if not fields:
             continue
@@ -793,10 +802,10 @@ def check_compact_rename_table(repo_root: Path, api_doc: str) -> list[str]:
             "check_verification_gates.py has changed shape; fix it before trusting this gate."
         )
 
-    builders = agent_view_builder_bodies(read_text(repo_root, GAME_STATE_PATH))
+    builders = agent_view_builder_bodies(read_text(repo_root, AGENT_VIEW_PATH))
     if not builders:
         raise GateError(
-            f"{GAME_STATE_PATH} no longer declares any BuildAgent*Payload method, so the compact "
+            f"{AGENT_VIEW_PATH} no longer declares any BuildAgent*Payload method, so the compact "
             "rename table cannot be checked."
         )
 
@@ -959,17 +968,22 @@ def check_doc_marks(repo_root: Path) -> list[str]:
 
 def list_tracked_docs(repo_root: Path) -> set[str]:
     """Paths under docs/ that the git index tracks, as repo-root-relative posix strings."""
+    return list_tracked_files(repo_root, "docs")
+
+
+def list_tracked_files(repo_root: Path, pathspec: str) -> set[str]:
+    """Paths matching a git pathspec that the index tracks, as repo-root-relative posix strings."""
     try:
         result = subprocess.run(
             # -z prints pathnames verbatim (no quoting), so non-ASCII filenames compare as-is.
-            ["git", "-C", str(repo_root), "ls-files", "-z", "--", "docs"],
+            ["git", "-C", str(repo_root), "ls-files", "-z", "--", pathspec],
             capture_output=True,
             check=True,
         )
     except FileNotFoundError as exc:
         raise GateError(
             f"{repo_root} is a git work tree but 'git' could not be executed, so the "
-            "docs/ tracking check cannot run. Install git or run this gate from a checkout."
+            "tracked-file listing cannot run. Install git or run this gate from a checkout."
         ) from exc
     except subprocess.CalledProcessError as exc:
         detail = exc.stderr.decode("utf-8", "replace").strip()
@@ -1262,12 +1276,250 @@ def check_sh_syntax(repo_root: Path) -> list[str]:
     return notes
 
 
+ARCH_SPEC_PATH = ".trellis/spec/mod/architecture.md"
+ARCH_TABLE_HEADING = "## Code shape and its known debts"
+# The size ratchet's default budget. A file past it is a file the architecture page has to name,
+# because "which files are big" is the one thing that page exists to answer.
+ARCH_LISTED_FLOOR = 1000
+# Line counts drift a few lines at a time and re-measuring on every commit would be a tax nobody
+# pays for long. 5% is wide enough that ordinary work never touches this gate and narrow enough
+# that a refactor cannot hide: the table sat at 8,559 for GameStateService.cs while the file was
+# 5,872, which is 46% out.
+ARCH_LINE_TOLERANCE = 0.05
+ARCH_FILE_ROW = re.compile(r"^\|\s*\[([^\]]+)\]\(([^)]+)\)\s*\|\s*([\d,]+)\s*\|", re.MULTILINE)
+ARCH_TOTALS = re.compile(
+    r"across\s+([\d,]+)\s+mod source files totalling\s+([\d,]+)\s+lines", re.MULTILINE
+)
+
+
+def count_lines(path: Path) -> int:
+    """Lines as `wc -l` counts them, which is what the size budgets and the table both mean."""
+    return path.read_text(encoding="utf-8").count("\n")
+
+
+def mod_source_files(repo_root: Path) -> list[Path]:
+    """Every mod source file git tracks, skipping generated build output.
+
+    Tracked, not on disk. A working tree also holds whatever the developer left there --
+    STS2AIAgent/_scratch/ is gitignored and real -- so counting files by walking the directory
+    measures one machine rather than the repository, and CI would count something different.
+    """
+    mod_root = repo_root / "STS2AIAgent"
+    if not (repo_root / ".git").exists():
+        # A source tarball has no index; fall back to the tree and say so through the caller.
+        candidates = mod_root.rglob("*.cs")
+    else:
+        candidates = (
+            repo_root / relative
+            for relative in list_tracked_files(repo_root, "STS2AIAgent/*.cs")
+        )
+    return sorted(
+        path
+        for path in candidates
+        if path.is_file()
+        and not any(part in ("bin", "obj") for part in path.relative_to(mod_root).parts)
+    )
+
+
+def within_tolerance(stated: int, actual: int) -> bool:
+    return abs(stated - actual) <= max(1, round(actual * ARCH_LINE_TOLERANCE))
+
+
+def check_arch_facts(repo_root: Path) -> list[str]:
+    """The architecture page's measurements against the files it measures.
+
+    A page that says where the weight is, and is wrong about it, is worse than no page: it sends
+    the next person to the wrong file and tells them the shape of the code is something it is not.
+    This one went stale once already -- it carried pre-ADR-0001 numbers and told readers to add
+    every new action to *both* action surfaces for a month after that duplication was gone.
+    """
+    spec = read_text(repo_root, ARCH_SPEC_PATH)
+    if ARCH_TABLE_HEADING not in spec:
+        raise GateError(
+            f"{ARCH_SPEC_PATH} has no '{ARCH_TABLE_HEADING}' section. That section is where this "
+            "gate reads the measurements; renaming it silently turns the check off."
+        )
+
+    section = spec[spec.index(ARCH_TABLE_HEADING):]
+    rows = ARCH_FILE_ROW.findall(section)
+    if len(rows) < 3:
+        raise GateError(
+            f"{ARCH_SPEC_PATH}: the file table yielded {len(rows)} row(s). The table or the "
+            "extraction in check_verification_gates.py has changed shape; fix it before trusting "
+            "this gate."
+        )
+
+    notes: list[str] = []
+    listed: set[str] = set()
+    for name, link, stated_text in rows:
+        target = (repo_root / ".trellis" / "spec" / "mod" / link).resolve()
+        if not target.is_file():
+            raise GateError(
+                f"{ARCH_SPEC_PATH} lists {name}, but {link} resolves to no file. Either the file "
+                "moved and the row was left behind, or the link is wrong -- both send a reader "
+                "somewhere the code is not."
+            )
+        try:
+            relative = target.relative_to(repo_root.resolve()).as_posix()
+        except ValueError:
+            raise GateError(
+                f"{ARCH_SPEC_PATH} lists {name} at {link}, which resolves outside the repository."
+            ) from None
+        listed.add(relative)
+
+        stated = int(stated_text.replace(",", ""))
+        actual = count_lines(target)
+        if not within_tolerance(stated, actual):
+            raise GateError(
+                f"{ARCH_SPEC_PATH} says {relative} is {stated:,} lines; it is {actual:,}. "
+                "Re-measure the table. A page that is wrong about where the weight is sends the "
+                "next person to the wrong file."
+            )
+        notes.append(f"{relative}: {actual:,} lines, table says {stated:,}")
+
+    sources = mod_source_files(repo_root)
+    total_lines = sum(count_lines(path) for path in sources)
+    totals = ARCH_TOTALS.search(section)
+    if not totals:
+        raise GateError(
+            f"{ARCH_SPEC_PATH} no longer states how many mod source files it measured and how many "
+            "lines they hold. That sentence is what makes the table's shares meaningful."
+        )
+    stated_files = int(totals.group(1).replace(",", ""))
+    stated_total = int(totals.group(2).replace(",", ""))
+    if not within_tolerance(stated_files, len(sources)):
+        raise GateError(
+            f"{ARCH_SPEC_PATH} says the mod has {stated_files} source files; it has {len(sources)}."
+        )
+    if not within_tolerance(stated_total, total_lines):
+        raise GateError(
+            f"{ARCH_SPEC_PATH} says the mod totals {stated_total:,} lines; it totals "
+            f"{total_lines:,}. Re-measure."
+        )
+    notes.append(f"{len(sources)} mod source files totalling {total_lines:,} lines")
+
+    unlisted = sorted(
+        path.relative_to(repo_root).as_posix()
+        for path in sources
+        if count_lines(path) > ARCH_LISTED_FLOOR
+        and path.relative_to(repo_root).as_posix() not in listed
+    )
+    if unlisted:
+        raise GateError(
+            f"these files are over {ARCH_LISTED_FLOOR:,} lines and {ARCH_SPEC_PATH} does not name "
+            "them: " + ", ".join(unlisted) + ". The table is how someone finds out where the mod's "
+            "weight is; a monolith it omits is one nobody is watching."
+        )
+    notes.append(
+        f"every file over {ARCH_LISTED_FLOOR:,} lines appears in the table ({len(listed)} listed)"
+    )
+    return notes
+
+
+DOC_LINK = re.compile(r"\[[^\]]*\]\(([^)\s]+)(?:\s+\"[^\"]*\")?\)")
+DOC_FENCE = re.compile(r"```.*?```", re.DOTALL)
+# Paths whose Markdown is not this repository's prose: vendored trees and the template backup
+# Trellis keeps, which deliberately holds an older copy of pages that have since moved.
+DOC_LINK_SKIP = ("node_modules/", ".trellis/.backup")
+# The floor is proportional, not absolute. Its job is to catch an extraction that has
+# stopped matching -- the failure mode where a regex quietly returns nothing and the
+# gate reports success over zero links. An absolute number would also have meant the
+# gate could only ever run against a tree this size, which is not true of the fixture
+# the self-test builds. A page carries roughly one link here, so a quarter of that is
+# far below any healthy tree and far above a broken extraction.
+MIN_DOC_LINKS_PER_PAGE = 4
+
+
+def check_doc_links(repo_root: Path) -> list[str]:
+    """Every relative Markdown link in a tracked page resolves to something in the repo.
+
+    `packaged-links` answers a narrower question -- whether the three documents shipped inside the
+    release artifact still resolve once they are out of the repository. This one covers the other
+    four hundred pages, where a link breaks for the dullest reason there is: a file moved and the
+    pages that pointed at it did not. Nothing was checking, and a specification that sends a reader
+    to a 404 is how a document stops being trusted and then stops being read.
+    """
+    if not (repo_root / ".git").exists():
+        return [
+            f"{repo_root} has no .git directory, so it is not a git work tree: "
+            "skipping the Markdown link check"
+        ]
+
+    pages = [
+        relative
+        for relative in list_tracked_files(repo_root, "*.md")
+        if not relative.startswith(DOC_LINK_SKIP)
+    ]
+    if not pages:
+        return ["no tracked Markdown pages to check"]
+
+    tracked = list_tracked_files(repo_root, ".")
+    broken: list[str] = []
+    checked = 0
+    for relative in pages:
+        path = repo_root / relative
+        if not path.is_file():
+            continue
+        try:
+            text = path.read_text(encoding="utf-8")
+        except (UnicodeDecodeError, OSError):
+            continue
+        for target in DOC_LINK.findall(DOC_FENCE.sub("", text)):
+            if target.startswith(("http://", "https://", "mailto:", "#")):
+                continue
+            # Strip the anchor and any query: this gate answers "does the file exist", and a
+            # heading anchor is not a file. Percent-escapes are undone so a link written with
+            # %20 for a space resolves the way a reader's browser would resolve it.
+            cleaned = unquote(target.split("#", 1)[0].split("?", 1)[0])
+            if not cleaned:
+                continue
+            checked += 1
+            resolved = (path.parent / cleaned).resolve()
+            try:
+                target_relative = resolved.relative_to(repo_root.resolve()).as_posix()
+            except ValueError:
+                broken.append(f"{relative} -> {target} (outside the repository)")
+                continue
+            # Tracked, not merely present. This gate exists to answer "will a reader who clones
+            # this repository be able to follow the link", and the working tree holds files a
+            # clone does not: AGENTS.md and extraction/decompiled/ are both gitignored and both
+            # real on a developer's disk. Asking the filesystem made the answer depend on whose
+            # machine ran the gate -- it passed locally and failed on CI, which is the whole
+            # failure mode this gate was added to prevent, one level up.
+            target_prefix = target_relative.rstrip("/") + "/"
+            target_is_tracked = (
+                target_relative == "."
+                or target_relative in tracked
+                or any(item.startswith(target_prefix) for item in tracked)
+            )
+            if not target_is_tracked:
+                broken.append(f"{relative} -> {target}")
+
+    floor = max(1, len(pages) // MIN_DOC_LINKS_PER_PAGE)
+    if checked < floor:
+        raise GateError(
+            f"only {checked} relative Markdown link(s) were found across {len(pages)} tracked "
+            f"pages, below the {floor} expected. The extraction in check_verification_gates.py "
+            "has stopped matching the pages; fix it before trusting this gate."
+        )
+    if broken:
+        raise GateError(
+            "these Markdown links point at files that are not in the repository: "
+            + ", ".join(broken)
+            + ". A link usually breaks because the target moved, so check where the file went "
+            "rather than deleting the link."
+        )
+    return [f"{checked} relative link(s) across {len(pages)} tracked Markdown pages resolve"]
+
+
 GATES = {
     "lockfile": check_lockfile,
     "api-doc": check_api_doc,
     "api-facts": check_api_facts,
     "doc-marks": check_doc_marks,
     "docs-tracked": check_docs_tracked,
+    "doc-links": check_doc_links,
+    "arch-facts": check_arch_facts,
     "packaged-links": check_packaged_links,
     "script-encoding": check_script_encoding,
     "ps1-syntax": check_ps1_syntax,
@@ -1302,6 +1554,13 @@ def main() -> int:
     parser = argparse.ArgumentParser(description="Run the offline verification gates.")
     parser.add_argument("--repo-root", type=Path, default=Path(__file__).resolve().parent.parent)
     parser.add_argument("--only", choices=sorted(GATES), action="append", help="run only the named gate(s)")
+    parser.add_argument(
+        "--skip",
+        choices=sorted(GATES),
+        action="append",
+        help="run every gate except the named one(s); for a tree a gate cannot meaningfully "
+        "measure, such as the self-test's partial fixture against doc-links",
+    )
     args = parser.parse_args()
 
     repo_root: Path = args.repo_root.resolve()
@@ -1314,7 +1573,10 @@ def main() -> int:
         )
         return 1
 
-    selected = args.only or sorted(GATES)
+    selected = [name for name in (args.only or sorted(GATES)) if name not in set(args.skip or ())]
+    if not selected:
+        print("verification gates failed: every gate was skipped", file=sys.stderr)
+        return 1
     try:
         for name in selected:
             notes = GATES[name](repo_root)

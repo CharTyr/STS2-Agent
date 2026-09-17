@@ -14,7 +14,7 @@ internal static class RewardChoiceThreadingContractTests
 
     public static void RewardChoiceIsNeverStaticState()
     {
-        var source = AgentSourceFixture.Read("STS2AIAgent/Game/GameActionService.cs");
+        var source = AgentSourceFixture.ReadActionService();
 
         Assert.False(
             source.Contains("_pendingCardRewardChoice", StringComparison.Ordinal),
@@ -23,7 +23,7 @@ internal static class RewardChoiceThreadingContractTests
 
     public static void DrainTakesAndForwardsTheChoice()
     {
-        var source = AgentSourceFixture.Read("STS2AIAgent/Game/GameActionService.cs");
+        var source = AgentSourceFixture.ReadActionService();
         var stripped = AgentSourceFixture.WithoutWhitespace(source);
 
         // Required parameter, declared at the call site rather than defaulted.
@@ -54,7 +54,7 @@ internal static class RewardChoiceThreadingContractTests
 
     public static void CollectRewardsAsksForTheAutomaticChoice()
     {
-        var source = AgentSourceFixture.Read("STS2AIAgent/Game/GameActionService.cs");
+        var source = AgentSourceFixture.ReadActionService();
         var body = Body(source, "ExecuteCollectRewardsAndProceedAsync");
 
         Assert.Contains("RewardChoicePolicy.AutoChoice", body, StringComparison.Ordinal);

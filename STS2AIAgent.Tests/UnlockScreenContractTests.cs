@@ -8,7 +8,7 @@ internal static class UnlockScreenContractTests
 {
     public static void UnlockCardsScreenWithVisibleGridReportsOnlyUnlockAction()
     {
-        var rawStateSource = AgentSourceFixture.Read("STS2AIAgent/Game/GameStateService.cs");
+        var rawStateSource = AgentSourceFixture.ReadStateService();
         var resolveBody = AgentSourceFixture.WithoutWhitespace(
             AgentSourceFixture.MethodBody(rawStateSource, "ResolveNonModalScreen"));
         var walkerBody = AgentSourceFixture.WithoutWhitespace(

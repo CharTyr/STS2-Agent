@@ -7,12 +7,11 @@ namespace STS2AIAgent.Tests;
 /// </summary>
 internal static class InviteCoopContractTests
 {
-    private const string StatePath = "STS2AIAgent/Game/GameStateService.cs";
     private const string Guard = "if (CanInviteAiTeammate(currentScreen))";
 
     public static void ActionIsAdvertisedBehindTheStructuralProbe()
     {
-        var state = AgentSourceFixture.Read(StatePath);
+        var state = AgentSourceFixture.ReadStateService();
         var probe = AgentSourceFixture.MethodBody(state, "CanInviteAiTeammate");
         Assert.Contains("currentScreen is not NMainMenu mainMenu || !mainMenu.IsVisibleInTree()", probe, StringComparison.Ordinal);
         Assert.Contains("CoopLaunchPolicy.GetStructuralError", probe, StringComparison.Ordinal);
@@ -38,7 +37,7 @@ internal static class InviteCoopContractTests
     /// </summary>
     public static void PendingExecutorReturnsTaskWithoutAsync()
     {
-        var source = AgentSourceFixture.Read("STS2AIAgent/Game/GameActionService.cs");
+        var source = AgentSourceFixture.ReadActionService();
         Assert.Contains(
             "private static Task<ActionResponsePayload> ExecuteInviteAiTeammateAsync()",
             source,

@@ -22,7 +22,6 @@ namespace STS2AIAgent.Tests;
 /// </remarks>
 internal static class ActionSurfaceContractTests
 {
-    private const string StatePath = "STS2AIAgent/Game/GameStateService.cs";
 
     private const string WalkerDeclaration =
         "private static List<ActionDescriptor> EnumerateAvailableActions(";
@@ -40,7 +39,7 @@ internal static class ActionSurfaceContractTests
 
     public static void OneWalkDecidesWhatIsOffered()
     {
-        var source = AgentSourceFixture.Read(StatePath);
+        var source = AgentSourceFixture.ReadStateService();
         var walker = AgentSourceFixture.DeclarationBody(source, WalkerDeclaration);
 
         var names = new SortedSet<string>(StringComparer.Ordinal);
@@ -63,7 +62,7 @@ internal static class ActionSurfaceContractTests
 
     public static void NeitherSurfaceDecidesForItself()
     {
-        var source = AgentSourceFixture.Read(StatePath);
+        var source = AgentSourceFixture.ReadStateService();
 
         foreach (var (declaration, surface) in new[]
                  {

@@ -31,15 +31,28 @@ internal static class SourceShapeContractTests
     /// </summary>
     private static readonly IReadOnlyDictionary<string, int> Budgets = new Dictionary<string, int>(StringComparer.Ordinal)
     {
-        // Was 8,559 lines until ADR 0001 collapsed the two action surfaces into one walk; the
-        // budget came down with it, which is what the ratchet is for. Two separable concerns are
-        // still fused here: the raw /state payload builders and the compact agent_view builders
-        // (BuildAgent*, ~690 lines).
-        ["STS2AIAgent/Game/GameStateService.cs"] = 8400,
-        // 60 Execute* handlers and 62 WaitFor* stabilizers. Unlike the file above this one is not
-        // tangled -- it is one clear pattern repeated sixty times -- so splitting it by room
-        // (combat / map / shop / co-op / menus) is mechanical whenever someone wants the room.
-        ["STS2AIAgent/Game/GameActionService.cs"] = 7100,
+        // 8,559 lines until ADR 0001 collapsed the two action surfaces into one walk, then 8,295
+        // until the compact agent_view moved to its own file. The budget came down both times,
+        // which is what the ratchet is for. What is left here is the raw /state payload builders
+        // and the predicates they read.
+        ["STS2AIAgent/Game/GameStateService.cs"] = 6000,
+        // The 60 payload types of GET /state: the wire format, as declarations. They grow with the
+        // API and are checked against docs/api.md by the api-facts gate, so the budget here is
+        // about noticing, not about stopping them.
+        ["STS2AIAgent/Game/GameStateService.Payloads.cs"] = 1300,
+        // The compact agent_view rewrite, split out of the file above. It is a projection of the
+        // raw payloads, so it grows when they do -- which is the reason to watch it separately
+        // rather than let it grow inside a file already too big to notice.
+        ["STS2AIAgent/Game/GameStateService.AgentView.cs"] = 1400,
+        // 7,061 lines until it was split by room on 2026-09-17. What is left in the base file is
+        // the dispatch switch and the helpers more than one room reaches; six of the eight room
+        // files came in under the default budget and so have no entry at all, which is the shape
+        // to aim for.
+        ["STS2AIAgent/Game/GameActionService.cs"] = 1300,
+        // Chests, events, rest sites, the crystal sphere, capstones and bundles. The largest room
+        // because it is really six small ones that share their settle-and-proceed helpers; if it
+        // grows again, it splits rather than the number going up.
+        ["STS2AIAgent/Game/GameActionService.Rooms.cs"] = 1250,
         ["STS2AIAgent/Ui/AgentOverlayHost.cs"] = 1900,
         ["STS2AIAgent/Agent/AgentRuntime.cs"] = 1450,
     };

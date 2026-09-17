@@ -9,14 +9,12 @@ namespace STS2AIAgent.Tests;
 /// </summary>
 internal static class CharacterSelectReadyContractTests
 {
-    private const string StatePath = "STS2AIAgent/Game/GameStateService.cs";
-    private const string ActionPath = "STS2AIAgent/Game/GameActionService.cs";
     private const string SelectGuard = "if (CanSelectCharacter(currentScreen))";
     private const string UnreadyGuard = "if (CanUnready(currentScreen))";
 
     public static void ReadyGateClosesSelectCharacterBeforeButtonAndLobbyProbes()
     {
-        var body = AgentSourceFixture.MethodBody(AgentSourceFixture.Read(StatePath), "CanSelectCharacter");
+        var body = AgentSourceFixture.MethodBody(AgentSourceFixture.ReadStateService(), "CanSelectCharacter");
         var flat = AgentSourceFixture.WithoutWhitespace(body);
 
         var unreadyGate = flat.IndexOf("if(CanUnready(currentScreen)){returnfalse;}", StringComparison.Ordinal);
@@ -43,7 +41,7 @@ internal static class CharacterSelectReadyContractTests
 
     public static void AdvertisingStaysBehindTheProbeAndUnreadyStaysIndependent()
     {
-        var state = AgentSourceFixture.Read(StatePath);
+        var state = AgentSourceFixture.ReadStateService();
 
         // One walk feeds both surfaces, so this is asserted once rather than once per surface.
         var walker = AgentSourceFixture.DeclarationBody(
@@ -63,7 +61,7 @@ internal static class CharacterSelectReadyContractTests
 
     public static void ExecutorStillUsesCanSelectCharacter()
     {
-        var action = AgentSourceFixture.Read(ActionPath);
+        var action = AgentSourceFixture.ReadActionService();
         var characterSelect = AgentSourceFixture.MethodBody(action, "ExecuteSelectCharacterAsync");
         Assert.Contains("GameStateService.CanSelectCharacter(currentScreen)", characterSelect, StringComparison.Ordinal);
 

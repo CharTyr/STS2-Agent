@@ -13,7 +13,7 @@ internal static class GameActionTrustContractTests
 
     public static void RewardConsumeNeverFallsBackToTheFirstOption()
     {
-        var source = AgentSourceFixture.Read("STS2AIAgent/Game/GameActionService.cs");
+        var source = AgentSourceFixture.ReadActionService();
         var body = Body(source, "TryResolveCardRewardAsync");
 
         Assert.Contains("RewardChoicePolicy.Resolve(", body, StringComparison.Ordinal);
@@ -25,7 +25,7 @@ internal static class GameActionTrustContractTests
 
     public static void RewardRequestRejectsAnOutOfRangeIndexBeforeClicking()
     {
-        var source = AgentSourceFixture.Read("STS2AIAgent/Game/GameActionService.cs");
+        var source = AgentSourceFixture.ReadActionService();
         var body = Body(source, "ExecuteResolveRewardsAsync");
 
         var validateIndex = body.IndexOf("RewardChoicePolicy.Resolve(", StringComparison.Ordinal);
@@ -44,7 +44,7 @@ internal static class GameActionTrustContractTests
 
     public static void ShopRemovalPurchaseFailureSurfaces()
     {
-        var source = AgentSourceFixture.Read("STS2AIAgent/Game/GameActionService.cs");
+        var source = AgentSourceFixture.ReadActionService();
         var body = Body(source, "ExecuteRemoveCardAtShopAsync");
 
         Assert.Contains("BackgroundTaskOutcome.DescribeFailure(", body, StringComparison.Ordinal);
@@ -57,7 +57,7 @@ internal static class GameActionTrustContractTests
 
     public static void MenuExitWaitDoesNotTreatAModalAsSuccess()
     {
-        var source = AgentSourceFixture.Read("STS2AIAgent/Game/GameActionService.cs");
+        var source = AgentSourceFixture.ReadActionService();
         var waitBody = Body(source, "WaitForMainMenuExitAsync");
         var helperBody = Body(source, "IsMenuExitSettled");
 
@@ -70,7 +70,7 @@ internal static class GameActionTrustContractTests
 
     public static void EmbarkWaitDoesNotTreatAModalAsSuccess()
     {
-        var source = AgentSourceFixture.Read("STS2AIAgent/Game/GameActionService.cs");
+        var source = AgentSourceFixture.ReadActionService();
         var waitBody = Body(source, "WaitForEmbarkTransitionAsync");
         var helperBody = Body(source, "IsEmbarkSettled");
 
@@ -83,7 +83,7 @@ internal static class GameActionTrustContractTests
 
     public static void CharacterSelectNeedsTheScreenItself()
     {
-        var source = AgentSourceFixture.Read("STS2AIAgent/Game/GameActionService.cs");
+        var source = AgentSourceFixture.ReadActionService();
 
         Assert.False(
             source.Contains("IsCharacterSelectOpenOrActionableModal", StringComparison.Ordinal),
@@ -103,7 +103,7 @@ internal static class GameActionTrustContractTests
 
     public static void BundleHandlersNeverFabricateAnEmptyState()
     {
-        var source = AgentSourceFixture.Read("STS2AIAgent/Game/GameActionService.cs");
+        var source = AgentSourceFixture.ReadActionService();
 
         Assert.False(
             source.Contains("?? new GameStatePayload()", StringComparison.Ordinal),

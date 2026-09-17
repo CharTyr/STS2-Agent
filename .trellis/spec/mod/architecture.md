@@ -69,55 +69,81 @@ For a change crossing state, action, agent, UI, or MCP, trace it in both directi
 
 ## Code shape and its known debts
 
-Measured 2026-09-16 across 82 mod source files totalling 31,632 lines. These numbers are here
+Measured 2026-09-17 across 91 mod source files totalling 32,174 lines (git-tracked only, which is what the gate counts -- a working tree also holds whatever the developer left in it). These numbers are here
 because nobody was counting, and that is how a codebase stops being navigable -- not through a bad
-commit, but through a thousand good ones.
+commit, but through a thousand good ones. The `arch-facts` gate checks this table against the
+files, so it cannot quietly go stale the way it did between ADR 0001 and the splits below.
 
-| File | Lines | Share of the mod |
-| --- | ---: | ---: |
-| [GameStateService.cs](../../../STS2AIAgent/Game/GameStateService.cs) | 8,559 | 27.1% |
-| [GameActionService.cs](../../../STS2AIAgent/Game/GameActionService.cs) | 7,008 | 22.2% |
-| [AgentOverlayHost.cs](../../../STS2AIAgent/Ui/AgentOverlayHost.cs) | 1,829 | 5.8% |
-| [AgentRuntime.cs](../../../STS2AIAgent/Agent/AgentRuntime.cs) | 1,377 | 4.4% |
-| the other 78 files | 12,859 | 40.6% |
+| File | Lines |
+| --- | ---: |
+| [GameStateService.cs](../../../STS2AIAgent/Game/GameStateService.cs) | 5,872 |
+| [AgentOverlayHost.cs](../../../STS2AIAgent/Ui/AgentOverlayHost.cs) | 1,829 |
+| [AgentRuntime.cs](../../../STS2AIAgent/Agent/AgentRuntime.cs) | 1,377 |
+| [GameStateService.AgentView.cs](../../../STS2AIAgent/Game/GameStateService.AgentView.cs) | 1,347 |
+| [GameStateService.Payloads.cs](../../../STS2AIAgent/Game/GameStateService.Payloads.cs) | 1,251 |
+| [GameActionService.cs](../../../STS2AIAgent/Game/GameActionService.cs) | 1,203 |
+| [GameActionService.Rooms.cs](../../../STS2AIAgent/Game/GameActionService.Rooms.cs) | 1,150 |
 
-**Two files hold 49% of the mod.** `SourceShapeContractTests` now caps every file, with named
-budgets for the four above; budgets go down, never up. Needing more room than a budget allows is the
-signal to move something out, not to raise the number.
+Until 2026-09-17 two files held 49% of the mod: `GameStateService.cs` at 8,559 lines and
+`GameActionService.cs` at 7,008. The largest file today is 18% of the mod, the second largest 6%,
+and nothing else reaches 1,500 lines.
 
-The two are not the same kind of large, and the difference decides what to do about each.
+`SourceShapeContractTests` caps every file -- 1,000 lines unless it has a named budget -- and budgets
+go down, never up. Needing more room than a budget allows is the signal to move something out, not
+to raise the number. Its second test fails a budget that has drifted far above the file it guards,
+so a file that shrinks drags its own ceiling down with it.
 
-### `GameActionService.cs` is repetition, not tangle
+### What was split, and what the splits were not
 
-193 methods: 60 `Execute*` handlers (57% of the body) and 62 `WaitFor*` stabilizers (20%). That is
-one clear pattern -- validate the screen, act on the game thread, wait for the transition with a
-deadline -- repeated once per action. Nothing is fused; it is simply all in one file. Splitting it
-by room (combat / map / shop / co-op / menus) is mechanical, needs no design, and can happen
-whenever someone wants the navigability. The longest handler is 136 lines.
+Both monoliths came apart on 2026-09-17, and neither split was a judgement call about where lines
+belong. In each case a member joined a group only when **every reference to it came from inside that
+group**; anything two groups both reached stayed in the base file. That is a computation, and it is
+reproducible.
 
-### `GameStateService.cs` is three concerns in one 7,290-line class
+- `GameActionService.cs` (7,061 lines) is now the base file plus eight partials -- combat, rewards,
+  rooms, shop, menus, embark, run, co-op. 5,697 of 6,756 member lines landed in exactly one room;
+  1,059 were genuinely shared. Six of the eight came in under the default budget.
+- `GameStateService.cs` (8,295 lines) gave up two concerns that shared nothing with the raw builders
+  except their output: the compact `agent_view` rewrite (`BuildAgent*`, plus the formatters and
+  glossary only it reaches) and the 60 payload type declarations.
 
-318 methods in a single class, plus 57 payload records (1,100 lines) in the same file:
+What is left in `GameStateService.cs` is one concern in 286 members: the raw `/state` payload
+builders and the predicates they read. It is still the largest file in the mod, and the next split,
+if someone wants one, is the `Can*` / `Is*` predicate layer.
 
-- `Build*` -- the raw `/state` payload builders (2,495 lines, 40%)
-- `BuildAgent*` -- the compact `agent_view` rewrite (687 lines, 11%), a **separable concern** that
-  shares nothing with the raw builders except their output
-- `Can*` / `Get*` / `Is*` -- 176 small predicates and accessors (1,862 lines)
-- the action surface: `BuildAvailableActionNames` (301) and `BuildAvailableActionsPayload` (609)
+A pure relocation is verifiable, and both were verified the same way: the base file's diff carries
+exactly one genuinely new line (the `partial` keyword), and every removed non-blank line appears
+verbatim in exactly one new file.
 
-Those last two are **910 lines answering one question twice**, verified identical field for field:
-the same 50 predicates, the same 55 action names. See
-[ADR 0001](../../../docs/adr/0001-single-action-surface.md) for the decision to collapse them, why
-it waits for a session that can validate against the running game, and the
-`ActionSurface.*` contracts that keep the duplication loud until then.
+### What the splits broke, which is the part worth remembering
+
+Moving members between the files of one class is invisible to the compiler and **not** invisible to
+tooling that reads source text -- which, in this repo, is most of the verification:
+
+- `AgentSourceFixture.MethodBody` resolved a name by its last occurrence. That is correct only while
+  a method is declared before it is called, which holds inside one file and fails across a partial
+  class. It failed *quietly*: the body of whatever enclosed a call site came back and the contract
+  kept asserting, against the wrong method. It now prefers a declaration.
+- `GameTaskBoundingContractTests` scanned a hard-coded list of files for unbounded awaits. Left
+  alone it would have kept scanning the base file only, so the first bare `await` written in a room
+  file would have wedged a request with nothing red to show for it. It enumerates now.
+- The gate self-test reported PASS for three cases that were failing with "missing required file".
+  `Assert-Case` only checked for a non-zero exit, so any failure looked like the failure the case was
+  written to provoke. Every case now declares the message it expects.
+
+The lesson generalises past this refactor: **a check that reads source by path carries a dependency
+the compiler will not enforce.** When a file moves, go looking for the checks that named it.
 
 ### Where new code goes
 
-- A new **action**: handler and stabilizer in `GameActionService.cs`, following the existing
-  `Execute*` / `WaitFor*` pair. Its availability goes in **both** action surfaces until ADR 0001
-  lands; `ActionSurface.*` fails by name if only one is updated.
-- A new **state field**: the payload record and its builder in `GameStateService.cs`, the compact
-  projection in the matching `BuildAgent*` method, and a row in `docs/api.md` -- the `api-facts`
-  gate refuses a field that no table names.
-- Anything **not** state-building or action-executing: a new file. Both monoliths are already past
-  the point where adding to them is free, and the budgets say so out loud.
+- A new **action**: handler and stabilizer in the `GameActionService` partial for its room, following
+  the existing `Execute*` / `WaitFor*` pair, and its name in the dispatch switch in
+  `GameActionService.cs`. Its availability goes in `EnumerateAvailableActions` -- **one place**,
+  since [ADR 0001](../../../docs/adr/0001-single-action-surface.md) collapsed the two action
+  surfaces; `ActionSurface.*` fails if either surface starts deciding for itself again.
+- A new **state field**: the payload record in `GameStateService.Payloads.cs`, its builder in
+  `GameStateService.cs`, the compact projection in the matching `BuildAgent*` method in
+  `GameStateService.AgentView.cs`, and a row in `docs/api.md` -- the `api-facts` gate refuses a
+  field that no table names.
+- Anything **not** state-building or action-executing: a new file. Every file in the table above is
+  already past the point where adding to it is free, and the budgets say so out loud.
