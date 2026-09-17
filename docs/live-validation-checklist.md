@@ -99,7 +99,34 @@ The player's real Steam profile was hashed before and after: 184 files, aggregat
 - **A console command that succeeded reads as a failure when retried.** Re-issuing `room Treasure`
   while already standing in a treasure room answers 409 `Console command failed: the game task
   faulted.`, although the first call had worked. The retry loop in `run_debug_command` therefore
-  reports a failure for a command that did what was asked.
+  reports a failure for a command that did what was asked. **Fixed**: the message was the real
+  problem -- the fault's own exception was being discarded, so a rejected request and a broken one
+  read identically. `DescribeGameTaskFailure` now names the exception, which covers all eleven
+  actions that answer through it, and `remove_card_at_shop` gets the same detail through the shared
+  describer. The retry loop itself was left alone: with a real message its `last_error` finally says
+  something, and changing retry semantics on a guess about the exception text is the sort of thing
+  this project has been burned by.
+
+  **Verified live on the patched build** (same isolated host, `--clientId 2026091701`). The first
+  `room Treasure` returns `completed` and lands on `CHEST`; the second now answers:
+
+  ```
+  Console command failed: the game task faulted: InvalidOperationException: Attempted to start
+  new relic picking session while one was already occurring.
+  ```
+
+  **The exception turns out to be benign and self-explanatory**: the treasure room's relic-picking
+  session is already open, so a second `room Treasure` legitimately cannot start another. That is
+  exactly the distinction the old wording made impossible — a request the game refused read the same
+  as a request that broke the mod. A repeated `room Monster`, by contrast, still returns `completed`,
+  which is why only the treasure path surfaced this.
+
+  The change is invisible where nothing failed: a successful console command still answers
+  `completed`, and `/health` plus `/state` on `MAIN_MENU`, `MAP`, `CHEST` and `COMBAT` are unchanged.
+  One cosmetic defect was found and fixed in the same pass — the game's message ends in `!` and each
+  call site appends `.`, so the first live rendering read `...already occurring!.`; the describer now
+  trims the exception's own trailing punctuation, and the quoted message above is from the re-run
+  after that fix.
 - **After a death settles, the main menu offers `continue_run` / `abandon_run` while `state.run` is
   `null`.** The pre-fix baseline recorded the same action set, so this is not new, but the
   combination is odd enough to deserve its own look.
