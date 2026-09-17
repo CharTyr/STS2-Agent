@@ -11,7 +11,7 @@ internal static class TimelineIndexContractTests
 {
     public static void ExecutorIndexesTheSameSlotListTheStateExposes()
     {
-        var rawState = AgentSourceFixture.Read("STS2AIAgent/Game/GameStateService.cs");
+        var rawState = AgentSourceFixture.ReadStateService();
         var rawAction = AgentSourceFixture.Read("STS2AIAgent/Game/GameActionService.cs");
 
         var stateSlots = Normalize(AgentSourceFixture.MethodBody(rawState, "BuildTimelinePayload"));
@@ -60,7 +60,7 @@ internal static class TimelineIndexContractTests
 
     public static void CrystalDescriptorsCarryTheirRequirements()
     {
-        var rawState = AgentSourceFixture.Read("STS2AIAgent/Game/GameStateService.cs");
+        var rawState = AgentSourceFixture.ReadStateService();
         var descriptorClass = Normalize(
             AgentSourceFixture.DeclarationBody(rawState, "internal sealed class ActionDescriptor"));
 

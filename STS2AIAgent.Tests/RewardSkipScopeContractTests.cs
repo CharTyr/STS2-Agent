@@ -30,7 +30,7 @@ internal static class RewardSkipScopeContractTests
 
     public static void TheOwnerResolutionCoversBothRewardScreens()
     {
-        var stateSource = AgentSourceFixture.Read("STS2AIAgent/Game/GameStateService.cs");
+        var stateSource = AgentSourceFixture.ReadStateService();
         var resolver = AgentSourceFixture.MethodBody(stateSource, "GetRewardSetId");
 
         Assert.Contains("NRewardsScreen", resolver);

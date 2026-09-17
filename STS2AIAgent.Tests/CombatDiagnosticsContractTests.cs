@@ -9,7 +9,7 @@ internal static class CombatDiagnosticsContractTests
 {
     public static void HandPayloadKeepsNativeCanPlayEvidence()
     {
-        var rawStateSource = ReadSource("STS2AIAgent/Game/GameStateService.cs");
+        var rawStateSource = AgentSourceFixture.ReadStateService();
         var handBody = WithoutWhitespace(MethodBody(rawStateSource, "BuildHandCardPayload"));
         var agentHandBody = WithoutWhitespace(MethodBody(rawStateSource, "BuildAgentHandCardPayload"));
 
@@ -31,7 +31,7 @@ internal static class CombatDiagnosticsContractTests
 
     public static void CombatPayloadDistinguishesQueueModalAndSnapshotLocks()
     {
-        var rawStateSource = ReadSource("STS2AIAgent/Game/GameStateService.cs");
+        var rawStateSource = AgentSourceFixture.ReadStateService();
         var stateSource = WithoutWhitespace(rawStateSource);
         var combatBody = WithoutWhitespace(MethodBody(rawStateSource, "BuildCombatPayload"));
         var agentCombatBody = WithoutWhitespace(MethodBody(rawStateSource, "BuildAgentCombatPayload"));
@@ -72,7 +72,7 @@ internal static class CombatDiagnosticsContractTests
 
     public static void CombatPayloadExposesOwnPets()
     {
-        var rawStateSource = ReadSource("STS2AIAgent/Game/GameStateService.cs");
+        var rawStateSource = AgentSourceFixture.ReadStateService();
         var combatBody = WithoutWhitespace(MethodBody(rawStateSource, "BuildCombatPayload"));
         var agentCombatBody = WithoutWhitespace(MethodBody(rawStateSource, "BuildAgentCombatPayload"));
         var petBody = WithoutWhitespace(MethodBody(rawStateSource, "BuildCombatPetPayload"));

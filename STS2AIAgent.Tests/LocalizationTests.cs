@@ -288,7 +288,7 @@ internal static class LocalizationTests
     /// </summary>
     public static void GlossaryKeywordsStayAlignedWithTheirEnglishSpellings()
     {
-        var source = AgentSourceFixture.Read("STS2AIAgent/Game/GameStateService.cs");
+        var source = AgentSourceFixture.ReadStateService();
         var keywords = new List<string>();
         var definitions = new List<string>();
 

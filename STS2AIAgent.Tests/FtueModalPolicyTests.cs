@@ -22,9 +22,9 @@ internal static class FtueModalPolicyTests
         Assert.False(FtueModalPolicy.CloseFtueDirectly("NAbandonRunConfirmPopup", hasUsableConfirmButton: false));
         Assert.Equal("CloseFtueAndEndTurn", FtueModalPolicy.CloseMethodNames("NCanPlayCardsFtue")[0]);
         Assert.Equal(0, FtueModalPolicy.CloseMethodNames("NCombatRulesFtue").Count);
-        Assert.Contains("CloseMethodNames", AgentSourceFixture.Read("STS2AIAgent/Game/GameStateService.cs"));
+        Assert.Contains("CloseMethodNames", AgentSourceFixture.ReadStateService());
 
-        var stateSource = AgentSourceFixture.Read("STS2AIAgent/Game/GameStateService.cs");
+        var stateSource = AgentSourceFixture.ReadStateService();
         Assert.Contains("FtueModalPolicy.ExposeConfirm", stateSource);
         Assert.Contains("TryCloseOpenFtue", stateSource);
         Assert.Contains("CloseFtue", stateSource);

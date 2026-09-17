@@ -12,7 +12,7 @@ internal static class RewardScreenContractTests
 {
     public static void RewardOverlayBranchPrecedesTheVisibleGrid()
     {
-        var rawStateSource = AgentSourceFixture.Read("STS2AIAgent/Game/GameStateService.cs");
+        var rawStateSource = AgentSourceFixture.ReadStateService();
         var resolveBody = AgentSourceFixture.WithoutWhitespace(
             AgentSourceFixture.MethodBody(rawStateSource, "ResolveNonModalScreen"));
 

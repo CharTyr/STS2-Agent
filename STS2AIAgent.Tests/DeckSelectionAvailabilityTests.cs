@@ -10,7 +10,6 @@ namespace STS2AIAgent.Tests;
 /// </summary>
 internal static class DeckSelectionAvailabilityTests
 {
-    private const string StatePath = "STS2AIAgent/Game/GameStateService.cs";
     private const string ActionPath = "STS2AIAgent/Game/GameActionService.cs";
     private const string AvailabilityDeclaration =
         "public static IReadOnlyList<NCardHolder> GetDeckSelectionOptions(";
@@ -20,7 +19,7 @@ internal static class DeckSelectionAvailabilityTests
         // DeclarationBody, not MethodBody: GetDeckSelectionOptions is called again from
         // BuildSelectionPayload below its own declaration, so a name lookup would land on that call site.
         var body = Flat(AgentSourceFixture.DeclarationBody(
-            AgentSourceFixture.Read(StatePath),
+            AgentSourceFixture.ReadStateService(),
             AvailabilityDeclaration));
 
         // The deleted branch was `if (currentScreen is Node rootNode) { return GetVisibleGridCardHolders(rootNode)... }`.
@@ -57,7 +56,7 @@ internal static class DeckSelectionAvailabilityTests
             StringComparison.Ordinal);
 
         var availability = Flat(AgentSourceFixture.DeclarationBody(
-            AgentSourceFixture.Read(StatePath),
+            AgentSourceFixture.ReadStateService(),
             AvailabilityDeclaration));
         foreach (var criterion in new[]
                  {

@@ -119,6 +119,11 @@ HTTP_SERVER_PATH = "STS2AIAgent/Server/HttpServer.cs"
 # none of them. The action contract covers action names only, so nothing noticed. These two C#
 # records are the producers; the docs/api.md tables below are what clients are told to expect.
 GAME_STATE_PATH = "STS2AIAgent/Game/GameStateService.cs"
+# GameStateService is one partial class in two files. The raw payload records and the screen
+# resolver live in the file above; the compact agent_view rewrite was split out on 2026-09-17
+# so the size ratchet could watch it separately. A check reads whichever file owns what it
+# asks about, and each one fails loudly when its extraction comes back empty.
+AGENT_VIEW_PATH = "STS2AIAgent/Game/GameStateService.AgentView.cs"
 # The leading @ is C#'s escape for a keyword used as an identifier -- `public EventPayload? @event`
 # serializes as "event". Missing it would read as "the docs list a field the code does not have".
 CSHARP_PAYLOAD_PROPERTY = re.compile(
@@ -793,10 +798,10 @@ def check_compact_rename_table(repo_root: Path, api_doc: str) -> list[str]:
             "check_verification_gates.py has changed shape; fix it before trusting this gate."
         )
 
-    builders = agent_view_builder_bodies(read_text(repo_root, GAME_STATE_PATH))
+    builders = agent_view_builder_bodies(read_text(repo_root, AGENT_VIEW_PATH))
     if not builders:
         raise GateError(
-            f"{GAME_STATE_PATH} no longer declares any BuildAgent*Payload method, so the compact "
+            f"{AGENT_VIEW_PATH} no longer declares any BuildAgent*Payload method, so the compact "
             "rename table cannot be checked."
         )
 

@@ -10,13 +10,12 @@ namespace STS2AIAgent.Tests;
 /// </summary>
 internal static class ContinueCoopContractTests
 {
-    private const string StatePath = "STS2AIAgent/Game/GameStateService.cs";
     private const string ActionPath = "STS2AIAgent/Game/GameActionService.cs";
     private const string Guard = "if (CanContinueAiTeammate(currentScreen))";
 
     public static void ActionIsAdvertisedBehindTheSaveProbe()
     {
-        var state = AgentSourceFixture.Read(StatePath);
+        var state = AgentSourceFixture.ReadStateService();
 
         // The probe mirrors the game's own gate for showing "Load" in the multiplayer submenu, on
         // the host's visible main menu only.
@@ -61,7 +60,7 @@ internal static class ContinueCoopContractTests
 
     public static void LoadScreenAdvertisesOnlyWhatTheExecutorHandles()
     {
-        var state = AgentSourceFixture.Read(StatePath);
+        var state = AgentSourceFixture.ReadStateService();
         var action = AgentSourceFixture.Read(ActionPath);
 
         // embark: the load screen resolves the button and the executor waits for the ready

@@ -35,6 +35,43 @@ internal static class AgentSourceFixture
         return false;
     }
 
+    /// <summary>
+    /// Every file that declares <c>GameStateService</c>, concatenated in path order.
+    /// </summary>
+    /// <remarks>
+    /// <c>GameStateService</c> is one <c>partial</c> class split across files -- the raw
+    /// <c>/state</c> builders in <c>GameStateService.cs</c> and the compact <c>agent_view</c>
+    /// rewrite in <c>GameStateService.AgentView.cs</c>. A source contract that asks what the class
+    /// says must read all of it, or a member that simply moved between its own files reads as
+    /// deleted. Tests that mean one specific file still name that file.
+    ///
+    /// At least two files are required, so merging the class back into one file fails here rather
+    /// than quietly halving what every contract above sees.
+    /// </remarks>
+    public static string ReadStateService()
+    {
+        var directory = Path.Combine(Root, "STS2AIAgent", "Game");
+        // GameStateService.cs first, then the partials. Order is not cosmetic here: MethodBody
+        // resolves a name by its *last* occurrence, so a method must be declared after it is
+        // called. The base file holds the call sites into the partials, so it has to come first
+        // or MethodBody("BuildAgentViewPayload") returns the body of whatever encloses its call.
+        var files = Directory
+            .EnumerateFiles(directory, "GameStateService*.cs", SearchOption.TopDirectoryOnly)
+            .OrderBy(path => Path.GetFileName(path) == "GameStateService.cs" ? 0 : 1)
+            .ThenBy(path => path, StringComparer.Ordinal)
+            .ToArray();
+
+        if (files.Length < 2)
+        {
+            throw new InvalidOperationException(
+                $"GameStateService is declared in {files.Length} file(s) under {directory}. The class "
+                + "was split on purpose; if it is being merged back, update the source contracts that "
+                + "read it instead of leaving them reading part of a class.");
+        }
+
+        return string.Join("\n", files.Select(path => File.ReadAllText(path, Encoding.UTF8)));
+    }
+
     public static string Read(string relativePath)
     {
         var root = FindAgentRoot();

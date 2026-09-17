@@ -9,7 +9,7 @@ internal static class ProfileSelectionContractTests
     public static void NativeProfileIdentityAndSwitchAreWiredEndToEnd()
     {
         var actionSource = WithoutWhitespace(ReadSource("STS2AIAgent/Game/GameActionService.cs"));
-        var stateSource = WithoutWhitespace(ReadSource("STS2AIAgent/Game/GameStateService.cs"));
+        var stateSource = WithoutWhitespace(AgentSourceFixture.ReadStateService());
 
         Assert.Contains("native_profile_id=SaveManager.Instance.CurrentProfileId", stateSource, StringComparison.Ordinal);
         Assert.Contains("native_profile_id=nativeProfileId", stateSource, StringComparison.Ordinal);

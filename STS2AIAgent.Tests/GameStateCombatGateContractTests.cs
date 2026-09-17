@@ -9,7 +9,6 @@ namespace STS2AIAgent.Tests;
 /// </summary>
 internal static class GameStateCombatGateContractTests
 {
-    private const string StatePath = "STS2AIAgent/Game/GameStateService.cs";
 
     public static void OneStateBuildEvaluatesTheGateOnce()
     {
@@ -214,7 +213,7 @@ internal static class GameStateCombatGateContractTests
         return string.Empty;
     }
 
-    private static string ReadSource() => AgentSourceFixture.Read(StatePath);
+    private static string ReadSource() => AgentSourceFixture.ReadStateService();
 
     private static string Flat(string source) => AgentSourceFixture.WithoutWhitespace(source);
 
