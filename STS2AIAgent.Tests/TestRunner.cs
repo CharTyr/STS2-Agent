@@ -516,8 +516,8 @@ internal static class TestRunner
         yield return ("CombatGate.ActionsAskTheSharedGate", () => Task.Run(GameStateCombatGateContractTests.AvailableActionsAskTheSharedGate));
         yield return ("CombatGate.ReadinessProjectsTheGate", () => Task.Run(GameStateCombatGateContractTests.ReadinessIsAProjectionOfTheGate));
         yield return ("CombatGate.QueueReadIsCombatOnly", () => Task.Run(GameStateCombatGateContractTests.TheActionQueueIsReadOnlyInsideCombat));
-        yield return ("ActionSurface.SameActionsOnBothSurfaces", () => Task.Run(ActionSurfaceContractTests.BothSurfacesOfferTheSameActions));
-        yield return ("ActionSurface.SamePredicatesOnBothSurfaces", () => Task.Run(ActionSurfaceContractTests.BothSurfacesAskTheSamePredicates));
+        yield return ("ActionSurface.OneWalkDecidesWhatIsOffered", () => Task.Run(ActionSurfaceContractTests.OneWalkDecidesWhatIsOffered));
+        yield return ("ActionSurface.NeitherSurfaceDecidesForItself", () => Task.Run(ActionSurfaceContractTests.NeitherSurfaceDecidesForItself));
         yield return ("SourceShape.FilesStayWithinBudget", () => Task.Run(SourceShapeContractTests.NoSourceFileGrowsPastItsBudget));
         yield return ("SourceShape.BudgetsTrackTheirFiles", () => Task.Run(SourceShapeContractTests.BudgetsStayCloseToTheFilesTheyGuard));
         yield return ("ActionDiagnostics.NoWordlessRecoveryCatch", () => Task.Run(ActionDiagnosticsContractTests.NoRecoveryCatchSwallowsWithoutSayingSo));

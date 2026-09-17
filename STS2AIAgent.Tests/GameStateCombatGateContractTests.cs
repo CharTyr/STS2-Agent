@@ -34,34 +34,43 @@ internal static class GameStateCombatGateContractTests
     public static void AvailableActionsAskTheSharedGate()
     {
         var state = ReadSource();
-        var names = Flat(AgentSourceFixture.MethodBody(state, "BuildAvailableActionNames"));
-        var descriptors = Flat(AgentSourceFixture.MethodBody(state, "BuildAvailableActionsPayload"));
+        var walker = Flat(AgentSourceFixture.DeclarationBody(
+            state,
+            "private static List<ActionDescriptor> EnumerateAvailableActions("));
+        var names = Flat(AgentSourceFixture.DeclarationBody(
+            state,
+            "private static string[] BuildAvailableActionNames("));
+        var endpoint = Flat(AgentSourceFixture.DeclarationBody(
+            state,
+            "public static AvailableActionsPayload BuildAvailableActionsPayload()"));
 
-        // The name list receives the gate; only the descriptor endpoint, which is its own request,
-        // evaluates one. Neither may evaluate it twice.
+        // One walk decides what is offered. The /state name list receives the gate its own payload
+        // already evaluated; /actions/available is its own request and evaluates exactly one.
+        Assert.False(
+            walker.Contains("EvaluateCombatActionGate(", StringComparison.Ordinal),
+            "EnumerateAvailableActions must take the gate rather than evaluate one: a /state build has "
+            + "to share a single evaluation across its action list, combat payload and potion flags.");
         Assert.False(
             names.Contains("EvaluateCombatActionGate(", StringComparison.Ordinal),
-            "BuildAvailableActionNames must take the gate instead of evaluating one per action.");
-        Assert.Equal(1, Occurrences(descriptors, "EvaluateCombatActionGate("));
+            "BuildAvailableActionNames must pass the gate through, not evaluate a second one.");
+        Assert.Equal(1, Occurrences(endpoint, "EvaluateCombatActionGate("));
 
-        foreach (var body in new[] { names, descriptors })
-        {
-            Assert.Contains(
-                "if(CanEndTurn(currentScreen,combatState,requireButtonReady:false,combatActionGate:combatActionGate))",
-                body,
-                StringComparison.Ordinal);
-            Assert.Contains("if(CanPlayAnyCard(currentScreen,combatState,combatActionGate))", body, StringComparison.Ordinal);
-            Assert.Contains(
-                "if(CanUsePotion(currentScreen,combatState,runState,combatActionGate))",
-                body,
-                StringComparison.Ordinal);
+        // The gated predicates are consulted in the walk, with the gate handed to each.
+        Assert.Contains(
+            "if(CanEndTurn(currentScreen,combatState,requireButtonReady:false,combatActionGate:combatActionGate))",
+            walker,
+            StringComparison.Ordinal);
+        Assert.Contains("if(CanPlayAnyCard(currentScreen,combatState,combatActionGate))", walker, StringComparison.Ordinal);
+        Assert.Contains(
+            "if(CanUsePotion(currentScreen,combatState,runState,combatActionGate))",
+            walker,
+            StringComparison.Ordinal);
 
-            // The probes must not reach past the gate: CanUseCombatActions would evaluate the
-            // stability sampler a second time and could answer from a later moment than the gate.
-            Assert.False(
-                body.Contains("CanUseCombatActions(", StringComparison.Ordinal),
-                "A gated action list must not call CanUseCombatActions directly.");
-        }
+        // The probes must not reach past the gate: CanUseCombatActions would evaluate the stability
+        // sampler a second time and could answer from a later moment than the gate.
+        Assert.False(
+            walker.Contains("CanUseCombatActions(", StringComparison.Ordinal),
+            "A gated action list must not call CanUseCombatActions directly.");
     }
 
     public static void ReadinessIsAProjectionOfTheGate()

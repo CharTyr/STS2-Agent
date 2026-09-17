@@ -2,6 +2,35 @@
 
 > Release attribution is recorded against tags or release commits. Post-tag maintenance is listed separately; current validation limits are maintained in [PRODUCT_PLAN_CURRENT.md](https://github.com/CharTyr/STS2-Agent/blob/main/PRODUCT_PLAN_CURRENT.md).
 
+## Unreleased
+
+> Post-tag maintenance on `dev`, not in any build a player can download.
+
+### Changed
+
+- **The two action surfaces are one decision again.** `GET /state`'s `available_actions` and
+  `GET /actions/available`'s descriptors were two hand-written implementations of the same
+  question -- 301 and 609 lines consulting the same 50 `Can*` predicates to emit the same 55 action
+  names -- so every new action had to be added twice and nothing but a contract test noticed when
+  only one was updated. Both now report a single `EnumerateAvailableActions` walk: the name list is
+  a 12-line projection of it and the descriptor endpoint a 14-line wrapper.
+  `GameStateService.cs` drops from 8,559 to 8,295 lines. See ADR 0001.
+
+  Verified by replaying the live baseline on the refactored build: 45 back-to-back samples across
+  all twelve screens the baseline covered, **zero disagreements between the surfaces**, and twelve
+  action sets matching the baseline exactly -- including `PAUSE_MENU`'s empty set, where both
+  surfaces return an empty array. The one difference, a missing `discard_potion` on
+  `CARD_SELECTION`, was traced to the run holding no potions rather than to the change.
+
+  Emission order now follows the descriptor surface, so `crystal_*` appears in a different position
+  in `available_actions`. The set is unchanged and no client depends on the order: the play skill and
+  `state-invariants` both test membership.
+
+- `ActionSurface.*` now pins that neither surface decides for itself -- neither may name an action or
+  consult a `Can*` predicate of its own -- which is a stronger promise than the old "two
+  implementations agree". `AGENTS.md` and the game-actions spec describe adding an action in one
+  place instead of two.
+
 ## v0.12.5 - 2026-09-17
 
 > Two fixes to what the mod reports about itself, both found by driving a running game rather than by

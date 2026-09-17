@@ -66,9 +66,9 @@ internal static class SurfacedActionParityTests
 
     public static void ResolveRewardsDescriptorDoesNotRequireAnIndex()
     {
-        var payload = Flat(AgentSourceFixture.MethodBody(
+        var payload = Flat(AgentSourceFixture.DeclarationBody(
             AgentSourceFixture.Read(StatePath),
-            "BuildAvailableActionsPayload"));
+            "private static List<ActionDescriptor> EnumerateAvailableActions("));
 
         // ExecuteResolveRewardsAsync treats option_index/card_index as optional (absent means
         // "auto"), so requiring an index made callers send one that was then ignored.

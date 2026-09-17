@@ -11,10 +11,10 @@ internal static class UnlockScreenContractTests
         var rawStateSource = AgentSourceFixture.Read("STS2AIAgent/Game/GameStateService.cs");
         var resolveBody = AgentSourceFixture.WithoutWhitespace(
             AgentSourceFixture.MethodBody(rawStateSource, "ResolveNonModalScreen"));
-        var actionNamesBody = AgentSourceFixture.WithoutWhitespace(
-            AgentSourceFixture.MethodBody(rawStateSource, "BuildAvailableActionNames"));
-        var actionDescriptorsBody = AgentSourceFixture.WithoutWhitespace(
-            AgentSourceFixture.MethodBody(rawStateSource, "BuildAvailableActionsPayload"));
+        var walkerBody = AgentSourceFixture.WithoutWhitespace(
+            AgentSourceFixture.DeclarationBody(
+                rawStateSource,
+                "private static List<ActionDescriptor> EnumerateAvailableActions("));
         var canSelectBody = AgentSourceFixture.WithoutWhitespace(
             AgentSourceFixture.MethodBody(rawStateSource, "CanSelectDeckCard"));
 
@@ -32,26 +32,15 @@ internal static class UnlockScreenContractTests
             resolveBody[unlockScreenIndex..visibleGridIndex],
             StringComparison.Ordinal);
 
-        var unlockNameBranch = SliceUnlockBranch(
-            actionNamesBody,
+        // One walk feeds both surfaces, so the UNLOCK branch is pinned once instead of once per surface.
+        var unlockBranch = SliceUnlockBranch(
+            walkerBody,
             "if(CanEndTurn(currentScreen,combatState,requireButtonReady:false,combatActionGate:combatActionGate))");
-        Assert.Contains(
-            "if(CanConfirmUnlock(currentScreen)){names.Add(\"confirm_unlock\");}",
-            unlockNameBranch,
-            StringComparison.Ordinal);
-        Assert.Contains("returnnames.ToArray();", unlockNameBranch, StringComparison.Ordinal);
+        Assert.Contains("name=\"confirm_unlock\"", unlockBranch, StringComparison.Ordinal);
+        Assert.Contains("returndescriptors;", unlockBranch, StringComparison.Ordinal);
         Assert.False(
-            unlockNameBranch.Contains("select_deck_card", StringComparison.Ordinal),
-            "UNLOCK available_actions must not expose select_deck_card.");
-
-        var unlockDescriptorBranch = SliceUnlockBranch(
-            actionDescriptorsBody,
-            "if(CanEndTurn(currentScreen,combatState,requireButtonReady:false,combatActionGate:combatActionGate))");
-        Assert.Contains("name=\"confirm_unlock\"", unlockDescriptorBranch, StringComparison.Ordinal);
-        Assert.Contains("returnnewAvailableActionsPayload", unlockDescriptorBranch, StringComparison.Ordinal);
-        Assert.False(
-            unlockDescriptorBranch.Contains("select_deck_card", StringComparison.Ordinal),
-            "The action-descriptor endpoint must not expose select_deck_card on UNLOCK.");
+            unlockBranch.Contains("select_deck_card", StringComparison.Ordinal),
+            "UNLOCK must not expose select_deck_card on either action surface.");
 
         Assert.Contains(
             "if(currentScreenisNUnlockScreen){returnfalse;}",

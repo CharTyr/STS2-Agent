@@ -20,7 +20,7 @@ internal static class GameOverContractTests
             actionSource,
             StringComparison.Ordinal);
         Assert.Contains(
-            "names.Add(\"continue_game_over\")",
+            "name=\"continue_game_over\"",
             stateSource,
             StringComparison.Ordinal);
         Assert.Contains("continue_game_over", promptSource, StringComparison.Ordinal);
@@ -44,7 +44,7 @@ internal static class GameOverContractTests
             stateSource.Contains("can_return_to_main_menu=true", StringComparison.Ordinal),
             "GAME_OVER must never advertise return_to_main_menu before the native summary button is visible and enabled.");
         Assert.Contains(
-            "if(gameOver.can_return_to_main_menu){names.Add(\"return_to_main_menu\")",
+            "if(gameOver.can_return_to_main_menu){descriptors.Add(newActionDescriptor{name=\"return_to_main_menu\"",
             stateSource,
             StringComparison.Ordinal);
     }
@@ -144,7 +144,7 @@ internal static class GameOverContractTests
             stateSource,
             StringComparison.Ordinal);
         Assert.Contains(
-            "if(gameOver.can_continue){names.Add(\"continue_game_over\")",
+            "if(gameOver.can_continue){descriptors.Add(newActionDescriptor{name=\"continue_game_over\"",
             stateSource,
             StringComparison.Ordinal);
     }

@@ -31,10 +31,11 @@ internal static class SourceShapeContractTests
     /// </summary>
     private static readonly IReadOnlyDictionary<string, int> Budgets = new Dictionary<string, int>(StringComparer.Ordinal)
     {
-        // 318 methods in one 7.3k-line class. Three separable concerns are fused here: the raw
-        // /state payload builders, the compact agent_view builders (BuildAgent*, ~690 lines), and
-        // the action-availability surface. See docs/adr/0001-single-action-surface.md.
-        ["STS2AIAgent/Game/GameStateService.cs"] = 8650,
+        // Was 8,559 lines until ADR 0001 collapsed the two action surfaces into one walk; the
+        // budget came down with it, which is what the ratchet is for. Two separable concerns are
+        // still fused here: the raw /state payload builders and the compact agent_view builders
+        // (BuildAgent*, ~690 lines).
+        ["STS2AIAgent/Game/GameStateService.cs"] = 8400,
         // 60 Execute* handlers and 62 WaitFor* stabilizers. Unlike the file above this one is not
         // tangled -- it is one clear pattern repeated sixty times -- so splitting it by room
         // (combat / map / shop / co-op / menus) is mechanical whenever someone wants the room.

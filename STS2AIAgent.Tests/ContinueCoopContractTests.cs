@@ -30,13 +30,12 @@ internal static class ContinueCoopContractTests
 
         // Each exposure list must carry its own guard: a descriptor without the name entry (or the
         // reverse) leaves a rule-following client unable to discover or legally call the action.
-        var descriptors = AgentSourceFixture.MethodBody(state, "BuildAvailableActionsPayload");
-        Assert.Contains(Guard, descriptors, StringComparison.Ordinal);
-        Assert.Contains("name = \"continue_ai_teammate\"", descriptors, StringComparison.Ordinal);
-
-        var names = AgentSourceFixture.MethodBody(state, "BuildAvailableActionNames");
-        Assert.Contains(Guard, names, StringComparison.Ordinal);
-        Assert.Contains("names.Add(\"continue_ai_teammate\")", names, StringComparison.Ordinal);
+        // Both surfaces report one walk, so the guard is pinned once.
+        var walker = AgentSourceFixture.DeclarationBody(
+            state,
+            "private static List<ActionDescriptor> EnumerateAvailableActions(");
+        Assert.Contains(Guard, walker, StringComparison.Ordinal);
+        Assert.Contains("name = \"continue_ai_teammate\"", walker, StringComparison.Ordinal);
     }
 
     public static void ExecutorRechecksTheProbeAndFailsRetryably()
