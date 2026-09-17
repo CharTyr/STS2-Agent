@@ -7225,6 +7225,17 @@ internal static class GameStateService
             return "MULTIPLAYER_LOBBY";
         }
 
+        // Death leaves the combat room active, so the combat branch below claimed every game-over
+        // screen and its own switch arm was unreachable: a 2026-09-17 live pass caught eight samples
+        // whose only offered action was continue_game_over, and all eight reported COMBAT. That name
+        // is documented in docs/api.md, the play skill routes on it, and run_sts2_validation.py
+        // branches on it, so an agent following the contract waited for a screen it would never see.
+        // This has to run before the combat branch for the same reason the capstone branch above does.
+        if (currentScreen is NGameOverScreen)
+        {
+            return "GAME_OVER";
+        }
+
         if (FindActiveCombatRoom(currentScreen) != null)
         {
             return "COMBAT";

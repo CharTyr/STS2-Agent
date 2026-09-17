@@ -143,6 +143,45 @@ internal static class ScreenResolutionContractTests
         Assert.Contains("return currentScreen is not NCardsViewScreen;", closed, StringComparison.Ordinal);
     }
 
+    /// <summary>
+    /// The game-over screen is named before the combat room can claim it.
+    /// </summary>
+    /// <remarks>
+    /// Death leaves the combat room active, so <c>FindActiveCombatRoom</c> still answers on the
+    /// game-over screen and the switch arm below it was unreachable. A live pass on 2026-09-17
+    /// caught eight samples whose only offered action was <c>continue_game_over</c> -- unambiguously
+    /// the end of a run -- and all eight reported <c>COMBAT</c>; across 2,346 samples not one ever
+    /// reported <c>GAME_OVER</c>. The name is documented in <c>docs/api.md</c>, the play skill routes
+    /// on it and <c>run_sts2_validation.py</c> branches on it, so an agent following the contract
+    /// waited for a screen it would never see and only recovered through the action list.
+    ///
+    /// Offline tests could not have found this: the ordering is only wrong when the two conditions
+    /// overlap, which needs a real death in a real fight.
+    /// </remarks>
+    public static void GameOverIsNamedBeforeTheCombatRoomClaimsIt()
+    {
+        var rawState = AgentSourceFixture.Read("STS2AIAgent/Game/GameStateService.cs");
+        var resolveBody = Flat(AgentSourceFixture.MethodBody(rawState, "ResolveNonModalScreen"));
+
+        const string gameOverGuard = "if(currentScreenisNGameOverScreen)";
+        var gameOverIndex = resolveBody.IndexOf(gameOverGuard, StringComparison.Ordinal);
+        var combatIndex = resolveBody.IndexOf("FindActiveCombatRoom(currentScreen)", StringComparison.Ordinal);
+
+        Assert.True(
+            gameOverIndex >= 0,
+            "ResolveNonModalScreen must claim NGameOverScreen with its own guard. The switch arm alone "
+            + "is unreachable, because the combat room is still active when a run ends.");
+        Assert.True(combatIndex >= 0, "The combat branch must remain covered by this contract.");
+        Assert.True(
+            gameOverIndex < combatIndex,
+            "NGameOverScreen must resolve before FindActiveCombatRoom can report COMBAT. Live evidence: "
+            + "with the guard after it, every game-over sample reported COMBAT instead.");
+
+        // The guard answers GAME_OVER and nothing else.
+        var guardSlice = resolveBody[gameOverIndex..combatIndex];
+        Assert.Contains("return\"GAME_OVER\";", guardSlice, StringComparison.Ordinal);
+    }
+
     public static void CapstoneContainerPagesAreNamedAndNotDecisionScreens()
     {
         var rawState = AgentSourceFixture.Read("STS2AIAgent/Game/GameStateService.cs");

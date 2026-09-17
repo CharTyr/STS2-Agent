@@ -1,0 +1,159 @@
+# Evidence
+
+## Destructive verification (every new contract turned red first, then was restored byte-for-byte)
+
+| # | What was broken | Result |
+| --- | --- | --- |
+| 1 | `runningAction = RunManager.Instance.ActionExecutor?...` hoisted above the `if (combatState != null && CombatManager.Instance.IsInProgress)` guard -- i.e. the exact shape of the shipped regression | `FAIL CombatGate.QueueReadIsCombatOnly` |
+| 2 | A second, unguarded `RunManager.Instance.ActionQueueSet` read added elsewhere in `BuildStatePayload` | `FAIL CombatGate.QueueReadIsCombatOnly` |
+| 3 | `lethal_risks` row deleted from the `combat` field table in docs/api.md | gate names the missing field: "internal sealed class CombatPayload serializes fields the docs/api.md '#### `combat` 顶层字段' table does not list: lethal_risks" |
+| 4 | `ghost_field` row added to that table | gate names the stale field: "...lists fields internal sealed class CombatPayload no longer serializes: ghost_field" |
+| 5 | `snapshot_stabilizing` row deleted from the `reason` table | gate names the missing code: "EvaluateCombatActionGate can answer with reason codes the docs/api.md ... section never mentions: snapshot_stabilizing" |
+
+Cases 1-2 restored with `cmp` proving the file byte-identical; cases 3-5 restored the same way and
+the gate returned to green. Cases 3-5 are now permanent cases in
+`scripts/test-verification-gates.ps1` (9c / 9d / 9e), which previously had three api-facts cases
+covering only the version string, the screen enum and the default port.
+
+## Second pass: destructive verification of the widened gate
+
+Re-run after the gate was extended from three records to the whole `/state` surface. Every case
+turned red with a message naming the specific field, code or rename, and both mutated files were
+restored byte-identically (`cmp` clean).
+
+| # | What was broken | Which check caught it |
+| --- | --- | --- |
+| A | `lethal_risks` row removed from the `combat` table | per-table (`CombatPayload`) |
+| B | `save_verified` row removed from the `game_over` table | per-table (`GameOverPayload`) |
+| C | `native_profile_id` row removed from the top-level table | per-table (`GameStatePayload`) |
+| D | `snapshot_stabilizing` removed from the `reason` table | reason vocabulary |
+| E | a `ghost` row added to the `combat` table | per-table, stale direction |
+| F | a field added to `CombatOrbPayload`, which owns no table | coarse coverage net |
+| G | the rename table changed to claim `can_embark -> disembark` | rename table vs builders |
+| H | `service` row removed from the `/health` table | `GET /health` keys |
+
+F is the one that matters most: it is the only check that catches a field on a record nobody wrote
+a table for, which is exactly how 91 of them shipped.
+
+**The self-test caught a real defect in this round's own work.** The new `/health` check reads
+`Router.cs`, which the CI fixture did not copy, so the baseline case went red immediately -- "passes
+on my machine, fails in CI", found before the commit rather than after.
+
+## Audit, before and after
+
+`GameStateService.cs` payload records against `docs/api.md`, matching inline code after stripping
+fenced blocks:
+
+- Before: **91 fields across 23 records** named nowhere. Whole sub-structures missing:
+  `multiplayer_lobby` (16/18), `character_select` (14/17), `game_over` (8/11), `timeline` (5/7),
+  `modal` (4/6), `multiplayer` (4/5), `session` (2/3).
+- After: **0**. The gate now reports 488 fields across 56 records, 16 per-table matches, 19 reason
+  codes, 43 compact renames and 21 `/health` keys.
+
+## Offline suites, after the round
+
+| Check | Result |
+| --- | --- |
+| `dotnet run --project STS2AIAgent.Tests -c Release` | **413 PASS / 0 FAIL** (408 at the start) |
+| `cd mcp_server && uv run --locked python -m unittest discover -s tests` | **224 tests OK** (222 at the start) |
+| `python scripts/check_verification_gates.py` | **9 gates green** (api-doc, api-facts, doc-marks, docs-tracked, lockfile, packaged-links, ps1-syntax, script-encoding, sh-syntax) |
+| `scripts/test-verification-gates.ps1` | **29 cases pass** (22 before) |
+| `python scripts/check_release_metadata.py` | `Release metadata consistent: 0.12.4` |
+| `scripts/preflight-release.ps1` | exit 0 |
+| `dotnet build STS2AIAgent/STS2AIAgent.csproj -c Release --no-incremental` | 0 warnings, 0 errors |
+
+The api-facts gate now reports, in addition to its three existing facts:
+
+```
+  - #### `combat` 顶层字段: 7 field(s) match internal sealed class CombatPayload
+  - #### `combat.action_readiness`: 23 field(s) match internal sealed class CombatActionReadinessPayload
+  - #### `combat.lethal_risks[]`: 10 field(s) match internal sealed class CombatLethalRiskPayload
+  - 19 action_readiness reason code(s) from EvaluateCombatActionGate are documented
+```
+
+## Third pass: the codebase's own shape
+
+Measured 2026-09-16 over 82 mod source files, 31,632 lines.
+
+| | Lines | Share |
+| --- | ---: | ---: |
+| `GameStateService.cs` | 8,559 | 27.1% |
+| `GameActionService.cs` | 7,008 | 22.2% |
+| both | 15,567 | **49.2%** |
+
+Inside them: `GameStateService` is one 7,290-line class of 318 methods with three concerns fused
+(raw `/state` builders 40%, compact `agent_view` 11%, action availability, plus 176 small
+predicates); `GameActionService` is 60 `Execute*` handlers and 62 `WaitFor*` stabilizers, one
+pattern repeated, nothing tangled.
+
+**The largest single debt, found by comparing the two action surfaces mechanically:**
+
+| | Lines | `Can*` predicates | action names |
+| --- | ---: | ---: | ---: |
+| `BuildAvailableActionNames` | 301 | 50 | 55 |
+| `BuildAvailableActionsPayload` | 609 | 50 | 55 |
+| intersection | — | **50, identical** | **55, identical** |
+
+910 lines answering one question twice, agreeing today only because someone has kept them agreeing.
+Emission order already diverges from the 28th entry. Not rewritten this round -- see
+`docs/adr/0001-single-action-surface.md` -- because those lines decide what an agent may do and the
+0.12.4 regression is what rewriting such code on offline evidence looks like.
+
+### Destructive verification, third pass
+
+| # | What was broken | Result |
+| --- | --- | --- |
+| I | `names.Add("brand_new_action")` added to one surface only | `FAIL ActionSurface.SameActionsOnBothSurfaces`, naming `brand_new_action` |
+| J | `CanOpenChest` replaced with `true` in the descriptor surface | `FAIL ActionSurface.SamePredicatesOnBothSurfaces`, naming `CanOpenChest` |
+| K | `AgentLoop.cs` (768 lines) padded past the 1000-line default | `FAIL SourceShape.FilesStayWithinBudget`, naming the file and its budget |
+| L | `AgentRuntime.cs` budget raised from 1450 to 5000 | `FAIL SourceShape.BudgetsTrackTheirFiles`: "lower the budget to match" |
+| M | `knowledge.py` (574 lines) padded past the 700-line default | Python ratchet fails, naming the module |
+
+All restored byte-identically.
+
+## Found by CI, fixed in this branch
+
+The `contracts` job failed on the first push, and the failure was this round's own:
+
+```
+[gate] api-facts: ok
+  - docs/api.md mod_version 0.12.4 matches ...
+UnicodeEncodeError: 'charmap' codec can't encode characters in position 18-21
+```
+
+Gate notes quote what they check, and what they check now includes Chinese section headings from
+`docs/api.md`. The Windows CI runner's stdout is cp1252, so `print` raised -- **a gate that passed
+still exited 1**. The worse case never fired but was already possible: a gate that genuinely failed
+would have had its message replaced by an encoding traceback, and `doc-marks` has carried Chinese in
+its failure text since long before this branch.
+
+Fixed by reconfiguring the gate's own streams to UTF-8 with `errors="replace"`. Reproduced locally
+with `PYTHONIOENCODING=cp1252`, both paths checked: a passing run now exits 0, and a deliberately
+failed `api-facts` prints its message with the heading intact instead of a traceback. Self-test case
+9i runs the suite under cp1252 and requires exit 0 with no `UnicodeEncodeError`; removing
+`use_utf8_streams()` turns it red.
+
+## Health sweep (beyond the round's own scope)
+
+| Check | Result |
+| --- | --- |
+| `npm audit` | 0 vulnerabilities |
+| MCP server builds its tool surface on every profile | guided 11 / layered 19 / full 74 tools |
+| Open GitHub issues | 0 |
+| Last 8 CI Validate runs | all success |
+| `origin/dev` vs `origin/main` | dev ahead by 2 commits, documentation only |
+| Workshop build vs released tag | `d0c6fbd` (Workshop third build) is an ancestor of `v0.12.4`, and `d0c6fbd..v0.12.4` touches only `.md` files -- the Workshop, the GitHub release, `main` and `dev` all carry the same code |
+
+## Fingerprint writer, smoke-tested
+
+`Write-BuildFingerprint` was run against a two-file fixture. SHA256 of the 5-byte file came back
+`2CF24DBA5FB0A30E26E83B2AC5B9E29E1B161E5C1FA7425E73043362938B9824`, which is SHA256("hello"); the
+summed byte count, the relative forward-slash paths, the source commit and the dirty flag were all
+correct.
+
+## Not covered
+
+- **No live validation.** This round changes documentation, tests and scripts only. No runtime mod
+  code was touched, so the published 0.12.4 third build is unaffected and its live evidence stands.
+- **Not published.** The work is committed to a local branch; pushing it and opening the
+  `-> dev` pull request is the maintainer's call.

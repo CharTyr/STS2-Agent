@@ -2,11 +2,130 @@
 
 > Release attribution is recorded against tags or release commits. Post-tag maintenance is listed separately; current validation limits are maintained in [PRODUCT_PLAN_CURRENT.md](https://github.com/CharTyr/STS2-Agent/blob/main/PRODUCT_PLAN_CURRENT.md).
 
+## v0.12.5 - 2026-09-17
+
+> Two fixes to what the mod reports about itself, both found by driving a running game rather than by
+> reading the code, and both re-verified live on the patched build. `/state.screen` reports
+> `GAME_OVER` again after a death, and a game action that fails now names the reason the game gave
+> instead of one blank sentence shared by twelve different actions.
+>
+> Nothing changes for a run that is going well: no cards, no numbers, no save format.
+>
+> Packaging now writes a `build-fingerprint.json` beside each artifact — every file with its SHA256,
+> the summed byte count Steam reports as `file_size`, and the source commit — so a build can be
+> identified from a bug report without collecting those numbers by hand afterwards.
+
+### Added
+
+- `docs/api.md` documents the `/state` `combat` object's own fields for the first time.
+  `action_readiness`, `players[]`, `end_turn_will_kill_player` and `lethal_risks[]` all shipped and
+  all reach agents through the compact `agent_view`, and none of them were described anywhere a
+  client could read. The new tables cover the three payload records and every `reason` code
+  `action_readiness` can answer with, together with what each one means for an agent deciding
+  whether to wait.
+- The `api-facts` gate now pins those tables to the records that produce them: `CombatPayload`,
+  `CombatActionReadinessPayload` and `CombatLethalRiskPayload` field-for-field, plus every reason
+  code `EvaluateCombatActionGate` can emit. A field added to the payload without a documentation
+  row, or a documented field the mod no longer sends, fails the gate by name. Three destructive
+  cases in `scripts/test-verification-gates.ps1` prove it.
+- `scripts/lib-build-fingerprint.ps1` writes a `build-fingerprint.json` next to every packaged
+  artifact: each file with its byte count and SHA256, the summed byte count Steam reports as
+  `file_size`, and the commit the tree was built from with a dirty flag. Republishing one version
+  number means size and hash are the only way to tell builds apart, and until now those numbers
+  were collected by hand after the upload. Both `package-release.ps1` and
+  `package-steam-workshop.ps1` emit one.
+- The play skill tells an agent what `combat.action_readiness` means: a `COMBAT` screen missing
+  `play_card` is one of the gate's reasons, not a lost turn, and the reason says whether to clear a
+  modal, wait, or leave a paused run alone. The in-game agent reads the same contract.
+- `docs/api.md` now describes the whole `/state` surface. Seven sub-structures had no section at
+  all -- `session`, `multiplayer`, `multiplayer_lobby`, `character_select`, `timeline`, `modal` and
+  `game_over` -- and nine top-level fields were missing from its own field table. 91 fields across
+  23 payload records were named nowhere a client could read, including three screens an agent has
+  to drive and the `session` block the play skill tells agents to route on first.
+- `docs/api.md` documents the compact `agent_view` renames. That view is what MCP `get_game_state`
+  returns by default and it renames 43 keys (`can_embark` becomes `embark`, `enough_gold` becomes
+  `affordable`, every `index` becomes `i`), so a client following the `/state` names reads
+  `undefined` rather than an error. The mapping existed only in the builder methods.
+- `GET /health` documents `service`, `api_host` and `api_port`, which had only ever appeared in the
+  example JSON.
+- Two contracts now guard the shape of the codebase itself, because nothing was counting. Two files
+  hold 49% of the mod's C# (`GameStateService.cs` at 8,559 lines and `GameActionService.cs` at
+  7,008, against 31,632 across 82 files), and neither got there by a decision.
+  `SourceShapeContractTests` and `mcp_server/tests/test_source_shape.py` give every file a line
+  budget -- named budgets for the four largest, a default for the rest -- and budgets only go down.
+  A second check fails when a budget drifts far above the file it guards, so shrinking a file
+  tightens its ratchet instead of leaving room to regrow.
+- `ActionSurface.SameActionsOnBothSurfaces` and `ActionSurface.SamePredicatesOnBothSurfaces` pin the
+  two action surfaces to each other. `GET /state`'s `available_actions` and
+  `GET /actions/available`'s descriptors are one decision written twice -- 301 and 609 lines
+  consulting the same 50 `Can*` predicates to emit the same 55 action names, verified field for
+  field -- so adding an action to one alone now fails by the name of the action that was forgotten.
+  The duplication itself is not removed: it decides what an agent is allowed to do, and rewriting it
+  on offline evidence alone is how the 0.12.4 regression happened. ADR 0001 records the plan and the
+  live-validation it waits for.
+- `.trellis/spec/mod/architecture.md` gains a "Code shape and its known debts" section with the
+  measurements, what distinguishes the two monoliths (one is repetition, one is three fused
+  concerns), and where new code belongs.
+- The `api-facts` gate grew to match: sixteen payload records checked field-for-field against their
+  own table, every `GET /health` key against its table, the compact rename table against the
+  renames the `BuildAgent*Payload` methods actually perform, and under all of it a coarse net
+  requiring every serialized field of every `/state` payload record to be named somewhere in
+  `docs/api.md`. Six destructive cases in the gate self-test cover the new paths.
+
+### Fixed
+
+- **A faulted game task now names the exception that faulted it.** Eleven actions answer 409 through
+  `DescribeGameTaskFailure` -- save and quit, the crystal sphere, event proceed, rest options, three
+  purchases, both lobby operations and `run_console_command` -- and every one of them said the same
+  sentence for a request the game legitimately rejected and a request that broke the mod. A live pass
+  hit it: `run_console_command room Treasure`, issued while already standing in a treasure room,
+  answered `Console command failed: the game task faulted.` with nothing to act on, and the bounded
+  retry loop in `run_sts2_validation.py` then repeated it twenty times. That handler's *synchronous*
+  branch already named its exception -- the same dishonesty was fixed there once, for `bestiary` --
+  and its asynchronous twin was missed. `remove_card_at_shop`, which reaches its 409 through the pure
+  `BackgroundTaskOutcome` decision layer rather than that helper, gets the same detail from the same
+  shared describer, so the twelfth path cannot drift from the other eleven.
+
+- **`/state.screen` reports `GAME_OVER` again after a death.** Death leaves the combat room active,
+  so `ResolveNonModalScreen`'s `FindActiveCombatRoom => "COMBAT"` guard claimed every game-over
+  screen and its own `NGameOverScreen` switch arm was unreachable. A live pass caught eight samples
+  whose only offered action was `continue_game_over` and all eight reported `COMBAT`; across 2,346
+  samples the name `GAME_OVER` never appeared once. `docs/api.md` documents it, the play skill routes
+  on it and `run_sts2_validation.py` branches on it, so an agent following the contract waited for a
+  screen it would never see and recovered only through the action list. Re-verified live on the
+  patched build: two independent deaths, 10 game-over samples, all reporting `GAME_OVER`, with
+  `continue_game_over` and `return_to_main_menu` still settling the run and `save_verified` still
+  reaching `true`. All 12 screens the baseline covered were re-sampled and none changed name.
+  `ScreenResolution.GameOverBeforeCombatRoom` pins the ordering.
+
+- `docs/api.md` said `shop.cards[]`, `shop.relics[]` and `shop.potions[]` carry an `available`
+  field. None of those three records has ever had one -- only `shop.card_removal` does -- so an
+  agent branching on it read `undefined` and could not tell a sold-out slot from an affordable one.
+  The three tables now document `is_stocked` and `enough_gold`, and say which one answers "can I
+  buy this".
+- The `run` field table was split in two by a stray blank line, so `ascension` and
+  `ascension_effects[]` rendered as a separate headerless table.
+- `AGENTS.md`'s "add a new action" walkthrough sent readers to `BuildAvailableActionDescriptors`,
+  a method that does not exist. The real one is `BuildAvailableActionsPayload`.
+- The verification gates crashed instead of reporting on a console that is not UTF-8. Gate messages
+  quote the Chinese section headings of `docs/api.md`, and the Windows CI runner's stdout is cp1252,
+  so printing one raised `UnicodeEncodeError`: a gate that **passed** still exited 1, and a gate that
+  failed would have had its real message replaced by an encoding traceback. The gates now write
+  UTF-8 with a replacing error handler, and the self-test runs the suite under `PYTHONIOENCODING=cp1252`.
+- The gate's C# property extractor missed identifiers escaped with `@`, so `public EventPayload?
+  @event` read as "the docs list a field the code does not have".
+- A source contract now pins the in-combat guard around the action-queue read in
+  `EvaluateCombatActionGate` (`CombatGate.QueueReadIsCombatOnly`). That guard is what the second
+  v0.12.4 re-cut had to add: reading `RunManager.ActionExecutor` / `ActionQueueSet` outside a fight
+  failed every `/state` request with a `NullReferenceException`, and 408 offline tests and nine
+  gates all passed that build. The contract also keeps the gate the only place in the state builder
+  that touches those two members, so the same failure cannot return through a second call site.
+
 ## v0.12.4 - 2026-09-15
 
 > Distributed to the Steam Workshop on 2026-09-15 (item 3796486050, public, `file_size` 1233413 equal to the local
 > content bytes, `time_updated` 19:38:00), from commit `4b8e7c5`. The GitHub tag and release for `v0.12.4` followed
-> on 2026-09-16, pointing at the `dev -> main` merge that carries both re-cuts below;
+> on 2026-09-16, pointing at the `dev -> main` merge `3a4ec95` (PR #139) that carries both re-cuts below;
 > the release asset is 557906 bytes, SHA256 `AD970DB1204A0DC37602A2751935E87E5B87FC502B21B00E47B2699C4A98EC57`.
 >
 > **The same version number was rebuilt twice.** The first build could contradict itself inside one

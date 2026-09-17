@@ -128,6 +128,83 @@ internal static class GameStateCombatGateContractTests
             StringComparison.Ordinal);
     }
 
+    /// <summary>
+    /// The action queue is read inside a fight and nowhere else.
+    /// </summary>
+    /// <remarks>
+    /// This is the contract the 0.12.4 re-cut broke. The gate runs before the screen checks so that
+    /// one evaluation can answer every caller, which put the queue read ahead of everything that
+    /// knew a fight was up: on the main menu <c>RunManager</c> has no <c>ActionExecutor</c> and no
+    /// <c>ActionQueueSet</c>, so every <c>/state</c> request failed with a NullReferenceException
+    /// and the mod was unusable outside combat. Offline tests and all nine gates passed that build.
+    ///
+    /// Two things are pinned. The reads live inside the in-combat guard, and the gate is the only
+    /// place in the state builder that touches those two members at all -- so the same mistake
+    /// cannot come back by adding an unguarded read somewhere else in the same file.
+    /// </remarks>
+    public static void TheActionQueueIsReadOnlyInsideCombat()
+    {
+        var state = ReadSource();
+
+        foreach (var member in new[] { "RunManager.Instance.ActionExecutor", "RunManager.Instance.ActionQueueSet" })
+        {
+            Assert.Equal(1, Occurrences(state, member));
+        }
+
+        var gate = AgentSourceFixture.DeclarationBody(
+            state,
+            "private static CombatActionGate EvaluateCombatActionGate(");
+        var guarded = BlockAfter(gate, "if (combatState != null && CombatManager.Instance.IsInProgress)");
+
+        foreach (var member in new[] { "RunManager.Instance.ActionExecutor", "RunManager.Instance.ActionQueueSet" })
+        {
+            Assert.True(
+                guarded.Contains(member, StringComparison.Ordinal),
+                member + " must be read inside 'if (combatState != null && CombatManager.Instance.IsInProgress)'. "
+                    + "Outside a fight RunManager has neither, and reading them there failed every /state request.");
+        }
+
+        // The guarded block is the whole of the gate's queue reading: nothing may read those
+        // members in the gate's unguarded prologue or epilogue.
+        var outsideGuard = gate.Replace(guarded, string.Empty, StringComparison.Ordinal);
+        foreach (var member in new[] { "RunManager.Instance.ActionExecutor", "RunManager.Instance.ActionQueueSet" })
+        {
+            Assert.False(
+                outsideGuard.Contains(member, StringComparison.Ordinal),
+                member + " is read outside the in-combat guard inside EvaluateCombatActionGate.");
+        }
+    }
+
+    /// <summary>Brace-matched block that follows a statement, on unflattened source.</summary>
+    private static string BlockAfter(string source, string statement)
+    {
+        var start = source.IndexOf(statement, StringComparison.Ordinal);
+        Assert.True(start >= 0, "EvaluateCombatActionGate no longer contains: " + statement);
+
+        var opening = source.IndexOf('{', start + statement.Length);
+        Assert.True(opening >= 0, statement + " is no longer followed by a block.");
+
+        var depth = 0;
+        for (var index = opening; index < source.Length; index++)
+        {
+            if (source[index] == '{')
+            {
+                depth++;
+            }
+            else if (source[index] == '}')
+            {
+                depth--;
+                if (depth == 0)
+                {
+                    return source[opening..(index + 1)];
+                }
+            }
+        }
+
+        Assert.True(false, statement + ": block braces never balanced.");
+        return string.Empty;
+    }
+
     private static string ReadSource() => AgentSourceFixture.Read(StatePath);
 
     private static string Flat(string source) => AgentSourceFixture.WithoutWhitespace(source);

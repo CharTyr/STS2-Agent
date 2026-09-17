@@ -443,6 +443,7 @@ internal static class TestRunner
         yield return ("ScreenResolution.PatchNotes", () => Task.Run(ScreenResolutionContractTests.PatchNotesClosePathIsWidenedWithoutWeakeningSubmenus));
         yield return ("ScreenResolution.InspectOverlays", () => Task.Run(ScreenResolutionContractTests.InspectOverlaysCloseThroughTheirOwnClose));
         yield return ("ScreenResolution.CapstoneContainerPages", () => Task.Run(ScreenResolutionContractTests.CapstoneContainerPagesAreNamedAndNotDecisionScreens));
+        yield return ("ScreenResolution.GameOverBeforeCombatRoom", () => Task.Run(ScreenResolutionContractTests.GameOverIsNamedBeforeTheCombatRoomClaimsIt));
         yield return ("ScreenResolution.CapstonePagesOneBackStep", () => Task.Run(ScreenResolutionContractTests.CapstonePagesOfferOneBackStepAndNeverThePausePage));
         yield return ("TimelineIndex.OneSpace", () => Task.Run(TimelineIndexContractTests.ExecutorIndexesTheSameSlotListTheStateExposes));
         yield return ("TimelineIndex.NonActionableRejected", () => Task.Run(TimelineIndexContractTests.NonActionableSlotsAreRejectedExplicitly));
@@ -514,7 +515,13 @@ internal static class TestRunner
         yield return ("CombatGate.OneEvaluationPerStateBuild", () => Task.Run(GameStateCombatGateContractTests.OneStateBuildEvaluatesTheGateOnce));
         yield return ("CombatGate.ActionsAskTheSharedGate", () => Task.Run(GameStateCombatGateContractTests.AvailableActionsAskTheSharedGate));
         yield return ("CombatGate.ReadinessProjectsTheGate", () => Task.Run(GameStateCombatGateContractTests.ReadinessIsAProjectionOfTheGate));
+        yield return ("CombatGate.QueueReadIsCombatOnly", () => Task.Run(GameStateCombatGateContractTests.TheActionQueueIsReadOnlyInsideCombat));
+        yield return ("ActionSurface.SameActionsOnBothSurfaces", () => Task.Run(ActionSurfaceContractTests.BothSurfacesOfferTheSameActions));
+        yield return ("ActionSurface.SamePredicatesOnBothSurfaces", () => Task.Run(ActionSurfaceContractTests.BothSurfacesAskTheSamePredicates));
+        yield return ("SourceShape.FilesStayWithinBudget", () => Task.Run(SourceShapeContractTests.NoSourceFileGrowsPastItsBudget));
+        yield return ("SourceShape.BudgetsTrackTheirFiles", () => Task.Run(SourceShapeContractTests.BudgetsStayCloseToTheFilesTheyGuard));
         yield return ("ActionDiagnostics.NoWordlessRecoveryCatch", () => Task.Run(ActionDiagnosticsContractTests.NoRecoveryCatchSwallowsWithoutSayingSo));
+        yield return ("ActionDiagnostics.FaultedTasksNameTheirException", () => Task.Run(ActionDiagnosticsContractTests.FaultedGameTasksNameTheirException));
         yield return ("CardViewer.BranchesPrecedeGrid", () => Task.Run(CardViewerScreenContractTests.ViewerBranchesPrecedeTheVisibleGrid));
         yield return ("CardViewer.ClosableViewerSameSource", () => Task.Run(CardViewerScreenContractTests.ClosableViewerSetIsSharedByProbeAndExecutor));
         yield return ("CardViewer.SubmenuStackBase", () => Task.Run(CardViewerScreenContractTests.SubmenuStackLookupUsesTheBaseClass));

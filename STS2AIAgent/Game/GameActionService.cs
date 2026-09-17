@@ -3795,11 +3795,23 @@ internal static class GameActionService
     }
 
     /// <summary>
-    /// Failure reason for a game task that already finished unsuccessfully, without re-reading
-    /// <c>Task.Exception</c> at the call site. Kept neutral instead of reusing
+    /// Failure reason for a game task that already finished unsuccessfully, read here once so no
+    /// call site has to touch <c>Task.Exception</c> itself. Kept separate from
     /// <c>BackgroundTaskOutcome.DescribeFailure</c>: that helper's wording is scoped to shop
     /// purchases, while these sites span save, rest, event, lobby, and console actions.
     /// </summary>
+    /// <remarks>
+    /// The fault's own exception is named, because "the game task faulted" is the same sentence for
+    /// a command the game rejected and a command that broke the mod. A 2026-09-17 live pass hit
+    /// exactly that: <c>run_console_command room Treasure</c>, issued while already standing in a
+    /// treasure room, answered 409 <c>Console command failed: the game task faulted.</c> with
+    /// nothing to act on. That handler's *synchronous* branch already names its exception -- the
+    /// same dishonesty was fixed there once, for <c>bestiary</c>, and the asynchronous branch that
+    /// reaches this helper was missed.
+    ///
+    /// Reading <c>Task.Exception</c> also marks the fault observed, which is what
+    /// <c>ObserveBackgroundTask</c> does for the tasks that outlive their request.
+    /// </remarks>
     private static string DescribeGameTaskFailure(Task task)
     {
         if (task.IsCanceled)
@@ -3807,7 +3819,43 @@ internal static class GameActionService
             return "the game task was canceled";
         }
 
-        return task.IsFaulted ? "the game task faulted" : "the game task failed";
+        if (!task.IsFaulted)
+        {
+            return "the game task failed";
+        }
+
+        return "the game task faulted" + DescribeTaskFault(task);
+    }
+
+    /// <summary>
+    /// The exception behind a faulted task, as a suffix to append to a failure sentence, or an empty
+    /// string when the task did not fault or carries nothing to name.
+    /// </summary>
+    /// <remarks>
+    /// Shared so the pure-decision path keeps its shape: <c>BackgroundTaskOutcome.DescribeFailure</c>
+    /// takes booleans on purpose and cannot see an exception, but its one call site holds the task
+    /// and can say what faulted. Appending only on a fault keeps the wording right for the outcomes
+    /// that have no exception -- a cancel, or a purchase the game simply refused.
+    /// </remarks>
+    private static string DescribeTaskFault(Task task)
+    {
+        if (!task.IsFaulted)
+        {
+            return string.Empty;
+        }
+
+        var failure = task.Exception?.InnerException ?? task.Exception?.GetBaseException();
+        if (failure == null)
+        {
+            return string.Empty;
+        }
+
+        // Every call site closes its sentence with a period, and a game exception often ends in its
+        // own punctuation -- live, "...while one was already occurring!" arrived and rendered as
+        // "occurring!.". This is the one place foreign text enters those sentences, so it is where
+        // the seam is smoothed.
+        var message = failure.Message.TrimEnd().TrimEnd('.', '!', '?');
+        return $": {failure.GetType().Name}: {message}";
     }
 
     /// <summary>
@@ -4274,11 +4322,15 @@ internal static class GameActionService
             result: purchaseTask.Status == TaskStatus.RanToCompletion ? purchaseTask.Result : null);
         if (!stable && purchaseFailure != null)
         {
-            throw new ApiException(409, "invalid_action", $"Card removal failed: {purchaseFailure}.", new
-            {
-                action = "remove_card_at_shop",
-                screen
-            });
+            throw new ApiException(
+                409,
+                "invalid_action",
+                $"Card removal failed: {purchaseFailure}{DescribeTaskFault(purchaseTask)}.",
+                new
+                {
+                    action = "remove_card_at_shop",
+                    screen
+                });
         }
 
         return new ActionResponsePayload

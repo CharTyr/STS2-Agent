@@ -90,6 +90,16 @@ Do not trust memory over the current payload. The game mutates screens in place,
 - Treat `state.session` as the source of truth for singleplayer vs multiplayer. Do not infer mode from screen names or tool names alone.
 - Resolve overlays before room flow. `MODAL`, `CARD_SELECTION`, reward-card overlays, and timeline overlays take priority over map or combat planning; `modal.underlying_screen` names the room underneath.
 - Treat `pending` responses as an instruction to stay inside the returned screen flow.
+- In combat, `combat.action_readiness` explains an action list that looks wrong, and it is the
+  field to read before concluding anything is broken. It is built from the same single gate
+  evaluation as that response's `available_actions`, so the two can never disagree:
+  `can_use_combat_actions = true` always carries `play_card` / `end_turn`. When it is false,
+  `reason` names the one thing in the way. `modal_open` means clear the modal first;
+  `hand_in_card_play`, `action_queue_unsettled`, `game_action_running`, `not_player_action_phase`
+  and `snapshot_stabilizing` all mean wait with `wait_until_actionable`; `combat_paused` means a
+  person paused the run, so wait rather than act. A missing `play_card` on `COMBAT` is one of
+  these, not a lost turn - do not spam re-reads inside the same frame and do not switch to an
+  unrelated action to make progress.
 - Treat `proceed` as a room action, not a universal fallback.
 
 ## Action Failure Rules

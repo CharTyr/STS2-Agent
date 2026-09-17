@@ -11,6 +11,157 @@ A session that walks this list needs the game installed, the mod built and deplo
 Legend: **[mod]** Mod API online only · **[combat]** needs a fight · **[room]** needs a specific
 screen · **[coop]** needs two instances · **[eye]** needs a human or model to watch behaviour.
 
+## Status as of 2026-09-17
+
+### Action-surface baseline (ADR 0001 step 1)
+
+Verified against the installed v0.12.4 third build (DLL SHA256 `0A8FBA67…611C`, identical to `dev`'s
+runtime code — `git diff v0.12.4 dev -- 'STS2AIAgent/**' 'mcp_server/src/**'` is empty, so no rebuild
+was needed and none was done). Isolated offline host, `--windowed --force-steam off --clientId
+2026091701`, API on `18080`, single instance, driven entirely over HTTP. Evidence:
+`build/validation-2026-09-17/action-surface-baseline.jsonl` (2,346 records, gitignored).
+
+`GET /state`'s `available_actions` and `GET /actions/available`'s descriptors are built by two
+separate 301- and 609-line methods. Source contracts pin their sets equal; this pass asked whether
+they agree **at runtime**, which is the baseline ADR 0001 needs before the two can be collapsed.
+
+- **12 screens, 22 distinct action-set variants, 2,346 back-to-back sample pairs.**
+- **Non-combat: 0 disagreements in 61 samples.** `PAUSE_MENU` agrees on the *empty* set, which is the
+  interesting edge case — both surfaces return an empty array rather than one of them omitting the key.
+- **Combat: 23 disagreements in 2,285 samples, every one a timing artifact.** All 23 involve exactly
+  the three readiness-gated actions `{end_turn, play_card, use_potion}` and no others, and each
+  carries `combat.action_readiness.reason` of `ready` (14) or `snapshot_stabilizing` (9) — caught
+  mid-settle.
+- **The falsifiable test:** if one surface were wrong, the direction of the difference would track
+  *the surface*. Across 1,911 order-alternated samples it tracks **which endpoint was read second**:
+  15 cases where the second read saw more actions, 8 where it saw fewer, both directions under both
+  request orders. `screen` matched between the paired reads in **all 2,346 samples**, so no room
+  transition is involved.
+
+**Conclusion: the two surfaces matched at runtime on every screen reached.** ADR 0001's assumption
+holds live, and this file is the replay baseline for step 3 of that ADR.
+
+### Found in this session
+
+- **`screen` never reports `GAME_OVER` after a death in combat.** Eight samples caught the run in an
+  unambiguous game-over state — the only offered action was `continue_game_over` — and all eight
+  reported `screen = "COMBAT"`. No sample in the whole run ever reported `GAME_OVER`. The cause is
+  ordering in `GameStateService.ResolveNonModalScreen`: the `FindActiveCombatRoom(currentScreen) !=
+  null => "COMBAT"` guard runs **before** the switch arm `NGameOverScreen => "GAME_OVER"`, and the
+  combat room is still active at that point (the live readiness block reported
+  `combat_in_progress = true`, `combat_room_mode = ActiveCombat` after death). Both action surfaces
+  agree and the offered actions are correct, so this is not an ADR 0001 issue — but `docs/api.md`
+  documents `GAME_OVER` as a screen, `skills/sts2-mcp-player/SKILL.md` routes on it, and
+  `run_sts2_validation.py` branches on it. An agent following the documented contract waits for a
+  screen name it will never see and only recovers through the action list.
+- **`requires_target` was `false` on every descriptor in all 2,346 samples**, across all 34 action
+  names that appeared, including `play_card`. No live sample exercised the `true` branch of that
+  field. Whether that is intended (targets are validated per card through `target_index` rather than
+  advertised on the action) or a gap is not settled by this pass.
+
+### That finding, fixed and re-verified in the game (2026-09-17)
+
+`GameStateService.ResolveNonModalScreen` now claims `NGameOverScreen` with its own guard, ahead of
+the combat branch, in the same idiom the capstone container already uses. Re-verified on the same
+isolated host against a build carrying the change (DLL SHA256 `96DD9A63…22D7`); the released build
+was restored afterwards, byte-identical. Evidence:
+`build/validation-2026-09-17/gameover-fix-verification.jsonl` and
+`gameover-fix-regression-check.jsonl` (both gitignored).
+
+- **Two independent deaths were driven, both from a real fight.** Across both runs, **10 samples had
+  `game_over` non-null and all 10 reported `screen = "GAME_OVER"`; none reported `COMBAT`.** That is
+  the exact mirror of the pre-fix baseline, where 8 unambiguous game-over samples all reported
+  `COMBAT` and 2,346 samples never once produced `GAME_OVER`.
+- **The settle path still works end to end**, which matters more than the rename: `continue_game_over`
+  advanced `phase` from `summary_animating` to `summary_ready`, `save_status` reached `verified` and
+  `save_verified` reached `true`, then `return_to_main_menu` settled the run. Full screen arc:
+  `MAIN_MENU → MAP → COMBAT → GAME_OVER → TIMELINE → MAIN_MENU`.
+- **No other screen changed.** All 12 screens the baseline covered were re-sampled (75 samples, 25
+  per-screen comparison rows): 16 exact matches, and **not one screen resolved to a different name**.
+  Five action-set differences were each traced to a different game situation rather than to the edit
+  — three are `discard_potion` absent because no potion was held (the run also reproduced the
+  baseline's full five-action combat set exactly, 4 samples, once a potion was held), one is `proceed`
+  on a single-option chest that auto-claimed its relic, and one is `open_timeline` on a main menu with
+  no run save.
+- **The action surfaces still agree on the patched build**: 103 back-to-back samples with alternating
+  request order, one disagreement, and it was a `TIMELINE` sample taken at the instant that overlay
+  was opening (`confirm_timeline_overlay` seen by the second read only; the next four samples agreed).
+  Every combat sample agreed, including across the `snapshot_stabilizing` → `ready` transition that
+  produced all 23 of the baseline's disagreements.
+
+The player's real Steam profile was hashed before and after: 184 files, aggregate SHA256
+`0D164367…4083` both times, per-file diff empty. Writes landed only under `default\2026091701\`.
+
+### Also seen while verifying (not caused by the fix)
+
+- **The console's room name for rest sites is `RestSite`, not `Rest`** — `room Rest` answers
+  `Room 'REST' not found`. Worth knowing before extending `run_sts2_validation.py`.
+- **A console command that succeeded reads as a failure when retried.** Re-issuing `room Treasure`
+  while already standing in a treasure room answers 409 `Console command failed: the game task
+  faulted.`, although the first call had worked. The retry loop in `run_debug_command` therefore
+  reports a failure for a command that did what was asked. **Fixed**: the message was the real
+  problem -- the fault's own exception was being discarded, so a rejected request and a broken one
+  read identically. `DescribeGameTaskFailure` now names the exception, which covers all eleven
+  actions that answer through it, and `remove_card_at_shop` gets the same detail through the shared
+  describer. The retry loop itself was left alone: with a real message its `last_error` finally says
+  something, and changing retry semantics on a guess about the exception text is the sort of thing
+  this project has been burned by.
+
+  **Verified live on the patched build** (same isolated host, `--clientId 2026091701`). The first
+  `room Treasure` returns `completed` and lands on `CHEST`; the second now answers:
+
+  ```
+  Console command failed: the game task faulted: InvalidOperationException: Attempted to start
+  new relic picking session while one was already occurring.
+  ```
+
+  **The exception turns out to be benign and self-explanatory**: the treasure room's relic-picking
+  session is already open, so a second `room Treasure` legitimately cannot start another. That is
+  exactly the distinction the old wording made impossible — a request the game refused read the same
+  as a request that broke the mod. A repeated `room Monster`, by contrast, still returns `completed`,
+  which is why only the treasure path surfaced this.
+
+  The change is invisible where nothing failed: a successful console command still answers
+  `completed`, and `/health` plus `/state` on `MAIN_MENU`, `MAP`, `CHEST` and `COMBAT` are unchanged.
+  One cosmetic defect was found and fixed in the same pass — the game's message ends in `!` and each
+  call site appends `.`, so the first live rendering read `...already occurring!.`; the describer now
+  trims the exception's own trailing punctuation, and the quoted message above is from the re-run
+  after that fix.
+- **After a death settles, the main menu offers `continue_run` / `abandon_run` while `state.run` is
+  `null`.** The pre-fix baseline recorded the same action set, so this is not new, but the
+  combination is odd enough to deserve its own look.
+- **A `TIMELINE` overlay sits between `return_to_main_menu` and `MAIN_MENU`.** An agent routing
+  `GAME_OVER → MAIN_MENU` has to close it with `close_main_menu_submenu`, which is what
+  `settle_main_menu` already does.
+
+### Not reached, and why
+
+- **`TIMELINE`** — `open_timeline` is not offered on either main-menu variant of a fresh profile (no
+  epochs discovered); probed directly and got 409 `invalid_action`. Genuinely gated, and both
+  surfaces agree on its absence.
+- **`GAME_OVER` as a screen value** — the state was reached, the screen name was not; see above.
+- **`CARD_PILE`** — needs a click on a pile during a fight; no console command opens it, matching the
+  note already in this file.
+- **`SETTINGS` / `COMPENDIUM` / `CARD_LIBRARY` / `RELIC_COLLECTION` / `POTION_LAB` / `STATS` /
+  `RUN_HISTORY`** — `PAUSE_MENU` itself was reached by sending Escape to the window, but the pages
+  under it need real mouse input: synthetic `SetCursorPos` + `mouse_event` produced no hover, no
+  cursor and no click, and keyboard focus navigation was ignored. These need a human at the machine.
+- **`MULTIPLAYER_LOBBY`** — deliberately skipped; this pass was single-instance by design.
+- `BUNDLE_SELECTION`, `CRYSTAL_SPHERE`, `FAKE_MERCHANT`, `CARDS_VIEW`, `CARD_INSPECT`,
+  `RELIC_INSPECT`, `UNLOCK`, `PATCH_NOTES`, `BESTIARY` — not encountered and not attempted.
+
+One coverage gap worth naming: the `CHARACTER_SELECT` variant that offers only
+`close_main_menu_submenu` (embark in flight) was seen in a direct read but the run advanced before
+the harness sampled it, so it is not in the JSONL.
+
+### Player data
+
+The real Steam profile (`%APPDATA%\SlayTheSpire2\steam\<account>`) was hashed before and after: 184
+files both times, identical manifest digest, empty `diff`. The isolated run wrote only under
+`default\2026091701\`. The installed mod was not rebuilt or redeployed — `STS2AIAgent.dll` is still
+`0A8FBA67…611C`. `DamageMeter` never had to be moved aside: the game log shows it was already
+disabled in settings and skipped at load, so its known `RunRngSet.get_Seed()` crash never fired.
+
 ## Status as of 2026-09-13
 
 Verified against the released v0.12.0 build (`mod_version=0.12.0`, game `v0.111.0`). The host was an

@@ -99,4 +99,4 @@
   均为 `failure_count=0`（`checked_actions=3`）。
 - 离线：C# 测试 408 PASS / 0 FAIL（含 `GameStateCombatGateContractTests` 三条），`mcp_server` 222 测试 OK，
   `scripts/check_verification_gates.py` 九道 gate 全绿，`scripts/check_release_metadata.py` 五处版本号一致。
-- GitHub 侧：2026-09-16 补上 `v0.12.4` tag 与 Release；资产 `sts2-ai-agent-v0.12.4-windows.zip` 557906 字节、SHA256 `AD970DB1204A0DC37602A2751935E87E5B87FC502B21B00E47B2699C4A98EC57`，tag 指向发布用的 `dev → main` 合并提交。
+- GitHub 侧：2026-09-16 补上 `v0.12.4` tag 与 Release；资产 `sts2-ai-agent-v0.12.4-windows.zip` 557906 字节、SHA256 `AD970DB1204A0DC37602A2751935E87E5B87FC502B21B00E47B2699C4A98EC57`，tag 指向发布用的 `dev → main` 合并提交 `3a4ec95`（PR #139）。
