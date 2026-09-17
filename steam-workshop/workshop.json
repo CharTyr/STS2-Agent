@@ -1,7 +1,7 @@
 {
   "title": "STS2 AI Agent",
   "visibility": "public",
-  "changeNote": "v0.12.4: invite and resume now answer immediately while the teammate window is still starting, so a slow launch reads as pending instead of a client timeout, and a second click can no longer report a success that never happened - the invite and resume actions also stop being offered while a launch is in flight. The AI teammate's launch state is reported by /health instead of only as display text. Session accounting now counts every model call that was actually sent, so the request cap in the play tab matches what was spent.",
+  "changeNote": "v0.12.5: two fixes an AI agent runs into, both found by driving a real game. When a run ends, the state now says GAME_OVER instead of still reporting COMBAT - an agent following the documented screen names was waiting for one it could never see, and had to work the end of a run out from the action list. And when a game action fails, the error now names the reason the game gave instead of a single blank sentence shared by eleven different actions, so \"the game refused that\" no longer reads the same as \"the mod broke\". Nothing changes for a run that is going well: this version adds no cards, no numbers, and touches no save.",
   "tags": [
     "Tools & APIs",
     "Utility",

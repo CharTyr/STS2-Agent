@@ -2,12 +2,23 @@
 
 > Release attribution is recorded against tags or release commits. Post-tag maintenance is listed separately; current validation limits are maintained in [PRODUCT_PLAN_CURRENT.md](https://github.com/CharTyr/STS2-Agent/blob/main/PRODUCT_PLAN_CURRENT.md).
 
-## Unreleased
+## v0.12.5 - 2026-09-17
 
-> Post-tag maintenance on `dev`, not in any build a player can download. This section exists so a
-> change that lands after a tag has somewhere to be recorded: four same-version re-cuts in three
-> days (v0.12.3 twice, v0.12.4 twice) all started as "a small fix after the tag" with no section to
-> write it in. It is renamed to the version on release.
+> **The first release this project did not have to re-cut.** Every one of the four same-version
+> re-publishes before it (v0.12.3 twice, v0.12.4 twice) began as a fix that landed after a tag with
+> nowhere in the changelog to live, so re-cutting the published version beat spending a number on it
+> — and the cost is permanent: three builds still answer to `0.12.4` and only size or hash tells them
+> apart. The `## Unreleased` section added during this cycle is where these changes waited instead,
+> and this heading is that section renamed.
+>
+> Two player-facing fixes carry the version. `/state.screen` reports `GAME_OVER` again after a death,
+> and a faulted game task now names the exception that faulted it instead of saying the same
+> contextless sentence for eleven different actions. Both were **found by driving the running game**,
+> not by reading the code, and both were re-verified live on the patched build.
+>
+> This release also ships the first `build-fingerprint.json`: every packaged file with its SHA256,
+> the summed byte count Steam reports as `file_size`, and the source commit. Telling two builds of
+> one version apart no longer depends on someone collecting those numbers by hand afterwards.
 
 ### Added
 
