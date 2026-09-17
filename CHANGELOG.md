@@ -60,6 +60,25 @@
 
 ### Added
 
+- **`GET /health` says whether the mod can still read the game.** This mod references the game's
+  `sts2.dll`, so almost everything it touches is compile-checked -- but twenty-two private game
+  members are found by name at runtime, and those fail quietly: `GetField` returns null, the call
+  site falls back to a default, and an agent is handed `max_players: 0` with no way to tell that
+  from a lobby that really holds nobody. Slay the Spire 2 is in early access, so that is a patch
+  away at any time.
+
+  All twenty-two are now resolved once at startup. `/health` gains a `compatibility` block naming
+  any that are missing and the feature each one costs, and `status` is derived from it instead of
+  being the literal `"ready"` it has always been -- the one field on the endpoint that could never
+  be wrong and never be useful.
+
+- A contract for **`abandon_run`**, the only action that destroys a player's run and one of twelve
+  that had nothing asserting what they do. What it pins is where the handler *stops*: it opens the
+  confirmation modal and waits, and the run survives until something else answers that modal. A
+  later simplification that confirmed the modal here would look like removing a redundant round
+  trip and would turn one call into a destroyed save.
+
+
 - **Two offline gates, bringing the set to eleven.** `arch-facts` checks the architecture
   specification's file table against the files: every listed file exists, each stated line count is
   within 5% of the real one, the totals hold, and **every source file over 1,000 lines appears in
