@@ -3845,7 +3845,17 @@ internal static class GameActionService
         }
 
         var failure = task.Exception?.InnerException ?? task.Exception?.GetBaseException();
-        return failure == null ? string.Empty : $": {failure.GetType().Name}: {failure.Message}";
+        if (failure == null)
+        {
+            return string.Empty;
+        }
+
+        // Every call site closes its sentence with a period, and a game exception often ends in its
+        // own punctuation -- live, "...while one was already occurring!" arrived and rendered as
+        // "occurring!.". This is the one place foreign text enters those sentences, so it is where
+        // the seam is smoothed.
+        var message = failure.Message.TrimEnd().TrimEnd('.', '!', '?');
+        return $": {failure.GetType().Name}: {message}";
     }
 
     /// <summary>

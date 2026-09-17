@@ -56,6 +56,11 @@ internal static class ActionDiagnosticsContractTests
         Assert.Contains("failure.GetType().Name", describer, StringComparison.Ordinal);
         Assert.Contains("failure.Message", describer, StringComparison.Ordinal);
 
+        // Every call site closes its sentence with a period and a game exception often carries its
+        // own, which read as "...already occurring!." live before this was trimmed. The describer is
+        // the one place foreign text enters those sentences, so it normalises the seam.
+        Assert.Contains("TrimEnd('.','!','?')", describer, StringComparison.Ordinal);
+
         // remove_card_at_shop reaches its 409 through the pure BackgroundTaskOutcome decision layer
         // instead of DescribeGameTaskFailure, so it is the one path that would otherwise keep the old
         // contextless wording. Fixing eleven call sites and leaving the twelfth is how the two drift.
