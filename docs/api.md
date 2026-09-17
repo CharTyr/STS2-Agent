@@ -57,6 +57,7 @@
 | `session_not_ready` | 409 | 会话尚未就绪（如组队未完成） | 是 |
 | `pause_pending` | 409 | 暂停尚未完成，需稍后重试 | 是 |
 | `internal_error` | 500 | 服务内部异常 | 否 |
+| `listener_error` | 500 | HTTP 监听循环本身抛异常（不是某个路由处理失败）。此时连接可能已经不健康，重试之前先用 `GET /health` 确认服务还在 | 是 |
 | `local_only` | 403 | 该端点只接受本机（loopback）请求 | 否 |
 | `companion_session_required` | 403 | 需要有效的 AI 队友会话令牌（见下） | 否 |
 | `companion_not_ready` | 409 | 队友实例尚未就绪，无法响应控制 | 是 |
@@ -69,6 +70,8 @@
 | `collection_not_found` | 404 | `GET /data/{collection}` 的集合名不存在 | 否 |
 | `export_error` | 500 | 游戏元数据导出失败 | 是 |
 | `origin_not_allowed` | 403 | 原生 MCP 请求的 `Origin` 不受信任 | 否 |
+| `method_not_allowed` | 405 | 用 POST 以外的方法请求 `/mcp`。原生 MCP 走 Streamable HTTP，只接受 POST 的 JSON-RPC | 否 |
+| `payload_too_large` | 413 | `/mcp` 请求体超过 1 MB | 否 |
 
 ---
 

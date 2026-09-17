@@ -13,22 +13,22 @@ retry_count = 0 if action_post else self._max_retries
 attempts = 1 + retry_count
 ```
 
-`Sts2ApiError` exposes `status_code`, `code`, `message`, `details`, and `retryable`. The [client definition](../../../mcp_server/src/sts2_mcp/client.py#L46) uses synchronous `urllib.request` transport; `iter_events` and `wait_for_event` are synchronous iterators/helpers as well.
+`Sts2ApiError` exposes `status_code`, `code`, `message`, `details`, and `retryable`. The [client definition](../../../mcp_server/src/sts2_mcp/client.py#L55) uses synchronous `urllib.request` transport; `iter_events` and `wait_for_event` are synchronous iterators/helpers as well.
 
-Ordinary reads may retry according to the client retry settings. An action is a `POST /action` request and is never automatically replayed. If its response cannot be read, is not valid JSON, or violates the action envelope, the client returns `status: "outcome_unknown"`, marks the response as not stable, and performs at most one `GET /state` reconciliation. The [request loop](../../../mcp_server/src/sts2_mcp/client.py#L691) and [reconciliation result](../../../mcp_server/src/sts2_mcp/client.py#L788) are the source of truth.
+Ordinary reads may retry according to the client retry settings. An action is a `POST /action` request and is never automatically replayed. If its response cannot be read, is not valid JSON, or violates the action envelope, the client returns `status: "outcome_unknown"`, marks the response as not stable, and performs at most one `GET /state` reconciliation. The [request loop](../../../mcp_server/src/sts2_mcp/client.py#L265) and [reconciliation result](../../../mcp_server/src/sts2_mcp/client.py#L397) are the source of truth.
 
-Action responses must be JSON objects with a boolean `ok`. A failed envelope must contain an object `error` with a non-empty string `code`, a string `message`, and a boolean `retryable`; malformed envelopes are `invalid_response`. See the [decoder](../../../mcp_server/src/sts2_mcp/client.py#L958).
+Action responses must be JSON objects with a boolean `ok`. A failed envelope must contain an object `error` with a non-empty string `code`, a string `message`, and a boolean `retryable`; malformed envelopes are `invalid_response`. See the [decoder](../../../mcp_server/src/sts2_mcp/client.py#L546).
 
 ## Tool registration contract
 
-The [server profile normalizer](../../../mcp_server/src/sts2_mcp/server.py#L130) defaults to `guided`, maps `planner` and `multi-agent` to `layered`, and maps `legacy` to `full`.
+The [server profile normalizer](../../../mcp_server/src/sts2_mcp/server.py#L136) defaults to `guided`, maps `planner` and `multi-agent` to `layered`, and maps `legacy` to `full`.
 
 - Base tools are registered for every profile.
 - Planner, combat handoff, and knowledge tools are registered for `layered` and `full`.
 - Legacy per-action tools are registered only for `full`.
 - `run_console_command` is a separate debug tool enabled only when `STS2_ENABLE_DEBUG_ACTIONS` is truthy; it is deliberately excluded from compact `act`.
 
-These gates live in [server registration](../../../mcp_server/src/sts2_mcp/server.py#L534) and [debug/legacy registration](../../../mcp_server/src/sts2_mcp/server.py#L1082). Keep the public profile names and the debug boundary stable when changing the tool surface.
+These gates live in [server registration](../../../mcp_server/src/sts2_mcp/server.py#L150) and [debug/legacy registration](../../../mcp_server/src/sts2_mcp/server.py#L693). Keep the public profile names and the debug boundary stable when changing the tool surface.
 
 Tool functions are ordinary synchronous `def` functions. FastMCP's tool listing is asynchronous, so tests commonly call `asyncio.run(server.get_tool("..."))` and then invoke `tool.fn(...)`. The [wait tests](../../../mcp_server/tests/test_waits.py#L142), [game-data tests](../../../mcp_server/tests/test_game_data_tools.py#L42), and [crystal-sphere tests](../../../mcp_server/tests/test_crystal_sphere_tools.py#L45) demonstrate this pattern.
 
