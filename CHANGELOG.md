@@ -31,6 +31,58 @@
   implementations agree". `AGENTS.md` and the game-actions spec describe adding an action in one
   place instead of two.
 
+- **The two biggest files came apart, and nothing they do changed.** `GameStateService.cs` was 8,295
+  lines and `GameActionService.cs` 7,061 -- together half the mod. The state service gave up the
+  compact `agent_view` rewrite and the 60 payload type declarations; the action service became one
+  file per room (combat, rewards, rooms, shop, menus, embark, run, co-op). Each is the same
+  `partial` class, so no call site changed and no behaviour moved: the base files' diffs carry
+  exactly one genuinely new line each, the `partial` keyword.
+
+  Which member went where was computed rather than chosen -- a member joins a group only when every
+  reference to it comes from inside that group -- so 5,697 of the action service's 6,756 member
+  lines landed in exactly one room and the 1,059 that two rooms both reach stayed put. The largest
+  file in the mod is now 5,872 lines instead of 8,295, and six of the eight room files fit the
+  1,000-line default budget with no entry at all.
+
+  On the Python side `client.py`'s 58 per-action wrappers moved to `client_actions.py` as a mixin.
+  Both halves now fit the default budget, so neither has a budget entry any more.
+
+### Added
+
+- **Two offline gates, bringing the set to eleven.** `arch-facts` checks the architecture
+  specification's file table against the files: every listed file exists, each stated line count is
+  within 5% of the real one, the totals hold, and **every source file over 1,000 lines appears in
+  the table** -- so a monolith cannot exist without the page that exists to name it saying so.
+  `doc-links` requires every relative Markdown link in a tracked page to resolve; 402 pages carry
+  445 of them and nothing checked any outside the three documents inside the release artifact.
+
+### Fixed
+
+- **Three checks were not checking what they said.** All three were found by the splits above and
+  all three predate them:
+  - `AgentSourceFixture.MethodBody` resolved a method name by its last occurrence in the source,
+    which is correct only while a method is declared before it is called. Across a partial class it
+    returned the body of whatever enclosed a *call site*, so a source contract kept asserting --
+    against the wrong method, silently.
+  - `GameTaskBoundingContractTests` scanned a hard-coded list of files for unbounded awaits, so the
+    first bare `await` written in one of the new room files would have gone unseen. It enumerates
+    the class's files now and refuses to run if it finds fewer than two.
+  - The verification-gate self-test reported PASS for three cases that were failing with "missing
+    required file". `Assert-Case` only checked for a non-zero exit, so a gate dying for an unrelated
+    reason was indistinguishable from a gate correctly rejecting drifted input. Every case now
+    declares the message it expects, and a case that declares none fails.
+
+- The architecture specification was stale: it carried pre-ADR-0001 measurements and still told
+  readers to add each new action to **both** action surfaces, a month after that duplication was
+  gone. Rewritten, and now held to the files by the `arch-facts` gate.
+
+### Documentation
+
+- **ADR 0002** records why the mod keeps two MCP tool surfaces -- the in-process native server that
+  needs no Python, and the sidecar that provides tool profiles -- and what would change that answer.
+  Adding an MCP tool means editing both sides, which is the opposite of the rule ADR 0001
+  established for actions, so `AGENTS.md` now says so where the steps are.
+
 ## v0.12.5 - 2026-09-17
 
 > Two fixes to what the mod reports about itself, both found by driving a running game rather than by
