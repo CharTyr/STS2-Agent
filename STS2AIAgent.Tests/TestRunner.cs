@@ -522,6 +522,9 @@ internal static class TestRunner
         yield return ("SourceShape.BudgetsTrackTheirFiles", () => Task.Run(SourceShapeContractTests.BudgetsStayCloseToTheFilesTheyGuard));
         yield return ("ActionDiagnostics.NoWordlessRecoveryCatch", () => Task.Run(ActionDiagnosticsContractTests.NoRecoveryCatchSwallowsWithoutSayingSo));
         yield return ("ActionDiagnostics.FaultedTasksNameTheirException", () => Task.Run(ActionDiagnosticsContractTests.FaultedGameTasksNameTheirException));
+        yield return ("ReflectedMembers.EveryOneIsProbedOrExcused", () => Task.Run(ReflectedMemberRegistryTests.EveryReflectedMemberIsProbedOrExcused));
+        yield return ("ReflectedMembers.NoOrphanEntries", () => Task.Run(ReflectedMemberRegistryTests.TheRegistryHasNoEntriesNobodyReads));
+        yield return ("ReflectedMembers.HealthStatusIsDerived", () => Task.Run(ReflectedMemberRegistryTests.HealthStatusComesFromTheProbe));
         yield return ("CardViewer.BranchesPrecedeGrid", () => Task.Run(CardViewerScreenContractTests.ViewerBranchesPrecedeTheVisibleGrid));
         yield return ("CardViewer.ClosableViewerSameSource", () => Task.Run(CardViewerScreenContractTests.ClosableViewerSetIsSharedByProbeAndExecutor));
         yield return ("CardViewer.SubmenuStackBase", () => Task.Run(CardViewerScreenContractTests.SubmenuStackLookupUsesTheBaseClass));

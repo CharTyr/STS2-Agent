@@ -23,6 +23,7 @@ internal static class SourceCoverageTests
     private static readonly string[] KnownUncompiledSources =
     {
         "STS2AIAgent/Game/GameStateService.cs",
+        "STS2AIAgent/Game/ReflectedGameMembers.cs",
         "STS2AIAgent/Game/GameStateService.AgentView.cs",
         "STS2AIAgent/Game/GameStateService.Payloads.cs",
         "STS2AIAgent/Game/GameActionService.cs",
