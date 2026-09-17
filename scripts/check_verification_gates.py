@@ -177,6 +177,7 @@ DOC_CODE_NAME = re.compile(r"`([a-z_][a-z0-9_]*)`")
 MIN_COMPACT_RENAMES = 35
 
 HTTP_ROUTER_PATH = "STS2AIAgent/Server/Router.cs"
+NATIVE_MCP_PATH = "STS2AIAgent/Server/NativeMcpServer.cs"
 HEALTH_BUILDER_SIGNATURE = "internal static object BuildHealthData"
 # BuildHealthData returns one anonymous object; its keys are the assignments at that object's
 # indentation, which is what a client receives under "data".
@@ -614,6 +615,23 @@ def slice_doc_subsection(text: str, heading: str, source: str) -> str:
     return rest[: following.start()] if following else rest
 
 
+def slice_doc_section(text: str, heading: str, source: str) -> str:
+    """Text under a heading, up to the next heading of the same or higher level.
+
+    Unlike :func:`slice_doc_subsection`, which stops at any heading, this keeps a section's own
+    subsections. `GET /events/stream` documents its frame format under a `###` before it reaches
+    the event-type table, and stopping at that subheading would have read the table as empty --
+    which is a check that passes while seeing nothing.
+    """
+    start = text.find(heading)
+    if start < 0:
+        raise GateError(f"{source} no longer contains the '{heading}' section")
+    level = len(heading) - len(heading.lstrip("#"))
+    rest = text[start + len(heading):]
+    following = re.search(r"^#{1,%d} " % level, rest, re.MULTILINE)
+    return rest[: following.start()] if following else rest
+
+
 def first_doc_table(section: str, heading: str) -> str:
     """Return only the first Markdown table in a section.
 
@@ -858,6 +876,191 @@ def check_health_payload_docs(repo_root: Path, api_doc: str) -> list[str]:
     return [f"{len(keys)} GET /health key(s) are described in the docs/api.md field table"]
 
 
+# --- the three contract surfaces an agent reads besides the payload ---------
+#
+# docs/api.md describes four things a client branches on: the routes it may call, the payload
+# fields it reads, the error codes it handles, and the event types it waits for. Until 2026-09-18
+# only the second was checked. The other three were accurate, but by maintenance rather than by
+# anything -- and a 500 `listener_error`, a 405 `method_not_allowed` and a 413 `payload_too_large`
+# had already slipped out of the table, each one a response an agent can receive and cannot look up.
+
+ERROR_CODE_HEADING = "## 错误码"
+# Three ways the mod answers with an error code. The status is captured loosely because it is
+# sometimes a variable (`WriteErrorAsync(response, statusCode, "not_found", ...)`), and a literal
+# is the only form worth comparing against the documented column.
+ERROR_EMITTERS = (
+    re.compile(r'ApiException\(\s*([A-Za-z0-9_.]+)\s*,\s*"([a-z_]+)"'),
+    re.compile(r'WriteErrorAsync\(\s*[^,]+,\s*([A-Za-z0-9_.]+)\s*,\s*"([a-z_]+)"'),
+    re.compile(r'RestError\(\s*([A-Za-z0-9_.]+)\s*,\s*"([a-z_]+)"'),
+)
+ERROR_CODE_ROW = re.compile(r"^\|\s*`([a-z_]+)`[^|]*\|\s*(\d+)\s*\|", re.MULTILINE)
+MIN_ERROR_CODES = 15
+
+EVENT_SERVICE_PATH = "STS2AIAgent/Server/GameEventService.cs"
+EVENT_STREAM_HEADING = "## `GET /events/stream`"
+EVENT_PUBLISH = re.compile(r'(?:Publish|BuildEnvelope)\(\s*"([a-z_]+)"')
+EVENT_TERNARY = re.compile(r'\?\s*"([a-z_]+)"\s*:\s*"([a-z_]+)"')
+EVENT_DOC_ROW = re.compile(r"^\|\s*`([a-z_]+)`(?:\s*/\s*`([a-z_]+)`)?\s*\|", re.MULTILINE)
+MIN_EVENT_TYPES = 8
+
+ROUTE_LITERAL = re.compile(r'"(/[a-z0-9/_.-]*)"')
+ROUTE_DOC_HEADING = re.compile(r"^##+\s+(.*)$", re.MULTILINE)
+ROUTE_IN_HEADING = re.compile(r"`(?:GET|POST|PUT|PATCH|DELETE)\s+(/[^`]*)`")
+MIN_ROUTES = 8
+# Not routes: fragments the router builds paths from, and paths that belong to the filesystem
+# rather than to the HTTP surface.
+ROUTE_LITERAL_IGNORE = {"/"}
+
+
+def normalize_route(route: str) -> str:
+    """A route and its documented spelling, reduced to one comparable form."""
+    route = route.split("?", 1)[0]
+    route = re.sub(r"\{[^}]*\}", "", route)
+    route = route.rstrip("/")
+    return route or "/"
+
+
+def check_error_code_docs(repo_root: Path, api_doc: str) -> list[str]:
+    """Every error code the mod can answer with appears in the docs/api.md table, and vice versa."""
+    emitted: dict[str, set[str]] = {}
+    for path in sorted((repo_root / "STS2AIAgent").rglob("*.cs")):
+        if any(part in ("bin", "obj") for part in path.parts):
+            continue
+        text = path.read_text(encoding="utf-8")
+        for pattern in ERROR_EMITTERS:
+            for match in pattern.finditer(text):
+                emitted.setdefault(match.group(2), set()).add(match.group(1))
+
+    if len(emitted) < MIN_ERROR_CODES:
+        raise GateError(
+            f"only {len(emitted)} error code(s) were found in the mod sources, below the "
+            f"{MIN_ERROR_CODES} expected. The extraction in check_verification_gates.py no longer "
+            "matches how errors are raised; fix it before trusting this gate."
+        )
+
+    section = slice_doc_section(api_doc, ERROR_CODE_HEADING, "docs/api.md")
+    documented: dict[str, set[str]] = {}
+    for name, status in ERROR_CODE_ROW.findall(section):
+        documented.setdefault(name, set()).add(status)
+
+    undocumented = sorted(set(emitted) - set(documented))
+    if undocumented:
+        raise GateError(
+            "the mod answers with error codes the docs/api.md table does not list: "
+            + ", ".join(undocumented)
+            + ". A client that receives one has nothing to look up, so it cannot tell a request it "
+            "should fix from one it should retry."
+        )
+
+    phantom = sorted(set(documented) - set(emitted))
+    if phantom:
+        raise GateError(
+            "the docs/api.md error table lists codes the mod never answers with: "
+            + ", ".join(phantom)
+            + ". Remove them so nobody writes a branch that can never be taken."
+        )
+
+    mismatched = []
+    for name in sorted(set(emitted) & set(documented)):
+        literals = {status for status in emitted[name] if status.isdigit()}
+        if literals and not literals & documented[name]:
+            mismatched.append(
+                f"{name} (code {', '.join(sorted(literals))} vs docs {', '.join(sorted(documented[name]))})"
+            )
+    if mismatched:
+        raise GateError(
+            "these error codes are documented with the wrong HTTP status: "
+            + ", ".join(mismatched)
+            + ". The status is what a client branches on before it ever reads the code."
+        )
+
+    return [f"{len(emitted)} error code(s) match the docs/api.md table, status included"]
+
+
+def check_event_type_docs(repo_root: Path, api_doc: str) -> list[str]:
+    """Every event GET /events/stream publishes is in the documented type table, and vice versa."""
+    source = read_text(repo_root, EVENT_SERVICE_PATH)
+    published = set(EVENT_PUBLISH.findall(source))
+    # `Publish(open ? "..._opened" : "..._closed", ...)` -- both arms are event names.
+    for opened, closed in EVENT_TERNARY.findall(source):
+        published.add(opened)
+        published.add(closed)
+
+    if len(published) < MIN_EVENT_TYPES:
+        raise GateError(
+            f"{EVENT_SERVICE_PATH} yielded {len(published)} event type(s), below the "
+            f"{MIN_EVENT_TYPES} expected. The extraction in check_verification_gates.py no longer "
+            "matches the file; fix it before trusting this gate."
+        )
+
+    section = slice_doc_section(api_doc, EVENT_STREAM_HEADING, "docs/api.md")
+    documented = set()
+    for first, second in EVENT_DOC_ROW.findall(section):
+        documented.add(first)
+        if second:
+            documented.add(second)
+
+    undocumented = sorted(published - documented)
+    if undocumented:
+        raise GateError(
+            "GET /events/stream publishes event types the docs/api.md table does not list: "
+            + ", ".join(undocumented)
+            + ". An agent waiting on events cannot wait for one it was never told about."
+        )
+
+    phantom = sorted(documented - published)
+    if phantom:
+        raise GateError(
+            "the docs/api.md event table lists types the stream never publishes: "
+            + ", ".join(phantom)
+            + ". Waiting for one of those is waiting forever."
+        )
+
+    return [f"{len(published)} event type(s) match the docs/api.md stream table"]
+
+
+def check_route_docs(repo_root: Path, api_doc: str) -> list[str]:
+    """Every path the router serves has a documented endpoint section, and vice versa."""
+    router = read_text(repo_root, HTTP_ROUTER_PATH)
+    mcp = read_text(repo_root, NATIVE_MCP_PATH)
+    served = {
+        normalize_route(literal)
+        for literal in ROUTE_LITERAL.findall(router) + ROUTE_LITERAL.findall(mcp)
+        if literal not in ROUTE_LITERAL_IGNORE
+    }
+    served.discard("/")
+
+    documented = set()
+    for heading in ROUTE_DOC_HEADING.findall(api_doc):
+        for route in ROUTE_IN_HEADING.findall(heading):
+            documented.add(normalize_route(route))
+
+    if len(documented) < MIN_ROUTES:
+        raise GateError(
+            f"docs/api.md yielded {len(documented)} endpoint heading(s), below the {MIN_ROUTES} "
+            "expected. The extraction in check_verification_gates.py no longer matches the "
+            "headings; fix it before trusting this gate."
+        )
+
+    undocumented = sorted(served - documented)
+    if undocumented:
+        raise GateError(
+            "the mod serves paths docs/api.md has no endpoint section for: "
+            + ", ".join(undocumented)
+            + ". An endpoint nobody documents is one only its author knows how to call."
+        )
+
+    phantom = sorted(documented - served)
+    if phantom:
+        raise GateError(
+            "docs/api.md documents endpoints the router does not serve: "
+            + ", ".join(phantom)
+            + ". A client following the document would get 404 not_found."
+        )
+
+    return [f"{len(served)} route(s) match the docs/api.md endpoint sections"]
+
+
 def check_api_facts(repo_root: Path) -> list[str]:
     """Documented facts that a code constant owns must still agree with it."""
     notes: list[str] = []
@@ -926,6 +1129,9 @@ def check_api_facts(repo_root: Path) -> list[str]:
     notes.extend(check_state_payload_coverage(repo_root, api_doc))
     notes.extend(check_compact_rename_table(repo_root, api_doc))
     notes.extend(check_health_payload_docs(repo_root, api_doc))
+    notes.extend(check_error_code_docs(repo_root, api_doc))
+    notes.extend(check_event_type_docs(repo_root, api_doc))
+    notes.extend(check_route_docs(repo_root, api_doc))
 
     return notes
 

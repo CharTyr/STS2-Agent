@@ -422,6 +422,48 @@ try {
     Assert-Case -Name "api-facts gate rejects an undocumented GET /health key" -Only "api-facts" -Expect "GET /health answers with keys"
     Write-Utf8 $factsDoc $originalFactsDoc
 
+    # 9j-l. The three contract surfaces besides the payload: error codes, event types and routes.
+    # docs/api.md tells a client what it may call, what it will read, what it must handle and what
+    # it can wait for. Only the payload half was checked until 2026-09-18, and three error codes had
+    # already slipped out of the table -- a 500, a 405 and a 413 an agent can receive and cannot
+    # look up.
+    $errorRow = ($originalFactsDoc -split ([char]10) | Where-Object { $_ -match ('^\| ' + [char]96 + 'payload_too_large' + [char]96 + ' \|') } | Select-Object -First 1)
+    if (-not $errorRow) { throw "fixture setup failed: docs/api.md has no payload_too_large error row" }
+    Write-Utf8 $factsDoc $originalFactsDoc.Replace($errorRow + [char]10, "")
+    Assert-Case -Name "api-facts gate rejects an error code the docs stop listing" -Only "api-facts" -Expect "payload_too_large"
+    Write-Utf8 $factsDoc $originalFactsDoc
+
+    # The status is what a client branches on before it ever reads the code, so a row with the
+    # right name and the wrong number is worse than a missing row.
+    $statusRow = ($originalFactsDoc -split ([char]10) | Where-Object { $_ -match ('^\| ' + [char]96 + 'invalid_target' + [char]96 + ' \| 409 ') } | Select-Object -First 1)
+    if (-not $statusRow) { throw "fixture setup failed: docs/api.md has no invalid_target 409 row" }
+    Write-Utf8 $factsDoc $originalFactsDoc.Replace($statusRow, $statusRow.Replace("| 409 ", "| 400 "))
+    Assert-Case -Name "api-facts gate rejects a documented error status the code contradicts" -Only "api-facts" -Expect "wrong HTTP status"
+    Write-Utf8 $factsDoc $originalFactsDoc
+
+    $eventRow = ($originalFactsDoc -split ([char]10) | Where-Object { $_ -match ('^\| ' + [char]96 + 'combat_turn_changed' + [char]96 + ' \|') } | Select-Object -First 1)
+    if (-not $eventRow) { throw "fixture setup failed: docs/api.md has no combat_turn_changed event row" }
+    Write-Utf8 $factsDoc $originalFactsDoc.Replace($eventRow + [char]10, "")
+    Assert-Case -Name "api-facts gate rejects an event type the docs stop listing" -Only "api-facts" -Expect "combat_turn_changed"
+    Write-Utf8 $factsDoc $originalFactsDoc
+
+    # A documented endpoint the router does not serve. The other direction -- a served path with no
+    # section -- is covered by mutating the router itself below.
+    $dataHeading = '## ' + [char]96 + 'GET /data/{collection}' + [char]96
+    if ($originalFactsDoc.IndexOf($dataHeading) -lt 0) { throw "fixture setup failed: docs/api.md has no /data/{collection} heading" }
+    $phantomHeading = '## ' + [char]96 + 'POST /fixture/phantom' + [char]96 + [char]10 + [char]10 + 'fixture' + [char]10 + [char]10 + '---' + [char]10 + [char]10 + $dataHeading
+    Write-Utf8 $factsDoc $originalFactsDoc.Replace($dataHeading, $phantomHeading)
+    Assert-Case -Name "api-facts gate rejects a documented endpoint the router does not serve" -Only "api-facts" -Expect "/fixture/phantom"
+    Write-Utf8 $factsDoc $originalFactsDoc
+
+    $routerPath = Join-Path $fixture "STS2AIAgent/Server/Router.cs"
+    $originalRouter = Read-Utf8 $routerPath
+    $healthRoute = 'request.Url?.AbsolutePath == "/health")'
+    if ($originalRouter.IndexOf($healthRoute) -lt 0) { throw "fixture setup failed: Router.cs has no /health dispatch" }
+    Write-Utf8 $routerPath $originalRouter.Replace($healthRoute, 'request.Url?.AbsolutePath == "/fixture/undocumented")')
+    Assert-Case -Name "api-facts gate rejects a served path with no documented section" -Only "api-facts" -Expect "/fixture/undocumented"
+    Write-Utf8 $routerPath $originalRouter
+
     # 9i. The gate's own output on a console that is not UTF-8. Gate messages quote the Chinese
     # section headings of docs/api.md, and the Windows CI runner's stdout is cp1252: printing one
     # raised UnicodeEncodeError, so a gate that PASSED still exited 1, and a gate that failed would
