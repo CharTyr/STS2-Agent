@@ -1119,3 +1119,24 @@ The lesson worth keeping: both runtime defects were found by driving a real game
 ### Status
 
 [OK] **Completed**
+
+
+## Session 28: 收尾 PR #148 verification gates CI
+
+**Date**: 2026-09-17
+**Task**: 收尾 PR #148 verification gates CI
+**Branch**: `refactor/split-monoliths`
+
+### Summary
+
+接手未完成的 CI 修复：让 arch-facts 与 doc-links 以 Git tracked 内容为准，移除 fresh checkout 中不可解析的本地链接，补未跟踪文件与目录回归测试；本地完整 gates/self-test 和 GitHub contracts 全绿。
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `bbd1635` | (see git log) |
+
+### Status
+
+[OK] **Completed**

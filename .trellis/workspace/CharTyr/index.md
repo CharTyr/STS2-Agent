@@ -8,7 +8,7 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-1.md`
-- **Total Sessions**: 27
+- **Total Sessions**: 28
 - **Last Active**: 2026-09-17
 <!-- @@@/auto:current-status -->
 
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-1.md` | ~1121 | Active |
+| `journal-1.md` | ~1142 | Active |
 <!-- @@@/auto:active-documents -->
 
 ---
@@ -29,6 +29,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 28 | 2026-09-17 | 收尾 PR #148 verification gates CI | `bbd1635` | `refactor/split-monoliths` |
 | 27 | 2026-09-17 | Close the drift that forced four re-cuts, ship v0.12.5, and collapse the action surface | `8e8835b`, `3825ead`, `abcd0db`, `d4af047`, `1b39c97`, `a4bff32`, `e644300`, `9bcaee6`, `dfd61bf`, `f1b2de7`, `0324285`, `ea732af` | `dev` |
 | 26 | 2026-09-14 | Revive dev: fast-forward it back and write down the rule that keeps it from drifting | `4a01e22`, `a92f5a6` | `main` |
 | 25 | 2026-09-14 | POSIX path parity: one resolver, 29 offline assertions, and the defects that exposed | `5d53d50`, `ca0a9cd` | `main` |
