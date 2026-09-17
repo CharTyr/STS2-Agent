@@ -582,6 +582,42 @@ try {
             Write-Host "PASS  doc-links gate accepts a tree whose links all resolve"
         }
 
+        # Links to targets that are on disk but that git does not track. This is not hypothetical:
+        # the gate first shipped asking the filesystem, passed locally and failed on CI, because
+        # AGENTS.md and extraction/decompiled/ are both gitignored and both present on a developer's
+        # machine. A link only works for the reader who clones, so tracked is the question.
+        $untrackedTarget = Join-Path $linkFixture "docs/fixture-untracked-target.md"
+        Write-Utf8 $untrackedTarget ("# Present but untracked" + [char]10)
+        $untrackedDirectory = Join-Path $linkFixture "docs/fixture-untracked-directory"
+        New-Item -ItemType Directory -Path $untrackedDirectory | Out-Null
+        Write-Utf8 (Join-Path $untrackedDirectory "README.md") ("# Present but untracked" + [char]10)
+        $ignoreFile = Join-Path $linkFixture ".gitignore"
+        Write-Utf8 $ignoreFile ("docs/fixture-untracked-target.md" + [char]10 + "docs/fixture-untracked-directory/" + [char]10)
+        Write-Utf8 (Join-Path $linkFixture "docs/guide.md") ("# Guide" + [char]10 + [char]10 + "[back](../README.md)" + [char]10 + [char]10 + "[present but untracked](./fixture-untracked-target.md)" + [char]10 + [char]10 + "[directory present but untracked](./fixture-untracked-directory/)" + [char]10)
+        $linkAddUntracked = Invoke-Git -Path $linkFixture -Arguments @("add", "-A")
+        if ($linkAddUntracked.ExitCode -ne 0) { throw "fixture setup failed: git add -A before the untracked-target case" }
+        $linkUntracked = Invoke-Gate -Fixture $linkFixture -Only "doc-links"
+        if ($linkUntracked.ExitCode -eq 0) {
+            Write-Host "FAIL  doc-links gate rejects a link to a file git does not track (gate accepted a drifted input)"
+            $script:failures++
+        }
+        elseif (((($linkUntracked.Output -join "") -replace "[\s]", "")) -notmatch "fixture-untracked-target.md") {
+            Write-Host "FAIL  doc-links gate names the untracked target"
+            Write-Host $linkUntracked.Output
+            $script:failures++
+        }
+        elseif (((($linkUntracked.Output -join "") -replace "[\s]", "")) -notmatch "fixture-untracked-directory/") {
+            Write-Host "FAIL  doc-links gate names the untracked directory"
+            Write-Host $linkUntracked.Output
+            $script:failures++
+        }
+        else {
+            Write-Host "PASS  doc-links gate rejects a link to a file git does not track"
+        }
+        Remove-Item -LiteralPath $untrackedTarget -Force
+        Remove-Item -LiteralPath $untrackedDirectory -Recurse -Force
+        Remove-Item -LiteralPath $ignoreFile -Force
+
         Write-Utf8 (Join-Path $linkFixture "docs/guide.md") ("# Guide" + [char]10 + [char]10 + "[back](../README.md)" + [char]10 + [char]10 + "[moved](./fixture-no-such-page.md)" + [char]10)
         $linkAdd2 = Invoke-Git -Path $linkFixture -Arguments @("add", "-A")
         if ($linkAdd2.ExitCode -ne 0) { throw "fixture setup failed: git add -A after the doc-links mutation" }

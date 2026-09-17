@@ -108,6 +108,6 @@ powershell -ExecutionPolicy Bypass -File scripts/package-release.ps1 -Configurat
 4. [mcp_server/pyproject.toml](../../../mcp_server/pyproject.toml) → `project.version`
 5. [mcp_server/uv.lock](../../../mcp_server/uv.lock) → the `version` of the `[[package]]` named `sts2-ai-agent-mcp`
 
-[AGENTS.md](../../../AGENTS.md) (a local working file, deliberately untracked, so this link only resolves in a developer checkout) lists the same five files, [preflight-release.ps1](../../../scripts/preflight-release.ps1#L102) runs the same checker CI runs, and [package-release.ps1](../../../scripts/package-release.ps1#L127) runs it before it starts building, so a package cannot be produced from drifted metadata.
+`AGENTS.md` (a local working file, deliberately untracked, so it is not a link: nothing a fresh checkout contains would resolve) lists the same five files, [preflight-release.ps1](../../../scripts/preflight-release.ps1#L102) runs the same checker CI runs, and [package-release.ps1](../../../scripts/package-release.ps1#L127) runs it before it starts building, so a package cannot be produced from drifted metadata.
 
 Static checks and package inspection do not prove that the Mod loads in the real game. Use the game-connected commands and the manual release checklist only when the task authorizes those side effects.

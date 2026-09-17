@@ -1298,12 +1298,26 @@ def count_lines(path: Path) -> int:
 
 
 def mod_source_files(repo_root: Path) -> list[Path]:
-    """Every tracked-shaped mod source file, skipping generated build output."""
+    """Every mod source file git tracks, skipping generated build output.
+
+    Tracked, not on disk. A working tree also holds whatever the developer left there --
+    STS2AIAgent/_scratch/ is gitignored and real -- so counting files by walking the directory
+    measures one machine rather than the repository, and CI would count something different.
+    """
     mod_root = repo_root / "STS2AIAgent"
+    if not (repo_root / ".git").exists():
+        # A source tarball has no index; fall back to the tree and say so through the caller.
+        candidates = mod_root.rglob("*.cs")
+    else:
+        candidates = (
+            repo_root / relative
+            for relative in list_tracked_files(repo_root, "STS2AIAgent/*.cs")
+        )
     return sorted(
         path
-        for path in mod_root.rglob("*.cs")
-        if not any(part in ("bin", "obj") for part in path.relative_to(mod_root).parts)
+        for path in candidates
+        if path.is_file()
+        and not any(part in ("bin", "obj") for part in path.relative_to(mod_root).parts)
     )
 
 
@@ -1439,6 +1453,7 @@ def check_doc_links(repo_root: Path) -> list[str]:
     if not pages:
         return ["no tracked Markdown pages to check"]
 
+    tracked = list_tracked_files(repo_root, ".")
     broken: list[str] = []
     checked = 0
     for relative in pages:
@@ -1459,7 +1474,25 @@ def check_doc_links(repo_root: Path) -> list[str]:
             if not cleaned:
                 continue
             checked += 1
-            if not (path.parent / cleaned).resolve().exists():
+            resolved = (path.parent / cleaned).resolve()
+            try:
+                target_relative = resolved.relative_to(repo_root.resolve()).as_posix()
+            except ValueError:
+                broken.append(f"{relative} -> {target} (outside the repository)")
+                continue
+            # Tracked, not merely present. This gate exists to answer "will a reader who clones
+            # this repository be able to follow the link", and the working tree holds files a
+            # clone does not: AGENTS.md and extraction/decompiled/ are both gitignored and both
+            # real on a developer's disk. Asking the filesystem made the answer depend on whose
+            # machine ran the gate -- it passed locally and failed on CI, which is the whole
+            # failure mode this gate was added to prevent, one level up.
+            target_prefix = target_relative.rstrip("/") + "/"
+            target_is_tracked = (
+                target_relative == "."
+                or target_relative in tracked
+                or any(item.startswith(target_prefix) for item in tracked)
+            )
+            if not target_is_tracked:
                 broken.append(f"{relative} -> {target}")
 
     floor = max(1, len(pages) // MIN_DOC_LINKS_PER_PAGE)
