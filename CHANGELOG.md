@@ -53,13 +53,16 @@
   specification's file table against the files: every listed file exists, each stated line count is
   within 5% of the real one, the totals hold, and **every source file over 1,000 lines appears in
   the table** -- so a monolith cannot exist without the page that exists to name it saying so.
-  `doc-links` requires every relative Markdown link in a tracked page to resolve; 402 pages carry
-  445 of them and nothing checked any outside the three documents inside the release artifact.
+  `doc-links` requires every relative Markdown link in a tracked page to resolve; 403 pages carry
+  411 of them and nothing checked any outside the three documents inside the release artifact.
+
+  Both gates ask git what the repository contains, not the filesystem -- see below for why that
+  distinction cost a CI run to learn.
 
 ### Fixed
 
-- **Three checks were not checking what they said.** All three were found by the splits above and
-  all three predate them:
+- **Four checks were not checking what they said.** The first three were found by the splits above
+  and predate them; the fourth was a defect in a gate added in this same batch:
   - `AgentSourceFixture.MethodBody` resolved a method name by its last occurrence in the source,
     which is correct only while a method is declared before it is called. Across a partial class it
     returned the body of whatever enclosed a *call site*, so a source contract kept asserting --
@@ -71,6 +74,15 @@
     required file". `Assert-Case` only checked for a non-zero exit, so a gate dying for an unrelated
     reason was indistinguishable from a gate correctly rejecting drifted input. Every case now
     declares the message it expects, and a case that declares none fails.
+  - **`doc-links` and `arch-facts` shipped asking the filesystem.** Both passed locally and failed
+    on CI, because a working tree holds files a clone does not: `AGENTS.md` is deliberately
+    untracked and `extraction/decompiled/` is a local decompile, and 36 links pointed at them. The
+    gates' verdict therefore depended on whose machine ran them -- which is, one level up, exactly
+    the failure mode they were added to prevent. Both now ask git.
+
+    The 36 links were real defects, not false positives: both documents already said in prose that
+    the target does not exist in a fresh checkout. They are written as code spans now, because a
+    Markdown link is a promise that clicking works.
 
 - The architecture specification was stale: it carried pre-ADR-0001 measurements and still told
   readers to add each new action to **both** action surfaces, a month after that duplication was
