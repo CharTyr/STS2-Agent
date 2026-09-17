@@ -1,13 +1,29 @@
 # STS2 AI Agent：当前状态页
-
-> 本页是仓库唯一的当前状态入口。更新日期：2026-09-16（v0.12.4 **工坊先行、随后补 GitHub 发布**，并在当日**两次同号重发**——第二次修掉战斗中一条一帧状态自相矛盾，第三次修掉第二次引入的主菜单 `/state` 失败；GitHub 侧已随 2026-09-16 的 tag 与 Release 更新到 `v0.12.4`；此前 2026-09-14 是 v0.12.3 **两次**同号重发；先是 #111 的两个联机界面入口完成实机点击验收，验收中发现并修掉一处 Continue 按钮刷新缺陷，随后把这处修复与当天的诊断 / 发布工具收口一起重切成第三次构建）。历史快照标记：本页为当前状态页，非历史快照。
-> 发布代码基准：tag `v0.12.3` @ `c2630a8`（2026-09-14 第二次重切；此前依次指向 `0f60ec4`（第一次重发）与 `b0217b0`（2026-09-13 首发））；工坊与 GitHub 两侧现均已是 `0.12.4`（见下行）；GitHub 侧 tag `v0.12.4` 指向 `dev → main` 合并提交 `3a4ec95`（PR #139）。
-> 工坊最新：Steam 工坊物品 3796486050 已于 2026-09-15 更新至 `0.12.4`，同日**两次同号重发**——第一次 19:38（`file_size` 1233413、来源提交 `4b8e7c5` = PR #133 合并提交），第二次 23:34:57（`file_size` 1236997，修掉战斗门禁一帧竞态但把动作队列读到了战斗外，主菜单 `/state` 会 500），第三次 2026-09-16 00:42:43（`file_size` 1236997 与本地内容字节和相等、内容 id `6841790951225102097`，当前版本：一帧矛盾与主菜单都正常）；三次构建版本字符串相同，只能靠大小或哈希（第二、第三次字节数相同，必须用哈希）区分。GitHub 侧已于 2026-09-16 补上 `v0.12.4` tag 与 Release（资产 `sts2-ai-agent-v0.12.4-windows.zip` 557906 字节、SHA256 `AD970DB1…`）。见 [Workshop 上传记录](history/workshop-upload-v0.12.4_2026-09-15.md)。
-> 发布基准：[GitHub Release v0.12.3](https://github.com/CharTyr/STS2-Agent/releases/tag/v0.12.3)，2026-09-13 首发、2026-09-14 两次同号重发；上一版 [v0.12.2](https://github.com/CharTyr/STS2-Agent/releases/tag/v0.12.2)，同日。Steam 工坊物品 3796486050 已更新至 `0.12.3`（第三次构建）：visibility=0（公开）、`file_size` 1232901 与本地内容字节和相等、`time_updated` 2026-09-14 02:17:15、内容 id `6689158800196895712`；前两次分别是 `file_size` 1229829 / `time_updated` 2026-09-14 00:09:26 / 内容 id `6028841468497339213`（第一次重发）与 `file_size` 1227269 / `time_updated` 2026-09-13 22:31:22 / 内容 id `5284257893537057643`（首发），三次都记在发布记录里。**工坊简体中文列表仍是旧版**（缺 v0.11.0 起的多条列表项），待手工粘贴 `steam-workshop/description.zh-CN.txt`——`ModUploader` 没有语言参数，这一步只能在工坊网页端做。
+> 本页是仓库唯一的当前状态入口。更新日期：2026-09-17（**v0.12.5 已发布**，GitHub 与 Steam 工坊同日、同源、各一次，未重切）。历史快照标记：本页为当前状态页，非历史快照。
+> 发布代码基准：tag `v0.12.5` @ `f361bdb`（PR #145 的 `dev → main` 合并）。GitHub Release 资产 `sts2-ai-agent-v0.12.5-windows.zip` 562212 字节、SHA256 `0E4A1518…CFED`。
+> 工坊最新：物品 3796486050 已于 2026-09-17 09:36:37 更新至 `0.12.5`（公开，`file_size` 1238533 与本地 content 字节和相等，内容 id `2962740913650521121`，DLL SHA256 `1624BBF5…D4A7`）。**本版只有一个构建**，不像 0.12.3 / 0.12.4 各有三个同号构建。见 [v0.12.5 发布记录](history/release-v0.12.5_2026-09-17.md)。
+> 构建识别：跨版本指纹索引见 [history/build-fingerprints.md](history/build-fingerprints.md)；自本版起这些数字由打包脚本写入产物旁的 `build-fingerprint.json`，不再事后手工采集。
+> 上一版 v0.12.4 的记录（含当日两次同号重发）见 [Workshop 上传记录](history/workshop-upload-v0.12.4_2026-09-15.md)。**工坊简体中文列表仍是旧版**（自 v0.11.0 起），待手工粘贴 `steam-workshop/description.zh-CN.txt`——`ModUploader` 没有语言参数，只能在工坊网页端做。
 
 旧路线图见 [PRODUCT_ROADMAP.md](PRODUCT_ROADMAP.md)（历史），旧交付原文见 [history/PRODUCT_PLAN_CURRENT_2026-09-07.md](history/PRODUCT_PLAN_CURRENT_2026-09-07.md) 和 [history/COOP_DELIVERY_2026-09-07.md](history/COOP_DELIVERY_2026-09-07.md)。[COOP_DELIVERY.md](COOP_DELIVERY.md) 现在只是历史证据索引。本页不继承历史文档中的审批、工作树或测试前执行约束。
 
 ## 1. 当前基线
+
+- **v0.12.5（当前发布基准）**：2026-09-17 发布，GitHub 与 Steam 工坊同日、同源、**各上传一次**。
+  发布提交 `f361bdb`（PR #145 的 `dev → main` 合并），tag `v0.12.5` 指向它；Release 资产
+  `sts2-ai-agent-v0.12.5-windows.zip` 562212 字节 / SHA256 `0E4A1518…CFED`；工坊 `file_size` 1238533
+  与本地 content 字节和相等、内容 id `2962740913650521121`、可见性 0（公开）。
+  见 [v0.12.5 发布记录](history/release-v0.12.5_2026-09-17.md)。
+
+  两条玩家 / agent 能感知的运行时修复，**都由驱动真实游戏发现、并在打过补丁的构建上复验**：
+  死亡后 `/state.screen` 恢复报 `GAME_OVER`（PR #142，此前整个结算阶段报 `COMBAT`，2346 个实机样本
+  里该名字一次没出现过）；失败的游戏动作说出游戏给的原因（PR #143，12 条路径此前共用一句
+  "the game task faulted"）。其余是 PR #141 的契约与工具收口。
+
+  本版是**第一个不需要同号重发的版本**：这两条修复同样是 tag 之后才发现的，但等在
+  `CHANGELOG.md` 新建的 `## Unreleased` 段里，直到本次发版才定版——而 v0.12.3 / v0.12.4 各有
+  三个同号构建，正是因为当时没有这个段落可写。构建指纹也首次由打包脚本自动产出，
+  发布记录里的哈希直接从 `build-fingerprint.json` 抄，不再事后手工采集。
 
 - **v0.12.4（工坊先行，随后补 GitHub 发布，当日两次同号重发）**：2026-09-15 更新到 Steam 工坊（物品 3796486050，公开，`file_size` 1233413，`time_updated` 2026-09-15 19:38:00，来源提交 `4b8e7c5`）。内容是 PR #132 的可靠性修复：邀请 / 继续队友立刻返回 `pending` 且并发第二发不再误报、请求计费补上此前漏记的路径、`state-invariants` 只在执行器 ready 时要求 `play_card`、首次 `--clientId` 启动的隔离档种子在两个平台都写进游戏真正读取的目录。GitHub 侧随 2026-09-16 的 `v0.12.4` tag 与 Release 一并补齐（资产 `sts2-ai-agent-v0.12.4-windows.zip` 557906 字节 / SHA256 `AD970DB1…`，与工坊第三次构建同源）。见 [Workshop 上传记录](history/workshop-upload-v0.12.4_2026-09-15.md)。
 （**同号重发**：修掉一份 `/state` 响应里 `available_actions` 与 `combat.action_readiness` 自相矛盾的一帧竞态——战斗门禁改为一次载荷只求值一次并沿调用链共享，readiness 成为它的纯投影；重发后 `file_size` 1236997、`time_updated` 2026-09-15 23:34:57。）
