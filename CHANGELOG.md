@@ -4,21 +4,16 @@
 
 ## v0.12.5 - 2026-09-17
 
-> **The first release this project did not have to re-cut.** Every one of the four same-version
-> re-publishes before it (v0.12.3 twice, v0.12.4 twice) began as a fix that landed after a tag with
-> nowhere in the changelog to live, so re-cutting the published version beat spending a number on it
-> — and the cost is permanent: three builds still answer to `0.12.4` and only size or hash tells them
-> apart. The `## Unreleased` section added during this cycle is where these changes waited instead,
-> and this heading is that section renamed.
+> Two fixes to what the mod reports about itself, both found by driving a running game rather than by
+> reading the code, and both re-verified live on the patched build. `/state.screen` reports
+> `GAME_OVER` again after a death, and a game action that fails now names the reason the game gave
+> instead of one blank sentence shared by twelve different actions.
 >
-> Two player-facing fixes carry the version. `/state.screen` reports `GAME_OVER` again after a death,
-> and a faulted game task now names the exception that faulted it instead of saying the same
-> contextless sentence for eleven different actions. Both were **found by driving the running game**,
-> not by reading the code, and both were re-verified live on the patched build.
+> Nothing changes for a run that is going well: no cards, no numbers, no save format.
 >
-> This release also ships the first `build-fingerprint.json`: every packaged file with its SHA256,
-> the summed byte count Steam reports as `file_size`, and the source commit. Telling two builds of
-> one version apart no longer depends on someone collecting those numbers by hand afterwards.
+> Packaging now writes a `build-fingerprint.json` beside each artifact — every file with its SHA256,
+> the summed byte count Steam reports as `file_size`, and the source commit — so a build can be
+> identified from a bug report without collecting those numbers by hand afterwards.
 
 ### Added
 
