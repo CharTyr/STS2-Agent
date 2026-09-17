@@ -9,11 +9,11 @@ Run the commands below from the repository root. The command determines whether 
 | `Push-Location mcp_server; uv run --locked python -m unittest discover -s tests -v; Pop-Location` | Python MCP unit tests using the standard-library `unittest` runner | No game required; tests use fakes and patched transport where appropriate |
 | `dotnet run --project STS2AIAgent.Tests/STS2AIAgent.Tests.csproj` | The custom executable C# core test harness | No game required; this is not a live Mod validation |
 | `powershell -ExecutionPolicy Bypass -File scripts/test-mcp-tool-profile.ps1` | Offline MCP tool-profile checks | No game required; keep the repository-root working directory |
-| `python scripts/check_verification_gates.py` | Ten offline gates: `lockfile`, `api-doc`, `api-facts`, `arch-facts`, `doc-marks`, `docs-tracked`, `packaged-links`, `script-encoding`, `ps1-syntax`, and `sh-syntax` (each is described in the gate table below) | No game, no network, standard library only. Exits 1 with the failing gate named on stderr; select one or more gates with `--only api-doc\|api-facts\|arch-facts\|doc-marks\|docs-tracked\|lockfile\|packaged-links\|ps1-syntax\|script-encoding\|sh-syntax`. When the repository root has no `.git` directory, `docs-tracked` prints a skip note (and the two syntax gates skip when `scripts/` holds no script of their kind, or when no interpreter is on `PATH`) instead of failing |
+| `python scripts/check_verification_gates.py` | Eleven offline gates: `lockfile`, `api-doc`, `api-facts`, `arch-facts`, `doc-links`, `doc-marks`, `docs-tracked`, `packaged-links`, `script-encoding`, `ps1-syntax`, and `sh-syntax` (each is described in the gate table below) | No game, no network, standard library only. Exits 1 with the failing gate named on stderr; select one or more gates with `--only api-doc\|api-facts\|arch-facts\|doc-links\|doc-marks\|docs-tracked\|lockfile\|packaged-links\|ps1-syntax\|script-encoding\|sh-syntax`, or run everything except one with `--skip <gate>`. When the repository root has no `.git` directory, `docs-tracked` prints a skip note (and the two syntax gates skip when `scripts/` holds no script of their kind, or when no interpreter is on `PATH`) instead of failing |
 | `powershell -ExecutionPolicy Bypass -File scripts/test-verification-gates.ps1` | Proves the gates above actually fail on drift, using a throwaway fixture in the temp directory | No game, no network; creates and removes its own fixture only |
 | `powershell -ExecutionPolicy Bypass -File scripts/preflight-release.ps1` | Build, Python compile/import, offline profile, unit-test, version, packaging-source, and release-document checks | Produces static preflight output. Its final “manual validation next” list means live gameplay still needs separate checks; see [preflight-release.ps1](../../../scripts/preflight-release.ps1#L140) |
 
-The ten gates are:
+The eleven gates are:
 
 | Gate | What it verifies |
 | --- | --- |
@@ -21,6 +21,7 @@ The ten gates are:
 | `api-doc` | Every action the `POST /action` switch accepts appears in the `docs/api.md` action contract block, and the block lists no retired action |
 | `api-facts` | Facts `docs/api.md` states that code owns: the documented `mod_version` vs `mod_manifest.json`, the screen enum vs `GameStateService.ResolveNonModalScreen`, and the documented default port vs `HttpServer.DefaultPort` |
 | `arch-facts` | The file table in `.trellis/spec/mod/architecture.md` against the files it measures: every listed file exists, its stated line count is within 5% of the real one, the stated file and line totals hold, and **every source file over 1,000 lines appears in the table**. That page went stale once already -- it carried pre-ADR-0001 counts and kept telling readers to add each new action to both action surfaces after that duplication was gone |
+| `doc-links` | Every relative Markdown link in a tracked page resolves to a file in the repository. `packaged-links` answers the narrower question of whether the three shipped documents still resolve once they are outside the repo; this covers the other four hundred pages, where a link breaks for the dullest reason there is -- a file moved and the pages pointing at it did not. Skips with a note outside a git work tree |
 | `doc-marks` | Date-stamped validation records carry a historical marker, and archived topic pages keep their redirect to `history/` |
 | `docs-tracked` | Every Markdown page under `docs/` is tracked by git, so a newly written page cannot fall out of a fresh checkout (which is what CI builds). Skips with a note when the repository root has no `.git` |
 | `packaged-links` | Every local link in the three packaged documents resolves inside the release artifact. Both the rewrite table and the shipped-file list are read from the packaging script and the artifact checker rather than copied here, so the gate cannot pass against a stale inventory |
@@ -38,7 +39,7 @@ These are the offline check entry points, plus the scripts that are deliberately
 
 | Entry point | Command | What it checks |
 | --- | --- | --- |
-| Offline verification gates | `python scripts/check_verification_gates.py` | The ten gates above; `--only <gate>` narrows the run |
+| Offline verification gates | `python scripts/check_verification_gates.py` | The eleven gates above; `--only <gate>` narrows the run |
 | Release metadata | `python scripts/check_release_metadata.py` | The five version sources below still agree |
 | Packaging source contract | `python scripts/check_release_package.py --source-root .` | The packaging script still collects the player-facing files (source mode; artifact mode inspects a real release directory or zip and is not an offline check) |
 | Budget proxy self-test | `python scripts/sts2-model-budget-proxy-selftest.py` | No-cost offline self-test of the validation budget proxy; asserts the real ledger is untouched and never calls the paid upstream |

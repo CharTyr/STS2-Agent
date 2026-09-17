@@ -15,10 +15,13 @@ function Write-Utf8([string]$Path, [string]$Text) {
     [System.IO.File]::WriteAllText($Path, $Text, $utf8)
 }
 
-function Invoke-Gate([string]$Fixture, [string]$Only) {
+function Invoke-Gate([string]$Fixture, [string]$Only, [string]$Skip) {
     $arguments = @("--repo-root", $Fixture)
     if ($Only) {
         $arguments += @("--only", $Only)
+    }
+    if ($Skip) {
+        $arguments += @("--skip", $Skip)
     }
 
     # A failing gate writes to stderr; that is the expected path here, not a script error.
@@ -170,14 +173,18 @@ try {
 
     $sourceDocs = Join-Path $repoRoot "docs"
     $fixtureDocs = Join-Path $fixture "docs"
-    Get-ChildItem -Path $sourceDocs -Recurse -File -Filter *.md | ForEach-Object {
+    # Every file, not only the Markdown: doc-links resolves links to screenshots and to the root
+    # status page, and a fixture holding the prose but not what it points at would make the gate
+    # report dangling links that are perfectly fine in the real tree. docs/ is 13 MB.
+    Copy-Item -LiteralPath (Join-Path $repoRoot "PRODUCT_PLAN_CURRENT.md") -Destination $fixture
+    Get-ChildItem -Path $sourceDocs -Recurse -File | ForEach-Object {
         $relative = $_.FullName.Substring($sourceDocs.Length).TrimStart([char]92, [char]47)
         $destination = Join-Path $fixtureDocs $relative
         New-Item -ItemType Directory -Path (Split-Path $destination) -Force | Out-Null
         Copy-Item -LiteralPath $_.FullName -Destination $destination
     }
 
-    $baseline = Invoke-Gate -Fixture $fixture -Only $null
+    $baseline = Invoke-Gate -Fixture $fixture -Only $null -Skip "doc-links"
     if ($baseline.ExitCode -ne 0) {
         Write-Host "FAIL  baseline (an unmodified fixture must pass)"
         Write-Host $baseline.Output
@@ -534,7 +541,72 @@ try {
     Assert-Case -Name "docs-tracked gate rejects a docs file git does not track" -Only "docs-tracked" -Expect "fixture-untracked-page.md"
     Remove-Item -LiteralPath $untrackedDoc -Force
 
-    $restored = Invoke-Gate -Fixture $fixture -Only $null
+    # 12. A relative Markdown link pointing at a file that is not there. This is the dullest way a
+    # repository decays -- someone moves a file and the pages that pointed at it keep pointing --
+    # and until 2026-09-17 nothing checked it outside the three packaged documents. A specification
+    # that sends a reader to a 404 stops being trusted and then stops being read.
+    #
+    # It gets its own tree. doc-links asks a question about a whole repository, and the fixture
+    # above is deliberately a handful of files: every link in README.md that points at LICENSE or
+    # the skills directory dangles there and is perfectly fine in the real checkout. Running it
+    # against a partial tree would mean a gate that reports problems it invented, so the two
+    # whole-suite runs skip it and this tree is built to hold exactly the links it declares.
+    $linkFixture = Join-Path ([System.IO.Path]::GetTempPath()) ("sts2-doc-links-" + [Guid]::NewGuid().ToString("N").Substring(0, 8))
+    try {
+        New-Item -ItemType Directory -Path $linkFixture | Out-Null
+        New-Item -ItemType Directory -Path (Join-Path $linkFixture "docs") | Out-Null
+        New-Item -ItemType Directory -Path (Join-Path $linkFixture "scripts") | Out-Null
+        Copy-Item -LiteralPath $gateScript -Destination (Join-Path $linkFixture "scripts/check_verification_gates.py")
+        Copy-Item -LiteralPath (Join-Path $repoRoot "README.md") -Destination $linkFixture
+        # The gate script refuses a directory that does not look like the repository root.
+        New-Item -ItemType Directory -Path (Join-Path $linkFixture "STS2AIAgent") | Out-Null
+        New-Item -ItemType Directory -Path (Join-Path $linkFixture "mcp_server") | Out-Null
+        Copy-Item -LiteralPath (Join-Path $repoRoot "STS2AIAgent/mod_manifest.json") -Destination (Join-Path $linkFixture "STS2AIAgent")
+        Copy-Item -LiteralPath (Join-Path $repoRoot "mcp_server/pyproject.toml") -Destination (Join-Path $linkFixture "mcp_server")
+        # README.md came from the real repo and links all over it, so replace it with one that
+        # points only at what this tree holds.
+        Write-Utf8 (Join-Path $linkFixture "README.md") ("# Fixture" + [char]10 + [char]10 + "[guide](./docs/guide.md)" + [char]10)
+        Write-Utf8 (Join-Path $linkFixture "docs/guide.md") ("# Guide" + [char]10 + [char]10 + "[back](../README.md)" + [char]10)
+        $linkInit = Invoke-Git -Path $linkFixture -Arguments @("init", "--quiet")
+        if ($linkInit.ExitCode -ne 0) { throw "fixture setup failed: git init for doc-links" }
+        $linkAdd = Invoke-Git -Path $linkFixture -Arguments @("add", "-A")
+        if ($linkAdd.ExitCode -ne 0) { throw "fixture setup failed: git add -A for doc-links" }
+
+        $linkClean = Invoke-Gate -Fixture $linkFixture -Only "doc-links"
+        if ($linkClean.ExitCode -ne 0) {
+            Write-Host "FAIL  doc-links gate accepts a tree whose links all resolve"
+            Write-Host $linkClean.Output
+            $script:failures++
+        }
+        else {
+            Write-Host "PASS  doc-links gate accepts a tree whose links all resolve"
+        }
+
+        Write-Utf8 (Join-Path $linkFixture "docs/guide.md") ("# Guide" + [char]10 + [char]10 + "[back](../README.md)" + [char]10 + [char]10 + "[moved](./fixture-no-such-page.md)" + [char]10)
+        $linkAdd2 = Invoke-Git -Path $linkFixture -Arguments @("add", "-A")
+        if ($linkAdd2.ExitCode -ne 0) { throw "fixture setup failed: git add -A after the doc-links mutation" }
+        $linkBroken = Invoke-Gate -Fixture $linkFixture -Only "doc-links"
+        if ($linkBroken.ExitCode -eq 0) {
+            Write-Host "FAIL  doc-links gate rejects a link to a file that is not there (gate accepted a drifted input)"
+            $script:failures++
+        }
+        elseif ((($linkBroken.Output -join "") -replace "[\s]", "") -notmatch "fixture-no-such-page.md") {
+            Write-Host "FAIL  doc-links gate names the dangling target"
+            Write-Host $linkBroken.Output
+            $script:failures++
+        }
+        else {
+            Write-Host "PASS  doc-links gate rejects a link to a file that is not there"
+            $linkMessage = ($linkBroken.Output -split "?
+" | Where-Object { $_ -match "verification gates failed" } | Select-Object -First 1)
+            Write-Host ("      " + $linkMessage.Trim())
+        }
+    }
+    finally {
+        Remove-Fixture -Path $linkFixture
+    }
+
+    $restored = Invoke-Gate -Fixture $fixture -Only $null -Skip "doc-links"
     if ($restored.ExitCode -ne 0) {
         Write-Host "FAIL  restored fixture (every mutation must be reverted)"
         Write-Host $restored.Output

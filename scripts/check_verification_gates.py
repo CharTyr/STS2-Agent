@@ -68,6 +68,7 @@ import shutil
 import subprocess
 import sys
 from pathlib import Path
+from urllib.parse import unquote
 
 # --- Gate configuration -----------------------------------------------------
 
@@ -967,17 +968,22 @@ def check_doc_marks(repo_root: Path) -> list[str]:
 
 def list_tracked_docs(repo_root: Path) -> set[str]:
     """Paths under docs/ that the git index tracks, as repo-root-relative posix strings."""
+    return list_tracked_files(repo_root, "docs")
+
+
+def list_tracked_files(repo_root: Path, pathspec: str) -> set[str]:
+    """Paths matching a git pathspec that the index tracks, as repo-root-relative posix strings."""
     try:
         result = subprocess.run(
             # -z prints pathnames verbatim (no quoting), so non-ASCII filenames compare as-is.
-            ["git", "-C", str(repo_root), "ls-files", "-z", "--", "docs"],
+            ["git", "-C", str(repo_root), "ls-files", "-z", "--", pathspec],
             capture_output=True,
             check=True,
         )
     except FileNotFoundError as exc:
         raise GateError(
             f"{repo_root} is a git work tree but 'git' could not be executed, so the "
-            "docs/ tracking check cannot run. Install git or run this gate from a checkout."
+            "tracked-file listing cannot run. Install git or run this gate from a checkout."
         ) from exc
     except subprocess.CalledProcessError as exc:
         detail = exc.stderr.decode("utf-8", "replace").strip()
@@ -1396,12 +1402,90 @@ def check_arch_facts(repo_root: Path) -> list[str]:
     return notes
 
 
+DOC_LINK = re.compile(r"\[[^\]]*\]\(([^)\s]+)(?:\s+\"[^\"]*\")?\)")
+DOC_FENCE = re.compile(r"```.*?```", re.DOTALL)
+# Paths whose Markdown is not this repository's prose: vendored trees and the template backup
+# Trellis keeps, which deliberately holds an older copy of pages that have since moved.
+DOC_LINK_SKIP = ("node_modules/", ".trellis/.backup")
+# The floor is proportional, not absolute. Its job is to catch an extraction that has
+# stopped matching -- the failure mode where a regex quietly returns nothing and the
+# gate reports success over zero links. An absolute number would also have meant the
+# gate could only ever run against a tree this size, which is not true of the fixture
+# the self-test builds. A page carries roughly one link here, so a quarter of that is
+# far below any healthy tree and far above a broken extraction.
+MIN_DOC_LINKS_PER_PAGE = 4
+
+
+def check_doc_links(repo_root: Path) -> list[str]:
+    """Every relative Markdown link in a tracked page resolves to something in the repo.
+
+    `packaged-links` answers a narrower question -- whether the three documents shipped inside the
+    release artifact still resolve once they are out of the repository. This one covers the other
+    four hundred pages, where a link breaks for the dullest reason there is: a file moved and the
+    pages that pointed at it did not. Nothing was checking, and a specification that sends a reader
+    to a 404 is how a document stops being trusted and then stops being read.
+    """
+    if not (repo_root / ".git").exists():
+        return [
+            f"{repo_root} has no .git directory, so it is not a git work tree: "
+            "skipping the Markdown link check"
+        ]
+
+    pages = [
+        relative
+        for relative in list_tracked_files(repo_root, "*.md")
+        if not relative.startswith(DOC_LINK_SKIP)
+    ]
+    if not pages:
+        return ["no tracked Markdown pages to check"]
+
+    broken: list[str] = []
+    checked = 0
+    for relative in pages:
+        path = repo_root / relative
+        if not path.is_file():
+            continue
+        try:
+            text = path.read_text(encoding="utf-8")
+        except (UnicodeDecodeError, OSError):
+            continue
+        for target in DOC_LINK.findall(DOC_FENCE.sub("", text)):
+            if target.startswith(("http://", "https://", "mailto:", "#")):
+                continue
+            # Strip the anchor and any query: this gate answers "does the file exist", and a
+            # heading anchor is not a file. Percent-escapes are undone so a link written with
+            # %20 for a space resolves the way a reader's browser would resolve it.
+            cleaned = unquote(target.split("#", 1)[0].split("?", 1)[0])
+            if not cleaned:
+                continue
+            checked += 1
+            if not (path.parent / cleaned).resolve().exists():
+                broken.append(f"{relative} -> {target}")
+
+    floor = max(1, len(pages) // MIN_DOC_LINKS_PER_PAGE)
+    if checked < floor:
+        raise GateError(
+            f"only {checked} relative Markdown link(s) were found across {len(pages)} tracked "
+            f"pages, below the {floor} expected. The extraction in check_verification_gates.py "
+            "has stopped matching the pages; fix it before trusting this gate."
+        )
+    if broken:
+        raise GateError(
+            "these Markdown links point at files that are not in the repository: "
+            + ", ".join(broken)
+            + ". A link usually breaks because the target moved, so check where the file went "
+            "rather than deleting the link."
+        )
+    return [f"{checked} relative link(s) across {len(pages)} tracked Markdown pages resolve"]
+
+
 GATES = {
     "lockfile": check_lockfile,
     "api-doc": check_api_doc,
     "api-facts": check_api_facts,
     "doc-marks": check_doc_marks,
     "docs-tracked": check_docs_tracked,
+    "doc-links": check_doc_links,
     "arch-facts": check_arch_facts,
     "packaged-links": check_packaged_links,
     "script-encoding": check_script_encoding,
@@ -1437,6 +1521,13 @@ def main() -> int:
     parser = argparse.ArgumentParser(description="Run the offline verification gates.")
     parser.add_argument("--repo-root", type=Path, default=Path(__file__).resolve().parent.parent)
     parser.add_argument("--only", choices=sorted(GATES), action="append", help="run only the named gate(s)")
+    parser.add_argument(
+        "--skip",
+        choices=sorted(GATES),
+        action="append",
+        help="run every gate except the named one(s); for a tree a gate cannot meaningfully "
+        "measure, such as the self-test's partial fixture against doc-links",
+    )
     args = parser.parse_args()
 
     repo_root: Path = args.repo_root.resolve()
@@ -1449,7 +1540,10 @@ def main() -> int:
         )
         return 1
 
-    selected = args.only or sorted(GATES)
+    selected = [name for name in (args.only or sorted(GATES)) if name not in set(args.skip or ())]
+    if not selected:
+        print("verification gates failed: every gate was skipped", file=sys.stderr)
+        return 1
     try:
         for name in selected:
             notes = GATES[name](repo_root)
