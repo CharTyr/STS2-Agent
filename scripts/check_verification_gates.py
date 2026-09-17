@@ -1270,12 +1270,139 @@ def check_sh_syntax(repo_root: Path) -> list[str]:
     return notes
 
 
+ARCH_SPEC_PATH = ".trellis/spec/mod/architecture.md"
+ARCH_TABLE_HEADING = "## Code shape and its known debts"
+# The size ratchet's default budget. A file past it is a file the architecture page has to name,
+# because "which files are big" is the one thing that page exists to answer.
+ARCH_LISTED_FLOOR = 1000
+# Line counts drift a few lines at a time and re-measuring on every commit would be a tax nobody
+# pays for long. 5% is wide enough that ordinary work never touches this gate and narrow enough
+# that a refactor cannot hide: the table sat at 8,559 for GameStateService.cs while the file was
+# 5,872, which is 46% out.
+ARCH_LINE_TOLERANCE = 0.05
+ARCH_FILE_ROW = re.compile(r"^\|\s*\[([^\]]+)\]\(([^)]+)\)\s*\|\s*([\d,]+)\s*\|", re.MULTILINE)
+ARCH_TOTALS = re.compile(
+    r"across\s+([\d,]+)\s+mod source files totalling\s+([\d,]+)\s+lines", re.MULTILINE
+)
+
+
+def count_lines(path: Path) -> int:
+    """Lines as `wc -l` counts them, which is what the size budgets and the table both mean."""
+    return path.read_text(encoding="utf-8").count("\n")
+
+
+def mod_source_files(repo_root: Path) -> list[Path]:
+    """Every tracked-shaped mod source file, skipping generated build output."""
+    mod_root = repo_root / "STS2AIAgent"
+    return sorted(
+        path
+        for path in mod_root.rglob("*.cs")
+        if not any(part in ("bin", "obj") for part in path.relative_to(mod_root).parts)
+    )
+
+
+def within_tolerance(stated: int, actual: int) -> bool:
+    return abs(stated - actual) <= max(1, round(actual * ARCH_LINE_TOLERANCE))
+
+
+def check_arch_facts(repo_root: Path) -> list[str]:
+    """The architecture page's measurements against the files it measures.
+
+    A page that says where the weight is, and is wrong about it, is worse than no page: it sends
+    the next person to the wrong file and tells them the shape of the code is something it is not.
+    This one went stale once already -- it carried pre-ADR-0001 numbers and told readers to add
+    every new action to *both* action surfaces for a month after that duplication was gone.
+    """
+    spec = read_text(repo_root, ARCH_SPEC_PATH)
+    if ARCH_TABLE_HEADING not in spec:
+        raise GateError(
+            f"{ARCH_SPEC_PATH} has no '{ARCH_TABLE_HEADING}' section. That section is where this "
+            "gate reads the measurements; renaming it silently turns the check off."
+        )
+
+    section = spec[spec.index(ARCH_TABLE_HEADING):]
+    rows = ARCH_FILE_ROW.findall(section)
+    if len(rows) < 3:
+        raise GateError(
+            f"{ARCH_SPEC_PATH}: the file table yielded {len(rows)} row(s). The table or the "
+            "extraction in check_verification_gates.py has changed shape; fix it before trusting "
+            "this gate."
+        )
+
+    notes: list[str] = []
+    listed: set[str] = set()
+    for name, link, stated_text in rows:
+        target = (repo_root / ".trellis" / "spec" / "mod" / link).resolve()
+        if not target.is_file():
+            raise GateError(
+                f"{ARCH_SPEC_PATH} lists {name}, but {link} resolves to no file. Either the file "
+                "moved and the row was left behind, or the link is wrong -- both send a reader "
+                "somewhere the code is not."
+            )
+        try:
+            relative = target.relative_to(repo_root.resolve()).as_posix()
+        except ValueError:
+            raise GateError(
+                f"{ARCH_SPEC_PATH} lists {name} at {link}, which resolves outside the repository."
+            ) from None
+        listed.add(relative)
+
+        stated = int(stated_text.replace(",", ""))
+        actual = count_lines(target)
+        if not within_tolerance(stated, actual):
+            raise GateError(
+                f"{ARCH_SPEC_PATH} says {relative} is {stated:,} lines; it is {actual:,}. "
+                "Re-measure the table. A page that is wrong about where the weight is sends the "
+                "next person to the wrong file."
+            )
+        notes.append(f"{relative}: {actual:,} lines, table says {stated:,}")
+
+    sources = mod_source_files(repo_root)
+    total_lines = sum(count_lines(path) for path in sources)
+    totals = ARCH_TOTALS.search(section)
+    if not totals:
+        raise GateError(
+            f"{ARCH_SPEC_PATH} no longer states how many mod source files it measured and how many "
+            "lines they hold. That sentence is what makes the table's shares meaningful."
+        )
+    stated_files = int(totals.group(1).replace(",", ""))
+    stated_total = int(totals.group(2).replace(",", ""))
+    if not within_tolerance(stated_files, len(sources)):
+        raise GateError(
+            f"{ARCH_SPEC_PATH} says the mod has {stated_files} source files; it has {len(sources)}."
+        )
+    if not within_tolerance(stated_total, total_lines):
+        raise GateError(
+            f"{ARCH_SPEC_PATH} says the mod totals {stated_total:,} lines; it totals "
+            f"{total_lines:,}. Re-measure."
+        )
+    notes.append(f"{len(sources)} mod source files totalling {total_lines:,} lines")
+
+    unlisted = sorted(
+        path.relative_to(repo_root).as_posix()
+        for path in sources
+        if count_lines(path) > ARCH_LISTED_FLOOR
+        and path.relative_to(repo_root).as_posix() not in listed
+    )
+    if unlisted:
+        raise GateError(
+            f"these files are over {ARCH_LISTED_FLOOR:,} lines and {ARCH_SPEC_PATH} does not name "
+            "them: " + ", ".join(unlisted) + ". The table is how someone finds out where the mod's "
+            "weight is; a monolith it omits is one nobody is watching."
+        )
+    notes.append(
+        f"every file over {ARCH_LISTED_FLOOR:,} lines appears in the table ({len(listed)} listed)"
+    )
+    return notes
+
+
 GATES = {
     "lockfile": check_lockfile,
     "api-doc": check_api_doc,
     "api-facts": check_api_facts,
     "doc-marks": check_doc_marks,
     "docs-tracked": check_docs_tracked,
+    "arch-facts": check_arch_facts,
     "packaged-links": check_packaged_links,
     "script-encoding": check_script_encoding,
     "ps1-syntax": check_ps1_syntax,

@@ -149,6 +149,25 @@ try {
     # api-facts also reads BuildHealthData, so the router has to be in the fixture too.
     Copy-Item -LiteralPath (Join-Path $repoRoot "STS2AIAgent/Server/Router.cs") -Destination $fixtureServerSource
 
+    # arch-facts measures the whole mod, not a handful of files: it counts every source file and
+    # then insists that each one over 1,000 lines appears in the architecture page's table. A
+    # fixture holding five files would make it measure a mod that does not exist, so the tree is
+    # mirrored whole. It is text and it is small.
+    $sourceMod = Join-Path $repoRoot "STS2AIAgent"
+    Get-ChildItem -Path $sourceMod -Recurse -File -Filter *.cs |
+        Where-Object { $_.FullName -notmatch "[\/](bin|obj)[\/]" } |
+        ForEach-Object {
+            $relative = $_.FullName.Substring($sourceMod.Length).TrimStart([char]92, [char]47)
+            $destination = Join-Path $fixtureAgent $relative
+            $parent = Split-Path -Parent $destination
+            if (-not (Test-Path -LiteralPath $parent)) { New-Item -ItemType Directory -Path $parent -Force | Out-Null }
+            Copy-Item -LiteralPath $_.FullName -Destination $destination -Force
+        }
+
+    $fixtureArchDir = Join-Path $fixture ".trellis/spec/mod"
+    New-Item -ItemType Directory -Path $fixtureArchDir -Force | Out-Null
+    Copy-Item -LiteralPath (Join-Path $repoRoot ".trellis/spec/mod/architecture.md") -Destination $fixtureArchDir
+
     $sourceDocs = Join-Path $repoRoot "docs"
     $fixtureDocs = Join-Path $fixture "docs"
     Get-ChildItem -Path $sourceDocs -Recurse -File -Filter *.md | ForEach-Object {
@@ -418,6 +437,38 @@ try {
     else {
         Write-Host "PASS  gate output survives a non-UTF-8 console"
     }
+
+    # 11a-c. The architecture page's measurements. This page went stale once already: it carried
+    # pre-ADR-0001 line counts for a month and, worse, kept telling readers to add every new action
+    # to *both* action surfaces after that duplication was gone. Numbers nobody checks are numbers
+    # that drift, and a page that is confidently wrong about the shape of the code is worse than no
+    # page at all.
+    $archDoc = Join-Path $fixture ".trellis/spec/mod/architecture.md"
+    $originalArch = Read-Utf8 $archDoc
+    $archNl = if ($originalArch.Contains([char]13 + [char]10)) { [char]13 + [char]10 } else { [char]10 }
+
+    $archRow = ($originalArch -split "`r?`n" | Where-Object { $_ -match "^\| \[GameStateService\.cs\]" } | Select-Object -First 1)
+    if (-not $archRow) { throw "fixture setup failed: architecture.md has no GameStateService.cs row" }
+    $staleRow = $archRow -replace "\| [\d,]+ \|", "| 8,559 |"
+    if ($staleRow -eq $archRow) { throw "fixture setup failed: could not rewrite the line count" }
+    Write-Utf8 $archDoc $originalArch.Replace($archRow, $staleRow)
+    Assert-Case -Name "arch-facts gate rejects a stale line count" -Only "arch-facts" -Expect "is 8,559 lines; it is"
+    Write-Utf8 $archDoc $originalArch
+
+    # A big file the table simply does not mention. This is the failure that matters most: the table
+    # is how someone finds out where the mod's weight is, so a monolith missing from it is one
+    # nobody is watching.
+    $roomsRow = ($originalArch -split "`r?`n" | Where-Object { $_ -match "^\| \[GameActionService\.Rooms\.cs\]" } | Select-Object -First 1)
+    if (-not $roomsRow) { throw "fixture setup failed: architecture.md has no GameActionService.Rooms.cs row" }
+    Write-Utf8 $archDoc $originalArch.Replace($roomsRow + $archNl, "")
+    Assert-Case -Name "arch-facts gate rejects a large file the table omits" -Only "arch-facts" -Expect "GameActionService.Rooms.cs"
+    Write-Utf8 $archDoc $originalArch
+
+    # Renaming the section is how a check like this gets turned off by accident rather than on
+    # purpose, so the gate refuses to pass when it cannot find what it reads.
+    Write-Utf8 $archDoc $originalArch.Replace("## Code shape and its known debts", "## Code shape")
+    Assert-Case -Name "arch-facts gate rejects a renamed section" -Only "arch-facts" -Expect "turns the check off"
+    Write-Utf8 $archDoc $originalArch
 
     # 9b. A packaged README linking to a file the release does not ship, at a target no rewrite
     # rule covers. This is the shape #105 shipped: the link was new, the rewrite table did not
