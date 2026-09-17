@@ -64,7 +64,19 @@ function Remove-Fixture([string]$Path) {
 $fixture = Join-Path ([System.IO.Path]::GetTempPath()) ("sts2-verification-gates-" + [Guid]::NewGuid().ToString("N").Substring(0, 8))
 $failures = 0
 
-function Assert-Case([string]$Name, [string]$Only, [scriptblock]$Mutate) {
+# $Expect is the point of this function, not decoration. Until 2026-09-17 a case passed on a
+# non-zero exit alone, so a gate that died for an unrelated reason -- a missing fixture file, an
+# import error, an encoding traceback -- read as "rejected the drifted input". That happened:
+# after GameStateService was split into three files, three api-facts cases reported PASS while
+# the gate was really failing with "missing required file". A case now names what it expects to
+# be told, and saying nothing is itself a failure.
+function Assert-Case([string]$Name, [string]$Only, [string]$Expect) {
+    if ([string]::IsNullOrWhiteSpace($Expect)) {
+        Write-Host "FAIL  $Name (the case declares no expected message)"
+        $script:failures++
+        return
+    }
+
     $result = Invoke-Gate -Fixture $fixture -Only $Only
     if ($result.ExitCode -eq 0) {
         Write-Host "FAIL  $Name (gate accepted a drifted input)"
@@ -75,6 +87,20 @@ function Assert-Case([string]$Name, [string]$Only, [scriptblock]$Mutate) {
     $message = ($result.Output -split "\r?\n" | Where-Object { $_ -match "verification gates failed" } | Select-Object -First 1)
     if (-not $message) {
         $message = $result.Output.Trim()
+    }
+
+    # Compared with all whitespace removed, against the whole output rather than one line.
+    # PowerShell wraps a native command's stderr at the console width, and it wraps mid-word: the
+    # name this case exists to see can arrive as "totally_" on one line and "made_up_action" on the
+    # next. Dropping whitespace is the same trick the C# source contracts use for the same reason.
+    $haystack = (($result.Output -join "") -replace "[\s]", "")
+    $needle = ($Expect -replace "[\s]", "")
+    if ($haystack -notmatch [regex]::Escape($needle)) {
+        Write-Host "FAIL  $Name (rejected, but not for the expected reason)"
+        Write-Host "      expected to contain: $Expect"
+        Write-Host "      got: $($message.Trim())"
+        $script:failures++
+        return
     }
 
     Write-Host "PASS  $Name"
@@ -112,6 +138,10 @@ try {
     New-Item -ItemType Directory -Path $fixtureAction -Force | Out-Null
     Copy-Item -LiteralPath (Join-Path $repoRoot "STS2AIAgent/Game/GameActionService.cs") -Destination $fixtureAction
     Copy-Item -LiteralPath (Join-Path $repoRoot "STS2AIAgent/Game/GameStateService.cs") -Destination $fixtureAction
+    # GameStateService is a partial class in three files: the builders, the compact agent_view
+    # and the payload declarations. api-facts reads all three, so the fixture mirrors all three.
+    Copy-Item -LiteralPath (Join-Path $repoRoot "STS2AIAgent/Game/GameStateService.AgentView.cs") -Destination $fixtureAction
+    Copy-Item -LiteralPath (Join-Path $repoRoot "STS2AIAgent/Game/GameStateService.Payloads.cs") -Destination $fixtureAction
 
     $fixtureServerSource = Join-Path $fixture "STS2AIAgent/Server"
     New-Item -ItemType Directory -Path $fixtureServerSource -Force | Out-Null
@@ -143,7 +173,7 @@ try {
     $original = Read-Utf8 $apiDoc
     $mutated = ($original -split "\r?\n" | Where-Object { $_ -notmatch '^- `choose_bundle`' }) -join "`n"
     Write-Utf8 $apiDoc $mutated
-    Assert-Case -Name "api-doc drift rejects undocumented action" -Only "api-doc"
+    Assert-Case -Name "api-doc drift rejects undocumented action" -Only "api-doc" -Expect "does not document these actions"
     Write-Utf8 $apiDoc $original
 
     # 2. A documented action the code does not accept.
@@ -154,7 +184,7 @@ try {
     $mutated = $original.Replace("<!-- END ACTION CONTRACT -->", $phantom + [char]10 + "<!-- END ACTION CONTRACT -->")
     if ($mutated -eq $original) { throw "fixture setup failed: the action contract end marker was not found in docs/api.md" }
     Write-Utf8 $apiDoc $mutated
-    Assert-Case -Name "api-doc drift rejects phantom action" -Only "api-doc"
+    Assert-Case -Name "api-doc drift rejects phantom action" -Only "api-doc" -Expect "totally_made_up_action"
     Write-Utf8 $apiDoc $original
 
     # 3. A lockfile below the security floor.
@@ -163,7 +193,7 @@ try {
     $mutated = $originalLock -replace '(?m)^(name = "fastmcp"\r?\nversion = ")[^"]+(")', '${1}3.1.0${2}'
     if ($mutated -eq $originalLock) { throw "fixture setup failed: could not rewrite the fastmcp version in uv.lock" }
     Write-Utf8 $uvLock $mutated
-    Assert-Case -Name "lockfile gate rejects a version below the security floor" -Only "lockfile"
+    Assert-Case -Name "lockfile gate rejects a version below the security floor" -Only "lockfile" -Expect "below the safe floor"
     Write-Utf8 $uvLock $originalLock
 
     # 3b. A manifest that demands more than the lock resolves (the lock is stale, not unsafe).
@@ -172,7 +202,7 @@ try {
     $mutated = $originalPyproject -replace 'fastmcp>=3\.1\.0,<4\.0\.0', 'fastmcp>=9.0.0,<10.0.0'
     if ($mutated -eq $originalPyproject) { throw "fixture setup failed: could not rewrite the fastmcp range in pyproject.toml" }
     Write-Utf8 $pyproject $mutated
-    Assert-Case -Name "lockfile gate rejects a stale uv.lock against its manifest" -Only "lockfile"
+    Assert-Case -Name "lockfile gate rejects a stale uv.lock against its manifest" -Only "lockfile" -Expect "uv.lock is out of sync"
     Write-Utf8 $pyproject $originalPyproject
 
     # 3c. An npm manifest that demands a version the lock cannot satisfy.
@@ -181,7 +211,7 @@ try {
     $mutated = $originalNpmManifest -replace '"@sammysnake/fast-context-mcp": "\^1\.2\.0"', '"@sammysnake/fast-context-mcp": "^99.0.0"'
     if ($mutated -eq $originalNpmManifest) { throw "fixture setup failed: could not rewrite the npm dependency range" }
     Write-Utf8 $npmManifest $mutated
-    Assert-Case -Name "lockfile gate rejects a stale package-lock against its manifest" -Only "lockfile"
+    Assert-Case -Name "lockfile gate rejects a stale package-lock against its manifest" -Only "lockfile" -Expect "package-lock.json is out of sync"
     Write-Utf8 $npmManifest $originalNpmManifest
 
     # 4. A date-stamped record without its historical marker.
@@ -189,7 +219,7 @@ try {
     $originalDated = Read-Utf8 $datedDoc
     $mutated = ($originalDated -split "\r?\n" | Where-Object { $_ -notmatch 'Historical snapshot|历史快照' }) -join "`n"
     Write-Utf8 $datedDoc $mutated
-    Assert-Case -Name "doc-marks gate rejects an unmarked snapshot" -Only "doc-marks"
+    Assert-Case -Name "doc-marks gate rejects an unmarked snapshot" -Only "doc-marks" -Expect "phase-8-validation-2026-03-11.md"
     Write-Utf8 $datedDoc $originalDated
 
     $matrixDoc = Join-Path $fixtureDocs "mechanic-coverage-matrix.md"
@@ -197,7 +227,7 @@ try {
     $mutated = ($originalMatrix -split "\r?\n" | Where-Object { $_ -notmatch 'Historical snapshot|历史快照' }) -join "`n"
     if ($mutated -eq $originalMatrix) { throw "fixture setup failed: the matrix header holds no marker to remove" }
     Write-Utf8 $matrixDoc $mutated
-    Assert-Case -Name "doc-marks gate rejects an unmarked date-less snapshot" -Only "doc-marks"
+    Assert-Case -Name "doc-marks gate rejects an unmarked date-less snapshot" -Only "doc-marks" -Expect "mechanic-coverage-matrix.md"
     Write-Utf8 $matrixDoc $originalMatrix
 
    # 5. An archived topic page that lost its redirect.
@@ -205,7 +235,7 @@ try {
     $originalRedirect = Read-Utf8 $redirectDoc
     $mutated = $originalRedirect -replace 'history/sts2-coverage-gaps_2026-03-10.md', 'somewhere-else.md'
     Write-Utf8 $redirectDoc $mutated
-    Assert-Case -Name "doc-marks gate rejects a broken archive redirect" -Only "doc-marks"
+    Assert-Case -Name "doc-marks gate rejects a broken archive redirect" -Only "doc-marks" -Expect "must redirect to history/"
     Write-Utf8 $redirectDoc $originalRedirect
 
     # 6. A PowerShell script with non-ASCII text saved without a UTF-8 BOM. Windows PowerShell 5.1
@@ -226,7 +256,7 @@ try {
     }
 
     Write-Utf8 $encodingScript $fixtureBody
-    Assert-Case -Name "script-encoding gate rejects non-ASCII without a BOM" -Only "script-encoding"
+    Assert-Case -Name "script-encoding gate rejects non-ASCII without a BOM" -Only "script-encoding" -Expect "fixture-non-ascii.ps1"
     Remove-Item -LiteralPath $encodingScript -Force
 
     # 6b. No .ps1 to parse at all. The fixture scripts/ holds the gate copy plus the packaged-links
@@ -267,7 +297,7 @@ try {
     # failure the gate exists to catch.
     $brokenPs1 = Join-Path (Join-Path $fixture "scripts") "fixture-broken-probe.ps1"
     Write-Utf8 $brokenPs1 ("if (" + [char]10)
-    Assert-Case -Name "ps1-syntax gate rejects a script with a syntax error" -Only "ps1-syntax"
+    Assert-Case -Name "ps1-syntax gate rejects a script with a syntax error" -Only "ps1-syntax" -Expect "fixture-broken-probe.ps1"
     Remove-Item -LiteralPath $brokenPs1 -Force
 
     # 7. The mod version documented in docs/api.md drifting away from the manifest.
@@ -276,14 +306,14 @@ try {
     $mutated = $originalFactsDoc -replace '"mod_version": "[^"]+"', '"mod_version": "0.0.1"'
     if ($mutated -eq $originalFactsDoc) { throw "fixture setup failed: docs/api.md has no mod_version value to rewrite" }
     Write-Utf8 $factsDoc $mutated
-    Assert-Case -Name "api-facts gate rejects a stale documented mod_version" -Only "api-facts"
+    Assert-Case -Name "api-facts gate rejects a stale documented mod_version" -Only "api-facts" -Expect "states mod_version 0.0.1"
     Write-Utf8 $factsDoc $originalFactsDoc
 
     # 8. A screen the code can emit but the docs enum no longer lists.
     $mutated = ($originalFactsDoc -split "\r?\n" | Where-Object { $_ -notmatch ('^\| ' + [char]96 + 'CARDS_VIEW' + [char]96) }) -join [char]10
     if ($mutated -eq $originalFactsDoc) { throw "fixture setup failed: docs/api.md has no CARDS_VIEW screen row" }
     Write-Utf8 $factsDoc $mutated
-    Assert-Case -Name "api-facts gate rejects a screen missing from the docs enum" -Only "api-facts"
+    Assert-Case -Name "api-facts gate rejects a screen missing from the docs enum" -Only "api-facts" -Expect "can emit screens missing from"
     Write-Utf8 $factsDoc $originalFactsDoc
 
     # 9. The documented default port drifting away from HttpServer.DefaultPort.
@@ -292,7 +322,7 @@ try {
     $mutated = $originalHttpServer -replace 'const int DefaultPort = \d+', 'const int DefaultPort = 9999'
     if ($mutated -eq $originalHttpServer) { throw "fixture setup failed: HttpServer.cs has no DefaultPort constant to rewrite" }
     Write-Utf8 $httpServer $mutated
-    Assert-Case -Name "api-facts gate rejects a default port the docs do not state" -Only "api-facts"
+    Assert-Case -Name "api-facts gate rejects a default port the docs do not state" -Only "api-facts" -Expect "states default port 8080"
     Write-Utf8 $httpServer $originalHttpServer
 
     # 9c. The /state combat payload records drifting away from the docs/api.md tables that
@@ -302,7 +332,7 @@ try {
 " | Where-Object { $_ -notmatch ('^\| ' + [char]96 + 'lethal_risks' + [char]96 + ' \|') }) -join [char]10
     if ($mutated -eq $originalFactsDoc) { throw "fixture setup failed: docs/api.md has no lethal_risks field row" }
     Write-Utf8 $factsDoc $mutated
-    Assert-Case -Name "api-facts gate rejects a combat payload field the docs stop listing" -Only "api-facts"
+    Assert-Case -Name "api-facts gate rejects a combat payload field the docs stop listing" -Only "api-facts" -Expect "CombatPayload serializes fields"
     Write-Utf8 $factsDoc $originalFactsDoc
 
     # 9d. The other direction: a documented field the record never serializes, which is what a
@@ -313,7 +343,7 @@ try {
     $ghostRow = '| ' + [char]96 + 'ghost_field' + [char]96 + ' | object | fixture |'
     $mutated = $originalFactsDoc.Replace($playerRow, $playerRow + [char]10 + $ghostRow)
     Write-Utf8 $factsDoc $mutated
-    Assert-Case -Name "api-facts gate rejects a documented field the payload never serializes" -Only "api-facts"
+    Assert-Case -Name "api-facts gate rejects a documented field the payload never serializes" -Only "api-facts" -Expect "table lists fields"
     Write-Utf8 $factsDoc $originalFactsDoc
 
     # 9e. A reason code EvaluateCombatActionGate can answer with that the docs never mention.
@@ -323,23 +353,23 @@ try {
 " | Where-Object { $_ -notmatch ('^\| ' + [char]96 + 'snapshot_stabilizing' + [char]96 + ' \|') }) -join [char]10
     if ($mutated -eq $originalFactsDoc) { throw "fixture setup failed: docs/api.md has no snapshot_stabilizing reason row" }
     Write-Utf8 $factsDoc $mutated
-    Assert-Case -Name "api-facts gate rejects an undocumented action_readiness reason" -Only "api-facts"
+    Assert-Case -Name "api-facts gate rejects an undocumented action_readiness reason" -Only "api-facts" -Expect "reason codes the docs/api.md"
     Write-Utf8 $factsDoc $originalFactsDoc
 
     # 9f. A payload field that no table owns and that docs/api.md never names. The per-table cases
     # above only cover records that have a table; this is the coarse net under them, and it is the
     # one that was missing while 91 fields -- whole screens, including character select, the
     # multiplayer lobby and game over -- shipped undocumented.
-    $stateService = Join-Path $fixture "STS2AIAgent/Game/GameStateService.cs"
+    $stateService = Join-Path $fixture "STS2AIAgent/Game/GameStateService.Payloads.cs"
     $originalStateService = Read-Utf8 $stateService
     $nl = if ($originalStateService.Contains([char]13 + [char]10)) { [char]13 + [char]10 } else { [char]10 }
     $orbAnchor = "internal sealed class CombatOrbPayload"
-    if ($originalStateService.IndexOf($orbAnchor) -lt 0) { throw "fixture setup failed: GameStateService.cs has no CombatOrbPayload record" }
+    if ($originalStateService.IndexOf($orbAnchor) -lt 0) { throw "fixture setup failed: GameStateService.Payloads.cs has no CombatOrbPayload record" }
     $strayRecord = "internal sealed class FixtureStrayPayload" + $nl + "{" + $nl + "    public int fixture_undocumented_field { get; init; }" + $nl + "}" + $nl + $nl + $orbAnchor
     $mutated = $originalStateService.Replace($orbAnchor, $strayRecord)
     if ($mutated -eq $originalStateService) { throw "fixture setup failed: could not inject a stray payload record" }
     Write-Utf8 $stateService $mutated
-    Assert-Case -Name "api-facts gate rejects a payload field docs/api.md never names" -Only "api-facts"
+    Assert-Case -Name "api-facts gate rejects a payload field docs/api.md never names" -Only "api-facts" -Expect "fixture_undocumented_field"
     Write-Utf8 $stateService $originalStateService
 
     # 9g. The compact rename table claiming a rename the agent view does not perform. The compact
@@ -353,7 +383,7 @@ try {
     $brokenRow = $renameRow.Replace($tick + 'embark' + $tick + ' / ', $tick + 'disembark' + $tick + ' / ')
     if ($brokenRow -eq $renameRow) { throw "fixture setup failed: could not rewrite the compact rename row" }
     Write-Utf8 $factsDoc $originalFactsDoc.Replace($renameRow, $brokenRow)
-    Assert-Case -Name "api-facts gate rejects a compact rename the agent view does not perform" -Only "api-facts"
+    Assert-Case -Name "api-facts gate rejects a compact rename the agent view does not perform" -Only "api-facts" -Expect "compact rename table claims"
     Write-Utf8 $factsDoc $originalFactsDoc
 
     # 9h. A GET /health key that only appears in the example JSON. /health is the first call any
@@ -363,7 +393,7 @@ try {
     $serviceRow = ($originalFactsDoc -split ([char]10) | Where-Object { $_ -match ('^\| ' + $tick + 'service' + $tick + ' \|') } | Select-Object -First 1)
     if (-not $serviceRow) { throw "fixture setup failed: docs/api.md has no service row in the /health table" }
     Write-Utf8 $factsDoc $originalFactsDoc.Replace($serviceRow + [char]10, "")
-    Assert-Case -Name "api-facts gate rejects an undocumented GET /health key" -Only "api-facts"
+    Assert-Case -Name "api-facts gate rejects an undocumented GET /health key" -Only "api-facts" -Expect "GET /health answers with keys"
     Write-Utf8 $factsDoc $originalFactsDoc
 
     # 9i. The gate's own output on a console that is not UTF-8. Gate messages quote the Chinese
@@ -450,7 +480,7 @@ try {
 
     $untrackedDoc = Join-Path $fixtureDocs "fixture-untracked-page.md"
     Write-Utf8 $untrackedDoc "# Fixture page`n"
-    Assert-Case -Name "docs-tracked gate rejects a docs file git does not track" -Only "docs-tracked"
+    Assert-Case -Name "docs-tracked gate rejects a docs file git does not track" -Only "docs-tracked" -Expect "fixture-untracked-page.md"
     Remove-Item -LiteralPath $untrackedDoc -Force
 
     $restored = Invoke-Gate -Fixture $fixture -Only $null

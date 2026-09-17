@@ -24,6 +24,7 @@ internal static class SourceCoverageTests
     {
         "STS2AIAgent/Game/GameStateService.cs",
         "STS2AIAgent/Game/GameStateService.AgentView.cs",
+        "STS2AIAgent/Game/GameStateService.Payloads.cs",
         "STS2AIAgent/Game/GameActionService.cs",
         "STS2AIAgent/Game/GameActionService.Combat.cs",
         "STS2AIAgent/Game/GameActionService.Coop.cs",

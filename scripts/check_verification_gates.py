@@ -124,6 +124,7 @@ GAME_STATE_PATH = "STS2AIAgent/Game/GameStateService.cs"
 # so the size ratchet could watch it separately. A check reads whichever file owns what it
 # asks about, and each one fails loudly when its extraction comes back empty.
 AGENT_VIEW_PATH = "STS2AIAgent/Game/GameStateService.AgentView.cs"
+PAYLOADS_PATH = "STS2AIAgent/Game/GameStateService.Payloads.cs"
 # The leading @ is C#'s escape for a keyword used as an identifier -- `public EventPayload? @event`
 # serializes as "event". Missing it would read as "the docs list a field the code does not have".
 CSHARP_PAYLOAD_PROPERTY = re.compile(
@@ -631,11 +632,11 @@ def first_doc_table(section: str, heading: str) -> str:
 
 def parse_code_payload_fields(game_state: str, declaration: str) -> set[str]:
     """Serialized property names of a payload record, which are the JSON keys clients receive."""
-    body = slice_class_body(game_state, declaration, GAME_STATE_PATH)
+    body = slice_class_body(game_state, declaration, PAYLOADS_PATH)
     fields = set(CSHARP_PAYLOAD_PROPERTY.findall(body))
     if not fields:
         raise GateError(
-            f"{GAME_STATE_PATH}: '{declaration}' yielded no serialized properties. The extraction "
+            f"{PAYLOADS_PATH}: '{declaration}' yielded no serialized properties. The extraction "
             "in check_verification_gates.py no longer matches the record; fix it before trusting "
             "this gate."
         )
@@ -658,10 +659,12 @@ def parse_code_gate_reasons(game_state: str) -> set[str]:
 def check_combat_payload_docs(repo_root: Path, api_doc: str) -> list[str]:
     """The /state combat payload records and the docs/api.md tables that describe them."""
     notes: list[str] = []
+    # Two files, on purpose: the records are declarations and the gate that fills them is logic.
+    payloads = read_text(repo_root, PAYLOADS_PATH)
     game_state = read_text(repo_root, GAME_STATE_PATH)
 
     for declaration, heading in COMBAT_PAYLOAD_TABLES:
-        code_fields = parse_code_payload_fields(game_state, declaration)
+        code_fields = parse_code_payload_fields(payloads, declaration)
         section = slice_doc_subsection(api_doc, heading, "docs/api.md")
         documented = set(DOC_FIELD_ROW.findall(first_doc_table(section, heading)))
         missing = sorted(code_fields - documented)
@@ -709,11 +712,11 @@ def check_state_payload_coverage(repo_root: Path, api_doc: str) -> list[str]:
     missing when 91 fields -- whole screens, including character select, the multiplayer lobby and
     game over -- shipped with no mention anywhere a client could read.
     """
-    game_state = read_text(repo_root, GAME_STATE_PATH)
+    game_state = read_text(repo_root, PAYLOADS_PATH)
     records = sorted(set(STATE_PAYLOAD_RECORD.findall(game_state)))
     if len(records) < MIN_STATE_PAYLOAD_RECORDS:
         raise GateError(
-            f"{GAME_STATE_PATH} yielded {len(records)} payload records, below the "
+            f"{PAYLOADS_PATH} yielded {len(records)} payload records, below the "
             f"{MIN_STATE_PAYLOAD_RECORDS} expected. The extraction in check_verification_gates.py "
             "no longer matches the file; fix it before trusting this gate."
         )
@@ -730,7 +733,7 @@ def check_state_payload_coverage(repo_root: Path, api_doc: str) -> list[str]:
     undocumented: list[str] = []
     checked = 0
     for record in records:
-        body = slice_class_body(game_state, f"internal sealed class {record}", GAME_STATE_PATH)
+        body = slice_class_body(game_state, f"internal sealed class {record}", PAYLOADS_PATH)
         fields = sorted(set(CSHARP_PAYLOAD_PROPERTY.findall(body)))
         if not fields:
             continue
