@@ -26,7 +26,7 @@ import re
 import unittest
 from pathlib import Path
 
-from sts2_mcp.server import (
+from sts2_mcp.game_data import (
     _FALLBACK_ITEM_SOURCES,
     _SCENE_FIELD_SETS,
     _SCENE_ITEM_SOURCES,

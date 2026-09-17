@@ -4,9 +4,11 @@ import asyncio
 import unittest
 from unittest.mock import patch
 
+import sts2_mcp.game_data as game_data_module
 import sts2_mcp.server as server_module
 from sts2_mcp.client import Sts2ApiError
-from sts2_mcp.server import create_server, get_game_data_items_fields
+from sts2_mcp.game_data import get_game_data_items_fields
+from sts2_mcp.server import create_server
 
 # Independent snapshots of the scene field sets, deliberately spelled out as literals.
 # Deriving them from _SCENE_FIELD_SETS would make every assertion below self-referential:
@@ -223,7 +225,7 @@ class GameDataToolsTests(unittest.TestCase):
             "type": "Event",
         }
 
-        with patch("sts2_mcp.server._ensure_game_data_index", return_value={"MYSTERY": event_item}):
+        with patch("sts2_mcp.game_data._ensure_game_data_index", return_value={"MYSTERY": event_item}):
             result = tool.fn(collection="events", item_ids="MYSTERY")
 
         self.assertEqual(
@@ -242,7 +244,7 @@ class GameDataToolsTests(unittest.TestCase):
 
     def test_get_game_data_items_fields_filters_fields(self) -> None:
         with patch(
-            "sts2_mcp.server._ensure_game_data_index",
+            "sts2_mcp.game_data._ensure_game_data_index",
             return_value={
                 "ABRASIVE": {"id": "ABRASIVE", "name": "Abrasive", "cost": 2},
                 "JOLT": {"id": "JOLT", "name": "Jolt", "cost": 1},
@@ -262,7 +264,7 @@ class GameDataToolsTests(unittest.TestCase):
         payload = {
             "ABRASIVE": {"id": "ABRASIVE", "name": "Abrasive", "cost": 2},
         }
-        with patch("sts2_mcp.server._ensure_game_data_index", return_value=payload):
+        with patch("sts2_mcp.game_data._ensure_game_data_index", return_value=payload):
             result_with_empty_fields = get_game_data_items_fields(
                 collection="cards",
                 item_ids="ABRASIVE",
@@ -310,16 +312,16 @@ class GameDataToolsTests(unittest.TestCase):
         self.assertEqual(result["error"]["collection"], "cards")
 
     def test_ensure_game_data_index_supports_case_insensitive_lookup_for_dict_collection(self) -> None:
-        with patch.object(server_module, "_GAME_DATA_COLLECTIONS", {}), patch.object(server_module, "_GAME_DATA_INDEXES", {}):
+        with patch.object(game_data_module, "_GAME_DATA_COLLECTIONS", {}), patch.object(game_data_module, "_GAME_DATA_INDEXES", {}):
             with patch(
-                "sts2_mcp.server._load_game_data_collection",
+                "sts2_mcp.game_data._load_game_data_collection",
                 return_value={"ABRASIVE": {"id": "ABRASIVE", "name": "Abrasive"}},
             ):
-                index = server_module._ensure_game_data_index("cards")
+                index = game_data_module._ensure_game_data_index("cards")
 
         self.assertEqual(index["ABRASIVE"]["id"], "ABRASIVE")
         self.assertEqual(index["abrasive"]["id"], "ABRASIVE")
-        self.assertEqual(server_module._lookup_game_data_item(index=index, item_id="Abrasive")["id"], "ABRASIVE")
+        self.assertEqual(game_data_module._lookup_game_data_item(index=index, item_id="Abrasive")["id"], "ABRASIVE")
 
     def test_game_data_errors_carry_the_same_envelope_fields_as_action_errors(self) -> None:
         """The play skill branches on error.code/retryable/status_code for any failed call.
@@ -340,7 +342,7 @@ class GameDataToolsTests(unittest.TestCase):
 
         with patch(
             "sts2_mcp.server._ensure_game_data_index",
-            side_effect=server_module.GameDataUnavailableError(
+            side_effect=game_data_module.GameDataUnavailableError(
                 "boom", code="mod_unreachable", status_code=503, retryable=True),
         ):
             unavailable = items_tool.fn(collection="cards", item_ids="ABRASIVE")
