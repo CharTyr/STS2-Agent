@@ -8,8 +8,8 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-1.md`
-- **Total Sessions**: 26
-- **Last Active**: 2026-09-14
+- **Total Sessions**: 27
+- **Last Active**: 2026-09-17
 <!-- @@@/auto:current-status -->
 
 ---
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-1.md` | ~1058 | Active |
+| `journal-1.md` | ~1121 | Active |
 <!-- @@@/auto:active-documents -->
 
 ---
@@ -29,6 +29,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 27 | 2026-09-17 | Close the drift that forced four re-cuts, ship v0.12.5, and collapse the action surface | `8e8835b`, `3825ead`, `abcd0db`, `d4af047`, `1b39c97`, `a4bff32`, `e644300`, `9bcaee6`, `dfd61bf`, `f1b2de7`, `0324285`, `ea732af` | `dev` |
 | 26 | 2026-09-14 | Revive dev: fast-forward it back and write down the rule that keeps it from drifting | `4a01e22`, `a92f5a6` | `main` |
 | 25 | 2026-09-14 | POSIX path parity: one resolver, 29 offline assertions, and the defects that exposed | `5d53d50`, `ca0a9cd` | `main` |
 | 24 | 2026-09-14 | 2026-09-14 v0.12.3 third build: live-pass fix plus the ten-goal sweep | `6a4b3a0`, `3d2eefb`, `74d03c9`, `052dac8`, `68bbd0a`, `c2630a8`, `0d42f94` | `main` |
