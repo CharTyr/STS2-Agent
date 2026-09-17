@@ -47,6 +47,17 @@
   On the Python side `client.py`'s 58 per-action wrappers moved to `client_actions.py` as a mixin.
   Both halves now fit the default budget, so neither has a budget entry any more.
 
+
+- **The MCP server's game-data half moved out.** Loading a collection, caching it, indexing it by id,
+  deriving which ids the current screen makes relevant and projecting requested fields is one job;
+  registering MCP tools is another. `game_data.py` holds the first, `server.py` drops 1,103 -> 707
+  lines, and its budget comes down 1,150 -> 750.
+
+- **`AgentOverlayHost.cs` will not be split, and the architecture page now says why.** At 1,829 lines
+  it reads like an oversight next to the two files that did come apart. It was measured instead:
+  78 of its 85 instance fields are touched by more than one method, so partials would scatter shared
+  mutable state to make the files smaller.
+
 ### Added
 
 - **Two offline gates, bringing the set to eleven.** `arch-facts` checks the architecture
@@ -58,6 +69,20 @@
 
   Both gates ask git what the repository contains, not the filesystem -- see below for why that
   distinction cost a CI run to learn.
+
+
+- **The three contract surfaces besides the payload are checked.** `docs/api.md` tells a client
+  four things it branches on: which routes it may call, which payload fields it reads, which error
+  codes it must handle, and which event types it can wait for. Only the payload half was checked,
+  and three error codes had already slipped out of the table -- `listener_error` (500),
+  `method_not_allowed` (405) and `payload_too_large` (413), each one a real response an agent can
+  receive with nothing to look up. All three are documented now, and `api-facts` compares all three
+  surfaces in both directions, with the HTTP status included: a code the mod never sends is a branch
+  nobody can take, and a row with the right name and the wrong number is worse than no row.
+
+- `doc-links` now checks that a `#L<n>` anchor names a line its file still has. Six anchors in the
+  MCP specs had gone stale when `client.py` and `server.py` were split -- a line anchor rots as soon
+  as the file is edited, and it rots quietly, because the link still opens.
 
 ### Fixed
 
@@ -87,33 +112,6 @@
 - The architecture specification was stale: it carried pre-ADR-0001 measurements and still told
   readers to add each new action to **both** action surfaces, a month after that duplication was
   gone. Rewritten, and now held to the files by the `arch-facts` gate.
-
-### Added
-
-- **The three contract surfaces besides the payload are checked.** `docs/api.md` tells a client
-  four things it branches on: which routes it may call, which payload fields it reads, which error
-  codes it must handle, and which event types it can wait for. Only the payload half was checked,
-  and three error codes had already slipped out of the table -- `listener_error` (500),
-  `method_not_allowed` (405) and `payload_too_large` (413), each one a real response an agent can
-  receive with nothing to look up. All three are documented now, and `api-facts` compares all three
-  surfaces in both directions, with the HTTP status included: a code the mod never sends is a branch
-  nobody can take, and a row with the right name and the wrong number is worse than no row.
-
-- `doc-links` now checks that a `#L<n>` anchor names a line its file still has. Six anchors in the
-  MCP specs had gone stale when `client.py` and `server.py` were split -- a line anchor rots as soon
-  as the file is edited, and it rots quietly, because the link still opens.
-
-### Changed
-
-- **The MCP server's game-data half moved out.** Loading a collection, caching it, indexing it by id,
-  deriving which ids the current screen makes relevant and projecting requested fields is one job;
-  registering MCP tools is another. `game_data.py` holds the first, `server.py` drops 1,103 -> 707
-  lines, and its budget comes down 1,150 -> 750.
-
-- **`AgentOverlayHost.cs` will not be split, and the architecture page now says why.** At 1,829 lines
-  it reads like an oversight next to the two files that did come apart. It was measured instead:
-  78 of its 85 instance fields are touched by more than one method, so partials would scatter shared
-  mutable state to make the files smaller.
 
 ### Documentation
 
