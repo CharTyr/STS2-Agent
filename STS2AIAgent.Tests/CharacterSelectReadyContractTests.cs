@@ -45,23 +45,20 @@ internal static class CharacterSelectReadyContractTests
     {
         var state = AgentSourceFixture.Read(StatePath);
 
-        var names = AgentSourceFixture.MethodBody(state, "BuildAvailableActionNames");
-        Assert.Contains(SelectGuard, names, StringComparison.Ordinal);
-        Assert.Contains("names.Add(" + Quote("select_character") + ")", names, StringComparison.Ordinal);
-        Assert.Contains(UnreadyGuard, names, StringComparison.Ordinal);
-        Assert.Contains("names.Add(" + Quote("unready") + ")", names, StringComparison.Ordinal);
+        // One walk feeds both surfaces, so this is asserted once rather than once per surface.
+        var walker = AgentSourceFixture.DeclarationBody(
+            state,
+            "private static List<ActionDescriptor> EnumerateAvailableActions(");
+        Assert.Contains(SelectGuard, walker, StringComparison.Ordinal);
+        Assert.Contains("name = " + Quote("select_character"), walker, StringComparison.Ordinal);
+        Assert.Contains(UnreadyGuard, walker, StringComparison.Ordinal);
+        Assert.Contains("name = " + Quote("unready"), walker, StringComparison.Ordinal);
 
-        var descriptors = AgentSourceFixture.MethodBody(state, "BuildAvailableActionsPayload");
-        Assert.Contains(SelectGuard, descriptors, StringComparison.Ordinal);
-        Assert.Contains("name = " + Quote("select_character"), descriptors, StringComparison.Ordinal);
-        Assert.Contains(UnreadyGuard, descriptors, StringComparison.Ordinal);
-        Assert.Contains("name = " + Quote("unready"), descriptors, StringComparison.Ordinal);
-
-        var namesFlat = AgentSourceFixture.WithoutWhitespace(names);
-        var unreadyName = namesFlat.IndexOf("if(CanUnready(currentScreen)){names.Add(" + Quote("unready") + ");}", StringComparison.Ordinal);
-        var selectName = namesFlat.IndexOf("if(CanSelectCharacter(currentScreen)){names.Add(" + Quote("select_character") + ");}", StringComparison.Ordinal);
-        Assert.True(unreadyName >= 0 && selectName >= 0, "unready and select_character must stay independently advertised.");
-        Assert.True(unreadyName != selectName, "unready must not be folded into the select_character gate.");
+        var flat = AgentSourceFixture.WithoutWhitespace(walker);
+        var unreadyGate = flat.IndexOf("if(CanUnready(currentScreen))", StringComparison.Ordinal);
+        var selectGate = flat.IndexOf("if(CanSelectCharacter(currentScreen))", StringComparison.Ordinal);
+        Assert.True(unreadyGate >= 0 && selectGate >= 0, "unready and select_character must stay independently advertised.");
+        Assert.True(unreadyGate != selectGate, "unready must not be folded into the select_character gate.");
     }
 
     public static void ExecutorStillUsesCanSelectCharacter()

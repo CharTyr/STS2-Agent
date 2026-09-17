@@ -256,19 +256,19 @@ internal static class ScreenResolutionContractTests
             Assert.Contains(pageType, knownPages, StringComparison.Ordinal);
         }
 
-        var names = Flat(AgentSourceFixture.MethodBody(rawState, "BuildAvailableActionNames"));
-        var descriptors = Flat(AgentSourceFixture.MethodBody(rawState, "BuildAvailableActionsPayload"));
+        var walker = Flat(AgentSourceFixture.DeclarationBody(
+            rawState,
+            "private static List<ActionDescriptor> EnumerateAvailableActions("));
         const string actionGuard = "if(IsCapstonePageOverlay(currentScreen))";
-        Assert.Contains(actionGuard, names, StringComparison.Ordinal);
-        Assert.Contains(actionGuard, descriptors, StringComparison.Ordinal);
+        Assert.Contains(actionGuard, walker, StringComparison.Ordinal);
 
         // The branch returns ahead of the combat actions, so nothing is advertised while a menu is up.
-        var guardInNames = names.IndexOf(actionGuard, StringComparison.Ordinal);
-        var endTurnIndex = names.IndexOf(
+        var guardIndex = walker.IndexOf(actionGuard, StringComparison.Ordinal);
+        var endTurnIndex = walker.IndexOf(
             "if(CanEndTurn(currentScreen,combatState,requireButtonReady:false,combatActionGate:combatActionGate))",
             StringComparison.Ordinal);
         Assert.True(
-            endTurnIndex >= 0 && guardInNames >= 0 && guardInNames < endTurnIndex,
+            endTurnIndex >= 0 && guardIndex >= 0 && guardIndex < endTurnIndex,
             "The container-page branch must return before the combat actions are advertised.");
     }
 
@@ -323,18 +323,16 @@ internal static class ScreenResolutionContractTests
             close,
             StringComparison.Ordinal);
 
-        // Both surfaces have to advertise it from inside the guard that suppresses the run actions, or the
-        // action would only be reachable by a client that ignores available_actions.
-        var names = Flat(AgentSourceFixture.MethodBody(rawState, "BuildAvailableActionNames"));
-        var descriptors = Flat(AgentSourceFixture.MethodBody(rawState, "BuildAvailableActionsPayload"));
-        Assert.Contains(
-            "if(CanCloseMainMenuSubmenu(currentScreen)){names.Add(\"close_main_menu_submenu\");}",
-            names,
-            StringComparison.Ordinal);
+        // It has to be advertised from inside the guard that suppresses the run actions, or the action
+        // would only be reachable by a client that ignores available_actions. One walk feeds both
+        // surfaces, so this is pinned once.
+        var walker = Flat(AgentSourceFixture.DeclarationBody(
+            rawState,
+            "private static List<ActionDescriptor> EnumerateAvailableActions("));
         Assert.Contains(
             "if(CanCloseMainMenuSubmenu(currentScreen)){descriptors.Add(newActionDescriptor{name=\"close_main_menu_submenu\","
             + "requires_target=false,requires_index=false});}",
-            descriptors,
+            walker,
             StringComparison.Ordinal);
 
         // "Closed" is the stack no longer holding that page: the container screen itself never changes, so

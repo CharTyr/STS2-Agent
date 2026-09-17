@@ -234,8 +234,38 @@ internal static class GameStateService
         var currentScreen = ActiveScreenContext.Instance.GetCurrentScreen();
         var combatState = CombatManager.Instance.DebugOnlyGetState();
         var runState = RunManager.Instance.DebugOnlyGetState();
-        var descriptors = new List<ActionDescriptor>();
+        // This endpoint is its own request, so it evaluates the gate itself; a /state build hands in
+        // the one it already evaluated.
         var combatActionGate = EvaluateCombatActionGate(currentScreen, combatState);
+
+        return new AvailableActionsPayload
+        {
+            screen = ResolveScreen(currentScreen),
+            actions = EnumerateAvailableActions(currentScreen, combatState, runState, combatActionGate).ToArray()
+        };
+    }
+
+    /// <summary>
+    /// Every action the executor would accept right now, with the parameters each one needs.
+    /// </summary>
+    /// <remarks>
+    /// The single source for both action surfaces. <c>GET /state</c> reports the names from here and
+    /// <c>GET /actions/available</c> reports these descriptors, so the two cannot disagree about what
+    /// is offered -- they used to be 301 and 609 hand-written lines consulting the same 50 <c>Can*</c>
+    /// predicates to emit the same 55 names, kept in step by nothing but care and a contract test.
+    /// See docs/adr/0001-single-action-surface.md.
+    ///
+    /// The gate is passed in rather than evaluated here: it advances a 200 ms stability sampler, and
+    /// one state build has to share a single evaluation across its action list, its combat payload
+    /// and its potion flags or the response can contradict itself.
+    /// </remarks>
+    private static List<ActionDescriptor> EnumerateAvailableActions(
+        IScreenContext? currentScreen,
+        CombatState? combatState,
+        RunState? runState,
+        CombatActionGate combatActionGate)
+    {
+        var descriptors = new List<ActionDescriptor>();
 
         if (GetOpenModal() != null)
         {
@@ -259,11 +289,7 @@ internal static class GameStateService
                 });
             }
 
-            return new AvailableActionsPayload
-            {
-                screen = ResolveScreen(currentScreen),
-                actions = descriptors.ToArray()
-            };
+            return descriptors;
         }
 
         // The container's pages are human menus over a frozen run: nothing in the run is actionable
@@ -282,11 +308,7 @@ internal static class GameStateService
                 });
             }
 
-            return new AvailableActionsPayload
-            {
-                screen = ResolveScreen(currentScreen),
-                actions = descriptors.ToArray()
-            };
+            return descriptors;
         }
 
         if (currentScreen is NUnlockScreen)
@@ -301,11 +323,7 @@ internal static class GameStateService
                 });
             }
 
-            return new AvailableActionsPayload
-            {
-                screen = ResolveScreen(currentScreen),
-                actions = descriptors.ToArray()
-            };
+            return descriptors;
         }
 
         if (CanEndTurn(currentScreen, combatState, requireButtonReady: false, combatActionGate: combatActionGate))
@@ -833,11 +851,7 @@ internal static class GameStateService
             });
         }
 
-        return new AvailableActionsPayload
-        {
-            screen = ResolveScreen(currentScreen),
-            actions = descriptors.ToArray()
-        };
+        return descriptors;
     }
 
     public static string ResolveScreen(IScreenContext? currentScreen)
@@ -2834,305 +2848,16 @@ internal static class GameStateService
         RunState? runState,
         CombatActionGate combatActionGate)
     {
-        var names = new List<string>();
-
-        if (GetOpenModal() != null)
+        // A projection of EnumerateAvailableActions, never a second opinion: /state.available_actions
+        // and /actions/available answer from one walk so they cannot advertise different actions.
+        var descriptors = EnumerateAvailableActions(currentScreen, combatState, runState, combatActionGate);
+        var names = new string[descriptors.Count];
+        for (var index = 0; index < descriptors.Count; index++)
         {
-            if (CanConfirmModal(currentScreen))
-            {
-                names.Add("confirm_modal");
-            }
-
-            if (CanDismissModal(currentScreen))
-            {
-                names.Add("dismiss_modal");
-            }
-
-            return names.ToArray();
+            names[index] = descriptors[index].name;
         }
 
-        // A human menu is over a frozen run: the combat actions are swallowed while it is up and none
-        // of the page's own buttons (including the pause menu's "放弃") is an agent decision.
-        if (IsCapstonePageOverlay(currentScreen))
-        {
-            // The page's own BackButton is the one action a human menu leaves an agent, and only for the
-            // pages above the pause menu. The pause page offers nothing: a person resumes that one.
-            if (CanCloseMainMenuSubmenu(currentScreen))
-            {
-                names.Add("close_main_menu_submenu");
-            }
-
-            return names.ToArray();
-        }
-
-        if (currentScreen is NUnlockScreen)
-        {
-            if (CanConfirmUnlock(currentScreen))
-            {
-                names.Add("confirm_unlock");
-            }
-
-            return names.ToArray();
-        }
-
-        if (CanEndTurn(currentScreen, combatState, requireButtonReady: false, combatActionGate: combatActionGate))
-        {
-            names.Add("end_turn");
-        }
-
-        if (CanPlayAnyCard(currentScreen, combatState, combatActionGate))
-        {
-            names.Add("play_card");
-        }
-
-        if (CanSwitchProfile(currentScreen))
-        {
-            names.Add("switch_profile");
-        }
-
-        if (CanContinueRun(currentScreen))
-        {
-            names.Add("continue_run");
-        }
-
-        if (CanAbandonRun(currentScreen))
-        {
-            names.Add("abandon_run");
-        }
-
-        if (CanSaveAndQuit(currentScreen, runState))
-        {
-            names.Add("save_and_quit");
-        }
-
-        if (CanOpenCharacterSelect(currentScreen))
-        {
-            names.Add("open_character_select");
-        }
-
-        if (CanOpenTimeline(currentScreen))
-        {
-            names.Add("open_timeline");
-        }
-
-        if (CanCloseMainMenuSubmenu(currentScreen))
-        {
-            names.Add("close_main_menu_submenu");
-        }
-
-        if (CanInviteAiTeammate(currentScreen))
-        {
-            names.Add("invite_ai_teammate");
-        }
-
-        if (CanContinueAiTeammate(currentScreen))
-        {
-            names.Add("continue_ai_teammate");
-        }
-
-        if (CanChooseTimelineEpoch(currentScreen))
-        {
-            names.Add("choose_timeline_epoch");
-        }
-
-        if (CanConfirmTimelineOverlay(currentScreen))
-        {
-            names.Add("confirm_timeline_overlay");
-        }
-
-        if (CanChooseMapNode(currentScreen, runState))
-        {
-            names.Add("choose_map_node");
-        }
-
-        if (CanCollectRewardsAndProceed(currentScreen))
-        {
-            names.Add("resolve_rewards");
-            names.Add("collect_rewards_and_proceed");
-        }
-
-        if (CanClaimReward(currentScreen))
-        {
-            names.Add("claim_reward");
-        }
-
-        if (CanChooseRewardCard(currentScreen))
-        {
-            names.Add("choose_reward_card");
-        }
-
-        if (CanSkipRewardCards(currentScreen))
-        {
-            names.Add("skip_reward_cards");
-        }
-
-        if (CanSelectDeckCard(currentScreen))
-        {
-            names.Add("select_deck_card");
-        }
-
-        if (CanCloseCardsView(currentScreen))
-        {
-            names.Add("close_cards_view");
-        }
-
-        if (CanConfirmSelection(currentScreen))
-        {
-            names.Add("confirm_selection");
-        }
-
-        if (CanProceed(currentScreen))
-        {
-            names.Add("proceed");
-        }
-
-        if (CanPlayCrystalSphere(currentScreen))
-        {
-            names.Add("crystal_set_tool");
-            names.Add("crystal_clear_cell");
-        }
-
-        if (CanOpenChest(currentScreen))
-        {
-            names.Add("open_chest");
-        }
-
-        if (CanChooseTreasureRelic(currentScreen))
-        {
-            names.Add("choose_treasure_relic");
-        }
-
-        if (CanChooseEventOption(currentScreen))
-        {
-            names.Add("choose_event_option");
-        }
-
-        if (CanChooseCapstoneOption(currentScreen))
-        {
-            names.Add("choose_capstone_option");
-        }
-
-        if (CanChooseBundle(currentScreen))
-        {
-            names.Add("choose_bundle");
-        }
-
-        if (CanConfirmBundle(currentScreen))
-        {
-            names.Add("confirm_bundle");
-        }
-
-        if (CanChooseRestOption(currentScreen))
-        {
-            names.Add("choose_rest_option");
-        }
-
-        if (CanOpenShopInventory(currentScreen))
-        {
-            names.Add("open_shop_inventory");
-        }
-
-        if (CanCloseShopInventory(currentScreen))
-        {
-            names.Add("close_shop_inventory");
-        }
-
-        if (CanBuyShopCard(currentScreen))
-        {
-            names.Add("buy_card");
-        }
-
-        if (CanBuyShopRelic(currentScreen))
-        {
-            names.Add("buy_relic");
-        }
-
-        if (CanBuyShopPotion(currentScreen))
-        {
-            names.Add("buy_potion");
-        }
-
-        if (CanRemoveCardAtShop(currentScreen))
-        {
-            names.Add("remove_card_at_shop");
-        }
-
-        if (CanSelectCharacter(currentScreen))
-        {
-            names.Add("select_character");
-        }
-
-        if (CanEmbark(currentScreen))
-        {
-            names.Add("embark");
-        }
-
-        if (CanUnready(currentScreen))
-        {
-            names.Add("unready");
-        }
-
-        if (CanHostMultiplayerLobby(currentScreen))
-        {
-            names.Add("host_multiplayer_lobby");
-        }
-
-        if (CanJoinMultiplayerLobby(currentScreen))
-        {
-            names.Add("join_multiplayer_lobby");
-        }
-
-        if (CanReadyMultiplayerLobby(currentScreen))
-        {
-            names.Add("ready_multiplayer_lobby");
-        }
-
-        if (CanDisconnectMultiplayerLobby(currentScreen))
-        {
-            names.Add("disconnect_multiplayer_lobby");
-        }
-
-        if (CanIncreaseAscension(currentScreen))
-        {
-            names.Add("increase_ascension");
-        }
-
-        if (CanDecreaseAscension(currentScreen))
-        {
-            names.Add("decrease_ascension");
-        }
-
-        if (CanUsePotion(currentScreen, combatState, runState, combatActionGate))
-        {
-            names.Add("use_potion");
-        }
-
-        if (CanDiscardPotion(currentScreen, runState))
-        {
-            names.Add("discard_potion");
-        }
-
-        var gameOver = BuildGameOverPayload(currentScreen, runState) ?? new GameOverPayload();
-        if (gameOver.waiting_for_other_players)
-        {
-            names.Add("dismiss_game_over_wait");
-        }
-
-        if (gameOver.can_continue)
-        {
-            names.Add("continue_game_over");
-        }
-        else if (GetGameOverContinueButton(currentScreen) != null && !gameOver.can_return_to_main_menu)
-        {
-            names.Add("continue_game_over");
-        }
-
-        if (gameOver.can_return_to_main_menu)
-        {
-            names.Add("return_to_main_menu");
-        }
-
-        return names.ToArray();
+        return names;
     }
 
     private static CombatPayload? BuildCombatPayload(CombatState? combatState, CombatActionGate combatActionGate)
