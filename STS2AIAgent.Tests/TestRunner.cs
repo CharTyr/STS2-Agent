@@ -535,6 +535,10 @@ internal static class TestRunner
         yield return ("HandlerContract.AscensionOneStep", () => Task.Run(HandlerBehaviourContractTests.AscensionMovesOneStepThroughTheLobby));
         yield return ("HandlerContract.GameOverWait", () => Task.Run(HandlerBehaviourContractTests.GameOverWaitIsDismissedOnlyWhileWaiting));
         yield return ("HandlerContract.LobbyDisconnect", () => Task.Run(HandlerBehaviourContractTests.LobbyDisconnectQuitsThroughTheRegistry));
+        yield return ("StateBuild.FastBuildsDoNotWarn", () => Task.Run(StateBuildTimingTests.FastBuildsAreCountedWithoutAWarning));
+        yield return ("StateBuild.SlowBuildsWarnRateLimited", () => Task.Run(StateBuildTimingTests.ASlowBuildWarnsOnceAndThenSaysHowManyItHeldBack));
+        yield return ("StateBuild.RecentPercentiles", () => Task.Run(StateBuildTimingTests.TheSummaryReportsRecentPercentilesOverABoundedWindow));
+        yield return ("StateBuild.EveryBuildIsTimed", () => Task.Run(StateBuildTimingTests.EveryStateBuildIsTimedAndReported));
         yield return ("AbandonRun.StopsAtTheConfirmation", () => Task.Run(AbandonRunContractTests.AbandonRunStopsAtTheConfirmation));
         yield return ("AbandonRun.RefusesRatherThanClickingBlind", () => Task.Run(AbandonRunContractTests.AbandonRunRefusesRatherThanClickingBlind));
         yield return ("ReflectedMembers.DeclaredWinsOverBaseOverload", () => Task.Run(ReflectedMemberResolverTests.ADeclaredMethodIsFoundDespiteAPublicBaseMethodOfTheSameName));

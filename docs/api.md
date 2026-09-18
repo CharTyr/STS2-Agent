@@ -192,6 +192,7 @@
 | `dual_status` / `team_control_status` | string | 双开与队友控制的人类可读状态 |
 | `dual_launch_outcome` | string\|null | 双开结构化结果，给外部客户端做成败分类，**不要**用 `dual_status` 文本。尚未尝试过为 `null`；否则为 `InProgress` / `Succeeded` / `Failed` / `Rejected` / `Canceled`（`DualLaunchOutcome` 枚举名，不含 `Idle`） |
 | `compatibility` | object | 启动时对 Mod 依赖的游戏私有成员做的一次自检结果。`reflected_members_checked` 是被检查的成员总数，`reflected_members_missing` 是找不到的个数，`missing_members[]` 逐条给出 `member`（`类型.成员`）与 `feature`（失效的功能）。游戏更新后 Mod 最常见的坏法就是某个私有字段被改名，此时读取悄悄退回默认值——这个区块是唯一的信号 |
+| `state_build` | object | 构建状态载荷的耗时，只计构建本身、不含排队等游戏线程。`/state`、每个动作响应与 SSE 刷新都会构建一次，且都跑在游戏线程上——构建期间游戏不出帧。`slow_threshold_ms`（100，约等于 60 帧下 6 帧的卡顿）、`samples`、`slow_builds`、`last_ms`、`max_ms` 与其 `max_screen`、以及最近 `recent_samples`（至多 256）次的 `recent_p50_ms` / `recent_p95_ms`；尚无样本时耗时字段为 `null`。超过阈值的构建会在游戏日志里记 `WARN`，每 30 秒至多一条并注明期间压下的条数 |
 
 ### `stop_kind` 取值
 

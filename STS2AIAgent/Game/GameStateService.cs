@@ -85,6 +85,9 @@ internal static partial class GameStateService
 
     public static GameStatePayload BuildStatePayload()
     {
+        // Measured here rather than around the /state route: every action response and SSE refresh
+        // builds this too, and all of it runs on the game thread.
+        var buildTimer = System.Diagnostics.Stopwatch.StartNew();
         var currentScreen = ActiveScreenContext.Instance.GetCurrentScreen();
         var combatState = CombatManager.Instance.DebugOnlyGetState();
         var runState = RunManager.Instance.DebugOnlyGetState();
@@ -116,7 +119,7 @@ internal static partial class GameStateService
         var modal = BuildModalPayload(currentScreen);
         var gameOver = BuildGameOverPayload(currentScreen, runState);
 
-        return new GameStatePayload
+        var payload = new GameStatePayload
         {
             state_version = StateVersion,
             native_profile_id = SaveManager.Instance.CurrentProfileId,
@@ -174,6 +177,14 @@ internal static partial class GameStateService
                 modal,
                 gameOver)
         };
+
+        var slowBuild = StateBuildTiming.Instance.Record(buildTimer.Elapsed.TotalMilliseconds, screen, DateTime.UtcNow);
+        if (slowBuild != null)
+        {
+            Log.Warn($"[STS2AIAgent] {slowBuild}");
+        }
+
+        return payload;
     }
 
     private static SessionPayload BuildSessionPayload(IScreenContext? currentScreen, RunState? runState)

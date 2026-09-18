@@ -352,7 +352,8 @@ internal static class Router
                 ? null
                 : dualLaunchOutcome.ToString(),
             team_control_status = AgentRuntime.Instance.TeamControlStatus,
-            compatibility = ReflectedGameMembers.BuildHealthSection()
+            compatibility = ReflectedGameMembers.BuildHealthSection(),
+            state_build = StateBuildTiming.Instance.Snapshot()
         };
     }
 

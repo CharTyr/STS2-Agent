@@ -60,6 +60,13 @@
 
 ### Added
 
+- **`GET /health` reports how long state builds take (`state_build`).** Every `/state`, action
+  response and SSE refresh builds the payload on the game thread, where the game draws no frame until
+  it finishes. The request log timed whole requests, queueing included, at Info with no threshold, so a
+  build that froze the game for a second looked like any other line. Builds are now timed alone; one
+  over 100 ms -- six frames at 60 fps -- is logged as a warning (at most one per 30 s, naming how many
+  it held back), and `/health` carries the count, the maximum and its screen, and recent p50/p95.
+
 - **`GET /health` says whether the mod can still read the game.** This mod references the game's
   `sts2.dll`, so almost everything it touches is compile-checked -- but twenty-three private game
   members are found by name at runtime, and those fail quietly: `GetField` returns null, the call
