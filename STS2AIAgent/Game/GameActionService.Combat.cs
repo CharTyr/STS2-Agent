@@ -231,7 +231,12 @@ internal static partial class GameActionService
             return;
         }
 
-        var duration = bar.GetType().GetField("_longPressDuration", flags)?.GetValue(bar) is double seconds
+        // _longPressDuration is static on the bar, so the instance-only flags above cannot see it.
+        // They never could: this read has been falling through to 0.45 since it was written, while
+        // the game's own value is 0.5 -- the mod was waiting 50ms less than it meant to and had no
+        // way to know. Found by the compatibility probe on its first live run.
+        const BindingFlags staticFlags = BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic;
+        var duration = bar.GetType().GetField("_longPressDuration", staticFlags)?.GetValue(null) is double seconds
             ? seconds
             : 0.45;
         var deadline = DateTime.UtcNow + TimeSpan.FromSeconds(Math.Max(0.05, duration + 0.1));

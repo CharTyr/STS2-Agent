@@ -105,6 +105,18 @@
 
 ### Fixed
 
+- **`end_turn`'s long-press wait had been using a number the mod invented.** The game's
+  `NEndTurnLongPressBar._longPressDuration` is a **static** field; the read asked for it with
+  instance-only binding flags, so `GetField` returned null and the wait fell through to a
+  hard-coded `0.45` against the game's real `0.5` -- 50 ms short, every time, since the line was
+  written, with nothing anywhere saying so.
+
+  Found by the compatibility probe on its **first live run**, which is the whole argument for the
+  probe: offline it looked fine, because reading a member's name out of the assembly metadata does
+  not tell you whether the binding flags can reach it. The registry now records staticness, and all
+  22 entries were re-checked against the installed assembly -- this was the only one wrong.
+
+
 - **Four checks were not checking what they said.** The first three were found by the splits above
   and predate them; the fourth was a defect in a gate added in this same batch:
   - `AgentSourceFixture.MethodBody` resolved a method name by its last occurrence in the source,

@@ -46,14 +46,18 @@ internal static class ReflectedGameMembers
 
     /// <summary>
     /// Every private game member the mod resolves by name, with the feature that degrades without
-    /// it. Verified against the installed <c>sts2.dll</c> on 2026-09-18 by reading its ECMA-335
-    /// metadata; all of them resolved.
+    /// it.
+    ///
+    /// The <c>Static</c> flag is part of the entry because it is part of the lookup: reading the
+    /// metadata for a member's *name* is not enough. <c>_longPressDuration</c> is static, this
+    /// registry first declared it as an instance member, and the probe correctly reported that the
+    /// mod could not read it -- which turned out to be true of the reading code as well.
     /// </summary>
     private static readonly Entry[] Entries =
     {
         new(typeof(NEndTurnButton), "_longPressBar", MemberKind.Field, false, "end_turn long-press detection"),
         new(typeof(NEndTurnLongPressBar), "_enabled", MemberKind.Field, false, "end_turn long-press detection"),
-        new(typeof(NEndTurnLongPressBar), "_longPressDuration", MemberKind.Field, false, "end_turn long-press detection"),
+        new(typeof(NEndTurnLongPressBar), "_longPressDuration", MemberKind.Field, true, "end_turn long-press detection"),
         new(typeof(NDevConsole), "_devConsole", MemberKind.Field, false, "run_console_command"),
         new(typeof(NMultiplayerSubmenu), "StartLoad", MemberKind.Method, false, "continue_ai_teammate"),
         new(typeof(StartRunLobby), "_maxPlayers", MemberKind.Field, false, "multiplayer_lobby.max_players"),
