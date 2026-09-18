@@ -104,7 +104,9 @@ internal static class ScreenResolutionContractTests
         var rawAction = AgentSourceFixture.ReadActionService();
         var close = Normalize(AgentSourceFixture.MethodBody(rawAction, "ExecuteCloseMainMenuSubmenuAsync"));
         Assert.Contains("currentScreen is NPatchNotesScreen patchNotes", close, StringComparison.Ordinal);
-        Assert.Contains("GetPrivateField<NButton>(patchNotes, \"_backButton\")", close, StringComparison.Ordinal);
+        // The patch notes back button is a private field, so it is read through the registry that
+        // probes it at load -- not through a lookup of its own that could disagree with the probe.
+        Assert.Contains("ReflectedGameMembers.Field(typeof(NPatchNotesScreen), \"_backButton\")?.GetValue(patchNotes) as NButton", close, StringComparison.Ordinal);
         Assert.Contains("backButton.ForceClick();", close, StringComparison.Ordinal);
         Assert.Contains("((Node)patchNotes).Call(\"Close\");", close, StringComparison.Ordinal);
         Assert.Contains("WaitForPatchNotesCloseAsync(patchNotes, TimeSpan.FromSeconds(10))", close, StringComparison.Ordinal);

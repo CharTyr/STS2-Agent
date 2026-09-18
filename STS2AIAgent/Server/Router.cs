@@ -333,7 +333,7 @@ internal static class Router
             mod_version = ModVersion,
             protocol_version = ProtocolVersion,
             game_version = ReleaseInfoManager.Instance.ReleaseInfo?.Version ?? "unknown",
-            status = "ready",
+            status = ReflectedGameMembers.ResolveStatus(),
             api_host = HttpServer.Instance.Host,
             api_port = HttpServer.Instance.Port,
             process_id = Environment.ProcessId,
@@ -351,7 +351,8 @@ internal static class Router
             dual_launch_outcome = dualLaunchOutcome == DualLaunchOutcome.Idle
                 ? null
                 : dualLaunchOutcome.ToString(),
-            team_control_status = AgentRuntime.Instance.TeamControlStatus
+            team_control_status = AgentRuntime.Instance.TeamControlStatus,
+            compatibility = ReflectedGameMembers.BuildHealthSection()
         };
     }
 

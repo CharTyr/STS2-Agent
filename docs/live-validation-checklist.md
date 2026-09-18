@@ -612,3 +612,50 @@ mod-side action.
   only matching their constants.
 - The English strings are machine-translated and have never been read by a native speaker; only
   Chinese and English have been exercised.
+
+## 2026-09-18 — 兼容性探测与两轮大重构（游戏 v0.111.0）
+
+隔离实例（`--windowed --force-steam off`，clientId `2026091801` / `2026091802`，API 18080），
+分支 `feat/upstream-break-visibility`。
+
+**探测在第一次实机运行就抓到一个真 bug。** `/health` 返回 `degraded`，点名
+`NEndTurnLongPressBar._longPressDuration` 缺失。根因不是探测误报：该字段是**静态**的，
+而注册表把它登记成实例成员——`GameActionService.Combat.cs` 里真正读它的代码
+**用的也是实例标志**，所以自这行写下来起就从未读到过真值，一直用写死的 `0.45` 兜底，
+而游戏的实际值是 `0.5`。长按等待每次少 50ms，没有任何地方会说。
+
+离线读元数据得出的「22 个全部存在」是**对名字而言正确、对问题而言无关**：
+一个成员的名字在不在，说明不了绑定标志够不够得着它。这是实机唯一能给出的结论。
+
+修复后（`6771b0e`）复验：`status: ready`、`reflected_members_checked: 22`、
+`reflected_members_missing: 0`、`missing_members: []`。
+
+**注入故障验证**：把 `_saveAndQuitButton` 改名为一个不存在的名字、重建重启，
+`/health` 精确点名 `NPauseMenu._saveAndQuitButtonFixtureGone`（feature `save_and_quit`）
+并报 `degraded`。随后按字节还原。
+
+**两轮大重构首次有实机证据**（PR #148 / #150 的 partial 拆分此前只有源码级证明）：
+主菜单 `/state` 200 且 `screen: MAIN_MENU`——v0.12.4 那次「主菜单每个 `/state` 都 500」的
+回归未复现；`/actions/available` 非空；`open_character_select → select_character → embark
+→ MAP → choose_map_node → COMBAT` 全链路走通（途中一次性 FTUE 弹窗，`dismiss_modal` 后继续）；
+`end_turn` 返回 `completed` / `stable: true`，`turn` 由 1 推进到 2。
+
+**未验证**：长按时长是否真的用上了 0.5——这个数字在 HTTP 面上看不出来，没有勉强去证。
+
+玩家真实存档两轮前后各哈希一次：`default/1`、`default/2`、`default/1001` **逐文件一致**；
+差异全部落在两个新建的隔离 clientId 目录、Godot 日志滚动与 Sentry 运行记录。
+`mods/` 三个文件已按字节还原到已发布的 v0.12.5（DLL `1624BBF5…D4A7`）。
+证据：`build/validation-2026-09-18/`（gitignore）。
+
+**第三轮（`d3e0d47`，clientId `2026091803`）——统一查找之后。** 调用点改为只向注册表要成员、
+注册表 23 条（新增 `NEndTurnButton.CanTurnBeEnded`）、探测改为加载时运行并写日志、删除 4 处死反射之后：
+
+- `/health`：`ready`，23 检查 / 0 缺失；`godot.log` 出现 `Compatibility: all 23 reflected game members resolved.`
+- 注入故障：`/health` `degraded`、缺失**恰为 1** 并点名 `NPauseMenu._saveAndQuitButtonFixtureGone`；日志同步出现两行 `WARN`
+- 读取改了路径的功能逐一走通，**零 500 / 零 `internal_error`**：`combat.action_readiness`（`CanTurnBeEnded`）、
+  `end_turn`（回合 1→2）、`run_console_command help`（`_devConsole`）、`save_and_quit`（`_saveAndQuitButton`）
+  → `continue_run`（`_standardButton`）回到同一局，以及 `die` → `GAME_OVER` → `continue_game_over`
+  → `return_to_main_menu`——**删掉三个死查找后，pressed 信号那一半仍把结算流程推了下去**
+- 日志 `error|exception|fatal` 扫描：只有三处 Godot 引擎自身的 `Invalid Task ID`，无源自本 mod 的异常
+
+玩家档案 `default/1`、`default/2`、`default/1001` 逐文件一致；`mods/` 还原到发布版 v0.12.5。

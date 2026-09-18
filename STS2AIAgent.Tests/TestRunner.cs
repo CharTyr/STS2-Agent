@@ -522,6 +522,13 @@ internal static class TestRunner
         yield return ("SourceShape.BudgetsTrackTheirFiles", () => Task.Run(SourceShapeContractTests.BudgetsStayCloseToTheFilesTheyGuard));
         yield return ("ActionDiagnostics.NoWordlessRecoveryCatch", () => Task.Run(ActionDiagnosticsContractTests.NoRecoveryCatchSwallowsWithoutSayingSo));
         yield return ("ActionDiagnostics.FaultedTasksNameTheirException", () => Task.Run(ActionDiagnosticsContractTests.FaultedGameTasksNameTheirException));
+        yield return ("AbandonRun.StopsAtTheConfirmation", () => Task.Run(AbandonRunContractTests.AbandonRunStopsAtTheConfirmation));
+        yield return ("AbandonRun.RefusesRatherThanClickingBlind", () => Task.Run(AbandonRunContractTests.AbandonRunRefusesRatherThanClickingBlind));
+        yield return ("ReflectedMembers.NoLookupOutsideTheRegistry", () => Task.Run(ReflectedMemberRegistryTests.NothingLooksUpAGameMemberByNameOutsideTheRegistry));
+        yield return ("ReflectedMembers.CallsNameRegisteredMembers", () => Task.Run(ReflectedMemberRegistryTests.EveryRegistryCallNamesARegisteredMember));
+        yield return ("ReflectedMembers.NoOrphanEntries", () => Task.Run(ReflectedMemberRegistryTests.EveryRegisteredMemberIsAskedFor));
+        yield return ("ReflectedMembers.HealthStatusIsDerived", () => Task.Run(ReflectedMemberRegistryTests.HealthStatusComesFromTheProbe));
+        yield return ("ReflectedMembers.ProbeRunsAtLoad", () => Task.Run(ReflectedMemberRegistryTests.TheProbeRunsWhenTheModLoads));
         yield return ("CardViewer.BranchesPrecedeGrid", () => Task.Run(CardViewerScreenContractTests.ViewerBranchesPrecedeTheVisibleGrid));
         yield return ("CardViewer.ClosableViewerSameSource", () => Task.Run(CardViewerScreenContractTests.ClosableViewerSetIsSharedByProbeAndExecutor));
         yield return ("CardViewer.SubmenuStackBase", () => Task.Run(CardViewerScreenContractTests.SubmenuStackLookupUsesTheBaseClass));

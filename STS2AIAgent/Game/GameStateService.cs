@@ -80,8 +80,8 @@ internal static partial class GameStateService
     private static string? _lastUnlockConfirmProbeSignature;
     private static bool _crystalSphereEntityLookupWarningLogged;
     private static bool _crystalSphereButtonLookupWarningLogged;
-    private static readonly FieldInfo? StartRunLobbyMaxPlayersField =
-        typeof(StartRunLobby).GetField("_maxPlayers", BindingFlags.Instance | BindingFlags.NonPublic);
+    private static FieldInfo? StartRunLobbyMaxPlayersField =>
+        ReflectedGameMembers.Field(typeof(StartRunLobby), "_maxPlayers");
 
     public static GameStatePayload BuildStatePayload()
     {
@@ -1137,8 +1137,8 @@ internal static partial class GameStateService
         return GetCapstoneButtons(currentScreen).Count > 0;
     }
 
-    private static readonly FieldInfo? CrystalSphereEntityField =
-        typeof(NCrystalSphereScreen).GetField("_entity", BindingFlags.NonPublic | BindingFlags.Instance);
+    private static FieldInfo? CrystalSphereEntityField =>
+        ReflectedGameMembers.Field(typeof(NCrystalSphereScreen), "_entity");
 
     public static CrystalSphereMinigame? GetCrystalSphereMinigame(IScreenContext? currentScreen)
     {
@@ -2054,8 +2054,7 @@ internal static partial class GameStateService
 
     private static CardSelectorPrefs? TryGetCombatHandSelectionPrefs(NPlayerHand hand)
     {
-        const BindingFlags flags = BindingFlags.Instance | BindingFlags.NonPublic;
-        var field = typeof(NPlayerHand).GetField("_prefs", flags);
+        var field = ReflectedGameMembers.Field(typeof(NPlayerHand), "_prefs");
         if (field?.GetValue(hand) is CardSelectorPrefs prefs)
         {
             return prefs;
@@ -2093,8 +2092,7 @@ internal static partial class GameStateService
 
     private static int GetCombatHandSelectedCount(NPlayerHand hand)
     {
-        const BindingFlags flags = BindingFlags.Instance | BindingFlags.NonPublic;
-        var field = typeof(NPlayerHand).GetField("_selectedCards", flags);
+        var field = ReflectedGameMembers.Field(typeof(NPlayerHand), "_selectedCards");
         return field?.GetValue(hand) is System.Collections.ICollection collection ? collection.Count : 0;
     }
 
@@ -2831,8 +2829,7 @@ internal static partial class GameStateService
             return false;
         }
 
-        const BindingFlags flags = BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic;
-        var property = button.GetType().GetProperty("CanTurnBeEnded", flags);
+        var property = ReflectedGameMembers.Property(typeof(NEndTurnButton), "CanTurnBeEnded");
         return property?.GetValue(button) is not bool canTurnBeEnded || canTurnBeEnded;
     }
 
@@ -3035,8 +3032,7 @@ internal static partial class GameStateService
 
         if (TryGetCombatHandSelection(currentScreen, out var hand) && hand != null)
         {
-            const BindingFlags flags = BindingFlags.Instance | BindingFlags.NonPublic;
-            if (typeof(NPlayerHand).GetField("_selectedCards", flags)?.GetValue(hand) is IEnumerable selectedHandCards)
+            if (ReflectedGameMembers.Field(typeof(NPlayerHand), "_selectedCards")?.GetValue(hand) is IEnumerable selectedHandCards)
             {
                 foreach (var item in selectedHandCards)
                 {
@@ -4898,8 +4894,7 @@ internal static partial class GameStateService
 
     public static StartRunLobby? GetMultiplayerTestLobby(NMultiplayerTest scene)
     {
-        const BindingFlags flags = BindingFlags.Instance | BindingFlags.NonPublic;
-        var field = typeof(NMultiplayerTest).GetField("_lobby", flags);
+        var field = ReflectedGameMembers.Field(typeof(NMultiplayerTest), "_lobby");
         return field?.GetValue(scene) as StartRunLobby;
     }
 
@@ -5037,22 +5032,12 @@ internal static partial class GameStateService
             return false;
         }
 
+        // Two reflective calls used to come first here -- SetWaitingForOtherPlayersOverlayVisible
+        // and HideWaitingForPlayersScreen. Neither is declared on NGameOverScreen or anything it
+        // inherits from: the first lives on NCombatRoom and the second on NRewardsScreen. Both
+        // lookups returned null every time, so hiding the overlay node below has always been the
+        // whole of this method.
         var hidden = false;
-        const BindingFlags flags = BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic;
-        var setVisible = gameOver.GetType().GetMethod("SetWaitingForOtherPlayersOverlayVisible", flags, binder: null, types: new[] { typeof(bool) }, modifiers: null);
-        if (setVisible != null)
-        {
-            setVisible.Invoke(gameOver, new object[] { false });
-            hidden = true;
-        }
-
-        var hide = gameOver.GetType().GetMethod("HideWaitingForPlayersScreen", flags, binder: null, types: Type.EmptyTypes, modifiers: null);
-        if (hide != null)
-        {
-            hide.Invoke(gameOver, null);
-            hidden = true;
-        }
-
         var overlay = GetWaitingForOtherPlayersOverlay(gameOver);
         if (overlay != null && overlay.Visible)
         {
@@ -5075,10 +5060,9 @@ internal static partial class GameStateService
             return true;
         }
 
-        const BindingFlags flags = BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic;
         try
         {
-            if (gameOver.GetType().GetField("_isAnimatingSummary", flags)?.GetValue(gameOver) is true)
+            if (ReflectedGameMembers.Field(typeof(NGameOverScreen), "_isAnimatingSummary")?.GetValue(gameOver) is true)
             {
                 return true;
             }
@@ -5116,8 +5100,7 @@ internal static partial class GameStateService
 
     public static NButton? GetSingleplayerStandardButton(NSingleplayerSubmenu submenu)
     {
-        const BindingFlags flags = BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic;
-        if (submenu.GetType().GetField("_standardButton", flags)?.GetValue(submenu) is NButton fieldButton &&
+        if (ReflectedGameMembers.Field(typeof(NSingleplayerSubmenu), "_standardButton")?.GetValue(submenu) is NButton fieldButton &&
             IsUsableModalButton(fieldButton))
         {
             return fieldButton;
@@ -5253,8 +5236,9 @@ internal static partial class GameStateService
             return null;
         }
 
-        var reflected = ReflectionMemberAccessor.TryGetValue(
-            unlockScreen, "_unlockConfirmButton", out var declaringType) as NButton;
+        var confirmField = ReflectedGameMembers.Field(typeof(NUnlockScreen), "_unlockConfirmButton");
+        var declaringType = confirmField?.DeclaringType;
+        var reflected = confirmField?.GetValue(unlockScreen) as NButton;
         var memberSource = $"member:{declaringType?.FullName ?? "unknown"}";
         var reflectedValid = reflected != null && GodotObject.IsInstanceValid(reflected);
         var memberStatus = reflectedValid ? "unusable" : "unavailable";
@@ -5325,15 +5309,18 @@ internal static partial class GameStateService
         return GetUnlockConfirmButton(currentScreen) != null;
     }
 
-    private static readonly string[] UnlockItemFieldNames =
-        { "_relics", "_cards", "_potions", "_unlockedEpochs", "_character", "_epoch" };
-
     private static string[] GetUnlockItemNames(NUnlockScreen unlockScreen)
     {
         var names = new List<string>();
-        foreach (var fieldName in UnlockItemFieldNames)
+        foreach (var field in ReflectedGameMembers.UnlockItemFields)
         {
-            var value = TryGetMemberValue(unlockScreen, fieldName);
+            // Each item field lives on its own concrete unlock screen; the others simply do not apply.
+            if (field.DeclaringType?.IsInstanceOfType(unlockScreen) != true)
+            {
+                continue;
+            }
+
+            var value = field.GetValue(unlockScreen);
             switch (value)
             {
                 case null:

@@ -69,7 +69,7 @@ For a change crossing state, action, agent, UI, or MCP, trace it in both directi
 
 ## Code shape and its known debts
 
-Measured 2026-09-17 across 91 mod source files totalling 32,174 lines (git-tracked only, which is what the gate counts -- a working tree also holds whatever the developer left in it). These numbers are here
+Measured 2026-09-18 across 92 mod source files totalling 32,312 lines (git-tracked only, which is what the gate counts -- a working tree also holds whatever the developer left in it). These numbers are here
 because nobody was counting, and that is how a codebase stops being navigable -- not through a bad
 commit, but through a thousand good ones. The `arch-facts` gate checks this table against the
 files, so it cannot quietly go stale the way it did between ADR 0001 and the splits below.
@@ -114,6 +114,48 @@ if someone wants one, is the `Can*` / `Is*` predicate layer.
 A pure relocation is verifiable, and both were verified the same way: the base file's diff carries
 exactly one genuinely new line (the `partial` keyword), and every removed non-blank line appears
 verbatim in exactly one new file.
+
+### The one thing the compiler cannot check for us
+
+This project references the game's `sts2.dll`, so almost everything it touches is compile-checked:
+rename a public game type or member and the build turns red before anyone runs anything.
+
+**Twenty-three private game members are the exception.** They are found by name at runtime, and they
+fail in the opposite way -- quietly. `GetField` returns null, the call site falls back to a default,
+and an agent is handed `max_players: 0` with no way to tell that from a lobby that really holds
+nobody. Slay the Spire 2 is in early access; a patch renames a private field and the mod keeps
+answering, confidently, with numbers it invented.
+
+`ReflectedGameMembers` closes that. Every one of those members is resolved once when the mod loads,
+the misses are written to the game log and named on `GET /health` under `compatibility`, and
+`status` is derived from the result rather than the literal `"ready"` it used to be. The declaring
+types are `typeof` expressions, so the compiler still checks them; only the member names -- the part
+that actually rots -- are text.
+
+**It is also the only place those members are looked up**, and that is the part that matters. The
+first version resolved its own copy of each member while the call sites resolved theirs, with their
+own binding flags, so the probe could report `ready` while a reader was broken: reintroducing the
+`_longPressDuration` bug with a correct registry left every offline test and gate green. Call sites
+now ask `ReflectedGameMembers.Field` / `Method` / `Property` for the member, so what the probe
+reports is what the mod actually gets.
+
+Duck-typed probing is a separate, sanctioned channel: `TryGetMemberValue` tries lists of candidate
+names across object shapes (`"Cards", "CardModels", "Entries", "List"`) and accepts whichever
+exists, so no one name in it is a dependency. `ReflectedMembers.*` names that channel and the few
+public members read by name across types, so neither is invisible any more.
+
+Making the registry the only lookup also exposed four reflective reads that had never resolved in the
+installed game: `continue_game_over` tried `OnContinueButtonPressed`, `OnPressed` and
+`OnContinueButtonPressedAsync` on a button (none exists on one), and the game-over overlay tried
+`SetWaitingForOtherPlayersOverlayVisible` and `HideWaitingForPlayersScreen` on `NGameOverScreen`
+(they live on `NCombatRoom` and `NRewardsScreen`). Each sat before a path that did the real work, so
+nothing broke; the dead halves are gone. The fourth, `MonsterModel.MoveNames`, is not so harmless --
+see the deferred list.
+
+`ReflectedMembers.*` keeps the registry honest: a new reflection site with no entry fails, and an
+entry nothing reads fails too. Two names are deliberately not probed and say why -- the card-grid
+`_prefs` / `_selectedCards` are declared per concrete screen, so a probe would need a subclass list
+and would raise a false alarm the day the game adds or drops one.
 
 ### `AgentOverlayHost.cs` is not going to be split, and that is a decision
 

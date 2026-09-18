@@ -943,9 +943,7 @@ internal static partial class GameActionService
 
     private static DevConsole? GetDevConsoleCore(NDevConsole console)
     {
-        const BindingFlags flags = BindingFlags.Instance | BindingFlags.NonPublic;
-        var field = typeof(NDevConsole).GetField("_devConsole", flags);
-        return field?.GetValue(console) as DevConsole;
+        return ReflectedGameMembers.Field(typeof(NDevConsole), "_devConsole")?.GetValue(console) as DevConsole;
     }
 
     /// <summary>
@@ -973,8 +971,7 @@ internal static partial class GameActionService
             await WaitForMainMenuSubmenuOpenAsync<NMultiplayerSubmenu>(mainMenu, TimeSpan.FromSeconds(5), cancellationToken);
         }
 
-        const BindingFlags flags = BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic;
-        var startLoad = typeof(NMultiplayerSubmenu).GetMethod("StartLoad", flags)
+        var startLoad = ReflectedGameMembers.Method(typeof(NMultiplayerSubmenu), "StartLoad")
             ?? throw new InvalidOperationException(Loc.T("找不到读档方法 StartLoad。"));
         startLoad.Invoke(submenu, new object?[] { null });
 
@@ -1128,13 +1125,6 @@ internal static partial class GameActionService
         const BindingFlags flags = BindingFlags.Instance | BindingFlags.NonPublic;
         var method = target.GetType().GetMethod(methodName, flags);
         return method?.Invoke(target, args) as Task;
-    }
-
-    private static T? GetPrivateField<T>(object target, string fieldName) where T : class
-    {
-        const BindingFlags flags = BindingFlags.Instance | BindingFlags.NonPublic;
-        var field = target.GetType().GetField(fieldName, flags);
-        return field?.GetValue(target) as T;
     }
 
     private static async Task ObserveBackgroundResultCore(Task<bool> task, string actionName)
