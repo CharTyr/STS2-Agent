@@ -41,4 +41,23 @@ internal static class MonsterMovesExportContractTests
             AgentSourceFixture.WithoutWhitespace(source).Contains("privateconststringMoveTitleSuffix=\".title\";", StringComparison.Ordinal),
             "MoveTitleSuffix must stay `.title` -- the key MonsterModel.GetBestiaryMoveName builds.");
     }
+
+    /// <summary>
+    /// The third time: three monsters still exported nothing. The DECIMILLIPEDE_SEGMENT_* segments
+    /// share their text under `DECIMILLIPEDE_SEGMENT`, and the prefix was built from each one's id.
+    /// </summary>
+    public static void ThePrefixFollowsTheMonstersOwnTitleKey()
+    {
+        var source = AgentSourceFixture.Read(ExportPath);
+        var body = AgentSourceFixture.WithoutWhitespace(AgentSourceFixture.MethodBody(source, "BuildMonsterMoves"));
+        var locBase = AgentSourceFixture.WithoutWhitespace(AgentSourceFixture.MethodBody(source, "LocalizationBase"));
+
+        Assert.True(
+            body.Contains("GetLocStringsWithPrefix(locBase+\".moves\")", StringComparison.Ordinal),
+            "BuildMonsterMoves must query by the monster's localization base, not its id: monsters that "
+            + "share text, like the three DECIMILLIPEDE segments, keep it under one shared key.");
+        Assert.True(
+            locBase.Contains("monster.Title?.LocEntryKey", StringComparison.Ordinal),
+            "LocalizationBase must derive from the key the monster's own Title uses.");
+    }
 }

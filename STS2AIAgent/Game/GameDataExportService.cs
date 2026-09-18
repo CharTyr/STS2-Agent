@@ -210,7 +210,12 @@ internal static class GameDataExportService
 
     private static object[] BuildMonsterMoves(MonsterModel monster)
     {
-        var prefix = $"{monster.Id.Entry}.moves.";
+        // The localization base is whatever the monster's own Title is keyed under, not its id. For
+        // almost every monster the two agree (`X.name` -> `X`). They differ when monsters share their
+        // text: the three DECIMILLIPEDE_SEGMENT_* segments are all titled `DECIMILLIPEDE_SEGMENT.name`,
+        // so keying by id found nothing and all three exported `moves: []`.
+        var locBase = LocalizationBase(monster);
+        var prefix = $"{locBase}.moves.";
 
         // This used to read a public MonsterModel.MoveNames property by reflection. The game removed
         // that property, the lookup returned null, and every monster in GET /data/monsters exported
@@ -220,7 +225,7 @@ internal static class GameDataExportService
         IEnumerable moveNames;
         try
         {
-            moveNames = LocManager.Instance.GetTable("monsters").GetLocStringsWithPrefix(monster.Id.Entry + ".moves");
+            moveNames = LocManager.Instance.GetTable("monsters").GetLocStringsWithPrefix(locBase + ".moves");
         }
         catch (Exception ex) when (ex is KeyNotFoundException or InvalidOperationException or NullReferenceException)
         {
@@ -248,6 +253,14 @@ internal static class GameDataExportService
     }
 
     private const string MoveTitleSuffix = ".title";
+
+    private static string LocalizationBase(MonsterModel monster)
+    {
+        var titleKey = monster.Title?.LocEntryKey;
+        return !string.IsNullOrEmpty(titleKey) && titleKey.EndsWith(".name", StringComparison.Ordinal)
+            ? TrimKnownSuffix(titleKey, ".name")
+            : monster.Id.Entry;
+    }
 
     private static string GetLocEntryKey(object value)
     {
