@@ -1,7 +1,7 @@
 {
   "title": "STS2 AI Agent",
   "visibility": "public",
-  "changeNote": "v0.12.5: two fixes an AI agent runs into, both found by driving a real game. When a run ends, the state now says GAME_OVER instead of still reporting COMBAT - an agent following the documented screen names was waiting for one it could never see, and had to work the end of a run out from the action list. And when a game action fails, the error now names the reason the game gave instead of a single blank sentence shared by eleven different actions, so \"the game refused that\" no longer reads the same as \"the mod broke\". Nothing changes for a run that is going well: this version adds no cards, no numbers, and touches no save.",
+  "changeNote": "v0.13.0: fixes to what the mod tells an AI agent about the game, found by checking every name it looked up against the game actually installed. Relic counters, card keywords and enchantments, and monster move lists had been silently empty; a combat resumed from a save could hide end turn and play card for good (thanks @XenoAmess); and several buttons were being pressed in a way the game's buttons ignore. The health check now also reports whether every game internal the mod relies on still exists, so a future game patch shows up as 'degraded' with the missing pieces named instead of as silently wrong data. Nothing changes for your runs: no cards, no numbers, no saves are touched.",
   "tags": [
     "Tools & APIs",
     "Utility",
