@@ -70,9 +70,7 @@ internal static class ReflectedMemberRegistryTests
             // Public properties read off whichever node, creature or power instance is at hand. Checked
             // against the installed sts2.dll on 2026-09-18: every declaration of each is public.
             ["Model"] = "public card-holder Model read across holder node types",
-            ["Powers"] = "public Creature.Powers read across creature types",
             ["Text"] = "public Text read across localized value types, inside the GetRawText fallback chain",
-            ["Title"] = "public Title read across power models",
         };
 
     /// <summary>
@@ -123,8 +121,6 @@ internal static class ReflectedMemberRegistryTests
         {
             ["FindMember"] = "ReflectionMemberAccessor: walks base types for a field or property whose owner varies; its private-name callers are held to the registry by the \"_x\" scan",
             ["FindInstanceMethod"] = "tries CloseFtue on whichever FTUE modal is stuck, then falls back to NModalContainer.Clear()",
-            ["GetReflectedProperty"] = "reads a public property off a value typed object; answers null when it is absent",
-            ["TryReadCardTextMember"] = "tries candidate text members on a card and keeps the first non-empty one",
         };
 
     // A name in a variable: a lower-case identifier followed by an argument separator. nameof(...) is
@@ -197,6 +193,7 @@ internal static class ReflectedMemberRegistryTests
     {
         var registered = ReadRegistry().Select(entry => entry.Name).ToHashSet(StringComparer.Ordinal);
         var offenders = new SortedSet<string>(StringComparer.Ordinal);
+        var duckNamesSeen = new HashSet<string>(StringComparer.Ordinal);
 
         foreach (var (path, text) in GameFacingSources(includeRegistry: false))
         {
@@ -205,6 +202,7 @@ internal static class ReflectedMemberRegistryTests
             foreach (Match match in DirectReflectionByName.Matches(text))
             {
                 var name = match.Groups[2].Value;
+                duckNamesSeen.Add(name);
                 if (!DuckTypedNames.ContainsKey(name) && !KnownDeadLookups.ContainsKey(name))
                 {
                     offenders.Add($"{match.Groups[1].Value}(\"{name}\") in {file}");
@@ -228,6 +226,14 @@ internal static class ReflectedMemberRegistryTests
             + "\n\nRegister the member and ask ReflectedGameMembers.Field/Method for it. A lookup of its own "
             + "is a second opinion on the binding flags -- which is how _longPressDuration was read with the "
             + "wrong ones for as long as the line existed.");
+
+        // An exemption nothing uses any more is an exemption waiting for the next lookup to hide
+        // behind. Powers and Title sat here after the reads they covered became typed.
+        var staleDuckNames = DuckTypedNames.Keys.Where(name => !duckNamesSeen.Contains(name)).OrderBy(name => name).ToArray();
+        Assert.True(
+            staleDuckNames.Length == 0,
+            "DuckTypedNames lists names no reflection call uses any more: " + string.Join(", ", staleDuckNames)
+            + ". Drop them.");
     }
 
     public static void NoHelperTakesAGameMemberNameAsAParameter()

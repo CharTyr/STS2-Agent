@@ -624,7 +624,7 @@
 | `relic_id` | string | 遗物内部 ID |
 | `name` | string | 遗物名称 |
 | `description` | string \| null | 遗物描述（若可读取） |
-| `stack` | number \| null | 遗物层数/计数（若适用） |
+| `stack` | number \| null | 遗物图标上显示的计数（游戏的 `DisplayAmount`，仅当该遗物显示计数时有值），其余为 `null`。2026-09-18 之前此字段对所有遗物恒为 `null`：它读的是游戏里不存在的 `Amount` |
 | `is_melted` | boolean | 是否已熔炼 |
 
 #### `run.potions[]`

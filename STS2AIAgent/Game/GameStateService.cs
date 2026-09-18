@@ -2158,24 +2158,10 @@ internal static partial class GameStateService
         {
         }
 
-        foreach (var memberName in new[]
-        {
-            "Description",
-            "RulesText",
-            "Body",
-            "Text",
-            "RawText",
-            "DescriptionText"
-        })
-        {
-            var text = TryReadCardTextMember(card, memberName);
-            if (!string.IsNullOrWhiteSpace(text))
-            {
-                return NormalizeCardRulesText(text);
-            }
-        }
-
-        return string.Empty;
+        // The same Description, coerced another way when its raw text is empty. This used to try five
+        // more names -- RulesText, Body, Text, RawText, DescriptionText -- none of which CardModel has.
+        var coerced = TryCoerceText(card.Description);
+        return string.IsNullOrWhiteSpace(coerced) ? string.Empty : NormalizeCardRulesText(coerced);
     }
 
     private static string GetResolvedCardRulesText(CardModel? card)
@@ -2249,31 +2235,6 @@ internal static partial class GameStateService
                 description = AscensionHelper.GetDescription(level).GetFormattedText()
             })
             .ToArray();
-    }
-
-    private static string TryReadCardTextMember(object instance, string memberName)
-    {
-        const BindingFlags flags = BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic;
-
-        try
-        {
-            var property = instance.GetType().GetProperty(memberName, flags);
-            if (property != null)
-            {
-                return TryCoerceText(property.GetValue(instance));
-            }
-
-            var field = instance.GetType().GetField(memberName, flags);
-            if (field != null)
-            {
-                return TryCoerceText(field.GetValue(instance));
-            }
-        }
-        catch
-        {
-        }
-
-        return string.Empty;
     }
 
     private static string TryCoerceText(object? value)
@@ -3003,8 +2964,8 @@ internal static partial class GameStateService
             gold = player.Gold,
             max_energy = player.MaxEnergy,
             base_orb_slots = player.BaseOrbSlotCount,
-            act_id = TryGetMemberValue(runState, "CurrentActIndex")?.ToString()
-                ?? TryGetMemberValue(runState, "ActId")?.ToString(),
+            // RunState has no ActId; the fallback that asked for one never resolved.
+            act_id = runState.CurrentActIndex.ToString(),
             boss_id = ResolveBossId(runState),
             deck = player.Deck.Cards.Select((card, index) => BuildDeckCardPayload(card, index)).ToArray(),
             relics = player.Relics.Select((relic, index) => BuildRunRelicPayload(relic, index)).ToArray(),
@@ -3019,12 +2980,8 @@ internal static partial class GameStateService
 
     private static string? ResolveBossId(RunState runState)
     {
-        if (runState.Act?.BossEncounter?.Id.Entry is { Length: > 0 } bossId)
-        {
-            return bossId;
-        }
-
-        return TryGetMemberValue(runState, "BossId")?.ToString();
+        // RunState has no BossId, so the reflective fallback that used to follow never resolved.
+        return runState.Act?.BossEncounter?.Id.Entry is { Length: > 0 } bossId ? bossId : null;
     }
 
     private static bool IsCardSelected(IScreenContext? currentScreen, CardModel card)
@@ -3403,7 +3360,7 @@ internal static partial class GameStateService
                         is_locked = SafeReadBool(() => opt.IsLocked),
                         is_proceed = SafeReadBool(() => opt.IsProceed),
                         will_kill_player = GetEventOptionWillKillPlayer(eventModel, opt),
-                        has_relic_preview = GetReflectedProperty(opt, "Relic") != null
+                        has_relic_preview = SafeReadBool(() => opt.Relic != null)
                     });
                 }
             }
@@ -3968,52 +3925,22 @@ internal static partial class GameStateService
 
     private static CombatPowerPayload[] BuildCreaturePowerPayloads(Creature creature)
     {
-        var powersValue = creature.GetType().GetProperty("Powers")?.GetValue(creature);
-        if (powersValue is not System.Collections.IEnumerable powersEnumerable)
-        {
-            return Array.Empty<CombatPowerPayload>();
-        }
-
+        // Every member read here is public on Creature and PowerModel, so the compiler checks it. This
+        // used to reach each one by name through reflection, which a rename would have emptied silently.
         var result = new List<CombatPowerPayload>();
         var index = 0;
 
-        foreach (var power in powersEnumerable)
+        foreach (var power in creature.Powers)
         {
             if (power == null)
             {
                 continue;
             }
 
-            var powerType = power.GetType();
-            var idEntry = SafeReadString(() =>
-            {
-                var idValue = powerType.GetProperty("Id")?.GetValue(power);
-                if (idValue == null)
-                {
-                    return string.Empty;
-                }
-
-                return idValue.GetType().GetProperty("Entry")?.GetValue(idValue)?.ToString();
-            });
-
-            var title = SafeReadString(() =>
-            {
-                var titleValue = powerType.GetProperty("Title")?.GetValue(power);
-                if (titleValue == null)
-                {
-                    return string.Empty;
-                }
-
-                return titleValue.GetType().GetMethod("GetFormattedText")?.Invoke(titleValue, null)?.ToString();
-            });
-
-            var amount = GetReflectedNullableIntProperty(power, "Amount");
-
-            var isDebuff = string.Equals(
-                GetReflectedProperty(power, "TypeForCurrentAmount")?.ToString()
-                    ?? GetReflectedProperty(power, "Type")?.ToString(),
-                "Debuff",
-                StringComparison.Ordinal);
+            var idEntry = SafeReadString(() => power.Id.Entry);
+            var title = SafeReadString(() => power.Title.GetFormattedText());
+            var amount = SafeReadNullableInt(() => power.Amount);
+            var isDebuff = SafeReadBool(() => power.TypeForCurrentAmount == MegaCrit.Sts2.Core.Entities.Powers.PowerType.Debuff);
 
             result.Add(new CombatPowerPayload
             {
@@ -4332,8 +4259,10 @@ internal static partial class GameStateService
             index = index,
             relic_id = relic.Id.Entry,
             name = relic.Title.GetFormattedText(),
-            description = GetDynamicFormattedTextProperty(relic, "DynamicDescription", "Description"),
-            stack = GetReflectedNullableIntProperty(relic, "Amount"),
+            description = RawTextOrNull(() => relic.DynamicDescription),
+            // RelicModel has no Amount, which is what this read, so stack was null for every relic. The
+            // number a player sees on a relic is DisplayAmount, shown when ShowCounter says so.
+            stack = SafeReadBool(() => relic.ShowCounter) ? SafeReadNullableInt(() => relic.DisplayAmount) : null,
             is_melted = relic.IsMelted
         };
     }
@@ -4355,8 +4284,8 @@ internal static partial class GameStateService
             index = index,
             potion_id = potion?.Id.Entry,
             name = potion?.Title.GetFormattedText(),
-            description = potion != null ? GetDynamicFormattedTextProperty(potion, "DynamicDescription", "Description") : null,
-            rarity = potion != null ? GetReflectedStringProperty(potion, "Rarity") : null,
+            description = potion != null ? RawTextOrNull(() => potion.DynamicDescription) : null,
+            rarity = potion?.Rarity.ToString(),
             occupied = potion != null,
             usage = potion?.Usage.ToString(),
             target_type = potion?.TargetType.ToString(),
@@ -4369,100 +4298,31 @@ internal static partial class GameStateService
         };
     }
 
-    private static object? GetReflectedProperty(object target, string propertyName)
+    /// <summary>The raw text of a localized string, or null when it is empty or cannot be read.</summary>
+    /// <remarks>
+    /// Replaces a by-name lookup that tried DynamicDescription and then Description. Description's
+    /// getter is private, and that lookup only saw public properties, so the second name never
+    /// resolved; DynamicDescription is public and read directly.
+    /// </remarks>
+    private static string? RawTextOrNull(Func<MegaCrit.Sts2.Core.Localization.LocString?> read)
     {
         try
         {
-            return target.GetType().GetProperty(propertyName)?.GetValue(target);
+            var text = read()?.GetRawText();
+            return string.IsNullOrWhiteSpace(text) ? null : text;
         }
-        catch
+        catch (Exception ex) when (ex is InvalidOperationException or NullReferenceException or KeyNotFoundException or FormatException)
         {
             return null;
         }
     }
 
-    private static string? GetReflectedStringProperty(object target, string propertyName)
-    {
-        var value = GetReflectedProperty(target, propertyName);
-        return value?.ToString();
-    }
-
-    private static string? GetReflectedFormattedTextProperty(object target, string propertyName)
-    {
-        var value = GetReflectedProperty(target, propertyName);
-        if (value == null)
-        {
-            return null;
-        }
-
-        try
-        {
-            var getRawText = value.GetType().GetMethod("GetRawText", Type.EmptyTypes);
-            if (getRawText != null)
-            {
-                return getRawText.Invoke(value, null)?.ToString();
-            }
-
-            return value.GetType().GetMethod("GetFormattedText")?.Invoke(value, null)?.ToString();
-        }
-        catch
-        {
-            return value.ToString();
-        }
-    }
-
-    private static string? GetDynamicFormattedTextProperty(object target, params string[] propertyNames)
-    {
-        foreach (var propertyName in propertyNames)
-        {
-            var value = GetReflectedFormattedTextProperty(target, propertyName);
-            if (!string.IsNullOrWhiteSpace(value))
-            {
-                return value;
-            }
-        }
-
-        return null;
-    }
-
-    private static int? GetReflectedNullableIntProperty(object target, string propertyName)
+    private static bool GetEventOptionWillKillPlayer(EventModel eventModel, EventOption option)
     {
         try
         {
-            var value = GetReflectedProperty(target, propertyName);
-            return value == null ? null : Convert.ToInt32(value);
-        }
-        catch
-        {
-            return null;
-        }
-    }
-
-    private static bool GetReflectedBoolProperty(object target, string propertyName)
-    {
-        try
-        {
-            var value = GetReflectedProperty(target, propertyName);
-            return value != null && Convert.ToBoolean(value);
-        }
-        catch
-        {
-            return false;
-        }
-    }
-
-    private static bool GetEventOptionWillKillPlayer(object eventModel, object option)
-    {
-        try
-        {
-            var owner = GetReflectedProperty(eventModel, "Owner");
-            var willKillPlayer = GetReflectedProperty(option, "WillKillPlayer") as Delegate;
-            if (owner == null || willKillPlayer == null)
-            {
-                return false;
-            }
-
-            return willKillPlayer.DynamicInvoke(owner) as bool? ?? false;
+            var owner = eventModel.Owner;
+            return owner != null && option.WillKillPlayer != null && option.WillKillPlayer(owner);
         }
         catch
         {
