@@ -20,7 +20,7 @@ The Python MCP server is a synchronous sidecar around the local STS2 HTTP API. K
 ## Quality Check
 
 - Preserve the default `guided` profile and its compact action surface. The [profile normalizer and gates](../../../mcp_server/src/sts2_mcp/server.py) define `layered`/`planner`/`multi-agent` and `full`/`legacy` aliases.
-- Preserve one-shot action semantics: ordinary reads may retry, but an ambiguous `POST /action` returns `outcome_unknown` after at most one state reconciliation. See the [request loop](../../../mcp_server/src/sts2_mcp/client.py#L265).
-- Preserve the action envelope schema: `ok` is a boolean; failed responses carry string `error.code` and `error.message`, plus boolean `error.retryable`. See the [action envelope decoder](../../../mcp_server/src/sts2_mcp/client.py#L546).
-- Keep network health failures structured. The [healthz endpoint](../../../mcp_server/src/sts2_mcp/network_server.py#L99) retains the STS2 error fields and returns an appropriate failure status.
+- Preserve one-shot action semantics: ordinary reads may retry, but an ambiguous `POST /action` returns `outcome_unknown` after at most one state reconciliation. See `Sts2Client._request` in [client.py](../../../mcp_server/src/sts2_mcp/client.py).
+- Preserve the action envelope schema: `ok` is a boolean; failed responses carry string `error.code` and `error.message`, plus boolean `error.retryable`. See `_decode_action_response_envelope` in [client.py](../../../mcp_server/src/sts2_mcp/client.py).
+- Keep network health failures structured. `healthz_endpoint` in [network_server.py](../../../mcp_server/src/sts2_mcp/network_server.py) retains the STS2 error fields and returns an appropriate failure status.
 - Run the focused MCP tests from the repository root by entering `mcp_server/` and using the command in [validation-and-release](../operations/validation-and-release.md). Report commands actually run; documentation-only work does not imply runtime or gameplay validation.

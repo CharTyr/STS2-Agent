@@ -1634,10 +1634,13 @@ DOC_LINK_SKIP = ("node_modules/", ".trellis/.backup")
 # the self-test builds. A page carries roughly one link here, so a quarter of that is
 # far below any healthy tree and far above a broken extraction.
 MIN_DOC_LINKS_PER_PAGE = 4
-# A link may carry a "#L123" or "#L10-L20" anchor at a source file. Those rot the moment the
-# file is edited, and silently: the link still resolves, it just lands somewhere else. The gate
-# cannot tell whether line 123 is still the right line, but it can tell when the file no longer
-# has one -- which is what happened to six anchors when client.py and server.py were split.
+# A link may not carry a "#L123" or "#L10-L20" anchor. Those rot the moment the file is edited,
+# and silently: the link still resolves, it just lands somewhere else. This gate first rejected
+# only anchors past the end of the file -- which caught six when client.py and server.py were
+# split -- but an anchor inside the file is no safer, only harder to catch: when the forty-one
+# anchors in the specs were replaced on 2026-09-18, one that read "build_parser" pointed into the
+# middle of another function and three test links landed on blank lines. A symbol name is
+# searchable forever; a line number is right for one commit.
 DOC_LINE_ANCHOR = re.compile(r"^L(\d+)(?:-L(\d+))?$")
 
 
@@ -1710,13 +1713,14 @@ def check_doc_links(repo_root: Path) -> list[str]:
                 continue
 
             line_anchor = DOC_LINE_ANCHOR.match(anchor)
-            if line_anchor and resolved.is_file():
-                wanted = int(line_anchor.group(2) or line_anchor.group(1))
-                available = resolved.read_text(encoding="utf-8", errors="replace").count("\n") + 1
-                if wanted > available:
-                    dangling_anchors.append(
-                        f"{relative} -> {target} ({Path(cleaned).name} has {available} lines)"
-                    )
+            if line_anchor:
+                note = ""
+                if resolved.is_file():
+                    wanted = int(line_anchor.group(2) or line_anchor.group(1))
+                    available = resolved.read_text(encoding="utf-8", errors="replace").count("\n") + 1
+                    if wanted > available:
+                        note = f" ({Path(cleaned).name} has {available} lines)"
+                dangling_anchors.append(f"{relative} -> {target}{note}")
 
     floor = max(1, len(pages) // MIN_DOC_LINKS_PER_PAGE)
     if checked < floor:
@@ -1734,10 +1738,11 @@ def check_doc_links(repo_root: Path) -> list[str]:
         )
     if dangling_anchors:
         raise GateError(
-            "these Markdown links point at a line the file does not have: "
+            "these Markdown links point at a line number: "
             + ", ".join(dangling_anchors)
             + ". A line anchor rots as soon as the file is edited, and it rots quietly -- the link "
-            "still opens, it just lands somewhere else. Re-point it, or name the symbol instead."
+            "still opens, it just lands somewhere else. Link the file and name the symbol instead "
+            "(a function, class, step name or parameter), which stays findable by search."
         )
 
     return [f"{checked} relative link(s) across {len(pages)} tracked Markdown pages resolve"]
