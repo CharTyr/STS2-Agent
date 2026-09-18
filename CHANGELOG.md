@@ -2,9 +2,20 @@
 
 > Release attribution is recorded against tags or release commits. Post-tag maintenance is listed separately; current validation limits are maintained in [PRODUCT_PLAN_CURRENT.md](https://github.com/CharTyr/STS2-Agent/blob/main/PRODUCT_PLAN_CURRENT.md).
 
-## Unreleased
+## v0.13.0 - 2026-09-19
 
-> Post-tag maintenance on `dev`, not in any build a player can download.
+> Mostly fixes to what `/state` tells an agent, found by checking every name the mod looked up
+> against the game that is actually installed. Relic counters, card keywords and enchantments,
+> monster move lists and a resumed combat's `end_turn` / `play_card` had been silently empty or
+> missing. Several buttons were being "clicked" through a signal the game's buttons do not have.
+>
+> `GET /health` gains two blocks. `compatibility` probes every game member the mod reaches by
+> reflection and can report `status: "degraded"` where it used to say `ready`. `state_build` reports
+> how long state builds take. A client that treats any `status` other than `ready` as failure should
+> read `compatibility` first: the mod still works, it is saying which feature will not.
+>
+> The two largest source files were split and the two action surfaces merged into one decision, with
+> no behaviour change. Saves, cards and numbers are untouched.
 
 ### Changed
 
