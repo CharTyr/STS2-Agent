@@ -526,6 +526,8 @@ mod-side action.
 
 - Every `GET /data/{collection}` answers `cards`, `relics`, `monsters`, `potions`, `events`,
   `powers`, `characters` (verified 2026-09-12: 596 / 299 / 107 / 66 / 57 / 283 / 5).
+- Every monster exports a non-empty `moves` list with no repeated id, each `name` a short move title
+  rather than dialogue (verified 2026-09-18: 107 / 107, 0 duplicates).
 - Exported fields match `GameDataExportSchema.cs` and the scene field tables the MCP server uses for
   `get_relevant_game_data`.
 - Exported collections stay aligned with the Python client's action surface: every action the client
@@ -659,3 +661,15 @@ mod-side action.
 - 日志 `error|exception|fatal` 扫描：只有三处 Godot 引擎自身的 `Invalid Task ID`，无源自本 mod 的异常
 
 玩家档案 `default/1`、`default/2`、`default/1001` 逐文件一致；`mods/` 还原到发布版 v0.12.5。
+
+**第四至六轮（`fix/monster-moves-export`，clientId `2026091804`–`2026091806`）——怪物招式导出。**
+`GET /data/monsters` 的 `moves` 在装着的游戏上一直是空数组（`MonsterModel.MoveNames` 已不存在）。
+
+| 轮次 | 提交 | 有招式 / 总数 | 含重复 id 的怪物 | 发现 |
+| --- | --- | --- | --- | --- |
+| 4 | `67f01ee` 直接调本地化 API | 104 / 107 | 9 | 同一前缀下还有台词 key，`FAKE_MERCHANT_MONSTER` 的 ENRAGE 出现三次、名字是台词 |
+| 5 | `4f1ab94` 只取 `.title` | 104 / 107 | 0 | 三个 `DECIMILLIPEDE_SEGMENT_*` 仍空：它们共用一套文案，key 不是自己的 id |
+| 6 | `f7208fd` 前缀取自 Title key | **107 / 107** | **0** | 三个分段各得 BULK / CONSTRICT / DEAD / REATTACH / WRITHE；其余 104 个与第五轮逐条（id + name + 顺序）一致 |
+
+三轮 `/health` 均为 `ready`、23 / 0。玩家档案 `default/1`、`default/2`、`default/1001` 逐文件一致；
+`mods/` 三个文件还原到发布版哈希。
