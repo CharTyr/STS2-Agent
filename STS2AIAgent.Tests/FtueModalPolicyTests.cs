@@ -20,7 +20,8 @@ internal static class FtueModalPolicyTests
         Assert.False(FtueModalPolicy.ExposeConfirm("NVerticalPopup", hasUsableConfirmButton: false));
         Assert.True(FtueModalPolicy.ExposeConfirm("NVerticalPopup", hasUsableConfirmButton: true));
         Assert.False(FtueModalPolicy.CloseFtueDirectly("NAbandonRunConfirmPopup", hasUsableConfirmButton: false));
-        Assert.Equal("CloseFtueAndEndTurn", FtueModalPolicy.CloseMethodNames("NCanPlayCardsFtue")[0]);
+        Assert.Equal("CloseFtue", string.Join(",", FtueModalPolicy.CloseMethodNames("NCanPlayCardsFtue")));
+        Assert.Equal("CloseFtue", string.Join(",", FtueModalPolicy.CloseMethodNames("NMerchantFtue")));
         Assert.Equal(0, FtueModalPolicy.CloseMethodNames("NCombatRulesFtue").Count);
         Assert.Contains("CloseMethodNames", AgentSourceFixture.ReadStateService());
 

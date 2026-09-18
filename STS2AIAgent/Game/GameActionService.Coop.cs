@@ -86,7 +86,8 @@ internal static partial class GameActionService
             });
         }
 
-        var startHostTask = InvokePrivateTask<bool>(scene, "StartHost", false)
+        var startHostTask = ReflectedGameMembers.Method(typeof(NMultiplayerTest), "StartHost")
+            ?.Invoke(scene, new object?[] { false }) as Task<bool>
             ?? throw new ApiException(503, "state_unavailable", "Multiplayer host entry point is unavailable.", new
             {
                 action = "host_multiplayer_lobby",
@@ -224,7 +225,9 @@ internal static partial class GameActionService
                 .Where(player => player.id != lobby.LocalPlayer.id)
                 .All(player => player.isReady);
 
-        InvokePrivateVoid(scene, "ReadyButtonPressed");
+        InvokeLobbyMethod(
+            ReflectedGameMembers.Method(typeof(NMultiplayerTest), "ReadyButtonPressed"),
+            scene, "ready_multiplayer_lobby", screen);
         var stable = await WaitForMultiplayerLobbyReadyTransitionAsync(scene, ready: true, expectRunStart, TimeSpan.FromSeconds(10));
 
         return new ActionResponsePayload
@@ -252,7 +255,9 @@ internal static partial class GameActionService
             });
         }
 
-        InvokePrivateVoid(scene, "Disconnect", NetError.Quit);
+        InvokeLobbyMethod(
+            ReflectedGameMembers.Method(typeof(NMultiplayerTest), "Disconnect"),
+            scene, "disconnect_multiplayer_lobby", screen, NetError.Quit);
         var stable = await WaitForMultiplayerLobbyDisconnectTransitionAsync(scene, TimeSpan.FromSeconds(10));
 
         return new ActionResponsePayload
@@ -549,11 +554,24 @@ internal static partial class GameActionService
         return finalScene == null || (ReferenceEquals(finalScene, scene) && GameStateService.GetMultiplayerTestLobby(scene) == null);
     }
 
-    private static void InvokePrivateVoid(object target, string methodName, params object?[] args)
+    /// <summary>Calls one of the lobby scene's private handlers, as resolved by the registry.</summary>
+    /// <remarks>
+    /// The caller names the member at the call site, so the registry contract can see which entry is
+    /// asked for. A missing handler used to throw InvalidOperationException, which reached the caller
+    /// as a 500 with no hint that the game had renamed a method; it is now the same 503 the host entry
+    /// point answers, and the startup probe has already named the member in the log.
+    /// </remarks>
+    private static void InvokeLobbyMethod(MethodInfo? method, NMultiplayerTest scene, string action, string screen, params object?[] args)
     {
-        const BindingFlags flags = BindingFlags.Instance | BindingFlags.NonPublic;
-        var method = target.GetType().GetMethod(methodName, flags)
-            ?? throw new InvalidOperationException($"Method '{methodName}' was not found on {target.GetType().FullName}.");
-        method.Invoke(target, args);
+        if (method == null)
+        {
+            throw new ApiException(503, "state_unavailable", "This lobby handler is missing in this game build.", new
+            {
+                action,
+                screen
+            });
+        }
+
+        method.Invoke(scene, args);
     }
 }

@@ -98,13 +98,14 @@ internal static class ActionDiagnosticsContractTests
             + "'. Log it, or say in the body why it needs no log.");
 
         // The fallback chains that used to be wordless. Each step names itself, so a recovery that
-        // keeps failing is visible in the log instead of only in a stuck action.
+        // keeps failing is visible in the log instead of only in a stuck action. confirm_bundle and
+        // continue_game_over were on this list until their fallbacks were found to be calls into
+        // things the installed game does not have -- an undeclared method and a signal NButton does
+        // not carry -- and were deleted rather than logged.
         foreach (var chain in new[]
                  {
                      "TryCancelRunningPlayerAction",
                      "DrainRewardFlowAsync",
-                     "confirm_bundle",
-                     "continue_game_over",
                  })
         {
             Assert.Contains(

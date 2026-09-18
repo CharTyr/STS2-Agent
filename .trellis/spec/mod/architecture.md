@@ -120,7 +120,7 @@ verbatim in exactly one new file.
 This project references the game's `sts2.dll`, so almost everything it touches is compile-checked:
 rename a public game type or member and the build turns red before anyone runs anything.
 
-**Twenty-three private game members are the exception.** They are found by name at runtime, and they
+**Twenty-seven private game members are the exception.** They are found by name at runtime, and they
 fail in the opposite way -- quietly. `GetField` returns null, the call site falls back to a default,
 and an agent is handed `max_players: 0` with no way to tell that from a lobby that really holds
 nobody. Slay the Spire 2 is in early access; a patch renames a private field and the mod keeps
@@ -157,6 +157,38 @@ of emptying the export.
 
 That is the general move worth remembering: before registering a member, check whether the thing it
 wraps is public. A compile-checked call beats the best-guarded reflection.
+
+**A name in a variable is a name the scan cannot see.** Four private methods --
+`NMultiplayerTest.StartHost`, `ReadyButtonPressed`, `Disconnect` and `NPauseMenu.CloseToMenu` --
+went unprobed for as long as the registry existed, because they reached `GetMethod` through
+`InvokePrivateTask` / `InvokePrivateVoid`, helpers that took the method name as a parameter. The
+contract looked for literals passed to `GetMethod`, and these never were. They are registered now,
+the helpers are gone, and `ReflectedMembers.NoNameTakingHelpers` fails on any lookup by a variable
+name outside the few helpers `NameTakingChannels` argues for by name.
+
+Registering them broke the mod on the first live run, which is worth knowing before adding the next
+entry. The registry searched base types too, and `NMultiplayerTest`'s private `Disconnect(NetError)`
+shares a name with Godot's public `GodotObject.Disconnect(StringName, Callable)`: `GetMethod` threw
+`AmbiguousMatchException`. All entries resolve inside one `Lazy`, which caches an exception, so that
+one entry took the startup probe, `GET /health` and every registry-backed action down with it --
+`open_character_select` included. Lookups are now declared-only (an entry's `typeof` names the
+declaring type, which is what it always meant) and go through `ReflectedMemberResolver`, which
+compiles offline, is tested against a fake with exactly that shape, and answers null rather than
+throwing. Metadata read offline showed the member existed; only the running game showed the collision.
+
+**Godot has its own by-name entry points, and they rot the same way.** `Node.Call("Name")`,
+`EmitSignal("name")` and `Set("name", ...)` are as unchecked as `GetMethod("Name")`. Each has a
+compile-checked form -- the generated `MethodName` / `SignalName` / `PropertyName` constant of the
+node's own type, or a direct call when the method is public -- and `ReflectedMembers.NoGodotCallByString`
+requires it. The sweep found `confirm_bundle` calling `OnConfirmPressed`, which the installed game does
+not declare, on every use.
+
+**The game's buttons are not Godot buttons.** `NButton` derives from `NClickableControl` -> `Control`,
+not from `BaseButton`: it has no `pressed` signal and no `disabled` property. Emitting
+`BaseButton.SignalName.Pressed` on one compiles -- the constant names `BaseButton`, not the button's
+own type -- and does nothing. `choose_capstone_option` did only that; `continue_game_over` did that and
+`Set("disabled", false)` before a `ForceClick` that was the only step that worked. Game buttons are
+clicked with `ForceClick()`, and `ReflectedMembers.GameButtonsAreClicked` holds that.
 
 `ReflectedMembers.*` keeps the registry honest: a new reflection site with no entry fails, and an
 entry nothing reads fails too. Two names are deliberately not probed and say why -- the card-grid

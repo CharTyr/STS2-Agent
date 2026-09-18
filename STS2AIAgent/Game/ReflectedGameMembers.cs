@@ -80,11 +80,17 @@ internal static class ReflectedGameMembers
         new(typeof(NPlayerHand), "_prefs", MemberKind.Field, false, "combat hand selection metadata"),
         new(typeof(NPlayerHand), "_selectedCards", MemberKind.Field, false, "combat hand selection metadata"),
         new(typeof(NMultiplayerTest), "_lobby", MemberKind.Field, false, "multiplayer test lobby"),
+        // Found by a helper that took the name as a parameter, which is how they stayed out of this
+        // list: the contract looked for literals passed to GetMethod, and these never were.
+        new(typeof(NMultiplayerTest), "StartHost", MemberKind.Method, false, "host_multiplayer_lobby"),
+        new(typeof(NMultiplayerTest), "ReadyButtonPressed", MemberKind.Method, false, "ready_multiplayer_lobby"),
+        new(typeof(NMultiplayerTest), "Disconnect", MemberKind.Method, false, "disconnect_multiplayer_lobby"),
         new(typeof(CommandLineHelper), "_args", MemberKind.Field, true, "companion launch arguments"),
         new(typeof(NGameOverScreen), "_isAnimatingSummary", MemberKind.Field, false, "game_over.showing_summary"),
         new(typeof(NSingleplayerSubmenu), "_standardButton", MemberKind.Field, false, "continue_run"),
         new(typeof(NPatchNotesScreen), "_backButton", MemberKind.Field, false, "close_main_menu_submenu"),
         new(typeof(NPauseMenu), "_saveAndQuitButton", MemberKind.Field, false, "save_and_quit"),
+        new(typeof(NPauseMenu), "CloseToMenu", MemberKind.Method, false, "save_and_quit"),
         new(typeof(NUnlockScreen), "_unlockConfirmButton", MemberKind.Field, false, "confirm_unlock"),
         // The six unlock payload fields each live on their own concrete screen, which is why the
         // reader tries all six names against whatever screen is open and expects five to miss.
@@ -156,19 +162,15 @@ internal static class ReflectedGameMembers
     /// <summary>Entries the game no longer declares. Empty is the healthy answer.</summary>
     internal static IReadOnlyList<Probe> Missing => Probes.Where(probe => !probe.Found).ToArray();
 
-    private static MemberInfo? Resolve(Entry entry)
+    // Declared-only and exception-free: see ReflectedMemberResolver for the two live failures that
+    // made it both.
+    private static MemberInfo? Resolve(Entry entry) => entry.Kind switch
     {
-        var flags = BindingFlags.Public | BindingFlags.NonPublic |
-            (entry.Static ? BindingFlags.Static : BindingFlags.Instance);
-
-        return entry.Kind switch
-        {
-            MemberKind.Field => entry.DeclaringType.GetField(entry.MemberName, flags),
-            MemberKind.Method => entry.DeclaringType.GetMethod(entry.MemberName, flags),
-            MemberKind.Property => entry.DeclaringType.GetProperty(entry.MemberName, flags),
-            _ => null,
-        };
-    }
+        MemberKind.Field => ReflectedMemberResolver.Field(entry.DeclaringType, entry.MemberName, entry.Static),
+        MemberKind.Method => ReflectedMemberResolver.Method(entry.DeclaringType, entry.MemberName, entry.Static),
+        MemberKind.Property => ReflectedMemberResolver.Property(entry.DeclaringType, entry.MemberName, entry.Static),
+        _ => null,
+    };
 
     /// <summary>
     /// Resolves every entry when the mod loads and writes the misses to the game log.

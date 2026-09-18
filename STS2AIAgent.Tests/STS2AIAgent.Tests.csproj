@@ -9,6 +9,7 @@
   </PropertyGroup>
   <ItemGroup>
     <Compile Include="..\STS2AIAgent\Agent\AutoPlaySession.cs" Link="Agent\AutoPlaySession.cs" />
+    <Compile Include="..\STS2AIAgent\Game\ReflectedMemberResolver.cs" Link="Game\ReflectedMemberResolver.cs" />
     <Compile Include="..\STS2AIAgent\Agent\AutoPlayRecovery.cs" Link="Agent\AutoPlayRecovery.cs" />
     <Compile Include="..\STS2AIAgent\Agent\CurrentRunBoundary.cs" Link="Agent\CurrentRunBoundary.cs" />
     <Compile Include="..\STS2AIAgent\Agent\StopKindPolicy.cs" Link="Agent\StopKindPolicy.cs" />

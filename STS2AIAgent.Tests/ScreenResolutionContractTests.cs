@@ -108,7 +108,7 @@ internal static class ScreenResolutionContractTests
         // probes it at load -- not through a lookup of its own that could disagree with the probe.
         Assert.Contains("ReflectedGameMembers.Field(typeof(NPatchNotesScreen), \"_backButton\")?.GetValue(patchNotes) as NButton", close, StringComparison.Ordinal);
         Assert.Contains("backButton.ForceClick();", close, StringComparison.Ordinal);
-        Assert.Contains("((Node)patchNotes).Call(\"Close\");", close, StringComparison.Ordinal);
+        Assert.Contains("((Node)patchNotes).Call(NPatchNotesScreen.MethodName.Close);", close, StringComparison.Ordinal);
         Assert.Contains("WaitForPatchNotesCloseAsync(patchNotes, TimeSpan.FromSeconds(10))", close, StringComparison.Ordinal);
         Assert.Contains("submenuStack.Pop();", close, StringComparison.Ordinal);
 
