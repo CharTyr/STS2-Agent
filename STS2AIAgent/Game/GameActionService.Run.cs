@@ -206,7 +206,7 @@ internal static partial class GameActionService
         }
         else
         {
-            var saveAndQuitButton = GetPrivateField<NButton>(pauseMenu, "_saveAndQuitButton");
+            var saveAndQuitButton = ReflectedGameMembers.Field(typeof(NPauseMenu), "_saveAndQuitButton")?.GetValue(pauseMenu) as NButton;
             if (saveAndQuitButton == null || !saveAndQuitButton.IsVisibleInTree() || !saveAndQuitButton.IsEnabled)
             {
                 throw new ApiException(503, "state_unavailable", "Save and Quit button is unavailable.", new
@@ -771,41 +771,10 @@ internal static partial class GameActionService
 
     private static void TryInvokePressed(NButton button)
     {
-        const BindingFlags flags = BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic;
-        foreach (var name in new[] { "OnContinueButtonPressed", "OnPressed" })
-        {
-            try
-            {
-                var method = button.GetType().GetMethod(name, flags, binder: null, types: Type.EmptyTypes, modifiers: null);
-                method?.Invoke(button, null);
-            }
-            catch (Exception ex)
-            {
-                Log.Warn($"[STS2AIAgent] continue_game_over: invoking {name} failed: {ex}");
-            }
-        }
-
-        try
-        {
-            var asyncPressed = button.GetType().GetMethod("OnContinueButtonPressedAsync", flags);
-            if (asyncPressed?.Invoke(button, null) is Task task)
-            {
-                ObserveBackgroundResult(task.ContinueWith(static completed =>
-                {
-                    if (completed.IsFaulted)
-                    {
-                        return false;
-                    }
-
-                    return true;
-                }), "continue_game_over");
-            }
-        }
-        catch (Exception ex)
-        {
-            Log.Warn($"[STS2AIAgent] continue_game_over: invoking OnContinueButtonPressedAsync failed: {ex}");
-        }
-
+        // This used to try three handlers by name first -- OnContinueButtonPressed, OnPressed and
+        // OnContinueButtonPressedAsync. None of them exists on a button in the installed game:
+        // OnPressed is declared nowhere, and the other two live on NMainMenu. All three lookups
+        // returned null on every call, so the signal below has always been the only thing this did.
         try
         {
             button.EmitSignal(Button.SignalName.Pressed);

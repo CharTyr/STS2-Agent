@@ -305,7 +305,7 @@
 **已做：**
 
 1. **上游破坏此前是盲区。** mod 编译期引用 `sts2.dll`，公开 API 改名会让构建立刻红；
-   例外是 **22 个按字符串反射的游戏私有成员**，它们失效时 `GetField` 返回 null、
+   例外是 **23 个按字符串反射的游戏私有成员**，它们失效时 `GetField` 返回 null、
    调用点退回默认值——agent 拿到 `max_players: 0`，分不清「大厅零人」和「读不到了」。
    现在启动时逐个解析，`/health` 的 `compatibility` 区块点名缺失项与受影响功能，
    `status` 由它推导而不再写死 `"ready"`。
@@ -331,7 +331,23 @@
 同时两轮大重构（PR #148 / #150）**首次有了实机证据**：主菜单 `/state` 200（v0.12.4 的回归未复现）、
 全链路进图开战、`end_turn` 回合推进。详见 [实机清单](docs/live-validation-checklist.md) 的 2026-09-18 条目。
 
-**未做（转入后置）**：其余 11 个无行为契约的动作（按风险排，`discard_potion` /
+**实机之后又补了一处结构性缺陷**：第一版探测和读取点**各查各的**、各用各的绑定标志，
+所以探测能在读取点坏着的时候报 `ready`——把 `_longPressDuration` 的 bug 放回去、注册表保持正确，
+**离线 420 条测试和 11 道闸门全绿**。实机那次抓到它有一半是运气：两处犯了同一个错。
+现在调用点只能向注册表要成员，一次查找、一组标志，探测报的就是 mod 实际拿到的。
+契约也不再只认下划线开头的名字——之前有 5 个方法/属性名从它下面溜过去，
+其中 `NEndTurnButton.CanTurnBeEnded`（私有 getter，决定 `end_turn` 是否就绪，缺失时恒答「就绪」）现已登记。
+
+把注册表变成唯一查找源的同时，**挖出 4 处在装着的游戏上从未成功过的反射读取**：
+`continue_game_over` 在按钮上找三个处理器名（一个都不存在）、game-over 覆盖层在 `NGameOverScreen` 上
+找两个实际属于 `NCombatRoom` / `NRewardsScreen` 的方法。它们都挡在真正干活的代码前面、从未生效，
+行为不受影响，已删除。第 4 处不无害——见下条。
+
+**未做（转入后置）**：
+- **`GET /data/monsters` 的 `moves` 恒为空数组。** `MonsterModel.MoveNames` 在装着的 `sts2.dll` 里
+  已不存在，招式改由 `GetAllMoves` / `GenerateBestiaryMoveList` / `GetBestiaryMoveName` 提供。
+  修它是对新 API 的功能工作，需要实机验证。契约里把它单列在 `KnownDeadLookups`，不混进可接受的鸭子类型名单。
+- 其余 11 个无行为契约的动作（按风险排，`discard_potion` /
 `choose_treasure_relic` 优先于 `open_timeline` / `open_chest` 这类只开界面的）；
 `/state` 每请求耗时只写日志、无阈值不进载荷；规格里 35 个行号锚点应改为按符号引用。
 

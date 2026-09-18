@@ -61,13 +61,14 @@
 ### Added
 
 - **`GET /health` says whether the mod can still read the game.** This mod references the game's
-  `sts2.dll`, so almost everything it touches is compile-checked -- but twenty-two private game
+  `sts2.dll`, so almost everything it touches is compile-checked -- but twenty-three private game
   members are found by name at runtime, and those fail quietly: `GetField` returns null, the call
   site falls back to a default, and an agent is handed `max_players: 0` with no way to tell that
   from a lobby that really holds nobody. Slay the Spire 2 is in early access, so that is a patch
   away at any time.
 
-  All twenty-two are now resolved once at startup. `/health` gains a `compatibility` block naming
+  All twenty-three are now resolved when the mod loads, and the misses are written to the game log --
+  the file a player actually attaches to a bug report. `/health` gains a `compatibility` block naming
   any that are missing and the feature each one costs, and `status` is derived from it instead of
   being the literal `"ready"` it has always been -- the one field on the endpoint that could never
   be wrong and never be useful.
@@ -104,6 +105,22 @@
   as the file is edited, and it rots quietly, because the link still opens.
 
 ### Fixed
+
+- **The compatibility probe no longer answers for code it does not run.** Its first version resolved
+  its own copy of each member while the call sites resolved theirs, with their own binding flags, so
+  the probe could say `ready` while a reader was broken -- reintroducing the `_longPressDuration` bug
+  with a correct registry left every offline test and gate green. Call sites now ask the registry
+  for the member, so there is one lookup and one set of flags. The contract that guards this also
+  used to look only for `"_x"` literals; five method and property names went straight past it.
+  `NEndTurnButton.CanTurnBeEnded`, whose private getter decides whether `end_turn` is ready, was
+  one of them, and is now probed.
+
+- **Four reflective reads that never resolved in the installed game.** `continue_game_over` tried
+  three handler names on the button before emitting its pressed signal; none exists on a button
+  (`OnPressed` is declared nowhere, the other two live on `NMainMenu`). The game-over overlay tried
+  two methods on `NGameOverScreen` that live on `NCombatRoom` and `NRewardsScreen`. All of them
+  returned null on every call and sat in front of the code that did the real work, so nothing
+  visible changes; the dead halves are removed rather than left looking like they do something.
 
 - **`end_turn`'s long-press wait had been using a number the mod invented.** The game's
   `NEndTurnLongPressBar._longPressDuration` is a **static** field; the read asked for it with

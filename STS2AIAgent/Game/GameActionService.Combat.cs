@@ -218,25 +218,23 @@ internal static partial class GameActionService
 
     private static async Task WaitForEndTurnLongPressAsync(NEndTurnButton endTurnButton)
     {
-        const BindingFlags flags = BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic;
-        var bar = typeof(NEndTurnButton).GetField("_longPressBar", flags)?.GetValue(endTurnButton);
-        if (bar == null)
+        if (ReflectedGameMembers.Field(typeof(NEndTurnButton), "_longPressBar")?.GetValue(endTurnButton)
+            is not NEndTurnLongPressBar bar)
         {
             return;
         }
 
-        var enabled = bar.GetType().GetField("_enabled", flags)?.GetValue(bar) as bool?;
+        var enabled = ReflectedGameMembers.Field(typeof(NEndTurnLongPressBar), "_enabled")?.GetValue(bar) as bool?;
         if (enabled != true)
         {
             return;
         }
 
-        // _longPressDuration is static on the bar, so the instance-only flags above cannot see it.
-        // They never could: this read has been falling through to 0.45 since it was written, while
-        // the game's own value is 0.5 -- the mod was waiting 50ms less than it meant to and had no
-        // way to know. Found by the compatibility probe on its first live run.
-        const BindingFlags staticFlags = BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic;
-        var duration = bar.GetType().GetField("_longPressDuration", staticFlags)?.GetValue(null) is double seconds
+        // _longPressDuration is static. This read used to ask for an instance field and has been
+        // falling through to 0.45 since it was written, against the game's own 0.5. It goes through
+        // the registry now, which records staticness once, so the reader and the probe cannot
+        // disagree about it again.
+        var duration = ReflectedGameMembers.Field(typeof(NEndTurnLongPressBar), "_longPressDuration")?.GetValue(null) is double seconds
             ? seconds
             : 0.45;
         var deadline = DateTime.UtcNow + TimeSpan.FromSeconds(Math.Max(0.05, duration + 0.1));

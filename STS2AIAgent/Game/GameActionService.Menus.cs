@@ -88,7 +88,7 @@ internal static partial class GameActionService
         bool stable;
         if (currentScreen is NPatchNotesScreen patchNotes)
         {
-            var backButton = GetPrivateField<NButton>(patchNotes, "_backButton");
+            var backButton = ReflectedGameMembers.Field(typeof(NPatchNotesScreen), "_backButton")?.GetValue(patchNotes) as NButton;
             if (backButton != null &&
                 GodotObject.IsInstanceValid(backButton) &&
                 backButton.IsVisibleInTree() &&
