@@ -695,3 +695,17 @@ mod 加载即崩：注册表连基类一起搜，`NMultiplayerTest` 的私有 `D
 - `Completed 500` 0 次（第七轮 282 次）
 
 玩家档案 `default/1`、`default/2`、`default/1001` 逐文件一致；`mods/` 还原到发布版哈希。
+
+**第八轮（`6dc592b`，clientId `2026091809`）——按类型读取、行为契约与构建计时，通过。** 用调试命令构造局面后查 `/state`：
+
+- 能力：玩家 `STRENGTH_POWER` 3（`is_debuff: false`）、敌人 `VULNERABLE_POWER` 2（`is_debuff: true`）
+- 遗物计数：`PEN_NIB` 的 `stack` 为 `0`、起始遗物 `BURNING_BLOOD` 为 `null`——此前所有遗物恒为 `null`
+- 药水：`BLOCK_POTION` 的 `rarity: "Common"`，`description` 非空
+- 关键词与附魔：`SECOND_WIND` 的术语匹配含「消耗」；`enchant SHARP` 后该牌 `mods` 为 `["Enchantment","锋利"]`、术语匹配含「附魔」——此前所有卡恒为空
+- 抽/弃/消耗堆 5 / 0 / 0，与手牌 6 张合计等于牌组 10 张；`act_id: "0"`，`boss_id: "VANTOM_BOSS"`
+- `discard_potion`、`use_potion`、`end_turn` 均 `completed`；`Completed 500` 0 次
+- `/health` 的 `state_build`：3,049 次构建，p50 2.8 ms、p95 16.8 ms，只有 1 次过阈（113.8 ms，`MAIN_MENU`），
+  日志恰好一条对应的 `WARN`。这是第一份真实分布：100 ms 的阈值在常态下不会误报
+
+未验证：`open_character_select` 拿不到界面时的 503（未能构造）、`crystal_set_tool` 的前置检查（未进水晶球事件）。
+玩家档案 `default/1`、`default/2`、`default/1001` 逐文件一致；`mods/` 还原到发布版哈希。

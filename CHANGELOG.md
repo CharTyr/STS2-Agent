@@ -113,6 +113,20 @@
 
 ### Fixed
 
+- **`run.relics[].stack` was null for every relic.** It read `RelicModel.Amount`, which the game does
+  not have. It is now the counter the relic shows (`DisplayAmount`, when `ShowCounter`), and null for
+  a relic that shows none.
+
+- **Cards never reported their keywords or enchantment to the glossary.** The modifier tags were
+  read through seven guessed member names; only `Keywords` existed, and its enum values came out as
+  no text at all. Keywords (`Exhaust`, `Retain`, ...) and the enchantment now reach the card's
+  glossary matches, so a card that exhausts is explained as one.
+
+- **Piles, powers, potion rarity, event previews and descriptions are read by type.** They were
+  read by guessed names on objects whose type was known; the values were right where the guess
+  happened to exist, and the rest were dead fallbacks (`ActId`, `BossId`, `DrawDeck`, a private
+  `Description`). A future rename now breaks the build instead of emptying a field.
+
 - **`open_character_select` could answer 500.** On the main menu it pushed the character select
   screen without checking the submenu stack returned one; it now answers `503 state_unavailable`,
   retryable, like every other control that is not there yet. Found while giving the eleven handlers

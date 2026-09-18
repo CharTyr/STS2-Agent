@@ -76,11 +76,11 @@ files, so it cannot quietly go stale the way it did between ADR 0001 and the spl
 
 | File | Lines |
 | --- | ---: |
-| [GameStateService.cs](../../../STS2AIAgent/Game/GameStateService.cs) | 5,872 |
+| [GameStateService.cs](../../../STS2AIAgent/Game/GameStateService.cs) | 5,730 |
 | [AgentOverlayHost.cs](../../../STS2AIAgent/Ui/AgentOverlayHost.cs) | 1,829 |
 | [AgentRuntime.cs](../../../STS2AIAgent/Agent/AgentRuntime.cs) | 1,377 |
-| [GameStateService.AgentView.cs](../../../STS2AIAgent/Game/GameStateService.AgentView.cs) | 1,347 |
 | [GameStateService.Payloads.cs](../../../STS2AIAgent/Game/GameStateService.Payloads.cs) | 1,251 |
+| [GameStateService.AgentView.cs](../../../STS2AIAgent/Game/GameStateService.AgentView.cs) | 1,236 |
 | [GameActionService.cs](../../../STS2AIAgent/Game/GameActionService.cs) | 1,203 |
 | [GameActionService.Rooms.cs](../../../STS2AIAgent/Game/GameActionService.Rooms.cs) | 1,150 |
 
@@ -139,10 +139,17 @@ own binding flags, so the probe could report `ready` while a reader was broken: 
 now ask `ReflectedGameMembers.Field` / `Method` / `Property` for the member, so what the probe
 reports is what the mod actually gets.
 
-Duck-typed probing is a separate, sanctioned channel: `TryGetMemberValue` tries lists of candidate
-names across object shapes (`"Cards", "CardModels", "Entries", "List"`) and accepts whichever
-exists, so no one name in it is a dependency. `ReflectedMembers.*` names that channel and the few
-public members read by name across types, so neither is invisible any more.
+**Guessing a member name is not duck typing when the type is known.** The state builders used to
+read piles, powers, relic counters, card text and card modifiers through lists of candidate names
+-- `"DrawPile", "DrawDeck"`, `"Enchantments", "Enchants", "Modifiers", ... "Keywords"` -- on objects
+whose static type was right there. Checked against the installed game on 2026-09-18, most names in
+those lists did not exist, and two of the guesses cost data: `RelicModel` has no `Amount`, so every
+relic's `stack` was null; and the only modifier name that existed, `Keywords`, held enum values the
+token extractor could not turn into text, so every card had no modifiers, and the real enchantment
+member (`Enchantment`, singular) was never on the list. All of it reads by type now. What is left
+of name-based probing is a handful of names read across genuinely different types -- a model's
+`Title`, a `LocString`'s `GetRawText` -- and `ReflectedMembers.*` requires each to be listed with
+its reason, and drops any the code no longer uses.
 
 Making the registry the only lookup also exposed four reflective reads that had never resolved in the
 installed game: `continue_game_over` tried `OnContinueButtonPressed`, `OnPressed` and

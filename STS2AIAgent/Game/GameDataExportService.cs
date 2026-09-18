@@ -78,7 +78,7 @@ internal static class GameDataExportService
             {
                 id = relic.Id.Entry,
                 name = ResolveText(relic.Title),
-                description = GetDynamicFormattedTextProperty(relic, "DynamicDescription", "Description"),
+                description = RawTextOrNull(() => relic.DynamicDescription),
                 rarity = relic.Rarity.ToString(),
                 pool = relic.Pool.ToString().ToLowerInvariant(),
                 is_melted = relic.IsMelted
@@ -94,7 +94,7 @@ internal static class GameDataExportService
             {
                 id = potion.Id.Entry,
                 name = ResolveText(potion.Title),
-                description = GetDynamicFormattedTextProperty(potion, "DynamicDescription", "Description"),
+                description = RawTextOrNull(() => potion.DynamicDescription),
                 rarity = potion.Rarity.ToString(),
                 pool = potion.Pool.ToString().ToLowerInvariant(),
                 usage = potion.Usage.ToString(),
@@ -424,24 +424,10 @@ internal static class GameDataExportService
         {
         }
 
-        foreach (var memberName in new[]
-        {
-            "Description",
-            "RulesText",
-            "Body",
-            "Text",
-            "RawText",
-            "DescriptionText"
-        })
-        {
-            var text = TryReadCardTextMember(card, memberName);
-            if (!string.IsNullOrWhiteSpace(text))
-            {
-                return NormalizeCardRulesText(text);
-            }
-        }
-
-        return string.Empty;
+        // The same Description, coerced another way when its raw text is empty. This used to try five
+        // more names -- RulesText, Body, Text, RawText, DescriptionText -- none of which CardModel has.
+        var coerced = TryCoerceText(card.Description);
+        return string.IsNullOrWhiteSpace(coerced) ? string.Empty : NormalizeCardRulesText(coerced);
     }
 
     private static string GetResolvedCardRulesText(CardModel? card)
@@ -466,31 +452,6 @@ internal static class GameDataExportService
         }
 
         return GetCardRulesText(card);
-    }
-
-    private static string TryReadCardTextMember(object instance, string memberName)
-    {
-        const BindingFlags flags = BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic;
-
-        try
-        {
-            var property = instance.GetType().GetProperty(memberName, flags);
-            if (property != null)
-            {
-                return TryCoerceText(property.GetValue(instance));
-            }
-
-            var field = instance.GetType().GetField(memberName, flags);
-            if (field != null)
-            {
-                return TryCoerceText(field.GetValue(instance));
-            }
-        }
-        catch
-        {
-        }
-
-        return string.Empty;
     }
 
     private static string TryCoerceText(object? value)
@@ -535,36 +496,22 @@ internal static class GameDataExportService
         return normalized.Trim();
     }
 
-    private static object? GetReflectedProperty(object target, string propertyName)
+    /// <summary>The raw text of a localized string, or null when it is empty or cannot be read.</summary>
+    /// <remarks>
+    /// Replaces a by-name lookup of DynamicDescription then Description. Description's getter is
+    /// private and that lookup saw public properties only, so the second name never resolved.
+    /// </remarks>
+    private static string? RawTextOrNull(Func<LocString?> read)
     {
         try
         {
-            return target.GetType().GetProperty(propertyName)?.GetValue(target);
+            var text = read()?.GetRawText();
+            return string.IsNullOrWhiteSpace(text) ? null : text;
         }
-        catch
+        catch (Exception ex) when (ex is InvalidOperationException or NullReferenceException or KeyNotFoundException or FormatException)
         {
             return null;
         }
-    }
-
-    private static string? GetReflectedFormattedTextProperty(object target, string propertyName)
-    {
-        var value = GetReflectedProperty(target, propertyName);
-        return value == null ? null : TryCoerceText(value);
-    }
-
-    private static string? GetDynamicFormattedTextProperty(object target, params string[] propertyNames)
-    {
-        foreach (var propertyName in propertyNames)
-        {
-            var value = GetReflectedFormattedTextProperty(target, propertyName);
-            if (!string.IsNullOrWhiteSpace(value))
-            {
-                return value;
-            }
-        }
-
-        return null;
     }
 
     private readonly record struct CardDynamicValueInfo(

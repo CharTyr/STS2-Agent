@@ -300,12 +300,12 @@ internal static partial class GameStateService
                     card,
                     card.index >= 0 && card.index < liveHand.Count ? liveHand[card.index] : null,
                     glossaryTerms)).ToArray(),
-            draw = BuildAgentCardStacks(ReadCombatPileCards(playerCombatState, "DrawPile", "DrawDeck"), glossaryTerms),
-            discard = BuildAgentCardStacks(ReadCombatPileCards(playerCombatState, "DiscardPile"), glossaryTerms),
-            exhaust = BuildAgentCardStacks(ReadCombatPileCards(playerCombatState, "ExhaustPile"), glossaryTerms),
-            draw_cards = BuildStructuredPileCards(ReadCombatPileCards(playerCombatState, "DrawPile", "DrawDeck")),
-            discard_cards = BuildStructuredPileCards(ReadCombatPileCards(playerCombatState, "DiscardPile")),
-            exhaust_cards = BuildStructuredPileCards(ReadCombatPileCards(playerCombatState, "ExhaustPile")),
+            draw = BuildAgentCardStacks(PileCards(playerCombatState?.DrawPile), glossaryTerms),
+            discard = BuildAgentCardStacks(PileCards(playerCombatState?.DiscardPile), glossaryTerms),
+            exhaust = BuildAgentCardStacks(PileCards(playerCombatState?.ExhaustPile), glossaryTerms),
+            draw_cards = BuildStructuredPileCards(PileCards(playerCombatState?.DrawPile)),
+            discard_cards = BuildStructuredPileCards(PileCards(playerCombatState?.DiscardPile)),
+            exhaust_cards = BuildStructuredPileCards(PileCards(playerCombatState?.ExhaustPile)),
             enemies = combat.enemies.Select(enemy => new
             {
                 i = enemy.index,
@@ -399,12 +399,12 @@ internal static partial class GameStateService
             }).ToArray(),
             piles = new
             {
-                draw = BuildAgentCardStacks(ReadCombatPileCards(combatPlayer, "DrawPile", "DrawDeck"), glossaryTerms),
-                discard = BuildAgentCardStacks(ReadCombatPileCards(combatPlayer, "DiscardPile"), glossaryTerms),
-                exhaust = BuildAgentCardStacks(ReadCombatPileCards(combatPlayer, "ExhaustPile"), glossaryTerms),
-                draw_cards = BuildStructuredPileCards(ReadCombatPileCards(combatPlayer, "DrawPile", "DrawDeck")),
-                discard_cards = BuildStructuredPileCards(ReadCombatPileCards(combatPlayer, "DiscardPile")),
-                exhaust_cards = BuildStructuredPileCards(ReadCombatPileCards(combatPlayer, "ExhaustPile"))
+                draw = BuildAgentCardStacks(PileCards(combatPlayer?.DrawPile), glossaryTerms),
+                discard = BuildAgentCardStacks(PileCards(combatPlayer?.DiscardPile), glossaryTerms),
+                exhaust = BuildAgentCardStacks(PileCards(combatPlayer?.ExhaustPile), glossaryTerms),
+                draw_cards = BuildStructuredPileCards(PileCards(combatPlayer?.DrawPile)),
+                discard_cards = BuildStructuredPileCards(PileCards(combatPlayer?.DiscardPile)),
+                exhaust_cards = BuildStructuredPileCards(PileCards(combatPlayer?.ExhaustPile))
             }
         };
     }
@@ -1010,78 +1010,6 @@ internal static partial class GameStateService
         }).ToArray();
     }
 
-    private static CardModel[] ReadCombatPileCards(object? playerCombatState, params string[] memberNames)
-    {
-        if (playerCombatState == null)
-        {
-            return Array.Empty<CardModel>();
-        }
-
-        foreach (var memberName in memberNames)
-        {
-            var memberValue = TryGetMemberValue(playerCombatState, memberName);
-            var cards = ExtractCards(memberValue);
-            if (cards.Length > 0 || memberValue != null)
-            {
-                return cards;
-            }
-        }
-
-        return Array.Empty<CardModel>();
-    }
-
-    private static CardModel[] ExtractCards(object? value)
-    {
-        return ExtractCards(value, new HashSet<object>(ReferenceEqualityComparer.Instance));
-    }
-
-    private static CardModel[] ExtractCards(object? value, HashSet<object> visited)
-    {
-        if (value == null)
-        {
-            return Array.Empty<CardModel>();
-        }
-
-        if (!visited.Add(value))
-        {
-            return Array.Empty<CardModel>();
-        }
-
-        if (value is IEnumerable enumerable and not string)
-        {
-            var cards = new List<CardModel>();
-            foreach (var item in enumerable)
-            {
-                if (item is CardModel card)
-                {
-                    cards.Add(card);
-                }
-            }
-
-            if (cards.Count > 0)
-            {
-                return cards.ToArray();
-            }
-        }
-
-        foreach (var memberName in new[] { "Cards", "CardModels", "Entries", "List" })
-        {
-            var nested = TryGetMemberValue(value, memberName);
-            if (nested == null)
-            {
-                continue;
-            }
-
-            var cards = ExtractCards(nested, visited);
-            if (cards.Length > 0)
-            {
-                return cards;
-            }
-        }
-
-        return Array.Empty<CardModel>();
-    }
-
     private static string[] GetCardModifierTags(CardModel? card)
     {
         if (card == null)
@@ -1089,82 +1017,43 @@ internal static partial class GameStateService
             return Array.Empty<string>();
         }
 
+        // Read by type. The by-name version tried Enchantments, Enchants, Modifiers, ModifierIds,
+        // Affixes, Augments and Keywords: CardModel has only Keywords, a set of CardKeyword enum
+        // values that the token extractor could not turn into text, so every card reported no mods.
+        // The enchantment is CardModel.Enchantment, singular, which the list never named.
         var values = new HashSet<string>(StringComparer.Ordinal);
-        foreach (var memberName in new[]
+        try
         {
-            "Enchantments",
-            "Enchants",
-            "Modifiers",
-            "ModifierIds",
-            "Affixes",
-            "Augments",
-            "Keywords"
-        })
-        {
-            var memberValue = TryGetMemberValue(card, memberName);
-            foreach (var token in ExtractModifierTokens(memberValue))
+            foreach (var keyword in card.Keywords)
             {
-                if (string.IsNullOrWhiteSpace(token))
+                if (keyword != CardKeyword.None)
                 {
-                    continue;
+                    // The enum name is the English keyword ("Exhaust", "Retain"), which is what
+                    // AgentKeywordAliases matches the Chinese glossary terms against.
+                    values.Add(keyword.ToString());
                 }
+            }
+        }
+        catch (Exception ex) when (ex is InvalidOperationException or NullReferenceException)
+        {
+            // A card mid-transform can briefly have no keyword set; it has no tags this frame.
+        }
 
-                values.Add(NormalizeCardRulesText(token));
+        if (card.Enchantment is { } enchantment)
+        {
+            values.Add("Enchantment");
+            var title = SafeReadString(() => enchantment.Title.GetFormattedText());
+            if (!string.IsNullOrWhiteSpace(title))
+            {
+                values.Add(NormalizeCardRulesText(title));
             }
         }
 
         return values.OrderBy(value => value, StringComparer.Ordinal).ToArray();
     }
 
-    private static IEnumerable<string> ExtractModifierTokens(object? value)
-    {
-        if (value == null)
-        {
-            yield break;
-        }
-
-        if (value is string text)
-        {
-            if (!string.IsNullOrWhiteSpace(text))
-            {
-                yield return text;
-            }
-
-            yield break;
-        }
-
-        if (value is IEnumerable enumerable)
-        {
-            foreach (var item in enumerable)
-            {
-                foreach (var token in ExtractModifierTokens(item))
-                {
-                    yield return token;
-                }
-            }
-
-            yield break;
-        }
-
-        foreach (var memberName in new[] { "Title", "Name", "Keyword", "Text", "Description", "Label" })
-        {
-            var memberValue = TryGetMemberValue(value, memberName);
-            if (TryCoerceText(memberValue) is { Length: > 0 } memberText)
-            {
-                yield return memberText;
-            }
-        }
-
-        var idValue = TryGetMemberValue(value, "Id");
-        if (idValue != null)
-        {
-            var entryValue = TryGetMemberValue(idValue, "Entry");
-            if (entryValue is string entryText && !string.IsNullOrWhiteSpace(entryText))
-            {
-                yield return entryText;
-            }
-        }
-    }
+    private static CardModel[] PileCards(CardPile? pile) =>
+        pile?.Cards.Where(card => card != null).ToArray() ?? Array.Empty<CardModel>();
 
     private static string[] GetGlossaryMatches(string text, params string[][] modifierGroups)
     {
