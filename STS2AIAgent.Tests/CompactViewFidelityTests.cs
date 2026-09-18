@@ -15,7 +15,6 @@ namespace STS2AIAgent.Tests;
 /// </summary>
 internal static class CompactViewFidelityTests
 {
-    private const string StateSourcePath = "STS2AIAgent/Game/GameStateService.cs";
 
     public static void PowersReachTheCompactCombatView()
     {
@@ -197,7 +196,7 @@ internal static class CompactViewFidelityTests
 
     private static string ReadStateSource()
     {
-        return AgentSourceFixture.Read(StateSourcePath);
+        return AgentSourceFixture.ReadStateService();
     }
 
     private static string Body(string source, string methodName)

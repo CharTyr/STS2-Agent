@@ -1075,3 +1075,68 @@ rebase，所以已发布的历史只会被追加；而当 dev 恰好没有独有
 教训：规则要连原因一起写，而且**写完要真跑一次**。我这轮两个错都是同一类 —— 先写结论、后验证，
 结果第一个错（squash 会让叠放的 PR 冲突）是在动手前实测发现的，第二个错（这条规则）是在应用时
 被 git 拒绝发现的。两次都是「跑一次」救的，不是「想一遍」救的。
+
+
+## Session 27: Close the drift that forced four re-cuts, ship v0.12.5, and collapse the action surface
+
+**Date**: 2026-09-17
+**Task**: Close the drift that forced four re-cuts, ship v0.12.5, and collapse the action surface
+**Branch**: `dev`
+
+### Summary
+
+Worked back from a symptom: four same-version re-publishes in three days (v0.12.3 twice, v0.12.4 twice). The second v0.12.4 re-cut fixed a regression the first had introduced -- the combat gate read RunManager.ActionExecutor on the main menu, where there is no executor, so every /state answered 500 and the mod was unusable outside combat. 408 offline tests and nine gates passed that build. The question for this session was therefore not "what else is broken" but "what else is nobody watching".
+
+Three answers, shipped as PR #141. (1) A source contract pins the in-combat guard around the queue read and keeps the gate the only place in the state builder that touches those members. (2) docs/api.md was missing a quarter of the state surface -- an audit found 91 fields across 23 payload records named nowhere a client could read, including seven whole sub-structures (session, multiplayer, multiplayer_lobby, character_select, timeline, modal, game_over) and the 43 key renames the compact agent_view performs, which is what MCP get_game_state returns by default. It also documented an `available` field on the three shop tables that none of those records has ever had. The api-facts gate now pins 16 payload records field-for-field, every GET /health key, the rename table against the builders, and a coarse net requiring every serialized field of every /state payload record to be named somewhere. (3) Nobody was counting the codebase: 82 files, 31,632 lines, two of them holding 49%. Line budgets now ratchet in both C# and Python, and a second check tightens a budget when its file shrinks.
+
+CI caught a real defect in that work: gate messages quote Chinese headings from docs/api.md and the Windows runner's stdout is cp1252, so a gate that PASSED still exited 1 -- and a gate that failed would have had its message replaced by an encoding traceback. Fixed by writing UTF-8 with a replacing handler; self-test case 9i runs the suite under PYTHONIOENCODING=cp1252.
+
+Then the live work. A baseline pass captured 2,346 back-to-back /state + /actions/available samples across 12 screens, which proved the two action surfaces agree at runtime and, separately, turned up two defects offline tests could not find. /state.screen never reported GAME_OVER after a death (the combat branch of ResolveNonModalScreen claimed it because the combat room stays active); eight samples in an unambiguous game-over state all reported COMBAT and the name never appeared once in 2,346. And a faulted game task said "the game task faulted" for twelve different actions, so a request the game refused read identically to a request that broke the mod -- live, a repeated `room Treasure` now names InvalidOperationException: Attempted to start new relic picking session while one was already occurring. Both fixed (#142, #143) and both re-verified on the patched build.
+
+v0.12.5 shipped from f361bdb: GitHub and the Workshop, same source, one upload each, no re-cut. The Unreleased section added this session is where those post-tag fixes waited instead of forcing a fifth re-publish. Packaging emitted its first build-fingerprint.json, so the release record's hashes were copied from the build rather than collected by hand afterwards, and the Workshop's file_size 1238533 matched the local content bytes exactly.
+
+Finally ADR 0001, implemented (#147). BuildAvailableActionNames and BuildAvailableActionsPayload were 301 and 609 lines consulting the same 50 Can* predicates to emit the same 55 names; they now both report one EnumerateAvailableActions walk, as a 12-line projection and a 14-line wrapper. GameStateService.cs 8,559 -> 8,295, budget lowered to match. Verified by replaying the baseline: 45 samples, all 12 screens, zero disagreements, twelve action sets matching exactly including PAUSE_MENU's empty set; the one difference traced to the run holding no potions, confirmed from run.potions. The contracts changed shape rather than being deleted -- ActionSurface.* now asserts neither surface has anywhere to put a predicate or name of its own, which is stronger than "two implementations agree".
+
+The lesson worth keeping: both runtime defects were found by driving a real game, and the refactor was only safe because the baseline existed first. Doing it in the other order is exactly what produced the 0.12.4 regression.
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `8e8835b` | (see git log) |
+| `3825ead` | (see git log) |
+| `abcd0db` | (see git log) |
+| `d4af047` | (see git log) |
+| `1b39c97` | (see git log) |
+| `a4bff32` | (see git log) |
+| `e644300` | (see git log) |
+| `9bcaee6` | (see git log) |
+| `dfd61bf` | (see git log) |
+| `f1b2de7` | (see git log) |
+| `0324285` | (see git log) |
+| `ea732af` | (see git log) |
+
+### Status
+
+[OK] **Completed**
+
+
+## Session 28: 收尾 PR #148 verification gates CI
+
+**Date**: 2026-09-17
+**Task**: 收尾 PR #148 verification gates CI
+**Branch**: `refactor/split-monoliths`
+
+### Summary
+
+接手未完成的 CI 修复：让 arch-facts 与 doc-links 以 Git tracked 内容为准，移除 fresh checkout 中不可解析的本地链接，补未跟踪文件与目录回归测试；本地完整 gates/self-test 和 GitHub contracts 全绿。
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `bbd1635` | (see git log) |
+
+### Status
+
+[OK] **Completed**

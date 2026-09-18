@@ -526,6 +526,8 @@ mod-side action.
 
 - Every `GET /data/{collection}` answers `cards`, `relics`, `monsters`, `potions`, `events`,
   `powers`, `characters` (verified 2026-09-12: 596 / 299 / 107 / 66 / 57 / 283 / 5).
+- Every monster exports a non-empty `moves` list with no repeated id, each `name` a short move title
+  rather than dialogue (verified 2026-09-18: 107 / 107, 0 duplicates).
 - Exported fields match `GameDataExportSchema.cs` and the scene field tables the MCP server uses for
   `get_relevant_game_data`.
 - Exported collections stay aligned with the Python client's action surface: every action the client
@@ -612,3 +614,98 @@ mod-side action.
   only matching their constants.
 - The English strings are machine-translated and have never been read by a native speaker; only
   Chinese and English have been exercised.
+
+## 2026-09-18 — 兼容性探测与两轮大重构（游戏 v0.111.0）
+
+隔离实例（`--windowed --force-steam off`，clientId `2026091801` / `2026091802`，API 18080），
+分支 `feat/upstream-break-visibility`。
+
+**探测在第一次实机运行就抓到一个真 bug。** `/health` 返回 `degraded`，点名
+`NEndTurnLongPressBar._longPressDuration` 缺失。根因不是探测误报：该字段是**静态**的，
+而注册表把它登记成实例成员——`GameActionService.Combat.cs` 里真正读它的代码
+**用的也是实例标志**，所以自这行写下来起就从未读到过真值，一直用写死的 `0.45` 兜底，
+而游戏的实际值是 `0.5`。长按等待每次少 50ms，没有任何地方会说。
+
+离线读元数据得出的「22 个全部存在」是**对名字而言正确、对问题而言无关**：
+一个成员的名字在不在，说明不了绑定标志够不够得着它。这是实机唯一能给出的结论。
+
+修复后（`6771b0e`）复验：`status: ready`、`reflected_members_checked: 22`、
+`reflected_members_missing: 0`、`missing_members: []`。
+
+**注入故障验证**：把 `_saveAndQuitButton` 改名为一个不存在的名字、重建重启，
+`/health` 精确点名 `NPauseMenu._saveAndQuitButtonFixtureGone`（feature `save_and_quit`）
+并报 `degraded`。随后按字节还原。
+
+**两轮大重构首次有实机证据**（PR #148 / #150 的 partial 拆分此前只有源码级证明）：
+主菜单 `/state` 200 且 `screen: MAIN_MENU`——v0.12.4 那次「主菜单每个 `/state` 都 500」的
+回归未复现；`/actions/available` 非空；`open_character_select → select_character → embark
+→ MAP → choose_map_node → COMBAT` 全链路走通（途中一次性 FTUE 弹窗，`dismiss_modal` 后继续）；
+`end_turn` 返回 `completed` / `stable: true`，`turn` 由 1 推进到 2。
+
+**未验证**：长按时长是否真的用上了 0.5——这个数字在 HTTP 面上看不出来，没有勉强去证。
+
+玩家真实存档两轮前后各哈希一次：`default/1`、`default/2`、`default/1001` **逐文件一致**；
+差异全部落在两个新建的隔离 clientId 目录、Godot 日志滚动与 Sentry 运行记录。
+`mods/` 三个文件已按字节还原到已发布的 v0.12.5（DLL `1624BBF5…D4A7`）。
+证据：`build/validation-2026-09-18/`（gitignore）。
+
+**第三轮（`d3e0d47`，clientId `2026091803`）——统一查找之后。** 调用点改为只向注册表要成员、
+注册表 23 条（新增 `NEndTurnButton.CanTurnBeEnded`）、探测改为加载时运行并写日志、删除 4 处死反射之后：
+
+- `/health`：`ready`，23 检查 / 0 缺失；`godot.log` 出现 `Compatibility: all 23 reflected game members resolved.`
+- 注入故障：`/health` `degraded`、缺失**恰为 1** 并点名 `NPauseMenu._saveAndQuitButtonFixtureGone`；日志同步出现两行 `WARN`
+- 读取改了路径的功能逐一走通，**零 500 / 零 `internal_error`**：`combat.action_readiness`（`CanTurnBeEnded`）、
+  `end_turn`（回合 1→2）、`run_console_command help`（`_devConsole`）、`save_and_quit`（`_saveAndQuitButton`）
+  → `continue_run`（`_standardButton`）回到同一局，以及 `die` → `GAME_OVER` → `continue_game_over`
+  → `return_to_main_menu`——删掉三个死查找后结算流程照常推进（**更正，同日稍晚**：当时归功于
+  「pressed 信号那一半」，是错的。`NButton` 是 `Control` 而非 Godot `BaseButton`，没有 pressed 信号，
+  那一发什么也没做；推动流程的是紧随其后的 `ForceClick()`。该信号与 `Set("disabled")` 已一并删除）
+- 日志 `error|exception|fatal` 扫描：只有三处 Godot 引擎自身的 `Invalid Task ID`，无源自本 mod 的异常
+
+玩家档案 `default/1`、`default/2`、`default/1001` 逐文件一致；`mods/` 还原到发布版 v0.12.5。
+
+**第四至六轮（`fix/monster-moves-export`，clientId `2026091804`–`2026091806`）——怪物招式导出。**
+`GET /data/monsters` 的 `moves` 在装着的游戏上一直是空数组（`MonsterModel.MoveNames` 已不存在）。
+
+| 轮次 | 提交 | 有招式 / 总数 | 含重复 id 的怪物 | 发现 |
+| --- | --- | --- | --- | --- |
+| 4 | `67f01ee` 直接调本地化 API | 104 / 107 | 9 | 同一前缀下还有台词 key，`FAKE_MERCHANT_MONSTER` 的 ENRAGE 出现三次、名字是台词 |
+| 5 | `4f1ab94` 只取 `.title` | 104 / 107 | 0 | 三个 `DECIMILLIPEDE_SEGMENT_*` 仍空：它们共用一套文案，key 不是自己的 id |
+| 6 | `f7208fd` 前缀取自 Title key | **107 / 107** | **0** | 三个分段各得 BULK / CONSTRICT / DEAD / REATTACH / WRITHE；其余 104 个与第五轮逐条（id + name + 顺序）一致 |
+
+三轮 `/health` 均为 `ready`、23 / 0。玩家档案 `default/1`、`default/2`、`default/1001` 逐文件一致；
+`mods/` 三个文件还原到发布版哈希。
+
+**第七轮（`bc6ada6`，clientId `2026091807`）——失败，而且是离线看不出来的那种。** 注册表补登
+`NMultiplayerTest.StartHost` / `ReadyButtonPressed` / `Disconnect` 与 `NPauseMenu.CloseToMenu` 后，
+mod 加载即崩：注册表连基类一起搜，`NMultiplayerTest` 的私有 `Disconnect(NetError)` 与 Godot
+`GodotObject` 的公开 `Disconnect(StringName, Callable)` 同名，`GetMethod` 抛 `AmbiguousMatchException`。
+27 条在同一个 `Lazy` 里解析，异常被缓存，于是加载时自检、`/health` 与一切查注册表的动作都 500——
+连毫不相干的 `open_character_select` 也是。离线读元数据只证明了「这个名字在这个类型上」，
+证明不了「按这组标志找只找到一个」。
+
+**第七轮 b（`d9b9c02`，clientId `2026091808`）——通过。** 查找改为只看声明类型（27 条逐一核对均声明在所登记的类型上），
+解析器永不抛异常且离线用同形状的假类型复现了该异常：
+
+- `/health`：`ready`，27 / 0；日志 `Compatibility: all 27 reflected game members resolved.`，全会话 `Ambiguous` 0 处
+- `save_and_quit`（经注册表调 `CloseToMenu`）→ `continue_run` 回到同一局
+- `win` 进奖励页 → `collect_rewards_and_proceed` 回地图
+- `die` → `continue_game_over`（现在只靠 `ForceClick`）→ `return_to_main_menu`
+- 联机测试大厅 `host` / `ready` / `disconnect` 全部 `completed`——正是第七轮崩在的那条路径
+- `Completed 500` 0 次（第七轮 282 次）
+
+玩家档案 `default/1`、`default/2`、`default/1001` 逐文件一致；`mods/` 还原到发布版哈希。
+
+**第八轮（`6dc592b`，clientId `2026091809`）——按类型读取、行为契约与构建计时，通过。** 用调试命令构造局面后查 `/state`：
+
+- 能力：玩家 `STRENGTH_POWER` 3（`is_debuff: false`）、敌人 `VULNERABLE_POWER` 2（`is_debuff: true`）
+- 遗物计数：`PEN_NIB` 的 `stack` 为 `0`、起始遗物 `BURNING_BLOOD` 为 `null`——此前所有遗物恒为 `null`
+- 药水：`BLOCK_POTION` 的 `rarity: "Common"`，`description` 非空
+- 关键词与附魔：`SECOND_WIND` 的术语匹配含「消耗」；`enchant SHARP` 后该牌 `mods` 为 `["Enchantment","锋利"]`、术语匹配含「附魔」——此前所有卡恒为空
+- 抽/弃/消耗堆 5 / 0 / 0，与手牌 6 张合计等于牌组 10 张；`act_id: "0"`，`boss_id: "VANTOM_BOSS"`
+- `discard_potion`、`use_potion`、`end_turn` 均 `completed`；`Completed 500` 0 次
+- `/health` 的 `state_build`：3,049 次构建，p50 2.8 ms、p95 16.8 ms，只有 1 次过阈（113.8 ms，`MAIN_MENU`），
+  日志恰好一条对应的 `WARN`。这是第一份真实分布：100 ms 的阈值在常态下不会误报
+
+未验证：`open_character_select` 拿不到界面时的 503（未能构造）、`crystal_set_tool` 的前置检查（未进水晶球事件）。
+玩家档案 `default/1`、`default/2`、`default/1001` 逐文件一致；`mods/` 还原到发布版哈希。

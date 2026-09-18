@@ -10,14 +10,13 @@ Do not rebuild state in a caller by reaching into native managers. Use `BuildSta
 
 ## Available actions are the legal action source
 
-`BuildAvailableActionNames` is the canonical name list used in raw state and compact state. `BuildAvailableActionsPayload` adds descriptors such as `requires_index` and `requires_target` for clients that need parameter hints. **They are one decision written twice** -- 301 and 609 lines consulting the same 50 `Can*` predicates to emit the same 55 action names, verified mechanically -- so every action has to be added to both. `ActionSurface.SameActionsOnBothSurfaces` and `ActionSurface.SamePredicatesOnBothSurfaces` fail by name when only one is updated; [ADR 0001](../../../docs/adr/0001-single-action-surface.md) records the plan to collapse them and why it waits for a session that can validate against the running game.
+`EnumerateAvailableActions` is the single walk that decides what the executor would accept right now. `GET /state` reports its names as `available_actions` and `GET /actions/available` reports its descriptors (`requires_index`, `requires_target`, ...), so the two endpoints cannot disagree about what is offered. They used to be two hand-written implementations of that decision -- 301 and 609 lines consulting the same 50 `Can*` predicates to emit the same 55 names -- until [ADR 0001](../../../docs/adr/0001-single-action-surface.md) collapsed them, with a live replay across all twelve baseline screens confirming nothing changed. `ActionSurface.*` keeps it that way: neither surface may name an action or consult a predicate of its own.
 
 Agent and MCP callers must select an action from the latest `available_actions` and recompute indexes from that same state. This is encoded in [AgentTools](../../../STS2AIAgent/Agent/AgentTools.cs), [AgentLoop.ExecuteActAsync](../../../STS2AIAgent/Agent/AgentLoop.cs), and the native/Python `act` implementations. A screen name alone is not permission to act; stale or guessed action names must be rejected.
 
 When adding an action, make the whole path explicit:
 
-1. Add the name and its `CanX` condition to `BuildAvailableActionNames`. This is step one of two; skipping the other turns `ActionSurface.*` red.
-2. Add a corresponding descriptor to `BuildAvailableActionsPayload` for every exposed action, including actions without arguments. `ActionDescriptor` contains only `name`, `requires_index`, and `requires_target`; coordinate/tool requirements belong in the action request schema and handler validation.
+1. Add the name, its `CanX` condition and its descriptor to `EnumerateAvailableActions` -- one place, and both endpoints follow. `ActionDescriptor` contains only `name`, `requires_index`, `requires_target`, `requires_coordinates` and `requires_tool`; anything else belongs in the action request schema and handler validation.
 3. Add the normalized action name to the `GameActionService.ExecuteAsync` switch.
 4. Implement an `ExecuteXxxAsync` method that checks current availability first, validates request fields next, invokes native controls, waits for a stable condition, and returns `ActionResponsePayload` with a fresh `GameStatePayload`.
 5. Add or update the compact/raw payload only when the action needs state that is not already represented.

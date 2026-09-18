@@ -78,7 +78,7 @@ internal static class GameDataExportService
             {
                 id = relic.Id.Entry,
                 name = ResolveText(relic.Title),
-                description = GetDynamicFormattedTextProperty(relic, "DynamicDescription", "Description"),
+                description = RawTextOrNull(() => relic.DynamicDescription),
                 rarity = relic.Rarity.ToString(),
                 pool = relic.Pool.ToString().ToLowerInvariant(),
                 is_melted = relic.IsMelted
@@ -94,7 +94,7 @@ internal static class GameDataExportService
             {
                 id = potion.Id.Entry,
                 name = ResolveText(potion.Title),
-                description = GetDynamicFormattedTextProperty(potion, "DynamicDescription", "Description"),
+                description = RawTextOrNull(() => potion.DynamicDescription),
                 rarity = potion.Rarity.ToString(),
                 pool = potion.Pool.ToString().ToLowerInvariant(),
                 usage = potion.Usage.ToString(),
@@ -210,21 +210,56 @@ internal static class GameDataExportService
 
     private static object[] BuildMonsterMoves(MonsterModel monster)
     {
-        var prefix = $"{monster.Id.Entry}.moves.";
-        var moveNamesProperty = monster.GetType().GetProperty("MoveNames", BindingFlags.Public | BindingFlags.Instance);
-        if (moveNamesProperty?.GetValue(monster) is not IEnumerable moveNames)
+        // The localization base is whatever the monster's own Title is keyed under, not its id. For
+        // almost every monster the two agree (`X.name` -> `X`). They differ when monsters share their
+        // text: the three DECIMILLIPEDE_SEGMENT_* segments are all titled `DECIMILLIPEDE_SEGMENT.name`,
+        // so keying by id found nothing and all three exported `moves: []`.
+        var locBase = LocalizationBase(monster);
+        var prefix = $"{locBase}.moves.";
+
+        // This used to read a public MonsterModel.MoveNames property by reflection. The game removed
+        // that property, the lookup returned null, and every monster in GET /data/monsters exported
+        // `moves: []` with nothing anywhere saying so. MoveNames was only ever this table query, and
+        // everything in it is public, so it is called directly now: if the game renames any of it,
+        // the build fails instead of the export quietly emptying.
+        IEnumerable moveNames;
+        try
         {
+            moveNames = LocManager.Instance.GetTable("monsters").GetLocStringsWithPrefix(locBase + ".moves");
+        }
+        catch (Exception ex) when (ex is KeyNotFoundException or InvalidOperationException or NullReferenceException)
+        {
+            // The table is created by the game's localization manager; before it is loaded there is
+            // nothing to export, which is a state, not a defect.
             return Array.Empty<object>();
         }
 
+        // A move's name is its `.title` key -- the game builds exactly that in
+        // MonsterModel.GetBestiaryMoveName: `{Id}.moves.{moveId}.title`. The same prefix also holds
+        // the move's dialogue (`banter`, `speakLine`, `speakLineInitial`, `deadDoorSpeakLine`), and
+        // exporting every entry under it made FAKE_MERCHANT_MONSTER's ENRAGE appear three times, two
+        // of them taunts. Live on 2026-09-18, nine monsters carried duplicates like that.
         return moveNames
             .Cast<object>()
-            .Select(locString => new
+            .Select(locString => (locString, key: GetLocEntryKey(locString)))
+            .Where(entry => entry.key.StartsWith(prefix, StringComparison.Ordinal) &&
+                            entry.key.EndsWith(MoveTitleSuffix, StringComparison.Ordinal))
+            .Select(entry => new
             {
-                id = ExtractKeySegment(GetLocEntryKey(locString), prefix),
-                name = GetFormattedLocString(locString)
+                id = ExtractKeySegment(entry.key, prefix),
+                name = GetFormattedLocString(entry.locString)
             })
             .ToArray<object>();
+    }
+
+    private const string MoveTitleSuffix = ".title";
+
+    private static string LocalizationBase(MonsterModel monster)
+    {
+        var titleKey = monster.Title?.LocEntryKey;
+        return !string.IsNullOrEmpty(titleKey) && titleKey.EndsWith(".name", StringComparison.Ordinal)
+            ? TrimKnownSuffix(titleKey, ".name")
+            : monster.Id.Entry;
     }
 
     private static string GetLocEntryKey(object value)
@@ -389,24 +424,10 @@ internal static class GameDataExportService
         {
         }
 
-        foreach (var memberName in new[]
-        {
-            "Description",
-            "RulesText",
-            "Body",
-            "Text",
-            "RawText",
-            "DescriptionText"
-        })
-        {
-            var text = TryReadCardTextMember(card, memberName);
-            if (!string.IsNullOrWhiteSpace(text))
-            {
-                return NormalizeCardRulesText(text);
-            }
-        }
-
-        return string.Empty;
+        // The same Description, coerced another way when its raw text is empty. This used to try five
+        // more names -- RulesText, Body, Text, RawText, DescriptionText -- none of which CardModel has.
+        var coerced = TryCoerceText(card.Description);
+        return string.IsNullOrWhiteSpace(coerced) ? string.Empty : NormalizeCardRulesText(coerced);
     }
 
     private static string GetResolvedCardRulesText(CardModel? card)
@@ -431,31 +452,6 @@ internal static class GameDataExportService
         }
 
         return GetCardRulesText(card);
-    }
-
-    private static string TryReadCardTextMember(object instance, string memberName)
-    {
-        const BindingFlags flags = BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic;
-
-        try
-        {
-            var property = instance.GetType().GetProperty(memberName, flags);
-            if (property != null)
-            {
-                return TryCoerceText(property.GetValue(instance));
-            }
-
-            var field = instance.GetType().GetField(memberName, flags);
-            if (field != null)
-            {
-                return TryCoerceText(field.GetValue(instance));
-            }
-        }
-        catch
-        {
-        }
-
-        return string.Empty;
     }
 
     private static string TryCoerceText(object? value)
@@ -500,36 +496,22 @@ internal static class GameDataExportService
         return normalized.Trim();
     }
 
-    private static object? GetReflectedProperty(object target, string propertyName)
+    /// <summary>The raw text of a localized string, or null when it is empty or cannot be read.</summary>
+    /// <remarks>
+    /// Replaces a by-name lookup of DynamicDescription then Description. Description's getter is
+    /// private and that lookup saw public properties only, so the second name never resolved.
+    /// </remarks>
+    private static string? RawTextOrNull(Func<LocString?> read)
     {
         try
         {
-            return target.GetType().GetProperty(propertyName)?.GetValue(target);
+            var text = read()?.GetRawText();
+            return string.IsNullOrWhiteSpace(text) ? null : text;
         }
-        catch
+        catch (Exception ex) when (ex is InvalidOperationException or NullReferenceException or KeyNotFoundException or FormatException)
         {
             return null;
         }
-    }
-
-    private static string? GetReflectedFormattedTextProperty(object target, string propertyName)
-    {
-        var value = GetReflectedProperty(target, propertyName);
-        return value == null ? null : TryCoerceText(value);
-    }
-
-    private static string? GetDynamicFormattedTextProperty(object target, params string[] propertyNames)
-    {
-        foreach (var propertyName in propertyNames)
-        {
-            var value = GetReflectedFormattedTextProperty(target, propertyName);
-            if (!string.IsNullOrWhiteSpace(value))
-            {
-                return value;
-            }
-        }
-
-        return null;
     }
 
     private readonly record struct CardDynamicValueInfo(

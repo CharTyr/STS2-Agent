@@ -224,7 +224,7 @@ internal static class DualInstanceCoordinator
 
     private static void EnableFastMpENetHost()
     {
-        var field = typeof(CommandLineHelper).GetField("_args", BindingFlags.Static | BindingFlags.NonPublic)
+        var field = ReflectedGameMembers.Field(typeof(CommandLineHelper), "_args")
             ?? typeof(CommandLineHelper).GetFields(BindingFlags.Static | BindingFlags.NonPublic | BindingFlags.Public)
                 .FirstOrDefault(candidate => candidate.FieldType.Name.Contains("Dictionary", StringComparison.Ordinal));
         var args = field?.GetValue(null)

@@ -28,6 +28,7 @@ from sts2_mcp.client import Sts2Client
 from sts2_mcp.server import _LEGACY_ACTION_TOOLS
 
 _CLIENT_SOURCE = Path(__file__).resolve().parents[1] / "src" / "sts2_mcp" / "client.py"
+_ACTIONS_SOURCE = Path(__file__).resolve().parents[1] / "src" / "sts2_mcp" / "client_actions.py"
 
 # One distinct sentinel per wire key, so a value that lands on the wrong key
 # (for example card_index written into option_index) is not masked by an equal value.
@@ -63,12 +64,24 @@ _PARAM_SHAPES: frozenset[tuple[str, ...]] = frozenset(
 _DEBUG_ONLY_ACTIONS = frozenset({"run_console_command"})
 
 
-def _client_class() -> ast.ClassDef:
-    tree = ast.parse(_CLIENT_SOURCE.read_text(encoding="utf-8"))
-    for node in tree.body:
-        if isinstance(node, ast.ClassDef) and node.name == "Sts2Client":
-            return node
-    raise AssertionError("Sts2Client class is missing from client.py")
+def _client_classes() -> list[ast.ClassDef]:
+    """Sts2Client and the mixin that carries its per-action methods.
+
+    The action methods moved to client_actions.py on 2026-09-17 so client.py could be the
+    transport and nothing else. Both are read here, because the guard below is about what the
+    client offers, not about which of its own files a method sits in -- and reading only one
+    would have turned every assertion into a vacuous pass over an empty dict.
+    """
+    found: list[ast.ClassDef] = []
+    for source, class_name in ((_CLIENT_SOURCE, "Sts2Client"), (_ACTIONS_SOURCE, "Sts2ActionMethods")):
+        tree = ast.parse(source.read_text(encoding="utf-8"))
+        for node in tree.body:
+            if isinstance(node, ast.ClassDef) and node.name == class_name:
+                found.append(node)
+                break
+        else:
+            raise AssertionError(f"{class_name} class is missing from {source.name}")
+    return found
 
 
 def _execute_action_calls(function: ast.FunctionDef) -> list[ast.Call]:
@@ -88,9 +101,10 @@ def _execute_action_calls(function: ast.FunctionDef) -> list[ast.Call]:
 def _action_methods() -> dict[str, ast.FunctionDef]:
     """Action methods discovered from the class body, not a hand-maintained list."""
     methods: dict[str, ast.FunctionDef] = {}
-    for node in _client_class().body:
-        if isinstance(node, ast.FunctionDef) and _execute_action_calls(node):
-            methods[node.name] = node
+    for class_node in _client_classes():
+        for node in class_node.body:
+            if isinstance(node, ast.FunctionDef) and _execute_action_calls(node):
+                methods[node.name] = node
     return methods
 
 

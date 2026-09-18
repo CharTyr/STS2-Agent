@@ -57,6 +57,7 @@
 | `session_not_ready` | 409 | 会话尚未就绪（如组队未完成） | 是 |
 | `pause_pending` | 409 | 暂停尚未完成，需稍后重试 | 是 |
 | `internal_error` | 500 | 服务内部异常 | 否 |
+| `listener_error` | 500 | HTTP 监听循环本身抛异常（不是某个路由处理失败）。此时连接可能已经不健康，重试之前先用 `GET /health` 确认服务还在 | 是 |
 | `local_only` | 403 | 该端点只接受本机（loopback）请求 | 否 |
 | `companion_session_required` | 403 | 需要有效的 AI 队友会话令牌（见下） | 否 |
 | `companion_not_ready` | 409 | 队友实例尚未就绪，无法响应控制 | 是 |
@@ -69,6 +70,8 @@
 | `collection_not_found` | 404 | `GET /data/{collection}` 的集合名不存在 | 否 |
 | `export_error` | 500 | 游戏元数据导出失败 | 是 |
 | `origin_not_allowed` | 403 | 原生 MCP 请求的 `Origin` 不受信任 | 否 |
+| `method_not_allowed` | 405 | 用 POST 以外的方法请求 `/mcp`。原生 MCP 走 Streamable HTTP，只接受 POST 的 JSON-RPC | 否 |
+| `payload_too_large` | 413 | `/mcp` 请求体超过 1 MB | 否 |
 
 ---
 
@@ -143,7 +146,7 @@
   "request_id": "req_20260911_121549_7955_4",
   "data": {
     "service": "sts2-ai-agent",
-    "mod_version": "0.12.5",
+    "mod_version": "0.13.0",
     "protocol_version": "2026-03-11-v1",
     "game_version": "v0.111.0",
     "status": "ready",
@@ -175,7 +178,7 @@
 | `mod_version` | string | Mod 版本号，与 `STS2AIAgent/Server/Router.cs` 的 `ModVersion` 常量一致 |
 | `protocol_version` | string | HTTP 协议版本 |
 | `game_version` | string | 游戏版本；示例值随游戏更新变化 |
-| `status` | string | `ready` 表示可以接受请求 |
+| `status` | string | `ready`：Mod 仍能读取这一版游戏的全部内部状态。`degraded`：至少有一处按名字反射的游戏私有成员已经找不到——请求照常受理，但受影响的字段会退回默认值，**具体缺哪些看 `compatibility`**。这个值由启动自检推导，不是写死的 |
 | `api_host` / `api_port` | string / integer | **本实例**自己的 HTTP API 地址。端口被占用时会自动递增，所以不要写死 8080——以这里为准 |
 | `process_id` | integer | 游戏进程 PID，用于核对双开窗口身份 |
 | `instance_role` | string | `human`（玩家窗口）或 `companion`（AI 队友实例） |
@@ -188,6 +191,8 @@
 | `companion` | object\|null | 仅主窗口、且本次组队的队友进程仍在运行时存在（队友退出后回到 `null`）。`api_host` / `api_port` / `process_id` 是队友实例的 HTTP API，用来直接对队友的 `GET /state` 与 `POST /action` 编程；`auto_play` 说明这次组队走的是 AI 自走（`true`）还是外部接管（`false`）。队友会话令牌**不会**出现在任何响应里 |
 | `dual_status` / `team_control_status` | string | 双开与队友控制的人类可读状态 |
 | `dual_launch_outcome` | string\|null | 双开结构化结果，给外部客户端做成败分类，**不要**用 `dual_status` 文本。尚未尝试过为 `null`；否则为 `InProgress` / `Succeeded` / `Failed` / `Rejected` / `Canceled`（`DualLaunchOutcome` 枚举名，不含 `Idle`） |
+| `compatibility` | object | 启动时对 Mod 依赖的游戏私有成员做的一次自检结果。`reflected_members_checked` 是被检查的成员总数，`reflected_members_missing` 是找不到的个数，`missing_members[]` 逐条给出 `member`（`类型.成员`）与 `feature`（失效的功能）。游戏更新后 Mod 最常见的坏法就是某个私有字段被改名，此时读取悄悄退回默认值——这个区块是唯一的信号 |
+| `state_build` | object | 构建状态载荷的耗时，只计构建本身、不含排队等游戏线程。`/state`、每个动作响应与 SSE 刷新都会构建一次，且都跑在游戏线程上——构建期间游戏不出帧。`slow_threshold_ms`（100，约等于 60 帧下 6 帧的卡顿）、`samples`、`slow_builds`、`last_ms`、`max_ms` 与其 `max_screen`、以及最近 `recent_samples`（至多 256）次的 `recent_p50_ms` / `recent_p95_ms`；尚无样本时耗时字段为 `null`。超过阈值的构建会在游戏日志里记 `WARN`，每 30 秒至多一条并注明期间压下的条数 |
 
 ### `stop_kind` 取值
 
@@ -619,7 +624,7 @@
 | `relic_id` | string | 遗物内部 ID |
 | `name` | string | 遗物名称 |
 | `description` | string \| null | 遗物描述（若可读取） |
-| `stack` | number \| null | 遗物层数/计数（若适用） |
+| `stack` | number \| null | 遗物图标上显示的计数（游戏的 `DisplayAmount`，仅当该遗物显示计数时有值），其余为 `null`。2026-09-18 之前此字段对所有遗物恒为 `null`：它读的是游戏里不存在的 `Amount` |
 | `is_melted` | boolean | 是否已熔炼 |
 
 #### `run.potions[]`

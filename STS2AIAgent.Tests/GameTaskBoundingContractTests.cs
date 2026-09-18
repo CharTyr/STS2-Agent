@@ -11,7 +11,6 @@ namespace STS2AIAgent.Tests;
 /// </summary>
 internal static class GameTaskBoundingContractTests
 {
-    private const string SourcePath = "STS2AIAgent/Game/GameActionService.cs";
 
     /// <summary>
     /// Files that drive game objects from an action or request path. Each one is scanned whole: a game
@@ -19,11 +18,37 @@ internal static class GameTaskBoundingContractTests
     /// </summary>
     private static readonly string[] GameDrivingPaths =
     {
-        "STS2AIAgent/Game/GameActionService.cs",
         "STS2AIAgent/Multiplayer/DualInstanceCoordinator.cs",
         "STS2AIAgent/Multiplayer/LocalDualInstanceLauncher.cs",
         "STS2AIAgent/Ui/AgentOverlayHost.cs",
     };
+
+    /// <summary>
+    /// The files above plus every file of the <c>GameActionService</c> partial class.
+    /// </summary>
+    /// <remarks>
+    /// The action service is enumerated rather than listed. It was split into one file per room on
+    /// 2026-09-17, and a list would have kept scanning the base file only -- so the first bare
+    /// <c>await</c> written in a room file would have wedged a request with nothing red to show
+    /// for it. Whoever adds the ninth room gets the check for free.
+    /// </remarks>
+    private static IEnumerable<string> ScannedPaths()
+    {
+        var gameDirectory = Path.Combine(AgentSourceFixture.Root, "STS2AIAgent", "Game");
+        var actionFiles = Directory
+            .EnumerateFiles(gameDirectory, "GameActionService*.cs", SearchOption.TopDirectoryOnly)
+            .Select(path => "STS2AIAgent/Game/" + Path.GetFileName(path))
+            .OrderBy(path => path, StringComparer.Ordinal)
+            .ToArray();
+
+        Assert.True(
+            actionFiles.Length >= 2,
+            $"Found {actionFiles.Length} GameActionService file(s); the class is split per room, so "
+            + "this scan expects the base file and its partials. A single file means either the "
+            + "split was undone or this enumeration stopped matching.");
+
+        return actionFiles.Concat(GameDrivingPaths);
+    }
 
     /// <summary>
     /// The fire-and-forget observers await their task to completion on purpose: they are off the
@@ -48,7 +73,7 @@ internal static class GameTaskBoundingContractTests
 
     public static void EveryGameTaskAwaitIsBounded()
     {
-        var source = AgentSourceFixture.Read(SourcePath);
+        var source = AgentSourceFixture.ReadActionService();
 
         AssertBounded(source, "ExecuteSaveAndQuitAsync", "awaitcloseTask");
         AssertBounded(source, "ExecuteCrystalClearCellAsync", "awaitminigame.CellClicked");
@@ -63,7 +88,7 @@ internal static class GameTaskBoundingContractTests
         AssertBounded(source, "InvokeFastHostAsync", "awaittask;");
 
         var declared = DeclaredMemberNames();
-        foreach (var path in GameDrivingPaths)
+        foreach (var path in ScannedPaths())
         {
             AssertEveryAwaitIsBounded(path, declared);
         }
@@ -71,7 +96,7 @@ internal static class GameTaskBoundingContractTests
 
     public static void TheBackgroundObserverStaysUnbounded()
     {
-        var source = AgentSourceFixture.WithoutWhitespace(AgentSourceFixture.Read(SourcePath));
+        var source = AgentSourceFixture.WithoutWhitespace(AgentSourceFixture.ReadActionService());
 
         // The fire-and-forget observer is not on a request path; it must still await its task
         // to completion so the result and any exception are consumed.
@@ -80,7 +105,7 @@ internal static class GameTaskBoundingContractTests
 
     public static void TheBoundedWaitHandsTheTaskBackForObservation()
     {
-        var source = AgentSourceFixture.WithoutWhitespace(AgentSourceFixture.Read(SourcePath));
+        var source = AgentSourceFixture.WithoutWhitespace(AgentSourceFixture.ReadActionService());
 
         Assert.Contains("WaitForGameTaskAsync<T>", source, StringComparison.Ordinal);
         // Both overloads hand the task back, and both treat a task that already finished as

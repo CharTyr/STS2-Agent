@@ -13,13 +13,11 @@ namespace STS2AIAgent.Tests;
 /// </summary>
 internal static class CardViewerScreenContractTests
 {
-    private const string StatePath = "STS2AIAgent/Game/GameStateService.cs";
-    private const string ActionPath = "STS2AIAgent/Game/GameActionService.cs";
 
     public static void ViewerBranchesPrecedeTheVisibleGrid()
     {
         var resolveBody = Flat(AgentSourceFixture.MethodBody(
-            AgentSourceFixture.Read(StatePath),
+            AgentSourceFixture.ReadStateService(),
             "ResolveNonModalScreen"));
 
         var libraryIndex = resolveBody.IndexOf("if(currentScreenisNCardLibrary)", StringComparison.Ordinal);
@@ -46,8 +44,8 @@ internal static class CardViewerScreenContractTests
 
     public static void ClosableViewerSetIsSharedByProbeAndExecutor()
     {
-        var stateSource = AgentSourceFixture.Read(StatePath);
-        var actionSource = AgentSourceFixture.Read(ActionPath);
+        var stateSource = AgentSourceFixture.ReadStateService();
+        var actionSource = AgentSourceFixture.ReadActionService();
 
         // One predicate owns the widened set: NCardsViewScreen plus NCardPileScreen. Narrowing it
         // back to NCardsViewScreen alone has to turn this test red.
@@ -81,8 +79,8 @@ internal static class CardViewerScreenContractTests
 
     public static void SubmenuStackLookupUsesTheBaseClass()
     {
-        var stateSource = AgentSourceFixture.Read(StatePath);
-        var actionSource = AgentSourceFixture.Read(ActionPath);
+        var stateSource = AgentSourceFixture.ReadStateService();
+        var actionSource = AgentSourceFixture.ReadActionService();
 
         var lookup = Flat(AgentSourceFixture.DeclarationBody(
             stateSource,

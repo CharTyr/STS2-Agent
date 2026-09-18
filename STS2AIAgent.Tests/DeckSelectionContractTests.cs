@@ -10,8 +10,7 @@ internal static class DeckSelectionContractTests
 {
     public static void CardGridPayloadReportsNativeSelectionProgress()
     {
-        var rawStateSource = ReadSource(
-            "STS2AIAgent/Game/GameStateService.cs");
+        var rawStateSource = AgentSourceFixture.ReadStateService();
         var stateSource = WithoutWhitespace(rawStateSource);
         var payloadBody = WithoutWhitespace(
             MethodBody(rawStateSource, "BuildSelectionPayload"));
@@ -46,8 +45,7 @@ internal static class DeckSelectionContractTests
 
     public static void CardGridClickSettlesInEitherDirectionBeforeConfirming()
     {
-        var rawActionSource = ReadSource(
-            "STS2AIAgent/Game/GameActionService.cs");
+        var rawActionSource = AgentSourceFixture.ReadActionService();
         var selectBody = WithoutWhitespace(
             MethodBody(rawActionSource, "ExecuteSelectDeckCardAsync"));
         var settleBody = WithoutWhitespace(
@@ -83,15 +81,14 @@ internal static class DeckSelectionContractTests
             "ConfirmDeckSelectionAsync(screen,remaining)",
             settleBody,
             StringComparison.Ordinal);
-        var stateSource = WithoutWhitespace(ReadSource("STS2AIAgent/Game/GameStateService.cs"));
+        var stateSource = WithoutWhitespace(AgentSourceFixture.ReadStateService());
         Assert.Contains("IsCardSelected(currentScreen,holder.CardModel!)", stateSource, StringComparison.Ordinal);
         Assert.Contains("selected=selected", stateSource, StringComparison.Ordinal);
     }
 
     public static void CardGridConfirmationUsesSharedExecutor()
     {
-        var rawActionSource = ReadSource(
-            "STS2AIAgent/Game/GameActionService.cs");
+        var rawActionSource = AgentSourceFixture.ReadActionService();
         var confirmBody = WithoutWhitespace(
             MethodBody(rawActionSource, "ExecuteConfirmSelectionAsync"));
 

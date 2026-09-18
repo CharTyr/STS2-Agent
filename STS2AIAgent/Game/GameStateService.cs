@@ -71,21 +71,23 @@ using STS2AIAgent.Multiplayer;
 
 namespace STS2AIAgent.Game;
 
-internal static class GameStateService
+internal static partial class GameStateService
 {
     private const int StateVersion = 16;
-    private const int AgentViewVersion = 10;
     private static readonly TimeSpan CombatActionSnapshotStableDelay = TimeSpan.FromMilliseconds(200);
     private static string? _lastCombatActionReadinessSignature;
     private static DateTime _lastCombatActionReadinessSinceUtc = DateTime.MinValue;
     private static string? _lastUnlockConfirmProbeSignature;
     private static bool _crystalSphereEntityLookupWarningLogged;
     private static bool _crystalSphereButtonLookupWarningLogged;
-    private static readonly FieldInfo? StartRunLobbyMaxPlayersField =
-        typeof(StartRunLobby).GetField("_maxPlayers", BindingFlags.Instance | BindingFlags.NonPublic);
+    private static FieldInfo? StartRunLobbyMaxPlayersField =>
+        ReflectedGameMembers.Field(typeof(StartRunLobby), "_maxPlayers");
 
     public static GameStatePayload BuildStatePayload()
     {
+        // Measured here rather than around the /state route: every action response and SSE refresh
+        // builds this too, and all of it runs on the game thread.
+        var buildTimer = System.Diagnostics.Stopwatch.StartNew();
         var currentScreen = ActiveScreenContext.Instance.GetCurrentScreen();
         var combatState = CombatManager.Instance.DebugOnlyGetState();
         var runState = RunManager.Instance.DebugOnlyGetState();
@@ -117,7 +119,7 @@ internal static class GameStateService
         var modal = BuildModalPayload(currentScreen);
         var gameOver = BuildGameOverPayload(currentScreen, runState);
 
-        return new GameStatePayload
+        var payload = new GameStatePayload
         {
             state_version = StateVersion,
             native_profile_id = SaveManager.Instance.CurrentProfileId,
@@ -175,6 +177,14 @@ internal static class GameStateService
                 modal,
                 gameOver)
         };
+
+        var slowBuild = StateBuildTiming.Instance.Record(buildTimer.Elapsed.TotalMilliseconds, screen, DateTime.UtcNow);
+        if (slowBuild != null)
+        {
+            Log.Warn($"[STS2AIAgent] {slowBuild}");
+        }
+
+        return payload;
     }
 
     private static SessionPayload BuildSessionPayload(IScreenContext? currentScreen, RunState? runState)
@@ -234,8 +244,38 @@ internal static class GameStateService
         var currentScreen = ActiveScreenContext.Instance.GetCurrentScreen();
         var combatState = CombatManager.Instance.DebugOnlyGetState();
         var runState = RunManager.Instance.DebugOnlyGetState();
-        var descriptors = new List<ActionDescriptor>();
+        // This endpoint is its own request, so it evaluates the gate itself; a /state build hands in
+        // the one it already evaluated.
         var combatActionGate = EvaluateCombatActionGate(currentScreen, combatState);
+
+        return new AvailableActionsPayload
+        {
+            screen = ResolveScreen(currentScreen),
+            actions = EnumerateAvailableActions(currentScreen, combatState, runState, combatActionGate).ToArray()
+        };
+    }
+
+    /// <summary>
+    /// Every action the executor would accept right now, with the parameters each one needs.
+    /// </summary>
+    /// <remarks>
+    /// The single source for both action surfaces. <c>GET /state</c> reports the names from here and
+    /// <c>GET /actions/available</c> reports these descriptors, so the two cannot disagree about what
+    /// is offered -- they used to be 301 and 609 hand-written lines consulting the same 50 <c>Can*</c>
+    /// predicates to emit the same 55 names, kept in step by nothing but care and a contract test.
+    /// See docs/adr/0001-single-action-surface.md.
+    ///
+    /// The gate is passed in rather than evaluated here: it advances a 200 ms stability sampler, and
+    /// one state build has to share a single evaluation across its action list, its combat payload
+    /// and its potion flags or the response can contradict itself.
+    /// </remarks>
+    private static List<ActionDescriptor> EnumerateAvailableActions(
+        IScreenContext? currentScreen,
+        CombatState? combatState,
+        RunState? runState,
+        CombatActionGate combatActionGate)
+    {
+        var descriptors = new List<ActionDescriptor>();
 
         if (GetOpenModal() != null)
         {
@@ -259,11 +299,7 @@ internal static class GameStateService
                 });
             }
 
-            return new AvailableActionsPayload
-            {
-                screen = ResolveScreen(currentScreen),
-                actions = descriptors.ToArray()
-            };
+            return descriptors;
         }
 
         // The container's pages are human menus over a frozen run: nothing in the run is actionable
@@ -282,11 +318,7 @@ internal static class GameStateService
                 });
             }
 
-            return new AvailableActionsPayload
-            {
-                screen = ResolveScreen(currentScreen),
-                actions = descriptors.ToArray()
-            };
+            return descriptors;
         }
 
         if (currentScreen is NUnlockScreen)
@@ -301,11 +333,7 @@ internal static class GameStateService
                 });
             }
 
-            return new AvailableActionsPayload
-            {
-                screen = ResolveScreen(currentScreen),
-                actions = descriptors.ToArray()
-            };
+            return descriptors;
         }
 
         if (CanEndTurn(currentScreen, combatState, requireButtonReady: false, combatActionGate: combatActionGate))
@@ -833,11 +861,7 @@ internal static class GameStateService
             });
         }
 
-        return new AvailableActionsPayload
-        {
-            screen = ResolveScreen(currentScreen),
-            actions = descriptors.ToArray()
-        };
+        return descriptors;
     }
 
     public static string ResolveScreen(IScreenContext? currentScreen)
@@ -1124,8 +1148,8 @@ internal static class GameStateService
         return GetCapstoneButtons(currentScreen).Count > 0;
     }
 
-    private static readonly FieldInfo? CrystalSphereEntityField =
-        typeof(NCrystalSphereScreen).GetField("_entity", BindingFlags.NonPublic | BindingFlags.Instance);
+    private static FieldInfo? CrystalSphereEntityField =>
+        ReflectedGameMembers.Field(typeof(NCrystalSphereScreen), "_entity");
 
     public static CrystalSphereMinigame? GetCrystalSphereMinigame(IScreenContext? currentScreen)
     {
@@ -2041,8 +2065,7 @@ internal static class GameStateService
 
     private static CardSelectorPrefs? TryGetCombatHandSelectionPrefs(NPlayerHand hand)
     {
-        const BindingFlags flags = BindingFlags.Instance | BindingFlags.NonPublic;
-        var field = typeof(NPlayerHand).GetField("_prefs", flags);
+        var field = ReflectedGameMembers.Field(typeof(NPlayerHand), "_prefs");
         if (field?.GetValue(hand) is CardSelectorPrefs prefs)
         {
             return prefs;
@@ -2080,8 +2103,7 @@ internal static class GameStateService
 
     private static int GetCombatHandSelectedCount(NPlayerHand hand)
     {
-        const BindingFlags flags = BindingFlags.Instance | BindingFlags.NonPublic;
-        var field = typeof(NPlayerHand).GetField("_selectedCards", flags);
+        var field = ReflectedGameMembers.Field(typeof(NPlayerHand), "_selectedCards");
         return field?.GetValue(hand) is System.Collections.ICollection collection ? collection.Count : 0;
     }
 
@@ -2136,24 +2158,10 @@ internal static class GameStateService
         {
         }
 
-        foreach (var memberName in new[]
-        {
-            "Description",
-            "RulesText",
-            "Body",
-            "Text",
-            "RawText",
-            "DescriptionText"
-        })
-        {
-            var text = TryReadCardTextMember(card, memberName);
-            if (!string.IsNullOrWhiteSpace(text))
-            {
-                return NormalizeCardRulesText(text);
-            }
-        }
-
-        return string.Empty;
+        // The same Description, coerced another way when its raw text is empty. This used to try five
+        // more names -- RulesText, Body, Text, RawText, DescriptionText -- none of which CardModel has.
+        var coerced = TryCoerceText(card.Description);
+        return string.IsNullOrWhiteSpace(coerced) ? string.Empty : NormalizeCardRulesText(coerced);
     }
 
     private static string GetResolvedCardRulesText(CardModel? card)
@@ -2212,11 +2220,6 @@ internal static class GameStateService
         }
     }
 
-    private static string GetPreferredCardRulesText(string rulesText, string? resolvedRulesText)
-    {
-        return string.IsNullOrWhiteSpace(resolvedRulesText) ? rulesText : resolvedRulesText;
-    }
-
     private static AscensionEffectPayload[] BuildAscensionEffectPayloads(int ascensionLevel)
     {
         if (ascensionLevel <= 0)
@@ -2232,31 +2235,6 @@ internal static class GameStateService
                 description = AscensionHelper.GetDescription(level).GetFormattedText()
             })
             .ToArray();
-    }
-
-    private static string TryReadCardTextMember(object instance, string memberName)
-    {
-        const BindingFlags flags = BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic;
-
-        try
-        {
-            var property = instance.GetType().GetProperty(memberName, flags);
-            if (property != null)
-            {
-                return TryCoerceText(property.GetValue(instance));
-            }
-
-            var field = instance.GetType().GetField(memberName, flags);
-            if (field != null)
-            {
-                return TryCoerceText(field.GetValue(instance));
-            }
-        }
-        catch
-        {
-        }
-
-        return string.Empty;
     }
 
     private static string TryCoerceText(object? value)
@@ -2520,22 +2498,19 @@ internal static class GameStateService
         return gate.Usable;
     }
 
-
-    private static bool IsLocalCombatTurnReady(Player me)
+    private static bool IsLocalCombatTurnReady(Player me, NCombatRoom? combatRoom)
     {
         var playerCombatState = me.PlayerCombatState;
-        if (playerCombatState == null || playerCombatState.TurnNumber <= 0)
+        if (playerCombatState == null)
         {
             return false;
         }
 
-        if (playerCombatState.Hand.Cards.Count == 0 &&
-            GameActionService.CardsPlayedThisTurn == 0)
-        {
-            return false;
-        }
-
-        return true;
+        return CombatTurnReadinessPolicy.IsLocallyReady(
+            playerCombatState.TurnNumber,
+            playerCombatState.Hand.Cards.Count,
+            GameActionService.CardsPlayedThisTurn,
+            IsEndTurnButtonReady(GetEndTurnButton(combatRoom)));
     }
 
     /// <summary>
@@ -2608,7 +2583,7 @@ internal static class GameStateService
         }
 
         var actionsSettled = !actionQueueHasExecutingAction && runningAction == null && readyAction == null;
-        var localTurnReady = me != null && IsLocalCombatTurnReady(me);
+        var localTurnReady = me != null && IsLocalCombatTurnReady(me, room);
         var playerActionPhase = IsPlayerActionPhase(combatState, me);
         var snapshotStable = false;
         string reason;
@@ -2823,8 +2798,7 @@ internal static class GameStateService
             return false;
         }
 
-        const BindingFlags flags = BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic;
-        var property = button.GetType().GetProperty("CanTurnBeEnded", flags);
+        var property = ReflectedGameMembers.Property(typeof(NEndTurnButton), "CanTurnBeEnded");
         return property?.GetValue(button) is not bool canTurnBeEnded || canTurnBeEnded;
     }
 
@@ -2834,305 +2808,16 @@ internal static class GameStateService
         RunState? runState,
         CombatActionGate combatActionGate)
     {
-        var names = new List<string>();
-
-        if (GetOpenModal() != null)
+        // A projection of EnumerateAvailableActions, never a second opinion: /state.available_actions
+        // and /actions/available answer from one walk so they cannot advertise different actions.
+        var descriptors = EnumerateAvailableActions(currentScreen, combatState, runState, combatActionGate);
+        var names = new string[descriptors.Count];
+        for (var index = 0; index < descriptors.Count; index++)
         {
-            if (CanConfirmModal(currentScreen))
-            {
-                names.Add("confirm_modal");
-            }
-
-            if (CanDismissModal(currentScreen))
-            {
-                names.Add("dismiss_modal");
-            }
-
-            return names.ToArray();
+            names[index] = descriptors[index].name;
         }
 
-        // A human menu is over a frozen run: the combat actions are swallowed while it is up and none
-        // of the page's own buttons (including the pause menu's "放弃") is an agent decision.
-        if (IsCapstonePageOverlay(currentScreen))
-        {
-            // The page's own BackButton is the one action a human menu leaves an agent, and only for the
-            // pages above the pause menu. The pause page offers nothing: a person resumes that one.
-            if (CanCloseMainMenuSubmenu(currentScreen))
-            {
-                names.Add("close_main_menu_submenu");
-            }
-
-            return names.ToArray();
-        }
-
-        if (currentScreen is NUnlockScreen)
-        {
-            if (CanConfirmUnlock(currentScreen))
-            {
-                names.Add("confirm_unlock");
-            }
-
-            return names.ToArray();
-        }
-
-        if (CanEndTurn(currentScreen, combatState, requireButtonReady: false, combatActionGate: combatActionGate))
-        {
-            names.Add("end_turn");
-        }
-
-        if (CanPlayAnyCard(currentScreen, combatState, combatActionGate))
-        {
-            names.Add("play_card");
-        }
-
-        if (CanSwitchProfile(currentScreen))
-        {
-            names.Add("switch_profile");
-        }
-
-        if (CanContinueRun(currentScreen))
-        {
-            names.Add("continue_run");
-        }
-
-        if (CanAbandonRun(currentScreen))
-        {
-            names.Add("abandon_run");
-        }
-
-        if (CanSaveAndQuit(currentScreen, runState))
-        {
-            names.Add("save_and_quit");
-        }
-
-        if (CanOpenCharacterSelect(currentScreen))
-        {
-            names.Add("open_character_select");
-        }
-
-        if (CanOpenTimeline(currentScreen))
-        {
-            names.Add("open_timeline");
-        }
-
-        if (CanCloseMainMenuSubmenu(currentScreen))
-        {
-            names.Add("close_main_menu_submenu");
-        }
-
-        if (CanInviteAiTeammate(currentScreen))
-        {
-            names.Add("invite_ai_teammate");
-        }
-
-        if (CanContinueAiTeammate(currentScreen))
-        {
-            names.Add("continue_ai_teammate");
-        }
-
-        if (CanChooseTimelineEpoch(currentScreen))
-        {
-            names.Add("choose_timeline_epoch");
-        }
-
-        if (CanConfirmTimelineOverlay(currentScreen))
-        {
-            names.Add("confirm_timeline_overlay");
-        }
-
-        if (CanChooseMapNode(currentScreen, runState))
-        {
-            names.Add("choose_map_node");
-        }
-
-        if (CanCollectRewardsAndProceed(currentScreen))
-        {
-            names.Add("resolve_rewards");
-            names.Add("collect_rewards_and_proceed");
-        }
-
-        if (CanClaimReward(currentScreen))
-        {
-            names.Add("claim_reward");
-        }
-
-        if (CanChooseRewardCard(currentScreen))
-        {
-            names.Add("choose_reward_card");
-        }
-
-        if (CanSkipRewardCards(currentScreen))
-        {
-            names.Add("skip_reward_cards");
-        }
-
-        if (CanSelectDeckCard(currentScreen))
-        {
-            names.Add("select_deck_card");
-        }
-
-        if (CanCloseCardsView(currentScreen))
-        {
-            names.Add("close_cards_view");
-        }
-
-        if (CanConfirmSelection(currentScreen))
-        {
-            names.Add("confirm_selection");
-        }
-
-        if (CanProceed(currentScreen))
-        {
-            names.Add("proceed");
-        }
-
-        if (CanPlayCrystalSphere(currentScreen))
-        {
-            names.Add("crystal_set_tool");
-            names.Add("crystal_clear_cell");
-        }
-
-        if (CanOpenChest(currentScreen))
-        {
-            names.Add("open_chest");
-        }
-
-        if (CanChooseTreasureRelic(currentScreen))
-        {
-            names.Add("choose_treasure_relic");
-        }
-
-        if (CanChooseEventOption(currentScreen))
-        {
-            names.Add("choose_event_option");
-        }
-
-        if (CanChooseCapstoneOption(currentScreen))
-        {
-            names.Add("choose_capstone_option");
-        }
-
-        if (CanChooseBundle(currentScreen))
-        {
-            names.Add("choose_bundle");
-        }
-
-        if (CanConfirmBundle(currentScreen))
-        {
-            names.Add("confirm_bundle");
-        }
-
-        if (CanChooseRestOption(currentScreen))
-        {
-            names.Add("choose_rest_option");
-        }
-
-        if (CanOpenShopInventory(currentScreen))
-        {
-            names.Add("open_shop_inventory");
-        }
-
-        if (CanCloseShopInventory(currentScreen))
-        {
-            names.Add("close_shop_inventory");
-        }
-
-        if (CanBuyShopCard(currentScreen))
-        {
-            names.Add("buy_card");
-        }
-
-        if (CanBuyShopRelic(currentScreen))
-        {
-            names.Add("buy_relic");
-        }
-
-        if (CanBuyShopPotion(currentScreen))
-        {
-            names.Add("buy_potion");
-        }
-
-        if (CanRemoveCardAtShop(currentScreen))
-        {
-            names.Add("remove_card_at_shop");
-        }
-
-        if (CanSelectCharacter(currentScreen))
-        {
-            names.Add("select_character");
-        }
-
-        if (CanEmbark(currentScreen))
-        {
-            names.Add("embark");
-        }
-
-        if (CanUnready(currentScreen))
-        {
-            names.Add("unready");
-        }
-
-        if (CanHostMultiplayerLobby(currentScreen))
-        {
-            names.Add("host_multiplayer_lobby");
-        }
-
-        if (CanJoinMultiplayerLobby(currentScreen))
-        {
-            names.Add("join_multiplayer_lobby");
-        }
-
-        if (CanReadyMultiplayerLobby(currentScreen))
-        {
-            names.Add("ready_multiplayer_lobby");
-        }
-
-        if (CanDisconnectMultiplayerLobby(currentScreen))
-        {
-            names.Add("disconnect_multiplayer_lobby");
-        }
-
-        if (CanIncreaseAscension(currentScreen))
-        {
-            names.Add("increase_ascension");
-        }
-
-        if (CanDecreaseAscension(currentScreen))
-        {
-            names.Add("decrease_ascension");
-        }
-
-        if (CanUsePotion(currentScreen, combatState, runState, combatActionGate))
-        {
-            names.Add("use_potion");
-        }
-
-        if (CanDiscardPotion(currentScreen, runState))
-        {
-            names.Add("discard_potion");
-        }
-
-        var gameOver = BuildGameOverPayload(currentScreen, runState) ?? new GameOverPayload();
-        if (gameOver.waiting_for_other_players)
-        {
-            names.Add("dismiss_game_over_wait");
-        }
-
-        if (gameOver.can_continue)
-        {
-            names.Add("continue_game_over");
-        }
-        else if (GetGameOverContinueButton(currentScreen) != null && !gameOver.can_return_to_main_menu)
-        {
-            names.Add("continue_game_over");
-        }
-
-        if (gameOver.can_return_to_main_menu)
-        {
-            names.Add("return_to_main_menu");
-        }
-
-        return names.ToArray();
+        return names;
     }
 
     private static CombatPayload? BuildCombatPayload(CombatState? combatState, CombatActionGate combatActionGate)
@@ -3276,8 +2961,8 @@ internal static class GameStateService
             gold = player.Gold,
             max_energy = player.MaxEnergy,
             base_orb_slots = player.BaseOrbSlotCount,
-            act_id = TryGetMemberValue(runState, "CurrentActIndex")?.ToString()
-                ?? TryGetMemberValue(runState, "ActId")?.ToString(),
+            // RunState has no ActId; the fallback that asked for one never resolved.
+            act_id = runState.CurrentActIndex.ToString(),
             boss_id = ResolveBossId(runState),
             deck = player.Deck.Cards.Select((card, index) => BuildDeckCardPayload(card, index)).ToArray(),
             relics = player.Relics.Select((relic, index) => BuildRunRelicPayload(relic, index)).ToArray(),
@@ -3292,685 +2977,8 @@ internal static class GameStateService
 
     private static string? ResolveBossId(RunState runState)
     {
-        if (runState.Act?.BossEncounter?.Id.Entry is { Length: > 0 } bossId)
-        {
-            return bossId;
-        }
-
-        return TryGetMemberValue(runState, "BossId")?.ToString();
-    }
-
-    private static object BuildAgentViewPayload(
-        string screen,
-        SessionPayload session,
-        int nativeProfileId,
-        string runId,
-        int? turn,
-        string[] availableActions,
-        CombatState? combatState,
-        RunState? runState,
-        CombatPayload? combat,
-        RunPayload? run,
-        MultiplayerPayload? multiplayer,
-        MultiplayerLobbyPayload? multiplayerLobby,
-        MapPayload? map,
-        SelectionPayload? selection,
-        CharacterSelectPayload? characterSelect,
-        TimelinePayload? timeline,
-        ChestPayload? chest,
-        EventPayload? eventPayload,
-        CrystalSpherePayload? crystalSphere,
-        ShopPayload? shop,
-        RestPayload? rest,
-        RewardPayload? reward,
-        BundlePayload[]? bundles,
-        object? capstone,
-        UnlockPayload? unlock,
-        ModalPayload? modal,
-        GameOverPayload? gameOver)
-    {
-        var glossaryTerms = new HashSet<string>(StringComparer.Ordinal);
-
-        return new
-        {
-            version = AgentViewVersion,
-            screen,
-            native_profile_id = nativeProfileId,
-            profiles = new[]
-            {
-                new { id = 1, current = nativeProfileId == 1 },
-                new { id = 2, current = nativeProfileId == 2 },
-                new { id = 3, current = nativeProfileId == 3 }
-            },
-            run_id = runId,
-            session,
-            turn,
-            actions = availableActions,
-            available_actions = availableActions,
-            combat = BuildAgentCombatPayload(combatState, combat, glossaryTerms),
-            run = BuildAgentRunPayload(combatState, runState, run, glossaryTerms),
-            multiplayer = BuildAgentMultiplayerPayload(multiplayer),
-            multiplayer_lobby = BuildAgentMultiplayerLobbyPayload(multiplayerLobby),
-            map = BuildAgentMapPayload(map),
-            selection = BuildAgentSelectionPayload(selection, glossaryTerms),
-            character_select = BuildAgentCharacterSelectPayload(characterSelect),
-            timeline = BuildAgentTimelinePayload(timeline),
-            chest = BuildAgentChestPayload(chest),
-            @event = BuildAgentEventPayload(eventPayload),
-            crystal_sphere = crystalSphere,
-            shop = BuildAgentShopPayload(shop, glossaryTerms),
-            rest = BuildAgentRestPayload(rest),
-            reward = BuildAgentRewardPayload(reward, glossaryTerms),
-            bundles = BuildAgentBundlePayload(bundles, glossaryTerms),
-            capstone,
-            unlock = unlock == null
-                ? null
-                : new
-                {
-                    unlock_type = unlock.unlock_type,
-                    items = unlock.items,
-                    can_confirm = unlock.can_confirm
-                },
-            modal = BuildAgentModalPayload(modal),
-            game_over = BuildAgentGameOverPayload(gameOver),
-            glossary = BuildAgentGlossary(glossaryTerms)
-        };
-    }
-
-    private static object? BuildAgentMultiplayerPayload(MultiplayerPayload? multiplayer)
-    {
-        if (multiplayer == null)
-        {
-            return null;
-        }
-
-        return new
-        {
-            is_multiplayer = multiplayer.is_multiplayer,
-            net_game_type = multiplayer.net_game_type,
-            local_player_id = multiplayer.local_player_id,
-            player_count = multiplayer.player_count,
-            connected_player_ids = multiplayer.connected_player_ids
-        };
-    }
-
-    private static object? BuildAgentMultiplayerLobbyPayload(MultiplayerLobbyPayload? lobby)
-    {
-        if (lobby == null)
-        {
-            return null;
-        }
-
-        return new
-        {
-            has_lobby = lobby.has_lobby,
-            is_host = lobby.is_host,
-            is_client = lobby.is_client,
-            local_ready = lobby.local_ready,
-            can_host = lobby.can_host,
-            can_join = lobby.can_join,
-            can_ready = lobby.can_ready,
-            can_disconnect = lobby.can_disconnect,
-            join_host = lobby.join_host,
-            join_port = lobby.join_port,
-            selected_character_id = lobby.selected_character_id,
-            player_count = lobby.player_count,
-            max_players = lobby.max_players,
-            players = lobby.players.Select((player, index) => new
-            {
-                i = index,
-                player_id = player.player_id,
-                is_local = player.is_local,
-                character = player.character_name ?? player.character_id,
-                ready = player.is_ready
-            }).ToArray(),
-            characters = lobby.characters.Select(character => new
-            {
-                i = character.index,
-                line = character.name,
-                locked = character.is_locked,
-                selected = character.is_selected
-            }).ToArray()
-        };
-    }
-
-    private static object? BuildAgentCombatPayload(
-        CombatState? combatState,
-        CombatPayload? combat,
-        HashSet<string> glossaryTerms)
-    {
-        if (combat == null)
-        {
-            return null;
-        }
-
-        var liveHand = GetLocalPlayer(combatState)?.PlayerCombatState?.Hand.Cards.ToList()
-            ?? new List<CardModel>();
-        var playerCombatState = GetLocalPlayer(combatState)?.PlayerCombatState;
-
-        return new
-        {
-            action_readiness = combat.action_readiness,
-            player = new
-            {
-                hp = $"{combat.player.current_hp}/{combat.player.max_hp}",
-                block = combat.player.block,
-                energy = combat.player.energy,
-                stars = combat.player.stars,
-                focus = combat.player.focus,
-                orbs = combat.player.orbs.Select(orb => FormatOrbLine(orb)).ToArray(),
-                pets = combat.player.pets.Select(pet => FormatPetLine(pet)).ToArray(),
-                pet_missing = combat.player.pet_missing,
-                cards_played_this_turn = combat.player.cards_played_this_turn,
-                attacks_played_this_turn = combat.player.attacks_played_this_turn,
-                skills_played_this_turn = combat.player.skills_played_this_turn,
-                powers = combat.player.powers.Select(power => FormatPowerLine(power)).ToArray()
-            },
-            players = combat.players.Select(other => new
-            {
-                player_id = other.player_id,
-                slot_index = other.slot_index,
-                is_local = other.is_local,
-                is_connected = other.is_connected,
-                character_id = other.character_id,
-                character_name = other.character_name,
-                current_hp = other.current_hp,
-                max_hp = other.max_hp,
-                block = other.block,
-                energy = other.energy,
-                stars = other.stars,
-                focus = other.focus,
-                is_alive = other.is_alive
-            }).ToArray(),
-            end_turn_will_kill_player = combat.end_turn_will_kill_player,
-            lethal_risks = combat.lethal_risks.Select(risk => new
-            {
-                risk_id = risk.risk_id,
-                source = risk.source,
-                will_kill_player = risk.will_kill_player,
-                reason = risk.reason,
-                incoming_damage = risk.incoming_damage,
-                damage_after_block = risk.damage_after_block,
-                player_hp = risk.player_hp,
-                player_block = risk.player_block,
-                power_id = risk.power_id,
-                power_amount = risk.power_amount
-            }).ToArray(),
-            hand = combat.hand.Select(card =>
-                BuildAgentHandCardPayload(
-                    card,
-                    card.index >= 0 && card.index < liveHand.Count ? liveHand[card.index] : null,
-                    glossaryTerms)).ToArray(),
-            draw = BuildAgentCardStacks(ReadCombatPileCards(playerCombatState, "DrawPile", "DrawDeck"), glossaryTerms),
-            discard = BuildAgentCardStacks(ReadCombatPileCards(playerCombatState, "DiscardPile"), glossaryTerms),
-            exhaust = BuildAgentCardStacks(ReadCombatPileCards(playerCombatState, "ExhaustPile"), glossaryTerms),
-            draw_cards = BuildStructuredPileCards(ReadCombatPileCards(playerCombatState, "DrawPile", "DrawDeck")),
-            discard_cards = BuildStructuredPileCards(ReadCombatPileCards(playerCombatState, "DiscardPile")),
-            exhaust_cards = BuildStructuredPileCards(ReadCombatPileCards(playerCombatState, "ExhaustPile")),
-            enemies = combat.enemies.Select(enemy => new
-            {
-                i = enemy.index,
-                enemy_id = enemy.enemy_id,
-                name = enemy.name,
-                hp = $"{enemy.current_hp}/{enemy.max_hp}",
-                // Unscaled base roll (same dimension as monsters.min_hp/max_hp metadata); hp above is scaled live.
-                base_max_hp = enemy.base_max_hp,
-                block = enemy.block,
-                intent = enemy.intent,
-                move_id = enemy.move_id,
-                powers = enemy.powers.Select(power => FormatPowerLine(power)).ToArray(),
-                intents = enemy.intents.Select(intent => new
-                {
-                    i = intent.index,
-                    intent_type = intent.intent_type,
-                    label = intent.label,
-                    damage = intent.damage,
-                    hits = intent.hits,
-                    total_damage = intent.total_damage,
-                    status_card_count = intent.status_card_count
-                }).ToArray(),
-                alive = enemy.is_alive,
-                hittable = enemy.is_hittable
-            }).ToArray()
-        };
-    }
-
-    private static object? BuildAgentRunPayload(
-        CombatState? combatState,
-        RunState? runState,
-        RunPayload? run,
-        HashSet<string> glossaryTerms)
-    {
-        if (run == null)
-        {
-            return null;
-        }
-
-        var player = GetLocalPlayer(runState);
-        var deckCards = player?.Deck.Cards.ToArray() ?? Array.Empty<CardModel>();
-        var combatPlayer = GetLocalPlayer(combatState)?.PlayerCombatState;
-
-        foreach (var effect in run.ascension_effects)
-        {
-            CollectGlossaryTerms(glossaryTerms, effect.name);
-            CollectGlossaryTerms(glossaryTerms, effect.description);
-        }
-
-        return new
-        {
-            character = run.character_name,
-            ascension = run.ascension,
-            ascension_effects = run.ascension_effects,
-            floor = run.floor,
-            act_id = run.act_id,
-            boss_id = run.boss_id,
-            hp = $"{run.current_hp}/{run.max_hp}",
-            gold = run.gold,
-            max_energy = run.max_energy,
-            base_orb_slots = run.base_orb_slots,
-            deck = deckCards.Length > 0
-                ? BuildAgentCardStacks(deckCards, glossaryTerms)
-                : BuildAgentCardStacks(run.deck, glossaryTerms),
-            relics = run.relics
-                .Select(relic => relic.is_melted ? Loc.T("{0} (熔毁)", relic.name) : relic.name)
-                .ToArray(),
-            relic_ids = run.relics.Select(relic => relic.relic_id).ToArray(),
-            players = run.players.Select(other => new
-            {
-                player_id = other.player_id,
-                slot_index = other.slot_index,
-                is_local = other.is_local,
-                is_connected = other.is_connected,
-                character_id = other.character_id,
-                character_name = other.character_name,
-                current_hp = other.current_hp,
-                max_hp = other.max_hp,
-                gold = other.gold,
-                is_alive = other.is_alive
-            }).ToArray(),
-            potions = run.potions.Select(potion => new
-            {
-                i = potion.index,
-                potion_id = potion.potion_id,
-                line = FormatPotionLine(potion),
-                usable = potion.can_use,
-                discard = potion.can_discard,
-                target = NormalizeTargetHint(potion.target_type),
-                targets = potion.valid_target_indices
-            }).ToArray(),
-            piles = new
-            {
-                draw = BuildAgentCardStacks(ReadCombatPileCards(combatPlayer, "DrawPile", "DrawDeck"), glossaryTerms),
-                discard = BuildAgentCardStacks(ReadCombatPileCards(combatPlayer, "DiscardPile"), glossaryTerms),
-                exhaust = BuildAgentCardStacks(ReadCombatPileCards(combatPlayer, "ExhaustPile"), glossaryTerms),
-                draw_cards = BuildStructuredPileCards(ReadCombatPileCards(combatPlayer, "DrawPile", "DrawDeck")),
-                discard_cards = BuildStructuredPileCards(ReadCombatPileCards(combatPlayer, "DiscardPile")),
-                exhaust_cards = BuildStructuredPileCards(ReadCombatPileCards(combatPlayer, "ExhaustPile"))
-            }
-        };
-    }
-
-    private static object? BuildAgentSelectionPayload(SelectionPayload? selection, HashSet<string> glossaryTerms)
-    {
-        if (selection == null)
-        {
-            return null;
-        }
-
-        CollectGlossaryTerms(glossaryTerms, selection.prompt);
-
-        return new
-        {
-            kind = selection.kind,
-            prompt = selection.prompt,
-            min = selection.min_select,
-            max = selection.max_select,
-            selected = selection.selected_count,
-            confirm = selection.can_confirm,
-            cards = selection.cards.Select(card => BuildAgentChoiceCardPayload(card.index, card.card_id, card.name, card.upgraded, card.energy_cost, card.star_cost, card.costs_x, card.star_costs_x, GetPreferredCardRulesText(card.rules_text, card.resolved_rules_text), glossaryTerms, card.selected)).ToArray()
-        };
-    }
-
-    private static object? BuildAgentRewardPayload(RewardPayload? reward, HashSet<string> glossaryTerms)
-    {
-        if (reward == null)
-        {
-            return null;
-        }
-
-        foreach (var option in reward.rewards)
-        {
-            CollectGlossaryTerms(glossaryTerms, option.description);
-        }
-
-        return new
-        {
-            pending_card_choice = reward.pending_card_choice,
-            can_proceed = reward.can_proceed,
-            rewards = reward.rewards.Select(option => new
-            {
-                i = option.index,
-                line = $"{option.reward_type}: {option.description}",
-                claimable = option.claimable
-            }).ToArray(),
-            cards = reward.card_options.Select(card => BuildAgentChoiceCardPayload(card.index, card.card_id, card.name, card.upgraded, null, null, false, false, GetPreferredCardRulesText(card.rules_text, card.resolved_rules_text), glossaryTerms)).ToArray(),
-            alternatives = reward.alternatives.Select(option => new
-            {
-                i = option.index,
-                line = option.label
-            }).ToArray()
-        };
-    }
-
-    private static object? BuildAgentBundlePayload(BundlePayload[]? bundles, HashSet<string> glossaryTerms)
-    {
-        if (bundles == null || bundles.Length == 0)
-        {
-            return null;
-        }
-
-        return bundles.Select(bundle => new
-        {
-            i = bundle.index,
-            cards = bundle.cards.Select(card =>
-                BuildAgentChoiceCardPayload(
-                    card.index, card.card_id, card.name, card.upgraded,
-                    card.energy_cost, null, false, false,
-                    GetPreferredCardRulesText(card.rules_text, card.resolved_rules_text),
-                    glossaryTerms)).ToArray()
-        }).ToArray();
-    }
-
-    private static object? BuildAgentEventPayload(EventPayload? eventPayload)
-    {
-        if (eventPayload == null)
-        {
-            return null;
-        }
-
-        return new
-        {
-            id = eventPayload.event_id,
-            title = eventPayload.title,
-            finished = eventPayload.is_finished,
-            options = eventPayload.options.Select(option => new
-            {
-                i = option.index,
-                line = FormatEventOptionLine(option),
-                locked = option.is_locked,
-                proceed = option.is_proceed,
-                kill = option.will_kill_player
-            }).ToArray()
-        };
-    }
-
-    private static object? BuildAgentShopPayload(ShopPayload? shop, HashSet<string> glossaryTerms)
-    {
-        if (shop == null)
-        {
-            return null;
-        }
-
-        return new
-        {
-            open = shop.is_open,
-            can_open = shop.can_open,
-            can_close = shop.can_close,
-            cards = shop.cards.Select(card =>
-                BuildAgentPricedCardPayload(
-                    card.index,
-                    card.card_id,
-                    card.name,
-                    card.upgraded,
-                    card.energy_cost,
-                    card.star_cost,
-                    card.costs_x,
-                    card.star_costs_x,
-                    GetPreferredCardRulesText(card.rules_text, card.resolved_rules_text),
-                    card.price,
-                    card.enough_gold,
-                    glossaryTerms)).ToArray(),
-            relics = shop.relics.Select(relic => new
-            {
-                i = relic.index,
-                line = $"{relic.name} [{relic.rarity}] | {relic.price}g",
-                affordable = relic.enough_gold,
-                stocked = relic.is_stocked
-            }).ToArray(),
-            potions = shop.potions.Select(potion => new
-            {
-                i = potion.index,
-                line = FormatShopPotionLine(potion),
-                affordable = potion.enough_gold,
-                stocked = potion.is_stocked
-            }).ToArray(),
-            remove = shop.card_removal == null
-                ? null
-                : new
-                {
-                    price = shop.card_removal.price,
-                    affordable = shop.card_removal.enough_gold,
-                    available = shop.card_removal.available,
-                    used = shop.card_removal.used
-                }
-        };
-    }
-
-    private static object? BuildAgentRestPayload(RestPayload? rest)
-    {
-        if (rest == null)
-        {
-            return null;
-        }
-
-        return new
-        {
-            options = rest.options.Select(option => new
-            {
-                i = option.index,
-                line = (string.IsNullOrWhiteSpace(option.description)
-                    ? option.title
-                    : $"{option.title}: {option.description}") +
-                    (option.requires_target
-                        ? $" [target {option.target_index_space}: {string.Join(",", option.valid_target_indices)}]"
-                        : string.Empty),
-                requires_target = option.requires_target,
-                target_index_space = option.target_index_space,
-                valid_target_indices = option.valid_target_indices,
-                enabled = option.is_enabled
-            }).ToArray()
-        };
-    }
-
-    private static object? BuildAgentMapPayload(MapPayload? map)
-    {
-        if (map == null)
-        {
-            return null;
-        }
-
-        return new
-        {
-            current = map.current_node == null ? null : $"{map.current_node.row},{map.current_node.col}",
-            local_vote = map.local_vote == null ? null : $"{map.local_vote.row},{map.local_vote.col}",
-            votes = map.player_votes
-                .Where(vote => vote.coord != null)
-                .Select(vote => new
-                {
-                    player_id = vote.player_id,
-                    local = vote.is_local,
-                    coord = $"{vote.coord!.row},{vote.coord.col}"
-                }).ToArray(),
-            options = map.available_nodes.Select(node => new
-            {
-                i = node.index,
-                line = $"{node.node_type} ({node.row},{node.col})" +
-                    (node.has_local_vote
-                        ? " [local vote]"
-                        : node.vote_count > 0
-                            ? $" [votes:{node.vote_count}]"
-                            : string.Empty)
-            }).ToArray()
-        };
-    }
-
-    private static object? BuildAgentCharacterSelectPayload(CharacterSelectPayload? characterSelect)
-    {
-        if (characterSelect == null)
-        {
-            return null;
-        }
-
-        return new
-        {
-            selected = characterSelect.selected_character_id,
-            embark = characterSelect.can_embark,
-            ascension = characterSelect.ascension,
-            characters = characterSelect.characters.Select(character => new
-            {
-                i = character.index,
-                line = character.is_random ? Loc.T("{0} (随机)", character.name) : character.name,
-                locked = character.is_locked,
-                selected = character.is_selected
-            }).ToArray()
-        };
-    }
-
-    private static object? BuildAgentTimelinePayload(TimelinePayload? timeline)
-    {
-        if (timeline == null)
-        {
-            return null;
-        }
-
-        return new
-        {
-            back = timeline.back_enabled,
-            confirm = timeline.can_confirm_overlay,
-            tutorial = timeline.tutorial_open,
-            slots = timeline.slots.Select(slot => new
-            {
-                i = slot.index,
-                line = $"{slot.title} [{slot.state}]",
-                actionable = slot.is_actionable
-            }).ToArray()
-        };
-    }
-
-    private static object? BuildAgentChestPayload(ChestPayload? chest)
-    {
-        if (chest == null)
-        {
-            return null;
-        }
-
-        return new
-        {
-            opened = chest.is_opened,
-            claimed = chest.has_relic_been_claimed,
-            relics = chest.relic_options.Select(relic => new
-            {
-                i = relic.index,
-                relic_id = relic.relic_id,
-                line = $"{relic.name} [{relic.rarity}]"
-            }).ToArray()
-        };
-    }
-
-    private static object? BuildAgentModalPayload(ModalPayload? modal)
-    {
-        if (modal == null)
-        {
-            return null;
-        }
-
-        return new
-        {
-            type = modal.type_name,
-            underlying_screen = modal.underlying_screen,
-            confirm = modal.can_confirm,
-            dismiss = modal.can_dismiss,
-            confirm_label = modal.confirm_label,
-            dismiss_label = modal.dismiss_label
-        };
-    }
-
-    private static object? BuildAgentGameOverPayload(GameOverPayload? gameOver)
-    {
-        if (gameOver == null)
-        {
-            return null;
-        }
-
-        return new
-        {
-            victory = gameOver.is_victory,
-            floor = gameOver.floor,
-            character = gameOver.character_id,
-            phase = gameOver.phase,
-            can_continue = gameOver.can_continue,
-            can_return = gameOver.can_return_to_main_menu,
-            waiting_for_other_players = gameOver.waiting_for_other_players,
-            save_status = gameOver.save_status,
-            save_verified = gameOver.save_verified,
-            save_error = gameOver.save_error
-        };
-    }
-
-    private static object BuildAgentHandCardPayload(
-        CombatHandCardPayload card,
-        CardModel? liveCard,
-        HashSet<string> glossaryTerms)
-    {
-        var displayRulesText = GetPreferredCardRulesText(card.rules_text, card.resolved_rules_text);
-        var mods = GetCardModifierTags(liveCard);
-        var keywords = GetGlossaryMatches(displayRulesText, mods);
-        CollectGlossaryTerms(glossaryTerms, displayRulesText, mods);
-
-        return new
-        {
-            i = card.index,
-            card_id = card.card_id,
-            line = FormatCardLine(card.name, card.upgraded, 1, card.energy_cost, card.star_cost, card.costs_x, card.star_costs_x, displayRulesText),
-            playable = card.playable,
-            can_play_result = card.can_play_result,
-            target = card.requires_target ? NormalizeTargetHint(card.target_index_space ?? card.target_type) : null,
-            targets = card.requires_target ? card.valid_target_indices : Array.Empty<int>(),
-            why = card.playable ? null : card.unplayable_reason,
-            unplayable_reason = card.unplayable_reason,
-            unplayable_reason_raw = card.unplayable_reason_raw,
-            unplayable_preventer_id = card.unplayable_preventer_id,
-            unplayable_preventer_type = card.unplayable_preventer_type,
-            keywords = TranslateKeywords(keywords),
-            mods
-        };
-    }
-
-    private static object BuildAgentChoiceCardPayload(
-        int index,
-        string cardId,
-        string name,
-        bool upgraded,
-        int? energyCost,
-        int? starCost,
-        bool costsX,
-        bool starCostsX,
-        string rulesText,
-        HashSet<string> glossaryTerms,
-        bool selected = false)
-    {
-        var keywords = GetGlossaryMatches(rulesText);
-        CollectGlossaryTerms(glossaryTerms, rulesText);
-
-        return new
-        {
-            i = index,
-            card_id = cardId,
-            line = FormatCardLine(name, upgraded, 1, energyCost, starCost, costsX, starCostsX, rulesText),
-            selected,
-            keywords = TranslateKeywords(keywords),
-            mods = Array.Empty<string>()
-        };
+        // RunState has no BossId, so the reflective fallback that used to follow never resolved.
+        return runState.Act?.BossEncounter?.Id.Entry is { Length: > 0 } bossId ? bossId : null;
     }
 
     private static bool IsCardSelected(IScreenContext? currentScreen, CardModel card)
@@ -3989,8 +2997,7 @@ internal static class GameStateService
 
         if (TryGetCombatHandSelection(currentScreen, out var hand) && hand != null)
         {
-            const BindingFlags flags = BindingFlags.Instance | BindingFlags.NonPublic;
-            if (typeof(NPlayerHand).GetField("_selectedCards", flags)?.GetValue(hand) is IEnumerable selectedHandCards)
+            if (ReflectedGameMembers.Field(typeof(NPlayerHand), "_selectedCards")?.GetValue(hand) is IEnumerable selectedHandCards)
             {
                 foreach (var item in selectedHandCards)
                 {
@@ -4005,558 +3012,10 @@ internal static class GameStateService
         return false;
     }
 
-    private static object BuildAgentPricedCardPayload(
-        int index,
-        string cardId,
-        string name,
-        bool upgraded,
-        int energyCost,
-        int starCost,
-        bool costsX,
-        bool starCostsX,
-        string rulesText,
-        int price,
-        bool enoughGold,
-        HashSet<string> glossaryTerms)
-    {
-        var keywords = GetGlossaryMatches(rulesText);
-        CollectGlossaryTerms(glossaryTerms, rulesText);
-
-        return new
-        {
-            i = index,
-            card_id = cardId,
-            line = $"{FormatCardLine(name, upgraded, 1, energyCost, starCost, costsX, starCostsX, rulesText)} | {price}g",
-            affordable = enoughGold,
-            keywords = TranslateKeywords(keywords),
-            mods = Array.Empty<string>()
-        };
-    }
-
-    private static object[] BuildAgentCardStacks(IEnumerable<CardModel> cards, HashSet<string> glossaryTerms)
-    {
-        var descriptors = cards
-            .Select(card => BuildAgentCardDescriptor(card, glossaryTerms))
-            .ToArray();
-
-        return BuildAgentCardStacks(descriptors);
-    }
-
-    private static object[] BuildAgentCardStacks(IEnumerable<DeckCardPayload> cards, HashSet<string> glossaryTerms)
-    {
-        var descriptors = cards
-            .Select(card => BuildAgentCardDescriptor(card, glossaryTerms))
-            .ToArray();
-
-        return BuildAgentCardStacks(descriptors);
-    }
-
-    private static object[] BuildAgentCardStacks(IEnumerable<AgentCardDescriptor> descriptors)
-    {
-        return descriptors
-            .GroupBy(descriptor => descriptor.GroupKey, StringComparer.Ordinal)
-            .Select(group =>
-            {
-                var first = group.First();
-                var line = FormatCardLine(first.name, first.upgraded, group.Count(), first.energy_cost, first.star_cost, first.costs_x, first.star_costs_x, first.rules_text);
-
-                return new
-                {
-                    line,
-                    card_ids = group
-                        .Select(descriptor => descriptor.card_id)
-                        .Where(id => !string.IsNullOrWhiteSpace(id))
-                        .Distinct(StringComparer.Ordinal)
-                        .OrderBy(id => id, StringComparer.Ordinal)
-                        .ToArray(),
-                    keywords = TranslateKeywords(first.keywords),
-                    mods = first.mods
-                };
-            })
-            .OrderBy(item => item.line, StringComparer.Ordinal)
-            .Cast<object>()
-            .ToArray();
-    }
-
-    private static AgentCardDescriptor BuildAgentCardDescriptor(CardModel card, HashSet<string> glossaryTerms)
-    {
-        var rulesText = GetResolvedCardRulesText(card);
-        var mods = GetCardModifierTags(card);
-        var keywords = GetGlossaryMatches(rulesText, mods);
-        CollectGlossaryTerms(glossaryTerms, rulesText, mods);
-
-        return new AgentCardDescriptor(
-            card.Title,
-            card.IsUpgraded,
-            card.EnergyCost.GetWithModifiers(CostModifiers.All),
-            Math.Max(0, card.GetStarCostWithModifiers()),
-            card.EnergyCost.CostsX,
-            card.HasStarCostX,
-            rulesText,
-            keywords,
-            mods,
-            card.Id.Entry);
-    }
-
-    private static AgentCardDescriptor BuildAgentCardDescriptor(DeckCardPayload card, HashSet<string> glossaryTerms)
-    {
-        var rulesText = GetPreferredCardRulesText(card.rules_text, card.resolved_rules_text);
-        var keywords = GetGlossaryMatches(rulesText);
-        CollectGlossaryTerms(glossaryTerms, rulesText);
-
-        return new AgentCardDescriptor(
-            card.name,
-            card.upgraded,
-            card.energy_cost,
-            card.star_cost,
-            card.costs_x,
-            card.star_costs_x,
-            rulesText,
-            keywords,
-            Array.Empty<string>(),
-            card.card_id);
-    }
-
-    private static string FormatCardLine(
-        string name,
-        bool upgraded,
-        int count,
-        int? energyCost,
-        int? starCost,
-        bool costsX,
-        bool starCostsX,
-        string rulesText)
-    {
-        var title = upgraded && !name.EndsWith("+", StringComparison.Ordinal) ? $"{name}+" : name;
-        if (count > 1)
-        {
-            title = $"{title}*{count}";
-        }
-
-        var cost = FormatCardCost(energyCost, starCost, costsX, starCostsX);
-        var prefix = string.IsNullOrWhiteSpace(cost) ? title : $"{title} [{cost}]";
-        return string.IsNullOrWhiteSpace(rulesText)
-            ? prefix
-            : Loc.T("{0}：{1}", prefix, rulesText);
-    }
-
-    private static string FormatCardCost(int? energyCost, int? starCost, bool costsX, bool starCostsX)
-    {
-        var parts = new List<string>();
-        if (costsX)
-        {
-            parts.Add(Loc.T("X费"));
-        }
-        else if (energyCost.HasValue)
-        {
-            parts.Add(Loc.T("{0}费", Math.Max(0, energyCost.Value)));
-        }
-
-        if (starCostsX)
-        {
-            parts.Add(Loc.T("X星"));
-        }
-        else if (starCost.HasValue && starCost.Value > 0)
-        {
-            parts.Add(Loc.T("{0}星", starCost.Value));
-        }
-
-        return string.Join("/", parts);
-    }
-
-    private static string FormatOrbLine(CombatOrbPayload orb)
-    {
-        return Loc.T("{0} 被动{1}/激发{2}", orb.name, orb.passive_value, orb.evoke_value);
-    }
-
-    private static string FormatPetLine(CombatPetPayload pet)
-    {
-        return Loc.T("{0} {1}/{2} 格挡{3}", pet.name, pet.current_hp, pet.max_hp, pet.block);
-    }
-
-    // Powers decide combat math (Strength scales every hit, Vulnerable/Weak move the numbers,
-    // Thorns punishes multi-hit lines), so the compact view reports them as short id+amount lines
-    // rather than dropping them. The raw payload keeps the full object shape for /state consumers.
-    private static string FormatPowerLine(CombatPowerPayload power)
-    {
-        var amount = power.amount is int value ? $" {value}" : string.Empty;
-        var debuff = power.is_debuff ? " [debuff]" : string.Empty;
-        return $"{power.power_id}{amount}{debuff}";
-    }
-
-    private static string FormatPotionLine(RunPotionPayload potion)
-    {
-        if (!potion.occupied)
-        {
-            return Loc.T("{0}: 空", potion.index);
-        }
-
-        var usage = string.IsNullOrWhiteSpace(potion.usage) ? string.Empty : Loc.T("：{0}", potion.usage);
-        return Loc.T("{0}: {1}{2}", potion.index, potion.name, usage);
-    }
-
-    private static string FormatShopPotionLine(ShopPotionPayload potion)
-    {
-        var name = string.IsNullOrWhiteSpace(potion.name) ? Loc.T("空") : potion.name;
-        var usage = string.IsNullOrWhiteSpace(potion.usage) ? string.Empty : Loc.T("：{0}", potion.usage);
-        return Loc.T("{0}{1} | {2}g", name, usage, potion.price);
-    }
-
-    private static string FormatEventOptionLine(EventOptionPayload option)
-    {
-        var segments = new List<string>();
-        if (!string.IsNullOrWhiteSpace(option.title))
-        {
-            segments.Add(option.title);
-        }
-
-        if (!string.IsNullOrWhiteSpace(option.description))
-        {
-            segments.Add(option.description);
-        }
-
-        if (segments.Count == 0 && !string.IsNullOrWhiteSpace(option.text_key))
-        {
-            segments.Add(option.text_key);
-        }
-
-        if (option.is_locked)
-        {
-            segments.Add("LOCKED");
-        }
-
-        if (option.will_kill_player)
-        {
-            segments.Add("LETHAL");
-        }
-
-        return string.Join(" | ", segments);
-    }
-
-    private static object[] BuildStructuredPileCards(CardModel[] cards)
-    {
-        return cards.Select(card => new
-        {
-            card_id = card.Id.Entry,
-            upgraded = card.IsUpgraded,
-            card_type = card.Type.ToString()
-        }).ToArray();
-    }
-
-    private static CardModel[] ReadCombatPileCards(object? playerCombatState, params string[] memberNames)
-    {
-        if (playerCombatState == null)
-        {
-            return Array.Empty<CardModel>();
-        }
-
-        foreach (var memberName in memberNames)
-        {
-            var memberValue = TryGetMemberValue(playerCombatState, memberName);
-            var cards = ExtractCards(memberValue);
-            if (cards.Length > 0 || memberValue != null)
-            {
-                return cards;
-            }
-        }
-
-        return Array.Empty<CardModel>();
-    }
-
-    private static CardModel[] ExtractCards(object? value)
-    {
-        return ExtractCards(value, new HashSet<object>(ReferenceEqualityComparer.Instance));
-    }
-
-    private static CardModel[] ExtractCards(object? value, HashSet<object> visited)
-    {
-        if (value == null)
-        {
-            return Array.Empty<CardModel>();
-        }
-
-        if (!visited.Add(value))
-        {
-            return Array.Empty<CardModel>();
-        }
-
-        if (value is IEnumerable enumerable and not string)
-        {
-            var cards = new List<CardModel>();
-            foreach (var item in enumerable)
-            {
-                if (item is CardModel card)
-                {
-                    cards.Add(card);
-                }
-            }
-
-            if (cards.Count > 0)
-            {
-                return cards.ToArray();
-            }
-        }
-
-        foreach (var memberName in new[] { "Cards", "CardModels", "Entries", "List" })
-        {
-            var nested = TryGetMemberValue(value, memberName);
-            if (nested == null)
-            {
-                continue;
-            }
-
-            var cards = ExtractCards(nested, visited);
-            if (cards.Length > 0)
-            {
-                return cards;
-            }
-        }
-
-        return Array.Empty<CardModel>();
-    }
-
     private static object? TryGetMemberValue(object instance, string memberName)
     {
         return ReflectionMemberAccessor.TryGetValue(instance, memberName);
     }
-
-    private static string[] GetCardModifierTags(CardModel? card)
-    {
-        if (card == null)
-        {
-            return Array.Empty<string>();
-        }
-
-        var values = new HashSet<string>(StringComparer.Ordinal);
-        foreach (var memberName in new[]
-        {
-            "Enchantments",
-            "Enchants",
-            "Modifiers",
-            "ModifierIds",
-            "Affixes",
-            "Augments",
-            "Keywords"
-        })
-        {
-            var memberValue = TryGetMemberValue(card, memberName);
-            foreach (var token in ExtractModifierTokens(memberValue))
-            {
-                if (string.IsNullOrWhiteSpace(token))
-                {
-                    continue;
-                }
-
-                values.Add(NormalizeCardRulesText(token));
-            }
-        }
-
-        return values.OrderBy(value => value, StringComparer.Ordinal).ToArray();
-    }
-
-    private static IEnumerable<string> ExtractModifierTokens(object? value)
-    {
-        if (value == null)
-        {
-            yield break;
-        }
-
-        if (value is string text)
-        {
-            if (!string.IsNullOrWhiteSpace(text))
-            {
-                yield return text;
-            }
-
-            yield break;
-        }
-
-        if (value is IEnumerable enumerable)
-        {
-            foreach (var item in enumerable)
-            {
-                foreach (var token in ExtractModifierTokens(item))
-                {
-                    yield return token;
-                }
-            }
-
-            yield break;
-        }
-
-        foreach (var memberName in new[] { "Title", "Name", "Keyword", "Text", "Description", "Label" })
-        {
-            var memberValue = TryGetMemberValue(value, memberName);
-            if (TryCoerceText(memberValue) is { Length: > 0 } memberText)
-            {
-                yield return memberText;
-            }
-        }
-
-        var idValue = TryGetMemberValue(value, "Id");
-        if (idValue != null)
-        {
-            var entryValue = TryGetMemberValue(idValue, "Entry");
-            if (entryValue is string entryText && !string.IsNullOrWhiteSpace(entryText))
-            {
-                yield return entryText;
-            }
-        }
-    }
-
-    private static string[] GetGlossaryMatches(string text, params string[][] modifierGroups)
-    {
-        var values = new HashSet<string>(StringComparer.Ordinal);
-
-        foreach (var (keyword, _) in AgentKeywordDefinitions)
-        {
-            if (ContainsKeyword(text, keyword) || modifierGroups.Any(group => ContainsKeyword(group, keyword)))
-            {
-                values.Add(keyword);
-            }
-        }
-
-        return values.OrderBy(value => value, StringComparer.Ordinal).ToArray();
-    }
-
-    /// <summary>
-    /// True when the text carries this keyword in any spelling the glossary knows. Card text
-    /// arrives in whatever language the game is running in, so the English spellings count too.
-    /// </summary>
-    private static bool ContainsKeyword(string? text, string keyword)
-    {
-        if (string.IsNullOrWhiteSpace(text))
-        {
-            return false;
-        }
-
-        if (text.Contains(keyword, StringComparison.Ordinal))
-        {
-            return true;
-        }
-
-        if (!AgentKeywordAliases.TryGetValue(keyword, out var aliases))
-        {
-            return false;
-        }
-
-        return aliases.Any(alias => text.Contains(alias, StringComparison.OrdinalIgnoreCase));
-    }
-
-    private static bool ContainsKeyword(IEnumerable<string> texts, string keyword)
-    {
-        return texts.Any(text => ContainsKeyword(text, keyword));
-    }
-
-    /// <summary>
-    /// The keyword labels the model reads follow the game language, and the glossary is built from
-    /// the same spellings so the two stay in step. Chinese is the identity case.
-    /// </summary>
-    private static string[] TranslateKeywords(string[] keywords)
-    {
-        if (Loc.IsChinese || keywords.Length == 0)
-        {
-            return keywords;
-        }
-
-        return keywords.Select(keyword => Loc.T(keyword)).ToArray();
-    }
-
-    private static void CollectGlossaryTerms(HashSet<string> glossaryTerms, string? text, params string[][] modifierGroups)
-    {
-        if (glossaryTerms.Count >= AgentKeywordDefinitions.Length)
-        {
-            return;
-        }
-
-        foreach (var keyword in GetGlossaryMatches(text ?? string.Empty, modifierGroups))
-        {
-            glossaryTerms.Add(keyword);
-        }
-    }
-
-    private static Dictionary<string, string> BuildAgentGlossary(HashSet<string> glossaryTerms)
-    {
-        var glossary = new Dictionary<string, string>(StringComparer.Ordinal);
-        foreach (var (keyword, definition) in AgentKeywordDefinitions)
-        {
-            if (glossaryTerms.Contains(keyword))
-            {
-                glossary[Loc.T(keyword)] = Loc.T(definition);
-            }
-        }
-
-        return glossary;
-    }
-
-    private static string? NormalizeTargetHint(string? value)
-    {
-        if (string.IsNullOrWhiteSpace(value))
-        {
-            return null;
-        }
-
-        var normalized = value.Trim().ToLowerInvariant();
-        if (normalized.Contains("enemy", StringComparison.Ordinal))
-        {
-            return "enemy";
-        }
-
-        if (normalized.Contains("player", StringComparison.Ordinal) || normalized.Contains("self", StringComparison.Ordinal))
-        {
-            return "player";
-        }
-
-        return normalized;
-    }
-
-    private static readonly (string keyword, string definition)[] AgentKeywordDefinitions =
-    {
-        ("力量", "每层力量通常使攻击额外造成 1 点伤害。"),
-        ("敏捷", "每层敏捷通常使获得的格挡额外增加 1。"),
-        ("易伤", "易伤单位会承受更多攻击伤害。"),
-        ("虚弱", "虚弱单位造成的攻击伤害会降低。"),
-        ("脆弱", "脆弱单位获得的格挡会减少。"),
-        ("格挡", "格挡会优先抵消即将受到的伤害。"),
-        ("消耗", "消耗牌打出后会移出本场战斗。"),
-        ("保留", "保留牌在回合结束时不会被弃掉。"),
-        ("中毒", "中毒会在回合结束时造成等量生命损失，然后层数减少。"),
-        ("眩晕", "眩晕通常是无法主动打出的状态牌。"),
-        ("灼伤", "灼伤通常会在手中或结算时带来额外伤害。"),
-        ("虚空", "虚空通常会在抽到时消耗能量或妨碍出牌。"),
-        ("力量流失", "力量流失会临时降低力量。"),
-        ("集中", "集中通常会强化充能球的被动与激发效果。"),
-        ("球位", "球位决定你能同时容纳多少个充能球。"),
-        ("附魔", "附魔是卡牌附着的额外词条或效果层。"),
-        ("灌注", "灌注表示卡牌带有额外附着效果。"),
-        ("临时", "临时牌通常会在回合结束或打出后离开牌组流转。")
-    };
-
-    /// <summary>
-    /// Latin spellings the same keywords take in the English card text. The Chinese spelling stays
-    /// the key everywhere else; these only widen the search so an English client still matches.
-    /// </summary>
-    private static readonly Dictionary<string, string[]> AgentKeywordAliases = new(StringComparer.Ordinal)
-    {
-        ["力量"] = new[] { "Strength" },
-        ["敏捷"] = new[] { "Dexterity" },
-        ["易伤"] = new[] { "Vulnerable" },
-        ["虚弱"] = new[] { "Weak" },
-        ["脆弱"] = new[] { "Frail" },
-        ["格挡"] = new[] { "Block" },
-        ["消耗"] = new[] { "Exhaust" },
-        ["保留"] = new[] { "Retain" },
-        ["中毒"] = new[] { "Poison" },
-        ["眩晕"] = new[] { "Dazed" },
-        ["灼伤"] = new[] { "Burn" },
-        ["虚空"] = new[] { "Void" },
-        ["力量流失"] = new[] { "Strength Down" },
-        ["集中"] = new[] { "Focus" },
-        ["球位"] = new[] { "Orb Slot" },
-        ["附魔"] = new[] { "Enchantment", "Enchant" },
-        ["灌注"] = new[] { "Imbued", "Imbue", "Infused" },
-        ["临时"] = new[] { "Temporary" }
-    };
 
     private static MultiplayerPayload? BuildMultiplayerPayload(IScreenContext? currentScreen, RunState? runState)
     {
@@ -4898,7 +3357,7 @@ internal static class GameStateService
                         is_locked = SafeReadBool(() => opt.IsLocked),
                         is_proceed = SafeReadBool(() => opt.IsProceed),
                         will_kill_player = GetEventOptionWillKillPlayer(eventModel, opt),
-                        has_relic_preview = GetReflectedProperty(opt, "Relic") != null
+                        has_relic_preview = SafeReadBool(() => opt.Relic != null)
                     });
                 }
             }
@@ -5463,52 +3922,22 @@ internal static class GameStateService
 
     private static CombatPowerPayload[] BuildCreaturePowerPayloads(Creature creature)
     {
-        var powersValue = creature.GetType().GetProperty("Powers")?.GetValue(creature);
-        if (powersValue is not System.Collections.IEnumerable powersEnumerable)
-        {
-            return Array.Empty<CombatPowerPayload>();
-        }
-
+        // Every member read here is public on Creature and PowerModel, so the compiler checks it. This
+        // used to reach each one by name through reflection, which a rename would have emptied silently.
         var result = new List<CombatPowerPayload>();
         var index = 0;
 
-        foreach (var power in powersEnumerable)
+        foreach (var power in creature.Powers)
         {
             if (power == null)
             {
                 continue;
             }
 
-            var powerType = power.GetType();
-            var idEntry = SafeReadString(() =>
-            {
-                var idValue = powerType.GetProperty("Id")?.GetValue(power);
-                if (idValue == null)
-                {
-                    return string.Empty;
-                }
-
-                return idValue.GetType().GetProperty("Entry")?.GetValue(idValue)?.ToString();
-            });
-
-            var title = SafeReadString(() =>
-            {
-                var titleValue = powerType.GetProperty("Title")?.GetValue(power);
-                if (titleValue == null)
-                {
-                    return string.Empty;
-                }
-
-                return titleValue.GetType().GetMethod("GetFormattedText")?.Invoke(titleValue, null)?.ToString();
-            });
-
-            var amount = GetReflectedNullableIntProperty(power, "Amount");
-
-            var isDebuff = string.Equals(
-                GetReflectedProperty(power, "TypeForCurrentAmount")?.ToString()
-                    ?? GetReflectedProperty(power, "Type")?.ToString(),
-                "Debuff",
-                StringComparison.Ordinal);
+            var idEntry = SafeReadString(() => power.Id.Entry);
+            var title = SafeReadString(() => power.Title.GetFormattedText());
+            var amount = SafeReadNullableInt(() => power.Amount);
+            var isDebuff = SafeReadBool(() => power.TypeForCurrentAmount == MegaCrit.Sts2.Core.Entities.Powers.PowerType.Debuff);
 
             result.Add(new CombatPowerPayload
             {
@@ -5827,8 +4256,10 @@ internal static class GameStateService
             index = index,
             relic_id = relic.Id.Entry,
             name = relic.Title.GetFormattedText(),
-            description = GetDynamicFormattedTextProperty(relic, "DynamicDescription", "Description"),
-            stack = GetReflectedNullableIntProperty(relic, "Amount"),
+            description = RawTextOrNull(() => relic.DynamicDescription),
+            // RelicModel has no Amount, which is what this read, so stack was null for every relic. The
+            // number a player sees on a relic is DisplayAmount, shown when ShowCounter says so.
+            stack = SafeReadBool(() => relic.ShowCounter) ? SafeReadNullableInt(() => relic.DisplayAmount) : null,
             is_melted = relic.IsMelted
         };
     }
@@ -5850,8 +4281,8 @@ internal static class GameStateService
             index = index,
             potion_id = potion?.Id.Entry,
             name = potion?.Title.GetFormattedText(),
-            description = potion != null ? GetDynamicFormattedTextProperty(potion, "DynamicDescription", "Description") : null,
-            rarity = potion != null ? GetReflectedStringProperty(potion, "Rarity") : null,
+            description = potion != null ? RawTextOrNull(() => potion.DynamicDescription) : null,
+            rarity = potion?.Rarity.ToString(),
             occupied = potion != null,
             usage = potion?.Usage.ToString(),
             target_type = potion?.TargetType.ToString(),
@@ -5864,100 +4295,31 @@ internal static class GameStateService
         };
     }
 
-    private static object? GetReflectedProperty(object target, string propertyName)
+    /// <summary>The raw text of a localized string, or null when it is empty or cannot be read.</summary>
+    /// <remarks>
+    /// Replaces a by-name lookup that tried DynamicDescription and then Description. Description's
+    /// getter is private, and that lookup only saw public properties, so the second name never
+    /// resolved; DynamicDescription is public and read directly.
+    /// </remarks>
+    private static string? RawTextOrNull(Func<MegaCrit.Sts2.Core.Localization.LocString?> read)
     {
         try
         {
-            return target.GetType().GetProperty(propertyName)?.GetValue(target);
+            var text = read()?.GetRawText();
+            return string.IsNullOrWhiteSpace(text) ? null : text;
         }
-        catch
+        catch (Exception ex) when (ex is InvalidOperationException or NullReferenceException or KeyNotFoundException or FormatException)
         {
             return null;
         }
     }
 
-    private static string? GetReflectedStringProperty(object target, string propertyName)
-    {
-        var value = GetReflectedProperty(target, propertyName);
-        return value?.ToString();
-    }
-
-    private static string? GetReflectedFormattedTextProperty(object target, string propertyName)
-    {
-        var value = GetReflectedProperty(target, propertyName);
-        if (value == null)
-        {
-            return null;
-        }
-
-        try
-        {
-            var getRawText = value.GetType().GetMethod("GetRawText", Type.EmptyTypes);
-            if (getRawText != null)
-            {
-                return getRawText.Invoke(value, null)?.ToString();
-            }
-
-            return value.GetType().GetMethod("GetFormattedText")?.Invoke(value, null)?.ToString();
-        }
-        catch
-        {
-            return value.ToString();
-        }
-    }
-
-    private static string? GetDynamicFormattedTextProperty(object target, params string[] propertyNames)
-    {
-        foreach (var propertyName in propertyNames)
-        {
-            var value = GetReflectedFormattedTextProperty(target, propertyName);
-            if (!string.IsNullOrWhiteSpace(value))
-            {
-                return value;
-            }
-        }
-
-        return null;
-    }
-
-    private static int? GetReflectedNullableIntProperty(object target, string propertyName)
+    private static bool GetEventOptionWillKillPlayer(EventModel eventModel, EventOption option)
     {
         try
         {
-            var value = GetReflectedProperty(target, propertyName);
-            return value == null ? null : Convert.ToInt32(value);
-        }
-        catch
-        {
-            return null;
-        }
-    }
-
-    private static bool GetReflectedBoolProperty(object target, string propertyName)
-    {
-        try
-        {
-            var value = GetReflectedProperty(target, propertyName);
-            return value != null && Convert.ToBoolean(value);
-        }
-        catch
-        {
-            return false;
-        }
-    }
-
-    private static bool GetEventOptionWillKillPlayer(object eventModel, object option)
-    {
-        try
-        {
-            var owner = GetReflectedProperty(eventModel, "Owner");
-            var willKillPlayer = GetReflectedProperty(option, "WillKillPlayer") as Delegate;
-            if (owner == null || willKillPlayer == null)
-            {
-                return false;
-            }
-
-            return willKillPlayer.DynamicInvoke(owner) as bool? ?? false;
+            var owner = eventModel.Owner;
+            return owner != null && option.WillKillPlayer != null && option.WillKillPlayer(owner);
         }
         catch
         {
@@ -6400,8 +4762,7 @@ internal static class GameStateService
 
     public static StartRunLobby? GetMultiplayerTestLobby(NMultiplayerTest scene)
     {
-        const BindingFlags flags = BindingFlags.Instance | BindingFlags.NonPublic;
-        var field = typeof(NMultiplayerTest).GetField("_lobby", flags);
+        var field = ReflectedGameMembers.Field(typeof(NMultiplayerTest), "_lobby");
         return field?.GetValue(scene) as StartRunLobby;
     }
 
@@ -6539,22 +4900,12 @@ internal static class GameStateService
             return false;
         }
 
+        // Two reflective calls used to come first here -- SetWaitingForOtherPlayersOverlayVisible
+        // and HideWaitingForPlayersScreen. Neither is declared on NGameOverScreen or anything it
+        // inherits from: the first lives on NCombatRoom and the second on NRewardsScreen. Both
+        // lookups returned null every time, so hiding the overlay node below has always been the
+        // whole of this method.
         var hidden = false;
-        const BindingFlags flags = BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic;
-        var setVisible = gameOver.GetType().GetMethod("SetWaitingForOtherPlayersOverlayVisible", flags, binder: null, types: new[] { typeof(bool) }, modifiers: null);
-        if (setVisible != null)
-        {
-            setVisible.Invoke(gameOver, new object[] { false });
-            hidden = true;
-        }
-
-        var hide = gameOver.GetType().GetMethod("HideWaitingForPlayersScreen", flags, binder: null, types: Type.EmptyTypes, modifiers: null);
-        if (hide != null)
-        {
-            hide.Invoke(gameOver, null);
-            hidden = true;
-        }
-
         var overlay = GetWaitingForOtherPlayersOverlay(gameOver);
         if (overlay != null && overlay.Visible)
         {
@@ -6577,10 +4928,9 @@ internal static class GameStateService
             return true;
         }
 
-        const BindingFlags flags = BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic;
         try
         {
-            if (gameOver.GetType().GetField("_isAnimatingSummary", flags)?.GetValue(gameOver) is true)
+            if (ReflectedGameMembers.Field(typeof(NGameOverScreen), "_isAnimatingSummary")?.GetValue(gameOver) is true)
             {
                 return true;
             }
@@ -6618,8 +4968,7 @@ internal static class GameStateService
 
     public static NButton? GetSingleplayerStandardButton(NSingleplayerSubmenu submenu)
     {
-        const BindingFlags flags = BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic;
-        if (submenu.GetType().GetField("_standardButton", flags)?.GetValue(submenu) is NButton fieldButton &&
+        if (ReflectedGameMembers.Field(typeof(NSingleplayerSubmenu), "_standardButton")?.GetValue(submenu) is NButton fieldButton &&
             IsUsableModalButton(fieldButton))
         {
             return fieldButton;
@@ -6755,8 +5104,9 @@ internal static class GameStateService
             return null;
         }
 
-        var reflected = ReflectionMemberAccessor.TryGetValue(
-            unlockScreen, "_unlockConfirmButton", out var declaringType) as NButton;
+        var confirmField = ReflectedGameMembers.Field(typeof(NUnlockScreen), "_unlockConfirmButton");
+        var declaringType = confirmField?.DeclaringType;
+        var reflected = confirmField?.GetValue(unlockScreen) as NButton;
         var memberSource = $"member:{declaringType?.FullName ?? "unknown"}";
         var reflectedValid = reflected != null && GodotObject.IsInstanceValid(reflected);
         var memberStatus = reflectedValid ? "unusable" : "unavailable";
@@ -6827,15 +5177,18 @@ internal static class GameStateService
         return GetUnlockConfirmButton(currentScreen) != null;
     }
 
-    private static readonly string[] UnlockItemFieldNames =
-        { "_relics", "_cards", "_potions", "_unlockedEpochs", "_character", "_epoch" };
-
     private static string[] GetUnlockItemNames(NUnlockScreen unlockScreen)
     {
         var names = new List<string>();
-        foreach (var fieldName in UnlockItemFieldNames)
+        foreach (var field in ReflectedGameMembers.UnlockItemFields)
         {
-            var value = TryGetMemberValue(unlockScreen, fieldName);
+            // Each item field lives on its own concrete unlock screen; the others simply do not apply.
+            if (field.DeclaringType?.IsInstanceOfType(unlockScreen) != true)
+            {
+                continue;
+            }
+
+            var value = field.GetValue(unlockScreen);
             switch (value)
             {
                 case null:
@@ -7371,1200 +5724,4 @@ internal static class GameStateService
     {
         return netId.ToString();
     }
-}
-
-internal sealed class GameStatePayload
-{
-    public int state_version { get; init; }
-
-    public int native_profile_id { get; init; }
-
-    public string run_id { get; init; } = "run_unknown";
-
-    public string screen { get; init; } = "UNKNOWN";
-
-    public SessionPayload session { get; init; } = new();
-
-    public bool in_combat { get; init; }
-
-    public int? turn { get; init; }
-
-    public string[] available_actions { get; init; } = Array.Empty<string>();
-
-    public CombatPayload? combat { get; init; }
-
-    public RunPayload? run { get; init; }
-
-    public MultiplayerPayload? multiplayer { get; init; }
-
-    public MultiplayerLobbyPayload? multiplayer_lobby { get; init; }
-
-    public MapPayload? map { get; init; }
-
-    public SelectionPayload? selection { get; init; }
-
-    public CharacterSelectPayload? character_select { get; init; }
-
-    public TimelinePayload? timeline { get; init; }
-
-    public UnlockPayload? unlock { get; init; }
-
-    public ChestPayload? chest { get; init; }
-
-    public EventPayload? @event { get; init; }
-
-    public CrystalSpherePayload? crystal_sphere { get; init; }
-
-    public ShopPayload? shop { get; init; }
-
-    public RestPayload? rest { get; init; }
-
-    public RewardPayload? reward { get; init; }
-
-    public BundlePayload[]? bundles { get; init; }
-
-    public object? capstone { get; init; }
-
-    public ModalPayload? modal { get; init; }
-
-    public GameOverPayload? game_over { get; init; }
-
-    public object? agent_view { get; init; }
-}
-
-internal sealed class SessionPayload
-{
-    public string mode { get; init; } = "singleplayer";
-
-    public string phase { get; init; } = "menu";
-
-    public string control_scope { get; init; } = "local_player";
-}
-
-internal sealed class AvailableActionsPayload
-{
-    public string screen { get; init; } = "UNKNOWN";
-
-    public ActionDescriptor[] actions { get; init; } = Array.Empty<ActionDescriptor>();
-}
-
-internal sealed class CombatPayload
-{
-    public CombatActionReadinessPayload action_readiness { get; init; } = new();
-
-    public CombatPlayerPayload player { get; init; } = new();
-
-    public CombatPlayerSummaryPayload[] players { get; init; } = Array.Empty<CombatPlayerSummaryPayload>();
-
-    public CombatHandCardPayload[] hand { get; init; } = Array.Empty<CombatHandCardPayload>();
-
-    public CombatEnemyPayload[] enemies { get; init; } = Array.Empty<CombatEnemyPayload>();
-
-    public bool end_turn_will_kill_player { get; init; }
-
-    public CombatLethalRiskPayload[] lethal_risks { get; init; } = Array.Empty<CombatLethalRiskPayload>();
-}
-
-internal sealed class CombatActionReadinessPayload
-{
-    public bool can_use_combat_actions { get; init; }
-
-    public string reason { get; init; } = string.Empty;
-
-    public bool actions_settled { get; init; }
-
-    public string? running_action_type { get; init; }
-
-    public string? ready_action_type { get; init; }
-
-    public bool modal_open { get; init; }
-
-    public string? modal_type { get; init; }
-
-    public bool player_actions_disabled { get; init; }
-
-    public bool is_paused { get; init; }
-
-    public bool local_ready_to_end_turn { get; init; }
-
-    public bool all_players_ready_to_end_turn { get; init; }
-
-    public bool ending_turn_phase_one { get; init; }
-
-    public bool ending_turn_phase_two { get; init; }
-
-    public string? end_turn_kick { get; init; }
-
-    public bool combat_in_progress { get; init; }
-
-    public bool combat_over_or_ending { get; init; }
-
-    public string? combat_room_mode { get; init; }
-
-    public bool? hand_in_card_play { get; init; }
-
-    public bool? hand_in_card_selection { get; init; }
-
-    public string? hand_mode { get; init; }
-
-    public bool local_turn_ready { get; init; }
-
-    public bool snapshot_stable { get; init; }
-
-    public bool player_action_phase { get; init; }
-}
-
-internal sealed class RunPayload
-{
-    public string character_id { get; init; } = string.Empty;
-
-    public string character_name { get; init; } = string.Empty;
-
-    public int ascension { get; init; }
-
-    public AscensionEffectPayload[] ascension_effects { get; init; } = Array.Empty<AscensionEffectPayload>();
-
-    public int floor { get; init; }
-
-    public int current_hp { get; init; }
-
-    public int max_hp { get; init; }
-
-    public int gold { get; init; }
-
-    public int max_energy { get; init; }
-
-    public int base_orb_slots { get; init; }
-
-    public string? act_id { get; init; }
-
-    public string? boss_id { get; init; }
-
-    public DeckCardPayload[] deck { get; init; } = Array.Empty<DeckCardPayload>();
-
-    public RunRelicPayload[] relics { get; init; } = Array.Empty<RunRelicPayload>();
-
-    public RunPlayerSummaryPayload[] players { get; init; } = Array.Empty<RunPlayerSummaryPayload>();
-
-    public RunPotionPayload[] potions { get; init; } = Array.Empty<RunPotionPayload>();
-}
-
-internal sealed class AscensionEffectPayload
-{
-    public string id { get; init; } = string.Empty;
-
-    public string name { get; init; } = string.Empty;
-
-    public string description { get; init; } = string.Empty;
-}
-
-internal sealed class MultiplayerPayload
-{
-    public bool is_multiplayer { get; init; }
-
-    public string net_game_type { get; init; } = string.Empty;
-
-    public string? local_player_id { get; init; }
-
-    public int player_count { get; init; }
-
-    public string[] connected_player_ids { get; init; } = Array.Empty<string>();
-}
-
-internal sealed class MultiplayerLobbyPayload
-{
-    public string net_game_type { get; init; } = string.Empty;
-
-    public string join_host { get; init; } = "127.0.0.1";
-
-    public int join_port { get; init; }
-
-    public string? local_net_id_hint { get; init; }
-
-    public bool has_lobby { get; init; }
-
-    public bool is_host { get; init; }
-
-    public bool is_client { get; init; }
-
-    public bool local_ready { get; init; }
-
-    public bool can_host { get; init; }
-
-    public bool can_join { get; init; }
-
-    public bool can_ready { get; init; }
-
-    public bool can_disconnect { get; init; }
-
-    public bool can_unready { get; init; }
-
-    public string? selected_character_id { get; init; }
-
-    public int player_count { get; init; }
-
-    public int max_players { get; init; }
-
-    public CharacterSelectPlayerPayload[] players { get; init; } = Array.Empty<CharacterSelectPlayerPayload>();
-
-    public CharacterSelectOptionPayload[] characters { get; init; } = Array.Empty<CharacterSelectOptionPayload>();
-}
-
-internal sealed class MapPayload
-{
-    public MapCoordPayload? current_node { get; init; }
-
-    public bool is_travel_enabled { get; init; }
-
-    public bool is_traveling { get; init; }
-
-    public int map_generation_count { get; init; }
-
-    public int rows { get; init; }
-
-    public int cols { get; init; }
-
-    public MapCoordPayload? starting_node { get; init; }
-
-    public MapCoordPayload? boss_node { get; init; }
-
-    public MapCoordPayload? second_boss_node { get; init; }
-
-    public MapGraphNodePayload[] nodes { get; init; } = Array.Empty<MapGraphNodePayload>();
-
-    public MapNodePayload[] available_nodes { get; init; } = Array.Empty<MapNodePayload>();
-
-    public MapCoordPayload? local_vote { get; init; }
-
-    public MapPlayerVotePayload[] player_votes { get; init; } = Array.Empty<MapPlayerVotePayload>();
-}
-
-internal sealed class SelectionPayload
-{
-    public string kind { get; init; } = string.Empty;
-
-    public string prompt { get; init; } = string.Empty;
-
-    public int min_select { get; init; } = 1;
-
-    public int max_select { get; init; } = 1;
-
-    public int selected_count { get; init; }
-
-    public bool requires_confirmation { get; init; }
-
-    public bool can_confirm { get; init; }
-
-    public SelectionCardPayload[] cards { get; init; } = Array.Empty<SelectionCardPayload>();
-}
-
-internal readonly record struct CombatHandSelectionMetadata(
-    int MinSelect,
-    int MaxSelect,
-    int SelectedCount,
-    bool RequiresConfirmation,
-    bool CanConfirm);
-
-internal readonly record struct CardGridSelectionMetadata(
-    int MinSelect,
-    int MaxSelect,
-    int SelectedCount,
-    bool RequiresConfirmation,
-    bool CanConfirm);
-
-internal sealed class CharacterSelectPayload
-{
-    public string? selected_character_id { get; init; }
-
-    public bool is_multiplayer { get; init; }
-
-    public string net_game_type { get; init; } = string.Empty;
-
-    public bool can_embark { get; init; }
-
-    public bool can_unready { get; init; }
-
-    public bool can_increase_ascension { get; init; }
-
-    public bool can_decrease_ascension { get; init; }
-
-    public bool local_ready { get; init; }
-
-    public bool is_waiting_for_players { get; init; }
-
-    public int player_count { get; init; }
-
-    public int max_players { get; init; }
-
-    public int ascension { get; init; }
-
-    public int max_ascension { get; init; }
-
-    public string? seed { get; init; }
-
-    public string[] modifier_ids { get; init; } = Array.Empty<string>();
-
-    public CharacterSelectPlayerPayload[] players { get; init; } = Array.Empty<CharacterSelectPlayerPayload>();
-
-    public CharacterSelectOptionPayload[] characters { get; init; } = Array.Empty<CharacterSelectOptionPayload>();
-}
-
-internal sealed class CharacterSelectPlayerPayload
-{
-    public string player_id { get; init; } = string.Empty;
-
-    public int slot_index { get; init; }
-
-    public bool is_local { get; init; }
-
-    public string? character_id { get; init; }
-
-    public string? character_name { get; init; }
-
-    public bool is_ready { get; init; }
-
-    public int max_multiplayer_ascension_unlocked { get; init; }
-}
-
-internal sealed class CharacterSelectOptionPayload
-{
-    public int index { get; init; }
-
-    public string character_id { get; init; } = string.Empty;
-
-    public string name { get; init; } = string.Empty;
-
-    public bool is_locked { get; init; }
-
-    public bool is_selected { get; init; }
-
-    public bool is_random { get; init; }
-}
-
-internal sealed class TimelinePayload
-{
-    public bool back_enabled { get; init; }
-
-    public bool inspect_open { get; init; }
-
-    public bool unlock_screen_open { get; init; }
-
-    public bool tutorial_open { get; init; }
-
-    public bool can_choose_epoch { get; init; }
-
-    public bool can_confirm_overlay { get; init; }
-
-    public TimelineSlotPayload[] slots { get; init; } = Array.Empty<TimelineSlotPayload>();
-}
-
-internal sealed class TimelineSlotPayload
-{
-    public int index { get; init; }
-
-    public string epoch_id { get; init; } = string.Empty;
-
-    public string title { get; init; } = string.Empty;
-
-    public string state { get; init; } = string.Empty;
-
-    public bool is_actionable { get; init; }
-}
-
-internal sealed class ChestPayload
-{
-    public bool is_opened { get; init; }
-
-    public bool has_relic_been_claimed { get; init; }
-
-    public ChestRelicOptionPayload[] relic_options { get; init; } = Array.Empty<ChestRelicOptionPayload>();
-}
-
-internal sealed class ChestRelicOptionPayload
-{
-    public int index { get; init; }
-
-    public string relic_id { get; init; } = string.Empty;
-
-    public string name { get; init; } = string.Empty;
-
-    public string rarity { get; init; } = string.Empty;
-}
-
-internal sealed class EventPayload
-{
-    public string event_id { get; init; } = string.Empty;
-
-    public string title { get; init; } = string.Empty;
-
-    public string description { get; init; } = string.Empty;
-
-    public bool is_finished { get; init; }
-
-    public EventOptionPayload[] options { get; init; } = Array.Empty<EventOptionPayload>();
-}
-
-internal sealed class EventOptionPayload
-{
-    public int index { get; init; }
-
-    public string text_key { get; init; } = string.Empty;
-
-    public string title { get; init; } = string.Empty;
-
-    public string description { get; init; } = string.Empty;
-
-    public bool is_locked { get; init; }
-
-    public bool is_proceed { get; init; }
-
-    public bool will_kill_player { get; init; }
-
-    public bool has_relic_preview { get; init; }
-}
-
-internal sealed class RestPayload
-{
-    public RestOptionPayload[] options { get; init; } = Array.Empty<RestOptionPayload>();
-}
-
-internal sealed class RestOptionPayload
-{
-    public int index { get; init; }
-
-    public string option_id { get; init; } = string.Empty;
-
-    public string title { get; init; } = string.Empty;
-
-    public string description { get; init; } = string.Empty;
-
-    public bool is_enabled { get; init; }
-
-    public bool requires_target { get; init; }
-
-    public string? target_index_space { get; init; }
-
-    public int[] valid_target_indices { get; init; } = Array.Empty<int>();
-
-    public string[] valid_target_player_ids { get; init; } = Array.Empty<string>();
-}
-
-internal sealed class CrystalSpherePayload
-{
-    public int divinations_left { get; init; }
-
-    public string tool { get; init; } = "none";
-
-    public bool is_finished { get; init; }
-
-    public int grid_width { get; init; }
-
-    public int grid_height { get; init; }
-
-    public int[][] hidden_cells { get; init; } = Array.Empty<int[]>();
-
-    public CrystalSphereItemPayload[] items { get; init; } = Array.Empty<CrystalSphereItemPayload>();
-}
-
-internal sealed class CrystalSphereItemPayload
-{
-    public string kind { get; init; } = string.Empty;
-
-    public bool is_good { get; init; }
-
-    public int x { get; init; }
-
-    public int y { get; init; }
-
-    public int width { get; init; }
-
-    public int height { get; init; }
-
-    public bool revealed { get; init; }
-
-    public int[][] cells { get; init; } = Array.Empty<int[]>();
-
-    public int[][] hidden_cells { get; init; } = Array.Empty<int[]>();
-}
-
-internal sealed class ShopPayload
-{
-    public bool is_open { get; init; }
-
-    public bool can_open { get; init; }
-
-    public bool can_close { get; init; }
-
-    public ShopCardPayload[] cards { get; init; } = Array.Empty<ShopCardPayload>();
-
-    public ShopRelicPayload[] relics { get; init; } = Array.Empty<ShopRelicPayload>();
-
-    public ShopPotionPayload[] potions { get; init; } = Array.Empty<ShopPotionPayload>();
-
-    public ShopCardRemovalPayload? card_removal { get; init; }
-}
-
-internal sealed class ShopCardPayload
-{
-    public int index { get; init; }
-
-    public string category { get; init; } = string.Empty;
-
-    public string card_id { get; init; } = string.Empty;
-
-    public string name { get; init; } = string.Empty;
-
-    public bool upgraded { get; init; }
-
-    public string card_type { get; init; } = string.Empty;
-
-    public string rarity { get; init; } = string.Empty;
-
-    public bool costs_x { get; init; }
-
-    public bool star_costs_x { get; init; }
-
-    public int energy_cost { get; init; }
-
-    public int star_cost { get; init; }
-
-    public string rules_text { get; init; } = string.Empty;
-
-    public string resolved_rules_text { get; init; } = string.Empty;
-
-    public CardDynamicValuePayload[] dynamic_values { get; init; } = Array.Empty<CardDynamicValuePayload>();
-
-    public int price { get; init; }
-
-    public bool on_sale { get; init; }
-
-    public bool is_stocked { get; init; }
-
-    public bool enough_gold { get; init; }
-}
-
-internal sealed class ShopRelicPayload
-{
-    public int index { get; init; }
-
-    public string relic_id { get; init; } = string.Empty;
-
-    public string name { get; init; } = string.Empty;
-
-    public string rarity { get; init; } = string.Empty;
-
-    public int price { get; init; }
-
-    public bool is_stocked { get; init; }
-
-    public bool enough_gold { get; init; }
-}
-
-internal sealed class ShopPotionPayload
-{
-    public int index { get; init; }
-
-    public string? potion_id { get; init; }
-
-    public string? name { get; init; }
-
-    public string? rarity { get; init; }
-
-    public string? usage { get; init; }
-
-    public int price { get; init; }
-
-    public bool is_stocked { get; init; }
-
-    public bool enough_gold { get; init; }
-}
-
-internal sealed class ShopCardRemovalPayload
-{
-    public int price { get; init; }
-
-    public bool available { get; init; }
-
-    public bool used { get; init; }
-
-    public bool enough_gold { get; init; }
-}
-
-internal sealed class MapCoordPayload
-{
-    public int row { get; init; }
-
-    public int col { get; init; }
-}
-
-internal sealed class MapNodePayload
-{
-    public int index { get; init; }
-
-    public int row { get; init; }
-
-    public int col { get; init; }
-
-    public string node_type { get; init; } = string.Empty;
-
-    public string state { get; init; } = string.Empty;
-
-    public int vote_count { get; init; }
-
-    public bool has_local_vote { get; init; }
-
-    public string[] voted_player_ids { get; init; } = Array.Empty<string>();
-}
-
-internal sealed class MapPlayerVotePayload
-{
-    public string player_id { get; init; } = string.Empty;
-
-    public int slot_index { get; init; }
-
-    public bool is_local { get; init; }
-
-    public MapCoordPayload? coord { get; init; }
-}
-
-internal sealed class MapGraphNodePayload
-{
-    public int row { get; init; }
-
-    public int col { get; init; }
-
-    public string node_type { get; init; } = string.Empty;
-
-    public string state { get; init; } = string.Empty;
-
-    public bool visited { get; init; }
-
-    public bool is_current { get; init; }
-
-    public bool is_available { get; init; }
-
-    public bool is_start { get; init; }
-
-    public bool is_boss { get; init; }
-
-    public bool is_second_boss { get; init; }
-
-    public MapCoordPayload[] parents { get; init; } = Array.Empty<MapCoordPayload>();
-
-    public MapCoordPayload[] children { get; init; } = Array.Empty<MapCoordPayload>();
-}
-
-internal sealed class CombatPlayerPayload
-{
-    public int current_hp { get; init; }
-
-    public int max_hp { get; init; }
-
-    public int block { get; init; }
-
-    public int energy { get; init; }
-
-    public int stars { get; init; }
-
-    public int focus { get; init; }
-
-    public CombatPowerPayload[] powers { get; init; } = Array.Empty<CombatPowerPayload>();
-
-    public int base_orb_slots { get; init; }
-
-    public int orb_capacity { get; init; }
-
-    public int empty_orb_slots { get; init; }
-
-    public CombatOrbPayload[] orbs { get; init; } = Array.Empty<CombatOrbPayload>();
-
-    public CombatPetPayload[] pets { get; init; } = Array.Empty<CombatPetPayload>();
-
-    public bool pet_missing { get; init; }
-
-    public int cards_played_this_turn { get; init; }
-
-    public int attacks_played_this_turn { get; init; }
-
-    public int skills_played_this_turn { get; init; }
-}
-
-internal sealed class CombatPlayerSummaryPayload
-{
-    public string player_id { get; init; } = string.Empty;
-
-    public int slot_index { get; init; }
-
-    public bool is_local { get; init; }
-
-    public bool is_connected { get; init; }
-
-    public string character_id { get; init; } = string.Empty;
-
-    public string character_name { get; init; } = string.Empty;
-
-    public int current_hp { get; init; }
-
-    public int max_hp { get; init; }
-
-    public int block { get; init; }
-
-    public int energy { get; init; }
-
-    public int stars { get; init; }
-
-    public int focus { get; init; }
-
-    public bool is_alive { get; init; }
-}
-
-internal sealed class RunPlayerSummaryPayload
-{
-    public string player_id { get; init; } = string.Empty;
-
-    public int slot_index { get; init; }
-
-    public bool is_local { get; init; }
-
-    public bool is_connected { get; init; }
-
-    public string character_id { get; init; } = string.Empty;
-
-    public string character_name { get; init; } = string.Empty;
-
-    public int current_hp { get; init; }
-
-    public int max_hp { get; init; }
-
-    public int gold { get; init; }
-
-    public bool is_alive { get; init; }
-}
-
-internal sealed class CombatPetPayload
-{
-    public int index { get; init; }
-
-    public string pet_id { get; init; } = string.Empty;
-
-    public string name { get; init; } = string.Empty;
-
-    public int current_hp { get; init; }
-
-    public int max_hp { get; init; }
-
-    public int block { get; init; }
-
-    public CombatPowerPayload[] powers { get; init; } = Array.Empty<CombatPowerPayload>();
-}
-
-internal sealed class CombatOrbPayload
-{
-    public int slot_index { get; init; }
-
-    public string orb_id { get; init; } = string.Empty;
-
-    public string name { get; init; } = string.Empty;
-
-    public decimal passive_value { get; init; }
-
-    public decimal evoke_value { get; init; }
-
-    public bool is_front { get; init; }
-}
-
-internal sealed class CombatHandCardPayload
-{
-    public int index { get; init; }
-
-    public string card_id { get; init; } = string.Empty;
-
-    public string name { get; init; } = string.Empty;
-
-    public bool upgraded { get; init; }
-
-    public string target_type { get; init; } = string.Empty;
-
-    public bool requires_target { get; init; }
-
-    public string? target_index_space { get; init; }
-
-    public int[] valid_target_indices { get; init; } = Array.Empty<int>();
-
-    public bool costs_x { get; init; }
-
-    public bool star_costs_x { get; init; }
-
-    public int energy_cost { get; init; }
-
-    public int star_cost { get; init; }
-
-    public string rules_text { get; init; } = string.Empty;
-
-    public string resolved_rules_text { get; init; } = string.Empty;
-
-    public CardDynamicValuePayload[] dynamic_values { get; init; } = Array.Empty<CardDynamicValuePayload>();
-
-    public bool playable { get; init; }
-
-    public bool can_play_result { get; init; }
-
-    public string? unplayable_reason { get; init; }
-
-    public string? unplayable_reason_raw { get; init; }
-
-    public string? unplayable_preventer_id { get; init; }
-
-    public string? unplayable_preventer_type { get; init; }
-}
-
-internal sealed class CombatEnemyPayload
-{
-    public int index { get; init; }
-
-    public string enemy_id { get; init; } = string.Empty;
-
-    public string name { get; init; } = string.Empty;
-
-    public int current_hp { get; init; }
-
-    public int max_hp { get; init; }
-
-    public int? base_max_hp { get; init; }
-
-    public int block { get; init; }
-
-    public bool is_alive { get; init; }
-
-    public bool is_hittable { get; init; }
-
-    public CombatPowerPayload[] powers { get; init; } = Array.Empty<CombatPowerPayload>();
-
-    public string? intent { get; init; }
-
-    public string? move_id { get; init; }
-
-    public CombatEnemyIntentPayload[] intents { get; init; } = Array.Empty<CombatEnemyIntentPayload>();
-}
-
-internal sealed class CombatEnemyIntentPayload
-{
-    public int index { get; init; }
-
-    public string intent_type { get; init; } = string.Empty;
-
-    public string? label { get; init; }
-
-    public int? damage { get; init; }
-
-    public int? hits { get; init; }
-
-    public int? total_damage { get; init; }
-
-    public int? status_card_count { get; init; }
-}
-
-internal sealed class CombatLethalRiskPayload
-{
-    public string risk_id { get; init; } = string.Empty;
-
-    public string source { get; init; } = string.Empty;
-
-    public bool will_kill_player { get; init; }
-
-    public string reason { get; init; } = string.Empty;
-
-    public int? incoming_damage { get; init; }
-
-    public int? damage_after_block { get; init; }
-
-    public int? player_hp { get; init; }
-
-    public int? player_block { get; init; }
-
-    public string? power_id { get; init; }
-
-    public int? power_amount { get; init; }
-}
-
-internal sealed class CombatPowerPayload
-{
-    public int index { get; init; }
-
-    public string power_id { get; init; } = string.Empty;
-
-    public string name { get; init; } = string.Empty;
-
-    public int? amount { get; init; }
-
-    public bool is_debuff { get; init; }
-}
-
-internal sealed class RewardPayload
-{
-    public bool pending_card_choice { get; init; }
-
-    public bool can_proceed { get; init; }
-
-    public RewardOptionPayload[] rewards { get; init; } = Array.Empty<RewardOptionPayload>();
-
-    public RewardCardOptionPayload[] card_options { get; init; } = Array.Empty<RewardCardOptionPayload>();
-
-    public RewardAlternativePayload[] alternatives { get; init; } = Array.Empty<RewardAlternativePayload>();
-}
-
-internal sealed class ModalPayload
-{
-    public string type_name { get; init; } = string.Empty;
-
-    public string? underlying_screen { get; init; }
-
-    public bool can_confirm { get; init; }
-
-    public bool can_dismiss { get; init; }
-
-    public string? confirm_label { get; init; }
-
-    public string? dismiss_label { get; init; }
-}
-
-internal sealed class UnlockPayload
-{
-    public string unlock_type { get; init; } = string.Empty;
-
-    public string[] items { get; init; } = Array.Empty<string>();
-
-    public bool can_confirm { get; init; }
-}
-
-internal sealed class GameOverPayload
-{
-    public bool is_victory { get; init; }
-
-    public int? floor { get; init; }
-
-    public string? character_id { get; init; }
-
-    public string phase { get; init; } = "intro";
-
-    public bool can_continue { get; init; }
-
-    public bool can_return_to_main_menu { get; init; }
-
-    public bool showing_summary { get; init; }
-
-    public bool waiting_for_other_players { get; init; }
-
-    public string save_status { get; init; } = "pending";
-
-    public bool save_verified { get; init; }
-
-    public string? save_error { get; init; }
-}
-
-internal sealed class RewardOptionPayload
-{
-    public int index { get; init; }
-
-    public string reward_type { get; init; } = string.Empty;
-
-    public string description { get; init; } = string.Empty;
-
-    public bool claimable { get; init; }
-}
-
-internal sealed class RewardCardOptionPayload
-{
-    public int index { get; init; }
-
-    public string card_id { get; init; } = string.Empty;
-
-    public string name { get; init; } = string.Empty;
-
-    public bool upgraded { get; init; }
-
-    public string card_type { get; init; } = string.Empty;
-
-    public string rarity { get; init; } = string.Empty;
-
-    public int energy_cost { get; init; }
-
-    public string rules_text { get; init; } = string.Empty;
-
-    public string resolved_rules_text { get; init; } = string.Empty;
-
-    public CardDynamicValuePayload[] dynamic_values { get; init; } = Array.Empty<CardDynamicValuePayload>();
-}
-
-internal sealed class RewardAlternativePayload
-{
-    public int index { get; init; }
-
-    public string label { get; init; } = string.Empty;
-}
-
-internal sealed class BundlePayload
-{
-    public int index { get; init; }
-
-    public RewardCardOptionPayload[] cards { get; init; } = Array.Empty<RewardCardOptionPayload>();
-}
-
-internal sealed class DeckCardPayload
-{
-    public int index { get; init; }
-
-    public string card_id { get; init; } = string.Empty;
-
-    public string name { get; init; } = string.Empty;
-
-    public bool upgraded { get; init; }
-
-    public string card_type { get; init; } = string.Empty;
-
-    public string rarity { get; init; } = string.Empty;
-
-    public bool costs_x { get; init; }
-
-    public bool star_costs_x { get; init; }
-
-    public int energy_cost { get; init; }
-
-    public int star_cost { get; init; }
-
-    public string rules_text { get; init; } = string.Empty;
-
-    public string resolved_rules_text { get; init; } = string.Empty;
-
-    public CardDynamicValuePayload[] dynamic_values { get; init; } = Array.Empty<CardDynamicValuePayload>();
-}
-
-internal sealed class SelectionCardPayload
-{
-    public int index { get; init; }
-
-    public bool selected { get; init; }
-
-    public string card_id { get; init; } = string.Empty;
-
-    public string name { get; init; } = string.Empty;
-
-    public bool upgraded { get; init; }
-
-    public string card_type { get; init; } = string.Empty;
-
-    public string rarity { get; init; } = string.Empty;
-
-    public bool costs_x { get; init; }
-
-    public bool star_costs_x { get; init; }
-
-    public int energy_cost { get; init; }
-
-    public int star_cost { get; init; }
-
-    public string rules_text { get; init; } = string.Empty;
-
-    public string resolved_rules_text { get; init; } = string.Empty;
-
-    public CardDynamicValuePayload[] dynamic_values { get; init; } = Array.Empty<CardDynamicValuePayload>();
-}
-
-internal sealed class CardDynamicValuePayload
-{
-    public string name { get; init; } = string.Empty;
-
-    public int base_value { get; init; }
-
-    public int current_value { get; init; }
-
-    public int enchanted_value { get; init; }
-
-    public bool is_modified { get; init; }
-
-    public bool was_just_upgraded { get; init; }
-}
-
-internal sealed class RunRelicPayload
-{
-    public int index { get; init; }
-
-    public string relic_id { get; init; } = string.Empty;
-
-    public string name { get; init; } = string.Empty;
-
-    public string? description { get; init; }
-
-    public int? stack { get; init; }
-
-    public bool is_melted { get; init; }
-}
-
-internal sealed class RunPotionPayload
-{
-    public int index { get; init; }
-
-    public string? potion_id { get; init; }
-
-    public string? name { get; init; }
-
-    public string? description { get; init; }
-
-    public string? rarity { get; init; }
-
-    public bool occupied { get; init; }
-
-    public string? usage { get; init; }
-
-    public string? target_type { get; init; }
-
-    public bool is_queued { get; init; }
-
-    public bool requires_target { get; init; }
-
-    public string? target_index_space { get; init; }
-
-    public int[] valid_target_indices { get; init; } = Array.Empty<int>();
-
-    public bool can_use { get; init; }
-
-    public bool can_discard { get; init; }
-}
-
-internal readonly record struct AgentCardDescriptor(
-    string name,
-    bool upgraded,
-    int energy_cost,
-    int star_cost,
-    bool costs_x,
-    bool star_costs_x,
-    string rules_text,
-    string[] keywords,
-    string[] mods,
-    string card_id)
-{
-    public string GroupKey =>
-        string.Join(
-            "\u001f",
-            name,
-            upgraded ? "1" : "0",
-            energy_cost.ToString(),
-            star_cost.ToString(),
-            costs_x ? "1" : "0",
-            star_costs_x ? "1" : "0",
-            rules_text,
-            string.Join("\u001e", mods));
-}
-
-internal sealed class ActionDescriptor
-{
-    public string name { get; init; } = string.Empty;
-
-    public bool requires_target { get; init; }
-
-    public bool requires_index { get; init; }
-
-    public bool requires_coordinates { get; init; }
-
-    public bool requires_tool { get; init; }
 }

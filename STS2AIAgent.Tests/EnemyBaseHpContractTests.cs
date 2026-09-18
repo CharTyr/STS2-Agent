@@ -12,12 +12,11 @@ namespace STS2AIAgent.Tests;
 /// </summary>
 internal static class EnemyBaseHpContractTests
 {
-    private const string StateSourcePath = "STS2AIAgent/Game/GameStateService.cs";
 
     public static void RawEnemyPayloadCarriesTheBaseRoll()
     {
         var buildEnemy = AgentSourceFixture.WithoutWhitespace(
-            AgentSourceFixture.MethodBody(AgentSourceFixture.Read(StateSourcePath), "BuildEnemyPayload"));
+            AgentSourceFixture.MethodBody(AgentSourceFixture.ReadStateService(), "BuildEnemyPayload"));
 
         // The base roll is read straight off the creature; the field is nullable, so a player, a pet or
         // a creature whose value is not yet set yields null rather than a fallback to the scaled MaxHp.
@@ -33,7 +32,7 @@ internal static class EnemyBaseHpContractTests
     public static void CompactEnemyPayloadMirrorsTheBaseRoll()
     {
         var compactCombat = AgentSourceFixture.WithoutWhitespace(
-            AgentSourceFixture.MethodBody(AgentSourceFixture.Read(StateSourcePath), "BuildAgentCombatPayload"));
+            AgentSourceFixture.MethodBody(AgentSourceFixture.ReadStateService(), "BuildAgentCombatPayload"));
 
         // The compact view exposes the same key name as the raw payload, forwarded verbatim.
         Assert.Contains("base_max_hp=enemy.base_max_hp", compactCombat, StringComparison.Ordinal);
@@ -44,7 +43,7 @@ internal static class EnemyBaseHpContractTests
     public static void EnemyPayloadTypeDeclaresNullableBaseMaxHp()
     {
         var payload = AgentSourceFixture.WithoutWhitespace(AgentSourceFixture.DeclarationBody(
-            AgentSourceFixture.Read(StateSourcePath), "internal sealed class CombatEnemyPayload"));
+            AgentSourceFixture.ReadStateService(), "internal sealed class CombatEnemyPayload"));
 
         // New field only: the base roll is a nullable int so "unset" stays distinguishable from zero.
         Assert.Contains("publicint?base_max_hp{get;init;}", payload, StringComparison.Ordinal);

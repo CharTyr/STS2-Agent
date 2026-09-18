@@ -64,7 +64,7 @@ internal static class CoopRouteTests
         Assert.Contains("LaunchCompanionAsync(cancellationToken, companionAutoPlay)", coordinator);
         Assert.Contains("bool companionAutoPlay = true", coordinator);
 
-        var actions = AgentSourceFixture.Read("STS2AIAgent/Game/GameActionService.cs");
+        var actions = AgentSourceFixture.ReadActionService();
         Assert.Contains("FirstRunSetup.Evaluate(settings).ReadyToInvite", actions);
         Assert.Contains("requireVerifiedPlayModel: companionAutoPlay", actions);
         Assert.Contains("LaunchDualInstanceAsync(settings, companionAutoPlay, CancellationToken.None)", actions);

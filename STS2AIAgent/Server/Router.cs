@@ -15,7 +15,7 @@ internal static class Router
 {
     private const string ServiceName = "sts2-ai-agent";
     private const string ProtocolVersion = "2026-03-11-v1";
-    internal const string ModVersion = "0.12.5";
+    internal const string ModVersion = "0.13.0";
     private const string LogPrefix = "[STS2AIAgent.Router]";
 
     private static long _requestCounter;
@@ -333,7 +333,7 @@ internal static class Router
             mod_version = ModVersion,
             protocol_version = ProtocolVersion,
             game_version = ReleaseInfoManager.Instance.ReleaseInfo?.Version ?? "unknown",
-            status = "ready",
+            status = ReflectedGameMembers.ResolveStatus(),
             api_host = HttpServer.Instance.Host,
             api_port = HttpServer.Instance.Port,
             process_id = Environment.ProcessId,
@@ -351,7 +351,9 @@ internal static class Router
             dual_launch_outcome = dualLaunchOutcome == DualLaunchOutcome.Idle
                 ? null
                 : dualLaunchOutcome.ToString(),
-            team_control_status = AgentRuntime.Instance.TeamControlStatus
+            team_control_status = AgentRuntime.Instance.TeamControlStatus,
+            compatibility = ReflectedGameMembers.BuildHealthSection(),
+            state_build = StateBuildTiming.Instance.Snapshot()
         };
     }
 

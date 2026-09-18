@@ -2,6 +2,247 @@
 
 > Release attribution is recorded against tags or release commits. Post-tag maintenance is listed separately; current validation limits are maintained in [PRODUCT_PLAN_CURRENT.md](https://github.com/CharTyr/STS2-Agent/blob/main/PRODUCT_PLAN_CURRENT.md).
 
+## v0.13.0 - 2026-09-19
+
+> Mostly fixes to what `/state` tells an agent, found by checking every name the mod looked up
+> against the game that is actually installed. Relic counters, card keywords and enchantments,
+> monster move lists and a resumed combat's `end_turn` / `play_card` had been silently empty or
+> missing. Several buttons were being "clicked" through a signal the game's buttons do not have.
+>
+> `GET /health` gains two blocks. `compatibility` probes every game member the mod reaches by
+> reflection and can report `status: "degraded"` where it used to say `ready`. `state_build` reports
+> how long state builds take. A client that treats any `status` other than `ready` as failure should
+> read `compatibility` first: the mod still works, it is saying which feature will not.
+>
+> The two largest source files were split and the two action surfaces merged into one decision, with
+> no behaviour change. Saves, cards and numbers are untouched.
+
+### Changed
+
+- **The two action surfaces are one decision again.** `GET /state`'s `available_actions` and
+  `GET /actions/available`'s descriptors were two hand-written implementations of the same
+  question -- 301 and 609 lines consulting the same 50 `Can*` predicates to emit the same 55 action
+  names -- so every new action had to be added twice and nothing but a contract test noticed when
+  only one was updated. Both now report a single `EnumerateAvailableActions` walk: the name list is
+  a 12-line projection of it and the descriptor endpoint a 14-line wrapper.
+  `GameStateService.cs` drops from 8,559 to 8,295 lines. See ADR 0001.
+
+  Verified by replaying the live baseline on the refactored build: 45 back-to-back samples across
+  all twelve screens the baseline covered, **zero disagreements between the surfaces**, and twelve
+  action sets matching the baseline exactly -- including `PAUSE_MENU`'s empty set, where both
+  surfaces return an empty array. The one difference, a missing `discard_potion` on
+  `CARD_SELECTION`, was traced to the run holding no potions rather than to the change.
+
+  Emission order now follows the descriptor surface, so `crystal_*` appears in a different position
+  in `available_actions`. The set is unchanged and no client depends on the order: the play skill and
+  `state-invariants` both test membership.
+
+- `ActionSurface.*` now pins that neither surface decides for itself -- neither may name an action or
+  consult a `Can*` predicate of its own -- which is a stronger promise than the old "two
+  implementations agree". `AGENTS.md` and the game-actions spec describe adding an action in one
+  place instead of two.
+
+- **The two biggest files came apart, and nothing they do changed.** `GameStateService.cs` was 8,295
+  lines and `GameActionService.cs` 7,061 -- together half the mod. The state service gave up the
+  compact `agent_view` rewrite and the 60 payload type declarations; the action service became one
+  file per room (combat, rewards, rooms, shop, menus, embark, run, co-op). Each is the same
+  `partial` class, so no call site changed and no behaviour moved: the base files' diffs carry
+  exactly one genuinely new line each, the `partial` keyword.
+
+  Which member went where was computed rather than chosen -- a member joins a group only when every
+  reference to it comes from inside that group -- so 5,697 of the action service's 6,756 member
+  lines landed in exactly one room and the 1,059 that two rooms both reach stayed put. The largest
+  file in the mod is now 5,872 lines instead of 8,295, and six of the eight room files fit the
+  1,000-line default budget with no entry at all.
+
+  On the Python side `client.py`'s 58 per-action wrappers moved to `client_actions.py` as a mixin.
+  Both halves now fit the default budget, so neither has a budget entry any more.
+
+
+- **The MCP server's game-data half moved out.** Loading a collection, caching it, indexing it by id,
+  deriving which ids the current screen makes relevant and projecting requested fields is one job;
+  registering MCP tools is another. `game_data.py` holds the first, `server.py` drops 1,103 -> 707
+  lines, and its budget comes down 1,150 -> 750.
+
+- **`AgentOverlayHost.cs` will not be split, and the architecture page now says why.** At 1,829 lines
+  it reads like an oversight next to the two files that did come apart. It was measured instead:
+  78 of its 85 instance fields are touched by more than one method, so partials would scatter shared
+  mutable state to make the files smaller.
+
+### Added
+
+- **`GET /health` reports how long state builds take (`state_build`).** Every `/state`, action
+  response and SSE refresh builds the payload on the game thread, where the game draws no frame until
+  it finishes. The request log timed whole requests, queueing included, at Info with no threshold, so a
+  build that froze the game for a second looked like any other line. Builds are now timed alone; one
+  over 100 ms -- six frames at 60 fps -- is logged as a warning (at most one per 30 s, naming how many
+  it held back), and `/health` carries the count, the maximum and its screen, and recent p50/p95.
+
+- **`GET /health` says whether the mod can still read the game.** This mod references the game's
+  `sts2.dll`, so almost everything it touches is compile-checked -- but twenty-three private game
+  members are found by name at runtime, and those fail quietly: `GetField` returns null, the call
+  site falls back to a default, and an agent is handed `max_players: 0` with no way to tell that
+  from a lobby that really holds nobody. Slay the Spire 2 is in early access, so that is a patch
+  away at any time.
+
+  All twenty-three are now resolved when the mod loads, and the misses are written to the game log --
+  the file a player actually attaches to a bug report. `/health` gains a `compatibility` block naming
+  any that are missing and the feature each one costs, and `status` is derived from it instead of
+  being the literal `"ready"` it has always been -- the one field on the endpoint that could never
+  be wrong and never be useful.
+
+- A contract for **`abandon_run`**, the only action that destroys a player's run and one of twelve
+  that had nothing asserting what they do. What it pins is where the handler *stops*: it opens the
+  confirmation modal and waits, and the run survives until something else answers that modal. A
+  later simplification that confirmed the modal here would look like removing a redundant round
+  trip and would turn one call into a destroyed save.
+
+
+- **Two offline gates, bringing the set to eleven.** `arch-facts` checks the architecture
+  specification's file table against the files: every listed file exists, each stated line count is
+  within 5% of the real one, the totals hold, and **every source file over 1,000 lines appears in
+  the table** -- so a monolith cannot exist without the page that exists to name it saying so.
+  `doc-links` requires every relative Markdown link in a tracked page to resolve; 403 pages carry
+  411 of them and nothing checked any outside the three documents inside the release artifact.
+
+  Both gates ask git what the repository contains, not the filesystem -- see below for why that
+  distinction cost a CI run to learn.
+
+
+- **The three contract surfaces besides the payload are checked.** `docs/api.md` tells a client
+  four things it branches on: which routes it may call, which payload fields it reads, which error
+  codes it must handle, and which event types it can wait for. Only the payload half was checked,
+  and three error codes had already slipped out of the table -- `listener_error` (500),
+  `method_not_allowed` (405) and `payload_too_large` (413), each one a real response an agent can
+  receive with nothing to look up. All three are documented now, and `api-facts` compares all three
+  surfaces in both directions, with the HTTP status included: a code the mod never sends is a branch
+  nobody can take, and a row with the right name and the wrong number is worse than no row.
+
+- `doc-links` now checks that a `#L<n>` anchor names a line its file still has. Six anchors in the
+  MCP specs had gone stale when `client.py` and `server.py` were split -- a line anchor rots as soon
+  as the file is edited, and it rots quietly, because the link still opens.
+
+### Fixed
+
+- **A resumed combat could hide `end_turn` and `play_card` forever** (#151, by @XenoAmess). With an
+  empty hand, turn readiness required a recorded card play this turn, and that counter can be reset to
+  zero by the round transition after card effects have already emptied the hand -- so an agent polled
+  indefinitely. When the turn has started, an enabled native End Turn button is now also accepted as
+  evidence. The opening-draw guard is unchanged: the game enables that button only after the turn's
+  setup, draw included, has finished.
+
+- **`run.relics[].stack` was null for every relic.** It read `RelicModel.Amount`, which the game does
+  not have. It is now the counter the relic shows (`DisplayAmount`, when `ShowCounter`), and null for
+  a relic that shows none.
+
+- **Cards never reported their keywords or enchantment to the glossary.** The modifier tags were
+  read through seven guessed member names; only `Keywords` existed, and its enum values came out as
+  no text at all. Keywords (`Exhaust`, `Retain`, ...) and the enchantment now reach the card's
+  glossary matches, so a card that exhausts is explained as one.
+
+- **Piles, powers, potion rarity, event previews and descriptions are read by type.** They were
+  read by guessed names on objects whose type was known; the values were right where the guess
+  happened to exist, and the rest were dead fallbacks (`ActId`, `BossId`, `DrawDeck`, a private
+  `Description`). A future rename now breaks the build instead of emptying a field.
+
+- **`open_character_select` could answer 500.** On the main menu it pushed the character select
+  screen without checking the submenu stack returned one; it now answers `503 state_unavailable`,
+  retryable, like every other control that is not there yet. Found while giving the eleven handlers
+  that had no behaviour contract one each (`HandlerContract.*`); `crystal_set_tool` now refuses by
+  the same predicate the action surface offers it by instead of a copy of it.
+
+- **`GET /data/monsters` exported `moves: []` for every monster.** The export read a public
+  `MonsterModel.MoveNames` property by reflection; the game removed it, the lookup returned null, and
+  the export emptied without a word. `MoveNames` had only ever wrapped a public localization query,
+  so the export now calls that directly -- a future rename breaks the build rather than the data.
+
+  The first live run of that fix found the next problem: the same key prefix also holds each move's
+  dialogue, so nine monsters exported duplicate moves named with taunts -- `FAKE_MERCHANT_MONSTER`'s
+  ENRAGE appeared three times. Only the `.title` key is exported now, which is exactly the key the
+  game's own `GetBestiaryMoveName` builds.
+
+  The second live run left three monsters still empty: the Decimillipede's segments share one set
+  of text under a key that is not their own id. The prefix now comes from the monster's own title
+  key, the same place the game looks, so all 107 monsters export their moves.
+
+- **The compatibility probe no longer answers for code it does not run.** Its first version resolved
+  its own copy of each member while the call sites resolved theirs, with their own binding flags, so
+  the probe could say `ready` while a reader was broken -- reintroducing the `_longPressDuration` bug
+  with a correct registry left every offline test and gate green. Call sites now ask the registry
+  for the member, so there is one lookup and one set of flags. The contract that guards this also
+  used to look only for `"_x"` literals; five method and property names went straight past it.
+  `NEndTurnButton.CanTurnBeEnded`, whose private getter decides whether `end_turn` is ready, was
+  one of them, and is now probed.
+
+- **Four private methods the compatibility probe could not see.** `host_multiplayer_lobby`,
+  `ready_multiplayer_lobby`, `disconnect_multiplayer_lobby` and `save_and_quit` called
+  `NMultiplayerTest.StartHost` / `ReadyButtonPressed` / `Disconnect` and `NPauseMenu.CloseToMenu`
+  through helpers that took the method name as a parameter, so the registry's scan -- which looked for
+  names written into `GetMethod` calls -- never saw them. They are registered and probed now (27
+  members), and a missing lobby handler answers `503 state_unavailable` instead of a 500.
+
+- **Clicks that could not land.** The game's `NButton` is a `Control`, not a Godot `BaseButton`, so it
+  has no `pressed` signal. `choose_capstone_option` only emitted that signal, and now clicks.
+  `confirm_bundle`'s fallbacks called `OnConfirmPressed`, which the screen does not declare, and emitted
+  the same missing signal; `continue_game_over` also emitted it, and set a `disabled` property the
+  button does not have, before the `ForceClick` that did the work. The dead steps are removed. Godot
+  calls by string (`Call("OpenMultiplayerSubmenu")` and three more) use compile-checked names now.
+  The stuck-tutorial fallback's method list is cut to the one name that can match.
+
+- **Four reflective reads that never resolved in the installed game.** `continue_game_over` tried
+  three handler names on the button before emitting its pressed signal; none exists on a button
+  (`OnPressed` is declared nowhere, the other two live on `NMainMenu`), and the signal turned out to
+  be missing too -- see above. The game-over overlay tried
+  two methods on `NGameOverScreen` that live on `NCombatRoom` and `NRewardsScreen`. All of them
+  returned null on every call and sat in front of the code that did the real work, so nothing
+  visible changes; the dead halves are removed rather than left looking like they do something.
+
+- **`end_turn`'s long-press wait had been using a number the mod invented.** The game's
+  `NEndTurnLongPressBar._longPressDuration` is a **static** field; the read asked for it with
+  instance-only binding flags, so `GetField` returned null and the wait fell through to a
+  hard-coded `0.45` against the game's real `0.5` -- 50 ms short, every time, since the line was
+  written, with nothing anywhere saying so.
+
+  Found by the compatibility probe on its **first live run**, which is the whole argument for the
+  probe: offline it looked fine, because reading a member's name out of the assembly metadata does
+  not tell you whether the binding flags can reach it. The registry now records staticness, and all
+  22 entries were re-checked against the installed assembly -- this was the only one wrong.
+
+
+- **Four checks were not checking what they said.** The first three were found by the splits above
+  and predate them; the fourth was a defect in a gate added in this same batch:
+  - `AgentSourceFixture.MethodBody` resolved a method name by its last occurrence in the source,
+    which is correct only while a method is declared before it is called. Across a partial class it
+    returned the body of whatever enclosed a *call site*, so a source contract kept asserting --
+    against the wrong method, silently.
+  - `GameTaskBoundingContractTests` scanned a hard-coded list of files for unbounded awaits, so the
+    first bare `await` written in one of the new room files would have gone unseen. It enumerates
+    the class's files now and refuses to run if it finds fewer than two.
+  - The verification-gate self-test reported PASS for three cases that were failing with "missing
+    required file". `Assert-Case` only checked for a non-zero exit, so a gate dying for an unrelated
+    reason was indistinguishable from a gate correctly rejecting drifted input. Every case now
+    declares the message it expects, and a case that declares none fails.
+  - **`doc-links` and `arch-facts` shipped asking the filesystem.** Both passed locally and failed
+    on CI, because a working tree holds files a clone does not: `AGENTS.md` is deliberately
+    untracked and `extraction/decompiled/` is a local decompile, and 36 links pointed at them. The
+    gates' verdict therefore depended on whose machine ran them -- which is, one level up, exactly
+    the failure mode they were added to prevent. Both now ask git.
+
+    The 36 links were real defects, not false positives: both documents already said in prose that
+    the target does not exist in a fresh checkout. They are written as code spans now, because a
+    Markdown link is a promise that clicking works.
+
+- The architecture specification was stale: it carried pre-ADR-0001 measurements and still told
+  readers to add each new action to **both** action surfaces, a month after that duplication was
+  gone. Rewritten, and now held to the files by the `arch-facts` gate.
+
+### Documentation
+
+- **ADR 0002** records why the mod keeps two MCP tool surfaces -- the in-process native server that
+  needs no Python, and the sidecar that provides tool profiles -- and what would change that answer.
+  Adding an MCP tool means editing both sides, which is the opposite of the rule ADR 0001
+  established for actions, so `AGENTS.md` now says so where the steps are.
+
 ## v0.12.5 - 2026-09-17
 
 > Two fixes to what the mod reports about itself, both found by driving a running game rather than by

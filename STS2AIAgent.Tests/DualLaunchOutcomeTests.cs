@@ -57,7 +57,7 @@ internal static class DualLaunchOutcomeTests
     /// </summary>
     public static void HandlerClassifiesOnTheOutcomeNotOnDisplayText()
     {
-        var source = AgentSourceFixture.Read("STS2AIAgent/Game/GameActionService.cs");
+        var source = AgentSourceFixture.ReadActionService();
         var handler = AgentSourceFixture.MethodBody(source, "ExecuteInviteAiTeammateAsync");
 
         Assert.False(

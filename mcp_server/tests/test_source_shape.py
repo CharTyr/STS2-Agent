@@ -18,11 +18,15 @@ DEFAULT_BUDGET = 700
 
 # Modules already past the default, with the headroom they are allowed.
 BUDGETS = {
-    # The HTTP client: one method per action plus the request/error plumbing.
-    "client.py": 1200,
-    # Tool registration for three profiles, including the legacy per-action tools.
-    "server.py": 1150,
+    # Tool registration for three profiles, including the legacy per-action tools. 1,103 lines
+    # until the game-data concern moved to game_data.py on 2026-09-18; the budget came down with
+    # it, and the module is now seven lines over the default rather than four hundred.
+    "server.py": 750,
 }
+# client.py held 1,156 lines under a 1,200 budget until its 58 per-action wrappers moved to
+# client_actions.py on 2026-09-17. Both halves now fit the default, so neither has an entry --
+# which is the shape to aim for, and the reason the second test below fails a budget that has
+# stopped binding rather than letting it sit there as decoration.
 
 MINIMUM_MODULES = 4
 

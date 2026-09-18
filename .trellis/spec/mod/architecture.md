@@ -69,55 +69,185 @@ For a change crossing state, action, agent, UI, or MCP, trace it in both directi
 
 ## Code shape and its known debts
 
-Measured 2026-09-16 across 82 mod source files totalling 31,632 lines. These numbers are here
+Measured 2026-09-18 across 92 mod source files totalling 32,312 lines (git-tracked only, which is what the gate counts -- a working tree also holds whatever the developer left in it). These numbers are here
 because nobody was counting, and that is how a codebase stops being navigable -- not through a bad
-commit, but through a thousand good ones.
+commit, but through a thousand good ones. The `arch-facts` gate checks this table against the
+files, so it cannot quietly go stale the way it did between ADR 0001 and the splits below.
 
-| File | Lines | Share of the mod |
-| --- | ---: | ---: |
-| [GameStateService.cs](../../../STS2AIAgent/Game/GameStateService.cs) | 8,559 | 27.1% |
-| [GameActionService.cs](../../../STS2AIAgent/Game/GameActionService.cs) | 7,008 | 22.2% |
-| [AgentOverlayHost.cs](../../../STS2AIAgent/Ui/AgentOverlayHost.cs) | 1,829 | 5.8% |
-| [AgentRuntime.cs](../../../STS2AIAgent/Agent/AgentRuntime.cs) | 1,377 | 4.4% |
-| the other 78 files | 12,859 | 40.6% |
+| File | Lines |
+| --- | ---: |
+| [GameStateService.cs](../../../STS2AIAgent/Game/GameStateService.cs) | 5,730 |
+| [AgentOverlayHost.cs](../../../STS2AIAgent/Ui/AgentOverlayHost.cs) | 1,829 |
+| [AgentRuntime.cs](../../../STS2AIAgent/Agent/AgentRuntime.cs) | 1,377 |
+| [GameStateService.Payloads.cs](../../../STS2AIAgent/Game/GameStateService.Payloads.cs) | 1,251 |
+| [GameStateService.AgentView.cs](../../../STS2AIAgent/Game/GameStateService.AgentView.cs) | 1,236 |
+| [GameActionService.cs](../../../STS2AIAgent/Game/GameActionService.cs) | 1,203 |
+| [GameActionService.Rooms.cs](../../../STS2AIAgent/Game/GameActionService.Rooms.cs) | 1,150 |
 
-**Two files hold 49% of the mod.** `SourceShapeContractTests` now caps every file, with named
-budgets for the four above; budgets go down, never up. Needing more room than a budget allows is the
-signal to move something out, not to raise the number.
+Until 2026-09-17 two files held 49% of the mod: `GameStateService.cs` at 8,559 lines and
+`GameActionService.cs` at 7,008. The largest file today is 18% of the mod, the second largest 6%,
+and nothing else reaches 1,500 lines.
 
-The two are not the same kind of large, and the difference decides what to do about each.
+`SourceShapeContractTests` caps every file -- 1,000 lines unless it has a named budget -- and budgets
+go down, never up. Needing more room than a budget allows is the signal to move something out, not
+to raise the number. Its second test fails a budget that has drifted far above the file it guards,
+so a file that shrinks drags its own ceiling down with it.
 
-### `GameActionService.cs` is repetition, not tangle
+### What was split, and what the splits were not
 
-193 methods: 60 `Execute*` handlers (57% of the body) and 62 `WaitFor*` stabilizers (20%). That is
-one clear pattern -- validate the screen, act on the game thread, wait for the transition with a
-deadline -- repeated once per action. Nothing is fused; it is simply all in one file. Splitting it
-by room (combat / map / shop / co-op / menus) is mechanical, needs no design, and can happen
-whenever someone wants the navigability. The longest handler is 136 lines.
+Both monoliths came apart on 2026-09-17, and neither split was a judgement call about where lines
+belong. In each case a member joined a group only when **every reference to it came from inside that
+group**; anything two groups both reached stayed in the base file. That is a computation, and it is
+reproducible.
 
-### `GameStateService.cs` is three concerns in one 7,290-line class
+- `GameActionService.cs` (7,061 lines) is now the base file plus eight partials -- combat, rewards,
+  rooms, shop, menus, embark, run, co-op. 5,697 of 6,756 member lines landed in exactly one room;
+  1,059 were genuinely shared. Six of the eight came in under the default budget.
+- `GameStateService.cs` (8,295 lines) gave up two concerns that shared nothing with the raw builders
+  except their output: the compact `agent_view` rewrite (`BuildAgent*`, plus the formatters and
+  glossary only it reaches) and the 60 payload type declarations.
 
-318 methods in a single class, plus 57 payload records (1,100 lines) in the same file:
+What is left in `GameStateService.cs` is one concern in 286 members: the raw `/state` payload
+builders and the predicates they read. It is still the largest file in the mod, and the next split,
+if someone wants one, is the `Can*` / `Is*` predicate layer.
 
-- `Build*` -- the raw `/state` payload builders (2,495 lines, 40%)
-- `BuildAgent*` -- the compact `agent_view` rewrite (687 lines, 11%), a **separable concern** that
-  shares nothing with the raw builders except their output
-- `Can*` / `Get*` / `Is*` -- 176 small predicates and accessors (1,862 lines)
-- the action surface: `BuildAvailableActionNames` (301) and `BuildAvailableActionsPayload` (609)
+A pure relocation is verifiable, and both were verified the same way: the base file's diff carries
+exactly one genuinely new line (the `partial` keyword), and every removed non-blank line appears
+verbatim in exactly one new file.
 
-Those last two are **910 lines answering one question twice**, verified identical field for field:
-the same 50 predicates, the same 55 action names. See
-[ADR 0001](../../../docs/adr/0001-single-action-surface.md) for the decision to collapse them, why
-it waits for a session that can validate against the running game, and the
-`ActionSurface.*` contracts that keep the duplication loud until then.
+### The one thing the compiler cannot check for us
+
+This project references the game's `sts2.dll`, so almost everything it touches is compile-checked:
+rename a public game type or member and the build turns red before anyone runs anything.
+
+**Twenty-seven private game members are the exception.** They are found by name at runtime, and they
+fail in the opposite way -- quietly. `GetField` returns null, the call site falls back to a default,
+and an agent is handed `max_players: 0` with no way to tell that from a lobby that really holds
+nobody. Slay the Spire 2 is in early access; a patch renames a private field and the mod keeps
+answering, confidently, with numbers it invented.
+
+`ReflectedGameMembers` closes that. Every one of those members is resolved once when the mod loads,
+the misses are written to the game log and named on `GET /health` under `compatibility`, and
+`status` is derived from the result rather than the literal `"ready"` it used to be. The declaring
+types are `typeof` expressions, so the compiler still checks them; only the member names -- the part
+that actually rots -- are text.
+
+**It is also the only place those members are looked up**, and that is the part that matters. The
+first version resolved its own copy of each member while the call sites resolved theirs, with their
+own binding flags, so the probe could report `ready` while a reader was broken: reintroducing the
+`_longPressDuration` bug with a correct registry left every offline test and gate green. Call sites
+now ask `ReflectedGameMembers.Field` / `Method` / `Property` for the member, so what the probe
+reports is what the mod actually gets.
+
+**Guessing a member name is not duck typing when the type is known.** The state builders used to
+read piles, powers, relic counters, card text and card modifiers through lists of candidate names
+-- `"DrawPile", "DrawDeck"`, `"Enchantments", "Enchants", "Modifiers", ... "Keywords"` -- on objects
+whose static type was right there. Checked against the installed game on 2026-09-18, most names in
+those lists did not exist, and two of the guesses cost data: `RelicModel` has no `Amount`, so every
+relic's `stack` was null; and the only modifier name that existed, `Keywords`, held enum values the
+token extractor could not turn into text, so every card had no modifiers, and the real enchantment
+member (`Enchantment`, singular) was never on the list. All of it reads by type now. What is left
+of name-based probing is a handful of names read across genuinely different types -- a model's
+`Title`, a `LocString`'s `GetRawText` -- and `ReflectedMembers.*` requires each to be listed with
+its reason, and drops any the code no longer uses.
+
+Making the registry the only lookup also exposed four reflective reads that had never resolved in the
+installed game: `continue_game_over` tried `OnContinueButtonPressed`, `OnPressed` and
+`OnContinueButtonPressedAsync` on a button (none exists on one), and the game-over overlay tried
+`SetWaitingForOtherPlayersOverlayVisible` and `HideWaitingForPlayersScreen` on `NGameOverScreen`
+(they live on `NCombatRoom` and `NRewardsScreen`). Each sat before a path that did the real work, so
+nothing broke; the dead halves are gone. The fourth, `MonsterModel.MoveNames`, was not harmless:
+the game removed that property, so every monster in `GET /data/monsters` exported `moves: []`. It
+had only ever wrapped a public localization query (`LocTable.GetLocStringsWithPrefix`), so the
+export now calls that directly -- no reflection at all, and a future rename breaks the build instead
+of emptying the export.
+
+That is the general move worth remembering: before registering a member, check whether the thing it
+wraps is public. A compile-checked call beats the best-guarded reflection.
+
+**A name in a variable is a name the scan cannot see.** Four private methods --
+`NMultiplayerTest.StartHost`, `ReadyButtonPressed`, `Disconnect` and `NPauseMenu.CloseToMenu` --
+went unprobed for as long as the registry existed, because they reached `GetMethod` through
+`InvokePrivateTask` / `InvokePrivateVoid`, helpers that took the method name as a parameter. The
+contract looked for literals passed to `GetMethod`, and these never were. They are registered now,
+the helpers are gone, and `ReflectedMembers.NoNameTakingHelpers` fails on any lookup by a variable
+name outside the few helpers `NameTakingChannels` argues for by name.
+
+Registering them broke the mod on the first live run, which is worth knowing before adding the next
+entry. The registry searched base types too, and `NMultiplayerTest`'s private `Disconnect(NetError)`
+shares a name with Godot's public `GodotObject.Disconnect(StringName, Callable)`: `GetMethod` threw
+`AmbiguousMatchException`. All entries resolve inside one `Lazy`, which caches an exception, so that
+one entry took the startup probe, `GET /health` and every registry-backed action down with it --
+`open_character_select` included. Lookups are now declared-only (an entry's `typeof` names the
+declaring type, which is what it always meant) and go through `ReflectedMemberResolver`, which
+compiles offline, is tested against a fake with exactly that shape, and answers null rather than
+throwing. Metadata read offline showed the member existed; only the running game showed the collision.
+
+**Godot has its own by-name entry points, and they rot the same way.** `Node.Call("Name")`,
+`EmitSignal("name")` and `Set("name", ...)` are as unchecked as `GetMethod("Name")`. Each has a
+compile-checked form -- the generated `MethodName` / `SignalName` / `PropertyName` constant of the
+node's own type, or a direct call when the method is public -- and `ReflectedMembers.NoGodotCallByString`
+requires it. The sweep found `confirm_bundle` calling `OnConfirmPressed`, which the installed game does
+not declare, on every use.
+
+**The game's buttons are not Godot buttons.** `NButton` derives from `NClickableControl` -> `Control`,
+not from `BaseButton`: it has no `pressed` signal and no `disabled` property. Emitting
+`BaseButton.SignalName.Pressed` on one compiles -- the constant names `BaseButton`, not the button's
+own type -- and does nothing. `choose_capstone_option` did only that; `continue_game_over` did that and
+`Set("disabled", false)` before a `ForceClick` that was the only step that worked. Game buttons are
+clicked with `ForceClick()`, and `ReflectedMembers.GameButtonsAreClicked` holds that.
+
+`ReflectedMembers.*` keeps the registry honest: a new reflection site with no entry fails, and an
+entry nothing reads fails too. Two names are deliberately not probed and say why -- the card-grid
+`_prefs` / `_selectedCards` are declared per concrete screen, so a probe would need a subclass list
+and would raise a false alarm the day the game adds or drops one.
+
+### `AgentOverlayHost.cs` is not going to be split, and that is a decision
+
+It is 1,829 lines and the table above names it, which makes it look like an oversight. It is not.
+The two files that came apart could come apart because their parts did not share mutable state:
+`GameActionService`'s sixty handlers touch the game, not each other.
+
+This one was measured rather than guessed. Of its **85 instance fields, 78 are touched by more
+than one method**, 2.6 methods each on average; only 7 belong to a single method, and `_panel`
+alone is touched by twelve. That is one stateful Godot object, not several concerns sharing a
+file. Splitting it into partials would scatter shared mutable state across files and make every
+one of those 78 fields harder to reason about -- worse to read, and easier to break, in exchange
+for smaller files.
+
+If it is ever worth changing, the move is to extract a *tab* into its own class with its own
+state and a narrow interface to the host -- which is design work with a behaviour risk, not a
+mechanical split. Do not do it to satisfy a line count.
+
+### What the splits broke, which is the part worth remembering
+
+Moving members between the files of one class is invisible to the compiler and **not** invisible to
+tooling that reads source text -- which, in this repo, is most of the verification:
+
+- `AgentSourceFixture.MethodBody` resolved a name by its last occurrence. That is correct only while
+  a method is declared before it is called, which holds inside one file and fails across a partial
+  class. It failed *quietly*: the body of whatever enclosed a call site came back and the contract
+  kept asserting, against the wrong method. It now prefers a declaration.
+- `GameTaskBoundingContractTests` scanned a hard-coded list of files for unbounded awaits. Left
+  alone it would have kept scanning the base file only, so the first bare `await` written in a room
+  file would have wedged a request with nothing red to show for it. It enumerates now.
+- The gate self-test reported PASS for three cases that were failing with "missing required file".
+  `Assert-Case` only checked for a non-zero exit, so any failure looked like the failure the case was
+  written to provoke. Every case now declares the message it expects.
+
+The lesson generalises past this refactor: **a check that reads source by path carries a dependency
+the compiler will not enforce.** When a file moves, go looking for the checks that named it.
 
 ### Where new code goes
 
-- A new **action**: handler and stabilizer in `GameActionService.cs`, following the existing
-  `Execute*` / `WaitFor*` pair. Its availability goes in **both** action surfaces until ADR 0001
-  lands; `ActionSurface.*` fails by name if only one is updated.
-- A new **state field**: the payload record and its builder in `GameStateService.cs`, the compact
-  projection in the matching `BuildAgent*` method, and a row in `docs/api.md` -- the `api-facts`
-  gate refuses a field that no table names.
-- Anything **not** state-building or action-executing: a new file. Both monoliths are already past
-  the point where adding to them is free, and the budgets say so out loud.
+- A new **action**: handler and stabilizer in the `GameActionService` partial for its room, following
+  the existing `Execute*` / `WaitFor*` pair, and its name in the dispatch switch in
+  `GameActionService.cs`. Its availability goes in `EnumerateAvailableActions` -- **one place**,
+  since [ADR 0001](../../../docs/adr/0001-single-action-surface.md) collapsed the two action
+  surfaces; `ActionSurface.*` fails if either surface starts deciding for itself again.
+- A new **state field**: the payload record in `GameStateService.Payloads.cs`, its builder in
+  `GameStateService.cs`, the compact projection in the matching `BuildAgent*` method in
+  `GameStateService.AgentView.cs`, and a row in `docs/api.md` -- the `api-facts` gate refuses a
+  field that no table names.
+- Anything **not** state-building or action-executing: a new file. Every file in the table above is
+  already past the point where adding to it is free, and the budgets say so out loud.

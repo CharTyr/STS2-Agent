@@ -7,8 +7,9 @@
 
 更新时间：`2026-03-10`
 
-> 下文引用反编译源码时用的 `../extraction/decompiled/**` 链接指向本地反编译目录（已 gitignore），
-> 在 GitHub 与全新检出上并不存在；它们的作用是给出类名与命名空间的定位，不是可点击的来源。
+> 下文引用反编译源码时写成 `extraction/decompiled/**` 路径而**不是链接**：那个目录已 gitignore，
+> 在 GitHub 与全新检出上并不存在。它们的作用是给出类名与命名空间的定位，点不开是本来就点不开——
+> 写成链接会是一句做不到的承诺，`doc-links` 闸门也会照直报红。
 
 本文档只基于 **Slay the Spire 2** 的 `sts2.dll` 反编译结果整理，**不是 1 代**。
 
@@ -60,9 +61,9 @@
 
 反编译入口：
 
-- [NTreasureRoom.cs](../extraction/decompiled/MegaCrit.Sts2.Core.Nodes.Rooms/NTreasureRoom.cs)
-- [NTreasureRoomRelicCollection.cs](../extraction/decompiled/MegaCrit.Sts2.Core.Nodes.Screens.TreasureRoomRelic/NTreasureRoomRelicCollection.cs)
-- [TreasureRoomRelicSynchronizer.cs](../extraction/decompiled/MegaCrit.Sts2.Core.Multiplayer.Game/TreasureRoomRelicSynchronizer.cs)
+- `extraction/decompiled/MegaCrit.Sts2.Core.Nodes.Rooms/NTreasureRoom.cs`
+- `extraction/decompiled/MegaCrit.Sts2.Core.Nodes.Screens.TreasureRoomRelic/NTreasureRoomRelicCollection.cs`
+- `extraction/decompiled/MegaCrit.Sts2.Core.Multiplayer.Game/TreasureRoomRelicSynchronizer.cs`
 
 关键事实：
 
@@ -94,10 +95,10 @@
 
 反编译入口：
 
-- [NEventRoom.cs](../extraction/decompiled/MegaCrit.Sts2.Core.Nodes.Rooms/NEventRoom.cs)
-- [EventOption.cs](../extraction/decompiled/MegaCrit.Sts2.Core.Events/EventOption.cs)
-- [NEventOptionButton.cs](../extraction/decompiled/MegaCrit.Sts2.Core.Nodes.Events/NEventOptionButton.cs)
-- [EventSynchronizer.cs](../extraction/decompiled/MegaCrit.Sts2.Core.Multiplayer.Game/EventSynchronizer.cs)
+- `extraction/decompiled/MegaCrit.Sts2.Core.Nodes.Rooms/NEventRoom.cs`
+- `extraction/decompiled/MegaCrit.Sts2.Core.Events/EventOption.cs`
+- `extraction/decompiled/MegaCrit.Sts2.Core.Nodes.Events/NEventOptionButton.cs`
+- `extraction/decompiled/MegaCrit.Sts2.Core.Multiplayer.Game/EventSynchronizer.cs`
 
 关键事实：
 
@@ -144,9 +145,9 @@
 
 反编译入口：
 
-- [NEventRoom.cs](../extraction/decompiled/MegaCrit.Sts2.Core.Nodes.Rooms/NEventRoom.cs)
-- [NRun.cs](../extraction/decompiled/MegaCrit.Sts2.Core.Nodes/NRun.cs)
-- [ActiveScreenContext.cs](../extraction/decompiled/MegaCrit.Sts2.Core.Nodes.Screens.ScreenContext/ActiveScreenContext.cs)
+- `extraction/decompiled/MegaCrit.Sts2.Core.Nodes.Rooms/NEventRoom.cs`
+- `extraction/decompiled/MegaCrit.Sts2.Core.Nodes/NRun.cs`
+- `extraction/decompiled/MegaCrit.Sts2.Core.Nodes.Screens.ScreenContext/ActiveScreenContext.cs`
 
 关键事实：
 
@@ -176,10 +177,10 @@
 
 反编译入口：
 
-- [NRestSiteRoom.cs](../extraction/decompiled/MegaCrit.Sts2.Core.Nodes.Rooms/NRestSiteRoom.cs)
-- [RestSiteOption.cs](../extraction/decompiled/MegaCrit.Sts2.Core.Entities.RestSite/RestSiteOption.cs)
-- [NRestSiteButton.cs](../extraction/decompiled/MegaCrit.Sts2.Core.Nodes.RestSite/NRestSiteButton.cs)
-- [RestSiteSynchronizer.cs](../extraction/decompiled/MegaCrit.Sts2.Core.Multiplayer.Game/RestSiteSynchronizer.cs)
+- `extraction/decompiled/MegaCrit.Sts2.Core.Nodes.Rooms/NRestSiteRoom.cs`
+- `extraction/decompiled/MegaCrit.Sts2.Core.Entities.RestSite/RestSiteOption.cs`
+- `extraction/decompiled/MegaCrit.Sts2.Core.Nodes.RestSite/NRestSiteButton.cs`
+- `extraction/decompiled/MegaCrit.Sts2.Core.Multiplayer.Game/RestSiteSynchronizer.cs`
 
 关键事实：
 
@@ -226,7 +227,7 @@
 
 反编译入口：
 
-- [SmithRestSiteOption.cs](../extraction/decompiled/MegaCrit.Sts2.Core.Entities.RestSite/SmithRestSiteOption.cs)
+- `extraction/decompiled/MegaCrit.Sts2.Core.Entities.RestSite/SmithRestSiteOption.cs`
 
 关键事实：
 
@@ -255,11 +256,11 @@
 
 反编译入口：
 
-- [NMerchantRoom.cs](../extraction/decompiled/MegaCrit.Sts2.Core.Nodes.Rooms/NMerchantRoom.cs)
-- [NMerchantInventory.cs](../extraction/decompiled/MegaCrit.Sts2.Core.Nodes.Screens.Shops/NMerchantInventory.cs)
-- [MerchantInventory.cs](../extraction/decompiled/MegaCrit.Sts2.Core.Entities.Merchant/MerchantInventory.cs)
-- [NMerchantSlot.cs](../extraction/decompiled/MegaCrit.Sts2.Core.Nodes.Screens.Shops/NMerchantSlot.cs)
-- [NMerchantCardRemoval.cs](../extraction/decompiled/MegaCrit.Sts2.Core.Nodes.Screens.Shops/NMerchantCardRemoval.cs)
+- `extraction/decompiled/MegaCrit.Sts2.Core.Nodes.Rooms/NMerchantRoom.cs`
+- `extraction/decompiled/MegaCrit.Sts2.Core.Nodes.Screens.Shops/NMerchantInventory.cs`
+- `extraction/decompiled/MegaCrit.Sts2.Core.Entities.Merchant/MerchantInventory.cs`
+- `extraction/decompiled/MegaCrit.Sts2.Core.Nodes.Screens.Shops/NMerchantSlot.cs`
+- `extraction/decompiled/MegaCrit.Sts2.Core.Nodes.Screens.Shops/NMerchantCardRemoval.cs`
 
 关键事实：
 
@@ -306,8 +307,8 @@
 
 反编译入口：
 
-- [NPotionHolder.cs](../extraction/decompiled/MegaCrit.Sts2.Core.Nodes.Potions/NPotionHolder.cs)
-- [NPotionPopup.cs](../extraction/decompiled/MegaCrit.Sts2.Core.Nodes.Potions/NPotionPopup.cs)
+- `extraction/decompiled/MegaCrit.Sts2.Core.Nodes.Potions/NPotionHolder.cs`
+- `extraction/decompiled/MegaCrit.Sts2.Core.Nodes.Potions/NPotionPopup.cs`
 
 关键事实：
 
@@ -350,7 +351,7 @@
 
 反编译入口：
 
-- [NCharacterSelectScreen.cs](../extraction/decompiled/MegaCrit.Sts2.Core.Nodes.Screens.CharacterSelect/NCharacterSelectScreen.cs)
+- `extraction/decompiled/MegaCrit.Sts2.Core.Nodes.Screens.CharacterSelect/NCharacterSelectScreen.cs`
 
 关键事实：
 
@@ -385,7 +386,7 @@
 
 反编译入口：
 
-- [NGameOverScreen.cs](../extraction/decompiled/MegaCrit.Sts2.Core.Nodes.Screens.GameOverScreen/NGameOverScreen.cs)
+- `extraction/decompiled/MegaCrit.Sts2.Core.Nodes.Screens.GameOverScreen/NGameOverScreen.cs`
 
 关键事实：
 
@@ -420,9 +421,9 @@
 
 反编译入口：
 
-- [NOverlayStack.cs](../extraction/decompiled/MegaCrit.Sts2.Core.Nodes.Screens.Overlays/NOverlayStack.cs)
-- [ActiveScreenContext.cs](../extraction/decompiled/MegaCrit.Sts2.Core.Nodes.Screens.ScreenContext/ActiveScreenContext.cs)
-- [AutoSlayer.cs](../extraction/decompiled/MegaCrit.Sts2.Core.AutoSlay/AutoSlayer.cs)
+- `extraction/decompiled/MegaCrit.Sts2.Core.Nodes.Screens.Overlays/NOverlayStack.cs`
+- `extraction/decompiled/MegaCrit.Sts2.Core.Nodes.Screens.ScreenContext/ActiveScreenContext.cs`
+- `extraction/decompiled/MegaCrit.Sts2.Core.AutoSlay/AutoSlayer.cs`
 
 关键事实：
 
@@ -440,9 +441,9 @@
 
 反编译入口：
 
-- [NModalContainer](../extraction/decompiled/Properties/AssemblyInfo.cs)
-- [AutoSlayer.cs](../extraction/decompiled/MegaCrit.Sts2.Core.AutoSlay/AutoSlayer.cs)
-- [SaveManager.cs](../extraction/decompiled/MegaCrit.Sts2.Core.Saves/SaveManager.cs)
+- `extraction/decompiled/Properties/AssemblyInfo.cs`
+- `extraction/decompiled/MegaCrit.Sts2.Core.AutoSlay/AutoSlayer.cs`
+- `extraction/decompiled/MegaCrit.Sts2.Core.Saves/SaveManager.cs`
 
 关键事实：
 
@@ -464,10 +465,10 @@
 
 反编译入口：
 
-- [EventSynchronizer.cs](../extraction/decompiled/MegaCrit.Sts2.Core.Multiplayer.Game/EventSynchronizer.cs)
-- [RestSiteSynchronizer.cs](../extraction/decompiled/MegaCrit.Sts2.Core.Multiplayer.Game/RestSiteSynchronizer.cs)
-- [TreasureRoomRelicSynchronizer.cs](../extraction/decompiled/MegaCrit.Sts2.Core.Multiplayer.Game/TreasureRoomRelicSynchronizer.cs)
-- [MapSelectionSynchronizer.cs](../extraction/decompiled/MegaCrit.Sts2.Core.Multiplayer.Game/MapSelectionSynchronizer.cs)
+- `extraction/decompiled/MegaCrit.Sts2.Core.Multiplayer.Game/EventSynchronizer.cs`
+- `extraction/decompiled/MegaCrit.Sts2.Core.Multiplayer.Game/RestSiteSynchronizer.cs`
+- `extraction/decompiled/MegaCrit.Sts2.Core.Multiplayer.Game/TreasureRoomRelicSynchronizer.cs`
+- `extraction/decompiled/MegaCrit.Sts2.Core.Multiplayer.Game/MapSelectionSynchronizer.cs`
 
 关键事实：
 

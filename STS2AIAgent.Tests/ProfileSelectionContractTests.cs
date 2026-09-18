@@ -8,13 +8,13 @@ internal static class ProfileSelectionContractTests
 {
     public static void NativeProfileIdentityAndSwitchAreWiredEndToEnd()
     {
-        var actionSource = WithoutWhitespace(ReadSource("STS2AIAgent/Game/GameActionService.cs"));
-        var stateSource = WithoutWhitespace(ReadSource("STS2AIAgent/Game/GameStateService.cs"));
+        var actionSource = WithoutWhitespace(AgentSourceFixture.ReadActionService());
+        var stateSource = WithoutWhitespace(AgentSourceFixture.ReadStateService());
 
         Assert.Contains("native_profile_id=SaveManager.Instance.CurrentProfileId", stateSource, StringComparison.Ordinal);
         Assert.Contains("native_profile_id=nativeProfileId", stateSource, StringComparison.Ordinal);
         Assert.Contains("profiles=new[]", stateSource, StringComparison.Ordinal);
-        Assert.Contains("names.Add(\"switch_profile\")", stateSource, StringComparison.Ordinal);
+        Assert.Contains("name=\"switch_profile\"", stateSource, StringComparison.Ordinal);
         Assert.Contains("\"switch_profile\"=>ExecuteSwitchProfileAsync(request)", actionSource, StringComparison.Ordinal);
         Assert.Contains("profileIdis<1or>3", actionSource, StringComparison.Ordinal);
         Assert.Contains("SaveManager.Instance.SwitchProfileId(profileId)", actionSource, StringComparison.Ordinal);

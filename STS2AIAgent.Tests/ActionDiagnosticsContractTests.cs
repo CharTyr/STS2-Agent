@@ -12,7 +12,6 @@ namespace STS2AIAgent.Tests;
 /// </summary>
 internal static class ActionDiagnosticsContractTests
 {
-    private const string ActionPath = "STS2AIAgent/Game/GameActionService.cs";
 
     /// <summary>
     /// A faulted game task reports the exception that faulted it.
@@ -32,7 +31,7 @@ internal static class ActionDiagnosticsContractTests
     /// </remarks>
     public static void FaultedGameTasksNameTheirException()
     {
-        var source = AgentSourceFixture.Read(ActionPath);
+        var source = AgentSourceFixture.ReadActionService();
         var body = AgentSourceFixture.WithoutWhitespace(
             AgentSourceFixture.DeclarationBody(source, "private static string DescribeGameTaskFailure(Task task)"));
 
@@ -89,7 +88,7 @@ internal static class ActionDiagnosticsContractTests
 
     public static void NoRecoveryCatchSwallowsWithoutSayingSo()
     {
-        var source = AgentSourceFixture.WithoutWhitespace(AgentSourceFixture.Read(ActionPath));
+        var source = AgentSourceFixture.WithoutWhitespace(AgentSourceFixture.ReadActionService());
 
         var match = EmptyCatch.Match(source);
         Assert.False(
@@ -99,13 +98,14 @@ internal static class ActionDiagnosticsContractTests
             + "'. Log it, or say in the body why it needs no log.");
 
         // The fallback chains that used to be wordless. Each step names itself, so a recovery that
-        // keeps failing is visible in the log instead of only in a stuck action.
+        // keeps failing is visible in the log instead of only in a stuck action. confirm_bundle and
+        // continue_game_over were on this list until their fallbacks were found to be calls into
+        // things the installed game does not have -- an undeclared method and a signal NButton does
+        // not carry -- and were deleted rather than logged.
         foreach (var chain in new[]
                  {
                      "TryCancelRunningPlayerAction",
                      "DrainRewardFlowAsync",
-                     "confirm_bundle",
-                     "continue_game_over",
                  })
         {
             Assert.Contains(

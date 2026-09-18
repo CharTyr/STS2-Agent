@@ -7,12 +7,11 @@ namespace STS2AIAgent.Tests;
 /// </summary>
 internal static class InviteCoopContractTests
 {
-    private const string StatePath = "STS2AIAgent/Game/GameStateService.cs";
     private const string Guard = "if (CanInviteAiTeammate(currentScreen))";
 
     public static void ActionIsAdvertisedBehindTheStructuralProbe()
     {
-        var state = AgentSourceFixture.Read(StatePath);
+        var state = AgentSourceFixture.ReadStateService();
         var probe = AgentSourceFixture.MethodBody(state, "CanInviteAiTeammate");
         Assert.Contains("currentScreen is not NMainMenu mainMenu || !mainMenu.IsVisibleInTree()", probe, StringComparison.Ordinal);
         Assert.Contains("CoopLaunchPolicy.GetStructuralError", probe, StringComparison.Ordinal);
@@ -21,20 +20,15 @@ internal static class InviteCoopContractTests
         Assert.Contains("AgentRuntime.Instance?.DualLaunching == true", probe, StringComparison.Ordinal);
         Assert.True(!probe.Contains("ReadyToInvite", StringComparison.Ordinal), "Advertising invite must not require a verified play model.");
 
-        var descriptors = AgentSourceFixture.MethodBody(state, "BuildAvailableActionsPayload");
-        Assert.Contains(Guard, descriptors, StringComparison.Ordinal);
-        Assert.Contains("name = \"invite_ai_teammate\"", descriptors, StringComparison.Ordinal);
+        // Both surfaces report one walk, so the guard is pinned once.
+        var walker = AgentSourceFixture.DeclarationBody(
+            state,
+            "private static List<ActionDescriptor> EnumerateAvailableActions(");
+        Assert.Contains(Guard, walker, StringComparison.Ordinal);
+        Assert.Contains("name = \"invite_ai_teammate\"", walker, StringComparison.Ordinal);
         Assert.True(
-            !descriptors.Contains("currentScreen is NMainMenu inviteMenu && inviteMenu.IsVisibleInTree()", StringComparison.Ordinal),
-            "invite_ai_teammate descriptors must not use the unguarded main-menu check.");
-
-        var names = AgentSourceFixture.MethodBody(state, "BuildAvailableActionNames");
-        Assert.Contains(Guard, names, StringComparison.Ordinal);
-        Assert.Contains("names.Add(\"invite_ai_teammate\")", names, StringComparison.Ordinal);
-        Assert.True(
-            !names.Contains("currentScreen is NMainMenu mainMenu && mainMenu.IsVisibleInTree()", StringComparison.Ordinal)
-                || names.IndexOf(Guard, StringComparison.Ordinal) >= 0,
-            "invite_ai_teammate names must go through CanInviteAiTeammate.");
+            !walker.Contains("currentScreen is NMainMenu inviteMenu && inviteMenu.IsVisibleInTree()", StringComparison.Ordinal),
+            "invite_ai_teammate must not use the unguarded main-menu check.");
     }
 
     /// <summary>
@@ -43,7 +37,7 @@ internal static class InviteCoopContractTests
     /// </summary>
     public static void PendingExecutorReturnsTaskWithoutAsync()
     {
-        var source = AgentSourceFixture.Read("STS2AIAgent/Game/GameActionService.cs");
+        var source = AgentSourceFixture.ReadActionService();
         Assert.Contains(
             "private static Task<ActionResponsePayload> ExecuteInviteAiTeammateAsync()",
             source,

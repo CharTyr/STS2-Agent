@@ -73,7 +73,7 @@ internal static class MenuWaitObservationTests
     /// </summary>
     public static void MenuWaitsDoNotTreatALostNodeAsSuccess()
     {
-        var source = AgentSourceFixture.Read("STS2AIAgent/Game/GameActionService.cs");
+        var source = AgentSourceFixture.ReadActionService();
 
         var submenuWait = Body(source, "private static async Task<bool> WaitForMainMenuSubmenuOpenAsync<TSubmenu>");
         var characterSelectWait = Body(source, "private static async Task<bool> WaitForCharacterSelectionTransitionAsync(");
@@ -123,7 +123,7 @@ internal static class MenuWaitObservationTests
     /// </summary>
     public static void ConsoleTimeoutNeverReportsCompletion()
     {
-        var source = AgentSourceFixture.Read("STS2AIAgent/Game/GameActionService.cs");
+        var source = AgentSourceFixture.ReadActionService();
         var body = Body(source, "private static async Task<ActionResponsePayload> ExecuteConsoleCommandCoreAsync(");
 
         var statusStart = body.IndexOf("status=", StringComparison.Ordinal);

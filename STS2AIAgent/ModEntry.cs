@@ -30,6 +30,9 @@ public static class ModEntry
         GameEventService.Instance.Start();
         HttpServer.Instance.Start();
         AgentRuntime.Instance.Initialize();
+        // Before anything asks for a private game member, so a renamed one is in the log a player
+        // attaches to a bug report rather than only on an endpoint they have never called.
+        ReflectedGameMembers.ProbeAtStartup();
         if (InstanceRole.IsCompanion || IsHeadlessDisplay())
         {
             Log.Info($"{LogPrefix} Skipping overlay (companion={InstanceRole.IsCompanion}, headless={IsHeadlessDisplay()})");
