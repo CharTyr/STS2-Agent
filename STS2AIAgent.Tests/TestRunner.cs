@@ -525,6 +525,16 @@ internal static class TestRunner
         yield return ("MonsterMoves.FromTheLocTableDirectly", () => Task.Run(MonsterMovesExportContractTests.MovesComeFromTheLocalizationTableDirectly));
         yield return ("MonsterMoves.OnlyTitles", () => Task.Run(MonsterMovesExportContractTests.OnlyTheTitleOfEachMoveIsExported));
         yield return ("MonsterMoves.PrefixFromTitleKey", () => Task.Run(MonsterMovesExportContractTests.ThePrefixFollowsTheMonstersOwnTitleKey));
+        yield return ("HandlerContract.RefusesBySurfaceRule", () => Task.Run(HandlerBehaviourContractTests.EachHandlerRefusesByTheRuleTheSurfaceOffersBy));
+        yield return ("HandlerContract.ReportsWhatItObserved", () => Task.Run(HandlerBehaviourContractTests.EachHandlerReportsWhatItObserved));
+        yield return ("HandlerContract.Potions", () => Task.Run(HandlerBehaviourContractTests.PotionsAreRefusedPreciselyAndQueuedLikeTheGameDoes));
+        yield return ("HandlerContract.TreasureRelic", () => Task.Run(HandlerBehaviourContractTests.TreasureRelicsAreChosenThroughTheSynchronizer));
+        yield return ("HandlerContract.MissingButtonsAreTransient", () => Task.Run(HandlerBehaviourContractTests.MissingButtonsAreTransientNotRefusals));
+        yield return ("HandlerContract.TimelineOverlayRevalidates", () => Task.Run(HandlerBehaviourContractTests.TimelineOverlayRevalidatesBeforeEachClick));
+        yield return ("HandlerContract.CrystalToolReadBack", () => Task.Run(HandlerBehaviourContractTests.CrystalToolIsConfirmedByReadingItBack));
+        yield return ("HandlerContract.AscensionOneStep", () => Task.Run(HandlerBehaviourContractTests.AscensionMovesOneStepThroughTheLobby));
+        yield return ("HandlerContract.GameOverWait", () => Task.Run(HandlerBehaviourContractTests.GameOverWaitIsDismissedOnlyWhileWaiting));
+        yield return ("HandlerContract.LobbyDisconnect", () => Task.Run(HandlerBehaviourContractTests.LobbyDisconnectQuitsThroughTheRegistry));
         yield return ("AbandonRun.StopsAtTheConfirmation", () => Task.Run(AbandonRunContractTests.AbandonRunStopsAtTheConfirmation));
         yield return ("AbandonRun.RefusesRatherThanClickingBlind", () => Task.Run(AbandonRunContractTests.AbandonRunRefusesRatherThanClickingBlind));
         yield return ("ReflectedMembers.DeclaredWinsOverBaseOverload", () => Task.Run(ReflectedMemberResolverTests.ADeclaredMethodIsFoundDespiteAPublicBaseMethodOfTheSameName));

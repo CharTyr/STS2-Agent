@@ -100,7 +100,14 @@ internal static partial class GameActionService
             }
             else
             {
-                var characterSelectScreen = mainMenu.SubmenuStack.GetSubmenuType<NCharacterSelectScreen>();
+                // Checked like the singleplayer submenu above: an unchecked null here reached the caller
+                // as a 500 rather than as the transient state it is.
+                var characterSelectScreen = mainMenu.SubmenuStack.GetSubmenuType<NCharacterSelectScreen>()
+                    ?? throw new ApiException(503, "state_unavailable", "Character select screen is unavailable.", new
+                    {
+                        action = "open_character_select",
+                        screen
+                    }, retryable: true);
                 characterSelectScreen.InitializeSingleplayer();
                 mainMenu.SubmenuStack.Push(characterSelectScreen);
             }
