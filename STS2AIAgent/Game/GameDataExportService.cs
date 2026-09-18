@@ -210,21 +210,56 @@ internal static class GameDataExportService
 
     private static object[] BuildMonsterMoves(MonsterModel monster)
     {
-        var prefix = $"{monster.Id.Entry}.moves.";
-        var moveNamesProperty = monster.GetType().GetProperty("MoveNames", BindingFlags.Public | BindingFlags.Instance);
-        if (moveNamesProperty?.GetValue(monster) is not IEnumerable moveNames)
+        // The localization base is whatever the monster's own Title is keyed under, not its id. For
+        // almost every monster the two agree (`X.name` -> `X`). They differ when monsters share their
+        // text: the three DECIMILLIPEDE_SEGMENT_* segments are all titled `DECIMILLIPEDE_SEGMENT.name`,
+        // so keying by id found nothing and all three exported `moves: []`.
+        var locBase = LocalizationBase(monster);
+        var prefix = $"{locBase}.moves.";
+
+        // This used to read a public MonsterModel.MoveNames property by reflection. The game removed
+        // that property, the lookup returned null, and every monster in GET /data/monsters exported
+        // `moves: []` with nothing anywhere saying so. MoveNames was only ever this table query, and
+        // everything in it is public, so it is called directly now: if the game renames any of it,
+        // the build fails instead of the export quietly emptying.
+        IEnumerable moveNames;
+        try
         {
+            moveNames = LocManager.Instance.GetTable("monsters").GetLocStringsWithPrefix(locBase + ".moves");
+        }
+        catch (Exception ex) when (ex is KeyNotFoundException or InvalidOperationException or NullReferenceException)
+        {
+            // The table is created by the game's localization manager; before it is loaded there is
+            // nothing to export, which is a state, not a defect.
             return Array.Empty<object>();
         }
 
+        // A move's name is its `.title` key -- the game builds exactly that in
+        // MonsterModel.GetBestiaryMoveName: `{Id}.moves.{moveId}.title`. The same prefix also holds
+        // the move's dialogue (`banter`, `speakLine`, `speakLineInitial`, `deadDoorSpeakLine`), and
+        // exporting every entry under it made FAKE_MERCHANT_MONSTER's ENRAGE appear three times, two
+        // of them taunts. Live on 2026-09-18, nine monsters carried duplicates like that.
         return moveNames
             .Cast<object>()
-            .Select(locString => new
+            .Select(locString => (locString, key: GetLocEntryKey(locString)))
+            .Where(entry => entry.key.StartsWith(prefix, StringComparison.Ordinal) &&
+                            entry.key.EndsWith(MoveTitleSuffix, StringComparison.Ordinal))
+            .Select(entry => new
             {
-                id = ExtractKeySegment(GetLocEntryKey(locString), prefix),
-                name = GetFormattedLocString(locString)
+                id = ExtractKeySegment(entry.key, prefix),
+                name = GetFormattedLocString(entry.locString)
             })
             .ToArray<object>();
+    }
+
+    private const string MoveTitleSuffix = ".title";
+
+    private static string LocalizationBase(MonsterModel monster)
+    {
+        var titleKey = monster.Title?.LocEntryKey;
+        return !string.IsNullOrEmpty(titleKey) && titleKey.EndsWith(".name", StringComparison.Ordinal)
+            ? TrimKnownSuffix(titleKey, ".name")
+            : monster.Id.Entry;
     }
 
     private static string GetLocEntryKey(object value)
