@@ -681,6 +681,26 @@ try {
             Write-Host "PASS  doc-links gate rejects a line anchor past the end of the file"
         }
 
+        # A #L anchor inside the file is no safer, only quieter: it lands on whatever line 1 is
+        # today. When the specs' 41 anchors were replaced, one named build_parser and pointed into
+        # another function, and three test links landed on blank lines -- all of them in range.
+        Write-Utf8 (Join-Path $linkFixture "docs/guide.md") ("# Guide" + [char]10 + [char]10 + "[back](../README.md)" + [char]10 + [char]10 + "[in range](../README.md#L1)" + [char]10)
+        $linkAddInRange = Invoke-Git -Path $linkFixture -Arguments @("add", "-A")
+        if ($linkAddInRange.ExitCode -ne 0) { throw "fixture setup failed: git add -A before the in-range line-anchor case" }
+        $linkInRange = Invoke-Gate -Fixture $linkFixture -Only "doc-links"
+        if ($linkInRange.ExitCode -eq 0) {
+            Write-Host "FAIL  doc-links gate rejects a line anchor inside the file (gate accepted a line anchor)"
+            $script:failures++
+        }
+        elseif (((($linkInRange.Output -join "") -replace "[\s]", "")) -notmatch "README\.md#L1") {
+            Write-Host "FAIL  doc-links gate names the in-range line anchor"
+            Write-Host $linkInRange.Output
+            $script:failures++
+        }
+        else {
+            Write-Host "PASS  doc-links gate rejects a line anchor inside the file"
+        }
+
         Write-Utf8 (Join-Path $linkFixture "docs/guide.md") ("# Guide" + [char]10 + [char]10 + "[back](../README.md)" + [char]10 + [char]10 + "[moved](./fixture-no-such-page.md)" + [char]10)
         $linkAdd2 = Invoke-Git -Path $linkFixture -Arguments @("add", "-A")
         if ($linkAdd2.ExitCode -ne 0) { throw "fixture setup failed: git add -A after the doc-links mutation" }

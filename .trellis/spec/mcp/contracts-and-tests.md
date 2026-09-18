@@ -13,34 +13,34 @@ retry_count = 0 if action_post else self._max_retries
 attempts = 1 + retry_count
 ```
 
-`Sts2ApiError` exposes `status_code`, `code`, `message`, `details`, and `retryable`. The [client definition](../../../mcp_server/src/sts2_mcp/client.py#L55) uses synchronous `urllib.request` transport; `iter_events` and `wait_for_event` are synchronous iterators/helpers as well.
+`Sts2ApiError` exposes `status_code`, `code`, `message`, `details`, and `retryable`. The client, `Sts2Client` in [client.py](../../../mcp_server/src/sts2_mcp/client.py), uses synchronous `urllib.request` transport; `iter_events` and `wait_for_event` are synchronous iterators/helpers as well.
 
-Ordinary reads may retry according to the client retry settings. An action is a `POST /action` request and is never automatically replayed. If its response cannot be read, is not valid JSON, or violates the action envelope, the client returns `status: "outcome_unknown"`, marks the response as not stable, and performs at most one `GET /state` reconciliation. The [request loop](../../../mcp_server/src/sts2_mcp/client.py#L265) and [reconciliation result](../../../mcp_server/src/sts2_mcp/client.py#L397) are the source of truth.
+Ordinary reads may retry according to the client retry settings. An action is a `POST /action` request and is never automatically replayed. If its response cannot be read, is not valid JSON, or violates the action envelope, the client returns `status: "outcome_unknown"`, marks the response as not stable, and performs at most one `GET /state` reconciliation. `Sts2Client._request` and `_reconcile_action_state_once` in [client.py](../../../mcp_server/src/sts2_mcp/client.py) are the source of truth.
 
-Action responses must be JSON objects with a boolean `ok`. A failed envelope must contain an object `error` with a non-empty string `code`, a string `message`, and a boolean `retryable`; malformed envelopes are `invalid_response`. See the [decoder](../../../mcp_server/src/sts2_mcp/client.py#L546).
+Action responses must be JSON objects with a boolean `ok`. A failed envelope must contain an object `error` with a non-empty string `code`, a string `message`, and a boolean `retryable`; malformed envelopes are `invalid_response`. See `_decode_action_response_envelope` in [client.py](../../../mcp_server/src/sts2_mcp/client.py).
 
 ## Tool registration contract
 
-The [server profile normalizer](../../../mcp_server/src/sts2_mcp/server.py#L136) defaults to `guided`, maps `planner` and `multi-agent` to `layered`, and maps `legacy` to `full`.
+`_normalize_tool_profile` in [server.py](../../../mcp_server/src/sts2_mcp/server.py) defaults to `guided`, maps `planner` and `multi-agent` to `layered`, and maps `legacy` to `full`.
 
 - Base tools are registered for every profile.
 - Planner, combat handoff, and knowledge tools are registered for `layered` and `full`.
 - Legacy per-action tools are registered only for `full`.
 - `run_console_command` is a separate debug tool enabled only when `STS2_ENABLE_DEBUG_ACTIONS` is truthy; it is deliberately excluded from compact `act`.
 
-These gates live in [server registration](../../../mcp_server/src/sts2_mcp/server.py#L150) and [debug/legacy registration](../../../mcp_server/src/sts2_mcp/server.py#L693). Keep the public profile names and the debug boundary stable when changing the tool surface.
+These gates live in `create_server` in [server.py](../../../mcp_server/src/sts2_mcp/server.py), which calls `_register_legacy_action_tools` for `full` and registers the debug tool only when `_debug_tools_enabled()`. Keep the public profile names and the debug boundary stable when changing the tool surface.
 
-Tool functions are ordinary synchronous `def` functions. FastMCP's tool listing is asynchronous, so tests commonly call `asyncio.run(server.get_tool("..."))` and then invoke `tool.fn(...)`. The [wait tests](../../../mcp_server/tests/test_waits.py#L142), [game-data tests](../../../mcp_server/tests/test_game_data_tools.py#L42), and [crystal-sphere tests](../../../mcp_server/tests/test_crystal_sphere_tools.py#L45) demonstrate this pattern.
+Tool functions are ordinary synchronous `def` functions. FastMCP's tool listing is asynchronous, so tests commonly call `asyncio.run(server.get_tool("..."))` and then invoke `tool.fn(...)`. `WaitBehaviorTests` in [test_waits.py](../../../mcp_server/tests/test_waits.py), `GameDataToolsTests` in [test_game_data_tools.py](../../../mcp_server/tests/test_game_data_tools.py) and `CrystalSphereToolTests` in [test_crystal_sphere_tools.py](../../../mcp_server/tests/test_crystal_sphere_tools.py) demonstrate this pattern.
 
 ## Test patterns
 
 Use the standard library `unittest` runner used by the project. Prefer small fakes over a live game:
 
-- A `DummyClient` with queued states verifies wait and tool behavior without HTTP; see [test_waits.py](../../../mcp_server/tests/test_waits.py#L23).
-- A `RecordingClient` verifies action arguments and call count; see [test_crystal_sphere_tools.py](../../../mcp_server/tests/test_crystal_sphere_tools.py#L11).
-- Patch `_ensure_game_data_index` when testing game-data selection and normalization; see [test_game_data_tools.py](../../../mcp_server/tests/test_game_data_tools.py#L51).
-- Patch `request.urlopen` and `time.sleep` to verify transport outcomes. The [replay-safety tests](../../../mcp_server/tests/test_action_replay_safety.py#L108) assert one action POST, no action retry, and one reconciliation GET for an ambiguous result.
-- The [native alignment test](../../../mcp_server/tests/test_native_tool_alignment.py#L97) compares the Python guided surface with the C# native MCP surface. Update both sides deliberately when a guided tool changes.
+- A `DummyClient` with queued states verifies wait and tool behavior without HTTP; see `DummyClient` in [test_waits.py](../../../mcp_server/tests/test_waits.py).
+- A `RecordingClient` verifies action arguments and call count; see `RecordingClient` in [test_crystal_sphere_tools.py](../../../mcp_server/tests/test_crystal_sphere_tools.py).
+- Patch `_ensure_game_data_index` when testing game-data selection and normalization; see `GameDataToolsTests` in [test_game_data_tools.py](../../../mcp_server/tests/test_game_data_tools.py).
+- Patch `request.urlopen` and `time.sleep` to verify transport outcomes. The replay-safety tests in [test_action_replay_safety.py](../../../mcp_server/tests/test_action_replay_safety.py) (for example `test_action_transport_failures_post_once_and_reconcile`) assert one action POST, no action retry, and one reconciliation GET for an ambiguous result.
+- `NativeToolAlignmentTests` in [test_native_tool_alignment.py](../../../mcp_server/tests/test_native_tool_alignment.py) compares the Python guided surface with the C# native MCP surface. Update both sides deliberately when a guided tool changes.
 
 ## Dependency refresh checklist
 
