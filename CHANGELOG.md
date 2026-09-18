@@ -106,6 +106,12 @@
 
 ### Fixed
 
+- **`open_character_select` could answer 500.** On the main menu it pushed the character select
+  screen without checking the submenu stack returned one; it now answers `503 state_unavailable`,
+  retryable, like every other control that is not there yet. Found while giving the eleven handlers
+  that had no behaviour contract one each (`HandlerContract.*`); `crystal_set_tool` now refuses by
+  the same predicate the action surface offers it by instead of a copy of it.
+
 - **`GET /data/monsters` exported `moves: []` for every monster.** The export read a public
   `MonsterModel.MoveNames` property by reflection; the game removed it, the lookup returned null, and
   the export emptied without a word. `MoveNames` had only ever wrapped a public localization query,

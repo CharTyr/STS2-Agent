@@ -143,8 +143,7 @@ internal static partial class GameActionService
     {
         var currentScreen = ActiveScreenContext.Instance.GetCurrentScreen();
         var screen = GameStateService.ResolveScreen(currentScreen);
-        var minigame = GameStateService.GetCrystalSphereMinigame(currentScreen);
-        if (minigame == null || minigame.IsFinished)
+        if (!GameStateService.CanPlayCrystalSphere(currentScreen))
         {
             throw new ApiException(409, "invalid_action", "Action is not available in the current state.", new
             {
