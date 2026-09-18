@@ -675,3 +675,23 @@ mod-side action.
 
 三轮 `/health` 均为 `ready`、23 / 0。玩家档案 `default/1`、`default/2`、`default/1001` 逐文件一致；
 `mods/` 三个文件还原到发布版哈希。
+
+**第七轮（`bc6ada6`，clientId `2026091807`）——失败，而且是离线看不出来的那种。** 注册表补登
+`NMultiplayerTest.StartHost` / `ReadyButtonPressed` / `Disconnect` 与 `NPauseMenu.CloseToMenu` 后，
+mod 加载即崩：注册表连基类一起搜，`NMultiplayerTest` 的私有 `Disconnect(NetError)` 与 Godot
+`GodotObject` 的公开 `Disconnect(StringName, Callable)` 同名，`GetMethod` 抛 `AmbiguousMatchException`。
+27 条在同一个 `Lazy` 里解析，异常被缓存，于是加载时自检、`/health` 与一切查注册表的动作都 500——
+连毫不相干的 `open_character_select` 也是。离线读元数据只证明了「这个名字在这个类型上」，
+证明不了「按这组标志找只找到一个」。
+
+**第七轮 b（`d9b9c02`，clientId `2026091808`）——通过。** 查找改为只看声明类型（27 条逐一核对均声明在所登记的类型上），
+解析器永不抛异常且离线用同形状的假类型复现了该异常：
+
+- `/health`：`ready`，27 / 0；日志 `Compatibility: all 27 reflected game members resolved.`，全会话 `Ambiguous` 0 处
+- `save_and_quit`（经注册表调 `CloseToMenu`）→ `continue_run` 回到同一局
+- `win` 进奖励页 → `collect_rewards_and_proceed` 回地图
+- `die` → `continue_game_over`（现在只靠 `ForceClick`）→ `return_to_main_menu`
+- 联机测试大厅 `host` / `ready` / `disconnect` 全部 `completed`——正是第七轮崩在的那条路径
+- `Completed 500` 0 次（第七轮 282 次）
+
+玩家档案 `default/1`、`default/2`、`default/1001` 逐文件一致；`mods/` 还原到发布版哈希。
