@@ -113,6 +113,13 @@
 
 ### Fixed
 
+- **A resumed combat could hide `end_turn` and `play_card` forever** (#151, by @XenoAmess). With an
+  empty hand, turn readiness required a recorded card play this turn, and that counter can be reset to
+  zero by the round transition after card effects have already emptied the hand -- so an agent polled
+  indefinitely. When the turn has started, an enabled native End Turn button is now also accepted as
+  evidence. The opening-draw guard is unchanged: the game enables that button only after the turn's
+  setup, draw included, has finished.
+
 - **`run.relics[].stack` was null for every relic.** It read `RelicModel.Amount`, which the game does
   not have. It is now the counter the relic shows (`DisplayAmount`, when `ShowCounter`), and null for
   a relic that shows none.
