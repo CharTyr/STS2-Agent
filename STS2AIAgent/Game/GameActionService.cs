@@ -344,7 +344,7 @@ internal static partial class GameActionService
 
             try
             {
-                rewardsScreen.Call("TryEnableProceedButton");
+                rewardsScreen.Call(NRewardsScreen.MethodName.TryEnableProceedButton);
             }
             catch (Exception ex)
             {
@@ -704,7 +704,7 @@ internal static partial class GameActionService
         var submenu = mainMenu.SubmenuStack.GetSubmenuType<NMultiplayerSubmenu>();
         if (submenu == null)
         {
-            mainMenu.Call("OpenMultiplayerSubmenu");
+            mainMenu.OpenMultiplayerSubmenu();
             await WaitForMainMenuSubmenuOpenAsync<NMultiplayerSubmenu>(mainMenu, TimeSpan.FromSeconds(5));
             submenu = mainMenu.SubmenuStack.GetSubmenuType<NMultiplayerSubmenu>()
                 ?? throw new InvalidOperationException(Loc.T("找不到多人子菜单。"));
@@ -960,7 +960,7 @@ internal static partial class GameActionService
         var submenu = mainMenu.SubmenuStack.GetSubmenuType<NMultiplayerSubmenu>();
         if (submenu == null)
         {
-            mainMenu.Call("OpenMultiplayerSubmenu");
+            mainMenu.OpenMultiplayerSubmenu();
             await WaitForMainMenuSubmenuOpenAsync<NMultiplayerSubmenu>(mainMenu, TimeSpan.FromSeconds(5), cancellationToken);
             submenu = mainMenu.SubmenuStack.GetSubmenuType<NMultiplayerSubmenu>()
                 ?? throw new InvalidOperationException(Loc.T("找不到多人子菜单。"));
@@ -1111,20 +1111,6 @@ internal static partial class GameActionService
         {
             Log.Error($"[STS2AIAgent] Background task {actionName} failed: {ex}");
         }
-    }
-
-    private static Task<T>? InvokePrivateTask<T>(object target, string methodName, params object?[] args)
-    {
-        const BindingFlags flags = BindingFlags.Instance | BindingFlags.NonPublic;
-        var method = target.GetType().GetMethod(methodName, flags);
-        return method?.Invoke(target, args) as Task<T>;
-    }
-
-    private static Task? InvokePrivateTask(object target, string methodName, params object?[] args)
-    {
-        const BindingFlags flags = BindingFlags.Instance | BindingFlags.NonPublic;
-        var method = target.GetType().GetMethod(methodName, flags);
-        return method?.Invoke(target, args) as Task;
     }
 
     private static async Task ObserveBackgroundResultCore(Task<bool> task, string actionName)

@@ -528,6 +528,9 @@ internal static class TestRunner
         yield return ("AbandonRun.StopsAtTheConfirmation", () => Task.Run(AbandonRunContractTests.AbandonRunStopsAtTheConfirmation));
         yield return ("AbandonRun.RefusesRatherThanClickingBlind", () => Task.Run(AbandonRunContractTests.AbandonRunRefusesRatherThanClickingBlind));
         yield return ("ReflectedMembers.NoLookupOutsideTheRegistry", () => Task.Run(ReflectedMemberRegistryTests.NothingLooksUpAGameMemberByNameOutsideTheRegistry));
+        yield return ("ReflectedMembers.NoNameTakingHelpers", () => Task.Run(ReflectedMemberRegistryTests.NoHelperTakesAGameMemberNameAsAParameter));
+        yield return ("ReflectedMembers.NoGodotCallByString", () => Task.Run(ReflectedMemberRegistryTests.GodotIsNeverCalledByAString));
+        yield return ("ReflectedMembers.GameButtonsAreClicked", () => Task.Run(ReflectedMemberRegistryTests.GameButtonsAreClickedRatherThanSignalled));
         yield return ("ReflectedMembers.CallsNameRegisteredMembers", () => Task.Run(ReflectedMemberRegistryTests.EveryRegistryCallNamesARegisteredMember));
         yield return ("ReflectedMembers.NoOrphanEntries", () => Task.Run(ReflectedMemberRegistryTests.EveryRegisteredMemberIsAskedFor));
         yield return ("ReflectedMembers.HealthStatusIsDerived", () => Task.Run(ReflectedMemberRegistryTests.HealthStatusComesFromTheProbe));

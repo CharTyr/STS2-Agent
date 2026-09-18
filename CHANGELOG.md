@@ -129,9 +129,25 @@
   `NEndTurnButton.CanTurnBeEnded`, whose private getter decides whether `end_turn` is ready, was
   one of them, and is now probed.
 
+- **Four private methods the compatibility probe could not see.** `host_multiplayer_lobby`,
+  `ready_multiplayer_lobby`, `disconnect_multiplayer_lobby` and `save_and_quit` called
+  `NMultiplayerTest.StartHost` / `ReadyButtonPressed` / `Disconnect` and `NPauseMenu.CloseToMenu`
+  through helpers that took the method name as a parameter, so the registry's scan -- which looked for
+  names written into `GetMethod` calls -- never saw them. They are registered and probed now (27
+  members), and a missing lobby handler answers `503 state_unavailable` instead of a 500.
+
+- **Clicks that could not land.** The game's `NButton` is a `Control`, not a Godot `BaseButton`, so it
+  has no `pressed` signal. `choose_capstone_option` only emitted that signal, and now clicks.
+  `confirm_bundle`'s fallbacks called `OnConfirmPressed`, which the screen does not declare, and emitted
+  the same missing signal; `continue_game_over` also emitted it, and set a `disabled` property the
+  button does not have, before the `ForceClick` that did the work. The dead steps are removed. Godot
+  calls by string (`Call("OpenMultiplayerSubmenu")` and three more) use compile-checked names now.
+  The stuck-tutorial fallback's method list is cut to the one name that can match.
+
 - **Four reflective reads that never resolved in the installed game.** `continue_game_over` tried
   three handler names on the button before emitting its pressed signal; none exists on a button
-  (`OnPressed` is declared nowhere, the other two live on `NMainMenu`). The game-over overlay tried
+  (`OnPressed` is declared nowhere, the other two live on `NMainMenu`), and the signal turned out to
+  be missing too -- see above. The game-over overlay tried
   two methods on `NGameOverScreen` that live on `NCombatRoom` and `NRewardsScreen`. All of them
   returned null on every call and sat in front of the code that did the real work, so nothing
   visible changes; the dead halves are removed rather than left looking like they do something.

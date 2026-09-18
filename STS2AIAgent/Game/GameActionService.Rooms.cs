@@ -632,8 +632,12 @@ internal static partial class GameActionService
             });
         }
 
+        // ForceClick, not the BaseButton pressed signal this used to emit: NButton derives from
+        // NClickableControl -> Control, not from Godot's BaseButton, so it has no "pressed" signal and
+        // emitting one did nothing. The constant compiled only because it names BaseButton, not the
+        // button's own type.
         var button = buttons[request.option_index.Value];
-        button.EmitSignal(BaseButton.SignalName.Pressed);
+        button.ForceClick();
 
         // Wait for screen transition
         var deadline = DateTime.UtcNow + TimeSpan.FromSeconds(10);
@@ -716,7 +720,7 @@ internal static partial class GameActionService
         // Call the screen's OnBundleClicked method directly
         if (currentScreen is NChooseABundleSelectionScreen bundleScreen)
         {
-            ((Node)bundleScreen).Call("OnBundleClicked", bundle);
+            ((Node)bundleScreen).Call(NChooseABundleSelectionScreen.MethodName.OnBundleClicked, bundle);
         }
 
         // Wait for screen transition
@@ -774,30 +778,13 @@ internal static partial class GameActionService
         confirmBtn.ForceClick();
         await WaitForNextFrameAsync();
 
-        // If still on bundle screen, try calling OnConfirmPressed on the screen
+        // There used to be two fallbacks here for a screen that had not moved on: calling the
+        // screen's OnConfirmPressed and emitting "pressed" on the button. Neither could work in the
+        // installed game -- NChooseABundleSelectionScreen declares no OnConfirmPressed, and NButton is
+        // a Control, not a Godot BaseButton, so it has no "pressed" signal. The click above is the
+        // only thing this handler has ever done; the wait below is what tells the caller whether it
+        // landed.
         var stable = false;
-        if (ActiveScreenContext.Instance.GetCurrentScreen() is NChooseABundleSelectionScreen bundleScreen2)
-        {
-            try
-            {
-                Log.Info("[STS2AIAgent] confirm_bundle: trying OnConfirmPressed");
-                ((Node)bundleScreen2).Call("OnConfirmPressed");
-            }
-            catch (Exception ex)
-            {
-                Log.Warn($"[STS2AIAgent] confirm_bundle: OnConfirmPressed failed: {ex}");
-            }
-
-            // Also try emitting the button's signal with no args
-            try
-            {
-                confirmBtn.EmitSignal("pressed");
-            }
-            catch (Exception ex)
-            {
-                Log.Warn($"[STS2AIAgent] confirm_bundle: emitting the pressed signal failed: {ex}");
-            }
-        }
 
         var deadline = DateTime.UtcNow + TimeSpan.FromSeconds(5);
         while (!stable && DateTime.UtcNow < deadline)

@@ -184,7 +184,7 @@ internal static partial class GameActionService
 
         var closeTimeout = TimeSpan.FromSeconds(20);
         var closeTimedOut = false;
-        var closeTask = InvokePrivateTask(pauseMenu, "CloseToMenu");
+        var closeTask = ReflectedGameMembers.Method(typeof(NPauseMenu), "CloseToMenu")?.Invoke(pauseMenu, null) as Task;
         if (closeTask != null)
         {
             var completedCloseTask = await WaitForGameTaskAsync(closeTask, closeTimeout);
@@ -567,9 +567,12 @@ internal static partial class GameActionService
                     screen
                 }, retryable: true);
 
+            // ForceClick is the whole of the click. Two steps used to precede it and neither did
+            // anything: Set("disabled", false) and emitting Button.SignalName.Pressed both assume a
+            // Godot BaseButton, and NGameOverContinueButton is an NButton -- NClickableControl ->
+            // Control -- with no "disabled" property and no "pressed" signal. Before that the helper
+            // also tried three handler names that no button declares.
             continueButton.Visible = true;
-            continueButton.Set("disabled", false);
-            TryInvokePressed(continueButton);
             continueButton.ForceClick();
         }
 
@@ -767,21 +770,5 @@ internal static partial class GameActionService
         }
 
         return null;
-    }
-
-    private static void TryInvokePressed(NButton button)
-    {
-        // This used to try three handlers by name first -- OnContinueButtonPressed, OnPressed and
-        // OnContinueButtonPressedAsync. None of them exists on a button in the installed game:
-        // OnPressed is declared nowhere, and the other two live on NMainMenu. All three lookups
-        // returned null on every call, so the signal below has always been the only thing this did.
-        try
-        {
-            button.EmitSignal(Button.SignalName.Pressed);
-        }
-        catch (Exception ex)
-        {
-            Log.Warn($"[STS2AIAgent] continue_game_over: emitting the pressed signal failed: {ex}");
-        }
     }
 }

@@ -98,7 +98,7 @@ internal static partial class GameActionService
             }
             else
             {
-                ((Node)patchNotes).Call("Close");
+                ((Node)patchNotes).Call(NPatchNotesScreen.MethodName.Close);
             }
 
             stable = await WaitForPatchNotesCloseAsync(patchNotes, TimeSpan.FromSeconds(10));

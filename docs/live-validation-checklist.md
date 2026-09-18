@@ -657,7 +657,9 @@ mod-side action.
 - 读取改了路径的功能逐一走通，**零 500 / 零 `internal_error`**：`combat.action_readiness`（`CanTurnBeEnded`）、
   `end_turn`（回合 1→2）、`run_console_command help`（`_devConsole`）、`save_and_quit`（`_saveAndQuitButton`）
   → `continue_run`（`_standardButton`）回到同一局，以及 `die` → `GAME_OVER` → `continue_game_over`
-  → `return_to_main_menu`——**删掉三个死查找后，pressed 信号那一半仍把结算流程推了下去**
+  → `return_to_main_menu`——删掉三个死查找后结算流程照常推进（**更正，同日稍晚**：当时归功于
+  「pressed 信号那一半」，是错的。`NButton` 是 `Control` 而非 Godot `BaseButton`，没有 pressed 信号，
+  那一发什么也没做；推动流程的是紧随其后的 `ForceClick()`。该信号与 `Set("disabled")` 已一并删除）
 - 日志 `error|exception|fatal` 扫描：只有三处 Godot 引擎自身的 `Invalid Task ID`，无源自本 mod 的异常
 
 玩家档案 `default/1`、`default/2`、`default/1001` 逐文件一致；`mods/` 还原到发布版 v0.12.5。

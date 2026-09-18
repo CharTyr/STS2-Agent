@@ -21,7 +21,11 @@ namespace STS2AIAgent.Tests;
 ///   method names went straight past it);
 /// - every <c>ReflectedGameMembers.Field</c> / <c>Method</c> / <c>Property</c> call names a registered member of the
 ///   right kind -- an unregistered one throws, and it would throw on a live request path;
-/// - every registered member is actually asked for, or the probe reports on something nothing reads.
+/// - every registered member is actually asked for, or the probe reports on something nothing reads;
+/// - no helper takes a member name as a parameter, except the few <c>NameTakingChannels</c> names --
+///   that is how four private lobby and pause-menu methods stayed invisible to the scan above;
+/// - Godot is never called by a string (<c>Call("X")</c>, <c>EmitSignal("x")</c>, <c>Set("x")</c>), and
+///   the game's buttons are clicked rather than sent a <c>BaseButton</c> signal they do not have.
 ///
 /// Duck-typed probing is a different thing and is allowed on purpose: <c>TryGetMemberValue</c> tries
 /// a list of candidate names across object shapes and accepts whichever exists, so no single name in
@@ -102,6 +106,41 @@ internal static class ReflectedMemberRegistryTests
             ["_prefs"] = "declared per concrete card-grid screen; the reader guards on the base type and fails safe",
             ["_selectedCards"] = "declared per concrete card-grid screen; the reader guards on the base type and fails safe",
         };
+
+    /// <summary>
+    /// Methods allowed to call <c>GetField</c> / <c>GetMethod</c> / <c>GetProperty</c> with a name held
+    /// in a variable, and why.
+    /// </summary>
+    /// <remarks>
+    /// A helper that takes the member name as a parameter hides every name its callers pass from the
+    /// literal scan above. That is not hypothetical: <c>InvokePrivateTask</c> and
+    /// <c>InvokePrivateVoid</c> carried StartHost, ReadyButtonPressed, Disconnect and CloseToMenu past
+    /// the first version of this contract, unprobed. Each entry here is a helper that is allowed to
+    /// exist; a new one has to be argued for by name.
+    /// </remarks>
+    private static readonly IReadOnlyDictionary<string, string> NameTakingChannels =
+        new Dictionary<string, string>(StringComparer.Ordinal)
+        {
+            ["FindMember"] = "ReflectionMemberAccessor: walks base types for a field or property whose owner varies; its private-name callers are held to the registry by the \"_x\" scan",
+            ["FindInstanceMethod"] = "tries CloseFtue on whichever FTUE modal is stuck, then falls back to NModalContainer.Clear()",
+            ["GetReflectedProperty"] = "reads a public property off a value typed object; answers null when it is absent",
+            ["TryReadCardTextMember"] = "tries candidate text members on a card and keeps the first non-empty one",
+        };
+
+    // A name in a variable: a lower-case identifier followed by an argument separator. nameof(...) is
+    // compile-checked and does not match, because "nameof" is followed by a parenthesis.
+    private static readonly Regex ReflectionByVariable = new(
+        @"\.(GetField|GetMethod|GetProperty)\(\s*([a-z][A-Za-z0-9_]*)\s*[,)]", RegexOptions.Compiled);
+    private static readonly Regex StaticMethodDeclaration = new(
+        @"\b(?:private|public|internal)\s+static\s+[^;{}()=]+?\s([A-Za-z_][A-Za-z0-9_]*)\s*(?:<[^<>()]*>)?\s*\(",
+        RegexOptions.Compiled);
+
+    // Godot's own by-name entry points. Each has a compile-checked form -- a MethodName, SignalName or
+    // PropertyName constant, or a direct call -- so a string here is always a choice not to be checked.
+    private static readonly Regex GodotCallByString = new(
+        @"\.(Call|CallDeferred|Set|Get|EmitSignal|HasMethod|HasSignal|Connect)\(\s*""", RegexOptions.Compiled);
+    private static readonly Regex GodotButtonSignal = new(
+        @"EmitSignal\(\s*(?:global::)?(?:Godot\.)?(?:Base)?Button\.SignalName\.", RegexOptions.Compiled);
 
     // .NET member names are PascalCase or _camelCase. JsonElement.GetProperty shares the method name
     // but reads the mod's own lower-case JSON keys ("ok", "data"), which are not game members; the
@@ -186,6 +225,88 @@ internal static class ReflectedMemberRegistryTests
             + "\n\nRegister the member and ask ReflectedGameMembers.Field/Method for it. A lookup of its own "
             + "is a second opinion on the binding flags -- which is how _longPressDuration was read with the "
             + "wrong ones for as long as the line existed.");
+    }
+
+    public static void NoHelperTakesAGameMemberNameAsAParameter()
+    {
+        var offenders = new SortedSet<string>(StringComparer.Ordinal);
+        var channelsSeen = new HashSet<string>(StringComparer.Ordinal);
+
+        foreach (var (path, text) in GameFacingSources(includeRegistry: false))
+        {
+            var declarations = StaticMethodDeclaration.Matches(text);
+            foreach (Match match in ReflectionByVariable.Matches(text))
+            {
+                var enclosing = declarations
+                    .Where(declaration => declaration.Index < match.Index)
+                    .Select(declaration => declaration.Groups[1].Value)
+                    .LastOrDefault() ?? "(no enclosing static method)";
+                if (NameTakingChannels.ContainsKey(enclosing))
+                {
+                    channelsSeen.Add(enclosing);
+                    continue;
+                }
+
+                offenders.Add($"{match.Groups[1].Value}({match.Groups[2].Value}) in {enclosing}, {Path.GetFileName(path)}");
+            }
+        }
+
+        Assert.True(
+            offenders.Count == 0,
+            "These look a member up by a name held in a variable, outside the declared channels:\n  "
+            + string.Join("\n  ", offenders)
+            + "\n\nA helper that takes the name as a parameter hides every caller's name from the literal "
+            + "scan -- which is how four private lobby and pause-menu methods went unprobed. Register the "
+            + "members and ask ReflectedGameMembers for them, or argue for the helper in NameTakingChannels.");
+
+        var unused = NameTakingChannels.Keys.Where(name => !channelsSeen.Contains(name)).OrderBy(name => name).ToArray();
+        Assert.True(
+            unused.Length == 0,
+            "NameTakingChannels lists helpers that no longer look anything up by a variable name: "
+            + string.Join(", ", unused)
+            + ". Drop them -- or, if they still do, the extraction in this test stopped seeing them.");
+    }
+
+    public static void GodotIsNeverCalledByAString()
+    {
+        var offenders = new SortedSet<string>(StringComparer.Ordinal);
+        foreach (var (path, text) in GameFacingSources(includeRegistry: false))
+        {
+            foreach (Match match in GodotCallByString.Matches(text))
+            {
+                var line = text[..match.Index].Count(ch => ch == '\n') + 1;
+                offenders.Add($"{match.Groups[1].Value}(\"...\") at {Path.GetFileName(path)}:{line}");
+            }
+        }
+
+        Assert.True(
+            offenders.Count == 0,
+            "These reach into a Godot node by a string name:\n  " + string.Join("\n  ", offenders)
+            + "\n\nUse the generated MethodName / SignalName / PropertyName constant of the node's own type, "
+            + "or call the method directly when it is public. A string is a lookup the compiler cannot "
+            + "check: confirm_bundle called OnConfirmPressed, which the installed game does not declare, "
+            + "on every use.");
+    }
+
+    public static void GameButtonsAreClickedRatherThanSignalled()
+    {
+        var offenders = new SortedSet<string>(StringComparer.Ordinal);
+        foreach (var (path, text) in GameFacingSources(includeRegistry: false))
+        {
+            foreach (Match match in GodotButtonSignal.Matches(text))
+            {
+                var line = text[..match.Index].Count(ch => ch == '\n') + 1;
+                offenders.Add($"{Path.GetFileName(path)}:{line}");
+            }
+        }
+
+        Assert.True(
+            offenders.Count == 0,
+            "These emit Godot's Button pressed signal: " + string.Join(", ", offenders)
+            + "\n\nThe game's NButton derives from NClickableControl -> Control, not from BaseButton, so it "
+            + "has no pressed signal and the emit does nothing. The constant compiles because it names "
+            + "BaseButton, not the button's own type. Use ForceClick(). choose_capstone_option and "
+            + "continue_game_over both did this, and only the second had a ForceClick behind it.");
     }
 
     public static void EveryRegistryCallNamesARegisteredMember()

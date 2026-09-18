@@ -49,24 +49,20 @@ internal static class FtueModalPolicy
         return IsCombatRulesFtue(modalTypeName) && hasUsableConfirmButton;
     }
 
+    /// <summary>Parameterless close methods to try, in order, on a stuck FTUE modal.</summary>
+    /// <remarks>
+    /// Only <c>NFtue.CloseFtue()</c> -- the protected base method every FTUE inherits -- can match.
+    /// The list used to lead with <c>CloseFtueAndEndTurn</c>, <c>CloseFtueAndOpenRug</c> and
+    /// <c>MarkFtueAsComplete</c>. The first two take an <c>NButton</c> and the caller looks for a
+    /// parameterless method, so they never matched (and the first was mapped to NCanPlayCardsFtue
+    /// while the game declares it on NCannotPlayCardFtue); <c>MarkFtueAsComplete</c> lives on
+    /// <c>SaveManager</c>, not on any modal. Checked against the installed sts2.dll on 2026-09-18.
+    /// The one-argument <c>CloseFtue(NButton)</c> overloads are tried before this list, and
+    /// <c>NModalContainer.Clear()</c> after it.
+    /// </remarks>
     public static IReadOnlyList<string> CloseMethodNames(string? modalTypeName)
     {
-        if (string.Equals(modalTypeName, "NCanPlayCardsFtue", StringComparison.OrdinalIgnoreCase))
-        {
-            return new[] { "CloseFtueAndEndTurn", "CloseFtue", "MarkFtueAsComplete" };
-        }
-
-        if (string.Equals(modalTypeName, "NMerchantFtue", StringComparison.OrdinalIgnoreCase))
-        {
-            return new[] { "CloseFtueAndOpenRug", "CloseFtue", "MarkFtueAsComplete" };
-        }
-
-        if (IsCombatRulesFtue(modalTypeName))
-        {
-            return Array.Empty<string>();
-        }
-
-        return new[] { "CloseFtue", "MarkFtueAsComplete" };
+        return IsCombatRulesFtue(modalTypeName) ? Array.Empty<string>() : new[] { "CloseFtue" };
     }
 }
 
