@@ -166,6 +166,16 @@ contract looked for literals passed to `GetMethod`, and these never were. They a
 the helpers are gone, and `ReflectedMembers.NoNameTakingHelpers` fails on any lookup by a variable
 name outside the few helpers `NameTakingChannels` argues for by name.
 
+Registering them broke the mod on the first live run, which is worth knowing before adding the next
+entry. The registry searched base types too, and `NMultiplayerTest`'s private `Disconnect(NetError)`
+shares a name with Godot's public `GodotObject.Disconnect(StringName, Callable)`: `GetMethod` threw
+`AmbiguousMatchException`. All entries resolve inside one `Lazy`, which caches an exception, so that
+one entry took the startup probe, `GET /health` and every registry-backed action down with it --
+`open_character_select` included. Lookups are now declared-only (an entry's `typeof` names the
+declaring type, which is what it always meant) and go through `ReflectedMemberResolver`, which
+compiles offline, is tested against a fake with exactly that shape, and answers null rather than
+throwing. Metadata read offline showed the member existed; only the running game showed the collision.
+
 **Godot has its own by-name entry points, and they rot the same way.** `Node.Call("Name")`,
 `EmitSignal("name")` and `Set("name", ...)` are as unchecked as `GetMethod("Name")`. Each has a
 compile-checked form -- the generated `MethodName` / `SignalName` / `PropertyName` constant of the

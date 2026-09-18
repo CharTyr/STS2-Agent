@@ -162,19 +162,15 @@ internal static class ReflectedGameMembers
     /// <summary>Entries the game no longer declares. Empty is the healthy answer.</summary>
     internal static IReadOnlyList<Probe> Missing => Probes.Where(probe => !probe.Found).ToArray();
 
-    private static MemberInfo? Resolve(Entry entry)
+    // Declared-only and exception-free: see ReflectedMemberResolver for the two live failures that
+    // made it both.
+    private static MemberInfo? Resolve(Entry entry) => entry.Kind switch
     {
-        var flags = BindingFlags.Public | BindingFlags.NonPublic |
-            (entry.Static ? BindingFlags.Static : BindingFlags.Instance);
-
-        return entry.Kind switch
-        {
-            MemberKind.Field => entry.DeclaringType.GetField(entry.MemberName, flags),
-            MemberKind.Method => entry.DeclaringType.GetMethod(entry.MemberName, flags),
-            MemberKind.Property => entry.DeclaringType.GetProperty(entry.MemberName, flags),
-            _ => null,
-        };
-    }
+        MemberKind.Field => ReflectedMemberResolver.Field(entry.DeclaringType, entry.MemberName, entry.Static),
+        MemberKind.Method => ReflectedMemberResolver.Method(entry.DeclaringType, entry.MemberName, entry.Static),
+        MemberKind.Property => ReflectedMemberResolver.Property(entry.DeclaringType, entry.MemberName, entry.Static),
+        _ => null,
+    };
 
     /// <summary>
     /// Resolves every entry when the mod loads and writes the misses to the game log.

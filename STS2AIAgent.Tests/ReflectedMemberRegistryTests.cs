@@ -179,7 +179,10 @@ internal static class ReflectedMemberRegistryTests
             var directory = Path.Combine(root, relative.Replace('/', Path.DirectorySeparatorChar));
             foreach (var path in Directory.EnumerateFiles(directory, "*.cs", SearchOption.AllDirectories))
             {
-                var isRegistry = Path.GetFileName(path) == Path.GetFileName(RegistryPath);
+                // The resolver is the registry's lookup, split out so it compiles offline; it is the
+                // one place outside the registry file allowed to call GetField with a name it was given.
+                var isRegistry = Path.GetFileName(path) == Path.GetFileName(RegistryPath) ||
+                    Path.GetFileName(path) == "ReflectedMemberResolver.cs";
                 if (isRegistry && !includeRegistry)
                 {
                     continue;

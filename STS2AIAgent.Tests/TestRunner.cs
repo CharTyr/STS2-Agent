@@ -527,6 +527,10 @@ internal static class TestRunner
         yield return ("MonsterMoves.PrefixFromTitleKey", () => Task.Run(MonsterMovesExportContractTests.ThePrefixFollowsTheMonstersOwnTitleKey));
         yield return ("AbandonRun.StopsAtTheConfirmation", () => Task.Run(AbandonRunContractTests.AbandonRunStopsAtTheConfirmation));
         yield return ("AbandonRun.RefusesRatherThanClickingBlind", () => Task.Run(AbandonRunContractTests.AbandonRunRefusesRatherThanClickingBlind));
+        yield return ("ReflectedMembers.DeclaredWinsOverBaseOverload", () => Task.Run(ReflectedMemberResolverTests.ADeclaredMethodIsFoundDespiteAPublicBaseMethodOfTheSameName));
+        yield return ("ReflectedMembers.ResolverNeverThrows", () => Task.Run(ReflectedMemberResolverTests.AmbiguityAndInheritanceResolveToNothingInsteadOfThrowing));
+        yield return ("ReflectedMembers.StaticnessIsPartOfLookup", () => Task.Run(ReflectedMemberResolverTests.StaticnessIsPartOfTheLookup));
+        yield return ("ReflectedMembers.RegistryUsesResolver", () => Task.Run(ReflectedMemberResolverTests.TheRegistryResolvesThroughTheResolver));
         yield return ("ReflectedMembers.NoLookupOutsideTheRegistry", () => Task.Run(ReflectedMemberRegistryTests.NothingLooksUpAGameMemberByNameOutsideTheRegistry));
         yield return ("ReflectedMembers.NoNameTakingHelpers", () => Task.Run(ReflectedMemberRegistryTests.NoHelperTakesAGameMemberNameAsAParameter));
         yield return ("ReflectedMembers.NoGodotCallByString", () => Task.Run(ReflectedMemberRegistryTests.GodotIsNeverCalledByAString));
