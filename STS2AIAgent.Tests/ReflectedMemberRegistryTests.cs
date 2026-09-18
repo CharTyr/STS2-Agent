@@ -84,11 +84,9 @@ internal static class ReflectedMemberRegistryTests
     private static readonly IReadOnlyDictionary<string, string> KnownDeadLookups =
         new Dictionary<string, string>(StringComparer.Ordinal)
         {
-            // MonsterModel.MoveNames is declared nowhere in the installed sts2.dll (2026-09-18); moves
-            // now come from GetAllMoves / GenerateBestiaryMoveList / GetBestiaryMoveName. So every
-            // monster in GET /data/monsters exports `moves: []`. Fixing it is feature work against the
-            // new API and needs live verification; it is on the deferred list in PRODUCT_PLAN_CURRENT.md.
-            ["MoveNames"] = "DEAD: MonsterModel.MoveNames no longer exists; /data/monsters exports moves: [] -- see the deferred list",
+            // Empty, and that is the goal. MonsterModel.MoveNames sat here from the day the registry
+            // made the lookup visible until the export was rewritten against the public
+            // LocTable.GetLocStringsWithPrefix it had always wrapped.
         };
 
     /// <summary>

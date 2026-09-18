@@ -211,9 +211,21 @@ internal static class GameDataExportService
     private static object[] BuildMonsterMoves(MonsterModel monster)
     {
         var prefix = $"{monster.Id.Entry}.moves.";
-        var moveNamesProperty = monster.GetType().GetProperty("MoveNames", BindingFlags.Public | BindingFlags.Instance);
-        if (moveNamesProperty?.GetValue(monster) is not IEnumerable moveNames)
+
+        // This used to read a public MonsterModel.MoveNames property by reflection. The game removed
+        // that property, the lookup returned null, and every monster in GET /data/monsters exported
+        // `moves: []` with nothing anywhere saying so. MoveNames was only ever this table query, and
+        // everything in it is public, so it is called directly now: if the game renames any of it,
+        // the build fails instead of the export quietly emptying.
+        IEnumerable moveNames;
+        try
         {
+            moveNames = LocManager.Instance.GetTable("monsters").GetLocStringsWithPrefix(monster.Id.Entry + ".moves");
+        }
+        catch (Exception ex) when (ex is KeyNotFoundException or InvalidOperationException or NullReferenceException)
+        {
+            // The table is created by the game's localization manager; before it is loaded there is
+            // nothing to export, which is a state, not a defect.
             return Array.Empty<object>();
         }
 

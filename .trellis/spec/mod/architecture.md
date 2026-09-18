@@ -149,8 +149,14 @@ installed game: `continue_game_over` tried `OnContinueButtonPressed`, `OnPressed
 `OnContinueButtonPressedAsync` on a button (none exists on one), and the game-over overlay tried
 `SetWaitingForOtherPlayersOverlayVisible` and `HideWaitingForPlayersScreen` on `NGameOverScreen`
 (they live on `NCombatRoom` and `NRewardsScreen`). Each sat before a path that did the real work, so
-nothing broke; the dead halves are gone. The fourth, `MonsterModel.MoveNames`, is not so harmless --
-see the deferred list.
+nothing broke; the dead halves are gone. The fourth, `MonsterModel.MoveNames`, was not harmless:
+the game removed that property, so every monster in `GET /data/monsters` exported `moves: []`. It
+had only ever wrapped a public localization query (`LocTable.GetLocStringsWithPrefix`), so the
+export now calls that directly -- no reflection at all, and a future rename breaks the build instead
+of emptying the export.
+
+That is the general move worth remembering: before registering a member, check whether the thing it
+wraps is public. A compile-checked call beats the best-guarded reflection.
 
 `ReflectedMembers.*` keeps the registry honest: a new reflection site with no entry fails, and an
 entry nothing reads fails too. Two names are deliberately not probed and say why -- the card-grid

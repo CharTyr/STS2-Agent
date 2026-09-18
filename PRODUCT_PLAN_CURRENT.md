@@ -343,10 +343,12 @@
 找两个实际属于 `NCombatRoom` / `NRewardsScreen` 的方法。它们都挡在真正干活的代码前面、从未生效，
 行为不受影响，已删除。第 4 处不无害——见下条。
 
+**`GET /data/monsters` 的 `moves` 恒为空数组——已修（单独 PR）。** `MonsterModel.MoveNames` 在装着的
+`sts2.dll` 里已不存在，导出一直是 `moves: []`。看了旧实现才发现它从来只是一次公开的本地化表查询
+（`LocManager.Instance.GetTable("monsters").GetLocStringsWithPrefix(...)`），这三个 API 在装着的版本里
+都还是公开的——所以修法不是换一套反射，而是**干脆不用反射**：直接调用，编译器检查，上游再改名构建就红。
+
 **未做（转入后置）**：
-- **`GET /data/monsters` 的 `moves` 恒为空数组。** `MonsterModel.MoveNames` 在装着的 `sts2.dll` 里
-  已不存在，招式改由 `GetAllMoves` / `GenerateBestiaryMoveList` / `GetBestiaryMoveName` 提供。
-  修它是对新 API 的功能工作，需要实机验证。契约里把它单列在 `KnownDeadLookups`，不混进可接受的鸭子类型名单。
 - 其余 11 个无行为契约的动作（按风险排，`discard_potion` /
 `choose_treasure_relic` 优先于 `open_timeline` / `open_chest` 这类只开界面的）；
 `/state` 每请求耗时只写日志、无阈值不进载荷；规格里 35 个行号锚点应改为按符号引用。
