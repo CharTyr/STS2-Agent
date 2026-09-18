@@ -229,15 +229,25 @@ internal static class GameDataExportService
             return Array.Empty<object>();
         }
 
+        // A move's name is its `.title` key -- the game builds exactly that in
+        // MonsterModel.GetBestiaryMoveName: `{Id}.moves.{moveId}.title`. The same prefix also holds
+        // the move's dialogue (`banter`, `speakLine`, `speakLineInitial`, `deadDoorSpeakLine`), and
+        // exporting every entry under it made FAKE_MERCHANT_MONSTER's ENRAGE appear three times, two
+        // of them taunts. Live on 2026-09-18, nine monsters carried duplicates like that.
         return moveNames
             .Cast<object>()
-            .Select(locString => new
+            .Select(locString => (locString, key: GetLocEntryKey(locString)))
+            .Where(entry => entry.key.StartsWith(prefix, StringComparison.Ordinal) &&
+                            entry.key.EndsWith(MoveTitleSuffix, StringComparison.Ordinal))
+            .Select(entry => new
             {
-                id = ExtractKeySegment(GetLocEntryKey(locString), prefix),
-                name = GetFormattedLocString(locString)
+                id = ExtractKeySegment(entry.key, prefix),
+                name = GetFormattedLocString(entry.locString)
             })
             .ToArray<object>();
     }
+
+    private const string MoveTitleSuffix = ".title";
 
     private static string GetLocEntryKey(object value)
     {

@@ -111,6 +111,11 @@
   the export emptied without a word. `MoveNames` had only ever wrapped a public localization query,
   so the export now calls that directly -- a future rename breaks the build rather than the data.
 
+  The first live run of that fix found the next problem: the same key prefix also holds each move's
+  dialogue, so nine monsters exported duplicate moves named with taunts -- `FAKE_MERCHANT_MONSTER`'s
+  ENRAGE appeared three times. Only the `.title` key is exported now, which is exactly the key the
+  game's own `GetBestiaryMoveName` builds.
+
 - **The compatibility probe no longer answers for code it does not run.** Its first version resolved
   its own copy of each member while the call sites resolved theirs, with their own binding flags, so
   the probe could say `ready` while a reader was broken -- reintroducing the `_longPressDuration` bug
