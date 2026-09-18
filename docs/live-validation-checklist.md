@@ -646,3 +646,16 @@ mod-side action.
 差异全部落在两个新建的隔离 clientId 目录、Godot 日志滚动与 Sentry 运行记录。
 `mods/` 三个文件已按字节还原到已发布的 v0.12.5（DLL `1624BBF5…D4A7`）。
 证据：`build/validation-2026-09-18/`（gitignore）。
+
+**第三轮（`d3e0d47`，clientId `2026091803`）——统一查找之后。** 调用点改为只向注册表要成员、
+注册表 23 条（新增 `NEndTurnButton.CanTurnBeEnded`）、探测改为加载时运行并写日志、删除 4 处死反射之后：
+
+- `/health`：`ready`，23 检查 / 0 缺失；`godot.log` 出现 `Compatibility: all 23 reflected game members resolved.`
+- 注入故障：`/health` `degraded`、缺失**恰为 1** 并点名 `NPauseMenu._saveAndQuitButtonFixtureGone`；日志同步出现两行 `WARN`
+- 读取改了路径的功能逐一走通，**零 500 / 零 `internal_error`**：`combat.action_readiness`（`CanTurnBeEnded`）、
+  `end_turn`（回合 1→2）、`run_console_command help`（`_devConsole`）、`save_and_quit`（`_saveAndQuitButton`）
+  → `continue_run`（`_standardButton`）回到同一局，以及 `die` → `GAME_OVER` → `continue_game_over`
+  → `return_to_main_menu`——**删掉三个死查找后，pressed 信号那一半仍把结算流程推了下去**
+- 日志 `error|exception|fatal` 扫描：只有三处 Godot 引擎自身的 `Invalid Task ID`，无源自本 mod 的异常
+
+玩家档案 `default/1`、`default/2`、`default/1001` 逐文件一致；`mods/` 还原到发布版 v0.12.5。
