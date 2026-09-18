@@ -2498,22 +2498,19 @@ internal static partial class GameStateService
         return gate.Usable;
     }
 
-
-    private static bool IsLocalCombatTurnReady(Player me)
+    private static bool IsLocalCombatTurnReady(Player me, NCombatRoom? combatRoom)
     {
         var playerCombatState = me.PlayerCombatState;
-        if (playerCombatState == null || playerCombatState.TurnNumber <= 0)
+        if (playerCombatState == null)
         {
             return false;
         }
 
-        if (playerCombatState.Hand.Cards.Count == 0 &&
-            GameActionService.CardsPlayedThisTurn == 0)
-        {
-            return false;
-        }
-
-        return true;
+        return CombatTurnReadinessPolicy.IsLocallyReady(
+            playerCombatState.TurnNumber,
+            playerCombatState.Hand.Cards.Count,
+            GameActionService.CardsPlayedThisTurn,
+            IsEndTurnButtonReady(GetEndTurnButton(combatRoom)));
     }
 
     /// <summary>
@@ -2586,7 +2583,7 @@ internal static partial class GameStateService
         }
 
         var actionsSettled = !actionQueueHasExecutingAction && runningAction == null && readyAction == null;
-        var localTurnReady = me != null && IsLocalCombatTurnReady(me);
+        var localTurnReady = me != null && IsLocalCombatTurnReady(me, room);
         var playerActionPhase = IsPlayerActionPhase(combatState, me);
         var snapshotStable = false;
         string reason;

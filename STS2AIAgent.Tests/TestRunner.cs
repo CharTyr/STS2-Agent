@@ -301,6 +301,10 @@ internal static class TestRunner
         yield return ("CombatDiagnostics.CanPlay", () => Task.Run(CombatDiagnosticsContractTests.HandPayloadKeepsNativeCanPlayEvidence));
         yield return ("Map.NoVoteDuringCombat", () => Task.Run(MapCombatGatingTests.ChooseMapNodeHiddenWhileCombatInProgress));
         yield return ("CombatDiagnostics.Readiness", () => Task.Run(CombatDiagnosticsContractTests.CombatPayloadDistinguishesQueueModalAndSnapshotLocks));
+        yield return ("CombatReadiness.RejectsPreTurn", () => Task.Run(CombatTurnReadinessPolicyTests.RejectsPreTurnEmptyHandEvenWhenButtonLooksReady));
+        yield return ("CombatReadiness.KeepsOpeningGuard", () => Task.Run(CombatTurnReadinessPolicyTests.KeepsOpeningDrawGuardWhenNoNativeReadyEvidenceExists));
+        yield return ("CombatReadiness.AcceptsTurnEvidence", () => Task.Run(CombatTurnReadinessPolicyTests.AcceptsCardsOrRecordedPlayAsTurnEvidence));
+        yield return ("CombatReadiness.RecoversNativeEndTurn", () => Task.Run(CombatTurnReadinessPolicyTests.RecoversEmptyHandWhenNativeEndTurnIsReady));
         yield return ("CombatDiagnostics.CancelPlayCard", () => Task.Run(CombatDiagnosticsContractTests.PlayCardTimeoutCancelsNativeGameAction));
         yield return ("CombatDiagnostics.OwnPets", () => Task.Run(CombatDiagnosticsContractTests.CombatPayloadExposesOwnPets));
         yield return ("ProfileSelection.NativeSwitch", () => Task.Run(ProfileSelectionContractTests.NativeProfileIdentityAndSwitchAreWiredEndToEnd));
