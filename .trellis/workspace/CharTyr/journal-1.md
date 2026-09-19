@@ -1140,3 +1140,24 @@ The lesson worth keeping: both runtime defects were found by driving a real game
 ### Status
 
 [OK] **Completed**
+
+
+## Session 29: 发布 v0.13.0 并完成收尾
+
+**Date**: 2026-09-19
+**Task**: 发布 v0.13.0 并完成收尾
+**Branch**: `main`
+
+### Summary
+
+接手中断的 v0.13.0 发布：验证代理连通，完成最终发布 DLL 隔离实机冒烟，创建 GitHub Release，上传并通过 Steam Web API 核对工坊内容，补齐发布记录与构建指纹，经 PR #162、#163 合入 main，并将 dev 快进同步到 main。
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `dfb5659` | (see git log) |
+
+### Status
+
+[OK] **Completed**
