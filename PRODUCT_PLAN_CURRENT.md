@@ -1,15 +1,22 @@
 # STS2 AI Agent：当前状态页
-> 本页是仓库唯一的当前状态入口。更新日期：2026-09-17（**v0.12.5 已发布**，GitHub 与 Steam 工坊同日、同源、各一次，未重切）。历史快照标记：本页为当前状态页，非历史快照。
-> 发布代码基准：tag `v0.12.5` @ `f361bdb`（PR #145 的 `dev → main` 合并）。GitHub Release 资产 `sts2-ai-agent-v0.12.5-windows.zip` 562212 字节、SHA256 `0E4A1518…CFED`。
-> 工坊最新：物品 3796486050 已于 2026-09-17 09:36:37 更新至 `0.12.5`（公开，`file_size` 1238533 与本地 content 字节和相等，内容 id `2962740913650521121`，DLL SHA256 `1624BBF5…D4A7`）。**本版只有一个构建**，不像 0.12.3 / 0.12.4 各有三个同号构建。见 [v0.12.5 发布记录](history/release-v0.12.5_2026-09-17.md)。
+> 本页是仓库唯一的当前状态入口。更新日期：2026-09-19（**v0.13.0 已发布**，GitHub 与 Steam 工坊同日、同源、各一次，未重切）。历史快照标记：本页为当前状态页，非历史快照。
+> 发布代码基准：tag `v0.13.0` @ `78b085f`（PR #161 的 `dev → main` 合并）。GitHub Release 资产 `sts2-ai-agent-v0.13.0-windows.zip` 576033 字节、SHA256 `8CFC0F45…8733`。
+> 工坊最新：物品 3796486050 已于 2026-09-19 11:32:25 更新至 `0.13.0`（公开，`file_size` 1252357 与本地 content 字节和相等，内容 id `3840768014407368680`，DLL SHA256 `6B9D90C8…FBE42`）。最终发布 DLL 已单独通过隔离实机短冒烟。见 [v0.13.0 发布记录](history/release-v0.13.0_2026-09-19.md)。
 > 构建识别：跨版本指纹索引见 [history/build-fingerprints.md](history/build-fingerprints.md)；自本版起这些数字由打包脚本写入产物旁的 `build-fingerprint.json`，不再事后手工采集。
-> 上一版 v0.12.4 的记录（含当日两次同号重发）见 [Workshop 上传记录](history/workshop-upload-v0.12.4_2026-09-15.md)。**工坊简体中文列表仍是旧版**（自 v0.11.0 起），待手工粘贴 `steam-workshop/description.zh-CN.txt`——`ModUploader` 没有语言参数，只能在工坊网页端做。
+> 上一版 v0.12.5 的记录见 [v0.12.5 发布记录](history/release-v0.12.5_2026-09-17.md)。**工坊简体中文列表仍是旧版**（自 v0.11.0 起），待手工粘贴 `steam-workshop/description.zh-CN.txt`——`ModUploader` 没有语言参数，只能在工坊网页端做。
 
 旧路线图见 [PRODUCT_ROADMAP.md](PRODUCT_ROADMAP.md)（历史），旧交付原文见 [history/PRODUCT_PLAN_CURRENT_2026-09-07.md](history/PRODUCT_PLAN_CURRENT_2026-09-07.md) 和 [history/COOP_DELIVERY_2026-09-07.md](history/COOP_DELIVERY_2026-09-07.md)。[COOP_DELIVERY.md](COOP_DELIVERY.md) 现在只是历史证据索引。本页不继承历史文档中的审批、工作树或测试前执行约束。
 
 ## 1. 当前基线
 
-- **v0.12.5（当前发布基准）**：2026-09-17 发布，GitHub 与 Steam 工坊同日、同源、**各上传一次**。
+- **v0.13.0（当前发布基准）**：2026-09-19 发布。tag `v0.13.0` 指向 PR #161 的
+  `dev → main` 合并提交 `78b085f`；GitHub Release 资产 576033 字节 / SHA256 `8CFC0F45…8733`；
+  工坊公开，`file_size` 1252357 与本地 content 字节和相等，内容 id `3840768014407368680`。
+  发布候选的全量离线与实机验收通过；因重新构建的最终 DLL 与候选 DLL 字节不同，又对 GitHub 与
+  工坊共同使用的 `6B9D90C8…FBE42` DLL 单独完成新局战斗、怪物数据、保存退出与继续对局短冒烟。
+  见 [v0.13.0 发布记录](history/release-v0.13.0_2026-09-19.md)。
+
+- **v0.12.5（上一发布基准）**：2026-09-17 发布，GitHub 与 Steam 工坊同日、同源、**各上传一次**。
   发布提交 `f361bdb`（PR #145 的 `dev → main` 合并），tag `v0.12.5` 指向它；Release 资产
   `sts2-ai-agent-v0.12.5-windows.zip` 562212 字节 / SHA256 `0E4A1518…CFED`；工坊 `file_size` 1238533
   与本地 content 字节和相等、内容 id `2962740913650521121`、可见性 0（公开）。
@@ -130,7 +137,7 @@
 
 已完成、移出待办的里程碑（不再单列）：v0.10.5 / v0.10.6 / v0.10.7 / v0.11.0 的发布、安装与工坊更新；90s continue 超时与只点一次；Trellis 纳入版本控制并归档 bootstrap；旧 stash 已 drop；依赖安全 #50/#51；验证闸门与自测；模型兼容矩阵；外部 streamable-http 客户端核查；非法预算安全上限、损坏配置备份恢复、MCP Origin 契约、停流超时契约、play_card 取消、空奖励 overlay、continue_game_over 等待原生结算；外部 agent 接管队友窗口（[issue #85](https://github.com/CharTyr/STS2-Agent/issues/85)，PR #97 合入 main `d80a19d`，2026-09-13 隔离实机验收通过）。原始记录保留在提交历史与 `history/` 下（[v0.11.0 发布记录](history/release-v0.11.0_2026-09-12.md)、[v0.10.7 工坊上传](history/workshop-upload-v0.10.7_2026-09-12.md)、[v0.10.5 订阅加载验收](history/workshop-load-acceptance_2026-09-09.md)）。
 
-### v0.12.5 标签后第二批（2026-09-18）
+### 已随 v0.13.0 发布：v0.12.5 标签后第二批（2026-09-18）
 
 按 §5 规则 3 单列。**不改任何随 mod 发布的运行时行为**：唯一动到的运行时代码是 `docs/api.md` 里
 三条错误码说明，以及 Python sidecar 内部的一次纯位移。
@@ -162,7 +169,7 @@
 把错误码状态改成 400、删一行事件类型、文档写一个不存在的端点、代码加一条没文档的路由、
 锚点指向第 99999 行——全部点名转红，随后逐字节还原。
 
-### v0.12.5 标签后主线未发布变更（2026-09-17）
+### 已随 v0.13.0 发布：v0.12.5 标签后主线变更（2026-09-17）
 
 按 §5 规则 3 单列。**这一批不改任何随 mod 发布的运行时行为**：两次大文件拆分都是同一个 `partial`
 类内部的成员位移，基文件的 diff 各只有一行真正新增（`partial` 关键字），编译产物的语义不变。
