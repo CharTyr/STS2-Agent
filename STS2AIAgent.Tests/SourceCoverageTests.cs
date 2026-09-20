@@ -39,6 +39,10 @@ internal static class SourceCoverageTests
         "STS2AIAgent/Ui/AgentOverlayHost.cs",
         "STS2AIAgent/Ui/AgentOverlayHost.Tabs.cs",
         "STS2AIAgent/Agent/AgentRuntime.cs",
+        // The teammate partial stays unlinked with AgentRuntime.cs: both need the game runtime,
+        // while this suite's Roslyn pass still parses them and the explicit list makes the choice
+        // visible rather than letting a new source file evade every offline contract.
+        "STS2AIAgent/Agent/AgentRuntime.Team.cs",
         "STS2AIAgent/Game/GameDataExportService.cs",
         "STS2AIAgent/Server/Router.cs",
         "STS2AIAgent/Server/GameEventService.cs",

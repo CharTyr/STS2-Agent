@@ -114,10 +114,14 @@ try {
     New-Item -ItemType Directory -Path $fixture | Out-Null
     New-Item -ItemType Directory -Path (Join-Path $fixture "scripts") | Out-Null
     $fixtureScript = Join-Path $fixture "scripts/check_verification_gates.py"
+    $fixtureScripts = Join-Path $fixture "scripts"
     Copy-Item -LiteralPath $gateScript -Destination $fixtureScript
+    # api-schema is a deep stdlib module: the dispatcher imports it by file path, and its committed
+    # output lives under docs/. Mirror both so the fixture proves source changes make the generated
+    # contract go stale instead of only proving a missing module fails.
+    Copy-Item -LiteralPath (Join-Path $repoRoot "scripts/api_schema.py") -Destination $fixtureScripts
     # packaged-links reads the packaging script, the release checker, and the packaged documents,
     # so the fixture mirrors them for the baseline (all-gates) run to stay green.
-    $fixtureScripts = Join-Path $fixture "scripts"
     Copy-Item -LiteralPath (Join-Path $repoRoot "scripts/package-release.ps1") -Destination $fixtureScripts
     Copy-Item -LiteralPath (Join-Path $repoRoot "scripts/check_release_package.py") -Destination $fixtureScripts
     Copy-Item -LiteralPath (Join-Path $repoRoot "README.md") -Destination $fixture
@@ -483,6 +487,16 @@ try {
     if ($originalRouter.IndexOf($healthRoute) -lt 0) { throw "fixture setup failed: Router.cs has no /health dispatch" }
     Write-Utf8 $routerPath $originalRouter.Replace($healthRoute, 'request.Url?.AbsolutePath == "/fixture/undocumented")')
     Assert-Case -Name "api-facts gate rejects a served path with no documented section" -Only "api-facts" -Expect "/fixture/undocumented"
+    Write-Utf8 $routerPath $originalRouter
+
+    # 9h. The machine-readable contract is generated, not another hand-maintained route list. A
+    # source-owned response key changing without regeneration must fail with "out of date"; merely
+    # deleting docs/openapi.json would only prove that the module exists.
+    $healthAnchor = 'service = ServiceName,'
+    if ($originalRouter.IndexOf($healthAnchor) -lt 0) { throw "fixture setup failed: Router.cs has no BuildHealthData service key" }
+    $schemaDriftRouter = $originalRouter.Replace($healthAnchor, $healthAnchor + [char]10 + '            schema_fixture_key = true,')
+    Write-Utf8 $routerPath $schemaDriftRouter
+    Assert-Case -Name "api-schema gate rejects CSharp source drift without regeneration" -Only "api-schema" -Expect "docs/openapi.json is out of date"
     Write-Utf8 $routerPath $originalRouter
 
     # 9i. The gate's own output on a console that is not UTF-8. Gate messages quote the Chinese

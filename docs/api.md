@@ -11,6 +11,7 @@
 - 默认监听 `http://127.0.0.1:8080`
 - 响应类型固定为 `application/json; charset=utf-8`
 - 新增字段必须向后兼容，不删除既有字段
+- 机器可读 OpenAPI 3.1 / JSON Schema：[`openapi.json`](openapi.json)。它由 `scripts/api_schema.py` 从 Router 路由、C# wire payload 记录和本页已受验证的共享词汇生成；不要手改，改动后运行 `python scripts/api_schema.py`。`python scripts/check_verification_gates.py --only api-schema` 会逐字节拒绝过期产物。
 
 ---
 
@@ -1778,7 +1779,7 @@ Invoke-RestMethod -Uri 'http://127.0.0.1:8080/data/cards' | ConvertTo-Json -Dept
 
 ## `POST /mcp`（原生 MCP）
 
-进程内 MCP 端点，路径为 `/mcp`（`/mcp/` 等价，路由匹配不区分大小写，也不限制 HTTP 方法；客户端按 Streamable HTTP 语义发 `POST` 即可），与其它路由共用同一个 HTTP 监听端口，默认 `http://127.0.0.1:8080/mcp`。
+进程内 MCP 端点，路径为 `/mcp`（`/mcp/` 等价，路由匹配不区分大小写）。这是 MCP Streamable HTTP 的**独立面**：`OPTIONS` 返回 204，`DELETE` 清除 MCP session 并返回 `{ok:true}`，JSON-RPC 只接受 `POST`；`GET` 和其它方法返回 405 `method_not_allowed`。它与其它路由共用同一个 HTTP 监听端口，默认 `http://127.0.0.1:8080/mcp`。
 
 - 需在游戏内悬浮窗「接入」页勾选开启（settings 的 `mcpEnabled`）；未开启时返回 403 `mcp_disabled`
 - 走 MCP Streamable HTTP 语义：请求体为 JSON-RPC，响应为 JSON 或 SSE

@@ -32,6 +32,9 @@ api-facts  Facts that docs/api.md states and that code owns must still agree:
            including whole screens an agent has to drive (character_select,
            multiplayer_lobby, game_over) and the session block the play skill
            tells agents to route on first.
+api-schema Generated `docs/openapi.json` must byte-match the standard-library generator,
+           which extracts ordinary HTTP routes and C# wire payload records and takes shared
+           vocabularies (actions, errors, screens, SSE events) from existing contracts.
 doc-marks  Date-stamped validation records must carry a historical marker, and
            archived topic pages must keep their redirect to history/.
 docs-tracked
@@ -1768,10 +1771,38 @@ def check_doc_links(repo_root: Path) -> list[str]:
     return [f"{checked} relative link(s) across {len(pages)} tracked Markdown pages resolve"]
 
 
+def check_api_schema(repo_root: Path) -> list[str]:
+    """The committed machine-readable API contract is the generator's exact output.
+
+    The deep generator owns parsing and type mapping rather than duplicating them beside this
+    dispatcher. Import by file path so the check also works in the throwaway fixture used by the
+    gate self-test, whose scripts/ directory is intentionally not a Python package.
+    """
+    module_path = repo_root / "scripts" / "api_schema.py"
+    if not module_path.is_file():
+        raise GateError("scripts/api_schema.py is missing, so docs/openapi.json cannot be verified")
+    spec = importlib.util.spec_from_file_location("sts2_api_schema", module_path)
+    if spec is None or spec.loader is None:
+        raise GateError("scripts/api_schema.py could not be imported, so docs/openapi.json cannot be verified")
+    module = importlib.util.module_from_spec(spec)
+    try:
+        # dataclasses resolves annotations through sys.modules while this module is executing.
+        # Register it first, as normal Python import machinery does.
+        sys.modules[spec.name] = module
+        spec.loader.exec_module(module)
+        return module.check_spec(repo_root)
+    except Exception as exc:
+        detail = str(exc).strip() or type(exc).__name__
+        raise GateError(detail) from exc
+    finally:
+        sys.modules.pop(spec.name, None)
+
+
 GATES = {
     "lockfile": check_lockfile,
     "api-doc": check_api_doc,
     "api-facts": check_api_facts,
+    "api-schema": check_api_schema,
     "doc-marks": check_doc_marks,
     "docs-tracked": check_docs_tracked,
     "doc-links": check_doc_links,
