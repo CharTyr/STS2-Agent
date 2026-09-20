@@ -17,8 +17,10 @@
 > reflected members, `mod-load --deep-check`, `state-summary` and `state-invariants` all clean, and the
 > SSE lifecycle measured end to end (0 builds with no subscriber; `session_started` then `stream_ready`
 > for the first subscriber; reconnect gets `stream_ready`; no repeated frames; polling stopped after the
-> last client left). The degraded-companion path and a real slow-subscriber overflow still need a
-> two-instance run.
+> last client left). The degraded companion was verified with a real `degraded` payload too: the
+> companion kept serving, its host-only health keys came back `null`, and the shipped identity check
+> accepted that payload while still rejecting every wrong-identity and malformed variant (14/14). A real
+> slow-subscriber overflow could not be produced on a live instance and stays offline-only.
 
 ## v0.13.0 - 2026-09-19
 

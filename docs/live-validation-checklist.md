@@ -378,7 +378,8 @@ the raw `/action` endpoint. Evidence: `external-agent-log.jsonl` (84 lines), `ex
   they are inert on a companion; the fields that matter there (`instance_role`, `play_running`,
   `play_phase`, `session_requests`) are correct.
   **Current code changes these host-only health keys (including companion process/discovery and launch outcome)
-  to `null` on the companion while preserving the key shape.**
+  to `null` on the companion while preserving the key shape** — fixed and re-verified in the game on
+  2026-09-20, with a companion whose `/health` really reported `degraded`; see the section below.
 
 ### The demand-driven event stream, measured in the game (2026-09-20)
 
@@ -408,9 +409,53 @@ connections:
   `mod-load --deep-check` (`health_ok/state_ok/actions_ok`, `MAIN_MENU`, 5 actions),
   `state-summary`, and `state-invariants` (5 actions, 0 failures, 0 warnings).
 
-Not covered by this run, and still on the checklist: the **degraded companion** path (needs an
-injected missing reflected member on a second instance) and a **real slow-subscriber overflow**
-(needs a client that holds the stream open without reading); both were exercised offline only.
+### The degraded companion, with a real `degraded` payload (2026-09-20)
+
+The one thing the offline tests cannot supply is a companion that really is degraded. It was made
+real by forcing a single registry lookup to miss (`ReflectedGameMembers.Resolve` returning null for
+`NDevConsole._devConsole`), which is exactly the shape of a renamed private member after a game
+patch. The build was deployed, used for the measurements below, and then reverted; the installed mod
+and the profile settings were restored afterwards.
+
+- **`/health` reported the degradation honestly**: `status=degraded`,
+  `compatibility.reflected_members_missing=1`, `missing_members=[{"member":"NDevConsole._devConsole",
+  "feature":"run_console_command"}]`, and the log carried
+  `Compatibility: 1 of 27 reflected game members are missing ... status "degraded"`.
+- **The companion kept serving while degraded**: `instance_role=companion`, `play_running=false`,
+  `play_phase=paused`, `session_requests=0`, `api_port=18082`, `process_id=24224`, and its API answered
+  every request. Nothing about the degradation stopped the process being a usable teammate.
+- **The host-only keys are `null` on the companion and still present**: `companion_process_alive`,
+  `companion_process_exited`, `companion`, `dual_status`, `dual_launch_outcome` and
+  `team_control_status` all exist in the payload with value `null` — the key shape the fix promised,
+  instead of the host's `尚未启动双开` / `队友控制尚未连接` text.
+- **`CompanionHealth.IsExpectedProcess` accepted that exact payload.** A throwaway probe fed the
+  captured response through the shipped check: the live degraded payload, the same payload with
+  `status` forced to `ready`, and the same payload with `degraded` were accepted, while an unknown
+  status, an empty status, a null status, a missing status, a wrong port, a wrong pid, a wrong role, a
+  wrong service, `ok=false`, an array `data`, and malformed JSON were all rejected — **14/14**. Before
+  the fix the first three of those were rejections, which is what made a degraded teammate look like a
+  replaced one.
+
+### The slow-subscriber overflow is still not live-verified (attempted 2026-09-20)
+
+A stream that is never read, plus enough state changes to fill its 256-slot queue, is what the
+disconnect contract needs. Reaching that on a live instance was not possible in this session, and
+the reason is worth recording rather than leaving as "not done":
+
+- The poll loop only publishes an event when a digest field actually changes, so a client sitting on
+  `MAIN_MENU` receives nothing to fall behind on — the queue stays empty no matter how long it holds
+  the connection.
+- Driving 256 changes from the outside is not available either. The debug console is the natural
+  tool, but every `run_console_command` goes through `RunManager.Instance.DebugOnlyGetState()` and
+  the player lookup, so it answers 409 `invalid_action` until a run exists; the run-provoking actions
+  (`act`, `fight`) are themselves console commands, and the main menu's own actions do not cycle a
+  screen (`switch_profile` and `abandon_run` both left the screen at `MAIN_MENU`).
+- What would make it reachable: one long combat with a client that stops reading partway through, or
+  a debug hook that injects synthetic digest churn. Until one of those exists, the overflow contract
+  rests on the offline tests (`Events.OverflowDisconnects` proves a full queue closes the subscriber
+  instead of dropping the oldest event, `Events.SlowSubscriberIsolation` proves the healthy
+  subscriber is unaffected), which use the same bounded channel configuration as production but are
+  not the live path.
 
 ### Those three findings, fixed and re-verified in the game (2026-09-13)
 
