@@ -639,6 +639,7 @@ def create_server(client: Sts2Client | None = None, tool_profile: str | None = N
         x: int | None = None,
         y: int | None = None,
         tool: CrystalSphereTool | None = None,
+        reason: str | None = None,
     ) -> dict[str, Any]:
         """Execute one currently available game action through the compact tool surface.
 
@@ -648,7 +649,8 @@ def create_server(client: Sts2Client | None = None, tool_profile: str | None = N
             3. Pick an action that is currently available.
             4. Pass only the indexes or Crystal Sphere coordinates required by
                that action from the latest state.
-            5. Read state again after the action completes.
+            5. Attach a one-sentence `reason` so the player and decision log can see why.
+            6. Read state again after the action completes.
 
         Compact-tool rules:
             - Guided mode intentionally keeps the tool surface small: use this
@@ -681,6 +683,14 @@ def create_server(client: Sts2Client | None = None, tool_profile: str | None = N
                 f"{normalized} is gated separately and must use its own tool when enabled."
             )
 
+        client_context: dict[str, Any] = {
+            "source": "mcp",
+            "tool_name": "act",
+            "tool_profile": profile,
+        }
+        if reason and reason.strip():
+            client_context["decision_reason"] = reason.strip()
+
         return sts2.execute_action(
             normalized,
             card_index=card_index,
@@ -689,11 +699,7 @@ def create_server(client: Sts2Client | None = None, tool_profile: str | None = N
             x=x,
             y=y,
             tool=tool,
-            client_context={
-                "source": "mcp",
-                "tool_name": "act",
-                "tool_profile": profile,
-            },
+            client_context=client_context,
         )
 
     if profile == "full":

@@ -36,8 +36,8 @@ If the screen is UNKNOWN, say so and ask the player to wait or retry rather than
 
     public const string JsonActFallback = """
 If you cannot call tools, reply with a single JSON object and nothing else:
-{"action":"<name from available_actions>","card_index":0,"target_index":0,"option_index":0,"x":0,"y":0,"tool":"big"}
-Omit unused parameters. Do not wrap the JSON in markdown.
+{"action":"<name from available_actions>","card_index":0,"target_index":0,"option_index":0,"x":0,"y":0,"tool":"big","reason":"<one short sentence saying why>"}
+Omit unused parameters; keep "reason" -- it is shown to the player. Do not wrap the JSON in markdown.
 """;
 
     public static string PlayContract { get; } = ExtractSharedContract(ReadEmbedded("STS2AIAgent.Sts2McpPlayer.Skill.md"));
@@ -66,7 +66,7 @@ Omit unused parameters. Do not wrap the JSON in markdown.
         builder.AppendLine();
         builder.AppendLine(ScreenPlaybooks.Trim());
         builder.AppendLine();
-        builder.Append("Each play step: inspect state (and metadata if needed), then call act exactly once. Vision is optional; legality still comes from live state.");
+        builder.Append("Each play step: inspect state (and metadata if needed), then call act exactly once, attaching a one-sentence reason the player can read. Vision is optional; legality still comes from live state.");
         return builder.ToString();
     }
 

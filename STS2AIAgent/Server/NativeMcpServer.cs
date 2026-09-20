@@ -523,6 +523,10 @@ internal sealed class NativeMcpServer
         var x = ReadInt(arguments, "x");
         var y = ReadInt(arguments, "y");
         var tool = ReadString(arguments, "tool");
+        // Keep the native and Python guided schemas aligned. AgentLoop consumes the same optional
+        // reason as player-facing rationale; the native MCP decision log will consume this value
+        // when that shared log lands, while the game action itself intentionally ignores metadata.
+        _ = ReadString(arguments, "reason");
         var actionsJson = await _bridge.GetAvailableActionsJsonAsync(cancellationToken);
         var compactJson = await _bridge.GetCompactStateJsonAsync(cancellationToken);
         var indexError = ActIndexValidator.Validate(

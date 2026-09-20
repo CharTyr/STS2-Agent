@@ -76,6 +76,27 @@ class CrystalSphereToolTests(unittest.TestCase):
         self.assertEqual(kwargs["y"], 7)
         self.assertEqual(kwargs["tool"], "small")
 
+    def test_guided_act_forwards_decision_reason_in_client_context(self) -> None:
+        client = RecordingClient({"screen": "COMBAT"})
+        server = create_server(client=client, tool_profile="guided")
+        tool = asyncio.run(server.get_tool("act"))
+
+        self.assertIn("reason", tool.parameters["properties"])
+        tool.fn(action="end_turn", reason="No playable cards remain.  ")
+
+        self.assertEqual(len(client.action_calls), 1)
+        action, kwargs = client.action_calls[0]
+        self.assertEqual(action, "end_turn")
+        self.assertEqual(
+            kwargs["client_context"],
+            {
+                "source": "mcp",
+                "tool_name": "act",
+                "tool_profile": "guided",
+                "decision_reason": "No playable cards remain.",
+            },
+        )
+
     def test_client_execute_action_posts_crystal_fields(self) -> None:
         client = Sts2Client(base_url="http://127.0.0.1:8080")
 

@@ -20,6 +20,11 @@ internal static class AgentTools
                 type = "string",
                 @enum = new[] { "big", "small" },
                 description = "Crystal Sphere tool."
+            },
+            reason = new
+            {
+                type = "string",
+                description = "One short sentence saying why you chose this action. Shown to the player as the decision's rationale."
             }
         },
         required = new[] { "action" }
@@ -88,7 +93,7 @@ internal static class AgentTools
         new LlmTool
         {
             Name = "act",
-            Description = "Execute one legal game action. Only use names from the latest available_actions. Recompute indexes from the latest state.",
+            Description = "Execute one legal game action. Only use names from the latest available_actions. Recompute indexes from the latest state, and attach a short reason so the player can see why.",
             Parameters = ActParameters
         }
     }).ToArray();

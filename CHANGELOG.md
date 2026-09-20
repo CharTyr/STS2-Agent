@@ -6,6 +6,8 @@
 
 ### Added
 
+- **Agent actions can carry a player-facing rationale.** The shared `act` schema now accepts an optional one-sentence `reason`; tool-calling and JSON-fallback models both feed it into the existing `AgentTurnResult.Reasoning` / overlay thought path, so non-reasoning models no longer leave the player with only an opaque action. The Python and native MCP schemas stay aligned, and the Python sidecar preserves the reason in `client_context.decision_reason` for the upcoming decision log.
+
 - **An offline contract for vision (image) requests.** `OpenAI.VisionDataUrl` pins that a user message carrying a JPEG is serialized as the two-part `image_url` data-URL content array providers expect (text part first, base64 payload decoding back to the exact bytes), and `OpenAI.VisionPlainContent` pins that messages without an image keep plain string content. This closes the last `Partial` row on the model-compatibility matrix's request surface; sampling against a real multimodal endpoint remains open.
 
 ### Fixed
