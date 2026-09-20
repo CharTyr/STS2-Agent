@@ -50,6 +50,7 @@ $apiSchemaTest = Join-Path $ProjectRoot "scripts/test-api-schema.py"
 $decisionBenchmark = Join-Path $ProjectRoot "scripts/decision_benchmark.py"
 $decisionBenchmarkTest = Join-Path $ProjectRoot "scripts/test-decision-benchmark.py"
 $nativeExitPropagationTest = Join-Path $ProjectRoot "scripts/test-native-exit-propagation.ps1"
+$isolatedSettingsTest = Join-Path $ProjectRoot "scripts/test-isolated-settings.ps1"
 $budgetProxySelfTest = Join-Path $ProjectRoot "scripts/sts2-model-budget-proxy-selftest.py"
 $changelogPath = Join-Path $ProjectRoot "CHANGELOG.md"
 $releaseDoc = Join-Path $ProjectRoot "docs/release-readiness.md"
@@ -153,6 +154,12 @@ Invoke-Step -Name "Self-test the verification gates" -Action {
 
 Invoke-Step -Name "Check Windows PowerShell failure propagation" -Action {
     Invoke-CheckedNative -FilePath "powershell" -Arguments @("-ExecutionPolicy", "Bypass", "-File", $nativeExitPropagationTest)
+}
+
+Invoke-Step -Name "Check isolated-profile mod seeding" -Action {
+    # Offline: the live run on 2026-09-20 started a game whose agent mod was disabled, because the
+    # clone enabled only the first of two STS2AIAgent entries. No game is needed to catch that.
+    Invoke-CheckedNative -FilePath "powershell" -Arguments @("-ExecutionPolicy", "Bypass", "-File", $isolatedSettingsTest)
 }
 
 Invoke-Step -Name "Check release documents" -Action {

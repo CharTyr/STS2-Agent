@@ -11,6 +11,79 @@ A session that walks this list needs the game installed, the mod built and deplo
 Legend: **[mod]** Mod API online only · **[combat]** needs a fight · **[room]** needs a specific
 screen · **[coop]** needs two instances · **[eye]** needs a human or model to watch behaviour.
 
+## Status as of 2026-09-20 (v0.14.0 candidate)
+
+Run against the v0.14.0 candidate build (`STS2AIAgent.dll` deployed from `feat/v0.14-contracts`),
+game v0.111.0, in the isolated profile `default\2026092014` (`--windowed --force-steam off
+--clientId 2026092014`). The player's real profile was not written to: its `current_run.save` and
+`progress.save` still carry their 2026-09-12 / 2026-09-17 timestamps.
+
+### Offline-blocking checks, on the real game **[mod]**
+
+- `/health`: `mod_version=0.14.0`, `game_version=v0.111.0`, `status=ready`, `instance_role=human`,
+  compatibility **27/27 reflected members present, 0 missing**.
+- `run_sts2_validation.py mod-load --deep-check` → `{"health_ok": true, "state_ok": true,
+  "actions_ok": true, "screen": "MAIN_MENU", "available_action_count": 3}`.
+- `state-summary` and `state-invariants` → `failure_count: 0`, `warning_count: 0`.
+- `patch-check` → exit 0. The recorded `build/validation-2026-09-17/action-surface-baseline.jsonl`
+  MAIN_MENU sample was present, all three compared actions matched their flags
+  (`mismatches: []`); `abandon_run` / `continue_run` appeared only in the baseline, which is the
+  expected diagnostic for a baseline taken during an active run.
+
+### The decision explanation chain with a real model **[eye]**
+
+Provider `CommandCode` (`https://api.commandcode.ai/provider/v1`), model
+`deepseek/deepseek-v4.1-flash`, configured through an isolated agent settings file
+(`STS2_AGENT_SETTINGS_PATH`) so the player's own agent settings were untouched. The overlay's
+**Test Connection** button was pressed for real: 对话模型 and 游玩模型 both reported **连通成功**.
+
+Autoplay was then started from the main menu and ran a real run unattended:
+
+- 45 accepted decisions, all attributed to one run id (`D9P0C6TEVH8N`), advancing from floor 1 to
+  floor 3 (one relic picked up, deck 10 → 12).
+- **22 of 26** sampled entries carried a model-authored reason, and they are real reasoning rather
+  than restatement, for example: *"Cannot kill the 29 HP enemy this turn (3 strikes with Vulnerable
+  = 27), so I play Defend to reduce the incoming 6-damage attack to 1."* and *"A first-time shuffle
+  tutorial modal is blocking combat, so I confirm it to resume play."*
+- `GET /decisions` returned entries carrying `source`, `action`, `reason`, `requests_spent`,
+  `total_tokens` and `run_id`.
+- `/events/stream` published `decision_made` live (75 frames observed in a 40 s window alongside
+  `screen_changed`, `combat_started` and the action-window events).
+- The overlay's 决策日志 tab showed the newest-first log with the per-step token count and the
+  per-run total, and reported the budget stop: *"已达到会话 Token 预算上限（622,864/600,000
+  tokens），已自动停止游玩"* — the session budget guard stopped the loop at the configured cap
+  rather than running on.
+
+Session cost, as reported by the mod: **52 requests / 622,864 tokens** (prompt 585,244,
+completion 37,620). The 600,000-token cap is what ended the run; the request cap (150) was not
+reached.
+
+### Found in this session, fixed
+
+1. **The isolated profile could not enable the mod at all when the player also subscribes on the
+   Workshop.** `Initialize-IsolatedClientSettings` flipped only the *first* `STS2AIAgent` entry in
+   `mod_list`. A clone of a real profile holds two: `mods_directory` and `steam_workshop`. The
+   launcher enabled the first and left the second `false`, and the game reads the id as disabled if
+   any entry says so — it logged `Skipping loading mod STS2AIAgent, it is set to disabled in
+   settings` twice and started with no mod at all. Fixed by enabling every agent entry (rewriting
+   back-to-front) and by making the readiness check inspect all of them;
+   `scripts/test-isolated-settings.ps1` pins it offline and runs in the preflight.
+2. **A non-numeric `--clientId` silently validated a different profile.** `--clientId 20260920v14`
+   made the game fall back to client 1 (`Profile-scoped data path initialized:
+   user://default/1/modded/profile1`) while the launcher seeded `default\20260920v14`, so the
+   launcher was preparing a file the game never read. `Initialize-IsolatedClientSettings` now
+   rejects a non-numeric id with a message that names the fallback.
+
+### Still open after this session
+
+- A complete natural run (13 floors) was not attempted: the token cap ended this session at floor 3
+  on purpose. The remaining floors and an act boss are still unproven on this candidate.
+- **Co-op on this candidate** was not run at all: both the local dual-instance path and the Steam
+  two-instance path are untouched by this session.
+- Vision (screenshot attachment) was not enabled, so the multimodal path is still offline-only.
+- The `max_tokens` → `max_completion_tokens` retry was not exercised by this endpoint: it accepted
+  the request as sent, so which real providers take that branch is still unmeasured.
+
 ## Status as of 2026-09-17
 
 ### Action-surface baseline (ADR 0001 step 1)
