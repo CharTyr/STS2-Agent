@@ -11,6 +11,7 @@ from typing import Any, Iterable, Iterator
 from urllib import error, request
 
 from .client_actions import Sts2ActionMethods
+from .envelope import Envelope, EnvelopeError, Sts2ApiError, parse, parse_strict
 
 logger = logging.getLogger("sts2_mcp")
 
@@ -49,23 +50,6 @@ _ACTION_TRANSPORT_EXCEPTIONS = (OSError, http.client.HTTPException)
 # not run and the caller may retry. Any other transport failure happened after the request went
 # out, which stays uncertain.
 _ACTION_UNREACHABLE_REASONS = (ConnectionRefusedError, socket.gaierror)
-
-
-@dataclass(slots=True)
-class Sts2ApiError(RuntimeError):
-    status_code: int
-    code: str
-    message: str
-    details: Any = None
-    retryable: bool = False
-
-    def __str__(self) -> str:
-        parts = [f"{self.code}: {self.message}", f"http={self.status_code}"]
-        if self.retryable:
-            parts.append("retryable=true")
-        if self.details is not None:
-            parts.append(f"details={json.dumps(self.details, ensure_ascii=False)}")
-        return " | ".join(parts)
 
 
 class Sts2Client(Sts2ActionMethods):
@@ -457,63 +441,46 @@ class Sts2Client(Sts2ActionMethods):
 
     @staticmethod
     def _decode_success(response_body: bytes, *, expect_object_data: bool = True) -> Any:
-        payload = json.loads(response_body.decode("utf-8"))
-        if not payload.get("ok", False):
-            error_payload = payload.get("error", {})
-            raise Sts2ApiError(
-                status_code=200,
-                code=error_payload.get("code", "unknown_error"),
-                message=error_payload.get("message", "Request failed."),
-                details=error_payload.get("details"),
-                retryable=bool(error_payload.get("retryable", False)),
-            )
+        envelope = parse(response_body, status_code=200, decode_errors="raise")
+        if not envelope.ok:
+            assert envelope.error is not None
+            raise Sts2Client._api_error_from_envelope(200, envelope.error)
 
-        data = payload.get("data")
-        if expect_object_data and not isinstance(data, dict):
-            raise Sts2ApiError(
-                status_code=200,
-                code="invalid_response",
-                message="Server response did not contain an object data payload.",
-                details=payload,
-            )
-
-        return data
+        if not expect_object_data:
+            return envelope.data
+        return envelope.require_object_data()
 
     @staticmethod
-    def _build_api_error(status_code: int, response_body: bytes) -> Sts2ApiError:
-        try:
-            payload = json.loads(response_body.decode("utf-8"))
-        except json.JSONDecodeError:
-            return Sts2ApiError(
-                status_code=status_code,
-                code="invalid_response",
-                message="Server returned a non-JSON error response.",
-            )
-
-        error_payload = payload.get("error", {})
+    def _api_error_from_envelope(status_code: int, error: EnvelopeError) -> Sts2ApiError:
         return Sts2ApiError(
             status_code=status_code,
-            code=error_payload.get("code", "unknown_error"),
-            message=error_payload.get("message", "Request failed."),
-            details=error_payload.get("details"),
-            retryable=bool(error_payload.get("retryable", False)),
+            code=error.code,
+            message=error.message,
+            details=error.details,
+            retryable=error.retryable,
         )
 
     @staticmethod
+    def _build_api_error(status_code: int, response_body: bytes) -> Sts2ApiError:
+        envelope = parse(response_body, status_code=status_code)
+        assert envelope.error is not None
+        return Sts2Client._api_error_from_envelope(status_code, envelope.error)
+
+    @staticmethod
     def _decode_action_success(response_body: bytes, *, expect_object_data: bool = True) -> Any:
-        payload, error_payload = Sts2Client._decode_action_response_envelope(response_body, status_code=200)
+        envelope = parse_strict(response_body, status_code=200)
 
-        if not payload["ok"]:
-            assert error_payload is not None
-            raise Sts2Client._action_error_from_payload(200, error_payload)
+        if not envelope.ok:
+            assert envelope.error is not None
+            raise Sts2Client._action_error_from_envelope(200, envelope.error)
 
-        data = payload.get("data")
+        data = envelope.data
         if expect_object_data and not isinstance(data, dict):
             raise Sts2ApiError(
                 status_code=200,
                 code="invalid_response",
                 message="Server response did not contain an object data payload.",
-                details=payload,
+                details=envelope.raw,
             )
 
         # docs/api.md allows status "failed" alongside "completed" and "pending". Returning it as a
@@ -531,22 +498,19 @@ class Sts2Client(Sts2ActionMethods):
     @staticmethod
     def _build_action_api_error(status_code: int, response_body: bytes) -> Sts2ApiError:
         try:
-            payload, error_payload = Sts2Client._decode_action_response_envelope(
-                response_body,
-                status_code=status_code,
-            )
+            envelope = parse_strict(response_body, status_code=status_code)
         except Sts2ApiError as exc:
             return exc
 
-        if payload["ok"]:
+        if envelope.ok:
             return Sts2ApiError(
                 status_code=status_code,
                 code="invalid_response",
                 message="HTTP error response incorrectly declared ok=true.",
             )
 
-        assert error_payload is not None
-        return Sts2Client._action_error_from_payload(status_code, error_payload)
+        assert envelope.error is not None
+        return Sts2Client._action_error_from_envelope(status_code, envelope.error)
 
     @staticmethod
     def _decode_action_response_envelope(
@@ -554,75 +518,21 @@ class Sts2Client(Sts2ActionMethods):
         *,
         status_code: int,
     ) -> tuple[dict[str, Any], dict[str, Any] | None]:
-        try:
-            payload = json.loads(response_body.decode("utf-8"))
-        except (json.JSONDecodeError, UnicodeDecodeError):
-            raise Sts2ApiError(
-                status_code=status_code,
-                code="invalid_response",
-                message="Server returned a non-JSON response.",
-            )
+        """Kept for callers that still want the raw envelope and error object.
 
-        if not isinstance(payload, dict):
-            raise Sts2ApiError(
-                status_code=status_code,
-                code="invalid_response",
-                message="Server returned a JSON response that was not an object.",
-                details={"response_type": type(payload).__name__},
-            )
-
-        ok = payload.get("ok")
-        if not isinstance(ok, bool):
-            raise Sts2ApiError(
-                status_code=status_code,
-                code="invalid_response",
-                message="Server response field 'ok' was missing or was not a boolean.",
-                details={"ok_type": type(ok).__name__},
-            )
-
-        error_payload: dict[str, Any] | None = None
-        if not ok:
-            raw_error = payload.get("error")
-            if not isinstance(raw_error, dict):
-                raise Sts2ApiError(
-                    status_code=status_code,
-                    code="invalid_response",
-                    message="Server response field 'error' was missing or was not an object.",
-                    details={"error_type": type(raw_error).__name__},
-                )
-
-            code = raw_error.get("code")
-            message = raw_error.get("message")
-            retryable = raw_error.get("retryable")
-            invalid_field: tuple[str, Any] | None = None
-            if not isinstance(code, str) or not code:
-                invalid_field = ("code", code)
-            elif not isinstance(message, str):
-                invalid_field = ("message", message)
-            elif not isinstance(retryable, bool):
-                invalid_field = ("retryable", retryable)
-
-            if invalid_field is not None:
-                field_name, field_value = invalid_field
-                raise Sts2ApiError(
-                    status_code=status_code,
-                    code="invalid_response",
-                    message=f"Server response error field '{field_name}' had an invalid schema.",
-                    details={
-                        "field": field_name,
-                        "field_type": type(field_value).__name__,
-                    },
-                )
-            error_payload = raw_error
-
-        return payload, error_payload
+        The parsing, and the strictness that decides whether an action may be retried, lives in
+        `envelope.parse_strict`.
+        """
+        envelope = parse_strict(response_body, status_code=status_code)
+        raw_error = envelope.raw.get("error") if not envelope.ok else None
+        return envelope.raw, raw_error
 
     @staticmethod
-    def _action_error_from_payload(status_code: int, error_payload: dict[str, Any]) -> Sts2ApiError:
+    def _action_error_from_envelope(status_code: int, error: EnvelopeError) -> Sts2ApiError:
         return Sts2ApiError(
             status_code=status_code,
-            code=error_payload["code"],
-            message=error_payload["message"],
-            details=error_payload.get("details"),
-            retryable=error_payload["retryable"],
+            code=error.code,
+            message=error.message,
+            details=error.details,
+            retryable=error.retryable,
         )

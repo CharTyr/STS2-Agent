@@ -14,6 +14,10 @@
 
 - **An offline contract for vision (image) requests.** `OpenAI.VisionDataUrl` pins that a user message carrying a JPEG is serialized as the two-part `image_url` data-URL content array providers expect (text part first, base64 payload decoding back to the exact bytes), and `OpenAI.VisionPlainContent` pins that messages without an image keep plain string content. This closes the last `Partial` row on the model-compatibility matrix's request surface; sampling against a real multimodal endpoint remains open.
 
+### Changed
+
+- **One module now owns the HTTP envelope.** The Python sidecar parsed the mod's `{ok, data, error}` response shape by hand in five places, and the copies had silently drifted into two different contracts. `sts2_mcp.envelope` states both on purpose: reads tolerate a thin error object and keep a truncated body's own decode error (a lost read is not a retryable game outcome), while `POST /action` requires a typed `ok`/`code`/`message`/`retryable` and refuses anything else as `invalid_response` — the strictness that stops a malformed response from being retried as a lost action.
+
 ### Fixed
 
 - **The English UI copy received a native editorial pass.** Sixty machine-translated values across the five localization shards now use concise game-UI phrasing and consistent terms (`AI teammate`, `co-op run`, `Role assignment`, `API key`, and `Let the AI play for you`) while preserving every key and placeholder. The two Star-cost labels remain marked for a quick in-game typography check because the game renders that cost with an icon rather than searchable text.
