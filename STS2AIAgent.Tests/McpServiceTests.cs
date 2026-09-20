@@ -122,6 +122,38 @@ internal static class McpServiceTests
         Assert.Equal(0, doc.RootElement.GetProperty("decisions").GetArrayLength());
     }
 
+    public static async Task ToolsCall_RunSummaryUsesRawState()
+    {
+        var bridge = new FakeMcpBridge();
+        var server = CreateServer(bridge: bridge);
+
+        var summary = await Rpc(server, """{"jsonrpc":"2.0","id":24,"method":"tools/call","params":{"name":"get_run_summary"}}""");
+        var text = summary.GetProperty("result").GetProperty("content")[0].GetProperty("text").GetString();
+        using var document = JsonDocument.Parse(text!);
+
+        // The summary is built from the raw payload, whose field names docs/api.md documents, rather
+        // than from the compact view that renames many of them.
+        Assert.True(bridge.RawStateCalls > 0, "expected get_run_summary to read the raw state");
+        Assert.Equal(JsonValueKind.Null, document.RootElement.GetProperty("run").ValueKind);
+    }
+
+    public static async Task ToolsCall_DiffStateComparesTwoPayloads()
+    {
+        var server = CreateServer();
+
+        var diff = await Rpc(
+            server,
+            """{"jsonrpc":"2.0","id":25,"method":"tools/call","params":{"name":"diff_state","arguments":{"before":{"gold":212},"after":{"gold":180}}}}""");
+        var text = diff.GetProperty("result").GetProperty("content")[0].GetProperty("text").GetString();
+        using var document = JsonDocument.Parse(text!);
+        var root = document.RootElement;
+
+        Assert.Equal(1, root.GetProperty("change_count").GetInt32());
+        Assert.Equal("gold", root.GetProperty("changes")[0].GetProperty("path").GetString());
+        Assert.Equal(212d, root.GetProperty("changes")[0].GetProperty("before").GetDouble());
+        Assert.Equal(180d, root.GetProperty("changes")[0].GetProperty("after").GetDouble());
+    }
+
     public static async Task Notification_Returns202()
     {
         var server = CreateServer();
@@ -390,6 +422,10 @@ internal static class McpServiceTests
     {
         public int ActCalls { get; private set; }
 
+        public int RawStateCalls { get; private set; }
+
+        public string RawStateJson { get; set; } = """{"screen":"COMBAT","raw":true}""";
+
         public string? LastAction { get; private set; }
 
         public int? LastCardIndex { get; private set; }
@@ -405,7 +441,11 @@ internal static class McpServiceTests
 
         public Task<string> GetCompactStateJsonAsync(CancellationToken cancellationToken) => Task.FromResult(CompactStateJson);
 
-        public Task<string> GetRawStateJsonAsync(CancellationToken cancellationToken) => Task.FromResult("""{"screen":"COMBAT","raw":true}""");
+        public Task<string> GetRawStateJsonAsync(CancellationToken cancellationToken)
+        {
+            RawStateCalls++;
+            return Task.FromResult(RawStateJson);
+        }
 
         public Task<string> GetAvailableActionsJsonAsync(CancellationToken cancellationToken) => Task.FromResult(AvailableActionsJson);
 

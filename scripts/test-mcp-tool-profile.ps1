@@ -28,6 +28,8 @@ ESSENTIAL_TOOLS = {
     "get_raw_game_state",
     "get_available_actions",
     "get_decision_log",
+    "get_run_summary",
+    "diff_state",
     "get_game_data_item",
     "get_game_data_items",
     "get_relevant_game_data",

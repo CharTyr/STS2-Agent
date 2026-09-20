@@ -39,6 +39,8 @@
 - `get_raw_game_state`
 - `get_available_actions`
 - `get_decision_log`
+- `get_run_summary`
+- `diff_state`
 - `act`
 - `get_game_data_item`
 - `get_game_data_items`

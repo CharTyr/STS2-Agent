@@ -109,7 +109,6 @@ def _native_tool_names(source_root: Path) -> set[str]:
             "NativeMcpServer.cs does not build tools/list from AgentTools.Mcp; "
             "the native source contract is no longer connected"
         )
-
     initializers = _extract_list_initializers(agent_tools)
     if "Mcp" not in initializers:
         raise AssertionError("AgentTools.cs is missing the Mcp tool list")
@@ -145,7 +144,7 @@ _NATIVE_MEMBER = re.compile(
     r"[\w<>\[\],\s\.\?]+?\s+(\w+)\s*\("
 )
 _CASE_MARKER = re.compile(r'^[ \t]*(?:case\s+"([^"]+)"|default)[ \t]*:', re.MULTILINE)
-_READ_ARGUMENT = re.compile(r'Read(?:String|Int)\(\s*arguments\s*,\s*"([^"]+)"\s*\)')
+_READ_ARGUMENT = re.compile(r'Read(?:String|Int|Object)\(\s*arguments\s*,\s*"([^"]+)"\s*\)')
 _READ_TIMEOUT_CALL = re.compile(r'ReadTimeoutSeconds\(\s*arguments\s*(?:,\s*"([^"]+)")?\s*\)')
 _TRY_GET_PROPERTY = re.compile(r'TryGetProperty\(\s*"([^"]+)"')
 _HELPER_CALL = re.compile(r"\b(\w+Async)\s*\(\s*arguments")
@@ -162,7 +161,17 @@ def _native_members(source: str) -> dict[str, str]:
 
 
 def _native_server_source(source_root: Path) -> str:
-    return (source_root / "STS2AIAgent/Server/NativeMcpServer.cs").read_text(encoding="utf-8")
+    """Every file declaring NativeMcpServer, concatenated.
+
+    The class is `partial`: transport (HTTP/SSE, sessions, Origin, JSON-RPC dispatch) lives in
+    NativeMcpServer.cs and tool execution in NativeMcpServer.Tools.cs. Reading only the base file
+    would make every tool case look deleted the day one moved, so this reads the class, not a file.
+    """
+    directory = source_root / "STS2AIAgent/Server"
+    files = sorted(directory.glob("NativeMcpServer*.cs"))
+    if not files:
+        raise AssertionError(f"no NativeMcpServer*.cs under {directory}")
+    return "\n".join(path.read_text(encoding="utf-8") for path in files)
 
 
 def _switch_branch_bodies(method_body: str) -> dict[str, str]:
