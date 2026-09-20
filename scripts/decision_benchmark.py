@@ -21,6 +21,7 @@ import sys
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Mapping, Sequence
+from urllib import error, request
 
 SCHEMA_VERSION = 1
 DEFAULT_SUITE = Path("docs/decision-benchmark.json")
@@ -410,11 +411,48 @@ def render_report(report: Mapping[str, Any]) -> str:
     return json.dumps(report, ensure_ascii=False, indent=2, sort_keys=True) + "\n"
 
 
+def capture_state(base_url: str, *, timeout: float = 5.0) -> Mapping[str, Any]:
+    """Read exactly one local `/state` envelope for manual fixture capture.
+
+    This is deliberately not implicit in validation/scoring: the caller must supply the URL, run
+    the game themselves, and decide when its state is stable. It sends no action and has no model
+    configuration or credential path, so it cannot spend a provider credit.
+    """
+    url = base_url.rstrip("/") + "/state"
+    http_request = request.Request(url=url, headers={"Accept": "application/json"})
+    try:
+        with request.urlopen(http_request, timeout=timeout) as response:
+            payload = json.loads(response.read().decode("utf-8"))
+    except (error.URLError, OSError, TimeoutError) as exc:
+        raise BenchmarkError(f"cannot capture /state from {url}: {exc}") from exc
+    except UnicodeDecodeError as exc:
+        raise BenchmarkError(f"capture /state from {url} was not UTF-8") from exc
+    except json.JSONDecodeError as exc:
+        raise BenchmarkError(f"capture /state from {url} was not JSON: {exc.msg}") from exc
+    if not isinstance(payload, Mapping) or payload.get("ok") is not True or not isinstance(payload.get("data"), Mapping):
+        raise BenchmarkError(f"capture /state from {url} did not return an ok object envelope")
+    return payload["data"]
+
+
+def capture_template(suite: Suite, base_url: str) -> dict[str, Any]:
+    """Return a no-action, no-model capture document shaped for manual fixture authoring."""
+    state = capture_state(base_url)
+    return {
+        "schema_version": SCHEMA_VERSION,
+        "capture_scope": "Single explicit GET /state only; no model/API call and no game action.",
+        "base_url": base_url.rstrip("/"),
+        "state": state,
+        "suite": suite.title,
+        "next_step": "Review this state manually, redact identifiers if needed, then add only snapshot-evidenced cases to the versioned suite.",
+    }
+
+
 def _parse_args(argv: Sequence[str] | None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Validate and score an offline STS2 decision benchmark.")
     parser.add_argument("--suite", type=Path, default=DEFAULT_SUITE, help="versioned benchmark fixture JSON")
     parser.add_argument("--answers", type=Path, help="candidate answers JSON; omit to validate the suite only")
-    parser.add_argument("--output", type=Path, help="write the deterministic score report here")
+    parser.add_argument("--capture-base-url", help="explicit local Mod URL; captures the suite's raw states into candidate answers without any model call")
+    parser.add_argument("--output", type=Path, help="write the deterministic score report or capture document here")
     return parser.parse_args(argv)
 
 
@@ -422,6 +460,17 @@ def main(argv: Sequence[str] | None = None) -> int:
     args = _parse_args(argv)
     try:
         suite = load_suite(args.suite)
+        if args.answers is not None and args.capture_base_url is not None:
+            raise BenchmarkError("--answers and --capture-base-url are mutually exclusive")
+        if args.capture_base_url is not None:
+            rendered = render_report(capture_template(suite, args.capture_base_url))
+            if args.output is None:
+                sys.stdout.write(rendered)
+            else:
+                args.output.parent.mkdir(parents=True, exist_ok=True)
+                args.output.write_text(rendered, encoding="utf-8")
+                print(f"[decision-benchmark] wrote capture {args.output}")
+            return 0
         if args.answers is None:
             print(f"[decision-benchmark] {suite.title}: {len(suite.cases)} cases validated; no model/game run requested")
             return 0

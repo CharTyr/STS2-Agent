@@ -27,6 +27,16 @@ python scripts/decision_benchmark.py `
 python scripts/test-decision-benchmark.py
 ```
 
+如游戏已由操作者自行启动，下面的**显式只读**命令可抓取一份原始 `/state` 作为人工新增 case 的
+候选材料；它不会发送 action 或模型请求，输出写入 gitignored `build/`，也不会自动把局面算作
+通过：
+
+```powershell
+python scripts/decision_benchmark.py `
+  --capture-base-url http://127.0.0.1:8080 `
+  --output build/decision-benchmark/manual-state-capture.json
+```
+
 这四个命令只读入版本控制内的 JSON（最后一个 `--output` 例外会写本地报告），不会启动游戏、
 访问 MCP、调用 HTTP 或使用任何模型/API 凭据。`scripts/preflight-release.ps1` 会执行结构验证与
 模块契约测试，因而确保发布前 fixture 不会损坏；它不会把 example 的 100% 当成模型质量证据。
@@ -115,7 +125,9 @@ kind，不能暗中重解释 v1 的字段。
 
 1. **实机采集（仍待人工启动的游戏）**：开启 debug actions 后，通过
    `run_sts2_validation.py` 的现有 `run_debug_command()` 到固定 room/fight，再读取一次稳定 `/state`。
-   将该 state 连同可复核 `evidence` 归档为一个新 case；不要把 save 或 token/密钥提交到仓库。
+   可用 `decision_benchmark.py --capture-base-url ... --output build/...` 作一次明确的只读捕获；它不会
+   自动导航、执行 action 或调用模型。人工审核状态、删去不宜提交的标识符后，再将该 state 连同可复核
+   `evidence` 归档为一个新 case；不要把 save 或 token/密钥提交到仓库。
 2. **候选 runner（不在本提交中实现）**：对每个 case 把 state 交给一个模型/agent，记录它实际尝试的
    `{case_id, action, option_index, reason}`。先用 runner 本地的请求预算和 provider 同意流程；真实调用
    会消耗额度，必须先取得用户授权。

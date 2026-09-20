@@ -11,6 +11,7 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -105,6 +106,26 @@ class DecisionBenchmarkTests(unittest.TestCase):
             path.write_text(json.dumps(raw), encoding="utf-8")
             with self.assertRaisesRegex(benchmark.BenchmarkError, "unsupported field"):
                 benchmark.load_suite(path)
+
+    def test_capture_reads_one_explicit_state_and_never_submits_an_action(self) -> None:
+        class Response:
+            def read(self) -> bytes:
+                return b'{"ok":true,"data":{"screen":"MAP","available_actions":["choose_map_node"]}}'
+
+            def __enter__(self) -> "Response":
+                return self
+
+            def __exit__(self, *args: object) -> None:
+                return None
+
+        with patch.object(benchmark.request, "urlopen", return_value=Response()) as urlopen:
+            capture = benchmark.capture_template(self.suite, "http://127.0.0.1:8080/")
+
+        self.assertEqual(capture["base_url"], "http://127.0.0.1:8080")
+        self.assertEqual(capture["state"]["screen"], "MAP")
+        self.assertIn("no model/API call and no game action", capture["capture_scope"])
+        self.assertTrue(urlopen.call_args.args[0].full_url.endswith("/state"))
+        self.assertEqual(urlopen.call_count, 1)
 
     def test_cli_validates_without_model_game_or_network(self) -> None:
         stdout = io.StringIO()
