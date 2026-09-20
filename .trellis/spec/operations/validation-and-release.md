@@ -92,6 +92,12 @@ Other lifecycle, combat, multiplayer, and debug-gating subcommands are also regi
 
 `state-invariants` demands an action exactly where the executor would accept it. Its combat branch requires `play_card` only while `combat.action_readiness.can_use_combat_actions` is true, which is the executor's whole readiness chain, not merely `player_action_phase`: a snapshot taken while a played card is still resolving reports the local player's turn with playable cards in hand, so gating on the turn predicate alone reports a missing action that was never expected. Payloads without the readiness field fall back to `player_action_phase`, and payloads with neither keep the old demand.
 
+### Console travel names are not screen names
+
+A suite that moves the run with `run_console_command` uses the game's internal room names, which are not the `screen` values the mod reports. A rest site is `room RestSite`, not `room Rest` (`room Rest` answers `Room 'REST' not found`); a treasure room is `room Treasure`. Getting this wrong looks like a mod failure and is not one.
+
+Re-issuing a travel command while already standing in the resulting room answers 409. That is idempotence rather than a contract failure, so check the current screen before travelling. The notes are kept next to the helper in [run_sts2_validation.py](../../../scripts/run_sts2_validation.py) (`RUN_SETTLE_SECONDS` block) and for agents in [debug-and-validation.md](../../../skills/sts2-mcp-player/references/debug-and-validation.md).
+
 ## Build and package behavior
 
 ```powershell

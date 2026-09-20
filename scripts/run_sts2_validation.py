@@ -1429,6 +1429,15 @@ DEBUG_COMMAND_RETRY_DELAY_MS = 500
 # the game never opens its game-over screen, leaving a dead run parked on the map.
 RUN_SETTLE_SECONDS = 3.0
 
+# Console travel names the game's own internal rooms, and they do not always match the screen name
+# the mod reports, so a suite that guesses gets `Room 'X' not found` and looks like a mod bug:
+#   rest site  -> `room RestSite`, not `room Rest` (verified live 2026-09-17)
+#   treasure   -> `room Treasure`
+# Re-issuing a travel command while already standing in the resulting room answers 409. That is
+# idempotence, not a contract failure: check the current screen before travelling, or treat the 409
+# as success once the screen already matches. The same notes are kept for agents in
+# skills/sts2-mcp-player/references/debug-and-validation.md.
+
 
 def run_debug_command(client: ApiClient, command: str) -> dict[str, Any]:
     """Run a debug console command, giving a still-settling screen time to accept it.
