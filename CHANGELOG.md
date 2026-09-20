@@ -5,6 +5,7 @@
 ## Unreleased
 
 - Added a versioned, no-network decision-quality benchmark: eleven snapshot-evidenced combat, event, map, rest, shop, and reward cases; deterministic scoring; an explicit reference-answer baseline; and offline contracts. Scores describe recorded action constraints only, never simulated outcomes or live-model quality.
+- The connectivity check now works against endpoints that reject `max_tokens`. OpenAI-compatible providers disagree about the output-token cap field name: the older `max_tokens` is what nearly every clone and local runtime accepts, while the official API's reasoning models answer 400 and name `max_completion_tokens` instead. The client sends the broadly compatible form first and retries once with the other name only when the server says the parameter is unsupported, so the difference is resolved from the response rather than guessed from the URL. A 400 that merely mentions tokens — a context-length overflow, for example — is not treated as a field-name problem, and the retry is bounded to one attempt.
 - Added typed Python models for the two mod payloads that have a fixed field set. `sts2_mcp.payloads` owns `ActionDescriptor` / `AvailableActions` and `DecisionLogEntry`, including the validation and extension policy; `Sts2Client.get_action_catalog()` and `Sts2Client.get_decision_entries()` expose them, and a malformed payload arrives as the mod's own non-retryable `invalid_response` with the offending field path. The existing dict-returning getters are unchanged, so no caller has to migrate on this release.
 
 ### Added

@@ -241,6 +241,10 @@ internal static class TestRunner
         yield return ("OpenAI.LlmUsageMath", () => Task.Run(OpenAiCompatibleClientTests.LlmUsage_CombineAndAdd));
         yield return ("OpenAI.StalledBodyTimeout", OpenAiCompatibleClientTests.CompleteAsync_HeadersThenStalledBodyTimesOut);
         yield return ("OpenAI.StalledBodyUserCancel", OpenAiCompatibleClientTests.CompleteAsync_HeadersThenStalledBodyUserCancel);
+        yield return ("OpenAI.MaxTokensFieldDetection", () => Task.Run(OpenAiCompatibleClientTests.MaxTokensField_DetectsOnlyTheUnsupportedParameterError));
+        yield return ("OpenAI.MaxTokensFieldRename", () => Task.Run(OpenAiCompatibleClientTests.MaxTokensField_RenamesOnlyWhenThereIsAValueToMove));
+        yield return ("OpenAI.PingCompletionTokensRetry", OpenAiCompatibleClientTests.Ping_RetriesWithCompletionTokensWhenTheEndpointRefusesMaxTokens);
+        yield return ("OpenAI.PingUnrelated400NotRetried", OpenAiCompatibleClientTests.Ping_DoesNotRetryA400ThatIsNotAboutTheParameter);
         yield return ("Budget.NoLimit", () => Task.Run(SessionBudgetGuardTests.NoLimit_NeverStops));
         yield return ("Budget.MaxTokens", () => Task.Run(SessionBudgetGuardTests.MaxTokens_StopsWhenExceeded));
         yield return ("Budget.MaxRequests", () => Task.Run(SessionBudgetGuardTests.MaxRequests_StopsEvenWithoutUsage));

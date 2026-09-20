@@ -193,6 +193,87 @@ internal static class OpenAiCompatibleClientTests
         Assert.Equal("hi", content.GetString());
     }
 
+    public static void MaxTokensField_DetectsOnlyTheUnsupportedParameterError()
+    {
+        // The exact wording the official API uses when a reasoning model is handed `max_tokens`.
+        Assert.True(MaxTokensField.IsUnsupportedParameterError(new LlmException(
+            "LLM request failed (HTTP 400): Unsupported parameter: 'max_tokens' is not supported with this model. Use 'max_completion_tokens' instead.",
+            400)));
+
+        // An Azure-style phrasing with no mention of the replacement field.
+        Assert.True(MaxTokensField.IsUnsupportedParameterError(new LlmException(
+            "HTTP 400: Unrecognized request argument supplied: max_tokens", 400)));
+
+        // A context-length 400 also mentions max_tokens and must NOT be read as a field-name problem:
+        // renaming the field for it would turn one clear failure into two confusing ones.
+        Assert.False(MaxTokensField.IsUnsupportedParameterError(new LlmException(
+            "HTTP 400: This model's maximum context length is 8192 tokens, however you requested 9000 tokens.", 400)));
+
+        // A failure that has nothing to do with this field.
+        Assert.False(MaxTokensField.IsUnsupportedParameterError(new LlmException("HTTP 401: Incorrect API key provided.", 401)));
+        Assert.False(MaxTokensField.IsUnsupportedParameterError(new LlmException("LLM request timed out.", 408)));
+        Assert.False(MaxTokensField.IsUnsupportedParameterError(new LlmException("HTTP 500: internal error", 500)));
+    }
+
+    public static void MaxTokensField_RenamesOnlyWhenThereIsAValueToMove()
+    {
+        var body = new Dictionary<string, object?> { ["model"] = "m", [MaxTokensField.Standard] = 16 };
+
+        Assert.True(MaxTokensField.RenameToCompletionTokens(body));
+        Assert.False(body.ContainsKey(MaxTokensField.Standard));
+        Assert.Equal(16, body[MaxTokensField.CompletionTokens]);
+        Assert.Equal("m", body["model"]);
+
+        // Nothing to move means the rejection was not about this field, so the caller must surface
+        // the original error rather than resend an identical request.
+        Assert.False(MaxTokensField.RenameToCompletionTokens(new Dictionary<string, object?> { ["model"] = "m" }));
+    }
+
+    public static async Task Ping_RetriesWithCompletionTokensWhenTheEndpointRefusesMaxTokens()
+    {
+        var handler = new ScriptedHandler(
+            (HttpStatusCode.BadRequest, """
+                {"error":{"message":"Unsupported parameter: 'max_tokens' is not supported with this model. Use 'max_completion_tokens' instead.","type":"invalid_request_error"}}
+                """),
+            (HttpStatusCode.OK, """{"choices":[{"message":{"role":"assistant","content":"pong"}}]}"""));
+        var client = new OpenAiCompatibleClient(
+            new LlmEndpoint { BaseUrl = "https://example.test/v1", ApiKey = "sk-test" },
+            handler);
+
+        var reply = await client.PingAsync("gpt-5", CancellationToken.None);
+
+        Assert.Equal("pong", reply);
+        Assert.Equal(2, handler.RequestCount);
+        Assert.Contains($"\"{MaxTokensField.Standard}\":16", handler.Bodies[0]);
+        Assert.Contains($"\"{MaxTokensField.CompletionTokens}\":16", handler.Bodies[1]);
+        Assert.False(handler.Bodies[1].Contains($"\"{MaxTokensField.Standard}\"", StringComparison.Ordinal),
+            "the retried request must not still carry the field the endpoint rejected");
+    }
+
+    public static async Task Ping_DoesNotRetryA400ThatIsNotAboutTheParameter()
+    {
+        var handler = new ScriptedHandler(
+            (HttpStatusCode.BadRequest, """
+                {"error":{"message":"This model's maximum context length is 8192 tokens.","type":"invalid_request_error"}}
+                """));
+        var client = new OpenAiCompatibleClient(
+            new LlmEndpoint { BaseUrl = "https://example.test/v1", ApiKey = "sk-test" },
+            handler);
+
+        var failed = false;
+        try
+        {
+            await client.PingAsync("gpt-5", CancellationToken.None);
+        }
+        catch (LlmException)
+        {
+            failed = true;
+        }
+
+        Assert.True(failed, "an unrelated 400 must surface as the provider sent it");
+        Assert.Equal(1, handler.RequestCount);
+    }
+
     public static void ParseSse_AccumulatesContentAndToolCalls()
     {
         const string payload = """
@@ -336,6 +417,33 @@ internal static class OpenAiCompatibleClientTests
         elapsed.Stop();
         Assert.True(canceled, "user cancellation must surface as OperationCanceledException, not a timeout LlmException");
         Assert.True(elapsed.Elapsed < TimeSpan.FromSeconds(3), $"user cancel took {elapsed.Elapsed}");
+    }
+
+    private sealed class ScriptedHandler : HttpMessageHandler
+    {
+        private readonly Queue<(HttpStatusCode Status, string Body)> _script;
+
+        public ScriptedHandler(params (HttpStatusCode Status, string Body)[] script)
+        {
+            _script = new Queue<(HttpStatusCode, string)>(script);
+        }
+
+        /// <summary>Every request body, in order, so a retry can be compared with what it replaced.</summary>
+        public List<string> Bodies { get; } = new();
+
+        public int RequestCount => Bodies.Count;
+
+        protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
+        {
+            Bodies.Add(request.Content == null ? string.Empty : await request.Content.ReadAsStringAsync(cancellationToken));
+            if (_script.Count == 0)
+            {
+                throw new InvalidOperationException("The client sent more requests than the test scripted.");
+            }
+
+            var (status, body) = _script.Dequeue();
+            return new HttpResponseMessage(status) { Content = new StringContent(body) };
+        }
     }
 
     private sealed class RecordingHandler : HttpMessageHandler

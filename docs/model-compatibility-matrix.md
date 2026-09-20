@@ -13,6 +13,7 @@ Scope: behavior expected from any OpenAI-compatible /v1/chat/completions endpoin
 | Thinking / reasoning effort | reasoning_effort sent when configured; gpt-4o / gpt-5 / o3-mini / deepseek / explicit / off mapping in ThinkingRequestBuilder | Thinking.* tests | Verified |
 | DeepSeek-style thinking wrapper | thinking body + extra_body.thinking sent only for deepseek profile | OpenAI.DeepSeekExtraBody | Verified |
 | Vision (image input) | image_url data URL content parts when ImageJpeg present; plain string content kept when absent | OpenAI.VisionDataUrl, OpenAI.VisionPlainContent (offline, request-body contract) | Verified (offline) |
+| Output-token cap field name | Requests are sent with `max_tokens` (accepted by the clones and local runtimes); a 400/422 that says the parameter is unsupported is retried once with `max_completion_tokens`. Only the connectivity ping sets a cap today, so the extra request costs one round trip per session at most | OpenAI.MaxTokensFieldDetection, OpenAI.MaxTokensFieldRename, OpenAI.PingCompletionTokensRetry, OpenAI.PingUnrelated400NotRetried | Verified (offline) |
 | Cancellation | play_card / request cancellation propagates through linked CTS | AgentLoop.CancelPropagates | Verified |
 | Connection reuse / streaming body | HttpCompletionOption.ResponseHeadersRead when streaming; SSE parsing with [DONE] handling | OpenAI.ParseSse, ParseSsePayload | Verified |
 
@@ -38,7 +39,7 @@ Scope: behavior expected from any OpenAI-compatible /v1/chat/completions endpoin
 
 - Known-good in live play per history: DeepSeek (chat/play), MiniMax (budget-proxy acceptance), official OpenAI-compatible loopback fixtures.
 - Ollama / LM Studio: key may be empty; usage may be absent on some versions -- covered by missing-usage path.
-- Not yet sampled live: SiliconFlow, OpenRouter, vLLM native extra_body variants beyond DeepSeek, and providers that require max_tokens vs max_completion_tokens differences.
+- Not yet sampled live: SiliconFlow, OpenRouter, vLLM native extra_body variants beyond DeepSeek, and the live behaviour of the `max_tokens` → `max_completion_tokens` retry (the detection and the retry are pinned offline; what is unmeasured is which real endpoints take that path).
 
 ## Matrix Read Date
 
