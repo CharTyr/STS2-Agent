@@ -8,8 +8,8 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-1.md`
-- **Total Sessions**: 29
-- **Last Active**: 2026-09-19
+- **Total Sessions**: 30
+- **Last Active**: 2026-09-20
 <!-- @@@/auto:current-status -->
 
 ---
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-1.md` | ~1163 | Active |
+| `journal-1.md` | ~1188 | Active |
 <!-- @@@/auto:active-documents -->
 
 ---
@@ -29,6 +29,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 30 | 2026-09-20 | Companion health semantics, demand-driven SSE, predicate split, and the debug churn hook | `c017302`, `aac032a`, `62972c7`, `c3c531e`, `2a1bd2a` | `main` |
 | 29 | 2026-09-19 | 发布 v0.13.0 并完成收尾 | `dfb5659` | `main` |
 | 28 | 2026-09-17 | 收尾 PR #148 verification gates CI | `bbd1635` | `refactor/split-monoliths` |
 | 27 | 2026-09-17 | Close the drift that forced four re-cuts, ship v0.12.5, and collapse the action surface | `8e8835b`, `3825ead`, `abcd0db`, `d4af047`, `1b39c97`, `a4bff32`, `e644300`, `9bcaee6`, `dfd61bf`, `f1b2de7`, `0324285`, `ea732af` | `dev` |
