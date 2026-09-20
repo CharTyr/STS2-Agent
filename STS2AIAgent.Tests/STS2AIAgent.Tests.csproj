@@ -65,6 +65,7 @@
     <Compile Include="..\STS2AIAgent\Server\EventPollingCoordinator.cs" Link="Server\EventPollingCoordinator.cs" />
     <Compile Include="..\STS2AIAgent\Server\GameEventSubscriberHub.cs" Link="Server\GameEventSubscriberHub.cs" />
     <Compile Include="..\STS2AIAgent\Server\ConsecutiveRepeatSuppressor.cs" Link="Server\ConsecutiveRepeatSuppressor.cs" />
+    <Compile Include="..\STS2AIAgent\Server\EventChurnPolicy.cs" Link="Server\EventChurnPolicy.cs" />
     <Compile Include="..\STS2AIAgent\Server\EventStreamSubscribers.cs" Link="Server\EventStreamSubscribers.cs" />
   </ItemGroup>
   <ItemGroup>

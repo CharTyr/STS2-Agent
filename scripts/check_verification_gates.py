@@ -900,10 +900,15 @@ EVENT_SERVICE_PATH = "STS2AIAgent/Server/GameEventService.cs"
 EVENT_STREAM_HEADING = "## `GET /events/stream`"
 # `Publish("<name>", ...)` for the ordinary events, `BuildEnvelope("<name>", ...)` where the envelope
 # is assembled first, and `PublishSnapshot("<name>", snapshot)` for the state snapshot frames. All
-# three spell the event name as a literal next to the call, which is what this extraction relies on:
-# a name reached through a variable reads as "never published" and fails the gate rather than
-# silently leaving the docs unchecked.
+# three spell the event name as a literal next to the call.
 EVENT_PUBLISH = re.compile(r'(?:Publish|PublishSnapshot|BuildEnvelope)\(\s*"([a-z_]+)"')
+# A name reached through a constant -- `Publish(SomePolicy.EventType, ...)` -- is invisible to the
+# literal pattern above, so it has to be declared here or it is checked by nobody. That is how
+# `debug_churn` was added, and it is the reason this list exists instead of a comment claiming such
+# names fail the gate: they did not, they were silently skipped.
+EVENT_PUBLISH_CONSTANTS = {
+    "debug_churn": "EventChurnPolicy.EventType",
+}
 EVENT_TERNARY = re.compile(r'\?\s*"([a-z_]+)"\s*:\s*"([a-z_]+)"')
 EVENT_DOC_ROW = re.compile(r"^\|\s*`([a-z_]+)`(?:\s*/\s*`([a-z_]+)`)?\s*\|", re.MULTILINE)
 MIN_EVENT_TYPES = 8
@@ -990,6 +995,16 @@ def check_event_type_docs(repo_root: Path, api_doc: str) -> list[str]:
     for opened, closed in EVENT_TERNARY.findall(source):
         published.add(opened)
         published.add(closed)
+
+    # Constant-named events, each one verified as actually published rather than merely declared:
+    # an entry whose constant is no longer referenced is stale bookkeeping, not coverage.
+    for event_name, constant in EVENT_PUBLISH_CONSTANTS.items():
+        if constant not in source:
+            raise GateError(
+                f"the {event_name!r} event type is declared in this gate as published through "
+                f"{constant}, but {EVENT_SERVICE_PATH} no longer mentions it. Update the gate."
+            )
+        published.add(event_name)
 
     if len(published) < MIN_EVENT_TYPES:
         raise GateError(

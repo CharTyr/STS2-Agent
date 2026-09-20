@@ -233,6 +233,39 @@ internal static partial class GameActionService
         return false;
     }
 
+    private static Task<ActionResponsePayload> ExecuteInjectEventChurnAsync(ActionRequest request)
+    {
+        if (!AreDebugActionsEnabled())
+        {
+            throw new ApiException(409, "invalid_action", "inject_event_churn is disabled. Set STS2_ENABLE_DEBUG_ACTIONS=1 for development use.", new
+            {
+                action = "inject_event_churn"
+            });
+        }
+
+        if (!EventChurnPolicy.TryResolveCount(request.option_index, out var count, out var error))
+        {
+            throw new ApiException(400, "invalid_request", error ?? "count is invalid.", new
+            {
+                action = "inject_event_churn"
+            });
+        }
+
+        // Deliberately not a state mutation: the releases exist to push a subscriber's bounded queue
+        // past its capacity, so a live run can observe the slow-subscriber contract end to end. One
+        // state build serves both the events and the response instead of paying for two.
+        var state = GameStateService.BuildStatePayload();
+        var published = GameEventService.Instance.PublishDebugChurn(state, count);
+        return Task.FromResult(new ActionResponsePayload
+        {
+            action = "inject_event_churn",
+            status = "completed",
+            stable = true,
+            message = $"Published {published} synthetic {EventChurnPolicy.EventType} event(s).",
+            state = state
+        });
+    }
+
     private static Task<ActionResponsePayload> ExecuteRunConsoleCommandAsync(ActionRequest request)
     {
         if (!AreDebugActionsEnabled())

@@ -1485,6 +1485,7 @@ compact 不是 `/state` 的子集，**很多键换了名字**。MCP `get_game_st
 - `use_potion` — 使用药水（`option_index`，需要目标时再加 `target_index`）
 - `discard_potion` — 丢弃药水（`option_index`）
 - `run_console_command` — 调试控制台命令，仅在 `STS2_ENABLE_DEBUG_ACTIONS=1` 时注册
+- `inject_event_churn` — **开发向调试动作**，仅在 `STS2_ENABLE_DEBUG_ACTIONS=1` 时可用。用 `option_index` 指定发布多少条 `debug_churn` 合成事件（默认 300，最小 257，即必须能填满单个订阅者的 256 格队列，最大 5000；越界返回 400 `invalid_request`）。这些事件走的是和其它事件完全相同的发布路径，只是数据里带 `synthetic: true` 与 1 起的 `index`。它不改变游戏状态，唯一用途是让慢订阅者契约能在实机里被观察到：把一个不读取的客户端队列顶满，确认该订阅者被关闭、其它订阅者不受影响。
 - `confirm_modal` — 确认阻塞弹窗
 - `dismiss_modal` — 关闭阻塞弹窗
 - `return_to_main_menu` — 返回主菜单
@@ -1610,6 +1611,9 @@ data: }
 | `reward_decision_required` | 奖励需要选择 |
 | `event_state_changed` | 事件内部状态变化 |
 | `available_actions_changed` | 可用动作集合变化 |
+| `debug_churn` | 仅由调试动作 `inject_event_churn` 发布（需 `STS2_ENABLE_DEBUG_ACTIONS=1`）。载荷含 `synthetic: true` 与 1 起的 `index`，用于在实机里把慢订阅者的队列顶满 |
+
+**事件类型名由 `EventChurnPolicy.EventType` 常量给出，不是字面量。** 门禁的事件名提取只认字面量，所以这里显式说明：`debug_churn` 是变量拼出来的名字，不会被自动提取发现——新增任何**变量形式**的事件名时，必须同时更新本表和提取规则，否则两者都会静默漏检。
 
 2026-09-11 在隔离副本上实测：45 秒窗口内收到 `: stream opened`、2 次 `: heartbeat` 与 123 行帧内容，事件类型覆盖 `stream_ready`、`screen_changed`（SHOP→COMBAT）、`combat_started`、`player_action_window_opened`、`available_actions_changed`。证据 `build/validation-2026-09-11/sse-frames.jsonl`（gitignore）。
 
@@ -2274,8 +2278,16 @@ Invoke-RestMethod -Uri 'http://127.0.0.1:8080/data/cards' | ConvertTo-Json -Dept
 
 ### Debug 动作
 
-`run_console_command` 仅用于开发期调试 / 验证，默认关闭。
+`run_console_command` 与 `inject_event_churn` 仅用于开发期调试 / 验证，默认关闭。
 
 - 启用方式：设置环境变量 `STS2_ENABLE_DEBUG_ACTIONS=1`
 - 发布建议：不要在正式发布默认配置中启用
 - 设计目标：用于本地实机验证提速，不应成为正式游玩 agent 的常规依赖
+
+`inject_event_churn` 专用于验证 `/events/stream` 的慢订阅者契约：它发布 N 条 `debug_churn`
+合成事件，走的是和其它事件完全相同的发布路径。典型用法是打开一个**不读取**流、再打开一个正常
+读取的流，然后 `POST {"action":"inject_event_churn","option_index":400}`：不读取的那条会被填满
+256 格队列并**被服务端关闭**，正常那条继续收事件，游戏日志出现
+`Disconnected 1 slow event subscriber(s)`。在此之前该路径只有离线证据，因为实机无法自然产生
+256 次状态变化（轮询只在字段真正变化时发布）。`count` 上限 5000，低于 257 会被拒绝，理由写在
+`EventChurnPolicy` 里：填不满一个队列的请求证明不了任何事。

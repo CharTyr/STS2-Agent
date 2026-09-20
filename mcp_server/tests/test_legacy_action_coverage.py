@@ -1,8 +1,8 @@
 """Every mod action must have a legacy tool in the full profile.
 
 The full profile exists for compatibility and validation, and docs/api.md claims it exposes
-an independent tool per action. run_console_command is the one deliberate exception: it is
-debug-gated and registered separately.
+an independent tool per action. The debug-gated actions are the deliberate exception: each is
+registered separately, and only when STS2_ENABLE_DEBUG_ACTIONS is set.
 """
 
 from __future__ import annotations
@@ -12,7 +12,7 @@ import unittest
 from pathlib import Path
 
 from sts2_mcp.client import Sts2Client
-from sts2_mcp.server import _LEGACY_ACTION_TOOLS
+from sts2_mcp.server import _DEBUG_GATED_ACTIONS, _LEGACY_ACTION_TOOLS
 
 _ACTION_BRANCH = re.compile(r'\"([a-z_]+)\"\s*=>')
 _README_TOOL = re.compile(r"^- `([a-z][a-z0-9_]*)`", re.MULTILINE)
@@ -39,7 +39,7 @@ class LegacyActionCoverageTests(unittest.TestCase):
 
         have = {spec.name for spec in _LEGACY_ACTION_TOOLS}
         self.assertEqual(
-            {"run_console_command"},
+            set(_DEBUG_GATED_ACTIONS),
             documented - have,
             "full profile is missing per-action tools: " + ", ".join(sorted(documented - have)),
         )

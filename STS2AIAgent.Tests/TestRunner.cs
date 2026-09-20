@@ -506,6 +506,12 @@ internal static class TestRunner
         yield return ("Events.ReaderLoopBounded", () => Task.Run(ConsecutiveRepeatSuppressorTests.EventStreamReaderLoopStaysBounded));
         yield return ("Events.SuppressedIdsNotBurned", () => Task.Run(ConsecutiveRepeatSuppressorTests.SuppressedRepeatsDoNotConsumeEventIds));
         yield return ("Events.SignatureStable", () => Task.Run(ConsecutiveRepeatSuppressorTests.SignatureIsStableForIdenticalPayloads));
+        yield return ("Churn.DefaultFillsQueue", () => Task.Run(EventChurnPolicyTests.DefaultCountFillsOneQueue));
+        yield return ("Churn.RejectsSmallCount", () => Task.Run(EventChurnPolicyTests.CountBelowQueueCapacityIsRejected));
+        yield return ("Churn.RejectsHugeCount", () => Task.Run(EventChurnPolicyTests.CountAboveTheCeilingIsRejected));
+        yield return ("Churn.EventsAreNumbered", () => Task.Run(EventChurnPolicyTests.EventsAreSyntheticNumberedAndInOrder));
+        yield return ("Churn.PayloadsAreDistinct", () => Task.Run(EventChurnPolicyTests.EveryEventPayloadIsDistinct));
+        yield return ("Churn.ActionIsDebugGated", () => Task.Run(EventChurnPolicyTests.ActionIsDebugGatedAndUsesTheRealPublishPath));
         yield return ("Events.OrderedDelivery", () => Task.Run(GameEventSubscriberHubTests.NormalConsumersKeepOrderUntilCapacity));
         yield return ("Events.OverflowDisconnects", GameEventSubscriberHubTests.FullQueueClosesInsteadOfDroppingOldest);
         yield return ("Events.SlowSubscriberIsolation", () => Task.Run(GameEventSubscriberHubTests.SlowSubscriberDoesNotAffectHealthySubscriber));

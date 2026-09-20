@@ -436,11 +436,39 @@ and the profile settings were restored afterwards.
   the fix the first three of those were rejections, which is what made a degraded teammate look like a
   replaced one.
 
-### The slow-subscriber overflow is still not live-verified (attempted 2026-09-20)
+### The slow-subscriber overflow, observed in the game (2026-09-20, second attempt)
+
+The first attempt could not reach 256 state changes (kept below for the record). The debug action
+added for exactly this purpose made it reachable: `POST /action
+{"action":"inject_event_churn","option_index":N}` publishes N numbered synthetic `debug_churn`
+events through the **same** publishing path as every other event. Host instance, API `18080`, game
+v0.111.0, mod 0.13.0 plus this round:
+
+- **A count that cannot fill a queue is refused.** `option_index: 100` → HTTP 400 `invalid_request`,
+  `count must be at least 257 to fill one subscriber queue (capacity 256), so nothing below that
+  proves anything.`
+- **A count that can fill one is published.** `option_index: 400` → HTTP 200 `completed`,
+  `Published 400 synthetic debug_churn event(s).`
+- **The server disconnected the subscribers that fell behind, and said so.**
+  `[WARN] [STS2AIAgent.GameEventService] Disconnected 2 slow event subscriber(s); reconnect to
+  resynchronize state.` Two, because neither stream kept up: the deliberately unread one, and the one
+  the probe was draining too slowly to absorb 400 events arriving in a single burst.
+- **Nothing was silently dropped in place of a disconnect.** The healthy subscriber received its
+  `stream_ready` and then `debug_churn` frames; the frames stop where its own queue filled, which is
+  the contract — a full queue ends that subscriber instead of evicting the oldest event and pretending
+  nothing happened.
+
+That closes the last offline-only item for this round. One caveat worth stating: the
+`Disconnected 2` line cannot tell the two cases apart by itself, so the evidence that the healthy
+subscriber kept working is the frames it counted before its own queue filled. A future run could keep
+the healthy reader ahead of the burst (`option_index` well under what a fast drain absorbs) to watch
+one subscriber dropped while another survives the same burst.
+
+### Why the first attempt failed (kept for the record)
 
 A stream that is never read, plus enough state changes to fill its 256-slot queue, is what the
-disconnect contract needs. Reaching that on a live instance was not possible in this session, and
-the reason is worth recording rather than leaving as "not done":
+disconnect contract needs. Reaching that on a live instance was not possible at first, and the reason
+is worth recording rather than leaving as "not done":
 
 - The poll loop only publishes an event when a digest field actually changes, so a client sitting on
   `MAIN_MENU` receives nothing to fall behind on — the queue stays empty no matter how long it holds
@@ -450,12 +478,8 @@ the reason is worth recording rather than leaving as "not done":
   the player lookup, so it answers 409 `invalid_action` until a run exists; the run-provoking actions
   (`act`, `fight`) are themselves console commands, and the main menu's own actions do not cycle a
   screen (`switch_profile` and `abandon_run` both left the screen at `MAIN_MENU`).
-- What would make it reachable: one long combat with a client that stops reading partway through, or
-  a debug hook that injects synthetic digest churn. Until one of those exists, the overflow contract
-  rests on the offline tests (`Events.OverflowDisconnects` proves a full queue closes the subscriber
-  instead of dropping the oldest event, `Events.SlowSubscriberIsolation` proves the healthy
-  subscriber is unaffected), which use the same bounded channel configuration as production but are
-  not the live path.
+- That is why `inject_event_churn` exists: it publishes through the real path instead of waiting for
+  the game to cooperate.
 
 ### Those three findings, fixed and re-verified in the game (2026-09-13)
 

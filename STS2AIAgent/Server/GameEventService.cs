@@ -77,6 +77,27 @@ internal sealed class GameEventService
         }
     }
 
+    /// <summary>
+    /// Publishes <paramref name="count"/> synthetic events so a live run can push a subscriber's
+    /// bounded queue past its capacity on demand. Debug-gated by the caller; the events travel the
+    /// same publishing path as every other event, which is the point -- they exercise the real
+    /// deliverability rules rather than a copy of them. Returns how many were accepted.
+    /// </summary>
+    public int PublishDebugChurn(GameStatePayload state, int count)
+    {
+        lock (_gate)
+        {
+            var published = 0;
+            foreach (var payload in EventChurnPolicy.BuildEvents(state.run_id, state.screen, count))
+            {
+                Publish(EventChurnPolicy.EventType, payload);
+                published++;
+            }
+
+            return published;
+        }
+    }
+
     private void Unsubscribe(long subscriberId)
     {
         lock (_gate)
