@@ -7,13 +7,24 @@ import os
 import socket
 import time
 from dataclasses import dataclass
-from typing import Any, Iterable, Iterator
+from typing import Any, Callable, Iterable, Iterator, TypeVar
 from urllib import error, request
 
 from .client_actions import Sts2ActionMethods
 from .envelope import Envelope, EnvelopeError, Sts2ApiError, parse, parse_strict
+from .payloads import (
+    AvailableActions,
+    DecisionLogEntry,
+    PayloadSchemaError,
+    parse_available_actions,
+    parse_decision_log,
+)
 
 logger = logging.getLogger("sts2_mcp")
+
+# The parsed type a `sts2_mcp.payloads` parser returns, so `_parse_payload` keeps that return type
+# at each call site instead of widening every typed getter to `Any`.
+_ParsedPayload = TypeVar("_ParsedPayload")
 
 
 def _set_socket_read_timeout(response: Any, timeout: float) -> None:
@@ -81,6 +92,43 @@ class Sts2Client(Sts2ActionMethods):
 
     def get_decisions(self, limit: int = 50) -> Any:
         return self._request("GET", f"/decisions?limit={limit}", expect_object_data=False)
+
+    def get_action_catalog(self) -> AvailableActions:
+        """`/actions/available` as typed descriptors.
+
+        Kept beside `get_available_actions` rather than replacing it: the old method's return value
+        is what every existing tool, fake and external caller already handles, and a release is the
+        wrong moment to change a public return type. This one is for callers that want the
+        descriptor flags without re-reading them out of a dict.
+        """
+        return self._parse_payload(parse_available_actions, self._request("GET", "/actions/available"))
+
+    def get_decision_entries(self, limit: int = 50) -> tuple[DecisionLogEntry, ...]:
+        """`/decisions` as typed entries; see `get_action_catalog` for why both forms exist."""
+        return self._parse_payload(
+            parse_decision_log,
+            self._request("GET", f"/decisions?limit={limit}", expect_object_data=False),
+        )
+
+    @staticmethod
+    def _parse_payload(parser: Callable[[Any], _ParsedPayload], value: Any) -> _ParsedPayload:
+        """Run a `sts2_mcp.payloads` parser, reporting its failure as the mod's error contract.
+
+        The transport succeeded and the envelope was well formed; only the fields inside were
+        wrong. `invalid_response` with the offending path is the same answer the client already
+        gives for a malformed envelope, and it is deliberately non-retryable -- re-requesting an
+        unchanged payload cannot repair a type.
+        """
+        try:
+            return parser(value)
+        except PayloadSchemaError as exc:
+            raise Sts2ApiError(
+                status_code=200,
+                code="invalid_response",
+                message=f"Server response payload was invalid: {exc}",
+                details=exc.as_details(),
+                retryable=False,
+            ) from exc
 
     def get_game_data_collection(self, collection: str) -> Any:
         return self._request("GET", f"/data/{collection}", expect_object_data=False)

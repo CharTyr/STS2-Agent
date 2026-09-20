@@ -34,6 +34,9 @@ $modProject = Join-Path $ProjectRoot "STS2AIAgent/STS2AIAgent.csproj"
 $mcpRoot = Join-Path $ProjectRoot "mcp_server"
 $clientPy = Join-Path $mcpRoot "src/sts2_mcp/client.py"
 $serverPy = Join-Path $mcpRoot "src/sts2_mcp/server.py"
+$payloadsPy = Join-Path $mcpRoot "src/sts2_mcp/payloads.py"
+# Modules whose absence the packaging or import contract would otherwise only reveal at runtime.
+$requiredMcpModules = @($clientPy, $serverPy, $payloadsPy)
 $buildScript = Join-Path $ProjectRoot "scripts/build-mod.ps1"
 $testScript = Join-Path $ProjectRoot "scripts/test-mod-load.ps1"
 $stateInvariantScript = Join-Path $ProjectRoot "scripts/test-state-invariants.ps1"
@@ -71,7 +74,24 @@ Invoke-Step -Name "Build mod project ($Configuration)" -Action {
 }
 
 Invoke-Step -Name "Compile Python sources" -Action {
-    Invoke-CheckedNative -FilePath "python" -Arguments @("-m", "py_compile", $clientPy, $serverPy)
+    # Every module, not a remembered pair: naming only client.py and server.py meant a syntax error
+    # in any other module (payloads.py, envelope.py, state_views.py, ...) reached this gate only if
+    # some test happened to import it. The list below stays, because the whole-package import step
+    # after this one would otherwise report a missing module as a confusing ImportError.
+    $missingModules = @($requiredMcpModules | Where-Object { -not (Test-Path $_) })
+    if ($missingModules.Count -gt 0) {
+        throw "Missing MCP module(s): $($missingModules -join ', ')"
+    }
+
+    $mcpModules = @(
+        Get-ChildItem -Path (Join-Path $mcpRoot "src/sts2_mcp") -Filter "*.py" -File |
+            ForEach-Object { $_.FullName }
+    )
+    if ($mcpModules.Count -lt 6) {
+        throw "Expected at least 6 MCP modules to compile, found $($mcpModules.Count); the walk is wrong."
+    }
+
+    Invoke-CheckedNative -FilePath "python" -Arguments (@("-m", "py_compile") + $mcpModules)
 }
 
 Invoke-Step -Name "Import MCP server package" -Action {

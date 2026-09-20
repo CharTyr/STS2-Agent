@@ -5,6 +5,7 @@
 ## Unreleased
 
 - Added a versioned, no-network decision-quality benchmark: eleven snapshot-evidenced combat, event, map, rest, shop, and reward cases; deterministic scoring; an explicit reference-answer baseline; and offline contracts. Scores describe recorded action constraints only, never simulated outcomes or live-model quality.
+- Added typed Python models for the two mod payloads that have a fixed field set. `sts2_mcp.payloads` owns `ActionDescriptor` / `AvailableActions` and `DecisionLogEntry`, including the validation and extension policy; `Sts2Client.get_action_catalog()` and `Sts2Client.get_decision_entries()` expose them, and a malformed payload arrives as the mod's own non-retryable `invalid_response` with the offending field path. The existing dict-returning getters are unchanged, so no caller has to migrate on this release.
 
 ### Added
 
