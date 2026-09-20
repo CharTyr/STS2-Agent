@@ -134,6 +134,65 @@ internal static class OpenAiCompatibleClientTests
         Assert.Equal("enabled", extraBody.GetProperty("thinking").GetProperty("type").GetString());
     }
 
+    public static async Task CompleteAsync_AttachesImageAsDataUrlContentParts()
+    {
+        var handler = new RecordingHandler("""
+            {"choices":[{"message":{"role":"assistant","content":"seen"}}]}
+            """);
+        var client = new OpenAiCompatibleClient(
+            new LlmEndpoint { BaseUrl = "https://example.test/v1", ApiKey = "sk-test" },
+            handler);
+
+        byte[] jpeg = { 0xFF, 0xD8, 0xFF, 0xE0, 1, 2, 3, 0xFF, 0xD9 };
+        await client.CompleteAsync(new LlmRequest
+        {
+            Model = "gpt-5",
+            Messages = new[] { LlmMessage.User("what is on screen?", jpeg) },
+            Stream = false
+        }, CancellationToken.None);
+
+        Assert.NotNull(handler.LastBody);
+        using var document = JsonDocument.Parse(handler.LastBody!);
+        var content = document.RootElement.GetProperty("messages")[0].GetProperty("content");
+        Assert.Equal(JsonValueKind.Array, content.ValueKind);
+        Assert.Equal(2, content.GetArrayLength());
+
+        var textPart = content[0];
+        Assert.Equal("text", textPart.GetProperty("type").GetString());
+        Assert.Equal("what is on screen?", textPart.GetProperty("text").GetString());
+
+        var imagePart = content[1];
+        Assert.Equal("image_url", imagePart.GetProperty("type").GetString());
+        var url = imagePart.GetProperty("image_url").GetProperty("url").GetString();
+        Assert.NotNull(url);
+        Assert.True(url!.StartsWith("data:image/jpeg;base64,", StringComparison.Ordinal), $"unexpected data URL prefix: {url}");
+        var payload = url.Substring("data:image/jpeg;base64,".Length);
+        Assert.Equal(Convert.ToBase64String(jpeg), payload);
+    }
+
+    public static async Task CompleteAsync_PlainContentStaysStringWithoutImage()
+    {
+        var handler = new RecordingHandler("""
+            {"choices":[{"message":{"role":"assistant","content":"ok"}}]}
+            """);
+        var client = new OpenAiCompatibleClient(
+            new LlmEndpoint { BaseUrl = "https://example.test/v1", ApiKey = "sk-test" },
+            handler);
+
+        await client.CompleteAsync(new LlmRequest
+        {
+            Model = "gpt-5",
+            Messages = new[] { LlmMessage.User("hi") },
+            Stream = false
+        }, CancellationToken.None);
+
+        Assert.NotNull(handler.LastBody);
+        using var document = JsonDocument.Parse(handler.LastBody!);
+        var content = document.RootElement.GetProperty("messages")[0].GetProperty("content");
+        Assert.Equal(JsonValueKind.String, content.ValueKind);
+        Assert.Equal("hi", content.GetString());
+    }
+
     public static void ParseSse_AccumulatesContentAndToolCalls()
     {
         const string payload = """

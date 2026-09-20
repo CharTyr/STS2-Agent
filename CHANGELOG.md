@@ -4,6 +4,10 @@
 
 ## Unreleased
 
+### Added
+
+- **An offline contract for vision (image) requests.** `OpenAI.VisionDataUrl` pins that a user message carrying a JPEG is serialized as the two-part `image_url` data-URL content array providers expect (text part first, base64 payload decoding back to the exact bytes), and `OpenAI.VisionPlainContent` pins that messages without an image keep plain string content. This closes the last `Partial` row on the model-compatibility matrix's request surface; sampling against a real multimodal endpoint remains open.
+
 ## v0.13.1 - 2026-09-20
 
 > Event-stream reliability: the SSE poller is demand-driven, a full subscriber queue now

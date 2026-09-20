@@ -232,6 +232,8 @@ internal static class TestRunner
         yield return ("OpenAI.ParseCompletion", () => Task.Run(OpenAiCompatibleClientTests.ParseCompletion_ReadsToolCallsAndReasoning));
         yield return ("OpenAI.PostBody", OpenAiCompatibleClientTests.CompleteAsync_PostsOpenAiCompatibleBody);
         yield return ("OpenAI.DeepSeekExtraBody", OpenAiCompatibleClientTests.CompleteAsync_PostsDeepSeekThinkingInExtraBody);
+        yield return ("OpenAI.VisionDataUrl", OpenAiCompatibleClientTests.CompleteAsync_AttachesImageAsDataUrlContentParts);
+        yield return ("OpenAI.VisionPlainContent", OpenAiCompatibleClientTests.CompleteAsync_PlainContentStaysStringWithoutImage);
         yield return ("OpenAI.ParseSse", () => Task.Run(OpenAiCompatibleClientTests.ParseSse_AccumulatesContentAndToolCalls));
         yield return ("OpenAI.ParseCompletionUsage", () => Task.Run(OpenAiCompatibleClientTests.ParseCompletion_ReadsUsage));
         yield return ("OpenAI.ParseSseUsage", () => Task.Run(OpenAiCompatibleClientTests.ParseSse_ReadsUsageFromEndChunk));

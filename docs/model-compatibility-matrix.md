@@ -1,6 +1,6 @@
 # OpenAI-Compatible Model Compatibility Matrix
 
-> Last updated: 2026-09-08. Grounded in the current source (STS2AIAgent/Llm/OpenAiCompatibleClient.cs) and offline tests; live-model sampling remains a per-provider follow-up. This document complements the status page; it is not a substitute for a live-model test against a real endpoint.
+> Last updated: 2026-09-20. Grounded in the current source (STS2AIAgent/Llm/OpenAiCompatibleClient.cs) and offline tests; live-model sampling remains a per-provider follow-up. This document complements the status page; it is not a substitute for a live-model test against a real endpoint.
 
 Scope: behavior expected from any OpenAI-compatible /v1/chat/completions endpoint (official OpenAI, DeepSeek, SiliconFlow, OpenRouter, Ollama, LM Studio, vLLM, and clones). A row is `Verified` only when there is an executable test or direct source contract; `Partial` means the code path exists but only samples were validated; `Gap` means not covered yet.
 
@@ -12,7 +12,7 @@ Scope: behavior expected from any OpenAI-compatible /v1/chat/completions endpoin
 | JSON fallback when tools unavailable | ShouldRetryWithoutStream demotes only HTTP 400/415/422 mentioning stream; agent fallback JsonActFallback asks for a bare JSON action object | OpenAI.ParseCompletion; AgentLoop.JsonActNoTools, JsonIgnoredWithTools, CrystalJsonNoTools | Verified |
 | Thinking / reasoning effort | reasoning_effort sent when configured; gpt-4o / gpt-5 / o3-mini / deepseek / explicit / off mapping in ThinkingRequestBuilder | Thinking.* tests | Verified |
 | DeepSeek-style thinking wrapper | thinking body + extra_body.thinking sent only for deepseek profile | OpenAI.DeepSeekExtraBody | Verified |
-| Vision (image input) | image_url data URL content parts when ImageJpeg present | ToMessageDto path; no dedicated offline test | Partial |
+| Vision (image input) | image_url data URL content parts when ImageJpeg present; plain string content kept when absent | OpenAI.VisionDataUrl, OpenAI.VisionPlainContent (offline, request-body contract) | Verified (offline) |
 | Cancellation | play_card / request cancellation propagates through linked CTS | AgentLoop.CancelPropagates | Verified |
 | Connection reuse / streaming body | HttpCompletionOption.ResponseHeadersRead when streaming; SSE parsing with [DONE] handling | OpenAI.ParseSse, ParseSsePayload | Verified |
 
