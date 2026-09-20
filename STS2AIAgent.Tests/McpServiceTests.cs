@@ -86,6 +86,42 @@ internal static class McpServiceTests
         Assert.Equal(1, bridge.ActCalls);
     }
 
+    public static async Task ToolsCall_DecisionLogRecordsAcceptedActOnly()
+    {
+        var bridge = new FakeMcpBridge();
+        var decisions = new DecisionLog();
+        var server = CreateServer(bridge: bridge, decisions: decisions);
+
+        var rejected = await Rpc(
+            server,
+            """{"jsonrpc":"2.0","id":20,"method":"tools/call","params":{"name":"act","arguments":{"action":"not_a_real_action","reason":"should never be logged"}}}""");
+        Assert.True(rejected.GetProperty("result").GetProperty("isError").GetBoolean());
+        Assert.Equal(0, decisions.Snapshot().Count);
+
+        var accepted = await Rpc(
+            server,
+            """{"jsonrpc":"2.0","id":21,"method":"tools/call","params":{"name":"act","arguments":{"action":"play_card","card_index":0,"reason":"Strike the weakest slime.  "}}}""");
+        Assert.False(accepted.GetProperty("result").GetProperty("isError").GetBoolean());
+
+        var logged = await Rpc(server, """{"jsonrpc":"2.0","id":22,"method":"tools/call","params":{"name":"get_decision_log","arguments":{"limit":10}}}""");
+        var text = logged.GetProperty("result").GetProperty("content")[0].GetProperty("text").GetString();
+        using var doc = JsonDocument.Parse(text!);
+        var entries = doc.RootElement.GetProperty("decisions");
+        Assert.Equal(1, entries.GetArrayLength());
+        Assert.Equal("native_mcp", entries[0].GetProperty("source").GetString());
+        Assert.Equal("play_card", entries[0].GetProperty("action").GetString());
+        Assert.Equal("Strike the weakest slime.", entries[0].GetProperty("reason").GetString());
+    }
+
+    public static async Task NativeServerWithoutDecisionLog_StaysSilent()
+    {
+        var server = CreateServer();
+        var read = await Rpc(server, """{"jsonrpc":"2.0","id":23,"method":"tools/call","params":{"name":"get_decision_log"}}""");
+        var text = read.GetProperty("result").GetProperty("content")[0].GetProperty("text").GetString();
+        using var doc = JsonDocument.Parse(text!);
+        Assert.Equal(0, doc.RootElement.GetProperty("decisions").GetArrayLength());
+    }
+
     public static async Task Notification_Returns202()
     {
         var server = CreateServer();
@@ -241,12 +277,17 @@ internal static class McpServiceTests
         Assert.False(native.HasHeader("Access-Control-Allow-Origin"));
     }
 
-    private static NativeMcpServer CreateServer(bool enabled = true, FakeMcpBridge? bridge = null, string endpointUrl = "http://127.0.0.1:8080/mcp")
+    private static NativeMcpServer CreateServer(
+        bool enabled = true,
+        FakeMcpBridge? bridge = null,
+        string endpointUrl = "http://127.0.0.1:8080/mcp",
+        DecisionLog? decisions = null)
     {
         var server = new NativeMcpServer(
             bridge ?? new FakeMcpBridge(),
             () => new { status = "ready", service = "sts2-ai-agent" },
-            "9.9.9");
+            "9.9.9",
+            decisions);
         if (enabled)
         {
             server.SetEnabled(true, endpointUrl);

@@ -20,6 +20,8 @@
     <Compile Include="..\STS2AIAgent\Agent\SessionBudgetGuard.cs" Link="Agent\SessionBudgetGuard.cs" />
     <Compile Include="..\STS2AIAgent\Agent\PlayerFacingSession.cs" Link="Agent\PlayerFacingSession.cs" />
     <Compile Include="..\STS2AIAgent\Agent\DiagnosticExport.cs" Link="Agent\DiagnosticExport.cs" />
+    <Compile Include="..\STS2AIAgent\Agent\DecisionLog.cs" Link="Agent\DecisionLog.cs" />
+    <Compile Include="..\STS2AIAgent\Agent\DecisionContext.cs" Link="Agent\DecisionContext.cs" />
     <Compile Include="..\STS2AIAgent\Server\LoopbackListener.cs" Link="Server\LoopbackListener.cs" />
     <Compile Include="..\STS2AIAgent\Server\CompanionPortFile.cs" Link="Server\CompanionPortFile.cs" />
     <Compile Include="..\STS2AIAgent\Multiplayer\CompanionHealth.cs" Link="Multiplayer\CompanionHealth.cs" />

@@ -419,6 +419,15 @@ def create_server(client: Sts2Client | None = None, tool_profile: str | None = N
         """List currently executable actions with `requires_index` and `requires_target` hints."""
         return sts2.get_available_actions()
 
+    @mcp.tool
+    def get_decision_log(limit: int = 50) -> list[dict[str, Any]]:
+        """Read recent accepted decisions with the rationale each one carried.
+
+        Entries are ordered oldest first and end at the most recent decision. Use it to
+        review why the agent played the way it did, or to diff a run against another.
+        """
+        return list(sts2.get_decisions(limit=limit) or [])
+
     if profile in {"full", "layered"}:
         @mcp.tool
         def get_planner_context(planner_note: str | None = None) -> dict[str, Any]:

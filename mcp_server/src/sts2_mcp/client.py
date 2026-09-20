@@ -95,6 +95,9 @@ class Sts2Client(Sts2ActionMethods):
         payload = self._request("GET", "/actions/available")
         return list(payload.get("actions", []))
 
+    def get_decisions(self, limit: int = 50) -> Any:
+        return self._request("GET", f"/decisions?limit={limit}", expect_object_data=False)
+
     def get_game_data_collection(self, collection: str) -> Any:
         return self._request("GET", f"/data/{collection}", expect_object_data=False)
 

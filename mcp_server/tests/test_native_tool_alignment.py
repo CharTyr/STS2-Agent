@@ -51,6 +51,33 @@ def _find_source_root() -> Path:
     )
 
 
+def _initializer_end(source: str, start: int) -> int:
+    """Index of the `;` that terminates an initializer, ignoring strings and comments.
+
+    A description string may contain a `;` -- "Newest last; use it to review ..." did --
+    and a plain `source.find(";")` then ends the initializer inside that literal. The
+    truncated expression silently loses every list it chained to (`.Concat(Play)`), which
+    reads as the Play tools having been deleted from AgentTools.Mcp.
+    """
+    index = start
+    while index < len(source):
+        char = source[index]
+        if char == '"':
+            index += 1
+            while index < len(source) and source[index] != '"':
+                index += 2 if source[index] == "\\" else 1
+        elif source.startswith("//", index):
+            newline = source.find("\n", index)
+            index = len(source) if newline < 0 else newline
+        elif source.startswith("/*", index):
+            close = source.find("*/", index)
+            index = len(source) if close < 0 else close + 2
+        elif char == ";":
+            return index
+        index += 1
+    return -1
+
+
 def _extract_list_initializers(source: str) -> dict[str, str]:
     matches = list(_LIST_FIELD.finditer(source))
     if not matches:
@@ -61,7 +88,7 @@ def _extract_list_initializers(source: str) -> dict[str, str]:
     initializers: dict[str, str] = {}
     for match in matches:
         field_name = match.group(1)
-        end = source.find(";", match.end())
+        end = _initializer_end(source, match.end())
         if end < 0:
             raise AssertionError(f"AgentTools.cs initializer for {field_name} is unterminated")
         initializers[field_name] = source[match.end() : end]

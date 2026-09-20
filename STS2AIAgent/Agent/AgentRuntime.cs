@@ -63,6 +63,10 @@ internal sealed class AgentRuntime
     private bool _requestingModel;
     private volatile bool _requestingModelStatus;
     private readonly List<string> _diagnosticEvents = new();
+    private readonly DecisionLog _decisions = new(
+        System.IO.Path.Combine(
+            System.IO.Path.GetDirectoryName(SettingsStore.DefaultPath()) ?? ".",
+            "decisions.jsonl"));
     private SessionBudgetGuard _budgetGuard;
     private string? _proactiveSituationKey;
     private readonly ProactiveChatSession _proactiveChat = new();
@@ -222,6 +226,27 @@ internal sealed class AgentRuntime
 
     public string LastThought => _lastThought;
 
+    public IReadOnlyList<DecisionLogEntry> RecentDecisions(int limit = 50) => _decisions.Snapshot(limit);
+
+    public string DecisionLogJson(int limit = 50) => _decisions.RenderJson(limit);
+
+    internal DecisionLogEntry RecordDecision(
+        string source,
+        string action,
+        string? reason = null,
+        string? stateFingerprint = null,
+        int requestsSpent = 0,
+        int? totalTokens = null)
+    {
+        return _decisions.Record(
+            source,
+            action,
+            reason,
+            stateFingerprint,
+            requestsSpent,
+            totalTokens);
+    }
+
     public LlmUsage SessionUsage
     {
         get { lock (_gate) return _sessionUsage; }
@@ -374,7 +399,11 @@ internal sealed class AgentRuntime
 
     public void Initialize()
     {
-        NativeMcpServer.BindRuntime(new GameBridge(), Router.BuildHealthData, Router.ModVersion);
+        NativeMcpServer.BindRuntime(
+            new GameBridge(),
+            Router.BuildHealthData,
+            Router.ModVersion,
+            _decisions);
         ApplyMcpFromSettings();
         AppendLog($"API {Server.HttpServer.Instance.Prefix}  role={InstanceRole.Current}");
         if (InstanceRole.IsCompanion)
@@ -1191,6 +1220,13 @@ internal sealed class AgentRuntime
         if (!string.IsNullOrWhiteSpace(result.Acted))
         {
             _lastAction = result.Acted;
+            RecordDecision(
+                "agent_loop",
+                result.Acted,
+                result.Reasoning,
+                result.StateFingerprint,
+                result.RequestsSpent,
+                result.Usage?.TotalTokens);
         }
 
         _lastThought = result.Reasoning ?? result.AssistantText ?? _lastThought;

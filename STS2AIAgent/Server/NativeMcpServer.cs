@@ -46,15 +46,21 @@ internal sealed class NativeMcpServer
     private readonly object _gate = new();
     private readonly IGameBridge _bridge;
     private readonly Func<object> _health;
+    private readonly DecisionLog? _decisions;
     private readonly string _version;
     private bool _enabled;
     private string? _endpointUrl;
     private string? _sessionId;
 
-    public NativeMcpServer(IGameBridge bridge, Func<object> health, string version)
+    public NativeMcpServer(
+        IGameBridge bridge,
+        Func<object> health,
+        string version,
+        DecisionLog? decisions = null)
     {
         _bridge = bridge;
         _health = health;
+        _decisions = decisions;
         _version = string.IsNullOrWhiteSpace(version) ? "0.0.0" : version.Trim();
     }
 
@@ -66,9 +72,13 @@ internal sealed class NativeMcpServer
         }
     }
 
-    public static NativeMcpServer BindRuntime(IGameBridge bridge, Func<object> health, string version)
+    public static NativeMcpServer BindRuntime(
+        IGameBridge bridge,
+        Func<object> health,
+        string version,
+        DecisionLog? decisions = null)
     {
-        var server = new NativeMcpServer(bridge, health, version);
+        var server = new NativeMcpServer(bridge, health, version, decisions);
         _runtime = server;
         return server;
     }
@@ -478,6 +488,11 @@ internal sealed class NativeMcpServer
                     cancellationToken);
             case "act":
                 return await ExecuteActAsync(arguments, cancellationToken);
+            case "get_decision_log":
+                // The key is read inline so test_native_tool_alignment can see it: a delegated
+                // reader would be invisible to the argument-name comparison.
+                return _decisions?.RenderJson(Math.Clamp(ReadInt(arguments, "limit") ?? 50, 1, 200))
+                    ?? """{"decisions":[]}""";
             default:
                 return JsonSerializer.Serialize(new { error = "Unknown tool '" + name + "'" }, JsonOptions);
         }
@@ -523,10 +538,8 @@ internal sealed class NativeMcpServer
         var x = ReadInt(arguments, "x");
         var y = ReadInt(arguments, "y");
         var tool = ReadString(arguments, "tool");
-        // Keep the native and Python guided schemas aligned. AgentLoop consumes the same optional
-        // reason as player-facing rationale; the native MCP decision log will consume this value
-        // when that shared log lands, while the game action itself intentionally ignores metadata.
-        _ = ReadString(arguments, "reason");
+        // Metadata never enters the game action itself; it is recorded only after acceptance.
+        var reason = ReadString(arguments, "reason")?.Trim();
         var actionsJson = await _bridge.GetAvailableActionsJsonAsync(cancellationToken);
         var compactJson = await _bridge.GetCompactStateJsonAsync(cancellationToken);
         var indexError = ActIndexValidator.Validate(
@@ -560,6 +573,7 @@ internal sealed class NativeMcpServer
             y,
             tool,
             cancellationToken);
+        _decisions?.Record("native_mcp", action, string.IsNullOrWhiteSpace(reason) ? null : reason);
         if (!ActIndexValidator.IsUnsettled(result))
         {
             return result;

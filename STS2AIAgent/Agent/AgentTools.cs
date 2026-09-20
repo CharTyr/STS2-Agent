@@ -77,6 +77,15 @@ internal static class AgentTools
         }
     };
 
+    private static readonly object DecisionLogParameters = new
+    {
+        type = "object",
+        properties = new
+        {
+            limit = new { type = "integer", description = "How many recent decisions to return, newest last. Default 50, maximum 200." }
+        }
+    };
+
     public static readonly IReadOnlyList<LlmTool> ReadOnly = new[]
     {
         Tool("get_game_state", "Read the compact live game state. Always prefer this over memory. This is sufficient to play every screen without vision."),
@@ -100,7 +109,8 @@ internal static class AgentTools
 
     public static readonly IReadOnlyList<LlmTool> Mcp = new[]
     {
-        Tool("health_check", "Check whether the STS2 AI Agent mod is loaded and this MCP endpoint is open.")
+        Tool("health_check", "Check whether the STS2 AI Agent mod is loaded and this MCP endpoint is open."),
+        Tool("get_decision_log", "Read the recent accepted decisions with the rationale each one carried. Newest last; use it to review why the agent played the way it did.", DecisionLogParameters)
     }.Concat(Play).ToArray();
 
     private static LlmTool Tool(string name, string description, object? parameters = null)

@@ -1,6 +1,7 @@
 using System.Net;
 using System.Diagnostics;
 using System.Text;
+using System.Text.Json;
 using System.Threading;
 using MegaCrit.Sts2.Core.Debug;
 using MegaCrit.Sts2.Core.Logging;
@@ -229,6 +230,19 @@ internal static class Router
             }
 
             if (request.HttpMethod.Equals("GET", StringComparison.OrdinalIgnoreCase) &&
+                request.Url?.AbsolutePath == "/decisions")
+            {
+                await WriteJsonAsync(response, 200, new
+                {
+                    ok = true,
+                    request_id = requestId,
+                    data = AgentRuntime.Instance.RecentDecisions(ReadDecisionLimit(request))
+                });
+                statusCode = 200;
+                return;
+            }
+
+            if (request.HttpMethod.Equals("GET", StringComparison.OrdinalIgnoreCase) &&
                 request.Url?.AbsolutePath == "/actions/available")
             {
                 var payload = await GameThread.InvokeAsync(GameStateService.BuildAvailableActionsPayload);
@@ -292,6 +306,8 @@ internal static class Router
                 }
 
                 var actionResponse = await GameThread.InvokeAsync(() => GameActionService.ExecuteAsync(actionRequest));
+                var decisionReason = DecisionContext.ReadReason(actionRequest.client_context);
+                AgentRuntime.Instance.RecordDecision("http_api", actionRequest.action, decisionReason);
                 await WriteJsonAsync(response, 200, new
                 {
                     ok = true,
@@ -388,6 +404,16 @@ internal static class Router
             process_id = connection.ProcessId,
             auto_play = AgentRuntime.Instance.CompanionAutoPlay
         };
+    }
+
+    /// <summary>
+    /// Reads the optional <c>limit</c> query parameter for <c>GET /decisions</c>, clamped so a
+    /// caller cannot ask the mod to materialize an unbounded slice of the log.
+    /// </summary>
+    internal static int ReadDecisionLimit(HttpListenerRequest request)
+    {
+        var raw = request.QueryString["limit"];
+        return int.TryParse(raw, out var parsed) ? Math.Clamp(parsed, 1, 200) : 50;
     }
 
     private static bool IsMcpPath(string? path)

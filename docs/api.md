@@ -1509,7 +1509,7 @@ compact 不是 `/state` 的子集，**很多键换了名字**。MCP `get_game_st
 | `x` | number \| null | 水晶球格子的 X 坐标（`crystal_clear_cell`） |
 | `y` | number \| null | 水晶球格子的 Y 坐标（`crystal_clear_cell`） |
 | `tool` | string \| null | 水晶球工具：`big` 或 `small` |
-| `client_context` | object \| null | 可选的客户端上下文（如调用来源标识） |
+| `client_context` | object \| null | 可选的客户端上下文（如调用来源标识）。`client_context.decision_reason`（string）会被记进 `GET /decisions`，作为这一步的玩家可见理由 |
 | `command` | string \| null | 控制台命令（仅 `run_console_command`） |
 | `player_id` | string \| null | 多人场景下的行动归属校验；不属于本机角色时返回 `forbidden_actor` |
 
@@ -1715,6 +1715,41 @@ MCP 侧的 `get_relevant_game_data` 读取这份元数据时，`item_ids` 可以
 
 ```powershell
 Invoke-RestMethod -Uri 'http://127.0.0.1:8080/data/cards' | ConvertTo-Json -Depth 3 -Compress
+```
+
+---
+
+## `GET /decisions`
+
+按时间顺序返回**已被接受**的决策（最旧在前，最新在最后），用于复盘「这一步为什么这么打」。这是进程内共享的一份日志：游戏内自动游玩、`POST /action`（外部 agent）和原生 MCP 的 `act` 都写同一份，`source` 区分来源。
+
+查询参数 `limit` 可选，默认 50，最大 200；超出范围会被夹到边界，非法值回落到默认值。
+
+| 字段 | 类型 | 说明 |
+| --- | --- | --- |
+| `id` | number | 进程内单调递增序号，从 1 开始 |
+| `timestamp` | string | ISO 8601 UTC 时间戳 |
+| `source` | string | 写入者：`agent_loop`（游戏内自动游玩）、`http_api`（`POST /action`）、`native_mcp`（原生 MCP `act`） |
+| `action` | string | 被接受的动作名 |
+| `reason` | string \| null | 该动作携带的一句话理由；调用方没给时为 `null` |
+| `state_fingerprint` | string \| null | 动作执行后的紧凑状态指纹（无进展守卫用）；不可得时为 `null` |
+| `requests_spent` | number | 这一步花掉的模型请求数（`http_api` / `native_mcp` 记为 0） |
+| `total_tokens` | number \| null | 这一步的 token 总量；模型未回报用量时为 `null` |
+
+只有**被接受**的动作才会进日志：动作名不在 `available_actions` 里、索引越界或执行失败时都不记录，所以日志里不会出现玩家界面上从未发生过的选择。
+
+理由文本来自模型的 `reason` 参数（见 `POST /action` 的 `client_context.decision_reason`），落盘前会经过与诊断导出相同的脱敏和长度裁剪。
+
+日志同时以 JSONL 追加到设置文件同目录的 `decisions.jsonl`（默认 `%APPDATA%\STS2AIAgent\decisions.jsonl`），超过 2 MB 时轮转为 `decisions.jsonl.previous`。写盘是尽力而为：诊断目录不可写时只影响落盘，不影响对局。
+
+### 响应示例
+
+```json
+{
+  "ok": true,
+  "request_id": "…",
+  "data": []
+}
 ```
 
 ---
