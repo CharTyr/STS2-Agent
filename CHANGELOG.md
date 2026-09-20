@@ -4,6 +4,13 @@
 
 ## Unreleased
 
+## v0.13.1 - 2026-09-20
+
+> Event-stream reliability: the SSE poller is demand-driven, a full subscriber queue now
+> disconnects the slow client instead of silently discarding events, shutdown can no longer
+> resurrect event state, and a debug action can prove the overflow contract in a live game.
+> Co-op hosts get companion-identity and per-role health-key fixes.
+
 ### Added
 
 - **A debug action that can prove the slow-subscriber contract in a live game.** `/events/stream` closes a subscriber whose 256-slot queue fills instead of dropping the oldest event, but that path had no in-game evidence: the poll loop publishes only when a digest field really changes, so an idle client never falls behind, and the debug console that could have driven 256 changes answers 409 until a run exists. `POST /action {"action":"inject_event_churn","option_index":400}` (needs `STS2_ENABLE_DEBUG_ACTIONS=1`) publishes numbered synthetic `debug_churn` events through the same publishing path as every other event, so one unread stream plus one healthy stream is enough to watch the slow one get dropped. Counts below 257 are rejected on purpose — a request that cannot fill a queue proves nothing.
