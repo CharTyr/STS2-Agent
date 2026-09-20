@@ -69,14 +69,14 @@ For a change crossing state, action, agent, UI, or MCP, trace it in both directi
 
 ## Code shape and its known debts
 
-Measured 2026-09-20 across 114 mod source files totalling 35,129 lines (git-tracked only, which is what the gate counts -- a working tree also holds whatever the developer left in it). These numbers are here
+Measured 2026-09-20 across 122 mod source files totalling 35,744 lines (git-tracked only, which is what the gate counts -- a working tree also holds whatever the developer left in it). These numbers are here
 because nobody was counting, and that is how a codebase stops being navigable -- not through a bad
 commit, but through a thousand good ones. The `arch-facts` gate checks this table against the
 files, so it cannot quietly go stale the way it did between ADR 0001 and the splits below.
 
 | File | Lines |
 | --- | ---: |
-| [GameStateService.cs](../../../STS2AIAgent/Game/GameStateService.cs) | 5,037 |
+| [GameStateService.cs](../../../STS2AIAgent/Game/GameStateService.cs) | 1,336 |
 | [AgentOverlayHost.cs](../../../STS2AIAgent/Ui/AgentOverlayHost.cs) | 1,347 |
 | [AgentRuntime.cs](../../../STS2AIAgent/Agent/AgentRuntime.cs) | 1,377 |
 | [GameStateService.Payloads.cs](../../../STS2AIAgent/Game/GameStateService.Payloads.cs) | 1,251 |
@@ -119,19 +119,35 @@ reproducible.
   version of this split swept those four into the partial because their names read like
   availability; the rule is the call sites, not the name.
 
-What is left in `GameStateService.cs` is the raw `/state` payload builders and the helpers they
-share with the predicates, at 5,037 lines. It is still the largest file in the mod, and it is now the
-only one of the three original concerns left there.
+What is left in `GameStateService.cs` is the payload entry point, the availability walk, screen
+resolution, and the node/text helpers more than one screen file reads, at 1,336 lines.
 
-A pure relocation is verifiable, and all three were verified the same way: the base file's diff
-carries no logic -- for the predicates the base lost 765 lines and gained none -- and every removed
-non-blank line appears verbatim in the new file. `PredicateRelocationContractTests` keeps that
-checkable rather than trusting a commit message: it stores a SHA-256 of every moved declaration's
-text as computed from the file at the parent commit and fails when a body stops matching, so an
-"equivalent rewrite" cannot pass as a move. The same contract pins each declaration's order and file,
-and names the shared helpers that have to stay in the base file, because a member put back in the
-wrong file compiles and reads fine. What it cannot see is a reordering of members *within* the base
-file, or a change to a member that never moved.
+- `GameStateService.cs` (5,037 lines) gave up its raw `/state` builders by screen on 2026-09-20,
+  leaving the 1,336 lines above. Eight new partials: `Combat` (958), `Rooms` (944), `Menus` (712),
+  `Rewards` (659), `Run` (314), `Map` (306), `Shop` (276) and `Potions` (147). All eight came in
+  under the default budget and so have no entry in the table, which is the shape to aim for. The
+  split was mechanical in the same sense as the two before it -- same signatures, same bodies, same
+  relative order -- and `GameStateServiceRelocationContractTests` proves it with a SHA-256 per moved
+  declaration, 218 of them, taken from the file at the parent commit. `Combat` was 1,029 lines on the
+  first pass and the potion probes moved out rather than the budget going up.
+
+A pure relocation is verifiable, and all four were verified the same way: the base file's diff
+carries no logic, and every removed non-blank line appears verbatim in the new file.
+`PredicateRelocationContractTests` and `GameStateServiceRelocationContractTests` keep that checkable
+rather than trusting a commit message: each stores a SHA-256 of every moved declaration's text as
+computed from the file at the parent commit and fails when a body stops matching, so an "equivalent
+rewrite" cannot pass as a move. They also pin each declaration's file, and name the shared helpers
+that must not be swept into the predicate partial or duplicated across two builder files, because a
+member put back in the wrong file compiles and reads fine. What they cannot see is a reordering of
+members *within* one file, or a change to a member that never moved.
+
+**A check about the class has to read the class.** Two gates asked the `GameStateService` partial a
+question -- which `action_readiness` reason codes the combat gate emits, and which screens the
+resolver reports -- and read one path to answer it. Both went red the moment the builders moved,
+reporting a deleted member that was simply in a different file. `check_verification_gates.py` now
+concatenates the whole `GameStateService*.cs` family for those two checks, and
+`test-verification-gates.ps1` deletes one partial to prove the reader sees the family rather than
+one file.
 
 ### The one thing the compiler cannot check for us
 

@@ -613,7 +613,9 @@ internal static class TestRunner
         yield return ("SourceShape.BudgetsTrackTheirFiles", () => Task.Run(SourceShapeContractTests.BudgetsStayCloseToTheFilesTheyGuard));
         yield return ("PredicateSplit.BodyHashProof", () => Task.Run(PredicateRelocationContractTests.MovedPredicatesMatchTheirPreSplitBodies));
         yield return ("PredicateSplit.MovedPredicatesInPredicatePartial", () => Task.Run(PredicateRelocationContractTests.MovedPredicatesAreDeclaredInThePredicatePartialInSourceOrder));
-        yield return ("PredicateSplit.SharedHelpersStayInBase", () => Task.Run(PredicateRelocationContractTests.SharedHelpersStayInTheBaseFile));
+        yield return ("PredicateSplit.SharedHelpersStayInBase", () => Task.Run(PredicateRelocationContractTests.SharedHelpersAreDeclaredOnceAcrossTheSplit));
+        yield return ("StateSplit.MovedBodiesUnchanged", () => Task.Run(GameStateServiceRelocationContractTests.EveryMovedDeclarationStillMatchesItsPreSplitText));
+        yield return ("StateSplit.BaseFileShrank", () => Task.Run(GameStateServiceRelocationContractTests.TheSplitActuallyShrankTheBaseFile));
         yield return ("PredicateSplit.BudgetCameDown", () => Task.Run(PredicateRelocationContractTests.TheSplitLoweredTheBaseBudgetInsteadOfRaisingIt));
         yield return ("ActionDiagnostics.NoWordlessRecoveryCatch", () => Task.Run(ActionDiagnosticsContractTests.NoRecoveryCatchSwallowsWithoutSayingSo));
         yield return ("ActionDiagnostics.FaultedTasksNameTheirException", () => Task.Run(ActionDiagnosticsContractTests.FaultedGameTasksNameTheirException));

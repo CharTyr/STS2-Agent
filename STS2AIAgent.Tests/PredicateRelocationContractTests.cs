@@ -19,9 +19,9 @@ namespace STS2AIAgent.Tests;
 /// <item><see cref="MovedPredicatesAreDeclaredInThePredicatePartialInSourceOrder"/> pins where each
 /// member is <em>declared</em>, so a member put back in the wrong file fails instead of being
 /// invisible.</item>
-/// <item><see cref="SharedHelpersStayInTheBaseFile"/> pins the members that are legitimately read
-/// by the raw <c>/state</c> builders too. Those stayed in the base file on purpose; sweeping one
-/// into the predicate partial is a reorganisation, not a relocation.</item>
+/// <item><see cref="SharedHelpersAreDeclaredOnceAcrossTheSplit"/> pins the members that are
+/// legitimately read by the raw <c>/state</c> builders too. Those live somewhere in the builder
+/// family rather than in the predicate partial, and a second copy of one is what this catches.</item>
 /// </list>
 /// The hash table is the durable part: regenerating it is a deliberate act, and it only matches if
 /// the declaration text is byte-identical to what the split moved.
@@ -268,19 +268,31 @@ internal static class PredicateRelocationContractTests
             + "how two sources of truth start.");
     }
 
-    public static void SharedHelpersStayInTheBaseFile()
+    public static void SharedHelpersAreDeclaredOnceAcrossTheSplit()
     {
         var predicates = AgentSourceFixture.Read(PredicateFile);
-        var baseFile = AgentSourceFixture.Read(BaseFile);
+        var builders = BuilderPartials()
+            .Select(AgentSourceFixture.Read)
+            .ToList();
 
         var missing = new List<string>();
         var swept = new List<string>();
+        var duplicated = new List<string>();
 
         foreach (var name in SharedHelpersLeftInBase)
         {
-            if (DeclarationIndex(baseFile, name, 0) < 0)
+            // "In exactly one file" is the invariant, not "declared once": `IsPlayerActionPhase` is
+            // an overload pair, and two overloads in one file is a signature, not a duplicate. What
+            // must not happen is the same helper appearing in two partials, or in the predicate
+            // partial, whose members all have to be about action availability.
+            var declaringFiles = builders.Count(source => DeclarationIndex(source, name, 0) >= 0);
+            if (declaringFiles == 0)
             {
                 missing.Add(name);
+            }
+            else if (declaringFiles > 1)
+            {
+                duplicated.Add($"{name} ({declaringFiles} files)");
             }
 
             if (DeclarationIndex(predicates, name, 0) >= 0)
@@ -291,13 +303,47 @@ internal static class PredicateRelocationContractTests
 
         Assert.True(
             missing.Count == 0,
-            $"{BaseFile} no longer declares shared helper(s): " + string.Join(", ", missing)
+            "the GameStateService builder partials no longer declare shared helper(s): "
+            + string.Join(", ", missing)
             + ". The raw /state builders read these too, so they belong beside the builders.");
+        Assert.True(
+            duplicated.Count == 0,
+            "these shared helpers are declared in more than one builder partial: "
+            + string.Join(", ", duplicated)
+            + ". A partial class compiles a duplicate in silence until someone calls it, which is "
+            + "how two sources of truth start.");
         Assert.True(
             swept.Count == 0,
             $"{PredicateFile} declares shared helper(s) the raw builders also read: "
             + string.Join(", ", swept)
             + ". Only members whose whole job is action availability belong in the predicate file.");
+    }
+
+    /// <summary>
+    /// The builder side of the family: every <c>GameStateService*.cs</c> partial except the three
+    /// that own something else (predicates, the compact view, the payload declarations).
+    /// </summary>
+    private static IReadOnlyList<string> BuilderPartials()
+    {
+        var excluded = new HashSet<string>(StringComparer.Ordinal)
+        {
+            PredicateFile,
+            "STS2AIAgent/Game/GameStateService.AgentView.cs",
+            "STS2AIAgent/Game/GameStateService.Payloads.cs",
+        };
+        var files = AgentSourceFixture.SourceFiles()
+            .Select(path => Path.GetRelativePath(AgentSourceFixture.Root, path).Replace('\\', '/'))
+            .Where(path => path.StartsWith("STS2AIAgent/Game/GameStateService", StringComparison.Ordinal))
+            .Where(path => path.EndsWith(".cs", StringComparison.Ordinal))
+            .Where(path => !excluded.Contains(path))
+            .OrderBy(path => path, StringComparer.Ordinal)
+            .ToList();
+
+        Assert.True(
+            files.Count >= 6,
+            $"the GameStateService builder family is {files.Count} file(s): the split is no longer "
+            + "there, or this walk stopped seeing it.");
+        return files;
     }
 
     public static void TheSplitLoweredTheBaseBudgetInsteadOfRaisingIt()

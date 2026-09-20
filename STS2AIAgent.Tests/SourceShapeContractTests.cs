@@ -33,12 +33,11 @@ internal static class SourceShapeContractTests
     {
         // 8,559 lines until ADR 0001 collapsed the two action surfaces into one walk, then 8,295
         // until the compact agent_view moved to its own file, then 5,730 until the availability
-        // predicates moved to GameStateService.Predicates.cs on 2026-09-20. The budget came down
-        // every time, which is what the ratchet is for. What is left here is the raw /state payload
-        // builders and the helpers they share with the predicates -- which is why the four
-        // predicates the builders also read (IsPlayerActionPhase, IsCardTargetSupported,
-        // IsEndTurnButtonReady, IsWaitingForOtherPlayers) stayed behind and are counted here.
-        ["STS2AIAgent/Game/GameStateService.cs"] = 5150,
+        // predicates moved to GameStateService.Predicates.cs, then 1,336 when the raw /state
+        // builders were split by screen on 2026-09-20. The budget came down every time, which is
+        // what the ratchet is for. What is left here is the payload entry point, the availability
+        // walk, screen resolution, and the node/text helpers more than one screen file reads.
+        ["STS2AIAgent/Game/GameStateService.cs"] = 1400,
         // The 60 payload types of GET /state: the wire format, as declarations. They grow with the
         // API and are checked against docs/api.md by the api-facts gate, so the budget here is
         // about noticing, not about stopping them.

@@ -145,8 +145,10 @@ try {
     New-Item -ItemType Directory -Path $fixtureAction -Force | Out-Null
     Copy-Item -LiteralPath (Join-Path $repoRoot "STS2AIAgent/Game/GameActionService.cs") -Destination $fixtureAction
     Copy-Item -LiteralPath (Join-Path $repoRoot "STS2AIAgent/Game/GameStateService.cs") -Destination $fixtureAction
-    # GameStateService is a partial class in three files: the builders, the compact agent_view
-    # and the payload declarations. api-facts reads all three, so the fixture mirrors all three.
+    # GameStateService is a partial class across several files: the payload declarations, the compact
+    # agent_view, and -- since 2026-09-20 -- one file per screen for the raw /state builders. The
+    # whole-tree mirror below brings the per-screen files in; these are the two the older api-facts
+    # checks name by path.
     Copy-Item -LiteralPath (Join-Path $repoRoot "STS2AIAgent/Game/GameStateService.AgentView.cs") -Destination $fixtureAction
     Copy-Item -LiteralPath (Join-Path $repoRoot "STS2AIAgent/Game/GameStateService.Payloads.cs") -Destination $fixtureAction
 
@@ -401,6 +403,18 @@ try {
     Write-Utf8 $stateService $mutated
     Assert-Case -Name "api-facts gate rejects a payload field docs/api.md never names" -Only "api-facts" -Expect "fixture_undocumented_field"
     Write-Utf8 $stateService $originalStateService
+
+    # 9m. A member the checks ask about, moved to another file of the same partial class. Reading a
+    # single path made api-facts report that EvaluateCombatActionGate had been deleted the moment the
+    # raw builders were split by screen: the member was fine, the reader was pointed at one file of a
+    # partial. Deleting that file is the same failure from the other side, and the family reader has
+    # to see it.
+    $combatPartial = Join-Path $fixture "STS2AIAgent/Game/GameStateService.Combat.cs"
+    if (-not (Test-Path $combatPartial)) { throw "fixture setup failed: the fixture has no GameStateService.Combat.cs partial" }
+    $originalCombatPartial = Read-Utf8 $combatPartial
+    Remove-Item -LiteralPath $combatPartial -Force
+    Assert-Case -Name "api-facts gate reads every file of the GameStateService partial" -Only "api-facts" -Expect "no longer declares"
+    Write-Utf8 $combatPartial $originalCombatPartial
 
     # 9g. The compact rename table claiming a rename the agent view does not perform. The compact
     # view is what MCP get_game_state returns by default, so a wrong compact key sends a client to a
