@@ -154,6 +154,7 @@ internal static partial class GameActionService
             "use_potion" => ExecuteUsePotionAsync(request),
             "discard_potion" => ExecuteDiscardPotionAsync(request),
             "run_console_command" => ExecuteRunConsoleCommandAsync(request),
+            "inject_event_churn" => ExecuteInjectEventChurnAsync(request),
             "confirm_modal" => ExecuteConfirmModalAsync(),
             "dismiss_modal" => ExecuteDismissModalAsync(),
             "return_to_main_menu" => ExecuteReturnToMainMenuAsync(),

@@ -26,7 +26,7 @@ import unittest
 from pathlib import Path
 
 from sts2_mcp.client import Sts2Client
-from sts2_mcp.server import _LEGACY_ACTION_TOOLS, create_server
+from sts2_mcp.server import _DEBUG_GATED_ACTIONS, _LEGACY_ACTION_TOOLS, create_server
 
 
 _TOOL_CALL = re.compile(r'\bTool\s*\(\s*"([^"]+)"')
@@ -289,9 +289,9 @@ def _documented_action_arguments(source_root: Path) -> dict[str, set[str]]:
 # needed.
 _DOC_ARGUMENT_EXEMPTIONS: dict[str, set[str]] = {}
 
-# run_console_command is documented but deliberately not a legacy per-action tool: it is
-# registered separately and only when STS2_ENABLE_DEBUG_ACTIONS is truthy.
-_DOCUMENTED_WITHOUT_LEGACY_TOOL = {"run_console_command"}
+# The debug-gated actions are documented but deliberately not legacy per-action tools: each is
+# registered separately, and only when STS2_ENABLE_DEBUG_ACTIONS is truthy.
+_DOCUMENTED_WITHOUT_LEGACY_TOOL = set(_DEBUG_GATED_ACTIONS)
 
 
 class NativeToolAlignmentTests(unittest.TestCase):

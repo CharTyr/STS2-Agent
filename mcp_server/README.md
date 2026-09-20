@@ -138,6 +138,11 @@ Modal：
   - 仅当 `STS2_ENABLE_DEBUG_ACTIONS=1` 时注册
   - 默认关闭
   - 只用于开发和验证，不应成为正式游玩流程的常规依赖
+- `inject_event_churn`
+  - 仅当 `STS2_ENABLE_DEBUG_ACTIONS=1` 时注册
+  - 发布 N 条 `debug_churn` 合成事件（`option_index`，0 用 mod 默认值），用来在实机里把
+    `/events/stream` 慢订阅者的队列顶满，验证「满队列关闭该订阅者」而不是静默丢事件
+  - `option_index` 必须大于单订阅者队列容量（256），否则 mod 返回 400 `invalid_request`
 
 ## 状态视图与等待
 
@@ -220,7 +225,7 @@ Modal：
   - 作用：可重试的读取类请求的重试次数；动作请求从不自动重放
 - `STS2_ENABLE_DEBUG_ACTIONS`
   - 默认：未设置 / `0`
-  - 作用：启用开发期 debug 工具，例如 `run_console_command`
+  - 作用：启用开发期 debug 工具，例如 `run_console_command`、`inject_event_churn`
   - 发布建议：保持关闭
 
 ## 运行时知识库

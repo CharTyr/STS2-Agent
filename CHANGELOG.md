@@ -4,6 +4,10 @@
 
 ## Unreleased
 
+### Added
+
+- **A debug action that can prove the slow-subscriber contract in a live game.** `/events/stream` closes a subscriber whose 256-slot queue fills instead of dropping the oldest event, but that path had no in-game evidence: the poll loop publishes only when a digest field really changes, so an idle client never falls behind, and the debug console that could have driven 256 changes answers 409 until a run exists. `POST /action {"action":"inject_event_churn","option_index":400}` (needs `STS2_ENABLE_DEBUG_ACTIONS=1`) publishes numbered synthetic `debug_churn` events through the same publishing path as every other event, so one unread stream plus one healthy stream is enough to watch the slow one get dropped. Counts below 257 are rejected on purpose — a request that cannot fill a queue proves nothing.
+
 ### Fixed
 
 - Companion identity checks now accept both live compatibility states, `ready` and `degraded`, while still requiring the exact service, companion role, API port and process ID. The POSIX game launcher uses the same liveness contract, so a working companion with one missing reflection capability is no longer reported as replaced or offline.
@@ -19,8 +23,9 @@
 > for the first subscriber; reconnect gets `stream_ready`; no repeated frames; polling stopped after the
 > last client left). The degraded companion was verified with a real `degraded` payload too: the
 > companion kept serving, its host-only health keys came back `null`, and the shipped identity check
-> accepted that payload while still rejecting every wrong-identity and malformed variant (14/14). A real
-> slow-subscriber overflow could not be produced on a live instance and stays offline-only.
+> accepted that payload while still rejecting every wrong-identity and malformed variant (14/14). The
+> slow-subscriber overflow was then observed in the game too, through the debug churn action below:
+> the server logged `Disconnected 2 slow event subscriber(s)` instead of dropping events silently.
 
 ## v0.13.0 - 2026-09-19
 

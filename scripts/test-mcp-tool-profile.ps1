@@ -44,7 +44,10 @@ LAYERED_TOOLS = {
     "append_combat_knowledge",
     "append_event_knowledge",
 }
-GUIDED_DEBUG_TOOLS = ESSENTIAL_TOOLS | {"run_console_command"}
+# The tools the mod gates behind STS2_ENABLE_DEBUG_ACTIONS. Each is registered separately rather
+# than as a legacy per-action tool, and the compact `act` refuses to forward them.
+DEBUG_GATED_TOOLS = {"run_console_command", "inject_event_churn"}
+GUIDED_DEBUG_TOOLS = ESSENTIAL_TOOLS | DEBUG_GATED_TOOLS
 LEGACY_ACTION_TOOLS = {
     "play_card",
     "choose_map_node",
@@ -82,14 +85,16 @@ async def main():
     if any(name in guided for name in LEGACY_ACTION_TOOLS):
         failures.append("guided profile should not expose legacy per-action tools")
 
-    if "run_console_command" in guided:
-        failures.append("guided profile should hide run_console_command while debug actions are disabled")
+    if DEBUG_GATED_TOOLS & set(guided):
+        failures.append("guided profile should hide debug-gated tools while debug actions are disabled")
 
     if set(layered) != (ESSENTIAL_TOOLS | LAYERED_TOOLS):
         failures.append(f"layered profile should expose essential tools plus layered helpers, but exposed {layered}")
 
     if set(guided_debug) != GUIDED_DEBUG_TOOLS:
-        failures.append(f"guided debug profile should only add run_console_command, but exposed {guided_debug}")
+        failures.append(
+            "guided debug profile should only add the debug-gated tools, but exposed " + str(guided_debug)
+        )
 
     if not LEGACY_ACTION_TOOLS.issubset(set(full)):
         failures.append("full profile should expose legacy action wrappers")
