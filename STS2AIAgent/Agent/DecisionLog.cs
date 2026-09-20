@@ -11,7 +11,18 @@ internal sealed record DecisionLogEntry(
     string? reason,
     string? state_fingerprint,
     int requests_spent,
-    int? total_tokens);
+    int? total_tokens,
+    string? run_id);
+
+/// <summary>
+/// What one run has cost so far: how many decisions were recorded for it and what they spent.
+/// </summary>
+/// <remarks>
+/// <see cref="TokensKnown"/> is separate from <see cref="Tokens"/> on purpose. A run whose models
+/// never reported usage has spent an unknown number of tokens, and reporting that as 0 would make
+/// "nothing was spent" and "nobody told us" the same answer.
+/// </remarks>
+internal readonly record struct RunSpend(string? RunId, int Decisions, long Tokens, bool TokensKnown);
 
 /// <summary>
 /// Owns the bounded, redacted record of accepted agent decisions.
@@ -60,12 +71,20 @@ internal sealed class DecisionLog
         string? stateFingerprint = null,
         int requestsSpent = 0,
         int? totalTokens = null,
-        DateTimeOffset? timestamp = null)
+        DateTimeOffset? timestamp = null,
+        string? runId = null)
     {
         var safeSource = Clean(source, "unknown", 48);
         var safeAction = Clean(action, "unknown", 96);
         var safeReason = CleanOptional(reason, 500);
         var safeFingerprint = CleanOptional(stateFingerprint, 256);
+        // `run_unknown` is the mod's placeholder for "no run has been identified yet", so storing it
+        // would create a bucket that every pre-run decision shares and no run owns.
+        var safeRunId = CleanOptional(runId, 64);
+        if (safeRunId == "run_unknown")
+        {
+            safeRunId = null;
+        }
 
         DecisionLogEntry entry;
         lock (_gate)
@@ -78,7 +97,8 @@ internal sealed class DecisionLog
                 safeReason,
                 safeFingerprint,
                 Math.Max(0, requestsSpent),
-                totalTokens is >= 0 ? totalTokens : null);
+                totalTokens is >= 0 ? totalTokens : null,
+                safeRunId);
 
             _entries.Add(entry);
             if (_entries.Count > _capacity)
@@ -110,6 +130,38 @@ internal sealed class DecisionLog
             var take = Math.Clamp(limit, 1, _capacity);
             var start = Math.Max(0, _entries.Count - take);
             return _entries.Skip(start).ToArray();
+        }
+    }
+
+    /// <summary>
+    /// What one run has cost, or the log's totals over every run when <paramref name="runId"/> is
+    /// null. Read from the entries themselves rather than from a running counter, so entries evicted
+    /// by the capacity bound cannot make the total disagree with what
+    /// <see cref="Snapshot"/> can show.
+    /// </summary>
+    public RunSpend Spend(string? runId)
+    {
+        lock (_gate)
+        {
+            var decisions = 0;
+            long tokens = 0;
+            var known = false;
+            foreach (var entry in _entries)
+            {
+                if (runId != null && !string.Equals(entry.run_id, runId, StringComparison.Ordinal))
+                {
+                    continue;
+                }
+
+                decisions++;
+                if (entry.total_tokens is { } entryTokens)
+                {
+                    tokens += entryTokens;
+                    known = true;
+                }
+            }
+
+            return new RunSpend(runId, decisions, tokens, known);
         }
     }
 

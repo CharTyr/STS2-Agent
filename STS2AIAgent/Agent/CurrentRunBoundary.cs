@@ -13,6 +13,12 @@ internal sealed class CurrentRunBoundary
     private bool _enteredRun;
     private string? _seed;
 
+    /// <summary>
+    /// The run identity observed so far, or null before one is known. Used to attribute a decision to
+    /// the run it was made in, so a session spanning two runs can report them separately.
+    /// </summary>
+    public string? RunId => _seed;
+
     public void Check(string stateJson)
     {
         using var document = JsonDocument.Parse(stateJson);

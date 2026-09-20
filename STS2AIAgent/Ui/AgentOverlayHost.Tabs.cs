@@ -25,6 +25,7 @@ internal sealed partial class AgentOverlayHost
 
     private RichTextLabel? _decisionLog;
     private Label? _decisionUsage;
+    private Label? _decisionRunSpend;
 
     /// <summary>
     /// Builds every tab in <see cref="OverlayTabCatalog"/> order. One loop rather than one line per
@@ -273,6 +274,8 @@ internal sealed partial class AgentOverlayHost
         var page = UiFactory.Column();
         _decisionUsage = UiFactory.Label(Loc.T("Token 消耗：-"), 13, muted: true);
         page.AddChild(_decisionUsage);
+        _decisionRunSpend = UiFactory.Label(Loc.T("本局：-"), 13, muted: true);
+        page.AddChild(_decisionRunSpend);
         page.AddChild(UiFactory.Label(Loc.T("最新在前：动作、理由、来源，以及该步消耗的 Token。"), 12, muted: true));
         _decisionLog = UiFactory.Rich();
         _decisionLog.FitContent = false;
@@ -298,6 +301,16 @@ internal sealed partial class AgentOverlayHost
                 AgentRuntime.Instance.SessionUsage,
                 AgentRuntime.Instance.SessionRequests,
                 facing);
+        }
+
+        if (_decisionRunSpend != null)
+        {
+            var spend = AgentRuntime.Instance.CurrentRunSpend();
+            _decisionRunSpend.Text = PlayerFacingSession.FormatRunSpend(
+                AgentRuntime.Instance.CurrentRunId ?? spend.RunId,
+                spend.Decisions,
+                spend.Tokens,
+                spend.TokensKnown);
         }
 
         if (_decisionLog == null)

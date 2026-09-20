@@ -140,6 +140,31 @@ internal static class PlayerExperienceTests
         Assert.Contains("请求：5 次", cappedSummary);
     }
 
+    /// <summary>
+    /// The per-run spend line above the decision log. A session can outlive a run, so this answers a
+    /// different question from the session totals, and an unknown token spend has to stay unknown
+    /// rather than reading as a run that played for free.
+    /// </summary>
+    public static void RunSpendLineStaysHonestAboutUnknowns()
+    {
+        Assert.Contains("尚未识别到对局", PlayerFacingSession.FormatRunSpend(null, 0, 0, false));
+        Assert.Contains("尚未识别到对局", PlayerFacingSession.FormatRunSpend("  ", 3, 10, true));
+
+        var none = PlayerFacingSession.FormatRunSpend("ABCD1234", 0, 0, false);
+        Assert.Contains("暂无决策记录", none);
+        Assert.False(none.Contains("0 tokens", StringComparison.Ordinal));
+
+        var unknown = PlayerFacingSession.FormatRunSpend("ABCD1234", 4, 0, false);
+        Assert.Contains("4 次决策", unknown);
+        Assert.Contains("未知", unknown);
+        Assert.False(unknown.Contains("0 tokens", StringComparison.Ordinal));
+
+        var counted = PlayerFacingSession.FormatRunSpend("ABCD1234", 4, 12345, true);
+        Assert.Contains("4 次决策", counted);
+        Assert.Contains("12,345", counted);
+        Assert.False(counted.Contains("未知", StringComparison.Ordinal));
+    }
+
     public static void DiagnosticExportRedactsSecretsAndOmitsChat()
     {
         var settings = AgentSettings.CreateDefault();

@@ -86,6 +86,70 @@ internal static class DecisionLogTests
         Assert.Single(log.Snapshot());
     }
 
+    public static void Record_AttributesDecisionsToTheirRun()
+    {
+        var log = new DecisionLog();
+        log.Record("agent_loop", "play_card", totalTokens: 100, runId: "RUN_A");
+        log.Record("agent_loop", "end_turn", totalTokens: 50, runId: "RUN_A");
+        log.Record("http_api", "play_card", totalTokens: 7, runId: "RUN_B");
+        // Before a run is identified there is nothing to attribute to, and the placeholder the mod
+        // uses for that must not become a bucket of its own.
+        log.Record("agent_loop", "open_character_select", runId: "run_unknown");
+        log.Record("native_mcp", "end_turn");
+
+        var runA = log.Spend("RUN_A");
+        Assert.Equal(2, runA.Decisions);
+        Assert.Equal(150L, runA.Tokens);
+        Assert.True(runA.TokensKnown);
+
+        var runB = log.Spend("RUN_B");
+        Assert.Equal(1, runB.Decisions);
+        Assert.Equal(7L, runB.Tokens);
+        Assert.True(runB.TokensKnown);
+
+        Assert.Equal(0, log.Spend("RUN_MISSING").Decisions);
+
+        // A null run id asks for the whole log, which is what the overlay needs before any run has
+        // been identified: every entry counts, including the two that belong to no run.
+        var all = log.Spend(null);
+        Assert.Equal(5, all.Decisions);
+        Assert.Equal(157L, all.Tokens);
+
+        // Snapshot is oldest-first, so the two unattributed entries are the last two.
+        var entries = log.Snapshot();
+        Assert.Equal("RUN_A", entries[0].run_id);
+        Assert.Equal("RUN_B", entries[2].run_id);
+        Assert.Null(entries[3].run_id);
+        Assert.Null(entries[4].run_id);
+    }
+
+    public static void Spend_KeepsUnknownTokensUnknown()
+    {
+        var log = new DecisionLog();
+        log.Record("agent_loop", "play_card", totalTokens: null, runId: "RUN_A");
+        log.Record("agent_loop", "end_turn", totalTokens: null, runId: "RUN_A");
+
+        var spend = log.Spend("RUN_A");
+
+        Assert.Equal(2, spend.Decisions);
+        Assert.Equal(0L, spend.Tokens);
+        // Two decisions and no usage report is "unknown", never "spent nothing".
+        Assert.False(spend.TokensKnown);
+    }
+
+    public static void Spend_TracksTheEntriesTheSnapshotCanShow()
+    {
+        var log = new DecisionLog(capacity: 2);
+        log.Record("agent_loop", "play_card", totalTokens: 10, runId: "RUN_A");
+        log.Record("agent_loop", "end_turn", totalTokens: 20, runId: "RUN_A");
+        log.Record("agent_loop", "proceed", totalTokens: 30, runId: "RUN_A");
+
+        // The evicted entry is gone from both views, so the total cannot disagree with the lines.
+        Assert.Equal(2, log.Snapshot().Count);
+        Assert.Equal(2, log.Spend("RUN_A").Decisions);
+        Assert.Equal(50L, log.Spend("RUN_A").Tokens);
+    }
+
     public static void SseDecisionEvent_IsMirroredFromTheSameLog()
     {
         var runtime = AgentSourceFixture.Read("STS2AIAgent/Agent/AgentRuntime.cs");

@@ -159,8 +159,8 @@ internal static class OverlayTabContractTests
     {
         var entries = new[]
         {
-            new DecisionLogEntry(1, "2026-09-20T00:00:00.0000000+00:00", "http_api", "play_card", "先补防", "fp", 1, 900),
-            new DecisionLogEntry(2, "2026-09-20T00:00:05.0000000+00:00", "agent_loop", "end_turn", null, "fp", 1, null)
+            new DecisionLogEntry(1, "2026-09-20T00:00:00.0000000+00:00", "http_api", "play_card", "先补防", "fp", 1, 900, "R1"),
+            new DecisionLogEntry(2, "2026-09-20T00:00:05.0000000+00:00", "agent_loop", "end_turn", null, "fp", 1, null, "R1")
         };
 
         var lines = DecisionLogView.Lines(entries);
@@ -190,7 +190,7 @@ internal static class OverlayTabContractTests
         var entries = new List<DecisionLogEntry>();
         for (var id = 1; id <= DecisionLogView.RecentLimit + 10; id++)
         {
-            entries.Add(new DecisionLogEntry(id, "2026-09-20T00:00:00.0000000+00:00", "agent_loop", "play_card", null, null, 1, 10));
+            entries.Add(new DecisionLogEntry(id, "2026-09-20T00:00:00.0000000+00:00", "agent_loop", "play_card", null, null, 1, 10, "R1"));
         }
 
         var lines = DecisionLogView.Lines(entries);

@@ -307,7 +307,11 @@ internal static class Router
 
                 var actionResponse = await GameThread.InvokeAsync(() => GameActionService.ExecuteAsync(actionRequest));
                 var decisionReason = DecisionContext.ReadReason(actionRequest.client_context);
-                AgentRuntime.Instance.RecordDecision("http_api", actionRequest.action, decisionReason);
+                AgentRuntime.Instance.RecordDecision(
+                    "http_api",
+                    actionRequest.action,
+                    decisionReason,
+                    runId: AgentRuntime.Instance.CurrentRunId);
                 await WriteJsonAsync(response, 200, new
                 {
                     ok = true,

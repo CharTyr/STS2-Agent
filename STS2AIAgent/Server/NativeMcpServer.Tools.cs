@@ -181,7 +181,13 @@ internal sealed partial class NativeMcpServer
             y,
             tool,
             cancellationToken);
-        _decisions?.Record("native_mcp", action, string.IsNullOrWhiteSpace(reason) ? null : reason);
+        _decisions?.Record(
+            "native_mcp",
+            action,
+            string.IsNullOrWhiteSpace(reason) ? null : reason,
+            // The act's own pre-action snapshot names the run, so this surface needs no runtime
+            // singleton to attribute the decision to it.
+            runId: RunIdOf(compactJson));
         if (!ActIndexValidator.IsUnsettled(result))
         {
             return result;
@@ -197,6 +203,16 @@ internal sealed partial class NativeMcpServer
             previous = DeserializeOrEmpty(result),
             state = DeserializeOrEmpty(latest)
         }, JsonOptions);
+    }
+
+    /// <summary>
+    /// The <c>run_id</c> of a <c>/state</c> payload, or null when it is absent or is the mod's
+    /// "no run identified yet" placeholder. Never throws: attribution is worth less than the action.
+    /// </summary>
+    private static string? RunIdOf(string? stateJson)
+    {
+        var runId = ReadString(DeserializeOrEmpty(stateJson), "run_id");
+        return string.IsNullOrWhiteSpace(runId) || runId == "run_unknown" ? null : runId;
     }
 
     private static object ToolError(string message)

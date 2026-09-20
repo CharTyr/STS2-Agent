@@ -1736,12 +1736,15 @@ Invoke-RestMethod -Uri 'http://127.0.0.1:8080/data/cards' | ConvertTo-Json -Dept
 | `state_fingerprint` | string \| null | 动作执行后的紧凑状态指纹（无进展守卫用）；不可得时为 `null` |
 | `requests_spent` | number | 这一步花掉的模型请求数（`http_api` / `native_mcp` 记为 0） |
 | `total_tokens` | number \| null | 这一步的 token 总量；模型未回报用量时为 `null` |
+| `run_id` | string \| null | 这一步属于哪一局；尚未识别到对局时为 `null`（Mod 内部的占位值 `run_unknown` 不会被写进来，否则它会把开局前的决策都混进同一个桶） |
 
 只有**被接受**的动作才会进日志：动作名不在 `available_actions` 里、索引越界或执行失败时都不记录，所以日志里不会出现玩家界面上从未发生过的选择。
 
 理由文本来自模型的 `reason` 参数（见 `POST /action` 的 `client_context.decision_reason`），落盘前会经过与诊断导出相同的脱敏和长度裁剪。
 
 日志同时以 JSONL 追加到设置文件同目录的 `decisions.jsonl`（默认 `%APPDATA%\STS2AIAgent\decisions.jsonl`），超过 2 MB 时轮转为 `decisions.jsonl.previous`。写盘是尽力而为：诊断目录不可写时只影响落盘，不影响对局。
+
+`run_id` 是给「本局花了多少」用的：一次自动游玩会话可以跨过不止一局，所以会话总量与本局总量回答的是两个问题。覆盖层「决策日志」页两行都显示；本局 token 在模型未回报用量时显示为**未知**，而不是 0——「没花」和「没人告诉我们」不是同一件事。
 
 ### 响应示例
 

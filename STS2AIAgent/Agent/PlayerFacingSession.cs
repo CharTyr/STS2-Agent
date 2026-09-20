@@ -299,6 +299,33 @@ internal static class PlayerFacingSession
         return facing.Kind == BudgetKind ? line + "\n" + facing.Detail : line;
     }
 
+    /// <summary>
+    /// The current run's own spend, shown above the decision log next to the session totals.
+    /// </summary>
+    /// <remarks>
+    /// A session can outlive a run, so a session total answers a different question from "what has
+    /// this run cost". Token spend is unknown until a model reports usage, and it stays unknown here
+    /// rather than reading as 0. A run with no decisions yet says so instead of showing "0 tokens",
+    /// which would look like a run that played for free.
+    /// </remarks>
+    public static string FormatRunSpend(string? runId, int decisions, long tokens, bool tokensKnown)
+    {
+        if (string.IsNullOrWhiteSpace(runId))
+        {
+            return Loc.T("本局：尚未识别到对局。");
+        }
+
+        if (decisions == 0)
+        {
+            return Loc.T("本局（{0}）：暂无决策记录。", runId);
+        }
+
+        var spend = tokensKnown
+            ? Loc.T("本局（{0}）：{1} 次决策，{2} tokens。", runId, decisions, tokens.ToString("N0"))
+            : Loc.T("本局（{0}）：{1} 次决策，Token 未知。", runId, decisions);
+        return spend;
+    }
+
     private static PlayerFacingView ComposeCompanion(PlayerFacingSnapshot s)
     {
         if (s.PlayPhase == "stopping")

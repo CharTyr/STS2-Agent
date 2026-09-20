@@ -91,6 +91,12 @@ internal static partial class Loc
         map["本次 Token：未知"] = "Tokens this step: unknown";
         map["还没有决策记录。自动游玩或外部客户端执行动作后会出现在这里。"] =
             "No decisions recorded yet. They appear here once auto-play or an external client runs an action.";
+        // A session can outlive a run, so the tab shows both totals.
+        map["本局：-"] = "This run: -";
+        map["本局：尚未识别到对局。"] = "This run: no run identified yet.";
+        map["本局（{0}）：暂无决策记录。"] = "This run ({0}): no decisions recorded yet.";
+        map["本局（{0}）：{1} 次决策，{2} tokens。"] = "This run ({0}): {1} decisions, {2} tokens.";
+        map["本局（{0}）：{1} 次决策，Token 未知。"] = "This run ({0}): {1} decisions, token spend unknown.";
 
         // Connect page.
         map["MCP 接入"] = "MCP Connect";
