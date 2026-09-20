@@ -787,7 +787,7 @@ internal static class AgentLoopTests
         Assert.Null(guard.Observe(result));
         Assert.Equal(result.RequestsSpent, guard.RequestCount);
 
-        var source = AgentSourceFixture.Read("STS2AIAgent/Agent/AgentRuntime.cs");
+        var source = AgentSourceFixture.ReadAgentRuntime();
         var reply = AgentSourceFixture.MethodBody(source, "ReplyToTeammateAsync");
         var replyAccount = reply.IndexOf("AccountTurn(result, recordBudget: true)", StringComparison.Ordinal);
         var replyError = reply.IndexOf("if (result.Error != null)", StringComparison.Ordinal);

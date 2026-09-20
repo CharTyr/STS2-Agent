@@ -69,6 +69,16 @@ internal static class AgentSourceFixture
     public static string ReadOverlayHost() => ReadPartialClass("Ui", "AgentOverlayHost");
 
     /// <summary>
+    /// Every file that declares <c>AgentRuntime</c>, concatenated in reading order.
+    /// </summary>
+    /// <remarks>
+    /// The AI-teammate surface moved to <c>AgentRuntime.Team.cs</c> when the base file crossed its
+    /// size budget. Same reasoning again: a contract that asks what the runtime does has to read
+    /// what the runtime says, not the file that happens to hold the first half of it.
+    /// </remarks>
+    public static string ReadAgentRuntime() => ReadPartialClass("Agent", "AgentRuntime");
+
+    /// <summary>
     /// Reads every file declaring one partial class under <paramref name="directoryName"/>, base file
     /// first.
     /// </summary>

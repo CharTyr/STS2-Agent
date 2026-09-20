@@ -3,6 +3,7 @@ using STS2AIAgent.Agent;
 using STS2AIAgent.Config;
 using STS2AIAgent.Game;
 using STS2AIAgent.Localization;
+using STS2AIAgent.Multiplayer;
 
 namespace STS2AIAgent.Ui;
 
@@ -166,6 +167,24 @@ internal sealed partial class AgentOverlayHost
         return page;
     }
 
+    /// <summary>
+    /// The teammate's live line. Null means "not asked yet" rather than "no teammate", so the label
+    /// distinguishes the two instead of claiming the teammate is gone while the first poll is in
+    /// flight.
+    /// </summary>
+    private static string TeammateLiveText()
+    {
+        var status = AgentRuntime.Instance.TeammateLiveStatus;
+        if (status != null)
+        {
+            return Loc.T("队友实况：{0}", status);
+        }
+
+        return LocalDualInstanceLauncher.Connection == null
+            ? Loc.T("队友实况：组队后显示。")
+            : Loc.T("队友实况：读取中…");
+    }
+
     private Control BuildDualPage()
     {
         var page = UiFactory.Column();
@@ -208,6 +227,11 @@ internal sealed partial class AgentOverlayHost
         page.AddChild(_dualContinueButton);
         _dualStatus = UiFactory.Label(Loc.T("队友尚未加入。"), 13, muted: true);
         page.AddChild(_dualStatus);
+        // The companion's own live state, not the host's view of the shared run: the host already
+        // knows the process is alive, and what a co-op player needs mid-fight is the other
+        // character's health and whether it can act.
+        _teammateLive = UiFactory.Label(TeammateLiveText(), 13, muted: true);
+        page.AddChild(_teammateLive);
         _teamPause = UiFactory.Button(Loc.T("暂停队友"), () => _ = AgentRuntime.Instance.ControlTeammateAsync(false, CancellationToken.None));
         _teamResume = UiFactory.Button(Loc.T("继续游玩"), () => _ = AgentRuntime.Instance.ControlTeammateAsync(true, CancellationToken.None));
         page.AddChild(UiFactory.Row(_teamPause, _teamResume));

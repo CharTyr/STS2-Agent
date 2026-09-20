@@ -45,6 +45,7 @@ internal sealed partial class AgentOverlayHost
     private OptionButton? _proactiveToneCombo;
     private Label? _apiLabel;
     private Label? _dualStatus;
+    private Label? _teammateLive;
     private Label? _firstRunHint;
     private Label? _sessionHeadline;
     private Label? _sessionDetail;
@@ -904,6 +905,11 @@ internal sealed partial class AgentOverlayHost
             _dualStatus.Text = AgentRuntime.Instance.DualStatus;
         }
 
+        if (_teammateLive != null)
+        {
+            _teammateLive.Text = TeammateLiveText();
+        }
+
         if (_firstRunHint != null)
         {
             _firstRunHint.Text = FirstRunHintText();
@@ -1040,6 +1046,13 @@ internal sealed partial class AgentOverlayHost
                 if (IsTabVisible(OverlayTabCatalog.Dual))
                 {
                     RefreshContinueAvailability();
+                    // Cached inside the runtime and throttled there: this runs on the game thread, so
+                    // it asks for a refresh and renders whatever the last one produced.
+                    AgentRuntime.Instance.RequestTeammateStatusRefresh();
+                    if (_teammateLive != null)
+                    {
+                        _teammateLive.Text = TeammateLiveText();
+                    }
                 }
 
                 // Decisions reach the log from paths with no runtime event to subscribe to (an action

@@ -355,6 +355,12 @@ internal static class TestRunner
         yield return ("TeamIntent.FocusFireConstrains", () => Task.Run(TeamIntentTests.FocusFireBecomesAConstraintOnTheNextDecision));
         yield return ("TeamIntent.NewestAnnouncementWins", () => Task.Run(TeamIntentTests.ALaterAnnouncementSupersedesAnEarlierOne));
         yield return ("TeamIntent.NoAnnouncementNoConstraint", () => Task.Run(TeamIntentTests.WithoutAnAnnouncementThereIsNoConstraint));
+        yield return ("TeammateStatus.Combat", () => Task.Run(TeammateStatusTests.ReadsTheNonLocalPlayerInCombat));
+        yield return ("TeammateStatus.RunFallback", () => Task.Run(TeammateStatusTests.FallsBackToTheRunPartyOutsideCombat));
+        yield return ("TeammateStatus.DescribesOwnFacts", () => Task.Run(TeammateStatusTests.DescriptionNamesHealthAndOnlyTheFactsThatApply));
+        yield return ("TeammateStatus.Downed", () => Task.Run(TeammateStatusTests.ADownedTeammateSaysSoInsteadOfShowingEnergy));
+        yield return ("TeammateStatus.UnreadableIsEmpty", () => Task.Run(TeammateStatusTests.NothingReadableProducesNoLineRatherThanAGuess));
+        yield return ("TeammateStatus.UnknownHealthStaysUnknown", () => Task.Run(TeammateStatusTests.MissingHealthStaysUnknownRatherThanZero));
         yield return ("AgentLoop.PlayOnce", AgentLoopTests.PlayOnce_ExecutesSingleValidatedAct);
         yield return ("AgentLoop.CrystalArgs", AgentLoopTests.PlayOnce_ForwardsCrystalSphereArguments);
         yield return ("AgentTools.CrystalSchema", () => Task.Run(AgentLoopTests.ActToolSchema_IncludesCrystalSphereArguments));

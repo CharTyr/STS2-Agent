@@ -73,6 +73,16 @@ internal static partial class Loc
         map["队伍交流"] = "Team chat";
         map["一起集火哪个敌人？这条路线你怎么看？"] = "Which enemy should we focus? What do you think of this route?";
         map["和队友说"] = "Message teammate";
+        map["队友实况：{0}"] = "Teammate now: {0}";
+        map["队友实况：组队后显示。"] = "Teammate now: shown once you team up.";
+        map["队友实况：读取中…"] = "Teammate now: reading…";
+        map["未知"] = "unknown";
+        map["{0}：{1} HP"] = "{0}: {1} HP";
+        map["，{0} 格挡"] = ", {0} block";
+        map["（已倒下）"] = " (down)";
+        map["，{0} 能量"] = ", {0} energy";
+        map["手牌 {0} 张"] = "{0} cards in hand";
+        map["队友"] = "Teammate";
         map["等待队友回复…"] = "Waiting for teammate…";
         // The focus-fire constraint the companion's loop receives when the teammate announced a target.
         map["队友本回合在打 enemy_index {0}。除非那个敌人已经必死或只剩最后一击，不要把伤害再倾泻在它身上；优先选另一个目标，避免两人重复集火把伤害溢出掉。"] =

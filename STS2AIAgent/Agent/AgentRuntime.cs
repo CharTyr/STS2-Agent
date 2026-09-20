@@ -15,9 +15,12 @@ namespace STS2AIAgent.Agent;
 /// </summary>
 internal readonly record struct TeammateControlResult(bool Ok, string Phase, string Message);
 
-internal sealed class AgentRuntime
+internal sealed partial class AgentRuntime
 {
     private const string LogPrefix = "[STS2AIAgent.Runtime]";
+
+    /// <summary>How often the overlay's tick may ask for a fresh teammate summary.</summary>
+    private const long TeammateStatusRefreshMs = 2000;
 
     private static readonly Lazy<AgentRuntime> LazyInstance = new(() => new AgentRuntime());
 
@@ -70,6 +73,9 @@ internal sealed class AgentRuntime
     private SessionBudgetGuard _budgetGuard;
     private string? _proactiveSituationKey;
     private readonly ProactiveChatSession _proactiveChat = new();
+    private string? _teammateLiveStatus;
+    private long _teammateStatusAtMs;
+    private volatile bool _teammateStatusRefreshing;
 
     public static AgentRuntime Instance => LazyInstance.Value;
 
@@ -306,86 +312,6 @@ internal sealed class AgentRuntime
     public bool TeamMessagePending => _teamMessagePending;
     public string TeamStatus => _teamStatus ?? Loc.T("组队后，可以在这里和 AI 队友商量打法。");
     public IReadOnlyList<ChatTurn> TeamHistory => _teamConversation.Snapshot();
-
-    public async Task SendTeamMessageAsync(string text, CancellationToken cancellationToken)
-    {
-        if (!await _teamMessageGate.WaitAsync(0, cancellationToken)) return;
-        _teamMessagePending = true;
-        try
-        {
-            if (_dualLaunching) throw new InvalidOperationException(Loc.T("正在组队，请等待连接完成后发送消息。"));
-            var connection = LocalDualInstanceLauncher.Connection
-                ?? throw new InvalidOperationException(Loc.T("请先邀请 AI 队友。此处消息只发送给本次邀请的队友。"));
-            _teamConversation.Add("user", text);
-            _teamStatus = Loc.T("消息正在送往队友；若它正在行动，会在本次行动完成后回复。");
-            RaiseChanged();
-            var reply = await connection.SendMessageAsync(text, intent: null, cancellationToken);
-            _teamConversation.Add("assistant", reply.Length > TeamConversation.MaxMessageLength ? reply[..TeamConversation.MaxMessageLength] : reply);
-            _teamStatus = Loc.T("队友已回复。你的建议会作为后续决策的参考。");
-        }
-        catch (Exception ex)
-        {
-            _teamStatus = Loc.T("队伍消息未确认完成：{0}", ex.Message);
-        }
-        finally
-        {
-            _teamMessagePending = false;
-            _teamMessageGate.Release();
-            RaiseChanged();
-        }
-    }
-
-    public async Task<string> ReplyToTeammateAsync(string text, TeamIntent? intent, CancellationToken cancellationToken)
-    {
-        if (!InstanceRole.IsCompanion) throw new InvalidOperationException("Only a companion can receive team messages.");
-        using var deadline = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, _lifetime.Token);
-        deadline.CancelAfter(TimeSpan.FromMinutes(3));
-        cancellationToken = deadline.Token;
-        // Share the turn gate with gameplay, but do not require autoplay to be
-        // stopped: this request only reads state and adds conversational context.
-        string? budgetBlocked;
-        lock (_gate)
-        {
-            budgetBlocked = _budgetGuard.CheckBudget();
-        }
-
-        if (budgetBlocked != null)
-        {
-            throw new InvalidOperationException(budgetBlocked);
-        }
-
-        await _turnGate.WaitAsync(cancellationToken);
-        try
-        {
-            var previous = _teamConversation.Snapshot();
-            _teamConversation.Add("user", text, intent);
-            var result = await _loop.ChatAsync(text, previous, new ChatOptions
-            {
-                TeammateConversation = true,
-                AttachState = true
-            }, cancellationToken);
-            AccountTurn(result, recordBudget: true);
-            if (result.Error != null)
-            {
-                RaiseChanged();
-                throw new InvalidOperationException(result.Error);
-            }
-            if (string.IsNullOrWhiteSpace(result.AssistantText))
-            {
-                RaiseChanged();
-                throw new InvalidOperationException(Loc.T("队友未返回文本回复；建议已记录供后续决策参考。"));
-            }
-            var reply = result.AssistantText;
-            if (reply.Length > TeamConversation.MaxMessageLength) reply = reply[..TeamConversation.MaxMessageLength];
-            _teamConversation.Add("assistant", reply);
-            RaiseChanged();
-            return reply;
-        }
-        finally
-        {
-            _turnGate.Release();
-        }
-    }
 
     public string McpStatus => _mcpStatus ?? Loc.T("MCP 已关闭，未对外暴露。");
 

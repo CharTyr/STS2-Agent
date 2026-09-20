@@ -60,7 +60,10 @@ internal static class SourceShapeContractTests
         // down with the file, which is the ratchet working: the sixth tab was added next to the other
         // five pages instead of growing this one, and the seventh has to do the same.
         ["STS2AIAgent/Ui/AgentOverlayHost.cs"] = 1420,
-        ["STS2AIAgent/Agent/AgentRuntime.cs"] = 1450,
+        // 1,492 lines until the AI-teammate surface moved to AgentRuntime.Team.cs on 2026-09-20. The
+        // budget came down with the file rather than being raised for the feature that pushed it
+        // over, which is the same move the overlay made for its sixth tab.
+        ["STS2AIAgent/Agent/AgentRuntime.cs"] = 1400,
     };
 
     public static void NoSourceFileGrowsPastItsBudget()

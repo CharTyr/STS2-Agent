@@ -48,6 +48,34 @@ internal sealed class CompanionConnection
         return data.GetProperty("reply").GetString() ?? Loc.T("队友没有返回文本。");
     }
 
+    /// <summary>
+    /// The companion's own <c>/state</c> payload, or null when it cannot be read.
+    /// </summary>
+    /// <remarks>
+    /// Deliberately quiet: the overlay polls this while the teammate panel is open, and a companion
+    /// mid-restart is normal rather than exceptional. The identity check still runs first, so a
+    /// replacement process on a reused port is never read as the teammate.
+    /// </remarks>
+    public async Task<string?> TryReadStateAsync(CancellationToken cancellationToken)
+    {
+        try
+        {
+            using var deadline = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+            deadline.CancelAfter(TimeSpan.FromSeconds(2));
+            var health = await _http.GetStringAsync($"http://127.0.0.1:{_port}/health", deadline.Token);
+            if (!CompanionHealth.IsExpectedProcess(health, _port, _pid))
+            {
+                return null;
+            }
+
+            return await _http.GetStringAsync($"http://127.0.0.1:{_port}/state", deadline.Token);
+        }
+        catch (Exception)
+        {
+            return null;
+        }
+    }
+
     public async Task<string> ControlAsync(bool running, CancellationToken cancellationToken)
     {
         using var deadline = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
