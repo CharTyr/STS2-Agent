@@ -40,7 +40,8 @@ internal static class PlaybookSections
         ["MAP"] = new[] { "Route: which node to enter" },
         ["REST"] = new[] { "Rest site: heal or upgrade" },
         ["SHOP"] = new[] { "Shop: what to buy" },
-        ["FAKE_MERCHANT"] = new[] { "Shop: what to buy" }
+        ["FAKE_MERCHANT"] = new[] { "Shop: what to buy" },
+        ["EVENT"] = new[] { "Event options: how to choose" }
     };
 
     /// <summary>

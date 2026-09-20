@@ -15,6 +15,7 @@ from .legacy_tools import (
     ActionToolSpec,
     LEGACY_ACTION_TOOLS as _LEGACY_ACTION_TOOLS,
 )
+from .scene_guidance import scene_guidance
 from .state_views import MAX_DIFF_ENTRIES, diff_state, run_summary
 from .game_data import (
     ITEM_IDS_SEPARATOR,
@@ -375,6 +376,22 @@ def create_server(client: Sts2Client | None = None, tool_profile: str | None = N
         the payload carries no run.
         """
         return {"run": run_summary(sts2.get_state())}
+
+    @mcp.tool
+    def get_scene_guidance() -> dict[str, Any]:
+        """Return the strategy guidance for the screen the game is on right now.
+
+        `guidance` is the same text the mod injects into its own play loop: the route rules on
+        `MAP`, the rest-site rules on `REST`, the shop rules on `SHOP` and the Fake Merchant, the
+        combat and potion priority order on `COMBAT`, and the event-option rules on `EVENT`. It is
+        empty on a screen with no strategic choice, which is an answer rather than a failure.
+
+        On `EVENT` this also returns `event_options`: the offline index's per-option handler, cost,
+        and risk grade (`lethal-possible`, `harmful`, `costly`, `none-detected`, `locked`,
+        `unknown`) for the current `event_id`, in the order the event builds them. The mod does not
+        ship that index, so the native MCP surface answers strategy only.
+        """
+        return scene_guidance(sts2.get_state())
 
     @mcp.tool
     def diff_state(

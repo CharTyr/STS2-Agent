@@ -342,6 +342,7 @@ internal static class TestRunner
         yield return ("Playbook.HeadingsAccountedFor", () => Task.Run(PlaybookSectionsTests.EveryReferenceHeadingIsAccountedFor));
         yield return ("Playbook.ScreenFromState", () => Task.Run(PlaybookSectionsTests.ScreenComesFromTheCompactPayload));
         yield return ("Playbook.SystemPromptUnchanged", () => Task.Run(PlaybookSectionsTests.PlaySystemStillCarriesTheFullReferences));
+        yield return ("Mcp.SceneGuidanceTool", McpServiceTests.ToolsCall_SceneGuidanceFollowsTheScreen);
         yield return ("AgentLoop.PlayOnce", AgentLoopTests.PlayOnce_ExecutesSingleValidatedAct);
         yield return ("AgentLoop.CrystalArgs", AgentLoopTests.PlayOnce_ForwardsCrystalSphereArguments);
         yield return ("AgentTools.CrystalSchema", () => Task.Run(AgentLoopTests.ActToolSchema_IncludesCrystalSphereArguments));

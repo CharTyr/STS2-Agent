@@ -40,6 +40,7 @@
 - `get_available_actions`
 - `get_decision_log`
 - `get_run_summary`
+- `get_scene_guidance`
 - `diff_state`
 - `act`
 - `get_game_data_item`
@@ -57,6 +58,16 @@
 - `complete_event_handoff`（layered / full）
 
 `get_game_data_item`、`get_game_data_items`、`get_relevant_game_data` 读取的元数据全部来自运行中的 Mod（`GET /data/{collection}`），包内不再附带任何游戏数据快照。
+
+只读观察类工具：
+
+- `get_run_summary`：一次调用给出当前局的角色、楼层、Act、Boss、HP、金币、能量，以及牌库 / 遗物 / 药水计数（含联机队伍块）。取的是 raw `/state` 字段，不是 compact 的改名版。
+- `get_decision_log`：最近被接受的决策及其理由，最新在最后。
+- `diff_state`：两份 `/state` 的逐路径差异（前后值），`truncated` 标明触顶。
+- `get_scene_guidance`：当前屏该用的策略规则——`MAP` 路线、`REST` 休息点、`SHOP` / Fake Merchant 商店、`COMBAT` 战斗与药水优先级、`EVENT` 选项判读；没有策略可言的屏（奖励、选牌等）返回空串。`EVENT` 屏额外带 `event_options`：离线索引给出的逐选项 handler / cost / risk 分级（**这项只有 sidecar 有**，Mod 内不带那份索引，原生 MCP 面只回策略）。
+
+`get_scene_guidance` 的策略正文与游戏内循环注入的是同一份 `skills/sts2-mcp-player/references/strategy.md`，两侧的「屏 → 章节」映射由
+`tests/test_scene_guidance_alignment.py` 逐条比对（C# 为准）。
 
 <!-- BEGIN LEGACY ACTION TOOLS -->
 <!-- The bullets below are the full profile's per-action tools. They are bound to

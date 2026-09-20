@@ -124,6 +124,7 @@ internal static class AgentTools
         Tool("health_check", "Check whether the STS2 AI Agent mod is loaded and this MCP endpoint is open."),
         Tool("get_decision_log", "Read the recent accepted decisions with the rationale each one carried. Newest last; use it to review why the agent played the way it did.", DecisionLogParameters),
         Tool("get_run_summary", "Summarise the current run in one call: character, floor, act, boss, HP, gold, and the deck/relic/potion counts."),
+        Tool("get_scene_guidance", "Return the strategy rules that apply to the screen the game is on right now. Empty on a screen with no strategic choice."),
         Tool("diff_state", "Compare two /state payloads and report the paths that differ. Use it to see exactly what an action changed.", DiffStateParameters)
     }.Concat(Play).ToArray();
 

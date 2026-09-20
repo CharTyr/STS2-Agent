@@ -40,6 +40,11 @@ internal static class PlaybookSectionsTests
 
         var rest = PlaybookSections.ForScreen(Strategy, "REST");
         Assert.Contains("Rest site: heal or upgrade", rest);
+
+        // The event screen gets the option rules, which is where 1.2's risk vocabulary is actionable.
+        var @event = PlaybookSections.ForScreen(Strategy, "EVENT");
+        Assert.Contains("Event options: how to choose", @event);
+        Assert.False(@event.Contains("Shop: what to buy", StringComparison.Ordinal));
     }
 
     public static void FakeMerchantGetsTheShopGuidance()

@@ -154,6 +154,43 @@ internal static class McpServiceTests
         Assert.Equal(180d, root.GetProperty("changes")[0].GetProperty("after").GetDouble());
     }
 
+    public static async Task ToolsCall_SceneGuidanceFollowsTheScreen()
+    {
+        var bridge = new FakeMcpBridge();
+        var server = CreateServer(bridge: bridge);
+
+        var combat = await Rpc(server, """{"jsonrpc":"2.0","id":26,"method":"tools/call","params":{"name":"get_scene_guidance"}}""");
+        var combatText = combat.GetProperty("result").GetProperty("content")[0].GetProperty("text").GetString();
+        using (var document = JsonDocument.Parse(combatText!))
+        {
+            var root = document.RootElement;
+            Assert.Equal("COMBAT", root.GetProperty("screen").GetString());
+            Assert.Equal("combat", root.GetProperty("scene").GetString());
+            Assert.Contains("Combat: what to prioritise", root.GetProperty("guidance").GetString());
+            Assert.False(
+                root.GetProperty("guidance").GetString()!.Contains("Route: which node to enter", StringComparison.Ordinal),
+                "a combat screen must not be sent the route rules");
+        }
+
+        // The screen comes from live state, so the same tool answers for a different screen.
+        bridge.CompactStateJson = """{"screen":"REST","available_actions":["choose_rest_option"]}""";
+        var rest = await Rpc(server, """{"jsonrpc":"2.0","id":27,"method":"tools/call","params":{"name":"get_scene_guidance"}}""");
+        var restText = rest.GetProperty("result").GetProperty("content")[0].GetProperty("text").GetString();
+        using (var document = JsonDocument.Parse(restText!))
+        {
+            Assert.Contains("Rest site: heal or upgrade", document.RootElement.GetProperty("guidance").GetString());
+        }
+
+        // A screen with no strategic choice answers with an empty string, not an error and not null.
+        bridge.CompactStateJson = """{"screen":"REWARD","available_actions":["collect_rewards_and_proceed"]}""";
+        var reward = await Rpc(server, """{"jsonrpc":"2.0","id":28,"method":"tools/call","params":{"name":"get_scene_guidance"}}""");
+        var rewardText = reward.GetProperty("result").GetProperty("content")[0].GetProperty("text").GetString();
+        using (var document = JsonDocument.Parse(rewardText!))
+        {
+            Assert.Equal(string.Empty, document.RootElement.GetProperty("guidance").GetString());
+        }
+    }
+
     public static async Task Notification_Returns202()
     {
         var server = CreateServer();

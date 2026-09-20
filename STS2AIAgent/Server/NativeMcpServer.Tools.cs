@@ -58,6 +58,8 @@ internal sealed partial class NativeMcpServer
                     ?? """{"decisions":[]}""";
             case "get_run_summary":
                 return await GetRunSummaryJsonAsync(cancellationToken);
+            case "get_scene_guidance":
+                return await GetSceneGuidanceJsonAsync(cancellationToken);
             case "diff_state":
                 // The three keys are named here rather than inside the helper so the argument-name
                 // comparison in test_native_tool_alignment can see them.
@@ -79,6 +81,29 @@ internal sealed partial class NativeMcpServer
             string.IsNullOrWhiteSpace(stateJson) ? "{}" : stateJson);
         var summary = StateViews.BuildRunSummary(document.RootElement);
         return JsonSerializer.Serialize(new { run = summary }, JsonOptionsKeepingNulls);
+    }
+
+    /// <summary>
+    /// The strategy guidance for the screen the game is on.
+    /// </summary>
+    /// <remarks>
+    /// This surface serves the guidance the mod itself ships: the embedded strategy reference, sliced
+    /// by screen exactly as the in-game loop receives it. The Python sidecar additionally looks up the
+    /// generated per-option event risk index, which the mod does not carry — that difference is
+    /// deliberate and documented rather than papered over, because shipping the index inside the mod
+    /// is a packaging change, not a code one.
+    /// </remarks>
+    private async Task<string> GetSceneGuidanceJsonAsync(CancellationToken cancellationToken)
+    {
+        var stateJson = await _bridge.GetCompactStateJsonAsync(cancellationToken);
+        var screen = PlaybookSections.ScreenOfCompactState(stateJson);
+        var guidance = PlayPrompt.ScreenGuidance(screen);
+        return JsonSerializer.Serialize(new
+        {
+            screen,
+            scene = GameDataFilter.DetectScene(screen),
+            guidance
+        }, JsonOptionsKeepingNulls);
     }
 
     private async Task<string> WaitUntilActionableJsonAsync(JsonElement arguments, CancellationToken cancellationToken)

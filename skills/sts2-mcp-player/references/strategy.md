@@ -4,7 +4,7 @@
 
 Every rule names the payload field it reads, so a rule can be checked against live state instead of trusted. Field names are the compact ones MCP `get_game_state` returns; the rename table in `docs/api.md` maps them back to raw `/state` names.
 
-**This file is not carried whole in the in-game prompt.** The mod embeds it and injects only the section the current screen needs — roughly 260 to 520 tokens, and nothing at all on a screen with no strategic choice — because carrying all ~2,200 tokens on every play step would charge a combat decision for the shop advice. An external agent should read the file directly and keep the whole picture; the in-game loop reads it one screen at a time.
+**This file is not carried whole in the in-game prompt.** The mod embeds it and injects only the section the current screen needs — roughly 260 to 520 tokens, and nothing at all on a screen with no strategic choice — because carrying all ~2,200 tokens on every play step would charge a combat decision for the shop advice. An external agent should read the file directly and keep the whole picture; the in-game loop reads it one screen at a time. The same sections are reachable over MCP through `get_scene_guidance`, which answers "what does this screen need" in one call.
 
 Two consequences of that split are worth knowing:
 
@@ -42,6 +42,21 @@ Read `shop.cards[]`, `shop.relics[]`, `shop.potions[]` and `shop.card_removal`. 
 3. **Buy a potion only into an empty slot** (`run.potions[].occupied` false). With every slot full, `buy_potion` will not stay available, and buying to discard wastes gold.
 4. **Keep a reserve.** Spending `run.gold` to zero means the next shop cannot sell the card removal wanted after a bad act. Leave roughly 75 gold behind unless the purchase wins the act outright.
 5. **`on_sale` is a discount, not a reason.** A discounted card you would not otherwise take is still a card you did not want.
+
+## Event options: how to choose
+
+Read `event.options[]` and skip every entry with `is_locked` true. `event.options[].index` is the `choose_event_option` argument; `is_proceed` marks the leave/continue entry and `will_kill_player` marks an option the game itself considers fatal.
+
+1. **Never take a `will_kill_player` option** unless the run is being ended on purpose. It outranks every other consideration on this screen.
+2. **Read the cost before the reward.** The generated event index grades each option — `lethal-possible`, `harmful`, `costly`, `none-detected`, `locked`, `unknown` — and names what the handler spends (HP, Max HP, gold, a card, a relic). An option that costs Max HP is a permanent price; one that costs gold is usually not.
+3. **A card or relic the deck does not want is not a reward.** When an option "adds a card to your deck", read what it adds before taking it: a curse is a cost dressed as a reward.
+4. **`none-detected` is not a promise.** It means the handler body showed no harmful command, not that the option is safe. When a risk grade is `?` or `unknown`, prefer an option whose cost is written down.
+5. **Leave when the remaining options all cost more than they give.** `is_proceed` / the finished-event entry is a legitimate answer; an unspent event is not a loss.
+6. **Re-read state after every branch.** Events mutate in place, and the options on the next page are not the options on this one.
+
+### Where the risk grades come from
+
+The grades are derived offline from the decompiled event sources into `docs/game-knowledge/events.md`, per option the event builds. An external agent reading the repository can look up the current `event.event_id` there and see the specific options this general advice is about; the in-game loop gets this section only, because the index is not shipped inside the mod.
 
 ## Potions: when to drink
 
