@@ -74,6 +74,14 @@ python scripts/run_sts2_validation.py state-summary
 python scripts/run_sts2_validation.py state-invariants
 ```
 
+`patch-check` composes the four checks a game-version bump has to survive into one command, because "remember four commands in the right order" is how a patch regression ships:
+
+```powershell
+python scripts/run_sts2_validation.py patch-check
+```
+
+It requires `reflected_members_missing` to be `0` (otherwise the build is unsupported and the run stops before the expensive steps), then runs the deep mod load, the ADR 0001 state/descriptor invariants, and a replay of the recorded action surface. The replay compares the current screen against the newest `build/validation-*/action-surface-baseline.jsonl` (or `--baseline <path>`), and **only fails on a flag that disagrees for an action present on both sides** — a baseline sample was taken in some other run state, so an action set that differs between saves is reported as `only_in_state` / `only_in_baseline` rather than a failure. A screen the baseline never sampled is reported with `baseline_screen_present: false` and is not a pass; likewise a checkout with no baseline file at all. That baseline lives under gitignored `build/`, so a fresh checkout skips the replay step and says so.
+
 These state and mod checks require the game and Mod API to be online. The Python-dependent profile check uses the MCP project's environment while keeping the script path rooted at the repository:
 
 ```powershell
