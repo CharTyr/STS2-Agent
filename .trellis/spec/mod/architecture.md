@@ -69,7 +69,7 @@ For a change crossing state, action, agent, UI, or MCP, trace it in both directi
 
 ## Code shape and its known debts
 
-Measured 2026-09-20 across 101 mod source files totalling 32,844 lines (git-tracked only, which is what the gate counts -- a working tree also holds whatever the developer left in it). These numbers are here
+Measured 2026-09-20 across 102 mod source files totalling 32,976 lines (git-tracked only, which is what the gate counts -- a working tree also holds whatever the developer left in it). These numbers are here
 because nobody was counting, and that is how a codebase stops being navigable -- not through a bad
 commit, but through a thousand good ones. The `arch-facts` gate checks this table against the
 files, so it cannot quietly go stale the way it did between ADR 0001 and the splits below.
@@ -81,7 +81,7 @@ files, so it cannot quietly go stale the way it did between ADR 0001 and the spl
 | [AgentRuntime.cs](../../../STS2AIAgent/Agent/AgentRuntime.cs) | 1,377 |
 | [GameStateService.Payloads.cs](../../../STS2AIAgent/Game/GameStateService.Payloads.cs) | 1,251 |
 | [GameStateService.AgentView.cs](../../../STS2AIAgent/Game/GameStateService.AgentView.cs) | 1,236 |
-| [GameActionService.cs](../../../STS2AIAgent/Game/GameActionService.cs) | 1,179 |
+| [GameActionService.cs](../../../STS2AIAgent/Game/GameActionService.cs) | 1,180 |
 | [GameActionService.Rooms.cs](../../../STS2AIAgent/Game/GameActionService.Rooms.cs) | 1,136 |
 
 Until 2026-09-17 two files held 49% of the mod: `GameStateService.cs` at 8,559 lines and
