@@ -333,6 +333,15 @@ internal static class TestRunner
         yield return ("StateViews.DiffEmptyObject", () => Task.Run(StateViewsTests.DiffTreatsAnEmptyObjectAsALeaf));
         yield return ("Mcp.RunSummaryTool", McpServiceTests.ToolsCall_RunSummaryUsesRawState);
         yield return ("Mcp.DiffStateTool", McpServiceTests.ToolsCall_DiffStateComparesTwoPayloads);
+        yield return ("Playbook.Embedded", () => Task.Run(PlaybookSectionsTests.StrategyReferenceIsEmbedded));
+        yield return ("Playbook.PerScreenOnly", () => Task.Run(PlaybookSectionsTests.ScreenGuidanceIsLimitedToTheScreen));
+        yield return ("Playbook.FakeMerchant", () => Task.Run(PlaybookSectionsTests.FakeMerchantGetsTheShopGuidance));
+        yield return ("Playbook.NoChoiceNoGuidance", () => Task.Run(PlaybookSectionsTests.ScreensWithoutAStrategicChoiceGetNothing));
+        yield return ("Playbook.Bounded", () => Task.Run(PlaybookSectionsTests.TheInjectionIsBounded));
+        yield return ("Playbook.MappedHeadingsExist", () => Task.Run(PlaybookSectionsTests.EveryMappedHeadingExistsInTheReference));
+        yield return ("Playbook.HeadingsAccountedFor", () => Task.Run(PlaybookSectionsTests.EveryReferenceHeadingIsAccountedFor));
+        yield return ("Playbook.ScreenFromState", () => Task.Run(PlaybookSectionsTests.ScreenComesFromTheCompactPayload));
+        yield return ("Playbook.SystemPromptUnchanged", () => Task.Run(PlaybookSectionsTests.PlaySystemStillCarriesTheFullReferences));
         yield return ("AgentLoop.PlayOnce", AgentLoopTests.PlayOnce_ExecutesSingleValidatedAct);
         yield return ("AgentLoop.CrystalArgs", AgentLoopTests.PlayOnce_ForwardsCrystalSphereArguments);
         yield return ("AgentTools.CrystalSchema", () => Task.Run(AgentLoopTests.ActToolSchema_IncludesCrystalSphereArguments));

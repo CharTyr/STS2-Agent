@@ -118,6 +118,16 @@ internal sealed class AgentLoop
             LlmMessage.User("Latest compact game state:\n" + stateJson)
         };
 
+        // Only the guidance this screen can act on. The full references stay in PlaySystem; this is
+        // the part that had nowhere to live because it is too long to carry on every step.
+        var screen = PlaybookSections.ScreenOfCompactState(stateJson);
+        var screenGuidance = PlayPrompt.ScreenGuidance(screen);
+        if (!string.IsNullOrEmpty(screenGuidance))
+        {
+            messages.Add(LlmMessage.System(
+                "Strategy for the screen in the latest state (" + screen + "):\n" + screenGuidance));
+        }
+
         var teamContext = _teamContext?.Invoke();
         if (!string.IsNullOrEmpty(teamContext))
         {

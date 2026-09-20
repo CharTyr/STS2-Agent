@@ -180,5 +180,5 @@ For detailed per-screen sequences and pitfalls, read [references/screen-playbook
 
 For validation flows, read [references/debug-and-validation.md](references/debug-and-validation.md).
 
-For the choices the shared contract does not make for you — which node to enter, when to heal instead of smith, what to buy, when to drink a potion, which enemy to kill first, and how a host and a teammate divide the work — read [references/strategy.md](references/strategy.md). Every rule there names the payload field it reads. It is a separate file rather than part of the shared contract on purpose: the mod embeds the shared contract and `screen-playbooks.md` into the in-game prompt on every play step, and the in-game loop has no file access, so a pointer to it inside the contract would instruct that loop to read something it cannot open.
+For the choices the shared contract does not make for you — which node to enter, when to heal instead of smith, what to buy, when to drink a potion, which enemy to kill first, and how a host and a teammate divide the work — read [references/strategy.md](references/strategy.md). Every rule there names the payload field it reads. Read the file whole; the in-game loop does not, and cannot, because it has no file access — the mod injects one section of it per screen instead (see the note at the top of that file).
 

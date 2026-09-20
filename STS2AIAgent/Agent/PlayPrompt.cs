@@ -44,6 +44,26 @@ Omit unused parameters; keep "reason" -- it is shown to the player. Do not wrap 
 
     public static string ScreenPlaybooks { get; } = ReadEmbedded("STS2AIAgent.Sts2McpPlayer.ScreenPlaybooks.md");
 
+    /// <summary>
+    /// The strategy reference: the choices the per-screen action sequences do not make.
+    /// </summary>
+    /// <remarks>
+    /// Injected one screen at a time through <see cref="ScreenGuidance"/> rather than carried whole
+    /// in <see cref="PlaySystem"/>, because the whole file is roughly 1,500 tokens and a decision in
+    /// combat cannot use the shop advice.
+    /// </remarks>
+    public static string StrategyReference { get; } = ReadEmbedded("STS2AIAgent.Sts2McpPlayer.Strategy.md");
+
+    /// <summary>
+    /// The strategy guidance that applies to <paramref name="screen"/>, or an empty string when the
+    /// screen has no strategic choice. The caller appends it only when it is non-empty, so a combat
+    /// turn and a reward screen are not charged for the route rules.
+    /// </summary>
+    public static string ScreenGuidance(string? screen)
+    {
+        return PlaybookSections.ForScreen(StrategyReference, screen);
+    }
+
     public static string PlaySystem { get; } = BuildPlaySystem();
 
     public readonly record struct SkillResource(string Uri, string Name, string Description, string Text);

@@ -23,6 +23,7 @@
     <Compile Include="..\STS2AIAgent\Agent\DecisionLog.cs" Link="Agent\DecisionLog.cs" />
     <Compile Include="..\STS2AIAgent\Agent\DecisionContext.cs" Link="Agent\DecisionContext.cs" />
     <Compile Include="..\STS2AIAgent\Agent\StateViews.cs" Link="Agent\StateViews.cs" />
+    <Compile Include="..\STS2AIAgent\Agent\PlaybookSections.cs" Link="Agent\PlaybookSections.cs" />
     <Compile Include="..\STS2AIAgent\Server\LoopbackListener.cs" Link="Server\LoopbackListener.cs" />
     <Compile Include="..\STS2AIAgent\Server\CompanionPortFile.cs" Link="Server\CompanionPortFile.cs" />
     <Compile Include="..\STS2AIAgent\Multiplayer\CompanionHealth.cs" Link="Multiplayer\CompanionHealth.cs" />
@@ -82,6 +83,7 @@
   <ItemGroup>
     <EmbeddedResource Include="../skills/sts2-mcp-player/SKILL.md" LogicalName="STS2AIAgent.Sts2McpPlayer.Skill.md" />
     <EmbeddedResource Include="../skills/sts2-mcp-player/references/screen-playbooks.md" LogicalName="STS2AIAgent.Sts2McpPlayer.ScreenPlaybooks.md" />
+    <EmbeddedResource Include="../skills/sts2-mcp-player/references/strategy.md" LogicalName="STS2AIAgent.Sts2McpPlayer.Strategy.md" />
   </ItemGroup>
   <ItemGroup>
     <!--

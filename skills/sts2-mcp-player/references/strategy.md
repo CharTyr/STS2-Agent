@@ -4,7 +4,13 @@
 
 Every rule names the payload field it reads, so a rule can be checked against live state instead of trusted. Field names are the compact ones MCP `get_game_state` returns; the rename table in `docs/api.md` maps them back to raw `/state` names.
 
-**This file is deliberately not part of the in-game prompt.** The mod embeds `SKILL.md`'s shared contract and `screen-playbooks.md`; adding these rules there would add roughly 1,500 tokens to every single play step. An external agent should load this file on demand — when the screen is `MAP`, `REST`, or `SHOP`, or when the run is co-op — and the in-game loop gets the same rules through a budgeted per-screen injection instead.
+**This file is not carried whole in the in-game prompt.** The mod embeds it and injects only the section the current screen needs — roughly 260 to 520 tokens, and nothing at all on a screen with no strategic choice — because carrying all ~2,200 tokens on every play step would charge a combat decision for the shop advice. An external agent should read the file directly and keep the whole picture; the in-game loop reads it one screen at a time.
+
+Two consequences of that split are worth knowing:
+
+- A heading that no screen maps to reaches the in-game model on no screen at all. The mapping lives in `STS2AIAgent/Agent/PlaybookSections.cs`, and a test fails if a section is neither mapped nor declared as run-level or deliberately not injected — so a new section cannot be added here and silently never ship.
+- The co-op section is one of those deliberate omissions in-game: the in-game loop drives one local player and has no channel to coordinate with the other instance. It is written for an external client that does.
+
 
 ## Route: which node to enter
 
