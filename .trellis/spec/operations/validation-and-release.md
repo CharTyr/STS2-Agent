@@ -46,6 +46,7 @@ These are the offline check entry points, plus the scripts that are deliberately
 | Packaging source contract | `python scripts/check_release_package.py --source-root .` | The packaging script still collects the player-facing files (source mode; artifact mode inspects a real release directory or zip and is not an offline check) |
 | Budget proxy self-test | `python scripts/sts2-model-budget-proxy-selftest.py` | No-cost offline self-test of the validation budget proxy; asserts the real ledger is untouched and never calls the paid upstream |
 | API schema semantics | `python scripts/test-api-schema.py` | Source route/method ownership, nullable wire-type mappings, typed teammate intent, explicit dynamic/opaque boundaries, and stale-byte refusal for `docs/openapi.json` |
+| Decision benchmark | `python scripts/decision_benchmark.py` / `python scripts/test-decision-benchmark.py` | Validates the versioned offline action-decision suite and its scorer. It never starts a game or model; scores only snapshot-evidenced constraints and labels that limitation in the report |
 | Gate drift self-test | `powershell -ExecutionPolicy Bypass -File scripts/test-verification-gates.ps1` | Proves the gates fail on drift, using a throwaway fixture |
 | MCP tool profiles | `powershell -ExecutionPolicy Bypass -File scripts/test-mcp-tool-profile.ps1` | `guided` / `layered` / `full` tool registration |
 | PowerShell failure propagation | `powershell -ExecutionPolicy Bypass -File scripts/test-native-exit-propagation.ps1` | A failing native command propagates as a script failure |

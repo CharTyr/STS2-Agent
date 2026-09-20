@@ -4,6 +4,8 @@
 
 ## Unreleased
 
+- Added a versioned, no-network decision-quality benchmark: eleven snapshot-evidenced combat, event, map, rest, shop, and reward cases; deterministic scoring; an explicit reference-answer baseline; and offline contracts. Scores describe recorded action constraints only, never simulated outcomes or live-model quality.
+
 ### Added
 
 - **The HTTP API now ships a machine-readable OpenAPI 3.1 / JSON Schema contract.** [`docs/openapi.json`](docs/openapi.json) is generated, not hand-maintained: its stdlib generator reads the Router's route/method dispatch, C# state/action wire records, and the already-checked shared vocabularies for actions, errors, screens, and SSE events. A twelfth preflight gate compares the committed bytes with regenerated output, so a changed route or payload cannot quietly leave tool authors with an old contract. Dynamic game-data exports, compact agent-view data, and MCP JSON-RPC are explicitly free-form/opaque where the server's own surface is dynamic, rather than being described with invented static fields.

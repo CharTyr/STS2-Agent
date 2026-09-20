@@ -44,6 +44,8 @@ $releaseMetadataChecker = Join-Path $ProjectRoot "scripts/check_release_metadata
 $verificationGates = Join-Path $ProjectRoot "scripts/check_verification_gates.py"
 $verificationGateSelfTest = Join-Path $ProjectRoot "scripts/test-verification-gates.ps1"
 $apiSchemaTest = Join-Path $ProjectRoot "scripts/test-api-schema.py"
+$decisionBenchmark = Join-Path $ProjectRoot "scripts/decision_benchmark.py"
+$decisionBenchmarkTest = Join-Path $ProjectRoot "scripts/test-decision-benchmark.py"
 $nativeExitPropagationTest = Join-Path $ProjectRoot "scripts/test-native-exit-propagation.ps1"
 $budgetProxySelfTest = Join-Path $ProjectRoot "scripts/sts2-model-budget-proxy-selftest.py"
 $changelogPath = Join-Path $ProjectRoot "CHANGELOG.md"
@@ -118,6 +120,11 @@ Invoke-Step -Name "Run dependency, API-doc, schema, and doc-snapshot gates" -Act
 
 Invoke-Step -Name "Test generated API schema semantics" -Action {
     Invoke-CheckedNative -FilePath "python" -Arguments @($apiSchemaTest)
+}
+
+Invoke-Step -Name "Validate offline decision benchmark" -Action {
+    Invoke-CheckedNative -FilePath "python" -Arguments @($decisionBenchmark)
+    Invoke-CheckedNative -FilePath "python" -Arguments @($decisionBenchmarkTest)
 }
 
 Invoke-Step -Name "Self-test the verification gates" -Action {
