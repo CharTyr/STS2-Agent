@@ -72,7 +72,20 @@ internal static class Router
                     !body.RootElement.TryGetProperty("message", out var message) || message.ValueKind != System.Text.Json.JsonValueKind.String ||
                     string.IsNullOrWhiteSpace(message.GetString()) || message.GetString()!.Length > TeamConversation.MaxMessageLength)
                     throw new ApiException(400, "invalid_request", "message must contain 1–2000 characters.");
-                var reply = await AgentRuntime.Instance.ReplyToTeammateAsync(message.GetString()!, cancellationToken);
+                // The typed signal is optional and additive: a client that sends only text keeps
+                // working, and a malformed signal is refused rather than dropped, because a dropped
+                // instruction looks like a teammate ignoring it.
+                TeamIntent? intent;
+                try
+                {
+                    intent = TeamIntent.Parse(body.RootElement);
+                }
+                catch (ArgumentException ex)
+                {
+                    throw new ApiException(400, "invalid_request", ex.Message);
+                }
+
+                var reply = await AgentRuntime.Instance.ReplyToTeammateAsync(message.GetString()!, intent, cancellationToken);
                 await WriteJsonAsync(response, 200, new { ok = true, request_id = requestId, data = new { reply } });
                 statusCode = 200;
                 return;

@@ -85,7 +85,7 @@ internal sealed class AgentRuntime
             {
                 return _settings;
             }
-        }, InstanceRole.IsCompanion ? () => _teamConversation.BuildDecisionContext() : null,
+        }, InstanceRole.IsCompanion ? () => _teamConversation.BuildTeamContext() : null,
             () =>
             {
                 lock (_gate)
@@ -319,7 +319,7 @@ internal sealed class AgentRuntime
             _teamConversation.Add("user", text);
             _teamStatus = Loc.T("消息正在送往队友；若它正在行动，会在本次行动完成后回复。");
             RaiseChanged();
-            var reply = await connection.SendMessageAsync(text, cancellationToken);
+            var reply = await connection.SendMessageAsync(text, intent: null, cancellationToken);
             _teamConversation.Add("assistant", reply.Length > TeamConversation.MaxMessageLength ? reply[..TeamConversation.MaxMessageLength] : reply);
             _teamStatus = Loc.T("队友已回复。你的建议会作为后续决策的参考。");
         }
@@ -335,7 +335,7 @@ internal sealed class AgentRuntime
         }
     }
 
-    public async Task<string> ReplyToTeammateAsync(string text, CancellationToken cancellationToken)
+    public async Task<string> ReplyToTeammateAsync(string text, TeamIntent? intent, CancellationToken cancellationToken)
     {
         if (!InstanceRole.IsCompanion) throw new InvalidOperationException("Only a companion can receive team messages.");
         using var deadline = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, _lifetime.Token);
@@ -358,7 +358,7 @@ internal sealed class AgentRuntime
         try
         {
             var previous = _teamConversation.Snapshot();
-            _teamConversation.Add("user", text);
+            _teamConversation.Add("user", text, intent);
             var result = await _loop.ChatAsync(text, previous, new ChatOptions
             {
                 TeammateConversation = true,

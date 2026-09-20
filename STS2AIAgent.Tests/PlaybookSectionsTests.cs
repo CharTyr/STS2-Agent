@@ -122,7 +122,9 @@ internal static class PlaybookSectionsTests
     public static void ScreenComesFromTheCompactPayload()
     {
         Assert.Equal("COMBAT", PlaybookSections.ScreenOfCompactState("""{"screen":"COMBAT","run":{}}"""));
-        Assert.Equal("MAP", PlaybookSections.ScreenOfCompactState("""{"screen":" MAP "}""").Trim());
+        // The raw value is returned as-is; the mapping is what trims before looking a screen up.
+        Assert.Equal(" MAP ", PlaybookSections.ScreenOfCompactState("""{"screen":" MAP "}"""));
+        Assert.Contains("Route: which node to enter", PlaybookSections.ForScreen(Strategy, " MAP "));
         Assert.Null(PlaybookSections.ScreenOfCompactState("{}"));
         Assert.Null(PlaybookSections.ScreenOfCompactState("""{"screen":null}"""));
         Assert.Null(PlaybookSections.ScreenOfCompactState("not json"));

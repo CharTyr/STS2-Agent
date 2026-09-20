@@ -1690,6 +1690,24 @@ AI 队友实例上的受控端点，由宿主进程在本地调用，普通玩�
 - `POST /companion/control`：请求体 `{"running": true|false}`，响应 `data.phase`；队友被远程暂停后不会再自行启动
 - `POST /companion/message`：请求体 `{"message": "..."}`（1–2000 字符），响应 `data.reply` 为队友的回复
 
+### `POST /companion/message` 的带类型信号（可选）
+
+自由文本对决策循环不可靠：「我打左边那个」既没有说清是哪个 `enemy_index`，两个人重复说也无法判断指的是不是同一个。所以 `message` 之外可以再带一个**可选**的 `intent` 对象，`message` 本身仍然是必填的、仍然是人读的那份。
+
+| 字段 | 类型 | 适用 `type` | 说明 |
+| --- | --- | --- | --- |
+| `type` | string | 必填 | `focus_fire`、`target_announce`、`potion_ownership` 之一 |
+| `enemy_index` | number | `focus_fire` / `target_announce` | 本回合针对的敌人索引（`combat.enemies[].i` 的那套），必填 |
+| `potion_index` | number | `potion_ownership` | 药水槽索引，必填 |
+| `player_id` | string | `potion_ownership` | 这瓶药水归谁；省略则该行显示为「未指定玩家」 |
+| `potion_id` | string | `potion_ownership` | 药水 ID；省略则显示为「一瓶药水」 |
+
+- **向后兼容**：不带 `intent` 的请求与以前完全一致；`intent: null` 等同于不带。
+- **格式错误会被拒绝，不会被丢弃**：`type` 缺失或未知、该类型必填字段缺失、字段类型不对，一律 400 `invalid_request`。静默丢弃一个信号看起来就像队友无视了指令。
+- **多出来的字段会被忽略**，便于前后版本共存。
+
+收到的信号会以独立字段进入队友的决策上下文（与消息文本并列，各自回答不同的问题），并在 `focus_fire` / `target_announce` 存在时给队友的下一步决策追加一条**约束**：队友本回合在打 `enemy_index N`，除非那个敌人已经必死或只剩最后一击，否则不要把伤害再倾泻在它身上。这是提示词层面的约束，不是硬性改写出牌——模型能看到实况血量与 `lethal_risks`，能区分「别重复」和「补刀」，在代码里拒绝动作反而会拿走这个判断。
+
 ---
 
 ## `GET /data/{collection}`

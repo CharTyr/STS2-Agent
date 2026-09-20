@@ -37,11 +37,14 @@ internal sealed class CompanionConnection
             CryptographicOperations.FixedTimeEquals(Encoding.UTF8.GetBytes(expected), Encoding.UTF8.GetBytes(supplied));
     }
 
-    public async Task<string> SendMessageAsync(string message, CancellationToken cancellationToken)
+    public async Task<string> SendMessageAsync(string message, TeamIntent? intent, CancellationToken cancellationToken)
     {
         if (string.IsNullOrWhiteSpace(message) || message.Length > TeamConversation.MaxMessageLength)
             throw new ArgumentException(Loc.T("请输入 1–2000 个字符的队伍消息。"));
-        var data = await SendAsync("message", new { message }, cancellationToken);
+        var data = await SendAsync(
+            "message",
+            intent is null ? new { message } : new { message, intent },
+            cancellationToken);
         return data.GetProperty("reply").GetString() ?? Loc.T("队友没有返回文本。");
     }
 

@@ -74,6 +74,9 @@ internal static partial class Loc
         map["一起集火哪个敌人？这条路线你怎么看？"] = "Which enemy should we focus? What do you think of this route?";
         map["和队友说"] = "Message teammate";
         map["等待队友回复…"] = "Waiting for teammate…";
+        // The focus-fire constraint the companion's loop receives when the teammate announced a target.
+        map["队友本回合在打 enemy_index {0}。除非那个敌人已经必死或只剩最后一击，不要把伤害再倾泻在它身上；优先选另一个目标，避免两人重复集火把伤害溢出掉。"] =
+            "Your teammate is attacking enemy_index {0} this turn. Unless that enemy is already certain to die or is one hit from it, do not pour more damage into it; pick another target so the two of you do not waste damage on the same kill.";
         map["聊天不会替你出牌，也不会恢复已暂停的队友。建议会供队友下一次决策参考。"] =
             "Chat will not play cards for you or resume a paused teammate. Your advice feeds the teammate's next decision.";
         map["如果队友窗口未能连接，请检查游戏日志和 Steam 双开限制。"] =

@@ -347,6 +347,14 @@ internal static class TestRunner
         yield return ("Playbook.ScreenFromState", () => Task.Run(PlaybookSectionsTests.ScreenComesFromTheCompactPayload));
         yield return ("Playbook.SystemPromptUnchanged", () => Task.Run(PlaybookSectionsTests.PlaySystemStillCarriesTheFullReferences));
         yield return ("Mcp.SceneGuidanceTool", McpServiceTests.ToolsCall_SceneGuidanceFollowsTheScreen);
+        yield return ("TeamIntent.Optional", () => Task.Run(TeamIntentTests.NoIntentIsAllowedSoTextOnlyClientsKeepWorking));
+        yield return ("TeamIntent.ParsesKnownTypes", () => Task.Run(TeamIntentTests.KnownTypesParseTheirFields));
+        yield return ("TeamIntent.RefusesMalformed", () => Task.Run(TeamIntentTests.AMalformedIntentIsRefusedRatherThanDropped));
+        yield return ("TeamIntent.DescribesItsOwnFields", () => Task.Run(TeamIntentTests.DescriptionNamesOnlyTheFieldsTheTypeCarries));
+        yield return ("TeamIntent.ReachesTheDecisionContext", () => Task.Run(TeamIntentTests.TheConversationCarriesTheSignalBesideTheMessage));
+        yield return ("TeamIntent.FocusFireConstrains", () => Task.Run(TeamIntentTests.FocusFireBecomesAConstraintOnTheNextDecision));
+        yield return ("TeamIntent.NewestAnnouncementWins", () => Task.Run(TeamIntentTests.ALaterAnnouncementSupersedesAnEarlierOne));
+        yield return ("TeamIntent.NoAnnouncementNoConstraint", () => Task.Run(TeamIntentTests.WithoutAnAnnouncementThereIsNoConstraint));
         yield return ("AgentLoop.PlayOnce", AgentLoopTests.PlayOnce_ExecutesSingleValidatedAct);
         yield return ("AgentLoop.CrystalArgs", AgentLoopTests.PlayOnce_ForwardsCrystalSphereArguments);
         yield return ("AgentTools.CrystalSchema", () => Task.Run(AgentLoopTests.ActToolSchema_IncludesCrystalSphereArguments));
