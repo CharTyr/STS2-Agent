@@ -1161,3 +1161,28 @@ The lesson worth keeping: both runtime defects were found by driving a real game
 ### Status
 
 [OK] **Completed**
+
+
+## Session 30: Companion health semantics, demand-driven SSE, predicate split, and the debug churn hook
+
+**Date**: 2026-09-20
+**Task**: Companion health semantics, demand-driven SSE, predicate split, and the debug churn hook
+**Branch**: `main`
+
+### Summary
+
+Five tasks, all merged through PRs #166-#171. Companion identity now accepts ready and degraded while keeping pid/port/role/service checks (live-verified 14/14 against a real degraded payload produced by forcing one registry lookup to miss). Companion /health returns null for the host-only keys instead of the host state machine's idle text, same key shape. The event poller is demand-driven (0 subscribers built nothing over 12s in the game) with a generation fence so a poll in flight when Stop runs cannot commit, and it will not restart if a poll refuses to end inside the shutdown budget. Full subscriber queues now fail the write and drop that subscriber instead of silently evicting the oldest event; a live run produced 'Disconnected 2 slow event subscriber(s)'. Two bugs were found by the live runs and fixed: every poll re-announced stream_ready (~60 frames in 10s on a stationary screen), and a suppressed repeat still consumed an event_id, which would have left gaps the docs read as loss. GameStateService predicates moved to GameStateService.Predicates.cs: 61 members, 771 lines, base 765 lines smaller with no line added, 4 shared helpers left in the base file, and PredicateRelocationContractTests stores a SHA-256 per moved declaration from the parent commit. A new debug-gated inject_event_churn action makes the overflow path reachable in a live run, which is how the last offline-only item was closed. Verification: 487 C# tests, 226 Python tests, 11/11 gates, MCP tool profile clean, gate self-test, preflight complete.
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `c017302` | (see git log) |
+| `aac032a` | (see git log) |
+| `62972c7` | (see git log) |
+| `c3c531e` | (see git log) |
+| `2a1bd2a` | (see git log) |
+
+### Status
+
+[OK] **Completed**
