@@ -314,6 +314,8 @@ internal static class TestRunner
         yield return ("DecisionLog.BoundsAndRedacts", () => Task.Run(DecisionLogTests.Record_RedactsBoundsAndKeepsNewest));
         yield return ("DecisionLog.PersistsAndRotates", () => Task.Run(DecisionLogTests.Record_PersistsJsonlAndRotates));
         yield return ("DecisionLog.PersistenceFailureIsSafe", () => Task.Run(DecisionLogTests.Record_UnwritablePathNeverThrows));
+        yield return ("DecisionLog.NotifiesMirrorsSafely", () => Task.Run(DecisionLogTests.Record_NotifiesMirrorsAfterCommitting));
+        yield return ("Events.DecisionMadeMirror", () => Task.Run(DecisionLogTests.SseDecisionEvent_IsMirroredFromTheSameLog));
         yield return ("DecisionLog.ClientContextReason", () => Task.Run(DecisionContextTests.ClientContext_ReasonIsOptionalAndTrimmed));
         yield return ("Mcp.DecisionLogTool", McpServiceTests.ToolsCall_DecisionLogRecordsAcceptedActOnly);
         yield return ("Mcp.DecisionLogAbsentIsEmpty", McpServiceTests.NativeServerWithoutDecisionLog_StaysSilent);

@@ -404,6 +404,9 @@ internal sealed class AgentRuntime
             Router.BuildHealthData,
             Router.ModVersion,
             _decisions);
+        // The overlay, /decisions, and the SSE stream are three views of one log, so the mirror is
+        // attached once, here, rather than each writer remembering to announce itself.
+        _decisions.Recorded += GameEventService.Instance.PublishDecision;
         ApplyMcpFromSettings();
         AppendLog($"API {Server.HttpServer.Instance.Prefix}  role={InstanceRole.Current}");
         if (InstanceRole.IsCompanion)

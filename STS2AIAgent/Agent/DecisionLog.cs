@@ -46,6 +46,13 @@ internal sealed class DecisionLog
         _maxFileBytes = Math.Max(1, maxFileBytes);
     }
 
+    /// <summary>
+    /// Raised after an entry is stored, for consumers that mirror the log elsewhere (the SSE
+    /// stream). Handlers run outside the lock so a slow subscriber cannot stall recording, and a
+    /// throwing handler must not lose the entry -- the log is already committed at that point.
+    /// </summary>
+    public event Action<DecisionLogEntry>? Recorded;
+
     public DecisionLogEntry Record(
         string source,
         string action,
@@ -60,9 +67,10 @@ internal sealed class DecisionLog
         var safeReason = CleanOptional(reason, 500);
         var safeFingerprint = CleanOptional(stateFingerprint, 256);
 
+        DecisionLogEntry entry;
         lock (_gate)
         {
-            var entry = new DecisionLogEntry(
+            entry = new DecisionLogEntry(
                 ++_nextId,
                 (timestamp ?? DateTimeOffset.UtcNow).ToString("O"),
                 safeSource,
@@ -79,8 +87,20 @@ internal sealed class DecisionLog
             }
 
             AppendBestEffort(entry);
-            return entry;
         }
+
+        // Notified after the entry is committed and the lock is released: a mirror must not be able
+        // to stall recording, and a throwing one must not lose a decision that already happened.
+        try
+        {
+            Recorded?.Invoke(entry);
+        }
+        catch (Exception)
+        {
+            // A mirroring failure is not the recorder's failure.
+        }
+
+        return entry;
     }
 
     public IReadOnlyList<DecisionLogEntry> Snapshot(int limit = 50)

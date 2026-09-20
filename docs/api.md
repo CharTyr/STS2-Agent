@@ -1614,6 +1614,7 @@ data: }
 | `reward_decision_required` | 奖励需要选择 |
 | `event_state_changed` | 事件内部状态变化 |
 | `available_actions_changed` | 可用动作集合变化 |
+| `decision_made` | 一次**被接受**的动作写进决策日志（与 `GET /decisions` 同一份记录）。载荷为 `id`、`source`、`action`、`reason`、`state_fingerprint`、`requests_spent`、`total_tokens`、`timestamp_utc`；被拒绝或失败的动作不发此事件 |
 | `debug_churn` | 仅由调试动作 `inject_event_churn` 发布（需 `STS2_ENABLE_DEBUG_ACTIONS=1`）。载荷含 `synthetic: true` 与 1 起的 `index`，用于在实机里把慢订阅者的队列顶满 |
 
 **事件类型名由 `EventChurnPolicy.EventType` 常量给出，不是字面量。** 门禁的事件名提取只认字面量，所以这里显式说明：`debug_churn` 是变量拼出来的名字，不会被自动提取发现——新增任何**变量形式**的事件名时，必须同时更新本表和提取规则，否则两者都会静默漏检。

@@ -64,4 +64,43 @@ internal static class DecisionLogTests
             try { File.Delete(root); } catch (Exception) { }
         }
     }
+
+    public static void Record_NotifiesMirrorsAfterCommitting()
+    {
+        var log = new DecisionLog();
+        var seen = new List<DecisionLogEntry>();
+        log.Recorded += entry =>
+        {
+            // The mirror must observe a committed entry, not a promise of one.
+            seen.Add(entry);
+            Assert.Contains(entry.action, string.Join(",", log.Snapshot().Select(item => item.action)));
+        };
+        log.Recorded += _ => throw new InvalidOperationException("mirror failed");
+
+        var recorded = log.Record("agent_loop", "play_card", "Keep the block up.");
+
+        Assert.Equal(1, seen.Count);
+        Assert.Equal(recorded.id, seen[0].id);
+        // A throwing mirror is not allowed to lose the decision or the return value.
+        Assert.Equal("play_card", recorded.action);
+        Assert.Single(log.Snapshot());
+    }
+
+    public static void SseDecisionEvent_IsMirroredFromTheSameLog()
+    {
+        var runtime = AgentSourceFixture.Read("STS2AIAgent/Agent/AgentRuntime.cs");
+        Assert.Contains(
+            "_decisions.Recorded += GameEventService.Instance.PublishDecision;",
+            runtime,
+            StringComparison.Ordinal);
+
+        var service = AgentSourceFixture.Read("STS2AIAgent/Server/GameEventService.cs");
+        var publish = AgentSourceFixture.MethodBody(service, "PublishDecision");
+        // The event name is a literal so the api-facts gate can see it, and it travels the shared
+        // Publish path so the repeat guard and slow-subscriber rules apply to it too.
+        Assert.Contains("Publish(\"decision_made\"", publish, StringComparison.Ordinal);
+        Assert.False(
+            publish.Contains("_subscribers.Publish", StringComparison.Ordinal),
+            "PublishDecision must go through Publish, not around the repeat guard");
+    }
 }
