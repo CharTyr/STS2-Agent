@@ -12,6 +12,8 @@
 
 ### Fixed
 
+- **The English UI copy received a native editorial pass.** Sixty machine-translated values across the five localization shards now use concise game-UI phrasing and consistent terms (`AI teammate`, `co-op run`, `Role assignment`, `API key`, and `Let the AI play for you`) while preserving every key and placeholder. The two Star-cost labels remain marked for a quick in-game typography check because the game renders that cost with an icon rather than searchable text.
+
 - **The action-descriptor `requires_target` contract is now written down.** A 2,346-sample live pass had found the flag `false` on every descriptor and could not tell a dead branch from design. It is design: no action unconditionally takes `target_index`; the three that take it conditionally (`play_card`, `use_potion`, multiplayer rest options) advertise it per item on the hand card, potion, or rest option. `docs/api.md`'s descriptor table now states that rule generally instead of carving out `play_card` alone, and `ActionSurface.DescriptorTargetIsDocumentedConstant` pins the walk so the constant cannot drift silently.
 
 ## v0.13.1 - 2026-09-20

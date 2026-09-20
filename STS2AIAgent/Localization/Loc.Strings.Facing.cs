@@ -11,31 +11,31 @@ internal static partial class Loc
         map["队友窗口已退出"] = "Teammate window closed";
         map["关闭残留窗口后，回到主菜单再点「邀请 AI 队友」。"] =
             "Close the leftover window, then go back to the main menu and click “Invite AI teammate” again.";
-        map["正在组队"] = "Pairing up";
+        map["正在组队"] = "Teaming up";
         map["等待第二窗口连接。请勿重复点击邀请。"] =
             "Waiting for the second window to connect. Do not click Invite again.";
         map["已达到会话预算"] = "Session budget reached";
         map["配置有误，已停止"] = "Stopped: configuration error";
         map["打开「设置」修正端点、模型名或 Key，测试通过后再点「继续游玩」。不会自动重试。"] =
-            "Open “Settings” and fix the endpoint, model name, or key, then test again before you click “Resume”. It will not retry on its own.";
+            "Open “Settings”, fix the endpoint, model name, or API key, and test again before clicking “Resume”. It will not retry on its own.";
         map["对局已结束"] = "Run ended";
         map["已离开当前对局，不会自动开新局。"] = "The run has ended; a new one will not start automatically.";
         map["若要再打一局，先回到主菜单自行开局，再继续或重新邀请。"] =
             "To play another run, go back to the main menu and start one yourself, then resume or invite again.";
         map["暂时连不上模型"] = "Cannot reach the model right now";
         map["检查网络或服务后，点「继续游玩」恢复。配置类错误不会无限重试。"] =
-            "Check your network or the service, then click “Resume” to continue. Configuration errors are not retried endlessly.";
+            "Check your network or the service, then click “Resume” to continue. Configuration errors will not be retried forever.";
         map["自动游玩已停止"] = "Auto-play stopped";
         map["查看当前局面后点「继续游玩」。"] = "Review the current situation, then click “Resume”.";
         map["正在暂停"] = "Pausing";
         map["已提交的动作会先完成，不会再派发新的游戏动作。"] =
-            "The action already submitted will finish first; no new game actions will be sent.";
+            "The submitted action will finish first; no new game actions will be sent.";
         map["正在完成已提交的动作"] = "Finishing the submitted action";
         map["请稍候。这不是已取消；完成后会显示已暂停。"] =
-            "Please wait. This is not a cancellation; it will show as paused once finished.";
+            "Please wait. Nothing was cancelled; the status will show Paused once it finishes.";
         map["队友已暂停"] = "Teammate paused";
         map["仍可聊天。确认配置与队友仍在后，点「继续游玩」。"] =
-            "You can still chat. Once you confirm the setup and teammate are fine, click “Resume”.";
+            "You can still chat. Check that the setup and the teammate are fine, then click “Resume”.";
         map["打开「设置」，按失败用途修正后再测试。"] =
             "Open “Settings”, fix the role that failed, then test again.";
         map["打开「设置」：添加端点 → 添加模型并绑定 → 选择对话/游玩用途 → 测试 → 邀请队友。"] =
@@ -48,7 +48,7 @@ internal static partial class Loc
             "Make your choice in your window. This is a normal wait, not a problem.";
         map["正在等游戏"] = "Waiting for the game";
         map["动画或转场结束后会继续。这是正常等待。"] =
-            "It continues after the animation or transition ends. This is a normal wait.";
+            "The AI continues once the animation or transition ends. This is a normal wait.";
         map["正在请求模型"] = "Asking the model";
         map["可点「暂停队友」。暂停不会取消已经发出的模型请求，但不会再派发新动作。"] =
             "You can click “Pause teammate”. Pausing does not cancel a model request already in flight, but no new actions will be sent.";
@@ -96,12 +96,12 @@ internal static partial class Loc
         map["核对模型名是否与服务商目录一致，以及 Base URL 是否指向 /v1。"] =
             "Check that the model name matches the provider's catalog and that the base URL points to /v1.";
         map["{0} 返回 429，请求过于频繁或额度不足。"] =
-            "{0} returned 429: too many requests, or the quota is exhausted.";
+            "{0} returned 429: too many requests, or your quota is exhausted.";
         map["稍后再测，或检查服务商配额。不要连续重试。"] =
             "Test again later or check your provider quota. Do not retry in a loop.";
         map["{0} 返回 {1}，服务暂时不可用。"] = "{0} returned {1}: the service is temporarily unavailable.";
         map["确认服务已启动后重试。这是临时错误，不是模型名填错。"] =
-            "Make sure the service is running, then retry. This is a temporary error, not a wrong model name.";
+            "Make sure the service is running, then retry. This is a temporary error, not a mistyped model name.";
         map["连接 {0} 超时。"] = "Connection to {0} timed out.";
         map["检查网络、防火墙以及 Base URL 是否可从本机访问。"] =
             "Check your network, your firewall, and whether the base URL is reachable from this machine.";
@@ -110,15 +110,15 @@ internal static partial class Loc
             "Check the base URL, your network, and whether the local service has started.";
         map["{0}请求 {1} / {2} 失败：{3}"] = "{0} request to {1} / {2} failed: {3}";
         map["根据错误核对端点、模型名和网络后，再对该用途单独测试。"] =
-            "Use the error to check the endpoint, model name, and network, then test this role again.";
+            "Check the endpoint, model name, and network against the error, then test this role again.";
 
         // First-run setup hints (Config/FirstRunSetup.cs).
         map["请先在设置中填写 OpenAI 兼容接口地址和模型名称。本地 Ollama / LM Studio 可以留空 API Key。"] =
-            "Start by filling in an OpenAI-compatible endpoint URL and model name in Settings. Local Ollama / LM Studio can leave the API Key blank.";
+            "Start by entering an OpenAI-compatible endpoint URL and model name in Settings. For local Ollama / LM Studio you can leave the API key blank.";
         map["配置已填写，但尚未验证游玩模型。点「测试连接」会向配置的服务发送测试请求；通过后再邀请队友。"] =
             "Your setup is filled in, but the play model is not verified yet. “Test connection” sends a test request to the configured service; invite your teammate after it passes.";
         map["游玩模型已验证。回到主菜单打开「AI 队友」邀请。本地 1 人 + 1 AI 同一局：你打你的角色，AI 自动打另一个。大厅仍为 4 人位。"] =
-            "The play model is verified. Go back to the main menu and open “AI teammate” to invite. Local 1 human + 1 AI in one run: you play your character while the AI plays the other. The lobby still holds 4.";
+            "The play model is verified. Go back to the main menu and open the “AI teammate” page to invite. Local play is 1 human + 1 AI in one run: you play your character while the AI plays the other. The lobby still holds 4.";
         map["模型端点地址无效，请在设置中填写完整的 HTTP 或 HTTPS 地址。"] =
             "The model endpoint address is invalid. Enter a full HTTP or HTTPS address in Settings.";
 
@@ -127,7 +127,7 @@ internal static partial class Loc
         map["会话预算必须是正整数；留空或 0 表示不限。已保留原来的安全上限。"] =
             "The session budget must be a positive whole number; leave it blank or 0 for unlimited. Your previous safe limit was kept.";
         map["打开「设置」→ 显示高级选项以提高上限，或点「重置本会话统计」后再点「继续游玩」。重置只清零本会话计数，不会改预算上限；普通暂停/继续不会清零。"] =
-            "Open “Settings” → Show advanced options to raise the limit, or click “Reset session stats” and then “Resume”. Resetting only clears this session's counters; it does not raise the budget. Normal pause/resume does not clear them.";
+            "Open “Settings” → Show advanced options to raise the limit, or click “Reset session stats” and then “Resume”. Resetting only clears this session's counters; it does not change the budget cap. Normal pause/resume does not clear them.";
         map["自动游玩进行中不能清零统计。请先点「暂停队友」，再在「设置」→ 显示高级选项提高上限，或暂停后点「重置本会话统计」。暂停/继续不会清零累计。"] =
             "You cannot clear stats while auto-play is running. Click “Pause teammate” first, then raise the limit under “Settings” → Show advanced options, or click “Reset session stats” after pausing. Pause/resume does not clear the totals.";
     }
