@@ -147,6 +147,12 @@ def _debug_tools_enabled() -> bool:
     return _env_flag("STS2_ENABLE_DEBUG_ACTIONS")
 
 
+# Actions that the mod gates behind STS2_ENABLE_DEBUG_ACTIONS. They are deliberately not legacy
+# per-action tools: each is registered as its own tool when the flag is set, and the compact `act`
+# refuses to forward them so a debug action cannot be reached through the ordinary surface.
+_DEBUG_GATED_ACTIONS = {"run_console_command", "inject_event_churn"}
+
+
 def _register_no_arg_tool(mcp: FastMCP, name: str, description: str, handler: ToolHandler) -> None:
     def tool() -> dict[str, Any]:
         return handler()
@@ -666,11 +672,14 @@ def create_server(client: Sts2Client | None = None, tool_profile: str | None = N
               `combat.enemies[]`, `player` means the local player list, and `targets` lists the exact
               indices that are legal right now. The full state spells the same thing out as
               `target_index_space` and `valid_target_indices`.
-            - `run_console_command` is intentionally excluded from this compact tool.
+            - `run_console_command` and `inject_event_churn` are intentionally excluded from this
+              compact tool; each has its own debug-gated tool.
         """
         normalized = action.strip().lower()
-        if normalized == "run_console_command":
-            raise RuntimeError("run_console_command is gated separately and must use its own tool when enabled.")
+        if normalized in _DEBUG_GATED_ACTIONS:
+            raise RuntimeError(
+                f"{normalized} is gated separately and must use its own tool when enabled."
+            )
 
         return sts2.execute_action(
             normalized,
@@ -695,6 +704,16 @@ def create_server(client: Sts2Client | None = None, tool_profile: str | None = N
         def run_console_command(command: str) -> dict[str, Any]:
             """Run a game dev-console command for local validation or debugging."""
             return sts2.run_console_command(command=command)
+
+        @mcp.tool
+        def inject_event_churn(option_index: int = 0) -> dict[str, Any]:
+            """Publish synthetic /events/stream events to exercise the slow-subscriber contract.
+
+            Development tool: needs STS2_ENABLE_DEBUG_ACTIONS=1 on the mod. `option_index` is the
+            number of events (0 uses the mod's default), and it must exceed the per-subscriber queue
+            capacity -- a request that cannot fill a queue proves nothing.
+            """
+            return sts2.execute_action("inject_event_churn", option_index=option_index)
 
     return mcp
 

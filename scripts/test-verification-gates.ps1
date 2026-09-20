@@ -459,6 +459,15 @@ try {
     Assert-Case -Name "api-facts gate rejects a snapshot event name the code stops spelling" -Only "api-facts" -Expect "stream_ready"
     Write-Utf8 $eventServicePath $originalEventService
 
+    # An event whose name comes from a constant. The literal pattern cannot see it, so the gate
+    # carries an explicit list; dropping the constant's use has to be reported as stale gate
+    # bookkeeping rather than silently reducing what the gate checks.
+    $constantUse = 'EventChurnPolicy.EventType'
+    if ($originalEventService.IndexOf($constantUse) -lt 0) { throw "fixture setup failed: GameEventService.cs never uses $constantUse" }
+    Write-Utf8 $eventServicePath $originalEventService.Replace($constantUse, 'ChurnEventType')
+    Assert-Case -Name "api-facts gate reports a constant-named event its list no longer matches" -Only "api-facts" -Expect "debug_churn"
+    Write-Utf8 $eventServicePath $originalEventService
+
     # A documented endpoint the router does not serve. The other direction -- a served path with no
     # section -- is covered by mutating the router itself below.
     $dataHeading = '## ' + [char]96 + 'GET /data/{collection}' + [char]96
