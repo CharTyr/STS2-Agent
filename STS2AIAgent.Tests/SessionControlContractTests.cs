@@ -10,7 +10,8 @@ internal static class SessionControlContractTests
         Assert.Contains("SetCompanionRunningAsync", AgentSourceFixture.MethodBody(source, "HandleAsync"), StringComparison.Ordinal);
         Assert.Contains("play_phase = AgentRuntime.Instance.PlayPhase", source, StringComparison.Ordinal);
         Assert.Contains("session_requests = AgentRuntime.Instance.SessionRequests", source, StringComparison.Ordinal);
-        Assert.Contains("companion_process_exited = LocalDualInstanceLauncher.CompanionProcessExited", source, StringComparison.Ordinal);
+        Assert.Contains("LocalDualInstanceLauncher.CompanionProcessExited", source, StringComparison.Ordinal);
+        Assert.Contains("companion_process_exited = roleData.companion_process_exited", source, StringComparison.Ordinal);
     }
 
     public static void WorkshopStagingKeepsLocalCandidate()

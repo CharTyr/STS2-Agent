@@ -898,7 +898,12 @@ MIN_ERROR_CODES = 15
 
 EVENT_SERVICE_PATH = "STS2AIAgent/Server/GameEventService.cs"
 EVENT_STREAM_HEADING = "## `GET /events/stream`"
-EVENT_PUBLISH = re.compile(r'(?:Publish|BuildEnvelope)\(\s*"([a-z_]+)"')
+# `Publish("<name>", ...)` for the ordinary events, `BuildEnvelope("<name>", ...)` where the envelope
+# is assembled first, and `PublishSnapshot("<name>", snapshot)` for the state snapshot frames. All
+# three spell the event name as a literal next to the call, which is what this extraction relies on:
+# a name reached through a variable reads as "never published" and fails the gate rather than
+# silently leaving the docs unchecked.
+EVENT_PUBLISH = re.compile(r'(?:Publish|PublishSnapshot|BuildEnvelope)\(\s*"([a-z_]+)"')
 EVENT_TERNARY = re.compile(r'\?\s*"([a-z_]+)"\s*:\s*"([a-z_]+)"')
 EVENT_DOC_ROW = re.compile(r"^\|\s*`([a-z_]+)`(?:\s*/\s*`([a-z_]+)`)?\s*\|", re.MULTILINE)
 MIN_EVENT_TYPES = 8

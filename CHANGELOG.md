@@ -2,6 +2,26 @@
 
 > Release attribution is recorded against tags or release commits. Post-tag maintenance is listed separately; current validation limits are maintained in [PRODUCT_PLAN_CURRENT.md](https://github.com/CharTyr/STS2-Agent/blob/main/PRODUCT_PLAN_CURRENT.md).
 
+## Unreleased
+
+### Fixed
+
+- Companion identity checks now accept both live compatibility states, `ready` and `degraded`, while still requiring the exact service, companion role, API port and process ID. The POSIX game launcher uses the same liveness contract, so a working companion with one missing reflection capability is no longer reported as replaced or offline.
+- A companion instance no longer reports the host window's default dual-launch and teammate-control messages in `GET /health`. The existing host-only keys remain stable but are `null` when `instance_role` is `companion`; common per-process health, compatibility and state-build fields are unchanged.
+- The SSE state poller is demand-driven: with no `/events/stream` subscribers it no longer builds a full state payload every 120 ms. One shared poll loop wakes for the first subscriber, remains active while any subscriber exists, becomes idle after the last leaves, and resumes on reconnect. The ordering contract is unchanged and now holds on both paths: a connection that already has a snapshot gets `stream_ready` immediately, and the first connection of a session gets `session_started` followed by `stream_ready`.
+- Full SSE subscriber queues no longer discard old semantic events silently. A slow subscriber is explicitly disconnected without blocking event production or other subscribers; the Python client reconnects within its existing wait deadline and resynchronizes from the next stream snapshot. Event IDs remain monotonic and make a discontinuity observable.
+- Shutdown cannot resurrect event state. The poll loop is stopped before the subscriber registry is cleared and every in-flight sample is fenced by its lifecycle generation, so a sample that was already on the game thread when shutdown started is discarded instead of being replayed to whoever connects next. A poll that does not honour cancellation inside the shutdown budget leaves the coordinator stopped rather than letting the next `Start` run a second loop beside it.
+- An unchanged state no longer re-sends its event. The first live run of the demand-driven loop showed a client on a stationary screen receiving one `stream_ready` frame per 120 ms poll; the poll now records the snapshot for the next subscriber and only publishes an event whose payload differs from the previous one. The live run also confirmed the intended lifecycle: zero subscribers built nothing over 12 s, the first subscriber produced `session_started` then `stream_ready`, and reconnect produced `stream_ready` alone.
+
+> Live-verified 2026-09-20 on an isolated profile against game v0.111.0: `/health` `ready` with 27/27
+> reflected members, `mod-load --deep-check`, `state-summary` and `state-invariants` all clean, and the
+> SSE lifecycle measured end to end (0 builds with no subscriber; `session_started` then `stream_ready`
+> for the first subscriber; reconnect gets `stream_ready`; no repeated frames; polling stopped after the
+> last client left). The degraded companion was verified with a real `degraded` payload too: the
+> companion kept serving, its host-only health keys came back `null`, and the shipped identity check
+> accepted that payload while still rejecting every wrong-identity and malformed variant (14/14). A real
+> slow-subscriber overflow could not be produced on a live instance and stays offline-only.
+
 ## v0.13.0 - 2026-09-19
 
 > Mostly fixes to what `/state` tells an agent, found by checking every name the mod looked up

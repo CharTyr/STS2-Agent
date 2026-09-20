@@ -1,0 +1,5 @@
+{"file":".trellis/spec/mod/index.md","reason":"Review transport ownership, thread boundaries, and C# executable contract tests."}
+{"file":".trellis/spec/mod/architecture.md","reason":"Verify event lifecycle ownership and byte-preserving GameStateService relocation claims."}
+{"file":".trellis/spec/mcp/contracts-and-tests.md","reason":"Review Python SSE EOF/retry/fallback compatibility and unittest coverage."}
+{"file":".trellis/spec/operations/validation-and-release.md","reason":"Verify canonical full commands, api-facts/arch-facts, preflight, and offline/live reporting."}
+{"file":".trellis/spec/guides/cross-layer-thinking-guide.md","reason":"Check health and SSE changes against every consumer and external contract."}

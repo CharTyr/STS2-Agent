@@ -69,23 +69,23 @@ For a change crossing state, action, agent, UI, or MCP, trace it in both directi
 
 ## Code shape and its known debts
 
-Measured 2026-09-18 across 92 mod source files totalling 32,312 lines (git-tracked only, which is what the gate counts -- a working tree also holds whatever the developer left in it). These numbers are here
+Measured 2026-09-20 across 101 mod source files totalling 32,844 lines (git-tracked only, which is what the gate counts -- a working tree also holds whatever the developer left in it). These numbers are here
 because nobody was counting, and that is how a codebase stops being navigable -- not through a bad
 commit, but through a thousand good ones. The `arch-facts` gate checks this table against the
 files, so it cannot quietly go stale the way it did between ADR 0001 and the splits below.
 
 | File | Lines |
 | --- | ---: |
-| [GameStateService.cs](../../../STS2AIAgent/Game/GameStateService.cs) | 5,730 |
+| [GameStateService.cs](../../../STS2AIAgent/Game/GameStateService.cs) | 5,037 |
 | [AgentOverlayHost.cs](../../../STS2AIAgent/Ui/AgentOverlayHost.cs) | 1,829 |
 | [AgentRuntime.cs](../../../STS2AIAgent/Agent/AgentRuntime.cs) | 1,377 |
 | [GameStateService.Payloads.cs](../../../STS2AIAgent/Game/GameStateService.Payloads.cs) | 1,251 |
 | [GameStateService.AgentView.cs](../../../STS2AIAgent/Game/GameStateService.AgentView.cs) | 1,236 |
-| [GameActionService.cs](../../../STS2AIAgent/Game/GameActionService.cs) | 1,203 |
-| [GameActionService.Rooms.cs](../../../STS2AIAgent/Game/GameActionService.Rooms.cs) | 1,150 |
+| [GameActionService.cs](../../../STS2AIAgent/Game/GameActionService.cs) | 1,179 |
+| [GameActionService.Rooms.cs](../../../STS2AIAgent/Game/GameActionService.Rooms.cs) | 1,136 |
 
 Until 2026-09-17 two files held 49% of the mod: `GameStateService.cs` at 8,559 lines and
-`GameActionService.cs` at 7,008. The largest file today is 18% of the mod, the second largest 6%,
+`GameActionService.cs` at 7,008. The largest file today is 15% of the mod, the second largest 6%,
 and nothing else reaches 1,500 lines.
 
 `SourceShapeContractTests` caps every file -- 1,000 lines unless it has a named budget -- and budgets
@@ -106,14 +106,32 @@ reproducible.
 - `GameStateService.cs` (8,295 lines) gave up two concerns that shared nothing with the raw builders
   except their output: the compact `agent_view` rewrite (`BuildAgent*`, plus the formatters and
   glossary only it reaches) and the 60 payload type declarations.
+- `GameStateService.cs` (5,730 lines) gave up its availability layer on 2026-09-20: the `Can*` /
+  action-level `Is*` predicates, now in
+  [GameStateService.Predicates.cs](../../../STS2AIAgent/Game/GameStateService.Predicates.cs) at 771
+  lines. That file came in under the default budget, so it has no entry above -- which is the shape
+  to aim for. Only members whose whole job is the availability question moved. A helper the raw
+  builders or the action services read too stayed behind, which is why `CanPurchaseShopPotion`,
+  `CanDiscardPotionsInCurrentScreen`, `IsLocalCombatTurnReady`, `IsCombatActionSnapshotStable`, the
+  `IsPotion*` probes, `IsGameOverButtonReady`, `IsKnownCapstoneContainerPage` **and the four
+  predicates the builders call directly** -- `IsPlayerActionPhase`, `IsCardTargetSupported`,
+  `IsEndTurnButtonReady`, `IsWaitingForOtherPlayers` -- are still in the base file. The first
+  version of this split swept those four into the partial because their names read like
+  availability; the rule is the call sites, not the name.
 
-What is left in `GameStateService.cs` is one concern in 286 members: the raw `/state` payload
-builders and the predicates they read. It is still the largest file in the mod, and the next split,
-if someone wants one, is the `Can*` / `Is*` predicate layer.
+What is left in `GameStateService.cs` is the raw `/state` payload builders and the helpers they
+share with the predicates, at 5,037 lines. It is still the largest file in the mod, and it is now the
+only one of the three original concerns left there.
 
-A pure relocation is verifiable, and both were verified the same way: the base file's diff carries
-exactly one genuinely new line (the `partial` keyword), and every removed non-blank line appears
-verbatim in exactly one new file.
+A pure relocation is verifiable, and all three were verified the same way: the base file's diff
+carries no logic -- for the predicates the base lost 765 lines and gained none -- and every removed
+non-blank line appears verbatim in the new file. `PredicateRelocationContractTests` keeps that
+checkable rather than trusting a commit message: it stores a SHA-256 of every moved declaration's
+text as computed from the file at the parent commit and fails when a body stops matching, so an
+"equivalent rewrite" cannot pass as a move. The same contract pins each declaration's order and file,
+and names the shared helpers that have to stay in the base file, because a member put back in the
+wrong file compiles and reads fine. What it cannot see is a reordering of members *within* the base
+file, or a change to a member that never moved.
 
 ### The one thing the compiler cannot check for us
 

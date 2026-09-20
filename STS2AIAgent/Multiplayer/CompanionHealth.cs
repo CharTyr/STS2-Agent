@@ -14,7 +14,7 @@ internal static class CompanionHealth
                 root.TryGetProperty("ok", out var ok) && ok.ValueKind == JsonValueKind.True &&
                 root.TryGetProperty("data", out var data) && data.ValueKind == JsonValueKind.Object &&
                 HasString(data, "service", "sts2-ai-agent") &&
-                HasString(data, "status", "ready") &&
+                HasLivenessStatus(data) &&
                 HasString(data, "instance_role", "companion") &&
                 HasInt(data, "api_port", expectedPort) &&
                 HasInt(data, "process_id", expectedPid);
@@ -29,6 +29,12 @@ internal static class CompanionHealth
     {
         return data.TryGetProperty(name, out var value) && value.ValueKind == JsonValueKind.String &&
             value.GetString() == expected;
+    }
+
+    private static bool HasLivenessStatus(JsonElement data)
+    {
+        return data.TryGetProperty("status", out var value) && value.ValueKind == JsonValueKind.String &&
+            value.GetString() is "ready" or "degraded";
     }
 
     private static bool HasInt(JsonElement data, string name, int expected)
