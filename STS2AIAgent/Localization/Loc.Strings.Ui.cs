@@ -81,6 +81,17 @@ internal static partial class Loc
         map["诊断已复制到剪贴板（不含 API Key 和对话正文）。"] =
             "Diagnostics copied to the clipboard (no API keys or chat content).";
 
+        // Decision log tab: what the agent did, why, and what this session has spent.
+        map["决策日志"] = "Decision log";
+        map["最新在前：动作、理由、来源，以及该步消耗的 Token。"] =
+            "Newest first: the action, its reason, the source, and the tokens that step spent.";
+        map["理由：{0}"] = "Reason: {0}";
+        map["来源：{0}"] = "Source: {0}";
+        map["本次 Token：{0}"] = "Tokens this step: {0}";
+        map["本次 Token：未知"] = "Tokens this step: unknown";
+        map["还没有决策记录。自动游玩或外部客户端执行动作后会出现在这里。"] =
+            "No decisions recorded yet. They appear here once auto-play or an external client runs an action.";
+
         // Connect page.
         map["MCP 接入"] = "MCP Connect";
         map["选择：一起玩只用游戏内窗口，不必打开 MCP。外部客户端用本页开关。Python sidecar 仅 stdio / layered / full。"] =

@@ -69,7 +69,7 @@ For a change crossing state, action, agent, UI, or MCP, trace it in both directi
 
 ## Code shape and its known debts
 
-Measured 2026-09-20 across 102 mod source files totalling 32,976 lines (git-tracked only, which is what the gate counts -- a working tree also holds whatever the developer left in it). These numbers are here
+Measured 2026-09-20 across 107 mod source files totalling 33,606 lines (git-tracked only, which is what the gate counts -- a working tree also holds whatever the developer left in it). These numbers are here
 because nobody was counting, and that is how a codebase stops being navigable -- not through a bad
 commit, but through a thousand good ones. The `arch-facts` gate checks this table against the
 files, so it cannot quietly go stale the way it did between ADR 0001 and the splits below.
@@ -77,7 +77,7 @@ files, so it cannot quietly go stale the way it did between ADR 0001 and the spl
 | File | Lines |
 | --- | ---: |
 | [GameStateService.cs](../../../STS2AIAgent/Game/GameStateService.cs) | 5,037 |
-| [AgentOverlayHost.cs](../../../STS2AIAgent/Ui/AgentOverlayHost.cs) | 1,829 |
+| [AgentOverlayHost.cs](../../../STS2AIAgent/Ui/AgentOverlayHost.cs) | 1,347 |
 | [AgentRuntime.cs](../../../STS2AIAgent/Agent/AgentRuntime.cs) | 1,377 |
 | [GameStateService.Payloads.cs](../../../STS2AIAgent/Game/GameStateService.Payloads.cs) | 1,251 |
 | [GameStateService.AgentView.cs](../../../STS2AIAgent/Game/GameStateService.AgentView.cs) | 1,236 |
@@ -85,7 +85,7 @@ files, so it cannot quietly go stale the way it did between ADR 0001 and the spl
 | [GameActionService.Rooms.cs](../../../STS2AIAgent/Game/GameActionService.Rooms.cs) | 1,136 |
 
 Until 2026-09-17 two files held 49% of the mod: `GameStateService.cs` at 8,559 lines and
-`GameActionService.cs` at 7,008. The largest file today is 15% of the mod, the second largest 6%,
+`GameActionService.cs` at 7,008. The largest file today is 15% of the mod, the second largest 4%,
 and nothing else reaches 1,500 lines.
 
 `SourceShapeContractTests` caps every file -- 1,000 lines unless it has a named budget -- and budgets
@@ -220,22 +220,29 @@ entry nothing reads fails too. Two names are deliberately not probed and say why
 `_prefs` / `_selectedCards` are declared per concrete screen, so a probe would need a subclass list
 and would raise a false alarm the day the game adds or drops one.
 
-### `AgentOverlayHost.cs` is not going to be split, and that is a decision
+### `AgentOverlayHost.cs` was not split mechanically, and that is still a decision
 
-It is 1,829 lines and the table above names it, which makes it look like an oversight. It is not.
+It was 1,829 lines and the table above named it, which made it look like an oversight. It was not.
 The two files that came apart could come apart because their parts did not share mutable state:
 `GameActionService`'s sixty handlers touch the game, not each other.
 
-This one was measured rather than guessed. Of its **85 instance fields, 78 are touched by more
-than one method**, 2.6 methods each on average; only 7 belong to a single method, and `_panel`
+This one was measured rather than guessed. Of its **85 instance fields, 78 were touched by more
+than one method**, 2.6 methods each on average; only 7 belonged to a single method, and `_panel`
 alone is touched by twelve. That is one stateful Godot object, not several concerns sharing a
 file. Splitting it into partials would scatter shared mutable state across files and make every
 one of those 78 fields harder to reason about -- worse to read, and easier to break, in exchange
 for smaller files.
 
-If it is ever worth changing, the move is to extract a *tab* into its own class with its own
-state and a narrow interface to the host -- which is design work with a behaviour risk, not a
-mechanical split. Do not do it to satisfy a line count.
+The extraction that did happen is the one this section already named as the only safe shape: the
+**tab construction** moved out, whole, into `AgentOverlayHost.Tabs.cs` (591 lines), and the tab list
+itself became data in the Godot-free `OverlayTabCatalog`. The base file went from 1,829 to 1,347
+lines without changing what any tab does, and it kept every field those pages read -- the extracted
+code still reads 62 of them. That is why the seams are where they are: `ShowTab(string)` stayed with
+the host's call sites, the pages moved as one unit, and `OverlayTabContractTests` fails if a catalog
+entry has no page builder or the page builders drift back into the base file.
+
+The rule the measurement above still implies holds for the rest of the file: do not split it to
+satisfy a line count. Extract a tab when a tab is what needs to move, as this one did.
 
 ### What the splits broke, which is the part worth remembering
 
@@ -267,5 +274,9 @@ the compiler will not enforce.** When a file moves, go looking for the checks th
   `GameStateService.cs`, the compact projection in the matching `BuildAgent*` method in
   `GameStateService.AgentView.cs`, and a row in `docs/api.md` -- the `api-facts` gate refuses a
   field that no table names.
+- A new **overlay tab**: an entry in `OverlayTabCatalog` (id, Chinese source label, whether entering
+  it re-reads live state) and one page builder in `AgentOverlayHost.Tabs.cs`. The header row is built
+  from that list and `ShowTab` shows the page whose id it names, so there is no second place to
+  register a tab -- and no reason to add one to `AgentOverlayHost.cs`, whose budget only goes down.
 - Anything **not** state-building or action-executing: a new file. Every file in the table above is
   already past the point where adding to it is free, and the budgets say so out loud.

@@ -98,6 +98,48 @@ internal static class PlayerExperienceTests
         Assert.Contains("请求：3 次", text);
     }
 
+    /// <summary>
+    /// The decision tab's usage block. Unknown usage has to stay unknown there too, the request count
+    /// is the runtime's, and a session stopped at a cap carries the reason the player-facing view
+    /// already produced instead of a second reading of the budget guard.
+    /// </summary>
+    public static void UsageSummaryKeepsUnknownUnknownAndCarriesTheBudgetReason()
+    {
+        var settings = AgentSettings.CreateDefault();
+        ModelRoleProbe.Upsert(settings, ModelRoleProbe.FromSuccess(ModelRoleNames.Play, settings.TryResolvePlayModel()!));
+        var verified = FirstRunSetup.Evaluate(settings);
+        var running = PlayerFacingSession.Compose(BaseSnapshot(verified) with
+        {
+            PlayRunning = true,
+            PlayPhase = "running"
+        });
+
+        var unknown = PlayerFacingSession.FormatUsageSummary(false, LlmUsage.Empty, 5, running);
+        Assert.Contains("未知", unknown);
+        Assert.Contains("请求：5 次", unknown);
+        Assert.False(unknown.Contains("Token 消耗：0"), "A session with no usage must not read as 0.");
+
+        var counted = PlayerFacingSession.FormatUsageSummary(
+            true,
+            new LlmUsage { TotalTokens = 1234, PromptTokens = 1000, CompletionTokens = 234 },
+            5,
+            running);
+        Assert.Contains("1,234", counted);
+        Assert.Contains("请求：5 次", counted);
+        Assert.False(counted.Contains("未知"), "A counted session must not read as unknown.");
+
+        var capped = PlayerFacingSession.Compose(BaseSnapshot(verified) with
+        {
+            BudgetReason = "已达到会话 Token 预算上限（1,234/1,234 tokens），已自动停止游玩。",
+            PlayRunning = false,
+            PlayPhase = "paused"
+        });
+        Assert.Equal(PlayerFacingSession.BudgetKind, capped.Kind);
+        var cappedSummary = PlayerFacingSession.FormatUsageSummary(false, LlmUsage.Empty, 5, capped);
+        Assert.Contains("1,234/1,234", cappedSummary);
+        Assert.Contains("请求：5 次", cappedSummary);
+    }
+
     public static void DiagnosticExportRedactsSecretsAndOmitsChat()
     {
         var settings = AgentSettings.CreateDefault();

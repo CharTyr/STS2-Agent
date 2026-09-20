@@ -119,7 +119,7 @@ internal static class CoopRouteTests
     /// </summary>
     public static void OverlayInviteFollowsTheApiRoute()
     {
-        var overlay = AgentSourceFixture.Read("STS2AIAgent/Ui/AgentOverlayHost.cs");
+        var overlay = AgentSourceFixture.ReadOverlayHost();
         var launch = AgentSourceFixture.DeclarationBody(overlay, "private async Task LaunchDualAsync()");
         Assert.Contains("var companionAutoPlay = FirstRunSetup.Evaluate(settings).ReadyToInvite;", launch);
         Assert.Contains("LaunchDualInstanceAsync(settings, companionAutoPlay, CancellationToken.None)", launch);
@@ -144,7 +144,7 @@ internal static class CoopRouteTests
     /// </summary>
     public static void OverlayOffersContinueAndCharacterChoice()
     {
-        var overlay = AgentSourceFixture.Read("STS2AIAgent/Ui/AgentOverlayHost.cs");
+        var overlay = AgentSourceFixture.ReadOverlayHost();
 
         // Continue chooses the route the same way the invite does (see OverlayInviteFollowsTheApiRoute).
         Assert.Contains("ContinueDualInstanceAsync(settings, companionAutoPlay, CancellationToken.None)", overlay);
@@ -161,7 +161,7 @@ internal static class CoopRouteTests
         // live pass found it, and the panel tick that already polls the play page now re-reads it too.
         Assert.Contains("RefreshContinueAvailability();", overlay);
         var tick = AgentSourceFixture.MethodBody(overlay, "OnProcessFrame");
-        Assert.Contains("if (_dualPage?.Visible == true)", tick);
+        Assert.Contains("if (IsTabVisible(OverlayTabCatalog.Dual))", tick);
         Assert.Contains("RefreshContinueAvailability();", tick);
     }
 
@@ -192,7 +192,7 @@ internal static class CoopRouteTests
         Assert.True(
             host.IndexOf("FirstRunSetup.Evaluate(Settings)", StringComparison.Ordinal) > 0,
             "POST /teammate/control must keep its model gate.");
-        var overlay = AgentSourceFixture.Read("STS2AIAgent/Ui/AgentOverlayHost.cs");
+        var overlay = AgentSourceFixture.ReadOverlayHost();
         Assert.Contains("AgentRuntime.Instance.ControlTeammateAsync(true", overlay);
     }
 }

@@ -69,6 +69,9 @@ internal readonly record struct PlaySessionIdentity(long Generation, Task Task)
 
 internal static class PlayerFacingSession
 {
+    /// <summary><see cref="PlayerFacingView.Kind"/> for a session that stopped at a budget cap.</summary>
+    public const string BudgetKind = "budget";
+
     internal static bool IsCurrentPlaySession(PlaySessionIdentity? current, PlaySessionIdentity observed)
     {
         return current is { } currentIdentity &&
@@ -112,7 +115,7 @@ internal static class PlayerFacingSession
         {
             var canReset = SessionBudgetLimits.CanResetSessionStats(s.PlayRunning, s.PlayPhase);
             return new PlayerFacingView(
-                "budget",
+                BudgetKind,
                 Loc.T("已达到会话预算"),
                 s.BudgetReason,
                 SessionBudgetLimits.BudgetRecoveryNextAction(canReset),
@@ -277,6 +280,23 @@ internal static class PlayerFacingSession
             usage.PromptTokens.ToString("N0"),
             usage.CompletionTokens.ToString("N0"),
             requestText);
+    }
+
+    /// <summary>
+    /// The usage block the overlay shows above the decision log: the same token/request line as
+    /// <see cref="FormatUsage"/>, plus the budget reason when the session stopped at a cap. The
+    /// reason is the one <see cref="Compose"/> already carries, so the overlay and the AI teammate
+    /// tab cannot tell the player two different stories about the same cap.
+    /// </summary>
+    /// <remarks>
+    /// A session with no usage reported reads as unknown, never as 0: "the service returned nothing"
+    /// and "this session spent nothing" are different facts, and only one of them is a reason to
+    /// keep playing.
+    /// </remarks>
+    public static string FormatUsageSummary(bool known, LlmUsage usage, int requests, PlayerFacingView facing)
+    {
+        var line = FormatUsage(known, usage, requests);
+        return facing.Kind == BudgetKind ? line + "\n" + facing.Detail : line;
     }
 
     private static PlayerFacingView ComposeCompanion(PlayerFacingSnapshot s)

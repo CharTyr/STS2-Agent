@@ -37,6 +37,7 @@ internal static class SourceCoverageTests
         "STS2AIAgent/Game/GameActionService.Run.cs",
         "STS2AIAgent/Game/GameActionService.Shop.cs",
         "STS2AIAgent/Ui/AgentOverlayHost.cs",
+        "STS2AIAgent/Ui/AgentOverlayHost.Tabs.cs",
         "STS2AIAgent/Agent/AgentRuntime.cs",
         "STS2AIAgent/Game/GameDataExportService.cs",
         "STS2AIAgent/Server/Router.cs",

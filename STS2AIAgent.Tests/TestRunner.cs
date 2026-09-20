@@ -122,6 +122,7 @@ internal static class TestRunner
         yield return ("Settings.ModelRemovalAllRoles", () => Task.Run(SettingsExperienceRegressionTests.ModelRemovalReportsEveryRoleReference));
         yield return ("Settings.ModelRemovalUnreferenced", () => Task.Run(SettingsExperienceRegressionTests.ModelRemovalAllowsUnreferencedModel));
         yield return ("Usage.MissingNotZero", () => Task.Run(PlayerExperienceTests.MissingUsageIsNotDisplayedAsZero));
+        yield return ("Usage.SummaryKeepsUnknownAndBudgetReason", () => Task.Run(PlayerExperienceTests.UsageSummaryKeepsUnknownUnknownAndCarriesTheBudgetReason));
         yield return ("Diagnostics.RedactsSecrets", () => Task.Run(PlayerExperienceTests.DiagnosticExportRedactsSecretsAndOmitsChat));
         yield return ("Diagnostics.RedactsAllCredentialShapes", () => Task.Run(RuntimeExperienceRegressionTests.DiagnosticExportRedactsAllCredentialShapes));
         yield return ("Probe.RoleInFallbackError", () => Task.Run(RuntimeExperienceRegressionTests.ModelRoleProbeUsesTheTestedRoleInFallbackErrors));
@@ -608,5 +609,15 @@ internal static class TestRunner
         yield return ("CardViewer.BranchesPrecedeGrid", () => Task.Run(CardViewerScreenContractTests.ViewerBranchesPrecedeTheVisibleGrid));
         yield return ("CardViewer.ClosableViewerSameSource", () => Task.Run(CardViewerScreenContractTests.ClosableViewerSetIsSharedByProbeAndExecutor));
         yield return ("CardViewer.SubmenuStackBase", () => Task.Run(CardViewerScreenContractTests.SubmenuStackLookupUsesTheBaseClass));
+        yield return ("OverlayTabs.ExtractedFromTheHost", () => Task.Run(OverlayTabContractTests.TabConstructionLivesInItsOwnFile));
+        yield return ("OverlayTabs.ExistingTabsKeepTheirOrder", () => Task.Run(OverlayTabContractTests.ExistingTabsKeepTheirOrder));
+        yield return ("OverlayTabs.EveryTabHasAPageBuilder", () => Task.Run(OverlayTabContractTests.EveryTabHasAPageBuilder));
+        yield return ("OverlayTabs.RefreshOnShow", () => Task.Run(OverlayTabContractTests.TabsThatChangeWithoutAnEventRefreshOnShow));
+        yield return ("OverlayTabs.LabelsResolveToEnglish", () => Task.Run(OverlayTabContractTests.CatalogLabelsResolveToEnglish));
+        yield return ("OverlayTabs.DecisionLogLiveRefresh", () => Task.Run(OverlayTabContractTests.DecisionLogFollowsTheLiveRefreshPath));
+        yield return ("OverlayTabs.DecisionPageReusesRuntimeCounters", () => Task.Run(OverlayTabContractTests.DecisionPageReusesTheRuntimeCounters));
+        yield return ("OverlayTabs.DecisionLinesNewestFirst", () => Task.Run(OverlayTabContractTests.DecisionLinesAreNewestFirstAndUnknownUsageStaysUnknown));
+        yield return ("OverlayTabs.NoDecisionsNoLines", () => Task.Run(OverlayTabContractTests.NoDecisionsProducesNoLines));
+        yield return ("OverlayTabs.DecisionLinesBounded", () => Task.Run(OverlayTabContractTests.DecisionLinesStayBounded));
     }
 }
