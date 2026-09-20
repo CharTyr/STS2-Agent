@@ -686,22 +686,59 @@ class PosixStartGameSessionContractTests(unittest.TestCase):
 
 
 class WindowsSeedScopingTests(unittest.TestCase):
-    """The PowerShell seeder must decide is_enabled inside the agent's own entry.
+    """Both seeders must decide is_enabled inside the agent's own entries, and must agree.
 
-    A fixed character window around the agent id reaches the next entry: the Steam template's
-    list continues with DamageMeter, whose is_enabled is false, so a windowed check called a
-    perfectly good clone unready, sent it to the repair path, and made the repair flip the wrong
-    mod before the caller fell back to the sparse settings file the game will not accept.
+    Two regressions live here, one from each side of the split:
+
+    A fixed character window around the agent id reaches the next entry: the Steam template's list
+    continues with DamageMeter, whose is_enabled is false, so a windowed check called a perfectly
+    good clone unready, sent it to the repair path, and made the repair flip the wrong mod before
+    the caller fell back to the sparse settings file the game will not accept.
+
+    The other is that a *scoped* check is not enough if it stops at the first match. A player who
+    also subscribes on the Workshop has two STS2AIAgent entries -- `mods_directory` and
+    `steam_workshop` -- and the game reads the id as disabled if any of them says so. The Windows
+    seeder enabled the first and left the second false, so the launcher prepared a profile in which
+    the mod never loaded: the game logged "Skipping loading mod STS2AIAgent, it is set to disabled
+    in settings" twice. Observed live on 2026-09-20. The POSIX seeder already handled every entry;
+    these assertions are what keeps the two platforms from drifting apart again.
     """
 
     def ps_script(self) -> str:
         return (SCRIPTS / "start-game-session.ps1").read_text(encoding="utf-8")
 
+    def sh_script(self) -> str:
+        return (SCRIPTS / "start-game-session.sh").read_text(encoding="utf-8")
+
     def test_agent_entry_is_scoped_to_its_own_object(self) -> None:
         script = self.ps_script()
-        self.assertIn("function Get-IsolatedAgentEntryBody", script)
-        # definition plus the readiness probe and the repair
-        self.assertGreaterEqual(script.count("Get-IsolatedAgentEntryBody"), 3)
+        self.assertIn("function Get-IsolatedAgentEntryBodies", script)
+        # definition, the readiness probe, and the repair
+        self.assertGreaterEqual(script.count("Get-IsolatedAgentEntryBodies"), 3)
+
+    def test_every_agent_entry_is_enabled_not_only_the_first(self) -> None:
+        script = self.ps_script()
+        # The repair walks all of them, back to front so the earlier offsets stay valid.
+        self.assertIn("$entries = @(Get-IsolatedAgentEntryBodies -Raw $fixed)", script)
+        self.assertIn("for ($index = $entries.Count - 1; $index -ge 0; $index--)", script)
+        # And the readiness probe refuses while any one of them is disabled.
+        self.assertIn("foreach ($entry in $entries) {", script)
+
+        posix = self.sh_script()
+        self.assertIn(
+            'agent_entries = [item for item in mod_list if isinstance(item, dict) and item.get("id") == "STS2AIAgent"]',
+            posix,
+            "the POSIX readiness check has to collect every agent entry before judging them",
+        )
+        self.assertIn("for item in agent_entries:", posix)
+
+    def test_both_seeders_refuse_a_non_numeric_client_id(self) -> None:
+        # The game parses the client id as a number and falls back to client 1 otherwise, so the
+        # seeder would prepare default/<id> while the game read default/1.
+        script = self.ps_script()
+        self.assertIn("if ($ClientId -notmatch '^\\d+$') {", script)
+        posix = self.sh_script()
+        self.assertIn('if [[ ! "$client_id" =~ ^[0-9]+$ ]]; then', posix)
 
     def test_no_fixed_character_window_decides_is_enabled(self) -> None:
         script = self.ps_script()

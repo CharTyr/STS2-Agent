@@ -140,10 +140,18 @@ if not isinstance(mod_settings, dict) or mod_settings.get("mods_enabled") is not
 mod_list = mod_settings.get("mod_list")
 if not isinstance(mod_list, list):
     raise SystemExit(1)
-for item in mod_list:
-    if isinstance(item, dict) and item.get("id") == "STS2AIAgent" and item.get("is_enabled") is not False:
-        raise SystemExit(0)
-raise SystemExit(1)
+# Every agent entry has to be enabled, not just one. A player who also subscribes on the Workshop
+# has two -- mods_directory and steam_workshop -- and the game reads the id as disabled if any
+# entry says so, so a clone with one of each looks ready here and starts with no mod at all.
+# Observed live on 2026-09-20 (the Windows seeder had the same hole; this check is what makes both
+# platforms agree).
+agent_entries = [item for item in mod_list if isinstance(item, dict) and item.get("id") == "STS2AIAgent"]
+if not agent_entries:
+    raise SystemExit(1)
+for item in agent_entries:
+    if item.get("is_enabled") is False:
+        raise SystemExit(1)
+raise SystemExit(0)
 PY
 }
 
@@ -234,6 +242,15 @@ sts2_initialize_isolated_client_settings() {
 
   if [[ -z "$client_id" ]]; then
     return 0
+  fi
+
+  # The game parses the client id as a number and falls back to client 1 for a value it cannot
+  # parse. The seeder would then prepare default/<id> while the game reads default/1, so the mod
+  # loads with whatever that other profile says or not at all. Observed live on 2026-09-20 on the
+  # Windows side with --clientId 20260920v14. This side refuses the same input.
+  if [[ ! "$client_id" =~ ^[0-9]+$ ]]; then
+    echo "[start-game-session] clientId '$client_id' is not a number. The game falls back to client 1 for a value it cannot parse, which silently validates a different profile. Use digits only, for example --clientId 2026092014." >&2
+    return 1
   fi
 
   if [[ -z "$user_root" ]]; then
