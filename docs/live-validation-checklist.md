@@ -377,6 +377,85 @@ the raw `/action` endpoint. Evidence: `external-agent-log.jsonl` (84 lines), `ex
   「尚未启动双开」/「队友控制尚未连接」.** Those two fields describe the *host's* dual-launch bookkeeping, so
   they are inert on a companion; the fields that matter there (`instance_role`, `play_running`,
   `play_phase`, `session_requests`) are correct.
+  **Current code changes these host-only health keys (including companion process/discovery and launch outcome)
+  to `null` on the companion while preserving the key shape** — fixed and re-verified in the game on
+  2026-09-20, with a companion whose `/health` really reported `degraded`; see the section below.
+
+### The demand-driven event stream, measured in the game (2026-09-20)
+
+Isolated profile (`--clientId 2026092001` semantics: an off-profile settings.save with the mod
+enabled), game v0.111.0, mod 0.13.0 plus this round's changes, API on `18080`, process 27496/55512.
+Every number below came from `GET /health`'s `state_build.samples` around real `/events/stream`
+connections:
+
+- **Zero subscribers build nothing.** `samples` went `0 -> 0` over 12 s on a freshly loaded process,
+  and `354 -> 354` across a later idle window.
+- **One subscriber starts the single poll loop.** `samples` grew from `0` to `85` while a stream was
+  held open, then kept growing at ~6/s (the 120 ms interval, with build cost counted in).
+- **First subscriber ordering.** The first stream of a fresh process delivered `session_started`
+  (`event_id` 1) and then `stream_ready` (`event_id` 2) with the same `run_id`/`screen`.
+- **Reconnect ordering.** A later stream delivered `stream_ready` alone, because a snapshot now
+  existed — the documented split between the two paths.
+- **The first run of this loop had a real bug the offline tests missed.** Every poll re-announced the
+  snapshot, so a client on a stationary `MAIN_MENU` received ~60 `stream_ready` frames in 10 s. The
+  fix (record the snapshot, publish only changed payloads) was deployed and re-measured: 1 frame, and
+  `samples` growth confined to the poll loop.
+- **Disconnect lag is real and bounded, not zero.** After the client closed, polling continued for
+  ~33 s (two 15 s heartbeats) before two consecutive failed heartbeat writes ended the subscriber.
+  In TCP terms the connection was not closed until then, so counting it was correct; shortening the
+  heartbeat is a deliberate decision rather than a free win. A client that resets the connection is
+  noticed sooner.
+- **Existing game-connected suites still pass** with `--base-url http://127.0.0.1:18080`:
+  `mod-load --deep-check` (`health_ok/state_ok/actions_ok`, `MAIN_MENU`, 5 actions),
+  `state-summary`, and `state-invariants` (5 actions, 0 failures, 0 warnings).
+
+### The degraded companion, with a real `degraded` payload (2026-09-20)
+
+The one thing the offline tests cannot supply is a companion that really is degraded. It was made
+real by forcing a single registry lookup to miss (`ReflectedGameMembers.Resolve` returning null for
+`NDevConsole._devConsole`), which is exactly the shape of a renamed private member after a game
+patch. The build was deployed, used for the measurements below, and then reverted; the installed mod
+and the profile settings were restored afterwards.
+
+- **`/health` reported the degradation honestly**: `status=degraded`,
+  `compatibility.reflected_members_missing=1`, `missing_members=[{"member":"NDevConsole._devConsole",
+  "feature":"run_console_command"}]`, and the log carried
+  `Compatibility: 1 of 27 reflected game members are missing ... status "degraded"`.
+- **The companion kept serving while degraded**: `instance_role=companion`, `play_running=false`,
+  `play_phase=paused`, `session_requests=0`, `api_port=18082`, `process_id=24224`, and its API answered
+  every request. Nothing about the degradation stopped the process being a usable teammate.
+- **The host-only keys are `null` on the companion and still present**: `companion_process_alive`,
+  `companion_process_exited`, `companion`, `dual_status`, `dual_launch_outcome` and
+  `team_control_status` all exist in the payload with value `null` — the key shape the fix promised,
+  instead of the host's `尚未启动双开` / `队友控制尚未连接` text.
+- **`CompanionHealth.IsExpectedProcess` accepted that exact payload.** A throwaway probe fed the
+  captured response through the shipped check: the live degraded payload, the same payload with
+  `status` forced to `ready`, and the same payload with `degraded` were accepted, while an unknown
+  status, an empty status, a null status, a missing status, a wrong port, a wrong pid, a wrong role, a
+  wrong service, `ok=false`, an array `data`, and malformed JSON were all rejected — **14/14**. Before
+  the fix the first three of those were rejections, which is what made a degraded teammate look like a
+  replaced one.
+
+### The slow-subscriber overflow is still not live-verified (attempted 2026-09-20)
+
+A stream that is never read, plus enough state changes to fill its 256-slot queue, is what the
+disconnect contract needs. Reaching that on a live instance was not possible in this session, and
+the reason is worth recording rather than leaving as "not done":
+
+- The poll loop only publishes an event when a digest field actually changes, so a client sitting on
+  `MAIN_MENU` receives nothing to fall behind on — the queue stays empty no matter how long it holds
+  the connection.
+- Driving 256 changes from the outside is not available either. The debug console is the natural
+  tool, but every `run_console_command` goes through `RunManager.Instance.DebugOnlyGetState()` and
+  the player lookup, so it answers 409 `invalid_action` until a run exists; the run-provoking actions
+  (`act`, `fight`) are themselves console commands, and the main menu's own actions do not cycle a
+  screen (`switch_profile` and `abandon_run` both left the screen at `MAIN_MENU`).
+- What would make it reachable: one long combat with a client that stops reading partway through, or
+  a debug hook that injects synthetic digest churn. Until one of those exists, the overflow contract
+  rests on the offline tests (`Events.OverflowDisconnects` proves a full queue closes the subscriber
+  instead of dropping the oldest event, `Events.SlowSubscriberIsolation` proves the healthy
+  subscriber is unaffected), which use the same bounded channel configuration as production but are
+  not the live path.
 
 ### Those three findings, fixed and re-verified in the game (2026-09-13)
 

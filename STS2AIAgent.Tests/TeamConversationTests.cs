@@ -42,6 +42,18 @@ internal static class TeamConversationTests
         Assert.Equal(1, handler.Posts);
     }
 
+    public static async Task DegradedCompanionRemainsControllable()
+    {
+        var token = CompanionConnection.CreateToken();
+        using var handler = new Handler(token, replacement: false, healthStatus: "degraded");
+        using var http = new HttpClient(handler);
+        var connection = new CompanionConnection(8081, 123, token, http);
+        var reply = await connection.SendMessageAsync("我们先集火", CancellationToken.None);
+        Assert.Equal("我先处理左侧敌人。", reply);
+        Assert.Equal("paused", await connection.ControlAsync(false, CancellationToken.None));
+        Assert.Equal(2, handler.Posts);
+    }
+
     public static async Task ReusedPortDoesNotReceiveMessage()
     {
         var token = CompanionConnection.CreateToken();
@@ -65,7 +77,7 @@ internal static class TeamConversationTests
         Assert.Equal(1, handler.Posts);
     }
 
-    private sealed class Handler(string token, bool replacement) : HttpMessageHandler
+    private sealed class Handler(string token, bool replacement, string healthStatus = "ready") : HttpMessageHandler
     {
         public int Posts { get; private set; }
 
@@ -75,7 +87,7 @@ internal static class TeamConversationTests
             if (request.Method == HttpMethod.Get)
             {
                 Assert.Equal("/health", request.RequestUri!.AbsolutePath);
-                payload = new { ok = true, data = new { service = "sts2-ai-agent", status = "ready", instance_role = "companion", api_port = 8081, process_id = replacement ? 456 : 123 } };
+                payload = new { ok = true, data = new { service = "sts2-ai-agent", status = healthStatus, instance_role = "companion", api_port = 8081, process_id = replacement ? 456 : 123 } };
             }
             else
             {

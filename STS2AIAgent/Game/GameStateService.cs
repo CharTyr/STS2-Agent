@@ -914,35 +914,6 @@ internal static partial class GameStateService
         }
     }
 
-    public static bool CanEndTurn(
-        IScreenContext? currentScreen,
-        CombatState? combatState,
-        bool requireButtonReady = true,
-        CombatActionGate? combatActionGate = null)
-    {
-        if (!CanUseCombatActions(currentScreen, combatState, out _, out var combatRoom, combatActionGate))
-        {
-            return false;
-        }
-
-        if (CombatManager.Instance.IsPlayerReadyToEndTurn(GetLocalPlayer(combatState)!))
-        {
-            return false;
-        }
-
-        return !requireButtonReady || IsEndTurnButtonReady(GetEndTurnButton(combatRoom));
-    }
-
-    public static bool CanPlayAnyCard(IScreenContext? currentScreen, CombatState? combatState, CombatActionGate? combatActionGate = null)
-    {
-        if (!CanUseCombatActions(currentScreen, combatState, out var me, out _, combatActionGate))
-        {
-            return false;
-        }
-
-        return me!.PlayerCombatState!.Hand.Cards.Any(IsCardPlayable);
-    }
-
     public static Player? GetLocalPlayer(CombatState? combatState)
     {
         return combatState == null ? null : LocalContext.GetMe((ICombatState)combatState);
@@ -953,142 +924,11 @@ internal static partial class GameStateService
         return runState == null ? null : LocalContext.GetMe((IPlayerCollection)runState);
     }
 
-    public static bool IsPlayerActionPhase(CombatState? combatState)
-    {
-        var me = GetLocalPlayer(combatState);
-        return IsPlayerActionPhase(combatState, me);
-    }
-
-    private static bool IsPlayerActionPhase(CombatState? combatState, Player? me)
-    {
-        if (combatState == null ||
-            me == null ||
-            combatState.CurrentSide != CombatSide.Player)
-        {
-            return false;
-        }
-
-        return CombatManager.Instance.IsPartOfPlayerTurn(me);
-    }
-
-    public static bool CanChooseMapNode(IScreenContext? currentScreen, RunState? runState)
-    {
-        // Map votes during an active fight hide end_turn/play_card and desync co-op.
-        if (CombatManager.Instance.IsInProgress)
-        {
-            return false;
-        }
-
-        return GetAvailableMapNodes(currentScreen, runState).Count > 0;
-    }
-
-    public static bool CanCollectRewardsAndProceed(IScreenContext? currentScreen)
-    {
-        return currentScreen is NRewardsScreen || currentScreen is NCardRewardSelectionScreen;
-    }
-
-    public static bool CanClaimReward(IScreenContext? currentScreen)
-    {
-        return GetRewardButtons(currentScreen).Any(button => button.IsEnabled);
-    }
-
-    public static bool CanChooseRewardCard(IScreenContext? currentScreen)
-    {
-        // NCardHolder is a plain Control with no enabled/enabled-in-tree state, and
-        // ExecuteChooseRewardCardAsync selects a holder by emitting NCardHolder.Pressed directly.
-        // The holders this probe returns are therefore exactly the set the executor can resolve; any
-        // extra filter here would advertise a gate the executor never applies.
-        return GetCardRewardOptions(currentScreen).Count > 0;
-    }
-
-    public static bool CanSkipRewardCards(IScreenContext? currentScreen)
-    {
-        // NCardRewardAlternativeButton is an NButton, so IsEnabled is the same signal CanClaimReward
-        // reads from NRewardButton; the getter already drops alternatives that are not visible.
-        return GetCardRewardAlternativeButtons(currentScreen).Any(button => button.IsEnabled);
-    }
-
-    public static bool CanSelectDeckCard(IScreenContext? currentScreen)
-    {
-        if (currentScreen is NUnlockScreen)
-        {
-            return false;
-        }
-
-        return GetDeckSelectionOptions(currentScreen).Count > 0;
-    }
-
-    public static bool CanCloseCardsView(IScreenContext? currentScreen)
-    {
-        if (currentScreen is NInspectCardScreen inspectCard)
-        {
-            return GodotObject.IsInstanceValid(inspectCard) && inspectCard.IsVisibleInTree();
-        }
-
-        if (currentScreen is NInspectRelicScreen inspectRelic)
-        {
-            return GodotObject.IsInstanceValid(inspectRelic) && inspectRelic.IsVisibleInTree();
-        }
-
-        return GetCardsViewBackButton(currentScreen) != null;
-    }
-
     /// <summary>
     /// Screens that draw the same visible card grid and are left with their own BackButton. They
     /// share <c>close_cards_view</c>, so the availability probe, the back-button lookup, and the
     /// executor's settled check all agree on this one set.
     /// </summary>
-    public static bool IsClosableCardViewer(IScreenContext? screen)
-    {
-        return screen is NCardsViewScreen or NCardPileScreen;
-    }
-
-    public static bool CanConfirmSelection(IScreenContext? currentScreen)
-    {
-        if (TryGetCombatHandSelectionMetadata(currentScreen, out _, out var combatMetadata) &&
-            combatMetadata.RequiresConfirmation &&
-            combatMetadata.CanConfirm)
-        {
-            return true;
-        }
-
-        return TryGetCardGridSelectionMetadata(currentScreen, out var gridMetadata) &&
-            gridMetadata.CanConfirm &&
-            (gridMetadata.RequiresConfirmation || gridMetadata.MinSelect < gridMetadata.MaxSelect);
-    }
-
-    public static bool CanProceed(IScreenContext? currentScreen)
-    {
-        if (currentScreen is NRewardsScreen or NCardRewardSelectionScreen)
-        {
-            return false;
-        }
-
-        return GetProceedButton(currentScreen) != null;
-    }
-
-    public static bool CanOpenChest(IScreenContext? currentScreen)
-    {
-        if (currentScreen is not NTreasureRoom treasureRoom)
-        {
-            return false;
-        }
-
-        var chestButton = treasureRoom.GetNodeOrNull<NButton>("%Chest");
-        return chestButton != null && GodotObject.IsInstanceValid(chestButton) && chestButton.IsEnabled;
-    }
-
-    public static bool CanChooseTreasureRelic(IScreenContext? currentScreen)
-    {
-        if (GetTreasureRelicCollection(currentScreen) == null)
-        {
-            return false;
-        }
-
-        var relics = RunManager.Instance.TreasureRoomRelicSynchronizer.CurrentRelics;
-        return relics != null && relics.Count > 0;
-    }
-
     public static NTreasureRoomRelicCollection? GetTreasureRelicCollection(IScreenContext? currentScreen)
     {
         if (currentScreen is NTreasureRoomRelicCollection relicCollection)
@@ -1108,44 +948,6 @@ internal static partial class GameStateService
         }
 
         return null;
-    }
-
-    public static bool CanChooseEventOption(IScreenContext? currentScreen)
-    {
-        if (currentScreen is not NEventRoom)
-        {
-            return false;
-        }
-
-        try
-        {
-            var eventModel = RunManager.Instance.EventSynchronizer.GetLocalEvent();
-            if (eventModel == null)
-            {
-                return false;
-            }
-
-            // Finished events have a synthetic proceed option
-            if (eventModel.IsFinished)
-            {
-                return true;
-            }
-
-            // Non-finished events need at least one non-locked option
-            return eventModel.CurrentOptions.Any(o => !o.IsLocked);
-        }
-        catch (Exception ex)
-        {
-            // Fail closed but never silently: swallowing this hid the difference between "no legal
-            // option" and "the probe threw", and the action simply vanished from available_actions.
-            Log.Warn($"[STS2AIAgent] choose_event_option probe failed; treating it as unavailable: {ex}");
-            return false;
-        }
-    }
-
-    public static bool CanChooseCapstoneOption(IScreenContext? currentScreen)
-    {
-        return GetCapstoneButtons(currentScreen).Count > 0;
     }
 
     private static FieldInfo? CrystalSphereEntityField =>
@@ -1193,12 +995,6 @@ internal static partial class GameStateService
 
         _crystalSphereEntityLookupWarningLogged = true;
         Log.Warn($"[STS2AIAgent] Crystal Sphere state is unavailable: {reason}.");
-    }
-
-    public static bool CanPlayCrystalSphere(IScreenContext? currentScreen)
-    {
-        var minigame = GetCrystalSphereMinigame(currentScreen);
-        return minigame is { IsFinished: false };
     }
 
     public static bool TrySetCrystalSphereTool(
@@ -1264,12 +1060,6 @@ internal static partial class GameStateService
     /// True while the shared capstone container is showing one of the in-run human menus it exists
     /// for (pause, settings, compendium, card library and their siblings).
     /// </summary>
-    public static bool IsCapstonePageOverlay(IScreenContext? currentScreen)
-    {
-        return currentScreen is NCapstoneSubmenuStack container
-            && IsKnownCapstoneContainerPage(container.Stack?.Peek());
-    }
-
     /// <summary>
     /// The pages this build pushes into the container. Every one of them is a menu the player opened
     /// (the container is only ever shown by the top-bar pause button), so none is a decision list and
@@ -1352,16 +1142,6 @@ internal static partial class GameStateService
         };
     }
 
-    public static bool CanChooseBundle(IScreenContext? currentScreen)
-    {
-        return GetBundleOptions(currentScreen).Count > 0;
-    }
-
-    public static bool CanConfirmBundle(IScreenContext? currentScreen)
-    {
-        return GetBundleConfirmButtons(currentScreen).Count > 0;
-    }
-
     public static IReadOnlyList<NButton> GetBundleConfirmButtons(IScreenContext? currentScreen)
     {
         if (currentScreen is not NChooseABundleSelectionScreen bundleScreen)
@@ -1389,37 +1169,6 @@ internal static partial class GameStateService
             .ToArray();
     }
 
-    public static bool CanChooseRestOption(IScreenContext? currentScreen)
-    {
-        if (currentScreen is not NRestSiteRoom)
-        {
-            return false;
-        }
-
-        try
-        {
-            var options = RunManager.Instance.RestSiteSynchronizer.GetLocalOptions();
-            return options != null && options.Any(o => o.IsEnabled);
-        }
-        catch (Exception ex)
-        {
-            // Same rule as the event probe: unavailable, but say so, or a thrown probe looks
-            // exactly like a rest site with nothing to offer.
-            Log.Warn($"[STS2AIAgent] choose_rest_option probe failed; treating it as unavailable: {ex}");
-            return false;
-        }
-    }
-
-    public static bool CanOpenShopInventory(IScreenContext? currentScreen)
-    {
-        if (currentScreen is NMerchantRoom room)
-        {
-            return room.Inventory != null && !room.Inventory.IsOpen;
-        }
-
-        return GetFakeMerchantButton(currentScreen) != null;
-    }
-
     /// <summary>
     /// The Fake Merchant event screen opens the same inventory as a merchant room, but only through
     /// its <c>%MerchantButton</c>. The predicate and the executor share this helper so the button the
@@ -1444,402 +1193,17 @@ internal static partial class GameStateService
         return inventory != null && inventory.IsOpen ? null : merchantButton;
     }
 
-    public static bool CanCloseShopInventory(IScreenContext? currentScreen)
-    {
-        return currentScreen is NMerchantInventory inventory && inventory.IsOpen;
-    }
-
-    public static bool CanBuyShopCard(IScreenContext? currentScreen)
-    {
-        var inventoryScreen = GetMerchantInventoryScreen(currentScreen);
-        return inventoryScreen != null && inventoryScreen.IsOpen &&
-            GetMerchantCardEntries(currentScreen).Any(entry => entry.IsStocked && entry.EnoughGold);
-    }
-
-    public static bool CanBuyShopRelic(IScreenContext? currentScreen)
-    {
-        var inventoryScreen = GetMerchantInventoryScreen(currentScreen);
-        return inventoryScreen != null && inventoryScreen.IsOpen &&
-            GetMerchantRelicEntries(currentScreen).Any(entry => entry.IsStocked && entry.EnoughGold);
-    }
-
-    public static bool CanBuyShopPotion(IScreenContext? currentScreen)
-    {
-        var inventoryScreen = GetMerchantInventoryScreen(currentScreen);
-        var inventory = GetMerchantInventory(currentScreen);
-        return inventoryScreen != null && inventoryScreen.IsOpen &&
-            GetMerchantPotionEntries(currentScreen).Any(entry => CanPurchaseShopPotion(inventory?.Player, entry));
-    }
-
-    public static bool CanRemoveCardAtShop(IScreenContext? currentScreen)
-    {
-        var inventoryScreen = GetMerchantInventoryScreen(currentScreen);
-        var entry = GetMerchantCardRemovalEntry(currentScreen);
-        return inventoryScreen != null && inventoryScreen.IsOpen &&
-            entry?.IsStocked == true && entry.EnoughGold;
-    }
-
-    public static bool CanSelectCharacter(IScreenContext? currentScreen)
-    {
-        if (CanUnready(currentScreen))
-        {
-            return false;
-        }
-
-        var multiplayerTestScene = GetMultiplayerTestScene();
-        if (multiplayerTestScene != null)
-        {
-            var lobby = GetMultiplayerTestLobby(multiplayerTestScene);
-            return lobby != null
-                && !lobby.LocalPlayer.isReady
-                && GetMultiplayerLobbyCharacters().Length > 0;
-        }
-
-        var characterSelect = GetCharacterSelectScreen(currentScreen);
-        if (characterSelect != null && characterSelect.Lobby.LocalPlayer.isReady)
-        {
-            return false;
-        }
-
-        return GetCharacterSelectButtons(currentScreen)
-            .Any(button => !button.IsLocked && button.IsEnabled && button.IsVisibleInTree());
-    }
-
-    public static bool CanSwitchProfile(IScreenContext? currentScreen)
-    {
-        return currentScreen is NMainMenu mainMenu &&
-            mainMenu.IsVisibleInTree() &&
-            mainMenu.SubmenuStack?.SubmenusOpen != true;
-    }
-
-    public static bool CanContinueRun(IScreenContext? currentScreen)
-    {
-        if (currentScreen is not NMainMenu mainMenu || !mainMenu.IsVisibleInTree())
-        {
-            return false;
-        }
-
-        if (mainMenu.SubmenuStack?.SubmenusOpen == true)
-        {
-            return false;
-        }
-
-        var continueButton = GetMainMenuContinueButton(mainMenu);
-        return continueButton != null && continueButton.IsVisibleInTree() && continueButton.IsEnabled;
-    }
-
-    public static bool CanAbandonRun(IScreenContext? currentScreen)
-    {
-        if (currentScreen is not NMainMenu mainMenu || !mainMenu.IsVisibleInTree())
-        {
-            return false;
-        }
-
-        if (mainMenu.SubmenuStack?.SubmenusOpen == true)
-        {
-            return false;
-        }
-
-        var abandonButton = GetMainMenuAbandonRunButton(mainMenu);
-        return abandonButton != null && abandonButton.IsVisibleInTree() && abandonButton.IsEnabled;
-    }
-
-    public static bool CanSaveAndQuit(IScreenContext? currentScreen, RunState? runState)
-    {
-        if (currentScreen == null || runState == null)
-        {
-            return false;
-        }
-
-        // A page of the in-run capstone container is a person's menu over a frozen run, and both action
-        // surfaces stay empty while one is up. The executor has to refuse the same surface -- the pause
-        // menu's own "save and quit" button belongs to the person sitting there, not to the agent.
-        if (IsCapstonePageOverlay(currentScreen))
-        {
-            return false;
-        }
-
-        if (NGame.Instance == null || !GodotObject.IsInstanceValid(NGame.Instance))
-        {
-            return false;
-        }
-
-        if (RunManager.Instance.NetService.Type.IsMultiplayer())
-        {
-            return false;
-        }
-
-        return currentScreen is not (NMainMenu or NGameOverScreen or NCharacterSelectScreen or NMultiplayerTest);
-    }
-
-    public static bool CanOpenCharacterSelect(IScreenContext? currentScreen)
-    {
-        if (currentScreen is NSingleplayerSubmenu singleplayerSubmenu && singleplayerSubmenu.IsVisibleInTree())
-        {
-            return true;
-        }
-
-        if (currentScreen is not NMainMenu mainMenu || !mainMenu.IsVisibleInTree())
-        {
-            return false;
-        }
-
-        if (mainMenu.SubmenuStack?.SubmenusOpen == true)
-        {
-            return false;
-        }
-
-        var singleplayerButton = GetMainMenuSingleplayerButton(mainMenu);
-        if (singleplayerButton != null && singleplayerButton.IsVisibleInTree() && singleplayerButton.IsEnabled)
-        {
-            return true;
-        }
-
-        // Some main-menu states still allow the singleplayer submenu to open even when the
-        // button has not become visible in the scene tree. If there is no active run flow to
-        // continue or abandon, prefer exposing character select instead of hard-blocking.
-        return !CanContinueRun(currentScreen) && !CanAbandonRun(currentScreen);
-    }
-
-    public static bool CanOpenTimeline(IScreenContext? currentScreen)
-    {
-        if (currentScreen is not NMainMenu mainMenu || !mainMenu.IsVisibleInTree())
-        {
-            return false;
-        }
-
-        if (mainMenu.SubmenuStack?.SubmenusOpen == true)
-        {
-            return false;
-        }
-
-        var timelineButton = GetMainMenuTimelineButton(mainMenu);
-        return timelineButton != null && timelineButton.IsVisibleInTree() && timelineButton.IsEnabled;
-    }
-
-    public static bool CanCloseMainMenuSubmenu(IScreenContext? currentScreen)
-    {
-        if (currentScreen is NPatchNotesScreen patchNotes)
-        {
-            return GodotObject.IsInstanceValid(patchNotes) && patchNotes.IsVisibleInTree();
-        }
-
-        // The in-run human pages are pages of the capstone container rather than NSubmenu screens of
-        // their own, so the submenu branch below never sees them; the container's stack is the thing to
-        // pop, and only while a page above the pause menu is the one being shown.
-        if (GetClosableCapstonePage(currentScreen) != null)
-        {
-            return true;
-        }
-
-        if (currentScreen is not NSubmenu submenu || !submenu.IsVisibleInTree())
-        {
-            return false;
-        }
-
-        var submenuStack = GetSubmenuStack(submenu);
-        return submenuStack != null && submenuStack.SubmenusOpen;
-    }
-
     /// <summary>
     /// Host main menu, not the companion window, autoplay not running, and no dual-instance
     /// launch already in flight. Advertising does not require a verified play model: the
     /// unverified route still launches the teammate paused for external takeover.
     /// </summary>
-    public static bool CanInviteAiTeammate(IScreenContext? currentScreen)
-    {
-        if (currentScreen is not NMainMenu mainMenu || !mainMenu.IsVisibleInTree())
-        {
-            return false;
-        }
-
-        if (AgentRuntime.Instance?.DualLaunching == true)
-        {
-            return false;
-        }
-
-        var autoPlayRunning = AgentRuntime.Instance?.PlayRunning == true;
-        return CoopLaunchPolicy.GetStructuralError(InstanceRole.IsCompanion, autoPlayRunning, "MAIN_MENU") == null;
-    }
-
     /// <summary>
     /// Host main menu with a saved multiplayer run on disk: the same gate the game uses to show
     /// "Load" instead of "Host" in its multiplayer submenu. The companion never continues a run
     /// itself. Continue also uses the autoplay / companion structural probe, and DualLaunching so a
     /// launch already in flight is not advertised again.
     /// </summary>
-    public static bool CanContinueAiTeammate(IScreenContext? currentScreen)
-    {
-        if (InstanceRole.IsCompanion)
-        {
-            return false;
-        }
-
-        if (currentScreen is not NMainMenu mainMenu || !mainMenu.IsVisibleInTree())
-        {
-            return false;
-        }
-
-        if (AgentRuntime.Instance?.DualLaunching == true)
-        {
-            return false;
-        }
-
-        var autoPlayRunning = AgentRuntime.Instance?.PlayRunning == true;
-        if (CoopLaunchPolicy.GetStructuralError(InstanceRole.IsCompanion, autoPlayRunning, "MAIN_MENU") != null)
-        {
-            return false;
-        }
-
-        return SaveManager.Instance.HasMultiplayerRunSave;
-    }
-
-    public static bool CanEmbark(IScreenContext? currentScreen)
-    {
-        var embarkButton = GetCharacterEmbarkButton(currentScreen);
-        return embarkButton != null && embarkButton.IsEnabled && embarkButton.IsVisibleInTree();
-    }
-
-    public static bool CanUnready(IScreenContext? currentScreen)
-    {
-        var multiplayerTestScene = GetMultiplayerTestScene();
-        var multiplayerLobby = multiplayerTestScene != null ? GetMultiplayerTestLobby(multiplayerTestScene) : null;
-        if (multiplayerLobby != null)
-        {
-            return multiplayerLobby.LocalPlayer.isReady;
-        }
-
-        var unreadyButton = GetCharacterUnreadyButton(currentScreen);
-        return unreadyButton != null && unreadyButton.IsEnabled && unreadyButton.IsVisibleInTree();
-    }
-
-    public static bool CanHostMultiplayerLobby(IScreenContext? currentScreen)
-    {
-        var scene = GetMultiplayerTestScene();
-        return scene != null && GetMultiplayerTestLobby(scene) == null;
-    }
-
-    public static bool CanJoinMultiplayerLobby(IScreenContext? currentScreen)
-    {
-        var scene = GetMultiplayerTestScene();
-        return scene != null && GetMultiplayerTestLobby(scene) == null;
-    }
-
-    public static bool CanReadyMultiplayerLobby(IScreenContext? currentScreen)
-    {
-        var scene = GetMultiplayerTestScene();
-        var lobby = scene != null ? GetMultiplayerTestLobby(scene) : null;
-        return lobby != null && !lobby.LocalPlayer.isReady;
-    }
-
-    public static bool CanDisconnectMultiplayerLobby(IScreenContext? currentScreen)
-    {
-        var scene = GetMultiplayerTestScene();
-        return scene != null && GetMultiplayerTestLobby(scene) != null;
-    }
-
-    public static bool CanIncreaseAscension(IScreenContext? currentScreen)
-    {
-        return CanAdjustAscension(currentScreen, delta: 1);
-    }
-
-    public static bool CanDecreaseAscension(IScreenContext? currentScreen)
-    {
-        return CanAdjustAscension(currentScreen, delta: -1);
-    }
-
-    public static bool CanChooseTimelineEpoch(IScreenContext? currentScreen)
-    {
-        return GetTimelineSlots(currentScreen).Any(slot => slot.State is EpochSlotState.Obtained or EpochSlotState.Complete);
-    }
-
-    public static bool CanConfirmTimelineOverlay(IScreenContext? currentScreen)
-    {
-        if (GetTimelineTutorial(currentScreen) != null)
-        {
-            return true;
-        }
-
-        var unlockConfirmButton = GetTimelineUnlockConfirmButton(currentScreen);
-        if (unlockConfirmButton != null && unlockConfirmButton.IsVisibleInTree() && unlockConfirmButton.IsEnabled)
-        {
-            return true;
-        }
-
-        var inspectCloseButton = GetTimelineInspectCloseButton(currentScreen);
-        return inspectCloseButton != null && inspectCloseButton.IsVisibleInTree() && inspectCloseButton.IsEnabled;
-    }
-
-    public static bool CanUsePotion(
-        IScreenContext? currentScreen,
-        CombatState? combatState,
-        RunState? runState,
-        CombatActionGate? combatActionGate = null)
-    {
-        var player = GetLocalPlayer(runState);
-        if (player == null)
-        {
-            return false;
-        }
-
-        return player.PotionSlots.Any(potion => IsPotionUsable(currentScreen, combatState, player, potion, combatActionGate));
-    }
-
-    public static bool CanUsePotionAtIndex(IScreenContext? currentScreen, CombatState? combatState, RunState? runState, int optionIndex)
-    {
-        var player = GetLocalPlayer(runState);
-        if (player == null || optionIndex < 0 || optionIndex >= player.PotionSlots.Count)
-        {
-            return false;
-        }
-
-        return IsPotionUsable(currentScreen, combatState, player, player.PotionSlots[optionIndex]);
-    }
-
-    public static bool CanDiscardPotion(IScreenContext? currentScreen, RunState? runState)
-    {
-        var player = GetLocalPlayer(runState);
-        if (player == null || !CanDiscardPotionsInCurrentScreen(currentScreen))
-        {
-            return false;
-        }
-
-        return player.PotionSlots.Any(potion => IsPotionDiscardable(player, potion));
-    }
-
-    public static bool CanDiscardPotionAtIndex(IScreenContext? currentScreen, RunState? runState, int optionIndex)
-    {
-        var player = GetLocalPlayer(runState);
-        if (player == null || !CanDiscardPotionsInCurrentScreen(currentScreen) || optionIndex < 0 || optionIndex >= player.PotionSlots.Count)
-        {
-            return false;
-        }
-
-        return IsPotionDiscardable(player, player.PotionSlots[optionIndex]);
-    }
-
-    public static bool CanConfirmModal(IScreenContext? currentScreen)
-    {
-        var hasButton = GetModalConfirmButton(currentScreen) != null;
-        return FtueModalPolicy.ExposeConfirm(GetOpenModal()?.GetType().Name, hasButton);
-    }
-
-    public static bool CanDismissModal(IScreenContext? currentScreen)
-    {
-        return GetModalCancelButton(currentScreen) != null;
-    }
-
-    public static bool CanReturnToMainMenu(IScreenContext? currentScreen)
-    {
-        return IsGameOverButtonReady(GetGameOverMainMenuButton(currentScreen));
-    }
-
-    public static bool CanContinueGameOver(IScreenContext? currentScreen)
-    {
-        return IsGameOverButtonReady(GetGameOverContinueButton(currentScreen))
-            && !CanReturnToMainMenu(currentScreen);
-    }
-
     public static IReadOnlyList<NMapPoint> GetAvailableMapNodes(IScreenContext? currentScreen, RunState? runState)
     {
         if (!TryGetMapScreen(currentScreen, runState, out var mapScreen))
@@ -2414,26 +1778,6 @@ internal static partial class GameStateService
         return player.Creature.IsAlive ? player : null;
     }
 
-    public static bool IsCardPlayable(CardModel card)
-    {
-        return card.CanPlay(out _, out _) && IsCardTargetSupported(card);
-    }
-
-    public static bool IsCardTargetSupported(CardModel card)
-    {
-        return card.TargetType switch
-        {
-            TargetType.None => true,
-            TargetType.Self => true,
-            TargetType.AnyEnemy => true,
-            TargetType.AllEnemies => true,
-            TargetType.RandomEnemy => true,
-            TargetType.AnyAlly => true,
-            TargetType.AllAllies => true,
-            _ => false
-        };
-    }
-
     public static string? GetUnplayableReasonCode(CardModel card)
     {
         card.CanPlay(out var reason, out _);
@@ -2473,29 +1817,6 @@ internal static partial class GameStateService
         }
 
         return reason.ToString();
-    }
-
-    internal static bool IsCombatActionReady()
-    {
-        var currentScreen = ActiveScreenContext.Instance.GetCurrentScreen();
-        var combatState = CombatManager.Instance.IsInProgress ? CombatManager.Instance.DebugOnlyGetState() : null;
-        return CanUseCombatActions(currentScreen, combatState, out _, out _);
-    }
-
-        private static bool CanUseCombatActions(
-        IScreenContext? currentScreen,
-        CombatState? combatState,
-        out Player? me,
-        out NCombatRoom? combatRoom,
-        CombatActionGate? combatActionGate = null)
-    {
-        // Callers inside one state build hand in the gate they already evaluated. The gate advances
-        // a shared stability sampler, so evaluating it a second time would answer from a later
-        // moment than the payload around it and could disagree with that payload.
-        var gate = combatActionGate ?? EvaluateCombatActionGate(currentScreen, combatState);
-        me = gate.Me;
-        combatRoom = gate.Room;
-        return gate.Usable;
     }
 
     private static bool IsLocalCombatTurnReady(Player me, NCombatRoom? combatRoom)
@@ -2789,17 +2110,6 @@ internal static partial class GameStateService
 
         return combatRoom.Ui?.EndTurnButton
             ?? FindDescendants<NEndTurnButton>(combatRoom).FirstOrDefault(GodotObject.IsInstanceValid);
-    }
-
-    public static bool IsEndTurnButtonReady(NEndTurnButton? button)
-    {
-        if (button == null || !GodotObject.IsInstanceValid(button) || !button.IsEnabled)
-        {
-            return false;
-        }
-
-        var property = ReflectedGameMembers.Property(typeof(NEndTurnButton), "CanTurnBeEnded");
-        return property?.GetValue(button) is not bool canTurnBeEnded || canTurnBeEnded;
     }
 
     private static string[] BuildAvailableActionNames(
@@ -4866,12 +4176,6 @@ internal static partial class GameStateService
             .GetNodeOrNull<NGameOverContinueButton>("%ContinueButton");
     }
 
-    public static bool IsWaitingForOtherPlayers(IScreenContext? currentScreen)
-    {
-        var overlay = GetWaitingForOtherPlayersOverlay(currentScreen);
-        return overlay != null && overlay.IsVisibleInTree();
-    }
-
     public static CanvasItem? GetWaitingForOtherPlayersOverlay(IScreenContext? currentScreen)
     {
         if (currentScreen is not NGameOverScreen gameOver)
@@ -4914,32 +4218,6 @@ internal static partial class GameStateService
         }
 
         return hidden || !IsWaitingForOtherPlayers(gameOver);
-    }
-
-    public static bool IsGameOverSummaryStarted(IScreenContext? currentScreen)
-    {
-        if (currentScreen is not NGameOverScreen gameOver)
-        {
-            return false;
-        }
-
-        if (GetGameOverMainMenuButton(gameOver)?.Visible == true)
-        {
-            return true;
-        }
-
-        try
-        {
-            if (ReflectedGameMembers.Field(typeof(NGameOverScreen), "_isAnimatingSummary")?.GetValue(gameOver) is true)
-            {
-                return true;
-            }
-        }
-        catch
-        {
-        }
-
-        return false;
     }
 
     public static NReturnToMainMenuButton? GetGameOverMainMenuButton(IScreenContext? currentScreen)
@@ -5170,11 +4448,6 @@ internal static partial class GameStateService
             $"[STS2AIAgent] Unlock confirm probe: screen={screenType}, instance={screenInstanceId}, " +
             $"source={source}, " +
             $"button={buttonType}, path={buttonPath}, visible={visible}, enabled={enabled}");
-    }
-
-    public static bool CanConfirmUnlock(IScreenContext? currentScreen)
-    {
-        return GetUnlockConfirmButton(currentScreen) != null;
     }
 
     private static string[] GetUnlockItemNames(NUnlockScreen unlockScreen)
@@ -5686,24 +4959,6 @@ internal static partial class GameStateService
         }
     }
 
-    private static bool CanAdjustAscension(IScreenContext? currentScreen, int delta)
-    {
-        var screen = GetCharacterSelectScreen(currentScreen);
-        if (screen == null)
-        {
-            return false;
-        }
-
-        var lobby = screen.Lobby;
-        if (lobby.NetService.Type == NetGameType.Client || lobby.LocalPlayer.isReady)
-        {
-            return false;
-        }
-
-        var nextAscension = lobby.Ascension + delta;
-        return nextAscension >= 0 && nextAscension <= lobby.MaxAscension;
-    }
-
     private static IReadOnlyCollection<ulong> GetConnectedPlayerIds(RunState? runState)
     {
         if (runState == null)
@@ -5723,5 +4978,60 @@ internal static partial class GameStateService
     private static string NetIdToString(ulong netId)
     {
         return netId.ToString();
+    }
+
+    // Shared with the raw /state builders (the combat payload, the turn-end button read, the
+    // game-over payload) and with the action services, so these stay beside the builders rather
+    // than in GameStateService.Predicates.cs -- the same rule that kept CanPurchaseShopPotion
+    // and the IsPotion* probes in this file.
+
+    public static bool IsPlayerActionPhase(CombatState? combatState)
+    {
+        var me = GetLocalPlayer(combatState);
+        return IsPlayerActionPhase(combatState, me);
+    }
+
+    private static bool IsPlayerActionPhase(CombatState? combatState, Player? me)
+    {
+        if (combatState == null ||
+            me == null ||
+            combatState.CurrentSide != CombatSide.Player)
+        {
+            return false;
+        }
+
+        return CombatManager.Instance.IsPartOfPlayerTurn(me);
+    }
+
+    public static bool IsCardTargetSupported(CardModel card)
+    {
+        return card.TargetType switch
+        {
+            TargetType.None => true,
+            TargetType.Self => true,
+            TargetType.AnyEnemy => true,
+            TargetType.AllEnemies => true,
+            TargetType.RandomEnemy => true,
+            TargetType.AnyAlly => true,
+            TargetType.AllAllies => true,
+            _ => false
+        };
+    }
+
+    public static bool IsEndTurnButtonReady(NEndTurnButton? button)
+    {
+        if (button == null || !GodotObject.IsInstanceValid(button) || !button.IsEnabled)
+        {
+            return false;
+        }
+
+        var property = ReflectedGameMembers.Property(typeof(NEndTurnButton), "CanTurnBeEnded");
+        return property?.GetValue(button) is not bool canTurnBeEnded || canTurnBeEnded;
+    }
+
+    public static bool IsWaitingForOtherPlayers(IScreenContext? currentScreen)
+    {
+        var overlay = GetWaitingForOtherPlayersOverlay(currentScreen);
+        return overlay != null && overlay.IsVisibleInTree();
     }
 }

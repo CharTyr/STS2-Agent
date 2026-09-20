@@ -220,7 +220,10 @@ class Sts2Client(Sts2ActionMethods):
                     event_name = str(event.get("event", ""))
                     if not target_names or event_name in target_names:
                         return event
-                return None
+                # A bounded server queue closes a slow subscriber explicitly rather than
+                # silently dropping events. Reconnect within the same overall deadline so the
+                # next stream_ready/current state can resynchronize the caller.
+                continue
             except Sts2ApiError as exc:
                 if exc.code != "connection_error":
                     raise

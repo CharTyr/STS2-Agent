@@ -420,12 +420,16 @@ internal static class CompanionStartupTests
     {
         string Health(int pid = 123, int port = 8081, string role = "companion", string service = "sts2-ai-agent", string status = "ready") =>
             JsonSerializer.Serialize(new { ok = true, data = new { process_id = pid, api_port = port, instance_role = role, service, status } });
-        Assert.True(CompanionHealth.IsExpectedProcess(Health(), 8081, 123));
+        Assert.True(CompanionHealth.IsExpectedProcess(Health(status: "ready"), 8081, 123));
+        Assert.True(CompanionHealth.IsExpectedProcess(Health(status: "degraded"), 8081, 123));
         Assert.True(!CompanionHealth.IsExpectedProcess(Health(pid: 456), 8081, 123));
         Assert.True(!CompanionHealth.IsExpectedProcess(Health(port: 8082), 8081, 123));
         Assert.True(!CompanionHealth.IsExpectedProcess(Health(role: "human"), 8081, 123));
         Assert.True(!CompanionHealth.IsExpectedProcess(Health(service: "other"), 8081, 123));
         Assert.True(!CompanionHealth.IsExpectedProcess(Health(status: "not ready"), 8081, 123));
+        Assert.True(!CompanionHealth.IsExpectedProcess(Health(status: "unknown"), 8081, 123));
+        Assert.True(!CompanionHealth.IsExpectedProcess("{\"ok\":true,\"data\":{\"service\":\"sts2-ai-agent\",\"status\":null,\"instance_role\":\"companion\",\"api_port\":8081,\"process_id\":123}}", 8081, 123));
+        Assert.True(!CompanionHealth.IsExpectedProcess("{\"ok\":true,\"data\":{\"service\":\"sts2-ai-agent\",\"instance_role\":\"companion\",\"api_port\":8081,\"process_id\":123}}", 8081, 123));
         Assert.True(!CompanionHealth.IsExpectedProcess("{\"ok\":false,\"status\":\"ready\"}", 8081, 123));
         Assert.True(!CompanionHealth.IsExpectedProcess("{\"ok\":true,\"data\":[]}", 8081, 123));
         Assert.True(!CompanionHealth.IsExpectedProcess("not JSON", 8081, 123));

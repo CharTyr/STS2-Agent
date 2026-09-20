@@ -92,7 +92,9 @@ internal static class CoopRouteTests
         var router = AgentSourceFixture.Read("STS2AIAgent/Server/Router.cs");
         Assert.Contains("/teammate/control", router);
         Assert.Contains("ControlTeammateResultAsync", router);
-        Assert.Contains("companion = BuildCompanionSessionData()", router);
+        Assert.Contains("BuildCompanionSessionData(),", router);
+        Assert.Contains("HealthRoleData.ForHost(", router);
+        Assert.Contains("HealthRoleData.NotApplicable", router);
         Assert.Contains("connection.Port", router);
         // The token authorizes this process alone, so the discovery payload must never carry it.
         var discovery = AgentSourceFixture.MethodBody(router, "BuildCompanionSessionData");
