@@ -1,3 +1,4 @@
+using System.Text.Json;
 using System.Threading.Channels;
 using MegaCrit.Sts2.Core.Logging;
 using STS2AIAgent.Game;
@@ -13,14 +14,17 @@ internal sealed class GameEventService
     private static readonly Lazy<GameEventService> LazyInstance = new(() => new GameEventService());
 
     private readonly object _gate = new();
-    private readonly Dictionary<long, Channel<GameEventEnvelope>> _subscribers = new();
+    private readonly EventStreamSubscribers<GameEventEnvelope, StateDigest> _subscribers = new(SubscriberQueueCapacity);
+    private readonly ConsecutiveRepeatSuppressor _repeatGuard = new();
 
-    private CancellationTokenSource? _cts;
-    private Task? _loopTask;
-    private long _nextSubscriberId;
+    private readonly EventPollingCoordinator _polling;
     private long _nextEventId;
-    private StateDigest? _lastState;
     private readonly TimeSpan _pollInterval;
+
+    private static readonly JsonSerializerOptions JsonOptions = new()
+    {
+        DefaultIgnoreCondition = System.Text.Json.Serialization.JsonIgnoreCondition.Never
+    };
 
     public static GameEventService Instance => LazyInstance.Value;
 
@@ -36,144 +40,91 @@ internal sealed class GameEventService
         }
 
         _pollInterval = TimeSpan.FromMilliseconds(pollMs);
+        _polling = new EventPollingCoordinator(PollOnceAsync, _pollInterval);
     }
 
     public void Start()
     {
-        lock (_gate)
-        {
-            if (_loopTask != null)
-            {
-                return;
-            }
-
-            _cts = new CancellationTokenSource();
-            _loopTask = Task.Run(() => PollLoopAsync(_cts.Token));
-            Log.Info($"{LogPrefix} Started with poll interval {_pollInterval.TotalMilliseconds:0}ms");
-        }
+        _polling.Start();
+        Log.Info($"{LogPrefix} Started with poll interval {_pollInterval.TotalMilliseconds:0}ms");
     }
 
     public void Stop()
     {
-        CancellationTokenSource? cts;
-        Task? loopTask;
-        List<Channel<GameEventEnvelope>> channels;
+        // Stop the loop first, then clear under the gate. Reversing these two would let a poll that
+        // was already past its staleness check republish a snapshot after the clear, and a
+        // subscriber arriving after shutdown would then be handed that lifecycle's state.
+        _polling.SetSubscriberCount(0);
+        _polling.Stop();
 
         lock (_gate)
         {
-            cts = _cts;
-            loopTask = _loopTask;
-            _cts = null;
-            _loopTask = null;
-            _lastState = null;
-            channels = _subscribers.Values.ToList();
-            _subscribers.Clear();
+            _subscribers.CompleteAll();
         }
 
-        try
-        {
-            cts?.Cancel();
-        }
-        catch (Exception ex)
-        {
-            Log.Warn($"{LogPrefix} Failed to cancel loop: {ex}");
-        }
-
-        try
-        {
-            loopTask?.Wait(TimeSpan.FromSeconds(2));
-        }
-        catch (AggregateException ex) when (ex.InnerExceptions.All(inner => inner is TaskCanceledException or OperationCanceledException))
-        {
-            Log.Info($"{LogPrefix} Poll loop stopped during shutdown.");
-        }
-
-        foreach (var channel in channels)
-        {
-            channel.Writer.TryComplete();
-        }
-
-        cts?.Dispose();
         Log.Info($"{LogPrefix} Stopped");
     }
 
     public GameEventSubscription Subscribe()
     {
-        var channel = Channel.CreateBounded<GameEventEnvelope>(new BoundedChannelOptions(SubscriberQueueCapacity)
-        {
-            FullMode = BoundedChannelFullMode.DropOldest,
-            SingleReader = true,
-            SingleWriter = false
-        });
-
-        long subscriberId;
-        StateDigest? snapshot;
         lock (_gate)
         {
-            subscriberId = ++_nextSubscriberId;
-            _subscribers[subscriberId] = channel;
-            snapshot = _lastState;
+            var lease = _subscribers.Subscribe(
+                _subscribers.Snapshot,
+                digest => BuildSnapshotEnvelope(digest, "stream_ready"));
+            _polling.SetSubscriberCount(_subscribers.Count);
+            return new GameEventSubscription(lease.Id, lease.Reader, Unsubscribe);
         }
-
-        if (snapshot != null)
-        {
-            var streamReady = BuildEnvelope("stream_ready", new
-            {
-                run_id = snapshot.RunId,
-                screen = snapshot.Screen,
-                in_combat = snapshot.InCombat,
-                turn = snapshot.Turn,
-                action_window_open = snapshot.PlayerActionWindowOpen
-            });
-            channel.Writer.TryWrite(streamReady);
-        }
-
-        return new GameEventSubscription(subscriberId, channel.Reader, Unsubscribe);
     }
 
     private void Unsubscribe(long subscriberId)
     {
-        Channel<GameEventEnvelope>? channel = null;
         lock (_gate)
         {
-            if (_subscribers.Remove(subscriberId, out var removed))
+            if (_subscribers.Unsubscribe(subscriberId))
             {
-                channel = removed;
+                // The session drops the snapshot when the last subscriber leaves, so the next
+                // connection starts a fresh lifecycle instead of being handed an idle-period
+                // snapshot as its first frame.
+                _polling.SetSubscriberCount(_subscribers.Count);
             }
         }
-
-        channel?.Writer.TryComplete();
     }
 
-    private async Task PollLoopAsync(CancellationToken cancellationToken)
+    private async Task PollOnceAsync(CancellationToken cancellationToken)
     {
-        while (!cancellationToken.IsCancellationRequested)
+        try
         {
-            try
+            var generation = _polling.CurrentGeneration;
+            var state = await GameThread.InvokeAsync(GameStateService.BuildStatePayload);
+            cancellationToken.ThrowIfCancellationRequested();
+            if (!_polling.IsGenerationCurrent(generation))
             {
-                var state = await GameThread.InvokeAsync(GameStateService.BuildStatePayload);
-                ProcessState(state);
-            }
-            catch (Exception ex) when (ex is not OperationCanceledException && ex is not TaskCanceledException)
-            {
-                Log.Warn($"{LogPrefix} Poll failed: {ex.Message}");
+                // The lifecycle that asked for this sample ended while it was in flight. Committing
+                // it would resurrect state the new lifecycle never observed.
+                return;
             }
 
-            try
-            {
-                await Task.Delay(_pollInterval, cancellationToken);
-            }
-            catch (OperationCanceledException)
-            {
-                break;
-            }
+            ProcessState(state);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException && ex is not TaskCanceledException)
+        {
+            Log.Warn($"{LogPrefix} Poll failed: {ex.Message}");
         }
     }
 
     private void ProcessState(GameStatePayload state)
     {
+        lock (_gate)
+        {
+            ProcessStateLocked(state);
+        }
+    }
+
+    private void ProcessStateLocked(GameStatePayload state)
+    {
         var current = StateDigest.FromState(state);
-        var previous = _lastState;
+        var previous = _subscribers.Snapshot;
 
         if (previous == null)
         {
@@ -183,7 +134,11 @@ internal sealed class GameEventService
                 screen = current.Screen,
                 session_phase = current.SessionPhase
             });
-            _lastState = current;
+            // A subscriber that connected on a lifecycle with no snapshot yet -- the normal case
+            // now that polling only runs on demand -- has had nothing to orient on. Publish the same
+            // snapshot every later subscriber gets, after session_started so the ordering contract
+            // in docs/api.md holds for this connection too.
+            PublishSnapshot("stream_ready", current);
             return;
         }
 
@@ -279,32 +234,50 @@ internal sealed class GameEventService
             });
         }
 
-        _lastState = current;
+        // The snapshot is recorded, not re-announced. It is the frame a *new* subscriber is handed so
+        // it can orient without polling /state; broadcasting it every poll turned a 120 ms loop into a
+        // stream of stream_ready frames that told a client nothing it had not already been told.
+        _subscribers.RecordSnapshot(current);
     }
 
     private void Publish(string eventType, object data)
     {
-        var envelope = BuildEnvelope(eventType, data);
-        List<long> staleSubscriberIds = new();
-
-        lock (_gate)
+        // The id is allocated only for a frame that is actually sent. Building the envelope first
+        // burned an id on every suppressed repeat, which left gaps in the stream that a client would
+        // read as loss -- the one signal the docs promise means something.
+        if (!_repeatGuard.ShouldPublish(eventType + "\n" + JsonSerializer.Serialize(data, JsonOptions)))
         {
-            foreach (var (subscriberId, channel) in _subscribers)
-            {
-                if (!channel.Writer.TryWrite(envelope))
-                {
-                    staleSubscriberIds.Add(subscriberId);
-                }
-            }
-
-            foreach (var subscriberId in staleSubscriberIds)
-            {
-                if (_subscribers.Remove(subscriberId, out var stale))
-                {
-                    stale.Writer.TryComplete();
-                }
-            }
+            return;
         }
+
+        var staleCount = _subscribers.Publish(BuildEnvelope(eventType, data));
+        if (staleCount > 0)
+        {
+            _polling.SetSubscriberCount(_subscribers.Count);
+            Log.Warn($"{LogPrefix} Disconnected {staleCount} slow event subscriber(s); reconnect to resynchronize state.");
+        }
+    }
+
+    /// <summary>
+    /// Records <paramref name="snapshot"/> as the newest state and sends it to everyone attached.
+    /// The literal event name lives in the only caller's argument list so the api-facts gate can
+    /// still see which types this service publishes.
+    /// </summary>
+    private void PublishSnapshot(string eventType, StateDigest snapshot)
+    {
+        _subscribers.PublishSnapshot(snapshot, BuildSnapshotEnvelope(snapshot, eventType));
+    }
+
+    private GameEventEnvelope BuildSnapshotEnvelope(StateDigest snapshot, string eventType)
+    {
+        return BuildEnvelope(eventType, new
+        {
+            run_id = snapshot.RunId,
+            screen = snapshot.Screen,
+            in_combat = snapshot.InCombat,
+            turn = snapshot.Turn,
+            action_window_open = snapshot.PlayerActionWindowOpen
+        });
     }
 
     private GameEventEnvelope BuildEnvelope(string eventType, object data)

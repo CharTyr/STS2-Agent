@@ -187,10 +187,10 @@
 | `play_phase` | string | 自动游玩阶段，常见值 `running` / `paused` / `stopping` |
 | `stop_kind` | string\|null | 上次自动游玩停止的类别，未停止过为 `null` |
 | `session_requests` | integer | 本会话已消耗的模型请求次数（可由「重置本会话统计」清零） |
-| `companion_process_alive` / `companion_process_exited` | boolean | AI 队友进程是否在运行 / 是否已退出 |
-| `companion` | object\|null | 仅主窗口、且本次组队的队友进程仍在运行时存在（队友退出后回到 `null`）。`api_host` / `api_port` / `process_id` 是队友实例的 HTTP API，用来直接对队友的 `GET /state` 与 `POST /action` 编程；`auto_play` 说明这次组队走的是 AI 自走（`true`）还是外部接管（`false`）。队友会话令牌**不会**出现在任何响应里 |
-| `dual_status` / `team_control_status` | string | 双开与队友控制的人类可读状态 |
-| `dual_launch_outcome` | string\|null | 双开结构化结果，给外部客户端做成败分类，**不要**用 `dual_status` 文本。尚未尝试过为 `null`；否则为 `InProgress` / `Succeeded` / `Failed` / `Rejected` / `Canceled`（`DualLaunchOutcome` 枚举名，不含 `Idle`） |
+| `companion_process_alive` / `companion_process_exited` | boolean\|null | **仅 host 有意义。** 主窗口返回 AI 队友进程是否在运行 / 是否已退出；`instance_role=companion` 时两项均为 `null`（not applicable），不会把 companion 自己描述成还应管理另一个队友进程 |
+| `companion` | object\|null | **仅 host 有意义。** 主窗口且本次组队的队友进程仍在运行时存在（队友退出后回到 `null`）。`api_host` / `api_port` / `process_id` 是队友实例的 HTTP API，用来直接对队友的 `GET /state` 与 `POST /action` 编程；`auto_play` 说明这次组队走的是 AI 自走（`true`）还是外部接管（`false`）。队友会话令牌**不会**出现在任何响应里；companion 自身固定为 `null` |
+| `dual_status` / `team_control_status` | string\|null | **仅 host 有意义。** 主窗口返回双开与队友控制的人类可读状态；companion 返回 `null`，不会伪造“尚未启动双开”或“尚未连接”的 host 默认状态 |
+| `dual_launch_outcome` | string\|null | **仅 host 有意义。** 双开结构化结果，给外部客户端做成败分类，**不要**用 `dual_status` 文本。host 尚未尝试或 companion 角色为 `null`；否则为 `InProgress` / `Succeeded` / `Failed` / `Rejected` / `Canceled`（`DualLaunchOutcome` 枚举名，不含 `Idle`） |
 | `compatibility` | object | 启动时对 Mod 依赖的游戏私有成员做的一次自检结果。`reflected_members_checked` 是被检查的成员总数，`reflected_members_missing` 是找不到的个数，`missing_members[]` 逐条给出 `member`（`类型.成员`）与 `feature`（失效的功能）。游戏更新后 Mod 最常见的坏法就是某个私有字段被改名，此时读取悄悄退回默认值——这个区块是唯一的信号 |
 | `state_build` | object | 构建状态载荷的耗时，只计构建本身、不含排队等游戏线程。`/state`、每个动作响应与 SSE 刷新都会构建一次，且都跑在游戏线程上——构建期间游戏不出帧。`slow_threshold_ms`（100，约等于 60 帧下 6 帧的卡顿）、`samples`、`slow_builds`、`last_ms`、`max_ms` 与其 `max_screen`、以及最近 `recent_samples`（至多 256）次的 `recent_p50_ms` / `recent_p95_ms`；尚无样本时耗时字段为 `null`。超过阈值的构建会在游戏日志里记 `WARN`，每 30 秒至多一条并注明期间压下的条数 |
 
@@ -1583,7 +1583,18 @@ data: }
 
 注意：JSON 是**多行**输出的，同一帧会有多行 `data:`。按 SSE 规范，客户端必须把所有 `data:` 行用换行符拼接后再整体解析，不能只读第一行。`mcp_server/src/sts2_mcp/client.py` 的 `wait_for_event` 就是这样处理的。
 
-帧内容：`id:` 为事件序号，`event:` 为事件类型，`data:` 为完整事件信封，含 `event_id`、`type`、`timestamp_utc` 与事件特有的 `data`。
+帧内容：`id:` 为事件序号，`event:` 为事件类型，`data:` 为完整事件信封，含 `event_id`、`type`、`timestamp_utc` 与事件特有的 `data`。`event_id` 在本进程内单调递增，但服务端不保存 replay backlog。
+
+事件轮询按需运行：没有订阅者时不会周期构建完整 `/state`；首个订阅者会唤醒唯一共享 poll loop，最后一个订阅者离开后轮询进入 idle，并丢弃上一段会话保留的快照。因此：
+
+- 一个连接建立时若当前已有快照（同一段活跃会话内），会**立即**收到 `stream_ready`；
+- 若还没有快照（首次订阅，或上一段会话已随最后一位订阅者结束），连接会先收到首次采样产生的 `session_started`，**紧接着**收到同一份采样的 `stream_ready`，顺序固定为 `session_started` → `stream_ready`。
+
+每个客户端使用容量 256 的有界队列。队列满时服务端**不会静默丢弃旧事件，也不会阻塞 producer**，而是完成并关闭该慢客户端的 stream；客户端应重连，并以新的 `stream_ready`（或一次新 `/state`）重新对齐。重连后跳变的 `event_id` 可用于识别连接期间存在 gap，但不代表服务端可以补发缺失事件。官方 Python `wait_for_event` 会在其原有总 deadline 内重连。
+
+状态没有变化时不会重复发帧：轮询只在某个事件的载荷与上一次已发布的不同时才发送它。`stream_ready` 只在两种时机出现——连接建立时（已有快照）与一段会话的首次采样后各一次；轮询本身只更新快照，不再广播。
+
+进程关闭时轮询先停止、再清空订阅者，因此关闭之后不会再有旧生命周期的状态被写成 `stream_ready`。最后一个订阅者断开后，服务端要到下一次写失败才会发现（心跳间隔 15 秒，最坏两次心跳约 30 秒）；这段时间里连接在 TCP 意义上仍然是打开的，因此仍会被计为订阅者。2026-09-20 实机实测：断开后约 33 秒轮询停止，之后 `samples` 不再增长。RST/写失败（例如 `curl` 立刻退出产生的重置）会被更早发现。
 
 事件类型：
 

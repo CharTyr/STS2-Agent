@@ -320,7 +320,7 @@ for _ in range(max_attempts):
         with request.urlopen(f"{base_url}/health", timeout=2) as response:
             payload = json.load(response)
             data = payload.get("data") if isinstance(payload, dict) else {}
-            if response.status == 200 and payload.get("ok") and data.get("status") == "ready":
+            if response.status == 200 and payload.get("ok") and data.get("status") in {"ready", "degraded"}:
                 raise SystemExit(0)
     except SystemExit:
         raise

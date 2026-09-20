@@ -447,6 +447,18 @@ try {
     Assert-Case -Name "api-facts gate rejects an event type the docs stop listing" -Only "api-facts" -Expect "combat_turn_changed"
     Write-Utf8 $factsDoc $originalFactsDoc
 
+    # An event name that stops being spelled as a literal beside its publish call. `stream_ready`
+    # is sent through PublishSnapshot, which is the third spelling the extraction has to recognise:
+    # if it stops matching, the gate must say the documented type is never published rather than
+    # quietly checking one fewer event.
+    $eventServicePath = Join-Path $fixture "STS2AIAgent/Server/GameEventService.cs"
+    $originalEventService = Read-Utf8 $eventServicePath
+    $readyLiteral = 'PublishSnapshot("stream_ready", current)'
+    if ($originalEventService.IndexOf($readyLiteral) -lt 0) { throw "fixture setup failed: GameEventService.cs has no $readyLiteral call" }
+    Write-Utf8 $eventServicePath $originalEventService.Replace($readyLiteral, 'PublishSnapshot(eventNameForSnapshot, current)')
+    Assert-Case -Name "api-facts gate rejects a snapshot event name the code stops spelling" -Only "api-facts" -Expect "stream_ready"
+    Write-Utf8 $eventServicePath $originalEventService
+
     # A documented endpoint the router does not serve. The other direction -- a served path with no
     # section -- is covered by mutating the router itself below.
     $dataHeading = '## ' + [char]96 + 'GET /data/{collection}' + [char]96

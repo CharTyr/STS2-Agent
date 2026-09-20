@@ -255,6 +255,17 @@ class PosixPathResolutionTests(unittest.TestCase):
             self, (ROOT / "scripts" / "lib-sts2.sh").read_text(encoding="utf-8")
         )
 
+    def test_health_wait_accepts_both_live_compatibility_states(self) -> None:
+        source = (ROOT / "scripts" / "lib-sts2.sh").read_text(encoding="utf-8")
+        body = function_body(source, "sts2_wait_for_health")
+        self.assertIn(
+            'data.get("status") in {"ready", "degraded"}',
+            body,
+            "the launched process is live in both documented compatibility states",
+        )
+        self.assertIn("port_owned_by_pid(port, pid)", body)
+        self.assertIn("process_alive(pid)", body)
+
 
 class PosixPathDestructiveTests(unittest.TestCase):
     def test_the_check_catches_a_second_copy_of_the_macos_path(self) -> None:

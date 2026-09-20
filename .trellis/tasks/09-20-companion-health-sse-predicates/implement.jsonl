@@ -1,0 +1,8 @@
+{"file":".trellis/spec/mod/index.md","reason":"Mod transport, game-thread, test seam, and executable test requirements for health and SSE changes."}
+{"file":".trellis/spec/mod/architecture.md","reason":"GameEventService lifecycle boundaries and the required pure-relocation rules for GameStateService partial splits."}
+{"file":".trellis/spec/mcp/index.md","reason":"Python SSE client boundaries and standard unittest requirements."}
+{"file":".trellis/spec/mcp/contracts-and-tests.md","reason":"Event wait transport behavior, fallback semantics, and Python fake-based test patterns."}
+{"file":".trellis/spec/operations/index.md","reason":"Offline versus live validation boundaries and release preflight rules."}
+{"file":".trellis/spec/operations/validation-and-release.md","reason":"Canonical commands, verification gates, arch-facts/api-facts contracts, and reporting limits."}
+{"file":".trellis/spec/guides/cross-layer-thinking-guide.md","reason":"Trace health and SSE contract changes across mod, docs, scripts, and Python consumers."}
+{"file":".trellis/spec/guides/code-reuse-thinking-guide.md","reason":"Prefer existing policy owners and keep extracted event test seams minimal."}

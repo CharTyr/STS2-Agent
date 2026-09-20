@@ -4,7 +4,7 @@ namespace STS2AIAgent.Tests;
 /// A ratchet on file size, so the two monoliths stop growing.
 /// </summary>
 /// <remarks>
-/// Two files hold 49% of this mod's C# -- <c>GameStateService.cs</c> at 8.5k lines and
+/// Two files once held 49% of this mod's C# -- <c>GameStateService.cs</c> at 8.5k lines and
 /// <c>GameActionService.cs</c> at 7k, against 31.6k in total across 82 files. Neither got there by a
 /// decision; each grew by one more screen, one more action, one more predicate, and every one of
 /// those additions was individually reasonable. That is how a codebase stops being navigable: not
@@ -32,10 +32,13 @@ internal static class SourceShapeContractTests
     private static readonly IReadOnlyDictionary<string, int> Budgets = new Dictionary<string, int>(StringComparer.Ordinal)
     {
         // 8,559 lines until ADR 0001 collapsed the two action surfaces into one walk, then 8,295
-        // until the compact agent_view moved to its own file. The budget came down both times,
-        // which is what the ratchet is for. What is left here is the raw /state payload builders
-        // and the predicates they read.
-        ["STS2AIAgent/Game/GameStateService.cs"] = 6000,
+        // until the compact agent_view moved to its own file, then 5,730 until the availability
+        // predicates moved to GameStateService.Predicates.cs on 2026-09-20. The budget came down
+        // every time, which is what the ratchet is for. What is left here is the raw /state payload
+        // builders and the helpers they share with the predicates -- which is why the four
+        // predicates the builders also read (IsPlayerActionPhase, IsCardTargetSupported,
+        // IsEndTurnButtonReady, IsWaitingForOtherPlayers) stayed behind and are counted here.
+        ["STS2AIAgent/Game/GameStateService.cs"] = 5150,
         // The 60 payload types of GET /state: the wire format, as declarations. They grow with the
         // API and are checked against docs/api.md by the api-facts gate, so the budget here is
         // about noticing, not about stopping them.

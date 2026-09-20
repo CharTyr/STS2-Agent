@@ -112,6 +112,37 @@ class WaitBehaviorTests(unittest.TestCase):
         self.assertIsNotNone(event)
         self.assertEqual(event["event"], "target")
 
+    def test_wait_for_event_reconnects_after_server_closes_a_slow_subscriber(self) -> None:
+        client = Sts2Client(base_url="http://127.0.0.1:8080")
+        clock = FakeClock()
+        open_calls = 0
+        responses = [
+            FakeResponse(clock, []),
+            FakeResponse(
+                clock,
+                [
+                    (0.0, b"event: stream_ready\n"),
+                    (0.0, b"id: 130\n"),
+                    (0.0, b'data: {"event_id": 130}\n'),
+                    (0.0, b"\n"),
+                ],
+            ),
+        ]
+
+        def fake_urlopen(http_request, timeout=None):
+            nonlocal open_calls
+            open_calls += 1
+            return responses.pop(0)
+
+        with patch("sts2_mcp.client.request.urlopen", new=fake_urlopen):
+            with patch("sts2_mcp.client.time.monotonic", new=clock.monotonic):
+                event = client.wait_for_event(event_names={"stream_ready"}, timeout=20.0)
+
+        self.assertEqual(open_calls, 2)
+        self.assertIsNotNone(event)
+        self.assertEqual(event["id"], "130")
+        self.assertEqual(event["data"]["event_id"], 130)
+
     def test_wait_for_event_respects_deadline_without_forcing_reconnects(self) -> None:
         client = Sts2Client(base_url="http://127.0.0.1:8080")
         clock = FakeClock()

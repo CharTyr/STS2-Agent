@@ -73,8 +73,8 @@ internal static class InviteCoopContractTests
         var health = AgentSourceFixture.MethodBody(
             AgentSourceFixture.Read("STS2AIAgent/Server/Router.cs"),
             "BuildHealthData");
-        Assert.Contains("dual_status = AgentRuntime.Instance.DualStatus", health, StringComparison.Ordinal);
-        Assert.Contains("dual_launch_outcome =", health, StringComparison.Ordinal);
+        Assert.Contains("HealthRoleData.ForHost(", health, StringComparison.Ordinal);
+        Assert.Contains("AgentRuntime.Instance.DualStatus", health, StringComparison.Ordinal);
         Assert.Contains("AgentRuntime.Instance.DualLaunchOutcome", health, StringComparison.Ordinal);
         Assert.Contains("dualLaunchOutcome.ToString()", health, StringComparison.Ordinal);
         Assert.Contains("DualLaunchOutcome.Idle", health, StringComparison.Ordinal);

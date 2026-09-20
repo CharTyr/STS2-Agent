@@ -327,6 +327,15 @@ internal static class Router
     {
         var mcp = NativeMcpServer.Runtime;
         var dualLaunchOutcome = AgentRuntime.Instance.DualLaunchOutcome;
+        var roleData = InstanceRole.IsCompanion
+            ? HealthRoleData.NotApplicable
+            : HealthRoleData.ForHost(
+                LocalDualInstanceLauncher.CompanionProcessAlive,
+                LocalDualInstanceLauncher.CompanionProcessExited,
+                BuildCompanionSessionData(),
+                AgentRuntime.Instance.DualStatus,
+                dualLaunchOutcome == DualLaunchOutcome.Idle ? null : dualLaunchOutcome.ToString(),
+                AgentRuntime.Instance.TeamControlStatus);
         return new
         {
             service = ServiceName,
@@ -344,14 +353,12 @@ internal static class Router
             play_phase = AgentRuntime.Instance.PlayPhase,
             stop_kind = AgentRuntime.Instance.StopKind,
             session_requests = AgentRuntime.Instance.SessionRequests,
-            companion_process_alive = LocalDualInstanceLauncher.CompanionProcessAlive,
-            companion_process_exited = LocalDualInstanceLauncher.CompanionProcessExited,
-            companion = BuildCompanionSessionData(),
-            dual_status = AgentRuntime.Instance.DualStatus,
-            dual_launch_outcome = dualLaunchOutcome == DualLaunchOutcome.Idle
-                ? null
-                : dualLaunchOutcome.ToString(),
-            team_control_status = AgentRuntime.Instance.TeamControlStatus,
+            companion_process_alive = roleData.companion_process_alive,
+            companion_process_exited = roleData.companion_process_exited,
+            companion = roleData.companion,
+            dual_status = roleData.dual_status,
+            dual_launch_outcome = roleData.dual_launch_outcome,
+            team_control_status = roleData.team_control_status,
             compatibility = ReflectedGameMembers.BuildHealthSection(),
             state_build = StateBuildTiming.Instance.Snapshot()
         };
@@ -463,26 +470,24 @@ internal static class Router
         response.Headers["X-Accel-Buffering"] = "no";
 
         using var subscription = GameEventService.Instance.Subscribe();
-
         try
         {
             await WriteSseCommentAsync(response, "stream opened");
 
             while (!cancellationToken.IsCancellationRequested)
             {
-                var waitForEvent = subscription.Reader.WaitToReadAsync(cancellationToken).AsTask();
-                var heartbeat = Task.Delay(TimeSpan.FromSeconds(15), cancellationToken);
-                var completedTask = await Task.WhenAny(waitForEvent, heartbeat);
-
-                if (completedTask == heartbeat)
+                using var heartbeatCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+                heartbeatCts.CancelAfter(TimeSpan.FromSeconds(15));
+                try
+                {
+                    if (!await subscription.Reader.WaitToReadAsync(heartbeatCts.Token))
+                    {
+                        break;
+                    }
+                }
+                catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
                 {
                     await WriteSseCommentAsync(response, "heartbeat");
-                    continue;
-                }
-
-                if (!await waitForEvent)
-                {
-                    break;
                 }
 
                 while (subscription.Reader.TryRead(out var envelope))

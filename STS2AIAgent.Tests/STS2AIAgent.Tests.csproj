@@ -61,6 +61,11 @@
     <Compile Include="..\STS2AIAgent\Agent\GameDataExportSchema.cs" Link="Agent\GameDataExportSchema.cs" />
     <Compile Include="..\STS2AIAgent\Server\ApiException.cs" Link="Server\ApiException.cs" />
     <Compile Include="..\STS2AIAgent\Server\JsonHelper.cs" Link="Server\JsonHelper.cs" />
+    <Compile Include="..\STS2AIAgent\Server\HealthRoleData.cs" Link="Server\HealthRoleData.cs" />
+    <Compile Include="..\STS2AIAgent\Server\EventPollingCoordinator.cs" Link="Server\EventPollingCoordinator.cs" />
+    <Compile Include="..\STS2AIAgent\Server\GameEventSubscriberHub.cs" Link="Server\GameEventSubscriberHub.cs" />
+    <Compile Include="..\STS2AIAgent\Server\ConsecutiveRepeatSuppressor.cs" Link="Server\ConsecutiveRepeatSuppressor.cs" />
+    <Compile Include="..\STS2AIAgent\Server\EventStreamSubscribers.cs" Link="Server\EventStreamSubscribers.cs" />
   </ItemGroup>
   <ItemGroup>
     <EmbeddedResource Include="../skills/sts2-mcp-player/SKILL.md" LogicalName="STS2AIAgent.Sts2McpPlayer.Skill.md" />
