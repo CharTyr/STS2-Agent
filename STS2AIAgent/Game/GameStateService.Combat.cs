@@ -282,7 +282,7 @@ internal static partial class GameStateService
         return now - _lastCombatActionReadinessSinceUtc >= CombatActionSnapshotStableDelay;
     }
 
-    
+
 
         private static CombatActionReadinessPayload BuildCombatActionReadinessPayload(CombatActionGate gate)
     {
