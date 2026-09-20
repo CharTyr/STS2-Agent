@@ -4,12 +4,29 @@
 
 ## Unreleased
 
-- Added a versioned, no-network decision-quality benchmark: eleven snapshot-evidenced combat, event, map, rest, shop, and reward cases; deterministic scoring; an explicit reference-answer baseline; and offline contracts. Scores describe recorded action constraints only, never simulated outcomes or live-model quality.
-- The connectivity check now works against endpoints that reject `max_tokens`. OpenAI-compatible providers disagree about the output-token cap field name: the older `max_tokens` is what nearly every clone and local runtime accepts, while the official API's reasoning models answer 400 and name `max_completion_tokens` instead. The client sends the broadly compatible form first and retries once with the other name only when the server says the parameter is unsupported, so the difference is resolved from the response rather than guessed from the URL. A 400 that merely mentions tokens — a context-length overflow, for example — is not treated as a field-name problem, and the retry is bounded to one attempt.
-- The mod's largest source file gave up its raw `/state` builders. `GameStateService.cs` went from 5,037 lines to 1,336, with eight new partials by screen — combat, rooms, menus, rewards, run, map, shop and potions. The move is byte-exact: a SHA-256 per moved declaration, taken from the file before the split, fails a body that was rewritten even slightly, and the same contract records which file each of the 218 members went to. Nothing in the mod can observe the difference; what changes is that a screen's state builder is now a file you can open. Two verification checks that ask the class a question now read the whole partial family rather than one path, because reading one file made them report a deleted member the moment it moved.
-- Added typed Python models for the two mod payloads that have a fixed field set. `sts2_mcp.payloads` owns `ActionDescriptor` / `AvailableActions` and `DecisionLogEntry`, including the validation and extension policy; `Sts2Client.get_action_catalog()` and `Sts2Client.get_decision_entries()` expose them, and a malformed payload arrives as the mod's own non-retryable `invalid_response` with the offending field path. The existing dict-returning getters are unchanged, so no caller has to migrate on this release.
+- Nothing yet. A fix that lands after the v0.14.0 release commit goes here rather than being folded back into a version that has already been published — that is how three releases ended up sharing one version string.
+
+## v0.14.0 - 2026-09-20
+
+> Explainable decisions and deeper co-op. The agent now says why it played what it played, and that
+> rationale is recorded, shown in the overlay, published on the event stream and readable over MCP.
+> The play skill gained the strategy rules the playbooks deliberately did not carry, injected one
+> screen at a time so a combat decision does not pay for the shop advice. Co-op messages carry typed
+> signals and the host sees the teammate's live character. The HTTP API ships a generated OpenAPI
+> contract, the Python client types the two payloads with a fixed field set, and the mod's largest
+> source file was split by screen.
+>
+> This release also carries the event-stream reliability batch written up for v0.13.1, which was
+> prepared on its own branch and never published: a v0.13.1 release commit exists in history and its
+> version bump was then superseded here, so those changes reach players as part of v0.14.0. Its
+> section was folded into this one rather than left standing as a version that never shipped.
 
 ### Added
+
+- **A debug action that can prove the slow-subscriber contract in a live game.** `/events/stream` closes a subscriber whose 256-slot queue fills instead of dropping the oldest event, but that path had no in-game evidence: the poll loop publishes only when a digest field really changes, so an idle client never falls behind, and the debug console that could have driven 256 changes answers 409 until a run exists. `POST /action {"action":"inject_event_churn","option_index":400}` (needs `STS2_ENABLE_DEBUG_ACTIONS=1`) publishes numbered synthetic `debug_churn` events through the same publishing path as every other event, so one unread stream plus one healthy stream is enough to watch the slow one get dropped. Counts below 257 are rejected on purpose — a request that cannot fill a queue proves nothing.
+
+- Added a versioned, no-network decision-quality benchmark: eleven snapshot-evidenced combat, event, map, rest, shop, and reward cases; deterministic scoring; an explicit reference-answer baseline; and offline contracts. Scores describe recorded action constraints only, never simulated outcomes or live-model quality.
+- Added typed Python models for the two mod payloads that have a fixed field set. `sts2_mcp.payloads` owns `ActionDescriptor` / `AvailableActions` and `DecisionLogEntry`, including the validation and extension policy; `Sts2Client.get_action_catalog()` and `Sts2Client.get_decision_entries()` expose them, and a malformed payload arrives as the mod's own non-retryable `invalid_response` with the offending field path. The existing dict-returning getters are unchanged, so no caller has to migrate on this release.
 
 - **The HTTP API now ships a machine-readable OpenAPI 3.1 / JSON Schema contract.** [`docs/openapi.json`](docs/openapi.json) is generated, not hand-maintained: its stdlib generator reads the Router's route/method dispatch, C# state/action wire records, and the already-checked shared vocabularies for actions, errors, screens, and SSE events. A twelfth preflight gate compares the committed bytes with regenerated output, so a changed route or payload cannot quietly leave tool authors with an old contract. Dynamic game-data exports, compact agent-view data, and MCP JSON-RPC are explicitly free-form/opaque where the server's own surface is dynamic, rather than being described with invented static fields.
 
@@ -43,26 +60,13 @@
 
 ### Changed
 
+- **The mod's largest source file gave up its raw `/state` builders.** `GameStateService.cs` went from 5,037 lines to 1,336, with eight new partials by screen — combat, rooms, menus, rewards, run, map, shop and potions. The move is byte-exact: a SHA-256 per moved declaration, taken from the file before the split, fails a body that was rewritten even slightly, and the same contract records which file each of the 218 members went to. Nothing in the mod can observe the difference; what changes is that a screen's state builder is now a file you can open. Two verification checks that ask the class a question now read the whole partial family rather than one path, because reading one file made them report a deleted member the moment it moved.
+
 - **One module now owns the HTTP envelope.** The Python sidecar parsed the mod's `{ok, data, error}` response shape by hand in five places, and the copies had silently drifted into two different contracts. `sts2_mcp.envelope` states both on purpose: reads tolerate a thin error object and keep a truncated body's own decode error (a lost read is not a retryable game outcome), while `POST /action` requires a typed `ok`/`code`/`message`/`retryable` and refuses anything else as `invalid_response` — the strictness that stops a malformed response from being retried as a lost action.
 
 ### Fixed
 
-- **The English UI copy received a native editorial pass.** Sixty machine-translated values across the five localization shards now use concise game-UI phrasing and consistent terms (`AI teammate`, `co-op run`, `Role assignment`, `API key`, and `Let the AI play for you`) while preserving every key and placeholder. The two Star-cost labels remain marked for a quick in-game typography check because the game renders that cost with an icon rather than searchable text.
-
-- **The action-descriptor `requires_target` contract is now written down.** A 2,346-sample live pass had found the flag `false` on every descriptor and could not tell a dead branch from design. It is design: no action unconditionally takes `target_index`; the three that take it conditionally (`play_card`, `use_potion`, multiplayer rest options) advertise it per item on the hand card, potion, or rest option. `docs/api.md`'s descriptor table now states that rule generally instead of carving out `play_card` alone, and `ActionSurface.DescriptorTargetIsDocumentedConstant` pins the walk so the constant cannot drift silently.
-
-## v0.13.1 - 2026-09-20
-
-> Event-stream reliability: the SSE poller is demand-driven, a full subscriber queue now
-> disconnects the slow client instead of silently discarding events, shutdown can no longer
-> resurrect event state, and a debug action can prove the overflow contract in a live game.
-> Co-op hosts get companion-identity and per-role health-key fixes.
-
-### Added
-
-- **A debug action that can prove the slow-subscriber contract in a live game.** `/events/stream` closes a subscriber whose 256-slot queue fills instead of dropping the oldest event, but that path had no in-game evidence: the poll loop publishes only when a digest field really changes, so an idle client never falls behind, and the debug console that could have driven 256 changes answers 409 until a run exists. `POST /action {"action":"inject_event_churn","option_index":400}` (needs `STS2_ENABLE_DEBUG_ACTIONS=1`) publishes numbered synthetic `debug_churn` events through the same publishing path as every other event, so one unread stream plus one healthy stream is enough to watch the slow one get dropped. Counts below 257 are rejected on purpose — a request that cannot fill a queue proves nothing.
-
-### Fixed
+- **The connectivity check now works against endpoints that reject `max_tokens`.** OpenAI-compatible providers disagree about the output-token cap field name: the older `max_tokens` is what nearly every clone and local runtime accepts, while the official API's reasoning models answer 400 and name `max_completion_tokens` instead. The client sends the broadly compatible form first and retries once with the other name only when the server says the parameter is unsupported, so the difference is resolved from the response rather than guessed from the URL. A 400 that merely mentions tokens — a context-length overflow, for example — is not treated as a field-name problem, and the retry is bounded to one attempt.
 
 - Companion identity checks now accept both live compatibility states, `ready` and `degraded`, while still requiring the exact service, companion role, API port and process ID. The POSIX game launcher uses the same liveness contract, so a working companion with one missing reflection capability is no longer reported as replaced or offline.
 - A companion instance no longer reports the host window's default dual-launch and teammate-control messages in `GET /health`. The existing host-only keys remain stable but are `null` when `instance_role` is `companion`; common per-process health, compatibility and state-build fields are unchanged.
@@ -71,15 +75,20 @@
 - Shutdown cannot resurrect event state. The poll loop is stopped before the subscriber registry is cleared and every in-flight sample is fenced by its lifecycle generation, so a sample that was already on the game thread when shutdown started is discarded instead of being replayed to whoever connects next. A poll that does not honour cancellation inside the shutdown budget leaves the coordinator stopped rather than letting the next `Start` run a second loop beside it.
 - An unchanged state no longer re-sends its event. The first live run of the demand-driven loop showed a client on a stationary screen receiving one `stream_ready` frame per 120 ms poll; the poll now records the snapshot for the next subscriber and only publishes an event whose payload differs from the previous one. The live run also confirmed the intended lifecycle: zero subscribers built nothing over 12 s, the first subscriber produced `session_started` then `stream_ready`, and reconnect produced `stream_ready` alone.
 
-> Live-verified 2026-09-20 on an isolated profile against game v0.111.0: `/health` `ready` with 27/27
-> reflected members, `mod-load --deep-check`, `state-summary` and `state-invariants` all clean, and the
-> SSE lifecycle measured end to end (0 builds with no subscriber; `session_started` then `stream_ready`
-> for the first subscriber; reconnect gets `stream_ready`; no repeated frames; polling stopped after the
-> last client left). The degraded companion was verified with a real `degraded` payload too: the
-> companion kept serving, its host-only health keys came back `null`, and the shipped identity check
-> accepted that payload while still rejecting every wrong-identity and malformed variant (14/14). The
-> slow-subscriber overflow was then observed in the game too, through the debug churn action below:
+> The event-stream batch was live-verified 2026-09-20 on an isolated profile against game v0.111.0,
+> before v0.13.1 was folded into this release: `/health` `ready` with 27/27 reflected members,
+> `mod-load --deep-check`, `state-summary` and `state-invariants` all clean, and the SSE lifecycle
+> measured end to end (0 builds with no subscriber; `session_started` then `stream_ready` for the
+> first subscriber; reconnect gets `stream_ready`; no repeated frames; polling stopped after the last
+> client left). The degraded companion was verified with a real `degraded` payload too: the companion
+> kept serving, its host-only health keys came back `null`, and the shipped identity check accepted
+> that payload while still rejecting every wrong-identity and malformed variant (14/14). The
+> slow-subscriber overflow was then observed in the game too, through the debug churn action above:
 > the server logged `Disconnected 2 slow event subscriber(s)` instead of dropping events silently.
+
+- **The English UI copy received a native editorial pass.** Sixty machine-translated values across the five localization shards now use concise game-UI phrasing and consistent terms (`AI teammate`, `co-op run`, `Role assignment`, `API key`, and `Let the AI play for you`) while preserving every key and placeholder. The two Star-cost labels remain marked for a quick in-game typography check because the game renders that cost with an icon rather than searchable text.
+
+- **The action-descriptor `requires_target` contract is now written down.** A 2,346-sample live pass had found the flag `false` on every descriptor and could not tell a dead branch from design. It is design: no action unconditionally takes `target_index`; the three that take it conditionally (`play_card`, `use_potion`, multiplayer rest options) advertise it per item on the hand card, potion, or rest option. `docs/api.md`'s descriptor table now states that rule generally instead of carving out `play_card` alone, and `ActionSurface.DescriptorTargetIsDocumentedConstant` pins the walk so the constant cannot drift silently.
 
 ## v0.13.0 - 2026-09-19
 

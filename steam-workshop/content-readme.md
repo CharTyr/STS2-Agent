@@ -22,6 +22,8 @@ After you subscribe, you do not copy any files.
 
 If you used to copy this mod into the game folder by hand, delete those files and keep only the Workshop subscription.
 
+The overlay has a **Decision log** tab: it lists each action the AI took, why, where it came from, and what that step spent. The main window also shows the teammate's live health, block, energy and hand size once you have teamed up.
+
 Needs Slay the Spire 2 v0.111.0 or newer.
 
 ---
@@ -42,6 +44,8 @@ Needs Slay the Spire 2 v0.111.0 or newer.
 - 邀请后会弹出第二窗口。AI 只打它自己那份：自己点开局、跟着你投地图、轮到它时自动出牌。
 - 房间仍是 4 人位。本地 1 人 + 1 AI，还留 2 个位置给线上朋友。
 - 上次没打完的联机局可以接着打：主菜单点「继续 AI 队友」，AI 会连回原来的角色。
+- 主窗口的「决策日志」页会列出 AI 每一步打了什么、为什么、来自哪条入口，以及这一步花了多少 Token。
+- 队友那个角色的实时状态（血量、格挡、能量、手牌数）显示在主窗口上。
 
 ## 怎么开始
 

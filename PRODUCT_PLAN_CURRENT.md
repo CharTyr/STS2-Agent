@@ -9,6 +9,17 @@
 
 ## 1. 当前基线
 
+- **v0.14.0（发布候选，尚未发布、尚未实机验收）**：候选提交在 `feat/v0.14-contracts`
+  （PR #173，base `dev`）；五处版本号已同步到 `0.14.0`，CHANGELOG 已定版，工坊发布物料
+  （`description.en.txt` / `description.zh-CN.txt` / `content-readme.md` / `workshop.json`
+  的 changeNote）已更新到本版。该候选提交**只在本地**，未推送、未打包、未打 tag，
+  所以它既不是「已发布」也不是「已验收」。内容见
+  [CHANGELOG.md](CHANGELOG.md) 的 `## v0.14.0` 段：决策解释链与决策日志（overlay / `GET /decisions` /
+  两面 MCP / SSE `decision_made`）、按屏注入的策略层、结构化队友信号与队友实况面板、
+  生成式 OpenAPI 契约、Python client 两个载荷类型化、`GameStateService` 按屏拆分，
+  以及原计划单独发版的 v0.13.1 事件流可靠性批（见该段说明：v0.13.1 有发布提交但从未发布，
+  已并入本版）。**待办**：真实模型完整对局 ≥2 场、供应商采样、打包与双渠道发布。
+
 - **v0.13.0（当前发布基准）**：2026-09-19 发布。tag `v0.13.0` 指向 PR #161 的
   `dev → main` 合并提交 `78b085f`；GitHub Release 资产 576033 字节 / SHA256 `8CFC0F45…8733`；
   工坊公开，`file_size` 1252357 与本地 content 字节和相等，内容 id `3840768014407368680`。
