@@ -1386,7 +1386,7 @@ compact 不是 `/state` 的子集，**很多键换了名字**。MCP `get_game_st
 | 字段 | 类型 | 说明 |
 | --- | --- | --- |
 | `name` | string | 动作名称 |
-| `requires_target` | boolean | 是否需要 `target_index` |
+| `requires_target` | boolean | 该动作是否**无条件**需要 `target_index`（目前所有动作恒为 `false`，见下方注记） |
 | `requires_index` | boolean | 是否需要 `card_index` 或 `option_index` |
 | `requires_coordinates` | boolean | 是否需要 `x` / `y`（目前只有 `crystal_clear_cell` 为 true） |
 | `requires_tool` | boolean | 是否需要 `tool`（目前只有 `crystal_set_tool` 为 true） |
@@ -1421,7 +1421,10 @@ compact 不是 `/state` 的子集，**很多键换了名字**。MCP `get_game_st
 }
 ```
 
-> **注意**：`play_card.requires_target` 固定为 `false`。是否需要目标取决于具体卡牌的 `combat.hand[].requires_target` 字段。
+> **注意**：`requires_target` 描述的是**调用形状**，目前所有动作恒为 `false`——没有任何动作在每次调用时都无条件需要目标。三个动作**有条件地**需要 `target_index`，且都在逐项字段上告知：
+> - `play_card`：看 `combat.hand[].requires_target`（compact 视图另有 `targets` / `valid_target_indices`）
+> - `use_potion`：看 `run.potions[].requires_target` 与 `valid_target_indices`
+> - `choose_rest_option`：联机局部分休息点选项要看该选项自身的 `requires_target`（目标空间为 `run.players`）
 
 ---
 

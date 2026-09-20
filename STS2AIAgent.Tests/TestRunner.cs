@@ -554,6 +554,7 @@ internal static class TestRunner
         yield return ("CombatGate.QueueReadIsCombatOnly", () => Task.Run(GameStateCombatGateContractTests.TheActionQueueIsReadOnlyInsideCombat));
         yield return ("ActionSurface.OneWalkDecidesWhatIsOffered", () => Task.Run(ActionSurfaceContractTests.OneWalkDecidesWhatIsOffered));
         yield return ("ActionSurface.NeitherSurfaceDecidesForItself", () => Task.Run(ActionSurfaceContractTests.NeitherSurfaceDecidesForItself));
+        yield return ("ActionSurface.DescriptorTargetIsDocumentedConstant", () => Task.Run(ActionSurfaceContractTests.DescriptorTargetIsDocumentedConstant));
         yield return ("SourceShape.FilesStayWithinBudget", () => Task.Run(SourceShapeContractTests.NoSourceFileGrowsPastItsBudget));
         yield return ("SourceShape.BudgetsTrackTheirFiles", () => Task.Run(SourceShapeContractTests.BudgetsStayCloseToTheFilesTheyGuard));
         yield return ("PredicateSplit.BodyHashProof", () => Task.Run(PredicateRelocationContractTests.MovedPredicatesMatchTheirPreSplitBodies));

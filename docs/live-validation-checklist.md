@@ -59,6 +59,18 @@ holds live, and this file is the replay baseline for step 3 of that ADR.
   field. Whether that is intended (targets are validated per card through `target_index` rather than
   advertised on the action) or a gap is not settled by this pass.
 
+### `requires_target` adjudicated as documented behaviour (2026-09-20)
+
+Every descriptor reports `requires_target: false` **by construction**: the walk assigns the literal
+to all actions, because the flag describes the static call shape and no action unconditionally
+takes `target_index`. Three actions take it conditionally (`play_card`, `use_potion`, and
+multiplayer rest options) and advertise that per item — `combat.hand[].requires_target`,
+`run.potions[].requires_target` with `valid_target_indices`, and each rest option's own flag with
+the `run.players` target space. `docs/api.md`'s descriptor table now states the general rule (it
+previously carved out `play_card` only), and
+`ActionSurface.DescriptorTargetIsDocumentedConstant` pins the walk so the flag cannot silently
+become dynamic without the docs following it.
+
 ### That finding, fixed and re-verified in the game (2026-09-17)
 
 `GameStateService.ResolveNonModalScreen` now claims `NGameOverScreen` with its own guard, ahead of

@@ -8,6 +8,10 @@
 
 - **An offline contract for vision (image) requests.** `OpenAI.VisionDataUrl` pins that a user message carrying a JPEG is serialized as the two-part `image_url` data-URL content array providers expect (text part first, base64 payload decoding back to the exact bytes), and `OpenAI.VisionPlainContent` pins that messages without an image keep plain string content. This closes the last `Partial` row on the model-compatibility matrix's request surface; sampling against a real multimodal endpoint remains open.
 
+### Fixed
+
+- **The action-descriptor `requires_target` contract is now written down.** A 2,346-sample live pass had found the flag `false` on every descriptor and could not tell a dead branch from design. It is design: no action unconditionally takes `target_index`; the three that take it conditionally (`play_card`, `use_potion`, multiplayer rest options) advertise it per item on the hand card, potion, or rest option. `docs/api.md`'s descriptor table now states that rule generally instead of carving out `play_card` alone, and `ActionSurface.DescriptorTargetIsDocumentedConstant` pins the walk so the constant cannot drift silently.
+
 ## v0.13.1 - 2026-09-20
 
 > Event-stream reliability: the SSE poller is demand-driven, a full subscriber queue now
