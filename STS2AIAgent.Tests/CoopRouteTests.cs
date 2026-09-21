@@ -114,12 +114,19 @@ internal static class CoopRouteTests
     /// The route split reached POST /action but not the overlay: the Invite button kept calling the
     /// auto-play overload, so with no verified play model the click was refused at the old model
     /// gate while the same request over the API launched the teammate for external takeover. The
-    /// button has to choose the route the way the API does, and the tab's first line has to
+    /// button has to choose the route the way the API does, and the description under it has to
     /// describe that route instead of asking for a connection test.
     /// </summary>
+    /// <remarks>
+    /// The fifth label this used to pin, <c>FirstRunHintText</c>, was dropped during the 2026-09-20
+    /// overlay pass: with the teammate page split into cards it repeated, word for word, the status
+    /// line above it. What it asserted about the unverified route is still asserted below, against
+    /// the description that survived and against the status line the page shares with the same
+    /// <c>PlayerFacingSession</c> view the play tab reads.
+    /// </remarks>
     public static void OverlayInviteFollowsTheApiRoute()
     {
-        var overlay = AgentSourceFixture.Read("STS2AIAgent/Ui/AgentOverlayHost.cs");
+        var overlay = AgentSourceFixture.ReadOverlayHost();
         var launch = AgentSourceFixture.DeclarationBody(overlay, "private async Task LaunchDualAsync()");
         Assert.Contains("var companionAutoPlay = FirstRunSetup.Evaluate(settings).ReadyToInvite;", launch);
         Assert.Contains("LaunchDualInstanceAsync(settings, companionAutoPlay, CancellationToken.None)", launch);
@@ -127,9 +134,6 @@ internal static class CoopRouteTests
             !overlay.Contains("LaunchDualInstanceAsync(HarvestSettings(), CancellationToken.None)", StringComparison.Ordinal),
             "the overlay must not call the auto-play-only overload any more.");
 
-        var hint = AgentSourceFixture.DeclarationBody(overlay, "private static string FirstRunHintText()");
-        Assert.Contains("firstRun.ReadyToInvite", hint);
-        Assert.Contains("_firstRunHint.Text = FirstRunHintText();", overlay);
         // The description under the invite follows the same route, so the two lines never contradict each other.
         var dualHint = AgentSourceFixture.DeclarationBody(overlay, "private static string DualHintText()");
         Assert.Contains("ReadyToInvite", dualHint);
@@ -144,7 +148,7 @@ internal static class CoopRouteTests
     /// </summary>
     public static void OverlayOffersContinueAndCharacterChoice()
     {
-        var overlay = AgentSourceFixture.Read("STS2AIAgent/Ui/AgentOverlayHost.cs");
+        var overlay = AgentSourceFixture.ReadOverlayHost();
 
         // Continue chooses the route the same way the invite does (see OverlayInviteFollowsTheApiRoute).
         Assert.Contains("ContinueDualInstanceAsync(settings, companionAutoPlay, CancellationToken.None)", overlay);
@@ -161,7 +165,7 @@ internal static class CoopRouteTests
         // live pass found it, and the panel tick that already polls the play page now re-reads it too.
         Assert.Contains("RefreshContinueAvailability();", overlay);
         var tick = AgentSourceFixture.MethodBody(overlay, "OnProcessFrame");
-        Assert.Contains("if (_dualPage?.Visible == true)", tick);
+        Assert.Contains("if (IsTabVisible(OverlayTabCatalog.Dual))", tick);
         Assert.Contains("RefreshContinueAvailability();", tick);
     }
 
@@ -192,7 +196,7 @@ internal static class CoopRouteTests
         Assert.True(
             host.IndexOf("FirstRunSetup.Evaluate(Settings)", StringComparison.Ordinal) > 0,
             "POST /teammate/control must keep its model gate.");
-        var overlay = AgentSourceFixture.Read("STS2AIAgent/Ui/AgentOverlayHost.cs");
+        var overlay = AgentSourceFixture.ReadOverlayHost();
         Assert.Contains("AgentRuntime.Instance.ControlTeammateAsync(true", overlay);
     }
 }

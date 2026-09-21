@@ -86,6 +86,111 @@ internal static class McpServiceTests
         Assert.Equal(1, bridge.ActCalls);
     }
 
+    public static async Task ToolsCall_DecisionLogRecordsAcceptedActOnly()
+    {
+        var bridge = new FakeMcpBridge();
+        var decisions = new DecisionLog();
+        var server = CreateServer(bridge: bridge, decisions: decisions);
+
+        var rejected = await Rpc(
+            server,
+            """{"jsonrpc":"2.0","id":20,"method":"tools/call","params":{"name":"act","arguments":{"action":"not_a_real_action","reason":"should never be logged"}}}""");
+        Assert.True(rejected.GetProperty("result").GetProperty("isError").GetBoolean());
+        Assert.Equal(0, decisions.Snapshot().Count);
+
+        var accepted = await Rpc(
+            server,
+            """{"jsonrpc":"2.0","id":21,"method":"tools/call","params":{"name":"act","arguments":{"action":"play_card","card_index":0,"reason":"Strike the weakest slime.  "}}}""");
+        Assert.False(accepted.GetProperty("result").GetProperty("isError").GetBoolean());
+
+        var logged = await Rpc(server, """{"jsonrpc":"2.0","id":22,"method":"tools/call","params":{"name":"get_decision_log","arguments":{"limit":10}}}""");
+        var text = logged.GetProperty("result").GetProperty("content")[0].GetProperty("text").GetString();
+        using var doc = JsonDocument.Parse(text!);
+        var entries = doc.RootElement.GetProperty("decisions");
+        Assert.Equal(1, entries.GetArrayLength());
+        Assert.Equal("native_mcp", entries[0].GetProperty("source").GetString());
+        Assert.Equal("play_card", entries[0].GetProperty("action").GetString());
+        Assert.Equal("Strike the weakest slime.", entries[0].GetProperty("reason").GetString());
+    }
+
+    public static async Task NativeServerWithoutDecisionLog_StaysSilent()
+    {
+        var server = CreateServer();
+        var read = await Rpc(server, """{"jsonrpc":"2.0","id":23,"method":"tools/call","params":{"name":"get_decision_log"}}""");
+        var text = read.GetProperty("result").GetProperty("content")[0].GetProperty("text").GetString();
+        using var doc = JsonDocument.Parse(text!);
+        Assert.Equal(0, doc.RootElement.GetProperty("decisions").GetArrayLength());
+    }
+
+    public static async Task ToolsCall_RunSummaryUsesRawState()
+    {
+        var bridge = new FakeMcpBridge();
+        var server = CreateServer(bridge: bridge);
+
+        var summary = await Rpc(server, """{"jsonrpc":"2.0","id":24,"method":"tools/call","params":{"name":"get_run_summary"}}""");
+        var text = summary.GetProperty("result").GetProperty("content")[0].GetProperty("text").GetString();
+        using var document = JsonDocument.Parse(text!);
+
+        // The summary is built from the raw payload, whose field names docs/api.md documents, rather
+        // than from the compact view that renames many of them.
+        Assert.True(bridge.RawStateCalls > 0, "expected get_run_summary to read the raw state");
+        Assert.Equal(JsonValueKind.Null, document.RootElement.GetProperty("run").ValueKind);
+    }
+
+    public static async Task ToolsCall_DiffStateComparesTwoPayloads()
+    {
+        var server = CreateServer();
+
+        var diff = await Rpc(
+            server,
+            """{"jsonrpc":"2.0","id":25,"method":"tools/call","params":{"name":"diff_state","arguments":{"before":{"gold":212},"after":{"gold":180}}}}""");
+        var text = diff.GetProperty("result").GetProperty("content")[0].GetProperty("text").GetString();
+        using var document = JsonDocument.Parse(text!);
+        var root = document.RootElement;
+
+        Assert.Equal(1, root.GetProperty("change_count").GetInt32());
+        Assert.Equal("gold", root.GetProperty("changes")[0].GetProperty("path").GetString());
+        Assert.Equal(212d, root.GetProperty("changes")[0].GetProperty("before").GetDouble());
+        Assert.Equal(180d, root.GetProperty("changes")[0].GetProperty("after").GetDouble());
+    }
+
+    public static async Task ToolsCall_SceneGuidanceFollowsTheScreen()
+    {
+        var bridge = new FakeMcpBridge();
+        var server = CreateServer(bridge: bridge);
+
+        var combat = await Rpc(server, """{"jsonrpc":"2.0","id":26,"method":"tools/call","params":{"name":"get_scene_guidance"}}""");
+        var combatText = combat.GetProperty("result").GetProperty("content")[0].GetProperty("text").GetString();
+        using (var document = JsonDocument.Parse(combatText!))
+        {
+            var root = document.RootElement;
+            Assert.Equal("COMBAT", root.GetProperty("screen").GetString());
+            Assert.Equal("combat", root.GetProperty("scene").GetString());
+            Assert.Contains("Combat: what to prioritise", root.GetProperty("guidance").GetString());
+            Assert.False(
+                root.GetProperty("guidance").GetString()!.Contains("Route: which node to enter", StringComparison.Ordinal),
+                "a combat screen must not be sent the route rules");
+        }
+
+        // The screen comes from live state, so the same tool answers for a different screen.
+        bridge.CompactStateJson = """{"screen":"REST","available_actions":["choose_rest_option"]}""";
+        var rest = await Rpc(server, """{"jsonrpc":"2.0","id":27,"method":"tools/call","params":{"name":"get_scene_guidance"}}""");
+        var restText = rest.GetProperty("result").GetProperty("content")[0].GetProperty("text").GetString();
+        using (var document = JsonDocument.Parse(restText!))
+        {
+            Assert.Contains("Rest site: heal or upgrade", document.RootElement.GetProperty("guidance").GetString());
+        }
+
+        // A screen with no strategic choice answers with an empty string, not an error and not null.
+        bridge.CompactStateJson = """{"screen":"REWARD","available_actions":["collect_rewards_and_proceed"]}""";
+        var reward = await Rpc(server, """{"jsonrpc":"2.0","id":28,"method":"tools/call","params":{"name":"get_scene_guidance"}}""");
+        var rewardText = reward.GetProperty("result").GetProperty("content")[0].GetProperty("text").GetString();
+        using (var document = JsonDocument.Parse(rewardText!))
+        {
+            Assert.Equal(string.Empty, document.RootElement.GetProperty("guidance").GetString());
+        }
+    }
+
     public static async Task Notification_Returns202()
     {
         var server = CreateServer();
@@ -241,12 +346,17 @@ internal static class McpServiceTests
         Assert.False(native.HasHeader("Access-Control-Allow-Origin"));
     }
 
-    private static NativeMcpServer CreateServer(bool enabled = true, FakeMcpBridge? bridge = null, string endpointUrl = "http://127.0.0.1:8080/mcp")
+    private static NativeMcpServer CreateServer(
+        bool enabled = true,
+        FakeMcpBridge? bridge = null,
+        string endpointUrl = "http://127.0.0.1:8080/mcp",
+        DecisionLog? decisions = null)
     {
         var server = new NativeMcpServer(
             bridge ?? new FakeMcpBridge(),
             () => new { status = "ready", service = "sts2-ai-agent" },
-            "9.9.9");
+            "9.9.9",
+            decisions);
         if (enabled)
         {
             server.SetEnabled(true, endpointUrl);
@@ -349,6 +459,10 @@ internal static class McpServiceTests
     {
         public int ActCalls { get; private set; }
 
+        public int RawStateCalls { get; private set; }
+
+        public string RawStateJson { get; set; } = """{"screen":"COMBAT","raw":true}""";
+
         public string? LastAction { get; private set; }
 
         public int? LastCardIndex { get; private set; }
@@ -364,7 +478,11 @@ internal static class McpServiceTests
 
         public Task<string> GetCompactStateJsonAsync(CancellationToken cancellationToken) => Task.FromResult(CompactStateJson);
 
-        public Task<string> GetRawStateJsonAsync(CancellationToken cancellationToken) => Task.FromResult("""{"screen":"COMBAT","raw":true}""");
+        public Task<string> GetRawStateJsonAsync(CancellationToken cancellationToken)
+        {
+            RawStateCalls++;
+            return Task.FromResult(RawStateJson);
+        }
 
         public Task<string> GetAvailableActionsJsonAsync(CancellationToken cancellationToken) => Task.FromResult(AvailableActionsJson);
 

@@ -269,7 +269,7 @@ internal static class LocalizationTests
     public static void StartupReadsTheLanguageBeforeTheUiIsBuilt()
     {
         var entry = AgentSourceFixture.Read("STS2AIAgent/ModEntry.cs");
-        var overlay = AgentSourceFixture.Read("STS2AIAgent/Ui/AgentOverlayHost.cs");
+        var overlay = AgentSourceFixture.ReadOverlayHost();
 
         var language = entry.IndexOf("LocSource.Initialize()", StringComparison.Ordinal);
         var overlayInstall = entry.IndexOf("AgentOverlayHost.Install()", StringComparison.Ordinal);

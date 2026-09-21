@@ -22,31 +22,31 @@ internal static partial class Loc
 
         // Continue a saved co-op run (Multiplayer/DualInstanceCoordinator.cs, Game/GameActionService.cs).
         map["请先回到主菜单，再继续联机对局。"] = "Return to the main menu before continuing the co-op run.";
-        map["读档开房失败：{0}"] = "Loading the saved run failed: {0}";
+        map["读档开房失败：{0}"] = "Could not load and host the saved run: {0}";
         map["正在继续联机存档，等待队友窗口连回…"] = "Continuing the saved co-op run; waiting for the teammate window to reconnect…";
-        map["继续联机存档失败：{0}"] = "Continuing the saved co-op run failed: {0}";
+        map["继续联机存档失败：{0}"] = "Could not continue the saved co-op run: {0}";
         map["{0}。已按存档开好本地房，等队友窗口连回来后两边各点一次出发；{1}"] = "{0}. The saved run is hosted locally; once the teammate window reconnects, both sides click Embark once; {1}";
         map["队友连回来后会自己出牌。"] = "the teammate plays its own cards once it reconnects.";
         map["队友连回来后停在原地等待外部接管，不会自己出牌。"] =
-            "the teammate waits to be taken over from outside once it reconnects instead of playing its own cards.";
+            "the teammate waits for an external client to take over once it reconnects; it will not play its own cards.";
         // The two halves of the route switch (Agent/AgentRuntime.cs).
         map["等待外部接管：队友窗口已就绪，未自动开始游玩。"] =
             "Waiting for an external takeover: the teammate window is ready and has not started playing on its own.";
         map["上一次队友控制还没有完成，请稍后重试。"] =
             "The previous teammate control has not finished yet. Try again shortly.";
         map["找不到读档方法 StartLoad。"] = "Could not find the StartLoad method.";
-        map["读档开房失败：当前弹窗是 {0}。常见原因是本地直连端口 33771 仍被上一局占着；可重启游戏后再试。"] = "Loading the saved run failed: the open modal is {0}. The usual cause is the local direct port 33771 still held by the previous run; restart the game and try again.";
+        map["读档开房失败：当前弹窗是 {0}。常见原因是本地直连端口 33771 仍被上一局占着；可重启游戏后再试。"] = "Could not load and host the saved run: the open modal is {0}. The usual cause is the local direct port 33771 still being held by the previous run; restart the game and try again.";
         map["读档后没有进入多人读档界面。"] = "The multiplayer load screen did not open after loading the save.";
         // The two NetId prechecks in Multiplayer/CoopSavePrecheckPolicy.cs. Both fire before the
         // game is allowed to load, because a failed load renames the co-op save to *.VAL.corrupt.
         map["主机的 NetId {0} 不在联机存档的玩家列表（{1}）里：游戏会拒绝读档，并把这局存档改名成 .VAL.corrupt 挪走且不还原，所以现在开不了房。离线主机的 NetId 就是启动参数 --clientId 的值（未传时默认为 1），请改用它重开主机；或者先删掉这份存档再开。"] = "Host NetId {0} is not in the saved co-op run's player list ({1}): the game refuses to load it and renames this run's save to *.VAL.corrupt without restoring it, so no lobby is hosted. An offline host's NetId is the --clientId launch argument (1 when omitted); restart the host with that value, or delete this save first.";
-        map["本次会用 NetId {0} 拉起 AI 队友，但联机存档的玩家列表（{1}）里没有这个 id：队友加入会被游戏拒绝（NotInSaveGame）退回主菜单，主机则卡在读档界面。队友 id 是主机 id + 1，请把主机启动参数 --clientId 改成「存档里队友的 id 减一」后重开。"] = "This attempt would launch the AI teammate with NetId {0}, but that id is not in the saved co-op run's player list ({1}): the game rejects the join (NotInSaveGame) and sends the teammate back to the main menu while the host stays stuck on the load screen. The teammate id is host id + 1, so restart the host with --clientId set to the saved teammate id minus one.";
+        map["本次会用 NetId {0} 拉起 AI 队友，但联机存档的玩家列表（{1}）里没有这个 id：队友加入会被游戏拒绝（NotInSaveGame）退回主菜单，主机则卡在读档界面。队友 id 是主机 id + 1，请把主机启动参数 --clientId 改成「存档里队友的 id 减一」后重开。"] = "This attempt would launch the AI teammate with NetId {0}, but that id is not in the saved co-op run's player list ({1}): the game rejects the join (NotInSaveGame) and sends the teammate back to the main menu while the host stays stuck on the load screen. The teammate ID is the host ID + 1, so restart the host with --clientId set to the saved teammate ID minus one.";
 
         // Single step.
-        map["单步决策中"] = "Deciding the single step";
+        map["单步决策中"] = "Deciding one step";
         map["单步已取消"] = "Single step cancelled";
         map["单步失败：{0}"] = "Single step failed: {0}";
-        map["自动游玩中，请先暂停再单步"] = "Auto-play is running; pause before single step";
+        map["自动游玩中，请先暂停再单步"] = "Auto-play is running; pause before single-stepping";
 
         // Chat and session stats.
         map["(无文本回复)"] = "(no text reply)";
@@ -55,7 +55,7 @@ internal static partial class Loc
         map["对话失败"] = "Chat failed";
         map["对话已取消"] = "Chat cancelled";
         map["请求失败：{0}"] = "Request failed: {0}";
-        map["自动游玩进行中。请先暂停，再对话或代打。"] = "Auto-play is running. Pause it before you chat or play on your behalf.";
+        map["自动游玩进行中。请先暂停，再对话或代打。"] = "Auto-play is running. Pause it before you chat or have the AI play for you.";
         map["自动游玩进行中，不能清零本会话统计。请先暂停。暂停/继续不会清零累计。"] = "Auto-play is running, so session stats cannot be reset. Pause first. Pause and Resume do not clear the totals.";
         map["已清零本会话统计。预算上限未改；继续游玩将重新计数。"] = "Session stats cleared. The budget limit is unchanged; resuming counts from zero.";
 
@@ -69,25 +69,25 @@ internal static partial class Loc
         map["配置错误"] = "Configuration error";
 
         // Dual instance and teammate.
-        map["尚未启动双开。"] = "Dual-instance has not started.";
+        map["尚未启动双开。"] = "No second game instance is running.";
         map["队友控制尚未连接。"] = "Teammate control is not connected yet.";
         map["正在请求队友继续…"] = "Asking your teammate to resume…";
         map["正在等待队友暂停；已提交的动作会先完成。"] = "Waiting for your teammate to pause; the submitted action will finish first.";
-        map["请等待组队完成。"] = "Wait for teaming up to finish.";
+        map["请等待组队完成。"] = "Wait for the team-up to finish.";
         map["队友进程已退出。请回到主菜单重新邀请。"] = "The teammate process exited. Go back to the main menu and invite again.";
         map["请先邀请 AI 队友。"] = "Invite an AI teammate first.";
-        map["队友已暂停。仍然可以聊天，点击继续后才会自动行动。"] = "Your teammate is paused. You can still chat; it resumes only after you click Resume.";
+        map["队友已暂停。仍然可以聊天，点击继续后才会自动行动。"] = "Your teammate is paused. You can still chat; it resumes only after you click “Resume”.";
         map["队友正在自动游玩。"] = "Your teammate is auto-playing.";
         map["队友仍在停止当前任务，请稍后再次确认暂停。"] = "Your teammate is still stopping the current task. Try pausing again in a moment.";
         map["未确认队友控制结果：{0}"] = "Teammate control was not confirmed: {0}";
-        map["队友尚未完成组队，请稍后继续。"] = "Your teammate has not finished teaming up. Resume in a moment.";
+        map["队友尚未完成组队，请稍后继续。"] = "Your teammate has not finished teaming up. Try again in a moment.";
         map["正在组队，请等待 AI 队友连接完成。"] = "Teaming up; wait for the AI teammate to connect.";
         map["正在组队，请等待连接完成后发送消息。"] = "Teaming up; wait for the connection before sending a message.";
-        map["请先邀请 AI 队友。此处消息只发送给本次邀请的队友。"] = "Invite an AI teammate first. Messages here go only to the teammate invited this time.";
+        map["请先邀请 AI 队友。此处消息只发送给本次邀请的队友。"] = "Invite an AI teammate first. Messages here go only to the teammate from this invite.";
         map["消息正在送往队友；若它正在行动，会在本次行动完成后回复。"] = "Sending the message to your teammate; if it is acting, it replies after the current action.";
-        map["队友已回复。你的建议会作为后续决策的参考。"] = "Your teammate replied. Your advice will guide its later decisions.";
+        map["队友已回复。你的建议会作为后续决策的参考。"] = "Your teammate replied. Your advice will guide its future decisions.";
         map["队伍消息未确认完成：{0}"] = "Team message was not confirmed: {0}";
-        map["队友未返回文本回复；建议已记录供后续决策参考。"] = "Your teammate returned no text reply; your advice was recorded for later decisions.";
+        map["队友未返回文本回复；建议已记录供后续决策参考。"] = "Your teammate returned no text reply; your advice was recorded for future decisions.";
         map["组队后，可以在这里和 AI 队友商量打法。"] = "After teaming up, you can discuss tactics with your AI teammate here.";
         map["正在检查组队条件…"] = "Checking team-up requirements…";
         map["请等待当前队伍消息完成，再重新组队。"] = "Wait for the current team message to finish, then team up again.";
@@ -95,8 +95,8 @@ internal static partial class Loc
         map["已取消等待队友连接；若队友窗口已打开，请在该窗口确认状态。"] = "Stopped waiting for the teammate to connect; if its window is open, confirm the status there.";
         map["邀请队友失败：{0}"] = "Could not invite the teammate: {0}";
         map["队伍对话已重置。确认队友连接后，可以商量这次冒险的打法。"] = "Team chat was reset. Once your teammate is connected, you can discuss how to play this run.";
-        map["同伴实例：正在加入大厅"] = "Companion instance: joining the lobby";
-        map["同伴实例加入大厅失败"] = "Companion instance failed to join the lobby";
+        map["同伴实例：正在加入大厅"] = "Teammate instance: joining the lobby";
+        map["同伴实例加入大厅失败"] = "Teammate instance failed to join the lobby";
         map["自动游玩已停止：{0}"] = "Auto-play stopped: {0}";
 
         // MCP endpoint.

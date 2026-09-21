@@ -24,6 +24,17 @@ internal static class SourceCoverageTests
     {
         "STS2AIAgent/Game/GameStateService.cs",
         "STS2AIAgent/Game/GameStateService.Predicates.cs",
+        // The raw /state builders, split by screen on 2026-09-20. They stay unlinked for the same
+        // reason the base file does -- they read the game assemblies -- and the relocation contract
+        // in GameStateServiceRelocationContractTests is what keeps them honest.
+        "STS2AIAgent/Game/GameStateService.Combat.cs",
+        "STS2AIAgent/Game/GameStateService.Map.cs",
+        "STS2AIAgent/Game/GameStateService.Menus.cs",
+        "STS2AIAgent/Game/GameStateService.Potions.cs",
+        "STS2AIAgent/Game/GameStateService.Rewards.cs",
+        "STS2AIAgent/Game/GameStateService.Rooms.cs",
+        "STS2AIAgent/Game/GameStateService.Run.cs",
+        "STS2AIAgent/Game/GameStateService.Shop.cs",
         "STS2AIAgent/Game/ReflectedGameMembers.cs",
         "STS2AIAgent/Game/GameStateService.AgentView.cs",
         "STS2AIAgent/Game/GameStateService.Payloads.cs",
@@ -37,7 +48,12 @@ internal static class SourceCoverageTests
         "STS2AIAgent/Game/GameActionService.Run.cs",
         "STS2AIAgent/Game/GameActionService.Shop.cs",
         "STS2AIAgent/Ui/AgentOverlayHost.cs",
+        "STS2AIAgent/Ui/AgentOverlayHost.Tabs.cs",
         "STS2AIAgent/Agent/AgentRuntime.cs",
+        // The teammate partial stays unlinked with AgentRuntime.cs: both need the game runtime,
+        // while this suite's Roslyn pass still parses them and the explicit list makes the choice
+        // visible rather than letting a new source file evade every offline contract.
+        "STS2AIAgent/Agent/AgentRuntime.Team.cs",
         "STS2AIAgent/Game/GameDataExportService.cs",
         "STS2AIAgent/Server/Router.cs",
         "STS2AIAgent/Server/GameEventService.cs",

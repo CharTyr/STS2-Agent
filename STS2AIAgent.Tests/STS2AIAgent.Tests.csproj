@@ -20,6 +20,10 @@
     <Compile Include="..\STS2AIAgent\Agent\SessionBudgetGuard.cs" Link="Agent\SessionBudgetGuard.cs" />
     <Compile Include="..\STS2AIAgent\Agent\PlayerFacingSession.cs" Link="Agent\PlayerFacingSession.cs" />
     <Compile Include="..\STS2AIAgent\Agent\DiagnosticExport.cs" Link="Agent\DiagnosticExport.cs" />
+    <Compile Include="..\STS2AIAgent\Agent\DecisionLog.cs" Link="Agent\DecisionLog.cs" />
+    <Compile Include="..\STS2AIAgent\Agent\DecisionContext.cs" Link="Agent\DecisionContext.cs" />
+    <Compile Include="..\STS2AIAgent\Agent\StateViews.cs" Link="Agent\StateViews.cs" />
+    <Compile Include="..\STS2AIAgent\Agent\PlaybookSections.cs" Link="Agent\PlaybookSections.cs" />
     <Compile Include="..\STS2AIAgent\Server\LoopbackListener.cs" Link="Server\LoopbackListener.cs" />
     <Compile Include="..\STS2AIAgent\Server\CompanionPortFile.cs" Link="Server\CompanionPortFile.cs" />
     <Compile Include="..\STS2AIAgent\Multiplayer\CompanionHealth.cs" Link="Multiplayer\CompanionHealth.cs" />
@@ -29,6 +33,8 @@
     <Compile Include="..\STS2AIAgent\Multiplayer\CoopLaunchPolicy.cs" Link="Multiplayer\CoopLaunchPolicy.cs" />
     <Compile Include="..\STS2AIAgent\Multiplayer\CoopSavePrecheckPolicy.cs" Link="Multiplayer\CoopSavePrecheckPolicy.cs" />
     <Compile Include="..\STS2AIAgent\Multiplayer\TeamConversation.cs" Link="Multiplayer\TeamConversation.cs" />
+    <Compile Include="..\STS2AIAgent\Multiplayer\TeamIntent.cs" Link="Multiplayer\TeamIntent.cs" />
+    <Compile Include="..\STS2AIAgent\Multiplayer\TeammateStatus.cs" Link="Multiplayer\TeammateStatus.cs" />
     <Compile Include="..\STS2AIAgent\Multiplayer\CompanionConnection.cs" Link="Multiplayer\CompanionConnection.cs" />
     <Compile Include="..\STS2AIAgent\Config\*.cs" Link="Config\%(Filename)%(Extension)" />
     <Compile Include="..\STS2AIAgent\Llm\*.cs" Link="Llm\%(Filename)%(Extension)" />
@@ -39,12 +45,21 @@
    <Compile Include="..\STS2AIAgent\Agent\PlayIntent.cs" Link="Agent\PlayIntent.cs" />
     <Compile Include="..\STS2AIAgent\Localization\Loc.cs" Link="Localization\Loc.cs" />
     <Compile Include="..\STS2AIAgent\Localization\Loc.Strings.*.cs" Link="Localization\%(Filename)%(Extension)" />
+    <Compile Include="..\STS2AIAgent\Ui\OverlayTabCatalog.cs" Link="Ui\OverlayTabCatalog.cs" />
+    <Compile Include="..\STS2AIAgent\Ui\OverlayTheme.cs" Link="Ui\OverlayTheme.cs" />
+    <Compile Include="..\STS2AIAgent\Ui\DecisionLogView.cs" Link="Ui\DecisionLogView.cs" />
     <Compile Include="..\STS2AIAgent\Agent\GameDataFilter.cs" Link="Agent\GameDataFilter.cs" />
     <Compile Include="..\STS2AIAgent\Agent\IGameBridge.cs" Link="Agent\IGameBridge.cs" />
     <Compile Include="..\STS2AIAgent\Agent\PlayPrompt.cs" Link="Agent\PlayPrompt.cs" />
     <Compile Include="..\STS2AIAgent\Agent\ProactiveChatPolicy.cs" Link="Agent\ProactiveChatPolicy.cs" />
     <Compile Include="..\STS2AIAgent\Agent\McpProcessLauncher.cs" Link="Agent\McpProcessLauncher.cs" />
-    <Compile Include="..\STS2AIAgent\Server\NativeMcpServer.cs" Link="Server\NativeMcpServer.cs" />
+    <!--
+      A glob, not one file: NativeMcpServer is a partial class (transport in the base file, tool
+      execution in NativeMcpServer.Tools.cs). Naming the base file alone compiled the class without
+      its tools, and the failure arrived as "ReadString does not exist" rather than as a missing
+      include. A new partial is picked up here without a second edit.
+    -->
+    <Compile Include="..\STS2AIAgent\Server\NativeMcpServer*.cs" Link="Server\%(Filename)%(Extension)" />
     <Compile Include="..\STS2AIAgent\Game\ReflectionMemberAccessor.cs" Link="Game\ReflectionMemberAccessor.cs" />
     <Compile Include="..\STS2AIAgent\Game\UnlockConfirmResolutionPolicy.cs" Link="Game\UnlockConfirmResolutionPolicy.cs" />
     <Compile Include="..\STS2AIAgent\Game\FtueModalPolicy.cs" Link="Game\FtueModalPolicy.cs" />
@@ -71,6 +86,7 @@
   <ItemGroup>
     <EmbeddedResource Include="../skills/sts2-mcp-player/SKILL.md" LogicalName="STS2AIAgent.Sts2McpPlayer.Skill.md" />
     <EmbeddedResource Include="../skills/sts2-mcp-player/references/screen-playbooks.md" LogicalName="STS2AIAgent.Sts2McpPlayer.ScreenPlaybooks.md" />
+    <EmbeddedResource Include="../skills/sts2-mcp-player/references/strategy.md" LogicalName="STS2AIAgent.Sts2McpPlayer.Strategy.md" />
   </ItemGroup>
   <ItemGroup>
     <!--

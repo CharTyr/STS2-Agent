@@ -51,6 +51,33 @@ def _find_source_root() -> Path:
     )
 
 
+def _initializer_end(source: str, start: int) -> int:
+    """Index of the `;` that terminates an initializer, ignoring strings and comments.
+
+    A description string may contain a `;` -- "Newest last; use it to review ..." did --
+    and a plain `source.find(";")` then ends the initializer inside that literal. The
+    truncated expression silently loses every list it chained to (`.Concat(Play)`), which
+    reads as the Play tools having been deleted from AgentTools.Mcp.
+    """
+    index = start
+    while index < len(source):
+        char = source[index]
+        if char == '"':
+            index += 1
+            while index < len(source) and source[index] != '"':
+                index += 2 if source[index] == "\\" else 1
+        elif source.startswith("//", index):
+            newline = source.find("\n", index)
+            index = len(source) if newline < 0 else newline
+        elif source.startswith("/*", index):
+            close = source.find("*/", index)
+            index = len(source) if close < 0 else close + 2
+        elif char == ";":
+            return index
+        index += 1
+    return -1
+
+
 def _extract_list_initializers(source: str) -> dict[str, str]:
     matches = list(_LIST_FIELD.finditer(source))
     if not matches:
@@ -61,7 +88,7 @@ def _extract_list_initializers(source: str) -> dict[str, str]:
     initializers: dict[str, str] = {}
     for match in matches:
         field_name = match.group(1)
-        end = source.find(";", match.end())
+        end = _initializer_end(source, match.end())
         if end < 0:
             raise AssertionError(f"AgentTools.cs initializer for {field_name} is unterminated")
         initializers[field_name] = source[match.end() : end]
@@ -82,7 +109,6 @@ def _native_tool_names(source_root: Path) -> set[str]:
             "NativeMcpServer.cs does not build tools/list from AgentTools.Mcp; "
             "the native source contract is no longer connected"
         )
-
     initializers = _extract_list_initializers(agent_tools)
     if "Mcp" not in initializers:
         raise AssertionError("AgentTools.cs is missing the Mcp tool list")
@@ -118,7 +144,7 @@ _NATIVE_MEMBER = re.compile(
     r"[\w<>\[\],\s\.\?]+?\s+(\w+)\s*\("
 )
 _CASE_MARKER = re.compile(r'^[ \t]*(?:case\s+"([^"]+)"|default)[ \t]*:', re.MULTILINE)
-_READ_ARGUMENT = re.compile(r'Read(?:String|Int)\(\s*arguments\s*,\s*"([^"]+)"\s*\)')
+_READ_ARGUMENT = re.compile(r'Read(?:String|Int|Object)\(\s*arguments\s*,\s*"([^"]+)"\s*\)')
 _READ_TIMEOUT_CALL = re.compile(r'ReadTimeoutSeconds\(\s*arguments\s*(?:,\s*"([^"]+)")?\s*\)')
 _TRY_GET_PROPERTY = re.compile(r'TryGetProperty\(\s*"([^"]+)"')
 _HELPER_CALL = re.compile(r"\b(\w+Async)\s*\(\s*arguments")
@@ -135,7 +161,17 @@ def _native_members(source: str) -> dict[str, str]:
 
 
 def _native_server_source(source_root: Path) -> str:
-    return (source_root / "STS2AIAgent/Server/NativeMcpServer.cs").read_text(encoding="utf-8")
+    """Every file declaring NativeMcpServer, concatenated.
+
+    The class is `partial`: transport (HTTP/SSE, sessions, Origin, JSON-RPC dispatch) lives in
+    NativeMcpServer.cs and tool execution in NativeMcpServer.Tools.cs. Reading only the base file
+    would make every tool case look deleted the day one moved, so this reads the class, not a file.
+    """
+    directory = source_root / "STS2AIAgent/Server"
+    files = sorted(directory.glob("NativeMcpServer*.cs"))
+    if not files:
+        raise AssertionError(f"no NativeMcpServer*.cs under {directory}")
+    return "\n".join(path.read_text(encoding="utf-8") for path in files)
 
 
 def _switch_branch_bodies(method_body: str) -> dict[str, str]:

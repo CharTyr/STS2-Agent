@@ -56,6 +56,8 @@ Use this reference when the task is not ordinary play, but smoke testing, protoc
 - Startup often reaches `/health` before the main menu is fully actionable. Wait for a stable screen with actions before assuming readiness.
 - Run-start transitions such as `embark` can take longer than lightweight actions. Use a longer request timeout and allow a short retry window.
 - After any debug travel or injection command, re-read state before choosing the next action.
+- Console `room` travel uses the game's internal room names, which do not always match the state screen name: a rest site is `RestSite`, not `Rest` (verified live 2026-09-17: `room Rest` answers `Room 'REST' not found`). Other observed names: `Treasure`.
+- A console command that succeeded reads as a failure when retried while already standing in the resulting state — re-issuing `room Treasure` inside a treasure room answers 409. Treat that as idempotence noise, not a contract failure.
 - Keep the game process stopped at the end of automated suites unless the caller explicitly wants a live session left open.
 
 ## Known Non-Blocking Noise

@@ -1,6 +1,7 @@
 using System.Net;
 using System.Diagnostics;
 using System.Text;
+using System.Text.Json;
 using System.Threading;
 using MegaCrit.Sts2.Core.Debug;
 using MegaCrit.Sts2.Core.Logging;
@@ -15,7 +16,7 @@ internal static class Router
 {
     private const string ServiceName = "sts2-ai-agent";
     private const string ProtocolVersion = "2026-03-11-v1";
-    internal const string ModVersion = "0.13.0";
+    internal const string ModVersion = "0.14.0";
     private const string LogPrefix = "[STS2AIAgent.Router]";
 
     private static long _requestCounter;
@@ -71,7 +72,20 @@ internal static class Router
                     !body.RootElement.TryGetProperty("message", out var message) || message.ValueKind != System.Text.Json.JsonValueKind.String ||
                     string.IsNullOrWhiteSpace(message.GetString()) || message.GetString()!.Length > TeamConversation.MaxMessageLength)
                     throw new ApiException(400, "invalid_request", "message must contain 1–2000 characters.");
-                var reply = await AgentRuntime.Instance.ReplyToTeammateAsync(message.GetString()!, cancellationToken);
+                // The typed signal is optional and additive: a client that sends only text keeps
+                // working, and a malformed signal is refused rather than dropped, because a dropped
+                // instruction looks like a teammate ignoring it.
+                TeamIntent? intent;
+                try
+                {
+                    intent = TeamIntent.Parse(body.RootElement);
+                }
+                catch (ArgumentException ex)
+                {
+                    throw new ApiException(400, "invalid_request", ex.Message);
+                }
+
+                var reply = await AgentRuntime.Instance.ReplyToTeammateAsync(message.GetString()!, intent, cancellationToken);
                 await WriteJsonAsync(response, 200, new { ok = true, request_id = requestId, data = new { reply } });
                 statusCode = 200;
                 return;
@@ -229,6 +243,19 @@ internal static class Router
             }
 
             if (request.HttpMethod.Equals("GET", StringComparison.OrdinalIgnoreCase) &&
+                request.Url?.AbsolutePath == "/decisions")
+            {
+                await WriteJsonAsync(response, 200, new
+                {
+                    ok = true,
+                    request_id = requestId,
+                    data = AgentRuntime.Instance.RecentDecisions(ReadDecisionLimit(request))
+                });
+                statusCode = 200;
+                return;
+            }
+
+            if (request.HttpMethod.Equals("GET", StringComparison.OrdinalIgnoreCase) &&
                 request.Url?.AbsolutePath == "/actions/available")
             {
                 var payload = await GameThread.InvokeAsync(GameStateService.BuildAvailableActionsPayload);
@@ -292,6 +319,12 @@ internal static class Router
                 }
 
                 var actionResponse = await GameThread.InvokeAsync(() => GameActionService.ExecuteAsync(actionRequest));
+                var decisionReason = DecisionContext.ReadReason(actionRequest.client_context);
+                AgentRuntime.Instance.RecordDecision(
+                    "http_api",
+                    actionRequest.action,
+                    decisionReason,
+                    runId: AgentRuntime.Instance.CurrentRunId);
                 await WriteJsonAsync(response, 200, new
                 {
                     ok = true,
@@ -388,6 +421,16 @@ internal static class Router
             process_id = connection.ProcessId,
             auto_play = AgentRuntime.Instance.CompanionAutoPlay
         };
+    }
+
+    /// <summary>
+    /// Reads the optional <c>limit</c> query parameter for <c>GET /decisions</c>, clamped so a
+    /// caller cannot ask the mod to materialize an unbounded slice of the log.
+    /// </summary>
+    internal static int ReadDecisionLimit(HttpListenerRequest request)
+    {
+        var raw = request.QueryString["limit"];
+        return int.TryParse(raw, out var parsed) ? Math.Clamp(parsed, 1, 200) : 50;
     }
 
     private static bool IsMcpPath(string? path)

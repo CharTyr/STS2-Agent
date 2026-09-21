@@ -11,6 +11,111 @@ A session that walks this list needs the game installed, the mod built and deplo
 Legend: **[mod]** Mod API online only · **[combat]** needs a fight · **[room]** needs a specific
 screen · **[coop]** needs two instances · **[eye]** needs a human or model to watch behaviour.
 
+## Status as of 2026-09-20 (v0.14.0 candidate)
+
+Run against the v0.14.0 candidate build (`STS2AIAgent.dll` deployed from `feat/v0.14-contracts`),
+game v0.111.0, in the isolated profile `default\2026092014` (`--windowed --force-steam off
+--clientId 2026092014`). The player's real profile was not written to: its `current_run.save` and
+`progress.save` still carry their 2026-09-12 / 2026-09-17 timestamps.
+
+### Offline-blocking checks, on the real game **[mod]**
+
+- `/health`: `mod_version=0.14.0`, `game_version=v0.111.0`, `status=ready`, `instance_role=human`,
+  compatibility **27/27 reflected members present, 0 missing**.
+- `run_sts2_validation.py mod-load --deep-check` → `{"health_ok": true, "state_ok": true,
+  "actions_ok": true, "screen": "MAIN_MENU", "available_action_count": 3}`.
+- `state-summary` and `state-invariants` → `failure_count: 0`, `warning_count: 0`.
+- `patch-check` → exit 0. The recorded `build/validation-2026-09-17/action-surface-baseline.jsonl`
+  MAIN_MENU sample was present, all three compared actions matched their flags
+  (`mismatches: []`); `abandon_run` / `continue_run` appeared only in the baseline, which is the
+  expected diagnostic for a baseline taken during an active run.
+
+### The decision explanation chain with a real model **[eye]**
+
+Provider `CommandCode` (`https://api.commandcode.ai/provider/v1`), model
+`deepseek/deepseek-v4.1-flash`, configured through an isolated agent settings file
+(`STS2_AGENT_SETTINGS_PATH`) so the player's own agent settings were untouched. The overlay's
+**Test Connection** button was pressed for real: 对话模型 and 游玩模型 both reported **连通成功**.
+
+Autoplay was then started from the main menu and ran a real run unattended:
+
+- 45 accepted decisions, all attributed to one run id (`D9P0C6TEVH8N`), advancing from floor 1 to
+  floor 3 (one relic picked up, deck 10 → 12).
+- **22 of 26** sampled entries carried a model-authored reason, and they are real reasoning rather
+  than restatement, for example: *"Cannot kill the 29 HP enemy this turn (3 strikes with Vulnerable
+  = 27), so I play Defend to reduce the incoming 6-damage attack to 1."* and *"A first-time shuffle
+  tutorial modal is blocking combat, so I confirm it to resume play."*
+- `GET /decisions` returned entries carrying `source`, `action`, `reason`, `requests_spent`,
+  `total_tokens` and `run_id`.
+- `/events/stream` published `decision_made` live (75 frames observed in a 40 s window alongside
+  `screen_changed`, `combat_started` and the action-window events).
+- The overlay's 决策日志 tab showed the newest-first log with the per-step token count and the
+  per-run total, and reported the budget stop: *"已达到会话 Token 预算上限（622,864/600,000
+  tokens），已自动停止游玩"* — the session budget guard stopped the loop at the configured cap
+  rather than running on.
+
+Session cost, as reported by the mod: **52 requests / 622,864 tokens** (prompt 585,244,
+completion 37,620). The 600,000-token cap is what ended the run; the request cap (150) was not
+reached.
+
+### Found in this session, fixed
+
+1. **The isolated profile could not enable the mod at all when the player also subscribes on the
+   Workshop.** `Initialize-IsolatedClientSettings` flipped only the *first* `STS2AIAgent` entry in
+   `mod_list`. A clone of a real profile holds two: `mods_directory` and `steam_workshop`. The
+   launcher enabled the first and left the second `false`, and the game reads the id as disabled if
+   any entry says so — it logged `Skipping loading mod STS2AIAgent, it is set to disabled in
+   settings` twice and started with no mod at all. Fixed by enabling every agent entry (rewriting
+   back-to-front) and by making the readiness check inspect all of them;
+   `scripts/test-isolated-settings.ps1` pins it offline and runs in the preflight.
+2. **A non-numeric `--clientId` silently validated a different profile.** `--clientId 20260920v14`
+   made the game fall back to client 1 (`Profile-scoped data path initialized:
+   user://default/1/modded/profile1`) while the launcher seeded `default\20260920v14`, so the
+   launcher was preparing a file the game never read. `Initialize-IsolatedClientSettings` now
+   rejects a non-numeric id with a message that names the fallback.
+
+### Local dual-instance co-op on this candidate **[coop]**
+
+A second run of the same session, after the single-player one above, on the same isolated profile.
+
+- `invite_ai_teammate` from the main menu launched a second process (PID 37872). The host's
+  `/health` reported `companion_process_alive: true`, `companion_process_exited: false` and the
+  companion block `{api_host: 127.0.0.1, api_port: 8081, process_id: 37872, auto_play: true}`; the
+  companion answered on 8081 with `instance_role: companion`, `mod_version: 0.14.0`, `status: ready`.
+- The lobby came up with the companion already auto-selected and readied (`CompanionAutoSelectCharacter`),
+  and `embark` put both instances into one run (`FRTG1BWGDRJ4`) at MAP. The party block reads
+  correctly from both sides: the host sees `1` as local and `2026092015` as not, the companion sees
+  the mirror image. That is the same fact the teammate panel is built on.
+- **The teammate plays with the real model.** Its `/decisions` holds four entries on the shared run
+  id, one of them the co-op rule doing its job rather than a card choice:
+  *"跟随你的地图选择。"* (following your map choice) for `choose_map_node`, then three combat
+  decisions with model-authored reasons such as *"Bash first applies Vulnerable so my follow-up
+  Strike deals bonus damage and next turn's attacks also hit harder."* The companion's own request
+  count reached 6 and it advanced the shared run to floor 1.
+- The host's overlay teammate panel showed the other player's live health, block and energy beside
+  the host's own bar while both characters stood in the same fight.
+- The host's own loop correctly refused to restart: `/session/control {"running": true}` returned
+  200 `running`, and `stop_kind` stayed `budget`, because the single-player session had already
+  spent the 600,000-token cap for that session. The map vote was then cast by hand through the API,
+  which is what let the companion proceed.
+
+Not covered here: the **Steam** two-instance path (this was the local dual-instance launcher), and
+the typed `intent` encoder over the wire — the host overlay sends `intent: null`
+(`AgentRuntime.Team.cs`), so a typed signal needs an external caller holding the companion session
+token, which this session did not exercise.
+
+### Still open after this session
+
+- A complete natural run (13 floors) was not attempted: the token cap ended the single-player
+  session at floor 3 on purpose. The remaining floors and an act boss are still unproven on this
+  candidate.
+- **Steam** co-op was not run at all. The local dual-instance path is covered above; the Steam
+  two-instance path is untouched by this session.
+- The typed teammate signal was not driven over the wire; see the note above.
+- Vision (screenshot attachment) was not enabled, so the multimodal path is still offline-only.
+- The `max_tokens` → `max_completion_tokens` retry was not exercised by this endpoint: it accepted
+  the request as sent, so which real providers take that branch is still unmeasured.
+
 ## Status as of 2026-09-17
 
 ### Action-surface baseline (ADR 0001 step 1)
@@ -58,6 +163,18 @@ holds live, and this file is the replay baseline for step 3 of that ADR.
   names that appeared, including `play_card`. No live sample exercised the `true` branch of that
   field. Whether that is intended (targets are validated per card through `target_index` rather than
   advertised on the action) or a gap is not settled by this pass.
+
+### `requires_target` adjudicated as documented behaviour (2026-09-20)
+
+Every descriptor reports `requires_target: false` **by construction**: the walk assigns the literal
+to all actions, because the flag describes the static call shape and no action unconditionally
+takes `target_index`. Three actions take it conditionally (`play_card`, `use_potion`, and
+multiplayer rest options) and advertise that per item — `combat.hand[].requires_target`,
+`run.potions[].requires_target` with `valid_target_indices`, and each rest option's own flag with
+the `run.players` target space. `docs/api.md`'s descriptor table now states the general rule (it
+previously carved out `play_card` only), and
+`ActionSurface.DescriptorTargetIsDocumentedConstant` pins the walk so the flag cannot silently
+become dynamic without the docs following it.
 
 ### That finding, fixed and re-verified in the game (2026-09-17)
 

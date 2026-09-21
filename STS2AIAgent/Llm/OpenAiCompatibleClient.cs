@@ -132,15 +132,38 @@ internal sealed class OpenAiCompatibleClient : ILlmClient
         bool stream,
         CancellationToken cancellationToken)
     {
-        try
+        // Each step is a documented provider difference, applied at most once, and tried in a loop
+        // rather than as nested catches. `ShouldRetryWithoutStream` accepts any HTTP 400, so with
+        // two separate catches a 400 about the token-cap field would be answered by demoting the
+        // stream instead of by renaming the field, and the rename would never be reached. Retrying
+        // from the top means the second error is classified on its own terms.
+        var streamDemotionTried = !stream;
+        var tokenFieldRenameTried = false;
+
+        while (true)
         {
-            return await SendOnceAsync(body, stream, cancellationToken);
-        }
-        catch (LlmException ex) when (stream && ShouldRetryWithoutStream(ex))
-        {
-            body["stream"] = false;
-            body.Remove("stream_options");
-            return await SendOnceAsync(body, stream: false, cancellationToken);
+            try
+            {
+                return await SendOnceAsync(body, stream, cancellationToken);
+            }
+            catch (LlmException ex) when (!streamDemotionTried && ShouldRetryWithoutStream(ex))
+            {
+                body["stream"] = false;
+                body.Remove("stream_options");
+                stream = false;
+                streamDemotionTried = true;
+            }
+            catch (LlmException ex) when (!tokenFieldRenameTried && MaxTokensField.IsUnsupportedParameterError(ex))
+            {
+                if (!MaxTokensField.RenameToCompletionTokens(body))
+                {
+                    // The server refused something, but this request has no max_tokens to rename,
+                    // so the retry would be byte-identical. Surface the original failure.
+                    throw;
+                }
+
+                tokenFieldRenameTried = true;
+            }
         }
     }
 

@@ -271,7 +271,7 @@ internal static class AgentLoopTests
                     {
                         Id = "call_act",
                         Name = "act",
-                        ArgumentsJson = """{"action":"play_card","card_index":0}"""
+                        ArgumentsJson = """{"action":"play_card","card_index":0,"reason":"Strike before ending the turn."}"""
                     }
                 }
             }
@@ -282,6 +282,7 @@ internal static class AgentLoopTests
         var result = await loop.PlayOnceAsync(CancellationToken.None);
 
         Assert.Equal("play_card", result.Acted);
+        Assert.Equal("Strike before ending the turn.", result.Reasoning);
         Assert.Equal(1, bridge.ActCalls);
         Assert.Null(result.Error);
     }
@@ -333,6 +334,8 @@ internal static class AgentLoopTests
         Assert.Contains("\"x\"", schema);
         Assert.Contains("\"y\"", schema);
         Assert.Contains("\"tool\"", schema);
+        Assert.Contains("\"reason\"", schema);
+        Assert.Contains("shown to the player", schema, StringComparison.OrdinalIgnoreCase);
     }
 
     public static async Task PlayOnce_SkipsWhenNotActionable()
@@ -478,7 +481,7 @@ internal static class AgentLoopTests
         var bridge = new FakeBridge();
         var factory = new ScriptedClientFactory(new[]
         {
-            new LlmCompletion { Content = """{"action":"end_turn"}""" }
+            new LlmCompletion { Content = """{"action":"end_turn","reason":"No playable cards remain."}""" }
         });
         var settings = AgentSettings.CreateDefault();
         settings.Models[0].SupportsVision = false;
@@ -489,6 +492,7 @@ internal static class AgentLoopTests
         var result = await loop.PlayOnceAsync(CancellationToken.None);
 
         Assert.Equal("end_turn", result.Acted);
+        Assert.Equal("No playable cards remain.", result.Reasoning);
         Assert.Equal(1, bridge.ActCalls);
         Assert.Null(result.Error);
         Assert.Equal(0, bridge.CaptureCalls);
@@ -669,7 +673,7 @@ internal static class AgentLoopTests
                     {
                         Id = "bad",
                         Name = "act",
-                        ArgumentsJson = """{"action":"play_card","card_index":9}"""
+                        ArgumentsJson = """{"action":"play_card","card_index":9,"reason":"This rejected choice must not leak."}"""
                     }
                 }
             },
@@ -681,7 +685,7 @@ internal static class AgentLoopTests
                     {
                         Id = "good",
                         Name = "act",
-                        ArgumentsJson = """{"action":"play_card","card_index":0}"""
+                        ArgumentsJson = """{"action":"play_card","card_index":0,"reason":"Use the legal strike."}"""
                     }
                 }
             }
@@ -692,6 +696,7 @@ internal static class AgentLoopTests
 
         Assert.Equal(1, bridge.ActCalls);
         Assert.Equal("play_card", result.Acted);
+        Assert.Equal("Use the legal strike.", result.Reasoning);
         Assert.Null(result.Error);
     }
 
@@ -782,7 +787,7 @@ internal static class AgentLoopTests
         Assert.Null(guard.Observe(result));
         Assert.Equal(result.RequestsSpent, guard.RequestCount);
 
-        var source = AgentSourceFixture.Read("STS2AIAgent/Agent/AgentRuntime.cs");
+        var source = AgentSourceFixture.ReadAgentRuntime();
         var reply = AgentSourceFixture.MethodBody(source, "ReplyToTeammateAsync");
         var replyAccount = reply.IndexOf("AccountTurn(result, recordBudget: true)", StringComparison.Ordinal);
         var replyError = reply.IndexOf("if (result.Error != null)", StringComparison.Ordinal);

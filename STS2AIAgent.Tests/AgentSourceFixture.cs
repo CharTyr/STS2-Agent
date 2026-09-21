@@ -45,7 +45,7 @@ internal static class AgentSourceFixture
     /// says must read all of it, or a member that simply moved between its own files reads as
     /// deleted. Tests that mean one specific file still name that file.
     /// </remarks>
-    public static string ReadStateService() => ReadPartialClass("GameStateService");
+    public static string ReadStateService() => ReadPartialClass("Game", "GameStateService");
 
     /// <summary>
     /// Every file that declares <c>GameActionService</c>, concatenated in reading order.
@@ -55,10 +55,32 @@ internal static class AgentSourceFixture
     /// reasoning is the same as <see cref="ReadStateService"/>: these contracts ask what the class
     /// says, not which of its own files a member currently sits in.
     /// </remarks>
-    public static string ReadActionService() => ReadPartialClass("GameActionService");
+    public static string ReadActionService() => ReadPartialClass("Game", "GameActionService");
 
     /// <summary>
-    /// Reads every file declaring one partial class, base file first.
+    /// Every file that declares <c>AgentOverlayHost</c>, concatenated in reading order.
+    /// </summary>
+    /// <remarks>
+    /// The overlay's tab construction moved to <c>AgentOverlayHost.Tabs.cs</c> so the file the size
+    /// ratchet and the architecture table watch stopped growing one tab at a time. The reasoning is
+    /// the same as the two services above: these contracts ask what the overlay says, not which of
+    /// its own files a member currently sits in.
+    /// </remarks>
+    public static string ReadOverlayHost() => ReadPartialClass("Ui", "AgentOverlayHost");
+
+    /// <summary>
+    /// Every file that declares <c>AgentRuntime</c>, concatenated in reading order.
+    /// </summary>
+    /// <remarks>
+    /// The AI-teammate surface moved to <c>AgentRuntime.Team.cs</c> when the base file crossed its
+    /// size budget. Same reasoning again: a contract that asks what the runtime does has to read
+    /// what the runtime says, not the file that happens to hold the first half of it.
+    /// </remarks>
+    public static string ReadAgentRuntime() => ReadPartialClass("Agent", "AgentRuntime");
+
+    /// <summary>
+    /// Reads every file declaring one partial class under <paramref name="directoryName"/>, base file
+    /// first.
     /// </summary>
     /// <remarks>
     /// Order is not cosmetic: <see cref="MethodBody"/> resolves a name by its *last* occurrence, so
@@ -69,9 +91,9 @@ internal static class AgentSourceFixture
     /// At least two files are required, so merging one of these classes back into a single file
     /// fails here rather than quietly halving what every contract above it can see.
     /// </remarks>
-    private static string ReadPartialClass(string className)
+    private static string ReadPartialClass(string directoryName, string className)
     {
-        var directory = Path.Combine(Root, "STS2AIAgent", "Game");
+        var directory = Path.Combine(Root, "STS2AIAgent", directoryName);
         var baseFile = className + ".cs";
         var files = Directory
             .EnumerateFiles(directory, className + ".*.cs", SearchOption.TopDirectoryOnly)

@@ -19,6 +19,20 @@ Ordinary reads may retry according to the client retry settings. An action is a 
 
 Action responses must be JSON objects with a boolean `ok`. A failed envelope must contain an object `error` with a non-empty string `code`, a string `message`, and a boolean `retryable`; malformed envelopes are `invalid_response`. See `_decode_action_response_envelope` in [client.py](../../../mcp_server/src/sts2_mcp/client.py).
 
+## Typed payload contract
+
+Only two responses have a fixed, mod-declared field set: `/actions/available` and `/decisions`. Their models live in [payloads.py](../../../mcp_server/src/sts2_mcp/payloads.py), which owns validation, defaulting, the extension policy, and `PayloadSchemaError(path, expected, actual)`. Everything else stays a plain dict on purpose — a `/state` snapshot is screen-shaped, a game-data collection is heterogeneous, an SSE frame is whatever was published, and an action result may be a recovery payload; typing those would either infect every consumer or discard information.
+
+The policy, so a new payload does not re-decide it:
+
+- A field the mod always sends is required and type-checked. A wrong type is an error, never a coercion — and `bool` is rejected where a count belongs, because `True` is an `int` in Python.
+- A field an older build may omit is optional with a documented default (`requires_*` flags default `False`). Absence is not corruption.
+- Unknown fields are retained and re-emitted by `to_wire()`, matching the additive public contract (`additionalProperties: true` in `docs/openapi.json`).
+
+`Sts2Client.get_action_catalog()` and `Sts2Client.get_decision_entries()` are the typed getters; `Sts2Client._parse_payload` converts a `PayloadSchemaError` into `Sts2ApiError(status_code=200, code="invalid_response", retryable=False, details=exc.as_details())`. They are **added beside** `get_available_actions()` / `get_decisions()`, which keep returning the raw JSON values so no existing caller, fake, or tool has to migrate mid-release. A null `/decisions` body is an error rather than an empty list: "no decisions were recorded" and "the response was unusable" are different claims.
+
+Tests: [test_client_payloads.py](../../../mcp_server/tests/test_client_payloads.py) covers accepted and malformed payloads, the defaulting and extension policy, the transport seam (including that an error envelope still surfaces as the mod's own `Sts2ApiError`), and the legacy dict getters.
+
 ## Tool registration contract
 
 `_normalize_tool_profile` in [server.py](../../../mcp_server/src/sts2_mcp/server.py) defaults to `guided`, maps `planner` and `multi-agent` to `layered`, and maps `legacy` to `full`.
@@ -41,6 +55,7 @@ Use the standard library `unittest` runner used by the project. Prefer small fak
 - Patch `_ensure_game_data_index` when testing game-data selection and normalization; see `GameDataToolsTests` in [test_game_data_tools.py](../../../mcp_server/tests/test_game_data_tools.py).
 - Patch `request.urlopen` and `time.sleep` to verify transport outcomes. The replay-safety tests in [test_action_replay_safety.py](../../../mcp_server/tests/test_action_replay_safety.py) (for example `test_action_transport_failures_post_once_and_reconcile`) assert one action POST, no action retry, and one reconciliation GET for an ambiguous result.
 - `NativeToolAlignmentTests` in [test_native_tool_alignment.py](../../../mcp_server/tests/test_native_tool_alignment.py) compares the Python guided surface with the C# native MCP surface. Update both sides deliberately when a guided tool changes.
+- [test_client_payloads.py](../../../mcp_server/tests/test_client_payloads.py) is the typed-model pattern: pure parser tests plus one transport test per getter, patching `request.urlopen` with a minimal `JsonResponse` double.
 
 ## Dependency refresh checklist
 

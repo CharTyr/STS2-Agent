@@ -69,6 +69,9 @@ internal readonly record struct PlaySessionIdentity(long Generation, Task Task)
 
 internal static class PlayerFacingSession
 {
+    /// <summary><see cref="PlayerFacingView.Kind"/> for a session that stopped at a budget cap.</summary>
+    public const string BudgetKind = "budget";
+
     internal static bool IsCurrentPlaySession(PlaySessionIdentity? current, PlaySessionIdentity observed)
     {
         return current is { } currentIdentity &&
@@ -112,7 +115,7 @@ internal static class PlayerFacingSession
         {
             var canReset = SessionBudgetLimits.CanResetSessionStats(s.PlayRunning, s.PlayPhase);
             return new PlayerFacingView(
-                "budget",
+                BudgetKind,
                 Loc.T("已达到会话预算"),
                 s.BudgetReason,
                 SessionBudgetLimits.BudgetRecoveryNextAction(canReset),
@@ -277,6 +280,50 @@ internal static class PlayerFacingSession
             usage.PromptTokens.ToString("N0"),
             usage.CompletionTokens.ToString("N0"),
             requestText);
+    }
+
+    /// <summary>
+    /// The usage block the overlay shows above the decision log: the same token/request line as
+    /// <see cref="FormatUsage"/>, plus the budget reason when the session stopped at a cap. The
+    /// reason is the one <see cref="Compose"/> already carries, so the overlay and the AI teammate
+    /// tab cannot tell the player two different stories about the same cap.
+    /// </summary>
+    /// <remarks>
+    /// A session with no usage reported reads as unknown, never as 0: "the service returned nothing"
+    /// and "this session spent nothing" are different facts, and only one of them is a reason to
+    /// keep playing.
+    /// </remarks>
+    public static string FormatUsageSummary(bool known, LlmUsage usage, int requests, PlayerFacingView facing)
+    {
+        var line = FormatUsage(known, usage, requests);
+        return facing.Kind == BudgetKind ? line + "\n" + facing.Detail : line;
+    }
+
+    /// <summary>
+    /// The current run's own spend, shown above the decision log next to the session totals.
+    /// </summary>
+    /// <remarks>
+    /// A session can outlive a run, so a session total answers a different question from "what has
+    /// this run cost". Token spend is unknown until a model reports usage, and it stays unknown here
+    /// rather than reading as 0. A run with no decisions yet says so instead of showing "0 tokens",
+    /// which would look like a run that played for free.
+    /// </remarks>
+    public static string FormatRunSpend(string? runId, int decisions, long tokens, bool tokensKnown)
+    {
+        if (string.IsNullOrWhiteSpace(runId))
+        {
+            return Loc.T("本局：尚未识别到对局。");
+        }
+
+        if (decisions == 0)
+        {
+            return Loc.T("本局（{0}）：暂无决策记录。", runId);
+        }
+
+        var spend = tokensKnown
+            ? Loc.T("本局（{0}）：{1} 次决策，{2} tokens。", runId, decisions, tokens.ToString("N0"))
+            : Loc.T("本局（{0}）：{1} 次决策，Token 未知。", runId, decisions);
+        return spend;
     }
 
     private static PlayerFacingView ComposeCompanion(PlayerFacingSnapshot s)

@@ -34,6 +34,9 @@ $modProject = Join-Path $ProjectRoot "STS2AIAgent/STS2AIAgent.csproj"
 $mcpRoot = Join-Path $ProjectRoot "mcp_server"
 $clientPy = Join-Path $mcpRoot "src/sts2_mcp/client.py"
 $serverPy = Join-Path $mcpRoot "src/sts2_mcp/server.py"
+$payloadsPy = Join-Path $mcpRoot "src/sts2_mcp/payloads.py"
+# Modules whose absence the packaging or import contract would otherwise only reveal at runtime.
+$requiredMcpModules = @($clientPy, $serverPy, $payloadsPy)
 $buildScript = Join-Path $ProjectRoot "scripts/build-mod.ps1"
 $testScript = Join-Path $ProjectRoot "scripts/test-mod-load.ps1"
 $stateInvariantScript = Join-Path $ProjectRoot "scripts/test-state-invariants.ps1"
@@ -43,7 +46,11 @@ $packageChecker = Join-Path $ProjectRoot "scripts/check_release_package.py"
 $releaseMetadataChecker = Join-Path $ProjectRoot "scripts/check_release_metadata.py"
 $verificationGates = Join-Path $ProjectRoot "scripts/check_verification_gates.py"
 $verificationGateSelfTest = Join-Path $ProjectRoot "scripts/test-verification-gates.ps1"
+$apiSchemaTest = Join-Path $ProjectRoot "scripts/test-api-schema.py"
+$decisionBenchmark = Join-Path $ProjectRoot "scripts/decision_benchmark.py"
+$decisionBenchmarkTest = Join-Path $ProjectRoot "scripts/test-decision-benchmark.py"
 $nativeExitPropagationTest = Join-Path $ProjectRoot "scripts/test-native-exit-propagation.ps1"
+$isolatedSettingsTest = Join-Path $ProjectRoot "scripts/test-isolated-settings.ps1"
 $budgetProxySelfTest = Join-Path $ProjectRoot "scripts/sts2-model-budget-proxy-selftest.py"
 $changelogPath = Join-Path $ProjectRoot "CHANGELOG.md"
 $releaseDoc = Join-Path $ProjectRoot "docs/release-readiness.md"
@@ -68,7 +75,24 @@ Invoke-Step -Name "Build mod project ($Configuration)" -Action {
 }
 
 Invoke-Step -Name "Compile Python sources" -Action {
-    Invoke-CheckedNative -FilePath "python" -Arguments @("-m", "py_compile", $clientPy, $serverPy)
+    # Every module, not a remembered pair: naming only client.py and server.py meant a syntax error
+    # in any other module (payloads.py, envelope.py, state_views.py, ...) reached this gate only if
+    # some test happened to import it. The list below stays, because the whole-package import step
+    # after this one would otherwise report a missing module as a confusing ImportError.
+    $missingModules = @($requiredMcpModules | Where-Object { -not (Test-Path $_) })
+    if ($missingModules.Count -gt 0) {
+        throw "Missing MCP module(s): $($missingModules -join ', ')"
+    }
+
+    $mcpModules = @(
+        Get-ChildItem -Path (Join-Path $mcpRoot "src/sts2_mcp") -Filter "*.py" -File |
+            ForEach-Object { $_.FullName }
+    )
+    if ($mcpModules.Count -lt 6) {
+        throw "Expected at least 6 MCP modules to compile, found $($mcpModules.Count); the walk is wrong."
+    }
+
+    Invoke-CheckedNative -FilePath "python" -Arguments (@("-m", "py_compile") + $mcpModules)
 }
 
 Invoke-Step -Name "Import MCP server package" -Action {
@@ -111,8 +135,17 @@ Invoke-Step -Name "Check release packaging source contract" -Action {
     Invoke-CheckedNative -FilePath "python" -Arguments @($packageChecker, "--source-root", $ProjectRoot)
 }
 
-Invoke-Step -Name "Run dependency, API-doc, and doc-snapshot gates" -Action {
+Invoke-Step -Name "Run dependency, API-doc, schema, and doc-snapshot gates" -Action {
     Invoke-CheckedNative -FilePath "python" -Arguments @($verificationGates, "--repo-root", $ProjectRoot)
+}
+
+Invoke-Step -Name "Test generated API schema semantics" -Action {
+    Invoke-CheckedNative -FilePath "python" -Arguments @($apiSchemaTest)
+}
+
+Invoke-Step -Name "Validate offline decision benchmark" -Action {
+    Invoke-CheckedNative -FilePath "python" -Arguments @($decisionBenchmark)
+    Invoke-CheckedNative -FilePath "python" -Arguments @($decisionBenchmarkTest)
 }
 
 Invoke-Step -Name "Self-test the verification gates" -Action {
@@ -121,6 +154,12 @@ Invoke-Step -Name "Self-test the verification gates" -Action {
 
 Invoke-Step -Name "Check Windows PowerShell failure propagation" -Action {
     Invoke-CheckedNative -FilePath "powershell" -Arguments @("-ExecutionPolicy", "Bypass", "-File", $nativeExitPropagationTest)
+}
+
+Invoke-Step -Name "Check isolated-profile mod seeding" -Action {
+    # Offline: the live run on 2026-09-20 started a game whose agent mod was disabled, because the
+    # clone enabled only the first of two STS2AIAgent entries. No game is needed to catch that.
+    Invoke-CheckedNative -FilePath "powershell" -Arguments @("-ExecutionPolicy", "Bypass", "-File", $isolatedSettingsTest)
 }
 
 Invoke-Step -Name "Check release documents" -Action {

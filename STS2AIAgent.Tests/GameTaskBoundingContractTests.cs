@@ -20,17 +20,20 @@ internal static class GameTaskBoundingContractTests
     {
         "STS2AIAgent/Multiplayer/DualInstanceCoordinator.cs",
         "STS2AIAgent/Multiplayer/LocalDualInstanceLauncher.cs",
-        "STS2AIAgent/Ui/AgentOverlayHost.cs",
     };
 
     /// <summary>
-    /// The files above plus every file of the <c>GameActionService</c> partial class.
+    /// The files above, every file of the <c>GameActionService</c> partial class, and every file of
+    /// the <c>AgentOverlayHost</c> partial class.
     /// </summary>
     /// <remarks>
     /// The action service is enumerated rather than listed. It was split into one file per room on
     /// 2026-09-17, and a list would have kept scanning the base file only -- so the first bare
     /// <c>await</c> written in a room file would have wedged a request with nothing red to show
-    /// for it. Whoever adds the ninth room gets the check for free.
+    /// for it. Whoever adds the ninth room gets the check for free. The overlay is enumerated the
+    /// same way for the same reason: its tab construction moved to
+    /// <c>AgentOverlayHost.Tabs.cs</c>, and a listed base file would have stopped covering the
+    /// overlay's own new file the day the page code moved into it.
     /// </remarks>
     private static IEnumerable<string> ScannedPaths()
     {
@@ -47,7 +50,20 @@ internal static class GameTaskBoundingContractTests
             + "this scan expects the base file and its partials. A single file means either the "
             + "split was undone or this enumeration stopped matching.");
 
-        return actionFiles.Concat(GameDrivingPaths);
+        var overlayDirectory = Path.Combine(AgentSourceFixture.Root, "STS2AIAgent", "Ui");
+        var overlayFiles = Directory
+            .EnumerateFiles(overlayDirectory, "AgentOverlayHost*.cs", SearchOption.TopDirectoryOnly)
+            .Select(path => "STS2AIAgent/Ui/" + Path.GetFileName(path))
+            .OrderBy(path => path, StringComparer.Ordinal)
+            .ToArray();
+
+        Assert.True(
+            overlayFiles.Length >= 2,
+            $"Found {overlayFiles.Length} AgentOverlayHost file(s); the overlay's tabs live in their "
+            + "own file, so this scan expects the base file and its partial. A single file means "
+            + "either the extraction was undone or this enumeration stopped matching.");
+
+        return actionFiles.Concat(overlayFiles).Concat(GameDrivingPaths);
     }
 
     /// <summary>

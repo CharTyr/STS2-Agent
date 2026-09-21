@@ -1429,6 +1429,15 @@ DEBUG_COMMAND_RETRY_DELAY_MS = 500
 # the game never opens its game-over screen, leaving a dead run parked on the map.
 RUN_SETTLE_SECONDS = 3.0
 
+# Console travel names the game's own internal rooms, and they do not always match the screen name
+# the mod reports, so a suite that guesses gets `Room 'X' not found` and looks like a mod bug:
+#   rest site  -> `room RestSite`, not `room Rest` (verified live 2026-09-17)
+#   treasure   -> `room Treasure`
+# Re-issuing a travel command while already standing in the resulting room answers 409. That is
+# idempotence, not a contract failure: check the current screen before travelling, or treat the 409
+# as success once the screen already matches. The same notes are kept for agents in
+# skills/sts2-mcp-player/references/debug-and-validation.md.
+
 
 def run_debug_command(client: ApiClient, command: str) -> dict[str, Any]:
     """Run a debug console command, giving a still-settling screen time to accept it.
@@ -1712,6 +1721,10 @@ def suite_mcp_tool_profile(_: argparse.Namespace) -> dict[str, Any]:
         "get_game_state",
         "get_raw_game_state",
         "get_available_actions",
+        "get_decision_log",
+        "get_run_summary",
+        "get_scene_guidance",
+        "diff_state",
         "get_game_data_item",
         "get_game_data_items",
         "get_relevant_game_data",
@@ -1769,6 +1782,172 @@ def suite_mcp_tool_profile(_: argparse.Namespace) -> dict[str, Any]:
         "guided_debug_count": len(guided_debug),
         "full_count": len(full),
         "failures": failures,
+    }
+
+
+PATCH_CHECK_DESCRIPTOR_FLAGS = (
+    "requires_index",
+    "requires_target",
+    "requires_coordinates",
+    "requires_tool",
+)
+
+
+def find_latest_action_surface_baseline(root: Path) -> Path | None:
+    """The most recent recorded action-surface baseline, or None when this checkout has none."""
+    candidates = sorted(
+        root.glob("build/validation-*/action-surface-baseline.jsonl"),
+        key=lambda path: path.stat().st_mtime,
+        reverse=True,
+    )
+    return candidates[0] if candidates else None
+
+
+def load_action_surface_baseline(path: Path) -> dict[str, dict[str, dict[str, Any]]]:
+    """Baseline descriptors per screen, keyed by action name.
+
+    A baseline file holds thousands of samples taken while the game sat on a screen. Two samples on
+    the same screen can legitimately differ when the run state differs (an active run adds actions
+    to MAIN_MENU), so the per-screen shape is merged rather than replaced: a flag that disagrees
+    between samples is dropped, because a contract that is not stable across its own samples cannot
+    be used to judge a live run.
+    """
+    shapes: dict[str, dict[str, dict[str, Any]]] = {}
+    with path.open("r", encoding="utf-8") as handle:
+        for line in handle:
+            line = line.strip()
+            if not line:
+                continue
+            try:
+                record = json.loads(line)
+            except json.JSONDecodeError:
+                continue
+            screen = str(record.get("screen") or "")
+            descriptors = record.get("descriptors")
+            if not screen or not isinstance(descriptors, list):
+                continue
+            per_screen = shapes.setdefault(screen, {})
+            for descriptor in descriptors:
+                name = str((descriptor or {}).get("name") or "")
+                if not name:
+                    continue
+                flags = {flag: descriptor.get(flag) for flag in PATCH_CHECK_DESCRIPTOR_FLAGS}
+                known = per_screen.get(name)
+                if known is None:
+                    per_screen[name] = flags
+                else:
+                    for flag, value in flags.items():
+                        if known.get(flag) != value:
+                            known[flag] = None
+    return shapes
+
+
+def replay_action_surface_baseline(
+    client: ApiClient,
+    baseline_path: Path,
+) -> dict[str, Any]:
+    """Compare the live action surface for the current screen against the recorded baseline.
+
+    Only a flag that disagrees for an action present on both sides is a failure: that is the same
+    action being called a different way, which is exactly the drift ADR 0001 is meant to prevent.
+    Actions that exist on one side only are diagnostics, because a baseline sample was taken in a
+    different run state and a missing action there is not evidence of a regression.
+    """
+    baseline = load_action_surface_baseline(baseline_path)
+    state = client.get_state()
+    screen = str(state.get("screen") or "")
+    live = {str(item.get("name")): item for item in client.get_available_actions()}
+    recorded = baseline.get(screen)
+
+    if recorded is None:
+        return {
+            "baseline": str(baseline_path),
+            "screen": screen,
+            "baseline_screen_present": False,
+            "note": (
+                f"the baseline has no sample for screen {screen!r}; this step compared nothing and "
+                "must not be reported as a pass"
+            ),
+        }
+
+    mismatches: list[dict[str, Any]] = []
+    for name in sorted(set(live) & set(recorded)):
+        expected = recorded[name]
+        actual = {flag: live[name].get(flag) for flag in PATCH_CHECK_DESCRIPTOR_FLAGS}
+        for flag in PATCH_CHECK_DESCRIPTOR_FLAGS:
+            if expected.get(flag) is None:
+                continue
+            if expected[flag] != actual[flag]:
+                mismatches.append(
+                    {"action": name, "flag": flag, "baseline": expected[flag], "live": actual[flag]}
+                )
+
+    return {
+        "baseline": str(baseline_path),
+        "screen": screen,
+        "baseline_screen_present": True,
+        "compared_actions": sorted(set(live) & set(recorded)),
+        "only_in_state": sorted(set(live) - set(recorded)),
+        "only_in_baseline": sorted(set(recorded) - set(live)),
+        "mismatches": mismatches,
+    }
+
+
+def suite_patch_check(args: argparse.Namespace) -> dict[str, Any]:
+    """The patch-regression runbook, in one command.
+
+    Composes the four checks a patch has to survive -- reflected-member resolution, a deep mod load,
+    the ADR 0001 state/descriptor invariants, and a replay of the recorded action surface -- so a
+    game-version bump is one command instead of four remembered ones.
+    """
+    client = ApiClient(base_url=args.base_url, timeout=args.timeout_sec, retries=2, retry_delay_ms=250)
+    health = client.request("GET", "/health")
+    client._require_ok(health, "GET /health")
+    data = health["data"]
+    compatibility = data.get("compatibility") or {}
+    missing = list(compatibility.get("missing_members") or [])
+    if missing:
+        raise ValidationError(
+            "reflected game members are missing, so this game build is not supported by this mod: "
+            + json.dumps(missing, ensure_ascii=False)
+        )
+
+    deep_load = suite_mod_load(
+        argparse.Namespace(base_url=args.base_url, timeout_sec=args.timeout_sec, deep_check=True)
+    )
+    invariants = suite_state_invariants(
+        argparse.Namespace(base_url=args.base_url, timeout_sec=args.timeout_sec)
+    )
+
+    baseline_arg = getattr(args, "baseline", None)
+    baseline_path = Path(baseline_arg) if baseline_arg else find_latest_action_surface_baseline(repo_root())
+    if baseline_path is None or not baseline_path.is_file():
+        replay: dict[str, Any] = {
+            "baseline": None,
+            "baseline_screen_present": False,
+            "note": (
+                "no action-surface baseline file was found (pass --baseline); the replay step did "
+                "not run and must not be reported as a pass"
+            ),
+        }
+    else:
+        replay = replay_action_surface_baseline(client, baseline_path)
+
+    if replay.get("mismatches"):
+        raise ValidationError(
+            "the live action surface disagrees with the recorded baseline for the same action: "
+            + json.dumps(replay["mismatches"], ensure_ascii=False)
+        )
+
+    return {
+        "mod_version": data.get("mod_version"),
+        "game_version": data.get("game_version"),
+        "status": data.get("status"),
+        "reflected_members_checked": compatibility.get("reflected_members_checked"),
+        "reflected_members_missing": compatibility.get("reflected_members_missing"),
+        "deep_load": deep_load,
+        "invariants": invariants,
+        "action_surface_replay": replay,
     }
 
 
@@ -2859,6 +3038,19 @@ def build_parser() -> argparse.ArgumentParser:
 
     tool_profile = subparsers.add_parser("mcp-tool-profile")
     tool_profile.set_defaults(func=suite_mcp_tool_profile)
+
+    patch_check = subparsers.add_parser("patch-check")
+    for name, (arg_type, kwargs) in common_api.items():
+        patch_check.add_argument(name, type=arg_type, **kwargs)
+    patch_check.add_argument(
+        "--baseline",
+        default=None,
+        help=(
+            "action-surface baseline JSONL to replay; defaults to the newest "
+            "build/validation-*/action-surface-baseline.jsonl in this checkout"
+        ),
+    )
+    patch_check.set_defaults(func=suite_patch_check)
 
     debug_gating = subparsers.add_parser("debug-console-gating")
     debug_gating.add_argument("--base-url", default="http://127.0.0.1:8080")

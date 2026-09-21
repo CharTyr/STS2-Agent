@@ -36,13 +36,33 @@ If the screen is UNKNOWN, say so and ask the player to wait or retry rather than
 
     public const string JsonActFallback = """
 If you cannot call tools, reply with a single JSON object and nothing else:
-{"action":"<name from available_actions>","card_index":0,"target_index":0,"option_index":0,"x":0,"y":0,"tool":"big"}
-Omit unused parameters. Do not wrap the JSON in markdown.
+{"action":"<name from available_actions>","card_index":0,"target_index":0,"option_index":0,"x":0,"y":0,"tool":"big","reason":"<one short sentence saying why>"}
+Omit unused parameters; keep "reason" -- it is shown to the player. Do not wrap the JSON in markdown.
 """;
 
     public static string PlayContract { get; } = ExtractSharedContract(ReadEmbedded("STS2AIAgent.Sts2McpPlayer.Skill.md"));
 
     public static string ScreenPlaybooks { get; } = ReadEmbedded("STS2AIAgent.Sts2McpPlayer.ScreenPlaybooks.md");
+
+    /// <summary>
+    /// The strategy reference: the choices the per-screen action sequences do not make.
+    /// </summary>
+    /// <remarks>
+    /// Injected one screen at a time through <see cref="ScreenGuidance"/> rather than carried whole
+    /// in <see cref="PlaySystem"/>, because the whole file is roughly 1,500 tokens and a decision in
+    /// combat cannot use the shop advice.
+    /// </remarks>
+    public static string StrategyReference { get; } = ReadEmbedded("STS2AIAgent.Sts2McpPlayer.Strategy.md");
+
+    /// <summary>
+    /// The strategy guidance that applies to <paramref name="screen"/>, or an empty string when the
+    /// screen has no strategic choice. The caller appends it only when it is non-empty, so a combat
+    /// turn and a reward screen are not charged for the route rules.
+    /// </summary>
+    public static string ScreenGuidance(string? screen)
+    {
+        return PlaybookSections.ForScreen(StrategyReference, screen);
+    }
 
     public static string PlaySystem { get; } = BuildPlaySystem();
 
@@ -66,7 +86,7 @@ Omit unused parameters. Do not wrap the JSON in markdown.
         builder.AppendLine();
         builder.AppendLine(ScreenPlaybooks.Trim());
         builder.AppendLine();
-        builder.Append("Each play step: inspect state (and metadata if needed), then call act exactly once. Vision is optional; legality still comes from live state.");
+        builder.Append("Each play step: inspect state (and metadata if needed), then call act exactly once, attaching a one-sentence reason the player can read. Vision is optional; legality still comes from live state.");
         return builder.ToString();
     }
 
