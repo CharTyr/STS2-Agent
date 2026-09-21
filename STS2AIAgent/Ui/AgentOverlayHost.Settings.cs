@@ -44,6 +44,7 @@ internal sealed partial class AgentOverlayHost
     /// only durable fix is to stop treating a persisted copy as the authority.
     /// </remarks>
     private string? _themeSelectedId;
+    private Control? _themePicker;
 
     /// <summary>The selection, seeded from settings the first time this page is built.</summary>
     private string SelectedTheme => _themeSelectedId ??= OverlayThemeCatalog.DefaultId;
@@ -184,13 +185,12 @@ internal sealed partial class AgentOverlayHost
     /// The theme tiles, marking the stored selection and applying a click straight away.
     /// </summary>
     /// <remarks>
-    /// A click marks the form dirty as well as repainting: the appearance row shares this page's Save
-    /// with the endpoint and model forms, and a theme that saved itself would be the one setting here
-    /// that does not answer to it.
+    /// The theme saves immediately. Replacing its swatches leaves the rest of the form's controls,
+    /// dirty flag and unfinished input intact.
     /// </remarks>
     private Control BuildThemePicker()
     {
-        return UiFactory.ThemeSwatchPicker(OverlayThemeCatalog.All, SelectedTheme, ApplyThemeChoice);
+        return _themePicker = UiFactory.ThemeSwatchPicker(OverlayThemeCatalog.All, SelectedTheme, ApplyThemeChoice);
     }
 
     /// <summary>
@@ -210,30 +210,51 @@ internal sealed partial class AgentOverlayHost
     /// </remarks>
     private void ApplyThemeChoice(string id)
     {
-        _themeSelectedId = OverlayThemeCatalog.Normalize(id);
+        var themeId = OverlayThemeCatalog.Normalize(id);
+        if (!PersistThemeChoice(themeId)) return;
+        _themeSelectedId = themeId;
         UiFactory.UseTheme(SelectedTheme);
         // From the host, not the panel: the chat footer is a sibling of the panel rather than a child
         // of it, so a walk rooted at the panel left its buttons painted in the previous palette --
         // observed live on 2026-09-21 as a grey-on-grey Hide button under the light theme.
         RepaintForPalette(_host);
-        PersistThemeChoice(SelectedTheme);
-        RebuildSettingsForm();
+        // Replace only the swatches. Rebuilding the whole form loses partial numeric input,
+        // focus and scroll state, even if a typed settings draft is copied first.
+        var previous = _themePicker;
+        var parent = previous?.GetParent();
+        if (parent != null && previous != null)
+        {
+            var index = previous.GetIndex();
+            parent.RemoveChild(previous);
+            previous.QueueFree();
+            var replacement = BuildThemePicker();
+            parent.AddChild(replacement);
+            parent.MoveChild(replacement, index);
+        }
     }
 
     /// <summary>
     /// Writes the chosen theme to the settings file, leaving every other field alone.
     /// </summary>
     /// <remarks>
-    /// Harvests the form rather than copying the stored settings, so an unsaved edit elsewhere on the
-    /// page is carried along instead of being silently reverted; the form stays marked dirty, so the
-    /// page's Save is still what commits the rest.
+    /// Copy persisted settings rather than harvesting the form. Unfinished endpoint, model and
+    /// budget edits remain in their controls until the player saves the form.
     /// </remarks>
-    private void PersistThemeChoice(string themeId)
+    private bool PersistThemeChoice(string themeId)
     {
-        var settings = HarvestSettings();
-        settings.OverlayTheme = OverlayThemeCatalog.Normalize(themeId);
-        AgentRuntime.Instance.SaveSettings(settings);
-        _settingsDirty = true;
+        var settings = CloneSettings(AgentRuntime.Instance.Settings);
+        settings.OverlayTheme = themeId;
+        try
+        {
+            AgentRuntime.Instance.SaveSettings(settings);
+            if (_saveStatus != null) _saveStatus.Text = Loc.T(_settingsDirty ? "未保存" : "已保存");
+            return true;
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            if (_saveStatus != null) _saveStatus.Text = FormatSettingsNotice();
+            return false;
+        }
     }
 
     /// <summary>
@@ -447,7 +468,7 @@ internal sealed partial class AgentOverlayHost
     private Control BuildEndpointCard(LlmEndpoint endpoint, int index)
     {
         var box = new PanelContainer();
-        box.AddThemeStyleboxOverride("panel", UiFactory.PanelStyle(UiFactory.BgRaised, 6));
+        UiFactory.TagSurface(box, UiFactory.SurfaceRole.ChromeRaised, 6);
         var column = UiFactory.Column();
         var name = UiFactory.Line(endpoint.Name, Loc.T("名称"));
         var url = UiFactory.Line(endpoint.BaseUrl, "https://api.openai.com/v1");
@@ -469,7 +490,7 @@ internal sealed partial class AgentOverlayHost
     private Control BuildModelCard(LlmModelConfig model, int index, AgentSettings settings)
     {
         var box = new PanelContainer();
-        box.AddThemeStyleboxOverride("panel", UiFactory.PanelStyle(UiFactory.BgRaised, 6));
+        UiFactory.TagSurface(box, UiFactory.SurfaceRole.ChromeRaised, 6);
         var column = UiFactory.Column();
         var display = UiFactory.Line(model.DisplayName, Loc.T("显示名"));
         var modelName = UiFactory.Line(model.Model, Loc.T("模型名"));

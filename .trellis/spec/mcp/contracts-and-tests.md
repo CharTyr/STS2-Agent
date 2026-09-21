@@ -90,3 +90,13 @@ floor in that script only together with the lock that satisfies it.
 - Test action transport loss, unreadable responses, and reconciliation failure when changing action handling.
 - Test each affected profile and debug gate when changing registration.
 - Keep the test command and its working directory explicit: from the repository root, enter `mcp_server/` and run `uv run --locked python -m unittest discover -s tests -v`.
+
+## State diff and event stream regressions
+
+Register a tool wrapper under its public name and import its implementation under a different local name. Exercise the registered `tool.fn` in every applicable profile; testing only a same-named pure helper will miss wrapper recursion.
+
+The C# and Python state diff implementations share the same output contract. Clamp the entry limit to 1..200. Report truncation only after finding an additional omitted change, or when the depth limit prevents a complete comparison. An empty result proves equality only when `truncated` is false. Keep object, array-length, depth and string markers distinct. Quote non-identifier property names with JSON brackets and deterministic ASCII escapes so literal dots, brackets, Unicode and backslashes cannot collide with generated paths. Preserve native numeric output without converting integers through double; equivalent decimal spellings compare equal.
+
+Event-stream connect timeouts and broken reads must surface as structured `Sts2ApiError` values so `wait_until_actionable` can fall back to state polling. Only an idle read timeout on an opened stream stays within `wait_for_event`. Cap both connection and read timeouts by the remaining overall deadline. Back off an immediate EOF reconnect without extending that deadline. Read failures in an HTTP error body must not replace the HTTP error with a bare exception.
+
+Use a fake clock that advances during simulated I/O or sleep. Advancing time every time `monotonic` is read makes a harmless extra deadline check change test behavior.

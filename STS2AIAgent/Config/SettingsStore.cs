@@ -94,6 +94,9 @@ internal sealed class SettingsStore
             try
             {
                 WriteUnlocked(settings);
+                // Recovery notices describe a recovered file; a transient failed save is no longer
+                // current after a successful retry.
+                if (LastNotice.Kind == "save_failed") LastNotice = SettingsPersistenceNotice.None;
             }
             catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
             {

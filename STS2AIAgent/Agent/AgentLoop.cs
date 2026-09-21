@@ -175,6 +175,7 @@ internal sealed class AgentLoop
         var cache = new Dictionary<string, ModelRoleTestRecord>(StringComparer.Ordinal);
         foreach (var role in new[] { ModelRoleNames.Conversation, ModelRoleNames.Play, ModelRoleNames.Vision })
         {
+            cancellationToken.ThrowIfCancellationRequested();
             var resolved = ModelRoleProbe.Resolve(settings, role);
             if (role == ModelRoleNames.Vision && resolved == null)
             {
@@ -206,9 +207,14 @@ internal sealed class AgentLoop
             {
                 var client = _factory.Create(resolved.Endpoint);
                 await client.PingAsync(resolved.Model.Model, cancellationToken);
+                cancellationToken.ThrowIfCancellationRequested();
                 var record = ModelRoleProbe.FromSuccess(role, resolved);
                 cache[fingerprint] = record;
                 results.Add(new ModelRoleProbeResult(role, record, false));
+            }
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+            {
+                throw;
             }
             catch (Exception ex)
             {
@@ -525,6 +531,10 @@ internal sealed class AgentLoop
                 : "Vision observation:\n" + completion.Content;
             return (caption, jpeg, false, completion.Usage, 1);
         }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            throw;
+        }
         catch (Exception ex)
         {
             return ("Vision model failed: " + ex.Message, jpeg, false, null, 1);
@@ -562,6 +572,10 @@ internal sealed class AgentLoop
             };
         }
         catch (AutoPlayStoppedException)
+        {
+            throw;
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
             throw;
         }

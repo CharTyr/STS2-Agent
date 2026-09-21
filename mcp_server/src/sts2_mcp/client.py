@@ -150,8 +150,15 @@ class Sts2Client(Sts2ActionMethods):
             },
         )
 
+        stream_opened = False
         try:
+            if deadline is not None:
+                remaining = deadline - time.monotonic()
+                if remaining <= 0:
+                    raise socket.timeout("timed out")
+                timeout = min(timeout, remaining)
             with request.urlopen(http_request, timeout=timeout) as response:
+                stream_opened = True
                 event_id: str | None = None
                 event_name: str | None = None
                 data_lines: list[str] = []
@@ -161,7 +168,7 @@ class Sts2Client(Sts2ActionMethods):
                         remaining = deadline - time.monotonic()
                         if remaining <= 0:
                             raise socket.timeout("timed out")
-                        _set_socket_read_timeout(response, max(remaining, 0.05))
+                        _set_socket_read_timeout(response, min(timeout, remaining))
 
                     raw_line = response.readline()
                     if not raw_line:
@@ -211,7 +218,11 @@ class Sts2Client(Sts2ActionMethods):
                     elif field == "retry":
                         continue
         except error.HTTPError as exc:
-            raise self._build_api_error(exc.code, exc.read()) from exc
+            try:
+                body = exc.read()
+            except (OSError, ValueError, http.client.HTTPException):
+                body = b""
+            raise self._build_api_error(exc.code, body) from exc
         except error.URLError as exc:
             raise Sts2ApiError(
                 status_code=0,
@@ -228,10 +239,24 @@ class Sts2Client(Sts2ActionMethods):
                 status_code=0,
                 code="connection_error",
                 message=(
-                    f"Timed out while reading the STS2 mod event stream at {self._base_url}. "
-                    "The client will retry until the overall wait deadline expires."
+                    f"Timed out {'reading' if stream_opened else 'connecting to'} "
+                    f"the STS2 mod event stream at {self._base_url}."
                 ),
-                details={"reason": str(exc), "path": "/events/stream", "kind": "read_timeout"},
+                details={
+                    "reason": str(exc), "path": "/events/stream",
+                    "kind": "read_timeout" if stream_opened else "connect_timeout",
+                },
+                retryable=True,
+            ) from exc
+
+        except (OSError, http.client.HTTPException) as exc:
+            # A reset or truncated chunk can occur after the stream has opened. Keep the same
+            # structured error contract so wait_until_actionable can fall back to state polling.
+            raise Sts2ApiError(
+                status_code=0,
+                code="connection_error",
+                message="The STS2 mod event stream disconnected while being read.",
+                details={"reason": str(exc), "path": "/events/stream"},
                 retryable=True,
             ) from exc
 
@@ -249,7 +274,7 @@ class Sts2Client(Sts2ActionMethods):
             if remaining <= 0:
                 return None
 
-            read_timeout = max(remaining, 0.05)
+            read_timeout = remaining
             try:
                 for event in self.iter_events(read_timeout=read_timeout, deadline=deadline):
                     event_name = str(event.get("event", ""))
@@ -257,7 +282,12 @@ class Sts2Client(Sts2ActionMethods):
                         return event
                 # A bounded server queue closes a slow subscriber explicitly rather than
                 # silently dropping events. Reconnect within the same overall deadline so the
-                # next stream_ready/current state can resynchronize the caller.
+                # next stream_ready/current state can resynchronize the caller. A server that
+                # repeatedly closes immediately must not cause a hot reconnect loop.
+                remaining = deadline - time.monotonic()
+                if remaining <= 0:
+                    return None
+                time.sleep(min(0.1, remaining))
                 continue
             except Sts2ApiError as exc:
                 if exc.code != "connection_error":
@@ -265,10 +295,10 @@ class Sts2Client(Sts2ActionMethods):
                 # Idle read/deadline timeouts on an opened stream stay inside this wait.
                 # Transport failures never opened the stream and must surface immediately
                 # so wait_until_actionable can poll /state.
-                if (exc.details or {}).get("kind") != "read_timeout":
-                    raise
                 if time.monotonic() >= deadline:
                     return None
+                if (exc.details or {}).get("kind") != "read_timeout":
+                    raise
 
     def execute_action(
         self,

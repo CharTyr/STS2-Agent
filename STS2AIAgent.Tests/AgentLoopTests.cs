@@ -814,6 +814,56 @@ internal static class AgentLoopTests
         Assert.False(McpProcessLauncher.IsMcpRoot(Path.GetTempPath()));
     }
 
+    public static async Task ModelProbeHonorsPreCancellation()
+    {
+        using var cancellation = new CancellationTokenSource();
+        cancellation.Cancel();
+        var factory = new ProbeClientFactory(_ => Task.FromResult("pong"));
+        var loop = new AgentLoop(new FakeBridge(), factory, AgentSettings.CreateDefault);
+        var canceled = false;
+        try { await loop.TestConfiguredRolesAsync(true, cancellation.Token); }
+        catch (OperationCanceledException) when (cancellation.IsCancellationRequested) { canceled = true; }
+        Assert.True(canceled, "A canceled probe must not become a verified or failed model test.");
+        Assert.Equal(0, factory.PingCalls);
+    }
+
+    public static async Task ModelProbePropagatesInFlightCancellation()
+    {
+        using var cancellation = new CancellationTokenSource();
+        var factory = new ProbeClientFactory(token =>
+        {
+            cancellation.Cancel();
+            return Task.FromCanceled<string>(token);
+        });
+        var loop = new AgentLoop(new FakeBridge(), factory, AgentSettings.CreateDefault);
+        var canceled = false;
+        try { await loop.TestConfiguredRolesAsync(true, cancellation.Token); }
+        catch (OperationCanceledException) when (cancellation.IsCancellationRequested) { canceled = true; }
+        Assert.True(canceled, "Caller cancellation must not be cached as endpoint failure.");
+        Assert.Equal(1, factory.PingCalls);
+    }
+
+    public static async Task ModelProbeStillReportsProviderFailure()
+    {
+        var factory = new ProbeClientFactory(_ => Task.FromException<string>(new OperationCanceledException("provider timeout")));
+        var loop = new AgentLoop(new FakeBridge(), factory, AgentSettings.CreateDefault);
+        var result = await loop.TestConfiguredRolesAsync(true, CancellationToken.None);
+        Assert.Equal("failed", result.First(item => item.Role == ModelRoleNames.Play).Record.Status);
+    }
+
+    private sealed class ProbeClientFactory(Func<CancellationToken, Task<string>> ping) : ILlmClientFactory, ILlmClient
+    {
+        public int PingCalls { get; private set; }
+        public ILlmClient Create(LlmEndpoint endpoint) => this;
+        public Task<string> PingAsync(string model, CancellationToken cancellationToken)
+        {
+            PingCalls++;
+            return ping(cancellationToken);
+        }
+        public Task<LlmCompletion> CompleteAsync(LlmRequest request, CancellationToken cancellationToken) =>
+            throw new InvalidOperationException("A model probe must not invoke gameplay completion.");
+    }
+
     private sealed class FakeBridge : IGameBridge
     {
         public int ActCalls { get; private set; }

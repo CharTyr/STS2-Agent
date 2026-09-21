@@ -74,12 +74,13 @@ internal sealed class EventStreamSubscribers<TEnvelope, TSnapshot>
     }
 
     /// <summary>Stores the newest snapshot and delivers it to every current subscriber.</summary>
-    public void PublishSnapshot(TSnapshot snapshot, TEnvelope frame)
+    public int PublishSnapshot(TSnapshot snapshot, TEnvelope frame)
     {
         lock (_gate)
         {
-            Snapshot = snapshot;
-            _hub.Publish(frame);
+            var dropped = _hub.Publish(frame);
+            Snapshot = _hub.Count > 0 ? snapshot : null;
+            return dropped;
         }
     }
 
@@ -92,7 +93,7 @@ internal sealed class EventStreamSubscribers<TEnvelope, TSnapshot>
     {
         lock (_gate)
         {
-            Snapshot = snapshot;
+            Snapshot = _hub.Count > 0 ? snapshot : null;
         }
     }
 
@@ -100,7 +101,9 @@ internal sealed class EventStreamSubscribers<TEnvelope, TSnapshot>
     {
         lock (_gate)
         {
-            return _hub.Publish(envelope);
+            var dropped = _hub.Publish(envelope);
+            if (_hub.Count == 0) Snapshot = null;
+            return dropped;
         }
     }
 

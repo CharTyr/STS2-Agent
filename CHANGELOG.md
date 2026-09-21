@@ -4,7 +4,13 @@
 
 ## Unreleased
 
-- Nothing yet. A fix that lands after the v0.14.5 release commit goes here rather than being folded back into a version that has already been published — that is how three releases ended up sharing one version string.
+- Preserve the selected overlay theme in settings copies. Theme selection saves only the theme, keeps unfinished form input and scroll position, repaints endpoint/model panels, and reports persistence failures.
+- Unwrap the companion's actual HTTP state response and read its local AI player, so health, energy and hand count describe the same character. Reject failed or malformed response envelopes.
+- Fix the Python MCP `diff_state` tool recursively calling itself. Both diff implementations now report actual truncation and depth limits, escape ambiguous property paths, distinguish empty objects from strings, and apply the same 200-entry cap. Native diffs preserve large integers and compare equivalent decimal number spellings correctly.
+- Clear event snapshots when the last subscriber leaves or overflows. Ignore late idle samples, update polling demand on snapshot overflow, and reset duplicate suppression for a new subscriber lifecycle.
+- Return structured errors for broken event streams and unreadable HTTP error bodies. Bound connection/read waits by the overall deadline, distinguish connection timeouts from idle reads, and back off repeated empty-stream reconnects.
+- Propagate caller cancellation through model probes, vision and read tools. Canceling a model test does not cache a connectivity failure. Clear a stale save-failure notice after a successful retry.
+- Add regressions for these boundaries and execute the registered diff tool in all three Python MCP profiles. This maintenance batch is validated offline; live-game checks are tracked in the dev audit.
 
 ## v0.14.5 - 2026-09-21
 

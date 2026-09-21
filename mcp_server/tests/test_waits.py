@@ -349,30 +349,34 @@ class WaitBehaviorTests(unittest.TestCase):
         """
 
         client = Sts2Client(base_url="http://127.0.0.1:8080")
+        clock = FakeClock()
         opens = 0
-        ticks = [0.0]
 
-        def fake_monotonic() -> float:
-            # Advancing on every read keeps the loop bounded without real waiting: the deadline
-            # arithmetic below is deterministic, and any raise-on-read-timeout regression is
-            # caught by the assertRaises-free call itself.
-            ticks[0] += 1.0
-            return ticks[0]
+        class IdleResponse:
+            def __init__(self, timeout):
+                self.timeout = timeout
+            def __enter__(self):
+                return self
+            def __exit__(self, *args):
+                return False
+            def readline(self):
+                clock.sleep(min(2.5, self.timeout))
+                raise socket.timeout("idle stream")
 
         def fake_urlopen(http_request, timeout=None):
             nonlocal opens
-            url = getattr(http_request, "full_url", str(http_request))
-            if "/events/stream" in url:
-                opens += 1
-                raise TimeoutError("idle")
-            raise AssertionError(f"unexpected urlopen: {url}")
+            opens += 1
+            return IdleResponse(timeout)
 
-        with patch("sts2_mcp.client.request.urlopen", new=fake_urlopen):
-            with patch("sts2_mcp.client.time.monotonic", new=fake_monotonic):
-                result = client.wait_for_event(timeout=5.0)
+        # Time advances on simulated I/O, not on reading the clock. Extra deadline checks must
+        # not make a test consume seconds that no operation actually spent.
+        with patch("sts2_mcp.client.request.urlopen", new=fake_urlopen), \
+             patch("sts2_mcp.client.time.monotonic", new=clock.monotonic):
+            result = client.wait_for_event(timeout=5.0)
 
         self.assertIsNone(result)
         self.assertEqual(opens, 2)
+        self.assertEqual(clock.now, 5.0)
 
 
 if __name__ == "__main__":

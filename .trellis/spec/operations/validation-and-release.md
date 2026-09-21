@@ -129,3 +129,9 @@ powershell -ExecutionPolicy Bypass -File scripts/package-release.ps1 -Configurat
 `AGENTS.md` (a local working file, deliberately untracked, so it is not a link: nothing a fresh checkout contains would resolve) lists the same five files, [preflight-release.ps1](../../../scripts/preflight-release.ps1) runs the same checker CI runs, and [package-release.ps1](../../../scripts/package-release.ps1) runs it (`Assert-ReleaseMetadataConsistent`) before it starts building, so a package cannot be produced from drifted metadata.
 
 Static checks and package inspection do not prove that the Mod loads in the real game. Use the game-connected commands and the manual release checklist only when the task authorizes those side effects.
+
+## Capturing offline validation output on Windows
+
+When capturing the full preflight, redirect the child process stdout and stderr at the OS process boundary (for example, `subprocess.run` with both streams directed to a file). Windows PowerShell can convert ordinary native stderr progress into `NativeCommandError` when `*>` redirection and `ErrorActionPreference=Stop` interact. Python unittest writes normal progress to stderr, so such a capture failure does not establish a failing test. Always preserve and check the actual child exit code.
+
+A date-stamped audit under `docs/` must state that it is a historical snapshot; `doc-marks` checks this. Record all actual attempts and distinguish an audit's baseline tests, new failing regressions, final offline checks and pending live-game validation.

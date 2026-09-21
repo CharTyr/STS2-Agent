@@ -43,6 +43,7 @@ internal static class SettingsClone
             OverlayVisibleOnStart = source.OverlayVisibleOnStart,
             HasSeenFirstRunGuide = source.HasSeenFirstRunGuide,
             CompanionAutoSelectCharacter = source.CompanionAutoSelectCharacter,
+            OverlayTheme = source.OverlayTheme,
             OverlayLeft = source.OverlayLeft,
             OverlayTop = source.OverlayTop,
             McpServerPath = source.McpServerPath,

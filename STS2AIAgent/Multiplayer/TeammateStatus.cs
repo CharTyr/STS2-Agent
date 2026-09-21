@@ -12,15 +12,14 @@ namespace STS2AIAgent.Multiplayer;
 /// needs mid-fight — how much health the teammate has and whether it can act — without the host
 /// having to guess from the process tree.
 ///
-/// From the companion's point of view its own character is the local player, so "teammate" here means
-/// every player in the payload whose <c>is_local</c> is false. That is also why this reads the
-/// companion's state rather than the host's: each instance reports the other one as non-local, and a
-/// single payload then names exactly the people the reader cares about.
+/// The connection reads the companion process, where the AI character has is_local=true.
+/// Its combat.hand belongs to that same local player. Selecting a non-local player here mixes
+/// the host's health and energy with the AI's hand.
 ///
 /// Parsing never throws. A companion that is mid-transition, restarting, or answering a payload this
 /// host does not understand must produce "no summary", not an exception on the overlay's tick.
 /// </remarks>
-/// <summary>One non-local player as the companion's payload reports them.</summary>
+/// <summary>The local AI player as the companion process reports it.</summary>
 internal readonly record struct TeammatePlayer(
     string? PlayerId,
     int? CurrentHp,
@@ -54,6 +53,16 @@ internal readonly record struct TeammateStatus(
                 return Empty;
             }
 
+            // HTTP /state wraps the payload in { ok, request_id, data }; direct bridge reads
+            // and fixtures may already contain the payload. Never display data from an error.
+            if (root.TryGetProperty("ok", out var ok))
+            {
+                if (ok.ValueKind != JsonValueKind.True ||
+                    !root.TryGetProperty("data", out var data) || data.ValueKind != JsonValueKind.Object)
+                    return Empty;
+                root = data;
+            }
+
             var screen = Text(root, "screen");
             var combat = Object(root, "combat");
             var inCombat = combat is { } combatPayload;
@@ -69,8 +78,8 @@ internal readonly record struct TeammateStatus(
             var players = new List<TeammatePlayer>();
             foreach (var player in source)
             {
-                // is_local false is the whole point: the companion's own character is local to it.
-                if (Bool(player, "is_local") != false)
+                // The payload is fetched from the companion, so its own player is the AI.
+                if (Bool(player, "is_local") != true)
                 {
                     continue;
                 }

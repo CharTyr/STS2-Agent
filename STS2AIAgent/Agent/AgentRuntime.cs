@@ -726,6 +726,11 @@ internal sealed partial class AgentRuntime
             NoteEvent(summary);
             return summary;
         }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            SetStatus(Loc.T("模型测试已取消。"));
+            throw;
+        }
         catch (Exception ex)
         {
             SetStatus(Loc.T("连通失败"));

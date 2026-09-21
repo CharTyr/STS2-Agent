@@ -32,6 +32,7 @@ internal static class EventStreamSubscribersTests
     public static void SubscribeAfterSnapshotKeepsInitialFrameFirst()
     {
         var session = NewSession();
+        session.Subscribe(null, snapshot => FrameOf(snapshot, "stream_ready"));
         session.PublishSnapshot(new Snapshot("run_1"), new Frame("run_1", "session_started"));
 
         var lease = session.Subscribe(session.Snapshot, snapshot => FrameOf(snapshot, "stream_ready"));
@@ -50,9 +51,8 @@ internal static class EventStreamSubscribersTests
     public static void SnapshotIsDroppedWhenTheLastSubscriberLeaves()
     {
         var session = NewSession();
+        var first = session.Subscribe(null, snapshot => FrameOf(snapshot, "stream_ready"));
         session.PublishSnapshot(new Snapshot("run_1"), new Frame("run_1", "session_started"));
-
-        var first = session.Subscribe(session.Snapshot, snapshot => FrameOf(snapshot, "stream_ready"));
         Assert.NotNull(session.Snapshot);
         Assert.True(session.Unsubscribe(first.Id));
         Assert.Null(session.Snapshot);

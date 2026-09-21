@@ -61,6 +61,7 @@ internal static partial class Loc
 
         // Model test, connection and settings.
         map["正在测试模型…会向配置的服务发送测试请求。"] = "Testing the model… a test request will be sent to the configured service.";
+        map["模型测试已取消。"] = "Model test canceled.";
         map["游玩模型测试失败"] = "Play model test failed";
         map["游玩模型连通成功（不等于工具/视觉已验证）"] = "Play model connected (this does not verify tools or vision)";
         map["模型尚未验证"] = "Model not verified yet";

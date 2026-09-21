@@ -245,6 +245,7 @@ internal static class SettingsStoreTests
         source.MaxSessionTokens = 1234;
         source.MaxSessionRequests = 7;
         source.Hotkey = "F9";
+        source.OverlayTheme = "ivory";
         source.OverlayLeft = 12;
         source.OverlayTop = 34;
         source.Endpoints[0].ApiKey = "sk-clone";
@@ -260,6 +261,7 @@ internal static class SettingsStoreTests
         Assert.Equal(1234, clone.MaxSessionTokens);
         Assert.Equal(7, clone.MaxSessionRequests);
         Assert.Equal("F9", clone.Hotkey);
+        Assert.Equal("ivory", clone.OverlayTheme);
         Assert.Equal(12f, clone.OverlayLeft);
         Assert.Equal(34f, clone.OverlayTop);
         Assert.Equal("sk-clone", clone.Endpoints[0].ApiKey);
