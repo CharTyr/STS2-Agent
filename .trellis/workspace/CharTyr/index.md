@@ -8,7 +8,7 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-1.md`
-- **Total Sessions**: 33
+- **Total Sessions**: 34
 - **Last Active**: 2026-09-21
 <!-- @@@/auto:current-status -->
 
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-1.md` | ~1362 | Active |
+| `journal-1.md` | ~1409 | Active |
 <!-- @@@/auto:active-documents -->
 
 ---
@@ -29,6 +29,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 34 | 2026-09-21 | Optimize the AI-play harness: cheaper prompts, smaller state, recoverable tools | `46b2cdd`, `5fcb7df`, `78b1546`, `d5f780b`, `cbb550b`, `13352db`, `41e34e1`, `712d77c` | `dev` |
 | 33 | 2026-09-21 | Fix all five agent turn integrity findings | `763eabddb10fdb52ff941df6715014bc468a4f8e` | `dev` |
 | 32 | 2026-09-21 | Dev audit: 16 fixes and offline verification | `a4463fe` | `dev` |
 | 31 | 2026-09-21 | v0.14.0: offline plan items, live validation, overlay redesign, and the release | `4cab34f`, `58a08ea`, `b32d56d`, `4151a37`, `e7520f8`, `c3118f1`, `9d3bc3b`, `9b92a8d`, `bd45774`, `2b7610a`, `51828ad`, `8bc7d2d`, `46d0da9` | `main` |
