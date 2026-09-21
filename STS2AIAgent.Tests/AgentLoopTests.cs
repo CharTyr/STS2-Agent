@@ -73,6 +73,81 @@ internal static class ActIndexValidatorTests
     }
 
     /// <summary>
+    /// A rejection has to be correctable: the field that was wrong, what was submitted, and the
+    /// indices the payload the validator just read actually offers -- plus the human-readable message
+    /// it has always carried, unchanged.
+    /// </summary>
+    public static void StructuredIndexRejections()
+    {
+        const string actions = """[{"name":"play_card","requires_index":true,"requires_target":false}]""";
+        const string state = """{"combat":{"hand":[{"i":0,"targets":[3,4]},{"i":1,"targets":[]}]}}""";
+
+        var stale = ActIndexValidator.Validate("play_card", 9, null, null, actions, state);
+        Assert.NotNull(stale);
+        Assert.Equal("card_index 9 is not in the latest combat.hand.", stale!.Message);
+        Assert.Equal("invalid_target", stale.Code);
+        Assert.Equal(409, stale.StatusCode);
+        Assert.Equal("card_index", stale.Field);
+        Assert.Equal(9, stale.Submitted);
+        Assert.Equal("combat.hand", stale.ValidField);
+        Assert.True(stale.ValidIndices.SequenceEqual(new[] { 0, 1 }), "the hand's own indices");
+
+        var missing = ActIndexValidator.Validate("play_card", null, null, null, actions, state);
+        Assert.NotNull(missing);
+        Assert.Equal("card_index must come from the latest combat.hand.", missing!.Message);
+        Assert.Equal("invalid_request", missing.Code);
+        Assert.Equal(400, missing.StatusCode);
+        Assert.Equal("card_index", missing.Field);
+        Assert.Null(missing.Submitted);
+        Assert.True(missing.ValidIndices.SequenceEqual(new[] { 0, 1 }));
+
+        const string targetActions = """[{"name":"play_card","requires_index":true,"requires_target":true}]""";
+        var missingTarget = ActIndexValidator.Validate("play_card", 0, null, null, targetActions, state);
+        Assert.NotNull(missingTarget);
+        Assert.Equal("target_index must come from the latest payload.", missingTarget!.Message);
+        Assert.Equal("target_index", missingTarget.Field);
+        Assert.Equal("combat.hand[].targets", missingTarget.ValidField);
+        Assert.True(missingTarget.ValidIndices.SequenceEqual(new[] { 3, 4 }), "the card's own targets");
+
+        var target = ActIndexValidator.Validate("play_card", 0, 7, null, targetActions, state);
+        Assert.NotNull(target);
+        Assert.Equal("target_index 7 is not in the latest targets for card 0.", target!.Message);
+        Assert.Equal("target_index", target.Field);
+        Assert.Equal(7, target.Submitted);
+        Assert.Equal("combat.hand[].targets", target.ValidField);
+        Assert.True(target.ValidIndices.SequenceEqual(new[] { 3, 4 }));
+
+        const string mapActions = """[{"name":"choose_map_node","requires_index":true}]""";
+        const string mapState = """{"map":{"options":[{"i":0},{"i":2}]}}""";
+        var option = ActIndexValidator.Validate("choose_map_node", null, null, 1, mapActions, mapState);
+        Assert.NotNull(option);
+        Assert.Equal("option_index 1 is not in the latest payload for choose_map_node.", option!.Message);
+        Assert.Equal("map.options", option.ValidField);
+        Assert.Equal("option_index", option.Field);
+        Assert.Equal(1, option.Submitted);
+        Assert.True(option.ValidIndices.SequenceEqual(new[] { 0, 2 }));
+
+        // The envelope is the HTTP one: the same code, message, details, and retryable the Router
+        // writes, with status_code in-process.
+        var payload = stale.ToApiException("play_card", new[] { "end_turn" });
+        using var document = JsonDocument.Parse(JsonSerializer.Serialize(AgentErrorEnvelope.ToPayload(payload)));
+        var error = document.RootElement;
+        Assert.Equal("invalid_target", error.GetProperty("code").GetString());
+        Assert.Equal("card_index 9 is not in the latest combat.hand.", error.GetProperty("message").GetString());
+        Assert.False(error.GetProperty("retryable").GetBoolean());
+        Assert.Equal(409, error.GetProperty("status_code").GetInt32());
+        var details = error.GetProperty("details");
+        Assert.Equal("play_card", details.GetProperty("action").GetString());
+        Assert.Equal("card_index", details.GetProperty("field").GetString());
+        Assert.Equal(9, details.GetProperty("submitted").GetInt32());
+        Assert.Equal("combat.hand", details.GetProperty("valid_field").GetString());
+        Assert.True(
+            details.GetProperty("valid_indices").EnumerateArray().Select(value => value.GetInt32()).SequenceEqual(new[] { 0, 1 }),
+            "valid_indices must survive serialization");
+        Assert.Equal("end_turn", details.GetProperty("available_actions")[0].GetString());
+    }
+
+    /// <summary>
     /// A non-object JSON root (array, scalar, null) must read as "settled" rather than throwing
     /// <see cref="InvalidOperationException"/> out of <c>TryGetProperty</c> — the same boundary
     /// <c>AgentLoop.ParseArgs</c> enforces on tool arguments.
@@ -309,7 +384,6 @@ internal static class AgentLoopTests
                 """{"screen":"CRYSTAL_SPHERE","available_actions":["crystal_clear_cell"],"crystal_sphere":{"grid_width":11,"grid_height":11}}""",
             AvailableActionsJson =
                 """[{"name":"crystal_clear_cell","requires_index":false,"requires_target":false}]""",
-            AvailableActionNames = new[] { "crystal_clear_cell" },
             Screen = "CRYSTAL_SPHERE"
         };
         var factory = new ScriptedClientFactory(new[]
@@ -521,7 +595,6 @@ internal static class AgentLoopTests
                 """{"screen":"CRYSTAL_SPHERE","available_actions":["crystal_clear_cell"],"crystal_sphere":{"grid_width":11,"grid_height":11}}""",
             AvailableActionsJson =
                 """[{"name":"crystal_clear_cell","requires_index":false,"requires_target":false}]""",
-            AvailableActionNames = new[] { "crystal_clear_cell" },
             Screen = "CRYSTAL_SPHERE"
         };
         var factory = new ScriptedClientFactory(new[]
@@ -712,6 +785,119 @@ internal static class AgentLoopTests
         Assert.Equal("play_card", result.Acted);
         Assert.Equal("Use the legal strike.", result.Reasoning);
         Assert.Null(result.Error);
+    }
+
+    /// <summary>
+    /// The prompt order is a cache contract: every message that does not change between two decisions
+    /// on the same screen comes first, and only this step's state and the instruction answering it
+    /// come last. The state used to be message 1, which invalidated everything after it -- the
+    /// playbook in the system prompt included -- on every single step.
+    /// </summary>
+    public static async Task PlayOnce_PutsTheStaticPrefixBeforeTheDynamicState()
+    {
+        var factory = new ScriptedClientFactory(Array.Empty<LlmCompletion>());
+        var loop = new AgentLoop(new FakeBridge(), factory, AgentSettings.CreateDefault);
+
+        await loop.PlayOnceAsync(CancellationToken.None);
+
+        var messages = factory.LastRequest!.Messages;
+        Assert.Contains(PlayPrompt.PlayContract, messages[0].Content);
+        Assert.Equal("system", messages[0].Role);
+
+        // Static system prompts, then the state, then the one instruction it answers.
+        var firstUser = messages.ToList().FindIndex(message => message.Role == "user");
+        Assert.True(firstUser > 0, "the first message must be the static system prompt");
+        for (var index = firstUser; index < messages.Count; index++)
+        {
+            Assert.Equal("user", messages[index].Role);
+        }
+
+        Assert.Equal(messages.Count - 2, firstUser);
+        Assert.Contains("Latest compact game state", messages[^2].Content);
+        Assert.Contains("Choose the next legal action", messages[^1].Content);
+
+        // The state carries the only copy of the screen playbook: one section, not the document.
+        Assert.Contains("## COMBAT", string.Join("\n", messages.Select(message => message.Content)));
+        Assert.False(
+            string.Join("\n", messages.Select(message => message.Content))
+                .Contains(PlayPrompt.ScreenPlaybooks, StringComparison.Ordinal),
+            "no step may carry the whole screen-playbooks document");
+    }
+
+    public static async Task PlayOnce_KeepsTheStaticPrefixStableAcrossSteps()
+    {
+        var bridge = new FakeBridge();
+        var factory = new ScriptedClientFactory(Array.Empty<LlmCompletion>());
+        var loop = new AgentLoop(bridge, factory, AgentSettings.CreateDefault);
+
+        await loop.PlayOnceAsync(CancellationToken.None);
+        var first = factory.LastRequest!.Messages;
+
+        // Same screen, different turn: everything before the state has to be byte-identical, which is
+        // what lets a provider reuse the prefix it cached for the previous step.
+        bridge.CompactStateJson =
+            """{"screen":"COMBAT","available_actions":["end_turn"],"combat":{"hand":[{"i":1,"line":"Defend","targets":[]}],"enemies":[{"i":0}]}}""";
+        await loop.PlayOnceAsync(CancellationToken.None);
+        var second = factory.LastRequest!.Messages;
+
+        Assert.Equal(first.Count, second.Count);
+        for (var index = 0; index < first.Count - 2; index++)
+        {
+            Assert.Equal(first[index].Role, second[index].Role);
+            Assert.Equal(first[index].Content, second[index].Content);
+        }
+
+        Assert.True(
+            !string.Equals(first[^2].Content, second[^2].Content, StringComparison.Ordinal),
+            "the state message is the part that must move between steps");
+    }
+
+    /// <summary>
+    /// The vision path keeps the same order: the screenshot is supporting context, and it is not the
+    /// last thing the model reads before it is told to act.
+    /// </summary>
+    public static async Task PlayOnce_KeepsTheStateLastWhenVisionIsAttached()
+    {
+        var bridge = new FakeBridge();
+        var factory = new ScriptedClientFactory(new[] { new LlmCompletion { Content = "end the turn" } });
+        var settings = AgentSettings.CreateDefault();
+        settings.Models[0].SupportsVision = true;
+        var loop = new AgentLoop(bridge, factory, () => settings);
+
+        await loop.PlayOnceAsync(CancellationToken.None);
+
+        var messages = factory.LastRequest!.Messages;
+        Assert.Equal(1, bridge.CaptureCalls);
+        var screenshot = messages.ToList().FindIndex(message => message.ImageJpeg != null);
+        Assert.True(screenshot > 0, "the attached screenshot must be in the request");
+        Assert.True(screenshot < messages.Count - 2, "the screenshot must precede the state and the instruction");
+        Assert.Contains("Latest compact game state", messages[^2].Content);
+        Assert.Contains("Choose the next legal action", messages[^1].Content);
+    }
+
+    /// <summary>
+    /// A model that cannot call tools is told the JSON shape in the static system prompt, which is
+    /// also where prefix caching wants it: the instruction does not move per step.
+    /// </summary>
+    public static async Task PlayOnce_JsonFallbackStaysInTheStaticPrefix()
+    {
+        var bridge = new FakeBridge();
+        var factory = new ScriptedClientFactory(new[]
+        {
+            new LlmCompletion { Content = """{"action":"end_turn","reason":"No playable cards remain."}""" }
+        });
+        var settings = AgentSettings.CreateDefault();
+        settings.Models[0].SupportsTools = false;
+        settings.Models[0].SupportsVision = false;
+        var loop = new AgentLoop(bridge, factory, () => settings);
+
+        var result = await loop.PlayOnceAsync(CancellationToken.None);
+
+        Assert.Equal("end_turn", result.Acted);
+        var messages = factory.LastRequest!.Messages;
+        Assert.Contains(PlayPrompt.JsonActFallback, messages[0].Content);
+        Assert.Contains("Latest compact game state", messages[^2].Content);
+        Assert.Contains("Choose the next legal action", messages[^1].Content);
     }
 
     public static async Task PlayOnce_PropagatesCancellation()
@@ -908,9 +1094,6 @@ internal static class AgentLoopTests
         public string AvailableActionsJson { get; set; } =
             """[{"name":"play_card","requires_index":true,"requires_target":false}]""";
 
-        public IReadOnlyList<string> AvailableActionNames { get; set; } =
-            new[] { "play_card", "end_turn" };
-
         public string Screen { get; set; } = "COMBAT";
 
         public Task<string> GetCompactStateJsonAsync(CancellationToken cancellationToken)
@@ -928,9 +1111,16 @@ internal static class AgentLoopTests
             return Task.FromResult(AvailableActionsJson);
         }
 
-        public Task<IReadOnlyList<string>> GetAvailableActionNamesAsync(CancellationToken cancellationToken)
+        public Task<string> GetActionSnapshotJsonAsync(CancellationToken cancellationToken)
         {
-            return Task.FromResult(AvailableActionNames);
+            // The same two halves the real bridge reads in one game-thread turn.
+            using var state = JsonDocument.Parse(CompactStateJson);
+            using var actions = JsonDocument.Parse(AvailableActionsJson);
+            return Task.FromResult(JsonSerializer.Serialize(new
+            {
+                state = state.RootElement.Clone(),
+                available_actions = actions.RootElement.Clone()
+            }));
         }
 
         public Task<string> GetScreenAsync(CancellationToken cancellationToken) => Task.FromResult(Screen);
@@ -943,7 +1133,8 @@ internal static class AgentLoopTests
             int? x,
             int? y,
             string? tool,
-            CancellationToken cancellationToken)
+            CancellationToken cancellationToken,
+            bool rawState = false)
         {
             ActCalls++;
             LastAction = action;

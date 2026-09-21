@@ -14,7 +14,7 @@
 
 - `guided`
   - 默认 profile
-  - 只暴露 `health_check`、`get_game_state`、`get_raw_game_state`、`get_available_actions`、`act`、`get_game_data_item`、`get_game_data_items`、`get_relevant_game_data`、`wait_for_event`、`wait_until_actionable`
+  - 只暴露 `health_check`、`get_game_state`、`get_raw_game_state`、`get_available_actions`、`decide`、`act`、`get_game_data_item`、`get_game_data_items`、`get_relevant_game_data`、`wait_for_event`、`wait_until_actionable`
 - `layered`
   - 面向主 / 副 Agent 分层编排
   - 在 guided 基础上额外暴露：
@@ -41,6 +41,7 @@
 - `get_decision_log`
 - `get_run_summary`
 - `get_scene_guidance`
+- `decide`
 - `diff_state`
 - `act`
 - `get_game_data_item`
@@ -64,9 +65,10 @@
 - `get_run_summary`：一次调用给出当前局的角色、楼层、Act、Boss、HP、金币、能量，以及牌库 / 遗物 / 药水计数（含联机队伍块）。取的是 raw `/state` 字段，不是 compact 的改名版。
 - `get_decision_log`：最近被接受的决策及其理由，最新在最后。
 - `diff_state`：两份 `/state` 的逐路径差异（前后值），`truncated` 标明触顶。
-- `get_scene_guidance`：当前屏该用的策略规则——`MAP` 路线、`REST` 休息点、`SHOP` / Fake Merchant 商店、`COMBAT` 战斗与药水优先级、`EVENT` 选项判读；没有策略可言的屏（奖励、选牌等）返回空串。`EVENT` 屏额外带 `event_options`：离线索引给出的逐选项 handler / cost / risk 分级（**这项只有 sidecar 有**，Mod 内不带那份索引，原生 MCP 面只回策略）。
+- `get_scene_guidance`：当前屏该用的策略与操作流程——`MAP` 路线、`REST` 休息点、`SHOP` / Fake Merchant 商店、`COMBAT` 战斗与药水优先级、`EVENT` 选项判读；没有策略可言的屏（奖励、选牌等）`guidance` 返回空串。返回四个共享键 `screen` / `scene` / `guidance` / `playbook`，其中 `playbook` 是 `references/screen-playbooks.md` 里该屏的流程段落，**永不为空**（映射不到的屏给章节索引）。`EVENT` 屏额外带 `event_id` / `event_options`：离线索引给出的逐选项 handler / cost / risk 分级（**这三项只有 sidecar 有**，Mod 内不带那份索引，原生 MCP 面只回四个共享键）。
+- `decide`：**一次调用**给出一次决策需要的三样东西——`state`（compact `agent_view`，与 `get_game_state` 同形）、`available_actions`（与 `get_available_actions` 同形，含 `requires_index` / `requires_target` / 目标提示）、`scene_guidance`（与 `get_scene_guidance` 同形）。文档里的 `get_game_state -> get_available_actions -> act`（外加 5 个屏的 `get_scene_guidance`）每步 3–4 次调用，用 `decide` 是 1 次；旧工具都还在，按需单独使用。
 
-`get_scene_guidance` 的策略正文与游戏内循环注入的是同一份 `skills/sts2-mcp-player/references/strategy.md`，两侧的「屏 → 章节」映射由
+`get_scene_guidance` 与 `decide` 里的策略正文与游戏内循环注入的是同一份 `skills/sts2-mcp-player/references/strategy.md`（外加同一份 `screen-playbooks.md`），两侧的「屏 → 章节」映射与共享键由
 `tests/test_scene_guidance_alignment.py` 逐条比对（C# 为准）。
 
 <!-- BEGIN LEGACY ACTION TOOLS -->
@@ -166,6 +168,18 @@ Modal：
 - compact 商店打开标志是 `shop.open`（raw state 里才是 `shop.is_open`）
 - `wait_until_actionable` 同时返回 `matched`（是否有事件命中）和 `actionable`（新状态是否已有非被动动作）；`actionable` 与原生 MCP server 的字段名一致
 
+## `act` 的结果契约
+
+`act` 的 `state` 是**动作之后那份状态的 compact `agent_view`**，不是完整 `/state`：一次 `POST /action` 的
+`data.state` 约 4,000–9,500 token，而决策要读的字段 compact 里都有，所以默认只回 compact。`action`、
+`status`、`stable`、`message` 等其余键原样保留。
+
+- 传 `raw_state=True`（默认 `False`）时 `state` 是完整载荷，用来查 compact 没带的字段。
+- Mod 未暴露 `agent_view` 时回退完整载荷（与 `get_game_state` 的 `compact_agent_view: false` 同义）。
+- `status: "pending"` / `stable: false` 时不要重发同一个动作：按返回的屏流程等待或重新读状态。
+- 索引被拒时错误对象里带 `field` / `submitted` / `valid_indices` / `valid_field`：按它改正索引，
+  而不是重发同一个值（`error.details` 里 Mod 原本的 `hand_count`、`option_count` 等计数也还在）。
+
 ## 降低模型误调用的建议
 
 这个 MCP 已经不算小，所以真正影响稳定性的，不只是“工具有没有”，还包括“模型是不是按正确节奏调用”。
@@ -173,11 +187,11 @@ Modal：
 推荐约束：
 
 1. 会话开始先调 `health_check`。
-2. 每次决策前都调 `get_game_state`。
+2. 每次决策前读一次状态：`decide`（一次拿到状态、动作与指引）或 `get_game_state`。
 3. 只调用当前 `available_actions` 里出现的动作。
 4. 调用 `act` 时附一条简短的 `reason`，供玩家界面与决策日志解释本步选择；
    协议上可省略，但 agent 应把它当作常规参数。
-5. 每次动作后重新读取状态，不复用旧索引。
+5. `act` 返回的 `state` 就是下一个决策的输入，不必再读一次；只有 `pending` / 屏幕变化时才重读。
 6. 优先用高层动作，不要把可合并流程拆碎。
 
 `guided` / `layered` profile 使用统一 `act` 工具时，水晶球动作额外接受
@@ -268,6 +282,11 @@ agent_knowledge/
 - 当前还没有 chapter 字段时，目录先落在 `global/`
 - 追加内容时会自动带上 `run_id`、`floor`、`screen`、UTC 时间戳
 - 不在仓库检出内时（wheel / pipx 安装态）不再猜测路径：知识库落到当前工作目录的 `agent_knowledge/`，并用 `STS2_AGENT_KNOWLEDGE_DIR` 可固定到指定位置
+
+`get_planner_context` / `get_combat_context` 返回的 `reference_files` 是离线知识库的入口，键就是状态里对应的
+id 字段（映射见 `docs/game-knowledge/agent-reference.md`）：`cards`（`card_id`）、`monsters` /
+`monster_behaviors`（`enemy_id`）、`potions`（`potion_id`）、`events`（`event_id`）、
+`relics`（`relic_id`）、`powers`（`power_id`）、`characters`、`playbook`。
 
 ## 主 / 副 Agent 交接
 

@@ -3,7 +3,7 @@ from __future__ import annotations
 import os
 import threading
 import time
-from typing import Any, Callable, Literal
+from typing import Any, Callable
 
 from fastmcp import FastMCP
 
@@ -13,7 +13,9 @@ from .knowledge import Sts2KnowledgeBase
 from .legacy_tools import (
     # Re-exported: callers and tests import these from here, and the table is one object either way.
     ActionToolSpec,
+    CrystalSphereTool,
     LEGACY_ACTION_TOOLS as _LEGACY_ACTION_TOOLS,
+    register_legacy_action_tools as _register_legacy_action_tools,
 )
 from .scene_guidance import scene_guidance
 from .state_views import MAX_DIFF_ENTRIES, diff_state as build_state_diff, run_summary
@@ -38,7 +40,6 @@ from .game_data import (
 )
 
 ToolHandler = Callable[..., dict[str, Any]]
-CrystalSphereTool = Literal["big", "small"]
 
 
 PASSIVE_ACTIONS = {"discard_potion", "save_and_quit"}
@@ -91,103 +92,6 @@ def _debug_tools_enabled() -> bool:
 _DEBUG_GATED_ACTIONS = {"run_console_command", "inject_event_churn"}
 
 
-def _register_no_arg_tool(mcp: FastMCP, name: str, description: str, handler: ToolHandler) -> None:
-    def tool() -> dict[str, Any]:
-        return handler()
-
-    tool.__name__ = name
-    tool.__doc__ = description
-    mcp.tool(name=name, description=description)(tool)
-
-
-def _register_option_index_tool(mcp: FastMCP, name: str, description: str, handler: ToolHandler) -> None:
-    def tool(option_index: int) -> dict[str, Any]:
-        return handler(option_index=option_index)
-
-    tool.__name__ = name
-    tool.__doc__ = description
-    mcp.tool(name=name, description=description)(tool)
-
-
-def _register_card_target_tool(mcp: FastMCP, name: str, description: str, handler: ToolHandler) -> None:
-    def tool(card_index: int, target_index: int | None = None) -> dict[str, Any]:
-        return handler(card_index=card_index, target_index=target_index)
-
-    tool.__name__ = name
-    tool.__doc__ = description
-    mcp.tool(name=name, description=description)(tool)
-
-
-def _register_reward_choice_tool(mcp: FastMCP, name: str, description: str, handler: ToolHandler) -> None:
-    def tool(option_index: int | None = None, card_index: int | None = None) -> dict[str, Any]:
-        return handler(option_index=option_index, card_index=card_index)
-
-    tool.__name__ = name
-    tool.__doc__ = description
-    mcp.tool(name=name, description=description)(tool)
-
-
-def _register_option_target_tool(mcp: FastMCP, name: str, description: str, handler: ToolHandler) -> None:
-    def tool(option_index: int, target_index: int | None = None) -> dict[str, Any]:
-        return handler(option_index=option_index, target_index=target_index)
-
-    tool.__name__ = name
-    tool.__doc__ = description
-    mcp.tool(name=name, description=description)(tool)
-
-
-def _register_crystal_tool(mcp: FastMCP, name: str, description: str, handler: ToolHandler) -> None:
-    def action_tool(tool: CrystalSphereTool) -> dict[str, Any]:
-        return handler(tool=tool)
-
-    action_tool.__name__ = name
-    action_tool.__doc__ = description
-    mcp.tool(name=name, description=description)(action_tool)
-
-
-def _register_crystal_cell_tool(mcp: FastMCP, name: str, description: str, handler: ToolHandler) -> None:
-    def action_tool(x: int, y: int, tool: CrystalSphereTool | None = None) -> dict[str, Any]:
-        return handler(x=x, y=y, tool=tool)
-
-    action_tool.__name__ = name
-    action_tool.__doc__ = description
-    mcp.tool(name=name, description=description)(action_tool)
-
-
-def _register_legacy_action_tools(mcp: FastMCP, sts2: Sts2Client) -> None:
-    for spec in _LEGACY_ACTION_TOOLS:
-        handler = getattr(sts2, spec.name)
-        if spec.kind == "no_args":
-            _register_no_arg_tool(mcp, spec.name, spec.description, handler)
-            continue
-
-        if spec.kind == "option_index":
-            _register_option_index_tool(mcp, spec.name, spec.description, handler)
-            continue
-
-        if spec.kind == "card_target":
-            _register_card_target_tool(mcp, spec.name, spec.description, handler)
-            continue
-
-        if spec.kind == "reward_choice":
-            _register_reward_choice_tool(mcp, spec.name, spec.description, handler)
-            continue
-
-        if spec.kind == "option_target":
-            _register_option_target_tool(mcp, spec.name, spec.description, handler)
-            continue
-
-        if spec.kind == "crystal_tool":
-            _register_crystal_tool(mcp, spec.name, spec.description, handler)
-            continue
-
-        if spec.kind == "crystal_cell":
-            _register_crystal_cell_tool(mcp, spec.name, spec.description, handler)
-            continue
-
-        raise RuntimeError(f"Unsupported action tool kind: {spec.kind}")
-
-
 def create_server(client: Sts2Client | None = None, tool_profile: str | None = None) -> FastMCP:
     sts2 = client or Sts2Client()
     knowledge = Sts2KnowledgeBase()
@@ -206,8 +110,8 @@ def create_server(client: Sts2Client | None = None, tool_profile: str | None = N
     _reset_game_data_cache()
     mcp = FastMCP("STS2 AI Agent")
 
-    def _agent_state() -> dict[str, Any]:
-        state = sts2.get_state()
+    def _agent_state(state: dict[str, Any] | None = None) -> dict[str, Any]:
+        state = sts2.get_state() if state is None else state
         agent_view = state.get("agent_view")
         if isinstance(agent_view, dict):
             if "available_actions" not in agent_view and isinstance(agent_view.get("actions"), list):
@@ -381,19 +285,49 @@ def create_server(client: Sts2Client | None = None, tool_profile: str | None = N
 
     @mcp.tool
     def get_scene_guidance() -> dict[str, Any]:
-        """Return the strategy guidance for the screen the game is on right now.
+        """Return the strategy and the playbook for the screen the game is on right now.
 
-        `guidance` is the same text the mod injects into its own play loop: the route rules on
-        `MAP`, the rest-site rules on `REST`, the shop rules on `SHOP` and the Fake Merchant, the
-        combat and potion priority order on `COMBAT`, and the event-option rules on `EVENT`. It is
-        empty on a screen with no strategic choice, which is an answer rather than a failure.
+        Four keys are always answered, and the native MCP surface answers the same four:
 
-        On `EVENT` this also returns `event_options`: the offline index's per-option handler, cost,
-        and risk grade (`lethal-possible`, `harmful`, `costly`, `none-detected`, `locked`,
-        `unknown`) for the current `event_id`, in the order the event builds them. The mod does not
-        ship that index, so the native MCP surface answers strategy only.
+        - `screen`: the current screen, or null when the payload carries none.
+        - `scene`: the metadata scene that screen maps to (`combat`, `shop`, `event`, `menu`).
+        - `guidance`: the strategy rules the mod injects into its own play loop -- the route rules on
+          `MAP`, the rest-site rules on `REST`, the shop rules on `SHOP` and the Fake Merchant, the
+          combat and potion priority order on `COMBAT`, and the event-option rules on `EVENT`. It is
+          empty on a screen with no strategic choice, which is an answer rather than a failure.
+        - `playbook`: how to drive that screen, the same slice the mod injects into its own loop. It
+          is never empty: a screen with no section of its own gets the index of the sections.
+
+        On `EVENT` this also returns `event_id` and `event_options`: the offline index's per-option
+        handler, cost, and risk grade (`lethal-possible`, `harmful`, `costly`, `none-detected`,
+        `locked`, `unknown`) for the current event, in the order the event builds them. The mod does
+        not ship that index, so the native surface answers the four shared keys only.
         """
         return scene_guidance(sts2.get_state())
+
+    @mcp.tool
+    def decide() -> dict[str, Any]:
+        """Read everything one decision needs in a single call.
+
+        The documented loop is `get_game_state` -> `get_available_actions` -> `act`, plus
+        `get_scene_guidance` on the screens with a real choice: three or four calls per decision. This
+        is the same three answers together, so a step costs one call instead of three:
+
+        - `state`: the compact `agent_view`, the same shape `get_game_state` returns.
+        - `available_actions`: the descriptors `get_available_actions` returns, with their
+          `requires_index` / `requires_target` / target hints.
+        - `scene_guidance`: the same object `get_scene_guidance` returns, `playbook` included.
+
+        Read this, choose one action, call `act`, and read the state it returns -- the returned state
+        is the next decision's input. The individual tools stay available and unchanged when you want
+        one of them alone, and `get_raw_game_state` is still the way to the full payload.
+        """
+        state = sts2.get_state()
+        return {
+            "state": _agent_state(state),
+            "available_actions": sts2.get_available_actions(),
+            "scene_guidance": scene_guidance(state),
+        }
 
     @mcp.tool
     def diff_state(
@@ -632,6 +566,7 @@ def create_server(client: Sts2Client | None = None, tool_profile: str | None = N
         y: int | None = None,
         tool: CrystalSphereTool | None = None,
         reason: str | None = None,
+        raw_state: bool = False,
     ) -> dict[str, Any]:
         """Execute one currently available game action through the compact tool surface.
 
@@ -642,7 +577,18 @@ def create_server(client: Sts2Client | None = None, tool_profile: str | None = N
             4. Pass only the indexes or Crystal Sphere coordinates required by
                that action from the latest state.
             5. Attach a one-sentence `reason` so the player and decision log can see why.
-            6. Read state again after the action completes.
+            6. Read `state` from the result instead of re-reading it: step 6 is the next decision.
+
+        Result:
+            - `state` is the compact `agent_view` of the state the action left behind -- the same
+              shape `get_game_state` returns, so it is enough for the next decision and costs a
+              fraction of the raw payload. The action echo, `status`, `stable`, and `message` are
+              returned unchanged.
+            - `raw_state=True` returns the full raw payload instead. Use it only to inspect a field
+              the compact view does not carry; it is thousands of tokens per action.
+            - A rejected index answers with an error object: `error.code`, `error.message`, and
+              `error.details` naming `field`, `submitted`, `valid_indices`, and `valid_field` -- the
+              payload path to re-read. Recompute from that instead of resending the same index.
 
         Compact-tool rules:
             - Guided mode intentionally keeps the tool surface small: use this
@@ -691,6 +637,7 @@ def create_server(client: Sts2Client | None = None, tool_profile: str | None = N
             x=x,
             y=y,
             tool=tool,
+            raw_state=raw_state,
             client_context=client_context,
         )
 

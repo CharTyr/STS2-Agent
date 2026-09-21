@@ -42,6 +42,11 @@ Omit unused parameters; keep "reason" -- it is shown to the player. Do not wrap 
 
     public static string PlayContract { get; } = ExtractSharedContract(ReadEmbedded("STS2AIAgent.Sts2McpPlayer.Skill.md"));
 
+    /// <summary>
+    /// The screen playbooks, whole. This is what the skill ships and what MCP clients read as
+    /// <c>sts2://skill/screen-playbooks</c>; the in-game loop is injected one screen at a time
+    /// through <see cref="PlaybookGuidance"/>.
+    /// </summary>
     public static string ScreenPlaybooks { get; } = ReadEmbedded("STS2AIAgent.Sts2McpPlayer.ScreenPlaybooks.md");
 
     /// <summary>
@@ -61,7 +66,24 @@ Omit unused parameters; keep "reason" -- it is shown to the player. Do not wrap 
     /// </summary>
     public static string ScreenGuidance(string? screen)
     {
-        return PlaybookSections.ForScreen(StrategyReference, screen);
+        return PlaybookSections.Strategy.Slice(StrategyReference, screen);
+    }
+
+    /// <summary>
+    /// How to drive the screen being played, and never empty.
+    /// </summary>
+    /// <remarks>
+    /// The whole reference used to ride in <see cref="PlaySystem"/>, which is re-sent on every play
+    /// step: 10,748 characters (roughly 3,070 tokens) covering 20 screens, paid again for each
+    /// decision even though a decision can only use the screen it is on. Only the matching section
+    /// is injected now -- 907 characters for a combat step, 1,194 for the largest screen, 622 for
+    /// the index below -- and a screen with no section of its own gets the index of the sections
+    /// instead of nothing, because the playbook carries the play contract for the screen and an
+    /// empty injection there would read as "there is nothing to know here".
+    /// </remarks>
+    public static string PlaybookGuidance(string? screen)
+    {
+        return PlaybookSections.Playbooks.SliceOrIndex(ScreenPlaybooks, screen);
     }
 
     public static string PlaySystem { get; } = BuildPlaySystem();
@@ -84,8 +106,9 @@ Omit unused parameters; keep "reason" -- it is shown to the player. Do not wrap 
         builder.AppendLine();
         builder.AppendLine(PlayContract.Trim());
         builder.AppendLine();
-        builder.AppendLine(ScreenPlaybooks.Trim());
-        builder.AppendLine();
+        // The playbooks are not carried here: this prompt is re-sent on every play step, and the
+        // caller injects the current screen's section (PlaybookGuidance) right behind this message.
+        builder.AppendLine("The playbook section for the current screen is injected after this message. The other screens' sections stay out of the prompt: a decision can only use the screen it is on.");
         builder.Append("Each play step: inspect state (and metadata if needed), then call act exactly once, attaching a one-sentence reason the player can read. Vision is optional; legality still comes from live state.");
         return builder.ToString();
     }

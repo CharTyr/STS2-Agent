@@ -2,7 +2,9 @@
 
 Use this reference when the active screen is clear and you need the exact action order or guardrails for that screen.
 
-This file is about **how to drive a screen**. For **what to choose** where the choice is not mechanical — route, rest site, shop, potion timing, combat priority, co-op division of labour — read [strategy.md](strategy.md). It is a separate file on purpose: the mod embeds this document into the in-game prompt on every play step, and the strategy rules are only needed on the screens they describe.
+This file is about **how to drive a screen**. For **what to choose** where the choice is not mechanical — route, rest site, shop, potion timing, combat priority, co-op division of labour — read [strategy.md](strategy.md). It is a separate file on purpose: the strategy rules are only needed on the screens they describe.
+
+**This file is not carried whole in the in-game prompt either.** The mod embeds it and injects only the section for the screen being played — the largest is ~1,200 characters (~340 tokens), and a screen with no section of its own gets the index of the sections — because carrying the whole file (~11,400 characters, ~3,250 tokens) on every play step charged a combat turn for the chest, shop and timeline sequences. An external agent should read the file whole; the in-game loop reads it one screen at a time. The mapping lives in `STS2AIAgent/Agent/PlaybookSections.cs`, and a test fails if a section is neither mapped nor declared run-level or deliberately not injected — so a new section cannot be added here and silently never ship in-game.
 
 ## MAIN_MENU and Timeline
 

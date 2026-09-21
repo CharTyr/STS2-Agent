@@ -46,12 +46,29 @@ internal sealed class GameBridge : IGameBridge
         });
     }
 
-    public Task<IReadOnlyList<string>> GetAvailableActionNamesAsync(CancellationToken cancellationToken)
+    /// <summary>
+    /// Everything one decision needs from the game -- the compact state and the action descriptors --
+    /// from one state read inside one game-thread turn.
+    /// </summary>
+    /// <remarks>
+    /// The reads a decision used to make separately (action names, descriptors, compact state) each
+    /// built the whole payload, and each was its own game-thread invocation. Between two of them the
+    /// game can advance, so a screen that changed mid-request left the index validator judging the
+    /// action against a payload the legality check had never seen. The names and the descriptors come
+    /// from the same walk by construction (ADR 0001); this makes them come from the same frame too,
+    /// and it is what the `act` and `decide` tools read.
+    /// </remarks>
+    public Task<string> GetActionSnapshotJsonAsync(CancellationToken cancellationToken)
     {
         return GameThread.InvokeAsync(() =>
         {
             var state = GameStateService.BuildStatePayload();
-            return (IReadOnlyList<string>)(state.available_actions ?? Array.Empty<string>());
+            var descriptors = GameStateService.BuildAvailableActionsPayload();
+            return JsonSerializer.Serialize(new
+            {
+                state = state.agent_view ?? (object)state,
+                available_actions = descriptors.actions
+            }, JsonOptions);
         });
     }
 
@@ -68,7 +85,8 @@ internal sealed class GameBridge : IGameBridge
         int? x,
         int? y,
         string? tool,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        bool rawState = false)
     {
         return GameThread.InvokeAsync(async () =>
         {
@@ -91,13 +109,18 @@ internal sealed class GameBridge : IGameBridge
                     }
                 });
 
+                // The action's own post-action snapshot either way; only its shape changes. The
+                // compact view is the default because the raw one costs thousands of tokens and a
+                // decision reads the same fields from either -- raw_state is the escape hatch for a
+                // caller that has to see a field the compact projection does not carry.
+                var compactState = response.state.agent_view ?? (object)response.state;
                 return JsonSerializer.Serialize(new
                 {
                     response.action,
                     response.status,
                     response.stable,
                     response.message,
-                    state = response.state.agent_view ?? (object)response.state
+                    state = rawState ? (object)response.state : compactState
                 }, JsonOptions);
             }
             catch (ApiException ex)

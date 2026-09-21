@@ -17,6 +17,17 @@
 
 ## 通用响应格式
 
+**线上是紧凑 JSON**：响应体不带缩进与空格（`{"ok":true,...}`），本文档里的示例为了可读性才展开。
+这一条不是风格问题——把本文档所有真实响应示例去掉缩进后，**35.6% 的字节都是排版**（嵌套最深的战斗状态
+是 44%），而读这些响应的是解析器：MCP sidecar、外部 agent、验证脚本。对 agent 来说这些字节就是每个
+决策都要付的 token。想人眼读就自己过一遍 `jq .`：
+
+```bash
+curl -s http://127.0.0.1:8080/state | jq .
+```
+
+字段名仍然是 PascalCase，这一点是契约（`JsonHelperTests` 钉着）。
+
 ### 成功
 
 ```json
@@ -73,6 +84,7 @@
 | `origin_not_allowed` | 403 | 原生 MCP 请求的 `Origin` 不受信任 | 否 |
 | `method_not_allowed` | 405 | 用 POST 以外的方法请求 `/mcp`。原生 MCP 走 Streamable HTTP，只接受 POST 的 JSON-RPC | 否 |
 | `payload_too_large` | 413 | `/mcp` 请求体超过 1 MB | 否 |
+| `unknown_tool` | 404 | 原生 MCP `tools/call` 的 `name` 不是这面注册的工具名（Python sidecar 与原生面共用同一份工具名）。消息里带工具名，`tools/list` 给出当前列表；这是调用方的笔误，不是可以重试的失败 | 否 |
 
 ---
 
@@ -360,7 +372,7 @@
 | `players` | object[] | 本局全部玩家的战斗血线（含本地玩家）。联机时用来判断队友是否需要救援；单人局只有一项 |
 | `hand` | object[] | 本地玩家手牌 |
 | `enemies` | object[] | 场上敌人 |
-| `end_turn_will_kill_player` | boolean | 此刻直接结束回合是否会打死本地玩家 |
+| `end_turn_will_kill_player` | boolean | 此刻直接结束回合是否会打死本地玩家；包含敌人意图**与**中毒 / 缠绕这类在你能再行动之前结算的持续伤害，逐条依据见 `lethal_risks` |
 | `lethal_risks` | object[] | 致命风险逐条拆解，见下 |
 
 #### `combat.action_readiness`
@@ -439,6 +451,18 @@
 | `player_block` | number \| null | 结算时的玩家格挡 |
 | `power_id` | string \| null | 来源 Power 的 ID（来源是 Power 时） |
 | `power_amount` | number \| null | 该 Power 的层数 |
+
+目前会出现这些 `risk_id`：
+
+| `risk_id` | 触发条件 | 关键点 |
+| --- | --- | --- |
+| `incoming_damage` | 敌人意图总伤害扣除当前格挡后 ≥ 当前生命 | 只看意图，不含持续伤害 |
+| `poison_next_turn` | 中毒在**你下一回合开始时**的结算总量 ≥ 当前生命 | 无视格挡（`damage_after_block` 等于 `incoming_damage`），且在你能再出牌之前结算——本回合结束战斗即可避免 |
+| `constrict_turn_end` | 缠绕在你**本回合结束时**造成的伤害扣格挡后 ≥ 当前生命 | 可被格挡，所以 `damage_after_block` 与 `incoming_damage` 常不同 |
+| `sandpit_countdown` | 沙坑计数 ≤ 1 | 结束回合视为致命，除非先杀 Boss 或已经用 Frantic Escape 抬高计数 |
+
+也就是说这个字段覆盖的是「结束回合之后、你还能行动之前」会落下的所有伤害，而不只是敌人意图——
+中毒这条曾经是「标记为安全、然后死于结算」的主要来源。
 
 #### `combat.player`
 
@@ -1806,6 +1830,89 @@ Invoke-RestMethod -Uri 'http://127.0.0.1:8080/data/cards' | ConvertTo-Json -Dept
 - 走 MCP Streamable HTTP 语义：请求体为 JSON-RPC，响应为 JSON 或 SSE
 - **Origin 策略**：带 `Origin` 头的请求必须与端点 authority 一致（可另带 `Host` 头，同样需匹配），否则 403 `origin_not_allowed`。缺少 `Origin` 的请求放行（原生客户端）。`Origin: null` 一律拒绝
 - 该端点使用自己的错误信封（`{ok:false, error:{code,message}}`）与 JSON-RPC 错误码，不套用本文档其余路由的 `request_id` 信封
+
+
+### 原生 MCP 工具面
+
+`/mcp` 与 Python sidecar 是**同一个工具面的两份实现**（理由见 ADR 0002）：工具名与参数名由
+`mcp_server/tests/test_native_tool_alignment.py` 双向比对，豁免表为空，两侧必须一致。
+
+| 工具 | 用途 |
+| --- | --- |
+| `health_check` | Mod 是否加载、端点是否开启 |
+| `get_game_state` | compact `agent_view`（默认状态读取） |
+| `get_raw_game_state` | 完整 `/state` |
+| `get_available_actions` | 动作描述符（`requires_index` / `requires_target` / 目标提示） |
+| `decide` | **一次状态读取**同时给出 `state`、`available_actions` 与 `scene_guidance` |
+| `get_scene_guidance` | 当前屏幕的策略与 playbook 段落 |
+| `get_decision_log` / `get_run_summary` / `diff_state` | 决策日志 / 本轮摘要 / 状态差异 |
+| `get_game_data_item` / `get_game_data_items` / `get_relevant_game_data` | 游戏元数据查询 |
+| `wait_until_actionable` | 等待重新可操作，然后返回新状态 |
+| `act` | 统一动作入口 |
+| `run_console_command` / `inject_event_churn` | 仅 `STS2_ENABLE_DEBUG_ACTIONS=1` 时注册 |
+
+Python sidecar 另有 `wait_for_event`（事件流便捷工具），原生面不含它；这在两侧比对里是唯一被明确允许的差异。
+
+`decide` 与 `get_scene_guidance` 各自只做一次状态读取：一次构建同时产出 compact 状态、动作描述符与
+该屏指引（`/state` 的 `available_actions` 与 `/actions/available` 的描述符本来就来自同一次遍历，见
+ADR 0001）。`act` 也复用同一次快照做合法性检查与索引校验，不再各建一次状态。
+
+### `act` 的结果契约
+
+`act` 的 `state` 是**动作之后那份状态的 compact `agent_view`**（与 `get_game_state` 同形），而不是完整
+`/state`：后者的字段在 compact 里大多换过名字（见「compact 的字段改名对照表」），且一次约 4,000–9,500 token。
+`action`、`status`、`stable`、`message` 等其余键原样保留。
+
+- 需要完整载荷时传 `raw_state: true`（默认 `false`）：此时 `state` 就是 `POST /action` 返回的 `data.state`。
+- Mod 未暴露 `agent_view` 时回退为完整载荷，与 `get_game_state` 的 `compact_agent_view: false` 同义。
+- `status: "pending"`（或 `stable: false`）时不要立刻重发同一个动作：先按返回的屏幕流程等待。
+
+### 工具错误的统一形状
+
+`tools/call` 的失败内容（`isError: true`）是一段 JSON 文本，其中的 `error` 与 HTTP 路由同形：
+
+```json
+{
+  "error": {
+    "code": "invalid_target",
+    "message": "card_index 9 is not in the latest combat.hand.",
+    "details": {
+      "action": "play_card",
+      "field": "card_index",
+      "submitted": 9,
+      "valid_field": "combat.hand",
+      "valid_indices": [0, 1, 2],
+      "locked": false,
+      "available_actions": ["end_turn", "play_card"]
+    },
+    "retryable": false,
+    "status_code": 409
+  }
+}
+```
+
+- 索引类拒绝（`invalid_request` / `invalid_target`）在 `details` 里给出 `field`（出错的字段）、
+  `submitted`（提交的值）、`valid_field`（该索引在 compact 状态里的路径）与 `valid_indices`
+  （payload 当前真正接受的索引），所以模型能直接改正，而不是重发同一个索引。
+- 人类可读文案没有变，仍在 `error.message`（上例就是原来那条字符串）。
+- 异常路径同样给出 `code` / `message` / `details` / `retryable`；`status_code` 只在它是
+  `ApiException` 时出现，否则省略。Python sidecar 侧沿用同一组键：Mod 的 HTTP `error.details`
+  原样保留，并补上 `field` / `submitted` / `valid_indices`（由 `hand_count`、`option_count` 之类的
+  计数推出）。
+
+### `get_scene_guidance` 与 `decide.scene_guidance` 的结果契约
+
+两个面都以这四个共享键作答（`decide` 里的 `scene_guidance` 与 `get_scene_guidance` 的返回值相同）：
+
+| 键 | 类型 | 说明 |
+| --- | --- | --- |
+| `screen` | string \| null | `state.screen`；取不到时为 `null` |
+| `scene` | string | `screen` 映射到的元数据场景：`combat` / `shop` / `event` / `menu` |
+| `guidance` | string | 该屏的策略段落。没有策略选择的屏幕（如奖励屏）是空字符串，这是答案而不是失败 |
+| `playbook` | string | 该屏的操作流程段落，**永不为空**：映射不到章节的屏幕给章节索引，避免把「没有内容」当成「没有需要知道的」 |
+
+Python sidecar 另加 `event_id`、`event_options` 与 `guidance_source`：它们来自仓库里的离线事件风险
+索引（`docs/game-knowledge/events.md`），Mod 不携带，因此原生面只答上面四个共享键。
 
 
 ## 已实现动作详细说明

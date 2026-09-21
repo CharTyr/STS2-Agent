@@ -409,10 +409,10 @@ internal static class PlayerExperienceTests
         public Task<string> GetCompactStateJsonAsync(CancellationToken cancellationToken) => Task.FromResult("{}");
         public Task<string> GetRawStateJsonAsync(CancellationToken cancellationToken) => Task.FromResult("{}");
         public Task<string> GetAvailableActionsJsonAsync(CancellationToken cancellationToken) => Task.FromResult("[]");
-        public Task<IReadOnlyList<string>> GetAvailableActionNamesAsync(CancellationToken cancellationToken) =>
-            Task.FromResult<IReadOnlyList<string>>(Array.Empty<string>());
+        public Task<string> GetActionSnapshotJsonAsync(CancellationToken cancellationToken) =>
+            Task.FromResult("""{"state":{"screen":"MAIN_MENU","available_actions":[]},"available_actions":[]}""");
         public Task<string> GetScreenAsync(CancellationToken cancellationToken) => Task.FromResult("MAIN_MENU");
-        public Task<string> ActAsync(string action, int? cardIndex, int? targetIndex, int? optionIndex, int? x, int? y, string? tool, CancellationToken cancellationToken) =>
+        public Task<string> ActAsync(string action, int? cardIndex, int? targetIndex, int? optionIndex, int? x, int? y, string? tool, CancellationToken cancellationToken, bool rawState = false) =>
             Task.FromResult("{}");
         public Task<string> GetGameDataItemJsonAsync(string collection, string itemId, CancellationToken cancellationToken) => Task.FromResult("{}");
         public Task<string> GetGameDataItemsJsonAsync(string collection, IReadOnlyList<string> itemIds, CancellationToken cancellationToken) => Task.FromResult("{}");

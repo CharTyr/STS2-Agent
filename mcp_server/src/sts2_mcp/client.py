@@ -11,6 +11,7 @@ from typing import Any, Callable, Iterable, Iterator, TypeVar
 from urllib import error, request
 
 from .client_actions import Sts2ActionMethods
+from .action_results import compact_action_result, with_index_details
 from .envelope import Envelope, EnvelopeError, Sts2ApiError, parse, parse_strict
 from .payloads import (
     AvailableActions,
@@ -311,24 +312,42 @@ class Sts2Client(Sts2ActionMethods):
         y: int | None = None,
         tool: str | None = None,
         command: str | None = None,
+        raw_state: bool = False,
         client_context: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
-        return self._request(
-            "POST",
-            "/action",
-            payload={
-                "action": action,
-                "card_index": card_index,
-                "target_index": target_index,
-                "option_index": option_index,
-                "x": x,
-                "y": y,
-                "tool": tool,
-                "command": command,
-                "client_context": client_context,
-            },
-            is_action=True,
-        )
+        """`POST /action`, answering with the compact state unless `raw_state` asks for the raw one.
+
+        The state in the response is the action's own post-action snapshot projected to the compact
+        `agent_view`, which is what the native MCP `act` returns and what `get_game_state` returns.
+        The raw payload is ~4,000-9,500 tokens and the compact view carries the fields a decision
+        reads, so the escape hatch is opt-in rather than the default. A rejected index comes back as
+        an `Sts2ApiError` whose details name the offending field and the indices that would have
+        worked; see `sts2_mcp.action_results`.
+        """
+        try:
+            result = self._request(
+                "POST",
+                "/action",
+                payload={
+                    "action": action,
+                    "card_index": card_index,
+                    "target_index": target_index,
+                    "option_index": option_index,
+                    "x": x,
+                    "y": y,
+                    "tool": tool,
+                    "command": command,
+                    "client_context": client_context,
+                },
+                is_action=True,
+            )
+        except Sts2ApiError as exc:
+            enriched = with_index_details(exc)
+            if enriched is exc:
+                raise
+            raise enriched from exc
+
+        return result if raw_state else compact_action_result(result)
 
     def _request(
         self,

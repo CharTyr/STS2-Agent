@@ -366,6 +366,11 @@ class Sts2KnowledgeBase:
                     "events": "docs/game-knowledge/events.md",
                     "cards": "docs/game-knowledge/cards.md",
                     "characters": "docs/game-knowledge/characters.md",
+                    # Keyed by the id the state reports for them, as agent-reference.md maps it:
+                    # `run.relics[].relic_id` / `shop.relics[].relic_id` here, and
+                    # `combat.*.powers[].power_id` below.
+                    "relics": "docs/game-knowledge/relics.md",
+                    "powers": "docs/game-knowledge/powers.md",
                 }
             ),
         }
@@ -400,6 +405,11 @@ class Sts2KnowledgeBase:
                     "monsters": "docs/game-knowledge/monsters.md",
                     "monster_behaviors": "docs/game-knowledge/monster-behaviors.md",
                     "potions": "docs/game-knowledge/potions.md",
+                    # The two ids a combat decision reads off the payload itself:
+                    # `combat.player.powers[].power_id` / `combat.enemies[].powers[].power_id`, and
+                    # `run.relics[].relic_id` (plus the relic offers a reward or chest carries).
+                    "relics": "docs/game-knowledge/relics.md",
+                    "powers": "docs/game-knowledge/powers.md",
                 }
             ),
         }

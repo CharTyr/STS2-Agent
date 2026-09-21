@@ -10,14 +10,6 @@ namespace STS2AIAgent.Tests;
 /// </summary>
 internal static class JsonHelperTests
 {
-    /// <summary>
-    /// Interim alias. The commit that made responses compact renamed the test below, but the test
-    /// registry it belongs to also carries registrations from work that had not landed yet, so it
-    /// stayed behind for one commit. This line goes away with it.
-    /// </summary>
-    public static void SerializationKeepsPascalCaseAndIndentation() =>
-        SerializationKeepsPascalCaseAndDropsLayout();
-
     public static void SerializationKeepsPascalCaseAndDropsLayout()
     {
         var json = JsonHelper.Serialize(new JsonHelperSample { PascalName = "Alpha", ItemCount = 3 });

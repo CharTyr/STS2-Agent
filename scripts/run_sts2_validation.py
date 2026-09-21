@@ -1724,6 +1724,7 @@ def suite_mcp_tool_profile(_: argparse.Namespace) -> dict[str, Any]:
         "get_decision_log",
         "get_run_summary",
         "get_scene_guidance",
+        "decide",
         "diff_state",
         "get_game_data_item",
         "get_game_data_items",

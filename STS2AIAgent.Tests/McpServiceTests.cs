@@ -160,6 +160,175 @@ internal static class McpServiceTests
         Assert.Contains("action is required", scalarText);
     }
 
+    /// <summary>
+    /// A stale index has to be correctable on this surface too: the tool answers with the same error
+    /// object the HTTP API sends, and its details name the offending field and the indices the
+    /// payload actually offers.
+    /// </summary>
+    public static async Task ToolsCall_IndexRejectionNamesTheValidIndices()
+    {
+        var bridge = new FakeMcpBridge();
+        var server = CreateServer(bridge: bridge);
+
+        var rejected = await Rpc(
+            server,
+            """{"jsonrpc":"2.0","id":40,"method":"tools/call","params":{"name":"act","arguments":{"action":"play_card","card_index":9}}}""");
+
+        Assert.True(rejected.GetProperty("result").GetProperty("isError").GetBoolean());
+        Assert.Equal(0, bridge.ActCalls);
+        using var document = JsonDocument.Parse(
+            rejected.GetProperty("result").GetProperty("content")[0].GetProperty("text").GetString()!);
+        var root = document.RootElement;
+        var error = root.GetProperty("error");
+
+        Assert.Equal("invalid_target", error.GetProperty("code").GetString());
+        Assert.Equal("card_index 9 is not in the latest combat.hand.", error.GetProperty("message").GetString());
+        Assert.False(error.GetProperty("retryable").GetBoolean());
+        Assert.Equal(9, root.GetProperty("card_index").GetInt32());
+
+        var details = error.GetProperty("details");
+        Assert.Equal("card_index", details.GetProperty("field").GetString());
+        Assert.Equal(9, details.GetProperty("submitted").GetInt32());
+        Assert.Equal("combat.hand", details.GetProperty("valid_field").GetString());
+        Assert.True(
+            details.GetProperty("valid_indices").EnumerateArray().Select(value => value.GetInt32()).SequenceEqual(new[] { 0 }),
+            "the fake payload's hand holds index 0 only");
+        Assert.Equal("end_turn", details.GetProperty("available_actions")[1].GetString());
+    }
+
+    /// <summary>
+    /// raw_state is the escape hatch from the compact post-action snapshot, and it has to reach the
+    /// bridge rather than being read and dropped.
+    /// </summary>
+    public static async Task ToolsCall_RawStateFlagReachesTheBridge()
+    {
+        var bridge = new FakeMcpBridge();
+        var server = CreateServer(bridge: bridge);
+
+        await Rpc(server, """{"jsonrpc":"2.0","id":41,"method":"tools/call","params":{"name":"act","arguments":{"action":"play_card","card_index":0}}}""");
+        Assert.False(bridge.LastRawState, "the compact view is the default");
+
+        await Rpc(server, """{"jsonrpc":"2.0","id":42,"method":"tools/call","params":{"name":"act","arguments":{"action":"play_card","card_index":0,"raw_state":true}}}""");
+        Assert.True(bridge.LastRawState, "raw_state must reach the bridge");
+
+        // The legality check and the index validator share one snapshot: this used to be three state
+        // builds per act, each its own game-thread turn.
+        Assert.Equal(2, bridge.SnapshotCalls);
+    }
+
+    /// <summary>
+    /// decide answers the whole documented loop from one state read, and its guidance block is the
+    /// same one get_scene_guidance returns.
+    /// </summary>
+    public static async Task ToolsCall_DecideAnswersOneDecisionPerRead()
+    {
+        var bridge = new FakeMcpBridge();
+        var server = CreateServer(bridge: bridge);
+
+        var decided = await Rpc(server, """{"jsonrpc":"2.0","id":46,"method":"tools/call","params":{"name":"decide"}}""");
+
+        Assert.False(decided.GetProperty("result").GetProperty("isError").GetBoolean());
+        Assert.Equal(1, bridge.SnapshotCalls);
+        using var document = JsonDocument.Parse(
+            decided.GetProperty("result").GetProperty("content")[0].GetProperty("text").GetString()!);
+        var root = document.RootElement;
+
+        Assert.Equal("COMBAT", root.GetProperty("state").GetProperty("screen").GetString());
+        Assert.Equal("play_card", root.GetProperty("available_actions")[0].GetProperty("name").GetString());
+
+        var guidance = root.GetProperty("scene_guidance");
+        Assert.Equal("COMBAT", guidance.GetProperty("screen").GetString());
+        Assert.Equal("combat", guidance.GetProperty("scene").GetString());
+        Assert.Contains("Combat: what to prioritise", guidance.GetProperty("guidance").GetString());
+        Assert.False(
+            string.IsNullOrWhiteSpace(guidance.GetProperty("playbook").GetString()),
+            "the playbook slice is never empty; an unmapped screen gets the index instead");
+    }
+
+    /// <summary>
+    /// Both surfaces answer the same guidance keys, and the playbook half is the per-screen slice
+    /// rather than the whole document.
+    /// </summary>
+    public static async Task ToolsCall_SceneGuidanceCarriesThePlaybookSlice()
+    {
+        var bridge = new FakeMcpBridge();
+        var server = CreateServer(bridge: bridge);
+
+        var read = await Rpc(server, """{"jsonrpc":"2.0","id":47,"method":"tools/call","params":{"name":"get_scene_guidance"}}""");
+        using var document = JsonDocument.Parse(
+            read.GetProperty("result").GetProperty("content")[0].GetProperty("text").GetString()!);
+        var guidance = document.RootElement;
+
+        foreach (var key in new[] { "screen", "scene", "guidance", "playbook" })
+        {
+            Assert.True(guidance.TryGetProperty(key, out _), "get_scene_guidance is missing " + key);
+        }
+
+        var playbook = guidance.GetProperty("playbook").GetString();
+        Assert.Contains("## COMBAT", playbook);
+        Assert.False(
+            playbook!.Contains("## SHOP", StringComparison.Ordinal),
+            "the playbook answer is the screen's slice, not the whole document");
+
+        // An unmapped screen still gets an answer: the index of the sections it could read.
+        bridge.CompactStateJson = """{"screen":"UNKNOWN","available_actions":[]}""";
+        var unmapped = await Rpc(server, """{"jsonrpc":"2.0","id":48,"method":"tools/call","params":{"name":"get_scene_guidance"}}""");
+        using var unmappedDocument = JsonDocument.Parse(
+            unmapped.GetProperty("result").GetProperty("content")[0].GetProperty("text").GetString()!);
+        var unmappedPlaybook = unmappedDocument.RootElement.GetProperty("playbook").GetString();
+        Assert.Contains("No section of this playbook matches", unmappedPlaybook);
+        Assert.Equal(string.Empty, unmappedDocument.RootElement.GetProperty("guidance").GetString());
+    }
+
+    /// <summary>
+    /// An exception is not a message string: the tool error content carries the code, details, and
+    /// retryable flag the shared play contract tells a client to branch on.
+    /// </summary>
+    public static async Task ToolsCall_ExceptionCarriesTheStructuredEnvelope()
+    {
+        var bridge = new FakeMcpBridge
+        {
+            ActFailure = new ApiException(
+                503,
+                "state_unavailable",
+                "Local player is unavailable.",
+                new { action = "play_card" },
+                retryable: true)
+        };
+        var server = CreateServer(bridge: bridge);
+
+        var failed = await Rpc(
+            server,
+            """{"jsonrpc":"2.0","id":43,"method":"tools/call","params":{"name":"act","arguments":{"action":"play_card","card_index":0}}}""");
+
+        Assert.True(failed.GetProperty("result").GetProperty("isError").GetBoolean());
+        using var document = JsonDocument.Parse(
+            failed.GetProperty("result").GetProperty("content")[0].GetProperty("text").GetString()!);
+        var error = document.RootElement.GetProperty("error");
+        Assert.Equal("state_unavailable", error.GetProperty("code").GetString());
+        Assert.Equal("Local player is unavailable.", error.GetProperty("message").GetString());
+        Assert.True(error.GetProperty("retryable").GetBoolean());
+        Assert.Equal(503, error.GetProperty("status_code").GetInt32());
+        Assert.Equal("play_card", error.GetProperty("details").GetProperty("action").GetString());
+    }
+
+    /// <summary>The two protocol-level refusals answer with the same envelope, not a bare string.</summary>
+    public static async Task ToolsCall_ToolNameRefusalsAreStructured()
+    {
+        var server = CreateServer();
+
+        var unnamed = await Rpc(server, """{"jsonrpc":"2.0","id":44,"method":"tools/call","params":{}}""");
+        using var unnamedDocument = JsonDocument.Parse(
+            unnamed.GetProperty("result").GetProperty("content")[0].GetProperty("text").GetString()!);
+        Assert.Equal("invalid_request", unnamedDocument.RootElement.GetProperty("error").GetProperty("code").GetString());
+
+        var unknown = await Rpc(server, """{"jsonrpc":"2.0","id":45,"method":"tools/call","params":{"name":"not_a_tool"}}""");
+        using var unknownDocument = JsonDocument.Parse(
+            unknown.GetProperty("result").GetProperty("content")[0].GetProperty("text").GetString()!);
+        Assert.Equal("unknown_tool", unknownDocument.RootElement.GetProperty("error").GetProperty("code").GetString());
+        Assert.Equal("Unknown tool 'not_a_tool'.", unknownDocument.RootElement.GetProperty("error").GetProperty("message").GetString());
+    }
+
     public static async Task ToolsCall_DiffStateComparesTwoPayloads()
     {
         var server = CreateServer();
@@ -484,20 +653,24 @@ internal static class McpServiceTests
 
         public int RawStateCalls { get; private set; }
 
+        public int SnapshotCalls { get; private set; }
+
         public string RawStateJson { get; set; } = """{"screen":"COMBAT","raw":true}""";
 
         public string? LastAction { get; private set; }
 
         public int? LastCardIndex { get; private set; }
 
+        public bool LastRawState { get; private set; }
+
+        /// <summary>When set, <see cref="ActAsync"/> throws it instead of answering.</summary>
+        public Exception? ActFailure { get; init; }
+
         public string CompactStateJson { get; set; } =
             """{"screen":"COMBAT","available_actions":["play_card","end_turn"],"combat":{"hand":[{"i":0,"line":"Strike","targets":[]}],"enemies":[{"i":0}]}}""";
 
         public string AvailableActionsJson { get; set; } =
             """[{"name":"play_card","requires_index":true,"requires_target":false}]""";
-
-        public IReadOnlyList<string> AvailableActionNames { get; set; } =
-            new[] { "play_card", "end_turn" };
 
         public Task<string> GetCompactStateJsonAsync(CancellationToken cancellationToken) => Task.FromResult(CompactStateJson);
 
@@ -509,7 +682,18 @@ internal static class McpServiceTests
 
         public Task<string> GetAvailableActionsJsonAsync(CancellationToken cancellationToken) => Task.FromResult(AvailableActionsJson);
 
-        public Task<IReadOnlyList<string>> GetAvailableActionNamesAsync(CancellationToken cancellationToken) => Task.FromResult(AvailableActionNames);
+        public Task<string> GetActionSnapshotJsonAsync(CancellationToken cancellationToken)
+        {
+            SnapshotCalls++;
+            // The same two halves the real bridge builds from one state read.
+            using var state = JsonDocument.Parse(CompactStateJson);
+            using var actions = JsonDocument.Parse(AvailableActionsJson);
+            return Task.FromResult(JsonSerializer.Serialize(new
+            {
+                state = state.RootElement.Clone(),
+                available_actions = actions.RootElement.Clone()
+            }));
+        }
 
         public Task<string> GetScreenAsync(CancellationToken cancellationToken) => Task.FromResult("COMBAT");
 
@@ -521,11 +705,18 @@ internal static class McpServiceTests
             int? x,
             int? y,
             string? tool,
-            CancellationToken cancellationToken)
+            CancellationToken cancellationToken,
+            bool rawState = false)
         {
             ActCalls++;
             LastAction = action;
             LastCardIndex = cardIndex;
+            LastRawState = rawState;
+            if (ActFailure != null)
+            {
+                throw ActFailure;
+            }
+
             return Task.FromResult("""{"action":"play_card","status":"completed","stable":true}""");
         }
 

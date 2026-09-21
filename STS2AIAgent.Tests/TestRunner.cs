@@ -279,6 +279,7 @@ internal static class TestRunner
         yield return ("GameDataFilter.EmptySceneFallsBack", () => Task.Run(GameDataFilterItemSourceTests.SceneSourceWithoutItsPayloadFallsBack));
         yield return ("PlayIntent.Detect", () => Task.Run(PlayIntentTests.DetectsPlayPhrasesAndIgnoresQuestions));
         yield return ("ActIndex.Validate", () => Task.Run(ActIndexValidatorTests.RejectsMissingAndStaleIndexes));
+        yield return ("ActIndex.Structured", () => Task.Run(ActIndexValidatorTests.StructuredIndexRejections));
         yield return ("ActIndex.Unsettled", () => Task.Run(ActIndexValidatorTests.DetectsUnsettledActResults));
         yield return ("ActIndex.UnsettledNonObject", () => Task.Run(ActIndexValidatorTests.NonObjectActResultReadsAsSettled));
         yield return ("Reflection.PrivateBaseField", () => Task.Run(ReflectionMemberAccessorTests.ReadsPrivateBaseFieldFromDerivedInstance));
@@ -317,6 +318,7 @@ internal static class TestRunner
         yield return ("CombatReadiness.RecoversNativeEndTurn", () => Task.Run(CombatTurnReadinessPolicyTests.RecoversEmptyHandWhenNativeEndTurnIsReady));
         yield return ("CombatDiagnostics.CancelPlayCard", () => Task.Run(CombatDiagnosticsContractTests.PlayCardTimeoutCancelsNativeGameAction));
         yield return ("CombatDiagnostics.OwnPets", () => Task.Run(CombatDiagnosticsContractTests.CombatPayloadExposesOwnPets));
+        yield return ("CombatDiagnostics.DamageOverTimeRisks", () => Task.Run(CombatDiagnosticsContractTests.LethalRisksIncludeDamageOverTime));
         yield return ("ProfileSelection.NativeSwitch", () => Task.Run(ProfileSelectionContractTests.NativeProfileIdentityAndSwitchAreWiredEndToEnd));
         yield return ("DecisionLog.BoundsAndRedacts", () => Task.Run(DecisionLogTests.Record_RedactsBoundsAndKeepsNewest));
         yield return ("DecisionLog.PersistsAndRotates", () => Task.Run(DecisionLogTests.Record_PersistsJsonlAndRotates));
@@ -393,8 +395,19 @@ internal static class TestRunner
         yield return ("Playbook.MappedHeadingsExist", () => Task.Run(PlaybookSectionsTests.EveryMappedHeadingExistsInTheReference));
         yield return ("Playbook.HeadingsAccountedFor", () => Task.Run(PlaybookSectionsTests.EveryReferenceHeadingIsAccountedFor));
         yield return ("Playbook.ScreenFromState", () => Task.Run(PlaybookSectionsTests.ScreenComesFromTheCompactPayload));
-        yield return ("Playbook.SystemPromptUnchanged", () => Task.Run(PlaybookSectionsTests.PlaySystemStillCarriesTheFullReferences));
+        yield return ("Playbook.PlaybookHeadingsAccountedFor", () => Task.Run(PlaybookSectionsTests.EveryPlaybookHeadingIsAccountedFor));
+        yield return ("Playbook.ScreensMatchTheResolver", () => Task.Run(PlaybookSectionsTests.EveryPlaybookScreenIsOneTheGameCanReport));
+        yield return ("Playbook.PlaybookSlicePerScreen", () => Task.Run(PlaybookSectionsTests.PlaybookSliceIsLimitedToTheScreen));
+        yield return ("Playbook.UnknownScreenGetsTheIndex", () => Task.Run(PlaybookSectionsTests.UnknownScreenGetsTheSectionIndexNotNothing));
+        yield return ("Playbook.SystemPromptSlicesTheReferences", () => Task.Run(PlaybookSectionsTests.PlaySystemCarriesTheSliceNotTheDocuments));
+        yield return ("Playbook.StaticPromptBudget", () => Task.Run(PlaybookSectionsTests.TheStaticPromptStaysUnderItsBudget));
         yield return ("Mcp.SceneGuidanceTool", McpServiceTests.ToolsCall_SceneGuidanceFollowsTheScreen);
+        yield return ("Mcp.IndexRejection", McpServiceTests.ToolsCall_IndexRejectionNamesTheValidIndices);
+        yield return ("Mcp.RawStateFlag", McpServiceTests.ToolsCall_RawStateFlagReachesTheBridge);
+        yield return ("Mcp.ToolErrorEnvelope", McpServiceTests.ToolsCall_ExceptionCarriesTheStructuredEnvelope);
+        yield return ("Mcp.ToolNameRefusals", McpServiceTests.ToolsCall_ToolNameRefusalsAreStructured);
+        yield return ("Mcp.DecideTool", McpServiceTests.ToolsCall_DecideAnswersOneDecisionPerRead);
+        yield return ("Mcp.SceneGuidancePlaybook", McpServiceTests.ToolsCall_SceneGuidanceCarriesThePlaybookSlice);
         yield return ("TeamIntent.Optional", () => Task.Run(TeamIntentTests.NoIntentIsAllowedSoTextOnlyClientsKeepWorking));
         yield return ("TeamIntent.ParsesKnownTypes", () => Task.Run(TeamIntentTests.KnownTypesParseTheirFields));
         yield return ("TeamIntent.RefusesMalformed", () => Task.Run(TeamIntentTests.AMalformedIntentIsRefusedRatherThanDropped));
@@ -428,6 +441,10 @@ internal static class TestRunner
         yield return ("AgentLoop.ChatAdviceQuestion", AgentLoopTests.Chat_IgnoresPlayACardAdviceQuestion);
         yield return ("AgentLoop.JsonIgnoredWithTools", AgentLoopTests.PlayOnce_IgnoresJsonWhenToolsEnabled);
         yield return ("AgentLoop.RetryFailedAct", AgentLoopTests.PlayOnce_RetriesAfterFailedAct);
+        yield return ("AgentLoop.StaticPrefixBeforeState", AgentLoopTests.PlayOnce_PutsTheStaticPrefixBeforeTheDynamicState);
+        yield return ("AgentLoop.StaticPrefixStableAcrossSteps", AgentLoopTests.PlayOnce_KeepsTheStaticPrefixStableAcrossSteps);
+        yield return ("AgentLoop.StateLastWhenVisionIsAttached", AgentLoopTests.PlayOnce_KeepsTheStateLastWhenVisionIsAttached);
+        yield return ("AgentLoop.JsonFallbackStaysInTheStaticPrefix", AgentLoopTests.PlayOnce_JsonFallbackStaysInTheStaticPrefix);
         yield return ("AgentLoop.CancelPropagates", AgentLoopTests.PlayOnce_PropagatesCancellation);
         yield return ("AgentLoop.UnexpectedExceptionCountsRequest", AgentLoopTests.PlayOnce_UnexpectedExceptionAfterTheRequestStillCountsIt);
         yield return ("AgentLoop.ChatErrorRecordsBudget", AgentLoopTests.Chat_ErrorPathRecordsTheSpentRequestOnTheBudgetGuard);
@@ -572,7 +589,7 @@ internal static class TestRunner
         yield return ("ApiException.CarriesStatusAndCode", () => Task.Run(ApiExceptionTests.CarriesStatusAndCode));
         yield return ("ApiException.RetryableDefaultsToFalse", () => Task.Run(ApiExceptionTests.RetryableDefaultsToFalse));
         yield return ("ApiException.DetailsAreOptional", () => Task.Run(ApiExceptionTests.DetailsAreOptional));
-        yield return ("JsonHelper.PascalCaseIndented", () => Task.Run(JsonHelperTests.SerializationKeepsPascalCaseAndIndentation));
+        yield return ("JsonHelper.PascalCaseCompact", () => Task.Run(JsonHelperTests.SerializationKeepsPascalCaseAndDropsLayout));
         yield return ("JsonHelper.CaseInsensitiveRead", () => Task.Run(JsonHelperTests.DeserializationIgnoresCase));
         yield return ("HttpServerPort.ExplicitNeverDrifts", () => Task.Run(HttpServerPortPolicyTests.ExplicitPortNeverDrifts));
         yield return ("HttpServerPort.AutoIncrementFlagged", () => Task.Run(HttpServerPortPolicyTests.AutoIncrementedPortIsFlagged));

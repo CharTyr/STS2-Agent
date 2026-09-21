@@ -447,7 +447,8 @@ internal sealed partial class NativeMcpServer
         var name = ReadString(args, "name")?.Trim();
         if (string.IsNullOrWhiteSpace(name))
         {
-            return ToolError("Tool name is required.");
+            return ToolError(AgentErrorEnvelope.ToPayload(
+                new ApiException(400, "invalid_request", "Tool name is required.")));
         }
 
         var arguments = ReadArguments(args);
@@ -466,7 +467,9 @@ internal sealed partial class NativeMcpServer
         }
         catch (Exception ex)
         {
-            return ToolError(ex.Message);
+            // Not ex.Message: the code, details, and retryable flag are what a client branches on,
+            // and this surface used to drop all three.
+            return ToolError(AgentErrorEnvelope.ToPayload(ex));
         }
     }
 

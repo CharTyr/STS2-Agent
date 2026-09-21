@@ -207,7 +207,8 @@
               "export_error",
               "origin_not_allowed",
               "method_not_allowed",
-              "payload_too_large"
+              "payload_too_large",
+              "unknown_tool"
             ],
             "type": "string"
           },

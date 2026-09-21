@@ -144,7 +144,7 @@ _NATIVE_MEMBER = re.compile(
     r"[\w<>\[\],\s\.\?]+?\s+(\w+)\s*\("
 )
 _CASE_MARKER = re.compile(r'^[ \t]*(?:case\s+"([^"]+)"|default)[ \t]*:', re.MULTILINE)
-_READ_ARGUMENT = re.compile(r'Read(?:String|Int|Object)\(\s*arguments\s*,\s*"([^"]+)"\s*\)')
+_READ_ARGUMENT = re.compile(r'Read(?:String|Int|Object|Bool)\(\s*arguments\s*,\s*"([^"]+)"\s*\)')
 _READ_TIMEOUT_CALL = re.compile(r'ReadTimeoutSeconds\(\s*arguments\s*(?:,\s*"([^"]+)")?\s*\)')
 _TRY_GET_PROPERTY = re.compile(r'TryGetProperty\(\s*"([^"]+)"')
 _HELPER_CALL = re.compile(r"\b(\w+Async)\s*\(\s*arguments")

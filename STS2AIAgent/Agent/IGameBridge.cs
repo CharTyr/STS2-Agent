@@ -10,10 +10,19 @@ internal interface IGameBridge
 
     Task<string> GetAvailableActionsJsonAsync(CancellationToken cancellationToken);
 
-    Task<IReadOnlyList<string>> GetAvailableActionNamesAsync(CancellationToken cancellationToken);
+    /// <summary>
+    /// The compact state and the action descriptors for one decision, from a single state read.
+    /// JSON shape: <c>{"state": {...compact state...}, "available_actions": [descriptors]}</c>.
+    /// The action names a legality check needs are the compact state's own <c>available_actions</c>.
+    /// </summary>
+    Task<string> GetActionSnapshotJsonAsync(CancellationToken cancellationToken);
 
     Task<string> GetScreenAsync(CancellationToken cancellationToken);
 
+    /// <summary>
+    /// Execute one action and return its response. The state in that response is the compact
+    /// <c>agent_view</c> unless <paramref name="rawState"/> asks for the full payload instead.
+    /// </summary>
     Task<string> ActAsync(
         string action,
         int? cardIndex,
@@ -22,7 +31,8 @@ internal interface IGameBridge
         int? x,
         int? y,
         string? tool,
-        CancellationToken cancellationToken);
+        CancellationToken cancellationToken,
+        bool rawState = false);
 
     Task<string> GetGameDataItemJsonAsync(string collection, string itemId, CancellationToken cancellationToken);
 

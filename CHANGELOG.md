@@ -4,12 +4,16 @@
 
 ## Unreleased
 
-> A harness pass over the compact `agent_view` — the payload every MCP client reads before each
-> decision. It drops three redundant keys and adds the handful of fields the strategy text already
-> told a model to read, so a client stops paying for the same data twice and stops guessing at
-> what an intent, a relic counter or a map route actually is. The in-game loop then stopped paying
-> for all twenty screens on every step, and `end_turn_will_kill_player` learned about the two ways
-> a run actually ends while the flag still said it was safe.
+> A harness pass over everything an AI pays for when it plays this game through the mod: the state
+> payload it reads before every decision, the prompt the in-game loop rebuilds every step, the tool
+> surface it calls, and the offline index it looks things up in. The compact `agent_view` drops three
+> redundant keys and gains the fields the strategy text already told a model to read; the in-game
+> prompt stops re-sending all twenty screens' playbooks and puts the state last so the prefix can be
+> cached; `act` stops handing back the raw 4,000-9,500-token state; a rejected index finally says
+> which indices would have worked; and the knowledge index gains the relic, power and monster-move
+> tables that did not exist. Two defects came out of the same reading: `end_turn_will_kill_player`
+> said a turn was safe while poison was about to kill you, and the compact view was leaking the exact
+> order of the draw pile.
 
 - **The in-game prompt no longer re-sends the whole playbook on every step.** `PlaySystem` used to
   embed `screen-playbooks.md` in full — about 3,070 tokens, re-sent for each decision, covering 20
@@ -52,6 +56,15 @@
 - Document the additions, the removals and the version bump in `docs/api.md`, including the
   compatibility note that only this derived view changed.
 
+- **Every HTTP response stopped paying for whitespace.** The wire format was indented JSON, which is
+  pleasant to read in a browser and expensive everywhere else: measured against this repository's own
+  response examples, indentation was **35.6% of the bytes** — 44% on the nested combat payload — and
+  every one of those bytes is re-read by the MCP sidecar, an external agent or a validation script on
+  every single state read. Responses are compact now; `curl -s .../state | jq .` gives back the
+  pretty form, and field names stay PascalCase, which is the part that is actually a contract. The
+  test that used to pin indentation now pins its absence, so turning it back on has to argue with an
+  assertion.
+
 - **The offline knowledge index gained the two files an agent asks for most.** There was no
   `relics.md` and no `powers.md`: a model deciding whether to take a relic, or reading a `power_id`
   plus a stack count, had nothing to look the answer up in. `docs/game-knowledge/relics.md` now
@@ -63,7 +76,53 @@
   winning, `MaxInitialHp => MinInitialHp`), with the file stating that A1+ is higher and that the
   live `min_hp`/`max_hp` stays the authority. Nothing was invented to fill a cell: 16 power rows and
   10 relic rows say the effect could not be read off a declaration, and 22 amounts stay `?` because
-  they are only computed at run time.
+  they are only computed at run time. Both files are reachable now: `get_planner_context` and
+  `get_combat_context` list them in `reference_files` under the ids the state reports (`relic_id`,
+  `power_id`), which is the mapping `docs/game-knowledge/agent-reference.md` documents.
+
+- **`act` stopped returning the full state, on both MCP surfaces.** `POST /action` answers with the
+  whole raw `/state` payload — roughly 4,000-9,500 tokens — and the Python sidecar handed that back
+  verbatim after every single action while the native `act` already answered with the compact
+  `agent_view`. The two surfaces are one tool face, so the sidecar now returns the action's own
+  post-action snapshot projected to `agent_view`, the same shape `get_game_state` returns, and the
+  other keys (`action`, `status`, `stable`, `message`) are untouched. `raw_state=true` is the escape
+  hatch for a field the compact view does not carry; it is off by default. The HTTP route is
+  unchanged, so REST callers still get the raw payload.
+
+- **A rejected index is now correctable, not just refused.** `card_index 9 is not in the latest
+  combat.hand.` said what was wrong and nothing about what would have worked, while the
+  "action is not available" answer next to it already listed `available_actions`. Both surfaces now
+  answer an index mistake with the same error object the HTTP API sends — `code`, `message`,
+  `details`, `retryable` — whose details name the offending `field`, the `submitted` value, the
+  `valid_field` payload path (`combat.hand`, `map.options`, `combat.hand[].targets`, ...) and the
+  `valid_indices` that path currently offers. The indices are free: deciding an index is stale means
+  the validator is already holding the payload that lists the good ones. The human-readable sentence
+  is unchanged and stays at `error.message`. On the Python side the mod's own details
+  (`hand_count`, `option_count`, ...) are kept and the same keys are added, derived from those
+  counts when the mod reports a count rather than a list.
+
+- **Native MCP tool failures carry the structured envelope.** An exception in a native tool became
+  `{"error": "<message>"}`, dropping the `code`, `details`, and `retryable` the HTTP and Python paths
+  keep — so the play contract's rule "retry only when `retryable` is true" was unimplementable on
+  that surface. Tool errors now serialize the same `{code, message, details, retryable}` object (with
+  `status_code` when there is one), an unknown tool name answers `404 unknown_tool`, and an act
+  without a name answers `400 invalid_request`.
+
+- **`decide` reads one decision's worth of context in one call.** The documented loop was
+  `get_game_state` -> `get_available_actions` -> `act` plus `get_scene_guidance` on the screens with a
+  real choice: three or four calls per decision, each rebuilding the whole state on the game thread.
+  `decide` returns `state`, `available_actions`, and `scene_guidance` from a single state read on
+  both surfaces, and `act` reuses one snapshot for its legality check and its index validator instead
+  of building the state three times. The existing tools are unchanged.
+
+- **`get_scene_guidance` answers the same four keys on both surfaces.** The Python tool returned
+  `{screen, guidance, event_id, event_options, guidance_source}` and the native tool
+  `{screen, scene, guidance}` — same name, different answers depending on which surface served it.
+  Both now always answer `screen`, `scene`, `guidance`, and `playbook`, where `playbook` is the
+  per-screen section of `screen-playbooks.md` the in-game loop uses and is never empty (an unmapped
+  screen gets the index of the sections). The sidecar keeps its three extras, which come from the
+  offline event index the mod does not ship. `tests/test_scene_guidance_alignment.py` compares both
+  mappings and the shared key set against the C# source.
 
 - **The compact view stopped leaking the draw order.** The removed `*_cards[]` arrays were emitted in
   real pile order, so a model could see the exact sequence it was about to draw — information the

@@ -1,6 +1,6 @@
 # STS2 MCP Player 使用说明
 
-游戏内自动游玩和这份技能共用同一份游玩合同：in-game agent 把 SKILL.md 的 shared play contract 加上 screen-playbooks.md 作为 system prompt。
+游戏内自动游玩和这份技能共用同一份游玩合同：in-game agent 把 SKILL.md 的 shared play contract 作为 system prompt，再按当前 screen 注入 screen-playbooks.md 与 strategy.md 里对应的那一节（未匹配到分节时注入分节索引），而不是整份文档。
 
 这是一个给 Codex/Agent 用的技能，目标是更稳定地通过 `sts2-ai-agent` MCP 接口游玩或验证《Slay the Spire 2》。
 
@@ -106,10 +106,11 @@ debug 模式：
 它的核心循环很简单：
 
 1. 先 `health_check`
-2. 每次决策前先 `get_game_state`
+2. 每次决策前读一次状态：`decide`（一次拿到 compact `state`、`available_actions` 与 `scene_guidance`）
+   或 `get_game_state`
 3. 只调用 `available_actions` 里真实存在的动作
-4. 动作后重新读取状态
-5. 所有索引都从最新 payload 重新计算
+4. `act` 返回的 `state` 就是下一个决策的输入；只有 `pending`、屏幕变化或需要完整载荷（`raw_state=true`）时才重读
+5. 所有索引都从最新 payload 重新计算；索引被拒时按 `error.details` 的 `field` / `valid_indices` / `valid_field` 改正
 6. 按 `agent_knowledge/run_logs/README.md` 模板维护单局决策日志，记录种子号、角色、路线、阶段选择和理由
 
 这意味着它特别适合处理这些容易出错的情况：
@@ -128,6 +129,7 @@ debug 模式：
 - `get_game_state`
 - `get_raw_game_state`
 - `get_available_actions`
+- `decide`（一次读取同时给出 `state` / `available_actions` / `scene_guidance`）
 - `get_relevant_game_data` / `get_game_data_item` / `get_game_data_items`
 - `wait_until_actionable`
 - `act`
@@ -141,6 +143,8 @@ debug 模式：
 ## 常见注意事项
 
 - 不要把 `completed` 当成绝对完成，仍然要看返回的 `state`
+- `act` 返回的 `state` 是 compact `agent_view`（与 `get_game_state` 同形），不是完整 `/state`；要看完整载荷传 `raw_state=true`
+- 索引被拒时不要重发同一个索引：读 `error.details.valid_indices` 与 `valid_field` 再改
 - 不要在 reward 流程里乱用 `proceed`
 - 不要假设一次 `select_deck_card` 就一定结束多选流程
 - 不要在 compact `shop.open=true` 时直接认为商店已经处理完（raw state 里才叫 `shop.is_open`）
