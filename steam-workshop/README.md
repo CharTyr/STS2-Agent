@@ -55,7 +55,22 @@ Prefer the official ModUploader. It writes tags, optional extra previews, and th
 ModUploader.exe upload -w "<absolute path to sts2-ai-agent-vX.Y.Z>"
 ```
 
-Restart the Steam client immediately before uploading. Without a restart, `SubmitItemUpdate` can sit in `k_EItemUpdateStatusPreparingConfig` / `k_EItemUpdateStatusPreparingContent` indefinitely and never reach `UploadingContent`; on 2026-09-11 the same command finished in 16 seconds right after a Steam restart. This is not a proxy problem: Steam-facing domains were intermittently unreachable both directly and through the local proxy, and the restart alone was the fix.
+Restart the Steam client immediately before uploading. Without a restart, `SubmitItemUpdate` can sit in `k_EItemUpdateStatusPreparingConfig` / `k_EItemUpdateStatusPreparingContent` indefinitely and never reach `UploadingContent`; on 2026-09-11 the same command finished in 16 seconds right after a Steam restart.
+
+**Turn the system proxy off for the upload.** This is the dominant failure on this machine, and it costs an hour if you do not know it. On 2026-09-21 six consecutive attempts (six minutes each) sat in `k_EItemUpdateStatusPreparingContent` and never moved, with the loader's general connectivity fine and Steam logged on, while the Windows system proxy pointed at `127.0.0.1:10808`. Clearing `ProxyEnable` under `HKCU:\Software\Microsoft\Windows\CurrentVersion\Internet Settings`, restarting Steam, and rerunning the same command finished in **8 seconds**. Steam's connection-manager links go direct anyway, so it logs on without the proxy; it is the SteamPipe content transfer that stalls behind it. Restore the proxy afterwards.
+
+```powershell
+# Save, disable, upload, restore.
+$key = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Internet Settings'
+$saved = Get-ItemProperty $key | Select-Object ProxyEnable, ProxyServer
+Set-ItemProperty -Path $key -Name ProxyEnable -Value 0
+Stop-Process -Name steam -Force; Start-Sleep 8
+Start-Process 'C:\Program Files (x86)\Steam\steam.exe'
+# ... upload ...
+Set-ItemProperty -Path $key -Name ProxyEnable -Value $saved.ProxyEnable
+```
+
+Read the outcome from `C:\Program Files (x86)\Steam\logs\workshop_log.txt`, not from the uploader's stdout: it prints a `Status:` line every second and the line that matters is `Upload finished for workshop item <id> : OK`. Note that the file keeps the history of every past upload, so a naive "does it contain a success line" check matches an old release and reports a success that did not happen — compare the count before and after, as `build/retry-workshop-upload.ps1` does.
 
 Updates must target the existing item. Pass `--id <item ID>` or keep `mod_id.txt` in the workspace — the uploader creates a new item when neither is present, and it writes `mod_id.txt` after a successful upload. Current item: `3796486050`.
 
