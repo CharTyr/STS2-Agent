@@ -40,6 +40,18 @@ SCENE_SHOP = "shop"
 SCENE_EVENT = "event"
 
 
+SCENE_REWARD = "reward"
+
+
+SCENE_CARD_SELECTION = "card_selection"
+
+
+SCENE_CHEST = "chest"
+
+
+SCENE_BUNDLE_SELECTION = "bundle_selection"
+
+
 COMBAT_SCREEN_KEYWORDS = ("combat",)
 
 
@@ -53,6 +65,38 @@ EVENT_SCREEN_KEYWORDS = ("event",)
 
 
 EVENT_SCREEN_NAMES = {"event_room", "ancient_event"}
+
+
+REWARD_SCREEN_KEYWORDS = ("reward",)
+
+
+CARD_SELECTION_SCREEN_KEYWORDS = ("card_selection",)
+
+
+CHEST_SCREEN_KEYWORDS = ("chest",)
+
+
+BUNDLE_SELECTION_SCREEN_KEYWORDS = ("bundle_selection",)
+
+
+# Screen -> scene, in evaluation order: (scene, keywords, exact names). The order is part of the
+# contract, not an implementation detail. "COMBAT_REWARD" carries the reward keyword and is claimed
+# by the combat rule that runs first, because the combat screen is the one that names its payload
+# `combat`; "BUNDLE_SELECTION" would be swallowed by any broader "selection" keyword, so card
+# selection matches the full `card_selection` token instead. The `names` column carries the legacy
+# spellings a scene has also been reported under, checked alongside the keyword; the offered-choice
+# scenes need none, because every name the mod emits for them spells its own scene.
+# Mirrors GameDataFilter.DetectScene, and tests/test_scene_field_alignment.py reads the C# test's
+# expectation table back so the two cannot classify the same screen differently.
+_SCENE_SCREEN_RULES: tuple[tuple[str, tuple[str, ...], set[str]], ...] = (
+    (SCENE_SHOP, SHOP_SCREEN_KEYWORDS, set()),
+    (SCENE_EVENT, EVENT_SCREEN_KEYWORDS, EVENT_SCREEN_NAMES),
+    (SCENE_COMBAT, COMBAT_SCREEN_KEYWORDS, COMBAT_SCREEN_NAMES),
+    (SCENE_REWARD, REWARD_SCREEN_KEYWORDS, set()),
+    (SCENE_CARD_SELECTION, CARD_SELECTION_SCREEN_KEYWORDS, set()),
+    (SCENE_CHEST, CHEST_SCREEN_KEYWORDS, set()),
+    (SCENE_BUNDLE_SELECTION, BUNDLE_SELECTION_SCREEN_KEYWORDS, set()),
+)
 
 
 _GAME_DATA_COLLECTIONS: dict[str, Any] = {}
@@ -179,7 +223,93 @@ _SCENE_FIELD_SETS: dict[str, dict[str, list[str]]] = {
             "options",
         ],
     },
+    # A card being offered is evaluated the same way whether it sits in a shop, behind a reward
+    # screen, in a bundle or in a deck-selection grid: cost, type, rarity and description decide it.
+    # These three scenes therefore share the shop card set instead of combat's larger one -- the
+    # combat-only damage/block/vars/upgrade fields would ride along on every offer lookup, which is
+    # exactly the bloat the projection exists to avoid. The chest shares the shop relic set for the
+    # same reason. Gold/potion/relic reward rows carry no stable id, so those scenes declare no
+    # collection for them and the run-level fallback answers instead of a guessed id.
+    SCENE_REWARD: {
+        "cards": [
+            "id",
+            "name",
+            "description",
+            "type",
+            "rarity",
+            "target",
+            "cost",
+            "is_x_cost",
+            "star_cost",
+            "is_x_star_cost",
+            "keywords",
+        ],
+    },
+    SCENE_CARD_SELECTION: {
+        "cards": [
+            "id",
+            "name",
+            "description",
+            "type",
+            "rarity",
+            "target",
+            "cost",
+            "is_x_cost",
+            "star_cost",
+            "is_x_star_cost",
+            "keywords",
+        ],
+    },
+    SCENE_BUNDLE_SELECTION: {
+        "cards": [
+            "id",
+            "name",
+            "description",
+            "type",
+            "rarity",
+            "target",
+            "cost",
+            "is_x_cost",
+            "star_cost",
+            "is_x_star_cost",
+            "keywords",
+        ],
+    },
+    SCENE_CHEST: {
+        "relics": [
+            "id",
+            "name",
+            "description",
+            "rarity",
+            "pool",
+            "is_melted",
+        ],
+    },
 }
+
+
+def _normalize_collection_name(collection: str) -> str:
+    """The one spelling of a collection name: trimmed and lowercased.
+
+    Both scene tables are keyed by this spelling, and a caller spells the collection by hand -- the
+    tool's argument is free text -- so every lookup goes through here instead of depending on it.
+    """
+    return (collection or "").strip().lower()
+
+
+def scene_field_set(scene: str, collection: str) -> list[str] | None:
+    """The fields to project for one collection in one scene, or `None` when nothing is projected.
+
+    The tool calls this with the caller's own spelling of both names, so the lookup is
+    case-insensitive here rather than at each call site: the C# mirror's tables are
+    OrdinalIgnoreCase dictionaries, and the same call has to answer the same way on both surfaces.
+    A scene with no field set for the collection returns `None`, which is the tool's signal to hand
+    back the item unprojected instead of an empty record.
+    """
+    collections = _SCENE_FIELD_SETS.get((scene or "").strip().lower())
+    if not collections:
+        return None
+    return collections.get(_normalize_collection_name(collection))
 
 
 def _configure_game_data_loader(loader: Callable[[str], Any]) -> None:
@@ -237,6 +367,12 @@ def _load_game_data_collection(collection: str) -> Any:
 # the ids the current screen is about, so the tool matches its own description instead of requiring
 # the caller to already know them. Mirrors STS2AIAgent/Agent/GameDataFilter.cs SceneItemSources;
 # tests/test_scene_field_alignment.py keeps the two equal.
+#
+# The collection column is what keeps the answer honest: a screen that is about cards declares paths
+# only under "cards", so a relic lookup on a card screen can never come back with card ids (and the
+# other way round). A screen whose offered collection has no stable id at all -- the gold/potion/
+# relic rows of a reward screen -- declares nothing and falls through to the run-level fallback
+# rather than inventing an id.
 _SCENE_ITEM_SOURCES: dict[str, dict[str, list[str]]] = {
     SCENE_COMBAT: {
         "cards": ["combat.hand[].card_id"],
@@ -245,12 +381,33 @@ _SCENE_ITEM_SOURCES: dict[str, dict[str, list[str]]] = {
         "potions": ["run.potions[].potion_id"],
     },
     SCENE_SHOP: {
+        # All three stock lists answered from the offer ids the shelf carries: `shop.cards[].card_id`,
+        # `shop.relics[].relic_id` and `shop.potions[].potion_id` are the raw /state payload's own
+        # fields. The compact agent_view drops the relic and potion ids (it keeps only the display
+        # line), which is why the raw path is the one listed -- it is present whenever the shelf is.
         "cards": ["shop.cards[].card_id"],
         "relics": ["shop.relics[].relic_id"],
         "potions": ["shop.potions[].potion_id"],
     },
     SCENE_EVENT: {
         "events": ["event.event_id"],
+    },
+    # Offered cards and relics are named differently by the two views one /state response carries:
+    # the raw payload says `reward.card_options[]` / `chest.relic_options[]`, the embedded compact
+    # agent_view says `reward.cards[]` / `chest.relics[]`. Both are listed (raw first: it is the list
+    # the screen builders write, and it is never absent while the screen is up) so a caller handing
+    # over either view gets the made offer rather than the deck the player already owns.
+    SCENE_REWARD: {
+        "cards": ["reward.card_options[].card_id", "agent_view.reward.cards[].card_id"],
+    },
+    SCENE_CARD_SELECTION: {
+        "cards": ["selection.cards[].card_id", "agent_view.selection.cards[].card_id"],
+    },
+    SCENE_CHEST: {
+        "relics": ["chest.relic_options[].relic_id", "agent_view.chest.relics[].relic_id"],
+    },
+    SCENE_BUNDLE_SELECTION: {
+        "cards": ["bundles[].cards[].card_id", "agent_view.bundles[].cards[].card_id"],
     },
 }
 
@@ -293,18 +450,27 @@ def _collect_path_ids(node: Any, tokens: list[str], ids: list[str], seen: set[st
 def derive_relevant_item_ids(state: Any, collection: str, screen: str) -> list[str]:
     """Ids the current screen is about for one collection, deduplicated and in surface order.
 
-    Empty when the collection is unknown or the state carries none of its ids, which is what an
-    unprojected answer looks like rather than an error.
+    The scene picks the source, and the source is looked up *by collection*: the scene tables are
+    keyed on collection, so a screen that offers cards can never answer a relic question with card
+    ids, and a collection the screen does not offer answers from the run-level ids the player already
+    owns. That fallback runs only when the scene's own source yields nothing -- an unknown collection,
+    a screen whose scene payload is absent (FAKE_MERCHANT classifies as shop but carries no shop
+    block), or a screen that simply does not offer the collection. An empty answer is a legitimate
+    "nothing to look up here" rather than an error.
+
+    `collection` is matched case-insensitively, the way the C# mirror's dictionaries are; the tool is
+    the one place a caller spells it by hand, so "Cards" has to reach the same source as "cards".
     """
     scene = _detect_scene_from_screen(screen)
-    paths = _SCENE_ITEM_SOURCES.get(scene, {}).get(collection)
+    collection_key = _normalize_collection_name(collection)
+    paths = _SCENE_ITEM_SOURCES.get(scene, {}).get(collection_key)
     ids = _collect_ids_from_paths(state, paths)
     if not ids:
         # A scene can name a source whose payload is absent on that screen: FAKE_MERCHANT is
         # classified as shop, but the shop payload is null there because the merchant room the ids
         # come from does not exist. An empty scene answer therefore still falls back to the
         # run-level ids instead of reporting nothing at all.
-        ids = _collect_ids_from_paths(state, _FALLBACK_ITEM_SOURCES.get(collection))
+        ids = _collect_ids_from_paths(state, _FALLBACK_ITEM_SOURCES.get(collection_key))
     return ids
 
 
@@ -453,11 +619,16 @@ def get_game_data_items_fields(collection: str, item_ids: str, fields: str | Non
 
 
 def _detect_scene_from_screen(screen: str) -> str:
+    """Classify one /state screen name into the scene its metadata is scoped by.
+
+    Walks _SCENE_SCREEN_RULES in order and takes the first rule whose keyword appears in the name or
+    whose exact name matches. Order decides the overlapping names: a "COMBAT_REWARD" screen is a
+    combat screen because the combat rule runs before the reward rule, and "BUNDLE_SELECTION" is not
+    a card selection because only the full `card_selection` token matches that rule. Mirrors
+    GameDataFilter.DetectScene in the C# mod.
+    """
     normalized = (screen or "").lower()
-    if any(keyword in normalized for keyword in COMBAT_SCREEN_KEYWORDS) or normalized in COMBAT_SCREEN_NAMES:
-        return SCENE_COMBAT
-    if any(keyword in normalized for keyword in SHOP_SCREEN_KEYWORDS):
-        return SCENE_SHOP
-    if any(keyword in normalized for keyword in EVENT_SCREEN_KEYWORDS) or normalized in EVENT_SCREEN_NAMES:
-        return SCENE_EVENT
+    for scene, keywords, names in _SCENE_SCREEN_RULES:
+        if normalized in names or any(keyword in normalized for keyword in keywords):
+            return scene
     return SCENE_MENU

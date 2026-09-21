@@ -5,13 +5,22 @@ single compact `act`. The data lives here rather than in `server.py` because reg
 that module is for: the 59-entry table was the bulk of its remaining weight, and moving it out let
 `server.py` come back under the default module budget instead of raising its own.
 
-`server.py` re-exports both names so callers and tests that already import them from there keep
-working; the table is one object either way.
+The registration that turns those specs into tools lives here too, for the same reason and the same
+budget: a table whose only reader is one function belongs beside it. `server.py` calls
+:func:`register_legacy_action_tools`, and re-exports `ActionToolSpec` / `LEGACY_ACTION_TOOLS` so
+callers and tests that already import them from there keep working; the table is one object either
+way.
 """
 
 from __future__ import annotations
 
 from dataclasses import dataclass
+from typing import Any, Callable, Literal
+
+from fastmcp import FastMCP
+
+ToolHandler = Callable[..., dict[str, Any]]
+CrystalSphereTool = Literal["big", "small"]
 
 
 @dataclass(frozen=True, slots=True)
@@ -82,3 +91,101 @@ LEGACY_ACTION_TOOLS: tuple[ActionToolSpec, ...] = (
     ActionToolSpec("invite_ai_teammate", "no_args", "Invite the AI teammate and launch the companion instance."),
     ActionToolSpec("continue_ai_teammate", "no_args", "Continue the saved multiplayer run from the main menu and relaunch the AI teammate to rejoin it."),
 )
+
+
+def _register_no_arg_tool(mcp: FastMCP, name: str, description: str, handler: ToolHandler) -> None:
+    def tool() -> dict[str, Any]:
+        return handler()
+
+    tool.__name__ = name
+    tool.__doc__ = description
+    mcp.tool(name=name, description=description)(tool)
+
+
+def _register_option_index_tool(mcp: FastMCP, name: str, description: str, handler: ToolHandler) -> None:
+    def tool(option_index: int) -> dict[str, Any]:
+        return handler(option_index=option_index)
+
+    tool.__name__ = name
+    tool.__doc__ = description
+    mcp.tool(name=name, description=description)(tool)
+
+
+def _register_card_target_tool(mcp: FastMCP, name: str, description: str, handler: ToolHandler) -> None:
+    def tool(card_index: int, target_index: int | None = None) -> dict[str, Any]:
+        return handler(card_index=card_index, target_index=target_index)
+
+    tool.__name__ = name
+    tool.__doc__ = description
+    mcp.tool(name=name, description=description)(tool)
+
+
+def _register_reward_choice_tool(mcp: FastMCP, name: str, description: str, handler: ToolHandler) -> None:
+    def tool(option_index: int | None = None, card_index: int | None = None) -> dict[str, Any]:
+        return handler(option_index=option_index, card_index=card_index)
+
+    tool.__name__ = name
+    tool.__doc__ = description
+    mcp.tool(name=name, description=description)(tool)
+
+
+def _register_option_target_tool(mcp: FastMCP, name: str, description: str, handler: ToolHandler) -> None:
+    def tool(option_index: int, target_index: int | None = None) -> dict[str, Any]:
+        return handler(option_index=option_index, target_index=target_index)
+
+    tool.__name__ = name
+    tool.__doc__ = description
+    mcp.tool(name=name, description=description)(tool)
+
+
+def _register_crystal_tool(mcp: FastMCP, name: str, description: str, handler: ToolHandler) -> None:
+    def action_tool(tool: CrystalSphereTool) -> dict[str, Any]:
+        return handler(tool=tool)
+
+    action_tool.__name__ = name
+    action_tool.__doc__ = description
+    mcp.tool(name=name, description=description)(action_tool)
+
+
+def _register_crystal_cell_tool(mcp: FastMCP, name: str, description: str, handler: ToolHandler) -> None:
+    def action_tool(x: int, y: int, tool: CrystalSphereTool | None = None) -> dict[str, Any]:
+        return handler(x=x, y=y, tool=tool)
+
+    action_tool.__name__ = name
+    action_tool.__doc__ = description
+    mcp.tool(name=name, description=description)(action_tool)
+
+
+def register_legacy_action_tools(mcp: FastMCP, sts2: Any) -> None:
+    """Register one MCP tool per entry of :data:`LEGACY_ACTION_TOOLS`, in table order."""
+    for spec in LEGACY_ACTION_TOOLS:
+        handler = getattr(sts2, spec.name)
+        if spec.kind == "no_args":
+            _register_no_arg_tool(mcp, spec.name, spec.description, handler)
+            continue
+
+        if spec.kind == "option_index":
+            _register_option_index_tool(mcp, spec.name, spec.description, handler)
+            continue
+
+        if spec.kind == "card_target":
+            _register_card_target_tool(mcp, spec.name, spec.description, handler)
+            continue
+
+        if spec.kind == "reward_choice":
+            _register_reward_choice_tool(mcp, spec.name, spec.description, handler)
+            continue
+
+        if spec.kind == "option_target":
+            _register_option_target_tool(mcp, spec.name, spec.description, handler)
+            continue
+
+        if spec.kind == "crystal_tool":
+            _register_crystal_tool(mcp, spec.name, spec.description, handler)
+            continue
+
+        if spec.kind == "crystal_cell":
+            _register_crystal_cell_tool(mcp, spec.name, spec.description, handler)
+            continue
+
+        raise RuntimeError(f"Unsupported action tool kind: {spec.kind}")

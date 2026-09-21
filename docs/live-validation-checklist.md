@@ -725,6 +725,13 @@ mod-side action.
 - Crystal Sphere: a map screen or capstone overlay covering the sphere must never let
   `/state.screen` report `CRYSTAL_SPHERE` (the offline argument is from the resolution path, not from
   observation).
+- Crystal Sphere: every item whose cells are not all clear reports `kind = null` and
+  `is_good = null` on both `/state` and compact `get_game_state`, and both fields fill in only on the
+  read after the last occupied cell is cleared; `x/y/width/height`, `cells` and `hidden_cells` stay
+  readable throughout. The keys never disappear, so a client that branches on `undefined` sees null.
+- Crystal Sphere: the divination count is unchanged by the null identity fields — clearing, tool
+  switching and the final `proceed` behave exactly as before, so the fix is invisible to an agent
+  that only ever read occupancy.
 - The timeline's unlock overlay: after a death, `settle_main_menu` walks real `UNLOCK` layers with
   `confirm_unlock` back to a usable menu.
 - Main-menu overlays: `modal.underlying_screen` reports the screen underneath each overlay type.

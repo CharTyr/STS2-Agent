@@ -11,6 +11,11 @@ from typing import Any, Callable, Iterable, Iterator, TypeVar
 from urllib import error, request
 
 from .client_actions import Sts2ActionMethods
+from .action_results import (
+    compact_action_result,
+    with_index_details,
+    with_reconciliation_semantics,
+)
 from .envelope import Envelope, EnvelopeError, Sts2ApiError, parse, parse_strict
 from .payloads import (
     AvailableActions,
@@ -62,6 +67,24 @@ _ACTION_TRANSPORT_EXCEPTIONS = (OSError, http.client.HTTPException)
 # out, which stays uncertain.
 _ACTION_UNREACHABLE_REASONS = (ConnectionRefusedError, socket.gaierror)
 
+# The one action error the mod declares retryable, and the only one this client passes through.
+# `action_in_flight` is the mod's refusal to run two actions at once: nothing was executed, so a later
+# retry cannot replay a card. Every other action error stays non-retryable, because its outcome may be
+# ambiguous. Surfacing the server's flag adds no automatic retry: `retry_count` is still 0 for
+# `POST /action`, so re-sending stays the caller's decision.
+_ACTION_IN_FLIGHT_CODE = "action_in_flight"
+
+
+def _action_error_retryable(error: Sts2ApiError) -> bool:
+    """The retryable flag to surface for an action error.
+
+    Normally `False` regardless of what the server said -- an action whose outcome is unknown must
+    never be replayed automatically, and a client that retries on a stale flag is how a lost response
+    becomes a second card played. The exception is the mod's own concurrency refusal, which states
+    that no part of the action ran.
+    """
+    return error.code == _ACTION_IN_FLIGHT_CODE and error.retryable
+
 
 class Sts2Client(Sts2ActionMethods):
     def __init__(
@@ -92,6 +115,19 @@ class Sts2Client(Sts2ActionMethods):
 
     def get_decisions(self, limit: int = 50) -> Any:
         return self._request("GET", f"/decisions?limit={limit}", expect_object_data=False)
+
+    def get_decision_snapshot(self) -> dict[str, Any]:
+        """One decision's state and action descriptors, from one game-thread state build.
+
+        `GET /state` and `GET /actions/available` are two requests and therefore two frames: the
+        game advances between them, so a state read and the action indices read next to it can
+        describe different moments. This route answers both halves of one decision from a single
+        build -- `state` is the compact `agent_view`, `available_actions` is the descriptor list the
+        same action-surface enumeration produced. The two separate routes stay for callers that want
+        one of them. Raises `Sts2ApiError` with `status_code == 404` and `code == "not_found"` on a
+        mod that predates the route; `read_decision` is where that one case is handled.
+        """
+        return self._request("GET", "/decision-snapshot")
 
     def get_action_catalog(self) -> AvailableActions:
         """`/actions/available` as typed descriptors.
@@ -311,24 +347,42 @@ class Sts2Client(Sts2ActionMethods):
         y: int | None = None,
         tool: str | None = None,
         command: str | None = None,
+        raw_state: bool = False,
         client_context: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
-        return self._request(
-            "POST",
-            "/action",
-            payload={
-                "action": action,
-                "card_index": card_index,
-                "target_index": target_index,
-                "option_index": option_index,
-                "x": x,
-                "y": y,
-                "tool": tool,
-                "command": command,
-                "client_context": client_context,
-            },
-            is_action=True,
-        )
+        """`POST /action`, answering with the compact state unless `raw_state` asks for the raw one.
+
+        The state in the response is the action's own post-action snapshot projected to the compact
+        `agent_view`, which is what the native MCP `act` returns and what `get_game_state` returns.
+        The raw payload is ~4,000-9,500 tokens and the compact view carries the fields a decision
+        reads, so the escape hatch is opt-in rather than the default. A rejected index comes back as
+        an `Sts2ApiError` whose details name the offending field and the indices that would have
+        worked; see `sts2_mcp.action_results`.
+        """
+        try:
+            result = self._request(
+                "POST",
+                "/action",
+                payload={
+                    "action": action,
+                    "card_index": card_index,
+                    "target_index": target_index,
+                    "option_index": option_index,
+                    "x": x,
+                    "y": y,
+                    "tool": tool,
+                    "command": command,
+                    "client_context": client_context,
+                },
+                is_action=True,
+            )
+        except Sts2ApiError as exc:
+            enriched = with_index_details(exc)
+            if enriched is exc:
+                raise
+            raise enriched from exc
+
+        return result if raw_state else compact_action_result(result)
 
     def _request(
         self,
@@ -385,7 +439,7 @@ class Sts2Client(Sts2ActionMethods):
                     except Sts2ApiError as exc:
                         if exc.code == "invalid_response":
                             return self._build_uncertain_action_result(path, payload, exc)
-                        exc.retryable = False
+                        exc.retryable = _action_error_retryable(exc)
                         raise
             except error.HTTPError as exc:
                 if not action_post:
@@ -402,7 +456,7 @@ class Sts2Client(Sts2ActionMethods):
                 last_error = self._build_action_api_error(exc.code, response_body)
                 if last_error.code == "invalid_response":
                     return self._build_uncertain_action_result(path, payload, last_error)
-                last_error.retryable = False
+                last_error.retryable = _action_error_retryable(last_error)
                 raise last_error
             except error.URLError as exc:
                 if action_post:
@@ -459,7 +513,10 @@ class Sts2Client(Sts2ActionMethods):
                 "path": path,
                 "retryable": False,
             },
-            "reconciliation": reconciliation,
+            # `succeeded`/`status` describe the state read; the action's effect was never compared
+            # against it. The additive keys say so (`state_read`, `action_effect_compared`,
+            # `action_outcome`, `required`) so the block cannot read as an action success.
+            "reconciliation": with_reconciliation_semantics(reconciliation),
         }
 
     def _reconcile_action_state_once(self, submitted_action: dict[str, Any]) -> dict[str, Any]:

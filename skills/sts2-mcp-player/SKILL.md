@@ -22,7 +22,7 @@ Use a conservative SubAgent profile for STS2. The goal is to keep the tool surfa
 
 - Recommended plugin settings: `max_concurrent = 1`, `auto_discover = false`, `broadcast_iteration_progress = false`, `inject_status_to_main_prompt = false`
 - Recommended retention settings: `inject_completed_for_seconds = 120`, `status_retention_seconds = 900`
-- Recommended skill settings: `allowed_tool_names = ["health_check", "get_game_state", "get_raw_game_state", "get_available_actions", "act", "get_game_data_item", "get_game_data_items", "get_relevant_game_data", "wait_for_event", "wait_until_actionable"]`, `max_mcp_tools_per_iteration = 1`, `share_to_main_chat = false`
+- Recommended skill settings: `allowed_tool_names = ["health_check", "get_game_state", "get_raw_game_state", "get_available_actions", "get_decision_log", "get_run_summary", "get_scene_guidance", "diff_state", "get_game_data_item", "get_game_data_items", "get_relevant_game_data", "wait_for_event", "wait_until_actionable", "decide", "act"]`, `max_mcp_tools_per_iteration = 1`, `share_to_main_chat = false`
 
 ### Simplified Config
 
@@ -43,15 +43,15 @@ This skill does not require a long MCP config walkthrough. At runtime, simply fo
 
 For an optional skill-local remote checklist, read [references/remote-connection.md](references/remote-connection.md).
 
-The in-game overlay agent loads the shared play contract below plus references/screen-playbooks.md as its system prompt. Follow those same documents. Do not invent a parallel workflow.
+The in-game overlay agent loads the shared play contract below plus the screen-playbooks.md section for the screen it is on as its system prompt. Follow those same documents. Do not invent a parallel workflow.
 
 <!-- BEGIN SHARED PLAY CONTRACT -->
 
 ## Quick Start
 
 1. Connection checking belongs to the external MCP client or orchestrator that launched the session; the in-game play loop has no `health_check`, so it reads live state instead.
-2. Prefer the guided decision loop: `get_game_state -> get_available_actions -> act`.
-   Use `wait_until_actionable` across animations and screen changes. Use `get_raw_game_state` only if compact state is missing a needed field.
+2. Read one decision at a time: `get_game_state`, then `act` once, using the state `act` returns
+   for the step after it. Use `wait_until_actionable` across animations and screen changes. Use `get_raw_game_state` only if compact state is missing a needed field.
    When you call `act`, attach a one-sentence `reason` -- it is optional for the protocol but it
    is what the player sees as the decision's rationale, so treat it as part of every act.
 3. For cards, monsters, relics, potions, shop items, and event options, prioritize game-data tools before using memory:
@@ -62,6 +62,7 @@ The in-game overlay agent loads the shared play contract below plus references/s
    The compact view carries the ids those lookups key on: `combat.hand[].card_id`,
    `combat.enemies[].enemy_id`, `run.deck[].card_ids`, `run.relic_ids`,
    `selection.cards[].card_id`, `reward.cards[].card_id`, `shop.cards[].card_id`,
+    `shop.relics[].relic_id`, `shop.potions[].potion_id`,
    `bundles[].cards[].card_id`, and `chest.relics[].relic_id`.
 4. Before every decision, call `get_game_state`.
 5. Route by `state.session` first:
@@ -69,7 +70,9 @@ The in-game overlay agent loads the shared play contract below plus references/s
    `session.phase` distinguishes `menu`, `character_select`,
    `multiplayer_lobby`, and `run`.
 6. Only invoke actions that are present in `available_actions`.
-7. After every action, inspect the returned `state`; if needed, fetch fresh state again before the next step.
+7. `act` answers with the state the action left behind, already compact: use it for the next decision
+   instead of reading again. Re-read after a `pending` response, a screen change, or when you
+   deliberately want the full payload with `raw_state=true`.
 8. Treat multiplayer as local-player control only. Never invent teammate actions that are not present in the latest state.
 9. Recompute indexes from fresh payloads every time. Never reuse stale hand, node, reward, or selection indexes.
 
@@ -78,9 +81,10 @@ Do not trust memory over the current payload. The game mutates screens in place,
 ## Game Data Priority Rules
 
 - Never guess static game facts (card text, potion targeting, monster metadata, relic effects, event option details) from memory when game-data tools are available.
-- Use `get_relevant_game_data` first for current-scene context in combat/shop/event/menu flows.
+- Use `get_relevant_game_data` first for current-scene context in combat/shop/event/reward/card-selection/chest/bundle flows.
   Passing `item_ids` is optional: without it the tool derives the ids the screen is about (the hand
-  in a fight, the shop stock in a shop, the event you are in). Pass them when you want to ask about
+  in a fight, the stock in a shop, the offered cards on a reward, card-selection or bundle screen,
+  the offered relics in a chest, the event you are in). Pass them when you want to ask about
   a specific id instead.
 - Use `get_game_data_item` when you need deep details for one entity id.
 - Use `get_game_data_items` when comparing multiple entities (for example, reward-card choices, shop candidates, potion options).
@@ -140,7 +144,7 @@ Do not trust memory over the current payload. The game mutates screens in place,
 - `PAUSE_MENU`, `SETTINGS`, `COMPENDIUM`, `RELIC_COLLECTION`, `POTION_LAB`, `BESTIARY`, `STATS`, `RUN_HISTORY` (and `CARD_LIBRARY` when it is opened from inside a run): the pages shown over a frozen run when a person presses pause. Room actions are suppressed and `capstone` is null on all of them; `close_main_menu_submenu` is the only action advertised, and it steps back one page (`CARD_LIBRARY` -> `COMPENDIUM` -> `PAUSE_MENU`). The pause menu itself offers nothing - a person resumes that one, so wait instead of trying to act.
 
 
-For detailed per-screen sequences and pitfalls, read [references/screen-playbooks.md](references/screen-playbooks.md).
+For detailed per-screen sequences and pitfalls, read the section for the current screen in [references/screen-playbooks.md](references/screen-playbooks.md). The in-game loop is handed that one section with the state; an external client reads the file whole.
 
 ## Common Pitfalls
 
@@ -163,6 +167,45 @@ For detailed per-screen sequences and pitfalls, read [references/screen-playbook
 
 <!-- END SHARED PLAY CONTRACT -->
 
+## Reading a Decision
+
+Both MCP surfaces expose the same tool face, and the read half of a decision can be one call:
+
+- `decide` answers with `state` (the compact `agent_view`, same shape as `get_game_state`),
+  `available_actions` (the descriptors from `get_available_actions`, with their `requires_index` /
+  `requires_target` / target hints), and `scene_guidance` (the same object `get_scene_guidance`
+  returns). The documented loop assembles those three from three or four calls, each rebuilding the
+  state on the game thread; `decide` reads one route, so the actions belong to the state beside them
+  rather than to a frame the game may already have left.
+- `scene_guidance` always carries `screen`, `scene`, `guidance`, and `playbook`. `guidance` is empty
+  on a screen with no strategic choice; `playbook` is the per-screen action sequence and is never
+  empty (an unmapped screen gets the index of the sections). The Python sidecar adds `event_id` /
+  `event_options` / `guidance_source` from the offline event index, which the mod does not ship.
+
+## Reading an Action Result
+
+- `act` answers with the state the action left behind, and on both surfaces that `state` is the
+  compact `agent_view`: the same shape `get_game_state` returns, so it is the next decision's input
+  rather than something to re-read. `action`, `status`, `stable`, and `message` are unchanged.
+- `raw_state=true` returns the full `/state` payload instead. Use it only to inspect a field the
+  compact view does not carry: it is roughly 4,000-9,500 tokens per action.
+- A rejected index is correctable rather than merely refused. The error object carries
+  `error.details.field` (the index you got wrong), `error.details.submitted` (what you sent),
+  `error.details.valid_indices` (the indexes the payload accepts right now), and
+  `error.details.valid_field` (the payload path they came from: `combat.hand`, `map.options`,
+  `combat.hand[].targets`, ...). Fix the call from those instead of resending the same value.
+- An action that is not in `available_actions` answers with the code `invalid_action` and the current
+  `available_actions` list in its details.
+- `status: "outcome_unknown"` means the action request may have completed but its response was lost.
+  One `/state` reconciliation was attempted and the state it read is under `reconciliation.state`
+  (compact, marked); `reconciliation.state_read` / `action_effect_compared` (always `false`) /
+  `action_outcome` (always `"unknown"`) say that the state was read but the action was never compared
+  against it, and `succeeded` / `status` describe that read rather than the action. **Never replay the
+  action automatically**: read the reconciled state and decide again from it.
+- `wait_until_actionable` answers with the same compact `state` as `get_game_state`, so a wait across an
+  animation costs a decision-sized payload rather than the full one. `raw_state=true` is its escape
+  hatch, exactly as on `act`.
+
 ## Run Decision Logs
 
 - Create one markdown log per played or continued run under `agent_knowledge/run_logs/`.
@@ -175,8 +218,15 @@ For detailed per-screen sequences and pitfalls, read [references/screen-playbook
 
 - Use the guided profile for normal play and most evaluations.
 - Keep `get_relevant_game_data` / `get_game_data_item` / `get_game_data_items` available in guided runs for card, monster, potion, shop, and event decisions.
+- Prefer `decide` when a step needs state and guidance together; it is the same answers as the individual read tools, from one call.
 - Use legacy per-action tools only when a harness explicitly needs tool-by-tool coverage.
-- Use `run_console_command` only in development flows where debug actions are enabled.
+- Use `run_console_command` and `inject_event_churn` only in development flows where debug actions are enabled.
+
+Both MCP surfaces (the mod's native `/mcp` and this Python sidecar) expose the same tool names and
+arguments. `get_scene_guidance` and `decide.scene_guidance` answer the same four keys on both:
+`screen`, `scene`, `guidance` (empty where the screen has no strategic choice) and `playbook` (never
+empty). The sidecar adds `event_id` / `event_options` / `guidance_source` from the offline index in
+`docs/game-knowledge/events.md`, which the mod does not ship.
 
 For validation flows, read [references/debug-and-validation.md](references/debug-and-validation.md).
 

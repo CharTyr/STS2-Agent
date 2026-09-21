@@ -92,7 +92,7 @@ namespace STS2AIAgent.Game;
 /// </remarks>
 internal static partial class GameStateService
 {
-    private const int AgentViewVersion = 10;
+    private const int AgentViewVersion = 11;
 
     private static string GetPreferredCardRulesText(string rulesText, string? resolvedRulesText)
     {
@@ -135,16 +135,9 @@ internal static partial class GameStateService
             version = AgentViewVersion,
             screen,
             native_profile_id = nativeProfileId,
-            profiles = new[]
-            {
-                new { id = 1, current = nativeProfileId == 1 },
-                new { id = 2, current = nativeProfileId == 2 },
-                new { id = 3, current = nativeProfileId == 3 }
-            },
             run_id = runId,
             session,
             turn,
-            actions = availableActions,
             available_actions = availableActions,
             combat = BuildAgentCombatPayload(combatState, combat, glossaryTerms),
             run = BuildAgentRunPayload(combatState, runState, run, glossaryTerms),
@@ -303,9 +296,6 @@ internal static partial class GameStateService
             draw = BuildAgentCardStacks(PileCards(playerCombatState?.DrawPile), glossaryTerms),
             discard = BuildAgentCardStacks(PileCards(playerCombatState?.DiscardPile), glossaryTerms),
             exhaust = BuildAgentCardStacks(PileCards(playerCombatState?.ExhaustPile), glossaryTerms),
-            draw_cards = BuildStructuredPileCards(PileCards(playerCombatState?.DrawPile)),
-            discard_cards = BuildStructuredPileCards(PileCards(playerCombatState?.DiscardPile)),
-            exhaust_cards = BuildStructuredPileCards(PileCards(playerCombatState?.ExhaustPile)),
             enemies = combat.enemies.Select(enemy => new
             {
                 i = enemy.index,
@@ -374,6 +364,8 @@ internal static partial class GameStateService
                 .Select(relic => relic.is_melted ? Loc.T("{0} (熔毁)", relic.name) : relic.name)
                 .ToArray(),
             relic_ids = run.relics.Select(relic => relic.relic_id).ToArray(),
+            relic_stacks = run.relics.Select(relic => relic.stack).ToArray(),
+            relic_descriptions = run.relics.Select(relic => relic.description).ToArray(),
             players = run.players.Select(other => new
             {
                 player_id = other.player_id,
@@ -392,6 +384,7 @@ internal static partial class GameStateService
                 i = potion.index,
                 potion_id = potion.potion_id,
                 line = FormatPotionLine(potion),
+                description = potion.description,
                 usable = potion.can_use,
                 discard = potion.can_discard,
                 target = NormalizeTargetHint(potion.target_type),
@@ -401,10 +394,7 @@ internal static partial class GameStateService
             {
                 draw = BuildAgentCardStacks(PileCards(combatPlayer?.DrawPile), glossaryTerms),
                 discard = BuildAgentCardStacks(PileCards(combatPlayer?.DiscardPile), glossaryTerms),
-                exhaust = BuildAgentCardStacks(PileCards(combatPlayer?.ExhaustPile), glossaryTerms),
-                draw_cards = BuildStructuredPileCards(PileCards(combatPlayer?.DrawPile)),
-                discard_cards = BuildStructuredPileCards(PileCards(combatPlayer?.DiscardPile)),
-                exhaust_cards = BuildStructuredPileCards(PileCards(combatPlayer?.ExhaustPile))
+                exhaust = BuildAgentCardStacks(PileCards(combatPlayer?.ExhaustPile), glossaryTerms)
             }
         };
     }
@@ -452,7 +442,7 @@ internal static partial class GameStateService
                 line = $"{option.reward_type}: {option.description}",
                 claimable = option.claimable
             }).ToArray(),
-            cards = reward.card_options.Select(card => BuildAgentChoiceCardPayload(card.index, card.card_id, card.name, card.upgraded, null, null, false, false, GetPreferredCardRulesText(card.rules_text, card.resolved_rules_text), glossaryTerms)).ToArray(),
+            cards = reward.card_options.Select(card => BuildAgentChoiceCardPayload(card.index, card.card_id, card.name, card.upgraded, card.energy_cost, null, false, false, GetPreferredCardRulesText(card.rules_text, card.resolved_rules_text), glossaryTerms)).ToArray(),
             alternatives = reward.alternatives.Select(option => new
             {
                 i = option.index,
@@ -495,6 +485,7 @@ internal static partial class GameStateService
             options = eventPayload.options.Select(option => new
             {
                 i = option.index,
+                text_key = option.text_key,
                 line = FormatEventOptionLine(option),
                 locked = option.is_locked,
                 proceed = option.is_proceed,
@@ -528,10 +519,12 @@ internal static partial class GameStateService
                     GetPreferredCardRulesText(card.rules_text, card.resolved_rules_text),
                     card.price,
                     card.enough_gold,
+                    card.on_sale,
                     glossaryTerms)).ToArray(),
             relics = shop.relics.Select(relic => new
             {
                 i = relic.index,
+                relic_id = relic.relic_id,
                 line = $"{relic.name} [{relic.rarity}] | {relic.price}g",
                 affordable = relic.enough_gold,
                 stocked = relic.is_stocked
@@ -539,6 +532,7 @@ internal static partial class GameStateService
             potions = shop.potions.Select(potion => new
             {
                 i = potion.index,
+                potion_id = potion.potion_id,
                 line = FormatShopPotionLine(potion),
                 affordable = potion.enough_gold,
                 stocked = potion.is_stocked
@@ -567,6 +561,7 @@ internal static partial class GameStateService
             options = rest.options.Select(option => new
             {
                 i = option.index,
+                option_id = option.option_id,
                 line = (string.IsNullOrWhiteSpace(option.description)
                     ? option.title
                     : $"{option.title}: {option.description}") +
@@ -592,6 +587,18 @@ internal static partial class GameStateService
         {
             current = map.current_node == null ? null : $"{map.current_node.row},{map.current_node.col}",
             local_vote = map.local_vote == null ? null : $"{map.local_vote.row},{map.local_vote.col}",
+            boss_node = map.boss_node == null ? null : $"{map.boss_node.row},{map.boss_node.col}",
+            second_boss_node = map.second_boss_node == null ? null : $"{map.second_boss_node.row},{map.second_boss_node.col}",
+            // Route planning needs the graph, not just the immediate options: every node's type,
+            // visited flag and children so a model can evaluate a path end-to-end without
+            // falling back to raw /state. Coordinates are "row,col" strings to keep it compact.
+            nodes = map.nodes.Select(node => new
+            {
+                coord = $"{node.row},{node.col}",
+                node_type = node.node_type,
+                visited = node.visited,
+                children = node.children.Select(child => $"{child.row},{child.col}").ToArray()
+            }).ToArray(),
             votes = map.player_votes
                 .Where(vote => vote.coord != null)
                 .Select(vote => new
@@ -731,6 +738,9 @@ internal static partial class GameStateService
             i = card.index,
             card_id = card.card_id,
             line = FormatCardLine(card.name, card.upgraded, 1, card.energy_cost, card.star_cost, card.costs_x, card.star_costs_x, displayRulesText),
+            upgraded = card.upgraded,
+            energy_cost = card.energy_cost,
+            star_cost = card.star_cost,
             playable = card.playable,
             can_play_result = card.can_play_result,
             target = card.requires_target ? NormalizeTargetHint(card.target_index_space ?? card.target_type) : null,
@@ -784,6 +794,7 @@ internal static partial class GameStateService
         string rulesText,
         int price,
         bool enoughGold,
+        bool onSale,
         HashSet<string> glossaryTerms)
     {
         var keywords = GetGlossaryMatches(rulesText);
@@ -795,6 +806,7 @@ internal static partial class GameStateService
             card_id = cardId,
             line = $"{FormatCardLine(name, upgraded, 1, energyCost, starCost, costsX, starCostsX, rulesText)} | {price}g",
             affordable = enoughGold,
+            on_sale = onSale,
             keywords = TranslateKeywords(keywords),
             mods = Array.Empty<string>()
         };
@@ -1000,16 +1012,6 @@ internal static partial class GameStateService
         return string.Join(" | ", segments);
     }
 
-    private static object[] BuildStructuredPileCards(CardModel[] cards)
-    {
-        return cards.Select(card => new
-        {
-            card_id = card.Id.Entry,
-            upgraded = card.IsUpgraded,
-            card_type = card.Type.ToString()
-        }).ToArray();
-    }
-
     private static string[] GetCardModifierTags(CardModel? card)
     {
         if (card == null)
@@ -1171,7 +1173,7 @@ internal static partial class GameStateService
         ("格挡", "格挡会优先抵消即将受到的伤害。"),
         ("消耗", "消耗牌打出后会移出本场战斗。"),
         ("保留", "保留牌在回合结束时不会被弃掉。"),
-        ("中毒", "中毒会在回合结束时造成等量生命损失，然后层数减少。"),
+        ("中毒", "中毒会在该角色回合开始时造成等量伤害（无视格挡），然后层数减少。"),
         ("眩晕", "眩晕通常是无法主动打出的状态牌。"),
         ("灼伤", "灼伤通常会在手中或结算时带来额外伤害。"),
         ("虚空", "虚空通常会在抽到时消耗能量或妨碍出牌。"),

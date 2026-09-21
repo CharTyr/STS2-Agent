@@ -3,17 +3,22 @@ from __future__ import annotations
 import os
 import threading
 import time
-from typing import Any, Callable, Literal
+from typing import Annotated, Any, Callable
 
 from fastmcp import FastMCP
+from pydantic import Field
 
+from .action_results import project_agent_state
 from .client import Sts2ApiError, Sts2Client
+from .decision import read_decision
 from .handoff import Sts2HandoffService
 from .knowledge import Sts2KnowledgeBase
 from .legacy_tools import (
     # Re-exported: callers and tests import these from here, and the table is one object either way.
     ActionToolSpec,
+    CrystalSphereTool,
     LEGACY_ACTION_TOOLS as _LEGACY_ACTION_TOOLS,
+    register_legacy_action_tools as _register_legacy_action_tools,
 )
 from .scene_guidance import scene_guidance
 from .state_views import MAX_DIFF_ENTRIES, diff_state as build_state_diff, run_summary
@@ -25,7 +30,6 @@ from .game_data import (
     SCENE_EVENT,
     SCENE_MENU,
     SCENE_SHOP,
-    _SCENE_FIELD_SETS,
     _build_game_data_tool_error,
     _configure_game_data_loader,
     _detect_scene_from_screen,
@@ -35,10 +39,10 @@ from .game_data import (
     _reset_game_data_cache,
     derive_relevant_item_ids,
     get_game_data_items_fields,
+    scene_field_set,
 )
 
 ToolHandler = Callable[..., dict[str, Any]]
-CrystalSphereTool = Literal["big", "small"]
 
 
 PASSIVE_ACTIONS = {"discard_potion", "save_and_quit"}
@@ -91,103 +95,6 @@ def _debug_tools_enabled() -> bool:
 _DEBUG_GATED_ACTIONS = {"run_console_command", "inject_event_churn"}
 
 
-def _register_no_arg_tool(mcp: FastMCP, name: str, description: str, handler: ToolHandler) -> None:
-    def tool() -> dict[str, Any]:
-        return handler()
-
-    tool.__name__ = name
-    tool.__doc__ = description
-    mcp.tool(name=name, description=description)(tool)
-
-
-def _register_option_index_tool(mcp: FastMCP, name: str, description: str, handler: ToolHandler) -> None:
-    def tool(option_index: int) -> dict[str, Any]:
-        return handler(option_index=option_index)
-
-    tool.__name__ = name
-    tool.__doc__ = description
-    mcp.tool(name=name, description=description)(tool)
-
-
-def _register_card_target_tool(mcp: FastMCP, name: str, description: str, handler: ToolHandler) -> None:
-    def tool(card_index: int, target_index: int | None = None) -> dict[str, Any]:
-        return handler(card_index=card_index, target_index=target_index)
-
-    tool.__name__ = name
-    tool.__doc__ = description
-    mcp.tool(name=name, description=description)(tool)
-
-
-def _register_reward_choice_tool(mcp: FastMCP, name: str, description: str, handler: ToolHandler) -> None:
-    def tool(option_index: int | None = None, card_index: int | None = None) -> dict[str, Any]:
-        return handler(option_index=option_index, card_index=card_index)
-
-    tool.__name__ = name
-    tool.__doc__ = description
-    mcp.tool(name=name, description=description)(tool)
-
-
-def _register_option_target_tool(mcp: FastMCP, name: str, description: str, handler: ToolHandler) -> None:
-    def tool(option_index: int, target_index: int | None = None) -> dict[str, Any]:
-        return handler(option_index=option_index, target_index=target_index)
-
-    tool.__name__ = name
-    tool.__doc__ = description
-    mcp.tool(name=name, description=description)(tool)
-
-
-def _register_crystal_tool(mcp: FastMCP, name: str, description: str, handler: ToolHandler) -> None:
-    def action_tool(tool: CrystalSphereTool) -> dict[str, Any]:
-        return handler(tool=tool)
-
-    action_tool.__name__ = name
-    action_tool.__doc__ = description
-    mcp.tool(name=name, description=description)(action_tool)
-
-
-def _register_crystal_cell_tool(mcp: FastMCP, name: str, description: str, handler: ToolHandler) -> None:
-    def action_tool(x: int, y: int, tool: CrystalSphereTool | None = None) -> dict[str, Any]:
-        return handler(x=x, y=y, tool=tool)
-
-    action_tool.__name__ = name
-    action_tool.__doc__ = description
-    mcp.tool(name=name, description=description)(action_tool)
-
-
-def _register_legacy_action_tools(mcp: FastMCP, sts2: Sts2Client) -> None:
-    for spec in _LEGACY_ACTION_TOOLS:
-        handler = getattr(sts2, spec.name)
-        if spec.kind == "no_args":
-            _register_no_arg_tool(mcp, spec.name, spec.description, handler)
-            continue
-
-        if spec.kind == "option_index":
-            _register_option_index_tool(mcp, spec.name, spec.description, handler)
-            continue
-
-        if spec.kind == "card_target":
-            _register_card_target_tool(mcp, spec.name, spec.description, handler)
-            continue
-
-        if spec.kind == "reward_choice":
-            _register_reward_choice_tool(mcp, spec.name, spec.description, handler)
-            continue
-
-        if spec.kind == "option_target":
-            _register_option_target_tool(mcp, spec.name, spec.description, handler)
-            continue
-
-        if spec.kind == "crystal_tool":
-            _register_crystal_tool(mcp, spec.name, spec.description, handler)
-            continue
-
-        if spec.kind == "crystal_cell":
-            _register_crystal_cell_tool(mcp, spec.name, spec.description, handler)
-            continue
-
-        raise RuntimeError(f"Unsupported action tool kind: {spec.kind}")
-
-
 def create_server(client: Sts2Client | None = None, tool_profile: str | None = None) -> FastMCP:
     sts2 = client or Sts2Client()
     knowledge = Sts2KnowledgeBase()
@@ -206,18 +113,10 @@ def create_server(client: Sts2Client | None = None, tool_profile: str | None = N
     _reset_game_data_cache()
     mcp = FastMCP("STS2 AI Agent")
 
-    def _agent_state() -> dict[str, Any]:
-        state = sts2.get_state()
-        agent_view = state.get("agent_view")
-        if isinstance(agent_view, dict):
-            if "available_actions" not in agent_view and isinstance(agent_view.get("actions"), list):
-                return {
-                    **agent_view,
-                    "available_actions": agent_view["actions"],
-                    "compact_agent_view": True,
-                }
-            return {**agent_view, "compact_agent_view": True}
-        return {**state, "compact_agent_view": False}
+    def _agent_state(state: dict[str, Any] | None = None, *, raw_state: bool = False) -> dict[str, Any]:
+        # One projection for every answer that carries a `/state` payload -- see
+        # `action_results.project_agent_state` for what the marker means and when raw comes back.
+        return project_agent_state(sts2.get_state() if state is None else state, raw_state=raw_state)
 
     def _state_actions(state: dict[str, Any]) -> list[Any] | None:
         actions = state.get("available_actions")
@@ -239,6 +138,7 @@ def create_server(client: Sts2Client | None = None, tool_profile: str | None = N
     def _wait_until_actionable_impl(
         timeout_seconds: float,
         *,
+        raw_state: bool = False,
         monotonic: Callable[[], float] = time.monotonic,
         sleep: Callable[[float], None] = time.sleep,
     ) -> dict[str, Any]:
@@ -257,7 +157,7 @@ def create_server(client: Sts2Client | None = None, tool_profile: str | None = N
                 "matched": False,
                 "actionable": True,
                 "event": None,
-                "state": state,
+                "state": _agent_state(state, raw_state=raw_state),
                 "actions": sts2.get_available_actions(),
                 "timeout_seconds": timeout,
                 "source": "state",
@@ -319,7 +219,7 @@ def create_server(client: Sts2Client | None = None, tool_profile: str | None = N
             "matched": event is not None,
             "actionable": _is_actionable_state(state),
             "event": event,
-            "state": state,
+            "state": _agent_state(state, raw_state=raw_state),
             "actions": sts2.get_available_actions(),
             "timeout_seconds": timeout,
             "source": source,
@@ -335,15 +235,9 @@ def create_server(client: Sts2Client | None = None, tool_profile: str | None = N
     def get_game_state() -> dict[str, Any]:
         """Read the compact agent-facing game state snapshot.
 
-        Two shapes are possible and compact_agent_view tells them apart:
-
-        - compact_agent_view: true - the mod exposed agent_view, so this is that
-          compact view (plus available_actions when only actions was sent).
-        - compact_agent_view: false - the mod did not expose agent_view and the
-          full raw /state payload is returned as a fallback. Treat it as a
-          degraded signal rather than the normal compact contract.
-
-        Use get_raw_game_state when you deliberately want the full payload.
+        `compact_agent_view` is true when this is the mod's `agent_view`, and false when the full
+        raw payload came back as a degraded fallback instead -- read it before trusting the shape.
+        `get_raw_game_state` is the deliberate route to the full payload.
         """
         return _agent_state()
 
@@ -359,41 +253,40 @@ def create_server(client: Sts2Client | None = None, tool_profile: str | None = N
 
     @mcp.tool
     def get_decision_log(limit: int = 50) -> dict[str, Any]:
-        """Read recent accepted decisions with the rationale each one carried.
+        """Read recent accepted decisions with the rationale each one carried, oldest first.
 
-        Entries are ordered oldest first and end at the most recent decision. Use it to
-        review why the agent played the way it did, or to diff a run against another.
-        Returns ``{"decisions": [...]}`` — the same envelope the native MCP surface
-        returns, so a client can target either surface with one parser.
+        Returns `{"decisions": [...]}`.
         """
         return {"decisions": list(sts2.get_decisions(limit=limit) or [])}
 
     @mcp.tool
     def get_run_summary() -> dict[str, Any]:
-        """Summarise the current run in one call.
-
-        Character, floor, act, boss, HP, gold, energy, and the deck/relic/potion counts,
-        plus the party block in co-op. Reading this is cheaper than walking run.deck,
-        run.relics, run.potions and the party array on every decision. `run` is null when
-        the payload carries no run.
+        """Summarise the current run in one call: character, floor, act, boss, HP, gold, and the
+        deck/relic/potion counts, plus the party block in co-op. `run` is null when the payload
+        carries no run.
         """
         return {"run": run_summary(sts2.get_state())}
 
     @mcp.tool
     def get_scene_guidance() -> dict[str, Any]:
-        """Return the strategy guidance for the screen the game is on right now.
+        """Return the strategy and the playbook for the screen the game is on right now.
 
-        `guidance` is the same text the mod injects into its own play loop: the route rules on
-        `MAP`, the rest-site rules on `REST`, the shop rules on `SHOP` and the Fake Merchant, the
-        combat and potion priority order on `COMBAT`, and the event-option rules on `EVENT`. It is
-        empty on a screen with no strategic choice, which is an answer rather than a failure.
-
-        On `EVENT` this also returns `event_options`: the offline index's per-option handler, cost,
-        and risk grade (`lethal-possible`, `harmful`, `costly`, `none-detected`, `locked`,
-        `unknown`) for the current `event_id`, in the order the event builds them. The mod does not
-        ship that index, so the native MCP surface answers strategy only.
+        Answers `screen`, `scene`, `guidance`, and `playbook`; `guidance` is empty on a screen with
+        no real choice, which is an answer rather than a failure. On `EVENT` it also adds `event_id`
+        and `event_options`: the offline index's per-option handler, cost, and risk grade.
         """
         return scene_guidance(sts2.get_state())
+
+    @mcp.tool
+    def decide() -> dict[str, Any]:
+        """Read everything one decision needs in a single call.
+
+        Answers `state` (the compact `agent_view`, the same shape `get_game_state` returns),
+        `available_actions` (the descriptors `get_available_actions` returns, with their
+        `requires_index` / `requires_target` / target hints), and `scene_guidance` (the same object
+        `get_scene_guidance` returns, `playbook` included). The individual read tools stay available.
+        """
+        return read_decision(sts2)
 
     @mcp.tool
     def diff_state(
@@ -403,11 +296,10 @@ def create_server(client: Sts2Client | None = None, tool_profile: str | None = N
     ) -> dict[str, Any]:
         """Report the paths that differ between two `/state` payloads.
 
-        Pass the `data` object from two snapshots (not the whole envelope). Each change
-        names the path, the value before, and the value after; a path present on one side
-        only reports null for the other. `truncated` is true when additional changes were
-        omitted or the depth limit prevented a full comparison. Only an empty, non-truncated
-        result means "no difference". The limit is clamped to 1..200.
+        Pass the `data` object from two snapshots, not the whole envelope. Each change names the
+        path, the value before, and the value after; a path present on one side only reports null
+        for the other. `truncated` is true when changes were omitted or the depth limit stopped a
+        full comparison, so only an empty, non-truncated result means "no difference".
         """
         return build_state_diff(before, after, limit=limit)
 
@@ -513,11 +405,17 @@ def create_server(client: Sts2Client | None = None, tool_profile: str | None = N
             )
 
     @mcp.tool
-    def get_game_data_item(collection: str, item_id: str) -> dict[str, Any] | None:
-        """Return a single item from a game metadata collection by id.
-
-        Example: `get_game_data_item(collection='cards', item_id='ABRASIVE')`
-        """
+    def get_game_data_item(
+        collection: Annotated[
+            str,
+            Field(description="cards, relics, monsters, potions, events, powers, or characters."),
+        ],
+        item_id: Annotated[
+            str,
+            Field(description="Entity id, for example ABRASIVE."),
+        ],
+    ) -> dict[str, Any] | None:
+        """Return a single item from a game metadata collection by id."""
         if not item_id:
             return None
 
@@ -528,7 +426,16 @@ def create_server(client: Sts2Client | None = None, tool_profile: str | None = N
             return _build_game_data_tool_error(collection=collection, exc=exc)
 
     @mcp.tool
-    def get_game_data_items(collection: str, item_ids: str) -> dict[str, Any]:
+    def get_game_data_items(
+        collection: Annotated[
+            str,
+            Field(description="cards, relics, monsters, potions, events, powers, or characters."),
+        ],
+        item_ids: Annotated[
+            str,
+            Field(description="Comma-separated entity ids."),
+        ],
+    ) -> dict[str, Any]:
         """Return multiple items (by comma-separated ids) from a collection."""
         if not item_ids:
             return {}
@@ -544,17 +451,26 @@ def create_server(client: Sts2Client | None = None, tool_profile: str | None = N
             return _build_game_data_tool_error(collection=collection, exc=exc)
 
     @mcp.tool
-    def get_relevant_game_data(collection: str, item_ids: str = "") -> dict[str, Any]:
-        """Return items with only the most relevant fields for the current game context.
+    def get_relevant_game_data(
+        collection: Annotated[
+            str,
+            Field(description="cards, relics, monsters, potions, events, powers, or characters."),
+        ],
+        item_ids: Annotated[
+            str,
+            Field(
+                description=(
+                    "Comma-separated ids. Omit to use the ids the current screen is about: the hand "
+                    "in a fight, the shop stock, the cards a reward or selection screen offers, the "
+                    "relics a chest offers."
+                )
+            ),
+        ] = "",
+    ) -> dict[str, Any]:
+        """Return items with only the most relevant fields for the current context.
 
-        This automatically detects the current scene (combat/shop/event/menu) and returns
-        only the fields most useful for AI decision-making in that context, minimizing token usage.
-
-        - `collection`: e.g. `cards`, `relics`, `monsters`, `events`
-        - `item_ids`: comma-separated ids. Omit to use the ids this screen is about (the cards in
-          hand, the enemies in combat, the shop stock), which is the usual call.
-
-        Recommended for most queries to save tokens and reduce uncertainty.
+        The scene decides which fields come back: combat, shop, event, reward, card_selection,
+        chest, bundle_selection, else menu.
         """
         # Auto-detect current scene from game state
         state = sts2.get_state()
@@ -564,7 +480,9 @@ def create_server(client: Sts2Client | None = None, tool_profile: str | None = N
             derive_relevant_item_ids(state, collection, screen)
         )
         try:
-            suggested_fields = _SCENE_FIELD_SETS.get(scene, {}).get(collection)
+            # Case-insensitive on both names, the way the C# mirror's dictionaries are: the caller
+            # spells the collection by hand, so "Cards" has to project exactly like "cards".
+            suggested_fields = scene_field_set(scene, collection)
             if not suggested_fields:
                 # Fallback to basic query if no scene-specific fields defined
                 return get_game_data_items(collection=collection, item_ids=resolved_ids)
@@ -578,12 +496,17 @@ def create_server(client: Sts2Client | None = None, tool_profile: str | None = N
             return _build_game_data_tool_error(collection=collection, exc=exc)
 
     @mcp.tool
-    def wait_for_event(event_names: str = "", timeout_seconds: float = 20.0) -> dict[str, Any]:
-        """Wait for one matching game event from `/events/stream`.
-
-        - `event_names`: comma-separated event names. Empty means accept any event.
-        - `timeout_seconds`: maximum wait time before returning `matched=false`.
-        """
+    def wait_for_event(
+        event_names: Annotated[
+            str,
+            Field(description="Comma-separated event names; empty accepts any event."),
+        ] = "",
+        timeout_seconds: Annotated[
+            float,
+            Field(description="Maximum wait in seconds."),
+        ] = 20.0,
+    ) -> dict[str, Any]:
+        """Wait for one matching game event from `/events/stream`; `matched=false` on timeout."""
         timeout = max(0.1, float(timeout_seconds))
         target_names = [name.strip() for name in event_names.split(",") if name.strip()]
         event = sts2.wait_for_event(
@@ -606,68 +529,103 @@ def create_server(client: Sts2Client | None = None, tool_profile: str | None = N
         }
 
     @mcp.tool
-    def wait_until_actionable(timeout_seconds: float = 20.0) -> dict[str, Any]:
-        """Wait until a new actionable phase is reported, then return fresh state.
+    def wait_until_actionable(
+        timeout_seconds: float = 20.0,
+        raw_state: Annotated[
+            bool,
+            Field(description="Raw /state payload instead of the compact agent_view."),
+        ] = False,
+    ) -> dict[str, Any]:
+        """Wait for a new actionable phase, then return the fresh compact state.
 
-        This reduces high-frequency polling between enemy turns, map transitions,
-        and reward animations. Falls back to basic polling when SSE events are
-        unavailable or no matching event arrives in time.
-
-        Two boolean keys are returned:
-
-        - matched: an SSE event matched. This keeps its original meaning.
-        - actionable: the fresh state exposes at least one non-passive action.
-          This is the portable key shared with the native server wait_until_actionable,
-          so prefer it when you only need to know whether you can act now.
+        `state` is the compact shape `get_game_state` returns; `actionable` says you can act now.
         """
-        return _wait_until_actionable_impl(timeout_seconds)
+        return _wait_until_actionable_impl(timeout_seconds, raw_state=raw_state)
 
     @mcp.tool
     def act(
-        action: str,
-        card_index: int | None = None,
-        target_index: int | None = None,
-        option_index: int | None = None,
-        x: int | None = None,
-        y: int | None = None,
-        tool: CrystalSphereTool | None = None,
-        reason: str | None = None,
+        action: Annotated[
+            str,
+            Field(description="Action name from the latest state's available_actions; never guessed from the screen name."),
+        ],
+        card_index: Annotated[
+            int | None,
+            Field(description="Hand card index for play_card."),
+        ] = None,
+        target_index: Annotated[
+            int | None,
+            Field(
+                description=(
+                    "Target index when the latest state gives a card or potion a non-null `target` "
+                    "and a non-empty `targets` list. The compact `target` hint names the list this "
+                    "indexes into (`enemy` = `combat.enemies[]`, `player` = the local player list); "
+                    "the full state spells it `target_index_space` / `valid_target_indices`."
+                )
+            ),
+        ] = None,
+        option_index: Annotated[
+            int | None,
+            Field(
+                description=(
+                    "Option index for map, reward, shop, event, rest, selection, and "
+                    "multiplayer-lobby actions. `rest.options` carry `requires_target` / "
+                    "`target_index_space` / `valid_target_indices` themselves."
+                )
+            ),
+        ] = None,
+        x: Annotated[
+            int | None,
+            Field(description="Crystal Sphere grid x-coordinate for crystal_clear_cell."),
+        ] = None,
+        y: Annotated[
+            int | None,
+            Field(description="Crystal Sphere grid y-coordinate for crystal_clear_cell."),
+        ] = None,
+        tool: Annotated[
+            CrystalSphereTool | None,
+            Field(
+                description=(
+                    "Crystal Sphere tool. Pass with x/y on crystal_clear_cell to select and clear "
+                    "atomically, or alone on crystal_set_tool."
+                )
+            ),
+        ] = None,
+        reason: Annotated[
+            str | None,
+            Field(
+                description=(
+                    "One-sentence rationale; recorded in the decision log and shown to the player "
+                    "as this decision's reason."
+                )
+            ),
+        ] = None,
+        raw_state: Annotated[
+            bool,
+            Field(
+                description=(
+                    "Return the full raw /state payload instead of the compact agent_view. Default "
+                    "false; thousands of tokens, so only for a field the compact view lacks."
+                )
+            ),
+        ] = False,
     ) -> dict[str, Any]:
-        """Execute one currently available game action through the compact tool surface.
+        """Execute one game action that is currently in `available_actions`.
 
-        Usage loop:
-            1. Call `get_game_state()` or `get_available_actions()`.
-            2. Branch on `state.session.mode` and `state.session.phase`.
-            3. Pick an action that is currently available.
-            4. Pass only the indexes or Crystal Sphere coordinates required by
-               that action from the latest state.
-            5. Attach a one-sentence `reason` so the player and decision log can see why.
-            6. Read state again after the action completes.
+        `state` in the result is the compact `agent_view` the action left behind: the same shape
+        `get_game_state` returns, so read it as the next decision instead of calling again.
+        `raw_state=True` returns the full payload. `action`, `status`, `stable`, and `message` are
+        unchanged.
 
-        Compact-tool rules:
-            - Guided mode intentionally keeps the tool surface small: use this
-              single `act` tool for both singleplayer and multiplayer actions.
-            - Multiplayer never changes the control scope; you only control the
-              local player exposed by the latest state.
-            - Never guess actions from screen names alone. Only call names that
-              are present in `state.available_actions`.
+        `status: "outcome_unknown"` means the response was lost: one state reconciliation was
+        attempted and its compact state sits under `reconciliation.state`, but nothing compared the
+        action against it, so never replay the action automatically.
 
-        Notes:
-            - Use `card_index` for `play_card`.
-            - Use `option_index` for map, reward, shop, event, rest, selection,
-              and multiplayer-lobby actions.
-            - Use `target_index` when the latest state gives a card or potion a non-null
-              `target` together with a non-empty `targets` list; `rest.options` instead carry the
-              explicit `requires_target` / `target_index_space` / `valid_target_indices` triple.
-            - Use `x` and `y` for `crystal_clear_cell`; optionally pass
-              `tool="big"` or `tool="small"` atomically. Use `tool` alone
-              with `crystal_set_tool`.
-            - The compact `target` hint says which list `target_index` indexes into: `enemy` means
-              `combat.enemies[]`, `player` means the local player list, and `targets` lists the exact
-              indices that are legal right now. The full state spells the same thing out as
-              `target_index_space` and `valid_target_indices`.
-            - `run_console_command` and `inject_event_churn` are intentionally excluded from this
-              compact tool; each has its own debug-gated tool.
+        A rejected index answers with `error.code`, `error.message`, and the `error.details` keys
+        `field`, `submitted`, `valid_indices`, and `valid_field` (the payload path to re-read).
+        Recompute from those rather than resending the same index.
+
+        `run_console_command` and `inject_event_churn` are excluded; each has its own debug-gated
+        tool.
         """
         normalized = action.strip().lower()
         if normalized in _DEBUG_GATED_ACTIONS:
@@ -691,6 +649,7 @@ def create_server(client: Sts2Client | None = None, tool_profile: str | None = N
             x=x,
             y=y,
             tool=tool,
+            raw_state=raw_state,
             client_context=client_context,
         )
 
@@ -707,9 +666,8 @@ def create_server(client: Sts2Client | None = None, tool_profile: str | None = N
         def inject_event_churn(option_index: int = 0) -> dict[str, Any]:
             """Publish synthetic /events/stream events to exercise the slow-subscriber contract.
 
-            Development tool: needs STS2_ENABLE_DEBUG_ACTIONS=1 on the mod. `option_index` is the
-            number of events (0 uses the mod's default), and it must exceed the per-subscriber queue
-            capacity -- a request that cannot fill a queue proves nothing.
+            Needs STS2_ENABLE_DEBUG_ACTIONS=1 on the mod. `option_index` is the number of events (0
+            uses the mod's default) and must exceed the per-subscriber queue capacity.
             """
             return sts2.execute_action("inject_event_churn", option_index=option_index)
 

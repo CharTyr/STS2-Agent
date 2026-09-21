@@ -113,20 +113,27 @@ internal sealed class AgentLoop
 
         var stateJson = await _bridge.GetCompactStateJsonAsync(cancellationToken);
         checkState?.Invoke(stateJson);
+
+        // Order is the cache contract: everything that does not change between two decisions on the
+        // same screen comes first, and only this step's state and the instruction it answers come
+        // last. The state used to sit at index 1, which invalidated every message after it on every
+        // step, so a provider's prefix cache could never reuse the prompt it had just paid for.
+        var screen = PlaybookSections.ScreenOfCompactState(stateJson);
+        var screenLabel = string.IsNullOrWhiteSpace(screen) ? "UNKNOWN" : screen.Trim();
         var messages = new List<LlmMessage>
         {
             LlmMessage.System(PlayPrompt.PlaySystem),
-            LlmMessage.User("Latest compact game state:\n" + stateJson)
+            // Never empty: a screen with no section of its own gets the index of the sections, so
+            // the model is never told that there is no playbook for what it is looking at.
+            LlmMessage.System(
+                "Playbook for the screen in the latest state (" + screenLabel + "):\n" + PlayPrompt.PlaybookGuidance(screen))
         };
 
-        // Only the guidance this screen can act on. The full references stay in PlaySystem; this is
-        // the part that had nowhere to live because it is too long to carry on every step.
-        var screen = PlaybookSections.ScreenOfCompactState(stateJson);
         var screenGuidance = PlayPrompt.ScreenGuidance(screen);
         if (!string.IsNullOrEmpty(screenGuidance))
         {
             messages.Add(LlmMessage.System(
-                "Strategy for the screen in the latest state (" + screen + "):\n" + screenGuidance));
+                "Strategy for the screen in the latest state (" + screenLabel + "):\n" + screenGuidance));
         }
 
         var teamContext = _teamContext?.Invoke();
@@ -147,6 +154,7 @@ internal sealed class AgentLoop
             messages.Add(LlmMessage.User("Screenshot of the current game view is attached. Use it as supporting context only.", visionNote.Jpeg));
         }
 
+        messages.Add(LlmMessage.User("Latest compact game state:\n" + stateJson));
         messages.Add(LlmMessage.User("Choose the next legal action from compact state. Vision is optional and not required. Call get_game_state if needed, then act exactly once."));
         AppendJsonActFallbackIfNeeded(messages, resolved, allowAct: true);
 
@@ -636,6 +644,13 @@ internal sealed class AgentLoop
         var actionable = await _bridge.WaitUntilActionableAsync(timeout, cancellationToken);
         var stateJson = await _bridge.GetCompactStateJsonAsync(cancellationToken);
         checkState?.Invoke(stateJson);
+        // The wait schema is shared with the MCP surface, so `raw_state` is honored here too rather
+        // than advertised and ignored. `checkState` keeps the compact view either way: it feeds the
+        // runtime's own state, not this answer.
+        if (ReadBool(args, "raw_state"))
+        {
+            stateJson = await _bridge.GetRawStateJsonAsync(cancellationToken);
+        }
         var actionsJson = await _bridge.GetAvailableActionsJsonAsync(cancellationToken);
         return JsonSerializer.Serialize(new
         {
@@ -663,7 +678,18 @@ internal sealed class AgentLoop
                 return (null, """{"error":"action is required"}""", null, false, "action is required");
             }
 
-            var legal = await _bridge.GetAvailableActionNamesAsync(cancellationToken);
+            // One snapshot for the legality check and the index validator. They used to be three
+            // reads, each rebuilding the whole state on the game thread, and the game can advance
+            // between two of them -- which is how the validator could judge an index against a
+            // payload the legality check never saw.
+            var snapshotJson = await _bridge.GetActionSnapshotJsonAsync(cancellationToken);
+            using var snapshot = ParseArgs(snapshotJson);
+            var state = ReadSnapshotPart(snapshot, "state", JsonValueKind.Object);
+            var descriptors = ReadSnapshotPart(snapshot, "available_actions", JsonValueKind.Array);
+            var compactJson = state.GetRawText();
+            checkState?.Invoke(compactJson);
+            var actionsJson = descriptors.GetRawText();
+            var legal = ReadActionNames(state);
             if (!legal.Contains(action, StringComparer.OrdinalIgnoreCase))
             {
                 var json = JsonSerializer.Serialize(new
@@ -681,9 +707,9 @@ internal sealed class AgentLoop
             var x = ReadInt(args, "x");
             var y = ReadInt(args, "y");
             var tool = ReadString(args, "tool");
-            var actionsJson = await _bridge.GetAvailableActionsJsonAsync(cancellationToken);
-            var compactJson = await _bridge.GetCompactStateJsonAsync(cancellationToken);
-            checkState?.Invoke(compactJson);
+            // The tool schema is shared with the MCP surface, so this one is honored here too rather
+            // than advertised and ignored.
+            var rawState = ReadBool(args, "raw_state");
             var indexError = ActIndexValidator.Validate(
                 action,
                 cardIndex,
@@ -693,9 +719,11 @@ internal sealed class AgentLoop
                 compactJson);
             if (indexError != null)
             {
+                // The rejection carries the offending field, what was submitted, and the indices the
+                // payload actually offers; the envelope and the echo around it are unchanged.
                 var json = JsonSerializer.Serialize(new
                 {
-                    error = indexError,
+                    error = AgentErrorEnvelope.ToPayload(indexError.ToApiException(action, legal)),
                     action,
                     card_index = cardIndex,
                     target_index = targetIndex,
@@ -704,7 +732,7 @@ internal sealed class AgentLoop
                     y,
                     tool
                 }, JsonOptions);
-                return (null, json, null, false, indexError);
+                return (null, json, null, false, indexError.Message);
             }
 
             cancellationToken.ThrowIfCancellationRequested();
@@ -716,7 +744,8 @@ internal sealed class AgentLoop
                 x,
                 y,
                 tool,
-                cancellationToken);
+                cancellationToken,
+                rawState);
             if (AgentErrorEnvelope.TryReadError(result, out var bridgeError))
             {
                 return (null, result, null, false, bridgeError ?? "act failed");
@@ -783,6 +812,11 @@ internal sealed class AgentLoop
         return json;
     }
 
+    /// <summary>
+    /// Tells a model that cannot call tools how to answer instead, by appending to the static system
+    /// prompt at index 0. It belongs there rather than near the final instruction: it is part of the
+    /// unchanging prefix, so it does not cost the steps that follow a cacheable message.
+    /// </summary>
     private static void AppendJsonActFallbackIfNeeded(List<LlmMessage> messages, ResolvedModel resolved, bool allowAct)
     {
         if (resolved.Model.SupportsTools || !allowAct || messages.Count == 0 || messages[0].Role != "system")
@@ -863,6 +897,68 @@ internal sealed class AgentLoop
         }
 
         return null;
+    }
+
+    /// <summary>A boolean tool argument, false when it is absent or unreadable.</summary>
+    private static bool ReadBool(JsonDocument document, string name)
+    {
+        if (!document.RootElement.TryGetProperty(name, out var value))
+        {
+            return false;
+        }
+
+        if (value.ValueKind is JsonValueKind.True or JsonValueKind.False)
+        {
+            return value.GetBoolean();
+        }
+
+        return value.ValueKind == JsonValueKind.String &&
+               bool.TryParse(value.GetString(), out var parsed) &&
+               parsed;
+    }
+
+    /// <summary>
+    /// One member of a parsed action snapshot, or an empty value of the expected kind.
+    /// </summary>
+    /// <remarks>
+    /// A snapshot that is missing a half has to degrade to "nothing is available" rather than throw
+    /// out of the act path: the caller is deciding whether to touch the game, and a malformed read
+    /// is the wrong moment to guess.
+    /// </remarks>
+    private static JsonElement ReadSnapshotPart(JsonDocument snapshot, string name, JsonValueKind kind)
+    {
+        if (snapshot.RootElement.ValueKind == JsonValueKind.Object &&
+            snapshot.RootElement.TryGetProperty(name, out var value) &&
+            value.ValueKind == kind)
+        {
+            return value;
+        }
+
+        return kind == JsonValueKind.Array
+            ? JsonSerializer.SerializeToElement(Array.Empty<string>(), JsonOptions)
+            : JsonSerializer.SerializeToElement(new { }, JsonOptions);
+    }
+
+    /// <summary>The names a snapshot's own state reports; the descriptors come from the same walk.</summary>
+    private static IReadOnlyList<string> ReadActionNames(JsonElement state)
+    {
+        if (state.ValueKind != JsonValueKind.Object ||
+            !state.TryGetProperty("available_actions", out var actions) ||
+            actions.ValueKind != JsonValueKind.Array)
+        {
+            return Array.Empty<string>();
+        }
+
+        var names = new List<string>();
+        foreach (var item in actions.EnumerateArray())
+        {
+            if (item.ValueKind == JsonValueKind.String)
+            {
+                names.Add(item.GetString() ?? string.Empty);
+            }
+        }
+
+        return names;
     }
 
     private static double ReadTimeoutSeconds(JsonDocument document)

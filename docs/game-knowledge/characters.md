@@ -1,7 +1,7 @@
 ﻿# Character Index
 
 > Auto-generated from extraction/decompiled in this repository.  
-> Generated at: 2026-09-20 21:16:43 +08:00
+> Generated at: 2026-09-21 22:31:54 +08:00
 
 Quick mapping for character internal names, starting state, and opening deck/relics.
 

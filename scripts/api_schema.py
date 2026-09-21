@@ -558,6 +558,12 @@ def build_paths(
     paths: dict[str, Any] = {
         "/health": {"get": ordinary_operation("Read mod health and API discovery data.", ref("HealthData"))},
         "/state": {"get": ordinary_operation("Read the complete game-state snapshot.", ref("GameStatePayload"))},
+        "/decision-snapshot": {
+            "get": ordinary_operation(
+                "Read one decision's state and the action descriptors its own state build enumerated.",
+                ref("DecisionSnapshotPayload"),
+            )
+        },
         "/actions/available": {
             "get": ordinary_operation("Read actions available in the current state.", ref("AvailableActionsPayload"))
         },

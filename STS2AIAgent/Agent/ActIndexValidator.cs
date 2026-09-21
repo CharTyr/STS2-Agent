@@ -1,9 +1,54 @@
 using System.Text.Json;
+using STS2AIAgent.Server;
 
 namespace STS2AIAgent.Agent;
 
+/// <summary>
+/// One rejected act index: which field was wrong, what was submitted, and the indices the latest
+/// payload actually offers.
+/// </summary>
+/// <remarks>
+/// The validator used to answer with a bare message string, and the envelope around it carried only
+/// an echo of what the caller had just sent. A model that guessed a stale <c>card_index</c> learned
+/// that it was wrong and nothing about what would have been right, while the "action is not
+/// available" answer next to it already carried <c>available_actions</c>.
+///
+/// The indices are free here: deciding that an index is stale means the validator is already holding
+/// the payload that lists the good ones. <see cref="ToApiException"/> renders this as the same error
+/// object the HTTP boundary sends (<c>code</c>, <c>message</c>, <c>details</c>, <c>retryable</c>), so
+/// the HTTP API, the in-game loop, and the native MCP tool all answer an index mistake with one
+/// shape -- and with the human-readable message unchanged, as <c>error.message</c>.
+/// </remarks>
+internal sealed record ActIndexError(
+    int StatusCode,
+    string Code,
+    string Message,
+    string Field,
+    int? Submitted,
+    string? ValidField,
+    IReadOnlyList<int> ValidIndices,
+    bool Locked = false)
+{
+    /// <summary>
+    /// The shared error envelope for this rejection, with the submitted indexes appended as the
+    /// surfaces have always echoed them.
+    /// </summary>
+    public ApiException ToApiException(string action, IReadOnlyList<string>? availableActions = null) =>
+        new(StatusCode, Code, Message, new
+        {
+            action,
+            field = Field,
+            submitted = Submitted,
+            valid_field = ValidField,
+            valid_indices = ValidIndices,
+            locked = Locked,
+            available_actions = availableActions
+        });
+}
+
 internal static class ActIndexValidator
 {
+    /// <summary>Where an action's option index lives in the compact state, primary path first.</summary>
     private static readonly Dictionary<string, string[][]> OptionPaths = new(StringComparer.OrdinalIgnoreCase)
     {
         ["play_card"] = new[] { new[] { "combat", "hand" } },
@@ -26,7 +71,15 @@ internal static class ActIndexValidator
         ["discard_potion"] = new[] { new[] { "run", "potions" } }
     };
 
-    public static string? Validate(
+    private const string HandPath = "combat.hand";
+
+    private const string HandTargetPath = "combat.hand[].targets";
+
+    /// <summary>
+    /// The index rejection for these parameters, or null when they are usable. Every rejection names
+    /// the offending field, the submitted value, and the indices the latest payload offers for it.
+    /// </summary>
+    public static ActIndexError? Validate(
         string action,
         int? cardIndex,
         int? targetIndex,
@@ -67,59 +120,69 @@ internal static class ActIndexValidator
         var playCard = string.Equals(action, "play_card", StringComparison.OrdinalIgnoreCase);
         var index = playCard ? cardIndex : optionIndex;
 
-        if (requiresIndex && index is null)
-        {
-            return playCard
-                ? "card_index must come from the latest combat.hand payload."
-                : "option_index must come from the latest payload.";
-        }
-
-        if (requiresTarget && targetIndex is null)
-        {
-            return "target_index must come from the latest payload.";
-        }
-
-        JsonDocument? state = null;
+        // The payload is read before the parameters are judged, because every answer below reports
+        // the indices the caller could have used and those only exist in the payload. A payload that
+        // cannot be parsed still leaves the "must come from the latest payload" answers intact, so
+        // the missing-parameter checks do not depend on it.
+        var state = TryParse(compactStateJson);
         try
         {
-            state = JsonDocument.Parse(string.IsNullOrWhiteSpace(compactStateJson) ? "{}" : compactStateJson);
-            var root = state.RootElement;
+            var root = state?.RootElement ?? default;
+            var optionList = playCard
+                ? IndexListAt(root, OptionPaths["play_card"])
+                : IndexListAt(root, OptionPaths.TryGetValue(action, out var paths) ? paths : null);
+            var targetList = playCard && cardIndex is int card
+                ? ReadCardTargets(root, card) ?? Array.Empty<int>()
+                : Array.Empty<int>();
 
-            if (playCard && cardIndex is int card)
+            if (requiresIndex && index is null)
             {
-                if (!ContainsIndex(root, OptionPaths["play_card"], card))
+                return playCard
+                    ? Missing("card_index must come from the latest combat.hand.", "card_index", HandPath, optionList.Indices)
+                    : Missing("option_index must come from the latest payload.", "option_index", optionList.Field, optionList.Indices);
+            }
+
+            if (requiresTarget && targetIndex is null)
+            {
+                return Missing("target_index must come from the latest payload.", "target_index", HandTargetPath, targetList);
+            }
+
+            if (state is null)
+            {
+                return null;
+            }
+
+            if (playCard && cardIndex is int playedCard)
+            {
+                if (!optionList.Indices.Contains(playedCard))
                 {
-                    return $"card_index {card} is not in the latest combat.hand.";
+                    return OutOfRange($"card_index {playedCard} is not in the latest combat.hand.", "card_index", playedCard, HandPath, optionList.Indices);
                 }
 
-                var targets = ReadCardTargets(root, card);
-                if (targets is { Count: > 0 })
+                if (targetList.Count > 0)
                 {
                     if (targetIndex is null)
                     {
-                        return "target_index must come from the latest payload for this card.";
+                        return Missing("target_index must come from the latest payload for this card.", "target_index", HandTargetPath, targetList);
                     }
 
-                    if (!targets.Contains(targetIndex.Value))
+                    if (!targetList.Contains(targetIndex.Value))
                     {
-                        return $"target_index {targetIndex.Value} is not in the latest targets for card {card}.";
+                        return OutOfRange($"target_index {targetIndex.Value} is not in the latest targets for card {playedCard}.", "target_index", targetIndex, HandTargetPath, targetList);
                     }
                 }
             }
-            else if (index is int option)
+            else if (!playCard && index is int option && optionList.Found)
             {
-                if (OptionPaths.TryGetValue(action, out var paths) && HasAnyArray(root, paths))
+                if (!optionList.Indices.Contains(option))
                 {
-                    if (!ContainsIndex(root, paths, option))
-                    {
-                        return $"option_index {option} is not in the latest payload for {action}.";
-                    }
+                    return OutOfRange($"option_index {option} is not in the latest payload for {action}.", "option_index", option, optionList.Field, optionList.Indices);
+                }
 
-                    if (string.Equals(action, "choose_event_option", StringComparison.OrdinalIgnoreCase) &&
-                        IsLockedIndex(root, paths, option))
-                    {
-                        return $"option_index {option} is locked.";
-                    }
+                if (string.Equals(action, "choose_event_option", StringComparison.OrdinalIgnoreCase) &&
+                    IsLockedIndex(root, OptionPaths[action], option))
+                {
+                    return OutOfRange($"option_index {option} is locked.", "option_index", option, optionList.Field, optionList.Indices, locked: true);
                 }
             }
         }
@@ -133,6 +196,20 @@ internal static class ActIndexValidator
 
         return null;
     }
+
+    /// <summary>A required parameter was not submitted, so nothing was out of range yet.</summary>
+    private static ActIndexError Missing(string message, string field, string? validField, IReadOnlyList<int> validIndices) =>
+        new(400, "invalid_request", message, field, null, validField, validIndices);
+
+    /// <summary>The submitted index is not one the latest payload offers.</summary>
+    private static ActIndexError OutOfRange(
+        string message,
+        string field,
+        int? submitted,
+        string? validField,
+        IReadOnlyList<int> validIndices,
+        bool locked = false) =>
+        new(409, "invalid_target", message, field, submitted, validField, validIndices, locked);
 
     public static bool IsUnsettled(string? actResultJson)
     {
@@ -170,28 +247,68 @@ internal static class ActIndexValidator
         return false;
     }
 
+    private static JsonDocument? TryParse(string json)
+    {
+        try
+        {
+            return JsonDocument.Parse(string.IsNullOrWhiteSpace(json) ? "{}" : json);
+        }
+        catch (JsonException)
+        {
+            return null;
+        }
+    }
+
     private static bool ReadBool(JsonElement item, string name)
     {
         return item.TryGetProperty(name, out var value) &&
                value.ValueKind == JsonValueKind.True;
     }
 
-    private static bool HasAnyArray(JsonElement root, IReadOnlyList<string[]> paths)
+    /// <summary>
+    /// Every index one action's payload offers, plus the path it came from.
+    /// </summary>
+    /// <remarks>
+    /// The union across the action's paths is what the membership check below accepts, so it is also
+    /// what a rejection has to report: naming fewer indices than the validator would have taken
+    /// would send the caller looking for an index that was fine all along. <see cref="Field"/> names
+    /// the primary path it read, for a caller that has to re-read the payload itself.
+    /// </remarks>
+    private readonly record struct IndexList(string Field, IReadOnlyList<int> Indices, bool Found);
+
+    private static IndexList IndexListAt(JsonElement root, IReadOnlyList<string[]>? paths)
     {
+        if (paths == null || paths.Count == 0 || root.ValueKind != JsonValueKind.Object)
+        {
+            return new IndexList(string.Empty, Array.Empty<int>(), false);
+        }
+
+        var field = string.Empty;
+        var found = false;
+        var indices = new SortedSet<int>();
         foreach (var path in paths)
         {
-            if (TryGetArray(root, path, out _))
+            if (!TryGetArray(root, path, out var array))
             {
-                return true;
+                continue;
+            }
+
+            if (!found)
+            {
+                field = string.Join(".", path);
+            }
+
+            found = true;
+            foreach (var item in array.EnumerateArray())
+            {
+                if (item.ValueKind == JsonValueKind.Object && TryReadIndex(item, out var value))
+                {
+                    indices.Add(value);
+                }
             }
         }
 
-        return false;
-    }
-
-    private static bool ContainsIndex(JsonElement root, IReadOnlyList<string[]> paths, int index)
-    {
-        return FindIndexedItem(root, paths, index) != null;
+        return new IndexList(field, indices.ToArray(), found);
     }
 
     private static bool IsLockedIndex(JsonElement root, IReadOnlyList<string[]> paths, int index)

@@ -51,6 +51,8 @@ internal sealed partial class NativeMcpServer
                     cancellationToken);
             case "act":
                 return await ExecuteActAsync(arguments, cancellationToken);
+            case "decide":
+                return await DecideJsonAsync(cancellationToken);
             case "get_decision_log":
                 // The key is read inline so test_native_tool_alignment can see it: a delegated
                 // reader would be invisible to the argument-name comparison.
@@ -70,7 +72,11 @@ internal sealed partial class NativeMcpServer
                         Math.Clamp(ReadInt(arguments, "limit") ?? StateViews.MaxDiffEntries, 1, 200)),
                     JsonOptions);
             default:
-                return JsonSerializer.Serialize(new { error = "Unknown tool '" + name + "'" }, JsonOptions);
+                return JsonSerializer.Serialize(new
+                {
+                    error = AgentErrorEnvelope.ToPayload(
+                        new ApiException(404, "unknown_tool", "Unknown tool '" + name + "'."))
+                }, JsonOptions);
         }
     }
 
@@ -84,33 +90,73 @@ internal sealed partial class NativeMcpServer
     }
 
     /// <summary>
-    /// The strategy guidance for the screen the game is on.
+    /// The strategy guidance for the screen the game is on, and how to drive that screen.
     /// </summary>
     /// <remarks>
-    /// This surface serves the guidance the mod itself ships: the embedded strategy reference, sliced
-    /// by screen exactly as the in-game loop receives it. The Python sidecar additionally looks up the
-    /// generated per-option event risk index, which the mod does not carry — that difference is
-    /// deliberate and documented rather than papered over, because shipping the index inside the mod
-    /// is a packaging change, not a code one.
+    /// This surface serves what the mod itself ships: the embedded strategy and playbook references,
+    /// sliced by screen exactly as the in-game loop receives them. The Python sidecar additionally
+    /// looks up the generated per-option event risk index, which the mod does not carry — that
+    /// difference is deliberate and documented rather than papered over, because shipping the index
+    /// inside the mod is a packaging change, not a code one. Both surfaces answer the same four keys:
+    /// <c>screen</c>, <c>scene</c>, <c>guidance</c>, and <c>playbook</c>.
     /// </remarks>
     private async Task<string> GetSceneGuidanceJsonAsync(CancellationToken cancellationToken)
     {
         var stateJson = await _bridge.GetCompactStateJsonAsync(cancellationToken);
-        var screen = PlaybookSections.ScreenOfCompactState(stateJson);
-        var guidance = PlayPrompt.ScreenGuidance(screen);
+        return JsonSerializer.Serialize(
+            BuildSceneGuidance(PlaybookSections.ScreenOfCompactState(stateJson)),
+            JsonOptionsKeepingNulls);
+    }
+
+    /// <summary>
+    /// State, the legal actions, and the guidance for the screen, from one state read.
+    /// </summary>
+    /// <remarks>
+    /// The documented loop is <c>get_game_state</c> -> <c>get_available_actions</c> -> <c>act</c>,
+    /// plus a guidance read on the screens with a real choice: three or four calls per decision, each
+    /// rebuilding the whole state on the game thread. These are the same three answers from one read,
+    /// which is what a client that wants to minimise calls should reach for.
+    /// </remarks>
+    private async Task<string> DecideJsonAsync(CancellationToken cancellationToken)
+    {
+        var snapshotJson = await _bridge.GetActionSnapshotJsonAsync(cancellationToken);
+        using var snapshot = JsonDocument.Parse(string.IsNullOrWhiteSpace(snapshotJson) ? "{}" : snapshotJson);
+        var state = ReadObjectOrEmpty(snapshot.RootElement, "state");
         return JsonSerializer.Serialize(new
         {
-            screen,
-            scene = GameDataFilter.DetectScene(screen),
-            guidance
+            state,
+            available_actions = ReadArrayOrEmpty(snapshot.RootElement, "available_actions"),
+            scene_guidance = BuildSceneGuidance(ScreenOfState(state))
         }, JsonOptionsKeepingNulls);
     }
+
+    /// <summary>The one guidance object both guidance-shaped answers are built from.</summary>
+    private static object BuildSceneGuidance(string? screen) => new
+    {
+        screen,
+        scene = GameDataFilter.DetectScene(screen),
+        guidance = PlayPrompt.ScreenGuidance(screen),
+        // Never empty: a screen with no section of its own gets the index of the sections, so the
+        // model is never told there is nothing to know about the screen it is looking at.
+        playbook = PlayPrompt.PlaybookGuidance(screen)
+    };
+
+    private static string? ScreenOfState(JsonElement state) =>
+        state.ValueKind == JsonValueKind.Object &&
+        state.TryGetProperty("screen", out var screen) &&
+        screen.ValueKind == JsonValueKind.String
+            ? screen.GetString()
+            : null;
 
     private async Task<string> WaitUntilActionableJsonAsync(JsonElement arguments, CancellationToken cancellationToken)
     {
         var timeout = TimeSpan.FromSeconds(ReadTimeoutSeconds(arguments));
         var actionable = await _bridge.WaitUntilActionableAsync(timeout, cancellationToken);
-        var stateJson = await _bridge.GetCompactStateJsonAsync(cancellationToken);
+        // The state half of this tool's answer is the compact agent_view by default, exactly as
+        // `act` answers; raw_state asks for the full payload instead.
+        var stateJson = ReadBool(arguments, "raw_state")
+            ? await _bridge.GetRawStateJsonAsync(cancellationToken)
+            : await _bridge.GetCompactStateJsonAsync(cancellationToken);
         var actionsJson = await _bridge.GetAvailableActionsJsonAsync(cancellationToken);
         return JsonSerializer.Serialize(new
         {
@@ -126,15 +172,30 @@ internal sealed partial class NativeMcpServer
         var action = ReadString(arguments, "action")?.Trim().ToLowerInvariant();
         if (string.IsNullOrWhiteSpace(action))
         {
-            return JsonSerializer.Serialize(new { error = "action is required" }, JsonOptions);
+            return JsonSerializer.Serialize(new
+            {
+                error = AgentErrorEnvelope.ToPayload(
+                    new ApiException(400, "invalid_request", "action is required"))
+            }, JsonOptions);
         }
 
-        var legal = await _bridge.GetAvailableActionNamesAsync(cancellationToken);
+        // One state read for the legality check and for the validator: the descriptors and the
+        // state's own available_actions come from the same walk, and now from the same frame, so a
+        // screen that changes mid-request cannot make the two disagree.
+        var snapshotJson = await _bridge.GetActionSnapshotJsonAsync(cancellationToken);
+        using var snapshot = JsonDocument.Parse(string.IsNullOrWhiteSpace(snapshotJson) ? "{}" : snapshotJson);
+        var state = ReadObjectOrEmpty(snapshot.RootElement, "state");
+        var descriptors = ReadArrayOrEmpty(snapshot.RootElement, "available_actions");
+        var legal = ReadActionNames(state);
         if (!legal.Contains(action, StringComparer.OrdinalIgnoreCase))
         {
             return JsonSerializer.Serialize(new
             {
-                error = "Action is not in available_actions.",
+                error = AgentErrorEnvelope.ToPayload(new ApiException(
+                    409,
+                    "invalid_action",
+                    "Action is not in available_actions.",
+                    new { action, available_actions = legal })),
                 action,
                 available_actions = legal
             }, JsonOptions);
@@ -146,22 +207,25 @@ internal sealed partial class NativeMcpServer
         var x = ReadInt(arguments, "x");
         var y = ReadInt(arguments, "y");
         var tool = ReadString(arguments, "tool");
+        // The state half of this tool's answer is the compact agent_view by default; raw_state asks
+        // for the full post-action payload instead.
+        var rawState = ReadBool(arguments, "raw_state");
         // Metadata never enters the game action itself; it is recorded only after acceptance.
         var reason = ReadString(arguments, "reason")?.Trim();
-        var actionsJson = await _bridge.GetAvailableActionsJsonAsync(cancellationToken);
-        var compactJson = await _bridge.GetCompactStateJsonAsync(cancellationToken);
         var indexError = ActIndexValidator.Validate(
             action,
             cardIndex,
             targetIndex,
             optionIndex,
-            actionsJson,
-            compactJson);
+            descriptors.GetRawText(),
+            state.GetRawText());
         if (indexError != null)
         {
+            // The same error object the HTTP boundary sends, plus the echo this surface has always
+            // returned: code, message, details (field / submitted / valid_indices / ...), retryable.
             return JsonSerializer.Serialize(new
             {
-                error = indexError,
+                error = AgentErrorEnvelope.ToPayload(indexError.ToApiException(action, legal)),
                 action,
                 card_index = cardIndex,
                 target_index = targetIndex,
@@ -180,14 +244,15 @@ internal sealed partial class NativeMcpServer
             x,
             y,
             tool,
-            cancellationToken);
+            cancellationToken,
+            rawState);
         _decisions?.Record(
             "native_mcp",
             action,
             string.IsNullOrWhiteSpace(reason) ? null : reason,
             // The act's own pre-action snapshot names the run, so this surface needs no runtime
             // singleton to attribute the decision to it.
-            runId: RunIdOf(compactJson));
+            runId: RunIdOf(state.GetRawText()));
         if (!ActIndexValidator.IsUnsettled(result))
         {
             return result;
@@ -215,11 +280,21 @@ internal sealed partial class NativeMcpServer
         return string.IsNullOrWhiteSpace(runId) || runId == "run_unknown" ? null : runId;
     }
 
-    private static object ToolError(string message)
+    /// <summary>
+    /// A tool failure as MCP error content: the same <c>{code, message, details, retryable}</c>
+    /// object the HTTP and Python surfaces answer with, never a bare message string.
+    /// </summary>
+    /// <remarks>
+    /// This used to collapse every exception to <c>ex.Message</c>, which dropped the <c>code</c>,
+    /// <c>retryable</c>, and <c>details</c> an HTTP caller keeps -- so the shared play contract's
+    /// rule "retry only when <c>retryable</c> is true" was unimplementable on this surface: the
+    /// field it names was simply absent.
+    /// </remarks>
+    private static object ToolError(object errorPayload)
     {
         return new
         {
-            content = new[] { new { type = "text", text = JsonSerializer.Serialize(new { error = message }, JsonOptions) } },
+            content = new[] { new { type = "text", text = JsonSerializer.Serialize(new { error = errorPayload }, JsonOptions) } },
             isError = true
         };
     }
@@ -272,6 +347,46 @@ internal sealed partial class NativeMcpServer
         return element.TryGetProperty(name, out var value) ? value : default;
     }
 
+    /// <summary>An object member of a parsed snapshot, or an empty object when it is missing or wrong.</summary>
+    private static JsonElement ReadObjectOrEmpty(JsonElement parent, string name)
+    {
+        return parent.ValueKind == JsonValueKind.Object &&
+               parent.TryGetProperty(name, out var value) &&
+               value.ValueKind == JsonValueKind.Object
+            ? value
+            : EmptyObject;
+    }
+
+    private static JsonElement ReadArrayOrEmpty(JsonElement parent, string name)
+    {
+        return parent.ValueKind == JsonValueKind.Object &&
+               parent.TryGetProperty(name, out var value) &&
+               value.ValueKind == JsonValueKind.Array
+            ? value
+            : EmptyArray;
+    }
+
+    /// <summary>The action names a compact state reports, which is the walk the descriptors come from.</summary>
+    private static IReadOnlyList<string> ReadActionNames(JsonElement state)
+    {
+        if (!state.TryGetProperty("available_actions", out var actions) ||
+            actions.ValueKind != JsonValueKind.Array)
+        {
+            return Array.Empty<string>();
+        }
+
+        var names = new List<string>();
+        foreach (var item in actions.EnumerateArray())
+        {
+            if (item.ValueKind == JsonValueKind.String)
+            {
+                names.Add(item.GetString() ?? string.Empty);
+            }
+        }
+
+        return names;
+    }
+
     private static int? ReadInt(JsonElement element, string name)
     {
         if (!element.TryGetProperty(name, out var value))
@@ -290,6 +405,25 @@ internal sealed partial class NativeMcpServer
         }
 
         return null;
+    }
+
+    private static bool ReadBool(JsonElement element, string name)
+    {
+        if (!element.TryGetProperty(name, out var value))
+        {
+            return false;
+        }
+
+        if (value.ValueKind is JsonValueKind.True or JsonValueKind.False)
+        {
+            return value.GetBoolean();
+        }
+
+        // A JSON string is how several clients send booleans; anything else stays false, which is
+        // the documented default for every flag this surface reads.
+        return value.ValueKind == JsonValueKind.String &&
+               bool.TryParse(value.GetString(), out var parsed) &&
+               parsed;
     }
 
     private static double ReadTimeoutSeconds(JsonElement element)

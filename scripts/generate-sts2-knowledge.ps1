@@ -172,23 +172,165 @@ function Get-DynamicVarSummary {
     return ($tokens -join ", ")
 }
 
-function Get-MoveSummary {
+function ConvertTo-IntentText {
+    param(
+        [string]$Expression
+    )
+
+    if ([string]::IsNullOrWhiteSpace($Expression)) {
+        return ""
+    }
+
+    $text = ($Expression -replace '\s+', ' ').Trim()
+    $construction = [regex]::Match($text, '^new\s+(?<type>\w+)\s*\(')
+    if (-not $construction.Success) {
+        return $text
+    }
+
+    $statement = Get-CallStatement -Text $text -Start $construction.Index
+    if ($null -eq $statement) {
+        return $text
+    }
+
+    # The argument list is read with the balanced-paren walker rather than a "[^)]*" run so an
+    # intent that carries an expression of its own ("new DeathBlowIntent(() => ExplodeDamage)")
+    # keeps its whole argument; an empty list prints as the bare intent name, as before.
+    $type = $construction.Groups["type"].Value
+    $args = ($statement.Arguments -replace '\s+', ' ').Trim()
+    if ($args -eq "") {
+        return $type
+    }
+
+    return "$type($args)"
+}
+
+function Get-MoveDeclarations {
     param(
         [string]$Text
     )
 
-    $matches = [regex]::Matches(
-        $Text,
-        'MoveState\s+\w+\s*=\s*new MoveState\("(?<name>[^"]+)",\s*[^,]+,\s*new\s+(?<intent>\w+)\((?<args>[^\)]*)\)\)',
-        [System.Text.RegularExpressions.RegexOptions]::Singleline
+    $moves = New-Object System.Collections.Generic.List[object]
+    if ([string]::IsNullOrWhiteSpace($Text)) {
+        return , $moves
+    }
+
+    # Every move is a MoveState construction, whether it is held in a local, stored in a field,
+    # or assigned into a follow-up chain. The old scan only saw a declaration that closed right
+    # after one intent, so a move with a second intent ("AttackIntent(...), DebuffIntent") or an
+    # intent with a nested call was missing from the table altogether.
+    foreach ($match in [regex]::Matches($Text, 'new\s+MoveState\s*\(')) {
+        $statement = Get-CallStatement -Text $Text -Start $match.Index
+        if ($null -eq $statement) {
+            continue
+        }
+
+        $arguments = Split-TopLevelArguments -Text $statement.Arguments
+        if ($arguments.Count -lt 2) {
+            continue
+        }
+
+        $nameMatch = [regex]::Match($arguments[0].Trim(), '^"(?<value>[^"]*)"$')
+        if (-not $nameMatch.Success) {
+            continue
+        }
+
+        $intents = New-Object System.Collections.Generic.List[string]
+        foreach ($intent in ($arguments | Select-Object -Skip 2)) {
+            $rendered = ConvertTo-IntentText -Expression $intent
+            if ($rendered -ne "" -and -not $intents.Contains($rendered)) {
+                $intents.Add($rendered)
+            }
+        }
+
+        $moves.Add([pscustomobject]@{
+            Name    = $nameMatch.Groups["value"].Value
+            Handler = $arguments[1].Trim()
+            Intents = ($intents -join "+")
+        })
+    }
+
+    return , $moves
+}
+
+function Get-MoveEffectText {
+    param(
+        [object[]]$Chain,
+        [string]$Handler
     )
 
+    # A move's method is the one named in the MoveState declaration, and a subclass that inherits
+    # the state machine inherits the method with it. The most derived class that declares the
+    # method wins, the same rule the HP columns use. The handful of monsters that write a move
+    # inline ("(IReadOnlyList<Creature> _) => Task.CompletedTask") carry the body in the
+    # declaration itself, and it is summarised the same way.
+    if ($Handler -notmatch '^[A-Za-z_]\w*$') {
+        return [pscustomobject]@{ Body = $Handler; Text = $Chain[0].Text }
+    }
+
+    foreach ($entry in $Chain) {
+        $body = Get-MethodBody -Text $entry.Text -MethodName $Handler
+        if (-not [string]::IsNullOrWhiteSpace($body)) {
+            return [pscustomobject]@{ Body = $body; Text = $entry.Text }
+        }
+    }
+
+    # The body could not be read anywhere in the chain: the move keeps its intent and no claim is
+    # made about its effect.
+    return $null
+}
+
+function Get-MoveSummary {
+    param(
+        [object[]]$Chain
+    )
+
+    # The state machine belongs to whichever class in the chain builds it. A subclass that does not
+    # override GenerateMoveStateMachine runs its base's moves, exactly as the game does, which is
+    # why DecimillipedeSegmentBack/Front/Middle and MysteriousKnight are not blank here.
+    $declarations = $null
+    foreach ($entry in $Chain) {
+        $found = Get-MoveDeclarations -Text $entry.Text
+        if ($found.Count -gt 0) {
+            $declarations = $found
+            break
+        }
+    }
+
+    if ($null -eq $declarations) {
+        return ""
+    }
+
     $tokens = New-Object System.Collections.Generic.List[string]
-    foreach ($match in $matches) {
-        $name = $match.Groups["name"].Value.Trim()
-        $intent = $match.Groups["intent"].Value.Trim()
-        $args = ($match.Groups["args"].Value.Trim() -replace '\s+', ' ')
-        $token = if ($args) { "$name=$intent($args)" } else { "$name=$intent" }
+    foreach ($move in $declarations) {
+        $intentText = if ($move.Intents) { $move.Intents } else { "(no intent)" }
+        $token = "$($move.Name)=$intentText"
+
+        # An intent that carries no numbers (a buff, debuff, block, or heal) is followed by what the
+        # move's own method does, read with the same phrase builder card-behaviors.md uses, so the
+        # amount lands in the cell. The handler is deliberately not inlined: a command that only
+        # exists inside a private helper is reported as no command found rather than guessed at.
+        $resolved = Get-MoveEffectText -Chain $Chain -Handler $move.Handler
+        if ($null -ne $resolved) {
+            $clauses = Get-EffectClauses `
+                -Body $resolved.Body `
+                -VarMap (Get-DynamicVarValues -Text $resolved.Text) `
+                -ModelText $resolved.Text `
+                -SelfTarget "base.Creature" `
+                -PowerClassName `
+                -RawCommandFallback `
+                -ExtraCosmeticCalls @("TalkCmd.", "ThinkCmd.")
+
+            if ($clauses.Count -eq 0) {
+                $token = "$token -> (no command in move body)"
+            }
+            else {
+                # "," inside one move's effects and ";" between moves, because "; " already
+                # separates the moves of the cell and a reader must be able to tell where a move
+                # ends.
+                $token = "$token -> $($clauses -join ', ')"
+            }
+        }
+
         if (-not $tokens.Contains($token)) {
             $tokens.Add($token)
         }
@@ -304,11 +446,12 @@ function ConvertTo-FallbackPhrase {
 function Test-CosmeticCall {
     param(
         [string]$Command,
-        [string]$Action
+        [string]$Action,
+        [string[]]$ExtraPrefixes = @()
     )
 
     $full = "$Command.$Action"
-    foreach ($prefix in $script:CosmeticCallPrefixes) {
+    foreach ($prefix in ($script:CosmeticCallPrefixes + $ExtraPrefixes)) {
         if ($full.StartsWith($prefix)) {
             return $true
         }
@@ -565,6 +708,7 @@ function Resolve-AmountText {
         [string]$Expression,
         $VarMap,
         [string]$Body,
+        [string]$ModelText = "",
         [int]$Depth = 0
     )
 
@@ -582,6 +726,22 @@ function Resolve-AmountText {
         return "?"
     }
 
+    # Only a monster move summary passes the model's own class text. A monster states its move
+    # amounts as members of the class ("private int PlowStrength => 2;", "private int OneTwoDamage
+    # => AscensionHelper.GetValueIfAscension(AscensionLevel.DeadlyEnemies, 6, 5);"), and a card or
+    # power amount is resolved exactly as before because every other caller leaves ModelText empty.
+    if ($ModelText -ne "") {
+        $ascension = [regex]::Match(
+            $text,
+            '^AscensionHelper\.GetValueIfAscension\s*\(\s*AscensionLevel\.\w+\s*,\s*(?<ascension>[^,]+),\s*(?<fallback>[^,)]+)\)$'
+        )
+
+        if ($ascension.Success) {
+            # The table prices a base run, the same convention monsters.md uses for HP.
+            return (Resolve-AmountText -Expression $ascension.Groups["fallback"].Value -VarMap $VarMap -Body $Body -ModelText $ModelText -Depth ($Depth + 1))
+        }
+    }
+
     if ($text -match 'ResolveEnergyXValue\s*\(\s*\)') {
         return "X (energy spent)"
     }
@@ -591,7 +751,7 @@ function Resolve-AmountText {
     }
 
     if ($text -match '^-\s*(?<inner>.+)$') {
-        $inner = Resolve-AmountText -Expression $Matches["inner"] -VarMap $VarMap -Body $Body -Depth ($Depth + 1)
+        $inner = Resolve-AmountText -Expression $Matches["inner"] -VarMap $VarMap -Body $Body -ModelText $ModelText -Depth ($Depth + 1)
         if ($inner -ne "?") {
             return "-$inner"
         }
@@ -607,8 +767,8 @@ function Resolve-AmountText {
     foreach ($operator in @('+', '-')) {
         $operands = Split-TopLevelBinary -Text $text -Operator $operator
         if ($null -ne $operands) {
-            $left = Resolve-AmountText -Expression $operands[0] -VarMap $VarMap -Body $Body -Depth ($Depth + 1)
-            $right = Resolve-AmountText -Expression $operands[1] -VarMap $VarMap -Body $Body -Depth ($Depth + 1)
+            $left = Resolve-AmountText -Expression $operands[0] -VarMap $VarMap -Body $Body -ModelText $ModelText -Depth ($Depth + 1)
+            $right = Resolve-AmountText -Expression $operands[1] -VarMap $VarMap -Body $Body -ModelText $ModelText -Depth ($Depth + 1)
             $leftValue = 0.0
             $rightValue = 0.0
             if ([double]::TryParse($left, [ref]$leftValue) -and [double]::TryParse($right, [ref]$rightValue)) {
@@ -635,11 +795,21 @@ function Resolve-AmountText {
         }
     }
 
+    # A model's own stack count. "Amount" on a power is how many stacks it has and "amount" in
+    # BeforeApplied/AfterPowerAmountChanged is the amount being applied to it; both are runtime
+    # quantities, but naming the quantity the source names beats printing "?" for it. The match
+    # is case-sensitive on purpose: a card body's local "decimal amount = ..." is a different
+    # thing and must fall through to the local-assignment lookup below.
+    if ($text -cmatch '^(?:base\.)?Amount$') {
+        return "Amount"
+    }
+
     if ($text -match 'Calculate\s*\(') {
         return "?"
     }
 
-    if ($text -match '^(?<name>[a-z]\w*)$') {
+    $identifierPattern = if ($ModelText -ne "") { '^(?<name>[A-Za-z_]\w*)$' } else { '^(?<name>[a-z]\w*)$' }
+    if ($text -match $identifierPattern) {
         $name = $Matches["name"]
         $assignment = [regex]::Match(
             $Body,
@@ -647,13 +817,47 @@ function Resolve-AmountText {
         )
 
         if ($assignment.Success) {
-            return (Resolve-AmountText -Expression $assignment.Groups["init"].Value -VarMap $VarMap -Body $Body -Depth ($Depth + 1))
+            return (Resolve-AmountText -Expression $assignment.Groups["init"].Value -VarMap $VarMap -Body $Body -ModelText $ModelText -Depth ($Depth + 1))
+        }
+
+        if ($ModelText -ne "") {
+            $declaration = Get-ModelAmountDeclaration -Text $ModelText -Name $name
+            if ($declaration -ne "") {
+                return (Resolve-AmountText -Expression $declaration -VarMap $VarMap -Body $Body -ModelText $ModelText -Depth ($Depth + 1))
+            }
         }
 
         return "?"
     }
 
     return "?"
+}
+
+function Get-ModelAmountDeclaration {
+    param(
+        [string]$Text,
+        [string]$Name
+    )
+
+    # A model's own declaration of an amount: an expression-bodied member ("private int
+    # PlowStrength => 2;"), a getter whose body is one return, or a constant/field with an
+    # initializer ("private const int _climbRepeat = 2;"). A member with no initializer
+    # ("private int _steamEruptionDamage;") and a computed getter both keep the amount unknown,
+    # because the source assigns them while the fight runs.
+    $patterns = @(
+        ('(?m)^\s*(?:public|private|protected|internal)[^\n=;{]*?\b' + [regex]::Escape($Name) + '\s*=>\s*(?<value>[^;]+);'),
+        ('(?m)^\s*(?:public|private|protected|internal)[^\n=;{]*?\b' + [regex]::Escape($Name) + '\s*\{\s*get\s*\{\s*return\s+(?<value>[^;]+);'),
+        ('(?m)^\s*(?:public|private|protected|internal)[^\n=;{]*?\b' + [regex]::Escape($Name) + '\s*=\s*(?<value>[^;]+);')
+    )
+
+    foreach ($pattern in $patterns) {
+        $match = [regex]::Match($Text, $pattern)
+        if ($match.Success) {
+            return $match.Groups["value"].Value.Trim()
+        }
+    }
+
+    return ""
 }
 
 function Get-ConditionalRanges {
@@ -756,7 +960,7 @@ function Get-SelectorCount {
         return "1"
     }
 
-    return (Resolve-AmountText -Expression $parts[$parts.Count - 1] -VarMap $VarMap -Body $Body)
+    return (Resolve-AmountText -Expression $parts[$parts.Count - 1] -VarMap $VarMap -Body $Body -ModelText $ModelText)
 }
 
 function Get-CardCountPhrase {
@@ -790,6 +994,22 @@ function Get-LoopBound {
     return $matches[$matches.Count - 1].Groups["bound"].Value.Trim()
 }
 
+function Test-SelfTarget {
+    param(
+        [string]$Target,
+        [string]$SelfTarget
+    )
+
+    # A monster move targets the monster itself by naming its own creature ("base.Creature"), while
+    # a card targets the player's ("Owner.Creature"); SelfTarget is empty for every caller but the
+    # monster move summary, so the card wording is untouched.
+    if ([string]::IsNullOrWhiteSpace($SelfTarget)) {
+        return $false
+    }
+
+    return ($Target.Trim() -eq $SelfTarget)
+}
+
 function Get-CallPhrase {
     param(
         [string]$Command,
@@ -797,10 +1017,19 @@ function Get-CallPhrase {
         [string]$Generic,
         $CallStatement,
         $VarMap,
-        [string]$Body
+        [string]$Body,
+        [string]$ModelText = "",
+        [string]$SelfTarget = "",
+        [switch]$PowerClassName,
+        [switch]$RawCommandFallback
     )
 
     $token = "$Command.$Action"
+    $rawToken = if ($Generic) { "$Command.$Action<$Generic>" } else { $token }
+    # A power clause names the class the way powers.md indexes it, next to the readable name, so a
+    # move can be followed into that file without a second guess. Off for every other index, whose
+    # wording has always been the readable name alone.
+    $classSuffix = if ($PowerClassName -and $Generic) { " ($Generic)" } else { "" }
     $callArgs = Split-TopLevelArguments -Text $CallStatement.Arguments
     $chain = $CallStatement.Chain
     $arg0 = Get-CallArgument -ArgumentList $callArgs -Index 0
@@ -808,11 +1037,11 @@ function Get-CallPhrase {
     $arg2 = Get-CallArgument -ArgumentList $callArgs -Index 2
 
     if ($token -eq "DamageCmd.Attack") {
-        $damage = Resolve-AmountText -Expression $arg0 -VarMap $VarMap -Body $Body
+        $damage = Resolve-AmountText -Expression $arg0 -VarMap $VarMap -Body $Body -ModelText $ModelText
         $phrase = if ($arg0 -match 'OstyDamage') { "Your Osty deals $damage damage" } else { "Deal $damage damage" }
         $hitExpression = Get-RegexValue -Text $chain -Pattern 'WithHitCount\((?<value>[^\)]*)\)'
         if ($hitExpression) {
-            $hits = Resolve-AmountText -Expression $hitExpression -VarMap $VarMap -Body $Body
+            $hits = Resolve-AmountText -Expression $hitExpression -VarMap $VarMap -Body $Body -ModelText $ModelText
             if ($hits -ne "1") {
                 $phrase = "$phrase $hits times"
             }
@@ -829,8 +1058,8 @@ function Get-CallPhrase {
     }
 
     if ($token -eq "CreatureCmd.Damage") {
-        $amount = Resolve-AmountText -Expression $arg2 -VarMap $VarMap -Body $Body
-        if ($arg1 -match 'Owner\.Creature' -or $arg1 -match 'Owner\.Osty') {
+        $amount = Resolve-AmountText -Expression $arg2 -VarMap $VarMap -Body $Body -ModelText $ModelText
+        if ($arg1 -match 'Owner\.Creature' -or $arg1 -match 'Owner\.Osty' -or (Test-SelfTarget -Target $arg1 -SelfTarget $SelfTarget)) {
             return "Lose $amount HP"
         }
 
@@ -838,8 +1067,8 @@ function Get-CallPhrase {
     }
 
     if ($token -eq "CreatureCmd.GainBlock") {
-        $amount = Resolve-AmountText -Expression $arg1 -VarMap $VarMap -Body $Body
-        if ($arg0 -match 'Owner\.Creature') {
+        $amount = Resolve-AmountText -Expression $arg1 -VarMap $VarMap -Body $Body -ModelText $ModelText
+        if ($arg0 -match 'Owner\.Creature' -or (Test-SelfTarget -Target $arg0 -SelfTarget $SelfTarget)) {
             return "Gain $amount Block"
         }
 
@@ -860,26 +1089,34 @@ function Get-CallPhrase {
         }
 
         $target = Get-CallArgument -ArgumentList $callArgs -Index $targetIndex
-        $amount = Resolve-AmountText -Expression (Get-CallArgument -ArgumentList $callArgs -Index $amountIndex) -VarMap $VarMap -Body $Body
+        $amount = Resolve-AmountText -Expression (Get-CallArgument -ArgumentList $callArgs -Index $amountIndex) -VarMap $VarMap -Body $Body -ModelText $ModelText
 
         if ([string]::IsNullOrWhiteSpace($powerName)) {
             return "Apply a power to the target"
         }
 
-        if ($target -match 'Owner\.(?:Creature|Osty)' -or $target -eq 'base.Owner' -or $target -match 'Owner\.Player') {
-            return "Gain $amount $powerName"
+        if ($target -match 'Owner\.(?:Creature|Osty)' -or $target -eq 'base.Owner' -or $target -match 'Owner\.Player' -or (Test-SelfTarget -Target $target -SelfTarget $SelfTarget)) {
+            return "Gain $amount $powerName$classSuffix"
         }
 
-        return "Apply $amount $powerName to the target"
+        return "Apply $amount $powerName$classSuffix to the target"
     }
 
     if ($token -eq "PowerCmd.Remove") {
         $powerName = Get-PowerDisplayName -Name $Generic
+        if ($arg0 -eq "this") {
+            return "Remove this power"
+        }
+
         if ([string]::IsNullOrWhiteSpace($powerName)) {
             return "Remove a power from the target"
         }
 
-        return "Remove $powerName from the target"
+        if (Test-SelfTarget -Target $arg0 -SelfTarget $SelfTarget) {
+            return "Remove $powerName$classSuffix"
+        }
+
+        return "Remove $powerName$classSuffix from the target"
     }
 
     if ($token -eq "PowerCmd.ModifyAmount") {
@@ -889,26 +1126,26 @@ function Get-CallPhrase {
     if ($token -eq "CardPileCmd.Draw") {
         $count = "1"
         if ($callArgs.Count -ge 3) {
-            $count = Resolve-AmountText -Expression $arg1 -VarMap $VarMap -Body $Body
+            $count = Resolve-AmountText -Expression $arg1 -VarMap $VarMap -Body $Body -ModelText $ModelText
         }
 
         return (Get-CardCountPhrase -Count $count -Verb "Draw")
     }
 
     if ($token -eq "PlayerCmd.GainEnergy") {
-        return "Gain $(Resolve-AmountText -Expression $arg0 -VarMap $VarMap -Body $Body) Energy"
+        return "Gain $(Resolve-AmountText -Expression $arg0 -VarMap $VarMap -Body $Body -ModelText $ModelText) Energy"
     }
 
     if ($token -eq "PlayerCmd.GainStars") {
-        return "Gain $(Resolve-AmountText -Expression $arg0 -VarMap $VarMap -Body $Body) Stars"
+        return "Gain $(Resolve-AmountText -Expression $arg0 -VarMap $VarMap -Body $Body -ModelText $ModelText) Stars"
     }
 
     if ($token -eq "PlayerCmd.GainGold") {
-        return "Gain $(Resolve-AmountText -Expression $arg0 -VarMap $VarMap -Body $Body) Gold"
+        return "Gain $(Resolve-AmountText -Expression $arg0 -VarMap $VarMap -Body $Body -ModelText $ModelText) Gold"
     }
 
     if ($token -eq "PlayerCmd.LoseGold") {
-        return "Lose $(Resolve-AmountText -Expression $arg0 -VarMap $VarMap -Body $Body) Gold"
+        return "Lose $(Resolve-AmountText -Expression $arg0 -VarMap $VarMap -Body $Body -ModelText $ModelText) Gold"
     }
 
     if ($token -eq "PlayerCmd.EndTurn") {
@@ -920,11 +1157,11 @@ function Get-CallPhrase {
     }
 
     if ($token -eq "CreatureCmd.Heal") {
-        return "Heal $(Resolve-AmountText -Expression $arg1 -VarMap $VarMap -Body $Body) HP"
+        return "Heal $(Resolve-AmountText -Expression $arg1 -VarMap $VarMap -Body $Body -ModelText $ModelText) HP"
     }
 
     if ($token -eq "CreatureCmd.GainMaxHp") {
-        return "Gain $(Resolve-AmountText -Expression $arg1 -VarMap $VarMap -Body $Body) Max HP"
+        return "Gain $(Resolve-AmountText -Expression $arg1 -VarMap $VarMap -Body $Body -ModelText $ModelText) Max HP"
     }
 
     if ($token -eq "CreatureCmd.LoseMaxHp") {
@@ -933,12 +1170,18 @@ function Get-CallPhrase {
             $amountExpression = $arg2
         }
 
-        return "Lose $(Resolve-AmountText -Expression $amountExpression -VarMap $VarMap -Body $Body) Max HP"
+        return "Lose $(Resolve-AmountText -Expression $amountExpression -VarMap $VarMap -Body $Body -ModelText $ModelText) Max HP"
     }
 
     if ($token -eq "CreatureCmd.Kill") {
         if ($arg0 -match 'Owner\.Osty') {
             return "Kill your own Osty"
+        }
+
+        if (Test-SelfTarget -Target $arg0 -SelfTarget $SelfTarget) {
+            # Both monsters that call this on themselves (GasBomb, WaterfallGiant) do it as a
+            # death blow, so "itself" is the monster row's reading of the same command.
+            return "Kill itself"
         }
 
         if ($arg0 -match 'Owner\.Creature') {
@@ -957,11 +1200,11 @@ function Get-CallPhrase {
     }
 
     if ($token -eq "OstyCmd.Summon") {
-        return "Summon $(Resolve-AmountText -Expression $arg2 -VarMap $VarMap -Body $Body)"
+        return "Summon $(Resolve-AmountText -Expression $arg2 -VarMap $VarMap -Body $Body -ModelText $ModelText)"
     }
 
     if ($token -eq "ForgeCmd.Forge") {
-        return "Forge $(Resolve-AmountText -Expression $arg0 -VarMap $VarMap -Body $Body)"
+        return "Forge $(Resolve-AmountText -Expression $arg0 -VarMap $VarMap -Body $Body -ModelText $ModelText)"
     }
 
     if ($token -eq "OrbCmd.Channel") {
@@ -983,7 +1226,7 @@ function Get-CallPhrase {
             $amountExpression = $arg0
         }
 
-        return "Add $(Resolve-AmountText -Expression $amountExpression -VarMap $VarMap -Body $Body) orb slot(s)"
+        return "Add $(Resolve-AmountText -Expression $amountExpression -VarMap $VarMap -Body $Body -ModelText $ModelText) orb slot(s)"
     }
 
     if ($token -eq "OrbCmd.RemoveSlots") {
@@ -992,7 +1235,7 @@ function Get-CallPhrase {
             $amountExpression = $arg0
         }
 
-        return "Remove $(Resolve-AmountText -Expression $amountExpression -VarMap $VarMap -Body $Body) orb slot(s)"
+        return "Remove $(Resolve-AmountText -Expression $amountExpression -VarMap $VarMap -Body $Body -ModelText $ModelText) orb slot(s)"
     }
 
     if ($token -eq "OrbCmd.Passive") {
@@ -1097,7 +1340,7 @@ function Get-CallPhrase {
     }
 
     if ($token -eq "CardSelectCmd.FromHandForDiscard") {
-        $count = Get-SelectorCount -Text $CallStatement.Arguments -VarMap $VarMap -Body $Body
+        $count = Get-SelectorCount -Text $CallStatement.Arguments -VarMap $VarMap -Body $Body -ModelText $ModelText
         if ($count -eq "1") {
             return "Discard 1 card from your hand"
         }
@@ -1153,12 +1396,12 @@ function Get-CallPhrase {
 
         $count = "1"
         if ($callArgs.Count -ge 2 -and $arg1 -notmatch 'CombatState') {
-            $count = Resolve-AmountText -Expression $arg1 -VarMap $VarMap -Body $Body
+            $count = Resolve-AmountText -Expression $arg1 -VarMap $VarMap -Body $Body -ModelText $ModelText
         }
         else {
             $loopBound = Get-LoopBound -Body $Body -Index $CallStatement.Start
             if ($loopBound) {
-                $count = Resolve-AmountText -Expression $loopBound -VarMap $VarMap -Body $Body
+                $count = Resolve-AmountText -Expression $loopBound -VarMap $VarMap -Body $Body -ModelText $ModelText
             }
         }
 
@@ -1207,13 +1450,25 @@ function Get-CallPhrase {
         return ""
     }
 
+    # A call this mapping does not cover ("CardPileCmd.AddToCombatAndPreview<Dazed>",
+    # "PowerCmd.SetAmount<StrengthPower>") would otherwise be spelled out word by word and lose the
+    # name a reader needs. The monster index asks for the verbatim command instead.
+    if ($RawCommandFallback) {
+        return $rawToken
+    }
+
     return $fallback
 }
 
 function Get-EffectClauses {
     param(
         [string]$Body,
-        $VarMap
+        $VarMap,
+        [string]$ModelText = "",
+        [string]$SelfTarget = "",
+        [switch]$PowerClassName,
+        [switch]$RawCommandFallback,
+        [string[]]$ExtraCosmeticCalls = @()
     )
 
     $clauses = New-Object System.Collections.Generic.List[string]
@@ -1238,7 +1493,7 @@ function Get-EffectClauses {
             $command = $match.Value.Substring(0, $match.Value.IndexOf('.'))
         }
 
-        if (Test-CosmeticCall -Command $command -Action $action) {
+        if (Test-CosmeticCall -Command $command -Action $action -ExtraPrefixes $ExtraCosmeticCalls) {
             continue
         }
 
@@ -1263,7 +1518,7 @@ function Get-EffectClauses {
 
         $covered.Add([pscustomobject]@{ Start = $statement.Start; End = $statement.End })
 
-        $phrase = Get-CallPhrase -Command $command -Action $action -Generic $generic -CallStatement $statement -VarMap $VarMap -Body $Body
+        $phrase = Get-CallPhrase -Command $command -Action $action -Generic $generic -CallStatement $statement -VarMap $VarMap -Body $Body -ModelText $ModelText -SelfTarget $SelfTarget -PowerClassName:$PowerClassName -RawCommandFallback:$RawCommandFallback
         if ([string]::IsNullOrWhiteSpace($phrase)) {
             continue
         }
@@ -1833,9 +2088,16 @@ function Get-EventEntries {
         }
 
         $options = Get-EventOptionRows -EventName $name -Text $text
+        # The risk table is keyed by the event id a live payload reports, not by the class name a
+        # reader recognises. `ModelDb.GetEntry` is `StringHelper.Slugify(class name)`, so the display
+        # name would be one normalization away from the `event_id` the game sends (`Neow` vs `NEOW`)
+        # and every consumer would have to redo that step. The generator already knows the class name
+        # and has the same `ConvertTo-Slug` the game's `Slugify` mirrors, so it writes the join key
+        # directly; `docs/game-knowledge/knowledge-plan.md` documents the contract.
+        $eventId = ConvertTo-Slug -Text $name
         foreach ($option in $options) {
             $optionRows.Add([pscustomobject]@{
-                Event        = $name
+                Event        = $eventId
                 BaseType     = $baseType
                 Option       = $option.Option
                 Handler      = $option.Handler
@@ -2014,19 +2276,606 @@ function Get-PotionEntries {
     return $rows
 }
 
+###############################################################################
+# Model class helpers.
+#
+# Relics and powers have no single entry point the way a card has OnPlay: their
+# behaviour lives in whichever combat hooks the class overrides. The hook names
+# are read out of the model base classes themselves rather than hard-coded, so a
+# hook added to a base class shows up here without anyone editing this script.
+###############################################################################
+
+function Get-ModelHookNames {
+    $paths = @(
+        (Join-Path $sourceRoot "MegaCrit.Sts2.Core.Models/AbstractModel.cs"),
+        (Join-Path $sourceRoot "MegaCrit.Sts2.Core.Models/RelicModel.cs"),
+        (Join-Path $sourceRoot "MegaCrit.Sts2.Core.Models/PowerModel.cs")
+    )
+
+    $names = New-Object System.Collections.Generic.List[string]
+    foreach ($path in $paths) {
+        if (-not (Test-Path $path)) {
+            continue
+        }
+
+        foreach ($match in [regex]::Matches((Get-SourceText -Path $path), 'public\s+virtual\s+(?<ret>[^\n(]+?)\s+(?<name>\w+)\s*\(')) {
+            # A property whose initialiser happens to contain a call ("=> Array.Empty<T>()")
+            # is not a hook; it is a property that the loose return-type group walked into.
+            if ($match.Groups["ret"].Value -match '=>') {
+                continue
+            }
+
+            $name = $match.Groups["name"].Value
+            if (-not $names.Contains($name)) {
+                $names.Add($name)
+            }
+        }
+    }
+
+    return $names
+}
+
+$script:ModelHookNames = Get-ModelHookNames
+
+function Get-OverriddenHooks {
+    param(
+        [string]$Text
+    )
+
+    $hooks = New-Object System.Collections.Generic.List[string]
+    foreach ($match in [regex]::Matches($Text, 'public\s+override\s+(?:async\s+)?(?<ret>[^\n(]+?)\s+(?<name>\w+)\s*\(')) {
+        if ($match.Groups["ret"].Value -match '=>') {
+            continue
+        }
+
+        $name = $match.Groups["name"].Value
+        if ($script:ModelHookNames -contains $name -and -not $hooks.Contains($name)) {
+            $hooks.Add($name)
+        }
+    }
+
+    return $hooks
+}
+
+function Get-ClassFileTexts {
+    param(
+        [string]$Directory,
+        [string]$Name,
+        [int]$Limit = 8
+    )
+
+    # The leaf class first, then each base class that has its own file; a base class with no
+    # file of its own (MonsterModel, PowerModel) ends the walk, which is also where C#'s
+    # inherited members stop being a model's own behaviour.
+    $texts = New-Object System.Collections.Generic.List[object]
+    $current = $Name
+
+    for ($i = 0; $i -lt $Limit; $i++) {
+        if ([string]::IsNullOrWhiteSpace($current)) {
+            break
+        }
+
+        $path = Join-Path $Directory "$current.cs"
+        if (-not (Test-Path $path)) {
+            break
+        }
+
+        $text = Get-SourceText -Path $path
+        $texts.Add([pscustomobject]@{ Name = $current; Text = $text })
+
+        $base = Get-RegexValue -Text $text -Pattern 'public\s+(?:sealed\s+|abstract\s+)?class\s+\w+\s*:\s*(?<value>\w+)'
+        if ($base -eq "" -or $base -eq $current) {
+            break
+        }
+
+        $current = $base
+    }
+
+    return , $texts
+}
+
+$script:NoOpReturnExpressions = @(
+    "Task.CompletedTask",
+    "null"
+)
+
+function Get-DynamicVarExpressionText {
+    param(
+        [string]$Text,
+        $VarMap
+    )
+
+    # "base.DynamicVars.Cards.BaseValue" and "base.DynamicVars["MaxHpLoss"].IntValue" name the
+    # same number the Vars column already shows; spelling it out keeps a returned expression
+    # readable instead of leaving the reader to resolve a dynamic var by hand.
+    return [regex]::Replace(
+        $Text,
+        '(?:base\.)?DynamicVars(?:\.(?<member>\w+)|\[\s*"(?<index>[^"]+)"\s*\])(?:\.(?:BaseValue|IntValue|PreviewValue))?',
+        {
+            param($match)
+            $name = if ($match.Groups["member"].Value) { $match.Groups["member"].Value } else { $match.Groups["index"].Value }
+            if ($VarMap.ContainsKey($name) -and $VarMap[$name] -ne "") {
+                return $VarMap[$name]
+            }
+
+            return $match.Value
+        }
+    )
+}
+
+function Get-ValueExpressionText {
+    param(
+        [string]$Expression,
+        $VarMap,
+        [string]$Body
+    )
+
+    $text = Get-DynamicVarExpressionText -Text $Expression.Trim() -VarMap $VarMap
+    # A cast on a sub-expression ("amount + (decimal)1") and a decimal suffix ("100m") are
+    # both noise in a rendered value; the leading-cast form is handled inside Resolve-AmountText.
+    $text = $text -replace '\((?:decimal|int|long|double|float)\)\s*', ''
+    $text = $text -replace '(?<=\d)m\b', ''
+    if ($text -match '^-?\d+(?:\.\d+)?$') {
+        return (Get-IntText -Value $text)
+    }
+
+    $resolved = Resolve-AmountText -Expression $text -VarMap $VarMap -Body $Body
+    if ($resolved -ne "?") {
+        return $resolved
+    }
+
+    return $text
+}
+
+function Get-ReturnValueTexts {
+    param(
+        [string]$Body,
+        $VarMap
+    )
+
+    $values = New-Object System.Collections.Generic.List[string]
+    foreach ($match in [regex]::Matches($Body, '(?<![\w.])return\s+(?<value>[^;]+);')) {
+        $expression = $match.Groups["value"].Value.Trim()
+        if ($expression -eq "" -or $script:NoOpReturnExpressions -contains $expression) {
+            continue
+        }
+
+        $rendered = Get-ValueExpressionText -Expression $expression -VarMap $VarMap -Body $Body
+        if ($rendered -eq "" -or $rendered.Length -gt 80 -or $rendered -match "`n") {
+            continue
+        }
+
+        if (-not $values.Contains($rendered)) {
+            $values.Add($rendered)
+        }
+    }
+
+    return , $values
+}
+
+function Get-BodyClauses {
+    param(
+        [string]$Body,
+        $VarMap
+    )
+
+    $clauses = New-Object System.Collections.Generic.List[string]
+    if ([string]::IsNullOrWhiteSpace($Body)) {
+        return , $clauses
+    }
+
+    foreach ($clause in (Get-EffectClauses -Body $Body -VarMap $VarMap)) {
+        $clauses.Add($clause)
+    }
+
+    if ($clauses.Count -eq 0) {
+        # A value-returning hook (ModifyDamageAdditive, ModifyHandDraw, IsAllowed, ShouldDie,
+        # ...) carries its effect in the returned expression rather than in a command call.
+        # More than four distinct returns is a branchy body, and summarising it would be a
+        # guess, so those stay silent.
+        $returns = Get-ReturnValueTexts -Body $Body -VarMap $VarMap
+        if ($returns.Count -gt 0 -and $returns.Count -le 4) {
+            # "or" rather than "/" because a returned expression may itself be a division.
+            $clauses.Add("returns " + ($returns -join " or "))
+        }
+    }
+
+    if ($clauses.Count -eq 0) {
+        # A hook whose whole body is one awaited helper call ("await SummonPet();") has no
+        # command to summarise, but the helper's own name is the effect. A body that is a bare
+        # call with nothing around it ("Flash();") is presentation, not effect, and is skipped.
+        $trimmed = $Body.Trim()
+        if ($trimmed -notmatch "`n" -and $trimmed.Length -le 80) {
+            $single = $trimmed -replace '^await\s+', '' -replace ';\s*$', ''
+            $isAwaited = $trimmed -match '^await\s'
+            if ($isAwaited -or $single -match '^-?\d+(?:\.\d+)?m?$|^(?:true|false)$|^(?:base\.)?Amount$|^!?\w+(?:\.\w+)*$') {
+                $clauses.Add("returns $(Get-ValueExpressionText -Expression $single -VarMap $VarMap -Body $Body)")
+            }
+        }
+    }
+
+    return , $clauses
+}
+
+function Get-HookClauses {
+    param(
+        [string]$Text,
+        [string]$Hook,
+        $VarMap
+    )
+
+    # A hook usually delegates to a private helper in the same class ("await SummonPet();",
+    # "await ModifyStrengthIfNecessary();"); inlining that helper's body is the same step the
+    # event summaries take, and it is the difference between "no effect detected" and the
+    # amount the helper actually applies.
+    $body = Get-MemberBody -Text $Text -MemberName $Hook
+    return , (Get-BodyClauses -Body (Add-InlinedHelperBodies -Body $body -FileText $Text) -VarMap $VarMap)
+}
+
+###############################################################################
+# Monster HP.
+#
+# MinInitialHp/MaxInitialHp is a plain literal for only a handful of monsters;
+# most write it through AscensionHelper.GetValueIfAscension, and a few inherit it
+# or name a property of their own. Each of those is a single declaration, so all
+# of them are read rather than guessed; a monster whose HP genuinely cannot be
+# resolved from source keeps an empty cell.
+###############################################################################
+
+function Resolve-MonsterHpValue {
+    param(
+        [string]$Expression,
+        [string]$FileText,
+        [string]$MinHpValue = "",
+        [int]$Depth = 0
+    )
+
+    $text = ""
+    if ($null -ne $Expression) {
+        $text = $Expression.Trim()
+    }
+
+    if ($text -eq "" -or $Depth -gt 3) {
+        return ""
+    }
+
+    if ($text -match '^\d+$') {
+        return $text
+    }
+
+    # The roll spans MinInitialHp..MaxInitialHp, so a MaxInitialHp that reads "MinInitialHp"
+    # is the same number the Min column already carries.
+    if ($text -eq "MinInitialHp") {
+        return $MinHpValue
+    }
+
+    # AscensionHelper.GetValueIfAscension(level, ascensionValue, fallbackValue) returns the
+    # fallback unless the run has that ascension. The table prices a base run, so the
+    # non-ascension value is the one kept.
+    $ascension = [regex]::Match(
+        $text,
+        '^AscensionHelper\.GetValueIfAscension\s*\(\s*AscensionLevel\.\w+\s*,\s*(?<ascension>[^,]+),\s*(?<fallback>[^,)]+)\)$'
+    )
+    if ($ascension.Success) {
+        return (Resolve-MonsterHpValue -Expression $ascension.Groups["fallback"].Value -FileText $FileText -MinHpValue $MinHpValue -Depth ($Depth + 1))
+    }
+
+    # A named property or constant declared in the same class (TestSubject.FirstFormHp).
+    if ($text -match '^\w+$') {
+        $declaration = [regex]::Match(
+            $FileText,
+            '(?m)^\s*(?:public|private|protected|internal)[^\n=;]*?\b' + [regex]::Escape($text) + '\s*=>\s*(?<value>[^;]+);'
+        )
+        if ($declaration.Success) {
+            return (Resolve-MonsterHpValue -Expression $declaration.Groups["value"].Value -FileText $FileText -MinHpValue $MinHpValue -Depth ($Depth + 1))
+        }
+    }
+
+    return ""
+}
+
 function Get-MonsterEntries {
     $dir = Join-Path $sourceRoot "MegaCrit.Sts2.Core.Models.Monsters"
     $files = Get-ChildItem -Path $dir -File | Sort-Object Name
     $rows = New-Object System.Collections.Generic.List[object]
 
     foreach ($file in $files) {
-        $text = Get-SourceText -Path $file.FullName
+        $name = [System.IO.Path]::GetFileNameWithoutExtension($file.Name)
+        $chain = Get-ClassFileTexts -Directory $dir -Name $name
+        $text = $chain[0].Text
+
+        # The declaring class wins over its base, exactly as the C# override does.
+        $minExpression = ""
+        $maxExpression = ""
+        $minText = ""
+        $maxText = ""
+        foreach ($entry in $chain) {
+            if ($minExpression -eq "") {
+                $minExpression = Get-RegexValue -Text $entry.Text -Pattern '(?<![A-Za-z])MinInitialHp\s*=>\s*(?<value>[^;]+);'
+                if ($minExpression -ne "") {
+                    $minText = $entry.Text
+                }
+            }
+
+            if ($maxExpression -eq "") {
+                $maxExpression = Get-RegexValue -Text $entry.Text -Pattern '(?<![A-Za-z])MaxInitialHp\s*=>\s*(?<value>[^;]+);'
+                if ($maxExpression -ne "") {
+                    $maxText = $entry.Text
+                }
+            }
+
+            if ($minExpression -ne "" -and $maxExpression -ne "") {
+                break
+            }
+        }
+
+        $minHp = Resolve-MonsterHpValue -Expression $minExpression -FileText $minText
+        $maxHp = Resolve-MonsterHpValue -Expression $maxExpression -FileText $maxText -MinHpValue $minHp
+
         $rows.Add([pscustomobject]@{
-            Name = [System.IO.Path]::GetFileNameWithoutExtension($file.Name)
-            MinHp = Get-RegexValue -Text $text -Pattern 'MinInitialHp\s*=>\s*(?<value>\d+)'
-            MaxHp = Get-RegexValue -Text $text -Pattern 'MaxInitialHp\s*=>\s*(?<value>\d+)'
-            Moves = Get-MoveSummary -Text $text
+            Name = $name
+            MinHp = $minHp
+            MaxHp = $maxHp
+            Moves = Get-MoveSummary -Chain $chain
             Passive = Get-CommandSummary -MethodBody (Get-MethodBody -Text $text -MethodName "AfterAddedToRoom")
+        })
+    }
+
+    return $rows
+}
+
+###############################################################################
+# Relics and powers.
+###############################################################################
+
+function Get-RelicOwnershipMap {
+    $poolDir = Join-Path $sourceRoot "MegaCrit.Sts2.Core.Models.RelicPools"
+    $characterDir = Join-Path $sourceRoot "MegaCrit.Sts2.Core.Models.Characters"
+
+    # character name -> declared relic pool, and the energy color it declares in
+    $characters = New-Object System.Collections.Generic.List[object]
+    foreach ($file in Get-ChildItem -Path $characterDir -File | Sort-Object Name) {
+        $text = Get-SourceText -Path $file.FullName
+        $characters.Add([pscustomobject]@{
+            Name = [System.IO.Path]::GetFileNameWithoutExtension($file.Name)
+            Pool = Get-RegexValue -Text $text -Pattern 'RelicPool\s*=>[^;]*?ModelDb\.RelicPool<(?<value>\w+)>'
+            Energy = Get-RegexValue -Text $text -Pattern 'energyColorName\s*=\s*"(?<value>[^"]+)"'
+        })
+    }
+
+    # pool name -> owner label. Same rule as the card pools: the energy-color constant decides
+    # which of several claimants is the real owner (the random-character shell claims the
+    # ironclad pool but declares no energy color of its own).
+    $ownerByPool = @{}
+    foreach ($file in Get-ChildItem -Path $poolDir -File | Sort-Object Name) {
+        $text = Get-SourceText -Path $file.FullName
+        $poolName = [System.IO.Path]::GetFileNameWithoutExtension($file.Name)
+        $energy = Get-RegexValue -Text $text -Pattern 'EnergyColorName\s*=>\s*"(?<value>[^"]+)"'
+
+        $claimants = @($characters | Where-Object { $_.Pool -eq $poolName } | Sort-Object Name)
+        $energyOwners = @($claimants | Where-Object { $_.Energy -ne "" -and $_.Energy -eq $energy })
+
+        if ($energyOwners.Count -gt 0) {
+            $ownerByPool[$poolName] = ($energyOwners | ForEach-Object { $_.Name }) -join "/"
+        }
+        elseif ($claimants.Count -eq 1) {
+            $ownerByPool[$poolName] = $claimants[0].Name
+        }
+        else {
+            # Shared / Event / Fallback / Deprecated: no character owns the pool, so the pool
+            # class name minus its RelicPool suffix is the label.
+            $ownerByPool[$poolName] = (ConvertTo-HumanWords ($poolName -replace 'RelicPool$', ''))
+        }
+    }
+
+    # relic name -> the pools that declare it, in pool-name order so the result is stable.
+    # A relic several pools declare is labelled with every owner, joined the way a card pool
+    # claimed by several characters is.
+    $poolsByRelic = @{}
+    foreach ($file in Get-ChildItem -Path $poolDir -File | Sort-Object Name) {
+        $text = Get-SourceText -Path $file.FullName
+        $poolName = [System.IO.Path]::GetFileNameWithoutExtension($file.Name)
+        foreach ($relicName in (Get-RegexMatches -Text $text -Pattern 'ModelDb\.Relic<(?<value>\w+)>\(\)')) {
+            if (-not $poolsByRelic.ContainsKey($relicName)) {
+                $poolsByRelic[$relicName] = New-Object System.Collections.Generic.List[string]
+            }
+
+            if (-not $poolsByRelic[$relicName].Contains($poolName)) {
+                $poolsByRelic[$relicName].Add($poolName)
+            }
+        }
+    }
+
+    $owners = @{}
+    foreach ($relicName in $poolsByRelic.Keys) {
+        $labels = New-Object System.Collections.Generic.List[string]
+        foreach ($poolName in $poolsByRelic[$relicName]) {
+            $label = $ownerByPool[$poolName]
+            if ($label -and -not $labels.Contains($label)) {
+                $labels.Add($label)
+            }
+        }
+
+        $owners[$relicName] = if ($labels.Count -gt 0) { $labels -join "/" } else { "unknown" }
+    }
+
+    return $owners
+}
+
+function Get-RelicEntries {
+    $dir = Join-Path $sourceRoot "MegaCrit.Sts2.Core.Models.Relics"
+    $files = Get-ChildItem -Path $dir -File | Sort-Object Name
+    $rows = New-Object System.Collections.Generic.List[object]
+    $owners = Get-RelicOwnershipMap
+
+    foreach ($file in $files) {
+        $text = Get-SourceText -Path $file.FullName
+        $name = [System.IO.Path]::GetFileNameWithoutExtension($file.Name)
+
+        # The folder also holds non-relic helpers (VakuuCardSelector); only a RelicModel
+        # subclass can ever be handed to a player as a relic_id.
+        if ($text -notmatch 'class\s+\w+\s*:\s*RelicModel') {
+            continue
+        }
+
+        $varMap = Get-DynamicVarValues -Text $text
+        $clauses = New-Object System.Collections.Generic.List[string]
+        foreach ($hook in (Get-OverriddenHooks -Text $text)) {
+            foreach ($clause in (Get-HookClauses -Text $text -Hook $hook -VarMap $varMap)) {
+                # Every clause names the hook that produces it: a relic's whole character is
+                # the difference between "when you pick it up" and "every combat".
+                $entry = "$hook`: $clause"
+                if (-not $clauses.Contains($entry)) {
+                    $clauses.Add($entry)
+                }
+            }
+        }
+
+        if ($clauses.Count -eq 0) {
+            $clauses.Add("no gameplay command in an overridden hook (passive in source)")
+        }
+
+        $owner = "unknown"
+        if ($owners.ContainsKey($name)) {
+            $owner = $owners[$name]
+        }
+
+        $rows.Add([pscustomobject]@{
+            Name   = $name
+            Rarity = Get-RegexValue -Text $text -Pattern '(?<![A-Za-z])Rarity\s*=>\s*RelicRarity\.(?<value>\w+)'
+            Owner  = $owner
+            Effect = ($clauses -join "; ")
+        })
+    }
+
+    return $rows
+}
+
+function Get-PowerIsPositive {
+    param(
+        $Chain
+    )
+
+    foreach ($entry in $Chain) {
+        $value = Get-RegexValue -Text $entry.Text -Pattern 'IsPositive\s*=>\s*(?<value>true|false)'
+        if ($value -ne "") {
+            return $value
+        }
+    }
+
+    return "true"
+}
+
+function Get-PowerEntries {
+    $dir = Join-Path $sourceRoot "MegaCrit.Sts2.Core.Models.Powers"
+    $files = Get-ChildItem -Path $dir -File | Sort-Object Name
+    $rows = New-Object System.Collections.Generic.List[object]
+
+    foreach ($file in $files) {
+        $name = [System.IO.Path]::GetFileNameWithoutExtension($file.Name)
+        $chain = Get-ClassFileTexts -Directory $dir -Name $name
+        $text = $chain[0].Text
+
+        # The three Temporary*Power bases are abstract: no creature can ever carry them as a
+        # power_id, though their concrete children inherit every hook below.
+        if ($text -match 'public\s+abstract\s+class') {
+            continue
+        }
+
+        $isPositive = (Get-PowerIsPositive -Chain $chain) -eq "true"
+        $varMap = Get-DynamicVarValues -Text $text
+
+        # PowerModel.Amount is this power's own stack count, and the "amount" a power receives
+        # in BeforeApplied/AfterPowerAmountChanged is the amount being applied to it; the two
+        # spellings name the same runtime quantity. ITemporaryPower.Sign is +1 for a positive
+        # temporary power and -1 otherwise, so "Sign * amount" and "-Sign * base.Amount" reduce
+        # to a sign the source declares.
+        $appliedSign = if ($isPositive) { "" } else { "-" }
+        $expiredSign = if ($isPositive) { "-" } else { "" }
+
+        $stackType = ""
+        $type = ""
+        foreach ($entry in $chain) {
+            if ($stackType -eq "") {
+                $stackType = Get-RegexValue -Text $entry.Text -Pattern '(?<![A-Za-z])StackType\s*=>\s*PowerStackType\.(?<value>\w+)'
+                if ($stackType -eq "") {
+                    # Two powers pick their stack type from runtime state inside a getter
+                    # (MonologuePower from a dynamic var, ShrinkPower from a negative amount).
+                    # Both branches are reported rather than one being chosen.
+                    $stackBlock = Get-RegexValue -Text $entry.Text -Pattern '(?s)override\s+PowerStackType\s+StackType\s*\{(?<value>.*?)\n\t\}'
+                    $stackValues = New-Object System.Collections.Generic.List[string]
+                    foreach ($stackMatch in [regex]::Matches($stackBlock, 'PowerStackType\.(?<value>\w+)')) {
+                        $stackValue = $stackMatch.Groups["value"].Value
+                        if (-not $stackValues.Contains($stackValue)) {
+                            $stackValues.Add($stackValue)
+                        }
+                    }
+
+                    if ($stackValues.Count -gt 0) {
+                        $stackType = $stackValues -join " / "
+                    }
+                }
+            }
+
+            if ($type -eq "") {
+                $type = Get-RegexValue -Text $entry.Text -Pattern '(?<![A-Za-z])Type\s*=>\s*PowerType\.(?<value>\w+)'
+                if ($type -eq "") {
+                    # The temporary-power bases pick the type from IsPositive inside a getter.
+                    $conditional = Get-RegexValue -Text $entry.Text -Pattern '(?s)override\s+PowerType\s+Type\s*\{(?<value>.*?)\n\t\}'
+                    if ($conditional -match 'IsPositive') {
+                        $type = if ($isPositive) { "Buff" } else { "Debuff" }
+                    }
+                }
+            }
+
+            if ($type -ne "" -and $stackType -ne "") {
+                break
+            }
+        }
+
+        $hooks = New-Object System.Collections.Generic.List[string]
+        $clauses = New-Object System.Collections.Generic.List[string]
+        foreach ($entry in $chain) {
+            foreach ($hook in (Get-OverriddenHooks -Text $entry.Text)) {
+                if (-not $hooks.Contains($hook)) {
+                    $hooks.Add($hook)
+                }
+
+                $body = Get-MemberBody -Text $entry.Text -MemberName $hook
+                if ([string]::IsNullOrWhiteSpace($body)) {
+                    continue
+                }
+
+                $body = Add-InlinedHelperBodies -Body $body -FileText $entry.Text
+                $body = $body -replace '\(decimal\)\s*Sign\s*\*\s*amount', "$($appliedSign)Amount"
+                $body = $body -replace '-Sign\s*\*\s*base\.Amount', "$($expiredSign)Amount"
+
+                # A hook a base class declares is labelled with that class, so an inherited
+                # temporary-power behaviour is never mistaken for the power's own code.
+                $label = if ($entry.Name -eq $chain[0].Name) { $hook } else { "$($entry.Name).$hook" }
+                foreach ($clause in (Get-BodyClauses -Body $body -VarMap $varMap)) {
+                    if ($clause -eq "") {
+                        continue
+                    }
+
+                    $line = "$label`: $clause"
+                    if (-not $clauses.Contains($line)) {
+                        $clauses.Add($line)
+                    }
+                }
+            }
+        }
+
+        if ($clauses.Count -eq 0) {
+            $clauses.Add("no hook effect detected in source")
+        }
+
+        $rows.Add([pscustomobject]@{
+            Name      = $name
+            Type      = $type
+            StackType = $stackType
+            Hook      = if ($hooks.Count -gt 0) { $hooks -join ", " } else { "passive" }
+            Effect    = ($clauses -join "; ")
         })
     }
 
@@ -2040,6 +2889,8 @@ $characters = Get-CharacterEntries
 $potions = Get-PotionEntries
 $monsters = Get-MonsterEntries
 $events = Get-EventEntries
+$relics = Get-RelicEntries
+$powers = Get-PowerEntries
 
 $summaryBody = @"
 ## Coverage
@@ -2050,13 +2901,16 @@ $summaryBody = @"
 - Potions: $($potions.Count)
 - Events: $($events.Index.Count)
 - Event options with a risk tag: $($events.Options.Count)
+- Relics: $($relics.Count)
+- Powers: $($powers.Count)
 
 ## Usage
 
-- Prefer these indexes when MCP returns `card_id`, `enemy_id`, `event_id`, or `potion_id`.
-- Read `docs/game-knowledge/agent-reference.md` first, then inspect the specific index file.
-- Use `card-behaviors.md`, `monster-behaviors.md`, and `potion-behaviors.md` when metadata alone is too thin for action choice.
-- Refresh this knowledge base after game updates by running `powershell -ExecutionPolicy Bypass -File "scripts/generate-sts2-knowledge.ps1"`.
+- Prefer these indexes when MCP returns ``card_id``, ``enemy_id``, ``event_id``, ``potion_id``, ``relic_id``, or ``power_id``.
+- Read ``docs/game-knowledge/agent-reference.md`` first, then inspect the specific index file.
+- Use ``card-behaviors.md``, ``monster-behaviors.md``, and ``potion-behaviors.md`` when metadata alone is too thin for action choice.
+- Use ``relics.md`` to price a relic offer and ``powers.md`` to find out what a ``power_id`` plus a stack count actually does.
+- Refresh this knowledge base after game updates by running ``powershell -ExecutionPolicy Bypass -File "scripts/generate-sts2-knowledge.ps1"``.
 - How these indexes are put together, and what belongs in each of them: [knowledge-plan.md](./knowledge-plan.md).
 - Where a risk or effect tag says "none detected" or "?", that is an absence of evidence rather than a guarantee; live state is still the authority.
 "@
@@ -2087,13 +2941,13 @@ Set-Content -Path (Join-Path $outputRoot "card-behaviors.md") -Encoding UTF8 -Va
 $monstersBody = ConvertTo-MarkdownTable -Headers @("Name", "MinHp", "MaxHp") -Rows $monsters
 Set-Content -Path (Join-Path $outputRoot "monsters.md") -Encoding UTF8 -Value (New-MarkdownDocument `
     -Title "Monster Index" `
-    -Description "Initial HP range lookup for monster internal names seen in `enemy_id`." `
+    -Description "Initial HP range lookup for monster internal names seen in ``enemy_id``. The range is the one the fight rolls on a base (non-ascension) run, the same convention ``cards.md`` uses for unupgraded numbers: where the source writes ``MinInitialHp``/``MaxInitialHp`` through ``AscensionHelper.GetValueIfAscension``, the non-ascension value is the one shown, and the ``ToughEnemies`` ascension value is higher for nearly every monster that declares one. A monster that inherits its HP from a base class shows the inherited range. A blank cell means no declaration in that class chain yields a number; it is left empty rather than guessed. Live ``min_hp``/``max_hp`` from the game state remains the authority for the fight in front of you." `
     -Body $monstersBody)
 
 $monsterBehaviorBody = ConvertTo-MarkdownTable -Headers @("Name", "Moves", "Passive") -Rows $monsters
 Set-Content -Path (Join-Path $outputRoot "monster-behaviors.md") -Encoding UTF8 -Value (New-MarkdownDocument `
     -Title "Monster Behavior Index" `
-    -Description "Move-state and passive-command summaries extracted from monster source." `
+    -Description "Move-state, move-effect, and passive-command summaries extracted from monster source. Each ``Moves`` entry is ``<MOVE>=<Intent>(args)`` as the source declares it, followed by ``->`` and what the move actually does, read from the move's own method the way ``card-behaviors.md`` reads a card's ``OnPlay``: ``SHARPEN_MOVE=BuffIntent -> Gain 4 Strength (StrengthPower)``, ``HAMMER_UPPERCUT_MOVE=SingleAttackIntent(HammerUppercutDamage)+DebuffIntent -> Deal 8 damage, Apply 1 Weak (WeakPower) to the target, Apply 1 Frail (FrailPower) to the target``. So an intent that carries no numbers still lands on the number, and a power is named twice on purpose: the readable name plus the class name ``powers.md`` indexes (the class whose slugified upper-case form is the ``power_id``), which is where its stacks and hooks are looked up. Amounts come from the class's own declarations - a property or constant such as ``private int CrushStrength => AscensionHelper.GetValueIfAscension(AscensionLevel.DeadlyEnemies, 4, 3)`` is read at its base (non-ascension) value, the convention ``monsters.md`` uses for HP - and ``?`` means the amount is only known while the fight runs (a computed getter, a lambda, or a count that depends on how many players are in the combat) rather than guessed. A power or command clause that names the monster itself reads as the monster's own action (``Gain 4 Strength``, ``Kill itself``); a move's targets are ``the target``. ``+`` joins a move's intents, ``(no intent)`` marks a move declared without one, ``,`` separates the effects of one move and ``;`` separates the moves, ``(no command in move body)`` means the body was read and holds no gameplay command (presentation-only calls are filtered out), which is an absence of evidence rather than a claim that the move does nothing - a move that delegates to a private helper, or that does its work through a power method, reads that way. A call the effect mapping does not cover keeps its own command name (``CardPileCmd.AddToCombatAndPreview<Dazed>``) instead of being spelled out in prose. The ``Passive`` column stays the verbatim command list it has always been." `
     -Body $monsterBehaviorBody)
 
 $potionsBody = ConvertTo-MarkdownTable -Headers @("Name", "Rarity", "Usage", "Target") -Rows $potions
@@ -2108,6 +2962,18 @@ Set-Content -Path (Join-Path $outputRoot "potion-behaviors.md") -Encoding UTF8 -
     -Description "Behavior summaries extracted from potion source. Useful when adding potion support or planning item usage." `
     -Body $potionBehaviorBody)
 
+$relicsBody = ConvertTo-MarkdownTable -Headers @("Name", "Rarity", "Owner", "Effect") -Rows $relics
+Set-Content -Path (Join-Path $outputRoot "relics.md") -Encoding UTF8 -Value (New-MarkdownDocument `
+    -Title "Relic Index" `
+    -Description "Rarity, owner, and readable effect for every relic, keyed by the internal name behind ``relic_id`` (the class name; the id the game reports is its slugified upper-case form, e.g. ``BurningBlood`` -> ``BURNING_BLOOD``). Use it when deciding whether to take a relic from a chest, buy one in a shop, or accept one from an event. ``Owner`` is the relic pool that declares the relic: a character name means that character's pool, ``Shared`` is the pool every character draws from, and ``Event``/``Fallback``/``Deprecated`` are the pools no character owns. ``Effect`` names the hook that produces each clause, because for a relic the difference between ``AfterObtained`` (once, on pickup) and ``AfterSideTurnStart`` (every turn) is the whole decision; a hook a base class declares is prefixed with that class name. Numbers come from the relic's dynamic vars; ``?`` marks an amount only computed at run time, and ``Amount`` is the relic's own counter where it has one." `
+    -Body $relicsBody)
+
+$powersBody = ConvertTo-MarkdownTable -Headers @("Name", "Type", "StackType", "Hook", "Effect") -Rows $powers
+Set-Content -Path (Join-Path $outputRoot "powers.md") -Encoding UTF8 -Value (New-MarkdownDocument `
+    -Title "Power Index" `
+    -Description "What a ``power_id`` plus a stack count actually does. ``Type`` is ``PowerType`` (Buff/Debuff) and ``StackType`` is ``PowerStackType``: ``Counter`` means the stacks accumulate and the amount is meaningful, ``Single`` means the power is present or not, ``None`` means it does not stack at all, and two values separated by a slash mean the source picks between them at run time. ``Hook`` lists the combat hooks the class overrides, which is when it triggers; ``Effect`` says what each of those hooks does, prefixed with the hook name, with a hook inherited from a base class prefixed with that class instead. ``Amount`` inside an effect is the power's own stack count (``PowerModel.Amount``), not a fixed number, and ``?`` marks an amount that is only computed at run time. A power whose source declares no command in any hook shows ``no hook effect detected in source`` rather than an invented description." `
+    -Body $powersBody)
+
 $eventsIndexBody = ConvertTo-MarkdownTable -Headers @("Name", "BaseType", "Layout", "Encounter", "Options", "HighestRisk") -Rows $events.Index
 $eventsOptionBody = ConvertTo-MarkdownTable -Headers @("Event", "Option", "Handler", "Effect", "Cost", "Risk", "Continuation") -Rows $events.Options
 $eventsBody = @"
@@ -2121,9 +2987,17 @@ $eventsIndexBody
 
 ## Option Risk Details
 
-Every distinct option the event builds, in source order. ``Option`` is the option's localization key
-without the ``<EVENT>.pages.`` prefix; options an Ancient creates through ``RelicOption<T>`` are
-labelled after that helper instead of a literal key.
+Every distinct option the event builds, in source order.
+
+``Event`` is the canonical ``event_id`` the live payload reports -- the class name through the same
+slug algorithm the game's ``StringHelper.Slugify`` applies (``Neow`` -> ``NEOW``,
+``DoorsOfLightAndDark`` -> ``DOORS_OF_LIGHT_AND_DARK``) -- so a live ``event.event_id`` joins this
+column without a case-sensitive comparison against a class name. ``Option`` is the option's
+localization key without the leading ``<EVENT>.pages.`` segment: the game builds the full key as
+``Slugify(EventTypeName).pages.<PAGE>.options.<OPTION>``, so a live ``event.options[].text_key`` of
+``NEOW.pages.INITIAL.options.ARCANE_SCROLL`` is this table's ``NEOW`` row with the option
+``INITIAL.options.ARCANE_SCROLL``. Options an Ancient creates through ``RelicOption<T>`` are labelled
+after that helper instead of a literal key, and their option name is the relic's own id entry.
 
 ``Risk`` is graded from the handler body and the option's own markers:
 

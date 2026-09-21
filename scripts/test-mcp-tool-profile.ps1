@@ -36,6 +36,7 @@ ESSENTIAL_TOOLS = {
     "get_relevant_game_data",
     "wait_for_event",
     "wait_until_actionable",
+    "decide",
     "act",
 }
 LAYERED_TOOLS = {

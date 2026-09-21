@@ -2,7 +2,9 @@
 
 Use this reference when the active screen is clear and you need the exact action order or guardrails for that screen.
 
-This file is about **how to drive a screen**. For **what to choose** where the choice is not mechanical — route, rest site, shop, potion timing, combat priority, co-op division of labour — read [strategy.md](strategy.md). It is a separate file on purpose: the mod embeds this document into the in-game prompt on every play step, and the strategy rules are only needed on the screens they describe.
+This file is about **how to drive a screen**. For **what to choose** where the choice is not mechanical — route, rest site, shop, potion timing, combat priority, co-op division of labour — read [strategy.md](strategy.md). It is a separate file on purpose: the strategy rules are only needed on the screens they describe.
+
+**This file is not carried whole in the in-game prompt either.** The mod embeds it and injects only the section for the screen being played — the largest is ~1,200 characters (~340 tokens), and a screen with no section of its own gets the index of the sections — because carrying the whole file (~11,400 characters, ~3,250 tokens) on every play step charged a combat turn for the chest, shop and timeline sequences. An external agent should read the file whole; the in-game loop reads it one screen at a time. The mapping lives in `STS2AIAgent/Agent/PlaybookSections.cs`, and a test fails if a section is neither mapped nor declared run-level or deliberately not injected — so a new section cannot be added here and silently never ship in-game.
 
 ## MAIN_MENU and Timeline
 
@@ -70,14 +72,14 @@ This file is about **how to drive a screen**. For **what to choose** where the c
 ## SHOP
 
 - Enter the inventory with `open_shop_inventory`.
-- While `shop.open = true`, use `buy_card`, `buy_relic`, `buy_potion`, and `remove_card_at_shop`.
+- While `shop.open = true`, use `buy_card`, `buy_relic`, `buy_potion`, and `remove_card_at_shop`. Buy only a row whose compact `affordable` is true; `stocked` alone still answers 409 when the gold is short. Raw `/state` spells those `enough_gold` and `is_stocked`.
 - Leave inner inventory with `close_shop_inventory`.
 - Leave the shop room with `proceed`.
 - If potion slots are full, do not expect `buy_potion` to remain available.
 
 ## REST
 
-- Use `choose_rest_option` on enabled entries only.
+- Use `choose_rest_option` on entries whose compact `enabled` is true only. Raw `/state` spells that flag `is_enabled`.
 - If smithing or a relic option opens `CARD_SELECTION`, finish selection first, then `proceed`.
 
 ## CHEST
@@ -104,9 +106,11 @@ This file is about **how to drive a screen**. For **what to choose** where the c
 - `crystal_clear_cell` requires `x` and `y`. Pass `tool="big"` for a
   3×3 clear or `tool="small"` for one cell; the tool can be switched atomically
   in the same `act` call.
-- An item is revealed when all of its occupied cells are clear. Revealed bad
-  items, including curses, are granted when the minigame ends, so do not complete
-  their remaining hidden cells.
+- An item is revealed when all of its occupied cells are clear. Until then its
+  `kind` and `is_good` are `null`: the board tells you occupancy, not identity, so
+  plan from `cells` and `hidden_cells` and never from an unrevealed item. Revealed
+  bad items, including curses, are granted when the minigame ends, so do not
+  complete their remaining hidden cells.
 - Every divination must be spent. If no safe reward remains, spend a small
   divination on an already clear cell.
 - After the last divination, resolve any reward child screens, then use

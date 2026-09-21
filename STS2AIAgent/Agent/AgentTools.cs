@@ -25,6 +25,11 @@ internal static class AgentTools
             {
                 type = "string",
                 description = "One short sentence saying why you chose this action. Shown to the player as the decision's rationale."
+            },
+            raw_state = new
+            {
+                type = "boolean",
+                description = "Return the full raw post-action state instead of the compact agent_view. Default false; only for a field the compact view does not carry."
             }
         },
         required = new[] { "action" }
@@ -73,7 +78,12 @@ internal static class AgentTools
         type = "object",
         properties = new
         {
-            timeout_seconds = new { type = "number", description = "Maximum wait in seconds. Default 20." }
+            timeout_seconds = new { type = "number", description = "Maximum wait in seconds. Default 20." },
+            raw_state = new
+            {
+                type = "boolean",
+                description = "Return the full raw state instead of the compact agent_view. Default false; only for a field the compact view does not carry."
+            }
         }
     };
 
@@ -114,7 +124,7 @@ internal static class AgentTools
         new LlmTool
         {
             Name = "act",
-            Description = "Execute one legal game action. Only use names from the latest available_actions. Recompute indexes from the latest state, and attach a short reason so the player can see why.",
+            Description = "Execute one legal game action. Only use names from the latest available_actions. Recompute indexes from the latest state, and attach a short reason so the player can see why. Returns the compact agent_view for the next decision unless raw_state is set.",
             Parameters = ActParameters
         }
     }).ToArray();
@@ -122,9 +132,10 @@ internal static class AgentTools
     public static readonly IReadOnlyList<LlmTool> Mcp = new[]
     {
         Tool("health_check", "Check whether the STS2 AI Agent mod is loaded and this MCP endpoint is open."),
+        Tool("decide", "Read everything one decision needs in a single state read: the compact state, the legal actions with their index/target hints, and the guidance for the screen. Use it when a step would otherwise spend three calls rebuilding the same state."),
         Tool("get_decision_log", "Read the recent accepted decisions with the rationale each one carried. Newest last; use it to review why the agent played the way it did.", DecisionLogParameters),
         Tool("get_run_summary", "Summarise the current run in one call: character, floor, act, boss, HP, gold, and the deck/relic/potion counts."),
-        Tool("get_scene_guidance", "Return the strategy rules that apply to the screen the game is on right now. Empty on a screen with no strategic choice."),
+        Tool("get_scene_guidance", "Return the strategy rules that apply to the screen the game is on right now, plus how to drive it. Empty strategy on a screen with no strategic choice."),
         Tool("diff_state", "Compare two /state payloads and report the paths that differ. Use it to see exactly what an action changed.", DiffStateParameters)
     }.Concat(Play).ToArray();
 

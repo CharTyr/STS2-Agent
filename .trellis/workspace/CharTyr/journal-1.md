@@ -1360,3 +1360,71 @@ Preserve accepted actions and partial receipts; enforce pending token and proact
 ### Next Steps
 
 - Live-game validation remains deferred; no push or release performed.
+
+
+## Session 34: Optimize the AI-play harness: cheaper prompts, smaller state, recoverable tools
+
+**Date**: 2026-09-21
+**Task**: Optimize the AI-play harness: cheaper prompts, smaller state, recoverable tools
+**Branch**: `dev`
+
+### Summary
+
+Measure and cut what an external AI pays to play: the per-step prompt, the per-action state payload, and the bytes of the API response - then make tool failures recoverable instead of terminal.
+
+### Main Changes
+
+- In-game prompt injects only the current screen's playbook and puts state plus the act-once instruction last: static block 24,105 to 14,577 chars per COMBAT step (-2,722 tokens, -39.5%), and repeated same-screen steps now share a cacheable prefix.
+- act returns the compact agent_view by default instead of echoing the 4,000-9,500-token raw state; raw_state=true is the opt-in and HTTP POST /action is unchanged.
+- Dropped JSON indentation: WriteIndented=false removes 35.6% of response bytes (44% on nested combat payloads).
+- compact agent_view v11: removed duplicated actions/profiles and pile *_cards arrays; added relic_stacks/relic_descriptions, map nodes and boss coordinates, real card costs, rest option_id, event text_key, shop on_sale.
+- Lethal-risk rows now include poison_next_turn and constrict_turn_end, so end_turn_will_kill_player can no longer call a poisoned death safe.
+- Added the decide tool (state + available_actions + scene guidance in one call) and structured index errors carrying field/submitted/valid_indices; native MCP failures keep code/details/retryable.
+- New offline knowledge: relics.md (289 rows), powers.md (257 rows), 121/121 monster HP, 358 monster moves of which 324 carry resolved amounts.
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `46b2cdd` | (see git log) |
+| `5fcb7df` | (see git log) |
+| `78b1546` | (see git log) |
+| `d5f780b` | (see git log) |
+| `cbb550b` | (see git log) |
+| `13352db` | (see git log) |
+| `41e34e1` | (see git log) |
+| `712d77c` | (see git log) |
+
+### Testing
+
+- [OK] C# 635 PASS/0 FAIL; Python 346 OK; all 12 verification gates; preflight-release.ps1 exit 0; a clean worktree of the final commit builds and passes 635 tests; GitHub Validate CI green on dev (run 35614200146).
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- Live-game validation (test-mod-load -DeepCheck, state-invariants) still requires launching the game.
+- Version bump, Workshop upload and the zh-CN listing paste remain manual release steps.
+
+
+## Session 35: Deepen harness reliability and decision seams
+
+**Date**: 2026-09-22
+**Task**: Deepen harness reliability and decision seams
+**Branch**: `dev`
+
+### Summary
+
+Explored STS2-Agent beyond token usage, then shipped one-frame decision snapshots, non-blocking action serialization, compact wait/reconciliation results, canonical event knowledge joins, screen-relevant game-data lookup, crystal-sphere reveal gating, stronger patch-check semantics, and broader CI coverage. Full offline suites, release preflight, verification gates, and GitHub Validate passed; pushed dev.
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `971f2f3` | (see git log) |
+
+### Status
+
+[OK] **Completed**

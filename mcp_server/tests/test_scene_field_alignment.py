@@ -11,6 +11,22 @@ imported and no game is needed) and asserts the (scene, collection) -> field-set
 mapping is equal in both directions, so a field added to only one side fails here
 instead of quietly changing what the tool returns.
 
+Three things are compared, all of them source text on the C# side:
+
+1. `SceneFieldSets` -> which fields a scene projects;
+2. `SceneItemSources` / `FallbackItemSources` -> which state paths a scene reads its
+   ids from;
+3. the screen -> scene mapping, through the expectation table in
+   `STS2AIAgent.Tests/AgentLoopTests.cs` (`DetectScene_MatchesGuidedMcpRules`), which
+   the C# suite asserts against the real `GameDataFilter.DetectScene` and this module
+   reads back and asserts against `_detect_scene_from_screen`. A screen that one side
+   calls combat and the other calls reward would otherwise return different ids for
+   the same call, which is exactly the defect the offered-choice screens had.
+
+Parallel to all of that, `SceneDerivedIdTests` pins what each supported screen
+actually derives, with fixtures that carry the owned ids *and* the offered ones so a
+silent fall-through to the deck cannot pass.
+
 C# is the reference side: GameDataFilter.SceneFieldSets is the copy that
 GameDataExportSchemaTests (STS2AIAgent.Tests/AgentLoopTests.cs) already keeps aligned
 with the export contract in GameDataExportSchema.cs, in both directions. When the two
@@ -30,11 +46,13 @@ from sts2_mcp.game_data import (
     _FALLBACK_ITEM_SOURCES,
     _SCENE_FIELD_SETS,
     _SCENE_ITEM_SOURCES,
+    _detect_scene_from_screen,
     derive_relevant_item_ids,
 )
 
 _CSHARP_FILTER = "STS2AIAgent/Agent/GameDataFilter.cs"
 _CSHARP_EXPORT_SCHEMA = "STS2AIAgent/Agent/GameDataExportSchema.cs"
+_CSHARP_DETECT_SCENE_TEST = "STS2AIAgent.Tests/AgentLoopTests.cs"
 
 # private static readonly Dictionary<...> SceneFieldSets = new(StringComparer...)
 _FILTER_TABLE = re.compile(r"SceneFieldSets\s*=\s*new\(")
@@ -54,6 +72,15 @@ _CSHARP_ITEM_SOURCES = re.compile(r"SceneItemSources\s*=\s*new")
 _CSHARP_FALLBACK_SOURCES = re.compile(r"FallbackItemSources\s*=\s*new")
 # ["cards"] = new[] { "combat.hand[].card_id" },
 _PATH_ENTRY = re.compile(r'\["(\w+)"\]\s*=\s*new\[\]\s*\{([^}]*)\}')
+
+
+# Assert.Equal("reward", GameDataFilter.DetectScene("REWARD"));
+# One screen per line, so the C# suite's expectation table can be read back here verbatim. Group 1
+# is the scene, group 2 the screen; the caller flips them into screen -> scene.
+_DETECT_SCENE_EXPECTATION = re.compile(
+    r'^\s*Assert\.Equal\("([a-z_]+)",\s*GameDataFilter\.DetectScene\("([A-Za-z0-9_]+)"\)\);\s*$',
+    re.MULTILINE,
+)
 
 
 def _find_source_root() -> Path:
@@ -207,7 +234,15 @@ class SceneFieldAlignmentTests(unittest.TestCase):
         # A parse that silently returns {} would make every other assertion vacuous.
         # Only a subset (not equality) is pinned, so adding a scene to both tables is
         # not blocked here while a parse that lost the real table still fails.
-        expected_scenes = {"combat", "shop", "event"}
+        expected_scenes = {
+            "combat",
+            "shop",
+            "event",
+            "reward",
+            "card_selection",
+            "chest",
+            "bundle_selection",
+        }
         self.assertEqual(
             set(),
             expected_scenes - {scene for scene, _ in self.csharp},
@@ -397,6 +432,310 @@ class SceneFieldAlignmentTests(unittest.TestCase):
             "Python scene field sets reference fields the mod never exports:\n  - "
             + "\n  - ".join(violations),
         )
+
+
+class SceneDetectionAlignmentTests(unittest.TestCase):
+    """The screen -> scene mapping, pinned once and read back from both languages.
+
+    `GameDataFilterTests.DetectScene_MatchesGuidedMcpRules` (C#) asserts the real
+    `GameDataFilter.DetectScene` against a one-screen-per-line expectation table. This class
+    parses those lines and asserts the Python mirror agrees, so the two sides cannot classify
+    the same screen differently -- which is what let the offered-choice screens answer with the
+    deck the player already owned while the C# side (had it been asked) would have said the same.
+    """
+
+    # Mirrors the C# expectation table; the assertions below compare the two in both directions.
+    _EXPECTED: dict[str, str] = {
+        "SHOP": "shop",
+        "FAKE_MERCHANT": "shop",
+        "EVENT": "event",
+        "COMBAT": "combat",
+        "COMBAT_REWARD": "combat",
+        "REWARD": "reward",
+        "CARD_SELECTION": "card_selection",
+        "CHEST": "chest",
+        "BUNDLE_SELECTION": "bundle_selection",
+        "MAP": "menu",
+        "MAIN_MENU": "menu",
+    }
+
+    @classmethod
+    def setUpClass(cls) -> None:
+        cls.source_root = _find_source_root()
+
+    def _csharp_expectations(self) -> dict[str, str]:
+        source = (self.source_root / _CSHARP_DETECT_SCENE_TEST).read_text(encoding="utf-8")
+        pairs = {screen: scene for scene, screen in _DETECT_SCENE_EXPECTATION.findall(source)}
+        if len(pairs) < 8:
+            raise AssertionError(
+                "GameDataFilterTests.DetectScene_MatchesGuidedMcpRules parsed to "
+                f"{len(pairs)} expectation(s); the table shape changed or the method was renamed. "
+                "The parse must never come back nearly empty, or this comparison checks nothing."
+            )
+        return pairs
+
+    def test_the_csharp_expectation_table_is_the_one_this_test_mirrors(self) -> None:
+        self.assertEqual(
+            self._EXPECTED,
+            self._csharp_expectations(),
+            "the C# screen -> scene expectation table and the Python mirror disagree; both are "
+            "listed one screen per line so a change has to be made on both sides",
+        )
+
+    def test_python_classifies_every_screen_the_csharp_side_pins(self) -> None:
+        mismatches = [
+            f"{screen}: python={_detect_scene_from_screen(screen)} expected={scene}"
+            for screen, scene in sorted(self._csharp_expectations().items())
+            if _detect_scene_from_screen(screen) != scene
+        ]
+        self.assertEqual(
+            [],
+            mismatches,
+            "Python _detect_scene_from_screen disagrees with the pinned table:\n  - "
+            + "\n  - ".join(mismatches),
+        )
+
+    def test_every_scene_the_tables_use_is_pinned_by_a_screen(self) -> None:
+        # A scene added to SceneFieldSets/SceneItemSources without a screen that classifies into it
+        # is dead weight: nothing would ever read it, and the C# table could add it alone.
+        table_scenes = set(_SCENE_FIELD_SETS) | set(_SCENE_ITEM_SOURCES)
+        pinned = set(self._csharp_expectations().values())
+        self.assertEqual(
+            set(),
+            table_scenes - pinned,
+            "these scenes have tables but no screen in the pinned mapping classifies into them: "
+            + ", ".join(sorted(table_scenes - pinned)),
+        )
+
+
+def _run_block(
+    deck: list[str] | None = None,
+    relics: list[str] | None = None,
+    potions: list[str] | None = None,
+) -> dict[str, object]:
+    """A `run` block carrying the ids the player already owns."""
+    return {
+        "deck": [{"card_id": card_id} for card_id in deck or []],
+        "relics": [{"relic_id": relic_id} for relic_id in relics or []],
+        "potions": [{"potion_id": potion_id} for potion_id in potions or []],
+    }
+
+
+class SceneDerivedIdTests(unittest.TestCase):
+    """The ids each supported screen derives, per collection.
+
+    Every fixture carries the ids the player already owns *and* the ones the screen offers, and
+    asserts the owned ones are absent: a path that silently fell through to the run-level fallback
+    still returns something, so a test with an empty run block would pass while the defect lives on.
+    """
+
+    OWNED = _run_block(deck=["OWNED_CARD_A", "OWNED_CARD_B"], relics=["OWNED_RELIC"], potions=["OWNED_POTION"])
+
+    def test_reward_screen_derives_the_offered_cards_not_the_deck(self) -> None:
+        state = {
+            "screen": "REWARD",
+            "reward": {
+                "card_options": [
+                    {"index": 0, "card_id": "OFFER_ALPHA"},
+                    {"index": 1, "card_id": "OFFER_BETA"},
+                ]
+            },
+            "run": self.OWNED,
+        }
+
+        ids = derive_relevant_item_ids(state, "cards", "REWARD")
+
+        self.assertEqual(["OFFER_ALPHA", "OFFER_BETA"], ids)
+        self.assertNotIn("OWNED_CARD_A", ids)
+
+    def test_reward_screen_derives_from_the_compact_view_when_the_raw_list_is_absent(self) -> None:
+        # One /state response carries both views and they name the offered cards differently; the
+        # compact one alone has to answer, so the tool works for a caller holding only that.
+        state = {
+            "screen": "REWARD",
+            "reward": None,
+            "agent_view": {
+                "reward": {"cards": [{"i": 0, "card_id": "OFFER_ALPHA"}, {"i": 1, "card_id": "OFFER_BETA"}]}
+            },
+            "run": self.OWNED,
+        }
+
+        self.assertEqual(
+            ["OFFER_ALPHA", "OFFER_BETA"],
+            derive_relevant_item_ids(state, "cards", "REWARD"),
+        )
+
+    def test_reward_screen_dedups_the_offered_cards_in_surface_order(self) -> None:
+        state = {
+            "screen": "REWARD",
+            "reward": {
+                "card_options": [
+                    {"index": 0, "card_id": "OFFER_BETA"},
+                    {"index": 1, "card_id": "OFFER_ALPHA"},
+                    {"index": 2, "card_id": "OFFER_BETA"},
+                ]
+            },
+            "run": self.OWNED,
+        }
+
+        self.assertEqual(
+            ["OFFER_BETA", "OFFER_ALPHA"],
+            derive_relevant_item_ids(state, "cards", "REWARD"),
+        )
+
+    def test_reward_relic_query_never_returns_the_offered_cards(self) -> None:
+        # The policy is collection-aware: the reward screen offers cards, so a relic question is not
+        # answered with card ids. Nothing on the screen names a relic, so the owned relics answer.
+        state = {
+            "screen": "REWARD",
+            "reward": {"card_options": [{"index": 0, "card_id": "OFFER_ALPHA"}]},
+            "run": self.OWNED,
+        }
+
+        ids = derive_relevant_item_ids(state, "relics", "REWARD")
+
+        self.assertEqual(["OWNED_RELIC"], ids)
+        self.assertNotIn("OFFER_ALPHA", ids)
+
+    def test_reward_potion_row_carries_no_id_so_the_run_potions_answer(self) -> None:
+        # A reward row has a type and a description and no stable id; inventing one would be worse
+        # than the run-level fallback, so the table declares no potion source for this scene.
+        state = {
+            "screen": "REWARD",
+            "reward": {
+                "rewards": [
+                    {"index": 0, "reward_type": "Potion", "description": "Fire Potion", "claimable": True}
+                ]
+            },
+            "run": self.OWNED,
+        }
+
+        self.assertEqual(["OWNED_POTION"], derive_relevant_item_ids(state, "potions", "REWARD"))
+
+    def test_card_selection_derives_the_offered_cards_not_the_deck(self) -> None:
+        state = {
+            "screen": "CARD_SELECTION",
+            "selection": {
+                "cards": [
+                    {"index": 0, "card_id": "SELECT_ALPHA"},
+                    {"index": 1, "card_id": "SELECT_ALPHA"},
+                    {"index": 2, "card_id": "SELECT_BETA"},
+                ]
+            },
+            "run": self.OWNED,
+        }
+
+        ids = derive_relevant_item_ids(state, "cards", "CARD_SELECTION")
+
+        self.assertEqual(["SELECT_ALPHA", "SELECT_BETA"], ids)
+        self.assertNotIn("OWNED_CARD_A", ids)
+
+    def test_card_selection_relic_query_never_returns_the_offered_cards(self) -> None:
+        state = {
+            "screen": "CARD_SELECTION",
+            "selection": {"cards": [{"index": 0, "card_id": "SELECT_ALPHA"}]},
+            "run": self.OWNED,
+        }
+
+        ids = derive_relevant_item_ids(state, "relics", "CARD_SELECTION")
+
+        self.assertEqual(["OWNED_RELIC"], ids)
+        self.assertNotIn("SELECT_ALPHA", ids)
+
+    def test_chest_derives_the_offered_relics_not_the_owned_ones(self) -> None:
+        state = {
+            "screen": "CHEST",
+            "chest": {
+                "is_opened": True,
+                "relic_options": [
+                    {"index": 0, "relic_id": "OFFER_RELIC_ALPHA"},
+                    {"index": 1, "relic_id": "OFFER_RELIC_BETA"},
+                ],
+            },
+            "run": self.OWNED,
+        }
+
+        ids = derive_relevant_item_ids(state, "relics", "CHEST")
+
+        self.assertEqual(["OFFER_RELIC_ALPHA", "OFFER_RELIC_BETA"], ids)
+        self.assertNotIn("OWNED_RELIC", ids)
+
+    def test_chest_derives_from_the_compact_view_when_the_raw_list_is_absent(self) -> None:
+        state = {
+            "screen": "CHEST",
+            "chest": None,
+            "agent_view": {"chest": {"opened": True, "relics": [{"i": 0, "relic_id": "OFFER_RELIC_ALPHA"}]}},
+            "run": self.OWNED,
+        }
+
+        self.assertEqual(
+            ["OFFER_RELIC_ALPHA"],
+            derive_relevant_item_ids(state, "relics", "CHEST"),
+        )
+
+    def test_chest_card_query_falls_back_to_the_owned_deck(self) -> None:
+        state = {
+            "screen": "CHEST",
+            "chest": {"relic_options": [{"index": 0, "relic_id": "OFFER_RELIC_ALPHA"}]},
+            "run": self.OWNED,
+        }
+
+        ids = derive_relevant_item_ids(state, "cards", "CHEST")
+
+        self.assertEqual(["OWNED_CARD_A", "OWNED_CARD_B"], ids)
+        self.assertNotIn("OFFER_RELIC_ALPHA", ids)
+
+    def test_bundle_selection_derives_every_card_of_every_bundle(self) -> None:
+        state = {
+            "screen": "BUNDLE_SELECTION",
+            "bundles": [
+                {"index": 0, "cards": [{"index": 0, "card_id": "BUNDLE_A_ONE"}, {"index": 1, "card_id": "BUNDLE_A_TWO"}]},
+                {"index": 1, "cards": [{"index": 0, "card_id": "BUNDLE_B_ONE"}]},
+            ],
+            "run": self.OWNED,
+        }
+
+        ids = derive_relevant_item_ids(state, "cards", "BUNDLE_SELECTION")
+
+        self.assertEqual(["BUNDLE_A_ONE", "BUNDLE_A_TWO", "BUNDLE_B_ONE"], ids)
+        self.assertNotIn("OWNED_CARD_A", ids)
+
+    def test_shop_derives_the_offer_ids_for_cards_relics_and_potions(self) -> None:
+        state = {
+            "screen": "SHOP",
+            "shop": {
+                "cards": [{"index": 0, "card_id": "STOCK_CARD"}],
+                "relics": [{"index": 0, "relic_id": "STOCK_RELIC"}],
+                "potions": [{"index": 0, "potion_id": "STOCK_POTION"}],
+            },
+            "run": self.OWNED,
+        }
+
+        self.assertEqual(["STOCK_CARD"], derive_relevant_item_ids(state, "cards", "SHOP"))
+        self.assertEqual(["STOCK_RELIC"], derive_relevant_item_ids(state, "relics", "SHOP"))
+        self.assertEqual(["STOCK_POTION"], derive_relevant_item_ids(state, "potions", "SHOP"))
+
+    def test_collection_names_are_matched_case_insensitively(self) -> None:
+        # The C# dictionaries are OrdinalIgnoreCase and the tool is the one place a caller spells
+        # the collection by hand, so "Cards" has to reach the same source as "cards".
+        state = {
+            "screen": "REWARD",
+            "reward": {"card_options": [{"index": 0, "card_id": "OFFER_ALPHA"}]},
+            "run": self.OWNED,
+        }
+
+        self.assertEqual(
+            ["OFFER_ALPHA"],
+            derive_relevant_item_ids(state, "Cards", "reward"),
+        )
+
+    def test_a_screen_with_no_offer_ids_still_falls_back_to_the_owned_ids(self) -> None:
+        # "Only then" in the policy: the fallback answers exactly when the screen's own source for
+        # this collection yields nothing, so an unaffected screen keeps its previous behaviour.
+        state = {"screen": "MAP", "run": self.OWNED}
+
+        self.assertEqual(["OWNED_CARD_A", "OWNED_CARD_B"], derive_relevant_item_ids(state, "cards", "MAP"))
+        self.assertEqual([], derive_relevant_item_ids(state, "events", "MAP"))
 
 
 if __name__ == "__main__":

@@ -1,11 +1,14 @@
 [project]
 name = "sts2-ai-agent-mcp"
-version = "0.14.6"
+version = "0.15.0"
 description = "FastMCP wrapper for the local STS2 AI Agent mod"
 readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [
     "fastmcp>=3.1.0,<4.0.0",
+    # Imported directly: server.py types its tool arguments with Annotated[..., Field(...)] so the
+    # per-argument contract lands in each tool's inputSchema, where an MCP client renders it.
+    "pydantic>=2,<3",
 ]
 
 [project.scripts]

@@ -187,6 +187,7 @@
               "not_found",
               "invalid_action",
               "invalid_target",
+              "action_in_flight",
               "state_unavailable",
               "forbidden_actor",
               "mcp_disabled",
@@ -207,7 +208,8 @@
               "export_error",
               "origin_not_allowed",
               "method_not_allowed",
-              "payload_too_large"
+              "payload_too_large",
+              "unknown_tool"
             ],
             "type": "string"
           },
@@ -1200,10 +1202,16 @@
             "type": "array"
           },
           "is_good": {
-            "type": "boolean"
+            "type": [
+              "boolean",
+              "null"
+            ]
           },
           "kind": {
-            "type": "string"
+            "type": [
+              "string",
+              "null"
+            ]
           },
           "revealed": {
             "type": "boolean"
@@ -1307,6 +1315,21 @@
               "integer",
               "null"
             ]
+          }
+        },
+        "type": "object"
+      },
+      "DecisionSnapshotPayload": {
+        "additionalProperties": true,
+        "properties": {
+          "available_actions": {
+            "items": {
+              "$ref": "#/components/schemas/ActionDescriptor"
+            },
+            "type": "array"
+          },
+          "state": {
+            "description": "Free-form JSON value."
           }
         },
         "type": "object"
@@ -3079,7 +3102,7 @@
   "info": {
     "description": "Generated from Router routes and C# wire payload declarations. Human guidance remains in docs/api.md.",
     "title": "STS2 AI Agent Mod HTTP API",
-    "version": "0.14.6"
+    "version": "0.15.0"
   },
   "jsonSchemaDialect": "https://json-schema.org/draft/2020-12/schema",
   "openapi": "3.1.0",
@@ -3352,6 +3375,45 @@
           }
         },
         "summary": "Export one game-data collection."
+      }
+    },
+    "/decision-snapshot": {
+      "get": {
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ApiSuccessEnvelope"
+                    },
+                    {
+                      "properties": {
+                        "data": {
+                          "$ref": "#/components/schemas/DecisionSnapshotPayload"
+                        }
+                      },
+                      "type": "object"
+                    }
+                  ]
+                }
+              }
+            },
+            "description": "Successful response."
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorEnvelope"
+                }
+              }
+            },
+            "description": "The normal HTTP error envelope."
+          }
+        },
+        "summary": "Read one decision's state and the action descriptors its own state build enumerated."
       }
     },
     "/decisions": {

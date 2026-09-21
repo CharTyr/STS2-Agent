@@ -37,6 +37,10 @@ internal static class SourceCoverageTests
         "STS2AIAgent/Game/GameStateService.Shop.cs",
         "STS2AIAgent/Game/ReflectedGameMembers.cs",
         "STS2AIAgent/Game/GameStateService.AgentView.cs",
+        // The lethal-risk half of the combat payload (intents, poison, constrict), split out of
+        // GameStateService.Combat.cs on 2026-10-02 for the size budget. It reads the game's power
+        // models, so it stays out of the offline compilation like the rest of the partial.
+        "STS2AIAgent/Game/GameStateService.CombatRisks.cs",
         "STS2AIAgent/Game/GameStateService.Payloads.cs",
         "STS2AIAgent/Game/GameActionService.cs",
         "STS2AIAgent/Game/GameActionService.Combat.cs",

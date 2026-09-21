@@ -1,130 +1,130 @@
 ﻿# Monster Index
 
 > Auto-generated from extraction/decompiled in this repository.  
-> Generated at: 2026-09-20 21:16:43 +08:00
+> Generated at: 2026-09-21 22:31:54 +08:00
 
-Initial HP range lookup for monster internal names seen in enemy_id.
+Initial HP range lookup for monster internal names seen in `enemy_id`. The range is the one the fight rolls on a base (non-ascension) run, the same convention `cards.md` uses for unupgraded numbers: where the source writes `MinInitialHp`/`MaxInitialHp` through `AscensionHelper.GetValueIfAscension`, the non-ascension value is the one shown, and the `ToughEnemies` ascension value is higher for nearly every monster that declares one. A monster that inherits its HP from a base class shows the inherited range. A blank cell means no declaration in that class chain yields a number; it is left empty rather than guessed. Live `min_hp`/`max_hp` from the game state remains the authority for the fight in front of you.
 
 | Name | MinHp | MaxHp |
 | --- | --- | --- |
 | Architect | 9999 | 9999 |
-| AssassinRubyRaider |  |  |
-| Axebot |  |  |
-| AxeRubyRaider |  |  |
+| AssassinRubyRaider | 18 | 23 |
+| Axebot | 40 | 44 |
+| AxeRubyRaider | 20 | 22 |
 | BattleFriendV1 | 75 | 75 |
 | BattleFriendV2 | 150 | 150 |
 | BattleFriendV3 | 300 | 300 |
 | BigDummy | 9999 | 9999 |
-| BowlbugEgg |  |  |
-| BowlbugNectar |  |  |
-| BowlbugRock |  |  |
-| BowlbugSilk |  |  |
-| BruteRubyRaider |  |  |
-| BygoneEffigy |  |  |
-| Byrdonis |  |  |
+| BowlbugEgg | 21 | 22 |
+| BowlbugNectar | 35 | 38 |
+| BowlbugRock | 45 | 48 |
+| BowlbugSilk | 40 | 43 |
+| BruteRubyRaider | 30 | 33 |
+| BygoneEffigy | 127 | 127 |
+| Byrdonis | 91 | 94 |
 | Byrdpip | 9999 | 9999 |
-| CalcifiedCultist |  |  |
-| CeremonialBeast |  |  |
-| Chomper |  |  |
-| CorpseSlug |  |  |
-| CrossbowRubyRaider |  |  |
-| Crusher |  |  |
-| CubexConstruct |  |  |
-| DampCultist |  |  |
-| DecimillipedeSegment |  |  |
-| DecimillipedeSegmentBack |  |  |
-| DecimillipedeSegmentFront |  |  |
-| DecimillipedeSegmentMiddle |  |  |
-| DevotedSculptor |  |  |
-| Door |  |  |
-| Doormaker |  |  |
-| Entomancer |  |  |
-| Exoskeleton |  |  |
-| EyeWithTeeth | 6 |  |
-| Fabricator |  |  |
-| FakeMerchantMonster |  |  |
-| FatGremlin |  |  |
-| FlailKnight |  |  |
-| Flyconid |  |  |
-| Fogmog |  |  |
-| FossilStalker |  |  |
-| FrogKnight |  |  |
-| FuzzyWurmCrawler |  |  |
-| GasBomb |  |  |
-| GlobeHead |  |  |
-| GremlinMerc |  |  |
-| Guardbot |  |  |
-| HauntedShip |  |  |
-| HunterKiller |  |  |
-| InfestedPrism |  |  |
-| Inklet |  |  |
-| KinFollower |  |  |
-| KinPriest |  |  |
-| KnowledgeDemon |  |  |
-| LagavulinMatriarch |  |  |
-| LeafSlimeM |  |  |
-| LeafSlimeS |  |  |
-| LivingFog |  |  |
-| LivingShield |  |  |
-| LouseProgenitor |  |  |
-| MagiKnight |  |  |
-| Mawler |  |  |
-| MechaKnight |  |  |
+| CalcifiedCultist | 38 | 41 |
+| CeremonialBeast | 252 | 252 |
+| Chomper | 60 | 64 |
+| CorpseSlug | 25 | 27 |
+| CrossbowRubyRaider | 18 | 21 |
+| Crusher | 199 | 199 |
+| CubexConstruct | 65 | 65 |
+| DampCultist | 51 | 53 |
+| DecimillipedeSegment | 42 | 48 |
+| DecimillipedeSegmentBack | 42 | 48 |
+| DecimillipedeSegmentFront | 42 | 48 |
+| DecimillipedeSegmentMiddle | 42 | 48 |
+| DevotedSculptor | 162 | 162 |
+| Door | 155 | 155 |
+| Doormaker | 489 | 489 |
+| Entomancer | 145 | 145 |
+| Exoskeleton | 24 | 28 |
+| EyeWithTeeth | 6 | 6 |
+| Fabricator | 150 | 150 |
+| FakeMerchantMonster | 165 | 165 |
+| FatGremlin | 13 | 17 |
+| FlailKnight | 101 | 101 |
+| Flyconid | 47 | 49 |
+| Fogmog | 74 | 74 |
+| FossilStalker | 51 | 53 |
+| FrogKnight | 191 | 191 |
+| FuzzyWurmCrawler | 55 | 57 |
+| GasBomb | 10 | 10 |
+| GlobeHead | 148 | 148 |
+| GremlinMerc | 47 | 49 |
+| Guardbot | 21 | 25 |
+| HauntedShip | 63 | 63 |
+| HunterKiller | 121 | 121 |
+| InfestedPrism | 200 | 200 |
+| Inklet | 11 | 17 |
+| KinFollower | 58 | 59 |
+| KinPriest | 190 | 190 |
+| KnowledgeDemon | 379 | 379 |
+| LagavulinMatriarch | 222 | 222 |
+| LeafSlimeM | 32 | 35 |
+| LeafSlimeS | 11 | 15 |
+| LivingFog | 80 | 80 |
+| LivingShield | 55 | 55 |
+| LouseProgenitor | 134 | 136 |
+| MagiKnight | 82 | 82 |
+| Mawler | 72 | 72 |
+| MechaKnight | 300 | 300 |
 | MultiAttackMoveMonster | 999 | 999 |
-| MysteriousKnight |  |  |
-| Myte |  |  |
-| Nibbit |  |  |
-| Noisebot |  |  |
+| MysteriousKnight | 101 | 101 |
+| Myte | 61 | 67 |
+| Nibbit | 42 | 46 |
+| Noisebot | 23 | 28 |
 | OneHpMonster | 1 | 1 |
 | Osty | 1 | 1 |
-| Ovicopter |  |  |
-| OwlMagistrate |  |  |
+| Ovicopter | 124 | 130 |
+| OwlMagistrate | 234 | 234 |
 | PaelsLegion | 9999 | 9999 |
-| Parafright | 21 |  |
-| PhantasmalGardener |  |  |
-| PhrogParasite |  |  |
-| PunchConstruct |  |  |
-| Queen |  |  |
-| Rocket |  |  |
-| ScrollOfBiting |  |  |
-| Seapunk |  |  |
-| SewerClam |  |  |
-| ShrinkerBeetle |  |  |
+| Parafright | 21 | 21 |
+| PhantasmalGardener | 28 | 32 |
+| PhrogParasite | 61 | 64 |
+| PunchConstruct | 55 | 55 |
+| Queen | 400 | 400 |
+| Rocket | 189 | 189 |
+| ScrollOfBiting | 31 | 38 |
+| Seapunk | 44 | 46 |
+| SewerClam | 56 | 56 |
+| ShrinkerBeetle | 38 | 40 |
 | SingleAttackMoveMonster | 999 | 999 |
-| SkulkingColony |  |  |
-| SlimedBerserker |  |  |
-| SlitheringStrangler |  |  |
-| SludgeSpinner |  |  |
-| SlumberingBeetle |  |  |
-| SnappingJaxfruit |  |  |
-| SneakyGremlin |  |  |
-| SoulFysh |  |  |
-| SoulNexus |  |  |
-| SpectralKnight |  |  |
-| SpinyToad |  |  |
-| Stabbot |  |  |
+| SkulkingColony | 79 | 79 |
+| SlimedBerserker | 266 | 266 |
+| SlitheringStrangler | 53 | 55 |
+| SludgeSpinner | 37 | 39 |
+| SlumberingBeetle | 86 | 86 |
+| SnappingJaxfruit | 31 | 33 |
+| SneakyGremlin | 10 | 14 |
+| SoulFysh | 211 | 211 |
+| SoulNexus | 234 | 234 |
+| SpectralKnight | 93 | 93 |
+| SpinyToad | 116 | 119 |
+| Stabbot | 23 | 28 |
 | TenHpMonster | 10 | 10 |
-| TerrorEel |  |  |
-| TestSubject |  |  |
-| TheAdversaryMkOne | 100 |  |
-| TheAdversaryMkThree |  |  |
-| TheAdversaryMkTwo |  |  |
-| TheForgotten |  |  |
-| TheInsatiable |  |  |
-| TheLost |  |  |
-| TheObscura |  |  |
-| ThievingHopper |  |  |
-| Toadpole |  |  |
-| TorchHeadAmalgam |  |  |
-| ToughEgg |  |  |
-| TrackerRubyRaider |  |  |
-| Tunneler |  |  |
-| TurretOperator |  |  |
-| TwigSlimeM |  |  |
-| TwigSlimeS |  |  |
-| TwoTailedRat |  |  |
-| Vantom |  |  |
-| VineShambler |  |  |
-| WaterfallGiant |  |  |
-| Wriggler |  |  |
-| Zapbot |  |  |
+| TerrorEel | 140 | 140 |
+| TestSubject | 100 | 100 |
+| TheAdversaryMkOne | 100 | 100 |
+| TheAdversaryMkThree | 300 | 300 |
+| TheAdversaryMkTwo | 200 | 200 |
+| TheForgotten | 106 | 106 |
+| TheInsatiable | 321 | 321 |
+| TheLost | 93 | 93 |
+| TheObscura | 123 | 123 |
+| ThievingHopper | 79 | 79 |
+| Toadpole | 21 | 25 |
+| TorchHeadAmalgam | 199 | 199 |
+| ToughEgg | 14 | 18 |
+| TrackerRubyRaider | 21 | 25 |
+| Tunneler | 87 | 87 |
+| TurretOperator | 41 | 41 |
+| TwigSlimeM | 26 | 28 |
+| TwigSlimeS | 7 | 11 |
+| TwoTailedRat | 17 | 21 |
+| Vantom | 173 | 173 |
+| VineShambler | 61 | 61 |
+| WaterfallGiant | 250 | 250 |
+| Wriggler | 17 | 21 |
+| Zapbot | 23 | 28 |

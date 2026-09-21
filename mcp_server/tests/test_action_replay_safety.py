@@ -91,6 +91,25 @@ class ActionReconciliationTransport:
         return self._action_handler(http_request, timeout)
 
 
+def _values_for_key(value: Any, key: str) -> list[Any]:
+    """Every value stored under `key`, anywhere in a nested answer.
+
+    The proof that no raw payload survived compaction is structural: a raw `/state` always embeds
+    its own `agent_view`, so an answer that carries no `agent_view` key anywhere cannot be carrying
+    one. Counting markers instead would only prove the projection ran once.
+    """
+    found: list[Any] = []
+    if isinstance(value, dict):
+        for name, child in value.items():
+            if name == key:
+                found.append(child)
+            found.extend(_values_for_key(child, key))
+    elif isinstance(value, list):
+        for item in value:
+            found.extend(_values_for_key(item, key))
+    return found
+
+
 class ActionReplaySafetyTests(unittest.TestCase):
     def _execute_uncertain_action(
         self,
@@ -99,6 +118,7 @@ class ActionReplaySafetyTests(unittest.TestCase):
         action: str = "confirm_unlock",
         invoke: Callable[[Sts2Client], dict[str, Any]] | None = None,
         state_error: Exception | None = None,
+        state_payload: dict[str, Any] | None = None,
     ) -> tuple[dict[str, Any], ActionReconciliationTransport]:
         client = Sts2Client(
             base_url="http://127.0.0.1:8080",
@@ -106,6 +126,7 @@ class ActionReplaySafetyTests(unittest.TestCase):
         )
         transport = ActionReconciliationTransport(
             action_handler,
+            state_payload=state_payload,
             state_error=state_error,
         )
 
@@ -129,15 +150,23 @@ class ActionReplaySafetyTests(unittest.TestCase):
         self.assertEqual(reconciliation["method"], "GET")
         self.assertEqual(reconciliation["path"], "/state")
         self.assertEqual(reconciliation["submitted_action"]["action"], action)
+        # An unknown outcome always needs a decision from the caller; `required` says so on both
+        # branches rather than only on the one where the read failed.
+        self.assertTrue(reconciliation["required"])
+        # The action's effect was never compared against the read, and the action's outcome is
+        # still unknown -- the two keys that stop `succeeded` reading as an action success.
+        self.assertFalse(reconciliation["action_effect_compared"])
+        self.assertEqual(reconciliation["action_outcome"], "unknown")
         if state_error is None:
             self.assertTrue(reconciliation["succeeded"])
             self.assertEqual(reconciliation["status"], "succeeded")
-            self.assertFalse(reconciliation["required"])
+            self.assertTrue(reconciliation["state_read"])
             self.assertEqual(reconciliation["state"]["phase"], "reconciled")
         else:
             self.assertFalse(reconciliation["succeeded"])
             self.assertEqual(reconciliation["status"], "failed")
-            self.assertTrue(reconciliation["required"])
+            self.assertFalse(reconciliation["state_read"])
+            self.assertNotIn("state", reconciliation)
             self.assertFalse(reconciliation["error"]["retryable"])
 
         return result, transport
@@ -406,6 +435,33 @@ class ActionReplaySafetyTests(unittest.TestCase):
         self.assertIn("state unavailable", reconciliation_error["message"])
         self.assertFalse(reconciliation_error["retryable"])
 
+    def test_a_lost_response_leaves_no_raw_payload_anywhere_in_the_answer(self) -> None:
+        """The state read after a lost response is projected, not appended raw.
+
+        It used to be embedded whole under `reconciliation.state`: the same 4,000-9,500 tokens, on
+        the path a caller reaches when it is most likely to hand the answer back to a model. The
+        raw payload always carries its own nested `agent_view`, so its absence anywhere in the
+        answer is what proves the projection reached this copy too.
+        """
+        raw_state = {
+            "state_version": 16,
+            "screen": "UNLOCK",
+            "phase": "reconciled",
+            "agent_view": {"version": 11, "screen": "UNLOCK", "phase": "reconciled"},
+        }
+
+        result, transport = self._execute_uncertain_action(
+            self._lost_response,
+            state_payload=raw_state,
+        )
+
+        self.assertEqual(transport.action_calls, 1)
+        self.assertEqual(_values_for_key(result, "agent_view"), [])
+        self.assertEqual(_values_for_key(result, "compact_agent_view"), [True])
+        self.assertEqual(result["reconciliation"]["state"]["phase"], "reconciled")
+        self.assertEqual(result["status"], "outcome_unknown")
+        self.assertNotIn("state", result)
+
     def test_retryable_http_action_error_is_not_replayed_or_reconciled(self) -> None:
         response_body = json.dumps(
             {
@@ -438,6 +494,55 @@ class ActionReplaySafetyTests(unittest.TestCase):
         self.assertEqual(transport.state_calls, 0)
         sleep_mock.assert_not_called()
         self.assertFalse(caught.exception.retryable)
+
+    def test_action_in_flight_is_retryable_without_being_reposted(self) -> None:
+        """The mod's concurrency refusal is the one action error that keeps its retryable flag.
+
+        `POST /action` answers 409 `action_in_flight` when another action still owns the lease. That
+        request was never executed -- nothing was clicked, so a later retry cannot replay a card --
+        and the server declares it retryable. The client surfaces that declaration instead of forcing
+        every action error to false. Surfacing it is not a retry: `retry_count` is 0 for actions, so
+        exactly one POST leaves and re-sending stays the caller's decision.
+        """
+        response_body = json.dumps(
+            {
+                "ok": False,
+                "error": {
+                    "code": "action_in_flight",
+                    "message": "Another action is still running.",
+                    "details": {"in_flight_action": "play_card"},
+                    "retryable": True,
+                },
+            }
+        ).encode("utf-8")
+
+        def action_in_flight(http_request, timeout=None):
+            raise error.HTTPError(
+                http_request.full_url,
+                409,
+                "Conflict",
+                hdrs=None,
+                fp=io.BytesIO(response_body),
+            )
+
+        client = Sts2Client(base_url="http://127.0.0.1:8080", max_retries=5)
+        transport = ActionReconciliationTransport(action_in_flight)
+        with patch("sts2_mcp.client.request.urlopen", new=transport.urlopen):
+            with patch("sts2_mcp.client.time.sleep") as sleep_mock:
+                with self.assertRaises(Sts2ApiError) as caught:
+                    client.execute_action("play_card")
+
+        self.assertEqual(caught.exception.code, "action_in_flight")
+        self.assertEqual(caught.exception.status_code, 409)
+        self.assertTrue(
+            caught.exception.retryable,
+            "A refusal that executed nothing has to reach the caller as retryable, or an agent "
+            "cannot tell it from a request that was wrong.",
+        )
+        self.assertEqual(caught.exception.details["in_flight_action"], "play_card")
+        self.assertEqual(transport.action_calls, 1)
+        self.assertEqual(transport.state_calls, 0)
+        sleep_mock.assert_not_called()
 
     def test_non_action_get_and_head_preserve_transport_retry_count(self) -> None:
         for method in ("GET", "HEAD"):

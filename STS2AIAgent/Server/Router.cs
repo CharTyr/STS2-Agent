@@ -16,7 +16,7 @@ internal static class Router
 {
     private const string ServiceName = "sts2-ai-agent";
     private const string ProtocolVersion = "2026-03-11-v1";
-    internal const string ModVersion = "0.14.6";
+    internal const string ModVersion = "0.15.0";
     private const string LogPrefix = "[STS2AIAgent.Router]";
 
     private static long _requestCounter;
@@ -237,6 +237,24 @@ internal static class Router
                     ok = true,
                     request_id = requestId,
                     data = state
+                });
+                statusCode = 200;
+                return;
+            }
+
+            if (request.HttpMethod.Equals("GET", StringComparison.OrdinalIgnoreCase) &&
+                request.Url?.AbsolutePath == "/decision-snapshot")
+            {
+                // One game-thread turn and one state build: the compact state and the action
+                // descriptors come from the same action-surface enumeration, so a caller that would
+                // otherwise read /state and then /actions/available cannot be handed two frames.
+                // Both endpoints stay; this is the one to read when both halves are needed.
+                var snapshot = await GameThread.InvokeAsync(GameStateService.BuildDecisionSnapshotPayload);
+                await WriteJsonAsync(response, 200, new
+                {
+                    ok = true,
+                    request_id = requestId,
+                    data = snapshot
                 });
                 statusCode = 200;
                 return;

@@ -5,7 +5,7 @@ This file is not a gameplay guide. It is a lookup order for agents using the MCP
 ## Suggested Lookup Flow
 
 1. Read the current `GET /state` or MCP `get_game_state` output.
-2. If the state contains unfamiliar `card_id`, `enemy_id`, `event_id`, or `potion_id`, check this knowledge base.
+2. If the state contains unfamiliar `card_id`, `enemy_id`, `event_id`, `potion_id`, `relic_id`, or `power_id`, check this knowledge base.
 3. Prefer internal English ids for stable matching, then use UI text for final decisions.
 
 ## Recommended Mapping
@@ -16,6 +16,10 @@ This file is not a gameplay guide. It is a lookup order for agents using the MCP
 - `combat.enemies[].enemy_id`
   - [monsters.md](./monsters.md)
   - [monster-behaviors.md](./monster-behaviors.md)
+- `combat.player.powers[].power_id` or `combat.enemies[].powers[].power_id`
+  - [powers.md](./powers.md)
+- `run.relics[].relic_id`, `shop.relics[].relic_id`, or a chest / reward relic offer
+  - [relics.md](./relics.md)
 - `event.event_id`
   - [events.md](./events.md)
 - `run.potions[].potion_id`

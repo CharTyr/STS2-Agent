@@ -38,6 +38,7 @@ This document is for agents that operate the game through MCP. It is not a full 
   - then read [monster-behaviors.md](./monster-behaviors.md)
 - `MultiAttackIntent` usually raises the value of block and damage reduction.
 - If the passive summary contains `PowerCmd.Apply<...>`, the monster may enter combat with a built-in mechanic.
+- Each move also ends with `->` and what that move does, amounts included (`SHARPEN_MOVE=BuffIntent -> Gain 4 Strength (StrengthPower)`), so a move whose intent shows no numbers still lands on the number. The bracketed name is the power's row in [powers.md](./powers.md), which says what the stacks do over time; `?` means the amount is only known while the fight runs. `(no command in move body)` means the move's own method runs no gameplay command - an absence of evidence, not a claim that the move does nothing.
 
 ## Events
 

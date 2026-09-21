@@ -4,17 +4,14 @@ Use this reference when the task is not ordinary play, but smoke testing, protoc
 
 ## Tool Profiles
 
-- Guided profile is the default and should stay compact:
-  - `health_check`
-  - `get_game_state`
-  - `get_raw_game_state`
-  - `get_available_actions`
-  - `get_relevant_game_data` / `get_game_data_item` / `get_game_data_items`
-  - `wait_for_event`
-  - `wait_until_actionable`
-  - `act`
-- `run_console_command` is not part of any profile: it appears in every profile when
-  debug actions are enabled, and in none when they are not.
+- Guided profile is the default and should stay compact — its 15 tools are
+  `health_check`, `get_game_state`, `get_raw_game_state`, `get_available_actions`,
+  `get_decision_log`, `get_run_summary`, `get_scene_guidance`, `diff_state`,
+  `get_game_data_item`, `get_game_data_items`, `get_relevant_game_data`,
+  `wait_for_event`, `wait_until_actionable`, `decide`, `act`. The per-argument
+  contract is each tool's own docstring in `mcp_server/src/sts2_mcp/server.py`.
+- `run_console_command` and `inject_event_churn` are not part of any profile: they appear in
+  every profile when debug actions are enabled, and in none when they are not.
 - Full profile exposes legacy per-action tools and is appropriate only when a harness explicitly needs them.
 
 ## Debug Policy

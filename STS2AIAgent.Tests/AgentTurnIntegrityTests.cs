@@ -556,9 +556,10 @@ internal static class AgentTurnIntegrityTests
         }
         public Task<string> GetRawStateJsonAsync(CancellationToken token) => GetCompactStateJsonAsync(token);
         public Task<string> GetAvailableActionsJsonAsync(CancellationToken token) => Task.FromResult("[{\"name\":\"play_card\",\"requires_index\":true}]");
-        public Task<IReadOnlyList<string>> GetAvailableActionNamesAsync(CancellationToken token) => Task.FromResult<IReadOnlyList<string>>(new[] { "play_card" });
+        public Task<string> GetActionSnapshotJsonAsync(CancellationToken token) =>
+            Task.FromResult("{\"state\":" + State + ",\"available_actions\":" + "[{\"name\":\"play_card\",\"requires_index\":true}]" + "}");
         public Task<string> GetScreenAsync(CancellationToken token) => Task.FromResult("COMBAT");
-        public Task<string> ActAsync(string action, int? cardIndex, int? targetIndex, int? optionIndex, int? x, int? y, string? tool, CancellationToken token)
+        public Task<string> ActAsync(string action, int? cardIndex, int? targetIndex, int? optionIndex, int? x, int? y, string? tool, CancellationToken token, bool rawState = false)
         {
             token.ThrowIfCancellationRequested();
             if (RejectFirstAction && !_rejected)

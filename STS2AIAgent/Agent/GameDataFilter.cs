@@ -27,6 +27,30 @@ internal static class GameDataFilter
         ["event"] = new Dictionary<string, string[]>(StringComparer.OrdinalIgnoreCase)
         {
             ["events"] = new[] { "id", "name", "type", "act", "description", "options" }
+        },
+        // A card being offered is evaluated the same way whether it sits in a shop, behind a reward
+        // screen, in a bundle or in a deck-selection grid: cost, type, rarity and description decide
+        // it. These three scenes therefore share the shop card set instead of combat's larger one --
+        // the combat-only damage/block/vars/upgrade fields would ride along on every offer lookup,
+        // which is exactly the bloat the projection exists to avoid. The chest shares the shop relic
+        // set for the same reason. Gold/potion/relic reward rows carry no stable id, so those scenes
+        // declare no collection for them and the run-level fallback answers instead of a guessed id.
+        // Mirrors _SCENE_FIELD_SETS in mcp_server/src/sts2_mcp/game_data.py.
+        ["reward"] = new Dictionary<string, string[]>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["cards"] = new[] { "id", "name", "description", "type", "rarity", "target", "cost", "is_x_cost", "star_cost", "is_x_star_cost", "keywords" }
+        },
+        ["card_selection"] = new Dictionary<string, string[]>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["cards"] = new[] { "id", "name", "description", "type", "rarity", "target", "cost", "is_x_cost", "star_cost", "is_x_star_cost", "keywords" }
+        },
+        ["bundle_selection"] = new Dictionary<string, string[]>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["cards"] = new[] { "id", "name", "description", "type", "rarity", "target", "cost", "is_x_cost", "star_cost", "is_x_star_cost", "keywords" }
+        },
+        ["chest"] = new Dictionary<string, string[]>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["relics"] = new[] { "id", "name", "description", "rarity", "pool", "is_melted" }
         }
     };
 
@@ -36,6 +60,18 @@ internal static class GameDataFilter
     /// </summary>
     internal static IReadOnlyDictionary<string, Dictionary<string, string[]>> SceneFieldSetView => SceneFieldSets;
 
+    /// <summary>
+    /// Classifies one /state screen name into the scene its metadata is scoped by.
+    ///
+    /// The checks run in a deliberate order, and the order is part of the contract:
+    /// "COMBAT_REWARD" carries the reward keyword and is claimed by the combat rule that runs first,
+    /// because the combat screen is the one that names its payload <c>combat</c>; and a card
+    /// selection matches the full <c>card_selection</c> token so "BUNDLE_SELECTION" cannot be
+    /// swallowed by a broader "selection" keyword. Mirrors _detect_scene_from_screen in
+    /// mcp_server/src/sts2_mcp/game_data.py; GameDataFilterTests.DetectScene_MatchesGuidedMcpRules
+    /// pins the mapping screen by screen and tests/test_scene_field_alignment.py reads that table
+    /// back, so the two sides cannot classify the same screen differently.
+    /// </summary>
     public static string DetectScene(string? screen)
     {
         var value = screen?.Trim().ToLowerInvariant() ?? string.Empty;
@@ -52,6 +88,29 @@ internal static class GameDataFilter
         if (value.Contains("combat", StringComparison.Ordinal))
         {
             return "combat";
+        }
+
+        // Offered-choice screens the tool used to classify as the generic menu scene, which made
+        // "the ids this screen is about" answer with the deck and relics the player already owns.
+        // Only reached after the combat rule, so a combat-reward name stays a combat screen.
+        if (value.Contains("reward", StringComparison.Ordinal))
+        {
+            return "reward";
+        }
+
+        if (value.Contains("card_selection", StringComparison.Ordinal))
+        {
+            return "card_selection";
+        }
+
+        if (value.Contains("chest", StringComparison.Ordinal))
+        {
+            return "chest";
+        }
+
+        if (value.Contains("bundle_selection", StringComparison.Ordinal))
+        {
+            return "bundle_selection";
         }
 
         return "menu";
@@ -123,8 +182,14 @@ internal static class GameDataFilter
     /// Scene-scoped id sources for <see cref="DeriveRelevantItemIds"/>: (scene, collection) -> JSON
     /// paths into the full /state payload, each ending in the collection's id field. This is what
     /// makes <c>get_relevant_game_data</c> work without the caller naming ids: "the ids this screen
-    /// is about". mcp_server/src/sts2_mcp/server.py mirrors it as _SCENE_ITEM_SOURCES and
+    /// is about". mcp_server/src/sts2_mcp/game_data.py mirrors it as _SCENE_ITEM_SOURCES and
     /// tests/test_scene_field_alignment.py keeps the two equal, the same way SceneFieldSets is kept.
+    ///
+    /// The collection column is what keeps the answer honest: a screen that is about cards declares
+    /// paths only under "cards", so a relic lookup on a card screen can never come back with card
+    /// ids (and the other way round). A screen whose offered collection has no stable id at all --
+    /// the gold/potion/relic rows of a reward screen -- declares nothing and falls through to the
+    /// run-level fallback rather than inventing an id.
     /// </summary>
     internal static readonly IReadOnlyDictionary<string, Dictionary<string, string[]>> SceneItemSources =
         new Dictionary<string, Dictionary<string, string[]>>(StringComparer.OrdinalIgnoreCase)
@@ -138,6 +203,10 @@ internal static class GameDataFilter
             },
             ["shop"] = new Dictionary<string, string[]>(StringComparer.OrdinalIgnoreCase)
             {
+                // All three stock lists answered from the offer ids the shelf carries: the raw /state
+                // payload's own card_id / relic_id / potion_id fields. The compact agent_view drops
+                // the relic and potion ids (it keeps only the display line), which is why the raw
+                // path is the one listed -- it is present whenever the shelf is.
                 ["cards"] = new[] { "shop.cards[].card_id" },
                 ["relics"] = new[] { "shop.relics[].relic_id" },
                 ["potions"] = new[] { "shop.potions[].potion_id" }
@@ -145,6 +214,28 @@ internal static class GameDataFilter
             ["event"] = new Dictionary<string, string[]>(StringComparer.OrdinalIgnoreCase)
             {
                 ["events"] = new[] { "event.event_id" }
+            },
+            // Offered cards and relics are named differently by the two views one /state response
+            // carries: the raw payload says reward.card_options[] / chest.relic_options[], the
+            // embedded compact agent_view says reward.cards[] / chest.relics[]. Both are listed (raw
+            // first: it is the list the screen builders write, and it is never absent while the
+            // screen is up) so a caller handing over either view gets the made offer rather than the
+            // deck the player already owns.
+            ["reward"] = new Dictionary<string, string[]>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["cards"] = new[] { "reward.card_options[].card_id", "agent_view.reward.cards[].card_id" }
+            },
+            ["card_selection"] = new Dictionary<string, string[]>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["cards"] = new[] { "selection.cards[].card_id", "agent_view.selection.cards[].card_id" }
+            },
+            ["chest"] = new Dictionary<string, string[]>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["relics"] = new[] { "chest.relic_options[].relic_id", "agent_view.chest.relics[].relic_id" }
+            },
+            ["bundle_selection"] = new Dictionary<string, string[]>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["cards"] = new[] { "bundles[].cards[].card_id", "agent_view.bundles[].cards[].card_id" }
             }
         };
 
@@ -166,22 +257,28 @@ internal static class GameDataFilter
 
     /// <summary>
     /// The ids <c>get_relevant_game_data</c> should look up for the current screen, in the order the
-    /// surface presents them, deduplicated. The scene decides first, and an empty scene answer --
-    /// an unknown collection, or a screen whose scene payload is absent -- falls back to the
-    /// run-level ids, so the result is empty only when neither source carries one. An empty answer
-    /// is a legitimate "nothing to look up here", not an error.
+    /// surface presents them, deduplicated. The scene picks the source and the source is looked up
+    /// <em>by collection</em>: a screen that offers cards can never answer a relic question with card
+    /// ids, and a collection the screen does not offer answers from the run-level ids the player
+    /// already owns. That fallback runs only when the scene's own source yields nothing -- an unknown
+    /// collection, a screen whose scene payload is absent, or a collection this screen does not offer.
+    /// An empty answer is a legitimate "nothing to look up here", not an error.
+    ///
+    /// The collection name is matched case-insensitively, as the dictionaries are; the tool is the
+    /// one place a caller spells it by hand, so "Cards" reaches the same source as "cards".
     /// </summary>
     public static IReadOnlyList<string> DeriveRelevantItemIds(string? screen, string collection, JsonElement state)
     {
         var scene = DetectScene(screen);
+        var collectionKey = (collection ?? string.Empty).Trim();
         string[]? paths = null;
         if (SceneItemSources.TryGetValue(scene, out var perCollection))
         {
-            perCollection.TryGetValue(collection, out paths);
+            perCollection.TryGetValue(collectionKey, out paths);
         }
 
         var ids = CollectIdsFromPaths(state, paths);
-        if (ids.Count == 0 && FallbackItemSources.TryGetValue(collection, out var fallbackPaths))
+        if (ids.Count == 0 && FallbackItemSources.TryGetValue(collectionKey, out var fallbackPaths))
         {
             // A scene can name a source whose payload is absent on that screen: FAKE_MERCHANT is
             // classified as shop, but the shop payload is null there because the merchant room the

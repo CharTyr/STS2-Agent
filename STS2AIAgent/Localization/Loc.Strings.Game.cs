@@ -57,7 +57,7 @@ internal static partial class Loc
         map["格挡会优先抵消即将受到的伤害。"] = "Block absorbs incoming damage before HP.";
         map["消耗牌打出后会移出本场战斗。"] = "Exhausted cards are removed for the rest of the combat.";
         map["保留牌在回合结束时不会被弃掉。"] = "Retained cards are not discarded at the end of the turn.";
-        map["中毒会在回合结束时造成等量生命损失，然后层数减少。"] = "Poison deals its stacks as HP loss at the end of the turn, then the stacks go down.";
+        map["中毒会在该角色回合开始时造成等量伤害（无视格挡），然后层数减少。"] = "Poison deals its stacks as damage at the start of that creature's turn, ignoring Block, then the stacks go down.";
         map["眩晕通常是无法主动打出的状态牌。"] = "Dazed is a status card that cannot be played.";
         map["灼伤通常会在手中或结算时带来额外伤害。"] = "Burn usually deals extra damage while in hand or when it resolves.";
         map["虚空通常会在抽到时消耗能量或妨碍出牌。"] = "Void usually drains energy or blocks your plays when you draw it.";

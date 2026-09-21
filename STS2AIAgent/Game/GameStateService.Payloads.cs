@@ -136,6 +136,20 @@ internal sealed class GameStatePayload
     public GameOverPayload? game_over { get; init; }
 
     public object? agent_view { get; init; }
+
+    /// <summary>
+    /// The exact descriptors <see cref="GameStateService.BuildStatePayload"/>'s own action-surface
+    /// walk produced for this frame.
+    /// </summary>
+    /// <remarks>
+    /// Internal on purpose, and not a wire field: <c>System.Text.Json</c> writes public properties
+    /// only, so this never reaches <c>GET /state</c> and the api-facts gate never reads it as a
+    /// documented field. <c>/state</c> keeps reporting the name projection it always has; this is
+    /// what <see cref="GameStateService.BuildDecisionSnapshotPayload"/> hands to a caller that needs
+    /// the descriptors of the same frame, instead of that caller reading the action surface again and
+    /// risking a different one.
+    /// </remarks>
+    internal ActionDescriptor[] AvailableActionDescriptors { get; init; } = Array.Empty<ActionDescriptor>();
 }
 
 internal sealed class SessionPayload
@@ -152,6 +166,24 @@ internal sealed class AvailableActionsPayload
     public string screen { get; init; } = "UNKNOWN";
 
     public ActionDescriptor[] actions { get; init; } = Array.Empty<ActionDescriptor>();
+}
+
+/// <summary>
+/// One decision's worth of state: the compact view plus the descriptors from the very same state
+/// build. <c>GET /decision-snapshot</c> answers this under the ordinary envelope.
+/// </summary>
+/// <remarks>
+/// It is deliberately not a second <c>/state</c>: <c>state</c> carries what the compact
+/// <c>agent_view</c> carries (the raw payload when a build produced no view at all), and
+/// <c>available_actions</c> is the descriptor list the same enumeration that produced
+/// <c>/state.available_actions</c> emitted. Reading the two halves from one build is the whole
+/// point -- two reads can straddle a frame boundary and describe different ones.
+/// </remarks>
+internal sealed class DecisionSnapshotPayload
+{
+    public object state { get; init; } = new();
+
+    public ActionDescriptor[] available_actions { get; init; } = Array.Empty<ActionDescriptor>();
 }
 
 internal sealed class CombatPayload
@@ -574,9 +606,19 @@ internal sealed class CrystalSpherePayload
 
 internal sealed class CrystalSphereItemPayload
 {
-    public string kind { get; init; } = string.Empty;
+    /// <summary>
+    /// What the item is, or <c>null</c> while any of its cells is still hidden.
+    /// </summary>
+    /// <remarks>
+    /// Identity is what a divination buys, so it is withheld until <c>revealed</c> is true; the
+    /// serializer writes nulls rather than omitting keys, so the field is always present on the wire.
+    /// </remarks>
+    public string? kind { get; init; }
 
-    public bool is_good { get; init; }
+    /// <summary>
+    /// Whether the item is a reward (<c>false</c> is a curse), or <c>null</c> while hidden.
+    /// </summary>
+    public bool? is_good { get; init; }
 
     public int x { get; init; }
 

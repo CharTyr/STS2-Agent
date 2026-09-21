@@ -76,6 +76,12 @@
     <Compile Include="..\STS2AIAgent\Game\EventOptionLocalization.cs" Link="Game\EventOptionLocalization.cs" />
     <Compile Include="..\STS2AIAgent\Agent\GameDataExportSchema.cs" Link="Agent\GameDataExportSchema.cs" />
     <Compile Include="..\STS2AIAgent\Server\ApiException.cs" Link="Server\ApiException.cs" />
+    <!--
+      The one-action lease. It reaches nothing from the game or Godot, only ApiException, so the
+      offline suite compiles the real class and tests its own rules (first caller wins, everyone else
+      is refused, no failure leaves it held) rather than a copy of them.
+    -->
+    <Compile Include="..\STS2AIAgent\Game\ActionExecutionGate.cs" Link="Game\ActionExecutionGate.cs" />
     <Compile Include="..\STS2AIAgent\Server\JsonHelper.cs" Link="Server\JsonHelper.cs" />
     <Compile Include="..\STS2AIAgent\Server\HealthRoleData.cs" Link="Server\HealthRoleData.cs" />
     <Compile Include="..\STS2AIAgent\Server\EventPollingCoordinator.cs" Link="Server\EventPollingCoordinator.cs" />

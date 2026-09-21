@@ -218,4 +218,268 @@ internal static class GameDataFilterItemSourceTests
         Assert.Equal("BURNING_BLOOD",
             string.Join(",", GameDataFilter.DeriveRelevantItemIds("FAKE_MERCHANT", "relics", doc.RootElement)));
     }
+
+    /// <summary>
+    /// The reward screen offers cards, so the card lookup answers with the offers -- not with the
+    /// deck the player already owns, which is what the generic menu scene used to hand back. The
+    /// fixture carries both so a path that fell through to the fallback cannot pass by accident.
+    /// </summary>
+    public static void RewardScreenLooksUpTheOfferedCards()
+    {
+        using var doc = JsonDocument.Parse("""
+        {
+          "screen": "REWARD",
+          "reward": {
+            "card_options": [
+              {"index": 0, "card_id": "OFFER_ALPHA"},
+              {"index": 1, "card_id": "OFFER_BETA"}
+            ],
+            "rewards": [{"index": 0, "reward_type": "Potion", "description": "Fire Potion", "claimable": true}]
+          },
+          "run": {
+            "deck": [{"card_id": "OWNED_CARD"}],
+            "potions": [{"potion_id": "OWNED_POTION"}]
+          }
+        }
+        """);
+
+        Assert.Equal("OFFER_ALPHA,OFFER_BETA",
+            string.Join(",", GameDataFilter.DeriveRelevantItemIds("REWARD", "cards", doc.RootElement)));
+    }
+
+    /// <summary>
+    /// One /state response carries the raw payload and the compact agent_view at once, and the two
+    /// name the offered cards differently. The compact list alone has to answer too, so a caller
+    /// holding only that view still gets the offers.
+    /// </summary>
+    public static void RewardCompactViewAnswersWithItsOwnOfferedCards()
+    {
+        using var doc = JsonDocument.Parse("""
+        {
+          "screen": "REWARD",
+          "reward": null,
+          "agent_view": {
+            "reward": {"cards": [{"i": 0, "card_id": "OFFER_ALPHA"}, {"i": 1, "card_id": "OFFER_BETA"}]}
+          },
+          "run": {"deck": [{"card_id": "OWNED_CARD"}]}
+        }
+        """);
+
+        Assert.Equal("OFFER_ALPHA,OFFER_BETA",
+            string.Join(",", GameDataFilter.DeriveRelevantItemIds("REWARD", "cards", doc.RootElement)));
+    }
+
+    /// <summary>
+    /// The policy is collection-aware: a reward screen offers cards, so a relic question on that
+    /// screen is not answered with the offered card ids. Nothing on the screen names a relic, so the
+    /// run-level relics the player already owns answer instead -- and no card id leaks into it.
+    /// </summary>
+    public static void RewardRelicLookupFallsBackWithoutCardIds()
+    {
+        using var doc = JsonDocument.Parse("""
+        {
+          "screen": "REWARD",
+          "reward": {"card_options": [{"index": 0, "card_id": "OFFER_ALPHA"}]},
+          "run": {
+            "deck": [{"card_id": "OWNED_CARD"}],
+            "relics": [{"relic_id": "BURNING_BLOOD"}]
+          }
+        }
+        """);
+
+        Assert.Equal("BURNING_BLOOD",
+            string.Join(",", GameDataFilter.DeriveRelevantItemIds("REWARD", "relics", doc.RootElement)));
+    }
+
+    /// <summary>
+    /// A reward screen's potion row carries a description and no stable id, so the potion lookup
+    /// must not invent one: it falls back to the potions the player already owns.
+    /// </summary>
+    public static void RewardPotionLookupFallsBackInsteadOfInventingAnId()
+    {
+        using var doc = JsonDocument.Parse("""
+        {
+          "screen": "REWARD",
+          "reward": {"rewards": [{"index": 0, "reward_type": "Potion", "description": "Fire Potion", "claimable": true}]},
+          "run": {"potions": [{"potion_id": "OWNED_POTION"}]}
+        }
+        """);
+
+        Assert.Equal("OWNED_POTION",
+            string.Join(",", GameDataFilter.DeriveRelevantItemIds("REWARD", "potions", doc.RootElement)));
+    }
+
+    /// <summary>
+    /// A card-selection grid is about the cards it shows: its own list, once per card, in the order
+    /// the grid presents them -- and never the deck the player is choosing from.
+    /// </summary>
+    public static void CardSelectionGridOffersItsOwnCardsOnceInOrder()
+    {
+        using var doc = JsonDocument.Parse("""
+        {
+          "screen": "CARD_SELECTION",
+          "selection": {
+            "cards": [
+              {"index": 0, "card_id": "SELECT_ALPHA"},
+              {"index": 1, "card_id": "SELECT_ALPHA"},
+              {"index": 2, "card_id": "SELECT_BETA"}
+            ]
+          },
+          "run": {"deck": [{"card_id": "OWNED_CARD"}]}
+        }
+        """);
+
+        Assert.Equal("SELECT_ALPHA,SELECT_BETA",
+            string.Join(",", GameDataFilter.DeriveRelevantItemIds("CARD_SELECTION", "cards", doc.RootElement)));
+    }
+
+    /// <summary>
+    /// The mirror of the reward case: a card-selection screen never answers a relic question with
+    /// the offered card ids. The collection column of SceneItemSources is what holds this.
+    /// </summary>
+    public static void CardSelectionRelicLookupNeverAnswersWithOfferedCards()
+    {
+        using var doc = JsonDocument.Parse("""
+        {
+          "screen": "CARD_SELECTION",
+          "selection": {"cards": [{"index": 0, "card_id": "SELECT_ALPHA"}]},
+          "run": {
+            "deck": [{"card_id": "OWNED_CARD"}],
+            "relics": [{"relic_id": "BURNING_BLOOD"}, {"relic_id": "RING_OF_THE_SNAKE"}]
+          }
+        }
+        """);
+
+        Assert.Equal("BURNING_BLOOD,RING_OF_THE_SNAKE",
+            string.Join(",", GameDataFilter.DeriveRelevantItemIds("CARD_SELECTION", "relics", doc.RootElement)));
+    }
+
+    /// <summary>
+    /// A chest offers relics: the raw payload's relic_options name them, and the run relics the
+    /// player owns are not the answer while the offer is on screen.
+    /// </summary>
+    public static void ChestOffersItsRelicOptions()
+    {
+        using var doc = JsonDocument.Parse("""
+        {
+          "screen": "CHEST",
+          "chest": {
+            "is_opened": true,
+            "relic_options": [
+              {"index": 0, "relic_id": "OFFER_RELIC_ALPHA"},
+              {"index": 1, "relic_id": "OFFER_RELIC_BETA"}
+            ]
+          },
+          "run": {"relics": [{"relic_id": "BURNING_BLOOD"}]}
+        }
+        """);
+
+        Assert.Equal("OFFER_RELIC_ALPHA,OFFER_RELIC_BETA",
+            string.Join(",", GameDataFilter.DeriveRelevantItemIds("CHEST", "relics", doc.RootElement)));
+    }
+
+    /// <summary>
+    /// The same chest read through the compact agent_view, which renames relic_options to relics.
+    /// </summary>
+    public static void ChestCompactViewAnswersWithItsOwnRelicOffers()
+    {
+        using var doc = JsonDocument.Parse("""
+        {
+          "screen": "CHEST",
+          "chest": null,
+          "agent_view": {"chest": {"opened": true, "relics": [{"i": 0, "relic_id": "OFFER_RELIC_ALPHA"}]}},
+          "run": {"relics": [{"relic_id": "BURNING_BLOOD"}]}
+        }
+        """);
+
+        Assert.Equal("OFFER_RELIC_ALPHA",
+            string.Join(",", GameDataFilter.DeriveRelevantItemIds("CHEST", "relics", doc.RootElement)));
+    }
+
+    /// <summary>
+    /// A chest is about relics, so a card question there falls back to the deck rather than
+    /// answering with relic ids.
+    /// </summary>
+    public static void ChestCardLookupFallsBackToTheDeck()
+    {
+        using var doc = JsonDocument.Parse("""
+        {
+          "screen": "CHEST",
+          "chest": {"relic_options": [{"index": 0, "relic_id": "OFFER_RELIC_ALPHA"}]},
+          "run": {"deck": [{"card_id": "OWNED_CARD"}]}
+        }
+        """);
+
+        Assert.Equal("OWNED_CARD",
+            string.Join(",", GameDataFilter.DeriveRelevantItemIds("CHEST", "cards", doc.RootElement)));
+    }
+
+    /// <summary>
+    /// A bundle screen offers several bundles of cards; every card of every bundle is an offer, in
+    /// bundle order, and the owned deck is not.
+    /// </summary>
+    public static void BundleScreenOffersEveryCardsInItsBundles()
+    {
+        using var doc = JsonDocument.Parse("""
+        {
+          "screen": "BUNDLE_SELECTION",
+          "bundles": [
+            {"index": 0, "cards": [{"index": 0, "card_id": "BUNDLE_A_ONE"}, {"index": 1, "card_id": "BUNDLE_A_TWO"}]},
+            {"index": 1, "cards": [{"index": 0, "card_id": "BUNDLE_B_ONE"}]}
+          ],
+          "run": {"deck": [{"card_id": "OWNED_CARD"}]}
+        }
+        """);
+
+        Assert.Equal("BUNDLE_A_ONE,BUNDLE_A_TWO,BUNDLE_B_ONE",
+            string.Join(",", GameDataFilter.DeriveRelevantItemIds("BUNDLE_SELECTION", "cards", doc.RootElement)));
+    }
+
+    /// <summary>
+    /// The shop was the one screen that already worked, and all three of its stock lists answer from
+    /// the offer ids the shelf carries rather than from the run.
+    /// </summary>
+    public static void ShopOffersStockIdsForCardsRelicsAndPotions()
+    {
+        using var doc = JsonDocument.Parse("""
+        {
+          "screen": "SHOP",
+          "shop": {
+            "cards": [{"index": 0, "card_id": "STOCK_CARD"}],
+            "relics": [{"index": 0, "relic_id": "STOCK_RELIC"}],
+            "potions": [{"index": 0, "potion_id": "STOCK_POTION"}]
+          },
+          "run": {
+            "deck": [{"card_id": "OWNED_CARD"}],
+            "relics": [{"relic_id": "BURNING_BLOOD"}],
+            "potions": [{"potion_id": "OWNED_POTION"}]
+          }
+        }
+        """);
+
+        Assert.Equal("STOCK_CARD",
+            string.Join(",", GameDataFilter.DeriveRelevantItemIds("SHOP", "cards", doc.RootElement)));
+        Assert.Equal("STOCK_RELIC",
+            string.Join(",", GameDataFilter.DeriveRelevantItemIds("SHOP", "relics", doc.RootElement)));
+        Assert.Equal("STOCK_POTION",
+            string.Join(",", GameDataFilter.DeriveRelevantItemIds("SHOP", "potions", doc.RootElement)));
+    }
+
+    /// <summary>
+    /// The collection column is matched case-insensitively on both sides, so the spelling a caller
+    /// happens to use does not decide whether the scene's ids are found.
+    /// </summary>
+    public static void OfferScreensMatchTheCollectionNameCaseInsensitively()
+    {
+        using var doc = JsonDocument.Parse("""
+        {
+          "screen": "REWARD",
+          "reward": {"card_options": [{"index": 0, "card_id": "OFFER_ALPHA"}]},
+          "run": {"deck": [{"card_id": "OWNED_CARD"}]}
+        }
+        """);
+
+        Assert.Equal("OFFER_ALPHA",
+            string.Join(",", GameDataFilter.DeriveRelevantItemIds("reward", "Cards", doc.RootElement)));
+    }
 }

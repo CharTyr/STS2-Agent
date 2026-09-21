@@ -1,37 +1,44 @@
-Bring an AI along for the climb. You play your character; on the same PC, the AI plays a second one. Use your own model (DeepSeek, SiliconFlow, ChatGPT, or something running on your computer). Subscribing does not give you an account or an API key.
+[h1]STS2 AI Agent[/h1]
+Bring an AI along for the climb in Slay the Spire 2. Let it take over your own character and play for you — or open a second window on the same PC and have the AI play a second character beside you, climbing the same run together.
 
-[b]This mod is still in development.[/b] Some things may be unfinished or break. Please send suggestions and anything that goes wrong — that feedback really helps. Post here: [url=https://github.com/CharTyr/STS2-Agent/issues]GitHub Issues[/url]
+Bring your own model: DeepSeek, SiliconFlow, ChatGPT, or a local Ollama / LM Studio all work. Subscribing does [b]not[/b] come with an account, an API key, or a hosted model — you spend your own tokens, and the window always shows what this run has cost you.
 
-More detail:
+[b]This mod is still in development.[/b] Some things may be unfinished or break. Suggestions and bug reports go to [url=https://github.com/CharTyr/STS2-Agent/issues]GitHub Issues[/url] — they genuinely help.
+
+Full documentation, troubleshooting and the developer API:
 [url=https://github.com/CharTyr/STS2-Agent]https://github.com/CharTyr/STS2-Agent[/url]
 
+[h2]Three ways to play[/h2]
+[list]
+[*][b]Play for you[/b]: the AI takes over your own character. Let it run on its own, or step through one decision at a time — pause and take back control whenever you like.
+[*][b]As a teammate[/b]: from the main menu, open the AI Teammate tab and invite. A second game window opens; the AI plays only its own character — picking its events, following your map votes, playing its turns. The lobby still has 4 seats, so two online friends can join you. Load a saved co-op run and the teammate rejoins by itself.
+[*][b]Just talk[/b]: ask "should I take this card?" or "which path ahead?" and it answers from the live game state. It also speaks up on its own along the way — the tone is adjustable in settings.
+[/list]
+
 [h2]How to start[/h2]
-After you subscribe, you do not copy any files.
+After subscribing, you do not copy any files.
 [olist]
 [*]Subscribe and wait for Steam to finish downloading.
 [*]In Steam click Play and choose [b]Play with Mods[/b]. Launching the exe directly skips mods.
 [*]The first launch may warn that the code is untrusted. Accept it, then fully quit the game and start it again.
 [*]In Mods, turn on [b]STS2 AI Agent[/b] and restart once more.
-[*]In game, press [b]F8[/b] or the [b]AI[/b] tab on the right.
-[*]Open Settings: add an endpoint, add a model and bind it, pick chat/play roles, click [b]Test Connection[/b] (this sends a request to your service), then save. A default URL plus model name is not treated as ready. Ollama / LM Studio keys may stay empty.
-[*]Want the AI to help with [b]your[/b] character? Use Chat or Play.
-[*]Want a teammate? After the play model test succeeds, go back to the [b]main menu[/b], open [b]AI teammate[/b], and invite. Status and the next click stay on the main window.
+[*]In game, press [b]F8[/b] or click the [b]AI[/b] tab on the right edge of the screen.
+[*]Open Settings: add an endpoint, add a model and bind it, pick the chat/play roles, click [b]Test Connection[/b] (this sends a request to your service), then save. Ollama / LM Studio keys may stay empty; a default URL plus a model name is not treated as ready.
+[*]To have the AI play for you, open the Play tab and start. For a teammate: once the play model test passes, go back to the [b]main menu[/b] and invite from the AI Teammate tab.
 [/olist]
 
-If you used to copy this mod into the game folder by hand, delete those files and keep only the Workshop subscription so it does not show up twice.
+If you used to copy this mod into the game folder by hand, delete those files and keep only the Workshop subscription, or it will show up twice.
 
 [h2]What you get[/h2]
 [list]
-[*]Set up your model and chat without leaving the game
-[*]Let it play on its own, or take one step at a time
-[*]See what it played and why: the decision log lists each accepted action with its reason and what that step spent
+[*]One in-game window for everything: AI Teammate / Chat / Play / Settings / Connect / Decision Log — six tabs, summoned with F8
+[*]Every step says what it played and why: the decision log lists each accepted action with its reason, its source, and what that step cost — per-run spend and session spend are tracked separately
 [*]See the teammate's live status: health, block, energy and hand size
-[*]Invite an AI teammate on the same PC
-[*]Continue a saved co-op run: load it and the teammate rejoins
-[*]Or leave the teammate's character pick to you instead of letting it choose
-[*]The whole interface follows your game language: Chinese clients read Chinese, everyone else reads English
-[*]Optional MCP for Cursor / Claude / Codex: F8 -> Connect, copy the address. For best results when an external agent plays over MCP, also load the companion skill [url=https://github.com/CharTyr/STS2-Agent/tree/main/skills/sts2-mcp-player]sts2-mcp-player[/url]. Tools without that skill can click; the skill is what matches in-game autoplay. No Python install.
+[*]You control the spend: session token and request caps stop play when hit, never silently overrun
+[*]8 interface themes (including a light one); window position and theme choice are remembered
+[*]The interface follows your game language: Chinese clients read Chinese, everyone else reads English
+[*]External agents (Cursor / Claude / Codex) can play too: F8 → Connect, enable MCP, copy the address — no Python install. For results close to in-game autoplay, also load the companion skill [url=https://github.com/CharTyr/STS2-Agent/tree/main/skills/sts2-mcp-player]sts2-mcp-player[/url]
 [*]No new cards, no balance tweaks, no changes to your save
 [/list]
 
-Needs Slay the Spire 2 [b]v0.111.0[/b] or newer.
+Needs Slay the Spire 2 [b]v0.111.0[/b] or newer. License: AGPL-3.0-only.

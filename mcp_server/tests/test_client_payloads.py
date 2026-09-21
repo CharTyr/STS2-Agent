@@ -249,6 +249,56 @@ class TypedClientGetterTests(unittest.TestCase):
         patcher.start()
         return client
 
+    def test_get_decision_snapshot_decodes_the_envelope_from_its_own_path(self) -> None:
+        """One path, one read: the whole point of the route is that the halves share a frame."""
+        client = Sts2Client(base_url="http://127.0.0.1:8080", max_retries=0)
+        self.addCleanup(patch.stopall)
+        opener = patch(
+            "sts2_mcp.client.request.urlopen",
+            return_value=JsonResponse(
+                {
+                    "ok": True,
+                    "data": {
+                        "state": {"screen": "COMBAT", "available_actions": ["end_turn"]},
+                        "available_actions": [
+                            {"name": "end_turn", "requires_index": False, "requires_target": False}
+                        ],
+                    },
+                }
+            ),
+        )
+        mocked = opener.start()
+
+        snapshot = client.get_decision_snapshot()
+
+        self.assertEqual(snapshot["state"]["screen"], "COMBAT")
+        self.assertEqual([item["name"] for item in snapshot["available_actions"]], ["end_turn"])
+        self.assertEqual(len(mocked.call_args_list), 1)
+        self.assertEqual(
+            mocked.call_args[0][0].full_url,
+            "http://127.0.0.1:8080/decision-snapshot",
+        )
+
+    def test_a_404_from_the_snapshot_route_arrives_as_the_not_found_the_fallback_keys_on(self) -> None:
+        """An older mod answers 404 `not_found`; any other failure must not look like that pair."""
+        from urllib import error as urlerror
+
+        client = Sts2Client(base_url="http://127.0.0.1:8080", max_retries=0)
+        body = json.dumps(
+            {"ok": False, "error": {"code": "not_found", "message": "Route not found.", "retryable": False}}
+        ).encode("utf-8")
+        http_error = urlerror.HTTPError(
+            client.base_url + "/decision-snapshot", 404, "Not Found", None, None
+        )
+        http_error.read = lambda *args, **kwargs: body  # type: ignore[method-assign]
+
+        with patch("sts2_mcp.client.request.urlopen", side_effect=http_error):
+            with self.assertRaises(Sts2ApiError) as caught:
+                client.get_decision_snapshot()
+
+        self.assertEqual(caught.exception.status_code, 404)
+        self.assertEqual(caught.exception.code, "not_found")
+
     def test_get_action_catalog_reads_a_well_formed_catalog(self) -> None:
         client = self._client_with(
             {
