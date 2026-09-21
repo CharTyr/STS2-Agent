@@ -114,9 +114,16 @@ internal static class CoopRouteTests
     /// The route split reached POST /action but not the overlay: the Invite button kept calling the
     /// auto-play overload, so with no verified play model the click was refused at the old model
     /// gate while the same request over the API launched the teammate for external takeover. The
-    /// button has to choose the route the way the API does, and the tab's first line has to
+    /// button has to choose the route the way the API does, and the description under it has to
     /// describe that route instead of asking for a connection test.
     /// </summary>
+    /// <remarks>
+    /// The fifth label this used to pin, <c>FirstRunHintText</c>, was dropped during the 2026-09-20
+    /// overlay pass: with the teammate page split into cards it repeated, word for word, the status
+    /// line above it. What it asserted about the unverified route is still asserted below, against
+    /// the description that survived and against the status line the page shares with the same
+    /// <c>PlayerFacingSession</c> view the play tab reads.
+    /// </remarks>
     public static void OverlayInviteFollowsTheApiRoute()
     {
         var overlay = AgentSourceFixture.ReadOverlayHost();
@@ -127,9 +134,6 @@ internal static class CoopRouteTests
             !overlay.Contains("LaunchDualInstanceAsync(HarvestSettings(), CancellationToken.None)", StringComparison.Ordinal),
             "the overlay must not call the auto-play-only overload any more.");
 
-        var hint = AgentSourceFixture.DeclarationBody(overlay, "private static string FirstRunHintText()");
-        Assert.Contains("firstRun.ReadyToInvite", hint);
-        Assert.Contains("_firstRunHint.Text = FirstRunHintText();", overlay);
         // The description under the invite follows the same route, so the two lines never contradict each other.
         var dualHint = AgentSourceFixture.DeclarationBody(overlay, "private static string DualHintText()");
         Assert.Contains("ReadyToInvite", dualHint);

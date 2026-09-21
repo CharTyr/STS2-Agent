@@ -30,6 +30,24 @@ internal static partial class Loc
         map["保存设置"] = "Save settings";
         map["测试连接"] = "Test connection";
 
+        // Section headings and the overlay theme selector.
+        map["外观"] = "Appearance";
+        map["界面主题"] = "Overlay theme";
+        map["只改这个窗口的配色，保存后立即生效。"] = "Changes this window's colours only; saving applies it straight away.";
+        map["暮色"] = "Dusk";
+        map["午夜"] = "Midnight";
+        map["羊皮纸"] = "Parchment";
+        map["高对比"] = "High contrast";
+        map["当前回合"] = "This turn";
+        map["本步详情"] = "Last step";
+        map["组队状态"] = "Party";
+        map["邀请与控制"] = "Invite and control";
+        map["队友控制"] = "Teammate control";
+        map["服务开关"] = "Service";
+        map["客户端配置"] = "Client configuration";
+        map["用量"] = "Usage";
+        map["决策记录"] = "Decisions";
+
         // Play page.
         map["状态：-"] = "Status: -";
         map["屏幕：-"] = "Screen: -";

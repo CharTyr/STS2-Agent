@@ -23,6 +23,7 @@ internal sealed partial class AgentOverlayHost
     /// <summary>The built page per tab id, and the tab currently shown. Tab state stays with the tab code.</summary>
     private readonly Dictionary<string, Control> _pages = new(StringComparer.Ordinal);
     private string _tab = "chat";
+    private HFlowContainer? _tabRow;
 
     private RichTextLabel? _decisionLog;
     private Label? _decisionUsage;
@@ -80,23 +81,66 @@ internal sealed partial class AgentOverlayHost
             page.Visible = string.Equals(id, tab, StringComparison.Ordinal);
         }
 
+        // The selected tab is drawn, not just remembered: without this the header row looks the same
+        // on every page and the player has to read six labels to find out where they are.
+        RebuildTabButtons();
+
         if (_chatFooter != null) _chatFooter.Visible = tab == OverlayTabCatalog.Chat;
         // The Continue button's availability follows the current screen, which changes without any
         // runtime event; re-read it whenever this tab comes into view.
         if (OverlayTabCatalog.RefreshesOnShow(tab)) RefreshDynamic();
     }
 
+    /// <summary>
+    /// The header row: one button per tab, the selected one drawn as a filled pill instead of the
+    /// same grey slab as its five neighbours.
+    /// </summary>
+    /// <remarks>
+    /// The row is rebuilt rather than restyled when the tab changes, because a Godot
+    /// <c>StyleBox</c> is set per control and swapping six buttons is cheaper to read than mutating
+    /// six sets of overrides in place. It is six controls on a click, not a per-frame cost.
+    /// </remarks>
     private Control BuildTabs()
     {
-        var row = new HBoxContainer { MouseFilter = Control.MouseFilterEnum.Ignore };
-        foreach (var tab in OverlayTabCatalog.Tabs)
+        // A flow container rather than a row: six labels fit on one line in Chinese and do not in
+        // English ("AI teammate" + "Decisions" are both wide), and the sixth tab was being clipped to
+        // "决策日" before this. Wrapping costs a second line on the languages that need it and
+        // nothing on the ones that do not.
+        _tabRow = new HFlowContainer
         {
-            var button = UiFactory.Button(OverlayTabCatalog.Label(tab.Id), () => ShowTab(tab.Id));
-            button.SizeFlagsHorizontal = Control.SizeFlags.ExpandFill;
-            row.AddChild(button);
+            MouseFilter = Control.MouseFilterEnum.Ignore,
+            SizeFlagsHorizontal = Control.SizeFlags.ExpandFill
+        };
+        _tabRow.AddThemeConstantOverride("h_separation", UiFactory.SpaceXs);
+        _tabRow.AddThemeConstantOverride("v_separation", UiFactory.SpaceXs);
+        RebuildTabButtons();
+        return _tabRow;
+    }
+
+    private void RebuildTabButtons()
+    {
+        if (_tabRow == null)
+        {
+            return;
         }
 
-        return row;
+        foreach (var child in _tabRow.GetChildren())
+        {
+            _tabRow.RemoveChild(child);
+            child.QueueFree();
+        }
+
+        foreach (var tab in OverlayTabCatalog.Tabs)
+        {
+            var button = UiFactory.TabButton(
+                OverlayTabCatalog.Label(tab.Id),
+                string.Equals(tab.Id, _tab, StringComparison.Ordinal),
+                () => ShowTab(tab.Id));
+            // Natural width, so the flow container can decide where the line breaks. Stretching them
+            // into equal columns is what pushed the last label off the edge.
+            button.SizeFlagsHorizontal = Control.SizeFlags.ShrinkBegin;
+            _tabRow.AddChild(button);
+        }
     }
 
     private Control BuildChatPage()
@@ -126,8 +170,8 @@ internal sealed partial class AgentOverlayHost
         footer.AddChild(_allowAct);
         _chatInput = UiFactory.Multiline("", 70);
         footer.AddChild(_chatInput);
-        _sendButton = UiFactory.Button(Loc.T("发送"), () => _ = SendChatAsync());
-        var clear = UiFactory.Button(Loc.T("清空"), () => AgentRuntime.Instance.ClearChat());
+        _sendButton = UiFactory.Button(Loc.T("发送"), () => _ = SendChatAsync(), UiFactory.ButtonKind.Primary);
+        var clear = UiFactory.Button(Loc.T("清空"), () => AgentRuntime.Instance.ClearChat(), UiFactory.ButtonKind.Ghost);
         footer.AddChild(UiFactory.Row(_sendButton, clear));
         return footer;
     }
@@ -139,7 +183,7 @@ internal sealed partial class AgentOverlayHost
         page.AddChild(UiFactory.Scroll(_settingsBody, 80));
         var addEndpoint = UiFactory.Button(Loc.T("添加端点"), AddEndpoint);
         var addModel = UiFactory.Button(Loc.T("添加模型"), AddModel);
-        var save = UiFactory.Button(Loc.T("保存设置"), SaveSettingsFromUi);
+        var save = UiFactory.Button(Loc.T("保存设置"), SaveSettingsFromUi, UiFactory.ButtonKind.Primary);
         var test = UiFactory.Button(Loc.T("测试连接"), () => _ = TestConnectionAsync());
         page.AddChild(UiFactory.Row(addEndpoint, addModel));
         page.AddChild(UiFactory.Row(save, test));
@@ -150,21 +194,25 @@ internal sealed partial class AgentOverlayHost
     private Control BuildPlayPage()
     {
         var page = UiFactory.Column();
-        _playStatus = UiFactory.Label(Loc.T("状态：-"));
+        _playStatus = UiFactory.Label(Loc.T("状态：-"), UiFactory.FontHeading);
         _playScreen = UiFactory.Label(Loc.T("屏幕：-"));
         _playAction = UiFactory.Label(Loc.T("最近动作：-"));
-        _playThought = UiFactory.Label(Loc.T("思考：-"), 13, muted: true);
-        _playToggle = UiFactory.Button(Loc.T("开始自动游玩"), TogglePlay);
+        _playThought = UiFactory.Label(Loc.T("思考：-"), UiFactory.FontBody, muted: true);
+        _playToggle = UiFactory.Button(Loc.T("开始自动游玩"), TogglePlay, UiFactory.ButtonKind.Primary);
         _stepButton = UiFactory.Button(Loc.T("单步"), () => _ = AgentRuntime.Instance.StepOnceAsync(CancellationToken.None));
-        page.AddChild(_playStatus);
-        page.AddChild(_playScreen);
-        page.AddChild(_playAction);
-        page.AddChild(_playThought);
-        _playUsage = UiFactory.Label(Loc.T("Token 消耗：-"), 13, muted: true);
-        page.AddChild(_playUsage);
-        page.AddChild(UiFactory.Row(_playToggle, _stepButton));
-        page.AddChild(UiFactory.Label(Loc.T("自动游玩走 compact 状态和工具，与 MCP 相同，不需要视觉即可打完全部流程。对话默认只读；勾选「允许代打」或明确说「帮我打」才会执行动作。"), 12, muted: true));
-        return page;
+        _playUsage = UiFactory.Label(Loc.T("Token 消耗：-"), UiFactory.FontBody, muted: true);
+        page.AddChild(UiFactory.Card(
+            Loc.T("当前回合"),
+            _playStatus,
+            UiFactory.Row(_playToggle, _stepButton)));
+        page.AddChild(UiFactory.Card(
+            Loc.T("本步详情"),
+            _playScreen,
+            _playAction,
+            _playThought,
+            _playUsage));
+        page.AddChild(UiFactory.Label(Loc.T("自动游玩走 compact 状态和工具，与 MCP 相同，不需要视觉即可打完全部流程。对话默认只读；勾选「允许代打」或明确说「帮我打」才会执行动作。"), UiFactory.FontCaption, muted: true));
+        return UiFactory.Scroll(page, 120);
     }
 
     /// <summary>
@@ -188,20 +236,13 @@ internal sealed partial class AgentOverlayHost
     private Control BuildDualPage()
     {
         var page = UiFactory.Column();
-        page.AddChild(UiFactory.Label(Loc.T("和 AI 一起爬塔"), 18));
-        page.AddChild(UiFactory.Label(Loc.T("可以一起玩：你打自己的角色，AI 打另一个角色，同一座塔往上爬。大厅仍是 4 人位，还可以再邀 2 名在线玩家。"), 13));
-        _sessionHeadline = UiFactory.Label(Loc.T("状态：-"), 16);
-        _sessionDetail = UiFactory.Label("-", 13, muted: true);
-        _sessionNext = UiFactory.Label(Loc.T("下一步：-"), 13);
-        page.AddChild(_sessionHeadline);
-        page.AddChild(_sessionDetail);
-        page.AddChild(_sessionNext);
-        _sessionConfigNotice = UiFactory.Label("", 12);
-        page.AddChild(_sessionConfigNotice);
-        _resetStatsButton = UiFactory.Button(Loc.T(SessionBudgetLimits.ResetStatsActionLabel), ResetSessionStatsFromUi);
-        page.AddChild(_resetStatsButton);
-        _firstRunHint = UiFactory.Label(FirstRunHintText(), 13, muted: true);
-        page.AddChild(_firstRunHint);
+        page.AddChild(UiFactory.Label(Loc.T("和 AI 一起爬塔"), UiFactory.FontTitle));
+        page.AddChild(UiFactory.Label(Loc.T("可以一起玩：你打自己的角色，AI 打另一个角色，同一座塔往上爬。大厅仍是 4 人位，还可以再邀 2 名在线玩家。"), UiFactory.FontBody, muted: true));
+        _sessionHeadline = UiFactory.Label(Loc.T("状态：-"), UiFactory.FontHeading);
+        _sessionDetail = UiFactory.Label("-", UiFactory.FontBody, muted: true);
+        _sessionNext = UiFactory.Label(Loc.T("下一步：-"), UiFactory.FontBody);
+        _sessionConfigNotice = UiFactory.Label("", UiFactory.FontCaption);
+        _resetStatsButton = UiFactory.Button(Loc.T(SessionBudgetLimits.ResetStatsActionLabel), ResetSessionStatsFromUi, UiFactory.ButtonKind.Ghost);
         // The switch names the new behaviour: ticked = the companion no longer takes the preselected
         // character; the AI driving it (or a human at that window) picks instead. It sits right above
         // the invite button so the choice is visible before the second window exists, and is saved on
@@ -214,60 +255,70 @@ internal sealed partial class AgentOverlayHost
             AgentRuntime.Instance.SaveSettings(settings);
             RefreshDynamic();
         };
-        page.AddChild(_companionChoiceToggle);
-        _dualHint = UiFactory.Label(DualHintText(), 12, muted: true);
-        page.AddChild(_dualHint);
-        page.AddChild(UiFactory.Button(Loc.T("导出诊断"), CopyDiagnostics));
-        _dualLaunchButton = UiFactory.Button(Loc.T("邀请 AI 队友"), () => _ = LaunchDualAsync());
-        page.AddChild(_dualLaunchButton);
-        // In-game entry for continue_ai_teammate: the game's own Load button opens a saved co-op run
-        // over Steam networking and rejects the local-connection NetIds, so the way back into a saved
-        // run has to live here, one row under the invite.
-        _dualContinueButton = UiFactory.Button(Loc.T("继续上次联机对局"), () => _ = ContinueDualAsync());
-        page.AddChild(_dualContinueButton);
-        _dualStatus = UiFactory.Label(Loc.T("队友尚未加入。"), 13, muted: true);
-        page.AddChild(_dualStatus);
+        _dualHint = UiFactory.Label(DualHintText(), UiFactory.FontCaption, muted: true);
+        _dualStatus = UiFactory.Label(Loc.T("队友尚未加入。"), UiFactory.FontBody, muted: true);
         // The companion's own live state, not the host's view of the shared run: the host already
         // knows the process is alive, and what a co-op player needs mid-fight is the other
         // character's health and whether it can act.
-        _teammateLive = UiFactory.Label(TeammateLiveText(), 13, muted: true);
-        page.AddChild(_teammateLive);
+        _teammateLive = UiFactory.Label(TeammateLiveText(), UiFactory.FontBody, muted: true);
+
+        page.AddChild(UiFactory.Card(
+            Loc.T("组队状态"),
+            _sessionHeadline,
+            _sessionDetail,
+            _sessionNext,
+            _sessionConfigNotice,
+            _teammateLive,
+            _dualStatus));
+        _dualLaunchButton = UiFactory.Button(Loc.T("邀请 AI 队友"), () => _ = LaunchDualAsync(), UiFactory.ButtonKind.Primary);
+        _dualContinueButton = UiFactory.Button(Loc.T("继续上次联机对局"), () => _ = ContinueDualAsync());
+        page.AddChild(UiFactory.Card(
+            Loc.T("邀请与控制"),
+            _companionChoiceToggle,
+            _dualHint,
+            // Invite is the tab's main action: it is the one a player comes to this page to press.
+            UiFactory.Row(_dualLaunchButton, UiFactory.Button(Loc.T("导出诊断"), CopyDiagnostics, UiFactory.ButtonKind.Ghost)),
+            // In-game entry for continue_ai_teammate: the game's own Load button opens a saved co-op
+            // run over Steam networking and rejects the local-connection NetIds, so the way back into
+            // a saved run has to live here, one row under the invite.
+            UiFactory.Row(_dualContinueButton, _resetStatsButton)));
+
         _teamPause = UiFactory.Button(Loc.T("暂停队友"), () => _ = AgentRuntime.Instance.ControlTeammateAsync(false, CancellationToken.None));
         _teamResume = UiFactory.Button(Loc.T("继续游玩"), () => _ = AgentRuntime.Instance.ControlTeammateAsync(true, CancellationToken.None));
-        page.AddChild(UiFactory.Row(_teamPause, _teamResume));
-        _teamControlStatus = UiFactory.Label(AgentRuntime.Instance.TeamControlStatus, 12, muted: true);
-        page.AddChild(_teamControlStatus);
-        page.AddChild(UiFactory.Label(Loc.T("队伍交流"), 15));
+        _teamControlStatus = UiFactory.Label(AgentRuntime.Instance.TeamControlStatus, UiFactory.FontCaption, muted: true);
+        page.AddChild(UiFactory.Card(Loc.T("队友控制"), UiFactory.Row(_teamPause, _teamResume), _teamControlStatus));
+
         _teamChat = UiFactory.Rich();
         _teamChat.FitContent = false;
         _teamChat.CustomMinimumSize = new Vector2(0, 130);
-        page.AddChild(_teamChat);
         _teamInput = UiFactory.Multiline("", 56);
         _teamInput.PlaceholderText = Loc.T("一起集火哪个敌人？这条路线你怎么看？");
-        page.AddChild(_teamInput);
-        _teamSend = UiFactory.Button(Loc.T("和队友说"), () => _ = SendTeamMessageAsync());
-        page.AddChild(_teamSend);
-        _teamStatus = UiFactory.Label(AgentRuntime.Instance.TeamStatus, 12, muted: true);
-        page.AddChild(_teamStatus);
-        page.AddChild(UiFactory.Label(Loc.T("聊天不会替你出牌，也不会恢复已暂停的队友。建议会供队友下一次决策参考。"), 12, muted: true));
-        page.AddChild(UiFactory.Label(Loc.T("如果队友窗口未能连接，请检查游戏日志和 Steam 双开限制。"), 12, muted: true));
-        return page;
+        _teamSend = UiFactory.Button(Loc.T("和队友说"), () => _ = SendTeamMessageAsync(), UiFactory.ButtonKind.Primary);
+        _teamStatus = UiFactory.Label(AgentRuntime.Instance.TeamStatus, UiFactory.FontCaption, muted: true);
+        page.AddChild(UiFactory.Card(
+            Loc.T("队伍交流"),
+            _teamChat,
+            _teamInput,
+            UiFactory.TightRow(_teamSend),
+            _teamStatus,
+            UiFactory.Label(Loc.T("聊天不会替你出牌，也不会恢复已暂停的队友。建议会供队友下一次决策参考。"), UiFactory.FontCaption, muted: true),
+            UiFactory.Label(Loc.T("如果队友窗口未能连接，请检查游戏日志和 Steam 双开限制。"), UiFactory.FontCaption, muted: true)));
+        // The teammate page is the longest one: cards, four action rows and a chat box. Without a
+        // scroll container the bottom half is simply unreachable -- the panel clips its contents.
+        return UiFactory.Scroll(page, 120);
     }
 
     private Control BuildConnectPage()
     {
         var page = UiFactory.Column();
-        page.AddChild(UiFactory.Label(Loc.T("MCP 接入"), 15));
-        page.AddChild(UiFactory.Label(Loc.T("选择：一起玩只用游戏内窗口，不必打开 MCP。外部客户端用本页开关。Python sidecar 仅 stdio / layered / full。"), 12, muted: true));
-        page.AddChild(UiFactory.Label(Loc.T("游戏内自动打不需要打开。只有 Cursor / Claude / Codex 等外部客户端才需要。"), 12, muted: true));
+        page.AddChild(UiFactory.Label(Loc.T("MCP 接入"), UiFactory.FontTitle));
+        page.AddChild(UiFactory.Label(Loc.T("选择：一起玩只用游戏内窗口，不必打开 MCP。外部客户端用本页开关。Python sidecar 仅 stdio / layered / full。"), UiFactory.FontBody, muted: true));
         _mcpToggle = UiFactory.Check(Loc.T("打开 MCP 服务"), AgentRuntime.Instance.McpRunning);
         _mcpToggle.Toggled += on => AgentRuntime.Instance.SetMcpEnabled(on);
-        page.AddChild(_mcpToggle);
-        _mcpStatus = UiFactory.Label(AgentRuntime.Instance.McpStatus, 12, muted: true);
-        page.AddChild(_mcpStatus);
+        _mcpStatus = UiFactory.Label(AgentRuntime.Instance.McpStatus, UiFactory.FontBody, muted: true);
 
         _mcpInfoBox = UiFactory.Column();
-        _mcpUrlLabel = UiFactory.Label("", 13);
+        _mcpUrlLabel = UiFactory.Label("", UiFactory.FontBody);
         _mcpInfoBox.AddChild(_mcpUrlLabel);
         var copyUrl = UiFactory.Button(Loc.T("复制地址"), () =>
         {
@@ -276,18 +327,23 @@ internal sealed partial class AgentOverlayHost
             {
                 CopyText(url);
             }
-        });
+        }, UiFactory.ButtonKind.Primary);
         var copyCfg = UiFactory.Button(Loc.T("复制配置"), () => CopyText(AgentRuntime.Instance.McpClientConfig));
         _mcpInfoBox.AddChild(UiFactory.Row(copyUrl, copyCfg));
         _mcpConfigEdit = UiFactory.Multiline("", 120);
         _mcpConfigEdit.Editable = false;
         _mcpInfoBox.AddChild(_mcpConfigEdit);
-        _mcpInfoBox.AddChild(UiFactory.Label(Loc.T("把配置贴进外部客户端的 MCP 设置。服务只监听本机 127.0.0.1。"), 12, muted: true));
+        _mcpInfoBox.AddChild(UiFactory.Label(Loc.T("把配置贴进外部客户端的 MCP 设置。服务只监听本机 127.0.0.1。"), UiFactory.FontCaption, muted: true));
         _mcpInfoBox.Visible = AgentRuntime.Instance.McpRunning;
-        page.AddChild(_mcpInfoBox);
 
-        page.AddChild(UiFactory.Label(Loc.T("本机 HTTP API 始终可用：GET /health /state ，POST /action。MCP 打开后才会在同一端口暴露 /mcp。地址以本页复制为准，不要写死 8080 或 8765。"), 12, muted: true));
-        return page;
+        page.AddChild(UiFactory.Card(
+            Loc.T("服务开关"),
+            UiFactory.Label(Loc.T("游戏内自动打不需要打开。只有 Cursor / Claude / Codex 等外部客户端才需要。"), UiFactory.FontBody, muted: true),
+            _mcpToggle,
+            _mcpStatus));
+        page.AddChild(UiFactory.Card(Loc.T("客户端配置"), _mcpInfoBox));
+        page.AddChild(UiFactory.Label(Loc.T("本机 HTTP API 始终可用：GET /health /state ，POST /action。MCP 打开后才会在同一端口暴露 /mcp。地址以本页复制为准，不要写死 8080 或 8765。"), UiFactory.FontCaption, muted: true));
+        return UiFactory.Scroll(page, 120);
     }
 
     /// <summary>
@@ -296,17 +352,17 @@ internal sealed partial class AgentOverlayHost
     private Control BuildDecisionPage()
     {
         var page = UiFactory.Column();
-        _decisionUsage = UiFactory.Label(Loc.T("Token 消耗：-"), 13, muted: true);
-        page.AddChild(_decisionUsage);
-        _decisionRunSpend = UiFactory.Label(Loc.T("本局：-"), 13, muted: true);
-        page.AddChild(_decisionRunSpend);
-        page.AddChild(UiFactory.Label(Loc.T("最新在前：动作、理由、来源，以及该步消耗的 Token。"), 12, muted: true));
+        _decisionUsage = UiFactory.Label(Loc.T("Token 消耗：-"), UiFactory.FontBody, muted: true);
+        _decisionRunSpend = UiFactory.Label(Loc.T("本局：-"), UiFactory.FontBody, muted: true);
         _decisionLog = UiFactory.Rich();
         _decisionLog.FitContent = false;
         // Newest first, so follow-to-bottom would scroll away from the line that just arrived.
         _decisionLog.ScrollFollowing = false;
         _decisionLog.SizeFlagsHorizontal = Control.SizeFlags.ExpandFill;
         _decisionLog.SizeFlagsVertical = Control.SizeFlags.ExpandFill;
+        page.AddChild(UiFactory.Card(Loc.T("用量"), _decisionUsage, _decisionRunSpend));
+        page.AddChild(UiFactory.Heading(Loc.T("决策记录")));
+        page.AddChild(UiFactory.Label(Loc.T("最新在前：动作、理由、来源，以及该步消耗的 Token。"), UiFactory.FontCaption, muted: true));
         page.AddChild(UiFactory.Scroll(_decisionLog, 120));
         return page;
     }
@@ -381,8 +437,8 @@ internal sealed partial class AgentOverlayHost
         _settingsBody.AddChild(_saveStatus);
         _settingsLoadNotice = UiFactory.Label(FormatSettingsNotice(), 12);
         _settingsBody.AddChild(_settingsLoadNotice);
-        _settingsBody.AddChild(UiFactory.Label(Loc.T("首次配置"), 15));
-        _settingsBody.AddChild(UiFactory.Label(Loc.T("添加端点 → 添加模型并绑定 → 选择对话/游玩用途 → 测试连接 → 保存。通过后再去「AI 队友」从主菜单邀请。默认网址和模型名不算已经可用。"), 12, muted: true));
+        _settingsBody.AddChild(UiFactory.Label(Loc.T("首次配置"), UiFactory.FontHeading));
+        _settingsBody.AddChild(UiFactory.Label(Loc.T("添加端点 → 添加模型并绑定 → 选择对话/游玩用途 → 测试连接 → 保存。通过后再去「AI 队友」从主菜单邀请。默认网址和模型名不算已经可用。"), UiFactory.FontCaption, muted: true));
         _testNotice = UiFactory.Label(Loc.T("测试连接会向配置的服务发送测试请求。对话通过不等于游玩已通过。本地服务可以留空 API Key。"), 12, muted: true);
         _settingsBody.AddChild(_testNotice);
         _conversationTest = UiFactory.Label(ModelRoleProbe.FormatLine(firstRun.Conversation), 12, muted: true);
@@ -399,19 +455,46 @@ internal sealed partial class AgentOverlayHost
         _deleteWarning = UiFactory.Label("", 12);
         _settingsBody.AddChild(_deleteWarning);
 
-        _settingsBody.AddChild(UiFactory.Label(Loc.T("端点"), 15));
+        // Appearance sits above the endpoint forms on purpose: it is the one setting on this page a
+        // player changes for fun rather than to make the agent work, and it should not be behind the
+        // advanced toggle that hides the budget knobs.
+        _themeCombo = UiFactory.Combo();
+        foreach (var preset in OverlayThemeCatalog.All)
+        {
+            _themeCombo.AddItem(Loc.T(preset.Label));
+            _themeCombo.SetItemMetadata(_themeCombo.ItemCount - 1, preset.Id);
+        }
+
+        // Match on the id, not the label: the label is translated, so comparing text would select
+        // nothing on an English client and silently reset the player's theme on the next save.
+        var currentTheme = OverlayThemeCatalog.Normalize(settings.OverlayTheme);
+        for (var i = 0; i < _themeCombo.ItemCount; i++)
+        {
+            if (string.Equals(_themeCombo.GetItemMetadata(i).AsString(), currentTheme, StringComparison.Ordinal))
+            {
+                _themeCombo.Selected = i;
+                break;
+            }
+        }
+
+        WatchCombo(_themeCombo);
+        _settingsBody.AddChild(UiFactory.Label(Loc.T("外观"), UiFactory.FontHeading));
+        _settingsBody.AddChild(Labeled(Loc.T("界面主题"), _themeCombo));
+        _settingsBody.AddChild(UiFactory.Label(Loc.T("只改这个窗口的配色，保存后立即生效。"), UiFactory.FontCaption, muted: true));
+
+        _settingsBody.AddChild(UiFactory.Label(Loc.T("端点"), UiFactory.FontHeading));
         for (var i = 0; i < settings.Endpoints.Count; i++)
         {
             _settingsBody.AddChild(BuildEndpointCard(settings.Endpoints[i], i));
         }
 
-        _settingsBody.AddChild(UiFactory.Label(Loc.T("模型"), 15));
+        _settingsBody.AddChild(UiFactory.Label(Loc.T("模型"), UiFactory.FontHeading));
         for (var i = 0; i < settings.Models.Count; i++)
         {
             _settingsBody.AddChild(BuildModelCard(settings.Models[i], i, settings));
         }
 
-        _settingsBody.AddChild(UiFactory.Label(Loc.T("角色绑定"), 15));
+        _settingsBody.AddChild(UiFactory.Label(Loc.T("角色绑定"), UiFactory.FontHeading));
         _conversationCombo = FillModelCombo(settings, settings.ConversationModelId, includeEmpty: false);
         _playCombo = FillModelCombo(settings, settings.PlayModelId, includeEmpty: true);
         _visionCombo = FillModelCombo(settings, settings.VisionModelId, includeEmpty: true);

@@ -661,6 +661,11 @@ internal static class TestRunner
         yield return ("OverlayTabs.EveryTabHasAPageBuilder", () => Task.Run(OverlayTabContractTests.EveryTabHasAPageBuilder));
         yield return ("OverlayTabs.RefreshOnShow", () => Task.Run(OverlayTabContractTests.TabsThatChangeWithoutAnEventRefreshOnShow));
         yield return ("OverlayTabs.LabelsResolveToEnglish", () => Task.Run(OverlayTabContractTests.CatalogLabelsResolveToEnglish));
+        yield return ("OverlayTheme.UniquePresets", () => Task.Run(OverlayThemeTests.EveryPresetHasAUniqueIdAndLabel));
+        yield return ("OverlayTheme.UnknownFallsBack", () => Task.Run(OverlayThemeTests.AnUnknownThemeFallsBackToTheDefault));
+        yield return ("OverlayTheme.ContrastFloors", () => Task.Run(OverlayThemeTests.EveryPresetStaysReadableOnEverySurface));
+        yield return ("OverlayTheme.ContrastMath", () => Task.Run(OverlayThemeTests.TheContrastHelperMatchesTheKnownEndpoints));
+        yield return ("OverlayTheme.AppliedBeforeBuild", () => Task.Run(OverlayThemeTests.TheStoredThemeIsAppliedBeforeAnythingIsBuilt));
         yield return ("OverlayTabs.DecisionLogLiveRefresh", () => Task.Run(OverlayTabContractTests.DecisionLogFollowsTheLiveRefreshPath));
         yield return ("OverlayTabs.DecisionPageReusesRuntimeCounters", () => Task.Run(OverlayTabContractTests.DecisionPageReusesTheRuntimeCounters));
         yield return ("OverlayTabs.DecisionLinesNewestFirst", () => Task.Run(OverlayTabContractTests.DecisionLinesAreNewestFirstAndUnknownUsageStaysUnknown));

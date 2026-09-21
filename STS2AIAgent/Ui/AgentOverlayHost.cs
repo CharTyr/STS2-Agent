@@ -43,10 +43,12 @@ internal sealed partial class AgentOverlayHost
     private LineEdit? _maxRequestsEdit;
     private CheckBox? _proactiveChatToggle;
     private OptionButton? _proactiveToneCombo;
+
+    /// <summary>The overlay's colour theme selector; see <see cref="OverlayThemeCatalog"/>.</summary>
+    private OptionButton? _themeCombo;
     private Label? _apiLabel;
     private Label? _dualStatus;
     private Label? _teammateLive;
-    private Label? _firstRunHint;
     private Label? _sessionHeadline;
     private Label? _sessionDetail;
     private Label? _sessionNext;
@@ -194,6 +196,11 @@ internal sealed partial class AgentOverlayHost
             return;
         }
 
+        // The palette has to be selected before the first control is built: every stylebox below
+        // reads it, and a control keeps the colours it was created with.
+        var startupSettings = AgentRuntime.Instance.Settings;
+        UiFactory.UseTheme(startupSettings.OverlayTheme);
+
         _tree = game.GetTree();
         var root = _tree.Root;
         _layer = new CanvasLayer
@@ -250,7 +257,6 @@ internal sealed partial class AgentOverlayHost
         layout.AddChild(_chatFooter);
         chrome.AddChild(layout);
         _panel.AddChild(chrome);
-        var startupSettings = AgentRuntime.Instance.Settings;
         _panel.Visible = startupSettings.OverlayVisibleOnStart || !startupSettings.HasSeenFirstRunGuide;
 
         host.AddChild(_edgeTab);
@@ -304,26 +310,31 @@ internal sealed partial class AgentOverlayHost
             MouseDefaultCursorShape = Control.CursorShape.Move,
             SizeFlagsHorizontal = Control.SizeFlags.ExpandFill
         };
-        _dragHandle.AddThemeStyleboxOverride("panel", UiFactory.PanelStyle(UiFactory.BgRaised, 6));
+        _dragHandle.AddThemeStyleboxOverride("panel", UiFactory.PanelStyle(UiFactory.BgRaised, 8));
         _dragHandle.GuiInput += OnDragHandleGuiInput;
-        var title = UiFactory.Label("STS2 AI Agent", 16);
+        var title = UiFactory.Label("STS2 AI Agent", UiFactory.FontTitle);
         title.MouseFilter = Control.MouseFilterEnum.Ignore;
-        var hint = UiFactory.Label(Loc.T("拖动移动"), 11, muted: true);
+        var hint = UiFactory.Label(Loc.T("拖动移动"), UiFactory.FontCaption, muted: true);
         hint.MouseFilter = Control.MouseFilterEnum.Ignore;
         var handleColumn = UiFactory.Column();
         handleColumn.MouseFilter = Control.MouseFilterEnum.Ignore;
         handleColumn.SizeFlagsVertical = Control.SizeFlags.ShrinkBegin;
+        handleColumn.AddThemeConstantOverride("separation", 2);
         handleColumn.AddChild(title);
         handleColumn.AddChild(hint);
         _dragHandle.AddChild(handleColumn);
 
-        var hide = UiFactory.Button(Loc.T("隐藏"), ToggleVisible);
-        hide.CustomMinimumSize = new Vector2(64, 0);
+        var hide = UiFactory.Button(Loc.T("隐藏"), ToggleVisible, UiFactory.ButtonKind.Ghost);
+        hide.CustomMinimumSize = new Vector2(56, 0);
         hide.SizeFlagsHorizontal = Control.SizeFlags.ShrinkEnd;
-        _apiLabel = UiFactory.Label("", 12, muted: true);
+
+        // The connection line doubles as the header's status chip: the colour says whether the local
+        // API is reachable before the player has read a word of it.
+        _apiLabel = UiFactory.Label("", UiFactory.FontCaption, muted: true);
         var column = UiFactory.Column();
         column.SizeFlagsVertical = Control.SizeFlags.ShrinkBegin;
         var row = new HBoxContainer { MouseFilter = Control.MouseFilterEnum.Ignore };
+        row.AddThemeConstantOverride("separation", UiFactory.SpaceSm);
         row.AddChild(_dragHandle);
         row.AddChild(hide);
         column.AddChild(row);
@@ -426,9 +437,21 @@ internal sealed partial class AgentOverlayHost
     {
         try
         {
+            var themeChanged = !string.Equals(
+                OverlayThemeCatalog.Normalize(settings.OverlayTheme),
+                UiFactory.Palette.Id,
+                StringComparison.Ordinal);
             AgentRuntime.Instance.SaveSettings(settings);
             _settingsDirty = false;
             RebuildSettingsForm();
+            if (themeChanged)
+            {
+                // The palette is baked into every stylebox at build time, so a saved theme needs a
+                // rebuild rather than a repaint. Same path a language change takes, so the window
+                // keeps its position, its visibility and the tab the player is on.
+                RebuildInPlace();
+            }
+
             return true;
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
@@ -528,6 +551,13 @@ internal sealed partial class AgentOverlayHost
         if (_proactiveToneCombo != null)
         {
             current.ProactiveChatTone = ProactiveChatTones.Normalize(SelectedMetadata(_proactiveToneCombo));
+        }
+
+        if (_themeCombo != null)
+        {
+            // Normalised on the way in, so an id this build does not know cannot be written back out
+            // and leave the next start choosing between a stored value and a drawn one.
+            current.OverlayTheme = OverlayThemeCatalog.Normalize(SelectedMetadata(_themeCombo));
         }
 
         current.AttachStateInChat = _attachState?.ButtonPressed ?? true;
@@ -697,15 +727,6 @@ internal sealed partial class AgentOverlayHost
             _continueLaunching = false;
         }
         RefreshDynamic();
-    }
-
-    /// <summary>The tab's top line tells the truth about both routes: without a verified model the invite still works, the teammate just waits to be taken over.</summary>
-    private static string FirstRunHintText()
-    {
-        var firstRun = FirstRunSetup.Evaluate(AgentRuntime.Instance.Settings);
-        return firstRun.ReadyToInvite
-            ? firstRun.Hint
-            : Loc.T("游玩模型未配置或未验证：仍然可以邀请，队友会加入并进图，然后停在原地等待外部接管，不会自己出牌。想让它自己打，先在设置里配好模型并通过「测试连接」。");
     }
 
     private static string DualHintText()
@@ -910,11 +931,6 @@ internal sealed partial class AgentOverlayHost
             _teammateLive.Text = TeammateLiveText();
         }
 
-        if (_firstRunHint != null)
-        {
-            _firstRunHint.Text = FirstRunHintText();
-        }
-
         if (_dualLaunchButton != null)
         {
             // Only the button that started the launch reads as busy; the other one just greys out.
@@ -1113,10 +1129,19 @@ internal sealed partial class AgentOverlayHost
     private void OnLanguageChanged()
     {
         // The game can raise this from its own thread; the overlay must be rebuilt on the game thread.
-        _ = GameThread.InvokeAsync(RebuildForLanguage);
+        _ = GameThread.InvokeAsync(RebuildInPlace);
     }
 
-    private void RebuildForLanguage()
+    /// <summary>
+    /// Tears the overlay down and builds it again, keeping where the player left it.
+    /// </summary>
+    /// <remarks>
+    /// Used by the two things that cannot be applied to an existing tree: a language change, because
+    /// every string was baked in, and a theme change, because every stylebox was. Both want the same
+    /// three facts preserved -- open or closed, which tab, and where the window sits -- so they share
+    /// one path instead of each growing its own.
+    /// </remarks>
+    private void RebuildInPlace()
     {
         // Keep the window where the player left it instead of flashing closed or jumping to chat.
         var hadPanel = _panel != null;

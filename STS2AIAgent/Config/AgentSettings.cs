@@ -16,6 +16,13 @@ internal sealed class AgentSettings
 
     public string Hotkey { get; set; } = "F8";
 
+    /// <summary>
+    /// The overlay's colour theme id. Stored as a plain string so Config does not depend on the UI
+    /// assembly; the overlay normalises an unknown value to the default when it reads it, which is
+    /// what keeps a hand-edited settings file from leaving the panel unthemed.
+    /// </summary>
+    public string OverlayTheme { get; set; } = "slate";
+
     public bool AttachStateInChat { get; set; } = true;
 
     public bool AttachScreenshotInChat { get; set; }
