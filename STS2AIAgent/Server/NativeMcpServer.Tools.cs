@@ -241,7 +241,11 @@ internal sealed partial class NativeMcpServer
             }
 
             using var document = JsonDocument.Parse(raw);
-            return document.RootElement.Clone();
+            // A stringified array or scalar is not an arguments object; treat it like a malformed
+            // one (empty) rather than letting TryGetProperty throw on a non-object root downstream.
+            return document.RootElement.ValueKind == JsonValueKind.Object
+                ? document.RootElement.Clone()
+                : EmptyObject;
         }
 
         return arguments.ValueKind == JsonValueKind.Object ? arguments : EmptyObject;

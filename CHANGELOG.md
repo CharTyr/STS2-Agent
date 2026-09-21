@@ -17,6 +17,8 @@
 - Return structured errors for broken event streams and unreadable HTTP error bodies. Bound connection/read waits by the overall deadline, distinguish connection timeouts from idle reads, and back off repeated empty-stream reconnects.
 - Propagate caller cancellation through model probes, vision and read tools. Canceling a model test does not cache a connectivity failure. Clear a stale save-failure notice after a successful retry.
 - Add regressions for these boundaries and execute the registered diff tool in all three Python MCP profiles. This maintenance batch is validated offline; live-game checks are tracked in the dev audit.
+- Extend the JSON object-root validation to the three readers the previous batch missed: a non-object act result now reads as settled instead of throwing out of `ActIndexValidator.IsUnsettled`, a stringified non-object MCP `arguments` value degrades to an empty object instead of crashing the native argument readers, and a non-object state payload is ignored by the run boundary instead of throwing.
+- Align the `get_decision_log` return shape across both MCP surfaces: the Python sidecar now returns the same `{"decisions": [...]}` envelope the native surface returns, so a client can target either surface with one parser.
 
 ## v0.14.5 - 2026-09-21
 

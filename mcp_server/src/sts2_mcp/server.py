@@ -358,13 +358,15 @@ def create_server(client: Sts2Client | None = None, tool_profile: str | None = N
         return sts2.get_available_actions()
 
     @mcp.tool
-    def get_decision_log(limit: int = 50) -> list[dict[str, Any]]:
+    def get_decision_log(limit: int = 50) -> dict[str, Any]:
         """Read recent accepted decisions with the rationale each one carried.
 
         Entries are ordered oldest first and end at the most recent decision. Use it to
         review why the agent played the way it did, or to diff a run against another.
+        Returns ``{"decisions": [...]}`` — the same envelope the native MCP surface
+        returns, so a client can target either surface with one parser.
         """
-        return list(sts2.get_decisions(limit=limit) or [])
+        return {"decisions": list(sts2.get_decisions(limit=limit) or [])}
 
     @mcp.tool
     def get_run_summary() -> dict[str, Any]:

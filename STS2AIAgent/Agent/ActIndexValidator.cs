@@ -145,6 +145,11 @@ internal static class ActIndexValidator
         {
             using var document = JsonDocument.Parse(actResultJson);
             var root = document.RootElement;
+            if (root.ValueKind != JsonValueKind.Object)
+            {
+                return false;
+            }
+
             if (root.TryGetProperty("status", out var status) &&
                 status.ValueKind == JsonValueKind.String &&
                 string.Equals(status.GetString(), "pending", StringComparison.OrdinalIgnoreCase))

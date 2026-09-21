@@ -141,6 +141,7 @@ internal static class TestRunner
         yield return ("CurrentRun.StopsMainMenuEvenIfSessionPhaseStillRun", () => Task.Run(CurrentRunBoundaryTests.StopsMainMenuEvenIfSessionPhaseStillRun));
        yield return ("CurrentRun.StopsCharacterSelectByScreenName", () => Task.Run(CurrentRunBoundaryTests.StopsCharacterSelectByScreenName));
         yield return ("CurrentRun.FreshSessionAcceptsNewRun", () => Task.Run(CurrentRunBoundaryTests.FreshSessionAcceptsARunThatStartedWhilePaused));
+        yield return ("CurrentRun.NonObjectStateIgnored", () => Task.Run(CurrentRunBoundaryTests.NonObjectStatePayloadIsIgnored));
         yield return ("StopKind.RetryIsNotRunEnd", StopKindPolicyTests.RetryStopIsNotRunEnd);
         yield return ("StopKind.BoundaryIsRunEnd", () => Task.Run(StopKindPolicyTests.BoundaryStopsAreRunEnd));
        yield return ("StopKind.OtherKindsSurvive", () => Task.Run(StopKindPolicyTests.BudgetConfigAndNetworkKindsSurvive));
@@ -279,6 +280,7 @@ internal static class TestRunner
         yield return ("PlayIntent.Detect", () => Task.Run(PlayIntentTests.DetectsPlayPhrasesAndIgnoresQuestions));
         yield return ("ActIndex.Validate", () => Task.Run(ActIndexValidatorTests.RejectsMissingAndStaleIndexes));
         yield return ("ActIndex.Unsettled", () => Task.Run(ActIndexValidatorTests.DetectsUnsettledActResults));
+        yield return ("ActIndex.UnsettledNonObject", () => Task.Run(ActIndexValidatorTests.NonObjectActResultReadsAsSettled));
         yield return ("Reflection.PrivateBaseField", () => Task.Run(ReflectionMemberAccessorTests.ReadsPrivateBaseFieldFromDerivedInstance));
         yield return ("Reflection.PrivateBaseProperty", () => Task.Run(ReflectionMemberAccessorTests.ReadsPrivateBasePropertyFromDerivedInstance));
         yield return ("Reflection.DerivedPrecedence", () => Task.Run(ReflectionMemberAccessorTests.PrefersDerivedMemberWithSameName));
@@ -382,6 +384,7 @@ internal static class TestRunner
         yield return ("StateViews.DiffEmptyObject", () => Task.Run(StateViewsTests.DiffTreatsAnEmptyObjectAsALeaf));
         yield return ("Mcp.RunSummaryTool", McpServiceTests.ToolsCall_RunSummaryUsesRawState);
         yield return ("Mcp.DiffStateTool", McpServiceTests.ToolsCall_DiffStateComparesTwoPayloads);
+        yield return ("Mcp.StringifiedNonObjectArgs", McpServiceTests.ToolsCall_StringifiedNonObjectArgumentsDegradeToEmpty);
         yield return ("Playbook.Embedded", () => Task.Run(PlaybookSectionsTests.StrategyReferenceIsEmbedded));
         yield return ("Playbook.PerScreenOnly", () => Task.Run(PlaybookSectionsTests.ScreenGuidanceIsLimitedToTheScreen));
         yield return ("Playbook.FakeMerchant", () => Task.Run(PlaybookSectionsTests.FakeMerchantGetsTheShopGuidance));

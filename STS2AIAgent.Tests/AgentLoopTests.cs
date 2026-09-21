@@ -71,6 +71,20 @@ internal static class ActIndexValidatorTests
         Assert.True(ActIndexValidator.IsUnsettled("""{"status":"completed","stable":false}"""));
         Assert.False(ActIndexValidator.IsUnsettled("""{"status":"completed","stable":true}"""));
     }
+
+    /// <summary>
+    /// A non-object JSON root (array, scalar, null) must read as "settled" rather than throwing
+    /// <see cref="InvalidOperationException"/> out of <c>TryGetProperty</c> — the same boundary
+    /// <c>AgentLoop.ParseArgs</c> enforces on tool arguments.
+    /// </summary>
+    public static void NonObjectActResultReadsAsSettled()
+    {
+        Assert.False(ActIndexValidator.IsUnsettled("[]"));
+        Assert.False(ActIndexValidator.IsUnsettled("42"));
+        Assert.False(ActIndexValidator.IsUnsettled("\"pending\""));
+        Assert.False(ActIndexValidator.IsUnsettled("null"));
+        Assert.False(ActIndexValidator.IsUnsettled("true"));
+    }
 }
 
 internal static class AgentLoopTests
