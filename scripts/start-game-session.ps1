@@ -160,52 +160,63 @@ function Test-IsolatedSettingsTextReady {
     if ($body -notmatch '"mods_enabled"\s*:\s*true') {
         return $false
     }
-    if ($body -notmatch '"id"\s*:\s*"STS2AIAgent"') {
+    # Scope the flag to the agent's own objects, and check all of them. A player who subscribed on
+    # the Workshop while also keeping a dev copy in mods/ has two STS2AIAgent entries, and the game
+    # reads the id as disabled if any one of them says so -- observed live on 2026-09-20, where the
+    # clone carried mods_directory=true and steam_workshop=false and the game logged
+    # "Skipping loading mod STS2AIAgent, it is set to disabled in settings" twice. Checking only the
+    # first entry (or flipping only the first) is what made the whole clone useless in that case.
+    $entries = @(Get-IsolatedAgentEntryBodies -Raw $body)
+    if ($entries.Count -eq 0) {
         return $false
     }
-    # Scope the flag to the agent's own object. A fixed character window leaks into the next
-    # entry, so a disabled sibling mod read as a disabled AI teammate and the whole clone was
-    # thrown away in favour of the fallback.
-    $entry = Get-IsolatedAgentEntryBody -Raw $body
-    if ($null -eq $entry) {
-        return $false
-    }
-    if ($entry.Body -match '"is_enabled"\s*:\s*false') {
-        return $false
+    foreach ($entry in $entries) {
+        if ($entry.Body -match '"is_enabled"\s*:\s*false') {
+            return $false
+        }
     }
     return $true
 }
 
-function Get-IsolatedAgentEntryBody {
+function Get-IsolatedAgentEntryBodies {
     param([string]$Raw)
 
-    $match = [regex]::Match($Raw, '"id"\s*:\s*"STS2AIAgent"')
-    if (-not $match.Success) {
-        return $null
-    }
+    $entries = @()
+    $searchFrom = 0
+    # A Regex instance with Match(input, startat): the static overload that takes an offset also
+    # wants a RegexOptions and a TimeSpan, and PowerShell binds the integer as neither.
+    $pattern = [regex]::new('"id"\s*:\s*"STS2AIAgent"')
+    while ($true) {
+        $match = $pattern.Match($Raw, $searchFrom)
+        if (-not $match.Success) {
+            break
+        }
 
-    $open = $Raw.LastIndexOf('{', $match.Index)
-    if ($open -lt 0) {
-        return $null
-    }
-
-    $depth = 0
-    for ($i = $open; $i -lt $Raw.Length; $i++) {
-        $ch = $Raw[$i]
-        if ($ch -eq '{') { $depth++ }
-        elseif ($ch -eq '}') {
-            $depth--
-            if ($depth -eq 0) {
-                $length = $i - $open + 1
-                return [pscustomobject]@{
-                    Start = $open
-                    Length = $length
-                    Body = $Raw.Substring($open, $length)
+        $open = $Raw.LastIndexOf('{', $match.Index)
+        if ($open -ge 0) {
+            $depth = 0
+            for ($i = $open; $i -lt $Raw.Length; $i++) {
+                $ch = $Raw[$i]
+                if ($ch -eq '{') { $depth++ }
+                elseif ($ch -eq '}') {
+                    $depth--
+                    if ($depth -eq 0) {
+                        $length = $i - $open + 1
+                        $entries += [pscustomobject]@{
+                            Start = $open
+                            Length = $length
+                            Body = $Raw.Substring($open, $length)
+                        }
+                        break
+                    }
                 }
             }
         }
+
+        $searchFrom = $match.Index + $match.Length
     }
-    return $null
+
+    return $entries
 }
 
 function Get-IsolatedModSettingsBody {
@@ -287,10 +298,13 @@ function Repair-IsolatedSettingsText {
         }
     }
 
-    # Flip only the agent's own entry. The same fixed character window used to reach the next
-    # mod's "is_enabled": false and turn a mod the operator had disabled back on.
-    $entry = Get-IsolatedAgentEntryBody -Raw $fixed
-    if ($null -ne $entry) {
+    # Flip every agent entry, not just the first. A player who subscribed on the Workshop and also
+    # kept a dev copy in mods/ has two STS2AIAgent entries; enabling one of them leaves the game
+    # reading the id as disabled (observed live 2026-09-20). Rewriting back-to-front keeps the
+    # offsets of the entries still to come valid.
+    $entries = @(Get-IsolatedAgentEntryBodies -Raw $fixed)
+    for ($index = $entries.Count - 1; $index -ge 0; $index--) {
+        $entry = $entries[$index]
         $entryFixed = if ($entry.Body -match '"is_enabled"\s*:\s*(true|false)') {
             [regex]::Replace($entry.Body, '("is_enabled"\s*:\s*)false', '${1}true', 1)
         } else {
@@ -345,6 +359,16 @@ function Initialize-IsolatedClientSettings {
 
     if ([string]::IsNullOrWhiteSpace($ClientId)) {
         return
+    }
+
+    # The game parses the client id as a number: a value it cannot parse makes it fall back to
+    # client 1, so the launcher would seed `default\<id>` while the game read `default\1` -- the mod
+    # then loads with whatever that other profile says, or does not load at all. Observed live on
+    # 2026-09-20 with `--clientId 20260920v14`: the seeding wrote default\20260920v14 and the game
+    # logged "Profile-scoped data path initialized: user://default/1/modded/profile1". Failing here
+    # is the difference between a wrong answer and an obvious one.
+    if ($ClientId -notmatch '^\d+$') {
+        throw "clientId '$ClientId' is not a number. The game falls back to client 1 for a value it cannot parse, which silently validates a different profile. Use digits only, for example --clientId 2026092014."
     }
 
     if ([string]::IsNullOrWhiteSpace($UserRoot)) {

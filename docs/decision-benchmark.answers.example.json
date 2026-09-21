@@ -1,0 +1,15 @@
+{
+  "answers": [
+    {"case_id": "combat-lethal-before-end-turn", "action": "play_card", "option_index": 2, "reason": "Take the exposed lethal line before ending into lethal damage."},
+    {"case_id": "combat-wait-when-gated", "action": "wait_until_actionable", "reason": "The state does not expose a legal combat action yet."},
+    {"case_id": "event-reject-lethal-option", "action": "choose_event_option", "option_index": 0, "reason": "Option 1 is marked will_kill_player."},
+    {"case_id": "event-reject-locked-option", "action": "choose_event_option", "option_index": 2, "reason": "Index 0 is locked."},
+    {"case_id": "map-low-health-avoid-elite", "action": "choose_map_node", "option_index": 1},
+    {"case_id": "map-healthy-elite-value", "action": "choose_map_node", "option_index": 0},
+    {"case_id": "rest-low-health-heal", "action": "choose_rest_option", "option_index": 0},
+    {"case_id": "shop-buy-affordable-sale-card", "action": "buy_card", "option_index": 1},
+    {"case_id": "reward-skip-low-value-card-choice", "action": "skip_reward_cards"},
+    {"case_id": "reward-choose-indexed-card", "action": "choose_reward_card", "option_index": 3},
+    {"case_id": "combat-legal-target-index", "action": "play_card", "option_index": 0, "target_index": 1}
+  ]
+}

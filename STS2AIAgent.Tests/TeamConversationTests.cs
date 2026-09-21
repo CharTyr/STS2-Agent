@@ -37,7 +37,7 @@ internal static class TeamConversationTests
         using var handler = new Handler(token, replacement: false);
         using var http = new HttpClient(handler);
         var connection = new CompanionConnection(8081, 123, token, http);
-        var reply = await connection.SendMessageAsync("我们先集火", CancellationToken.None);
+        var reply = await connection.SendMessageAsync("我们先集火", null, CancellationToken.None);
         Assert.Equal("我先处理左侧敌人。", reply);
         Assert.Equal(1, handler.Posts);
     }
@@ -48,7 +48,7 @@ internal static class TeamConversationTests
         using var handler = new Handler(token, replacement: false, healthStatus: "degraded");
         using var http = new HttpClient(handler);
         var connection = new CompanionConnection(8081, 123, token, http);
-        var reply = await connection.SendMessageAsync("我们先集火", CancellationToken.None);
+        var reply = await connection.SendMessageAsync("我们先集火", null, CancellationToken.None);
         Assert.Equal("我先处理左侧敌人。", reply);
         Assert.Equal("paused", await connection.ControlAsync(false, CancellationToken.None));
         Assert.Equal(2, handler.Posts);
@@ -61,7 +61,7 @@ internal static class TeamConversationTests
         using var http = new HttpClient(handler);
         var connection = new CompanionConnection(8081, 123, token, http);
         var rejected = false;
-        try { await connection.SendMessageAsync("我们先集火", CancellationToken.None); }
+        try { await connection.SendMessageAsync("我们先集火", null, CancellationToken.None); }
         catch (InvalidOperationException) { rejected = true; }
         Assert.True(rejected);
         Assert.Equal(0, handler.Posts);

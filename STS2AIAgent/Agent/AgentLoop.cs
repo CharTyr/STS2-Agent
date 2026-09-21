@@ -118,6 +118,16 @@ internal sealed class AgentLoop
             LlmMessage.User("Latest compact game state:\n" + stateJson)
         };
 
+        // Only the guidance this screen can act on. The full references stay in PlaySystem; this is
+        // the part that had nowhere to live because it is too long to carry on every step.
+        var screen = PlaybookSections.ScreenOfCompactState(stateJson);
+        var screenGuidance = PlayPrompt.ScreenGuidance(screen);
+        if (!string.IsNullOrEmpty(screenGuidance))
+        {
+            messages.Add(LlmMessage.System(
+                "Strategy for the screen in the latest state (" + screen + "):\n" + screenGuidance));
+        }
+
         var teamContext = _teamContext?.Invoke();
         if (!string.IsNullOrEmpty(teamContext))
         {
@@ -321,9 +331,11 @@ internal sealed class AgentLoop
                     !resolved.Model.SupportsTools &&
                     ActJsonParser.TryParse(completion.Content, out var actJson))
                 {
+                    var fallbackReason = TryReadActReason(actJson);
                     var parsedAct = await ExecuteActAsync(actJson, cancellationToken, checkState);
                     if (parsedAct.Error == null)
                     {
+                        lastReasoning = fallbackReason ?? lastReasoning;
                         acted = parsedAct.Action;
                         actResult = parsedAct.ResultJson;
                         actFingerprint = parsedAct.Fingerprint;
@@ -388,10 +400,12 @@ internal sealed class AgentLoop
                         continue;
                     }
 
+                    var actReason = TryReadActReason(call.ArgumentsJson);
                     var actOutcome = await ExecuteActAsync(call.ArgumentsJson, cancellationToken, checkState);
                     messages.Add(LlmMessage.Tool(call.Id, actOutcome.ResultJson));
                     if (actOutcome.Error == null)
                     {
+                        lastReasoning = actReason ?? lastReasoning;
                         acted = actOutcome.Action;
                         actResult = actOutcome.ResultJson;
                         actFingerprint = actOutcome.Fingerprint;
@@ -711,6 +725,26 @@ internal sealed class AgentLoop
         }
 
         return JsonDocument.Parse(argumentsJson);
+    }
+
+    /// <summary>
+    /// Reads the model's optional one-sentence rationale from an act's arguments. The reason is
+    /// surfaced as the decision's <see cref="AgentTurnResult.Reasoning"/> so the overlay and any
+    /// future decision log show why the agent acted, including for models that never emit
+    /// reasoning_content of their own.
+    /// </summary>
+    internal static string? TryReadActReason(string? argumentsJson)
+    {
+        try
+        {
+            using var args = ParseArgs(argumentsJson);
+            var reason = ReadString(args, "reason")?.Trim();
+            return string.IsNullOrWhiteSpace(reason) ? null : reason;
+        }
+        catch (JsonException)
+        {
+            return null;
+        }
     }
 
     private static string? ReadString(JsonDocument document, string name)

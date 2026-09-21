@@ -1,6 +1,6 @@
 # OpenAI-Compatible Model Compatibility Matrix
 
-> Last updated: 2026-09-08. Grounded in the current source (STS2AIAgent/Llm/OpenAiCompatibleClient.cs) and offline tests; live-model sampling remains a per-provider follow-up. This document complements the status page; it is not a substitute for a live-model test against a real endpoint.
+> Last updated: 2026-09-20. Grounded in the current source (STS2AIAgent/Llm/OpenAiCompatibleClient.cs) and offline tests, plus one live endpoint sampled end to end on the v0.14.0 candidate (CommandCode / deepseek-v4.1-flash). This document complements the status page; it is not a substitute for a live-model test against a real endpoint.
 
 Scope: behavior expected from any OpenAI-compatible /v1/chat/completions endpoint (official OpenAI, DeepSeek, SiliconFlow, OpenRouter, Ollama, LM Studio, vLLM, and clones). A row is `Verified` only when there is an executable test or direct source contract; `Partial` means the code path exists but only samples were validated; `Gap` means not covered yet.
 
@@ -12,7 +12,8 @@ Scope: behavior expected from any OpenAI-compatible /v1/chat/completions endpoin
 | JSON fallback when tools unavailable | ShouldRetryWithoutStream demotes only HTTP 400/415/422 mentioning stream; agent fallback JsonActFallback asks for a bare JSON action object | OpenAI.ParseCompletion; AgentLoop.JsonActNoTools, JsonIgnoredWithTools, CrystalJsonNoTools | Verified |
 | Thinking / reasoning effort | reasoning_effort sent when configured; gpt-4o / gpt-5 / o3-mini / deepseek / explicit / off mapping in ThinkingRequestBuilder | Thinking.* tests | Verified |
 | DeepSeek-style thinking wrapper | thinking body + extra_body.thinking sent only for deepseek profile | OpenAI.DeepSeekExtraBody | Verified |
-| Vision (image input) | image_url data URL content parts when ImageJpeg present | ToMessageDto path; no dedicated offline test | Partial |
+| Vision (image input) | image_url data URL content parts when ImageJpeg present; plain string content kept when absent | OpenAI.VisionDataUrl, OpenAI.VisionPlainContent (offline, request-body contract) | Verified (offline) |
+| Output-token cap field name | Requests are sent with `max_tokens` (accepted by the clones and local runtimes); a 400/422 that says the parameter is unsupported is retried once with `max_completion_tokens`. Only the connectivity ping sets a cap today, so the extra request costs one round trip per session at most | OpenAI.MaxTokensFieldDetection, OpenAI.MaxTokensFieldRename, OpenAI.PingCompletionTokensRetry, OpenAI.PingUnrelated400NotRetried | Verified (offline) |
 | Cancellation | play_card / request cancellation propagates through linked CTS | AgentLoop.CancelPropagates | Verified |
 | Connection reuse / streaming body | HttpCompletionOption.ResponseHeadersRead when streaming; SSE parsing with [DONE] handling | OpenAI.ParseSse, ParseSsePayload | Verified |
 
@@ -37,8 +38,9 @@ Scope: behavior expected from any OpenAI-compatible /v1/chat/completions endpoin
 ## Provider Notes
 
 - Known-good in live play per history: DeepSeek (chat/play), MiniMax (budget-proxy acceptance), official OpenAI-compatible loopback fixtures.
+- **CommandCode (`https://api.commandcode.ai/provider/v1`) with `deepseek/deepseek-v4.1-flash`: sampled live on 2026-09-20** on the v0.14.0 candidate. The overlay's Test Connection reported 连通成功 for both the conversation and play roles, and an unattended autoplay run then took a fresh Ironclad from floor 1 to floor 3, producing 45 accepted decisions with model-authored reasons over 52 requests / 622,864 tokens. The run ended because the session token cap was reached, not because of an endpoint error; no 401/429/5xx and no stream demotion appeared in that session. Recorded in [live-validation-checklist.md](live-validation-checklist.md).
 - Ollama / LM Studio: key may be empty; usage may be absent on some versions -- covered by missing-usage path.
-- Not yet sampled live: SiliconFlow, OpenRouter, vLLM native extra_body variants beyond DeepSeek, and providers that require max_tokens vs max_completion_tokens differences.
+- Not yet sampled live: SiliconFlow, OpenRouter, vLLM native extra_body variants beyond DeepSeek, and the live behaviour of the `max_tokens` → `max_completion_tokens` retry (the detection and the retry are pinned offline; what is unmeasured is which real endpoints take that path — the CommandCode endpoint accepted the request as sent).
 
 ## Matrix Read Date
 

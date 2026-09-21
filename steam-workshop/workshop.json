@@ -1,7 +1,7 @@
 {
   "title": "STS2 AI Agent",
   "visibility": "public",
-  "changeNote": "v0.13.0: fixes to what the mod tells an AI agent about the game, found by checking every name it looked up against the game actually installed. Relic counters, card keywords and enchantments, and monster move lists had been silently empty; a combat resumed from a save could hide end turn and play card for good (thanks @XenoAmess); and several buttons were being pressed in a way the game's buttons ignore. The health check now also reports whether every game internal the mod relies on still exists, so a future game patch shows up as 'degraded' with the missing pieces named instead of as silently wrong data. Nothing changes for your runs: no cards, no numbers, no saves are touched.",
+  "changeNote": "v0.14.0: the AI now tells you why it played what it played. A decision log in the overlay lists each accepted action with its reason and what that step spent, and the host window shows the teammate's live health, block, energy and hand size. Co-op messages can carry a typed signal, so an announced target is something the teammate actually reads rather than prose it has to interpret. Play quality gains a strategy layer for route, rest site, shop, potion timing and combat priority, injected one screen at a time. Nothing changes for your runs: no cards, no numbers, no saves are touched.",
   "tags": [
     "Tools & APIs",
     "Utility",

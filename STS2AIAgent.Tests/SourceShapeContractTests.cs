@@ -33,12 +33,11 @@ internal static class SourceShapeContractTests
     {
         // 8,559 lines until ADR 0001 collapsed the two action surfaces into one walk, then 8,295
         // until the compact agent_view moved to its own file, then 5,730 until the availability
-        // predicates moved to GameStateService.Predicates.cs on 2026-09-20. The budget came down
-        // every time, which is what the ratchet is for. What is left here is the raw /state payload
-        // builders and the helpers they share with the predicates -- which is why the four
-        // predicates the builders also read (IsPlayerActionPhase, IsCardTargetSupported,
-        // IsEndTurnButtonReady, IsWaitingForOtherPlayers) stayed behind and are counted here.
-        ["STS2AIAgent/Game/GameStateService.cs"] = 5150,
+        // predicates moved to GameStateService.Predicates.cs, then 1,336 when the raw /state
+        // builders were split by screen on 2026-09-20. The budget came down every time, which is
+        // what the ratchet is for. What is left here is the payload entry point, the availability
+        // walk, screen resolution, and the node/text helpers more than one screen file reads.
+        ["STS2AIAgent/Game/GameStateService.cs"] = 1400,
         // The 60 payload types of GET /state: the wire format, as declarations. They grow with the
         // API and are checked against docs/api.md by the api-facts gate, so the budget here is
         // about noticing, not about stopping them.
@@ -56,8 +55,14 @@ internal static class SourceShapeContractTests
         // because it is really six small ones that share their settle-and-proceed helpers; if it
         // grows again, it splits rather than the number going up.
         ["STS2AIAgent/Game/GameActionService.Rooms.cs"] = 1250,
-        ["STS2AIAgent/Ui/AgentOverlayHost.cs"] = 1900,
-        ["STS2AIAgent/Agent/AgentRuntime.cs"] = 1450,
+        // 1,829 lines until the tab construction moved to AgentOverlayHost.Tabs.cs. The budget came
+        // down with the file, which is the ratchet working: the sixth tab was added next to the other
+        // five pages instead of growing this one, and the seventh has to do the same.
+        ["STS2AIAgent/Ui/AgentOverlayHost.cs"] = 1420,
+        // 1,492 lines until the AI-teammate surface moved to AgentRuntime.Team.cs on 2026-09-20. The
+        // budget came down with the file rather than being raised for the feature that pushed it
+        // over, which is the same move the overlay made for its sixth tab.
+        ["STS2AIAgent/Agent/AgentRuntime.cs"] = 1400,
     };
 
     public static void NoSourceFileGrowsPastItsBudget()

@@ -32,6 +32,9 @@ api-facts  Facts that docs/api.md states and that code owns must still agree:
            including whole screens an agent has to drive (character_select,
            multiplayer_lobby, game_over) and the session block the play skill
            tells agents to route on first.
+api-schema Generated `docs/openapi.json` must byte-match the standard-library generator,
+           which extracts ordinary HTTP routes and C# wire payload records and takes shared
+           vocabularies (actions, errors, screens, SSE events) from existing contracts.
 doc-marks  Date-stamped validation records must carry a historical marker, and
            archived topic pages must keep their redirect to history/.
 docs-tracked
@@ -120,12 +123,18 @@ HTTP_SERVER_PATH = "STS2AIAgent/Server/HttpServer.cs"
 # none of them. The action contract covers action names only, so nothing noticed. These two C#
 # records are the producers; the docs/api.md tables below are what clients are told to expect.
 GAME_STATE_PATH = "STS2AIAgent/Game/GameStateService.cs"
-# GameStateService is one partial class in two files. The raw payload records and the screen
-# resolver live in the file above; the compact agent_view rewrite was split out on 2026-09-17
-# so the size ratchet could watch it separately. A check reads whichever file owns what it
-# asks about, and each one fails loudly when its extraction comes back empty.
+# GameStateService is one partial class across several files. The raw payload records and the screen
+# resolver live in the file above; the compact agent_view rewrite was split out on 2026-09-17, and
+# the raw /state builders by screen on 2026-09-20. A check reads whichever file owns what it asks
+# about, and each one fails loudly when its extraction comes back empty.
+#
+# Two checks below ask a question about the *class* rather than about one of its files -- which
+# reason codes the combat gate can emit, and which screens the resolver can report. Reading either
+# from a single path worked only until the member moved, which is exactly how this gate went red
+# when the builders were split. They read the whole family instead.
 AGENT_VIEW_PATH = "STS2AIAgent/Game/GameStateService.AgentView.cs"
 PAYLOADS_PATH = "STS2AIAgent/Game/GameStateService.Payloads.cs"
+GAME_STATE_CLASS_GLOB = "GameStateService*.cs"
 # The leading @ is C#'s escape for a keyword used as an identifier -- `public EventPayload? @event`
 # serializes as "event". Missing it would read as "the docs list a field the code does not have".
 CSHARP_PAYLOAD_PROPERTY = re.compile(
@@ -573,10 +582,29 @@ def slice_method_body(text: str, signature: str, source: str) -> str:
     raise GateError(f"{source}: '{signature}' body braces never balanced")
 
 
+def read_game_state_class(repo_root: Path) -> str:
+    """Every file declaring the `GameStateService` partial class, concatenated.
+
+    A check about the class has to read the class. Reading one path made `api-facts` claim that
+    `EvaluateCombatActionGate` had been deleted the moment the raw builders moved to their own
+    per-screen files -- the member was fine, the reader was pointed at one file of a partial.
+    """
+    directory = repo_root / "STS2AIAgent" / "Game"
+    files = sorted(directory.glob(GAME_STATE_CLASS_GLOB))
+    if len(files) < 2:
+        raise GateError(
+            f"found {len(files)} file(s) matching {GAME_STATE_CLASS_GLOB} under {directory}. "
+            "GameStateService is a partial class across several files on purpose; if it is being "
+            "merged back, update the checks that read it instead of letting them read part of a "
+            "class."
+        )
+    return "\n".join(path.read_text(encoding="utf-8") for path in files)
+
+
 def parse_code_screens(repo_root: Path) -> set[str]:
     """Screen names GameStateService.ResolveNonModalScreen can emit."""
-    text = read_text(repo_root, "STS2AIAgent/Game/GameStateService.cs")
-    body = slice_method_body(text, RESOLVE_SCREEN_SIGNATURE, "STS2AIAgent/Game/GameStateService.cs")
+    text = read_game_state_class(repo_root)
+    body = slice_method_body(text, RESOLVE_SCREEN_SIGNATURE, GAME_STATE_CLASS_GLOB)
     screens = set(CODE_SCREEN_SWITCH_ARM.findall(body)) | set(CODE_SCREEN_EARLY_RETURN.findall(body))
     if len(screens) < MIN_CODE_SCREENS:
         raise GateError(
@@ -664,7 +692,7 @@ def parse_code_payload_fields(game_state: str, declaration: str) -> set[str]:
 
 def parse_code_gate_reasons(game_state: str) -> set[str]:
     """Reason codes EvaluateCombatActionGate can put in combat.action_readiness.reason."""
-    body = slice_method_body(game_state, COMBAT_GATE_SIGNATURE, GAME_STATE_PATH)
+    body = slice_method_body(game_state, COMBAT_GATE_SIGNATURE, GAME_STATE_CLASS_GLOB)
     reasons = set(CODE_GATE_REASON.findall(body))
     if len(reasons) < MIN_GATE_REASONS:
         raise GateError(
@@ -680,7 +708,7 @@ def check_combat_payload_docs(repo_root: Path, api_doc: str) -> list[str]:
     notes: list[str] = []
     # Two files, on purpose: the records are declarations and the gate that fills them is logic.
     payloads = read_text(repo_root, PAYLOADS_PATH)
-    game_state = read_text(repo_root, GAME_STATE_PATH)
+    game_state = read_game_state_class(repo_root)
 
     for declaration, heading in COMBAT_PAYLOAD_TABLES:
         code_fields = parse_code_payload_fields(payloads, declaration)
@@ -1768,10 +1796,38 @@ def check_doc_links(repo_root: Path) -> list[str]:
     return [f"{checked} relative link(s) across {len(pages)} tracked Markdown pages resolve"]
 
 
+def check_api_schema(repo_root: Path) -> list[str]:
+    """The committed machine-readable API contract is the generator's exact output.
+
+    The deep generator owns parsing and type mapping rather than duplicating them beside this
+    dispatcher. Import by file path so the check also works in the throwaway fixture used by the
+    gate self-test, whose scripts/ directory is intentionally not a Python package.
+    """
+    module_path = repo_root / "scripts" / "api_schema.py"
+    if not module_path.is_file():
+        raise GateError("scripts/api_schema.py is missing, so docs/openapi.json cannot be verified")
+    spec = importlib.util.spec_from_file_location("sts2_api_schema", module_path)
+    if spec is None or spec.loader is None:
+        raise GateError("scripts/api_schema.py could not be imported, so docs/openapi.json cannot be verified")
+    module = importlib.util.module_from_spec(spec)
+    try:
+        # dataclasses resolves annotations through sys.modules while this module is executing.
+        # Register it first, as normal Python import machinery does.
+        sys.modules[spec.name] = module
+        spec.loader.exec_module(module)
+        return module.check_spec(repo_root)
+    except Exception as exc:
+        detail = str(exc).strip() or type(exc).__name__
+        raise GateError(detail) from exc
+    finally:
+        sys.modules.pop(spec.name, None)
+
+
 GATES = {
     "lockfile": check_lockfile,
     "api-doc": check_api_doc,
     "api-facts": check_api_facts,
+    "api-schema": check_api_schema,
     "doc-marks": check_doc_marks,
     "docs-tracked": check_docs_tracked,
     "doc-links": check_doc_links,

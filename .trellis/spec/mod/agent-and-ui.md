@@ -26,7 +26,15 @@ The dual-instance launch gate is claimed, never shared. `TryLaunchDualInstanceAs
 
 ## UI boundary and reusable controls
 
-[ModEntry](../../../STS2AIAgent/ModEntry.cs) installs the overlay only for a display-capable primary instance. [AgentOverlayHost](../../../STS2AIAgent/Ui/AgentOverlayHost.cs) owns the overlay node, tabs (chat, settings, play, teammate, connect), event wiring, dynamic labels, input harvesting, and placement persistence. [UiFactory](../../../STS2AIAgent/Ui/UiFactory.cs) owns repeated Godot control construction and the local palette/style helpers (`PanelStyle`, `Button`, `Label`, `Line`, `Check`, `Combo`, `Multiline`, `Rich`, and layout helpers).
+[ModEntry](../../../STS2AIAgent/ModEntry.cs) installs the overlay only for a display-capable primary instance. [AgentOverlayHost](../../../STS2AIAgent/Ui/AgentOverlayHost.cs) owns the overlay node, tabs (chat, settings, play, teammate, connect), event wiring, dynamic labels, input harvesting, and placement persistence. [UiFactory](../../../STS2AIAgent/Ui/UiFactory.cs) owns repeated Godot control construction and the visual system: the palette in use, the spacing and type scales, styled buttons (`Button` with a `ButtonKind`, `TabButton` with an active state), `Card`, `Heading`, `Badge`, `Gap`, `Divider`, and the layout helpers.
+
+The colour half of that system lives in [OverlayTheme.cs](../../../STS2AIAgent/Ui/OverlayTheme.cs), which is Godot-free on purpose so the executable test project can link it. `OverlayThemeCatalog` holds the presets and resolves an unknown id to the default; `OverlayColor.ContrastRatio` is the measuring instrument the tests use. Three rules follow from that split, and each has a contract test:
+
+- `UiFactory.UseTheme` runs before the first control is built. A Godot control keeps the colours it was created with, so applying the theme afterwards leaves the panel in the previous palette and nothing fails.
+- A saved theme rebuilds the overlay. `PersistHarvested` compares the stored id with the live palette and calls `RebuildInPlace`, the same path a language change takes, so the window keeps its visibility, its tab and its position.
+- Every preset clears WCAG contrast floors against every surface it draws on. `OverlayThemeTests` fails a theme whose body text, secondary text or accent label is unreadable, which is the check a screenshot cannot make.
+
+`ClipText` stays off on buttons. Godot's clipped button reports a minimum width that excludes its label, so a tab row laid out by natural width collapsed to six empty slivers live on 2026-09-20; the label has to drive the size.
 
 Use `UiFactory` for controls that match an existing pattern; keep tab-specific composition and event handlers in `AgentOverlayHost`. UI callbacks may collect user input, call an `AgentRuntime` method, and request refresh. They should not serialize `AgentSettings` themselves, call `GameActionService` directly, or access native game objects from a background continuation. The existing overlay calls `GameThread.InvokeAsync(RefreshDynamic)` after asynchronous team operations and in `OnRuntimeChanged`.
 

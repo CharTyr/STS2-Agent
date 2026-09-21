@@ -2,6 +2,8 @@
 
 Use this reference when the active screen is clear and you need the exact action order or guardrails for that screen.
 
+This file is about **how to drive a screen**. For **what to choose** where the choice is not mechanical — route, rest site, shop, potion timing, combat priority, co-op division of labour — read [strategy.md](strategy.md). It is a separate file on purpose: the mod embeds this document into the in-game prompt on every play step, and the strategy rules are only needed on the screens they describe.
+
 ## MAIN_MENU and Timeline
 
 - If `continue_run` is available, prefer it over starting a new run.

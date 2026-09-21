@@ -24,6 +24,8 @@ If you used to copy this mod into the game folder by hand, delete those files an
 [list]
 [*]Set up your model and chat without leaving the game
 [*]Let it play on its own, or take one step at a time
+[*]See what it played and why: the decision log lists each accepted action with its reason and what that step spent
+[*]See the teammate's live status: health, block, energy and hand size
 [*]Invite an AI teammate on the same PC
 [*]Continue a saved co-op run: load it and the teammate rejoins
 [*]Or leave the teammate's character pick to you instead of letting it choose

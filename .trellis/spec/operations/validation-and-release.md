@@ -9,17 +9,19 @@ Run the commands below from the repository root. The command determines whether 
 | `Push-Location mcp_server; uv run --locked python -m unittest discover -s tests -v; Pop-Location` | Python MCP unit tests using the standard-library `unittest` runner | No game required; tests use fakes and patched transport where appropriate |
 | `dotnet run --project STS2AIAgent.Tests/STS2AIAgent.Tests.csproj` | The custom executable C# core test harness | No game required; this is not a live Mod validation |
 | `powershell -ExecutionPolicy Bypass -File scripts/test-mcp-tool-profile.ps1` | Offline MCP tool-profile checks | No game required; keep the repository-root working directory |
-| `python scripts/check_verification_gates.py` | Eleven offline gates: `lockfile`, `api-doc`, `api-facts`, `arch-facts`, `doc-links`, `doc-marks`, `docs-tracked`, `packaged-links`, `script-encoding`, `ps1-syntax`, and `sh-syntax` (each is described in the gate table below) | No game, no network, standard library only. Exits 1 with the failing gate named on stderr; select one or more gates with `--only api-doc\|api-facts\|arch-facts\|doc-links\|doc-marks\|docs-tracked\|lockfile\|packaged-links\|ps1-syntax\|script-encoding\|sh-syntax`, or run everything except one with `--skip <gate>`. When the repository root has no `.git` directory, `docs-tracked` prints a skip note (and the two syntax gates skip when `scripts/` holds no script of their kind, or when no interpreter is on `PATH`) instead of failing |
+| `python scripts/check_verification_gates.py` | Twelve offline gates: `lockfile`, `api-doc`, `api-facts`, `api-schema`, `arch-facts`, `doc-links`, `doc-marks`, `docs-tracked`, `packaged-links`, `script-encoding`, `ps1-syntax`, and `sh-syntax` (each is described in the gate table below) | No game, no network, standard library only. Exits 1 with the failing gate named on stderr; select one or more gates with `--only api-doc\|api-facts\|api-schema\|arch-facts\|doc-links\|doc-marks\|docs-tracked\|lockfile\|packaged-links\|ps1-syntax\|script-encoding\|sh-syntax`, or run everything except one with `--skip <gate>`. When the repository root has no `.git` directory, `docs-tracked` prints a skip note (and the two syntax gates skip when `scripts/` holds no script of their kind, or when no interpreter is on `PATH`) instead of failing |
+| `python scripts/test-api-schema.py` | Validates the generated OpenAPI model's semantic contracts (source routes/methods, nullable C# wire mappings, typed teammate intent, opaque MCP/dynamic surfaces, and stale-byte rejection) | No game, no network, standard library only; no write outside a temporary file |
 | `powershell -ExecutionPolicy Bypass -File scripts/test-verification-gates.ps1` | Proves the gates above actually fail on drift, using a throwaway fixture in the temp directory | No game, no network; creates and removes its own fixture only |
 | `powershell -ExecutionPolicy Bypass -File scripts/preflight-release.ps1` | Build, Python compile/import, offline profile, unit-test, version, packaging-source, and release-document checks | Produces static preflight output. Its final “manual validation next” list means live gameplay still needs separate checks; see the closing "Manual validation next" list in [preflight-release.ps1](../../../scripts/preflight-release.ps1) |
 
-The eleven gates are:
+The twelve gates are:
 
 | Gate | What it verifies |
 | --- | --- |
 | `lockfile` | Dependency security floors (`fastmcp`, `fast-uri`) plus manifest/lock agreement for `mcp_server/uv.lock` and `package-lock.json` |
 | `api-doc` | Every action the `POST /action` switch accepts appears in the `docs/api.md` action contract block, and the block lists no retired action |
 | `api-facts` | Facts `docs/api.md` states that code owns. The documented `mod_version` vs `mod_manifest.json`, the screen enum vs `GameStateService.ResolveNonModalScreen`, the default port vs `HttpServer.DefaultPort`, every payload field against its record, the compact rename table against the `BuildAgent*` methods, and the `/health` keys. Since 2026-09-18 also the three surfaces besides the payload, each bidirectional: **error codes** (with their HTTP status, gathered from `ApiException`, `WriteErrorAsync` and `RestError`), **event types** published on `/events/stream`, and **routes** the router serves against the documented endpoint sections |
+| `api-schema` | `docs/openapi.json` byte-matches the standard-library generator `scripts/api_schema.py`: Router route/method ownership, state/action C# wire properties, route-specific request/response wiring, and existing docs-backed shared vocabularies (actions, errors, screens, SSE event types). It does not invent detail for dynamic game-data exports, compact agent-view data, or MCP JSON-RPC envelopes; those surfaces are explicitly modeled as free-form / opaque where their source contracts are open-ended |
 | `arch-facts` | The file table in `.trellis/spec/mod/architecture.md` against the files it measures: every listed file exists, its stated line count is within 5% of the real one, the stated file and line totals hold, and **every source file over 1,000 lines appears in the table**. That page went stale once already -- it carried pre-ADR-0001 counts and kept telling readers to add each new action to both action surfaces after that duplication was gone |
 | `doc-links` | Every relative Markdown link in a tracked page resolves to a file in the repository, and a `#L<n>` anchor points at a line that file still has -- a line anchor rots as soon as the file is edited, and it rots quietly, because the link still opens. `packaged-links` answers the narrower question of whether the three shipped documents still resolve once they are outside the repo; this covers the other four hundred pages, where a link breaks for the dullest reason there is -- a file moved and the pages pointing at it did not. Skips with a note outside a git work tree |
 | `doc-marks` | Date-stamped validation records carry a historical marker, and archived topic pages keep their redirect to `history/` |
@@ -39,10 +41,12 @@ These are the offline check entry points, plus the scripts that are deliberately
 
 | Entry point | Command | What it checks |
 | --- | --- | --- |
-| Offline verification gates | `python scripts/check_verification_gates.py` | The eleven gates above; `--only <gate>` narrows the run |
+| Offline verification gates | `python scripts/check_verification_gates.py` | The twelve gates above; `--only <gate>` narrows the run |
 | Release metadata | `python scripts/check_release_metadata.py` | The five version sources below still agree |
 | Packaging source contract | `python scripts/check_release_package.py --source-root .` | The packaging script still collects the player-facing files (source mode; artifact mode inspects a real release directory or zip and is not an offline check) |
 | Budget proxy self-test | `python scripts/sts2-model-budget-proxy-selftest.py` | No-cost offline self-test of the validation budget proxy; asserts the real ledger is untouched and never calls the paid upstream |
+| API schema semantics | `python scripts/test-api-schema.py` | Source route/method ownership, nullable wire-type mappings, typed teammate intent, explicit dynamic/opaque boundaries, and stale-byte refusal for `docs/openapi.json` |
+| Decision benchmark | `python scripts/decision_benchmark.py` / `python scripts/test-decision-benchmark.py` | Validates the versioned offline action-decision suite and its scorer. It never starts a game or model; scores only snapshot-evidenced constraints and labels that limitation in the report |
 | Gate drift self-test | `powershell -ExecutionPolicy Bypass -File scripts/test-verification-gates.ps1` | Proves the gates fail on drift, using a throwaway fixture |
 | MCP tool profiles | `powershell -ExecutionPolicy Bypass -File scripts/test-mcp-tool-profile.ps1` | `guided` / `layered` / `full` tool registration |
 | PowerShell failure propagation | `powershell -ExecutionPolicy Bypass -File scripts/test-native-exit-propagation.ps1` | A failing native command propagates as a script failure |
@@ -74,6 +78,14 @@ python scripts/run_sts2_validation.py state-summary
 python scripts/run_sts2_validation.py state-invariants
 ```
 
+`patch-check` composes the four checks a game-version bump has to survive into one command, because "remember four commands in the right order" is how a patch regression ships:
+
+```powershell
+python scripts/run_sts2_validation.py patch-check
+```
+
+It requires `reflected_members_missing` to be `0` (otherwise the build is unsupported and the run stops before the expensive steps), then runs the deep mod load, the ADR 0001 state/descriptor invariants, and a replay of the recorded action surface. The replay compares the current screen against the newest `build/validation-*/action-surface-baseline.jsonl` (or `--baseline <path>`), and **only fails on a flag that disagrees for an action present on both sides** — a baseline sample was taken in some other run state, so an action set that differs between saves is reported as `only_in_state` / `only_in_baseline` rather than a failure. A screen the baseline never sampled is reported with `baseline_screen_present: false` and is not a pass; likewise a checkout with no baseline file at all. That baseline lives under gitignored `build/`, so a fresh checkout skips the replay step and says so.
+
 These state and mod checks require the game and Mod API to be online. The Python-dependent profile check uses the MCP project's environment while keeping the script path rooted at the repository:
 
 ```powershell
@@ -83,6 +95,12 @@ uv run --project mcp_server python scripts/run_sts2_validation.py mcp-tool-profi
 Other lifecycle, combat, multiplayer, and debug-gating subcommands are also registered by the same parser. Some suites can start or stop processes or mutate a game run; inspect the selected suite before execution and report those prerequisites and effects.
 
 `state-invariants` demands an action exactly where the executor would accept it. Its combat branch requires `play_card` only while `combat.action_readiness.can_use_combat_actions` is true, which is the executor's whole readiness chain, not merely `player_action_phase`: a snapshot taken while a played card is still resolving reports the local player's turn with playable cards in hand, so gating on the turn predicate alone reports a missing action that was never expected. Payloads without the readiness field fall back to `player_action_phase`, and payloads with neither keep the old demand.
+
+### Console travel names are not screen names
+
+A suite that moves the run with `run_console_command` uses the game's internal room names, which are not the `screen` values the mod reports. A rest site is `room RestSite`, not `room Rest` (`room Rest` answers `Room 'REST' not found`); a treasure room is `room Treasure`. Getting this wrong looks like a mod failure and is not one.
+
+Re-issuing a travel command while already standing in the resulting room answers 409. That is idempotence rather than a contract failure, so check the current screen before travelling. The notes are kept next to the helper in [run_sts2_validation.py](../../../scripts/run_sts2_validation.py) (`RUN_SETTLE_SECONDS` block) and for agents in [debug-and-validation.md](../../../skills/sts2-mcp-player/references/debug-and-validation.md).
 
 ## Build and package behavior
 

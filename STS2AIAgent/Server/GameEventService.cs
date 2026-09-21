@@ -1,6 +1,7 @@
 using System.Text.Json;
 using System.Threading.Channels;
 using MegaCrit.Sts2.Core.Logging;
+using STS2AIAgent.Agent;
 using STS2AIAgent.Game;
 
 namespace STS2AIAgent.Server;
@@ -74,6 +75,29 @@ internal sealed class GameEventService
                 digest => BuildSnapshotEnvelope(digest, "stream_ready"));
             _polling.SetSubscriberCount(_subscribers.Count);
             return new GameEventSubscription(lease.Id, lease.Reader, Unsubscribe);
+        }
+    }
+
+    /// <summary>
+    /// Publishes one accepted agent decision so an external client sees the same "what, and why"
+    /// the player overlay shows. Called from the decision log's notification, which may run on
+    /// whichever thread recorded the action.
+    /// </summary>
+    public void PublishDecision(DecisionLogEntry entry)
+    {
+        lock (_gate)
+        {
+            Publish("decision_made", new
+            {
+                id = entry.id,
+                source = entry.source,
+                action = entry.action,
+                reason = entry.reason,
+                state_fingerprint = entry.state_fingerprint,
+                requests_spent = entry.requests_spent,
+                total_tokens = entry.total_tokens,
+                timestamp_utc = entry.timestamp
+            });
         }
     }
 

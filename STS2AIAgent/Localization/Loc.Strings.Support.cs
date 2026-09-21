@@ -12,12 +12,12 @@ internal static partial class Loc
         map["仍有 {0} 个模型绑定此端点"] = "{0} models still use this endpoint";
         map["，其中 {0} 正在使用"] = ", and these roles are in use: {0}";
         map["暂不能删除该端点（{0}）。请先在设置中为这些模型选择其他端点并保存；重绑定完成后再删除。"] =
-            "Can't delete this endpoint yet ({0}). Choose another endpoint for these models in Settings and save; delete it after rebinding.";
+            "Cannot delete this endpoint yet ({0}). Choose another endpoint for these models in Settings and save; delete it after rebinding.";
         map["对话模型"] = "chat model";
         map["游玩模型"] = "play model";
         map["视觉模型"] = "vision model";
         map["暂不能删除该模型（仍绑定 {0}）。请先为这些用途选择其他模型并保存；重绑定完成后再删除。"] =
-            "Can't delete this model yet (still used by {0}). Choose another model for these roles in Settings and save; delete it after rebinding.";
+            "Cannot delete this model yet (still used by {0}). Choose another model for these roles in Settings and save; delete it after rebinding.";
 
         // Config/SettingsStore.cs
         map["保存失败，原配置文件未被覆盖。"] = "Saving failed. The existing settings file was not overwritten.";
@@ -51,14 +51,14 @@ internal static partial class Loc
         map["AI 会自动加入、点开局并打另一个角色。"] =
             "the AI joins, starts the run, and plays the other one.";
         map["AI 会自动加入并点开局，然后停在原地等待外部接管，不会自己出牌。"] =
-            "the AI joins and starts the run, then waits to be taken over from outside instead of playing its own cards.";
+            "the AI joins and starts the run, then waits for an external client to take over instead of playing its own cards.";
         map["找不到 FastHost 命令行参数表。"] = "Could not find the FastHost command-line argument table.";
         map["FastHost 命令行参数表类型无法写入：{0}"] =
             "Cannot write to the FastHost command-line argument table type: {0}";
         map["写入 -fastmp 后 HasArg 仍为 false。type={0}"] = "HasArg is still false after writing -fastmp. type={0}";
 
         // Multiplayer/LocalDualInstanceLauncher.cs
-        map["正在邀请 AI 队友，请等待连接结果。"] = "Inviting the AI teammate. Wait for the connection result.";
+        map["正在邀请 AI 队友，请等待连接结果。"] = "Inviting the AI teammate. Wait for it to connect.";
         map["AI 队友窗口已经在运行。请查看该窗口；若要重新组队，请先正常关闭它。"] =
             "The AI teammate window is already running. Check that window; to invite again, close it normally first.";
         map["找不到游戏可执行文件。"] = "Could not find the game executable.";
@@ -69,7 +69,7 @@ internal static partial class Loc
         map["AI 队友进程已退出（退出码 {0}）。请检查游戏日志与 Steam 双开限制后重试。"] =
             "The AI teammate process exited (exit code {0}). Check the game log and Steam's multi-instance limits, then try again.";
         map["AI 队友进程仍在运行（PID {0}），但未能确认连接。请检查队友窗口和游戏日志，不要重复启动。"] =
-            "The AI teammate process is still running (PID {0}), but the connection could not be confirmed. Check the teammate window and the game log, and do not start it again.";
+            "The AI teammate process is still running (PID {0}), but the connection could not be confirmed. Check the teammate window and the game log; do not launch another copy.";
         map["第二实例已就绪：PID {0}，API {1}"] = "Second instance ready: PID {0}, API {1}";
 
         // Multiplayer/TeamConversation.cs
@@ -108,7 +108,7 @@ internal static partial class Loc
         map["连续 {0} 次重复同一个动作且状态没有变化，已停止自动游玩。检查当前局面后可手动继续：{1}"] =
             "{0} identical actions in a row left the state unchanged, so auto-play stopped. Review the current situation, then resume manually: {1}";
         map["连续 {0} 次动作已执行但界面一直没有稳定，已停止自动游玩。检查当前局面后可手动继续：{1}"] =
-            "{0} actions in a row executed but the game never settled, so auto-play stopped. Review the current situation, then resume manually: {1}";
+            "{0} actions in a row were executed, but the game never settled, so auto-play stopped. Review the current situation, then resume manually: {1}";
 
         // Agent/CurrentRunBoundary.cs (constants stay Chinese; wrapped at the throw site)
         map["当前局已离开，自动游玩已停止。开始另一局需要手动继续。"] =
@@ -119,6 +119,6 @@ internal static partial class Loc
         // Agent/ProactiveChatPolicy.cs
         map["轻松搭档"] = "Easygoing partner";
         map["沉稳参谋"] = "Steady advisor";
-        map["简短简报"] = "Short briefing";
+        map["简短简报"] = "Brief updates";
     }
 }

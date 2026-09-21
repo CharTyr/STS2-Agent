@@ -11,6 +11,7 @@
 - 默认监听 `http://127.0.0.1:8080`
 - 响应类型固定为 `application/json; charset=utf-8`
 - 新增字段必须向后兼容，不删除既有字段
+- 机器可读 OpenAPI 3.1 / JSON Schema：[`openapi.json`](openapi.json)。它由 `scripts/api_schema.py` 从 Router 路由、C# wire payload 记录和本页已受验证的共享词汇生成；不要手改，改动后运行 `python scripts/api_schema.py`。`python scripts/check_verification_gates.py --only api-schema` 会逐字节拒绝过期产物。
 
 ---
 
@@ -146,7 +147,7 @@
   "request_id": "req_20260911_121549_7955_4",
   "data": {
     "service": "sts2-ai-agent",
-    "mod_version": "0.13.0",
+    "mod_version": "0.14.0",
     "protocol_version": "2026-03-11-v1",
     "game_version": "v0.111.0",
     "status": "ready",
@@ -1386,7 +1387,7 @@ compact 不是 `/state` 的子集，**很多键换了名字**。MCP `get_game_st
 | 字段 | 类型 | 说明 |
 | --- | --- | --- |
 | `name` | string | 动作名称 |
-| `requires_target` | boolean | 是否需要 `target_index` |
+| `requires_target` | boolean | 该动作是否**无条件**需要 `target_index`（目前所有动作恒为 `false`，见下方注记） |
 | `requires_index` | boolean | 是否需要 `card_index` 或 `option_index` |
 | `requires_coordinates` | boolean | 是否需要 `x` / `y`（目前只有 `crystal_clear_cell` 为 true） |
 | `requires_tool` | boolean | 是否需要 `tool`（目前只有 `crystal_set_tool` 为 true） |
@@ -1421,7 +1422,10 @@ compact 不是 `/state` 的子集，**很多键换了名字**。MCP `get_game_st
 }
 ```
 
-> **注意**：`play_card.requires_target` 固定为 `false`。是否需要目标取决于具体卡牌的 `combat.hand[].requires_target` 字段。
+> **注意**：`requires_target` 描述的是**调用形状**，目前所有动作恒为 `false`——没有任何动作在每次调用时都无条件需要目标。三个动作**有条件地**需要 `target_index`，且都在逐项字段上告知：
+> - `play_card`：看 `combat.hand[].requires_target`（compact 视图另有 `targets` / `valid_target_indices`）
+> - `use_potion`：看 `run.potions[].requires_target` 与 `valid_target_indices`
+> - `choose_rest_option`：联机局部分休息点选项要看该选项自身的 `requires_target`（目标空间为 `run.players`）
 
 ---
 
@@ -1506,7 +1510,7 @@ compact 不是 `/state` 的子集，**很多键换了名字**。MCP `get_game_st
 | `x` | number \| null | 水晶球格子的 X 坐标（`crystal_clear_cell`） |
 | `y` | number \| null | 水晶球格子的 Y 坐标（`crystal_clear_cell`） |
 | `tool` | string \| null | 水晶球工具：`big` 或 `small` |
-| `client_context` | object \| null | 可选的客户端上下文（如调用来源标识） |
+| `client_context` | object \| null | 可选的客户端上下文（如调用来源标识）。`client_context.decision_reason`（string）会被记进 `GET /decisions`，作为这一步的玩家可见理由 |
 | `command` | string \| null | 控制台命令（仅 `run_console_command`） |
 | `player_id` | string \| null | 多人场景下的行动归属校验；不属于本机角色时返回 `forbidden_actor` |
 
@@ -1611,6 +1615,7 @@ data: }
 | `reward_decision_required` | 奖励需要选择 |
 | `event_state_changed` | 事件内部状态变化 |
 | `available_actions_changed` | 可用动作集合变化 |
+| `decision_made` | 一次**被接受**的动作写进决策日志（与 `GET /decisions` 同一份记录）。载荷为 `id`、`source`、`action`、`reason`、`state_fingerprint`、`requests_spent`、`total_tokens`、`timestamp_utc`；被拒绝或失败的动作不发此事件 |
 | `debug_churn` | 仅由调试动作 `inject_event_churn` 发布（需 `STS2_ENABLE_DEBUG_ACTIONS=1`）。载荷含 `synthetic: true` 与 1 起的 `index`，用于在实机里把慢订阅者的队列顶满 |
 
 **事件类型名由 `EventChurnPolicy.EventType` 常量给出，不是字面量。** 门禁的事件名提取只认字面量，所以这里显式说明：`debug_churn` 是变量拼出来的名字，不会被自动提取发现——新增任何**变量形式**的事件名时，必须同时更新本表和提取规则，否则两者都会静默漏检。
@@ -1686,6 +1691,24 @@ AI 队友实例上的受控端点，由宿主进程在本地调用，普通玩�
 - `POST /companion/control`：请求体 `{"running": true|false}`，响应 `data.phase`；队友被远程暂停后不会再自行启动
 - `POST /companion/message`：请求体 `{"message": "..."}`（1–2000 字符），响应 `data.reply` 为队友的回复
 
+### `POST /companion/message` 的带类型信号（可选）
+
+自由文本对决策循环不可靠：「我打左边那个」既没有说清是哪个 `enemy_index`，两个人重复说也无法判断指的是不是同一个。所以 `message` 之外可以再带一个**可选**的 `intent` 对象，`message` 本身仍然是必填的、仍然是人读的那份。
+
+| 字段 | 类型 | 适用 `type` | 说明 |
+| --- | --- | --- | --- |
+| `type` | string | 必填 | `focus_fire`、`target_announce`、`potion_ownership` 之一 |
+| `enemy_index` | number | `focus_fire` / `target_announce` | 本回合针对的敌人索引（`combat.enemies[].i` 的那套），必填 |
+| `potion_index` | number | `potion_ownership` | 药水槽索引，必填 |
+| `player_id` | string | `potion_ownership` | 这瓶药水归谁；省略则该行显示为「未指定玩家」 |
+| `potion_id` | string | `potion_ownership` | 药水 ID；省略则显示为「一瓶药水」 |
+
+- **向后兼容**：不带 `intent` 的请求与以前完全一致；`intent: null` 等同于不带。
+- **格式错误会被拒绝，不会被丢弃**：`type` 缺失或未知、该类型必填字段缺失、字段类型不对，一律 400 `invalid_request`。静默丢弃一个信号看起来就像队友无视了指令。
+- **多出来的字段会被忽略**，便于前后版本共存。
+
+收到的信号会以独立字段进入队友的决策上下文（与消息文本并列，各自回答不同的问题），并在 `focus_fire` / `target_announce` 存在时给队友的下一步决策追加一条**约束**：队友本回合在打 `enemy_index N`，除非那个敌人已经必死或只剩最后一击，否则不要把伤害再倾泻在它身上。这是提示词层面的约束，不是硬性改写出牌——模型能看到实况血量与 `lethal_risks`，能区分「别重复」和「补刀」，在代码里拒绝动作反而会拿走这个判断。
+
 ---
 
 ## `GET /data/{collection}`
@@ -1716,9 +1739,47 @@ Invoke-RestMethod -Uri 'http://127.0.0.1:8080/data/cards' | ConvertTo-Json -Dept
 
 ---
 
+## `GET /decisions`
+
+按时间顺序返回**已被接受**的决策（最旧在前，最新在最后），用于复盘「这一步为什么这么打」。这是进程内共享的一份日志：游戏内自动游玩、`POST /action`（外部 agent）和原生 MCP 的 `act` 都写同一份，`source` 区分来源。
+
+查询参数 `limit` 可选，默认 50，最大 200；超出范围会被夹到边界，非法值回落到默认值。
+
+| 字段 | 类型 | 说明 |
+| --- | --- | --- |
+| `id` | number | 进程内单调递增序号，从 1 开始 |
+| `timestamp` | string | ISO 8601 UTC 时间戳 |
+| `source` | string | 写入者：`agent_loop`（游戏内自动游玩）、`http_api`（`POST /action`）、`native_mcp`（原生 MCP `act`） |
+| `action` | string | 被接受的动作名 |
+| `reason` | string \| null | 该动作携带的一句话理由；调用方没给时为 `null` |
+| `state_fingerprint` | string \| null | 动作执行后的紧凑状态指纹（无进展守卫用）；不可得时为 `null` |
+| `requests_spent` | number | 这一步花掉的模型请求数（`http_api` / `native_mcp` 记为 0） |
+| `total_tokens` | number \| null | 这一步的 token 总量；模型未回报用量时为 `null` |
+| `run_id` | string \| null | 这一步属于哪一局；尚未识别到对局时为 `null`（Mod 内部的占位值 `run_unknown` 不会被写进来，否则它会把开局前的决策都混进同一个桶） |
+
+只有**被接受**的动作才会进日志：动作名不在 `available_actions` 里、索引越界或执行失败时都不记录，所以日志里不会出现玩家界面上从未发生过的选择。
+
+理由文本来自模型的 `reason` 参数（见 `POST /action` 的 `client_context.decision_reason`），落盘前会经过与诊断导出相同的脱敏和长度裁剪。
+
+日志同时以 JSONL 追加到设置文件同目录的 `decisions.jsonl`（默认 `%APPDATA%\STS2AIAgent\decisions.jsonl`），超过 2 MB 时轮转为 `decisions.jsonl.previous`。写盘是尽力而为：诊断目录不可写时只影响落盘，不影响对局。
+
+`run_id` 是给「本局花了多少」用的：一次自动游玩会话可以跨过不止一局，所以会话总量与本局总量回答的是两个问题。覆盖层「决策日志」页两行都显示；本局 token 在模型未回报用量时显示为**未知**，而不是 0——「没花」和「没人告诉我们」不是同一件事。
+
+### 响应示例
+
+```json
+{
+  "ok": true,
+  "request_id": "…",
+  "data": []
+}
+```
+
+---
+
 ## `POST /mcp`（原生 MCP）
 
-进程内 MCP 端点，路径为 `/mcp`（`/mcp/` 等价，路由匹配不区分大小写，也不限制 HTTP 方法；客户端按 Streamable HTTP 语义发 `POST` 即可），与其它路由共用同一个 HTTP 监听端口，默认 `http://127.0.0.1:8080/mcp`。
+进程内 MCP 端点，路径为 `/mcp`（`/mcp/` 等价，路由匹配不区分大小写）。这是 MCP Streamable HTTP 的**独立面**：`OPTIONS` 返回 204，`DELETE` 清除 MCP session 并返回 `{ok:true}`，JSON-RPC 只接受 `POST`；`GET` 和其它方法返回 405 `method_not_allowed`。它与其它路由共用同一个 HTTP 监听端口，默认 `http://127.0.0.1:8080/mcp`。
 
 - 需在游戏内悬浮窗「接入」页勾选开启（settings 的 `mcpEnabled`）；未开启时返回 403 `mcp_disabled`
 - 走 MCP Streamable HTTP 语义：请求体为 JSON-RPC，响应为 JSON 或 SSE

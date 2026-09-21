@@ -20,6 +20,11 @@ internal static class AgentTools
                 type = "string",
                 @enum = new[] { "big", "small" },
                 description = "Crystal Sphere tool."
+            },
+            reason = new
+            {
+                type = "string",
+                description = "One short sentence saying why you chose this action. Shown to the player as the decision's rationale."
             }
         },
         required = new[] { "action" }
@@ -72,6 +77,27 @@ internal static class AgentTools
         }
     };
 
+    private static readonly object DecisionLogParameters = new
+    {
+        type = "object",
+        properties = new
+        {
+            limit = new { type = "integer", description = "How many recent decisions to return, newest last. Default 50, maximum 200." }
+        }
+    };
+
+    private static readonly object DiffStateParameters = new
+    {
+        type = "object",
+        properties = new
+        {
+            before = new { type = "object", description = "The earlier /state payload (the data object, not the whole envelope)." },
+            after = new { type = "object", description = "The later /state payload to compare against it." },
+            limit = new { type = "integer", description = "Maximum number of changed paths to report. Default 200." }
+        },
+        required = new[] { "before", "after" }
+    };
+
     public static readonly IReadOnlyList<LlmTool> ReadOnly = new[]
     {
         Tool("get_game_state", "Read the compact live game state. Always prefer this over memory. This is sufficient to play every screen without vision."),
@@ -88,14 +114,18 @@ internal static class AgentTools
         new LlmTool
         {
             Name = "act",
-            Description = "Execute one legal game action. Only use names from the latest available_actions. Recompute indexes from the latest state.",
+            Description = "Execute one legal game action. Only use names from the latest available_actions. Recompute indexes from the latest state, and attach a short reason so the player can see why.",
             Parameters = ActParameters
         }
     }).ToArray();
 
     public static readonly IReadOnlyList<LlmTool> Mcp = new[]
     {
-        Tool("health_check", "Check whether the STS2 AI Agent mod is loaded and this MCP endpoint is open.")
+        Tool("health_check", "Check whether the STS2 AI Agent mod is loaded and this MCP endpoint is open."),
+        Tool("get_decision_log", "Read the recent accepted decisions with the rationale each one carried. Newest last; use it to review why the agent played the way it did.", DecisionLogParameters),
+        Tool("get_run_summary", "Summarise the current run in one call: character, floor, act, boss, HP, gold, and the deck/relic/potion counts."),
+        Tool("get_scene_guidance", "Return the strategy rules that apply to the screen the game is on right now. Empty on a screen with no strategic choice."),
+        Tool("diff_state", "Compare two /state payloads and report the paths that differ. Use it to see exactly what an action changed.", DiffStateParameters)
     }.Concat(Play).ToArray();
 
     private static LlmTool Tool(string name, string description, object? parameters = null)

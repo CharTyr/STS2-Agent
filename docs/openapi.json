@@ -1,0 +1,3693 @@
+{
+  "components": {
+    "schemas": {
+      "ActionDescriptor": {
+        "additionalProperties": true,
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "requires_coordinates": {
+            "type": "boolean"
+          },
+          "requires_index": {
+            "type": "boolean"
+          },
+          "requires_target": {
+            "type": "boolean"
+          },
+          "requires_tool": {
+            "type": "boolean"
+          }
+        },
+        "type": "object"
+      },
+      "ActionRequest": {
+        "additionalProperties": true,
+        "properties": {
+          "action": {
+            "enum": [
+              "resolve_rewards",
+              "end_turn",
+              "play_card",
+              "switch_profile",
+              "continue_run",
+              "continue_game_over",
+              "dismiss_game_over_wait",
+              "abandon_run",
+              "save_and_quit",
+              "open_character_select",
+              "open_timeline",
+              "confirm_unlock",
+              "close_main_menu_submenu",
+              "choose_timeline_epoch",
+              "confirm_timeline_overlay",
+              "choose_map_node",
+              "collect_rewards_and_proceed",
+              "claim_reward",
+              "choose_reward_card",
+              "skip_reward_cards",
+              "select_deck_card",
+              "close_cards_view",
+              "confirm_selection",
+              "proceed",
+              "open_chest",
+              "choose_treasure_relic",
+              "choose_event_option",
+              "crystal_set_tool",
+              "crystal_clear_cell",
+              "choose_capstone_option",
+              "choose_bundle",
+              "confirm_bundle",
+              "choose_rest_option",
+              "open_shop_inventory",
+              "close_shop_inventory",
+              "buy_card",
+              "buy_relic",
+              "buy_potion",
+              "remove_card_at_shop",
+              "select_character",
+              "embark",
+              "unready",
+              "host_multiplayer_lobby",
+              "join_multiplayer_lobby",
+              "ready_multiplayer_lobby",
+              "disconnect_multiplayer_lobby",
+              "increase_ascension",
+              "decrease_ascension",
+              "use_potion",
+              "discard_potion",
+              "run_console_command",
+              "inject_event_churn",
+              "confirm_modal",
+              "dismiss_modal",
+              "return_to_main_menu",
+              "invite_ai_teammate",
+              "continue_ai_teammate"
+            ],
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "card_index": {
+            "format": "int32",
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "client_context": {
+            "description": "Free-form JSON value."
+          },
+          "command": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "option_index": {
+            "format": "int32",
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "player_id": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "target_index": {
+            "format": "int32",
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "tool": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "x": {
+            "format": "int32",
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "y": {
+            "format": "int32",
+            "type": [
+              "integer",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "action"
+        ],
+        "type": "object"
+      },
+      "ActionResponsePayload": {
+        "additionalProperties": true,
+        "properties": {
+          "action": {
+            "type": "string"
+          },
+          "message": {
+            "type": "string"
+          },
+          "stable": {
+            "type": "boolean"
+          },
+          "state": {
+            "$ref": "#/components/schemas/GameStatePayload"
+          },
+          "status": {
+            "enum": [
+              "completed",
+              "pending",
+              "failed"
+            ],
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "ApiError": {
+        "additionalProperties": true,
+        "properties": {
+          "code": {
+            "enum": [
+              "invalid_request",
+              "not_found",
+              "invalid_action",
+              "invalid_target",
+              "state_unavailable",
+              "forbidden_actor",
+              "mcp_disabled",
+              "session_not_ready",
+              "pause_pending",
+              "internal_error",
+              "listener_error",
+              "local_only",
+              "companion_session_required",
+              "companion_not_ready",
+              "not_host",
+              "teammate_control_failed",
+              "invite_failed",
+              "continue_failed",
+              "invalid_action",
+              "invalid_action",
+              "collection_not_found",
+              "export_error",
+              "origin_not_allowed",
+              "method_not_allowed",
+              "payload_too_large"
+            ],
+            "type": "string"
+          },
+          "details": {
+            "description": "Route-specific free-form JSON or null."
+          },
+          "message": {
+            "type": "string"
+          },
+          "retryable": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "code",
+          "message",
+          "details",
+          "retryable"
+        ],
+        "type": "object"
+      },
+      "ApiErrorEnvelope": {
+        "additionalProperties": true,
+        "description": "The ordinary non-MCP failure envelope.",
+        "properties": {
+          "error": {
+            "$ref": "#/components/schemas/ApiError"
+          },
+          "ok": {
+            "const": false
+          },
+          "request_id": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "ok",
+          "request_id",
+          "error"
+        ],
+        "type": "object"
+      },
+      "ApiSuccessEnvelope": {
+        "additionalProperties": true,
+        "description": "The ordinary non-MCP success envelope. Each operation narrows data to its route-specific schema.",
+        "properties": {
+          "data": {},
+          "ok": {
+            "const": true
+          },
+          "request_id": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "ok",
+          "request_id",
+          "data"
+        ],
+        "type": "object"
+      },
+      "AscensionEffectPayload": {
+        "additionalProperties": true,
+        "properties": {
+          "description": {
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "AvailableActionsPayload": {
+        "additionalProperties": true,
+        "properties": {
+          "actions": {
+            "items": {
+              "$ref": "#/components/schemas/ActionDescriptor"
+            },
+            "type": "array"
+          },
+          "screen": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "BundlePayload": {
+        "additionalProperties": true,
+        "properties": {
+          "cards": {
+            "items": {
+              "$ref": "#/components/schemas/RewardCardOptionPayload"
+            },
+            "type": "array"
+          },
+          "index": {
+            "format": "int32",
+            "type": "integer"
+          }
+        },
+        "type": "object"
+      },
+      "CardDynamicValuePayload": {
+        "additionalProperties": true,
+        "properties": {
+          "base_value": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "current_value": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "enchanted_value": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "is_modified": {
+            "type": "boolean"
+          },
+          "name": {
+            "type": "string"
+          },
+          "was_just_upgraded": {
+            "type": "boolean"
+          }
+        },
+        "type": "object"
+      },
+      "CharacterSelectOptionPayload": {
+        "additionalProperties": true,
+        "properties": {
+          "character_id": {
+            "type": "string"
+          },
+          "index": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "is_locked": {
+            "type": "boolean"
+          },
+          "is_random": {
+            "type": "boolean"
+          },
+          "is_selected": {
+            "type": "boolean"
+          },
+          "name": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "CharacterSelectPayload": {
+        "additionalProperties": true,
+        "properties": {
+          "ascension": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "can_decrease_ascension": {
+            "type": "boolean"
+          },
+          "can_embark": {
+            "type": "boolean"
+          },
+          "can_increase_ascension": {
+            "type": "boolean"
+          },
+          "can_unready": {
+            "type": "boolean"
+          },
+          "characters": {
+            "items": {
+              "$ref": "#/components/schemas/CharacterSelectOptionPayload"
+            },
+            "type": "array"
+          },
+          "is_multiplayer": {
+            "type": "boolean"
+          },
+          "is_waiting_for_players": {
+            "type": "boolean"
+          },
+          "local_ready": {
+            "type": "boolean"
+          },
+          "max_ascension": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "max_players": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "modifier_ids": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "net_game_type": {
+            "type": "string"
+          },
+          "player_count": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "players": {
+            "items": {
+              "$ref": "#/components/schemas/CharacterSelectPlayerPayload"
+            },
+            "type": "array"
+          },
+          "seed": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "selected_character_id": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "type": "object"
+      },
+      "CharacterSelectPlayerPayload": {
+        "additionalProperties": true,
+        "properties": {
+          "character_id": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "character_name": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "is_local": {
+            "type": "boolean"
+          },
+          "is_ready": {
+            "type": "boolean"
+          },
+          "max_multiplayer_ascension_unlocked": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "player_id": {
+            "type": "string"
+          },
+          "slot_index": {
+            "format": "int32",
+            "type": "integer"
+          }
+        },
+        "type": "object"
+      },
+      "ChestPayload": {
+        "additionalProperties": true,
+        "properties": {
+          "has_relic_been_claimed": {
+            "type": "boolean"
+          },
+          "is_opened": {
+            "type": "boolean"
+          },
+          "relic_options": {
+            "items": {
+              "$ref": "#/components/schemas/ChestRelicOptionPayload"
+            },
+            "type": "array"
+          }
+        },
+        "type": "object"
+      },
+      "ChestRelicOptionPayload": {
+        "additionalProperties": true,
+        "properties": {
+          "index": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "name": {
+            "type": "string"
+          },
+          "rarity": {
+            "type": "string"
+          },
+          "relic_id": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "CombatActionReadinessPayload": {
+        "additionalProperties": true,
+        "properties": {
+          "actions_settled": {
+            "type": "boolean"
+          },
+          "all_players_ready_to_end_turn": {
+            "type": "boolean"
+          },
+          "can_use_combat_actions": {
+            "type": "boolean"
+          },
+          "combat_in_progress": {
+            "type": "boolean"
+          },
+          "combat_over_or_ending": {
+            "type": "boolean"
+          },
+          "combat_room_mode": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "end_turn_kick": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "ending_turn_phase_one": {
+            "type": "boolean"
+          },
+          "ending_turn_phase_two": {
+            "type": "boolean"
+          },
+          "hand_in_card_play": {
+            "type": [
+              "boolean",
+              "null"
+            ]
+          },
+          "hand_in_card_selection": {
+            "type": [
+              "boolean",
+              "null"
+            ]
+          },
+          "hand_mode": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "is_paused": {
+            "type": "boolean"
+          },
+          "local_ready_to_end_turn": {
+            "type": "boolean"
+          },
+          "local_turn_ready": {
+            "type": "boolean"
+          },
+          "modal_open": {
+            "type": "boolean"
+          },
+          "modal_type": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "player_action_phase": {
+            "type": "boolean"
+          },
+          "player_actions_disabled": {
+            "type": "boolean"
+          },
+          "ready_action_type": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "reason": {
+            "type": "string"
+          },
+          "running_action_type": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "snapshot_stable": {
+            "type": "boolean"
+          }
+        },
+        "type": "object"
+      },
+      "CombatEnemyIntentPayload": {
+        "additionalProperties": true,
+        "properties": {
+          "damage": {
+            "format": "int32",
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "hits": {
+            "format": "int32",
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "index": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "intent_type": {
+            "type": "string"
+          },
+          "label": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "status_card_count": {
+            "format": "int32",
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "total_damage": {
+            "format": "int32",
+            "type": [
+              "integer",
+              "null"
+            ]
+          }
+        },
+        "type": "object"
+      },
+      "CombatEnemyPayload": {
+        "additionalProperties": true,
+        "properties": {
+          "base_max_hp": {
+            "format": "int32",
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "block": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "current_hp": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "enemy_id": {
+            "type": "string"
+          },
+          "index": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "intent": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "intents": {
+            "items": {
+              "$ref": "#/components/schemas/CombatEnemyIntentPayload"
+            },
+            "type": "array"
+          },
+          "is_alive": {
+            "type": "boolean"
+          },
+          "is_hittable": {
+            "type": "boolean"
+          },
+          "max_hp": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "move_id": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "name": {
+            "type": "string"
+          },
+          "powers": {
+            "items": {
+              "$ref": "#/components/schemas/CombatPowerPayload"
+            },
+            "type": "array"
+          }
+        },
+        "type": "object"
+      },
+      "CombatHandCardPayload": {
+        "additionalProperties": true,
+        "properties": {
+          "can_play_result": {
+            "type": "boolean"
+          },
+          "card_id": {
+            "type": "string"
+          },
+          "costs_x": {
+            "type": "boolean"
+          },
+          "dynamic_values": {
+            "items": {
+              "$ref": "#/components/schemas/CardDynamicValuePayload"
+            },
+            "type": "array"
+          },
+          "energy_cost": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "index": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "name": {
+            "type": "string"
+          },
+          "playable": {
+            "type": "boolean"
+          },
+          "requires_target": {
+            "type": "boolean"
+          },
+          "resolved_rules_text": {
+            "type": "string"
+          },
+          "rules_text": {
+            "type": "string"
+          },
+          "star_cost": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "star_costs_x": {
+            "type": "boolean"
+          },
+          "target_index_space": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "target_type": {
+            "type": "string"
+          },
+          "unplayable_preventer_id": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "unplayable_preventer_type": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "unplayable_reason": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "unplayable_reason_raw": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "upgraded": {
+            "type": "boolean"
+          },
+          "valid_target_indices": {
+            "items": {
+              "format": "int32",
+              "type": "integer"
+            },
+            "type": "array"
+          }
+        },
+        "type": "object"
+      },
+      "CombatLethalRiskPayload": {
+        "additionalProperties": true,
+        "properties": {
+          "damage_after_block": {
+            "format": "int32",
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "incoming_damage": {
+            "format": "int32",
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "player_block": {
+            "format": "int32",
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "player_hp": {
+            "format": "int32",
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "power_amount": {
+            "format": "int32",
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "power_id": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "reason": {
+            "type": "string"
+          },
+          "risk_id": {
+            "type": "string"
+          },
+          "source": {
+            "type": "string"
+          },
+          "will_kill_player": {
+            "type": "boolean"
+          }
+        },
+        "type": "object"
+      },
+      "CombatOrbPayload": {
+        "additionalProperties": true,
+        "properties": {
+          "evoke_value": {
+            "type": "number"
+          },
+          "is_front": {
+            "type": "boolean"
+          },
+          "name": {
+            "type": "string"
+          },
+          "orb_id": {
+            "type": "string"
+          },
+          "passive_value": {
+            "type": "number"
+          },
+          "slot_index": {
+            "format": "int32",
+            "type": "integer"
+          }
+        },
+        "type": "object"
+      },
+      "CombatPayload": {
+        "additionalProperties": true,
+        "properties": {
+          "action_readiness": {
+            "$ref": "#/components/schemas/CombatActionReadinessPayload"
+          },
+          "end_turn_will_kill_player": {
+            "type": "boolean"
+          },
+          "enemies": {
+            "items": {
+              "$ref": "#/components/schemas/CombatEnemyPayload"
+            },
+            "type": "array"
+          },
+          "hand": {
+            "items": {
+              "$ref": "#/components/schemas/CombatHandCardPayload"
+            },
+            "type": "array"
+          },
+          "lethal_risks": {
+            "items": {
+              "$ref": "#/components/schemas/CombatLethalRiskPayload"
+            },
+            "type": "array"
+          },
+          "player": {
+            "$ref": "#/components/schemas/CombatPlayerPayload"
+          },
+          "players": {
+            "items": {
+              "$ref": "#/components/schemas/CombatPlayerSummaryPayload"
+            },
+            "type": "array"
+          }
+        },
+        "type": "object"
+      },
+      "CombatPetPayload": {
+        "additionalProperties": true,
+        "properties": {
+          "block": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "current_hp": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "index": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "max_hp": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "name": {
+            "type": "string"
+          },
+          "pet_id": {
+            "type": "string"
+          },
+          "powers": {
+            "items": {
+              "$ref": "#/components/schemas/CombatPowerPayload"
+            },
+            "type": "array"
+          }
+        },
+        "type": "object"
+      },
+      "CombatPlayerPayload": {
+        "additionalProperties": true,
+        "properties": {
+          "attacks_played_this_turn": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "base_orb_slots": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "block": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "cards_played_this_turn": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "current_hp": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "empty_orb_slots": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "energy": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "focus": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "max_hp": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "orb_capacity": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "orbs": {
+            "items": {
+              "$ref": "#/components/schemas/CombatOrbPayload"
+            },
+            "type": "array"
+          },
+          "pet_missing": {
+            "type": "boolean"
+          },
+          "pets": {
+            "items": {
+              "$ref": "#/components/schemas/CombatPetPayload"
+            },
+            "type": "array"
+          },
+          "powers": {
+            "items": {
+              "$ref": "#/components/schemas/CombatPowerPayload"
+            },
+            "type": "array"
+          },
+          "skills_played_this_turn": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "stars": {
+            "format": "int32",
+            "type": "integer"
+          }
+        },
+        "type": "object"
+      },
+      "CombatPlayerSummaryPayload": {
+        "additionalProperties": true,
+        "properties": {
+          "block": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "character_id": {
+            "type": "string"
+          },
+          "character_name": {
+            "type": "string"
+          },
+          "current_hp": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "energy": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "focus": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "is_alive": {
+            "type": "boolean"
+          },
+          "is_connected": {
+            "type": "boolean"
+          },
+          "is_local": {
+            "type": "boolean"
+          },
+          "max_hp": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "player_id": {
+            "type": "string"
+          },
+          "slot_index": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "stars": {
+            "format": "int32",
+            "type": "integer"
+          }
+        },
+        "type": "object"
+      },
+      "CombatPowerPayload": {
+        "additionalProperties": true,
+        "properties": {
+          "amount": {
+            "format": "int32",
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "index": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "is_debuff": {
+            "type": "boolean"
+          },
+          "name": {
+            "type": "string"
+          },
+          "power_id": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "CompanionControlResponseData": {
+        "additionalProperties": true,
+        "properties": {
+          "phase": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "CompanionMessageRequest": {
+        "additionalProperties": true,
+        "properties": {
+          "intent": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/TeamIntent"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "message": {
+            "maxLength": 2000,
+            "minLength": 1,
+            "type": "string"
+          }
+        },
+        "required": [
+          "message"
+        ],
+        "type": "object"
+      },
+      "CompanionMessageResponseData": {
+        "additionalProperties": true,
+        "properties": {
+          "reply": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "CrystalSphereItemPayload": {
+        "additionalProperties": true,
+        "properties": {
+          "cells": {
+            "items": {
+              "items": {
+                "format": "int32",
+                "type": "integer"
+              },
+              "type": "array"
+            },
+            "type": "array"
+          },
+          "height": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "hidden_cells": {
+            "items": {
+              "items": {
+                "format": "int32",
+                "type": "integer"
+              },
+              "type": "array"
+            },
+            "type": "array"
+          },
+          "is_good": {
+            "type": "boolean"
+          },
+          "kind": {
+            "type": "string"
+          },
+          "revealed": {
+            "type": "boolean"
+          },
+          "width": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "x": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "y": {
+            "format": "int32",
+            "type": "integer"
+          }
+        },
+        "type": "object"
+      },
+      "CrystalSpherePayload": {
+        "additionalProperties": true,
+        "properties": {
+          "divinations_left": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "grid_height": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "grid_width": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "hidden_cells": {
+            "items": {
+              "items": {
+                "format": "int32",
+                "type": "integer"
+              },
+              "type": "array"
+            },
+            "type": "array"
+          },
+          "is_finished": {
+            "type": "boolean"
+          },
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/CrystalSphereItemPayload"
+            },
+            "type": "array"
+          },
+          "tool": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "DecisionLogEntry": {
+        "additionalProperties": true,
+        "properties": {
+          "action": {
+            "type": "string"
+          },
+          "id": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "reason": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "requests_spent": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "run_id": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "source": {
+            "type": "string"
+          },
+          "state_fingerprint": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "timestamp": {
+            "type": "string"
+          },
+          "total_tokens": {
+            "format": "int32",
+            "type": [
+              "integer",
+              "null"
+            ]
+          }
+        },
+        "type": "object"
+      },
+      "DeckCardPayload": {
+        "additionalProperties": true,
+        "properties": {
+          "card_id": {
+            "type": "string"
+          },
+          "card_type": {
+            "type": "string"
+          },
+          "costs_x": {
+            "type": "boolean"
+          },
+          "dynamic_values": {
+            "items": {
+              "$ref": "#/components/schemas/CardDynamicValuePayload"
+            },
+            "type": "array"
+          },
+          "energy_cost": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "index": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "name": {
+            "type": "string"
+          },
+          "rarity": {
+            "type": "string"
+          },
+          "resolved_rules_text": {
+            "type": "string"
+          },
+          "rules_text": {
+            "type": "string"
+          },
+          "star_cost": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "star_costs_x": {
+            "type": "boolean"
+          },
+          "upgraded": {
+            "type": "boolean"
+          }
+        },
+        "type": "object"
+      },
+      "EventOptionPayload": {
+        "additionalProperties": true,
+        "properties": {
+          "description": {
+            "type": "string"
+          },
+          "has_relic_preview": {
+            "type": "boolean"
+          },
+          "index": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "is_locked": {
+            "type": "boolean"
+          },
+          "is_proceed": {
+            "type": "boolean"
+          },
+          "text_key": {
+            "type": "string"
+          },
+          "title": {
+            "type": "string"
+          },
+          "will_kill_player": {
+            "type": "boolean"
+          }
+        },
+        "type": "object"
+      },
+      "EventPayload": {
+        "additionalProperties": true,
+        "properties": {
+          "description": {
+            "type": "string"
+          },
+          "event_id": {
+            "type": "string"
+          },
+          "is_finished": {
+            "type": "boolean"
+          },
+          "options": {
+            "items": {
+              "$ref": "#/components/schemas/EventOptionPayload"
+            },
+            "type": "array"
+          },
+          "title": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "GameDataItem": {
+        "additionalProperties": true,
+        "description": "Collection-specific exported game-data object.",
+        "type": "object"
+      },
+      "GameEventEnvelope": {
+        "additionalProperties": true,
+        "properties": {
+          "data": {
+            "description": "Free-form JSON value."
+          },
+          "event_id": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "timestamp_utc": {
+            "type": "string"
+          },
+          "type": {
+            "enum": [
+              "stream_ready",
+              "session_started",
+              "screen_changed",
+              "combat_started",
+              "combat_ended",
+              "combat_turn_changed",
+              "player_action_window_opened",
+              "player_action_window_closed",
+              "route_decision_required",
+              "reward_decision_required",
+              "event_state_changed",
+              "available_actions_changed",
+              "decision_made",
+              "debug_churn"
+            ],
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "GameOverPayload": {
+        "additionalProperties": true,
+        "properties": {
+          "can_continue": {
+            "type": "boolean"
+          },
+          "can_return_to_main_menu": {
+            "type": "boolean"
+          },
+          "character_id": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "floor": {
+            "format": "int32",
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "is_victory": {
+            "type": "boolean"
+          },
+          "phase": {
+            "type": "string"
+          },
+          "save_error": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "save_status": {
+            "type": "string"
+          },
+          "save_verified": {
+            "type": "boolean"
+          },
+          "showing_summary": {
+            "type": "boolean"
+          },
+          "waiting_for_other_players": {
+            "type": "boolean"
+          }
+        },
+        "type": "object"
+      },
+      "GameStatePayload": {
+        "additionalProperties": true,
+        "properties": {
+          "agent_view": {
+            "description": "Free-form JSON value."
+          },
+          "available_actions": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "bundles": {
+            "items": {
+              "$ref": "#/components/schemas/BundlePayload"
+            },
+            "type": [
+              "array",
+              "null"
+            ]
+          },
+          "capstone": {
+            "description": "Free-form JSON value."
+          },
+          "character_select": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CharacterSelectPayload"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "chest": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ChestPayload"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "combat": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CombatPayload"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "crystal_sphere": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CrystalSpherePayload"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "event": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/EventPayload"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "game_over": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/GameOverPayload"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "in_combat": {
+            "type": "boolean"
+          },
+          "map": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/MapPayload"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "modal": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ModalPayload"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "multiplayer": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/MultiplayerPayload"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "multiplayer_lobby": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/MultiplayerLobbyPayload"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "native_profile_id": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "rest": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/RestPayload"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "reward": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/RewardPayload"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "run": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/RunPayload"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "run_id": {
+            "type": "string"
+          },
+          "screen": {
+            "enum": [
+              "MAIN_MENU",
+              "CHARACTER_SELECT",
+              "MULTIPLAYER_LOBBY",
+              "MULTIPLAYER_LOAD",
+              "BUNDLE_SELECTION",
+              "CAPSTONE_SELECTION",
+              "PAUSE_MENU",
+              "SETTINGS",
+              "COMPENDIUM",
+              "RELIC_COLLECTION",
+              "POTION_LAB",
+              "BESTIARY",
+              "STATS",
+              "RUN_HISTORY",
+              "MAP",
+              "COMBAT",
+              "EVENT",
+              "CRYSTAL_SPHERE",
+              "SHOP",
+              "REST",
+              "REWARD",
+              "CHEST",
+              "CARD_SELECTION",
+              "CARDS_VIEW",
+              "CARD_LIBRARY",
+              "CARD_PILE",
+              "MODAL",
+              "GAME_OVER",
+              "UNLOCK",
+              "TIMELINE",
+              "FAKE_MERCHANT",
+              "PATCH_NOTES",
+              "CARD_INSPECT",
+              "RELIC_INSPECT",
+              "FEEDBACK",
+              "UNKNOWN"
+            ],
+            "type": "string"
+          },
+          "selection": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SelectionPayload"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "session": {
+            "$ref": "#/components/schemas/SessionPayload"
+          },
+          "shop": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ShopPayload"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "state_version": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "timeline": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/TimelinePayload"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "turn": {
+            "format": "int32",
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "unlock": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/UnlockPayload"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "type": "object"
+      },
+      "HealthData": {
+        "additionalProperties": true,
+        "description": "Health fields emitted by Router.BuildHealthData. Nested diagnostics remain forward-compatible free-form JSON.",
+        "properties": {
+          "api_host": {},
+          "api_port": {},
+          "companion": {},
+          "companion_process_alive": {},
+          "companion_process_exited": {},
+          "compatibility": {},
+          "dual_launch_outcome": {},
+          "dual_status": {},
+          "game_version": {},
+          "instance_role": {},
+          "mcp_enabled": {},
+          "mcp_url": {},
+          "mod_version": {},
+          "play_phase": {},
+          "play_running": {},
+          "process_id": {},
+          "protocol_version": {},
+          "service": {},
+          "session_requests": {},
+          "state_build": {},
+          "status": {},
+          "stop_kind": {},
+          "team_control_status": {}
+        },
+        "required": [
+          "service",
+          "mod_version",
+          "protocol_version",
+          "game_version",
+          "status",
+          "api_host",
+          "api_port",
+          "process_id",
+          "instance_role",
+          "mcp_enabled",
+          "mcp_url",
+          "play_running",
+          "play_phase",
+          "stop_kind",
+          "session_requests",
+          "companion_process_alive",
+          "companion_process_exited",
+          "companion",
+          "dual_status",
+          "dual_launch_outcome",
+          "team_control_status",
+          "compatibility",
+          "state_build"
+        ],
+        "type": "object"
+      },
+      "MapCoordPayload": {
+        "additionalProperties": true,
+        "properties": {
+          "col": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "row": {
+            "format": "int32",
+            "type": "integer"
+          }
+        },
+        "type": "object"
+      },
+      "MapGraphNodePayload": {
+        "additionalProperties": true,
+        "properties": {
+          "children": {
+            "items": {
+              "$ref": "#/components/schemas/MapCoordPayload"
+            },
+            "type": "array"
+          },
+          "col": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "is_available": {
+            "type": "boolean"
+          },
+          "is_boss": {
+            "type": "boolean"
+          },
+          "is_current": {
+            "type": "boolean"
+          },
+          "is_second_boss": {
+            "type": "boolean"
+          },
+          "is_start": {
+            "type": "boolean"
+          },
+          "node_type": {
+            "type": "string"
+          },
+          "parents": {
+            "items": {
+              "$ref": "#/components/schemas/MapCoordPayload"
+            },
+            "type": "array"
+          },
+          "row": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "state": {
+            "type": "string"
+          },
+          "visited": {
+            "type": "boolean"
+          }
+        },
+        "type": "object"
+      },
+      "MapNodePayload": {
+        "additionalProperties": true,
+        "properties": {
+          "col": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "has_local_vote": {
+            "type": "boolean"
+          },
+          "index": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "node_type": {
+            "type": "string"
+          },
+          "row": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "state": {
+            "type": "string"
+          },
+          "vote_count": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "voted_player_ids": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "type": "object"
+      },
+      "MapPayload": {
+        "additionalProperties": true,
+        "properties": {
+          "available_nodes": {
+            "items": {
+              "$ref": "#/components/schemas/MapNodePayload"
+            },
+            "type": "array"
+          },
+          "boss_node": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/MapCoordPayload"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "cols": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "current_node": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/MapCoordPayload"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "is_travel_enabled": {
+            "type": "boolean"
+          },
+          "is_traveling": {
+            "type": "boolean"
+          },
+          "local_vote": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/MapCoordPayload"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "map_generation_count": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "nodes": {
+            "items": {
+              "$ref": "#/components/schemas/MapGraphNodePayload"
+            },
+            "type": "array"
+          },
+          "player_votes": {
+            "items": {
+              "$ref": "#/components/schemas/MapPlayerVotePayload"
+            },
+            "type": "array"
+          },
+          "rows": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "second_boss_node": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/MapCoordPayload"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "starting_node": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/MapCoordPayload"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "type": "object"
+      },
+      "MapPlayerVotePayload": {
+        "additionalProperties": true,
+        "properties": {
+          "coord": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/MapCoordPayload"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "is_local": {
+            "type": "boolean"
+          },
+          "player_id": {
+            "type": "string"
+          },
+          "slot_index": {
+            "format": "int32",
+            "type": "integer"
+          }
+        },
+        "type": "object"
+      },
+      "McpOpaqueRequest": {
+        "additionalProperties": true,
+        "description": "MCP Streamable HTTP JSON-RPC request. Native MCP owns its schema."
+      },
+      "McpOpaqueResponse": {
+        "additionalProperties": true,
+        "description": "MCP JSON-RPC or native MCP error response."
+      },
+      "McpSessionReset": {
+        "additionalProperties": true,
+        "properties": {
+          "ok": {
+            "const": true
+          }
+        },
+        "required": [
+          "ok"
+        ],
+        "type": "object"
+      },
+      "ModalPayload": {
+        "additionalProperties": true,
+        "properties": {
+          "can_confirm": {
+            "type": "boolean"
+          },
+          "can_dismiss": {
+            "type": "boolean"
+          },
+          "confirm_label": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "dismiss_label": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "type_name": {
+            "type": "string"
+          },
+          "underlying_screen": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "type": "object"
+      },
+      "MultiplayerLobbyPayload": {
+        "additionalProperties": true,
+        "properties": {
+          "can_disconnect": {
+            "type": "boolean"
+          },
+          "can_host": {
+            "type": "boolean"
+          },
+          "can_join": {
+            "type": "boolean"
+          },
+          "can_ready": {
+            "type": "boolean"
+          },
+          "can_unready": {
+            "type": "boolean"
+          },
+          "characters": {
+            "items": {
+              "$ref": "#/components/schemas/CharacterSelectOptionPayload"
+            },
+            "type": "array"
+          },
+          "has_lobby": {
+            "type": "boolean"
+          },
+          "is_client": {
+            "type": "boolean"
+          },
+          "is_host": {
+            "type": "boolean"
+          },
+          "join_host": {
+            "type": "string"
+          },
+          "join_port": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "local_net_id_hint": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "local_ready": {
+            "type": "boolean"
+          },
+          "max_players": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "net_game_type": {
+            "type": "string"
+          },
+          "player_count": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "players": {
+            "items": {
+              "$ref": "#/components/schemas/CharacterSelectPlayerPayload"
+            },
+            "type": "array"
+          },
+          "selected_character_id": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "type": "object"
+      },
+      "MultiplayerPayload": {
+        "additionalProperties": true,
+        "properties": {
+          "connected_player_ids": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "is_multiplayer": {
+            "type": "boolean"
+          },
+          "local_player_id": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "net_game_type": {
+            "type": "string"
+          },
+          "player_count": {
+            "format": "int32",
+            "type": "integer"
+          }
+        },
+        "type": "object"
+      },
+      "RestOptionPayload": {
+        "additionalProperties": true,
+        "properties": {
+          "description": {
+            "type": "string"
+          },
+          "index": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "is_enabled": {
+            "type": "boolean"
+          },
+          "option_id": {
+            "type": "string"
+          },
+          "requires_target": {
+            "type": "boolean"
+          },
+          "target_index_space": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "title": {
+            "type": "string"
+          },
+          "valid_target_indices": {
+            "items": {
+              "format": "int32",
+              "type": "integer"
+            },
+            "type": "array"
+          },
+          "valid_target_player_ids": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "type": "object"
+      },
+      "RestPayload": {
+        "additionalProperties": true,
+        "properties": {
+          "options": {
+            "items": {
+              "$ref": "#/components/schemas/RestOptionPayload"
+            },
+            "type": "array"
+          }
+        },
+        "type": "object"
+      },
+      "RewardAlternativePayload": {
+        "additionalProperties": true,
+        "properties": {
+          "index": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "label": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "RewardCardOptionPayload": {
+        "additionalProperties": true,
+        "properties": {
+          "card_id": {
+            "type": "string"
+          },
+          "card_type": {
+            "type": "string"
+          },
+          "dynamic_values": {
+            "items": {
+              "$ref": "#/components/schemas/CardDynamicValuePayload"
+            },
+            "type": "array"
+          },
+          "energy_cost": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "index": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "name": {
+            "type": "string"
+          },
+          "rarity": {
+            "type": "string"
+          },
+          "resolved_rules_text": {
+            "type": "string"
+          },
+          "rules_text": {
+            "type": "string"
+          },
+          "upgraded": {
+            "type": "boolean"
+          }
+        },
+        "type": "object"
+      },
+      "RewardOptionPayload": {
+        "additionalProperties": true,
+        "properties": {
+          "claimable": {
+            "type": "boolean"
+          },
+          "description": {
+            "type": "string"
+          },
+          "index": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "reward_type": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "RewardPayload": {
+        "additionalProperties": true,
+        "properties": {
+          "alternatives": {
+            "items": {
+              "$ref": "#/components/schemas/RewardAlternativePayload"
+            },
+            "type": "array"
+          },
+          "can_proceed": {
+            "type": "boolean"
+          },
+          "card_options": {
+            "items": {
+              "$ref": "#/components/schemas/RewardCardOptionPayload"
+            },
+            "type": "array"
+          },
+          "pending_card_choice": {
+            "type": "boolean"
+          },
+          "rewards": {
+            "items": {
+              "$ref": "#/components/schemas/RewardOptionPayload"
+            },
+            "type": "array"
+          }
+        },
+        "type": "object"
+      },
+      "RunPayload": {
+        "additionalProperties": true,
+        "properties": {
+          "act_id": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "ascension": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "ascension_effects": {
+            "items": {
+              "$ref": "#/components/schemas/AscensionEffectPayload"
+            },
+            "type": "array"
+          },
+          "base_orb_slots": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "boss_id": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "character_id": {
+            "type": "string"
+          },
+          "character_name": {
+            "type": "string"
+          },
+          "current_hp": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "deck": {
+            "items": {
+              "$ref": "#/components/schemas/DeckCardPayload"
+            },
+            "type": "array"
+          },
+          "floor": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "gold": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "max_energy": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "max_hp": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "players": {
+            "items": {
+              "$ref": "#/components/schemas/RunPlayerSummaryPayload"
+            },
+            "type": "array"
+          },
+          "potions": {
+            "items": {
+              "$ref": "#/components/schemas/RunPotionPayload"
+            },
+            "type": "array"
+          },
+          "relics": {
+            "items": {
+              "$ref": "#/components/schemas/RunRelicPayload"
+            },
+            "type": "array"
+          }
+        },
+        "type": "object"
+      },
+      "RunPlayerSummaryPayload": {
+        "additionalProperties": true,
+        "properties": {
+          "character_id": {
+            "type": "string"
+          },
+          "character_name": {
+            "type": "string"
+          },
+          "current_hp": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "gold": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "is_alive": {
+            "type": "boolean"
+          },
+          "is_connected": {
+            "type": "boolean"
+          },
+          "is_local": {
+            "type": "boolean"
+          },
+          "max_hp": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "player_id": {
+            "type": "string"
+          },
+          "slot_index": {
+            "format": "int32",
+            "type": "integer"
+          }
+        },
+        "type": "object"
+      },
+      "RunPotionPayload": {
+        "additionalProperties": true,
+        "properties": {
+          "can_discard": {
+            "type": "boolean"
+          },
+          "can_use": {
+            "type": "boolean"
+          },
+          "description": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "index": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "is_queued": {
+            "type": "boolean"
+          },
+          "name": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "occupied": {
+            "type": "boolean"
+          },
+          "potion_id": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "rarity": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "requires_target": {
+            "type": "boolean"
+          },
+          "target_index_space": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "target_type": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "usage": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "valid_target_indices": {
+            "items": {
+              "format": "int32",
+              "type": "integer"
+            },
+            "type": "array"
+          }
+        },
+        "type": "object"
+      },
+      "RunRelicPayload": {
+        "additionalProperties": true,
+        "properties": {
+          "description": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "index": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "is_melted": {
+            "type": "boolean"
+          },
+          "name": {
+            "type": "string"
+          },
+          "relic_id": {
+            "type": "string"
+          },
+          "stack": {
+            "format": "int32",
+            "type": [
+              "integer",
+              "null"
+            ]
+          }
+        },
+        "type": "object"
+      },
+      "SelectionCardPayload": {
+        "additionalProperties": true,
+        "properties": {
+          "card_id": {
+            "type": "string"
+          },
+          "card_type": {
+            "type": "string"
+          },
+          "costs_x": {
+            "type": "boolean"
+          },
+          "dynamic_values": {
+            "items": {
+              "$ref": "#/components/schemas/CardDynamicValuePayload"
+            },
+            "type": "array"
+          },
+          "energy_cost": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "index": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "name": {
+            "type": "string"
+          },
+          "rarity": {
+            "type": "string"
+          },
+          "resolved_rules_text": {
+            "type": "string"
+          },
+          "rules_text": {
+            "type": "string"
+          },
+          "selected": {
+            "type": "boolean"
+          },
+          "star_cost": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "star_costs_x": {
+            "type": "boolean"
+          },
+          "upgraded": {
+            "type": "boolean"
+          }
+        },
+        "type": "object"
+      },
+      "SelectionPayload": {
+        "additionalProperties": true,
+        "properties": {
+          "can_confirm": {
+            "type": "boolean"
+          },
+          "cards": {
+            "items": {
+              "$ref": "#/components/schemas/SelectionCardPayload"
+            },
+            "type": "array"
+          },
+          "kind": {
+            "type": "string"
+          },
+          "max_select": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "min_select": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "prompt": {
+            "type": "string"
+          },
+          "requires_confirmation": {
+            "type": "boolean"
+          },
+          "selected_count": {
+            "format": "int32",
+            "type": "integer"
+          }
+        },
+        "type": "object"
+      },
+      "SessionControlRequest": {
+        "additionalProperties": true,
+        "properties": {
+          "running": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "running"
+        ],
+        "type": "object"
+      },
+      "SessionControlResponseData": {
+        "additionalProperties": true,
+        "properties": {
+          "phase": {
+            "type": "string"
+          },
+          "play_phase": {
+            "type": "string"
+          },
+          "play_running": {
+            "type": "boolean"
+          }
+        },
+        "type": "object"
+      },
+      "SessionPayload": {
+        "additionalProperties": true,
+        "properties": {
+          "control_scope": {
+            "type": "string"
+          },
+          "mode": {
+            "type": "string"
+          },
+          "phase": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "ShopCardPayload": {
+        "additionalProperties": true,
+        "properties": {
+          "card_id": {
+            "type": "string"
+          },
+          "card_type": {
+            "type": "string"
+          },
+          "category": {
+            "type": "string"
+          },
+          "costs_x": {
+            "type": "boolean"
+          },
+          "dynamic_values": {
+            "items": {
+              "$ref": "#/components/schemas/CardDynamicValuePayload"
+            },
+            "type": "array"
+          },
+          "energy_cost": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "enough_gold": {
+            "type": "boolean"
+          },
+          "index": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "is_stocked": {
+            "type": "boolean"
+          },
+          "name": {
+            "type": "string"
+          },
+          "on_sale": {
+            "type": "boolean"
+          },
+          "price": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "rarity": {
+            "type": "string"
+          },
+          "resolved_rules_text": {
+            "type": "string"
+          },
+          "rules_text": {
+            "type": "string"
+          },
+          "star_cost": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "star_costs_x": {
+            "type": "boolean"
+          },
+          "upgraded": {
+            "type": "boolean"
+          }
+        },
+        "type": "object"
+      },
+      "ShopCardRemovalPayload": {
+        "additionalProperties": true,
+        "properties": {
+          "available": {
+            "type": "boolean"
+          },
+          "enough_gold": {
+            "type": "boolean"
+          },
+          "price": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "used": {
+            "type": "boolean"
+          }
+        },
+        "type": "object"
+      },
+      "ShopPayload": {
+        "additionalProperties": true,
+        "properties": {
+          "can_close": {
+            "type": "boolean"
+          },
+          "can_open": {
+            "type": "boolean"
+          },
+          "card_removal": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ShopCardRemovalPayload"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "cards": {
+            "items": {
+              "$ref": "#/components/schemas/ShopCardPayload"
+            },
+            "type": "array"
+          },
+          "is_open": {
+            "type": "boolean"
+          },
+          "potions": {
+            "items": {
+              "$ref": "#/components/schemas/ShopPotionPayload"
+            },
+            "type": "array"
+          },
+          "relics": {
+            "items": {
+              "$ref": "#/components/schemas/ShopRelicPayload"
+            },
+            "type": "array"
+          }
+        },
+        "type": "object"
+      },
+      "ShopPotionPayload": {
+        "additionalProperties": true,
+        "properties": {
+          "enough_gold": {
+            "type": "boolean"
+          },
+          "index": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "is_stocked": {
+            "type": "boolean"
+          },
+          "name": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "potion_id": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "price": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "rarity": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "usage": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "type": "object"
+      },
+      "ShopRelicPayload": {
+        "additionalProperties": true,
+        "properties": {
+          "enough_gold": {
+            "type": "boolean"
+          },
+          "index": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "is_stocked": {
+            "type": "boolean"
+          },
+          "name": {
+            "type": "string"
+          },
+          "price": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "rarity": {
+            "type": "string"
+          },
+          "relic_id": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "TeamIntent": {
+        "additionalProperties": true,
+        "description": "Optional typed teammate signal. Unknown fields are intentionally ignored for forward compatibility.",
+        "oneOf": [
+          {
+            "properties": {
+              "type": {
+                "const": "focus_fire"
+              }
+            },
+            "required": [
+              "type",
+              "enemy_index"
+            ]
+          },
+          {
+            "properties": {
+              "type": {
+                "const": "target_announce"
+              }
+            },
+            "required": [
+              "type",
+              "enemy_index"
+            ]
+          },
+          {
+            "properties": {
+              "type": {
+                "const": "potion_ownership"
+              }
+            },
+            "required": [
+              "type",
+              "potion_index"
+            ]
+          }
+        ],
+        "properties": {
+          "enemy_index": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "player_id": {
+            "type": "string"
+          },
+          "potion_id": {
+            "type": "string"
+          },
+          "potion_index": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "type": {
+            "enum": [
+              "focus_fire",
+              "target_announce",
+              "potion_ownership"
+            ],
+            "type": "string"
+          }
+        },
+        "required": [
+          "type"
+        ],
+        "type": "object"
+      },
+      "TeammateControlResponseData": {
+        "additionalProperties": true,
+        "properties": {
+          "companion_auto_play": {
+            "type": "boolean"
+          },
+          "phase": {
+            "type": "string"
+          },
+          "play_phase": {
+            "type": "string"
+          },
+          "play_running": {
+            "type": "boolean"
+          }
+        },
+        "type": "object"
+      },
+      "TimelinePayload": {
+        "additionalProperties": true,
+        "properties": {
+          "back_enabled": {
+            "type": "boolean"
+          },
+          "can_choose_epoch": {
+            "type": "boolean"
+          },
+          "can_confirm_overlay": {
+            "type": "boolean"
+          },
+          "inspect_open": {
+            "type": "boolean"
+          },
+          "slots": {
+            "items": {
+              "$ref": "#/components/schemas/TimelineSlotPayload"
+            },
+            "type": "array"
+          },
+          "tutorial_open": {
+            "type": "boolean"
+          },
+          "unlock_screen_open": {
+            "type": "boolean"
+          }
+        },
+        "type": "object"
+      },
+      "TimelineSlotPayload": {
+        "additionalProperties": true,
+        "properties": {
+          "epoch_id": {
+            "type": "string"
+          },
+          "index": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "is_actionable": {
+            "type": "boolean"
+          },
+          "state": {
+            "type": "string"
+          },
+          "title": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "UnlockPayload": {
+        "additionalProperties": true,
+        "properties": {
+          "can_confirm": {
+            "type": "boolean"
+          },
+          "items": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "unlock_type": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      }
+    }
+  },
+  "info": {
+    "description": "Generated from Router routes and C# wire payload declarations. Human guidance remains in docs/api.md.",
+    "title": "STS2 AI Agent Mod HTTP API",
+    "version": "0.14.0"
+  },
+  "jsonSchemaDialect": "https://json-schema.org/draft/2020-12/schema",
+  "openapi": "3.1.0",
+  "paths": {
+    "/action": {
+      "post": {
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ActionRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ApiSuccessEnvelope"
+                    },
+                    {
+                      "properties": {
+                        "data": {
+                          "$ref": "#/components/schemas/ActionResponsePayload"
+                        }
+                      },
+                      "type": "object"
+                    }
+                  ]
+                }
+              }
+            },
+            "description": "Successful response."
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorEnvelope"
+                }
+              }
+            },
+            "description": "The normal HTTP error envelope."
+          }
+        },
+        "summary": "Execute one game action."
+      }
+    },
+    "/actions/available": {
+      "get": {
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ApiSuccessEnvelope"
+                    },
+                    {
+                      "properties": {
+                        "data": {
+                          "$ref": "#/components/schemas/AvailableActionsPayload"
+                        }
+                      },
+                      "type": "object"
+                    }
+                  ]
+                }
+              }
+            },
+            "description": "Successful response."
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorEnvelope"
+                }
+              }
+            },
+            "description": "The normal HTTP error envelope."
+          }
+        },
+        "summary": "Read actions available in the current state."
+      }
+    },
+    "/companion/control": {
+      "post": {
+        "parameters": [
+          {
+            "description": "Required active local companion session token.",
+            "in": "header",
+            "name": "X-STS2-Companion-Session",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SessionControlRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ApiSuccessEnvelope"
+                    },
+                    {
+                      "properties": {
+                        "data": {
+                          "$ref": "#/components/schemas/CompanionControlResponseData"
+                        }
+                      },
+                      "type": "object"
+                    }
+                  ]
+                }
+              }
+            },
+            "description": "Successful response."
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorEnvelope"
+                }
+              }
+            },
+            "description": "The normal HTTP error envelope."
+          }
+        },
+        "summary": "Control the companion instance itself."
+      }
+    },
+    "/companion/message": {
+      "post": {
+        "parameters": [
+          {
+            "description": "Required active local companion session token.",
+            "in": "header",
+            "name": "X-STS2-Companion-Session",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CompanionMessageRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ApiSuccessEnvelope"
+                    },
+                    {
+                      "properties": {
+                        "data": {
+                          "$ref": "#/components/schemas/CompanionMessageResponseData"
+                        }
+                      },
+                      "type": "object"
+                    }
+                  ]
+                }
+              }
+            },
+            "description": "Successful response."
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorEnvelope"
+                }
+              }
+            },
+            "description": "The normal HTTP error envelope."
+          }
+        },
+        "summary": "Send a text message and optional typed signal to the companion."
+      }
+    },
+    "/data/{collection}": {
+      "get": {
+        "parameters": [
+          {
+            "description": "Case-insensitive exported collection name.",
+            "in": "path",
+            "name": "collection",
+            "required": true,
+            "schema": {
+              "enum": [
+                "cards",
+                "relics",
+                "potions",
+                "events",
+                "powers",
+                "characters",
+                "monsters"
+              ],
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ApiSuccessEnvelope"
+                    },
+                    {
+                      "properties": {
+                        "data": {
+                          "items": {
+                            "$ref": "#/components/schemas/GameDataItem"
+                          },
+                          "type": "array"
+                        }
+                      },
+                      "type": "object"
+                    }
+                  ]
+                }
+              }
+            },
+            "description": "Successful response."
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorEnvelope"
+                }
+              }
+            },
+            "description": "The normal HTTP error envelope."
+          }
+        },
+        "summary": "Export one game-data collection."
+      }
+    },
+    "/decisions": {
+      "get": {
+        "parameters": [
+          {
+            "description": "Number of visible log entries, clamped to 1..200.",
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 50,
+              "maximum": 200,
+              "minimum": 1,
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ApiSuccessEnvelope"
+                    },
+                    {
+                      "properties": {
+                        "data": {
+                          "items": {
+                            "$ref": "#/components/schemas/DecisionLogEntry"
+                          },
+                          "type": "array"
+                        }
+                      },
+                      "type": "object"
+                    }
+                  ]
+                }
+              }
+            },
+            "description": "Successful response."
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorEnvelope"
+                }
+              }
+            },
+            "description": "The normal HTTP error envelope."
+          }
+        },
+        "summary": "Read accepted decisions, oldest first."
+      }
+    },
+    "/events/stream": {
+      "get": {
+        "description": "The stream multiplexes event types. See docs/api.md for event payload meanings and reconnect rules.",
+        "responses": {
+          "200": {
+            "content": {
+              "text/event-stream": {
+                "schema": {
+                  "$ref": "#/components/schemas/GameEventEnvelope"
+                }
+              }
+            },
+            "description": "A text/event-stream sequence of GameEventEnvelope payloads."
+          }
+        },
+        "summary": "Subscribe to the server-sent event stream."
+      }
+    },
+    "/health": {
+      "get": {
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ApiSuccessEnvelope"
+                    },
+                    {
+                      "properties": {
+                        "data": {
+                          "$ref": "#/components/schemas/HealthData"
+                        }
+                      },
+                      "type": "object"
+                    }
+                  ]
+                }
+              }
+            },
+            "description": "Successful response."
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorEnvelope"
+                }
+              }
+            },
+            "description": "The normal HTTP error envelope."
+          }
+        },
+        "summary": "Read mod health and API discovery data."
+      }
+    },
+    "/mcp": {
+      "delete": {
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/McpSessionReset"
+                }
+              }
+            },
+            "description": "Session cleared."
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/McpOpaqueResponse"
+                }
+              }
+            },
+            "description": "Native MCP error or JSON-RPC error."
+          }
+        },
+        "summary": "Clear the native MCP Streamable HTTP session."
+      },
+      "options": {
+        "responses": {
+          "204": {
+            "description": "No content."
+          }
+        },
+        "summary": "Discover/prepare a native MCP Streamable HTTP session."
+      },
+      "post": {
+        "description": "This operation has MCP/JSON-RPC envelopes, not the ordinary STS2 HTTP request_id envelope.",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/McpOpaqueRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/McpOpaqueResponse"
+                }
+              },
+              "text/event-stream": {
+                "schema": {
+                  "$ref": "#/components/schemas/McpOpaqueResponse"
+                }
+              }
+            },
+            "description": "MCP JSON-RPC or SSE response."
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/McpOpaqueResponse"
+                }
+              }
+            },
+            "description": "Native MCP error or JSON-RPC error."
+          }
+        },
+        "summary": "Call native MCP via Streamable HTTP JSON-RPC."
+      },
+      "x-sts2-aliases": [
+        "/mcp/"
+      ]
+    },
+    "/session/control": {
+      "post": {
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SessionControlRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ApiSuccessEnvelope"
+                    },
+                    {
+                      "properties": {
+                        "data": {
+                          "$ref": "#/components/schemas/SessionControlResponseData"
+                        }
+                      },
+                      "type": "object"
+                    }
+                  ]
+                }
+              }
+            },
+            "description": "Successful response."
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorEnvelope"
+                }
+              }
+            },
+            "description": "The normal HTTP error envelope."
+          }
+        },
+        "summary": "Start or pause local autoplay."
+      }
+    },
+    "/state": {
+      "get": {
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ApiSuccessEnvelope"
+                    },
+                    {
+                      "properties": {
+                        "data": {
+                          "$ref": "#/components/schemas/GameStatePayload"
+                        }
+                      },
+                      "type": "object"
+                    }
+                  ]
+                }
+              }
+            },
+            "description": "Successful response."
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorEnvelope"
+                }
+              }
+            },
+            "description": "The normal HTTP error envelope."
+          }
+        },
+        "summary": "Read the complete game-state snapshot."
+      }
+    },
+    "/teammate/control": {
+      "post": {
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SessionControlRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ApiSuccessEnvelope"
+                    },
+                    {
+                      "properties": {
+                        "data": {
+                          "$ref": "#/components/schemas/TeammateControlResponseData"
+                        }
+                      },
+                      "type": "object"
+                    }
+                  ]
+                }
+              }
+            },
+            "description": "Successful response."
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorEnvelope"
+                }
+              }
+            },
+            "description": "The normal HTTP error envelope."
+          }
+        },
+        "summary": "Start or pause the host's AI teammate."
+      }
+    }
+  },
+  "servers": [
+    {
+      "description": "Default loopback address; discover the actual port through GET /health.",
+      "url": "http://127.0.0.1:8080"
+    }
+  ]
+}

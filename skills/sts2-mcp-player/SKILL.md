@@ -52,6 +52,8 @@ The in-game overlay agent loads the shared play contract below plus references/s
 1. Connection checking belongs to the external MCP client or orchestrator that launched the session; the in-game play loop has no `health_check`, so it reads live state instead.
 2. Prefer the guided decision loop: `get_game_state -> get_available_actions -> act`.
    Use `wait_until_actionable` across animations and screen changes. Use `get_raw_game_state` only if compact state is missing a needed field.
+   When you call `act`, attach a one-sentence `reason` -- it is optional for the protocol but it
+   is what the player sees as the decision's rationale, so treat it as part of every act.
 3. For cards, monsters, relics, potions, shop items, and event options, prioritize game-data tools before using memory:
    `get_relevant_game_data` (default, scene-aware minimal context; omit `item_ids` and the current
    screen decides which ids to look up) ->
@@ -177,4 +179,6 @@ For detailed per-screen sequences and pitfalls, read [references/screen-playbook
 - Use `run_console_command` only in development flows where debug actions are enabled.
 
 For validation flows, read [references/debug-and-validation.md](references/debug-and-validation.md).
+
+For the choices the shared contract does not make for you — which node to enter, when to heal instead of smith, what to buy, when to drink a potion, which enemy to kill first, and how a host and a teammate divide the work — read [references/strategy.md](references/strategy.md). Every rule there names the payload field it reads. Read the file whole; the in-game loop does not, and cannot, because it has no file access — the mod injects one section of it per screen instead (see the note at the top of that file).
 
