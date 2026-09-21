@@ -192,7 +192,7 @@ Python sidecar 不是玩家必装，也不再作为推荐入口。
      }
    }
    ```
-内置 MCP 工具在内置自动游玩所用的工具面之上多一个 `health_check`：`get_game_state`、`get_available_actions`、`act`、`get_game_data_*`、`wait_until_actionable`。
+内置 MCP 工具在内置自动游玩所用的工具面之上多一个 `health_check`：`get_game_state`、`get_available_actions`、`act`、`get_game_data_*`、`wait_until_actionable`。默认的 `guided` 档还提供 `decide`（一次调用给出状态、可用动作与场景指引）、`get_scene_guidance`、`get_raw_game_state`、`get_decision_log`、`get_run_summary` 与 `diff_state`。
 
 游戏内自动游玩已经按配套 skill 的合同在打。若用 **外部** Agent 经 MCP 操作游戏（Cursor / Claude / Codex，或可选的 Python sidecar），请同时加载 [`sts2-mcp-player`](./skills/sts2-mcp-player/SKILL.md)。只接工具、不加载 skill，也能点合法动作；要接近游戏内自动游玩的效果，需要这份配套 skill。
 

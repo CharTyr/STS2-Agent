@@ -13,7 +13,9 @@
 > which indices would have worked; and the knowledge index gains the relic, power and monster-move
 > tables that did not exist. Two defects came out of the same reading: `end_turn_will_kill_player`
 > said a turn was safe while poison was about to kill you, and the compact view was leaking the exact
-> order of the draw pile.
+> order of the draw pile. A second pass turned to what an external client pays before it ever reads a
+> state: the tool descriptions, which a client re-sends on every request, and which the Python
+> sidecar carried at four times the native surface's length for the same tools.
 
 - **The in-game prompt no longer re-sends the whole playbook on every step.** `PlaySystem` used to
   embed `screen-playbooks.md` in full — about 3,070 tokens, re-sent for each decision, covering 20
@@ -138,6 +140,36 @@
   the poison total is read from the live power so Accelerant and every damage modifier are already
   folded in rather than guessed from the stack size. The glossary entry for 中毒 also said it
   resolves at end of turn, which is not what the power does; it now matches.
+
+- **The MCP tool surface stops re-explaining the game on every request.** A client re-sends every
+  tool's name, description and schema on each model request, and the default `guided` profile was
+  sending 11,468 characters of `tools/list` JSON — roughly 2,900 tokens — before a single byte of
+  state was read. Most of it was narrative the bundled skill already carries: a six-step usage loop, a
+  "Result:" essay, and per-parameter cookbooks. The descriptions are now telegraphic, and the
+  per-argument contracts moved into each tool's `inputSchema` property descriptions — where an MCP
+  client renders per-argument help, and where the native C# surface kept them all along (`act` carries
+  252 characters of description there against the sidecar's 2,744, for the same tool). The default
+  profile now sends 8,255 characters: **-3,213 (-28%), about 800 tokens off every single request**,
+  with the same 15 tools, names, argument names and return shapes. Every profile drops by that same
+  3,213, because the trimmed descriptions are the ones the profiles share. `pydantic` is declared as a
+  direct dependency now, since `server.py` imports `Field` to put that contract on the wire.
+
+- **A budget contract test makes the next long docstring fail the build instead of every request.**
+  `mcp_server/tests/test_tool_surface_budget.py` pins the `tools/list` envelope for each profile, a
+  ceiling for each tool, and the ratchet: every ceiling must sit below what that tool cost before this
+  pass, and the two-entry exemption list — for tools whose wire cost genuinely rose, because a nullable
+  parameter carries ~38 characters of `anyOf`/`null` scaffolding before any description — fails if it
+  ever goes stale. Same shape as the mod's own source-size budgets, and for the same reason.
+
+- **The guided tool list lived in six files and every copy but the canonical one was wrong.**
+  `SKILL.md`'s `allowed_tool_names`, `mcp_server/README.md`, `references/debug-and-validation.md` and
+  `AGENTS.md` still described a ten- or eleven-tool surface, missing `decide`, `get_scene_guidance`,
+  `get_decision_log`, `get_run_summary` and `diff_state` — an agent that filtered its toolset by that
+  list could not reach the one call the play loop is built around. The five lists now match
+  `ESSENTIAL_TOOLS`; the per-tool parameter cookbook in `mcp_server/README.md` became a table pointing
+  at the schemas so it cannot drift again (1,712 characters lighter); `skills/sts2-mcp-player/README.md`
+  and both root READMEs were corrected the same way; and ADR 0002 keeps its dated body but gained a
+  pointer to the live list rather than being rewritten.
 
 ## v0.14.6 - 2026-09-21
 

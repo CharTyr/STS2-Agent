@@ -1198,10 +1198,14 @@ version = "0.14.6"
 source = { editable = "." }
 dependencies = [
     { name = "fastmcp" },
+    { name = "pydantic" },
 ]
 
 [package.metadata]
-requires-dist = [{ name = "fastmcp", specifier = ">=3.1.0,<4.0.0" }]
+requires-dist = [
+    { name = "fastmcp", specifier = ">=3.1.0,<4.0.0" },
+    { name = "pydantic", specifier = ">=2,<3" },
+]
 
 [[package]]
 name = "typing-extensions"

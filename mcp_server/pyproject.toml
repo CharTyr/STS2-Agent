@@ -6,6 +6,9 @@ readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [
     "fastmcp>=3.1.0,<4.0.0",
+    # Imported directly: server.py types its tool arguments with Annotated[..., Field(...)] so the
+    # per-argument contract lands in each tool's inputSchema, where an MCP client renders it.
+    "pydantic>=2,<3",
 ]
 
 [project.scripts]

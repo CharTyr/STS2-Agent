@@ -22,7 +22,7 @@ Use a conservative SubAgent profile for STS2. The goal is to keep the tool surfa
 
 - Recommended plugin settings: `max_concurrent = 1`, `auto_discover = false`, `broadcast_iteration_progress = false`, `inject_status_to_main_prompt = false`
 - Recommended retention settings: `inject_completed_for_seconds = 120`, `status_retention_seconds = 900`
-- Recommended skill settings: `allowed_tool_names = ["health_check", "get_game_state", "get_raw_game_state", "get_available_actions", "decide", "act", "get_game_data_item", "get_game_data_items", "get_relevant_game_data", "wait_for_event", "wait_until_actionable"]`, `max_mcp_tools_per_iteration = 1`, `share_to_main_chat = false`
+- Recommended skill settings: `allowed_tool_names = ["health_check", "get_game_state", "get_raw_game_state", "get_available_actions", "get_decision_log", "get_run_summary", "get_scene_guidance", "diff_state", "get_game_data_item", "get_game_data_items", "get_relevant_game_data", "wait_for_event", "wait_until_actionable", "decide", "act"]`, `max_mcp_tools_per_iteration = 1`, `share_to_main_chat = false`
 
 ### Simplified Config
 
@@ -208,7 +208,7 @@ Both MCP surfaces expose the same tool face, and the read half of a decision can
 - Keep `get_relevant_game_data` / `get_game_data_item` / `get_game_data_items` available in guided runs for card, monster, potion, shop, and event decisions.
 - Prefer `decide` when a step needs state and guidance together; it is the same answers as the individual read tools, from one call.
 - Use legacy per-action tools only when a harness explicitly needs tool-by-tool coverage.
-- Use `run_console_command` only in development flows where debug actions are enabled.
+- Use `run_console_command` and `inject_event_churn` only in development flows where debug actions are enabled.
 
 Both MCP surfaces (the mod's native `/mcp` and this Python sidecar) expose the same tool names and
 arguments. `get_scene_guidance` and `decide.scene_guidance` answer the same four keys on both:

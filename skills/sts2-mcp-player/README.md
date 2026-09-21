@@ -123,7 +123,8 @@ debug 模式：
 
 ## 工具使用建议
 
-优先使用 guided profile：
+优先使用 guided profile（该档共 15 个工具，完整清单以 `scripts/test-mcp-tool-profile.ps1` 的
+`ESSENTIAL_TOOLS` 为准）。游玩最常用的是：
 
 - `health_check`
 - `get_game_state`
@@ -133,6 +134,9 @@ debug 模式：
 - `get_relevant_game_data` / `get_game_data_item` / `get_game_data_items`
 - `wait_until_actionable`
 - `act`
+
+复盘与排查另有 `get_decision_log`（读回被接受的决策及其理由）、`get_run_summary`（本轮概览）与
+`diff_state`（两份状态的逐路径差异）。
 
 只有在这些情况下才建议用 full profile：
 
