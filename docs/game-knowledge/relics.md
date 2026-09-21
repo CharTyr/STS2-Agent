@@ -1,7 +1,7 @@
 ﻿# Relic Index
 
 > Auto-generated from extraction/decompiled in this repository.  
-> Generated at: 2026-09-21 21:57:15 +08:00
+> Generated at: 2026-09-21 22:31:54 +08:00
 
 Rarity, owner, and readable effect for every relic, keyed by the internal name behind `relic_id` (the class name; the id the game reports is its slugified upper-case form, e.g. `BurningBlood` -> `BURNING_BLOOD`). Use it when deciding whether to take a relic from a chest, buy one in a shop, or accept one from an event. `Owner` is the relic pool that declares the relic: a character name means that character's pool, `Shared` is the pool every character draws from, and `Event`/`Fallback`/`Deprecated` are the pools no character owns. `Effect` names the hook that produces each clause, because for a relic the difference between `AfterObtained` (once, on pickup) and `AfterSideTurnStart` (every turn) is the whole decision; a hook a base class declares is prefixed with that class name. Numbers come from the relic's dynamic vars; `?` marks an amount only computed at run time, and `Amount` is the relic's own counter where it has one.
 

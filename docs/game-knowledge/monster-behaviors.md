@@ -1,130 +1,130 @@
 ﻿# Monster Behavior Index
 
 > Auto-generated from extraction/decompiled in this repository.  
-> Generated at: 2026-09-21 21:57:15 +08:00
+> Generated at: 2026-09-21 22:31:54 +08:00
 
-Move-state and passive-command summaries extracted from monster source.
+Move-state, move-effect, and passive-command summaries extracted from monster source. Each `Moves` entry is `<MOVE>=<Intent>(args)` as the source declares it, followed by `->` and what the move actually does, read from the move's own method the way `card-behaviors.md` reads a card's `OnPlay`: `SHARPEN_MOVE=BuffIntent -> Gain 4 Strength (StrengthPower)`, `HAMMER_UPPERCUT_MOVE=SingleAttackIntent(HammerUppercutDamage)+DebuffIntent -> Deal 8 damage, Apply 1 Weak (WeakPower) to the target, Apply 1 Frail (FrailPower) to the target`. So an intent that carries no numbers still lands on the number, and a power is named twice on purpose: the readable name plus the class name `powers.md` indexes (the class whose slugified upper-case form is the `power_id`), which is where its stacks and hooks are looked up. Amounts come from the class's own declarations - a property or constant such as `private int CrushStrength => AscensionHelper.GetValueIfAscension(AscensionLevel.DeadlyEnemies, 4, 3)` is read at its base (non-ascension) value, the convention `monsters.md` uses for HP - and `?` means the amount is only known while the fight runs (a computed getter, a lambda, or a count that depends on how many players are in the combat) rather than guessed. A power or command clause that names the monster itself reads as the monster's own action (`Gain 4 Strength`, `Kill itself`); a move's targets are `the target`. `+` joins a move's intents, `(no intent)` marks a move declared without one, `,` separates the effects of one move and `;` separates the moves, `(no command in move body)` means the body was read and holds no gameplay command (presentation-only calls are filtered out), which is an absence of evidence rather than a claim that the move does nothing - a move that delegates to a private helper, or that does its work through a power method, reads that way. A call the effect mapping does not cover keeps its own command name (`CardPileCmd.AddToCombatAndPreview<Dazed>`) instead of being spelled out in prose. The `Passive` column stays the verbatim command list it has always been.
 
 | Name | Moves | Passive |
 | --- | --- | --- |
-| Architect | NOTHING=HiddenIntent |  |
-| AssassinRubyRaider | KILLSHOT_MOVE=SingleAttackIntent(KillshotDamage) |  |
-| Axebot | ONE_TWO_MOVE=MultiAttackIntent(OneTwoDamage, 2); SHARPEN_MOVE=BuffIntent | PowerCmd.Apply<StockPower> |
-| AxeRubyRaider | BIG_SWING=SingleAttackIntent(BigSwingDamage) |  |
-| BattleFriendV1 |  | PowerCmd.Apply<BattlewornDummyTimeLimitPower> |
-| BattleFriendV2 |  | PowerCmd.Apply<BattlewornDummyTimeLimitPower> |
-| BattleFriendV3 |  | PowerCmd.Apply<BattlewornDummyTimeLimitPower> |
-| BigDummy | NOTHING=HiddenIntent |  |
-| BowlbugEgg |  |  |
-| BowlbugNectar | THRASH_MOVE=SingleAttackIntent(ThrashDamage); BUFF_MOVE=BuffIntent; THRASH2_MOVE=SingleAttackIntent(ThrashDamage) |  |
-| BowlbugRock | HEADBUTT_MOVE=SingleAttackIntent(HeadbuttDamage); DIZZY_MOVE=StunIntent | PowerCmd.Apply<ImbalancedPower> |
-| BowlbugSilk | TRASH_MOVE=MultiAttackIntent(ThrashDamage, 2) |  |
-| BruteRubyRaider | BEAT_MOVE=SingleAttackIntent(BeatDamage) |  |
-| BygoneEffigy | INITIAL_SLEEP_MOVE=SleepIntent; WAKE_MOVE=BuffIntent; SLEEP_MOVE=SleepIntent; SLASHES_MOVE=SingleAttackIntent(SlashDamage) | PowerCmd.Apply<SlowPower> |
-| Byrdonis | PECK_MOVE=MultiAttackIntent(PeckDamage, PeckRepeat); SWOOP_MOVE=SingleAttackIntent(SwoopDamage) | PowerCmd.Apply<TerritorialPower> |
-| Byrdpip |  |  |
-| CalcifiedCultist | INCANTATION_MOVE=BuffIntent |  |
-| CeremonialBeast | STAMP_MOVE=BuffIntent; STUN_MOVE=StunIntent; STOMP_MOVE=SingleAttackIntent(StompDamage) |  |
-| Chomper | CLAMP_MOVE=MultiAttackIntent(ClampDamage, 2) | PowerCmd.Apply<ArtifactPower> |
-| CorpseSlug | WHIP_SLAP_MOVE=MultiAttackIntent(WhipSlapDamage, WhipSlapRepeat); GLOMP_MOVE=SingleAttackIntent(GlompDamage); GOOP_MOVE=DebuffIntent | PowerCmd.Apply<RavenousPower> |
-| CrossbowRubyRaider | FIRE_MOVE=SingleAttackIntent(FireDamage) |  |
-| Crusher | THRASH_MOVE=SingleAttackIntent(ThrashDamage); ENLARGING_STRIKE_MOVE=SingleAttackIntent(EnlargingStrikeDamage); ADAPT_MOVE=BuffIntent | PowerCmd.Apply<BackAttackLeftPower>, PowerCmd.Apply<CrabRagePower> |
-| CubexConstruct | CHARGE_UP_MOVE=BuffIntent; EXPEL_BLAST=MultiAttackIntent(ExpelDamage, 2); SUBMERGE_MOVE=DefendIntent | CreatureCmd.GainBlock, PowerCmd.Apply<ArtifactPower> |
-| DampCultist | INCANTATION_MOVE=BuffIntent |  |
-| DecimillipedeSegment | WRITHE_MOVE=MultiAttackIntent(WritheDamage, 2); REATTACH_MOVE=HealIntent | CreatureCmd.SetMaxAndCurrentHp, PowerCmd.Apply<ReattachPower> |
-| DecimillipedeSegmentBack |  |  |
-| DecimillipedeSegmentFront |  |  |
-| DecimillipedeSegmentMiddle |  |  |
-| DevotedSculptor | FORBIDDEN_INCANTATION_MOVE=BuffIntent |  |
-| Door | DOOR_SLAM_MOVE=MultiAttackIntent(DoorSlamDamage, DoorSlamRepeat) | PowerCmd.Apply<DoorRevivalPower> |
-| Doormaker | WHAT_IS_IT_MOVE=StunIntent; BEAM_MOVE=SingleAttackIntent(LaserBeamDamage) |  |
-| Entomancer | PHEROMONE_SPIT_MOVE=BuffIntent; BEES_MOVE=MultiAttackIntent(BeesDamage, BeesRepeat) | PowerCmd.Apply<PersonalHivePower> |
-| Exoskeleton | SKITTER_MOVE=MultiAttackIntent(SkitterDamage, SkitterRepeats); MANDIBLE_MOVE=SingleAttackIntent(MandiblesDamage); ENRAGE_MOVE=BuffIntent | PowerCmd.Apply<HardToKillPower> |
-| EyeWithTeeth | DISTRACT_MOVE=StatusIntent(3) | PowerCmd.Apply<IllusionPower> |
-| Fabricator | FABRICATE_MOVE=SummonIntent; DISINTEGRATE_MOVE=SingleAttackIntent(DisintegrateDamage) |  |
-| FakeMerchantMonster | SWIPE_MOVE=SingleAttackIntent(SwipeDamage); SPEW_COINS_MOVE=MultiAttackIntent(2, 8); ENRAGE_MOVE=BuffIntent |  |
-| FatGremlin | SPAWNED_MOVE=StunIntent |  |
-| FlailKnight | WAR_CHANT=BuffIntent; FLAIL_MOVE=MultiAttackIntent(FlailDamage, 2); RAM_MOVE=SingleAttackIntent(RamDamage) |  |
-| Flyconid | VULNERABLE_SPORES_MOVE=DebuffIntent; SMASH_MOVE=SingleAttackIntent(SmashDamage) |  |
-| Fogmog | ILLUSION_MOVE=SummonIntent; HEADBUTT_MOVE=SingleAttackIntent(HeadbuttDamage) |  |
-| FossilStalker | LATCH_MOVE=SingleAttackIntent(LatchDamage); LASH_MOVE=MultiAttackIntent(LashDamage, LashRepeat) | PowerCmd.Apply<SuckPower> |
-| FrogKnight | FOR_THE_QUEEN=BuffIntent; STRIKE_DOWN_EVIL=SingleAttackIntent(StrikeDownEvilDamage); BEETLE_CHARGE=SingleAttackIntent(BeetleChargeDamage) | PowerCmd.Apply<PlatingPower> |
-| FuzzyWurmCrawler | FIRST_ACID_GOOP=SingleAttackIntent(AcidGoopDamage); ACID_GOOP=SingleAttackIntent(AcidGoopDamage) |  |
-| GasBomb |  | PowerCmd.Apply<MinionPower> |
-| GlobeHead | THUNDER_STRIKE=MultiAttackIntent(ThunderStrikeDamage, 3) | PowerCmd.Apply<GalvanicPower> |
-| GremlinMerc | GIMME_MOVE=MultiAttackIntent(GimmeDamage, GimmeRepeat) | PowerCmd.Apply<SurprisePower>, PowerCmd.Apply |
-| Guardbot | GUARD_MOVE=DefendIntent |  |
-| HauntedShip | SWIPE_MOVE=SingleAttackIntent(SwipeDamage); STOMP_MOVE=MultiAttackIntent(StompDamage, StompRepeat); HAUNT_MOVE=DebuffIntent |  |
-| HunterKiller | TENDERIZING_GOOP_MOVE=DebuffIntent; BITE_MOVE=SingleAttackIntent(BiteDamage); PUNCTURE_MOVE=MultiAttackIntent(PunctureDamage, 3) |  |
-| InfestedPrism | JAB_MOVE=SingleAttackIntent(JabDamage); WHIRLWIND_MOVE=MultiAttackIntent(WhirlwindDamage, WhirlwindRepeat) | PowerCmd.Apply<VitalSparkPower> |
-| Inklet | JAB_MOVE=SingleAttackIntent(JabDamage); WHIRLWIND_MOVE=MultiAttackIntent(WhirlwindDamage, 3); PIERCING_GAZE_MOVE=SingleAttackIntent(PiercingGazeDamage) | PowerCmd.Apply<SlipperyPower> |
-| KinFollower | QUICK_SLASH_MOVE=SingleAttackIntent(QuickSlashDamage); BOOMERANG_MOVE=MultiAttackIntent(BoomerangDamage, 2); POWER_DANCE_MOVE=BuffIntent | PowerCmd.Apply<MinionPower> |
-| KinPriest | BEAM_MOVE=MultiAttackIntent(BeamDamage, 3); RITUAL_MOVE=BuffIntent |  |
-| KnowledgeDemon | CURSE_OF_KNOWLEDGE_MOVE=DebuffIntent; SLAP_MOVE=SingleAttackIntent(SlapDamage); KNOWLEDGE_OVERWHELMING_MOVE=MultiAttackIntent(KnowledgeOverwhelmingDamage, 3) |  |
-| LagavulinMatriarch | SLEEP_MOVE=SleepIntent; SLASH_MOVE=SingleAttackIntent(SlashDamage); DISEMBOWEL_MOVE=MultiAttackIntent(DisembowelDamage, DisembowelRepeat) | CreatureCmd.TriggerAnim, PowerCmd.Apply<PlatingPower>, PowerCmd.Apply<AsleepPower> |
-| LeafSlimeM | CLUMP_SHOT=SingleAttackIntent(ClumpDamage); STICKY_SHOT=StatusIntent(2) |  |
-| LeafSlimeS | BUTT_MOVE=SingleAttackIntent(TackleDamage); GOOP_MOVE=StatusIntent(1) |  |
-| LivingFog | SUPER_GAS_BLAST_MOVE=SingleAttackIntent(SuperGasBlastDamage) |  |
-| LivingShield | SHIELD_SLAM_MOVE=SingleAttackIntent(ShieldSlamDamage) | PowerCmd.Apply<RampartPower> |
-| LouseProgenitor | POUNCE_MOVE=SingleAttackIntent(PounceDamage) | PowerCmd.Apply<CurlUpPower> |
-| MagiKnight | DAMPEN_MOVE=DebuffIntent; PREP_MOVE=DefendIntent; MAGIC_BOMB=SingleAttackIntent(BombDamage); RAM_MOVE=SingleAttackIntent(SpearDamage) |  |
-| Mawler | RIP_AND_TEAR_MOVE=SingleAttackIntent(RipAndTearDamage); ROAR_MOVE=DebuffIntent; CLAW_MOVE=MultiAttackIntent(ClawDamage, 2) |  |
-| MechaKnight | CHARGE_MOVE=SingleAttackIntent(ChargeDamage); FLAMETHROWER_MOVE=StatusIntent(4); HEAVY_CLEAVE_MOVE=SingleAttackIntent(HeavyCleaveDamage) | PowerCmd.Apply<ArtifactPower> |
-| MultiAttackMoveMonster | POKE=MultiAttackIntent(1, 5) |  |
-| MysteriousKnight |  | PowerCmd.Apply<StrengthPower>, PowerCmd.Apply<PlatingPower> |
-| Myte | TOXIC_MOVE=StatusIntent(2); BITE_MOVE=SingleAttackIntent(BiteDamage) |  |
-| Nibbit | BUTT_MOVE=SingleAttackIntent(ButtDamage); HISS_MOVE=BuffIntent |  |
-| Noisebot | NOISE_MOVE=StatusIntent(2) |  |
-| OneHpMonster | NOTHING=HiddenIntent |  |
-| Osty |  |  |
-| Ovicopter | LAY_EGGS_MOVE=SummonIntent; SMASH_MOVE=SingleAttackIntent(SmashDamage); NUTRITIONAL_PASTE_MOVE=BuffIntent | SfxCmd.PlayLoop |
-| OwlMagistrate | MAGISTRATE_SCRUTINY=SingleAttackIntent(ScrutinyDamage); PECK_ASSAULT=MultiAttackIntent(PeckAssaultDamage, 6); JUDICIAL_FLIGHT=BuffIntent |  |
-| PaelsLegion |  |  |
-| Parafright | SLAM_MOVE=SingleAttackIntent(SlamDamage) | PowerCmd.Apply<IllusionPower> |
-| PhantasmalGardener | BITE_MOVE=SingleAttackIntent(BiteDamage); LASH_MOVE=SingleAttackIntent(LashDamage); FLAIL_MOVE=MultiAttackIntent(FlailDamage, FlailRepeat); ENLARGE_MOVE=BuffIntent | PowerCmd.Apply<SkittishPower> |
-| PhrogParasite | INFECT_MOVE=StatusIntent(3); LASH_MOVE=MultiAttackIntent(LashDamage, 4) | PowerCmd.Apply<InfestedPower> |
-| PunchConstruct | READY_MOVE=DefendIntent; STRONG_PUNCH_MOVE=SingleAttackIntent(StrongPunchDamage) | PowerCmd.Apply<ArtifactPower> |
-| Queen | PUPPET_STRINGS_MOVE=CardDebuffIntent; YOUR_MINE_MOVE=DebuffIntent; OFF_WITH_YOUR_HEAD_MOVE=MultiAttackIntent(OffWithYourHeadDamage, 5); EXECUTION_MOVE=SingleAttackIntent(ExecutionDamage) |  |
-| Rocket | TARGETING_RETICLE_MOVE=SingleAttackIntent(TargetingReticleDamage); PRECISION_BEAM_MOVE=SingleAttackIntent(PrecisionBeamDamage); CHARGE_UP_MOVE=BuffIntent; LASER_MOVE=SingleAttackIntent(LaserDamage); RECHARGE_MOVE=SleepIntent | PowerCmd.Apply<SurroundedPower>, PowerCmd.Apply<BackAttackRightPower>, PowerCmd.Apply<CrabRagePower> |
-| ScrollOfBiting | CHOMP=SingleAttackIntent(ChompDamage); CHEW=MultiAttackIntent(ChewDamage, 2); MORE_TEETH=BuffIntent | PowerCmd.Apply<PaperCutsPower> |
-| Seapunk | SEA_KICK_MOVE=SingleAttackIntent(SeaKickDamage); SPINNING_KICK_MOVE=MultiAttackIntent(SpinningKickDamage, SpinningKickRepeat) |  |
-| SewerClam | PRESSURIZE_MOVE=BuffIntent | PowerCmd.Apply<PlatingPower> |
-| ShrinkerBeetle | SHRINKER_MOVE=DebuffIntent(strong: true); CHOMP_MOVE=SingleAttackIntent(ChompDamage); STOMP_MOVE=SingleAttackIntent(StompDamage) |  |
-| SingleAttackMoveMonster | POKE=SingleAttackIntent(1) |  |
-| SkulkingColony | ZOOM_MOVE=SingleAttackIntent(ZoomDamage); SUPER_CRAB_MOVE=MultiAttackIntent(SuperCrabDamage, SuperCrabRepeat) | PowerCmd.Apply<HardenedShellPower> |
-| SlimedBerserker | VOMIT_ICHOR_MOVE=StatusIntent(10); SMOTHER_MOVE=SingleAttackIntent(SmotherDamage) |  |
-| SlitheringStrangler | CONSTRICT=DebuffIntent; LASH=SingleAttackIntent(LashDamage) |  |
-| SludgeSpinner | SLAM_MOVE=SingleAttackIntent(SlamDamage) |  |
-| SlumberingBeetle | SNORE_MOVE=SleepIntent | PowerCmd.Apply<PlatingPower>, PowerCmd.Apply<SlumberPower>, SfxCmd.PlayLoop |
-| SnappingJaxfruit |  | SfxCmd.PlayLoop |
-| SneakyGremlin | SPAWNED_MOVE=StunIntent |  |
-| SoulFysh | BECKON_MOVE=StatusIntent(BeckonMoveAmount); DE_GAS_MOVE=SingleAttackIntent(DeGasDamage); FADE_MOVE=BuffIntent |  |
-| SoulNexus | SOUL_BURN_MOVE=SingleAttackIntent(SoulBurnDamage); MAELSTROM_MOVE=MultiAttackIntent(MaelstromDamage, MaelstromRepeat) |  |
-| SpectralKnight | HEX=DebuffIntent; SOUL_SLASH=SingleAttackIntent(SoulSlashDamage); SOUL_FLAME=MultiAttackIntent(SoulFlameDamage, 3) |  |
-| SpinyToad | PROTRUDING_SPIKES_MOVE=BuffIntent; SPIKE_EXPLOSION_MOVE=SingleAttackIntent(ExplosionDamage); TONGUE_LASH_MOVE=SingleAttackIntent(LashDamage) |  |
-| Stabbot |  |  |
-| TenHpMonster | NOTHING=HiddenIntent |  |
-| TerrorEel | CRASH_MOVE=SingleAttackIntent(CrashDamage); STUN_MOVE=StunIntent | PowerCmd.Apply<ShriekPower> |
-| TestSubject | BITE_MOVE=SingleAttackIntent(BiteDamage); POUNCE_MOVE=SingleAttackIntent(PounceDamage); PHASE3_LACERATE_MOVE=MultiAttackIntent(Phase3LacerateDamage, 3); BIG_POUNCE_MOVE=SingleAttackIntent(BigPounceDamage) | PowerCmd.Apply<AdaptablePower>, PowerCmd.Apply<EnragePower> |
-| TheAdversaryMkOne | SMASH_MOVE=SingleAttackIntent(SmashDamage); BEAM_MOVE=SingleAttackIntent(BeamDamage) | PowerCmd.Apply<ArtifactPower> |
-| TheAdversaryMkThree | CRASH_MOVE=SingleAttackIntent(CrashDamage); FLAME_BEAM_MOVE=SingleAttackIntent(FlameBeamDamage) | PowerCmd.Apply<ArtifactPower> |
-| TheAdversaryMkTwo | BASH_MOVE=SingleAttackIntent(BashDamage); FLAME_BEAM_MOVE=SingleAttackIntent(FlameBeamDamage) | PowerCmd.Apply<ArtifactPower> |
-| TheForgotten |  | PowerCmd.Apply<PossessSpeedPower> |
-| TheInsatiable | THRASH_MOVE_1=MultiAttackIntent(ThrashDamage, 2); THRASH_MOVE_2=MultiAttackIntent(ThrashDamage, 2); LUNGING_BITE_MOVE=SingleAttackIntent(BiteDamage); SALIVATE_MOVE=BuffIntent |  |
-| TheLost |  | PowerCmd.Apply<PossessStrengthPower> |
-| TheObscura | ILLUSION_MOVE=SummonIntent; PIERCING_GAZE_MOVE=SingleAttackIntent(PiercingGazeDamage); SAIL_MOVE=BuffIntent |  |
-| ThievingHopper | NAB_MOVE=SingleAttackIntent(NabDamage); HAT_TRICK_MOVE=SingleAttackIntent(HatTrickDamage); FLUTTER_MOVE=BuffIntent; ESCAPE_MOVE=EscapeIntent | PowerCmd.Apply<EscapeArtistPower> |
-| Toadpole | SPIKE_SPIT_MOVE=MultiAttackIntent(SpikeSpitDamage, SpikeSpitRepeat); WHIRL_MOVE=SingleAttackIntent(WhirlDamage); SPIKEN_MOVE=BuffIntent |  |
-| TorchHeadAmalgam | TACKLE_1_MOVE=SingleAttackIntent(TackleDamage); TACKLE_2_MOVE=SingleAttackIntent(TackleDamage); BEAM_MOVE=MultiAttackIntent(SoulBeamDamage, 3); TACKLE_3_MOVE=SingleAttackIntent(WeakTackleDamage); TACKLE_4_MOVE=SingleAttackIntent(WeakTackleDamage) | PowerCmd.Apply<MinionPower> |
-| ToughEgg | HATCH_MOVE=SummonIntent | PowerCmd.Apply<HatchPower> |
-| TrackerRubyRaider | TRACK_MOVE=DebuffIntent |  |
-| Tunneler | BITE_MOVE=SingleAttackIntent(BiteDamage); BELOW_MOVE_1=SingleAttackIntent(BelowDamage); DIZZY_MOVE=StunIntent |  |
-| TurretOperator | UNLOAD_MOVE_1=MultiAttackIntent(FireDamage, 5); UNLOAD_MOVE_2=MultiAttackIntent(FireDamage, 5); RELOAD_MOVE=BuffIntent |  |
-| TwigSlimeM | CLUMP_SHOT_MOVE=SingleAttackIntent(ClumpDamage); STICKY_SHOT_MOVE=StatusIntent(1) |  |
-| TwigSlimeS | BUTT_MOVE=SingleAttackIntent(TackleDamage) |  |
-| TwoTailedRat | SCRATCH_MOVE=SingleAttackIntent(ScratchDamage); DISEASE_BITE_MOVE=SingleAttackIntent(DiseaseBiteDamage); SCREECH_MOVE=DebuffIntent; CALL_FOR_BACKUP_MOVE=SummonIntent |  |
-| Vantom | INK_BLOT_MOVE=SingleAttackIntent(InkBlotDamage); INKY_LANCE_MOVE=MultiAttackIntent(InkyLanceDamage, 2); PREPARE_MOVE=BuffIntent | PowerCmd.Apply<SlipperyPower> |
-| VineShambler | SWIPE_MOVE=MultiAttackIntent(SwipeDamage, 2); CHOMP_MOVE=SingleAttackIntent(ChompDamage) |  |
-| WaterfallGiant | PRESSURIZE_MOVE=BuffIntent | SfxCmd.PlayLoop |
-| Wriggler | NASTY_BITE_MOVE=SingleAttackIntent(BiteDamage); SPAWNED_MOVE=StunIntent |  |
-| Zapbot | ZAP=SingleAttackIntent(ZapDamage) | PowerCmd.Apply<HighVoltagePower> |
+| Architect | NOTHING=HiddenIntent -> (no command in move body) |  |
+| AssassinRubyRaider | KILLSHOT_MOVE=SingleAttackIntent(KillshotDamage) -> Deal 11 damage |  |
+| Axebot | BOOT_UP_MOVE=DefendIntent+BuffIntent -> Gain 10 Block, Gain 1 Strength (StrengthPower); ONE_TWO_MOVE=MultiAttackIntent(OneTwoDamage, 2) -> Deal 5 damage 2 times; SHARPEN_MOVE=BuffIntent -> Gain 4 Strength (StrengthPower); HAMMER_UPPERCUT_MOVE=SingleAttackIntent(HammerUppercutDamage)+DebuffIntent -> Deal 8 damage, Apply 1 Weak (WeakPower) to the target, Apply 1 Frail (FrailPower) to the target | PowerCmd.Apply<StockPower> |
+| AxeRubyRaider | SWING_1=SingleAttackIntent(SwingDamage)+DefendIntent -> Deal 5 damage, Gain 5 Block; SWING_2=SingleAttackIntent(SwingDamage)+DefendIntent -> Deal 5 damage, Gain 5 Block; BIG_SWING=SingleAttackIntent(BigSwingDamage) -> Deal 12 damage |  |
+| BattleFriendV1 | NOTHING_MOVE=(no intent) -> (no command in move body) | PowerCmd.Apply<BattlewornDummyTimeLimitPower> |
+| BattleFriendV2 | NOTHING_MOVE=(no intent) -> (no command in move body) | PowerCmd.Apply<BattlewornDummyTimeLimitPower> |
+| BattleFriendV3 | NOTHING_MOVE=(no intent) -> (no command in move body) | PowerCmd.Apply<BattlewornDummyTimeLimitPower> |
+| BigDummy | NOTHING=HiddenIntent -> (no command in move body) |  |
+| BowlbugEgg | BITE_MOVE=SingleAttackIntent(BiteDamage)+DefendIntent -> Deal 7 damage, Gain 7 Block |  |
+| BowlbugNectar | THRASH_MOVE=SingleAttackIntent(ThrashDamage) -> Deal 3 damage; BUFF_MOVE=BuffIntent -> Gain 15 Strength (StrengthPower); THRASH2_MOVE=SingleAttackIntent(ThrashDamage) -> Deal 3 damage |  |
+| BowlbugRock | HEADBUTT_MOVE=SingleAttackIntent(HeadbuttDamage) -> Deal 15 damage; DIZZY_MOVE=StunIntent -> (no command in move body) | PowerCmd.Apply<ImbalancedPower> |
+| BowlbugSilk | TRASH_MOVE=MultiAttackIntent(ThrashDamage, 2) -> Deal 4 damage 2 times; TOXIC_SPIT_MOVE=DebuffIntent -> Apply 1 Weak (WeakPower) to the target |  |
+| BruteRubyRaider | BEAT_MOVE=SingleAttackIntent(BeatDamage) -> Deal 7 damage; ROAR_MOVE=BuffIntent -> Gain 3 Strength (StrengthPower) |  |
+| BygoneEffigy | INITIAL_SLEEP_MOVE=SleepIntent -> (no command in move body); WAKE_MOVE=BuffIntent -> Gain 10 Strength (StrengthPower); SLEEP_MOVE=SleepIntent -> (no command in move body); SLASHES_MOVE=SingleAttackIntent(SlashDamage) -> Deal 15 damage | PowerCmd.Apply<SlowPower> |
+| Byrdonis | PECK_MOVE=MultiAttackIntent(PeckDamage, PeckRepeat) -> Deal 3 damage 3 times; SWOOP_MOVE=SingleAttackIntent(SwoopDamage) -> Deal 16 damage | PowerCmd.Apply<TerritorialPower> |
+| Byrdpip | NOTHING_MOVE=(no intent) -> (no command in move body) |  |
+| CalcifiedCultist | INCANTATION_MOVE=BuffIntent -> Gain 2 Ritual (RitualPower); DARK_STRIKE_MOVE=SingleAttackIntent(DarkStrikeDamage) -> Deal 9 damage |  |
+| CeremonialBeast | STAMP_MOVE=BuffIntent -> Gain 150 Plow (PlowPower); PLOW_MOVE=SingleAttackIntent(PlowDamage)+BuffIntent -> Deal 18 damage, Gain 2 Strength (StrengthPower); STUN_MOVE=StunIntent -> (no command in move body); BEAST_CRY_MOVE=DebuffIntent -> Apply 1 Ringing (RingingPower) to the target; STOMP_MOVE=SingleAttackIntent(StompDamage) -> Deal 15 damage; CRUSH_MOVE=SingleAttackIntent(CrushDamage)+BuffIntent -> Deal 17 damage, Gain 3 Strength (StrengthPower) |  |
+| Chomper | CLAMP_MOVE=MultiAttackIntent(ClampDamage, 2) -> Deal 8 damage 2 times; SCREECH_MOVE=StatusIntent(3) -> CardPileCmd.AddToCombatAndPreview<Dazed> | PowerCmd.Apply<ArtifactPower> |
+| CorpseSlug | WHIP_SLAP_MOVE=MultiAttackIntent(WhipSlapDamage, WhipSlapRepeat) -> Deal 3 damage 2 times; GLOMP_MOVE=SingleAttackIntent(GlompDamage) -> Deal 8 damage; GOOP_MOVE=DebuffIntent -> Apply 2 Frail (FrailPower) to the target | PowerCmd.Apply<RavenousPower> |
+| CrossbowRubyRaider | FIRE_MOVE=SingleAttackIntent(FireDamage) -> Deal 14 damage; RELOAD_MOVE=DefendIntent -> Gain 3 Block |  |
+| Crusher | THRASH_MOVE=SingleAttackIntent(ThrashDamage) -> Deal 12 damage; ENLARGING_STRIKE_MOVE=SingleAttackIntent(EnlargingStrikeDamage) -> Deal 4 damage; BUG_STING_MOVE=MultiAttackIntent(BugStingDamage, BugStingTimes)+DebuffIntent -> Deal 6 damage 2 times, Apply 2 Weak (WeakPower) to the target, Apply 2 Frail (FrailPower) to the target; ADAPT_MOVE=BuffIntent -> Gain 2 Strength (StrengthPower); GUARDED_STRIKE_MOVE=SingleAttackIntent(GuardedStrikeDamage)+DefendIntent -> Deal 12 damage, Gain 18 Block | PowerCmd.Apply<BackAttackLeftPower>, PowerCmd.Apply<CrabRagePower> |
+| CubexConstruct | CHARGE_UP_MOVE=BuffIntent -> Gain 2 Strength (StrengthPower); REPEATER_MOVE=SingleAttackIntent(BlastDamage)+BuffIntent -> Deal 7 damage, Gain 2 Strength (StrengthPower); REPEATER_MOVE_2=SingleAttackIntent(BlastDamage)+BuffIntent -> Deal 7 damage, Gain 2 Strength (StrengthPower); EXPEL_BLAST=MultiAttackIntent(ExpelDamage, 2) -> Deal 5 damage 2 times; SUBMERGE_MOVE=DefendIntent -> Gain 15 Block | CreatureCmd.GainBlock, PowerCmd.Apply<ArtifactPower> |
+| DampCultist | INCANTATION_MOVE=BuffIntent -> Gain 5 Ritual (RitualPower); DARK_STRIKE_MOVE=SingleAttackIntent(DarkStrikeDamage) -> Deal 1 damage |  |
+| DecimillipedeSegment | WRITHE_MOVE=MultiAttackIntent(WritheDamage, 2) -> Deal 5 damage 2 times; BULK_MOVE=SingleAttackIntent(BulkDamage)+BuffIntent -> Deal 6 damage, Gain 2 Strength (StrengthPower); CONSTRICT_MOVE=SingleAttackIntent(ConstrictDamage)+DebuffIntent -> Deal 8 damage, Apply 1 Weak (WeakPower) to the target; DEAD_MOVE=(no intent) -> (no command in move body); REATTACH_MOVE=HealIntent -> (no command in move body) | CreatureCmd.SetMaxAndCurrentHp, PowerCmd.Apply<ReattachPower> |
+| DecimillipedeSegmentBack | WRITHE_MOVE=MultiAttackIntent(WritheDamage, 2) -> Deal 5 damage 2 times; BULK_MOVE=SingleAttackIntent(BulkDamage)+BuffIntent -> Deal 6 damage, Gain 2 Strength (StrengthPower); CONSTRICT_MOVE=SingleAttackIntent(ConstrictDamage)+DebuffIntent -> Deal 8 damage, Apply 1 Weak (WeakPower) to the target; DEAD_MOVE=(no intent) -> (no command in move body); REATTACH_MOVE=HealIntent -> (no command in move body) |  |
+| DecimillipedeSegmentFront | WRITHE_MOVE=MultiAttackIntent(WritheDamage, 2) -> Deal 5 damage 2 times; BULK_MOVE=SingleAttackIntent(BulkDamage)+BuffIntent -> Deal 6 damage, Gain 2 Strength (StrengthPower); CONSTRICT_MOVE=SingleAttackIntent(ConstrictDamage)+DebuffIntent -> Deal 8 damage, Apply 1 Weak (WeakPower) to the target; DEAD_MOVE=(no intent) -> (no command in move body); REATTACH_MOVE=HealIntent -> (no command in move body) |  |
+| DecimillipedeSegmentMiddle | WRITHE_MOVE=MultiAttackIntent(WritheDamage, 2) -> Deal 5 damage 2 times; BULK_MOVE=SingleAttackIntent(BulkDamage)+BuffIntent -> Deal 6 damage, Gain 2 Strength (StrengthPower); CONSTRICT_MOVE=SingleAttackIntent(ConstrictDamage)+DebuffIntent -> Deal 8 damage, Apply 1 Weak (WeakPower) to the target; DEAD_MOVE=(no intent) -> (no command in move body); REATTACH_MOVE=HealIntent -> (no command in move body) |  |
+| DevotedSculptor | FORBIDDEN_INCANTATION_MOVE=BuffIntent -> Gain 9 Ritual (RitualPower); SAVAGE_MOVE=SingleAttackIntent(SavageDamage) -> Deal 12 damage |  |
+| Door | DRAMATIC_OPEN_MOVE=SingleAttackIntent(DramaticOpenDamage) -> Deal 25 damage; ENFORCE_MOVE=SingleAttackIntent(EnforceDamage)+BuffIntent -> Deal 20 damage, Gain 3 Strength (StrengthPower); DOOR_SLAM_MOVE=MultiAttackIntent(DoorSlamDamage, DoorSlamRepeat) -> Deal 15 damage 2 times; DEAD_MOVE=(no intent) -> (no command in move body) | PowerCmd.Apply<DoorRevivalPower> |
+| Doormaker | WHAT_IS_IT_MOVE=StunIntent -> (no command in move body); BEAM_MOVE=SingleAttackIntent(LaserBeamDamage) -> Deal 31 damage; GET_BACK_IN_MOVE=SingleAttackIntent(GetBackInMoveDamage)+BuffIntent+EscapeIntent -> Deal 40 damage, Gain 5 Strength (StrengthPower), PowerCmd.SetAmount<StrengthPower>, CreatureCmd.SetMaxAndCurrentHp, CreatureCmd.Escape |  |
+| Entomancer | PHEROMONE_SPIT_MOVE=BuffIntent -> Gain 1 Personal Hive (PersonalHivePower), Gain 1 Strength (StrengthPower), Gain 2 Strength (StrengthPower); BEES_MOVE=MultiAttackIntent(BeesDamage, BeesRepeat) -> Deal 3 damage 7 times; SPEAR_MOVE=SingleAttackIntent(SpearMoveDamage) -> Deal 18 damage | PowerCmd.Apply<PersonalHivePower> |
+| Exoskeleton | SKITTER_MOVE=MultiAttackIntent(SkitterDamage, SkitterRepeats) -> Deal 1 damage 3 times; MANDIBLE_MOVE=SingleAttackIntent(MandiblesDamage) -> Deal 8 damage; ENRAGE_MOVE=BuffIntent -> Gain 2 Strength (StrengthPower) | PowerCmd.Apply<HardToKillPower> |
+| EyeWithTeeth | DISTRACT_MOVE=StatusIntent(3) -> CardPileCmd.AddToCombatAndPreview<Dazed> | PowerCmd.Apply<IllusionPower> |
+| Fabricator | FABRICATE_MOVE=SummonIntent -> (no command in move body); FABRICATING_STRIKE_MOVE=SingleAttackIntent(FabricatingStrikeDamage)+SummonIntent -> Deal 18 damage; DISINTEGRATE_MOVE=SingleAttackIntent(DisintegrateDamage) -> Deal 11 damage |  |
+| FakeMerchantMonster | SWIPE_MOVE=SingleAttackIntent(SwipeDamage) -> Deal 13 damage; SPEW_COINS_MOVE=MultiAttackIntent(2, 8) -> Deal 2 damage 8 times; THROW_RELIC_MOVE=SingleAttackIntent(ThrowRelicDamage)+DebuffIntent -> Deal 13 damage, Apply 1 Frail (FrailPower) to the target; ENRAGE_MOVE=BuffIntent -> Gain 2 Strength (StrengthPower) |  |
+| FatGremlin | SPAWNED_MOVE=StunIntent -> (no command in move body); FLEE_MOVE=EscapeIntent -> CreatureCmd.Escape |  |
+| FlailKnight | WAR_CHANT=BuffIntent -> Gain 3 Strength (StrengthPower); FLAIL_MOVE=MultiAttackIntent(FlailDamage, 2) -> Deal 9 damage 2 times; RAM_MOVE=SingleAttackIntent(RamDamage) -> Deal 15 damage |  |
+| Flyconid | VULNERABLE_SPORES_MOVE=DebuffIntent -> Apply 2 Vulnerable (VulnerablePower) to the target; FRAIL_SPORES_MOVE=SingleAttackIntent(SporeDamage)+DebuffIntent -> Deal 8 damage, Apply 2 Frail (FrailPower) to the target; SMASH_MOVE=SingleAttackIntent(SmashDamage) -> Deal 11 damage |  |
+| Fogmog | ILLUSION_MOVE=SummonIntent -> CreatureCmd.Add<EyeWithTeeth>; SWIPE_MOVE=SingleAttackIntent(SwipeDamage)+BuffIntent -> Deal 8 damage, Gain 1 Strength (StrengthPower); SWIPE_RANDOM_MOVE=SingleAttackIntent(SwipeDamage)+BuffIntent -> Deal 8 damage, Gain 1 Strength (StrengthPower); HEADBUTT_MOVE=SingleAttackIntent(HeadbuttDamage) -> Deal 14 damage |  |
+| FossilStalker | TACKLE_MOVE=SingleAttackIntent(TackleDamage)+DebuffIntent -> Deal 9 damage, Apply 1 Frail (FrailPower) to the target; LATCH_MOVE=SingleAttackIntent(LatchDamage) -> Deal 12 damage; LASH_MOVE=MultiAttackIntent(LashDamage, LashRepeat) -> Deal 3 damage 2 times | PowerCmd.Apply<SuckPower> |
+| FrogKnight | FOR_THE_QUEEN=BuffIntent -> Gain 5 Strength (StrengthPower); STRIKE_DOWN_EVIL=SingleAttackIntent(StrikeDownEvilDamage) -> Deal 21 damage; TONGUE_LASH=SingleAttackIntent(TongueLashDamage)+DebuffIntent -> Deal 13 damage, Apply 2 Frail (FrailPower) to the target; BEETLE_CHARGE=SingleAttackIntent(BeetleChargeDamage) -> Deal 35 damage | PowerCmd.Apply<PlatingPower> |
+| FuzzyWurmCrawler | FIRST_ACID_GOOP=SingleAttackIntent(AcidGoopDamage) -> Deal 4 damage; ACID_GOOP=SingleAttackIntent(AcidGoopDamage) -> Deal 4 damage; INHALE=BuffIntent -> Gain 7 Strength (StrengthPower) |  |
+| GasBomb | EXPLODE_MOVE=DeathBlowIntent(() => ExplodeDamage) -> Deal 8 damage, Kill itself | PowerCmd.Apply<MinionPower> |
+| GlobeHead | THUNDER_STRIKE=MultiAttackIntent(ThunderStrikeDamage, 3) -> Deal 6 damage 3 times; SHOCKING_SLAP=SingleAttackIntent(ShockingSlapDamage)+DebuffIntent -> Deal 13 damage, Apply 2 Frail (FrailPower) to the target; GALVANIC_BURST=SingleAttackIntent(GalvanicBurstDamage)+BuffIntent -> Deal 16 damage, Gain 2 Strength (StrengthPower) | PowerCmd.Apply<GalvanicPower> |
+| GremlinMerc | GIMME_MOVE=MultiAttackIntent(GimmeDamage, GimmeRepeat) -> Deal 7 damage 2 times; DOUBLE_SMASH_MOVE=MultiAttackIntent(DoubleSmashDamage, DoubleSmashRepeat)+DebuffIntent -> Deal 6 damage 2 times, Apply 2 Weak (WeakPower) to the target; HEHE_MOVE=SingleAttackIntent(HeheDamage)+BuffIntent -> Deal 8 damage, Gain 2 Strength (StrengthPower) | PowerCmd.Apply<SurprisePower>, PowerCmd.Apply |
+| Guardbot | GUARD_MOVE=DefendIntent -> Give 15 Block |  |
+| HauntedShip | RAMMING_SPEED_MOVE=SingleAttackIntent(RammingSpeedDamage)+StatusIntent(RammingSpeedStatusCount) -> Deal 10 damage, CardPileCmd.AddToCombatAndPreview<Wound>; SWIPE_MOVE=SingleAttackIntent(SwipeDamage) -> Deal 13 damage; STOMP_MOVE=MultiAttackIntent(StompDamage, StompRepeat) -> Deal 4 damage 3 times; HAUNT_MOVE=DebuffIntent -> Apply 2 Weak (WeakPower) to the target, Apply 2 Frail (FrailPower) to the target, Apply 2 Vulnerable (VulnerablePower) to the target |  |
+| HunterKiller | TENDERIZING_GOOP_MOVE=DebuffIntent -> Apply 1 Tender (TenderPower) to the target; BITE_MOVE=SingleAttackIntent(BiteDamage) -> Deal 17 damage; PUNCTURE_MOVE=MultiAttackIntent(PunctureDamage, 3) -> Deal 7 damage 3 times |  |
+| InfestedPrism | JAB_MOVE=SingleAttackIntent(JabDamage) -> Deal 22 damage; RADIATE_MOVE=SingleAttackIntent(RadiateDamage)+DefendIntent -> Deal 16 damage, Gain 16 Block; WHIRLWIND_MOVE=MultiAttackIntent(WhirlwindDamage, WhirlwindRepeat) -> Deal 9 damage 3 times; PULSATE_MOVE=BuffIntent+DefendIntent -> Gain 20 Block, Gain 4 Strength (StrengthPower) | PowerCmd.Apply<VitalSparkPower> |
+| Inklet | JAB_MOVE=SingleAttackIntent(JabDamage) -> Deal 3 damage; WHIRLWIND_MOVE=MultiAttackIntent(WhirlwindDamage, 3) -> Deal 2 damage 3 times; PIERCING_GAZE_MOVE=SingleAttackIntent(PiercingGazeDamage) -> Deal 10 damage | PowerCmd.Apply<SlipperyPower> |
+| KinFollower | QUICK_SLASH_MOVE=SingleAttackIntent(QuickSlashDamage) -> Deal 5 damage; BOOMERANG_MOVE=MultiAttackIntent(BoomerangDamage, 2) -> Deal 2 damage 2 times; POWER_DANCE_MOVE=BuffIntent -> Gain 2 Strength (StrengthPower) | PowerCmd.Apply<MinionPower> |
+| KinPriest | ORB_OF_FRAILTY_MOVE=SingleAttackIntent(OrbOfFrailtyDamage)+DebuffIntent -> Deal 8 damage, Apply 1 Frail (FrailPower) to the target; ORB_OF_WEAKNESS_MOVE=SingleAttackIntent(OrbOfWeaknessDamage)+DebuffIntent -> Deal 8 damage, Apply 1 Weak (WeakPower) to the target; BEAM_MOVE=MultiAttackIntent(BeamDamage, 3) -> Deal 3 damage 3 times; RITUAL_MOVE=BuffIntent -> Gain 2 Strength (StrengthPower) |  |
+| KnowledgeDemon | CURSE_OF_KNOWLEDGE_MOVE=DebuffIntent -> (no command in move body); SLAP_MOVE=SingleAttackIntent(SlapDamage) -> Deal 17 damage; KNOWLEDGE_OVERWHELMING_MOVE=MultiAttackIntent(KnowledgeOverwhelmingDamage, 3) -> Deal 8 damage 3 times; PONDER_MOVE=SingleAttackIntent(PonderDamage)+HealIntent+BuffIntent -> Deal 11 damage, Heal ? HP, Gain 2 Strength (StrengthPower) |  |
+| LagavulinMatriarch | SLEEP_MOVE=SleepIntent -> (no command in move body); SLASH_MOVE=SingleAttackIntent(SlashDamage) -> Deal 19 damage; SLASH2_MOVE=SingleAttackIntent(Slash2Damage)+DefendIntent -> Deal 12 damage, Gain 12 Block; DISEMBOWEL_MOVE=MultiAttackIntent(DisembowelDamage, DisembowelRepeat) -> Deal 9 damage 2 times; SOUL_SIPHON_MOVE=DebuffIntent+BuffIntent -> Apply -2 Strength (StrengthPower) to the target, Apply -2 Dexterity (DexterityPower) to the target, Gain 2 Strength (StrengthPower) | CreatureCmd.TriggerAnim, PowerCmd.Apply<PlatingPower>, PowerCmd.Apply<AsleepPower> |
+| LeafSlimeM | CLUMP_SHOT=SingleAttackIntent(ClumpDamage) -> Deal 8 damage; STICKY_SHOT=StatusIntent(2) -> CardPileCmd.AddToCombatAndPreview<Slimed> |  |
+| LeafSlimeS | BUTT_MOVE=SingleAttackIntent(TackleDamage) -> Deal 3 damage; GOOP_MOVE=StatusIntent(1) -> CardPileCmd.AddToCombatAndPreview<Slimed> |  |
+| LivingFog | ADVANCED_GAS_MOVE=SingleAttackIntent(AdvancedGasDamage)+CardDebuffIntent -> Deal 8 damage, Apply 1 Smoggy (SmoggyPower) to the target; BLOAT_MOVE=SingleAttackIntent(BloatDamage)+SummonIntent -> CreatureCmd.Add<GasBomb>, Deal 5 damage; SUPER_GAS_BLAST_MOVE=SingleAttackIntent(SuperGasBlastDamage) -> Deal 8 damage |  |
+| LivingShield | SHIELD_SLAM_MOVE=SingleAttackIntent(ShieldSlamDamage) -> Deal 6 damage; SMASH_MOVE=SingleAttackIntent(SmashDamage)+BuffIntent -> Deal 16 damage, Gain 3 Strength (StrengthPower) | PowerCmd.Apply<RampartPower> |
+| LouseProgenitor | WEB_CANNON_MOVE=SingleAttackIntent(WebDamage)+DebuffIntent -> Deal 9 damage, Apply 2 Frail (FrailPower) to the target; POUNCE_MOVE=SingleAttackIntent(PounceDamage) -> Deal 14 damage; CURL_AND_GROW_MOVE=DefendIntent+BuffIntent -> Gain 14 Block, Gain 5 Strength (StrengthPower) | PowerCmd.Apply<CurlUpPower> |
+| MagiKnight | FIRST_POWER_SHIELD_MOVE=SingleAttackIntent(PowerShieldDamage)+DefendIntent -> Deal 6 damage, Gain 5 Block; DAMPEN_MOVE=DebuffIntent -> Apply a power to the target; PREP_MOVE=DefendIntent -> Gain 5 Block; MAGIC_BOMB=SingleAttackIntent(BombDamage) -> Deal 35 damage; RAM_MOVE=SingleAttackIntent(SpearDamage) -> Deal 10 damage |  |
+| Mawler | RIP_AND_TEAR_MOVE=SingleAttackIntent(RipAndTearDamage) -> Deal 14 damage; ROAR_MOVE=DebuffIntent -> Apply 3 Vulnerable (VulnerablePower) to the target; CLAW_MOVE=MultiAttackIntent(ClawDamage, 2) -> Deal 4 damage 2 times |  |
+| MechaKnight | CHARGE_MOVE=SingleAttackIntent(ChargeDamage) -> Deal 25 damage; FLAMETHROWER_MOVE=StatusIntent(4) -> CardPileCmd.AddToCombatAndPreview<Burn>; WINDUP_MOVE=DefendIntent+BuffIntent -> Gain 15 Block, Gain 5 Strength (StrengthPower); HEAVY_CLEAVE_MOVE=SingleAttackIntent(HeavyCleaveDamage) -> Deal 35 damage | PowerCmd.Apply<ArtifactPower> |
+| MultiAttackMoveMonster | POKE=MultiAttackIntent(1, 5) -> Deal 1 damage 5 times |  |
+| MysteriousKnight | WAR_CHANT=BuffIntent -> Gain 3 Strength (StrengthPower); FLAIL_MOVE=MultiAttackIntent(FlailDamage, 2) -> Deal 9 damage 2 times; RAM_MOVE=SingleAttackIntent(RamDamage) -> Deal 15 damage | PowerCmd.Apply<StrengthPower>, PowerCmd.Apply<PlatingPower> |
+| Myte | TOXIC_MOVE=StatusIntent(2) -> CardPileCmd.AddToCombatAndPreview<Toxic>; BITE_MOVE=SingleAttackIntent(BiteDamage) -> Deal 13 damage; SUCK_MOVE=SingleAttackIntent(SuckDamage)+BuffIntent -> Deal 4 damage, Gain 2 Strength (StrengthPower) |  |
+| Nibbit | BUTT_MOVE=SingleAttackIntent(ButtDamage) -> Deal 12 damage; SLICE_MOVE=SingleAttackIntent(SliceDamage)+DefendIntent -> Deal 6 damage, Gain 5 Block; HISS_MOVE=BuffIntent -> Gain 2 Strength (StrengthPower) |  |
+| Noisebot | NOISE_MOVE=StatusIntent(2) -> Add a generated card to your discard pile, Add a generated card to your draw pile |  |
+| OneHpMonster | NOTHING=HiddenIntent -> (no command in move body) |  |
+| Osty | NOTHING_MOVE=(no intent) -> (no command in move body) |  |
+| Ovicopter | LAY_EGGS_MOVE=SummonIntent -> Apply 1 Minion (MinionPower) to the target; SMASH_MOVE=SingleAttackIntent(SmashDamage) -> Deal 16 damage; TENDERIZER_MOVE=SingleAttackIntent(TenderizerDamage)+DebuffIntent -> Deal 7 damage, Apply 2 Vulnerable (VulnerablePower) to the target; NUTRITIONAL_PASTE_MOVE=BuffIntent -> Gain 3 Strength (StrengthPower) | SfxCmd.PlayLoop |
+| OwlMagistrate | MAGISTRATE_SCRUTINY=SingleAttackIntent(ScrutinyDamage) -> Deal 16 damage; PECK_ASSAULT=MultiAttackIntent(PeckAssaultDamage, 6) -> Deal 4 damage 6 times; JUDICIAL_FLIGHT=BuffIntent -> Gain 1 Soar (SoarPower); VERDICT=SingleAttackIntent(VerdictDamage)+DebuffIntent -> Deal 33 damage, Apply 4 Vulnerable (VulnerablePower) to the target, Remove Soar (SoarPower) |  |
+| PaelsLegion | NOTHING_MOVE=(no intent) -> (no command in move body) |  |
+| Parafright | SLAM_MOVE=SingleAttackIntent(SlamDamage) -> Deal 16 damage | PowerCmd.Apply<IllusionPower> |
+| PhantasmalGardener | BITE_MOVE=SingleAttackIntent(BiteDamage) -> Deal 5 damage; LASH_MOVE=SingleAttackIntent(LashDamage) -> Deal 7 damage; FLAIL_MOVE=MultiAttackIntent(FlailDamage, FlailRepeat) -> Deal 1 damage 3 times; ENLARGE_MOVE=BuffIntent -> Gain 2 Strength (StrengthPower) | PowerCmd.Apply<SkittishPower> |
+| PhrogParasite | INFECT_MOVE=StatusIntent(3) -> CardPileCmd.AddToCombatAndPreview<Infection>; LASH_MOVE=MultiAttackIntent(LashDamage, 4) -> Deal 4 damage 4 times | PowerCmd.Apply<InfestedPower> |
+| PunchConstruct | READY_MOVE=DefendIntent -> Gain 10 Block; STRONG_PUNCH_MOVE=SingleAttackIntent(StrongPunchDamage) -> Deal 14 damage; FAST_PUNCH_MOVE=MultiAttackIntent(FastPunchDamage, FastPunchRepeat)+DebuffIntent -> Deal 5 damage 2 times, Apply 1 Weak (WeakPower) to the target | PowerCmd.Apply<ArtifactPower> |
+| Queen | PUPPET_STRINGS_MOVE=CardDebuffIntent -> Apply 3 Chains Of Binding (ChainsOfBindingPower) to the target; YOUR_MINE_MOVE=DebuffIntent -> Apply 99 Frail (FrailPower) to the target, Apply 99 Weak (WeakPower) to the target, Apply 99 Vulnerable (VulnerablePower) to the target; BURN_BRIGHT_FOR_ME_MOVE=BuffIntent+DefendIntent -> Apply 1 Strength (StrengthPower) to the target, Gain 20 Block; OFF_WITH_YOUR_HEAD_MOVE=MultiAttackIntent(OffWithYourHeadDamage, 5) -> Deal 3 damage 5 times; EXECUTION_MOVE=SingleAttackIntent(ExecutionDamage) -> Deal 15 damage; ENRAGE_MOVE=BuffIntent -> Gain 2 Strength (StrengthPower) |  |
+| Rocket | TARGETING_RETICLE_MOVE=SingleAttackIntent(TargetingReticleDamage) -> Deal 3 damage; PRECISION_BEAM_MOVE=SingleAttackIntent(PrecisionBeamDamage) -> Deal 18 damage; CHARGE_UP_MOVE=BuffIntent -> Gain 2 Strength (StrengthPower); LASER_MOVE=SingleAttackIntent(LaserDamage) -> Deal 31 damage; RECHARGE_MOVE=SleepIntent -> (no command in move body) | PowerCmd.Apply<SurroundedPower>, PowerCmd.Apply<BackAttackRightPower>, PowerCmd.Apply<CrabRagePower> |
+| ScrollOfBiting | CHOMP=SingleAttackIntent(ChompDamage) -> Deal 14 damage; CHEW=MultiAttackIntent(ChewDamage, 2) -> Deal 5 damage 2 times; MORE_TEETH=BuffIntent -> Gain 2 Strength (StrengthPower) | PowerCmd.Apply<PaperCutsPower> |
+| Seapunk | SEA_KICK_MOVE=SingleAttackIntent(SeaKickDamage) -> Deal 11 damage; SPINNING_KICK_MOVE=MultiAttackIntent(SpinningKickDamage, SpinningKickRepeat) -> Deal 2 damage 4 times; BUBBLE_BURP_MOVE=BuffIntent+DefendIntent -> Gain 7 Block, Gain 1 Strength (StrengthPower) |  |
+| SewerClam | PRESSURIZE_MOVE=BuffIntent -> Gain 4 Strength (StrengthPower); JET_MOVE=SingleAttackIntent(JetDamage) -> Deal 10 damage | PowerCmd.Apply<PlatingPower> |
+| ShrinkerBeetle | SHRINKER_MOVE=DebuffIntent(strong: true) -> Apply -1 Shrink (ShrinkPower) to the target; CHOMP_MOVE=SingleAttackIntent(ChompDamage) -> Deal 7 damage; STOMP_MOVE=SingleAttackIntent(StompDamage) -> Deal 13 damage |  |
+| SingleAttackMoveMonster | POKE=SingleAttackIntent(1) -> Deal 1 damage |  |
+| SkulkingColony | INERTIA_MOVE=DefendIntent+BuffIntent -> Gain 10 Block, Gain 3 Strength (StrengthPower); ZOOM_MOVE=SingleAttackIntent(ZoomDamage) -> Deal 16 damage; SUPER_CRAB_MOVE=MultiAttackIntent(SuperCrabDamage, SuperCrabRepeat) -> Deal 6 damage 2 times; SMASH_MOVE=SingleAttackIntent(SmashDamage)+StatusIntent(4) -> Deal 9 damage, CardPileCmd.AddToCombatAndPreview<Dazed> | PowerCmd.Apply<HardenedShellPower> |
+| SlimedBerserker | VOMIT_ICHOR_MOVE=StatusIntent(10) -> CardPileCmd.AddToCombatAndPreview<Slimed>; LEECHING_HUG_MOVE=DebuffIntent+BuffIntent -> Apply 3 Weak (WeakPower) to the target, Gain 3 Strength (StrengthPower); SMOTHER_MOVE=SingleAttackIntent(SmotherDamage) -> Deal 30 damage; FURIOUS_PUMMELING_MOVE=MultiAttackIntent(PummelingDamage, 4) -> Deal 4 damage 4 times |  |
+| SlitheringStrangler | CONSTRICT=DebuffIntent -> Apply 3 Constrict (ConstrictPower) to the target; TWACK=SingleAttackIntent(ThwackDamage)+DefendIntent -> Deal 7 damage, Gain 5 Block; LASH=SingleAttackIntent(LashDamage) -> Deal 12 damage |  |
+| SludgeSpinner | OIL_SPRAY_MOVE=SingleAttackIntent(OilSprayDamage)+DebuffIntent -> Deal 8 damage, Apply 1 Weak (WeakPower) to the target; SLAM_MOVE=SingleAttackIntent(SlamDamage) -> Deal 11 damage; RAGE_MOVE=SingleAttackIntent(RageDamage)+BuffIntent -> Deal 6 damage, Gain 3 Strength (StrengthPower) |  |
+| SlumberingBeetle | SNORE_MOVE=SleepIntent -> (no command in move body); ROLL_OUT_MOVE=SingleAttackIntent(RolloutDamage)+BuffIntent -> Deal 16 damage, Gain 2 Strength (StrengthPower) | PowerCmd.Apply<PlatingPower>, PowerCmd.Apply<SlumberPower>, SfxCmd.PlayLoop |
+| SnappingJaxfruit | ENERGY_ORB_MOVE=SingleAttackIntent(EnergyDamage)+BuffIntent -> Deal 3 damage, Gain 2 Strength (StrengthPower) | SfxCmd.PlayLoop |
+| SneakyGremlin | SPAWNED_MOVE=StunIntent -> (no command in move body); TACKLE_MOVE=SingleAttackIntent(TackleDamage) -> Deal 9 damage |  |
+| SoulFysh | BECKON_MOVE=StatusIntent(BeckonMoveAmount) -> Add a generated card to your draw pile, Add a generated card to your discard pile; DE_GAS_MOVE=SingleAttackIntent(DeGasDamage) -> Deal 16 damage; GAZE_MOVE=SingleAttackIntent(GazeDamage)+StatusIntent(GazeMoveAmount) -> Deal 7 damage, Add a generated card to your discard pile; FADE_MOVE=BuffIntent -> Gain 2 Intangible (IntangiblePower); SCREAM_MOVE=SingleAttackIntent(ScreamDamage)+DebuffIntent -> Deal 11 damage, Apply 3 Vulnerable (VulnerablePower) to the target |  |
+| SoulNexus | SOUL_BURN_MOVE=SingleAttackIntent(SoulBurnDamage) -> Deal 29 damage; MAELSTROM_MOVE=MultiAttackIntent(MaelstromDamage, MaelstromRepeat) -> Deal 6 damage 4 times; DRAIN_LIFE_MOVE=SingleAttackIntent(DrainLifeDamage)+DebuffIntent(strong: true) -> Deal 18 damage, Apply 2 Vulnerable (VulnerablePower) to the target, Apply 2 Weak (WeakPower) to the target |  |
+| SpectralKnight | HEX=DebuffIntent -> Apply 2 Hex (HexPower) to the target; SOUL_SLASH=SingleAttackIntent(SoulSlashDamage) -> Deal 15 damage; SOUL_FLAME=MultiAttackIntent(SoulFlameDamage, 3) -> Deal 3 damage 3 times |  |
+| SpinyToad | PROTRUDING_SPIKES_MOVE=BuffIntent -> Gain 5 Thorns (ThornsPower); SPIKE_EXPLOSION_MOVE=SingleAttackIntent(ExplosionDamage) -> Deal 23 damage, Gain -5 Thorns (ThornsPower); TONGUE_LASH_MOVE=SingleAttackIntent(LashDamage) -> Deal 17 damage |  |
+| Stabbot | STAB_MOVE=SingleAttackIntent(StabDamage)+DebuffIntent -> Deal 11 damage, Apply 1 Frail (FrailPower) to the target |  |
+| TenHpMonster | NOTHING=HiddenIntent -> (no command in move body) |  |
+| TerrorEel | CRASH_MOVE=SingleAttackIntent(CrashDamage) -> Deal 17 damage; ThrashMove=MultiAttackIntent(ThrashDamage, ThrashRepeat)+BuffIntent -> Deal 3 damage 3 times, Gain 7 Vigor (VigorPower); STUN_MOVE=StunIntent -> (no command in move body); TERROR_MOVE=DebuffIntent -> Apply 99 Vulnerable (VulnerablePower) to the target | PowerCmd.Apply<ShriekPower> |
+| TestSubject | RESPAWN_MOVE=HealIntent+BuffIntent -> Gain 1 Painful Stabs (PainfulStabsPower), Gain 1 Nemesis (NemesisPower), Remove Adaptable (AdaptablePower), Remove Painful Stabs (PainfulStabsPower); BITE_MOVE=SingleAttackIntent(BiteDamage) -> Deal 20 damage; SKULL_BASH_MOVE=SingleAttackIntent(SkullBashDamage)+DebuffIntent -> Deal 14 damage, Apply 1 Vulnerable (VulnerablePower) to the target; POUNCE_MOVE=SingleAttackIntent(PounceDamage) -> Deal 30 damage; MULTI_CLAW_MOVE=MultiAttackIntent(MultiClawDamage, () => MultiClawTotalCount) -> Deal 10 damage ? times; PHASE3_LACERATE_MOVE=MultiAttackIntent(Phase3LacerateDamage, 3) -> Deal 10 damage 3 times; BIG_POUNCE_MOVE=SingleAttackIntent(BigPounceDamage) -> Deal 45 damage; BURNING_GROWL_MOVE=StatusIntent(BurningGrowlBurnCount)+BuffIntent -> CardPileCmd.AddToCombatAndPreview<Burn>, Gain 2 Strength (StrengthPower) | PowerCmd.Apply<AdaptablePower>, PowerCmd.Apply<EnragePower> |
+| TheAdversaryMkOne | SMASH_MOVE=SingleAttackIntent(SmashDamage) -> Deal 12 damage; BEAM_MOVE=SingleAttackIntent(BeamDamage) -> Deal 15 damage; BARRAGE_MOVE=MultiAttackIntent(BarrageDamage, BarrageRepeat)+BuffIntent -> Deal 8 damage 2 times, Gain 2 Strength (StrengthPower) | PowerCmd.Apply<ArtifactPower> |
+| TheAdversaryMkThree | CRASH_MOVE=SingleAttackIntent(CrashDamage) -> Deal 15 damage; FLAME_BEAM_MOVE=SingleAttackIntent(FlameBeamDamage) -> Deal 18 damage; BARRAGE_MOVE=MultiAttackIntent(BarrageDamage, BarrageRepeat)+BuffIntent -> Deal 10 damage 2 times, Gain 4 Strength (StrengthPower) | PowerCmd.Apply<ArtifactPower> |
+| TheAdversaryMkTwo | BASH_MOVE=SingleAttackIntent(BashDamage) -> Deal 13 damage; FLAME_BEAM_MOVE=SingleAttackIntent(FlameBeamDamage) -> Deal 16 damage; BARRAGE_MOVE=MultiAttackIntent(BarrageDamage, BarrageRepeat)+BuffIntent -> Deal 9 damage 2 times, Gain 3 Strength (StrengthPower) | PowerCmd.Apply<ArtifactPower> |
+| TheForgotten | MIASMA=DebuffIntent+DefendIntent+BuffIntent -> Apply -2 Dexterity (DexterityPower) to the target, Gain 8 Block, Gain 2 Dexterity (DexterityPower); DREAD=SingleAttackIntent(DreadDamage) -> Deal 15 damage | PowerCmd.Apply<PossessSpeedPower> |
+| TheInsatiable | LIQUIFY_GROUND_MOVE=BuffIntent+StatusIntent(6) -> Apply a power to the target, Add a generated card to your pile; THRASH_MOVE_1=MultiAttackIntent(ThrashDamage, 2) -> Deal 8 damage 2 times; THRASH_MOVE_2=MultiAttackIntent(ThrashDamage, 2) -> Deal 8 damage 2 times; LUNGING_BITE_MOVE=SingleAttackIntent(BiteDamage) -> Deal 28 damage; SALIVATE_MOVE=BuffIntent -> Gain 2 Strength (StrengthPower) |  |
+| TheLost | DEBILITATING_SMOG=DebuffIntent+BuffIntent -> Apply -2 Strength (StrengthPower) to the target, Gain 2 Strength (StrengthPower); EYE_LASERS=MultiAttackIntent(EyeLasersDamage, 2) -> Deal 4 damage 2 times | PowerCmd.Apply<PossessStrengthPower> |
+| TheObscura | ILLUSION_MOVE=SummonIntent -> CreatureCmd.Add<Parafright>; PIERCING_GAZE_MOVE=SingleAttackIntent(PiercingGazeDamage) -> Deal 10 damage; SAIL_MOVE=BuffIntent -> Apply 3 Strength (StrengthPower) to the target; HARDENING_STRIKE_MOVE=SingleAttackIntent(HardeningStrikeDamage)+DefendIntent -> Deal 6 damage, Gain 6 Block |  |
+| ThievingHopper | THIEVERY_MOVE=SingleAttackIntent(TheftDamage)+CardDebuffIntent -> CardPileCmd.RemoveFromCombat, Apply a power to the target, Deal 17 damage; NAB_MOVE=SingleAttackIntent(NabDamage) -> Deal 14 damage; HAT_TRICK_MOVE=SingleAttackIntent(HatTrickDamage) -> Deal 21 damage; FLUTTER_MOVE=BuffIntent -> Gain 5 Flutter (FlutterPower); ESCAPE_MOVE=EscapeIntent -> CreatureCmd.Escape | PowerCmd.Apply<EscapeArtistPower> |
+| Toadpole | SPIKE_SPIT_MOVE=MultiAttackIntent(SpikeSpitDamage, SpikeSpitRepeat) -> Gain -2 Thorns (ThornsPower), Deal 3 damage 3 times; WHIRL_MOVE=SingleAttackIntent(WhirlDamage) -> Deal 7 damage; SPIKEN_MOVE=BuffIntent -> Gain 2 Thorns (ThornsPower) |  |
+| TorchHeadAmalgam | TACKLE_1_MOVE=SingleAttackIntent(TackleDamage) -> Deal 18 damage; TACKLE_2_MOVE=SingleAttackIntent(TackleDamage) -> Deal 18 damage; BEAM_MOVE=MultiAttackIntent(SoulBeamDamage, 3) -> Deal 8 damage 3 times; TACKLE_3_MOVE=SingleAttackIntent(WeakTackleDamage) -> Deal 14 damage; TACKLE_4_MOVE=SingleAttackIntent(WeakTackleDamage) -> Deal 14 damage | PowerCmd.Apply<MinionPower> |
+| ToughEgg | HATCH_MOVE=SummonIntent -> Remove Hatch (HatchPower), Remove a power from the target; NIBBLE_MOVE=SingleAttackIntent(NibbleDamage) -> Deal 4 damage | PowerCmd.Apply<HatchPower> |
+| TrackerRubyRaider | TRACK_MOVE=DebuffIntent -> Apply 2 Frail (FrailPower) to the target; HOUNDS_MOVE=MultiAttackIntent(HoundsDamage, HoundsRepeat) -> Deal 1 damage 8 times |  |
+| Tunneler | BITE_MOVE=SingleAttackIntent(BiteDamage) -> Deal 13 damage; BURROW_MOVE=BuffIntent+DefendIntent -> Gain 1 Burrowed (BurrowedPower), Gain 32 Block; BELOW_MOVE_1=SingleAttackIntent(BelowDamage) -> Deal 23 damage; DIZZY_MOVE=StunIntent -> (no command in move body) |  |
+| TurretOperator | UNLOAD_MOVE_1=MultiAttackIntent(FireDamage, 5) -> Deal 3 damage 5 times; UNLOAD_MOVE_2=MultiAttackIntent(FireDamage, 5) -> Deal 3 damage 5 times; RELOAD_MOVE=BuffIntent -> Gain 1 Strength (StrengthPower) |  |
+| TwigSlimeM | CLUMP_SHOT_MOVE=SingleAttackIntent(ClumpDamage) -> Deal 11 damage; STICKY_SHOT_MOVE=StatusIntent(1) -> CardPileCmd.AddToCombatAndPreview<Slimed> |  |
+| TwigSlimeS | BUTT_MOVE=SingleAttackIntent(TackleDamage) -> Deal 4 damage |  |
+| TwoTailedRat | SCRATCH_MOVE=SingleAttackIntent(ScratchDamage) -> Deal 8 damage; DISEASE_BITE_MOVE=SingleAttackIntent(DiseaseBiteDamage) -> Deal 6 damage; SCREECH_MOVE=DebuffIntent -> Apply 1 Frail (FrailPower) to the target; CALL_FOR_BACKUP_MOVE=SummonIntent -> CreatureCmd.Add<TwoTailedRat> |  |
+| Vantom | INK_BLOT_MOVE=SingleAttackIntent(InkBlotDamage) -> Deal 7 damage; INKY_LANCE_MOVE=MultiAttackIntent(InkyLanceDamage, 2) -> Deal 6 damage 2 times; DISMEMBER_MOVE=SingleAttackIntent(DismemberDamage)+StatusIntent(3) -> Deal 27 damage, CardPileCmd.AddToCombatAndPreview<Wound>; PREPARE_MOVE=BuffIntent -> Gain 2 Strength (StrengthPower) | PowerCmd.Apply<SlipperyPower> |
+| VineShambler | GRASPING_VINES_MOVE=SingleAttackIntent(GraspingVinesDamage)+CardDebuffIntent -> Deal 8 damage, Apply 1 Tangled (TangledPower) to the target; SWIPE_MOVE=MultiAttackIntent(SwipeDamage, 2) -> Deal 6 damage 2 times; CHOMP_MOVE=SingleAttackIntent(ChompDamage) -> Deal 16 damage |  |
+| WaterfallGiant | PRESSURIZE_MOVE=BuffIntent -> Gain 15 Steam Eruption (SteamEruptionPower); STOMP_MOVE=SingleAttackIntent(StompDamage)+DebuffIntent+BuffIntent -> Deal 15 damage, Apply 1 Weak (WeakPower) to the target, Gain 3 Steam Eruption (SteamEruptionPower); RAM_MOVE=SingleAttackIntent(RamDamage)+BuffIntent -> Deal 10 damage, Gain 3 Steam Eruption (SteamEruptionPower); SIPHON_MOVE=HealIntent+BuffIntent -> Heal ? HP, Gain 3 Steam Eruption (SteamEruptionPower); PRESSURE_GUN_MOVE=SingleAttackIntent(() => CurrentPressureGunDamage)+BuffIntent -> Deal ? damage, Gain 3 Steam Eruption (SteamEruptionPower); PRESSURE_UP_MOVE=SingleAttackIntent(PressureUpDamage)+BuffIntent -> Deal 13 damage, Gain 3 Steam Eruption (SteamEruptionPower); ABOUT_TO_BLOW_MOVE=StunIntent -> Remove Steam Eruption (SteamEruptionPower); EXPLODE_MOVE=DeathBlowIntent(() => SteamEruptionDamage) -> Deal ? damage, Kill itself | SfxCmd.PlayLoop |
+| Wriggler | NASTY_BITE_MOVE=SingleAttackIntent(BiteDamage) -> Deal 6 damage; WRIGGLE_MOVE=BuffIntent+StatusIntent(1) -> CardPileCmd.AddToCombatAndPreview<Infection>, Gain 2 Strength (StrengthPower); SPAWNED_MOVE=StunIntent -> (no command in move body) |  |
+| Zapbot | ZAP=SingleAttackIntent(ZapDamage) -> Deal 14 damage | PowerCmd.Apply<HighVoltagePower> |

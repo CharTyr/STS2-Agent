@@ -1,7 +1,7 @@
 ﻿# Power Index
 
 > Auto-generated from extraction/decompiled in this repository.  
-> Generated at: 2026-09-21 21:57:15 +08:00
+> Generated at: 2026-09-21 22:31:54 +08:00
 
 What a `power_id` plus a stack count actually does. `Type` is `PowerType` (Buff/Debuff) and `StackType` is `PowerStackType`: `Counter` means the stacks accumulate and the amount is meaningful, `Single` means the power is present or not, `None` means it does not stack at all, and two values separated by a slash mean the source picks between them at run time. `Hook` lists the combat hooks the class overrides, which is when it triggers; `Effect` says what each of those hooks does, prefixed with the hook name, with a hook inherited from a base class prefixed with that class instead. `Amount` inside an effect is the power's own stack count (`PowerModel.Amount`), not a fixed number, and `?` marks an amount that is only computed at run time. A power whose source declares no command in any hook shows `no hook effect detected in source` rather than an invented description.
 

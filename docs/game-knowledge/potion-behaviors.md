@@ -1,7 +1,7 @@
 ﻿# Potion Behavior Index
 
 > Auto-generated from extraction/decompiled in this repository.  
-> Generated at: 2026-09-21 21:57:15 +08:00
+> Generated at: 2026-09-21 22:31:54 +08:00
 
 Behavior summaries extracted from potion source. Useful when adding potion support or planning item usage.
 

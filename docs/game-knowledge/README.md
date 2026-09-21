@@ -1,7 +1,7 @@
 ﻿# STS2 Game Knowledge Base
 
 > Auto-generated from extraction/decompiled in this repository.  
-> Generated at: 2026-09-21 21:57:15 +08:00
+> Generated at: 2026-09-21 22:31:53 +08:00
 
 Local AI-facing indexes generated from the current repository's decompiled STS2 data.
 

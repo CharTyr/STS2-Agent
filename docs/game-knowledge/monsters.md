@@ -1,7 +1,7 @@
 ﻿# Monster Index
 
 > Auto-generated from extraction/decompiled in this repository.  
-> Generated at: 2026-09-21 21:57:15 +08:00
+> Generated at: 2026-09-21 22:31:54 +08:00
 
 Initial HP range lookup for monster internal names seen in `enemy_id`. The range is the one the fight rolls on a base (non-ascension) run, the same convention `cards.md` uses for unupgraded numbers: where the source writes `MinInitialHp`/`MaxInitialHp` through `AscensionHelper.GetValueIfAscension`, the non-ascension value is the one shown, and the `ToughEnemies` ascension value is higher for nearly every monster that declares one. A monster that inherits its HP from a base class shows the inherited range. A blank cell means no declaration in that class chain yields a number; it is left empty rather than guessed. Live `min_hp`/`max_hp` from the game state remains the authority for the fight in front of you.
 

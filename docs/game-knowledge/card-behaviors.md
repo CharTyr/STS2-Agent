@@ -1,7 +1,7 @@
 ﻿# Card Behavior Index
 
 > Auto-generated from extraction/decompiled in this repository.  
-> Generated at: 2026-09-21 21:57:15 +08:00
+> Generated at: 2026-09-21 22:31:54 +08:00
 
 Behavior-oriented summaries extracted from card source. Vars, OnPlay, and OnUpgrade stay close to the code for tool-friendly lookup; Effect is the same readable summary used by cards.md, with ? marking an amount that is only computed at play time.
 

@@ -172,23 +172,165 @@ function Get-DynamicVarSummary {
     return ($tokens -join ", ")
 }
 
-function Get-MoveSummary {
+function ConvertTo-IntentText {
+    param(
+        [string]$Expression
+    )
+
+    if ([string]::IsNullOrWhiteSpace($Expression)) {
+        return ""
+    }
+
+    $text = ($Expression -replace '\s+', ' ').Trim()
+    $construction = [regex]::Match($text, '^new\s+(?<type>\w+)\s*\(')
+    if (-not $construction.Success) {
+        return $text
+    }
+
+    $statement = Get-CallStatement -Text $text -Start $construction.Index
+    if ($null -eq $statement) {
+        return $text
+    }
+
+    # The argument list is read with the balanced-paren walker rather than a "[^)]*" run so an
+    # intent that carries an expression of its own ("new DeathBlowIntent(() => ExplodeDamage)")
+    # keeps its whole argument; an empty list prints as the bare intent name, as before.
+    $type = $construction.Groups["type"].Value
+    $args = ($statement.Arguments -replace '\s+', ' ').Trim()
+    if ($args -eq "") {
+        return $type
+    }
+
+    return "$type($args)"
+}
+
+function Get-MoveDeclarations {
     param(
         [string]$Text
     )
 
-    $matches = [regex]::Matches(
-        $Text,
-        'MoveState\s+\w+\s*=\s*new MoveState\("(?<name>[^"]+)",\s*[^,]+,\s*new\s+(?<intent>\w+)\((?<args>[^\)]*)\)\)',
-        [System.Text.RegularExpressions.RegexOptions]::Singleline
+    $moves = New-Object System.Collections.Generic.List[object]
+    if ([string]::IsNullOrWhiteSpace($Text)) {
+        return , $moves
+    }
+
+    # Every move is a MoveState construction, whether it is held in a local, stored in a field,
+    # or assigned into a follow-up chain. The old scan only saw a declaration that closed right
+    # after one intent, so a move with a second intent ("AttackIntent(...), DebuffIntent") or an
+    # intent with a nested call was missing from the table altogether.
+    foreach ($match in [regex]::Matches($Text, 'new\s+MoveState\s*\(')) {
+        $statement = Get-CallStatement -Text $Text -Start $match.Index
+        if ($null -eq $statement) {
+            continue
+        }
+
+        $arguments = Split-TopLevelArguments -Text $statement.Arguments
+        if ($arguments.Count -lt 2) {
+            continue
+        }
+
+        $nameMatch = [regex]::Match($arguments[0].Trim(), '^"(?<value>[^"]*)"$')
+        if (-not $nameMatch.Success) {
+            continue
+        }
+
+        $intents = New-Object System.Collections.Generic.List[string]
+        foreach ($intent in ($arguments | Select-Object -Skip 2)) {
+            $rendered = ConvertTo-IntentText -Expression $intent
+            if ($rendered -ne "" -and -not $intents.Contains($rendered)) {
+                $intents.Add($rendered)
+            }
+        }
+
+        $moves.Add([pscustomobject]@{
+            Name    = $nameMatch.Groups["value"].Value
+            Handler = $arguments[1].Trim()
+            Intents = ($intents -join "+")
+        })
+    }
+
+    return , $moves
+}
+
+function Get-MoveEffectText {
+    param(
+        [object[]]$Chain,
+        [string]$Handler
     )
 
+    # A move's method is the one named in the MoveState declaration, and a subclass that inherits
+    # the state machine inherits the method with it. The most derived class that declares the
+    # method wins, the same rule the HP columns use. The handful of monsters that write a move
+    # inline ("(IReadOnlyList<Creature> _) => Task.CompletedTask") carry the body in the
+    # declaration itself, and it is summarised the same way.
+    if ($Handler -notmatch '^[A-Za-z_]\w*$') {
+        return [pscustomobject]@{ Body = $Handler; Text = $Chain[0].Text }
+    }
+
+    foreach ($entry in $Chain) {
+        $body = Get-MethodBody -Text $entry.Text -MethodName $Handler
+        if (-not [string]::IsNullOrWhiteSpace($body)) {
+            return [pscustomobject]@{ Body = $body; Text = $entry.Text }
+        }
+    }
+
+    # The body could not be read anywhere in the chain: the move keeps its intent and no claim is
+    # made about its effect.
+    return $null
+}
+
+function Get-MoveSummary {
+    param(
+        [object[]]$Chain
+    )
+
+    # The state machine belongs to whichever class in the chain builds it. A subclass that does not
+    # override GenerateMoveStateMachine runs its base's moves, exactly as the game does, which is
+    # why DecimillipedeSegmentBack/Front/Middle and MysteriousKnight are not blank here.
+    $declarations = $null
+    foreach ($entry in $Chain) {
+        $found = Get-MoveDeclarations -Text $entry.Text
+        if ($found.Count -gt 0) {
+            $declarations = $found
+            break
+        }
+    }
+
+    if ($null -eq $declarations) {
+        return ""
+    }
+
     $tokens = New-Object System.Collections.Generic.List[string]
-    foreach ($match in $matches) {
-        $name = $match.Groups["name"].Value.Trim()
-        $intent = $match.Groups["intent"].Value.Trim()
-        $args = ($match.Groups["args"].Value.Trim() -replace '\s+', ' ')
-        $token = if ($args) { "$name=$intent($args)" } else { "$name=$intent" }
+    foreach ($move in $declarations) {
+        $intentText = if ($move.Intents) { $move.Intents } else { "(no intent)" }
+        $token = "$($move.Name)=$intentText"
+
+        # An intent that carries no numbers (a buff, debuff, block, or heal) is followed by what the
+        # move's own method does, read with the same phrase builder card-behaviors.md uses, so the
+        # amount lands in the cell. The handler is deliberately not inlined: a command that only
+        # exists inside a private helper is reported as no command found rather than guessed at.
+        $resolved = Get-MoveEffectText -Chain $Chain -Handler $move.Handler
+        if ($null -ne $resolved) {
+            $clauses = Get-EffectClauses `
+                -Body $resolved.Body `
+                -VarMap (Get-DynamicVarValues -Text $resolved.Text) `
+                -ModelText $resolved.Text `
+                -SelfTarget "base.Creature" `
+                -PowerClassName `
+                -RawCommandFallback `
+                -ExtraCosmeticCalls @("TalkCmd.", "ThinkCmd.")
+
+            if ($clauses.Count -eq 0) {
+                $token = "$token -> (no command in move body)"
+            }
+            else {
+                # "," inside one move's effects and ";" between moves, because "; " already
+                # separates the moves of the cell and a reader must be able to tell where a move
+                # ends.
+                $token = "$token -> $($clauses -join ', ')"
+            }
+        }
+
         if (-not $tokens.Contains($token)) {
             $tokens.Add($token)
         }
@@ -304,11 +446,12 @@ function ConvertTo-FallbackPhrase {
 function Test-CosmeticCall {
     param(
         [string]$Command,
-        [string]$Action
+        [string]$Action,
+        [string[]]$ExtraPrefixes = @()
     )
 
     $full = "$Command.$Action"
-    foreach ($prefix in $script:CosmeticCallPrefixes) {
+    foreach ($prefix in ($script:CosmeticCallPrefixes + $ExtraPrefixes)) {
         if ($full.StartsWith($prefix)) {
             return $true
         }
@@ -565,6 +708,7 @@ function Resolve-AmountText {
         [string]$Expression,
         $VarMap,
         [string]$Body,
+        [string]$ModelText = "",
         [int]$Depth = 0
     )
 
@@ -582,6 +726,22 @@ function Resolve-AmountText {
         return "?"
     }
 
+    # Only a monster move summary passes the model's own class text. A monster states its move
+    # amounts as members of the class ("private int PlowStrength => 2;", "private int OneTwoDamage
+    # => AscensionHelper.GetValueIfAscension(AscensionLevel.DeadlyEnemies, 6, 5);"), and a card or
+    # power amount is resolved exactly as before because every other caller leaves ModelText empty.
+    if ($ModelText -ne "") {
+        $ascension = [regex]::Match(
+            $text,
+            '^AscensionHelper\.GetValueIfAscension\s*\(\s*AscensionLevel\.\w+\s*,\s*(?<ascension>[^,]+),\s*(?<fallback>[^,)]+)\)$'
+        )
+
+        if ($ascension.Success) {
+            # The table prices a base run, the same convention monsters.md uses for HP.
+            return (Resolve-AmountText -Expression $ascension.Groups["fallback"].Value -VarMap $VarMap -Body $Body -ModelText $ModelText -Depth ($Depth + 1))
+        }
+    }
+
     if ($text -match 'ResolveEnergyXValue\s*\(\s*\)') {
         return "X (energy spent)"
     }
@@ -591,7 +751,7 @@ function Resolve-AmountText {
     }
 
     if ($text -match '^-\s*(?<inner>.+)$') {
-        $inner = Resolve-AmountText -Expression $Matches["inner"] -VarMap $VarMap -Body $Body -Depth ($Depth + 1)
+        $inner = Resolve-AmountText -Expression $Matches["inner"] -VarMap $VarMap -Body $Body -ModelText $ModelText -Depth ($Depth + 1)
         if ($inner -ne "?") {
             return "-$inner"
         }
@@ -607,8 +767,8 @@ function Resolve-AmountText {
     foreach ($operator in @('+', '-')) {
         $operands = Split-TopLevelBinary -Text $text -Operator $operator
         if ($null -ne $operands) {
-            $left = Resolve-AmountText -Expression $operands[0] -VarMap $VarMap -Body $Body -Depth ($Depth + 1)
-            $right = Resolve-AmountText -Expression $operands[1] -VarMap $VarMap -Body $Body -Depth ($Depth + 1)
+            $left = Resolve-AmountText -Expression $operands[0] -VarMap $VarMap -Body $Body -ModelText $ModelText -Depth ($Depth + 1)
+            $right = Resolve-AmountText -Expression $operands[1] -VarMap $VarMap -Body $Body -ModelText $ModelText -Depth ($Depth + 1)
             $leftValue = 0.0
             $rightValue = 0.0
             if ([double]::TryParse($left, [ref]$leftValue) -and [double]::TryParse($right, [ref]$rightValue)) {
@@ -648,7 +808,8 @@ function Resolve-AmountText {
         return "?"
     }
 
-    if ($text -match '^(?<name>[a-z]\w*)$') {
+    $identifierPattern = if ($ModelText -ne "") { '^(?<name>[A-Za-z_]\w*)$' } else { '^(?<name>[a-z]\w*)$' }
+    if ($text -match $identifierPattern) {
         $name = $Matches["name"]
         $assignment = [regex]::Match(
             $Body,
@@ -656,13 +817,47 @@ function Resolve-AmountText {
         )
 
         if ($assignment.Success) {
-            return (Resolve-AmountText -Expression $assignment.Groups["init"].Value -VarMap $VarMap -Body $Body -Depth ($Depth + 1))
+            return (Resolve-AmountText -Expression $assignment.Groups["init"].Value -VarMap $VarMap -Body $Body -ModelText $ModelText -Depth ($Depth + 1))
+        }
+
+        if ($ModelText -ne "") {
+            $declaration = Get-ModelAmountDeclaration -Text $ModelText -Name $name
+            if ($declaration -ne "") {
+                return (Resolve-AmountText -Expression $declaration -VarMap $VarMap -Body $Body -ModelText $ModelText -Depth ($Depth + 1))
+            }
         }
 
         return "?"
     }
 
     return "?"
+}
+
+function Get-ModelAmountDeclaration {
+    param(
+        [string]$Text,
+        [string]$Name
+    )
+
+    # A model's own declaration of an amount: an expression-bodied member ("private int
+    # PlowStrength => 2;"), a getter whose body is one return, or a constant/field with an
+    # initializer ("private const int _climbRepeat = 2;"). A member with no initializer
+    # ("private int _steamEruptionDamage;") and a computed getter both keep the amount unknown,
+    # because the source assigns them while the fight runs.
+    $patterns = @(
+        ('(?m)^\s*(?:public|private|protected|internal)[^\n=;{]*?\b' + [regex]::Escape($Name) + '\s*=>\s*(?<value>[^;]+);'),
+        ('(?m)^\s*(?:public|private|protected|internal)[^\n=;{]*?\b' + [regex]::Escape($Name) + '\s*\{\s*get\s*\{\s*return\s+(?<value>[^;]+);'),
+        ('(?m)^\s*(?:public|private|protected|internal)[^\n=;{]*?\b' + [regex]::Escape($Name) + '\s*=\s*(?<value>[^;]+);')
+    )
+
+    foreach ($pattern in $patterns) {
+        $match = [regex]::Match($Text, $pattern)
+        if ($match.Success) {
+            return $match.Groups["value"].Value.Trim()
+        }
+    }
+
+    return ""
 }
 
 function Get-ConditionalRanges {
@@ -765,7 +960,7 @@ function Get-SelectorCount {
         return "1"
     }
 
-    return (Resolve-AmountText -Expression $parts[$parts.Count - 1] -VarMap $VarMap -Body $Body)
+    return (Resolve-AmountText -Expression $parts[$parts.Count - 1] -VarMap $VarMap -Body $Body -ModelText $ModelText)
 }
 
 function Get-CardCountPhrase {
@@ -799,6 +994,22 @@ function Get-LoopBound {
     return $matches[$matches.Count - 1].Groups["bound"].Value.Trim()
 }
 
+function Test-SelfTarget {
+    param(
+        [string]$Target,
+        [string]$SelfTarget
+    )
+
+    # A monster move targets the monster itself by naming its own creature ("base.Creature"), while
+    # a card targets the player's ("Owner.Creature"); SelfTarget is empty for every caller but the
+    # monster move summary, so the card wording is untouched.
+    if ([string]::IsNullOrWhiteSpace($SelfTarget)) {
+        return $false
+    }
+
+    return ($Target.Trim() -eq $SelfTarget)
+}
+
 function Get-CallPhrase {
     param(
         [string]$Command,
@@ -806,10 +1017,19 @@ function Get-CallPhrase {
         [string]$Generic,
         $CallStatement,
         $VarMap,
-        [string]$Body
+        [string]$Body,
+        [string]$ModelText = "",
+        [string]$SelfTarget = "",
+        [switch]$PowerClassName,
+        [switch]$RawCommandFallback
     )
 
     $token = "$Command.$Action"
+    $rawToken = if ($Generic) { "$Command.$Action<$Generic>" } else { $token }
+    # A power clause names the class the way powers.md indexes it, next to the readable name, so a
+    # move can be followed into that file without a second guess. Off for every other index, whose
+    # wording has always been the readable name alone.
+    $classSuffix = if ($PowerClassName -and $Generic) { " ($Generic)" } else { "" }
     $callArgs = Split-TopLevelArguments -Text $CallStatement.Arguments
     $chain = $CallStatement.Chain
     $arg0 = Get-CallArgument -ArgumentList $callArgs -Index 0
@@ -817,11 +1037,11 @@ function Get-CallPhrase {
     $arg2 = Get-CallArgument -ArgumentList $callArgs -Index 2
 
     if ($token -eq "DamageCmd.Attack") {
-        $damage = Resolve-AmountText -Expression $arg0 -VarMap $VarMap -Body $Body
+        $damage = Resolve-AmountText -Expression $arg0 -VarMap $VarMap -Body $Body -ModelText $ModelText
         $phrase = if ($arg0 -match 'OstyDamage') { "Your Osty deals $damage damage" } else { "Deal $damage damage" }
         $hitExpression = Get-RegexValue -Text $chain -Pattern 'WithHitCount\((?<value>[^\)]*)\)'
         if ($hitExpression) {
-            $hits = Resolve-AmountText -Expression $hitExpression -VarMap $VarMap -Body $Body
+            $hits = Resolve-AmountText -Expression $hitExpression -VarMap $VarMap -Body $Body -ModelText $ModelText
             if ($hits -ne "1") {
                 $phrase = "$phrase $hits times"
             }
@@ -838,8 +1058,8 @@ function Get-CallPhrase {
     }
 
     if ($token -eq "CreatureCmd.Damage") {
-        $amount = Resolve-AmountText -Expression $arg2 -VarMap $VarMap -Body $Body
-        if ($arg1 -match 'Owner\.Creature' -or $arg1 -match 'Owner\.Osty') {
+        $amount = Resolve-AmountText -Expression $arg2 -VarMap $VarMap -Body $Body -ModelText $ModelText
+        if ($arg1 -match 'Owner\.Creature' -or $arg1 -match 'Owner\.Osty' -or (Test-SelfTarget -Target $arg1 -SelfTarget $SelfTarget)) {
             return "Lose $amount HP"
         }
 
@@ -847,8 +1067,8 @@ function Get-CallPhrase {
     }
 
     if ($token -eq "CreatureCmd.GainBlock") {
-        $amount = Resolve-AmountText -Expression $arg1 -VarMap $VarMap -Body $Body
-        if ($arg0 -match 'Owner\.Creature') {
+        $amount = Resolve-AmountText -Expression $arg1 -VarMap $VarMap -Body $Body -ModelText $ModelText
+        if ($arg0 -match 'Owner\.Creature' -or (Test-SelfTarget -Target $arg0 -SelfTarget $SelfTarget)) {
             return "Gain $amount Block"
         }
 
@@ -869,17 +1089,17 @@ function Get-CallPhrase {
         }
 
         $target = Get-CallArgument -ArgumentList $callArgs -Index $targetIndex
-        $amount = Resolve-AmountText -Expression (Get-CallArgument -ArgumentList $callArgs -Index $amountIndex) -VarMap $VarMap -Body $Body
+        $amount = Resolve-AmountText -Expression (Get-CallArgument -ArgumentList $callArgs -Index $amountIndex) -VarMap $VarMap -Body $Body -ModelText $ModelText
 
         if ([string]::IsNullOrWhiteSpace($powerName)) {
             return "Apply a power to the target"
         }
 
-        if ($target -match 'Owner\.(?:Creature|Osty)' -or $target -eq 'base.Owner' -or $target -match 'Owner\.Player') {
-            return "Gain $amount $powerName"
+        if ($target -match 'Owner\.(?:Creature|Osty)' -or $target -eq 'base.Owner' -or $target -match 'Owner\.Player' -or (Test-SelfTarget -Target $target -SelfTarget $SelfTarget)) {
+            return "Gain $amount $powerName$classSuffix"
         }
 
-        return "Apply $amount $powerName to the target"
+        return "Apply $amount $powerName$classSuffix to the target"
     }
 
     if ($token -eq "PowerCmd.Remove") {
@@ -892,7 +1112,11 @@ function Get-CallPhrase {
             return "Remove a power from the target"
         }
 
-        return "Remove $powerName from the target"
+        if (Test-SelfTarget -Target $arg0 -SelfTarget $SelfTarget) {
+            return "Remove $powerName$classSuffix"
+        }
+
+        return "Remove $powerName$classSuffix from the target"
     }
 
     if ($token -eq "PowerCmd.ModifyAmount") {
@@ -902,26 +1126,26 @@ function Get-CallPhrase {
     if ($token -eq "CardPileCmd.Draw") {
         $count = "1"
         if ($callArgs.Count -ge 3) {
-            $count = Resolve-AmountText -Expression $arg1 -VarMap $VarMap -Body $Body
+            $count = Resolve-AmountText -Expression $arg1 -VarMap $VarMap -Body $Body -ModelText $ModelText
         }
 
         return (Get-CardCountPhrase -Count $count -Verb "Draw")
     }
 
     if ($token -eq "PlayerCmd.GainEnergy") {
-        return "Gain $(Resolve-AmountText -Expression $arg0 -VarMap $VarMap -Body $Body) Energy"
+        return "Gain $(Resolve-AmountText -Expression $arg0 -VarMap $VarMap -Body $Body -ModelText $ModelText) Energy"
     }
 
     if ($token -eq "PlayerCmd.GainStars") {
-        return "Gain $(Resolve-AmountText -Expression $arg0 -VarMap $VarMap -Body $Body) Stars"
+        return "Gain $(Resolve-AmountText -Expression $arg0 -VarMap $VarMap -Body $Body -ModelText $ModelText) Stars"
     }
 
     if ($token -eq "PlayerCmd.GainGold") {
-        return "Gain $(Resolve-AmountText -Expression $arg0 -VarMap $VarMap -Body $Body) Gold"
+        return "Gain $(Resolve-AmountText -Expression $arg0 -VarMap $VarMap -Body $Body -ModelText $ModelText) Gold"
     }
 
     if ($token -eq "PlayerCmd.LoseGold") {
-        return "Lose $(Resolve-AmountText -Expression $arg0 -VarMap $VarMap -Body $Body) Gold"
+        return "Lose $(Resolve-AmountText -Expression $arg0 -VarMap $VarMap -Body $Body -ModelText $ModelText) Gold"
     }
 
     if ($token -eq "PlayerCmd.EndTurn") {
@@ -933,11 +1157,11 @@ function Get-CallPhrase {
     }
 
     if ($token -eq "CreatureCmd.Heal") {
-        return "Heal $(Resolve-AmountText -Expression $arg1 -VarMap $VarMap -Body $Body) HP"
+        return "Heal $(Resolve-AmountText -Expression $arg1 -VarMap $VarMap -Body $Body -ModelText $ModelText) HP"
     }
 
     if ($token -eq "CreatureCmd.GainMaxHp") {
-        return "Gain $(Resolve-AmountText -Expression $arg1 -VarMap $VarMap -Body $Body) Max HP"
+        return "Gain $(Resolve-AmountText -Expression $arg1 -VarMap $VarMap -Body $Body -ModelText $ModelText) Max HP"
     }
 
     if ($token -eq "CreatureCmd.LoseMaxHp") {
@@ -946,12 +1170,18 @@ function Get-CallPhrase {
             $amountExpression = $arg2
         }
 
-        return "Lose $(Resolve-AmountText -Expression $amountExpression -VarMap $VarMap -Body $Body) Max HP"
+        return "Lose $(Resolve-AmountText -Expression $amountExpression -VarMap $VarMap -Body $Body -ModelText $ModelText) Max HP"
     }
 
     if ($token -eq "CreatureCmd.Kill") {
         if ($arg0 -match 'Owner\.Osty') {
             return "Kill your own Osty"
+        }
+
+        if (Test-SelfTarget -Target $arg0 -SelfTarget $SelfTarget) {
+            # Both monsters that call this on themselves (GasBomb, WaterfallGiant) do it as a
+            # death blow, so "itself" is the monster row's reading of the same command.
+            return "Kill itself"
         }
 
         if ($arg0 -match 'Owner\.Creature') {
@@ -970,11 +1200,11 @@ function Get-CallPhrase {
     }
 
     if ($token -eq "OstyCmd.Summon") {
-        return "Summon $(Resolve-AmountText -Expression $arg2 -VarMap $VarMap -Body $Body)"
+        return "Summon $(Resolve-AmountText -Expression $arg2 -VarMap $VarMap -Body $Body -ModelText $ModelText)"
     }
 
     if ($token -eq "ForgeCmd.Forge") {
-        return "Forge $(Resolve-AmountText -Expression $arg0 -VarMap $VarMap -Body $Body)"
+        return "Forge $(Resolve-AmountText -Expression $arg0 -VarMap $VarMap -Body $Body -ModelText $ModelText)"
     }
 
     if ($token -eq "OrbCmd.Channel") {
@@ -996,7 +1226,7 @@ function Get-CallPhrase {
             $amountExpression = $arg0
         }
 
-        return "Add $(Resolve-AmountText -Expression $amountExpression -VarMap $VarMap -Body $Body) orb slot(s)"
+        return "Add $(Resolve-AmountText -Expression $amountExpression -VarMap $VarMap -Body $Body -ModelText $ModelText) orb slot(s)"
     }
 
     if ($token -eq "OrbCmd.RemoveSlots") {
@@ -1005,7 +1235,7 @@ function Get-CallPhrase {
             $amountExpression = $arg0
         }
 
-        return "Remove $(Resolve-AmountText -Expression $amountExpression -VarMap $VarMap -Body $Body) orb slot(s)"
+        return "Remove $(Resolve-AmountText -Expression $amountExpression -VarMap $VarMap -Body $Body -ModelText $ModelText) orb slot(s)"
     }
 
     if ($token -eq "OrbCmd.Passive") {
@@ -1110,7 +1340,7 @@ function Get-CallPhrase {
     }
 
     if ($token -eq "CardSelectCmd.FromHandForDiscard") {
-        $count = Get-SelectorCount -Text $CallStatement.Arguments -VarMap $VarMap -Body $Body
+        $count = Get-SelectorCount -Text $CallStatement.Arguments -VarMap $VarMap -Body $Body -ModelText $ModelText
         if ($count -eq "1") {
             return "Discard 1 card from your hand"
         }
@@ -1166,12 +1396,12 @@ function Get-CallPhrase {
 
         $count = "1"
         if ($callArgs.Count -ge 2 -and $arg1 -notmatch 'CombatState') {
-            $count = Resolve-AmountText -Expression $arg1 -VarMap $VarMap -Body $Body
+            $count = Resolve-AmountText -Expression $arg1 -VarMap $VarMap -Body $Body -ModelText $ModelText
         }
         else {
             $loopBound = Get-LoopBound -Body $Body -Index $CallStatement.Start
             if ($loopBound) {
-                $count = Resolve-AmountText -Expression $loopBound -VarMap $VarMap -Body $Body
+                $count = Resolve-AmountText -Expression $loopBound -VarMap $VarMap -Body $Body -ModelText $ModelText
             }
         }
 
@@ -1220,13 +1450,25 @@ function Get-CallPhrase {
         return ""
     }
 
+    # A call this mapping does not cover ("CardPileCmd.AddToCombatAndPreview<Dazed>",
+    # "PowerCmd.SetAmount<StrengthPower>") would otherwise be spelled out word by word and lose the
+    # name a reader needs. The monster index asks for the verbatim command instead.
+    if ($RawCommandFallback) {
+        return $rawToken
+    }
+
     return $fallback
 }
 
 function Get-EffectClauses {
     param(
         [string]$Body,
-        $VarMap
+        $VarMap,
+        [string]$ModelText = "",
+        [string]$SelfTarget = "",
+        [switch]$PowerClassName,
+        [switch]$RawCommandFallback,
+        [string[]]$ExtraCosmeticCalls = @()
     )
 
     $clauses = New-Object System.Collections.Generic.List[string]
@@ -1251,7 +1493,7 @@ function Get-EffectClauses {
             $command = $match.Value.Substring(0, $match.Value.IndexOf('.'))
         }
 
-        if (Test-CosmeticCall -Command $command -Action $action) {
+        if (Test-CosmeticCall -Command $command -Action $action -ExtraPrefixes $ExtraCosmeticCalls) {
             continue
         }
 
@@ -1276,7 +1518,7 @@ function Get-EffectClauses {
 
         $covered.Add([pscustomobject]@{ Start = $statement.Start; End = $statement.End })
 
-        $phrase = Get-CallPhrase -Command $command -Action $action -Generic $generic -CallStatement $statement -VarMap $VarMap -Body $Body
+        $phrase = Get-CallPhrase -Command $command -Action $action -Generic $generic -CallStatement $statement -VarMap $VarMap -Body $Body -ModelText $ModelText -SelfTarget $SelfTarget -PowerClassName:$PowerClassName -RawCommandFallback:$RawCommandFallback
         if ([string]::IsNullOrWhiteSpace($phrase)) {
             continue
         }
@@ -2367,7 +2609,7 @@ function Get-MonsterEntries {
             Name = $name
             MinHp = $minHp
             MaxHp = $maxHp
-            Moves = Get-MoveSummary -Text $text
+            Moves = Get-MoveSummary -Chain $chain
             Passive = Get-CommandSummary -MethodBody (Get-MethodBody -Text $text -MethodName "AfterAddedToRoom")
         })
     }
@@ -2698,7 +2940,7 @@ Set-Content -Path (Join-Path $outputRoot "monsters.md") -Encoding UTF8 -Value (N
 $monsterBehaviorBody = ConvertTo-MarkdownTable -Headers @("Name", "Moves", "Passive") -Rows $monsters
 Set-Content -Path (Join-Path $outputRoot "monster-behaviors.md") -Encoding UTF8 -Value (New-MarkdownDocument `
     -Title "Monster Behavior Index" `
-    -Description "Move-state and passive-command summaries extracted from monster source." `
+    -Description "Move-state, move-effect, and passive-command summaries extracted from monster source. Each ``Moves`` entry is ``<MOVE>=<Intent>(args)`` as the source declares it, followed by ``->`` and what the move actually does, read from the move's own method the way ``card-behaviors.md`` reads a card's ``OnPlay``: ``SHARPEN_MOVE=BuffIntent -> Gain 4 Strength (StrengthPower)``, ``HAMMER_UPPERCUT_MOVE=SingleAttackIntent(HammerUppercutDamage)+DebuffIntent -> Deal 8 damage, Apply 1 Weak (WeakPower) to the target, Apply 1 Frail (FrailPower) to the target``. So an intent that carries no numbers still lands on the number, and a power is named twice on purpose: the readable name plus the class name ``powers.md`` indexes (the class whose slugified upper-case form is the ``power_id``), which is where its stacks and hooks are looked up. Amounts come from the class's own declarations - a property or constant such as ``private int CrushStrength => AscensionHelper.GetValueIfAscension(AscensionLevel.DeadlyEnemies, 4, 3)`` is read at its base (non-ascension) value, the convention ``monsters.md`` uses for HP - and ``?`` means the amount is only known while the fight runs (a computed getter, a lambda, or a count that depends on how many players are in the combat) rather than guessed. A power or command clause that names the monster itself reads as the monster's own action (``Gain 4 Strength``, ``Kill itself``); a move's targets are ``the target``. ``+`` joins a move's intents, ``(no intent)`` marks a move declared without one, ``,`` separates the effects of one move and ``;`` separates the moves, ``(no command in move body)`` means the body was read and holds no gameplay command (presentation-only calls are filtered out), which is an absence of evidence rather than a claim that the move does nothing - a move that delegates to a private helper, or that does its work through a power method, reads that way. A call the effect mapping does not cover keeps its own command name (``CardPileCmd.AddToCombatAndPreview<Dazed>``) instead of being spelled out in prose. The ``Passive`` column stays the verbatim command list it has always been." `
     -Body $monsterBehaviorBody)
 
 $potionsBody = ConvertTo-MarkdownTable -Headers @("Name", "Rarity", "Usage", "Target") -Rows $potions
