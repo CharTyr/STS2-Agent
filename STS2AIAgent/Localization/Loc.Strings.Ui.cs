@@ -10,6 +10,23 @@ internal static partial class Loc
         // Header, tabs, chat page.
         map["拖动移动"] = "Drag to move";
         map["隐藏"] = "Hide";
+        map["● 自动游玩中"] = "● Auto-playing";
+        map["○ 待机"] = "○ Idle";
+        map["和 AI 聊聊这局"] = "Ask the AI about this run";
+        map["问它这手牌怎么打、这个遗物值不值得买、刚才那步为什么那么出。"] =
+            "Ask how to play this hand, whether that relic is worth buying, or why it made the move it just made.";
+        map["对话默认只读；要它真的动手，勾选下方的「允许代打」。"] =
+            "Chat is read-only by default; tick “Let the AI play for you” below to let it actually act.";
+        map["正在自动决策并执行动作。"] = "Deciding and acting on its own.";
+        map["等待开始。"] = "Waiting to start.";
+        map["还没有思考记录。开始自动游玩或单步一次后会显示。"] =
+            "No reasoning recorded yet. Start auto-play, or take a single step, and it will show up here.";
+        map["屏幕"] = "Screen";
+        map["最近动作"] = "Last action";
+        map["思考"] = "Reasoning";
+        map["本次会话"] = "This session";
+        map["本局"] = "This run";
+        map["跳到「{0}」"] = "Jump to “{0}”";
         map["对话"] = "Chat";
         map["设置"] = "Settings";
         map["游玩"] = "Play";
@@ -38,6 +55,10 @@ internal static partial class Loc
         map["午夜"] = "Midnight";
         map["羊皮纸"] = "Parchment";
         map["高对比"] = "High contrast";
+        map["猩红"] = "Crimson";
+        map["翡翠"] = "Emerald";
+        map["紫晶"] = "Amethyst";
+        map["象牙"] = "Ivory";
         map["当前回合"] = "This turn";
         map["本步详情"] = "Last step";
         map["组队状态"] = "Party";

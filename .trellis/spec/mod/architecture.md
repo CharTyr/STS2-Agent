@@ -69,24 +69,30 @@ For a change crossing state, action, agent, UI, or MCP, trace it in both directi
 
 ## Code shape and its known debts
 
-Measured 2026-09-20 across 122 mod source files totalling 35,744 lines (git-tracked only, which is what the gate counts -- a working tree also holds whatever the developer left in it). These numbers are here
+Measured 2026-10-01 across 123 mod source files totalling 36,082 lines (git-tracked only, which is what the gate counts -- a working tree also holds whatever the developer left in it). These numbers are here
 because nobody was counting, and that is how a codebase stops being navigable -- not through a bad
 commit, but through a thousand good ones. The `arch-facts` gate checks this table against the
 files, so it cannot quietly go stale the way it did between ADR 0001 and the splits below.
 
 | File | Lines |
 | --- | ---: |
+| [AgentRuntime.cs](../../../STS2AIAgent/Agent/AgentRuntime.cs) | 1,355 |
 | [GameStateService.cs](../../../STS2AIAgent/Game/GameStateService.cs) | 1,336 |
-| [AgentOverlayHost.cs](../../../STS2AIAgent/Ui/AgentOverlayHost.cs) | 1,385 |
-| [AgentRuntime.cs](../../../STS2AIAgent/Agent/AgentRuntime.cs) | 1,377 |
 | [GameStateService.Payloads.cs](../../../STS2AIAgent/Game/GameStateService.Payloads.cs) | 1,251 |
 | [GameStateService.AgentView.cs](../../../STS2AIAgent/Game/GameStateService.AgentView.cs) | 1,236 |
 | [GameActionService.cs](../../../STS2AIAgent/Game/GameActionService.cs) | 1,180 |
 | [GameActionService.Rooms.cs](../../../STS2AIAgent/Game/GameActionService.Rooms.cs) | 1,136 |
+| [AgentOverlayHost.cs](../../../STS2AIAgent/Ui/AgentOverlayHost.cs) | 1,120 |
+
+The overlay used to be the second name on that list. It moved to the bottom of it on 2026-10-01, when
+the page bodies and the single refresh pass moved to `AgentOverlayHost.Pages.cs` and the settings form
+moved on again to `AgentOverlayHost.Settings.cs`; the swatch renderer became `OverlaySwatch.cs` when
+the theme preview pushed `UiFactory.cs` past its own budget. See the section below for why those were
+the right cuts and not just smaller ones.
 
 Until 2026-09-17 two files held 49% of the mod: `GameStateService.cs` at 8,559 lines and
-`GameActionService.cs` at 7,008. The largest file today is 15% of the mod, the second largest 4%,
-and nothing else reaches 1,500 lines.
+`GameActionService.cs` at 7,008. The largest file today is 4% of the mod, the second largest 4%,
+and seven files reach 1,000 lines.
 
 `SourceShapeContractTests` caps every file -- 1,000 lines unless it has a named budget -- and budgets
 go down, never up. Needing more room than a budget allows is the signal to move something out, not
@@ -236,7 +242,7 @@ entry nothing reads fails too. Two names are deliberately not probed and say why
 `_prefs` / `_selectedCards` are declared per concrete screen, so a probe would need a subclass list
 and would raise a false alarm the day the game adds or drops one.
 
-### `AgentOverlayHost.cs` was not split mechanically, and that is still a decision
+### `AgentOverlayHost.cs` was not split mechanically -- the cut is by what a member touches
 
 It was 1,829 lines and the table above named it, which made it look like an oversight. It was not.
 The two files that came apart could come apart because their parts did not share mutable state:
@@ -249,16 +255,40 @@ file. Splitting it into partials would scatter shared mutable state across files
 one of those 78 fields harder to reason about -- worse to read, and easier to break, in exchange
 for smaller files.
 
-The extraction that did happen is the one this section already named as the only safe shape: the
-**tab construction** moved out, whole, into `AgentOverlayHost.Tabs.cs` (591 lines), and the tab list
-itself became data in the Godot-free `OverlayTabCatalog`. The base file went from 1,829 to 1,347
-lines without changing what any tab does, and it kept every field those pages read -- the extracted
-code still reads 62 of them. That is why the seams are where they are: `ShowTab(string)` stayed with
-the host's call sites, the pages moved as one unit, and `OverlayTabContractTests` fails if a catalog
-entry has no page builder or the page builders drift back into the base file.
+The extractions that did happen kept that property, and the fourth one is what settled the question:
 
-The rule the measurement above still implies holds for the rest of the file: do not split it to
-satisfy a line count. Extract a tab when a tab is what needs to move, as this one did.
+- **Tab construction** moved out, whole, into `AgentOverlayHost.Tabs.cs` (145 lines), and the tab
+  list itself became data in the Godot-free `OverlayTabCatalog`.
+- **The page bodies and the refresh pass** moved into `AgentOverlayHost.Pages.cs` when the header,
+  the six pages and the single 220-line `RefreshDynamic` stopped fitting the host's budget. This is
+  the cut the field measurement above permits, and it is worth naming why: the fields did **not**
+  move. They stayed declared next to the host, because they are the object's state, and what moved is
+  the code that *writes* them. The distinction the measurement was really drawing is **state changes
+  together; behaviour does not have to.** Every field the pages read is still one declaration in one
+  file, so there is still exactly one place that says what the overlay remembers -- and the pages that
+  repaint those fields now live beside each other instead of behind 400 lines of drag handling.
+- **The settings form** moved on from there to `AgentOverlayHost.Settings.cs` for a plainer reason: it
+  was a third of the pages by line count and changes for its own reasons. A change to the budget hint
+  and a change to the dashboard were arriving in the same diff.
+- **The swatch renderer** became `OverlaySwatch.cs` when the theme preview pushed `UiFactory.cs` past
+  its own budget. That file had grown one style helper at a time and had no obvious seam left; the
+  swatch was the one thing in it that paints an *inactive* palette rather than the active one, which
+  made it the piece that could leave without dragging anything with it.
+
+The base file went 1,829 -> 1,347 -> 1,059 -> 1,120 lines without changing what any tab does, and it
+kept every field those pages read. The last step is up rather than down -- the live pass on 2026-10-01
+added the palette repaint walk and the drag-handle type change -- but the budget still came down over
+the session as a whole, from 1,420 to 1,150, because two extractions happened alongside those
+additions. That is the ratchet behaving as intended rather than an exception to it. What is left in the
+file is the host's own job: attach and teardown, placement and drag, settings harvest and persistence,
+and the screen resolution the tabs switch on. That is why the seams are
+where they are: `ShowTab(string)` and the string call sites stayed with the host, the pages moved as
+one unit, and `OverlayTabContractTests` fails if a catalog entry has no page builder, if a page
+builder has no catalog entry, or if the page builders drift back into the base file.
+
+The rule this leaves behind is sharper than "do not split it to satisfy a line count": **extract a
+tab when a tab is what needs to move, and extract behaviour when behaviour is what grew -- never
+split the state.**
 
 ### What the splits broke, which is the part worth remembering
 
