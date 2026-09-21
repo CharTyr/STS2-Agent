@@ -655,13 +655,17 @@ internal sealed partial class AgentRuntime
                     AllowAct = allowAct
                 },
                 cancellationToken);
+                RecordTurnReceipt(result, recordBudget: true);
+            }
+            catch (AgentTurnCanceledException ex)
+            {
+                RecordTurnReceipt(ex.Receipt, recordBudget: true);
+                throw;
             }
             finally
             {
                 _turnGate.Release();
             }
-
-            AccountTurn(result, recordBudget: true);
 
             var reply = result.Error != null
                 ? result.Error
@@ -752,24 +756,24 @@ internal sealed partial class AgentRuntime
         {
             await _turnGate.WaitAsync(cancellationToken);
             AgentTurnResult result;
+            string? budgetStop;
             try
             {
                 result = await _loop.PlayOnceAsync(cancellationToken);
+                lock (_gate)
+                {
+                    budgetStop = _budgetGuard.Observe(result) ?? _budgetGuard.CheckBudget();
+                }
+                ApplyPlayResult(result);
+            }
+            catch (AgentTurnCanceledException ex)
+            {
+                RecordTurnReceipt(ex.Receipt, recordBudget: true);
+                throw;
             }
             finally
             {
                 _turnGate.Release();
-            }
-
-            ApplyPlayResult(result);
-
-            // The step button spends the same session budget as auto-play. Without recording the
-            // turn here the guard's request count never grew, so repeated steps could run past the
-            // configured cap while auto-play would have stopped at it.
-            string? budgetStop;
-            lock (_gate)
-            {
-                budgetStop = _budgetGuard.Observe(result) ?? _budgetGuard.CheckBudget();
             }
 
             if (!string.IsNullOrWhiteSpace(budgetStop))
@@ -945,6 +949,7 @@ internal sealed partial class AgentRuntime
     private async Task AutoPlayLoopAsync(CancellationToken cancellationToken)
     {
         var boundary = _runBoundary;
+        var moment = ProactiveChatMoment.None;
         SessionBudgetGuard budgetGuard;
         lock (_gate)
         {
@@ -955,7 +960,7 @@ internal sealed partial class AgentRuntime
         {
             await AutoPlayRecovery.RunAsync(async token =>
             {
-                await _turnGate.WaitAsync(token);
+                // Recovery owns the turn gate through receipt accounting.
                 try
                 {
                     _requestingModel = true;
@@ -969,26 +974,30 @@ internal sealed partial class AgentRuntime
                     // "entered a run" flag that makes a return to the menu a stop. Starting auto-play
                     // is what installs a fresh boundary (see StartAutoPlay).
                     boundary.Check(snapshot.Item1, snapshot.Item2, snapshot.Item3);
-                    var moment = ObserveProactiveMoment(snapshot.Item1, snapshot.Item4);
+                    moment = ObserveProactiveMoment(snapshot.Item1, snapshot.Item4);
                     var immediate = await TryCompanionImmediateAsync(token);
                     if (immediate != null)
                     {
-                        await TryProactiveChatAsync(moment, token);
                         return immediate;
                     }
 
                     SetRequestingModelStatus();
                     var turn = await _loop.PlayOnceAsync(token, boundary.Check);
-                    await TryProactiveChatAsync(moment, token);
                     return turn;
                 }
                 finally
                 {
                     _requestingModel = false;
-                    _turnGate.Release();
                 }
 
-            }, ApplyPlayResult, cancellationToken, delay: null, budgetGuard: budgetGuard);
+            }, ApplyPlayResult, cancellationToken, delay: null, budgetGuard: budgetGuard,
+            afterTurn: async token =>
+            {
+                await _turnGate.WaitAsync(token);
+                try { await TryProactiveChatAsync(moment, token); }
+                finally { _turnGate.Release(); }
+            },
+            reportInterrupted: result => RecordTurnReceipt(result), turnGate: _turnGate);
         }
         finally { RaiseChanged(); }
     }
@@ -1118,6 +1127,12 @@ internal sealed partial class AgentRuntime
 
             NoteEvent("proactive chat sent (" + moment + ")");
         }
+        catch (AgentTurnCanceledException ex)
+        {
+            RecordTurnReceipt(ex.Receipt, recordBudget: true);
+            throw;
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) { throw; }
         catch (Exception ex)
         {
             NoteEvent("proactive chat skipped: " + DiagnosticExport.Redact(ex.Message));
@@ -1137,59 +1152,6 @@ internal sealed partial class AgentRuntime
     private static string McpEndpointUrl()
     {
         return HttpServer.Instance.Prefix.TrimEnd('/') + "/mcp";
-    }
-
-    private void AccountTurn(AgentTurnResult result, bool recordBudget = false)
-    {
-        lock (_gate)
-        {
-            if (result.Usage != null)
-            {
-                _sessionUsage = LlmUsage.Combine(_sessionUsage, result.Usage) ?? LlmUsage.Empty;
-                _sessionUsageKnown = true;
-            }
-
-            _sessionRequests += Math.Max(0, result.RequestsSpent);
-            if (recordBudget)
-            {
-                _budgetGuard.Observe(result);
-            }
-        }
-    }
-
-    private void ApplyPlayResult(AgentTurnResult result)
-    {
-        AccountTurn(result);
-        _waitingForGame = result.WaitingForGame;
-        _waitingForPlayer = result.WaitingForPlayer;
-        _requestingModel = false;
-
-        if (!string.IsNullOrWhiteSpace(result.Acted))
-        {
-            _lastAction = result.Acted;
-            RecordDecision(
-                "agent_loop",
-                result.Acted,
-                result.Reasoning,
-                result.StateFingerprint,
-                result.RequestsSpent,
-                result.Usage?.TotalTokens);
-        }
-
-        _lastThought = result.Reasoning ?? result.AssistantText ?? _lastThought;
-        if (!string.IsNullOrWhiteSpace(result.AssistantText))
-        {
-            AddHistory("assistant", result.AssistantText);
-        }
-
-        if (result.RequiresConfiguration)
-        {
-            ClassifyStop(result.Error ?? Loc.T("配置错误"), ModelRoleNames.Play);
-        }
-
-            SetStatus(result.Error == null
-            ? (result.Acted != null ? Loc.T("已执行 {0}", result.Acted) : result.WaitingForGame ? Loc.T("等待游戏可操作") : Loc.T("等待可操作状态"))
-            : DiagnosticExport.Redact(result.Error));
     }
 
     public PlayerFacingView PlayerFacing()

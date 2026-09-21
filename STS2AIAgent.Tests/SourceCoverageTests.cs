@@ -62,6 +62,8 @@ internal static class SourceCoverageTests
         // while this suite's Roslyn pass still parses them and the explicit list makes the choice
         // visible rather than letting a new source file evade every offline contract.
         "STS2AIAgent/Agent/AgentRuntime.Team.cs",
+        // Accounting remains on the game runtime, but is separated from UI status updates.
+        "STS2AIAgent/Agent/AgentRuntime.Accounting.cs",
         "STS2AIAgent/Game/GameDataExportService.cs",
         "STS2AIAgent/Server/Router.cs",
         "STS2AIAgent/Server/GameEventService.cs",

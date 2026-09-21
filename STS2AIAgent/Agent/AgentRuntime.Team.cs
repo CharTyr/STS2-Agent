@@ -146,6 +146,11 @@ internal sealed partial class AgentRuntime
             RaiseChanged();
             return reply;
         }
+        catch (AgentTurnCanceledException ex)
+        {
+            RecordTurnReceipt(ex.Receipt, recordBudget: true);
+            throw;
+        }
         finally
         {
             _turnGate.Release();

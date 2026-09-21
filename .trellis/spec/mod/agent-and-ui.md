@@ -81,3 +81,15 @@ The C# test project [STS2AIAgent.Tests.csproj](../../../STS2AIAgent.Tests/STS2AI
 Caller cancellation must propagate through role probes, vision calls and read tools. Do not store an `OperationCanceledException` as a failed endpoint test when the caller's token is canceled. An independent provider timeout with a live caller token remains a reportable provider failure.
 
 `EventStreamSubscribers` retains snapshots only while at least one subscriber exists. Apply the rule to ordinary disconnects, queue overflow, snapshot overflow and a sample that arrives after the final disconnect. Both publish paths must update polling demand after dropping subscribers. The first sample of a new subscriber lifecycle resets duplicate suppression.
+
+## Turn receipts and budget ordering
+
+`AgentLoop.ExecuteActAsync` must remember a successful bridge response before any follow-up state read, wait or boundary check. Its caller receives the acceptance callback immediately. A later observation failure returns an accepted but unsettled result; it must never clear the fact that this decision already acted. An explicit bridge error still allows a corrected action. Tool arguments are parsed as an object before reading either the action or its reason.
+
+`SessionBudgetGuard.CheckBudget(extraRequests, extraTokens)` checks committed totals plus the current turn's pending usage without recording it. `CompleteWithToolsAsync` passes accumulated known tokens and request attempts, including vision. Recording happens once on completion or interruption. Missing provider usage is not estimated.
+
+`AgentTurnCanceledException` remains an `OperationCanceledException` and carries the turn's partial receipt. Run-boundary stops can also carry a receipt. `AutoPlayRecovery.RunAsync` commits that receipt before honoring cancellation. Runtime callers for step, chat, teammate replies and proactive chat consume interrupted receipts in their existing turn gate. `RecordTurnReceipt` records usage and accepted decisions; `ApplyPlayResult` additionally updates active-play UI fields. Interrupted autoplay uses only the receipt path.
+
+Recovery's optional `turnGate` spans model/game work and receipt commit; the gate is released in a `finally` block. A queued caller must not see the old budget after the previous call has already spent it. Recovery's optional `afterTurn` runs only after play accounting and budget/recovery checks. The runtime puts proactive chat there, acquires the same gate for that chat, and rechecks the budget afterward.
+
+`AgentTurnIntegrityTests` covers accepted-action observation faults, JSON fallback, explicit rejection, token/vision budgets, malformed arguments, cancellation at multiple boundaries, proactive accounting and a queued caller blocked until commit. Source-wiring contracts verify the game-dependent runtime connects those tested components. These tests do not establish live Godot rendering or full-game behavior.

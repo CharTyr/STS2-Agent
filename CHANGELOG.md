@@ -4,6 +4,12 @@
 
 ## Unreleased
 
+- Preserve accepted action receipts when a follow-up state read fails. The in-game agent now reports the action as unsettled and refreshes state before another decision instead of treating an accepted action as a failed submission and replaying it. Both tool-calling and JSON-fallback models follow this boundary.
+- Include the current decision's known token usage, including a separate vision request, in every subsequent model-budget check. Record final usage once; checks do not mutate the ledger.
+- Keep completed actions and known usage when a turn is canceled or crosses a run boundary. Interrupted turns carry a receipt through the cancellation exception; autoplay, single-step, regular chat, teammate replies and proactive chat consume it without starting more work or inventing missing provider usage.
+- Record gameplay before considering proactive chat, and hold the shared turn gate through accounting. Queued chat or step requests now see the preceding turn's budget usage before they can start; canceled proactive chat cannot discard or double-charge the already-completed gameplay turn.
+- Validate the JSON object root before reading tool arguments or action reasons. Malformed/non-object action parameters return a structured invalid-request result while preserving usage and allowing a corrected action.
+
 - Preserve the selected overlay theme in settings copies. Theme selection saves only the theme, keeps unfinished form input and scroll position, repaints endpoint/model panels, and reports persistence failures.
 - Unwrap the companion's actual HTTP state response and read its local AI player, so health, energy and hand count describe the same character. Reject failed or malformed response envelopes.
 - Fix the Python MCP `diff_state` tool recursively calling itself. Both diff implementations now report actual truncation and depth limits, escape ambiguous property paths, distinguish empty objects from strings, and apply the same 200-entry cap. Native diffs preserve large integers and compare equivalent decimal number spellings correctly.

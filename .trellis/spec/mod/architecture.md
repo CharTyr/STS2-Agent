@@ -69,14 +69,14 @@ For a change crossing state, action, agent, UI, or MCP, trace it in both directi
 
 ## Code shape and its known debts
 
-Measured 2026-10-01 across 123 mod source files totalling 36,082 lines (git-tracked only, which is what the gate counts -- a working tree also holds whatever the developer left in it). These numbers are here
+Measured 2026-09-21 across 128 mod source files totalling 37,934 lines (git-tracked only, which is what the gate counts -- a working tree also holds whatever the developer left in it). These numbers are here
 because nobody was counting, and that is how a codebase stops being navigable -- not through a bad
 commit, but through a thousand good ones. The `arch-facts` gate checks this table against the
 files, so it cannot quietly go stale the way it did between ADR 0001 and the splits below.
 
 | File | Lines |
 | --- | ---: |
-| [AgentRuntime.cs](../../../STS2AIAgent/Agent/AgentRuntime.cs) | 1,360 |
+| [AgentRuntime.cs](../../../STS2AIAgent/Agent/AgentRuntime.cs) | 1,322 |
 | [GameStateService.cs](../../../STS2AIAgent/Game/GameStateService.cs) | 1,336 |
 | [GameStateService.Payloads.cs](../../../STS2AIAgent/Game/GameStateService.Payloads.cs) | 1,251 |
 | [GameStateService.AgentView.cs](../../../STS2AIAgent/Game/GameStateService.AgentView.cs) | 1,236 |
@@ -326,3 +326,5 @@ the compiler will not enforce.** When a file moves, go looking for the checks th
   register a tab -- and no reason to add one to `AgentOverlayHost.cs`, whose budget only goes down.
 - Anything **not** state-building or action-executing: a new file. Every file in the table above is
   already past the point where adding to it is free, and the budgets say so out loud.
+
+`AgentRuntime.Accounting.cs` holds turn receipt accounting and the active-play result projection. It remains a partial of the runtime because it owns the existing session counters and decision log. The policy and cancellation types stay game-independent and linked into the executable test project.

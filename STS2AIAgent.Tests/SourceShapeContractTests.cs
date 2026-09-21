@@ -63,7 +63,8 @@ internal static class SourceShapeContractTests
         // 1,492 lines until the AI-teammate surface moved to AgentRuntime.Team.cs on 2026-09-20. The
         // budget came down with the file rather than being raised for the feature that pushed it
         // over, which is the same move the overlay made for its sixth tab.
-        ["STS2AIAgent/Agent/AgentRuntime.cs"] = 1400,
+        // Receipt accounting moved to AgentRuntime.Accounting.cs; keep the reduced base budget.
+        ["STS2AIAgent/Agent/AgentRuntime.cs"] = 1350,
     };
 
     public static void NoSourceFileGrowsPastItsBudget()

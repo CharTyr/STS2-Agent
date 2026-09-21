@@ -59,11 +59,11 @@ internal sealed class SessionBudgetGuard
         }
     }
 
-    public string? CheckBudget(int extraRequests = 0)
+    public string? CheckBudget(int extraRequests = 0, int extraTokens = 0)
     {
         lock (_gate)
         {
-            return CheckBudgetLocked(extraRequests);
+            return CheckBudgetLocked(extraRequests, extraTokens);
         }
     }
 
@@ -84,18 +84,20 @@ internal sealed class SessionBudgetGuard
         }
     }
 
-    private string? CheckBudgetLocked(int extraRequests = 0)
+    private string? CheckBudgetLocked(int extraRequests = 0, int extraTokens = 0)
     {
         extraRequests = Math.Max(0, extraRequests);
-        var requests = _requestCount + extraRequests;
+        // Pending usage belongs to the current turn and is checked, not recorded here.
+        var requests = (long)_requestCount + extraRequests;
+        var tokens = (long)_consumedTokens + Math.Max(0, extraTokens);
         if (_maxRequests.HasValue && requests >= _maxRequests.Value)
         {
             return Loc.T("已达到会话请求次数上限（{0}/{1} 次），已自动停止游玩。", requests, _maxRequests.Value);
         }
 
-        if (_maxTokens.HasValue && _consumedTokens >= _maxTokens.Value)
+        if (_maxTokens.HasValue && tokens >= _maxTokens.Value)
         {
-            return Loc.T("已达到会话 Token 预算上限（{0:N0}/{1:N0} tokens），已自动停止游玩。", _consumedTokens, _maxTokens.Value);
+            return Loc.T("已达到会话 Token 预算上限（{0:N0}/{1:N0} tokens），已自动停止游玩。", tokens, _maxTokens.Value);
         }
 
         return null;
