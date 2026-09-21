@@ -147,7 +147,7 @@
   "request_id": "req_20260911_121549_7955_4",
   "data": {
     "service": "sts2-ai-agent",
-    "mod_version": "0.14.5",
+    "mod_version": "0.14.6",
     "protocol_version": "2026-03-11-v1",
     "game_version": "v0.111.0",
     "status": "ready",
