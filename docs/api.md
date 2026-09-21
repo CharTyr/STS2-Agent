@@ -1024,13 +1024,34 @@ compact 的 `combat` 原样携带 `/state` 的 `action_readiness`、`end_turn_wi
 | `combat.enemies[]` | `base_max_hp` | 联机缩放前的基础血量；元数据的 `min_hp` / `max_hp` 与它同量纲，实况 `max_hp` 是缩放后的值 |
 | `combat.players[]` | `player_id` / `slot_index` / `is_local` / `is_connected` / `character_id` / `character_name` / `current_hp` / `max_hp` / `block` / `energy` / `stars` / `focus` / `is_alive` | 队伍血线（含本地玩家），用于判断队友是否需要救援 |
 | `combat.hand[]` | `card_id` | 手牌内部 ID，用于 `get_game_data_item` 精确查询 |
+| `combat.hand[]` | `upgraded` / `energy_cost` / `star_cost` | 结构化数值，与 `line` 里文本化的费用同源；判断「这手还能打什么」不必解析本地化字符串 |
+| `run.potions[]` | `description` | 药水效果原文；配合 `usable` / `discard` / `target` / `targets` 一起决定是否用掉 |
 | `combat.draw[]` / `combat.discard[]` / `combat.exhaust[]` / `run.deck[]` / `run.piles.*` | `card_ids` | 合并组代表的卡牌 ID（去重、升序）；组内若含不同 ID 会全部列出，`line` 仍带 `*N` 数量后缀 |
 | `selection.cards[]` / `reward.cards[]` / `shop.cards[]` / `bundles[].cards[]` | `card_id` | 选择屏 / 奖励 / 商店 / 卡包的卡牌 ID |
 | `run` | `relic_ids` | 与 `run.relics` 同序、等长的遗物 ID 列表（`relics` 保持原有名字数组不变） |
+| `run` | `relic_stacks` / `relic_descriptions` | 与 `run.relics` 同序、等长的计数与效果原文。计数遗物（笔尖 `AttacksPlayed % 10`、念珠、五轮书等）的层数只在这里，`relics` 里只有名字——**不读这两列就看不到「笔尖 9/10」这类时机** |
+| `map` | `nodes[]` | 全图节点：`coord`（`"row,col"`）、`node_type`、`visited`、`children[]`（同样 `"row,col"`）。`options[]` 只给当前可走的 1–3 个，**只有 `nodes[]` 能用来做跨楼层路线规划** |
+| `map` | `boss_node` / `second_boss_node` | 一 / 二 号 Boss 坐标（`"row,col"`）；`/state` 的 `boss_node` 对象在这里压成字符串 |
 | `run` | `players[]` | 队伍摘要，字段同 `combat.players[]`，另有 `gold` |
 | `chest.relics[]` | `relic_id` | 宝箱遗物 ID，配合 `i` 供 `choose_treasure_relic` 使用 |
 | `modal` | `underlying_screen` | 覆盖层底下的逻辑界面名，用于「先解覆盖层再规划房间」 |
+| `rest.options[]` | `option_id` | 休息点选项的稳定标识（`HEAL` / `SMITH` …）。`line` 是给人读的本地化文本，**按 id 分支才不会随语言漂移** |
+| `event.options[]` | `text_key` | 事件选项的稳定键（如 `INITIAL.options.IMMERSE`）。离线事件风险表 `docs/game-knowledge/events.md` 就是按这个键索引的，靠 `i` 对不上 |
+| `shop.cards[]` | `on_sale` | 该商品是否在打折；`line` 里的价格已是折后价，`on_sale` 用于判断「值得现在买」 |
 | 顶层 | `unlock` | 解锁覆盖层快照（`unlock_type` / `items` / `can_confirm`）；无解锁覆盖层时为 `null` |
+
+#### compact 在 v11 移除的冗余键
+
+`agent_view.version` 升到 **11** 时删掉了三处「同一份数据的第二种写法」。它们都只是冗余，
+不承载任何独有信息，删除后每次 `get_game_state` 少传一大截 token：
+
+| 已移除 | 原内容 | 改用什么 |
+| --- | --- | --- |
+| 顶层 `actions` | 与 `available_actions` **逐字相同**的重复数组 | `available_actions` |
+| 顶层 `profiles` | 恒为 `[{id:1},{id:2},{id:3}]` 的静态表 | `native_profile_id`（`switch_profile` 用它） |
+| `combat.draw_cards[]` / `discard_cards[]` / `exhaust_cards[]`、`run.piles.*_cards[]` | 与 `draw[]` / `discard[]` / `exhaust[]` 同源的**第二份堆叠视图**（每张牌一个对象） | `combat.draw[]` / `combat.discard[]` / `combat.exhaust[]` / `run.piles.*` 的分组行（`line` + `card_ids`） |
+
+`/state` 的字段**一个都没动**——以上只发生在这份派生的 compact 视图里，而它本来就有版本号。
 
 #### compact 的字段改名对照表
 

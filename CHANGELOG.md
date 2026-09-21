@@ -2,6 +2,39 @@
 
 > Release attribution is recorded against tags or release commits. Post-tag maintenance is listed separately; current validation limits are maintained in [PRODUCT_PLAN_CURRENT.md](https://github.com/CharTyr/STS2-Agent/blob/main/PRODUCT_PLAN_CURRENT.md).
 
+## Unreleased
+
+> A harness pass over the compact `agent_view` — the payload every MCP client reads before each
+> decision. It drops three redundant keys and adds the handful of fields the strategy text already
+> told a model to read, so a client stops paying for the same data twice and stops guessing at
+> what an intent, a relic counter or a map route actually is.
+
+- **The compact view no longer ships the same data twice.** `agent_view.version` is now `11`. The
+  top-level `actions` array was byte-identical to `available_actions`; `profiles` was a constant
+  `[{1},{2},{3}]` list that `native_profile_id` already answers; and `combat.draw_cards[]` /
+  `discard_cards[]` / `exhaust_cards[]` — duplicated again inside `run.piles` — restated the grouped
+  `draw[]` / `discard[]` / `exhaust[]` stacks one object per card. All three are gone from the
+  compact view only: no `/state` field was removed, and both MCP surfaces already read
+  `available_actions` with `actions` as a legacy fallback, so an older sidecar still works.
+
+- **Decision inputs the strategy files already assumed are now actually in the payload.** The map
+  gained `nodes[]` (`coord`, `node_type`, `visited`, `children[]`) plus `boss_node` /
+  `second_boss_node`, so route planning across floors no longer requires falling back to
+  `get_raw_game_state`. `run` gained `relic_stacks` and `relic_descriptions` — a counter relic's
+  charge (Pen Nib at 9/10) exists nowhere else in the compact view. `combat.hand[]` gained
+  `upgraded` / `energy_cost` / `star_cost` as numbers instead of leaving them inside the localized
+  `line`, `rest.options[]` gained the stable `option_id`, `event.options[]` gained `text_key` (the
+  key the offline event-risk index is written against), `shop.cards[]` gained `on_sale`, and
+  `run.potions[]` gained `description`. Together these remove the field-hunting round trips that the
+  previous payload forced.
+
+- **Reward card options carry their real cost.** `reward.cards[]` passed `null` for the energy and
+  star cost of every offered card, so a pick between two cards showed neither one's price; it now
+  reports the cost the raw payload always had.
+
+- Document the additions, the removals and the version bump in `docs/api.md`, including the
+  compatibility note that only this derived view changed.
+
 ## v0.14.6 - 2026-09-21
 
 > A reliability batch over the agent loop, the budget ledger, the event stream and both MCP
