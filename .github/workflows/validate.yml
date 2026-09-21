@@ -34,6 +34,17 @@ jobs:
         run: uv run --locked python ../scripts/check_release_metadata.py
       - name: Verification gates (deps, API doc, API facts, doc snapshots)
         run: python scripts/check_verification_gates.py
+      - name: Generated API schema semantics
+        run: python scripts/test-api-schema.py
+      - name: Offline decision benchmark contracts
+        shell: pwsh
+        run: |
+          python scripts/decision_benchmark.py
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          python scripts/test-decision-benchmark.py
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Isolated-profile mod seeding
+        run: powershell -NoProfile -ExecutionPolicy Bypass -File scripts/test-isolated-settings.ps1
       - name: Release package source contract (static, no game)
         run: python scripts/check_release_package.py --source-root .
       - name: Verification gate self-test

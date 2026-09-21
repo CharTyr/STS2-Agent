@@ -644,6 +644,13 @@ internal sealed class AgentLoop
         var actionable = await _bridge.WaitUntilActionableAsync(timeout, cancellationToken);
         var stateJson = await _bridge.GetCompactStateJsonAsync(cancellationToken);
         checkState?.Invoke(stateJson);
+        // The wait schema is shared with the MCP surface, so `raw_state` is honored here too rather
+        // than advertised and ignored. `checkState` keeps the compact view either way: it feeds the
+        // runtime's own state, not this answer.
+        if (ReadBool(args, "raw_state"))
+        {
+            stateJson = await _bridge.GetRawStateJsonAsync(cancellationToken);
+        }
         var actionsJson = await _bridge.GetAvailableActionsJsonAsync(cancellationToken);
         return JsonSerializer.Serialize(new
         {

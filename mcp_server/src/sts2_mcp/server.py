@@ -8,7 +8,9 @@ from typing import Annotated, Any, Callable
 from fastmcp import FastMCP
 from pydantic import Field
 
+from .action_results import project_agent_state
 from .client import Sts2ApiError, Sts2Client
+from .decision import read_decision
 from .handoff import Sts2HandoffService
 from .knowledge import Sts2KnowledgeBase
 from .legacy_tools import (
@@ -28,7 +30,6 @@ from .game_data import (
     SCENE_EVENT,
     SCENE_MENU,
     SCENE_SHOP,
-    _SCENE_FIELD_SETS,
     _build_game_data_tool_error,
     _configure_game_data_loader,
     _detect_scene_from_screen,
@@ -38,6 +39,7 @@ from .game_data import (
     _reset_game_data_cache,
     derive_relevant_item_ids,
     get_game_data_items_fields,
+    scene_field_set,
 )
 
 ToolHandler = Callable[..., dict[str, Any]]
@@ -111,18 +113,10 @@ def create_server(client: Sts2Client | None = None, tool_profile: str | None = N
     _reset_game_data_cache()
     mcp = FastMCP("STS2 AI Agent")
 
-    def _agent_state(state: dict[str, Any] | None = None) -> dict[str, Any]:
-        state = sts2.get_state() if state is None else state
-        agent_view = state.get("agent_view")
-        if isinstance(agent_view, dict):
-            if "available_actions" not in agent_view and isinstance(agent_view.get("actions"), list):
-                return {
-                    **agent_view,
-                    "available_actions": agent_view["actions"],
-                    "compact_agent_view": True,
-                }
-            return {**agent_view, "compact_agent_view": True}
-        return {**state, "compact_agent_view": False}
+    def _agent_state(state: dict[str, Any] | None = None, *, raw_state: bool = False) -> dict[str, Any]:
+        # One projection for every answer that carries a `/state` payload -- see
+        # `action_results.project_agent_state` for what the marker means and when raw comes back.
+        return project_agent_state(sts2.get_state() if state is None else state, raw_state=raw_state)
 
     def _state_actions(state: dict[str, Any]) -> list[Any] | None:
         actions = state.get("available_actions")
@@ -144,6 +138,7 @@ def create_server(client: Sts2Client | None = None, tool_profile: str | None = N
     def _wait_until_actionable_impl(
         timeout_seconds: float,
         *,
+        raw_state: bool = False,
         monotonic: Callable[[], float] = time.monotonic,
         sleep: Callable[[float], None] = time.sleep,
     ) -> dict[str, Any]:
@@ -162,7 +157,7 @@ def create_server(client: Sts2Client | None = None, tool_profile: str | None = N
                 "matched": False,
                 "actionable": True,
                 "event": None,
-                "state": state,
+                "state": _agent_state(state, raw_state=raw_state),
                 "actions": sts2.get_available_actions(),
                 "timeout_seconds": timeout,
                 "source": "state",
@@ -224,7 +219,7 @@ def create_server(client: Sts2Client | None = None, tool_profile: str | None = N
             "matched": event is not None,
             "actionable": _is_actionable_state(state),
             "event": event,
-            "state": state,
+            "state": _agent_state(state, raw_state=raw_state),
             "actions": sts2.get_available_actions(),
             "timeout_seconds": timeout,
             "source": source,
@@ -291,12 +286,7 @@ def create_server(client: Sts2Client | None = None, tool_profile: str | None = N
         `requires_index` / `requires_target` / target hints), and `scene_guidance` (the same object
         `get_scene_guidance` returns, `playbook` included). The individual read tools stay available.
         """
-        state = sts2.get_state()
-        return {
-            "state": _agent_state(state),
-            "available_actions": sts2.get_available_actions(),
-            "scene_guidance": scene_guidance(state),
-        }
+        return read_decision(sts2)
 
     @mcp.tool
     def diff_state(
@@ -471,14 +461,16 @@ def create_server(client: Sts2Client | None = None, tool_profile: str | None = N
             Field(
                 description=(
                     "Comma-separated ids. Omit to use the ids the current screen is about: the hand "
-                    "in a fight, the enemies in combat, the shop stock."
+                    "in a fight, the shop stock, the cards a reward or selection screen offers, the "
+                    "relics a chest offers."
                 )
             ),
         ] = "",
     ) -> dict[str, Any]:
         """Return items with only the most relevant fields for the current context.
 
-        The scene (combat/shop/event/menu) decides which fields come back.
+        The scene decides which fields come back: combat, shop, event, reward, card_selection,
+        chest, bundle_selection, else menu.
         """
         # Auto-detect current scene from game state
         state = sts2.get_state()
@@ -488,7 +480,9 @@ def create_server(client: Sts2Client | None = None, tool_profile: str | None = N
             derive_relevant_item_ids(state, collection, screen)
         )
         try:
-            suggested_fields = _SCENE_FIELD_SETS.get(scene, {}).get(collection)
+            # Case-insensitive on both names, the way the C# mirror's dictionaries are: the caller
+            # spells the collection by hand, so "Cards" has to project exactly like "cards".
+            suggested_fields = scene_field_set(scene, collection)
             if not suggested_fields:
                 # Fallback to basic query if no scene-specific fields defined
                 return get_game_data_items(collection=collection, item_ids=resolved_ids)
@@ -535,14 +529,18 @@ def create_server(client: Sts2Client | None = None, tool_profile: str | None = N
         }
 
     @mcp.tool
-    def wait_until_actionable(timeout_seconds: float = 20.0) -> dict[str, Any]:
-        """Wait until a new actionable phase is reported, then return fresh state.
+    def wait_until_actionable(
+        timeout_seconds: float = 20.0,
+        raw_state: Annotated[
+            bool,
+            Field(description="Raw /state payload instead of the compact agent_view."),
+        ] = False,
+    ) -> dict[str, Any]:
+        """Wait for a new actionable phase, then return the fresh compact state.
 
-        Returns two booleans: `matched`, an SSE event matched, and `actionable`, the fresh state
-        exposes at least one non-passive action. Prefer `actionable` when you only need to know
-        whether you can act now.
+        `state` is the compact shape `get_game_state` returns; `actionable` says you can act now.
         """
-        return _wait_until_actionable_impl(timeout_seconds)
+        return _wait_until_actionable_impl(timeout_seconds, raw_state=raw_state)
 
     @mcp.tool
     def act(
@@ -617,6 +615,10 @@ def create_server(client: Sts2Client | None = None, tool_profile: str | None = N
         `get_game_state` returns, so read it as the next decision instead of calling again.
         `raw_state=True` returns the full payload. `action`, `status`, `stable`, and `message` are
         unchanged.
+
+        `status: "outcome_unknown"` means the response was lost: one state reconciliation was
+        attempted and its compact state sits under `reconciliation.state`, but nothing compared the
+        action against it, so never replay the action automatically.
 
         A rejected index answers with `error.code`, `error.message`, and the `error.details` keys
         `field`, `submitted`, `valid_indices`, and `valid_field` (the payload path to re-read).

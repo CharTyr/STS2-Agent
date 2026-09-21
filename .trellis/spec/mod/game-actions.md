@@ -43,6 +43,8 @@ The ordering matters. Availability errors should not be reported as malformed pa
 
 Handlers are invoked inside the Router/GameBridge game-thread boundary described in [architecture.md](architecture.md). They should use `GameThread.WaitForNextFrameAsync` and native calls directly from that context, without adding another `GameThread.InvokeAsync` around the whole handler.
 
+One mutating action runs at a time. `ExecuteAsync` takes the process-wide lease from `ActionExecutionGate` (`STS2AIAgent/Game/ActionExecutionGate.cs`) before dispatching and releases it in `finally` after the handler's task completes, so the lease covers every transition wait; a concurrent caller is refused with 409 `action_in_flight` (retryable) instead of being queued, because a queued caller would act on the snapshot it read before the first action started. The gate sits at `ExecuteAsync` rather than at any single transport because that is the only place `POST /action`, the in-game agent, the native MCP `act` tool and the teammate coordinator converge. Do not add a second guard at a call site, and never await the lease: a lease that blocks the game thread deadlocks the transition it is waiting for.
+
 ## Error categories
 
 Use the existing [ApiException](../../../STS2AIAgent/Server/ApiException.cs) fields and categories. The current action code demonstrates these mappings:
@@ -53,6 +55,7 @@ Use the existing [ApiException](../../../STS2AIAgent/Server/ApiException.cs) fie
 | Ordinary request shape is invalid | 400 | `invalid_request` | no | `play_card` without `card_index`; missing required option/coordinate |
 | Required action target is missing, or index/target is invalid for current state | 409 | `invalid_target` | no | missing `target_index` for a targeted card; card, enemy, player, option, or reward index out of range |
 | Native state needed to perform an otherwise legal action is missing | 503 | `state_unavailable` | usually yes | local player, hand, combat room, or button cannot be resolved |
+| Another mutating action still owns the one-action lease | 409 | `action_in_flight` | yes | `ActionExecutionGate` refusal in `ExecuteAsync` while a `play_card` transition is still waiting |
 | Companion requests an actor it does not own | 403 | `forbidden_actor` | no | `CompanionActPolicy` rejection in `ExecuteAsync` |
 
 `retryable: true` is a statement about safe recovery after state availability changes, not a generic flag for every failure. Include action/screen/index details in `Details` when they help a caller diagnose a stale snapshot, but keep secrets and arbitrary native object dumps out of the response. Router serializes `details` and `retryable` consistently through `WriteErrorAsync`.

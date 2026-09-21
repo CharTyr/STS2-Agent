@@ -123,6 +123,21 @@ class ActionSurfaceBaselineReplayTests(unittest.TestCase):
         replay = self.validation.replay_action_surface_baseline(client, self.baseline_path)
 
         self.assertFalse(replay["baseline_screen_present"])
+        self.assertFalse(replay["comparable"])
+        self.assertIn("must not be reported as a pass", replay["note"])
+
+    def test_same_screen_with_zero_shared_actions_is_not_a_pass(self) -> None:
+        self.write_baseline(
+            [{"screen": "COMBAT", "descriptors": [descriptor("old_play_card")]}]
+        )
+        client = FakeClient("COMBAT", [descriptor("renamed_play_card")])
+
+        replay = self.validation.replay_action_surface_baseline(client, self.baseline_path)
+
+        self.assertTrue(replay["baseline_screen_present"])
+        self.assertFalse(replay["comparable"])
+        self.assertEqual(replay["compared_actions"], [])
+        self.assertEqual(replay["mismatches"], [])
         self.assertIn("must not be reported as a pass", replay["note"])
 
     def test_a_flag_unstable_across_samples_is_not_used_as_a_contract(self) -> None:

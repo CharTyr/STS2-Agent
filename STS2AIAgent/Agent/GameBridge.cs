@@ -55,21 +55,15 @@ internal sealed class GameBridge : IGameBridge
     /// built the whole payload, and each was its own game-thread invocation. Between two of them the
     /// game can advance, so a screen that changed mid-request left the index validator judging the
     /// action against a payload the legality check had never seen. The names and the descriptors come
-    /// from the same walk by construction (ADR 0001); this makes them come from the same frame too,
-    /// and it is what the `act` and `decide` tools read.
+    /// from the same walk by construction (ADR 0001); <see cref="GameStateService.BuildDecisionSnapshotPayload"/>
+    /// makes them come from the same build too, by retaining the descriptors that walk produced
+    /// instead of enumerating the action surface a second time. It is what the `act` and `decide`
+    /// tools read.
     /// </remarks>
     public Task<string> GetActionSnapshotJsonAsync(CancellationToken cancellationToken)
     {
         return GameThread.InvokeAsync(() =>
-        {
-            var state = GameStateService.BuildStatePayload();
-            var descriptors = GameStateService.BuildAvailableActionsPayload();
-            return JsonSerializer.Serialize(new
-            {
-                state = state.agent_view ?? (object)state,
-                available_actions = descriptors.actions
-            }, JsonOptions);
-        });
+            JsonSerializer.Serialize(GameStateService.BuildDecisionSnapshotPayload(), JsonOptions));
     }
 
     public Task<string> GetScreenAsync(CancellationToken cancellationToken)

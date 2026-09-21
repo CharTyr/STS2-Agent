@@ -187,6 +187,7 @@
               "not_found",
               "invalid_action",
               "invalid_target",
+              "action_in_flight",
               "state_unavailable",
               "forbidden_actor",
               "mcp_disabled",
@@ -1201,10 +1202,16 @@
             "type": "array"
           },
           "is_good": {
-            "type": "boolean"
+            "type": [
+              "boolean",
+              "null"
+            ]
           },
           "kind": {
-            "type": "string"
+            "type": [
+              "string",
+              "null"
+            ]
           },
           "revealed": {
             "type": "boolean"
@@ -1308,6 +1315,21 @@
               "integer",
               "null"
             ]
+          }
+        },
+        "type": "object"
+      },
+      "DecisionSnapshotPayload": {
+        "additionalProperties": true,
+        "properties": {
+          "available_actions": {
+            "items": {
+              "$ref": "#/components/schemas/ActionDescriptor"
+            },
+            "type": "array"
+          },
+          "state": {
+            "description": "Free-form JSON value."
           }
         },
         "type": "object"
@@ -3353,6 +3375,45 @@
           }
         },
         "summary": "Export one game-data collection."
+      }
+    },
+    "/decision-snapshot": {
+      "get": {
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ApiSuccessEnvelope"
+                    },
+                    {
+                      "properties": {
+                        "data": {
+                          "$ref": "#/components/schemas/DecisionSnapshotPayload"
+                        }
+                      },
+                      "type": "object"
+                    }
+                  ]
+                }
+              }
+            },
+            "description": "Successful response."
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorEnvelope"
+                }
+              }
+            },
+            "description": "The normal HTTP error envelope."
+          }
+        },
+        "summary": "Read one decision's state and the action descriptors its own state build enumerated."
       }
     },
     "/decisions": {

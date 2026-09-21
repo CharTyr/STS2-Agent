@@ -277,6 +277,19 @@ internal static class TestRunner
         yield return ("GameDataFilter.EmptyStringId", () => Task.Run(GameDataFilterItemSourceTests.EmptyStringIdsAreSkipped));
         yield return ("GameDataFilter.CombatRelicFallback", () => Task.Run(GameDataFilterItemSourceTests.CombatRelicsFallBackToTheRunRelics));
         yield return ("GameDataFilter.EmptySceneFallsBack", () => Task.Run(GameDataFilterItemSourceTests.SceneSourceWithoutItsPayloadFallsBack));
+        yield return ("GameDataFilter.RewardOffersCards", () => Task.Run(GameDataFilterItemSourceTests.RewardScreenLooksUpTheOfferedCards));
+        yield return ("GameDataFilter.RewardCompactCards", () => Task.Run(GameDataFilterItemSourceTests.RewardCompactViewAnswersWithItsOwnOfferedCards));
+        yield return ("GameDataFilter.RewardRelicFallback", () => Task.Run(GameDataFilterItemSourceTests.RewardRelicLookupFallsBackWithoutCardIds));
+        yield return ("GameDataFilter.RewardPotionFallback", () => Task.Run(GameDataFilterItemSourceTests.RewardPotionLookupFallsBackInsteadOfInventingAnId));
+        yield return ("GameDataFilter.SelectionOffersCards", () => Task.Run(GameDataFilterItemSourceTests.CardSelectionGridOffersItsOwnCardsOnceInOrder));
+        yield return ("GameDataFilter.SelectionRelicAware", () => Task.Run(GameDataFilterItemSourceTests.CardSelectionRelicLookupNeverAnswersWithOfferedCards));
+        yield return ("GameDataFilter.ChestOffersRelics", () => Task.Run(GameDataFilterItemSourceTests.ChestOffersItsRelicOptions));
+        yield return ("GameDataFilter.ChestCompactRelics", () => Task.Run(GameDataFilterItemSourceTests.ChestCompactViewAnswersWithItsOwnRelicOffers));
+        yield return ("GameDataFilter.ChestCardFallback", () => Task.Run(GameDataFilterItemSourceTests.ChestCardLookupFallsBackToTheDeck));
+        yield return ("GameDataFilter.BundleOffersCards", () => Task.Run(GameDataFilterItemSourceTests.BundleScreenOffersEveryCardsInItsBundles));
+        yield return ("GameDataFilter.ShopOfferIds", () => Task.Run(GameDataFilterItemSourceTests.ShopOffersStockIdsForCardsRelicsAndPotions));
+        yield return ("GameDataFilter.CollectionCaseInsensitive", () => Task.Run(GameDataFilterItemSourceTests.OfferScreensMatchTheCollectionNameCaseInsensitively));
+        yield return ("GameData.OfferCardProjection", () => Task.Run(GameDataFilterTests.ProjectRelevant_KeepsOfferCardFieldsOnReward));
         yield return ("PlayIntent.Detect", () => Task.Run(PlayIntentTests.DetectsPlayPhrasesAndIgnoresQuestions));
         yield return ("ActIndex.Validate", () => Task.Run(ActIndexValidatorTests.RejectsMissingAndStaleIndexes));
         yield return ("ActIndex.Structured", () => Task.Run(ActIndexValidatorTests.StructuredIndexRejections));
@@ -404,6 +417,7 @@ internal static class TestRunner
         yield return ("Mcp.SceneGuidanceTool", McpServiceTests.ToolsCall_SceneGuidanceFollowsTheScreen);
         yield return ("Mcp.IndexRejection", McpServiceTests.ToolsCall_IndexRejectionNamesTheValidIndices);
         yield return ("Mcp.RawStateFlag", McpServiceTests.ToolsCall_RawStateFlagReachesTheBridge);
+        yield return ("Mcp.WaitRawState", McpServiceTests.ToolsCall_WaitRawStateSelectsTheRawRead);
         yield return ("Mcp.ToolErrorEnvelope", McpServiceTests.ToolsCall_ExceptionCarriesTheStructuredEnvelope);
         yield return ("Mcp.ToolNameRefusals", McpServiceTests.ToolsCall_ToolNameRefusalsAreStructured);
         yield return ("Mcp.DecideTool", McpServiceTests.ToolsCall_DecideAnswersOneDecisionPerRead);
@@ -663,12 +677,22 @@ internal static class TestRunner
         yield return ("SurfacedAction.SkipRewardCardsEnabledFilter", () => Task.Run(SurfacedActionParityTests.SkipRewardCardsFiltersOnAlternativeButtonEnablement));
         yield return ("SurfacedAction.ChooseRewardCardCollection", () => Task.Run(SurfacedActionParityTests.ChooseRewardCardStaysOnTheExecutorCollection));
         yield return ("SurfacedAction.CrystalSphereScreenGuard", () => Task.Run(SurfacedActionParityTests.CrystalSphereExposureStaysOnTheScreenTypeGuard));
+        yield return ("CrystalReveal.IdentityFieldsNullable", () => Task.Run(CrystalSphereRevealGatingContractTests.ItemIdentityFieldsAreNullable));
+        yield return ("CrystalReveal.IdentityGatedOnTheReveal", () => Task.Run(CrystalSphereRevealGatingContractTests.IdentityIsWithheldUntilTheItemIsRevealed));
+        yield return ("CrystalReveal.CompactPassesTheGatedBoard", () => Task.Run(CrystalSphereRevealGatingContractTests.CompactViewPassesTheGatedBoardThrough));
+        yield return ("CrystalReveal.DocsStateTheGate", () => Task.Run(CrystalSphereRevealGatingContractTests.DocsSayIdentityArrivesWithTheReveal));
+        yield return ("CrystalReveal.HiddenIdentityStaysNullOnTheWire", () => Task.Run(CrystalSphereRevealGatingContractTests.HiddenIdentityStaysOnTheWireAsNull));
         yield return ("SurfacedAction.SkipTargetsEnabledAlternative", () => Task.Run(SurfacedActionParityTests.SkipTargetsEnabledAlternative));
         yield return ("SurfacedAction.RoomProbesDoNotSwallowFailures", () => Task.Run(SurfacedActionParityTests.RoomProbesDoNotSwallowTheirFailures));
         yield return ("CombatGate.OneEvaluationPerStateBuild", () => Task.Run(GameStateCombatGateContractTests.OneStateBuildEvaluatesTheGateOnce));
         yield return ("CombatGate.ActionsAskTheSharedGate", () => Task.Run(GameStateCombatGateContractTests.AvailableActionsAskTheSharedGate));
         yield return ("CombatGate.ReadinessProjectsTheGate", () => Task.Run(GameStateCombatGateContractTests.ReadinessIsAProjectionOfTheGate));
         yield return ("CombatGate.QueueReadIsCombatOnly", () => Task.Run(GameStateCombatGateContractTests.TheActionQueueIsReadOnlyInsideCombat));
+        yield return ("DecisionSnapshot.OneWalkPerStateBuild", () => Task.Run(DecisionSnapshotContractTests.OneStateBuildEnumeratesTheActionSurfaceOnce));
+        yield return ("DecisionSnapshot.BuilderReadsTheStateOnce", () => Task.Run(DecisionSnapshotContractTests.TheSnapshotBuilderReadsTheStateOnceAndNothingElse));
+        yield return ("DecisionSnapshot.CacheIsNotAWireField", () => Task.Run(DecisionSnapshotContractTests.TheDescriptorCacheIsNotAWireField));
+        yield return ("DecisionSnapshot.HttpRouteIsOneTurn", () => Task.Run(DecisionSnapshotContractTests.TheHttpRouteServesTheSnapshotInOneGameThreadTurn));
+        yield return ("DecisionSnapshot.BridgeUsesTheBuilder", () => Task.Run(DecisionSnapshotContractTests.TheBridgeSerializesTheSnapshotBuilder));
         yield return ("ActionSurface.OneWalkDecidesWhatIsOffered", () => Task.Run(ActionSurfaceContractTests.OneWalkDecidesWhatIsOffered));
         yield return ("ActionSurface.NeitherSurfaceDecidesForItself", () => Task.Run(ActionSurfaceContractTests.NeitherSurfaceDecidesForItself));
         yield return ("ActionSurface.DescriptorTargetIsDocumentedConstant", () => Task.Run(ActionSurfaceContractTests.DescriptorTargetIsDocumentedConstant));
@@ -745,5 +769,14 @@ internal static class TestRunner
         yield return ("OverlayLayout.ChromeIsTagged", () => Task.Run(OverlayLayoutContractTests.OverlayChromeIsTaggedForRepaint));
         yield return ("OverlayLayout.SwatchUsesChildNodes", () => Task.Run(OverlayLayoutContractTests.SwatchPreviewUsesChildNodes));
         yield return ("OverlayLayout.JumpLandsAtTop", () => Task.Run(OverlayLayoutContractTests.JumpingToASectionPutsItAtTheTop));
+        yield return ("ActionGate.FirstActionOwnsIt", () => Task.Run(ActionExecutionGateTests.AFreshGateAdmitsTheFirstAction));
+        yield return ("ActionGate.ConcurrentRefused", () => Task.Run(ActionExecutionGateTests.AHeldGateRefusesTheSecondActionImmediately));
+        yield return ("ActionGate.HeldAcrossAwait", ActionExecutionGateTests.TheLeaseIsHeldUntilTheAwaitedCoreTaskCompletes);
+        yield return ("ActionGate.ReleasedOnThrow", ActionExecutionGateTests.AThrownCoreFailureStillReleasesTheLease);
+        yield return ("ActionGate.ReleasedOnCancellation", ActionExecutionGateTests.ACanceledCoreWaitStillReleasesTheLease);
+        yield return ("ActionGate.DoubleReleaseIsSafe", () => Task.Run(ActionExecutionGateTests.ReleasingTwiceNeverFreesAnotherActionsLease));
+        yield return ("ActionGate.DisposeReleases", () => Task.Run(ActionExecutionGateTests.DisposingTheLeaseReleasesIt));
+        yield return ("ActionGate.WiringHoldsTheLease", () => Task.Run(ActionExecutionGateWiringContractTests.ExecuteAsyncHoldsTheLeaseAcrossTheAwaitedCoreTask));
+        yield return ("ActionGate.RefusalIsDocumented", () => Task.Run(ActionExecutionGateWiringContractTests.TheRefusalIsTheDocumentedActionInFlightError));
     }
 }

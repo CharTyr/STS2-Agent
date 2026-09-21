@@ -36,26 +36,51 @@ class ApiSchemaTests(unittest.TestCase):
             (ROOT / "docs" / "openapi.json").read_text(encoding="utf-8"),
         )
         self.assertEqual(json.loads(api_schema.render_spec(self.spec)), self.spec)
-        self.assertEqual(api_schema.check_spec(ROOT)[1], "OpenAPI 3.1.0 contains 12 path(s)")
+        self.assertEqual(api_schema.check_spec(ROOT)[1], "OpenAPI 3.1.0 contains 13 path(s)")
 
     def test_source_owned_routes_and_methods_have_one_operation_each(self) -> None:
         paths = self.spec["paths"]
         self.assertEqual(
             set(paths),
             {
-                "/health", "/state", "/actions/available", "/action", "/session/control",
-                "/teammate/control", "/companion/control", "/companion/message", "/data/{collection}",
-                "/decisions", "/events/stream", "/mcp",
+                "/health", "/state", "/decision-snapshot", "/actions/available", "/action",
+                "/session/control", "/teammate/control", "/companion/control", "/companion/message",
+                "/data/{collection}", "/decisions", "/events/stream", "/mcp",
             },
         )
         self.assertEqual(set(paths["/mcp"]) & {"options", "delete", "post"}, {"options", "delete", "post"})
         for ordinary_path, method in (
-            ("/health", "get"), ("/state", "get"), ("/actions/available", "get"),
+            ("/health", "get"), ("/state", "get"), ("/decision-snapshot", "get"),
+            ("/actions/available", "get"),
             ("/action", "post"), ("/session/control", "post"), ("/teammate/control", "post"),
             ("/companion/control", "post"), ("/companion/message", "post"),
             ("/data/{collection}", "get"), ("/decisions", "get"), ("/events/stream", "get"),
         ):
             self.assertIn(method, paths[ordinary_path], f"{ordinary_path} must retain {method}")
+
+    def test_the_decision_snapshot_carries_the_compact_state_and_the_descriptors(self) -> None:
+        """One route, both halves: the descriptor schema is the one `/actions/available` publishes."""
+        schemas = self.spec["components"]["schemas"]
+        snapshot = schemas["DecisionSnapshotPayload"]
+
+        self.assertEqual(
+            set(snapshot["properties"]),
+            {"state", "available_actions"},
+        )
+        self.assertEqual(snapshot["properties"]["state"], {"description": "Free-form JSON value."})
+        self.assertEqual(
+            snapshot["properties"]["available_actions"],
+            {"type": "array", "items": {"$ref": "#/components/schemas/ActionDescriptor"}},
+        )
+        self.assertEqual(
+            snapshot["properties"]["available_actions"]["items"],
+            schemas["AvailableActionsPayload"]["properties"]["actions"]["items"],
+        )
+        self.assertEqual(
+            self.spec["paths"]["/decision-snapshot"]["get"]["responses"]["200"]["content"]
+            ["application/json"]["schema"]["allOf"][1]["properties"]["data"],
+            {"$ref": "#/components/schemas/DecisionSnapshotPayload"},
+        )
 
     def test_csharp_payloads_preserve_nested_and_nullable_shapes(self) -> None:
         schemas = self.spec["components"]["schemas"]

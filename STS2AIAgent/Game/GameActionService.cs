@@ -78,7 +78,19 @@ internal static partial class GameActionService
     internal static int SkillsPlayedThisTurn { get; private set; }
     internal static int LastTurnNumber { get; private set; }
 
-    public static Task<ActionResponsePayload> ExecuteAsync(ActionRequest request)
+    /// <summary>
+    /// Executes one action, whichever transport asked for it.
+    /// </summary>
+    /// <remarks>
+    /// One mutating action runs at a time. The lease that enforces it is taken here rather than at any
+    /// single transport because this is the only place every transport converges -- <c>POST /action</c>,
+    /// the in-game agent through <see cref="GameBridge"/>, the native MCP <c>act</c> tool, the teammate
+    /// coordinator, the overlay. It is held until the dispatched task completes, every transition wait
+    /// included, and released in <c>finally</c> so an action that throws or is canceled cannot leave the
+    /// mod refusing every later request. <see cref="ActionExecutionGate"/> refuses a concurrent caller
+    /// immediately instead of queueing it behind a snapshot the first action has already invalidated.
+    /// </remarks>
+    public static async Task<ActionResponsePayload> ExecuteAsync(ActionRequest request)
     {
         var actionName = request.action?.Trim().ToLowerInvariant();
         var localPlayerId = System.Environment.GetEnvironmentVariable("STS2_MULTIPLAYER_NET_ID");
@@ -101,6 +113,23 @@ internal static partial class GameActionService
             });
         }
 
+        var lease = ActionExecutionGate.Shared.Acquire(actionName);
+        try
+        {
+            return await DispatchAsync(actionName, request);
+        }
+        finally
+        {
+            lease.Release();
+        }
+    }
+
+    /// <summary>
+    /// The action dispatch table: one arm per accepted action name. Only this table stays in the base
+    /// file; each handler lives in the partial for its room.
+    /// </summary>
+    private static Task<ActionResponsePayload> DispatchAsync(string? actionName, ActionRequest request)
+    {
         return actionName switch
         {
             "resolve_rewards" => ExecuteResolveRewardsAsync(request),

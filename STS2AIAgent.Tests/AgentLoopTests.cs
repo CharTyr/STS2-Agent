@@ -7,13 +7,29 @@ namespace STS2AIAgent.Tests;
 
 internal static class GameDataFilterTests
 {
+    /// <summary>
+    /// The screen-to-scene mapping the scene-scoped game-data lookup runs on.
+    ///
+    /// This is a shared expectation table, not a local assertion: one screen per line, one
+    /// <c>Assert.Equal</c> per line. <c>mcp_server/tests/test_scene_field_alignment.py</c> parses
+    /// these lines out of this file and asserts the Python mirror classifies the same screens the
+    /// same way, so an edit here that the other side does not make turns that test red. The overlap
+    /// case matters most: COMBAT_REWARD carries both keywords and only the order of the checks keeps
+    /// it a combat screen, while REWARD is the reward overlay the mod actually emits.
+    /// </summary>
     public static void DetectScene_MatchesGuidedMcpRules()
     {
-        Assert.Equal("combat", GameDataFilter.DetectScene("COMBAT"));
         Assert.Equal("shop", GameDataFilter.DetectScene("SHOP"));
+        Assert.Equal("shop", GameDataFilter.DetectScene("FAKE_MERCHANT"));
         Assert.Equal("event", GameDataFilter.DetectScene("EVENT"));
-        Assert.Equal("menu", GameDataFilter.DetectScene("REWARD"));
+        Assert.Equal("combat", GameDataFilter.DetectScene("COMBAT"));
+        Assert.Equal("combat", GameDataFilter.DetectScene("COMBAT_REWARD"));
+        Assert.Equal("reward", GameDataFilter.DetectScene("REWARD"));
+        Assert.Equal("card_selection", GameDataFilter.DetectScene("CARD_SELECTION"));
+        Assert.Equal("chest", GameDataFilter.DetectScene("CHEST"));
+        Assert.Equal("bundle_selection", GameDataFilter.DetectScene("BUNDLE_SELECTION"));
         Assert.Equal("menu", GameDataFilter.DetectScene("MAP"));
+        Assert.Equal("menu", GameDataFilter.DetectScene("MAIN_MENU"));
     }
 
     public static void ProjectRelevant_KeepsCombatCardFields()
@@ -28,6 +44,30 @@ internal static class GameDataFilterTests
         var item = projected["STRIKE"]!.Value;
         Assert.True(item.TryGetProperty("name", out _));
         Assert.False(item.TryGetProperty("flavor", out _));
+    }
+
+    /// <summary>
+    /// The offer screens have a field set of their own, so an offered card is projected rather than
+    /// handed back whole. Without it the scene would silently fall through to the unprojected answer
+    /// and every lookup would carry the entire card record.
+    /// </summary>
+    public static void ProjectRelevant_KeepsOfferCardFieldsOnReward()
+    {
+        using var doc = JsonDocument.Parse("""
+        [
+          {"id":"OFFER","name":"Offer","description":"Deal 9","type":"Attack","rarity":"Common","cost":1,"flavor":"ignore me","vars":{"damage":9}}
+        ]
+        """);
+
+        foreach (var screen in new[] { "REWARD", "CARD_SELECTION", "BUNDLE_SELECTION" })
+        {
+            var projected = GameDataFilter.ProjectRelevant(screen, "cards", doc.RootElement, new[] { "OFFER" });
+            Assert.True(projected["OFFER"].HasValue, screen);
+            var item = projected["OFFER"]!.Value;
+            Assert.True(item.TryGetProperty("cost", out _), screen);
+            Assert.False(item.TryGetProperty("flavor", out _), screen);
+            Assert.False(item.TryGetProperty("vars", out _), screen);
+        }
     }
 }
 

@@ -80,9 +80,10 @@ Do not trust memory over the current payload. The game mutates screens in place,
 ## Game Data Priority Rules
 
 - Never guess static game facts (card text, potion targeting, monster metadata, relic effects, event option details) from memory when game-data tools are available.
-- Use `get_relevant_game_data` first for current-scene context in combat/shop/event/menu flows.
+- Use `get_relevant_game_data` first for current-scene context in combat/shop/event/reward/card-selection/chest/bundle flows.
   Passing `item_ids` is optional: without it the tool derives the ids the screen is about (the hand
-  in a fight, the shop stock in a shop, the event you are in). Pass them when you want to ask about
+  in a fight, the stock in a shop, the offered cards on a reward, card-selection or bundle screen,
+  the offered relics in a chest, the event you are in). Pass them when you want to ask about
   a specific id instead.
 - Use `get_game_data_item` when you need deep details for one entity id.
 - Use `get_game_data_items` when comparing multiple entities (for example, reward-card choices, shop candidates, potion options).
@@ -173,7 +174,8 @@ Both MCP surfaces expose the same tool face, and the read half of a decision can
   `available_actions` (the descriptors from `get_available_actions`, with their `requires_index` /
   `requires_target` / target hints), and `scene_guidance` (the same object `get_scene_guidance`
   returns). The documented loop assembles those three from three or four calls, each rebuilding the
-  state on the game thread.
+  state on the game thread; `decide` reads one route, so the actions belong to the state beside them
+  rather than to a frame the game may already have left.
 - `scene_guidance` always carries `screen`, `scene`, `guidance`, and `playbook`. `guidance` is empty
   on a screen with no strategic choice; `playbook` is the per-screen action sequence and is never
   empty (an unmapped screen gets the index of the sections). The Python sidecar adds `event_id` /
@@ -193,6 +195,15 @@ Both MCP surfaces expose the same tool face, and the read half of a decision can
   `combat.hand[].targets`, ...). Fix the call from those instead of resending the same value.
 - An action that is not in `available_actions` answers with the code `invalid_action` and the current
   `available_actions` list in its details.
+- `status: "outcome_unknown"` means the action request may have completed but its response was lost.
+  One `/state` reconciliation was attempted and the state it read is under `reconciliation.state`
+  (compact, marked); `reconciliation.state_read` / `action_effect_compared` (always `false`) /
+  `action_outcome` (always `"unknown"`) say that the state was read but the action was never compared
+  against it, and `succeeded` / `status` describe that read rather than the action. **Never replay the
+  action automatically**: read the reconciled state and decide again from it.
+- `wait_until_actionable` answers with the same compact `state` as `get_game_state`, so a wait across an
+  animation costs a decision-sized payload rather than the full one. `raw_state=true` is its escape
+  hatch, exactly as on `act`.
 
 ## Run Decision Logs
 

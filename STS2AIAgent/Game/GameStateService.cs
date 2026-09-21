@@ -106,7 +106,16 @@ internal static partial class GameStateService
         // and contradict itself: the actions serialized first said "not yet" while the readiness
         // payload built later in the same response said "ready".
         var combatActionGate = EvaluateCombatActionGate(currentScreen, combatState);
-        var availableActions = BuildAvailableActionNames(currentScreen, combatState, runState, combatActionGate);
+        // One walk produces both action surfaces this response carries: the names /state reports and
+        // the exact descriptors a decision snapshot hands to an index validator. The descriptors are
+        // retained on the payload (internal, so they never serialize) rather than re-derived, which is
+        // what keeps a state read and its action surface in the same frame.
+        var availableActions = BuildAvailableActionNames(
+            currentScreen,
+            combatState,
+            runState,
+            combatActionGate,
+            out var availableActionDescriptors);
         var combat = BuildCombatPayload(combatState, combatActionGate);
         var run = BuildRunPayload(currentScreen, combatState, runState, combatActionGate);
         var multiplayer = BuildMultiplayerPayload(currentScreen, runState);
@@ -156,6 +165,7 @@ internal static partial class GameStateService
             capstone = capstone,
             modal = modal,
             game_over = gameOver,
+            AvailableActionDescriptors = availableActionDescriptors,
             agent_view = BuildAgentViewPayload(
                 screen,
                 session,
@@ -880,22 +890,55 @@ internal static partial class GameStateService
         return runState == null ? null : LocalContext.GetMe((IPlayerCollection)runState);
     }
 
+    /// <summary>
+    /// The names <c>/state.available_actions</c> reports, and the descriptors the same walk produced.
+    /// </summary>
+    /// <remarks>
+    /// The walk is the only source either surface reads, so both cannot advertise different actions;
+    /// handing the descriptor list back through <paramref name="descriptors"/> is what lets one state
+    /// build answer <c>GET /decision-snapshot</c> from the frame it already enumerated instead of
+    /// enumerating again.
+    /// </remarks>
     private static string[] BuildAvailableActionNames(
         IScreenContext? currentScreen,
         CombatState? combatState,
         RunState? runState,
-        CombatActionGate combatActionGate)
+        CombatActionGate combatActionGate,
+        out ActionDescriptor[] descriptors)
     {
         // A projection of EnumerateAvailableActions, never a second opinion: /state.available_actions
         // and /actions/available answer from one walk so they cannot advertise different actions.
-        var descriptors = EnumerateAvailableActions(currentScreen, combatState, runState, combatActionGate);
-        var names = new string[descriptors.Count];
-        for (var index = 0; index < descriptors.Count; index++)
+        descriptors = EnumerateAvailableActions(currentScreen, combatState, runState, combatActionGate).ToArray();
+        var names = new string[descriptors.Length];
+        for (var index = 0; index < descriptors.Length; index++)
         {
             names[index] = descriptors[index].name;
         }
 
         return names;
+    }
+
+    /// <summary>
+    /// Everything one decision needs from the game, from a single state build.
+    /// </summary>
+    /// <remarks>
+    /// A caller that reads <c>/state</c> and then <c>/actions/available</c> makes two requests, and
+    /// between them the game advances: the state it read and the action indices it was handed can
+    /// describe two different frames, which is how an index validator came to accept an action
+    /// against a hand the payload it validated never showed. This answers both halves from one
+    /// enumeration inside one build. The two individual endpoints stay for callers that want one of
+    /// them; this is the one to read when both are needed.
+    /// </remarks>
+    public static DecisionSnapshotPayload BuildDecisionSnapshotPayload()
+    {
+        var state = BuildStatePayload();
+        return new DecisionSnapshotPayload
+        {
+            // The compact projection is what a decision reads; the raw payload is the fallback for a
+            // build that produced no agent_view, matching what GameBridge has always returned here.
+            state = state.agent_view ?? state,
+            available_actions = state.AvailableActionDescriptors
+        };
     }
 
     private static string ResolveNonModalScreen(IScreenContext? currentScreen)

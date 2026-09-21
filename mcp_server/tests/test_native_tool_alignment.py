@@ -417,11 +417,19 @@ class NativeToolAlignmentTests(unittest.TestCase):
             "NativeMcpServer parsing: " + json.dumps(mismatches, sort_keys=True),
         )
 
-        # wait_until_actionable reads its key through ReadTimeoutSeconds rather than an
+        # wait_until_actionable reads its timeout through ReadTimeoutSeconds rather than an
         # inline literal, so pin it explicitly: a parser that drops delegated reads or a
-        # renamed key both have to show up here instead of passing silently.
-        self.assertEqual({"timeout_seconds"}, python_schemas["wait_until_actionable"])
-        self.assertEqual({"timeout_seconds"}, native_schemas["wait_until_actionable"])
+        # renamed key both have to show up here instead of passing silently. `raw_state` is
+        # read right next to the compact default it escapes, so an advertised switch the
+        # switch-case does not read fails here rather than being dropped at call time.
+        self.assertEqual(
+            {"timeout_seconds", "raw_state"},
+            python_schemas["wait_until_actionable"],
+        )
+        self.assertEqual(
+            {"timeout_seconds", "raw_state"},
+            native_schemas["wait_until_actionable"],
+        )
 
     def test_documented_action_arguments_match_registered_legacy_tools(self) -> None:
         source_root = _find_source_root()

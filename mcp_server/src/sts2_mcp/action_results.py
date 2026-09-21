@@ -8,6 +8,10 @@ stated anywhere a client could read it:
   `agent_view` the mod builds for exactly this purpose. The two surfaces are one tool face, so the
   sidecar now returns the same shape: the action's own post-action snapshot, projected to
   `agent_view` when the mod exposes one. `raw_state=True` on `act` keeps the old answer reachable.
+  Every answer that carries a `/state` payload -- `get_game_state`, `act`, `wait_until_actionable`,
+  and the reconciled read inside an uncertain action's answer -- goes through the one projection in
+  :func:`project_agent_state`, so a client reads the same keys and the same `compact_agent_view`
+  marker wherever the payload appears.
 - **an index error was a bare message string.** `card_index 9 is not in the latest combat.hand.`
   says what was wrong and nothing about what would have been right, while the "action is not
   available" answer next to it lists `available_actions`. The mod's HTTP details carry a count
@@ -72,27 +76,107 @@ _TARGET_SPACE = re.compile(r"\bfor ([a-z_]+(?:\.[a-z_]+)*\[\])")
 _MESSAGE_FIELD = re.compile(r"\b(" + "|".join(INDEX_FIELDS) + r")\b")
 
 
+def project_agent_state(state: Any, *, raw_state: bool = False) -> Any:
+    """The one raw-`/state` -> agent-facing projection: the compact view plus its marker.
+
+    `get_game_state`, `act`, `wait_until_actionable`, and the reconciled read inside an uncertain
+    action's answer all carry a `/state` payload, and a client that has learned to read one of them
+    has to be able to read the other three: the same keys, and the same `compact_agent_view` marker
+    saying which projection it got. Three call sites projecting the same payload three ways is how
+    `act` ended up handing back the raw 4,000-9,500-token payload while `get_game_state` answered
+    compact, and how `wait_until_actionable` did it again afterwards. So it happens here, once.
+
+    `state` comes back unchanged, with no marker, when `raw_state=True` asks for the raw payload:
+    that is the deliberate escape hatch, and it must stay the raw payload rather than gain a key the
+    raw route does not return. Otherwise the `agent_view` comes back with
+    `compact_agent_view: True`; when the mod exposes no `agent_view` the raw payload comes back with
+    `compact_agent_view: False`, the degraded fallback `get_game_state` already reports rather than
+    a silent empty answer.
+    """
+    if raw_state or not isinstance(state, dict):
+        return state
+
+    agent_view = state.get("agent_view")
+    if not isinstance(agent_view, dict) or agent_view is state:
+        return {**state, "compact_agent_view": False}
+
+    if "available_actions" not in agent_view and isinstance(agent_view.get("actions"), list):
+        # The compact view names its action list `actions`; every reader of this projection looks it
+        # up as `available_actions`, so the alias is added here rather than re-derived per caller.
+        return {
+            **agent_view,
+            "available_actions": agent_view["actions"],
+            "compact_agent_view": True,
+        }
+
+    return {**agent_view, "compact_agent_view": True}
+
+
 def compact_action_result(result: Any) -> Any:
-    """An action response whose `state` is the compact `agent_view` instead of the raw payload.
+    """An action response whose embedded state is compact, wherever the response keeps it.
 
     Mirrors `GameBridge.ActAsync`: the action's own post-action snapshot, only re-projected. Every
     other key (`action`, `status`, `stable`, `message`, and the echo of what was submitted) is
-    untouched, and a response that carries no state -- the outcome-unknown path -- is returned as it
-    is. When the mod exposes no `agent_view` the raw state stays, which is the same degraded fallback
-    `get_game_state` reports as `compact_agent_view: false` rather than a silent empty answer.
+    untouched, and a response that carries no state at all is returned as it is.
+
+    The outcome-unknown path keeps no top-level `state`; the one state it did read sits under
+    `reconciliation.state`, and it is projected the same way. Without that, the reliability path
+    handed back the very payload the success path had just stopped sending -- and the raw payload
+    embeds its own `agent_view`, so a single unprojected copy cost the tokens twice.
     """
     if not isinstance(result, dict):
         return result
 
+    projected = result
+
     state = result.get("state")
-    if not isinstance(state, dict):
-        return result
+    if isinstance(state, dict):
+        projected = {**projected, "state": project_agent_state(state)}
 
-    agent_view = state.get("agent_view")
-    if not isinstance(agent_view, dict) or agent_view is state:
-        return result
+    reconciliation = projected.get("reconciliation")
+    if isinstance(reconciliation, dict) and isinstance(reconciliation.get("state"), dict):
+        projected = {
+            **projected,
+            "reconciliation": {
+                **reconciliation,
+                "state": project_agent_state(reconciliation["state"]),
+            },
+        }
 
-    return {**result, "state": agent_view}
+    return projected
+
+
+# `action_outcome` carries this value on every reconciliation block: the read that followed a lost
+# response cannot tell a completed action from one the mod never ran.
+ACTION_OUTCOME_UNKNOWN = "unknown"
+
+
+def with_reconciliation_semantics(reconciliation: Any) -> Any:
+    """The reconciliation block with what it is -- and is not -- stated in explicit keys.
+
+    `succeeded: true` and `status: "succeeded"` describe the `/state` read that followed a lost
+    response, not the action: reading state successfully compares nothing, so a client that read
+    them as "the action worked" was reading them correctly by their own light. The block now says
+    each half out loud, additively, next to the keys that were already there:
+
+    - `state_read`: whether that one read happened (`succeeded` in the terms of the read itself).
+    - `action_effect_compared`: always false -- nothing diffed the state against the action.
+    - `action_outcome`: always `"unknown"` -- the top-level `status` stays `outcome_unknown`.
+    - `required`: true, because an unknown outcome always needs a decision; the failed-read branch
+      already said so and the successful-read branch used to say the opposite.
+
+    Nothing is removed or renamed, so a reader of the old keys is unaffected.
+    """
+    if not isinstance(reconciliation, dict):
+        return reconciliation
+
+    return {
+        **reconciliation,
+        "required": True,
+        "state_read": reconciliation.get("succeeded") is True,
+        "action_effect_compared": False,
+        "action_outcome": ACTION_OUTCOME_UNKNOWN,
+    }
 
 
 def index_error_details(exc: Sts2ApiError, *, available_actions: list[str] | None = None) -> dict[str, Any] | None:

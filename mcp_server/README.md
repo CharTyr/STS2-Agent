@@ -145,8 +145,15 @@ Modal：
 2. 每次决策前读一次状态：`decide`（一次拿到状态、动作与指引）或 `get_game_state`。
 3. 只调用当前 `available_actions` 里出现的动作；`act` 附一条简短的 `reason`，供玩家界面与决策日志解释本步选择。
 4. `act` 返回的 `state` 就是下一个决策的输入，不必再读一次；只有 `pending` / 屏幕变化时才重读，要完整载荷才传 `raw_state=True`（一次约 4,000–9,500 token）。
-5. 索引被拒时错误对象带 `field` / `submitted` / `valid_indices` / `valid_field`：按它改正索引，而不是重发同一个值。
-6. 优先用高层动作，不要把可合并流程拆碎（优先级见下）。
+5. `wait_until_actionable` 的 `state` 与 `act` / `get_game_state` 同形（compact），同样支持 `raw_state=True`：跨动画等待不需要完整载荷。
+6. 索引被拒时错误对象带 `field` / `submitted` / `valid_indices` / `valid_field`：按它改正索引，而不是重发同一个值。
+7. 优先用高层动作，不要把可合并流程拆碎（优先级见下）。
+
+**`outcome_unknown`（动作响应丢失）**：`status` 为 `outcome_unknown` 时，动作可能已经执行，只是响应没回来。
+客户端只做**一次** `/state` 对齐，读到的状态放在 `reconciliation.state`（compact，带 `compact_agent_view` 标记）；
+`reconciliation.state_read` / `action_effect_compared`（恒为 `false`）/ `action_outcome`（恒为 `"unknown"`）说明
+「读了状态、但没有把动作效果与它比对」，`succeeded` / `status` 描述的是那次读取而不是动作本身。
+**绝不要自动重放该动作**：先看对齐到的状态，再决定下一步。
 
 `get_game_state` 默认回 compact `agent_view`；Mod 未暴露 `agent_view` 时回退完整 `/state` 并带 `compact_agent_view: false`，那是降级信号而不是常规契约。compact 里一批键改过名（商店打开标志在 compact 里是 `shop.open`，raw state 里是 `shop.is_open`），读 compact 前先看 `docs/api.md` 的「compact 的字段改名对照表」。
 

@@ -63,6 +63,7 @@ curl -s http://127.0.0.1:8080/state | jq .
 | `not_found` | 404 | 路由不存在 | 否 |
 | `invalid_action` | 409 | 当前状态下不能执行该动作 | 否 |
 | `invalid_target` | 409 | 目标索引超出范围 | 否 |
+| `action_in_flight` | 409 | 已有动作正在执行（含它正在等待的状态转换）。本次请求**没有执行、也没有排队**：等上一个动作的响应返回、重新读一次 `/state` 再重试。详情带 `in_flight_action`，即占用中的动作名 | 是 |
 | `state_unavailable` | 503 | 游戏状态暂时不可安全读取（如正在过渡） | 是 |
 | `forbidden_actor` | 403 | 多人场景下试图为其它角色执行动作 | 否 |
 | `mcp_disabled` | 403 | 请求 /mcp 但原生 MCP 未开启 | 否 |
@@ -822,7 +823,7 @@ curl -s http://127.0.0.1:8080/state | jq .
 
 | 字段 | 类型 | 说明 |
 | --- | --- | --- |
-| `event_id` | string | 事件内部 ID |
+| `event_id` | string | 事件内部 ID，即模型 `Id.Entry` 的大写形式（如 `NEOW`） |
 | `title` | string | 事件标题 |
 | `description` | string | 事件描述文本 |
 | `is_finished` | boolean | 事件是否已完成（完成时仅剩 proceed 选项） |
@@ -833,13 +834,19 @@ curl -s http://127.0.0.1:8080/state | jq .
 | 字段 | 类型 | 说明 |
 | --- | --- | --- |
 | `index` | number | 用于 `choose_event_option` 的 `option_index` |
-| `text_key` | string | 选项文本键（内部标识） |
+| `text_key` | string | 选项的完整本地化键（如 `NEOW.pages.INITIAL.options.ARCANE_SCROLL`） |
 | `title` | string | 选项标题 |
 | `description` | string | 选项描述 |
 | `is_locked` | boolean | 选项是否被锁定（锁定选项不可选） |
 | `is_proceed` | boolean | 是否为继续/离开选项 |
 | `will_kill_player` | boolean | 该选项是否会导致玩家死亡（若模型提供） |
 | `has_relic_preview` | boolean | 该选项是否包含遗物预览（若模型提供） |
+
+`text_key` 由游戏按 `Slugify(事件类名).pages.<PAGE>.options.<OPTION>` 拼出，因此它与离线事件风险表
+的连接方式是**确定的**：`docs/game-knowledge/events.md` 的 `Option Risk Details` 表以 `event_id`
+（`NEOW`）为第一列、以上面这个键去掉 `<EVENT>.pages.` 前缀后的部分
+（`INITIAL.options.ARCANE_SCROLL`）为第二列。也就是说 `text_key` 去掉前缀就是表里的 `Option`；
+不要再按 `i` 去对行。
 
 ### `crystal_sphere` 子结构
 
@@ -855,9 +862,22 @@ curl -s http://127.0.0.1:8080/state | jq .
 | `hidden_cells` | number[][] | 尚未清开的 `[x,y]` 坐标 |
 | `items[]` | object[] | 已成功放置的奖励/诅咒及其占格信息 |
 
-`items[]` 包含 `kind`、`is_good`、`x/y/width/height`、`revealed`、
-`cells` 和 `hidden_cells`。物品的全部占格被清开后才会揭示；结束时所有已揭示物品都会发放，
-包括诅咒。
+#### `crystal_sphere.items[]`
+
+| 字段 | 类型 | 说明 |
+| --- | --- | --- |
+| `kind` | string \| null | 物品类型；物品揭示前为 `null` |
+| `is_good` | boolean \| null | 是否为好物品（诅咒为 `false`）；物品揭示前为 `null` |
+| `x` / `y` | number | 物品占格的最小 `[x,y]` 坐标 |
+| `width` / `height` | number | 物品占格尺寸 |
+| `revealed` | boolean | 物品的全部占格是否都已清开 |
+| `cells` | number[][] | 物品占用的全部 `[x,y]` 坐标 |
+| `hidden_cells` | number[][] | 其中尚未清开的 `[x,y]` 坐标 |
+
+物品的全部占格被清开后才会揭示：在 `revealed` 变为 `true` 之前，`kind` 与 `is_good`
+始终是 `null`，键仍在，值不泄露身份——占卜买的是物品身份，不是棋盘坐标。`x`、`y`、
+`width`、`height`、`cells` 与 `hidden_cells` 表示棋盘占用，任何时刻都可读，因此客户端永远
+可以按占格规划点击。结束时所有已揭示物品都会发放，包括诅咒。
 
 ### `rest` 子结构
 
@@ -1060,7 +1080,7 @@ compact 的 `combat` 原样携带 `/state` 的 `action_readiness`、`end_turn_wi
 | `chest.relics[]` | `relic_id` | 宝箱遗物 ID，配合 `i` 供 `choose_treasure_relic` 使用 |
 | `modal` | `underlying_screen` | 覆盖层底下的逻辑界面名，用于「先解覆盖层再规划房间」 |
 | `rest.options[]` | `option_id` | 休息点选项的稳定标识（`HEAL` / `SMITH` …）。`line` 是给人读的本地化文本，**按 id 分支才不会随语言漂移** |
-| `event.options[]` | `text_key` | 事件选项的稳定键（如 `INITIAL.options.IMMERSE`）。离线事件风险表 `docs/game-knowledge/events.md` 就是按这个键索引的，靠 `i` 对不上 |
+| `event.options[]` | `text_key` | 事件选项的**完整**本地化键（如 `NEOW.pages.INITIAL.options.ARCANE_SCROLL`，而**不是** `INITIAL.options.IMMERSE`）。离线事件风险表 `docs/game-knowledge/events.md` 的两张表分别按 `event_id`（`NEOW`）和去掉 `<EVENT>.pages.` 前缀的选项键（`INITIAL.options.ARCANE_SCROLL`）索引，靠 `i` 对不上。`screen_guidance` 内部的 `canonical_option_key` 就是做这个前缀剥离的，契约测试 `mcp_server/tests/test_scene_guidance.py` 用真实取值钉住它 |
 | `shop.cards[]` | `on_sale` | 该商品是否在打折；`line` 里的价格已是折后价，`on_sale` 用于判断「值得现在买」 |
 | 顶层 | `unlock` | 解锁覆盖层快照（`unlock_type` / `items` / `can_confirm`）；无解锁覆盖层时为 `null` |
 
@@ -1416,6 +1436,51 @@ compact 不是 `/state` 的子集，**很多键换了名字**。MCP `get_game_st
 
 ---
 
+## `GET /decision-snapshot`
+
+一次决策所需的读数，来自**同一次** game-thread 状态构建：紧凑状态与动作描述符是同一次动作面遍历的两个投影。
+
+`GET /state` 与 `GET /actions/available` 是两次请求，也就是两帧：两次请求之间游戏会推进，于是调用方刚读到的状态与紧接着
+读到的动作下标可能描述不同时刻——索引校验会拿一副它没见过的牌面去校验动作。本路由在一个状态构建里同时给出两半，读它
+就不存在这条缝隙；上面两个端点原样保留，只需要其中一半时仍可单独调用。
+
+### 响应字段
+
+| 字段 | 类型 | 说明 |
+| --- | --- | --- |
+| `state` | object | compact `agent_view`（与 `GET /state` 的 `agent_view` 同形）；该次构建没有产出 `agent_view` 时回退为完整载荷 |
+| `available_actions[]` | object[] | 同一次遍历产出的动作描述符，字段与 `GET /actions/available` 的 `actions[]` 完全一致 |
+
+### 响应示例
+
+```json
+{
+  "ok": true,
+  "request_id": "req_20260310_120010_2222",
+  "data": {
+    "state": {
+      "version": 11,
+      "screen": "COMBAT",
+      "available_actions": ["end_turn"]
+    },
+    "available_actions": [
+      {
+        "name": "end_turn",
+        "requires_target": false,
+        "requires_index": false,
+        "requires_coordinates": false,
+        "requires_tool": false
+      }
+    ]
+  }
+}
+```
+
+> **注意**：`state` 不是完整 `/state`——字段名与 compact 改名表一致（见下文「compact 的字段改名对照表」），需要完整载荷时改读
+> `GET /state`。`available_actions` 是描述符而不是名字数组，字段定义与 `GET /actions/available` 的 `actions[]` 完全相同。
+
+---
+
 ## `GET /actions/available`
 
 返回当前状态下允许执行的动作及其参数需求。
@@ -1477,6 +1542,11 @@ compact 不是 `/state` 的子集，**很多键换了名字**。MCP `get_game_st
 ## `POST /action`
 
 执行单个游戏动作。
+
+同一时刻只允许一个动作在跑。所有入口（HTTP、原生 MCP、游戏内 Agent、队友协调器）都汇聚到
+`GameActionService.ExecuteAsync` 上的同一把 lease，它覆盖整个动作——包括动作内部每一次等待状态转换。
+拿不到 lease 的请求**立刻**返回 409 `action_in_flight`（可重试），**不会排队**：排队会让它拿着读过的旧
+快照去点按钮。等上一个动作的响应返回后，重新读一次 `/state` 再发下一个。
 
 ### 动作总表（与代码强一致）
 
@@ -1774,7 +1844,7 @@ AI 队友实例上的受控端点，由宿主进程在本地调用，普通玩�
 
 **元数据是单机量纲。** `monsters` 的 `min_hp` / `max_hp` 是该怪掷出的基础血量范围，而联机对局里游戏会按 `玩家数 × 章节系数`（act 0 为 1.1、act 1 为 1.2、act 2 为 1.2，act 2 的 Boss 房为 1.3）放大后再落到实况敌人身上，所以两者常常对不上。要对齐时看实况 `combat.enemies[].base_max_hp`：它与元数据同量纲，`max_hp` 才是缩放后的值。
 
-MCP 侧的 `get_relevant_game_data` 读取这份元数据时，`item_ids` 可以省略：省略后由当前屏幕决定要查哪些 id（战斗看手牌与敌人、商店看货架、事件看当前事件），并把字段裁剪到该场景需要的子集。屏幕归类到某场景但该场景的载荷在这块屏上没有内容时（例如 `FAKE_MERCHANT` 归为商店却没有 `shop` 载荷），回落到牌库 / 遗物 / 药水这些角色级 id；确实没有该集合的 id 时返回 `{}`，不臆造。要问特定 id 时照常传 `item_ids`。
+MCP 侧的 `get_relevant_game_data` 读取这份元数据时，`item_ids` 可以省略：省略后由当前屏幕决定要查哪些 id——战斗看手牌与敌人，商店看货架（卡牌 / 遗物 / 药水都用货架上的 offer id），卡牌奖励看 `reward.card_options[]` / 紧凑视图的 `reward.cards[]`，选牌屏看 `selection.cards[]`，宝箱看 `chest.relic_options[]` / 紧凑视图的 `chest.relics[]`，卡包选择看 `bundles[].cards[]`，事件看当前事件——并把字段裁剪到该场景需要的子集。查询按集合分开：屏上 offer 的是卡牌时，问 `relics` 不会拿卡牌 id 作答，反之亦然；奖励屏的金币 / 药水 / 遗物行没有稳定 id，因此不臆造，直接走回落。屏幕归类到某场景但该场景的载荷在这块屏上没有内容时（例如 `FAKE_MERCHANT` 归为商店却没有 `shop` 载荷），或该屏本来就不提供这个集合时，回落到牌库 / 遗物 / 药水这些角色级 id；确实没有该集合的 id 时返回 `{}`，不臆造。要问特定 id 时照常传 `item_ids`。
 
 ### 典型用法
 
@@ -1847,15 +1917,19 @@ Invoke-RestMethod -Uri 'http://127.0.0.1:8080/data/cards' | ConvertTo-Json -Dept
 | `get_scene_guidance` | 当前屏幕的策略与 playbook 段落 |
 | `get_decision_log` / `get_run_summary` / `diff_state` | 决策日志 / 本轮摘要 / 状态差异 |
 | `get_game_data_item` / `get_game_data_items` / `get_relevant_game_data` | 游戏元数据查询 |
-| `wait_until_actionable` | 等待重新可操作，然后返回新状态 |
+| `wait_until_actionable` | 等待重新可操作，然后返回 compact `agent_view`（`raw_state: true` 时返回完整 `/state`） |
 | `act` | 统一动作入口 |
 | `run_console_command` / `inject_event_churn` | 仅 `STS2_ENABLE_DEBUG_ACTIONS=1` 时注册 |
 
 Python sidecar 另有 `wait_for_event`（事件流便捷工具），原生面不含它；这在两侧比对里是唯一被明确允许的差异。
 
-`decide` 与 `get_scene_guidance` 各自只做一次状态读取：一次构建同时产出 compact 状态、动作描述符与
-该屏指引（`/state` 的 `available_actions` 与 `/actions/available` 的描述符本来就来自同一次遍历，见
-ADR 0001）。`act` 也复用同一次快照做合法性检查与索引校验，不再各建一次状态。
+`decide` 与 `get_scene_guidance` 各自只做一次状态读取：sidecar 的 `decide` 读 `GET /decision-snapshot`，一次 game-thread
+状态构建同时产出 compact 状态与动作描述符；`get_scene_guidance` 读一次 `GET /state`。`/state` 的 `available_actions`
+与 `/actions/available` 的描述符本来就来自同一次遍历（ADR 0001），`/decision-snapshot` 让这两半连帧都相同，因此调用方
+不会再拿一份动作描述符去索引另一帧的状态。`act` 也复用同一次快照做合法性检查与索引校验，不再各建一次状态。
+
+旧 mod 没有 `/decision-snapshot` 时会以 404 `not_found` 作答，`decide` 仅对这一种情况回退为「读 `/state` + 读
+`/actions/available`」两次调用；其它错误照常抛出，不会被第二次读取掩盖。
 
 ### `act` 的结果契约
 
@@ -1866,6 +1940,12 @@ ADR 0001）。`act` 也复用同一次快照做合法性检查与索引校验，
 - 需要完整载荷时传 `raw_state: true`（默认 `false`）：此时 `state` 就是 `POST /action` 返回的 `data.state`。
 - Mod 未暴露 `agent_view` 时回退为完整载荷，与 `get_game_state` 的 `compact_agent_view: false` 同义。
 - `status: "pending"`（或 `stable: false`）时不要立刻重发同一个动作：先按返回的屏幕流程等待。
+- `wait_until_actionable` 的 `state` 与 `act` / `get_game_state` 同形（compact，带 `compact_agent_view` 标记），
+  同样支持 `raw_state: true`；等待发生在动画与转场期间，正是最不需要完整载荷的时候。
+- `status: "outcome_unknown"`（Python sidecar 独有，见 `mcp_server/README.md`）：动作请求可能已执行但响应丢失。
+  客户端只做**一次** `/state` 对齐，把读到的状态放在 `reconciliation.state`（compact，带标记）；
+  `reconciliation` 用 `state_read` / `action_effect_compared` / `action_outcome` 说明「读了状态、但从未把动作效果与它比对、结果仍是未知」，
+  顶层的 `succeeded` / `status` 描述的是那次读取而不是动作本身。**绝不要自动重放该动作。**
 
 ### 工具错误的统一形状
 
@@ -1907,12 +1987,19 @@ ADR 0001）。`act` 也复用同一次快照做合法性检查与索引校验，
 | 键 | 类型 | 说明 |
 | --- | --- | --- |
 | `screen` | string \| null | `state.screen`；取不到时为 `null` |
-| `scene` | string | `screen` 映射到的元数据场景：`combat` / `shop` / `event` / `menu` |
+| `scene` | string | `screen` 映射到的元数据场景：`combat` / `shop` / `event` / `reward` / `card_selection` / `chest` / `bundle_selection` / `menu`（`menu` 是其余屏幕的兜底） |
 | `guidance` | string | 该屏的策略段落。没有策略选择的屏幕（如奖励屏）是空字符串，这是答案而不是失败 |
 | `playbook` | string | 该屏的操作流程段落，**永不为空**：映射不到章节的屏幕给章节索引，避免把「没有内容」当成「没有需要知道的」 |
 
 Python sidecar 另加 `event_id`、`event_options` 与 `guidance_source`：它们来自仓库里的离线事件风险
 索引（`docs/game-knowledge/events.md`），Mod 不携带，因此原生面只答上面四个共享键。
+
+`event_id` 原样回传 `state.event.event_id`（如 `NEOW`），不改写。查表用的是它的规范形式
+`canonical_event_id`：`StringHelper.Slugify` 同一个算法，所以实况的 `NEOW` 与表里的类名 `Neow`
+落到同一个键。`event_options` 的每一行是表里的一行，`option` 字段是**去掉** `<EVENT>.pages.` 前缀的
+页内键（`INITIAL.options.ARCANE_SCROLL`）；把实况 `text_key` 去掉同一个前缀即可与它逐字配对。
+判别只做大小写归一与这一个前缀剥离，不做前缀/子串/相似度匹配，因此两张表里名字相近的两个事件
+不会被合并；表里没有的 id 返回空数组，而不是最近似的一行。
 
 
 ## 已实现动作详细说明
@@ -2391,7 +2478,8 @@ Python sidecar 另加 `event_id`、`event_options` 与 `guidance_source`：它�
 
 ```
 1. GET /state                          → screen=CRYSTAL_SPHERE
-2. 读取 crystal_sphere.items / hidden_cells，规划不完整揭示坏物品的坐标
+2. 读取 crystal_sphere.items / hidden_cells，规划不完整揭示**已揭示**坏物品的坐标
+   （未揭示物品的 `kind` / `is_good` 是 `null`，只能按占格规划）
 3. POST /action { crystal_clear_cell, x, y, tool="big" }
 4. 重复 1-3，直到 divinations_left=0
 5. 处理可能出现的奖励子屏；回到占卜屏后 POST /action { proceed }

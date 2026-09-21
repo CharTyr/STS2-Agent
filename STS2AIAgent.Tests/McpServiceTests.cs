@@ -217,6 +217,40 @@ internal static class McpServiceTests
     }
 
     /// <summary>
+    /// The wait's state half is the compact agent_view by default -- the same answer
+    /// get_game_state gives -- and raw_state asks for the full payload instead of being
+    /// advertised on the shared schema and then ignored.
+    /// </summary>
+    public static async Task ToolsCall_WaitRawStateSelectsTheRawRead()
+    {
+        var bridge = new FakeMcpBridge();
+        var server = CreateServer(bridge: bridge);
+
+        var listed = await Rpc(server, """{"jsonrpc":"2.0","id":43,"method":"tools/list"}""");
+        var wait = listed.GetProperty("result").GetProperty("tools").EnumerateArray()
+            .First(tool => tool.GetProperty("name").GetString() == "wait_until_actionable");
+        Assert.True(
+            wait.GetProperty("inputSchema").GetProperty("properties").TryGetProperty("raw_state", out _),
+            "the advertised wait schema must carry the raw_state the switch reads");
+
+        var compact = await Rpc(server, """{"jsonrpc":"2.0","id":44,"method":"tools/call","params":{"name":"wait_until_actionable"}}""");
+        using var compactDocument = JsonDocument.Parse(
+            compact.GetProperty("result").GetProperty("content")[0].GetProperty("text").GetString()!);
+        var compactState = compactDocument.RootElement.GetProperty("state");
+        Assert.Equal("COMBAT", compactState.GetProperty("screen").GetString());
+        Assert.False(compactState.TryGetProperty("raw", out _), "the compact view is the default");
+        Assert.Equal(0, bridge.RawStateCalls);
+
+        var raw = await Rpc(server, """{"jsonrpc":"2.0","id":45,"method":"tools/call","params":{"name":"wait_until_actionable","arguments":{"raw_state":true}}}""");
+        using var rawDocument = JsonDocument.Parse(
+            raw.GetProperty("result").GetProperty("content")[0].GetProperty("text").GetString()!);
+        var rawState = rawDocument.RootElement.GetProperty("state");
+        Assert.True(rawState.GetProperty("raw").GetBoolean(), "raw_state must reach the bridge");
+        Assert.True(rawDocument.RootElement.GetProperty("actionable").GetBoolean());
+        Assert.Equal(1, bridge.RawStateCalls);
+    }
+
+    /// <summary>
     /// decide answers the whole documented loop from one state read, and its guidance block is the
     /// same one get_scene_guidance returns.
     /// </summary>

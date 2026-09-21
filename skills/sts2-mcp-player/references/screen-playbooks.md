@@ -106,9 +106,11 @@ This file is about **how to drive a screen**. For **what to choose** where the c
 - `crystal_clear_cell` requires `x` and `y`. Pass `tool="big"` for a
   3×3 clear or `tool="small"` for one cell; the tool can be switched atomically
   in the same `act` call.
-- An item is revealed when all of its occupied cells are clear. Revealed bad
-  items, including curses, are granted when the minigame ends, so do not complete
-  their remaining hidden cells.
+- An item is revealed when all of its occupied cells are clear. Until then its
+  `kind` and `is_good` are `null`: the board tells you occupancy, not identity, so
+  plan from `cells` and `hidden_cells` and never from an unrevealed item. Revealed
+  bad items, including curses, are granted when the minigame ends, so do not
+  complete their remaining hidden cells.
 - Every divination must be spent. If no safe reward remains, spend a small
   divination on an already clear cell.
 - After the last divination, resolve any reward child screens, then use

@@ -55,6 +55,24 @@
   star cost of every offered card, so a pick between two cards showed neither one's price; it now
   reports the cost the raw payload always had.
 
+- **`get_relevant_game_data` now derives the ids the offered-choice screens are about.** Omitting
+  `item_ids` promised "the ids the current screen is about", but only combat, shop and event had an
+  id source: on `REWARD`, `CARD_SELECTION` and `CHEST` the tool fell through to the deck and relics
+  the player already owned, so asking about the cards on offer answered with the cards in the deck.
+  The scene tables gain `reward` (`reward.card_options[].card_id`, or the compact
+  `reward.cards[].card_id`), `card_selection` (`selection.cards[].card_id`), `chest`
+  (`chest.relic_options[].relic_id` / `chest.relics[].relic_id`) and `bundle_selection`
+  (`bundles[].cards[].card_id`), each projected to the lean offer field set instead of combat's
+  larger one. The lookup stays collection-aware — a relic question on a card screen is never
+  answered with card ids — and a reward screen's gold/potion/relic rows carry no stable id, so they
+  keep the run-level fallback rather than a guessed id; the fallback now runs only when the screen's
+  own source for that collection is empty. `CARD_SELECTION` is no longer classified as the generic
+  `menu` scene, so `get_scene_guidance`'s `scene` key reports `reward` / `card_selection` / `chest` /
+  `bundle_selection` where it used to say `menu`, and a `REWARD` card lookup is projected instead of
+  returned whole. Collection names are matched case-insensitively on both sides, as the C# tables
+  already did. Both mirrors carry the same tables and the same screen mapping, pinned by the C#
+  `DetectScene` expectation table that `tests/test_scene_field_alignment.py` reads back.
+
 - Document the additions, the removals and the version bump in `docs/api.md`, including the
   compatibility note that only this derived view changed.
 
@@ -90,6 +108,21 @@
   other keys (`action`, `status`, `stable`, `message`) are untouched. `raw_state=true` is the escape
   hatch for a field the compact view does not carry; it is off by default. The HTTP route is
   unchanged, so REST callers still get the raw payload.
+
+- **Waiting across an animation stopped costing the whole state, and a lost response stopped paying
+  for it twice.** `wait_until_actionable` is the tool the skill sends a client through on every
+  animation and screen transition, and the Python sidecar answered it with the full raw `/state`
+  payload — the 4,000-9,500 tokens `act` had just stopped sending, on the step where they are least
+  useful; the native surface had been answering compact all along. Both surfaces now return the same
+  compact state `get_game_state` returns, with `raw_state=true` as the escape hatch. The other leak
+  was the reliability path: an action whose response was lost embeds the one state reconciliation it
+  managed under `reconciliation.state`, and that copy was the raw payload too — raw state embeds its
+  own `agent_view`, so an unprojected copy cost those tokens twice. It is now the same compact
+  projection, marked, and the block says what it is: `state_read` (the read happened),
+  `action_effect_compared` (always false — nothing diffed the state against the action),
+  `action_outcome` (always `"unknown"`), and `required: true`, next to the `succeeded` / `status`
+  keys that describe the read rather than the action. The top-level `status` stays `outcome_unknown`,
+  and the rule is now written where a model reads it: never replay the action automatically.
 
 - **A rejected index is now correctable, not just refused.** `card_index 9 is not in the latest
   combat.hand.` said what was wrong and nothing about what would have worked, while the
@@ -131,6 +164,18 @@
   game's own pile viewer deliberately hides by sorting. The grouped stacks it now reads instead carry
   the same multiset (which the game does show) with no order attached.
 
+- **The crystal sphere stopped giving away what a divination is supposed to buy.** `crystal_sphere.items[]`
+  computed `revealed` for every item and then serialized `kind` (`item.GetType().Name`) and `is_good`
+  (`item.IsGood`) unconditionally, so an item whose cells were all still hidden shipped its identity
+  next to a `revealed` flag saying it was hidden — and the compact `agent_view` passes `crystal_sphere`
+  through untouched, so the default MCP read carried it too. An agent could read the reward/curse
+  layout at zero divination cost, which is the opposite of what the screen playbook describes. Both
+  fields are now nullable and written only when the item is revealed; while it is hidden they are
+  `null`, and the keys stay present, so a client that reads them unconditionally still works. `x`, `y`,
+  `width`, `height`, `cells` and `hidden_cells` are untouched: they are the board occupancy a client
+  plans its clicks against, and no action mechanic changed. `docs/api.md` and `screen-playbooks.md`
+  now state the gate the code implements.
+
 - **`end_turn_will_kill_player` now counts damage that lands after you stop acting.** The flag was
   built from enemy intents plus one hand-written Sandpit case, so poison — which resolves at the
   start of your own next turn, ignores block entirely and lands before you can play another card —
@@ -170,6 +215,59 @@
   at the schemas so it cannot drift again (1,712 characters lighter); `skills/sts2-mcp-player/README.md`
   and both root READMEs were corrected the same way; and ADR 0002 keeps its dated body but gained a
   pointer to the live list rather than being rewritten.
+
+- **Two actions arriving at once no longer run at the same time inside the game.** `HttpServer`
+  dispatches every request on its own task, and `POST /action`, the in-game agent, the native MCP `act`
+  tool and the teammate coordinator all converge on `GameActionService.ExecuteAsync`, which had no
+  execution gate: two callers could each validate their indexes against the same state, mutate the
+  game, and then wait for a transition the other one was causing. A new `ActionExecutionGate` holds one
+  non-blocking lease for the whole action — every transition wait included — and releases it in
+  `finally`, so a thrown or canceled action cannot leave the mod busy. The second request fails
+  immediately with 409 `action_in_flight` (retryable; `details.in_flight_action` names the running one)
+  instead of queueing behind a snapshot the first action has already invalidated, and the action switch
+  and every handler are unchanged. The Python client now surfaces that one server-declared retryable
+  flag without adding an automatic POST retry (`retry_count` stays 0, so exactly one POST leaves). Nine
+  offline C# tests pin acquire / busy / release, the thrown and canceled release, and the `ExecuteAsync`
+  wiring; a Python test pins the single POST with `retryable: true`; `action_in_flight` joins the
+  `docs/api.md` error table and the regenerated `docs/openapi.json`.
+
+- **A decision's state and its action list now come from one frame.** `GET /state` and
+  `GET /actions/available` are two requests, and two requests are two frames: the game advances in
+  between, so the state a client read and the action indices it read next could describe different
+  moments — a screen that changed mid-decision left an index validator judging an action against a
+  hand the payload it validated never showed. The new `GET /decision-snapshot` answers both halves
+  from one game-thread state build: `state` is the compact `agent_view`, and `available_actions` is
+  the descriptor list that build's own action-surface walk produced, retained on the payload
+  internally so it never serializes into `/state`. Both existing endpoints stay. The in-process
+  `GameBridge` snapshot — what the native `act` and `decide` read — built the state and then the
+  action surface separately inside one callback, and now uses the same builder, so one snapshot
+  enumerates the action surface once instead of twice. Python `decide` reads the new route in one
+  call and falls back to the old two reads only against a mod that predates it (404 `not_found`); the
+  route is documented in `docs/api.md` and the regenerated `docs/openapi.json`.
+
+- **`get_scene_guidance` returned no event options on every real event.** The offline risk index in
+  `docs/game-knowledge/events.md` was keyed by the generator's readable class name (`Neow`) and its
+  options by the page-relative key (`INITIAL.options.ARCANE_SCROLL`), while a live `EVENT` payload
+  reports the model's id entry (`NEOW`) and the full localization key
+  (`NEOW.pages.INITIAL.options.ARCANE_SCROLL`). `event_option_risk` compared the two with `==`, so
+  the `event_options` array came back empty on every live payload — the whole per-option risk half
+  of the tool was dead on the surface it was written for, and the tests only ever fed it the
+  generator's own spelling, so they stayed green. There is now one canonical join: `slugify` ports
+  the game's `StringHelper.Slugify` exactly (including its `\G(?!^)` rule, which parts capital runs
+  — `ABC` -> `A_B_C`), `canonical_event_id` makes `Neow`, `NEOW` and `neow` one key, and
+  `canonical_option_key` strips only the `<EVENT>.pages.` prefix, because `EventModel.OptionKey`
+  slugifies only that segment and re-slugging the rest would rewrite `ARCANE_SCROLL` into
+  `A_R_C_A_N_E_S_C_R_O_L_L`. The matching stays exact — no prefix, substring or similarity match —
+  and canonical ids that would collide are dropped rather than guessed, so two events with
+  near-identical names can never be merged. The generator now writes the canonical `event_id`
+  straight from the decompiled class name (`ConvertTo-Slug`, the same algorithm), so the index and
+  the runtime agree without either side redoing the other's work; only `events.md` was regenerated.
+  `docs/api.md` had documented `text_key` as the page-relative index key (`INITIAL.options.IMMERSE`),
+  which no payload ever sends, and now states the full shape and the join; a contract test reads that
+  page's examples and fails if they stop being keys the committed index carries and the runtime
+  accepts. Regression tests use the live values verbatim, cover a later page
+  (`ABYSSAL_BATHS.pages.ALL.options.LINGER`), an unknown event, and two names a loose match would
+  collide on.
 
 ## v0.14.6 - 2026-09-21
 

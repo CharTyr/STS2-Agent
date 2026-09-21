@@ -26,15 +26,25 @@ _EVENT_FIELDS = "id,name,type,act,description,options"
 
 
 class DummyClient:
-    def __init__(self, screen: str = "MAIN_MENU", game_data: dict[str, object] | None = None) -> None:
+    def __init__(
+        self,
+        screen: str = "MAIN_MENU",
+        game_data: dict[str, object] | None = None,
+        state: dict[str, object] | None = None,
+    ) -> None:
         self._screen = screen
         self._game_data = game_data or {}
+        # A caller that needs a real state body (the scene-aware derivation reads one) passes it
+        # here; the screen-only default is what every earlier test in this file relies on.
+        self._state = state
         self.game_data_calls: list[str] = []
 
     def get_health(self) -> dict:
         return {"ok": True}
 
     def get_state(self) -> dict:
+        if self._state is not None:
+            return self._state
         return {"screen": self._screen, "available_actions": []}
 
     def get_available_actions(self) -> list[dict]:
@@ -241,6 +251,49 @@ class GameDataToolsTests(unittest.TestCase):
         self.assertNotIn("title", result["MYSTERY"])
         # act is in the event field set but absent from this item, so it is still dropped.
         self.assertNotIn("act", result["MYSTERY"])
+
+    def test_get_relevant_game_data_matches_the_collection_name_case_insensitively(self) -> None:
+        """`collection="Cards"` has to derive the offered ids *and* project them.
+
+        The C# mirror's tables are OrdinalIgnoreCase dictionaries, and this tool is the one place a
+        caller spells the collection by hand, so both surfaces have to answer that spelling the same
+        way. Both halves are asserted here on purpose: a derivation that matched the case while the
+        field-set lookup did not would hand back the whole card record instead of the offer fields.
+        """
+        offered_card = {
+            "id": "OFFER_ALPHA",
+            "name": "Offer Alpha",
+            "description": "Deal 9 damage.",
+            "type": "Attack",
+            "rarity": "Common",
+            "target": "Enemy",
+            "cost": 1,
+            "is_x_cost": False,
+            "star_cost": 0,
+            "is_x_star_cost": False,
+            "keywords": [],
+            "flavor": "never part of the offer field set",
+            "vars": {"damage": 9},
+        }
+        client = DummyClient(
+            state={
+                "screen": "REWARD",
+                "reward": {"card_options": [{"index": 0, "card_id": "OFFER_ALPHA"}]},
+                "run": {"deck": [{"card_id": "OWNED_CARD"}]},
+            }
+        )
+        server = create_server(client=client)
+        tool = asyncio.run(server.get_tool("get_relevant_game_data"))
+
+        with patch("sts2_mcp.game_data._ensure_game_data_index", return_value={"OFFER_ALPHA": offered_card}):
+            result = tool.fn(collection="Cards", item_ids="")
+
+        # The offered card is what was looked up; the owned deck card never entered the query.
+        self.assertEqual(["OFFER_ALPHA"], list(result))
+        # ... and it came back projected to the scene's offer fields rather than whole.
+        self.assertNotIn("flavor", result["OFFER_ALPHA"])
+        self.assertNotIn("vars", result["OFFER_ALPHA"])
+        self.assertEqual("Offer Alpha", result["OFFER_ALPHA"]["name"])
 
     def test_get_game_data_items_fields_filters_fields(self) -> None:
         with patch(

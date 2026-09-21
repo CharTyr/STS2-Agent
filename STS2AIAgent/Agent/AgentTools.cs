@@ -78,7 +78,12 @@ internal static class AgentTools
         type = "object",
         properties = new
         {
-            timeout_seconds = new { type = "number", description = "Maximum wait in seconds. Default 20." }
+            timeout_seconds = new { type = "number", description = "Maximum wait in seconds. Default 20." },
+            raw_state = new
+            {
+                type = "boolean",
+                description = "Return the full raw state instead of the compact agent_view. Default false; only for a field the compact view does not carry."
+            }
         }
     };
 

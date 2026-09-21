@@ -18,6 +18,17 @@ namespace STS2AIAgent.Tests;
 /// The table also records <em>where</em> each member went. Regenerating it is a deliberate act: the
 /// values only reproduce if the text is byte-identical to what the split moved, and the file column
 /// has to be edited by hand, which is the friction a later reorganisation should feel.
+///
+/// Two entries were regenerated on purpose rather than by a relocation: <c>BuildStatePayload</c> and
+/// <c>BuildAvailableActionNames</c> both changed when one state build started retaining the action
+/// descriptors its own walk produced (<c>BuildDecisionSnapshotPayload</c>), so <c>/state</c> and the
+/// action surface a decision reads can no longer describe two frames. Every other hash in the table
+/// still reproduces the pre-split text, which is what makes the two edits visible instead of lost.
+///
+/// A third entry, <c>BuildCrystalSpherePayload</c>, was regenerated for a different reason: an item's
+/// <c>kind</c> and <c>is_good</c> are now serialized only once every cell it occupies is revealed, so
+/// the method that leaked them to hidden items on purpose no longer matches its pre-split text. The
+/// new value is recorded here rather than the leak being restored to keep a hash stable.
 /// </remarks>
 internal static class GameStateServiceRelocationContractTests
 {
@@ -37,7 +48,7 @@ internal static class GameStateServiceRelocationContractTests
         ["_crystalSphereEntityLookupWarningLogged"] = ("STS2AIAgent/Game/GameStateService.cs", "8cfbf4ecee8d49d9b44920162e162489a0d3efd8e49f94016e9dd3e42a7354af"),
         ["_crystalSphereButtonLookupWarningLogged"] = ("STS2AIAgent/Game/GameStateService.cs", "c16d410de6049f3e70e37296414fe3bd8af1ec1751280ab8f8e96eb0c9f86c82"),
         ["StartRunLobbyMaxPlayersField"] = ("STS2AIAgent/Game/GameStateService.cs", "19edb0e3c9f24ab60b3a0446ceb73aac1f773e4b31d22142439eb6ca3dcf973a"),
-        ["BuildStatePayload"] = ("STS2AIAgent/Game/GameStateService.cs", "aeb4939075fe842dfa0c95d487024606267d4d1a743521cc7a203028b704a65e"),
+        ["BuildStatePayload"] = ("STS2AIAgent/Game/GameStateService.cs", "819a16b1a8a7994557570d3317291a290f751a4934d85925b6c1f3308ebd9710"),
         ["BuildSessionPayload"] = ("STS2AIAgent/Game/GameStateService.Menus.cs", "c5ba61aed0a963ac73c60c7ac9890a010329625a5db703557d300b66ffc53795"),
         ["BuildAvailableActionsPayload"] = ("STS2AIAgent/Game/GameStateService.cs", "f94bfce253aebe76836b96be74844eac681be85f9448f50c96a7617bcd7fb1ad"),
         ["EnumerateAvailableActions"] = ("STS2AIAgent/Game/GameStateService.cs", "933b45a4c8c765a5bfd09471d850e956f54385168d3dc3ab02eed2643b9a66da"),
@@ -99,7 +110,7 @@ internal static class GameStateServiceRelocationContractTests
         ["BuildCombatActionReadinessSignature"] = ("STS2AIAgent/Game/GameStateService.Combat.cs", "9907c7517e3c7043c40d4ce211f65eb6f3e5170fd1526b6a07ece364c0931279"),
         ["ResetCombatActionReadiness"] = ("STS2AIAgent/Game/GameStateService.Combat.cs", "aa3bec113453f87628ba0577d450cca0dd4c11b0c4c23c6dc7425ee343732cf8"),
         ["GetEndTurnButton"] = ("STS2AIAgent/Game/GameStateService.Combat.cs", "8f76bfc88b7b47c46491119d5d891be8a53afda09d94b127e64a548c57c53b0f"),
-        ["BuildAvailableActionNames"] = ("STS2AIAgent/Game/GameStateService.cs", "3c92f32a9b0ad99acf6e8d37352f98a69bceb1b2f08c133777789d6c972317e9"),
+        ["BuildAvailableActionNames"] = ("STS2AIAgent/Game/GameStateService.cs", "b95d51aabf1bee52abb8ee13f1c27e166135bd2a33ce927504160b6cff111863"),
         ["BuildCombatPayload"] = ("STS2AIAgent/Game/GameStateService.Combat.cs", "2b54101bd86e153369f9c157d59e4eaf62126e9a0a85caf146a0dd3a23918ead"),
         ["BuildCombatLethalRiskPayloads"] = ("STS2AIAgent/Game/GameStateService.CombatRisks.cs", "a343a743005b4617887bf5e762cffe1c7ea2a583c1264574ecbd169b496a0b7c"),
         ["IsSandpitPower"] = ("STS2AIAgent/Game/GameStateService.CombatRisks.cs", "c423a99fb0c84cd3e162998b8b4c44c59ded64397b1577867da1e608c3f82696"),
@@ -113,7 +124,7 @@ internal static class GameStateServiceRelocationContractTests
         ["BuildSelectionPayload"] = ("STS2AIAgent/Game/GameStateService.Rewards.cs", "9043e2ec637810972058b06ea3d437ebc2b428539922bdbbd4feadbcb0c067e3"),
         ["BuildCharacterSelectPayload"] = ("STS2AIAgent/Game/GameStateService.Menus.cs", "c7e28df2cbbdb89eb640d940a41803dc11bf66babcaef667e55b6a8e2a3e1d96"),
         ["BuildEventPayload"] = ("STS2AIAgent/Game/GameStateService.Rooms.cs", "072fb8972e2738c52551e7c6e4902daa8d62747f826cfeb60060a58f5c6f5da6"),
-        ["BuildCrystalSpherePayload"] = ("STS2AIAgent/Game/GameStateService.Rooms.cs", "14a565d5870b20af6577c6e98d857c0fd4baa38fa1c85bbd1d2cd5c38ebba029"),
+        ["BuildCrystalSpherePayload"] = ("STS2AIAgent/Game/GameStateService.Rooms.cs", "c25d3e74c33cb001be8e1d6dbdceda1fc15c77f49149793c26f6b45eb1b66fcd"),
         ["BuildRestPayload"] = ("STS2AIAgent/Game/GameStateService.Rooms.cs", "378745fd9c1683082eda3041e03a6f6b445ca3df1a180fd5d4ddaa9333e92830"),
         ["BuildShopPayload"] = ("STS2AIAgent/Game/GameStateService.Shop.cs", "1b4998ed24c5a309edd3b6d9056b2b7f825a0a548307f0d875ae35fb7dc8946d"),
         ["BuildTimelinePayload"] = ("STS2AIAgent/Game/GameStateService.Menus.cs", "55429d92bc128646dbe1fd75b3fe7ec0557b5a09893811da0988f4a7fc11b198"),

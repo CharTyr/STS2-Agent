@@ -32,6 +32,32 @@ The current knowledge base has two layers:
 powershell -ExecutionPolicy Bypass -File "scripts/generate-sts2-knowledge.ps1"
 ```
 
+## Event id and option key contract
+
+`events.md` is the one index a live payload is joined against, and the two sides spell the same
+event differently, so the generator emits the canonical form rather than the readable one:
+
+- **`event_id`** is the model's `Id.Entry`, which `ModelDb.GetEntry` computes as
+  `StringHelper.Slugify(class name)`: `Neow` -> `NEOW`, `DoorsOfLightAndDark` ->
+  `DOORS_OF_LIGHT_AND_DARK`. The `Option Risk Details` table's first column carries that id
+  (`ConvertTo-Slug` in the generator is the same algorithm), so a live `event.event_id` joins it
+  directly. The `Event Index` table keeps the class name as `Name`, because that is the column a
+  reader uses.
+- **`Option`** is the option's localization key with the leading `<EVENT>.pages.` segment removed.
+  The game builds the full key in `EventModel.OptionKey` as
+  `$"{Slugify(GetType().Name)}.pages.{pageName}.options.{optionName}"` — only the event segment goes
+  through the slug algorithm, which is why the page and option names keep the source's own spelling
+  (`INITIAL.options.ARCANE_SCROLL`, not `I_N_I_T_I_A_L...`). A live `text_key` of
+  `NEOW.pages.INITIAL.options.ARCANE_SCROLL` is therefore this table's `NEOW` row with the option
+  `INITIAL.options.ARCANE_SCROLL`: strip the one prefix, compare the rest verbatim.
+
+The runtime side of that contract is `canonical_event_id` / `canonical_option_key` in
+`mcp_server/src/sts2_mcp/scene_guidance.py`, and it is pinned by
+`mcp_server/tests/test_scene_guidance.py` using the live `NEOW` payload values against this file —
+plus a docs contract test so `docs/api.md` cannot drift back to a `text_key` shape no payload sends.
+The lookup is exact after canonicalisation: no prefix, substring, or similarity matching, so two
+events with near-identical names can never be merged.
+
 ## Next Steps
 
 1. ~~Add character ownership and more human-readable effect summaries for cards.~~ **Done 2026-09-20.** `cards.md` and `card-behaviors.md` carry an `Owner` column (the character whose card pool declares the card; a pool no character owns shows that pool's title) and an `Effect` column. Numbers come from the card's `CanonicalVars`, amounts from the expressions actually passed to the command calls; an amount that cannot be resolved statically is `?` rather than a guess, and a call with no mapping falls back to a readable form of its own name.

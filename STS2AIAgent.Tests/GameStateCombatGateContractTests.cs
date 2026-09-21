@@ -20,9 +20,13 @@ internal static class GameStateCombatGateContractTests
             state,
             StringComparison.Ordinal);
         Assert.Contains(
-            "BuildAvailableActionNames(currentScreen,combatState,runState,combatActionGate)",
+            "BuildAvailableActionNames(currentScreen,combatState,runState,combatActionGate,outvaravailableActionDescriptors)",
             state,
             StringComparison.Ordinal);
+        // The walk itself happens inside BuildAvailableActionNames -- and one state build reaches it
+        // exactly once (DecisionSnapshotContractTests.OneStateBuildEnumeratesTheActionSurfaceOnce),
+        // which hands the same descriptor list to the payload this build returns.
+        Assert.Contains("AvailableActionDescriptors=availableActionDescriptors", state, StringComparison.Ordinal);
         Assert.Contains("BuildCombatPayload(combatState,combatActionGate)", state, StringComparison.Ordinal);
         Assert.Contains(
             "BuildRunPayload(currentScreen,combatState,runState,combatActionGate)",

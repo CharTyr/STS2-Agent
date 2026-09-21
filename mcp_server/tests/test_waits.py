@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import socket
 import unittest
+from typing import Any
 from unittest.mock import patch
 
 from urllib.error import URLError
@@ -377,6 +378,87 @@ class WaitBehaviorTests(unittest.TestCase):
         self.assertIsNone(result)
         self.assertEqual(opens, 2)
         self.assertEqual(clock.now, 5.0)
+
+
+class WaitUntilActionableStateShapeTests(unittest.TestCase):
+    """The wait returns the shape `get_game_state` returns, instead of the raw `/state` payload.
+
+    The skill sends a client through `wait_until_actionable` across every animation, so a raw answer
+    there cost the full 4,000-9,500 tokens on the step where the client was least likely to need
+    them -- and the native surface had been answering compact all along. `raw_state=True` keeps the
+    full payload reachable.
+    """
+
+    RAW = {
+        "state_version": 16,
+        "screen": "COMBAT",
+        "available_actions": ["play_card"],
+        "combat": {"hand": [{"i": 0, "card_id": "STRIKE", "line": "Deal 6 damage."}]},
+        "agent_view": {
+            "version": 11,
+            "screen": "COMBAT",
+            "available_actions": ["play_card"],
+            "combat": {"hand": [{"i": 0, "card_id": "STRIKE"}]},
+        },
+    }
+
+    def _tools(self, state: dict[str, Any]) -> tuple[Any, Any]:
+        server = create_server(client=DummyClient(states=[state]))
+        return (
+            asyncio.run(server.get_tool("wait_until_actionable")),
+            asyncio.run(server.get_tool("get_game_state")),
+        )
+
+    def test_the_wait_answers_compact_by_default_exactly_like_get_game_state(self) -> None:
+        wait_tool, state_tool = self._tools(dict(self.RAW))
+
+        result = wait_tool.fn(timeout_seconds=20.0)
+
+        self.assertTrue(result["actionable"])
+        self.assertIs(result["state"]["compact_agent_view"], True)
+        # Not merely compact-ish: the two tools answer the same object for the same state, so a
+        # client that learned to read one has learned to read the other.
+        self.assertEqual(result["state"], state_tool.fn())
+
+    def test_raw_state_is_opt_in_and_comes_back_unmarked(self) -> None:
+        wait_tool, _ = self._tools(dict(self.RAW))
+
+        result = wait_tool.fn(timeout_seconds=20.0, raw_state=True)
+
+        self.assertEqual(result["state"], self.RAW)
+        self.assertNotIn("compact_agent_view", result["state"])
+
+    def test_a_payload_without_agent_view_is_marked_false(self) -> None:
+        raw_only = {"screen": "COMBAT", "available_actions": ["proceed"]}
+        wait_tool, _ = self._tools(raw_only)
+
+        result = wait_tool.fn(timeout_seconds=20.0)
+
+        self.assertEqual(result["state"]["available_actions"], ["proceed"])
+        self.assertIs(result["state"]["compact_agent_view"], False)
+
+    def test_the_wait_schema_documents_raw_state(self) -> None:
+        wait_tool, _ = self._tools(dict(self.RAW))
+
+        self.assertIn("raw_state", wait_tool.parameters["properties"])
+        self.assertIn("compact", wait_tool.fn.__doc__ or "")
+
+    def test_every_result_key_the_wait_had_before_is_still_there(self) -> None:
+        wait_tool, _ = self._tools(dict(self.RAW))
+
+        result = wait_tool.fn(timeout_seconds=20.0)
+
+        for key in (
+            "matched",
+            "actionable",
+            "event",
+            "state",
+            "actions",
+            "timeout_seconds",
+            "source",
+            "event_stream_error",
+        ):
+            self.assertIn(key, result)
 
 
 if __name__ == "__main__":

@@ -152,7 +152,11 @@ internal sealed partial class NativeMcpServer
     {
         var timeout = TimeSpan.FromSeconds(ReadTimeoutSeconds(arguments));
         var actionable = await _bridge.WaitUntilActionableAsync(timeout, cancellationToken);
-        var stateJson = await _bridge.GetCompactStateJsonAsync(cancellationToken);
+        // The state half of this tool's answer is the compact agent_view by default, exactly as
+        // `act` answers; raw_state asks for the full payload instead.
+        var stateJson = ReadBool(arguments, "raw_state")
+            ? await _bridge.GetRawStateJsonAsync(cancellationToken)
+            : await _bridge.GetCompactStateJsonAsync(cancellationToken);
         var actionsJson = await _bridge.GetAvailableActionsJsonAsync(cancellationToken);
         return JsonSerializer.Serialize(new
         {

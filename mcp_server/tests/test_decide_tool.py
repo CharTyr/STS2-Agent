@@ -1,8 +1,15 @@
-"""`decide`: the three answers one decision needs, from a single call.
+"""`decide`: the three answers one decision needs, from one frame.
 
 The documented loop is get_game_state -> get_available_actions -> act plus a guidance read, and each
 of those rebuilt the whole state on the game thread. `decide` answers state, actions, and guidance
 together so a step costs one call; the individual tools stay available.
+
+What it must not do is read the state and the action surface separately. `GET /state` and
+`GET /actions/available` are two requests, so between them the game advances and the descriptors a
+caller is about to index into can describe a frame the state payload never showed. `decide` reads
+`GET /decision-snapshot`, which answers both halves from one state build. These tests pin the call
+counts for each path: the modern one is one HTTP call with no separate reads, and the legacy one --
+a mod that predates the route and answers 404 `not_found` -- is the only path allowed the two reads.
 """
 
 from __future__ import annotations
@@ -10,6 +17,7 @@ from __future__ import annotations
 import asyncio
 import unittest
 
+from sts2_mcp.client import Sts2ApiError
 from sts2_mcp.server import create_server
 
 
@@ -33,9 +41,19 @@ DESCRIPTORS = [
 
 
 class RecordingClient:
+    """Serves the one-snapshot route and counts every read the tool performs."""
+
     def __init__(self) -> None:
         self.state_calls = 0
         self.action_calls = 0
+        self.snapshot_calls = 0
+        # What `GET /decision-snapshot` answers: the compact view, and the descriptors the same
+        # state build enumerated. A test may replace it to describe another screen.
+        self.snapshot = {"state": STATE["agent_view"], "available_actions": DESCRIPTORS}
+
+    def get_decision_snapshot(self) -> dict:
+        self.snapshot_calls += 1
+        return self.snapshot
 
     def get_state(self) -> dict:
         self.state_calls += 1
@@ -44,6 +62,27 @@ class RecordingClient:
     def get_available_actions(self) -> list[dict]:
         self.action_calls += 1
         return DESCRIPTORS
+
+
+class SnapshotErrorClient(RecordingClient):
+    """A client whose snapshot route answers with one chosen failure."""
+
+    def __init__(self, error: Sts2ApiError) -> None:
+        super().__init__()
+        self._error = error
+
+    def get_decision_snapshot(self) -> dict:
+        self.snapshot_calls += 1
+        raise self._error
+
+
+def _legacy_error() -> Sts2ApiError:
+    return Sts2ApiError(
+        status_code=404,
+        code="not_found",
+        message="Route not found.",
+        retryable=False,
+    )
 
 
 class DecideToolTests(unittest.TestCase):
@@ -62,13 +101,14 @@ class DecideToolTests(unittest.TestCase):
         self.assertEqual(result["available_actions"], DESCRIPTORS)
         self.assertEqual(result["scene_guidance"]["screen"], "COMBAT")
 
-    def test_decide_reads_the_state_once(self) -> None:
+    def test_decide_reads_the_decision_snapshot_once_and_nothing_separately(self) -> None:
         client = RecordingClient()
 
         self._tool(client).fn()
 
-        self.assertEqual(1, client.state_calls, "decide must not re-read the state per part")
-        self.assertEqual(1, client.action_calls)
+        self.assertEqual(1, client.snapshot_calls, "decide must read the snapshot exactly once")
+        self.assertEqual(0, client.state_calls, "decide must not also read /state")
+        self.assertEqual(0, client.action_calls, "decide must not also read /actions/available")
 
     def test_decide_state_is_the_get_game_state_shape(self) -> None:
         client = RecordingClient()
@@ -89,6 +129,52 @@ class DecideToolTests(unittest.TestCase):
         self.assertEqual(guidance, decided["scene_guidance"])
         for key in ("screen", "scene", "guidance", "playbook"):
             self.assertIn(key, decided["scene_guidance"])
+
+    def test_decide_guidance_joins_on_the_compact_event_id(self) -> None:
+        """`scene_guidance` reads `event.event_id`; the compact view renames it to `event.id`."""
+        client = RecordingClient()
+        client.snapshot = {
+            "state": {"screen": "EVENT", "event": {"id": "NEOW", "options": []}},
+            "available_actions": [],
+        }
+
+        guidance = self._tool(client).fn()["scene_guidance"]
+
+        # The sidecar's per-option event risk index joins on this id, so a decision on an event
+        # screen would report no options where `get_scene_guidance` reports them if the rename were
+        # not undone for the guidance call.
+        self.assertEqual(guidance["screen"], "EVENT")
+        self.assertEqual(guidance["event_id"], "NEOW")
+
+    def test_decide_falls_back_to_the_two_reads_only_on_a_legacy_not_found(self) -> None:
+        modern = RecordingClient()
+        legacy = SnapshotErrorClient(_legacy_error())
+
+        expected = self._tool(modern).fn()
+        result = self._tool(legacy).fn()
+
+        self.assertEqual(expected, result)
+        self.assertEqual(1, legacy.snapshot_calls)
+        self.assertEqual(1, legacy.state_calls, "the fallback is the path that does cost a /state read")
+        self.assertEqual(1, legacy.action_calls)
+
+    def test_decide_does_not_hide_any_other_snapshot_failure(self) -> None:
+        client = SnapshotErrorClient(
+            Sts2ApiError(
+                status_code=500,
+                code="internal_error",
+                message="Unhandled server error.",
+                retryable=False,
+            )
+        )
+
+        with self.assertRaises(Sts2ApiError) as caught:
+            self._tool(client).fn()
+
+        self.assertEqual(caught.exception.code, "internal_error")
+        # A second read would have turned a broken mod into a slower answer instead of an error.
+        self.assertEqual(0, client.state_calls)
+        self.assertEqual(0, client.action_calls)
 
     def test_decide_takes_no_arguments(self) -> None:
         # The whole point is one call with nothing to assemble; an argument would make the cheapest

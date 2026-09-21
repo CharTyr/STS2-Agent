@@ -2088,9 +2088,16 @@ function Get-EventEntries {
         }
 
         $options = Get-EventOptionRows -EventName $name -Text $text
+        # The risk table is keyed by the event id a live payload reports, not by the class name a
+        # reader recognises. `ModelDb.GetEntry` is `StringHelper.Slugify(class name)`, so the display
+        # name would be one normalization away from the `event_id` the game sends (`Neow` vs `NEOW`)
+        # and every consumer would have to redo that step. The generator already knows the class name
+        # and has the same `ConvertTo-Slug` the game's `Slugify` mirrors, so it writes the join key
+        # directly; `docs/game-knowledge/knowledge-plan.md` documents the contract.
+        $eventId = ConvertTo-Slug -Text $name
         foreach ($option in $options) {
             $optionRows.Add([pscustomobject]@{
-                Event        = $name
+                Event        = $eventId
                 BaseType     = $baseType
                 Option       = $option.Option
                 Handler      = $option.Handler
@@ -2980,9 +2987,17 @@ $eventsIndexBody
 
 ## Option Risk Details
 
-Every distinct option the event builds, in source order. ``Option`` is the option's localization key
-without the ``<EVENT>.pages.`` prefix; options an Ancient creates through ``RelicOption<T>`` are
-labelled after that helper instead of a literal key.
+Every distinct option the event builds, in source order.
+
+``Event`` is the canonical ``event_id`` the live payload reports -- the class name through the same
+slug algorithm the game's ``StringHelper.Slugify`` applies (``Neow`` -> ``NEOW``,
+``DoorsOfLightAndDark`` -> ``DOORS_OF_LIGHT_AND_DARK``) -- so a live ``event.event_id`` joins this
+column without a case-sensitive comparison against a class name. ``Option`` is the option's
+localization key without the leading ``<EVENT>.pages.`` segment: the game builds the full key as
+``Slugify(EventTypeName).pages.<PAGE>.options.<OPTION>``, so a live ``event.options[].text_key`` of
+``NEOW.pages.INITIAL.options.ARCANE_SCROLL`` is this table's ``NEOW`` row with the option
+``INITIAL.options.ARCANE_SCROLL``. Options an Ancient creates through ``RelicOption<T>`` are labelled
+after that helper instead of a literal key, and their option name is the relic's own id entry.
 
 ``Risk`` is graded from the handler body and the option's own markers:
 

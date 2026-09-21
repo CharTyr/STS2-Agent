@@ -377,15 +377,21 @@ internal static partial class GameStateService
                     continue;
                 }
 
+                // Identity is bought with divinations, not read off the board: an item whose every
+                // cell is still hidden reports kind/is_good as null, so the raw and compact payloads
+                // cannot hand a client the reward/curse layout for free. Geometry and occupancy stay
+                // visible either way -- they are what the client plans its clicks against.
+                var revealed = occupied.All(c => !c.IsHidden);
+
                 items.Add(new CrystalSphereItemPayload
                 {
-                    kind = item.GetType().Name.Replace("CrystalSphere", string.Empty),
-                    is_good = SafeReadBool(() => item.IsGood),
+                    kind = revealed ? item.GetType().Name.Replace("CrystalSphere", string.Empty) : null,
+                    is_good = revealed ? SafeReadBool(() => item.IsGood) : null,
                     x = occupied.Min(c => c.X),
                     y = occupied.Min(c => c.Y),
                     width = item.Size.X,
                     height = item.Size.Y,
-                    revealed = occupied.All(c => !c.IsHidden),
+                    revealed = revealed,
                     cells = occupied.Select(c => new[] { c.X, c.Y }).ToArray(),
                     hidden_cells = occupied.Where(c => c.IsHidden).Select(c => new[] { c.X, c.Y }).ToArray()
                 });

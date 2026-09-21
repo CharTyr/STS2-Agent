@@ -1865,14 +1865,32 @@ def replay_action_surface_baseline(
             "baseline": str(baseline_path),
             "screen": screen,
             "baseline_screen_present": False,
+            "comparable": False,
             "note": (
                 f"the baseline has no sample for screen {screen!r}; this step compared nothing and "
                 "must not be reported as a pass"
             ),
         }
 
+    shared_actions = sorted(set(live) & set(recorded))
+    if not shared_actions:
+        return {
+            "baseline": str(baseline_path),
+            "screen": screen,
+            "baseline_screen_present": True,
+            "comparable": False,
+            "compared_actions": [],
+            "only_in_state": sorted(set(live)),
+            "only_in_baseline": sorted(set(recorded)),
+            "mismatches": [],
+            "note": (
+                f"the live and baseline {screen!r} surfaces share no action names; this step "
+                "compared nothing and must not be reported as a pass"
+            ),
+        }
+
     mismatches: list[dict[str, Any]] = []
-    for name in sorted(set(live) & set(recorded)):
+    for name in shared_actions:
         expected = recorded[name]
         actual = {flag: live[name].get(flag) for flag in PATCH_CHECK_DESCRIPTOR_FLAGS}
         for flag in PATCH_CHECK_DESCRIPTOR_FLAGS:
@@ -1887,7 +1905,8 @@ def replay_action_surface_baseline(
         "baseline": str(baseline_path),
         "screen": screen,
         "baseline_screen_present": True,
-        "compared_actions": sorted(set(live) & set(recorded)),
+        "comparable": True,
+        "compared_actions": shared_actions,
         "only_in_state": sorted(set(live) - set(recorded)),
         "only_in_baseline": sorted(set(recorded) - set(live)),
         "mismatches": mismatches,

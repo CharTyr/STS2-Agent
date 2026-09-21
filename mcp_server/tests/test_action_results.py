@@ -5,6 +5,9 @@ native MCP `act` already answered with the compact `agent_view`, and a rejected 
 bare message with no way to see what would have worked. Both are contract facts a client reads, so
 both are pinned here: the default shape, the `raw_state` escape hatch, and the structured details of
 an index rejection.
+
+The projection itself is pinned in `ProjectAgentStateTests`; the payloads below carry the marker it
+adds, because a client reads `compact_agent_view` to know which shape it got.
 """
 
 from __future__ import annotations
@@ -14,7 +17,12 @@ import unittest
 from typing import Any
 from unittest.mock import patch
 
-from sts2_mcp.action_results import compact_action_result, index_error_details, with_index_details
+from sts2_mcp.action_results import (
+    compact_action_result,
+    index_error_details,
+    project_agent_state,
+    with_index_details,
+)
 from sts2_mcp.client import Sts2ApiError, Sts2Client
 from sts2_mcp.server import create_server
 
@@ -25,6 +33,9 @@ AGENT_VIEW = {
     "available_actions": ["play_card", "end_turn"],
     "combat": {"hand": [{"i": 0, "card_id": "STRIKE"}]},
 }
+
+# What a client actually receives as `state`: the agent_view plus the marker `get_game_state` adds.
+COMPACT_STATE = {**AGENT_VIEW, "compact_agent_view": True}
 
 RAW_STATE = {
     "state_version": 16,
@@ -47,27 +58,85 @@ def action_response(**overrides: Any) -> dict[str, Any]:
     return response
 
 
+class ProjectAgentStateTests(unittest.TestCase):
+    """One projection, so `get_game_state`, `act`, and `wait_until_actionable` cannot diverge."""
+
+    def test_the_agent_view_comes_back_marked_compact(self) -> None:
+        self.assertEqual(project_agent_state(RAW_STATE), COMPACT_STATE)
+
+    def test_raw_state_is_returned_unchanged_and_unmarked(self) -> None:
+        # The escape hatch must stay the raw payload: gaining a compact marker would make it a
+        # different answer from the one `get_raw_game_state` gives for the same state.
+        self.assertIs(project_agent_state(RAW_STATE, raw_state=True), RAW_STATE)
+
+    def test_a_payload_without_agent_view_is_marked_false_not_left_silent(self) -> None:
+        raw_only = {"screen": "COMBAT", "available_actions": []}
+
+        self.assertEqual(
+            project_agent_state(raw_only),
+            {"screen": "COMBAT", "available_actions": [], "compact_agent_view": False},
+        )
+
+    def test_a_compact_view_naming_its_actions_gets_the_available_actions_alias(self) -> None:
+        view = {"screen": "MAP", "actions": [{"name": "choose_map_node"}]}
+
+        projected = project_agent_state({"screen": "MAP", "agent_view": view})
+
+        self.assertEqual(projected["available_actions"], [{"name": "choose_map_node"}])
+        self.assertIs(projected["compact_agent_view"], True)
+
+    def test_a_view_that_already_carries_the_marker_is_still_marked_compact(self) -> None:
+        # A stale false marker inside the mod's own view does not survive the projection: the
+        # question the marker answers is "what did this answer return", not "what did the mod say".
+        view = {"screen": "MAP", "compact_agent_view": False}
+
+        self.assertIs(project_agent_state({"screen": "MAP", "agent_view": view})["compact_agent_view"], True)
+
+    def test_a_non_mapping_state_is_returned_as_it_is(self) -> None:
+        self.assertIsNone(project_agent_state(None))
+        self.assertEqual(project_agent_state([1, 2]), [1, 2])
+
+
 class CompactActionResultTests(unittest.TestCase):
     def test_state_becomes_the_agent_view_and_every_other_key_survives(self) -> None:
         result = compact_action_result(action_response())
 
-        self.assertIs(result["state"], AGENT_VIEW)
+        self.assertEqual(result["state"], COMPACT_STATE)
         for key in ("action", "status", "stable", "message"):
             self.assertEqual(result[key], action_response()[key])
 
-    def test_a_payload_without_agent_view_keeps_the_raw_state(self) -> None:
+    def test_a_payload_without_agent_view_is_marked_false(self) -> None:
         raw_only = {"screen": "COMBAT", "available_actions": []}
 
         result = compact_action_result(action_response(state=raw_only))
 
-        self.assertIs(result["state"], raw_only)
+        self.assertIs(result["state"]["compact_agent_view"], False)
+        self.assertEqual(result["state"]["screen"], "COMBAT")
 
-    def test_a_result_without_state_is_untouched(self) -> None:
-        # The outcome-unknown path: there is no post-action snapshot to compact, and the response
-        # must not gain a state key it never had.
-        unknown = {"action": "end_turn", "status": "outcome_unknown", "reconciliation": {"state": {}}}
+    def test_a_reconciliation_state_is_projected_too(self) -> None:
+        # The outcome-unknown path keeps its one state read under `reconciliation.state`; leaving it
+        # raw re-introduced the payload the success path had just stopped sending.
+        unknown = {
+            "action": "end_turn",
+            "status": "outcome_unknown",
+            "reconciliation": {"attempted": True, "state": RAW_STATE},
+        }
 
-        self.assertIs(compact_action_result(unknown), unknown)
+        result = compact_action_result(unknown)
+
+        self.assertEqual(result["reconciliation"]["state"], COMPACT_STATE)
+        self.assertEqual(result["status"], "outcome_unknown")
+        # No top-level state is invented for an answer that never had one.
+        self.assertNotIn("state", result)
+        self.assertTrue(result["reconciliation"]["attempted"])
+
+    def test_a_result_with_no_state_anywhere_is_untouched(self) -> None:
+        bare = {"action": "end_turn", "status": "outcome_unknown"}
+
+        self.assertIs(compact_action_result(bare), bare)
+
+    def test_a_non_mapping_result_is_returned_as_it_is(self) -> None:
+        self.assertEqual(compact_action_result(None), None)
 
 
 class ActToolStateTests(unittest.TestCase):
@@ -84,7 +153,7 @@ class ActToolStateTests(unittest.TestCase):
         with patch.object(client, "_request", return_value=action_response()):
             result = tool.fn(action="play_card", card_index=0)
 
-        self.assertEqual(result["state"], AGENT_VIEW)
+        self.assertEqual(result["state"], COMPACT_STATE)
         self.assertEqual(result["status"], "completed")
         self.assertTrue(result["stable"])
         self.assertEqual(result["action"], "play_card")
@@ -118,7 +187,7 @@ class ClientCompactStateTests(unittest.TestCase):
         with patch.object(client, "_request", return_value=action_response()):
             result = client.execute_action("play_card", card_index=0)
 
-        self.assertEqual(result["state"], AGENT_VIEW)
+        self.assertEqual(result["state"], COMPACT_STATE)
 
     def test_execute_action_raw_state_returns_the_full_payload(self) -> None:
         client = Sts2Client(base_url="http://127.0.0.1:8080")
