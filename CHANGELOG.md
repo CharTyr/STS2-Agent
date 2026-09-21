@@ -2,7 +2,13 @@
 
 > Release attribution is recorded against tags or release commits. Post-tag maintenance is listed separately; current validation limits are maintained in [PRODUCT_PLAN_CURRENT.md](https://github.com/CharTyr/STS2-Agent/blob/main/PRODUCT_PLAN_CURRENT.md).
 
-## Unreleased
+## v0.14.6 - 2026-09-21
+
+> A reliability batch over the agent loop, the budget ledger, the event stream and both MCP
+> surfaces — twenty-five defects found by two offline audits of the dev branch, none of them
+> reachable without reading the code. Accepted actions are never replayed, canceled turns still
+> pay for the work they did, and the two MCP surfaces answer `get_decision_log` with the same
+> envelope.
 
 - Preserve accepted action receipts when a follow-up state read fails. The in-game agent now reports the action as unsettled and refreshes state before another decision instead of treating an accepted action as a failed submission and replaying it. Both tool-calling and JSON-fallback models follow this boundary.
 - Include the current decision's known token usage, including a separate vision request, in every subsequent model-budget check. Record final usage once; checks do not mutate the ledger.
