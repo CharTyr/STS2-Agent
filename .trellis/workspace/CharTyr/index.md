@@ -8,7 +8,7 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-1.md`
-- **Total Sessions**: 31
+- **Total Sessions**: 32
 - **Last Active**: 2026-09-21
 <!-- @@@/auto:current-status -->
 
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-1.md` | ~1245 | Active |
+| `journal-1.md` | ~1329 | Active |
 <!-- @@@/auto:active-documents -->
 
 ---
@@ -29,6 +29,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 32 | 2026-09-21 | Dev audit: 16 fixes and offline verification | `a4463fe` | `dev` |
 | 31 | 2026-09-21 | v0.14.0: offline plan items, live validation, overlay redesign, and the release | `4cab34f`, `58a08ea`, `b32d56d`, `4151a37`, `e7520f8`, `c3118f1`, `9d3bc3b`, `9b92a8d`, `bd45774`, `2b7610a`, `51828ad`, `8bc7d2d`, `46d0da9` | `main` |
 | 30 | 2026-09-20 | Companion health semantics, demand-driven SSE, predicate split, and the debug churn hook | `c017302`, `aac032a`, `62972c7`, `c3c531e`, `2a1bd2a` | `main` |
 | 29 | 2026-09-19 | 发布 v0.13.0 并完成收尾 | `dfb5659` | `main` |

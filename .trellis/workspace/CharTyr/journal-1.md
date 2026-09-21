@@ -1294,3 +1294,36 @@ Redesigned the in-game overlay (themes, layout, controls), split AgentOverlayHos
 
 - Open a PR from feat/overlay-visual-redesign into dev. The dev-resync rule from session 26 only applies while main is a strict ancestor of dev, and it is not right now: origin/dev carries the session-31 journal that main does not, so a fast-forward would drop it. Merge instead of reset, and the rule is lossless again once these commits reach main.
 - The mod was disabled in the Steam profile, so testing needed it enabled by hand; start-game-session.ps1's --clientId seeding is ignored when the game launches through Steam, which is why the isolated-profile path did not reach it.
+
+
+## Session 32: Dev audit: 16 fixes and offline verification
+
+**Date**: 2026-09-21
+**Task**: Dev audit: 16 fixes and offline verification
+**Branch**: `dev`
+
+### Summary
+
+Repaired 16 confirmed dev defects; full offline preflight passed. No live-game validation or remote publication.
+
+### Main Changes
+
+- Fixed settings, teammate HTTP state, MCP diff, event lifecycles and cancellation; recorded findings and prevention rules.
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `a4463fe` | (see git log) |
+
+### Testing
+
+- [OK] 589 C# tests; 315 Python tests; 12 verification gates; all 16 preflight steps; 165 cross-language cases matched.
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- Live-game validation remains deferred by the user.
