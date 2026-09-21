@@ -74,12 +74,44 @@ reached.
    launcher was preparing a file the game never read. `Initialize-IsolatedClientSettings` now
    rejects a non-numeric id with a message that names the fallback.
 
+### Local dual-instance co-op on this candidate **[coop]**
+
+A second run of the same session, after the single-player one above, on the same isolated profile.
+
+- `invite_ai_teammate` from the main menu launched a second process (PID 37872). The host's
+  `/health` reported `companion_process_alive: true`, `companion_process_exited: false` and the
+  companion block `{api_host: 127.0.0.1, api_port: 8081, process_id: 37872, auto_play: true}`; the
+  companion answered on 8081 with `instance_role: companion`, `mod_version: 0.14.0`, `status: ready`.
+- The lobby came up with the companion already auto-selected and readied (`CompanionAutoSelectCharacter`),
+  and `embark` put both instances into one run (`FRTG1BWGDRJ4`) at MAP. The party block reads
+  correctly from both sides: the host sees `1` as local and `2026092015` as not, the companion sees
+  the mirror image. That is the same fact the teammate panel is built on.
+- **The teammate plays with the real model.** Its `/decisions` holds four entries on the shared run
+  id, one of them the co-op rule doing its job rather than a card choice:
+  *"跟随你的地图选择。"* (following your map choice) for `choose_map_node`, then three combat
+  decisions with model-authored reasons such as *"Bash first applies Vulnerable so my follow-up
+  Strike deals bonus damage and next turn's attacks also hit harder."* The companion's own request
+  count reached 6 and it advanced the shared run to floor 1.
+- The host's overlay teammate panel showed the other player's live health, block and energy beside
+  the host's own bar while both characters stood in the same fight.
+- The host's own loop correctly refused to restart: `/session/control {"running": true}` returned
+  200 `running`, and `stop_kind` stayed `budget`, because the single-player session had already
+  spent the 600,000-token cap for that session. The map vote was then cast by hand through the API,
+  which is what let the companion proceed.
+
+Not covered here: the **Steam** two-instance path (this was the local dual-instance launcher), and
+the typed `intent` encoder over the wire — the host overlay sends `intent: null`
+(`AgentRuntime.Team.cs`), so a typed signal needs an external caller holding the companion session
+token, which this session did not exercise.
+
 ### Still open after this session
 
-- A complete natural run (13 floors) was not attempted: the token cap ended this session at floor 3
-  on purpose. The remaining floors and an act boss are still unproven on this candidate.
-- **Co-op on this candidate** was not run at all: both the local dual-instance path and the Steam
-  two-instance path are untouched by this session.
+- A complete natural run (13 floors) was not attempted: the token cap ended the single-player
+  session at floor 3 on purpose. The remaining floors and an act boss are still unproven on this
+  candidate.
+- **Steam** co-op was not run at all. The local dual-instance path is covered above; the Steam
+  two-instance path is untouched by this session.
+- The typed teammate signal was not driven over the wire; see the note above.
 - Vision (screenshot attachment) was not enabled, so the multimodal path is still offline-only.
 - The `max_tokens` → `max_completion_tokens` retry was not exercised by this endpoint: it accepted
   the request as sent, so which real providers take that branch is still unmeasured.
