@@ -1327,3 +1327,36 @@ Repaired 16 confirmed dev defects; full offline preflight passed. No live-game v
 ### Next Steps
 
 - Live-game validation remains deferred by the user.
+
+
+## Session 33: Fix all five agent turn integrity findings
+
+**Date**: 2026-09-21
+**Task**: Fix all five agent turn integrity findings
+**Branch**: `dev`
+
+### Summary
+
+Preserve accepted actions and partial receipts; enforce pending token and proactive budgets; validate action argument objects.
+
+### Main Changes
+
+- Added 26 regression and runtime-wiring tests; kept the shared turn gate through receipt accounting.
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `763eabddb10fdb52ff941df6715014bc468a4f8e` | (see git log) |
+
+### Testing
+
+- [OK] C# 615 PASS/0 FAIL; Python 315 OK; full offline preflight exit 0; build 0 warnings/errors.
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- Live-game validation remains deferred; no push or release performed.
