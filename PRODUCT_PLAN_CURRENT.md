@@ -9,27 +9,28 @@
 
 ## 1. 当前基线
 
-- **v0.14.0（发布候选，尚未发布；离线门槛全绿，实机门槛部分完成）**：候选提交在 `feat/v0.14-contracts`
-  （PR #173，base `dev`，CI `contracts` 绿）；五处版本号已同步到 `0.14.0`，CHANGELOG 已定版，工坊发布物料
-  （`description.en.txt` / `description.zh-CN.txt` / `content-readme.md` / `workshop.json`
-  的 changeNote）已更新到本版。该候选提交**只在本地**，未推送、未打包、未打 tag，
-  所以它既不是「已发布」也不是「已验收」。内容见
-  [CHANGELOG.md](CHANGELOG.md) 的 `## v0.14.0` 段：决策解释链与决策日志（overlay / `GET /decisions` /
-  两面 MCP / SSE `decision_made`）、按屏注入的策略层、结构化队友信号与队友实况面板、
-  生成式 OpenAPI 契约、Python client 两个载荷类型化、`GameStateService` 按屏拆分，
-  以及原计划单独发版的 v0.13.1 事件流可靠性批（见该段说明：v0.13.1 有发布提交但从未发布，
-  已并入本版）。
+- **v0.14.0（当前发布基准）**：2026-09-21 发布。发布提交 `5f9ea72`（PR #174 的 `dev → main` 合并；
+  功能经 PR #173 合入 `dev`，CI `contracts` 通过），tag `v0.14.0` 指向它。GitHub Release 资产
+  `sts2-ai-agent-v0.14.0-windows.zip` 637550 字节 / SHA256 `37F95EED…2A70`。见
+  [v0.14.0 发布记录](history/release-v0.14.0_2026-09-21.md)。
+  内容见 [CHANGELOG.md](CHANGELOG.md) 的 `## v0.14.0` 段：决策解释链与决策日志（overlay /
+  `GET /decisions` / 两面 MCP / SSE `decision_made`）、按屏注入的策略层、结构化队友信号与队友实况面板、
+  **界面重做与四套配色主题**、生成式 OpenAPI 契约、Python client 两个载荷类型化、
+  `GameStateService` 按屏拆分，以及原计划单独发版的 v0.13.1 事件流可靠性批（v0.13.1 有发布提交但
+  从未发布，已并入本版）。
   **实机验收现状**（2026-09-20，隔离档 `default\2026092014`，游戏 v0.111.0，玩家真档未被写入）：
   `/health` ready 且 27/27 反射成员齐全、`mod-load --deep-check`、`state-summary`、
   `state-invariants`（0 失败 0 警告）、`patch-check`（含动作面基线 replay，`mismatches: []`）全部通过；
-  **真实模型对局已跑通一场**——CommandCode / `deepseek/deepseek-v4.1-flash` 经 overlay「测试连接」
-  两个角色均连通成功，随后无人值守自动游玩从 1 层打到 3 层，45 次决策全部归属同一 run id，
-  26 条抽样里 22 条带模型自述理由，SSE `decision_made` 实时可见，最终由会话 Token 上限（600,000）
-  自动停止（实际 52 次请求 / 622,864 token）。细节与两项本机发现的修复见
+  **真实模型对局已跑通**——CommandCode / `deepseek/deepseek-v4.1-flash` 经 overlay「测试连接」
+  两个角色均连通成功，无人值守自动游玩从 1 层打到 3 层，45 次决策全部归属同一 run id，
+  26 条抽样里 22 条带模型自述理由，SSE `decision_made` 实时可见，最终由会话 Token 上限自动停止
+  （实际 52 次请求 / 622,864 token）；**本地双开 co-op 亦跑通**——第二实例、共享 run、
+  「跟随你的地图选择。」的协作规则与队友面板实况均有记录。细节见
   [live-validation-checklist.md](docs/live-validation-checklist.md)。
-  **待办**：Steam 双开路径、完整自然对局、Vision 实机、打包与双渠道发布。
+  **仍未做**：Steam 双开路径、完整自然对局、Vision 实机、typed intent 的线上路径、
+  5.4/5.6、7.2 BESTIARY、7.3 机制矩阵补样。工坊渠道状态见发布记录的「工坊上传过程」一节。
 
-- **v0.13.0（当前发布基准）**：2026-09-19 发布。tag `v0.13.0` 指向 PR #161 的
+- **v0.13.0（上一发布基准）**：2026-09-19 发布。tag `v0.13.0` 指向 PR #161 的
   `dev → main` 合并提交 `78b085f`；GitHub Release 资产 576033 字节 / SHA256 `8CFC0F45…8733`；
   工坊公开，`file_size` 1252357 与本地 content 字节和相等，内容 id `3840768014407368680`。
   发布候选的全量离线与实机验收通过；因重新构建的最终 DLL 与候选 DLL 字节不同，又对 GitHub 与
