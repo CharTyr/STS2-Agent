@@ -137,6 +137,17 @@ resolution, and the node/text helpers more than one screen file reads, at 1,336 
   declaration, 218 of them, taken from the file at the parent commit. `Combat` was 1,029 lines on the
   first pass and the potion probes moved out rather than the budget going up.
 
+- `GameStateService.Combat.cs` gave up the lethal-risk question on 2026-09-22: what happens to the
+  player between the moment they stop acting and the moment they may act again, now in
+  [GameStateService.CombatRisks.cs](../../../STS2AIAgent/Game/GameStateService.CombatRisks.cs). It is
+  the same move as the four splits above and it was forced the same way -- teaching
+  `end_turn_will_kill_player` about poison and constrict needed about fifty lines, the file had
+  thirty-nine of headroom, and the budget asks for a move rather than a raise. The concern stands on
+  its own: the enemy-intent sum, the Sandpit countdown and the two damage-over-time powers are all
+  answers to one question, and the next risk source has an obvious place to land. Two rows of the
+  relocation table moved with it (same text, new file column; both hashes were regenerated through a
+  replica of the test's own normalisation that first reproduced all 218 recorded values).
+
 A pure relocation is verifiable, and all four were verified the same way: the base file's diff
 carries no logic, and every removed non-blank line appears verbatim in the new file.
 `PredicateRelocationContractTests` and `GameStateServiceRelocationContractTests` keep that checkable

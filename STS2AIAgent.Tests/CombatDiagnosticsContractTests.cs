@@ -102,6 +102,42 @@ internal static class CombatDiagnosticsContractTests
         Assert.Contains("pet_missing=combat.player.pet_missing", agentCombatBody, StringComparison.Ordinal);
     }
 
+    public static void LethalRisksIncludeDamageOverTime()
+    {
+        var stateSource = AgentSourceFixture.ReadStateService();
+        var risksBody = WithoutWhitespace(MethodBody(stateSource, "BuildCombatLethalRiskPayloads"));
+        var combatBody = WithoutWhitespace(MethodBody(stateSource, "BuildCombatPayload"));
+
+        // strategy.md tells a model to trust end_turn_will_kill_player, so the damage sources that
+        // land between "I stopped acting" and "I may act again" have to be in it. Poison resolves at
+        // the start of the player's own next turn and Constrict at the end of their own turn; neither
+        // appears in the enemy-intent sum, which is all the flag used to see.
+        Assert.Contains(
+            "PoisonPowerpoison=>SafeReadNullableInt(()=>poison.CalculateTotalDamageNextTurn())",
+            risksBody,
+            StringComparison.Ordinal);
+        Assert.Contains(
+            "ConstrictPowerconstrict=>SafeReadNullableInt(()=>constrict.Amount)",
+            risksBody,
+            StringComparison.Ordinal);
+        Assert.Contains("\"poison_next_turn\"", risksBody, StringComparison.Ordinal);
+        Assert.Contains("\"constrict_turn_end\"", risksBody, StringComparison.Ordinal);
+
+        // Poison is Unblockable, so its damage-after-block figure must not have block subtracted;
+        // Constrict is only Unpowered and stays blockable.
+        Assert.Contains(
+            "blockable?Math.Max(0,damage.GetValueOrDefault()-Math.Max(0,player.block)):damage.GetValueOrDefault()",
+            risksBody,
+            StringComparison.Ordinal);
+
+        // The totals come from the live creature: Accelerant multiplies the poison trigger count and
+        // every damage modifier applies, so neither is derivable from the stack size in the payload.
+        Assert.Contains(
+            "BuildCombatLethalRiskPayloads(me.Creature,playerPayload,enemyPayloads)",
+            combatBody,
+            StringComparison.Ordinal);
+    }
+
     private static string ReadSource(string relativePath)
     {
         foreach (var start in new[] { Directory.GetCurrentDirectory(), AppContext.BaseDirectory })

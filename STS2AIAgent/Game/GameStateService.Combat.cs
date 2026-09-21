@@ -390,7 +390,7 @@ internal static partial class GameStateService
             skills_played_this_turn = GameActionService.SkillsPlayedThisTurn
         };
         var enemyPayloads = enemies.Select((enemy, index) => BuildEnemyPayload(enemy, index)).ToArray();
-        var lethalRisks = BuildCombatLethalRiskPayloads(playerPayload, enemyPayloads);
+        var lethalRisks = BuildCombatLethalRiskPayloads(me.Creature, playerPayload, enemyPayloads);
 
         return new CombatPayload
         {
@@ -404,65 +404,6 @@ internal static partial class GameStateService
             end_turn_will_kill_player = lethalRisks.Any(risk => risk.will_kill_player),
             lethal_risks = lethalRisks
         };
-    }
-
-    private static CombatLethalRiskPayload[] BuildCombatLethalRiskPayloads(
-        CombatPlayerPayload player,
-        CombatEnemyPayload[] enemies)
-    {
-        var risks = new List<CombatLethalRiskPayload>();
-        var incomingDamage = enemies
-            .Where(enemy => enemy.is_alive)
-            .SelectMany(enemy => enemy.intents)
-            .Sum(intent => Math.Max(0, intent.total_damage.GetValueOrDefault()));
-
-        if (incomingDamage > 0)
-        {
-            var damageAfterBlock = Math.Max(0, incomingDamage - Math.Max(0, player.block));
-            if (damageAfterBlock >= player.current_hp)
-            {
-                risks.Add(new CombatLethalRiskPayload
-                {
-                    risk_id = "incoming_damage",
-                    source = "enemy_intents",
-                    will_kill_player = true,
-                    reason = "Enemy intent damage after current block is at least current HP.",
-                    incoming_damage = incomingDamage,
-                    damage_after_block = damageAfterBlock,
-                    player_hp = player.current_hp,
-                    player_block = player.block
-                });
-            }
-        }
-
-        foreach (var power in player.powers)
-        {
-            if (!IsSandpitPower(power) || power.amount is not int amount || amount > 1)
-            {
-                continue;
-            }
-
-            risks.Add(new CombatLethalRiskPayload
-            {
-                risk_id = "sandpit_countdown",
-                source = "player_power",
-                will_kill_player = true,
-                reason = "SANDPIT_POWER is at or below 1; ending turn is treated as lethal unless the boss dies first or Frantic Escape has already raised the counter.",
-                player_hp = player.current_hp,
-                player_block = player.block,
-                power_id = power.power_id,
-                power_amount = amount
-            });
-        }
-
-        return risks.ToArray();
-    }
-
-    private static bool IsSandpitPower(CombatPowerPayload power)
-    {
-        return string.Equals(power.power_id, "SANDPIT_POWER", StringComparison.OrdinalIgnoreCase)
-            || string.Equals(power.name, "Sandpit", StringComparison.OrdinalIgnoreCase)
-            || string.Equals(power.name, "沙坑", StringComparison.OrdinalIgnoreCase);
     }
 
     private static CombatHandCardPayload BuildHandCardPayload(CombatState combatState, CardModel card, int index)
