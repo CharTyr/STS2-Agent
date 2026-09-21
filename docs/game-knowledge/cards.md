@@ -1,7 +1,7 @@
 ﻿# Card Index
 
 > Auto-generated from extraction/decompiled in this repository.  
-> Generated at: 2026-09-20 21:16:43 +08:00
+> Generated at: 2026-09-21 21:57:15 +08:00
 
 Base metadata plus character ownership and a one-line readable effect for each card internal name. Use this when MCP returns unfamiliar `card_id` values. Owner is the character whose card pool declares the card; cards in a pool no character owns (colorless, curse, status, token, event, quest) show that pool's title instead. Numbers inside Effect are the base (unupgraded) values taken from the card's dynamic vars; ? means the amount is only computed at play time and is deliberately left unresolved rather than guessed.
 

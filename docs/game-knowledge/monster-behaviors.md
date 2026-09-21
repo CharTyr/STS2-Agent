@@ -1,7 +1,7 @@
 ﻿# Monster Behavior Index
 
 > Auto-generated from extraction/decompiled in this repository.  
-> Generated at: 2026-09-20 21:16:43 +08:00
+> Generated at: 2026-09-21 21:57:15 +08:00
 
 Move-state and passive-command summaries extracted from monster source.
 
