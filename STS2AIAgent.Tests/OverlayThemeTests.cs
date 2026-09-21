@@ -157,16 +157,33 @@ internal static class OverlayThemeTests
         Assert.Contains("RebuildInPlace", persist);
 
         var harvest = AgentSourceFixture.MethodBody(overlay, "HarvestSettings");
-        Assert.Contains("OverlayThemeCatalog.Normalize(SelectedMetadata(_themeCombo))", harvest);
+        Assert.Contains("current.OverlayTheme = OverlayThemeCatalog.Normalize(SelectedTheme);", harvest);
 
-        // The settings rebuild is what creates the selector, so the theme row has to be built outside
-        // the advanced-only branch; an advanced-hidden control would still be harvested as null.
-        var tabs = AgentSourceFixture.Read("STS2AIAgent/Ui/AgentOverlayHost.Tabs.cs");
-        var form = AgentSourceFixture.MethodBody(tabs, "RebuildSettingsForm");
-        Assert.Contains("_themeCombo = UiFactory.Combo();", form);
+        // The swatch grid is what creates the selector now, and it has to be selectable outside the
+        // advanced-only branch: an advanced-hidden grid would leave the selection at its default and
+        // write that back on the next save, silently resetting the player's theme.
+        // The form moved to its own file when the pages were split; the contract follows it rather
+        // than reading a file that no longer declares it.
+        var formFile = AgentSourceFixture.Read("STS2AIAgent/Ui/AgentOverlayHost.Settings.cs");
+        var form = AgentSourceFixture.MethodBody(formFile, "RebuildSettingsForm");
+        Assert.Contains("BuildThemePicker()", form);
+        Assert.Contains("_themeSelectedId ??= OverlayThemeCatalog.Normalize(settings.OverlayTheme);", form);
         Assert.True(
-            form.IndexOf("_themeCombo = UiFactory.Combo();", StringComparison.Ordinal) <
+            form.IndexOf("_themeSelectedId ??=", StringComparison.Ordinal) <
             form.IndexOf("if (_showAdvancedValue)", StringComparison.Ordinal),
-            "The theme selector must be built whether or not the advanced section is open.");
+            "The theme selector must be selectable whether or not the advanced section is open.");
+
+        // A swatch grid marks the stored id, so a selection cannot be lost by re-drawing the grid.
+        var picker = AgentSourceFixture.MethodBody(formFile, "BuildThemePicker");
+        Assert.Contains("SelectedTheme", picker);
+
+        // And the selection is seeded once, never re-read: a rebuild that re-reads the persisted value
+        // can observe the pre-save copy and write the default back over the player's own choice --
+        // observed live on 2026-09-21 as "pick ivory, press Save, get slate".
+        Assert.Contains("private string? _themeSelectedId;", formFile);
+        Assert.Contains("_themeSelectedId ??= ", formFile);
+        Assert.False(
+            formFile.Contains("_themeSelectedId = OverlayThemeCatalog.Normalize(settings.OverlayTheme);", StringComparison.Ordinal),
+            "The rebuild overwrites the player's theme selection from the persisted value again.");
     }
 }

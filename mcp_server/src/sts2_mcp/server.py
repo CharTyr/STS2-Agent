@@ -16,7 +16,7 @@ from .legacy_tools import (
     LEGACY_ACTION_TOOLS as _LEGACY_ACTION_TOOLS,
 )
 from .scene_guidance import scene_guidance
-from .state_views import MAX_DIFF_ENTRIES, diff_state, run_summary
+from .state_views import MAX_DIFF_ENTRIES, diff_state as build_state_diff, run_summary
 from .game_data import (
     ITEM_IDS_SEPARATOR,
     GameDataUnavailableError,
@@ -358,13 +358,15 @@ def create_server(client: Sts2Client | None = None, tool_profile: str | None = N
         return sts2.get_available_actions()
 
     @mcp.tool
-    def get_decision_log(limit: int = 50) -> list[dict[str, Any]]:
+    def get_decision_log(limit: int = 50) -> dict[str, Any]:
         """Read recent accepted decisions with the rationale each one carried.
 
         Entries are ordered oldest first and end at the most recent decision. Use it to
         review why the agent played the way it did, or to diff a run against another.
+        Returns ``{"decisions": [...]}`` — the same envelope the native MCP surface
+        returns, so a client can target either surface with one parser.
         """
-        return list(sts2.get_decisions(limit=limit) or [])
+        return {"decisions": list(sts2.get_decisions(limit=limit) or [])}
 
     @mcp.tool
     def get_run_summary() -> dict[str, Any]:
@@ -403,10 +405,11 @@ def create_server(client: Sts2Client | None = None, tool_profile: str | None = N
 
         Pass the `data` object from two snapshots (not the whole envelope). Each change
         names the path, the value before, and the value after; a path present on one side
-        only reports null for the other. `truncated` is true when the cap was reached, so
-        an empty `changes` list always means "no difference".
+        only reports null for the other. `truncated` is true when additional changes were
+        omitted or the depth limit prevented a full comparison. Only an empty, non-truncated
+        result means "no difference". The limit is clamped to 1..200.
         """
-        return diff_state(before, after, limit=limit)
+        return build_state_diff(before, after, limit=limit)
 
     if profile in {"full", "layered"}:
         @mcp.tool

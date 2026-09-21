@@ -31,7 +31,7 @@ The dual-instance launch gate is claimed, never shared. `TryLaunchDualInstanceAs
 The colour half of that system lives in [OverlayTheme.cs](../../../STS2AIAgent/Ui/OverlayTheme.cs), which is Godot-free on purpose so the executable test project can link it. `OverlayThemeCatalog` holds the presets and resolves an unknown id to the default; `OverlayColor.ContrastRatio` is the measuring instrument the tests use. Three rules follow from that split, and each has a contract test:
 
 - `UiFactory.UseTheme` runs before the first control is built. A Godot control keeps the colours it was created with, so applying the theme afterwards leaves the panel in the previous palette and nothing fails.
-- A saved theme rebuilds the overlay. `PersistHarvested` compares the stored id with the live palette and calls `RebuildInPlace`, the same path a language change takes, so the window keeps its visibility, its tab and its position.
+- A theme swatch calls `ApplyThemeChoice`, saves only the theme through a clone of the stored settings, repaints existing controls, and replaces only the swatch picker. It must not harvest or rebuild unfinished settings fields. `PersistHarvested` still rebuilds the overlay when a full settings save finds that the saved palette differs from the displayed palette.
 - Every preset clears WCAG contrast floors against every surface it draws on. `OverlayThemeTests` fails a theme whose body text, secondary text or accent label is unreadable, which is the check a screenshot cannot make.
 
 `ClipText` stays off on buttons. Godot's clipped button reports a minimum width that excludes its label, so a tab row laid out by natural width collapsed to six empty slivers live on 2026-09-20; the label has to drive the size.
@@ -71,3 +71,25 @@ When a shared guided tool changes, update the C# `AgentTools.Mcp`, native dispat
 ## Test execution shape
 
 The C# test project [STS2AIAgent.Tests.csproj](../../../STS2AIAgent.Tests/STS2AIAgent.Tests.csproj) targets `net9.0`, sets `OutputType` to `Exe`, links selected production source files with `Compile Include`, and runs [TestRunner.Main](../../../STS2AIAgent.Tests/TestRunner.cs). Use `dotnet run --project STS2AIAgent.Tests/STS2AIAgent.Tests.csproj`; `dotnet test` is not the local contract for this project. Tests should remain deterministic and focused on state, transport, policy, parsing, and orchestration seams. Live game startup, mod deployment, and provider calls are separate validations and should never be smuggled into the unit runner.
+
+## Regression rules from the dev audit
+
+`SettingsClone.Clone` must copy every persisted preference, including `OverlayTheme`. Exercise a non-default value when testing a new preference; a round trip using defaults cannot reveal an omitted field. A successful save retry clears `save_failed` but does not erase a prior corrupt-file recovery notice.
+
+`CompanionConnection.TryReadStateAsync` returns the complete HTTP envelope from the companion process. `TeammateStatus.Parse` must unwrap a successful `data` object, reject malformed or failed envelopes, and select `is_local=true`: that is the AI player in the companion's own payload. Its hand, health and energy must describe the same player. Test the actual envelope as well as a direct state object.
+
+Caller cancellation must propagate through role probes, vision calls and read tools. Do not store an `OperationCanceledException` as a failed endpoint test when the caller's token is canceled. An independent provider timeout with a live caller token remains a reportable provider failure.
+
+`EventStreamSubscribers` retains snapshots only while at least one subscriber exists. Apply the rule to ordinary disconnects, queue overflow, snapshot overflow and a sample that arrives after the final disconnect. Both publish paths must update polling demand after dropping subscribers. The first sample of a new subscriber lifecycle resets duplicate suppression.
+
+## Turn receipts and budget ordering
+
+`AgentLoop.ExecuteActAsync` must remember a successful bridge response before any follow-up state read, wait or boundary check. Its caller receives the acceptance callback immediately. A later observation failure returns an accepted but unsettled result; it must never clear the fact that this decision already acted. An explicit bridge error still allows a corrected action. Tool arguments are parsed as an object before reading either the action or its reason.
+
+`SessionBudgetGuard.CheckBudget(extraRequests, extraTokens)` checks committed totals plus the current turn's pending usage without recording it. `CompleteWithToolsAsync` passes accumulated known tokens and request attempts, including vision. Recording happens once on completion or interruption. Missing provider usage is not estimated.
+
+`AgentTurnCanceledException` remains an `OperationCanceledException` and carries the turn's partial receipt. Run-boundary stops can also carry a receipt. `AutoPlayRecovery.RunAsync` commits that receipt before honoring cancellation. Runtime callers for step, chat, teammate replies and proactive chat consume interrupted receipts in their existing turn gate. `RecordTurnReceipt` records usage and accepted decisions; `ApplyPlayResult` additionally updates active-play UI fields. Interrupted autoplay uses only the receipt path.
+
+Recovery's optional `turnGate` spans model/game work and receipt commit; the gate is released in a `finally` block. A queued caller must not see the old budget after the previous call has already spent it. Recovery's optional `afterTurn` runs only after play accounting and budget/recovery checks. The runtime puts proactive chat there, acquires the same gate for that chat, and rechecks the budget afterward.
+
+`AgentTurnIntegrityTests` covers accepted-action observation faults, JSON fallback, explicit rejection, token/vision budgets, malformed arguments, cancellation at multiple boundaries, proactive accounting and a queued caller blocked until commit. Source-wiring contracts verify the game-dependent runtime connects those tested components. These tests do not establish live Godot rendering or full-game behavior.

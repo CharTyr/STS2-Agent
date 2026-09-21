@@ -1,15 +1,28 @@
 # STS2 AI Agent：当前状态页
+> 更新日期：2026-09-21。当前本地开发基线为 `dev` / `65c9ad9`，版本元数据为 **v0.14.5**，并包含 `CHANGELOG.md` 的 Unreleased 修复。
+> 本轮按用户要求进行源码审查、构建与离线回归。问题清单和验证记录见 [dev 分支审查](docs/dev-audit-2026-09-21.md)。本轮修复的实机验证尚未执行。
+> 下方各版本的发布、工坊与实机数据保留其原始日期，作为历史证据。
+
+<details>
+<summary>2026-09-19 的发布与渠道记录</summary>
+
 > 本页是仓库唯一的当前状态入口。更新日期：2026-09-19（**v0.13.0 已发布**，GitHub 与 Steam 工坊同日、同源、各一次，未重切）。历史快照标记：本页为当前状态页，非历史快照。
 > 发布代码基准：tag `v0.13.0` @ `78b085f`（PR #161 的 `dev → main` 合并）。GitHub Release 资产 `sts2-ai-agent-v0.13.0-windows.zip` 576033 字节、SHA256 `8CFC0F45…8733`。
 > 工坊最新：物品 3796486050 已于 2026-09-19 11:32:25 更新至 `0.13.0`（公开，`file_size` 1252357 与本地 content 字节和相等，内容 id `3840768014407368680`，DLL SHA256 `6B9D90C8…FBE42`）。最终发布 DLL 已单独通过隔离实机短冒烟。见 [v0.13.0 发布记录](history/release-v0.13.0_2026-09-19.md)。
 > 构建识别：跨版本指纹索引见 [history/build-fingerprints.md](history/build-fingerprints.md)；自本版起这些数字由打包脚本写入产物旁的 `build-fingerprint.json`，不再事后手工采集。
 > 上一版 v0.12.5 的记录见 [v0.12.5 发布记录](history/release-v0.12.5_2026-09-17.md)。**工坊简体中文列表仍是旧版**（自 v0.11.0 起），待手工粘贴 `steam-workshop/description.zh-CN.txt`——`ModUploader` 没有语言参数，只能在工坊网页端做。
 
+</details>
+
 旧路线图见 [PRODUCT_ROADMAP.md](PRODUCT_ROADMAP.md)（历史），旧交付原文见 [history/PRODUCT_PLAN_CURRENT_2026-09-07.md](history/PRODUCT_PLAN_CURRENT_2026-09-07.md) 和 [history/COOP_DELIVERY_2026-09-07.md](history/COOP_DELIVERY_2026-09-07.md)。[COOP_DELIVERY.md](COOP_DELIVERY.md) 现在只是历史证据索引。本页不继承历史文档中的审批、工作树或测试前执行约束。
 
 ## 1. 当前基线
 
-- **v0.14.0（当前发布基准）**：2026-09-21 发布。发布提交 `5f9ea72`（PR #174 的 `dev → main` 合并；
+- **第二轮 5 项行为修复**：重复动作、当轮 Token 检查、取消后的回执、主动发言预算顺序、非对象动作参数已进入本地 Unreleased。详见 [回合完整性修复记录](docs/agent-turn-integrity-2026-09-21.md)。本轮沿用离线验证范围。
+
+- **本地 dev：v0.14.5 + Unreleased 修复**。起点为 `65c9ad9`；当前工作覆盖主题保存、队友身份、两面状态差异、事件流生命周期及模型取消处理。完整验证见审查记录。
+
+- **v0.14.0（历史发布基准）**：2026-09-21 发布。发布提交 `5f9ea72`（PR #174 的 `dev → main` 合并；
   功能经 PR #173 合入 `dev`，CI `contracts` 通过），tag `v0.14.0` 指向它。GitHub Release 资产
   `sts2-ai-agent-v0.14.0-windows.zip` 637550 字节 / SHA256 `37F95EED…2A70`。见
   [v0.14.0 发布记录](history/release-v0.14.0_2026-09-21.md)。
@@ -30,14 +43,14 @@
   **仍未做**：Steam 双开路径、完整自然对局、Vision 实机、typed intent 的线上路径、
   5.4/5.6、7.2 BESTIARY、7.3 机制矩阵补样。工坊渠道状态见发布记录的「工坊上传过程」一节。
 
-- **v0.13.0（上一发布基准）**：2026-09-19 发布。tag `v0.13.0` 指向 PR #161 的
+- **v0.13.0（历史发布基准）**：2026-09-19 发布。tag `v0.13.0` 指向 PR #161 的
   `dev → main` 合并提交 `78b085f`；GitHub Release 资产 576033 字节 / SHA256 `8CFC0F45…8733`；
   工坊公开，`file_size` 1252357 与本地 content 字节和相等，内容 id `3840768014407368680`。
   发布候选的全量离线与实机验收通过；因重新构建的最终 DLL 与候选 DLL 字节不同，又对 GitHub 与
   工坊共同使用的 `6B9D90C8…FBE42` DLL 单独完成新局战斗、怪物数据、保存退出与继续对局短冒烟。
   见 [v0.13.0 发布记录](history/release-v0.13.0_2026-09-19.md)。
 
-- **v0.12.5（上一发布基准）**：2026-09-17 发布，GitHub 与 Steam 工坊同日、同源、**各上传一次**。
+- **v0.12.5（历史发布基准）**：2026-09-17 发布，GitHub 与 Steam 工坊同日、同源、**各上传一次**。
   发布提交 `f361bdb`（PR #145 的 `dev → main` 合并），tag `v0.12.5` 指向它；Release 资产
   `sts2-ai-agent-v0.12.5-windows.zip` 562212 字节 / SHA256 `0E4A1518…CFED`；工坊 `file_size` 1238533
   与本地 content 字节和相等、内容 id `2962740913650521121`、可见性 0（公开）。

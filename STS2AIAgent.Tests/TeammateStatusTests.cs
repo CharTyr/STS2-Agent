@@ -6,26 +6,48 @@ namespace STS2AIAgent.Tests;
 /// The host's view of the teammate's live state.
 /// </summary>
 /// <remarks>
-/// The payload read here is the <b>companion's</b> own <c>/state</c>, so "teammate" means every player
-/// whose <c>is_local</c> is false: each instance reports the other one as non-local, and one payload
-/// then names exactly the people the reader cares about. A companion mid-restart answers nothing, and
-/// that has to produce no summary rather than an exception on the overlay's tick.
+/// These fixtures are the companion process's own state. The AI is local to that process;
+/// non-local players are the host and must not be mixed with the companion's hand.
 /// </remarks>
 internal static class TeammateStatusTests
 {
     private const string CombatState = """
         {"screen":"COMBAT","combat":{"hand":[{"i":0},{"i":1},{"i":2}],"players":[
-        {"player_id":"p1","is_local":true,"is_alive":true,"current_hp":70,"max_hp":70,"block":0,"energy":3},
-        {"player_id":"p2","is_local":false,"is_alive":true,"current_hp":41,"max_hp":66,"block":7,"energy":2}]}}
+        {"player_id":"p1","is_local":false,"is_alive":true,"current_hp":70,"max_hp":70,"block":0,"energy":3},
+        {"player_id":"p2","is_local":true,"is_alive":true,"current_hp":41,"max_hp":66,"block":7,"energy":2}]}}
         """;
 
     private const string MapState = """
         {"screen":"MAP","run":{"players":[
-        {"player_id":"p1","is_local":true,"is_alive":true,"current_hp":70,"max_hp":70,"gold":100},
-        {"player_id":"p2","is_local":false,"is_alive":true,"current_hp":38,"max_hp":66,"gold":120}]}}
+        {"player_id":"p1","is_local":false,"is_alive":true,"current_hp":70,"max_hp":70,"gold":100},
+        {"player_id":"p2","is_local":true,"is_alive":true,"current_hp":38,"max_hp":66,"gold":120}]}}
         """;
 
-    public static void ReadsTheNonLocalPlayerInCombat()
+    public static void ReadsTheActualHttpEnvelope()
+    {
+        foreach (var payload in new[] { CombatState, MapState })
+        {
+            var envelope = "{\"ok\":true,\"request_id\":\"probe\",\"data\":" + payload + "}";
+            var status = TeammateStatus.Parse(envelope);
+            Assert.Equal(1, status.Players.Count);
+            Assert.Equal("p2", status.Players[0].PlayerId);
+            Assert.Equal(TeammateStatus.Parse(payload).Describe(), status.Describe());
+        }
+    }
+
+    public static void RejectsFailedOrMalformedHttpEnvelopes()
+    {
+        foreach (var envelope in new[]
+        {
+            "{\"ok\":false,\"data\":" + CombatState + "}",
+            "{\"ok\":true,\"data\":null}",
+            "{\"ok\":true,\"data\":[]}",
+            "{\"ok\":true}",
+            "{\"ok\":\"true\",\"data\":" + CombatState + "}"
+        }) Assert.Null(TeammateStatus.Parse(envelope).Describe());
+    }
+
+    public static void ReadsTheCompanionLocalPlayerInCombat()
     {
         var status = TeammateStatus.Parse(CombatState);
 
@@ -76,8 +98,8 @@ internal static class TeammateStatusTests
     {
         var state = """
             {"screen":"COMBAT","combat":{"hand":[],"players":[
-            {"player_id":"p1","is_local":true,"is_alive":true,"current_hp":70,"max_hp":70,"energy":3},
-            {"player_id":"p2","is_local":false,"is_alive":false,"current_hp":0,"max_hp":66,"energy":0}]}}
+            {"player_id":"p1","is_local":false,"is_alive":true,"current_hp":70,"max_hp":70,"energy":3},
+            {"player_id":"p2","is_local":true,"is_alive":false,"current_hp":0,"max_hp":66,"energy":0}]}}
             """;
 
         var text = TeammateStatus.Parse(state).Describe();
@@ -99,9 +121,9 @@ internal static class TeammateStatusTests
             Assert.Null(status.Describe());
         }
 
-        // A run with only the local player is a solo payload, not a teammate with no health.
+        // A payload with only the host has no companion player to describe.
         var solo = """
-            {"screen":"MAP","run":{"players":[{"player_id":"p1","is_local":true,"is_alive":true,"current_hp":70,"max_hp":70}]}}
+            {"screen":"MAP","run":{"players":[{"player_id":"p1","is_local":false,"is_alive":true,"current_hp":70,"max_hp":70}]}}
             """;
         Assert.Null(TeammateStatus.Parse(solo).Describe());
     }
@@ -110,7 +132,7 @@ internal static class TeammateStatusTests
     {
         var state = """
             {"screen":"COMBAT","combat":{"hand":[{"i":0}],"players":[
-            {"player_id":"p2","is_local":false,"is_alive":true}]}}
+            {"player_id":"p2","is_local":true,"is_alive":true}]}}
             """;
 
         var text = TeammateStatus.Parse(state).Describe();

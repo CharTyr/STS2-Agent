@@ -71,6 +71,20 @@ internal static class ActIndexValidatorTests
         Assert.True(ActIndexValidator.IsUnsettled("""{"status":"completed","stable":false}"""));
         Assert.False(ActIndexValidator.IsUnsettled("""{"status":"completed","stable":true}"""));
     }
+
+    /// <summary>
+    /// A non-object JSON root (array, scalar, null) must read as "settled" rather than throwing
+    /// <see cref="InvalidOperationException"/> out of <c>TryGetProperty</c> — the same boundary
+    /// <c>AgentLoop.ParseArgs</c> enforces on tool arguments.
+    /// </summary>
+    public static void NonObjectActResultReadsAsSettled()
+    {
+        Assert.False(ActIndexValidator.IsUnsettled("[]"));
+        Assert.False(ActIndexValidator.IsUnsettled("42"));
+        Assert.False(ActIndexValidator.IsUnsettled("\"pending\""));
+        Assert.False(ActIndexValidator.IsUnsettled("null"));
+        Assert.False(ActIndexValidator.IsUnsettled("true"));
+    }
 }
 
 internal static class AgentLoopTests
@@ -812,6 +826,56 @@ internal static class AgentLoopTests
         Assert.True(McpProcessLauncher.IsMcpRoot(root));
         Assert.Equal(Path.GetFullPath(root), McpProcessLauncher.FindMcpRoot(root));
         Assert.False(McpProcessLauncher.IsMcpRoot(Path.GetTempPath()));
+    }
+
+    public static async Task ModelProbeHonorsPreCancellation()
+    {
+        using var cancellation = new CancellationTokenSource();
+        cancellation.Cancel();
+        var factory = new ProbeClientFactory(_ => Task.FromResult("pong"));
+        var loop = new AgentLoop(new FakeBridge(), factory, AgentSettings.CreateDefault);
+        var canceled = false;
+        try { await loop.TestConfiguredRolesAsync(true, cancellation.Token); }
+        catch (OperationCanceledException) when (cancellation.IsCancellationRequested) { canceled = true; }
+        Assert.True(canceled, "A canceled probe must not become a verified or failed model test.");
+        Assert.Equal(0, factory.PingCalls);
+    }
+
+    public static async Task ModelProbePropagatesInFlightCancellation()
+    {
+        using var cancellation = new CancellationTokenSource();
+        var factory = new ProbeClientFactory(token =>
+        {
+            cancellation.Cancel();
+            return Task.FromCanceled<string>(token);
+        });
+        var loop = new AgentLoop(new FakeBridge(), factory, AgentSettings.CreateDefault);
+        var canceled = false;
+        try { await loop.TestConfiguredRolesAsync(true, cancellation.Token); }
+        catch (OperationCanceledException) when (cancellation.IsCancellationRequested) { canceled = true; }
+        Assert.True(canceled, "Caller cancellation must not be cached as endpoint failure.");
+        Assert.Equal(1, factory.PingCalls);
+    }
+
+    public static async Task ModelProbeStillReportsProviderFailure()
+    {
+        var factory = new ProbeClientFactory(_ => Task.FromException<string>(new OperationCanceledException("provider timeout")));
+        var loop = new AgentLoop(new FakeBridge(), factory, AgentSettings.CreateDefault);
+        var result = await loop.TestConfiguredRolesAsync(true, CancellationToken.None);
+        Assert.Equal("failed", result.First(item => item.Role == ModelRoleNames.Play).Record.Status);
+    }
+
+    private sealed class ProbeClientFactory(Func<CancellationToken, Task<string>> ping) : ILlmClientFactory, ILlmClient
+    {
+        public int PingCalls { get; private set; }
+        public ILlmClient Create(LlmEndpoint endpoint) => this;
+        public Task<string> PingAsync(string model, CancellationToken cancellationToken)
+        {
+            PingCalls++;
+            return ping(cancellationToken);
+        }
+        public Task<LlmCompletion> CompleteAsync(LlmRequest request, CancellationToken cancellationToken) =>
+            throw new InvalidOperationException("A model probe must not invoke gameplay completion.");
     }
 
     private sealed class FakeBridge : IGameBridge

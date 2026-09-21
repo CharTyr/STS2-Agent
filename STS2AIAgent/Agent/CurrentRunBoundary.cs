@@ -24,7 +24,9 @@ internal sealed class CurrentRunBoundary
         using var document = JsonDocument.Parse(stateJson);
         var state = document.RootElement;
         var screen = ReadString(state, "screen");
-        var phase = state.TryGetProperty("session", out var session) ? ReadString(session, "phase") : null;
+        var phase = state.ValueKind == JsonValueKind.Object && state.TryGetProperty("session", out var session)
+            ? ReadString(session, "phase")
+            : null;
         var seed = ReadString(state, "run_id");
         Check(screen, phase, seed);
     }

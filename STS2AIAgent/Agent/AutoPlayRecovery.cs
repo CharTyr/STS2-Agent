@@ -91,7 +91,10 @@ internal sealed class AutoPlayRecovery
         Action<AgentTurnResult> report,
         CancellationToken cancellationToken,
         Func<TimeSpan, CancellationToken, Task>? delay = null,
-        SessionBudgetGuard? budgetGuard = null)
+        SessionBudgetGuard? budgetGuard = null,
+        Func<CancellationToken, Task>? afterTurn = null,
+        Action<AgentTurnResult>? reportInterrupted = null,
+        SemaphoreSlim? turnGate = null)
     {
         var recovery = new AutoPlayRecovery();
         delay ??= Task.Delay;
@@ -103,24 +106,54 @@ internal sealed class AutoPlayRecovery
                     throw new AutoPlayStoppedException(initialExceeded, StopKindPolicy.Budget);
                 }
         }
+        string? Commit(AgentTurnResult receipt, bool interrupted)
+        {
+            // Ledger and accepted actions describe work already done. Cancellation only prevents
+            // future work; it cannot erase these facts. Keep interrupted UI updates optional.
+            var reason = budgetGuard?.Observe(receipt);
+            (interrupted ? reportInterrupted ?? report : report)(receipt);
+            return reason;
+        }
+
         while (true)
         {
             cancellationToken.ThrowIfCancellationRequested();
+            if (turnGate != null) await turnGate.WaitAsync(cancellationToken);
             AgentTurnResult result;
-            try { result = await turn(cancellationToken); }
-            catch (AutoPlayStoppedException) { throw; }
-            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) { throw; }
-            catch (Exception ex) { result = new AgentTurnResult { Error = ex.Message }; }
-            cancellationToken.ThrowIfCancellationRequested();
-            report(result);
-            if (budgetGuard != null)
+            string? budgetReason;
+            try
             {
-                // Record the finished turn, then stop before starting another.
-                var budgetReason = budgetGuard.Observe(result) ?? budgetGuard.CheckBudget();
-                if (budgetReason != null) throw new AutoPlayStoppedException(budgetReason, StopKindPolicy.Budget);
+                try { result = await turn(cancellationToken); }
+                catch (AgentTurnCanceledException ex) when (cancellationToken.IsCancellationRequested)
+                {
+                    Commit(ex.Receipt, interrupted: true);
+                    throw;
+                }
+                catch (AutoPlayStoppedException ex)
+                {
+                    if (ex.Receipt != null) Commit(ex.Receipt, interrupted: true);
+                    throw;
+                }
+                catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) { throw; }
+                catch (Exception ex) { result = new AgentTurnResult { Error = ex.Message }; }
+                budgetReason = Commit(result, cancellationToken.IsCancellationRequested);
             }
+            finally
+            {
+                // A waiting model turn must see this turn's receipt before it can start.
+                turnGate?.Release();
+            }
+            cancellationToken.ThrowIfCancellationRequested();
+            if (budgetReason != null) throw new AutoPlayStoppedException(budgetReason, StopKindPolicy.Budget);
             var next = recovery.Observe(result);
             if (next.StopReason != null) throw new AutoPlayStoppedException(next.StopReason, next.StopKind);
+            if (afterTurn != null)
+            {
+                await afterTurn(cancellationToken);
+                cancellationToken.ThrowIfCancellationRequested();
+                budgetReason = budgetGuard?.CheckBudget();
+                if (budgetReason != null) throw new AutoPlayStoppedException(budgetReason, StopKindPolicy.Budget);
+            }
             if (next.Delay > TimeSpan.Zero) await delay(next.Delay, cancellationToken);
         }
     }
@@ -134,4 +167,7 @@ internal sealed class AutoPlayStoppedException(string message, string? kind = nu
     /// budget or network stop just because the underlying error text contained a keyword.
     /// </summary>
     public string? Kind { get; } = kind;
+
+    /// <summary>Completed work before a run-boundary stop, if a model turn had already started.</summary>
+    public AgentTurnResult? Receipt { get; set; }
 }

@@ -39,11 +39,12 @@ class DecisionLogToolTests(unittest.TestCase):
         result = tool.fn(limit=7)
 
         self.assertEqual(client.limits, [7])
-        self.assertEqual(result, entries)
+        # The tool returns the same {"decisions": [...]} envelope as the native MCP surface.
+        self.assertEqual(result, {"decisions": entries})
 
     def test_guided_decision_log_tolerates_an_empty_answer(self) -> None:
-        # A mod that predates the route answers nothing useful; the tool must return a list
-        # rather than leaking a None into the model's context.
+        # A mod that predates the route answers nothing useful; the tool must return an
+        # empty envelope rather than leaking a None into the model's context.
         class Empty:
             def get_decisions(self, limit: int = 50):
                 return None
@@ -51,7 +52,7 @@ class DecisionLogToolTests(unittest.TestCase):
         server = create_server(client=Empty(), tool_profile="guided")  # type: ignore[arg-type]
         tool = asyncio.run(server.get_tool("get_decision_log"))
 
-        self.assertEqual(tool.fn(), [])
+        self.assertEqual(tool.fn(), {"decisions": []})
 
 
 if __name__ == "__main__":

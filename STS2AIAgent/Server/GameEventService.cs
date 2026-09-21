@@ -168,11 +168,14 @@ internal sealed class GameEventService
 
     private void ProcessStateLocked(GameStatePayload state)
     {
+        // The last subscriber can leave while the game-thread sample is in flight.
+        if (_subscribers.Count == 0) return;
         var current = StateDigest.FromState(state);
         var previous = _subscribers.Snapshot;
 
         if (previous == null)
         {
+            _repeatGuard.Reset();
             Publish("session_started", new
             {
                 run_id = current.RunId,
@@ -295,7 +298,11 @@ internal sealed class GameEventService
             return;
         }
 
-        var staleCount = _subscribers.Publish(BuildEnvelope(eventType, data));
+        NoteDroppedSubscribers(_subscribers.Publish(BuildEnvelope(eventType, data)));
+    }
+
+    private void NoteDroppedSubscribers(int staleCount)
+    {
         if (staleCount > 0)
         {
             _polling.SetSubscriberCount(_subscribers.Count);
@@ -310,7 +317,7 @@ internal sealed class GameEventService
     /// </summary>
     private void PublishSnapshot(string eventType, StateDigest snapshot)
     {
-        _subscribers.PublishSnapshot(snapshot, BuildSnapshotEnvelope(snapshot, eventType));
+        NoteDroppedSubscribers(_subscribers.PublishSnapshot(snapshot, BuildSnapshotEnvelope(snapshot, eventType)));
     }
 
     private GameEventEnvelope BuildSnapshotEnvelope(StateDigest snapshot, string eventType)

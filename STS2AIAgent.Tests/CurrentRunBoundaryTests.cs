@@ -1,4 +1,4 @@
-﻿using System.Text.Json;
+using System.Text.Json;
 using STS2AIAgent.Agent;
 
 namespace STS2AIAgent.Tests;
@@ -72,6 +72,19 @@ internal static class CurrentRunBoundaryTests
         var ex = Expect<AutoPlayStoppedException>(() =>
             boundary.Check("CHARACTER_SELECT", "run", "run_2"));
         Assert.Contains("当前局已离开", ex.Message);
+    }
+
+    /// <summary>
+    /// A non-object state payload (array, scalar) must not throw out of the session-phase read;
+    /// the boundary simply observes nothing from it.
+    /// </summary>
+    public static void NonObjectStatePayloadIsIgnored()
+    {
+        var boundary = new CurrentRunBoundary();
+        boundary.Check("[]");
+        boundary.Check("42");
+        boundary.Check("\"COMBAT\"");
+        Assert.Null(boundary.RunId);
     }
 
     private static T Expect<T>(Action action) where T : Exception

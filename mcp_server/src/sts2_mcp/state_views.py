@@ -19,6 +19,9 @@ run" from "in a run with nothing in it".
 
 from __future__ import annotations
 
+import json
+import re
+from itertools import chain
 from typing import Any
 
 # A diff of two whole `/state` payloads can be enormous (a combat payload with a full hand, every
@@ -106,22 +109,25 @@ def _leaf(value: Any) -> tuple[str, Any]:
 
 def _flatten(value: Any, path: str, depth: int, out: dict[str, tuple[str, Any]]) -> None:
     if depth > MAX_DIFF_DEPTH:
-        out[path] = ("string", "<max depth>")
+        out[path] = ("depth", "<max depth>")
         return
 
     if isinstance(value, dict):
         if not value:
-            out[path] = ("string", "{}")
+            out[path] = ("object", "{}")
             return
         for key in value:
-            child = f"{path}.{key}" if path else str(key)
+            name = str(key)
+            child = (f"{path}.{name}" if path else name) if re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", name) else (
+                f"{path}[{json.dumps(name, ensure_ascii=True)}]"
+            )
             _flatten(value[key], child, depth + 1, out)
         return
 
     if isinstance(value, list):
         # Lists are compared by length and by element, so an index that appeared or vanished is a
         # change of its own rather than a reshuffle of every later index.
-        out[f"{path}[]"] = ("string", f"len={len(value)}")
+        out[f"{path}[]"] = ("array_length", f"len={len(value)}")
         for index, item in enumerate(value):
             _flatten(item, f"{path}[{index}]", depth + 1, out)
         return
@@ -139,21 +145,25 @@ def diff_state(before: Any, after: Any, *, limit: int = MAX_DIFF_ENTRIES) -> dic
     """The paths that differ between two `/state` payloads, oldest value first.
 
     Each entry names the path, the value before, and the value after; a path on one side only is
-    reported with the missing side as None. `truncated` says the cap was reached, so an empty
-    `changes` list means "no difference" and a truncated one never reads as one.
+    reported with the missing side as None. `truncated` reports omitted changes or a depth
+    cutoff. An empty result means "no difference" only when it is not truncated.
     """
-    cap = max(1, int(limit))
+    cap = min(MAX_DIFF_ENTRIES, max(1, int(limit)))
     before_leaves = _leaves(before)
     after_leaves = _leaves(after)
 
     changes: list[dict[str, Any]] = []
-    truncated = False
+    truncated = any(kind == "depth" for kind, _ in chain(before_leaves.values(), after_leaves.values()))
     paths = sorted(set(before_leaves) | set(after_leaves))
     for path in paths:
         has_before = path in before_leaves
         has_after = path in after_leaves
         if has_before and has_after and before_leaves[path] == after_leaves[path]:
             continue
+
+        if len(changes) >= cap:
+            truncated = True
+            break
 
         changes.append(
             {
@@ -163,9 +173,6 @@ def diff_state(before: Any, after: Any, *, limit: int = MAX_DIFF_ENTRIES) -> dic
             }
         )
 
-        if len(changes) >= cap:
-            truncated = len(changes) < len(paths)
-            break
 
     return {
         "changes": changes,

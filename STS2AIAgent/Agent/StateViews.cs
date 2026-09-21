@@ -1,3 +1,6 @@
+using System.Globalization;
+using System.Numerics;
+using System.Text;
 using System.Text.Json;
 
 namespace STS2AIAgent.Agent;
@@ -97,7 +100,7 @@ internal static class StateViews
     /// </summary>
     public static object BuildStateDiff(JsonElement before, JsonElement after, int limit = MaxDiffEntries)
     {
-        var cap = Math.Max(1, limit);
+        var cap = Math.Clamp(limit, 1, MaxDiffEntries);
         var beforeLeaves = Flatten(before);
         var afterLeaves = Flatten(after);
 
@@ -106,7 +109,7 @@ internal static class StateViews
         paths.UnionWith(afterLeaves.Keys);
 
         var changes = new List<object>();
-        var truncated = false;
+        var truncated = beforeLeaves.Values.Concat(afterLeaves.Values).Any(leaf => leaf.Kind == "depth");
         foreach (var path in paths)
         {
             beforeLeaves.TryGetValue(path, out var beforeValue);
@@ -114,9 +117,16 @@ internal static class StateViews
             var hasBefore = beforeLeaves.ContainsKey(path);
             var hasAfter = afterLeaves.ContainsKey(path);
 
-            if (hasBefore && hasAfter && beforeValue == afterValue)
+            if (hasBefore && hasAfter && beforeValue.Kind == afterValue.Kind && beforeValue.Text == afterValue.Text)
             {
                 continue;
+            }
+
+            // Only an additional difference proves that the entry cap omitted a result.
+            if (changes.Count >= cap)
+            {
+                truncated = true;
+                break;
             }
 
             changes.Add(new
@@ -126,11 +136,6 @@ internal static class StateViews
                 after = hasAfter ? afterValue.Value : null
             });
 
-            if (changes.Count >= cap)
-            {
-                truncated = changes.Count < paths.Count;
-                break;
-            }
         }
 
         return new
@@ -161,7 +166,7 @@ internal static class StateViews
     {
         if (depth > MaxDiffDepth)
         {
-            flat[path] = new Leaf("string", "<max depth>", "<max depth>");
+            flat[path] = new Leaf("depth", "<max depth>", "<max depth>");
             return;
         }
 
@@ -172,13 +177,13 @@ internal static class StateViews
                 foreach (var property in value.EnumerateObject())
                 {
                     wroteChild = true;
-                    var child = path.Length == 0 ? property.Name : path + "." + property.Name;
+                    var child = PropertyPath(path, property.Name);
                     FlattenInto(property.Value, child, depth + 1, flat);
                 }
 
                 if (!wroteChild)
                 {
-                    flat[path] = new Leaf("string", "{}", "{}");
+                    flat[path] = new Leaf("object", "{}", "{}");
                 }
 
                 return;
@@ -187,7 +192,7 @@ internal static class StateViews
                 // Lists are compared by length and by element, so an index that appeared or vanished
                 // is a change of its own rather than a reshuffle of every later index.
                 var length = "len=" + value.GetArrayLength();
-                flat[path + "[]"] = new Leaf("string", length, length);
+                flat[path + "[]"] = new Leaf("array_length", length, length);
                 var index = 0;
                 foreach (var item in value.EnumerateArray())
                 {
@@ -211,7 +216,7 @@ internal static class StateViews
                 var text = value.GetString() ?? string.Empty;
                 return new Leaf("string", "s:" + text, text);
             case JsonValueKind.Number:
-                return new Leaf("number", "n:" + value.GetRawText(), value.GetDouble());
+                return new Leaf("number", NumberKey(value.GetRawText()), value.Clone());
             case JsonValueKind.True:
                 return new Leaf("bool", "b:true", true);
             case JsonValueKind.False:
@@ -219,6 +224,64 @@ internal static class StateViews
             default:
                 return new Leaf("null", "z:", null);
         }
+    }
+
+    private static string PropertyPath(string path, string name)
+    {
+        var plain = name.Length > 0 && (char.IsAsciiLetter(name[0]) || name[0] == '_') &&
+                    name.All(c => char.IsAsciiLetterOrDigit(c) || c == '_');
+        return plain ? (path.Length == 0 ? name : path + "." + name)
+            : path + "[" + QuotePathName(name) + "]";
+    }
+
+    // Match Python json.dumps(..., ensure_ascii=True), including lowercase surrogate escapes.
+    // These strings are part of the path, so serializer-specific Unicode escaping is observable.
+    private static string QuotePathName(string name)
+    {
+        var quoted = new StringBuilder();
+        quoted.Append((char)34);
+        foreach (var c in name)
+        {
+            switch ((int)c)
+            {
+                case 34: quoted.Append((char)92).Append((char)34); break;
+                case 92: quoted.Append((char)92).Append((char)92); break;
+                case 8: quoted.Append((char)92).Append('b'); break;
+                case 12: quoted.Append((char)92).Append('f'); break;
+                case 10: quoted.Append((char)92).Append('n'); break;
+                case 13: quoted.Append((char)92).Append('r'); break;
+                case 9: quoted.Append((char)92).Append('t'); break;
+                default:
+                    if (c < 0x20 || c > 0x7e)
+                        quoted.Append((char)92).Append('u').Append(((int)c).ToString("x4", CultureInfo.InvariantCulture));
+                    else quoted.Append(c);
+                    break;
+            }
+        }
+        return quoted.Append((char)34).ToString();
+    }
+
+    // Compare JSON numbers by their exact decimal value, without rounding ids through double.
+    // Keep the original JsonElement for output so even large numbers retain their wire value.
+    private static string NumberKey(string raw)
+    {
+        var exponentAt = raw.IndexOfAny(new[] { 'e', 'E' });
+        var mantissa = exponentAt < 0 ? raw : raw[..exponentAt];
+        var exponent = exponentAt < 0 ? BigInteger.Zero
+            : BigInteger.Parse(raw[(exponentAt + 1)..], CultureInfo.InvariantCulture);
+        var negative = mantissa.StartsWith('-');
+        if (negative) mantissa = mantissa[1..];
+        var dot = mantissa.IndexOf('.');
+        if (dot >= 0)
+        {
+            exponent -= mantissa.Length - dot - 1;
+            mantissa = mantissa.Remove(dot, 1);
+        }
+        mantissa = mantissa.TrimStart('0');
+        if (mantissa.Length == 0) return "0";
+        var digits = mantissa.TrimEnd('0');
+        exponent += mantissa.Length - digits.Length;
+        return (negative ? "-" : "") + digits + "e" + exponent.ToString(CultureInfo.InvariantCulture);
     }
 
     private static IReadOnlyList<JsonElement> ArrayOf(JsonElement parent, string name)

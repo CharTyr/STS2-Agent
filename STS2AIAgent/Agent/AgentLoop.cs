@@ -1,6 +1,7 @@
 using System.Text.Json;
 using STS2AIAgent.Config;
 using STS2AIAgent.Llm;
+using STS2AIAgent.Server;
 
 namespace STS2AIAgent.Agent;
 
@@ -175,6 +176,7 @@ internal sealed class AgentLoop
         var cache = new Dictionary<string, ModelRoleTestRecord>(StringComparer.Ordinal);
         foreach (var role in new[] { ModelRoleNames.Conversation, ModelRoleNames.Play, ModelRoleNames.Vision })
         {
+            cancellationToken.ThrowIfCancellationRequested();
             var resolved = ModelRoleProbe.Resolve(settings, role);
             if (role == ModelRoleNames.Vision && resolved == null)
             {
@@ -206,9 +208,14 @@ internal sealed class AgentLoop
             {
                 var client = _factory.Create(resolved.Endpoint);
                 await client.PingAsync(resolved.Model.Model, cancellationToken);
+                cancellationToken.ThrowIfCancellationRequested();
                 var record = ModelRoleProbe.FromSuccess(role, resolved);
                 cache[fingerprint] = record;
                 results.Add(new ModelRoleProbeResult(role, record, false));
+            }
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+            {
+                throw;
             }
             catch (Exception ex)
             {
@@ -251,7 +258,6 @@ internal sealed class AgentLoop
         LlmUsage? initialUsage = null,
         int initialRequests = 0)
     {
-        var client = _factory.Create(resolved.Endpoint);
         string? lastText = null;
         string? lastReasoning = null;
         string? acted = null;
@@ -263,198 +269,233 @@ internal sealed class AgentLoop
         var accumulatedUsage = initialUsage;
         var requestsSpent = initialRequests;
 
-        for (var round = 0; round < MaxToolRounds; round++)
+        void RememberAccepted(string action, string response, string? reason)
         {
-            cancellationToken.ThrowIfCancellationRequested();
-            rounds = round + 1;
-            var request = new LlmRequest
-            {
-                Model = resolved.Model.Model,
-                Messages = messages.ToArray(),
-                Tools = resolved.Model.SupportsTools ? tools : null,
-                Thinking = resolved.Model.GetThinkingIntensity(),
-                ThinkingMode = resolved.Model.ThinkingMode
-            };
-
-            var budgetReason = _budgetGuard?.Invoke()?.CheckBudget(requestsSpent);
-            if (budgetReason != null)
-            {
-                return new AgentTurnResult
-                {
-                    AssistantText = lastText,
-                    Reasoning = lastReasoning,
-                    Acted = acted,
-                    ActResultJson = actResult,
-                    Error = budgetReason,
-                    ToolRounds = rounds,
-                    Usage = accumulatedUsage,
-                    RequestsSpent = requestsSpent
-                };
-            }
-
-            LlmCompletion completion;
-            try
-            {
-                requestsSpent++;
-                completion = await client.CompleteAsync(request, cancellationToken);
-                if (completion.Usage != null)
-                {
-                    accumulatedUsage = LlmUsage.Combine(accumulatedUsage, completion.Usage);
-                }
-            }
-            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
-            {
-                throw;
-            }
-            catch (Exception ex)
-            {
-                return new AgentTurnResult
-                {
-                    AssistantText = lastText,
-                    Reasoning = lastReasoning,
-                    Acted = acted,
-                    ActResultJson = actResult,
-                    Error = ex.Message,
-                    RequiresConfiguration = ex is LlmException { StatusCode: >= 400 and < 500 and not 408 and not 429 },
-                    ToolRounds = rounds,
-                    Usage = accumulatedUsage,
-                    RequestsSpent = requestsSpent
-                };
-            }
-
-            lastText = completion.Content;
-            lastReasoning = completion.Reasoning ?? lastReasoning;
-            if (completion.ToolCalls.Count == 0)
-            {
-                if (allowAct &&
-                    acted == null &&
-                    !resolved.Model.SupportsTools &&
-                    ActJsonParser.TryParse(completion.Content, out var actJson))
-                {
-                    var fallbackReason = TryReadActReason(actJson);
-                    var parsedAct = await ExecuteActAsync(actJson, cancellationToken, checkState);
-                    if (parsedAct.Error == null)
-                    {
-                        lastReasoning = fallbackReason ?? lastReasoning;
-                        acted = parsedAct.Action;
-                        actResult = parsedAct.ResultJson;
-                        actFingerprint = parsedAct.Fingerprint;
-                        actUnsettled = parsedAct.Unsettled;
-                        lastActError = null;
-                        if (stopAfterAct)
-                        {
-                            return new AgentTurnResult
-                            {
-                                AssistantText = completion.Content,
-                                Reasoning = lastReasoning,
-                                Acted = acted,
-                                ActResultJson = actResult,
-                                StateFingerprint = actFingerprint,
-                                ExecutedUnsettled = actUnsettled,
-                                ToolRounds = rounds,
-                                Usage = accumulatedUsage,
-                                RequestsSpent = requestsSpent
-                            };
-                        }
-                    }
-                    else
-                    {
-                        lastActError = parsedAct.Error;
-                    }
-
-                    messages.Add(LlmMessage.Assistant(completion.Content));
-                    messages.Add(LlmMessage.User("Act result:\n" + parsedAct.ResultJson));
-                    continue;
-                }
-
-                return new AgentTurnResult
-                {
-                    AssistantText = completion.Content,
-                    Reasoning = lastReasoning,
-                    Acted = acted,
-                    ActResultJson = actResult,
-                    Error = acted == null ? lastActError : null,
-                    StateFingerprint = actFingerprint,
-                    ExecutedUnsettled = actUnsettled,
-                    ToolRounds = rounds,
-                    Usage = accumulatedUsage,
-                    RequestsSpent = requestsSpent
-                };
-            }
-
-            messages.Add(LlmMessage.Assistant(completion.Content, completion.ToolCalls));
-            foreach (var call in completion.ToolCalls)
-            {
-                cancellationToken.ThrowIfCancellationRequested();
-                if (string.Equals(call.Name, "act", StringComparison.OrdinalIgnoreCase))
-                {
-                    if (!allowAct)
-                    {
-                        messages.Add(LlmMessage.Tool(call.Id, """{"error":"act is disabled in chat mode"}"""));
-                        continue;
-                    }
-
-                    if (acted != null)
-                    {
-                        messages.Add(LlmMessage.Tool(call.Id, """{"error":"only one act is allowed per decision"}"""));
-                        continue;
-                    }
-
-                    var actReason = TryReadActReason(call.ArgumentsJson);
-                    var actOutcome = await ExecuteActAsync(call.ArgumentsJson, cancellationToken, checkState);
-                    messages.Add(LlmMessage.Tool(call.Id, actOutcome.ResultJson));
-                    if (actOutcome.Error == null)
-                    {
-                        lastReasoning = actReason ?? lastReasoning;
-                        acted = actOutcome.Action;
-                        actResult = actOutcome.ResultJson;
-                        actFingerprint = actOutcome.Fingerprint;
-                        actUnsettled = actOutcome.Unsettled;
-                        lastActError = null;
-                        if (stopAfterAct)
-                        {
-                            return new AgentTurnResult
-                            {
-                                AssistantText = completion.Content,
-                                Reasoning = lastReasoning,
-                                Acted = acted,
-                                ActResultJson = actResult,
-                                StateFingerprint = actFingerprint,
-                                ExecutedUnsettled = actUnsettled,
-                                ToolRounds = rounds,
-                                Usage = accumulatedUsage,
-                                RequestsSpent = requestsSpent
-                            };
-                        }
-                    }
-                    else
-                    {
-                        lastActError = actOutcome.Error;
-                    }
-
-                    continue;
-                }
-
-                var toolJson = await ExecuteReadToolAsync(call.Name, call.ArgumentsJson, cancellationToken, checkState);
-                messages.Add(LlmMessage.Tool(call.Id, toolJson));
-            }
+            acted = action;
+            actResult = response;
+            actUnsettled = true;
+            lastReasoning = reason ?? lastReasoning;
         }
 
-        return new AgentTurnResult
+        AgentTurnResult Receipt() => new()
         {
-            AssistantText = lastText,
-            Reasoning = lastReasoning,
-            Acted = acted,
-            ActResultJson = actResult,
-            Error = acted == null && lastActError != null
-                ? lastActError
-                : "Reached the tool-call round limit without a final answer.",
-            StateFingerprint = actFingerprint,
-            ExecutedUnsettled = actUnsettled,
-            ToolRounds = rounds,
-            Usage = accumulatedUsage,
-            RequestsSpent = requestsSpent
+            AssistantText = lastText, Reasoning = lastReasoning,
+            Acted = acted, ActResultJson = actResult, StateFingerprint = actFingerprint,
+            ExecutedUnsettled = actUnsettled, ToolRounds = rounds,
+            Usage = accumulatedUsage, RequestsSpent = requestsSpent
         };
+
+        try
+        {
+            var client = _factory.Create(resolved.Endpoint);
+            for (var round = 0; round < MaxToolRounds; round++)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                rounds = round + 1;
+                var request = new LlmRequest
+                {
+                    Model = resolved.Model.Model,
+                    Messages = messages.ToArray(),
+                    Tools = resolved.Model.SupportsTools ? tools : null,
+                    Thinking = resolved.Model.GetThinkingIntensity(),
+                    ThinkingMode = resolved.Model.ThinkingMode
+                };
+
+                var budgetReason = _budgetGuard?.Invoke()?.CheckBudget(requestsSpent, accumulatedUsage?.TotalTokens ?? 0);
+                if (budgetReason != null)
+                {
+                    return new AgentTurnResult
+                    {
+                        AssistantText = lastText,
+                        Reasoning = lastReasoning,
+                        Acted = acted,
+                        ActResultJson = actResult,
+                        Error = budgetReason,
+                        StateFingerprint = actFingerprint,
+                        ExecutedUnsettled = actUnsettled,
+                        ToolRounds = rounds,
+                        Usage = accumulatedUsage,
+                        RequestsSpent = requestsSpent
+                    };
+                }
+
+                LlmCompletion completion;
+                try
+                {
+                    requestsSpent++;
+                    completion = await client.CompleteAsync(request, cancellationToken);
+                    if (completion.Usage != null)
+                    {
+                        accumulatedUsage = LlmUsage.Combine(accumulatedUsage, completion.Usage);
+                    }
+                }
+                catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+                {
+                    throw;
+                }
+                catch (Exception ex)
+                {
+                    return new AgentTurnResult
+                    {
+                        AssistantText = lastText,
+                        Reasoning = lastReasoning,
+                        Acted = acted,
+                        ActResultJson = actResult,
+                        StateFingerprint = actFingerprint,
+                        ExecutedUnsettled = actUnsettled,
+                        Error = ex.Message,
+                        RequiresConfiguration = ex is LlmException { StatusCode: >= 400 and < 500 and not 408 and not 429 },
+                        ToolRounds = rounds,
+                        Usage = accumulatedUsage,
+                        RequestsSpent = requestsSpent
+                    };
+                }
+
+                lastText = completion.Content;
+                lastReasoning = completion.Reasoning ?? lastReasoning;
+                if (completion.ToolCalls.Count == 0)
+                {
+                    if (allowAct &&
+                        acted == null &&
+                        !resolved.Model.SupportsTools &&
+                        ActJsonParser.TryParse(completion.Content, out var actJson))
+                    {
+                        var fallbackReason = TryReadActReason(actJson);
+                        var parsedAct = await ExecuteActAsync(actJson, cancellationToken, checkState,
+                            (action, response) => RememberAccepted(action, response, fallbackReason));
+                        if (parsedAct.Error == null)
+                        {
+                            lastReasoning = fallbackReason ?? lastReasoning;
+                            acted = parsedAct.Action;
+                            actResult = parsedAct.ResultJson;
+                            actFingerprint = parsedAct.Fingerprint;
+                            actUnsettled = parsedAct.Unsettled;
+                            lastActError = null;
+                            if (stopAfterAct)
+                            {
+                                return new AgentTurnResult
+                                {
+                                    AssistantText = completion.Content,
+                                    Reasoning = lastReasoning,
+                                    Acted = acted,
+                                    ActResultJson = actResult,
+                                    StateFingerprint = actFingerprint,
+                                    ExecutedUnsettled = actUnsettled,
+                                    ToolRounds = rounds,
+                                    Usage = accumulatedUsage,
+                                    RequestsSpent = requestsSpent
+                                };
+                            }
+                        }
+                        else
+                        {
+                            lastActError = parsedAct.Error;
+                        }
+
+                        messages.Add(LlmMessage.Assistant(completion.Content));
+                        messages.Add(LlmMessage.User("Act result:\n" + parsedAct.ResultJson));
+                        continue;
+                    }
+
+                    return new AgentTurnResult
+                    {
+                        AssistantText = completion.Content,
+                        Reasoning = lastReasoning,
+                        Acted = acted,
+                        ActResultJson = actResult,
+                        Error = acted == null ? lastActError : null,
+                        StateFingerprint = actFingerprint,
+                        ExecutedUnsettled = actUnsettled,
+                        ToolRounds = rounds,
+                        Usage = accumulatedUsage,
+                        RequestsSpent = requestsSpent
+                    };
+                }
+
+                messages.Add(LlmMessage.Assistant(completion.Content, completion.ToolCalls));
+                foreach (var call in completion.ToolCalls)
+                {
+                    cancellationToken.ThrowIfCancellationRequested();
+                    if (string.Equals(call.Name, "act", StringComparison.OrdinalIgnoreCase))
+                    {
+                        if (!allowAct)
+                        {
+                            messages.Add(LlmMessage.Tool(call.Id, """{"error":"act is disabled in chat mode"}"""));
+                            continue;
+                        }
+
+                        if (acted != null)
+                        {
+                            messages.Add(LlmMessage.Tool(call.Id, """{"error":"only one act is allowed per decision"}"""));
+                            continue;
+                        }
+
+                        var actReason = TryReadActReason(call.ArgumentsJson);
+                        var actOutcome = await ExecuteActAsync(call.ArgumentsJson, cancellationToken, checkState,
+                            (action, response) => RememberAccepted(action, response, actReason));
+                        messages.Add(LlmMessage.Tool(call.Id, actOutcome.ResultJson));
+                        if (actOutcome.Error == null)
+                        {
+                            lastReasoning = actReason ?? lastReasoning;
+                            acted = actOutcome.Action;
+                            actResult = actOutcome.ResultJson;
+                            actFingerprint = actOutcome.Fingerprint;
+                            actUnsettled = actOutcome.Unsettled;
+                            lastActError = null;
+                            if (stopAfterAct)
+                            {
+                                return new AgentTurnResult
+                                {
+                                    AssistantText = completion.Content,
+                                    Reasoning = lastReasoning,
+                                    Acted = acted,
+                                    ActResultJson = actResult,
+                                    StateFingerprint = actFingerprint,
+                                    ExecutedUnsettled = actUnsettled,
+                                    ToolRounds = rounds,
+                                    Usage = accumulatedUsage,
+                                    RequestsSpent = requestsSpent
+                                };
+                            }
+                        }
+                        else
+                        {
+                            lastActError = actOutcome.Error;
+                        }
+
+                        continue;
+                    }
+
+                    var toolJson = await ExecuteReadToolAsync(call.Name, call.ArgumentsJson, cancellationToken, checkState);
+                    messages.Add(LlmMessage.Tool(call.Id, toolJson));
+                }
+            }
+
+            return new AgentTurnResult
+            {
+                AssistantText = lastText,
+                Reasoning = lastReasoning,
+                Acted = acted,
+                ActResultJson = actResult,
+                Error = acted == null && lastActError != null
+                    ? lastActError
+                    : "Reached the tool-call round limit without a final answer.",
+                StateFingerprint = actFingerprint,
+                ExecutedUnsettled = actUnsettled,
+                ToolRounds = rounds,
+                Usage = accumulatedUsage,
+                RequestsSpent = requestsSpent
+            };
+        }
+        catch (OperationCanceledException ex) when (cancellationToken.IsCancellationRequested)
+        {
+            throw new AgentTurnCanceledException(Receipt(), ex, cancellationToken);
+        }
+        catch (AutoPlayStoppedException ex)
+        {
+            ex.Receipt = Receipt();
+            throw;
+        }
     }
 
     private async Task<(string? Caption, byte[]? Jpeg, bool AttachToPrimary, LlmUsage? Usage, int RequestsSpent)> TryDescribeOrAttachVisionAsync(
@@ -478,6 +519,10 @@ internal sealed class AgentLoop
         try
         {
             jpeg = await _bridge.CaptureScreenshotJpegAsync(cancellationToken);
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            throw;
         }
         catch
         {
@@ -505,9 +550,12 @@ internal sealed class AgentLoop
             return (visionBudget, jpeg, false, null, 0);
         }
 
+        var visionRequests = 0;
         try
         {
+            cancellationToken.ThrowIfCancellationRequested();
             var client = _factory.Create(vision.Endpoint);
+            visionRequests = 1;
             var completion = await client.CompleteAsync(new LlmRequest
             {
                 Model = vision.Model.Model,
@@ -525,9 +573,13 @@ internal sealed class AgentLoop
                 : "Vision observation:\n" + completion.Content;
             return (caption, jpeg, false, completion.Usage, 1);
         }
+        catch (OperationCanceledException ex) when (cancellationToken.IsCancellationRequested)
+        {
+            throw new AgentTurnCanceledException(new AgentTurnResult { RequestsSpent = visionRequests }, ex, cancellationToken);
+        }
         catch (Exception ex)
         {
-            return ("Vision model failed: " + ex.Message, jpeg, false, null, 1);
+            return ("Vision model failed: " + ex.Message, jpeg, false, null, visionRequests);
         }
     }
 
@@ -565,6 +617,10 @@ internal sealed class AgentLoop
         {
             throw;
         }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            throw;
+        }
         catch (Exception ex)
         {
             return AgentErrorEnvelope.Serialize(ex, JsonOptions);
@@ -593,8 +649,11 @@ internal sealed class AgentLoop
     private async Task<(string? Action, string ResultJson, string? Fingerprint, bool Unsettled, string? Error)> ExecuteActAsync(
         string argumentsJson,
         CancellationToken cancellationToken,
-        Action<string>? checkState = null)
+        Action<string>? checkState = null,
+        Action<string, string>? onAccepted = null)
     {
+        string? acceptedAction = null;
+        string? acceptedResponse = null;
         try
         {
             using var args = ParseArgs(argumentsJson);
@@ -663,6 +722,10 @@ internal sealed class AgentLoop
                 return (null, result, null, false, bridgeError ?? "act failed");
             }
 
+            acceptedAction = action;
+            acceptedResponse = result;
+            onAccepted?.Invoke(action, result);
+
             if (ActIndexValidator.IsUnsettled(result))
             {
                 var settled = await _bridge.WaitUntilActionableAsync(TimeSpan.FromSeconds(20), cancellationToken);
@@ -697,7 +760,20 @@ internal sealed class AgentLoop
         }
         catch (Exception ex)
         {
-            return (null, AgentErrorEnvelope.Serialize(ex, JsonOptions), null, false, ex.Message);
+            if (acceptedAction != null)
+            {
+                var pending = JsonSerializer.Serialize(new
+                {
+                    action = acceptedAction, status = "pending", stable = false,
+                    message = "Action accepted; follow-up state is unavailable. Refresh state before the next decision.",
+                    accepted_response = acceptedResponse,
+                    observation_error = DiagnosticExport.Redact(ex.Message)
+                }, JsonOptions);
+                return (acceptedAction, pending, null, true, null);
+            }
+            var failure = ex is JsonException
+                ? new ApiException(400, "invalid_request", ex.Message) : ex;
+            return (null, AgentErrorEnvelope.Serialize(failure, JsonOptions), null, false, failure.Message);
         }
     }
 
@@ -724,7 +800,13 @@ internal sealed class AgentLoop
             return JsonDocument.Parse("{}");
         }
 
-        return JsonDocument.Parse(argumentsJson);
+        var document = JsonDocument.Parse(argumentsJson);
+        if (document.RootElement.ValueKind != JsonValueKind.Object)
+        {
+            document.Dispose();
+            throw new JsonException("Tool arguments must be a JSON object.");
+        }
+        return document;
     }
 
     /// <summary>

@@ -137,6 +137,29 @@ internal static class McpServiceTests
         Assert.Equal(JsonValueKind.Null, document.RootElement.GetProperty("run").ValueKind);
     }
 
+    /// <summary>
+    /// Some MCP clients serialize the arguments object into a JSON string. A stringified array or
+    /// scalar must degrade to an empty arguments object (the tool then answers with its own
+    /// structured error) instead of throwing <see cref="InvalidOperationException"/> out of the
+    /// argument readers.
+    /// </summary>
+    public static async Task ToolsCall_StringifiedNonObjectArgumentsDegradeToEmpty()
+    {
+        var server = CreateServer();
+
+        var array = await Rpc(
+            server,
+            """{"jsonrpc":"2.0","id":30,"method":"tools/call","params":{"name":"act","arguments":"[1,2]"}}""");
+        var arrayText = array.GetProperty("result").GetProperty("content")[0].GetProperty("text").GetString();
+        Assert.Contains("action is required", arrayText);
+
+        var scalar = await Rpc(
+            server,
+            """{"jsonrpc":"2.0","id":31,"method":"tools/call","params":{"name":"act","arguments":"42"}}""");
+        var scalarText = scalar.GetProperty("result").GetProperty("content")[0].GetProperty("text").GetString();
+        Assert.Contains("action is required", scalarText);
+    }
+
     public static async Task ToolsCall_DiffStateComparesTwoPayloads()
     {
         var server = CreateServer();
