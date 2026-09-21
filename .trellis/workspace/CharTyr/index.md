@@ -8,8 +8,8 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-1.md`
-- **Total Sessions**: 34
-- **Last Active**: 2026-09-21
+- **Total Sessions**: 35
+- **Last Active**: 2026-09-22
 <!-- @@@/auto:current-status -->
 
 ---
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-1.md` | ~1409 | Active |
+| `journal-1.md` | ~1430 | Active |
 <!-- @@@/auto:active-documents -->
 
 ---
@@ -29,6 +29,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 35 | 2026-09-22 | Deepen harness reliability and decision seams | `971f2f3` | `dev` |
 | 34 | 2026-09-21 | Optimize the AI-play harness: cheaper prompts, smaller state, recoverable tools | `46b2cdd`, `5fcb7df`, `78b1546`, `d5f780b`, `cbb550b`, `13352db`, `41e34e1`, `712d77c` | `dev` |
 | 33 | 2026-09-21 | Fix all five agent turn integrity findings | `763eabddb10fdb52ff941df6715014bc468a4f8e` | `dev` |
 | 32 | 2026-09-21 | Dev audit: 16 fixes and offline verification | `a4463fe` | `dev` |

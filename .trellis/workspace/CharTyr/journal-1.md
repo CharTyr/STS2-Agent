@@ -1407,3 +1407,24 @@ Measure and cut what an external AI pays to play: the per-step prompt, the per-a
 
 - Live-game validation (test-mod-load -DeepCheck, state-invariants) still requires launching the game.
 - Version bump, Workshop upload and the zh-CN listing paste remain manual release steps.
+
+
+## Session 35: Deepen harness reliability and decision seams
+
+**Date**: 2026-09-22
+**Task**: Deepen harness reliability and decision seams
+**Branch**: `dev`
+
+### Summary
+
+Explored STS2-Agent beyond token usage, then shipped one-frame decision snapshots, non-blocking action serialization, compact wait/reconciliation results, canonical event knowledge joins, screen-relevant game-data lookup, crystal-sphere reveal gating, stronger patch-check semantics, and broader CI coverage. Full offline suites, release preflight, verification gates, and GitHub Validate passed; pushed dev.
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `971f2f3` | (see git log) |
+
+### Status
+
+[OK] **Completed**
