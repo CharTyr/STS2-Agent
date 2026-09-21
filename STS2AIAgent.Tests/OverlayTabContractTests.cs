@@ -14,23 +14,40 @@ namespace STS2AIAgent.Tests;
 internal static class OverlayTabContractTests
 {
     /// <summary>
-    /// The file the size ratchet and the architecture table watch no longer holds the page builders,
-    /// so a seventh tab lands in the tabs file instead of growing it again.
+    /// The file the size ratchet and the architecture table watch no longer holds the tab
+    /// construction or the page bodies, so a seventh tab and a second dashboard row land beside the
+    /// pages instead of growing it again.
     /// </summary>
+    /// <remarks>
+    /// The page builders moved on from the tabs file to <c>AgentOverlayHost.Pages.cs</c> when the
+    /// settings form and the single refresh pass pushed the pages past their own budget. The split is
+    /// asserted at both ends: the pages have to be in their file, and neither the pages nor the tab
+    /// construction may drift back into the base file, which is the one the ratchet counts.
+    /// </remarks>
     public static void TabConstructionLivesInItsOwnFile()
     {
         var baseFile = AgentSourceFixture.Read("STS2AIAgent/Ui/AgentOverlayHost.cs");
         var tabs = AgentSourceFixture.Read("STS2AIAgent/Ui/AgentOverlayHost.Tabs.cs");
+        var pages = AgentSourceFixture.Read("STS2AIAgent/Ui/AgentOverlayHost.Pages.cs");
 
         Assert.Contains("private Control BuildTabs()", tabs);
         Assert.Contains("private void ShowTab(string tab)", tabs);
-        Assert.Contains("private Control BuildDecisionPage()", tabs);
+        // The switch that names every page stays with the tab data it switches over, while the bodies
+        // it dispatches to live with the other pages.
+        Assert.Contains("private Control BuildPageForTab(string tab)", tabs);
+        Assert.Contains("private Control BuildDecisionPage()", pages);
+        Assert.Contains("private Control BuildChatPage()", pages);
+        Assert.Contains("private void RefreshDynamic()", pages);
+
         Assert.False(
             baseFile.Contains("private Control BuildTabs()", StringComparison.Ordinal),
             "The tab construction must stay in AgentOverlayHost.Tabs.cs, or the next tab grows the file again.");
         Assert.False(
             baseFile.Contains("private void ShowTab(string tab)", StringComparison.Ordinal),
             "ShowTab belongs with the tab construction it switches between.");
+        Assert.False(
+            baseFile.Contains("private Control BuildDecisionPage()", StringComparison.Ordinal),
+            "The page bodies belong in AgentOverlayHost.Pages.cs, beside the refresh pass that repaints them.");
 
         // ShowTab keeps its string call sites in the base file: the startup tab is chosen from runtime
         // state, and those call sites are the overlay's, not the tabs file's.

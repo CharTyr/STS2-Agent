@@ -671,5 +671,16 @@ internal static class TestRunner
         yield return ("OverlayTabs.DecisionLinesNewestFirst", () => Task.Run(OverlayTabContractTests.DecisionLinesAreNewestFirstAndUnknownUsageStaysUnknown));
         yield return ("OverlayTabs.NoDecisionsNoLines", () => Task.Run(OverlayTabContractTests.NoDecisionsProducesNoLines));
         yield return ("OverlayTabs.DecisionLinesBounded", () => Task.Run(OverlayTabContractTests.DecisionLinesStayBounded));
+        yield return ("OverlayLayout.SaveOutsideScroll", () => Task.Run(OverlayLayoutContractTests.SaveStaysOutsideTheScrollingForm));
+        yield return ("OverlayLayout.JumpButtonsMatchSections", () => Task.Run(OverlayLayoutContractTests.EveryJumpButtonNamesARegisteredSection));
+        yield return ("OverlayLayout.CoopActionsFirst", () => Task.Run(OverlayLayoutContractTests.CoopActionsComeBeforeCoopStatus));
+        yield return ("OverlayLayout.CoopChatAdapts", () => Task.Run(OverlayLayoutContractTests.CoopChatBoxAdaptsToThePage));
+        yield return ("OverlayLayout.ChatFooterCompact", () => Task.Run(OverlayLayoutContractTests.ChatFooterKeepsItsHeightForMessages));
+        yield return ("OverlayLayout.LongLabelsReflow", () => Task.Run(OverlayLayoutContractTests.LongLabelsGoThroughTheReflowingHelper));
+        yield return ("OverlayLayout.SentenceFieldsReflow", () => Task.Run(OverlayLayoutContractTests.SentenceBearingFieldsReflow));
+        yield return ("OverlayLayout.ThemeRepaintsSurfaces", () => Task.Run(OverlayLayoutContractTests.ThemeSwitchRepaintsSurfacesNotJustText));
+        yield return ("OverlayLayout.ChromeIsTagged", () => Task.Run(OverlayLayoutContractTests.OverlayChromeIsTaggedForRepaint));
+        yield return ("OverlayLayout.SwatchUsesChildNodes", () => Task.Run(OverlayLayoutContractTests.SwatchPreviewUsesChildNodes));
+        yield return ("OverlayLayout.JumpLandsAtTop", () => Task.Run(OverlayLayoutContractTests.JumpingToASectionPutsItAtTheTop));
     }
 }

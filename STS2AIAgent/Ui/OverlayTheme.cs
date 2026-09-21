@@ -141,7 +141,77 @@ internal static class OverlayThemeCatalog
             Muted: new(0.784f, 0.784f, 0.784f, 1f),
             Positive: new(0.400f, 0.902f, 0.400f, 1f),
             Warning: new(1.000f, 0.855f, 0.200f, 1f),
-            Danger: new(1.000f, 0.451f, 0.451f, 1f))
+            Danger: new(1.000f, 0.451f, 0.451f, 1f)),
+
+        // Ironclad Crimson: molten ember red and forged charcoal iron.
+        new(
+            Id: "crimson",
+            Label: "猩红",
+            Backdrop: new(0.065f, 0.045f, 0.050f, 0.97f),
+            Surface: new(0.105f, 0.070f, 0.075f, 1f),
+            SurfaceRaised: new(0.155f, 0.105f, 0.115f, 1f),
+            Border: new(0.350f, 0.220f, 0.240f, 1f),
+            Accent: new(0.920f, 0.380f, 0.340f, 1f),
+            AccentText: new(0.080f, 0.030f, 0.030f, 1f),
+            Text: new(0.950f, 0.920f, 0.900f, 1f),
+            Muted: new(0.720f, 0.640f, 0.650f, 1f),
+            Positive: new(0.480f, 0.780f, 0.520f, 1f),
+            Warning: new(0.920f, 0.750f, 0.350f, 1f),
+            Danger: new(1.000f, 0.450f, 0.450f, 1f)),
+
+        // Silent Emerald: poisonous shadowed green and bright venom highlights.
+        new(
+            Id: "emerald",
+            Label: "翡翠",
+            Backdrop: new(0.045f, 0.065f, 0.055f, 0.97f),
+            Surface: new(0.070f, 0.105f, 0.085f, 1f),
+            SurfaceRaised: new(0.105f, 0.155f, 0.125f, 1f),
+            Border: new(0.220f, 0.340f, 0.270f, 1f),
+            Accent: new(0.380f, 0.850f, 0.620f, 1f),
+            AccentText: new(0.030f, 0.080f, 0.050f, 1f),
+            Text: new(0.910f, 0.950f, 0.920f, 1f),
+            Muted: new(0.650f, 0.720f, 0.680f, 1f),
+            Positive: new(0.450f, 0.820f, 0.550f, 1f),
+            Warning: new(0.920f, 0.750f, 0.350f, 1f),
+            Danger: new(0.920f, 0.450f, 0.450f, 1f)),
+
+        // Watcher / Defect Amethyst: ethereal celestial violet and cosmic glow.
+        new(
+            Id: "amethyst",
+            Label: "紫晶",
+            Backdrop: new(0.055f, 0.045f, 0.075f, 0.97f),
+            Surface: new(0.085f, 0.070f, 0.120f, 1f),
+            SurfaceRaised: new(0.130f, 0.110f, 0.180f, 1f),
+            Border: new(0.280f, 0.230f, 0.380f, 1f),
+            Accent: new(0.750f, 0.550f, 0.950f, 1f),
+            AccentText: new(0.060f, 0.030f, 0.090f, 1f),
+            Text: new(0.940f, 0.920f, 0.960f, 1f),
+            Muted: new(0.700f, 0.650f, 0.750f, 1f),
+            Positive: new(0.480f, 0.780f, 0.550f, 1f),
+            Warning: new(0.920f, 0.760f, 0.380f, 1f),
+            Danger: new(0.920f, 0.450f, 0.480f, 1f)),
+
+        // The light one. Every other preset is dark, which is the right default for a game that is
+        // itself dark -- but a player reading the panel in a bright room, or on a laptop in daylight,
+        // has no option here at all, and dark-on-dark is the one thing the overlay cannot fix by
+        // re-arranging. Ink on paper: a warm ivory surface, near-black text, and a deep bronze accent
+        // rather than a bright one, because a bright accent cannot carry readable label text on a
+        // light surface (amber at 0.72 luminance gives 3.5:1 against its own label; this one gives
+        // 7.3:1). Checked against the same floors OverlayThemeTests enforces.
+        new(
+            Id: "ivory",
+            Label: "象牙",
+            Backdrop: new(0.925f, 0.910f, 0.875f, 0.97f),
+            Surface: new(0.968f, 0.957f, 0.933f, 1f),
+            SurfaceRaised: new(0.888f, 0.868f, 0.828f, 1f),
+            Border: new(0.640f, 0.600f, 0.540f, 1f),
+            Accent: new(0.470f, 0.290f, 0.040f, 1f),
+            AccentText: new(1.000f, 0.980f, 0.950f, 1f),
+            Text: new(0.110f, 0.098f, 0.085f, 1f),
+            Muted: new(0.372f, 0.348f, 0.318f, 1f),
+            Positive: new(0.129f, 0.420f, 0.200f, 1f),
+            Warning: new(0.520f, 0.340f, 0.020f, 1f),
+            Danger: new(0.700f, 0.140f, 0.120f, 1f))
     };
 
     public static IReadOnlyList<OverlayPalette> All => Presets;

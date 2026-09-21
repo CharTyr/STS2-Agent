@@ -49,6 +49,14 @@ internal static class SourceCoverageTests
         "STS2AIAgent/Game/GameActionService.Shop.cs",
         "STS2AIAgent/Ui/AgentOverlayHost.cs",
         "STS2AIAgent/Ui/AgentOverlayHost.Tabs.cs",
+        // The page bodies and the settings form, split out of the host when it hit its size budget on
+        // 2026-10-01. They stay unlinked for the same reason the base file does -- they build Godot
+        // controls and read the game -- and the Roslyn pass above still parses them, so a syntax error
+        // in either one is still caught offline.
+        "STS2AIAgent/Ui/AgentOverlayHost.Pages.cs",
+        "STS2AIAgent/Ui/AgentOverlayHost.Settings.cs",
+        // The palette preview, split out of UiFactory.cs for the same budget. It needs Godot's ColorRect.
+        "STS2AIAgent/Ui/OverlaySwatch.cs",
         "STS2AIAgent/Agent/AgentRuntime.cs",
         // The teammate partial stays unlinked with AgentRuntime.cs: both need the game runtime,
         // while this suite's Roslyn pass still parses them and the explicit list makes the choice

@@ -1187,7 +1187,6 @@ Five tasks, all merged through PRs #166-#171. Companion identity now accepts rea
 
 [OK] **Completed**
 
-
 ## Session 31: v0.14.0: offline plan items, live validation, overlay redesign, and the release
 
 **Date**: 2026-09-21
@@ -1214,6 +1213,15 @@ Finished the plan's offline track, validated the candidate on a real game with a
 
 | Hash | Message |
 |------|---------|
+| `a3edf1b` | (see git log) |
+| `d39ef61` | test(ui): whitelist the three overlay files split out this session |
+
+### Testing
+
+- [OK] preflight-release.ps1 exit 0 - 12 static gates ok
+- [OK] 572 core unit and contract tests pass (5 new OverlayLayout.* contracts added)
+- [OK] SourceCoverage.UncompiledWhitelist caught the three split files only after they were committed, since it checks tracked sources
+- [OK] Live game: mod loaded as 0.14.0, 27/27 reflected members, state-invariants failure_count 0, screenshots confirmed each visual fix
 | `4cab34f` | (see git log) |
 | `58a08ea` | (see git log) |
 | `b32d56d` | (see git log) |
@@ -1240,6 +1248,49 @@ Finished the plan's offline track, validated the candidate on a real game with a
 
 ### Next Steps
 
+- Open a PR from feat/overlay-visual-redesign into dev; origin/dev has diverged so the documented fast-forward catch-up needs a human decision.
+- Enable the mod in the game settings was needed to test at all: the Steam profile had both STS2AIAgent entries disabled, and start-game-session.ps1's --clientId seeding is ignored when the game launches through Steam.
 - Steam two-instance co-op, a complete natural run, and the Vision path still need the game in front of a person.
 - Provider sampling for SiliconFlow / OpenRouter / vLLM needs a key and a budget cap; only the CommandCode endpoint was sampled.
 - Paste steam-workshop/description.zh-CN.txt into the item's Simplified Chinese listing; Steam exposes no API for non-default descriptions.
+
+
+## Session 32: Overlay visual redesign and live-test defect fixes
+
+**Date**: 2026-09-21
+**Task**: Overlay visual redesign and live-test defect fixes
+**Branch**: `feat/overlay-visual-redesign`
+
+### Summary
+
+Redesigned the in-game overlay (themes, layout, controls), split AgentOverlayHost into pages and settings partials, and fixed six defects that only a running game could show.
+
+### Main Changes
+
+- Seven colour themes instead of four, including the first light one (Ivory), with a swatch-grid picker that previews each palette.
+- Layout pass: play tab became a dashboard, settings gained a jump bar and a fixed footer, co-op tab inverted so actions precede status, chat footer compacted.
+- Split AgentOverlayHost.cs into Pages/Settings partials and extracted OverlaySwatch.cs, lowering the base file's size budget from 1,420 to 1,150.
+- Fixed: swatch preview never drew (custom _Draw never called); theme switch skipped PanelContainers; long labels widened the panel to 691px and clipped every card; theme selection was overwritten by the rebuild a theme change triggers; jump buttons landed sections at the viewport bottom; ivory's drop shadow read as a smudge.
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `a3edf1b` | (see git log) |
+| `736f173` | test(ui): whitelist the three overlay files split out this session |
+
+### Testing
+
+- [OK] preflight-release.ps1 exit 0 - 12 static gates ok
+- [OK] 572 core unit and contract tests pass (5 new OverlayLayout.* contracts added)
+- [OK] SourceCoverage.UncompiledWhitelist caught the three split files only after they were committed, since it checks tracked sources
+- [OK] Live game: mod loaded as 0.14.0, 27/27 reflected members, state-invariants failure_count 0, screenshots confirmed each visual fix
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- Open a PR from feat/overlay-visual-redesign into dev. The dev-resync rule from session 26 only applies while main is a strict ancestor of dev, and it is not right now: origin/dev carries the session-31 journal that main does not, so a fast-forward would drop it. Merge instead of reset, and the rule is lossless again once these commits reach main.
+- The mod was disabled in the Steam profile, so testing needed it enabled by hand; start-game-session.ps1's --clientId seeding is ignored when the game launches through Steam, which is why the isolated-profile path did not reach it.

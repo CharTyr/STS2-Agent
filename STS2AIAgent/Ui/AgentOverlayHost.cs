@@ -21,7 +21,7 @@ internal sealed partial class AgentOverlayHost
     private CanvasLayer? _layer;
     private Control? _host;
     private Control? _panel;
-    private Control? _dragHandle;
+    private PanelContainer? _dragHandle;
     private Button? _edgeTab;
     private SceneTree? _tree;
     private bool _hotkeyWasDown;
@@ -35,6 +35,7 @@ internal sealed partial class AgentOverlayHost
     private CheckBox? _attachShot;
     private CheckBox? _allowAct;
     private Label? _playStatus;
+    private Label? _playSummary;
     private Label? _playScreen;
     private Label? _playAction;
     private Label? _playThought;
@@ -44,8 +45,8 @@ internal sealed partial class AgentOverlayHost
     private CheckBox? _proactiveChatToggle;
     private OptionButton? _proactiveToneCombo;
 
-    /// <summary>The overlay's colour theme selector; see <see cref="OverlayThemeCatalog"/>.</summary>
-    private OptionButton? _themeCombo;
+    /// <summary>The header's live state tag and the connection line under it.</summary>
+    private Label? _headerStatus;
     private Label? _apiLabel;
     private Label? _dualStatus;
     private Label? _teammateLive;
@@ -74,6 +75,9 @@ internal sealed partial class AgentOverlayHost
     private Control? _mcpInfoBox;
     private Control? _pageHost;
     private Control? _chatFooter;
+    /// <summary>Diagnostic state: the content column to measure, and the page already reported.</summary>
+    private Control? _contentColumn;
+    private string? _overflowReportedFor;
     private VBoxContainer? _settingsBody;
     private int _buildAttempts;
     private bool _captureHidden;
@@ -238,9 +242,10 @@ internal sealed partial class AgentOverlayHost
             MouseFilter = Control.MouseFilterEnum.Stop
         };
         chrome.SetAnchorsAndOffsetsPreset(Control.LayoutPreset.FullRect);
-        chrome.AddThemeStyleboxOverride("panel", UiFactory.PanelStyle());
+        UiFactory.TagSurface(chrome, UiFactory.SurfaceRole.Chrome, 10);
 
         var layout = UiFactory.Column();
+        _contentColumn = layout;
         layout.AddChild(BuildHeader());
         layout.AddChild(BuildTabs());
 
@@ -310,17 +315,30 @@ internal sealed partial class AgentOverlayHost
             MouseDefaultCursorShape = Control.CursorShape.Move,
             SizeFlagsHorizontal = Control.SizeFlags.ExpandFill
         };
-        _dragHandle.AddThemeStyleboxOverride("panel", UiFactory.PanelStyle(UiFactory.BgRaised, 8));
+        UiFactory.TagSurface(_dragHandle, UiFactory.SurfaceRole.ChromeRaised, 8);
         _dragHandle.GuiInput += OnDragHandleGuiInput;
-        var title = UiFactory.Label("STS2 AI Agent", UiFactory.FontTitle);
+        // No wrapping on either of these: the title is a fixed string and the status is a chip, and a
+        // tight row is exactly where WordSmart would break them one character per line. Observed live
+        // on 2026-09-21 -- the title rendered as a vertical column of single letters.
+        var title = UiFactory.Label("STS2 AI Agent", UiFactory.FontTitle, wrap: false);
         title.MouseFilter = Control.MouseFilterEnum.Ignore;
-        var hint = UiFactory.Label(Loc.T("拖动移动"), UiFactory.FontCaption, muted: true);
+        title.AddThemeColorOverride("font_color", UiFactory.Accent);
+
+        // The live state tag: the answer to "is it playing" is in the title bar, where the player
+        // already looks to find the window, instead of one tab away.
+        _headerStatus = UiFactory.Label(Loc.T("○ 待机"), UiFactory.FontCaption, muted: true, wrap: false);
+        _headerStatus.MouseFilter = Control.MouseFilterEnum.Ignore;
+        _headerStatus.SizeFlagsVertical = Control.SizeFlags.ShrinkCenter;
+        var titleRow = UiFactory.TightRow(title, _headerStatus);
+        titleRow.MouseFilter = Control.MouseFilterEnum.Ignore;
+
+        var hint = UiFactory.Label(Loc.T("拖动移动"), UiFactory.FontCaption, muted: true, wrap: false);
         hint.MouseFilter = Control.MouseFilterEnum.Ignore;
         var handleColumn = UiFactory.Column();
         handleColumn.MouseFilter = Control.MouseFilterEnum.Ignore;
         handleColumn.SizeFlagsVertical = Control.SizeFlags.ShrinkBegin;
         handleColumn.AddThemeConstantOverride("separation", 2);
-        handleColumn.AddChild(title);
+        handleColumn.AddChild(titleRow);
         handleColumn.AddChild(hint);
         _dragHandle.AddChild(handleColumn);
 
@@ -553,12 +571,11 @@ internal sealed partial class AgentOverlayHost
             current.ProactiveChatTone = ProactiveChatTones.Normalize(SelectedMetadata(_proactiveToneCombo));
         }
 
-        if (_themeCombo != null)
-        {
-            // Normalised on the way in, so an id this build does not know cannot be written back out
-            // and leave the next start choosing between a stored value and a drawn one.
-            current.OverlayTheme = OverlayThemeCatalog.Normalize(SelectedMetadata(_themeCombo));
-        }
+        // The swatch grid keeps the selection in a field rather than in a control: the tile that was
+        // clicked is freed by the rebuild that follows it. Normalised on the way in, so an id this
+        // build does not know cannot be written back out and leave the next start choosing between a
+        // stored value and a drawn one.
+        current.OverlayTheme = OverlayThemeCatalog.Normalize(SelectedTheme);
 
         current.AttachStateInChat = _attachState?.ButtonPressed ?? true;
         current.AttachScreenshotInChat = _attachShot?.ButtonPressed ?? false;
@@ -601,53 +618,6 @@ internal sealed partial class AgentOverlayHost
         _panel.Visible = !_panel.Visible;
         AgentRuntime.Instance.PersistOverlayVisible(_panel.Visible);
         if (_panel.Visible) RefreshDynamic();
-    }
-
-    private void TogglePlay()
-    {
-        if (AgentRuntime.Instance.PlayRunning)
-        {
-            AgentRuntime.Instance.StopAutoPlay();
-        }
-        else
-        {
-            AgentRuntime.Instance.StartAutoPlay();
-        }
-
-        RefreshDynamic();
-    }
-
-    private async Task SendChatAsync()
-    {
-        var text = _chatInput?.Text ?? string.Empty;
-        if (_chatInput != null)
-        {
-            _chatInput.Text = string.Empty;
-        }
-
-        PersistChatFlags();
-        await AgentRuntime.Instance.SendChatAsync(
-            text,
-            _attachState?.ButtonPressed ?? true,
-            _attachShot?.ButtonPressed ?? false,
-            _allowAct?.ButtonPressed ?? false,
-            CancellationToken.None);
-    }
-
-    private async Task TestConnectionAsync()
-    {
-        SaveSettingsFromUi();
-        await AgentRuntime.Instance.TestConnectionAsync(CancellationToken.None);
-        _settingsDirty = false;
-        RebuildSettingsForm();
-        ShowTab("settings");
-    }
-
-    private void PersistChatFlags()
-    {
-        AgentRuntime.Instance.PersistChatAttachFlags(
-            _attachState?.ButtonPressed ?? true,
-            _attachShot?.ButtonPressed ?? false);
     }
 
     private static void CopyText(string text)
@@ -794,226 +764,57 @@ internal sealed partial class AgentOverlayHost
         _dualContinueButton.TooltipText = canContinue ? "" : Loc.T("主菜单上有联机存档时可用。");
     }
 
-    private async Task SendTeamMessageAsync()
-    {
-        var text = _teamInput?.Text.Trim() ?? "";
-        if (text.Length == 0 || AgentRuntime.Instance.TeamMessagePending) return;
-        if (_teamInput != null) _teamInput.Text = "";
-        await AgentRuntime.Instance.SendTeamMessageAsync(text, CancellationToken.None);
-        await GameThread.InvokeAsync(RefreshDynamic);
-    }
-
+    /// <summary>
+    /// The runtime's own change notification, marshalled onto the game thread: it can be raised from
+    /// a model callback or an HTTP request thread, and every control it repaints belongs to the game.
+    /// </summary>
     private void OnRuntimeChanged()
     {
         _ = GameThread.InvokeAsync(RefreshDynamic);
     }
 
-    private void RefreshDynamic()
+    /// <summary>
+    /// TEMPORARY: reports, once per page, which control's minimum width exceeds the panel. Removed
+    /// once the offending control is known -- the clipping has survived two earlier guesses.
+    /// </summary>
+    private void ReportOverflowOnce()
     {
-        if (_apiLabel != null)
+        if (_panel == null || _contentColumn == null || !_panel.Visible)
         {
-            _apiLabel.Text = Loc.T("{0}  ·  {1}  ·  热键 {2}", HttpServer.Instance.Prefix, InstanceRole.Current, AgentRuntime.Instance.Settings.Hotkey);
+            return;
         }
 
-        if (_playStatus != null)
+        if (_overflowReportedFor == _tab)
         {
-            _playStatus.Text = Loc.T("状态：{0}", AgentRuntime.Instance.Status);
+            return;
         }
 
-        if (_playScreen != null)
+        _overflowReportedFor = _tab;
+        var limit = _panel.Size.X;
+        var lines = new System.Collections.Generic.List<string>();
+        CollectWide(_contentColumn, limit, lines);
+        Godot.GD.Print($"[STS2AIAgent.Wide] tab={_tab} panel={limit:0} offenders={lines.Count}");
+        foreach (var line in lines)
         {
-            try
+            Godot.GD.Print("  " + line);
+        }
+    }
+
+    private static void CollectWide(Node node, float limit, System.Collections.Generic.List<string> lines)
+    {
+        if (node is Control control && control.Visible)
+        {
+            var minimum = control.GetCombinedMinimumSize().X;
+            if (minimum > limit)
             {
-                _playScreen.Text = Loc.T("屏幕：{0}", GameStateService.BuildStatePayload().screen);
-            }
-            catch
-            {
-                _playScreen.Text = Loc.T("屏幕：-");
-            }
-        }
-
-        if (_playAction != null)
-        {
-            _playAction.Text = Loc.T("最近动作：{0}", AgentRuntime.Instance.LastAction);
-        }
-
-        if (_playThought != null)
-        {
-            _playThought.Text = Loc.T("思考：{0}", Trim(AgentRuntime.Instance.LastThought, 240));
-        }
-
-        if (_playUsage != null)
-        {
-            _playUsage.Text = PlayerFacingSession.FormatUsage(
-                AgentRuntime.Instance.SessionUsageKnown,
-                AgentRuntime.Instance.SessionUsage,
-                AgentRuntime.Instance.SessionRequests);
-        }
-
-        var facing = AgentRuntime.Instance.PlayerFacing();
-        if (_sessionHeadline != null)
-        {
-            _sessionHeadline.Text = facing.Headline;
-        }
-
-        if (_sessionDetail != null)
-        {
-            _sessionDetail.Text = facing.Detail;
-        }
-
-        if (_sessionNext != null)
-        {
-            _sessionNext.Text = Loc.T("下一步：{0}", facing.NextAction);
-        }
-
-        RefreshDecisionPage(facing);
-
-        var canResetStats = SessionBudgetLimits.CanResetSessionStats(
-            AgentRuntime.Instance.PlayRunning,
-            AgentRuntime.Instance.PlayPhase);
-        if (_resetStatsButton != null)
-        {
-            _resetStatsButton.Disabled = !canResetStats;
-        }
-
-        if (_settingsResetStatsButton != null)
-        {
-            _settingsResetStatsButton.Disabled = !canResetStats;
-        }
-
-        if (_sessionConfigNotice != null)
-        {
-            _sessionConfigNotice.Text = FormatSettingsNotice();
-            _sessionConfigNotice.Visible = AgentRuntime.Instance.SettingsNotice.HasMessage;
-        }
-
-        if (_settingsLoadNotice != null)
-        {
-            _settingsLoadNotice.Text = FormatSettingsNotice();
-        }
-
-        if (_budgetHint != null && !string.IsNullOrWhiteSpace(_budgetInputError))
-        {
-            _budgetHint.Text = _budgetInputError;
-        }
-
-        if (_playTest != null)
-        {
-            var firstRun = FirstRunSetup.Evaluate(AgentRuntime.Instance.Settings);
-            if (_conversationTest != null) _conversationTest.Text = ModelRoleProbe.FormatLine(firstRun.Conversation);
-            _playTest.Text = ModelRoleProbe.FormatLine(firstRun.Play);
-            if (_visionTest != null) _visionTest.Text = ModelRoleProbe.FormatLine(firstRun.Vision);
-        }
-
-        if (_playToggle != null)
-        {
-            _playToggle.Disabled = AgentRuntime.Instance.DualLaunching;
-            _playToggle.Text = AgentRuntime.Instance.PlayRunning ? Loc.T("暂停自动游玩") : Loc.T("开始自动游玩");
-        }
-
-        if (_stepButton != null)
-        {
-            _stepButton.Disabled = AgentRuntime.Instance.PlayRunning;
-        }
-
-        if (_sendButton != null)
-        {
-            _sendButton.Disabled = AgentRuntime.Instance.PlayRunning;
-        }
-
-        if (_dualStatus != null)
-        {
-            _dualStatus.Text = AgentRuntime.Instance.DualStatus;
-        }
-
-        if (_teammateLive != null)
-        {
-            _teammateLive.Text = TeammateLiveText();
-        }
-
-        if (_dualLaunchButton != null)
-        {
-            // Only the button that started the launch reads as busy; the other one just greys out.
-            _dualLaunchButton.Text = AgentRuntime.Instance.DualLaunching && !_continueLaunching ? Loc.T("正在邀请队友…") : Loc.T("邀请 AI 队友");
-        }
-
-        RefreshContinueAvailability();
-
-        if (_dualContinueButton != null)
-        {
-            _dualContinueButton.Text = AgentRuntime.Instance.DualLaunching && _continueLaunching ? Loc.T("正在读档接回队友…") : Loc.T("继续上次联机对局");
-        }
-
-        if (_companionChoiceToggle != null)
-        {
-            _companionChoiceToggle.Disabled = InstanceRole.IsCompanion || AgentRuntime.Instance.DualLaunching;
-            _companionChoiceToggle.SetPressedNoSignal(!AgentRuntime.Instance.Settings.CompanionAutoSelectCharacter);
-        }
-
-        if (_dualHint != null) _dualHint.Text = DualHintText();
-
-        if (_teamSend != null)
-        {
-            _teamSend.Disabled = AgentRuntime.Instance.TeamMessagePending || AgentRuntime.Instance.DualLaunching || InstanceRole.IsCompanion;
-            _teamSend.Text = AgentRuntime.Instance.TeamMessagePending ? Loc.T("等待队友回复…") : Loc.T("和队友说");
-        }
-        if (_teamStatus != null) _teamStatus.Text = AgentRuntime.Instance.TeamStatus;
-        if (_teamControlStatus != null) _teamControlStatus.Text = AgentRuntime.Instance.TeamControlStatus;
-        var controlDisabled = InstanceRole.IsCompanion || AgentRuntime.Instance.DualLaunching || AgentRuntime.Instance.TeamControlPending;
-        if (_teamPause != null) _teamPause.Disabled = controlDisabled;
-        if (_teamResume != null) _teamResume.Disabled = controlDisabled;
-        if (_teamChat != null)
-        {
-            _teamChat.Clear();
-            foreach (var turn in AgentRuntime.Instance.TeamHistory)
-            {
-                var who = turn.Role == "user" ? Loc.T("你") : Loc.T("AI 队友");
-                _teamChat.AppendText($"[b]{who}[/b]\n{Escape(turn.Text)}\n\n");
+                var text = control is Label label ? " text=" + label.Text : string.Empty;
+                lines.Add($"{control.GetType().Name} minW={minimum:0} sizeW={control.Size.X:0}{text}");
             }
         }
 
-        if (_mcpStatus != null)
+        foreach (var child in node.GetChildren())
         {
-            _mcpStatus.Text = AgentRuntime.Instance.McpStatus;
-        }
-
-        if (_mcpToggle != null)
-        {
-            _mcpToggle.SetPressedNoSignal(AgentRuntime.Instance.McpRunning);
-        }
-
-        if (_mcpInfoBox != null)
-        {
-            _mcpInfoBox.Visible = AgentRuntime.Instance.McpRunning;
-        }
-
-        if (_mcpUrlLabel != null)
-        {
-            var url = AgentRuntime.Instance.McpUrl;
-            _mcpUrlLabel.Text = string.IsNullOrWhiteSpace(url) ? "" : Loc.T("地址：{0}", url);
-        }
-
-        if (_mcpConfigEdit != null)
-        {
-            _mcpConfigEdit.Text = AgentRuntime.Instance.McpClientConfig;
-        }
-
-        if (_chatLog != null)
-        {
-            _chatLog.Clear();
-            var history = AgentRuntime.Instance.History;
-            if (history.Count == 0)
-            {
-                _chatLog.AppendText("[color=#b3b3ad]" + Loc.T("在下方输入后点发送。") + "[/color]\n");
-            }
-            else
-            {
-                foreach (var turn in history)
-                {
-                    var who = turn.Role == "user" ? Loc.T("你") : Loc.T("助手");
-                    _chatLog.AppendText($"[b]{who}[/b]\n{Escape(turn.Text)}\n\n");
-                }
-            }
+            CollectWide(child, limit, lines);
         }
     }
 
@@ -1038,6 +839,7 @@ internal sealed partial class AgentOverlayHost
         if (now - _lastRefreshMs > 800)
         {
             _lastRefreshMs = now;
+            ReportOverflowOnce();
             if (_panel?.Visible == true)
             {
                 if (_apiLabel != null)
@@ -1219,6 +1021,16 @@ internal sealed partial class AgentOverlayHost
 
         _panel.Size = size;
         _panel.CustomMinimumSize = new Vector2(PanelWidth, Math.Min(size.Y, 360));
+        // A ceiling on the content column, not just a floor on the panel. A Godot container expands to
+        // fit its children's minimums, and one unwrapped sentence can report a minimum wider than the
+        // panel -- measured live on 2026-09-21 at 691 against a 440 panel, which clipped every card
+        // against the panel edge. Pinning the scroll body to the panel width makes over-wide content
+        // reflow instead of pushing the layout out.
+        if (_pageHost != null)
+        {
+            _pageHost.CustomMinimumSize = new Vector2(size.X - 2 * UiFactory.SpaceMd, 0);
+        }
+
         MovePanel(position, persist: false);
         _lastViewportSize = viewport;
     }
@@ -1306,80 +1118,4 @@ internal sealed partial class AgentOverlayHost
         var height = Math.Clamp(viewport.Y * 0.72f, 520f, Math.Max(520f, viewport.Y - 80f));
         return new Vector2(PanelWidth, height);
     }
-
-    private static string SelectedText(OptionButton? combo)
-    {
-        if (combo == null || combo.Selected < 0)
-        {
-            return string.Empty;
-        }
-
-        return combo.GetItemText(combo.Selected);
-    }
-
-    private static string SelectedMetadata(OptionButton? combo)
-    {
-        if (combo == null || combo.Selected < 0)
-        {
-            return string.Empty;
-        }
-
-        return combo.GetItemMetadata(combo.Selected).AsString();
-    }
-
-    private static void SelectByText(OptionButton combo, string? value)
-    {
-        for (var i = 0; i < combo.ItemCount; i++)
-        {
-            if (string.Equals(combo.GetItemText(i), value, StringComparison.OrdinalIgnoreCase))
-            {
-                combo.Selected = i;
-                return;
-            }
-        }
-
-        if (!string.IsNullOrWhiteSpace(value))
-        {
-            // Preserve an unknown value visibly until the user chooses a supported option.
-            // Falling back to item 0 would silently rewrite the model configuration on save.
-            combo.AddItem(value);
-            combo.Selected = combo.ItemCount - 1;
-            return;
-        }
-
-        combo.Selected = combo.ItemCount > 0 ? 0 : -1;
-    }
-
-    private static string? EmptyToNull(string? value)
-    {
-        return string.IsNullOrWhiteSpace(value) ? null : value;
-    }
-
-    private static string Trim(string? text, int max)
-    {
-        if (string.IsNullOrWhiteSpace(text))
-        {
-            return "-";
-        }
-
-        text = text.Replace("\n", " ");
-        return text.Length <= max ? text : text[..max] + "…";
-    }
-
-    private static string Escape(string text)
-    {
-        return text.Replace("[", "［").Replace("]", "］");
-    }
-
-    private sealed record EndpointEditors(string Id, LineEdit Name, LineEdit Url, LineEdit Key, CheckBox Enabled);
-
-    private sealed record ModelEditors(
-        string Id,
-        LineEdit Display,
-        LineEdit ModelName,
-        OptionButton Endpoint,
-        CheckBox Vision,
-        CheckBox Tools,
-        OptionButton ThinkingMode,
-        OptionButton ThinkingIntensity);
 }

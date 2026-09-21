@@ -55,10 +55,11 @@ internal static class SourceShapeContractTests
         // because it is really six small ones that share their settle-and-proceed helpers; if it
         // grows again, it splits rather than the number going up.
         ["STS2AIAgent/Game/GameActionService.Rooms.cs"] = 1250,
-        // 1,829 lines until the tab construction moved to AgentOverlayHost.Tabs.cs. The budget came
-        // down with the file, which is the ratchet working: the sixth tab was added next to the other
-        // five pages instead of growing this one, and the seventh has to do the same.
-        ["STS2AIAgent/Ui/AgentOverlayHost.cs"] = 1420,
+        // 1,829 lines until the tab construction moved to AgentOverlayHost.Tabs.cs, then 1,117 when
+        // the page bodies and the single 220-line refresh pass moved to AgentOverlayHost.Pages.cs on
+        // 2026-10-01. The budget came down with the file both times, which is the ratchet working:
+        // the seventh tab and the next dashboard row land with the other pages instead of here.
+        ["STS2AIAgent/Ui/AgentOverlayHost.cs"] = 1150,
         // 1,492 lines until the AI-teammate surface moved to AgentRuntime.Team.cs on 2026-09-20. The
         // budget came down with the file rather than being raised for the feature that pushed it
         // over, which is the same move the overlay made for its sixth tab.
