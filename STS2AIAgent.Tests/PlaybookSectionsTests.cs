@@ -25,6 +25,22 @@ internal static class PlaybookSectionsTests
     /// <summary>A quoted string in the resolver that is nothing but a screen name.</summary>
     private static readonly Regex ScreenLiteral = new("\"([A-Z][A-Z0-9_]*)\"", RegexOptions.Compiled);
 
+    /// <summary>
+    /// A backticked field reference in the strategy text. The file names fields this way and no
+    /// other, so this is the set of names a model is told to read.
+    /// </summary>
+    private static readonly Regex CompactField = new("`([^`]+)`", RegexOptions.Compiled);
+
+    /// <summary>
+    /// Raw <c>/state</c> paths and flags that compact <c>agent_view</c> renames or drops. A
+    /// strategy span matching one of these is a read of a key the model will not find. Mentioning
+    /// the raw spelling in prose ("raw /state spells it is_enabled") does not match, because that
+    /// sentence does not wrap the name as a field path.
+    /// </summary>
+    private static readonly Regex RawCompactField = new(
+        @"^(run\.(current_hp|max_hp)|map\.(available_nodes|player_votes)|shop\.card_removal|event\.event_id|rest\.options\[\]\.is_enabled)$|^(is_locked|is_enabled|is_proceed|will_kill_player|enough_gold|is_stocked|can_use|is_queued|occupied)$",
+        RegexOptions.Compiled);
+
     public static void StrategyReferenceIsEmbedded()
     {
         Assert.True(Strategy.Length > 500, "the strategy reference did not load from the embedded resource");
@@ -264,6 +280,54 @@ internal static class PlaybookSectionsTests
     /// MAIN_MENU at 1,194 and the index fallback is 622. The budget is the ratchet: the saving is a
     /// property of the design, so a section that grows past it is a decision, not a drift.
     /// </remarks>
+    /// <summary>
+    /// The strategy text is injected beside a compact <c>agent_view</c>, on both the in-game loop
+    /// and <c>get_scene_guidance</c>. A rule that names a raw <c>/state</c> field as the thing to
+    /// read sends the model after a key that view does not have: <c>run.current_hp</c>,
+    /// <c>map.available_nodes</c>, <c>shop.card_removal</c>, <c>event.event_id</c>. The rename is
+    /// documented, but the model is handed this file, not the rename table.
+    /// </summary>
+    /// <remarks>
+    /// The check is the backtick span, which is how this file names a field. A sentence that says
+    /// the raw payload spells a flag differently is allowed to mention the raw name; a span that
+    /// tells the model to read <c>run.current_hp</c> is not. The two are distinguished by whether
+    /// the span itself is a raw path.
+    /// </remarks>
+    public static void StrategyNamesCompactFieldsNotRawOnes()
+    {
+        var strategy = AgentSourceFixture.Read("skills/sts2-mcp-player/references/strategy.md");
+        foreach (var screen in new[] { "MAP", "REST", "SHOP", "EVENT", "COMBAT" })
+        {
+            var slice = PlaybookSections.Strategy.Slice(strategy, screen);
+            Assert.True(slice.Length > 0, $"the {screen} strategy slice is empty; the field check would pass vacuously");
+            foreach (Match field in CompactField.Matches(slice))
+            {
+                var name = field.Groups[1].Value;
+                Assert.False(
+                    RawCompactField.IsMatch(name),
+                    $"the {screen} strategy tells the model to read `{name}`, which compact agent_view does not have");
+            }
+        }
+
+        var map = PlaybookSections.Strategy.Slice(strategy, "MAP");
+        Assert.Contains("map.options[]", map, StringComparison.Ordinal);
+        Assert.Contains("run.hp", map, StringComparison.Ordinal);
+        Assert.Contains("shop.remove", map, StringComparison.Ordinal);
+        Assert.Contains("map.votes[]", map, StringComparison.Ordinal);
+
+        var rest = PlaybookSections.Strategy.Slice(strategy, "REST");
+        Assert.Contains("`enabled`", rest, StringComparison.Ordinal);
+
+        var shop = PlaybookSections.Strategy.Slice(strategy, "SHOP");
+        Assert.Contains("`affordable`", shop, StringComparison.Ordinal);
+        Assert.Contains("shop.remove", shop, StringComparison.Ordinal);
+
+        var @event = PlaybookSections.Strategy.Slice(strategy, "EVENT");
+        Assert.Contains("`locked`", @event, StringComparison.Ordinal);
+        Assert.Contains("`kill`", @event, StringComparison.Ordinal);
+        Assert.Contains("event.id", @event, StringComparison.Ordinal);
+    }
+
     public static void TheStaticPromptStaysUnderItsBudget()
     {
         const int systemBudget = 12_000;

@@ -62,6 +62,7 @@ The in-game overlay agent loads the shared play contract below plus the screen-p
    The compact view carries the ids those lookups key on: `combat.hand[].card_id`,
    `combat.enemies[].enemy_id`, `run.deck[].card_ids`, `run.relic_ids`,
    `selection.cards[].card_id`, `reward.cards[].card_id`, `shop.cards[].card_id`,
+    `shop.relics[].relic_id`, `shop.potions[].potion_id`,
    `bundles[].cards[].card_id`, and `chest.relics[].relic_id`.
 4. Before every decision, call `get_game_state`.
 5. Route by `state.session` first:

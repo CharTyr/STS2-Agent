@@ -522,12 +522,7 @@ def scene_guidance(state: Any, root: Path | None = None) -> dict[str, Any]:
     strategy_markdown = _read_reference(_strategy_path(root))
     playbook_markdown = _read_reference(_playbook_path(root))
 
-    event_id = None
-    if isinstance(state, dict):
-        event = state.get("event")
-        if isinstance(event, dict):
-            candidate = event.get("event_id")
-            event_id = candidate if isinstance(candidate, str) else None
+    event_id = _event_id(state)
 
     return {
         "screen": screen_text,
@@ -538,6 +533,27 @@ def scene_guidance(state: Any, root: Path | None = None) -> dict[str, Any]:
         "event_options": event_option_risk(root, event_id),
         "guidance_source": "strategy.md" if strategy_markdown else None,
     }
+
+
+def _event_id(state: Any) -> str | None:
+    """The event identifier, from whichever view handed this payload in.
+
+    ``/state`` spells it ``event.event_id``. Compact ``agent_view`` renames that key to ``event.id``
+    and drops the raw one, which is the payload ``get_game_state`` and ``decide`` hand back. Reading
+    only the raw name made a guidance call on the default view report no event and therefore no
+    option risks. The raw name wins when both are present, so a payload that still carries it is
+    unchanged.
+    """
+    if not isinstance(state, dict):
+        return None
+    event = state.get("event")
+    if not isinstance(event, dict):
+        return None
+    for key in ("event_id", "id"):
+        candidate = event.get(key)
+        if isinstance(candidate, str) and candidate.strip():
+            return candidate
+    return None
 
 
 def _read_reference(path: Path | None) -> str:

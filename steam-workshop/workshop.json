@@ -1,7 +1,7 @@
 {
   "title": "STS2 AI Agent",
   "visibility": "public",
-  "changeNote": "v0.14.0: the AI now tells you why it played what it played. A decision log in the overlay lists each accepted action with its reason and what that step spent, and the host window shows the teammate's live health, block, energy and hand size. Co-op messages can carry a typed signal, so an announced target is something the teammate actually reads rather than prose it has to interpret. Play quality gains a strategy layer for route, rest site, shop, potion timing and combat priority, injected one screen at a time. Nothing changes for your runs: no cards, no numbers, no saves are touched.",
+  "changeNote": "v0.15.0: the AI reads the fields it is actually handed. Strategy advice now uses the compact state names, shop relics and potions carry their ids, and ending a turn reports Doom and Magic Bomb as lethal. Each decision also costs less: one screen of guidance, a compact action result, and a shorter tool list. Nothing changes for your runs: no cards, no numbers, no saves are touched.",
   "tags": [
     "Tools & APIs",
     "Utility",

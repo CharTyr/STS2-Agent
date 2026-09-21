@@ -524,6 +524,7 @@ internal static partial class GameStateService
             relics = shop.relics.Select(relic => new
             {
                 i = relic.index,
+                relic_id = relic.relic_id,
                 line = $"{relic.name} [{relic.rarity}] | {relic.price}g",
                 affordable = relic.enough_gold,
                 stocked = relic.is_stocked
@@ -531,6 +532,7 @@ internal static partial class GameStateService
             potions = shop.potions.Select(potion => new
             {
                 i = potion.index,
+                potion_id = potion.potion_id,
                 line = FormatShopPotionLine(potion),
                 affordable = potion.enough_gold,
                 stocked = potion.is_stocked

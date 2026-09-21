@@ -2,7 +2,7 @@
 
 > Release attribution is recorded against tags or release commits. Post-tag maintenance is listed separately; current validation limits are maintained in [PRODUCT_PLAN_CURRENT.md](https://github.com/CharTyr/STS2-Agent/blob/main/PRODUCT_PLAN_CURRENT.md).
 
-## Unreleased
+## v0.15.0 - 2026-09-22
 
 > A harness pass over everything an AI pays for when it plays this game through the mod: the state
 > payload it reads before every decision, the prompt the in-game loop rebuilds every step, the tool
@@ -15,7 +15,32 @@
 > said a turn was safe while poison was about to kill you, and the compact view was leaking the exact
 > order of the draw pile. A second pass turned to what an external client pays before it ever reads a
 > state: the tool descriptions, which a client re-sends on every request, and which the Python
-> sidecar carried at four times the native surface's length for the same tools.
+> sidecar carried at four times the native surface's length for the same tools. A third pass found
+> that the strategy text both loops inject still named raw `/state` fields the compact view had
+> renamed, so a model following it was reading keys that were not there.
+
+- **The strategy text now names the fields the compact view actually has.** Both the in-game loop
+  and `get_scene_guidance` inject `strategy.md` beside a compact `agent_view`, but the rules told a
+  model to read `run.current_hp`, `map.available_nodes`, `map.player_votes`, `shop.card_removal` and
+  `event.event_id` — raw `/state` names the compact view renames to `run.hp`, `map.options`,
+  `map.votes`, `shop.remove` and `event.id`. A read of the old name comes back missing, so a route,
+  shop or event decision was being made against a field that was not in the payload. The injected
+  sections now use the compact keys, and a contract test fails if a backticked field in those
+  sections goes back to a raw name. `get_scene_guidance` also reads `event.id` when `event.event_id`
+  is absent, so the per-option risk rows join on the compact view instead of coming back empty.
+  `decide` already rewrote that one key; the standalone guidance call did not.
+
+- **Shop relics and potions now carry their ids in the compact view.** `shop.cards[]` already had
+  `card_id`, but `shop.relics[]` and `shop.potions[]` had only a display `line`, so asking what a
+  stocked relic or potion does meant falling back to the full `/state` payload. They now carry
+  `relic_id` and `potion_id`, the same keys `get_game_data_item` looks up. The raw payload already
+  had both; only the compact projection was missing them.
+
+- **`end_turn_will_kill_player` now counts Doom and Magic Bomb.** Doom kills at the end of your own
+  turn once its amount is at least current HP, and block does not enter that comparison. Magic Bomb
+  damages its owner after that same turn and ignores block. Neither was in the intent sum, so the
+  flag the strategy text tells a model to trust could stay false on a lethal end turn. The
+  player-played bomb stays out: it damages enemies, not the player who played it.
 
 - **The in-game prompt no longer re-sends the whole playbook on every step.** `PlaySystem` used to
   embed `screen-playbooks.md` in full — about 3,070 tokens, re-sent for each decision, covering 20

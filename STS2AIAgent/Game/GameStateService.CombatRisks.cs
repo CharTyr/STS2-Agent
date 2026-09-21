@@ -144,29 +144,62 @@ internal static partial class GameStateService
         // model.
         foreach (var power in playerCreature.Powers)
         {
+            // Doom is not damage. BeforeTurnEnd kills the owner when CurrentHp <= Amount, and block
+            // does not enter that comparison. A damage row would under-report it.
+            if (power is DoomPower doom
+                && SafeReadNullableInt(() => doom.Amount) is int doomAmount
+                && doomAmount >= player.current_hp)
+            {
+                risks.Add(new CombatLethalRiskPayload
+                {
+                    risk_id = "doom_turn_end",
+                    source = "player_power",
+                    will_kill_player = true,
+                    reason = "Doom kills you at the end of your own turn once its amount is at least your current HP. Block does not count.",
+                    player_hp = player.current_hp,
+                    player_block = player.block,
+                    power_id = SafeReadString(() => doom.Id.Entry),
+                    power_amount = SafeReadNullableInt(() => doom.Amount)
+                });
+                continue;
+            }
+
             var blockable = power is ConstrictPower;
+            var riskId = power switch
+            {
+                PoisonPower => "poison_next_turn",
+                ConstrictPower => "constrict_turn_end",
+                MagicBombPower => "magic_bomb_turn_end",
+                _ => null
+            };
             var damage = power switch
             {
                 PoisonPower poison => SafeReadNullableInt(() => poison.CalculateTotalDamageNextTurn()),
                 ConstrictPower constrict => SafeReadNullableInt(() => constrict.Amount),
+                // AfterTurnEnd damages the owner for Amount. The player-played bomb is deliberately
+                // absent: its BeforeTurnEnd damages hittable enemies, not the player who played it.
+                MagicBombPower magicBomb => SafeReadNullableInt(() => magicBomb.Amount),
                 _ => null
             };
             var damageAfterBlock = blockable
                 ? Math.Max(0, damage.GetValueOrDefault() - Math.Max(0, player.block))
                 : damage.GetValueOrDefault();
-            if (damage is not > 0 || damageAfterBlock < player.current_hp)
+            if (riskId == null || damage is not > 0 || damageAfterBlock < player.current_hp)
             {
                 continue;
             }
 
             risks.Add(new CombatLethalRiskPayload
             {
-                risk_id = blockable ? "constrict_turn_end" : "poison_next_turn",
+                risk_id = riskId,
                 source = "player_power",
                 will_kill_player = true,
-                reason = blockable
-                    ? "Constrict damages you when your own turn ends; current block does not cover it."
-                    : "Poison resolves at the start of your next turn and ignores block, so it lands before you can play another card; ending the fight this turn avoids it.",
+                reason = power switch
+                {
+                    ConstrictPower => "Constrict damages you when your own turn ends; current block does not cover it.",
+                    MagicBombPower => "Magic Bomb damages you after your own turn ends and ignores block.",
+                    _ => "Poison resolves at the start of your next turn and ignores block, so it lands before you can play another card; ending the fight this turn avoids it."
+                },
                 incoming_damage = damage,
                 damage_after_block = damageAfterBlock,
                 player_hp = player.current_hp,

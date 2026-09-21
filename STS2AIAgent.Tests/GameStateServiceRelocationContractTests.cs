@@ -29,6 +29,10 @@ namespace STS2AIAgent.Tests;
 /// <c>kind</c> and <c>is_good</c> are now serialized only once every cell it occupies is revealed, so
 /// the method that leaked them to hidden items on purpose no longer matches its pre-split text. The
 /// new value is recorded here rather than the leak being restored to keep a hash stable.
+///
+/// <c>BuildCombatLethalRiskPayloads</c> was regenerated again when Doom and Magic Bomb joined the
+/// flag the strategy text tells a model to trust. The player-played bomb stays out: it damages
+/// enemies, not the player who played it.
 /// </remarks>
 internal static class GameStateServiceRelocationContractTests
 {
@@ -112,7 +116,7 @@ internal static class GameStateServiceRelocationContractTests
         ["GetEndTurnButton"] = ("STS2AIAgent/Game/GameStateService.Combat.cs", "8f76bfc88b7b47c46491119d5d891be8a53afda09d94b127e64a548c57c53b0f"),
         ["BuildAvailableActionNames"] = ("STS2AIAgent/Game/GameStateService.cs", "b95d51aabf1bee52abb8ee13f1c27e166135bd2a33ce927504160b6cff111863"),
         ["BuildCombatPayload"] = ("STS2AIAgent/Game/GameStateService.Combat.cs", "2b54101bd86e153369f9c157d59e4eaf62126e9a0a85caf146a0dd3a23918ead"),
-        ["BuildCombatLethalRiskPayloads"] = ("STS2AIAgent/Game/GameStateService.CombatRisks.cs", "a343a743005b4617887bf5e762cffe1c7ea2a583c1264574ecbd169b496a0b7c"),
+        ["BuildCombatLethalRiskPayloads"] = ("STS2AIAgent/Game/GameStateService.CombatRisks.cs", "f8085db67fa7a5e0affb594b75fdfb232d34985b267badd28ea6024e346b10be"),
         ["IsSandpitPower"] = ("STS2AIAgent/Game/GameStateService.CombatRisks.cs", "c423a99fb0c84cd3e162998b8b4c44c59ded64397b1577867da1e608c3f82696"),
         ["BuildRunPayload"] = ("STS2AIAgent/Game/GameStateService.Run.cs", "508e174d94ea305e2302be42f5db73510ebe2da5b4ac9c7008e972048d20cd11"),
         ["ResolveBossId"] = ("STS2AIAgent/Game/GameStateService.Run.cs", "70aecade3371139e3fdb777685e7b1648c90ad859bc9d90a8de5592e1283949d"),

@@ -72,14 +72,14 @@ This file is about **how to drive a screen**. For **what to choose** where the c
 ## SHOP
 
 - Enter the inventory with `open_shop_inventory`.
-- While `shop.open = true`, use `buy_card`, `buy_relic`, `buy_potion`, and `remove_card_at_shop`.
+- While `shop.open = true`, use `buy_card`, `buy_relic`, `buy_potion`, and `remove_card_at_shop`. Buy only a row whose compact `affordable` is true; `stocked` alone still answers 409 when the gold is short. Raw `/state` spells those `enough_gold` and `is_stocked`.
 - Leave inner inventory with `close_shop_inventory`.
 - Leave the shop room with `proceed`.
 - If potion slots are full, do not expect `buy_potion` to remain available.
 
 ## REST
 
-- Use `choose_rest_option` on enabled entries only.
+- Use `choose_rest_option` on entries whose compact `enabled` is true only. Raw `/state` spells that flag `is_enabled`.
 - If smithing or a relic option opens `CARD_SELECTION`, finish selection first, then `proceed`.
 
 ## CHEST

@@ -122,6 +122,13 @@ internal static class CombatDiagnosticsContractTests
             StringComparison.Ordinal);
         Assert.Contains("\"poison_next_turn\"", risksBody, StringComparison.Ordinal);
         Assert.Contains("\"constrict_turn_end\"", risksBody, StringComparison.Ordinal);
+        Assert.Contains("\"doom_turn_end\"", risksBody, StringComparison.Ordinal);
+        Assert.Contains("\"magic_bomb_turn_end\"", risksBody, StringComparison.Ordinal);
+        Assert.Contains("doomAmount>=player.current_hp", risksBody, StringComparison.Ordinal);
+        Assert.Contains("MagicBombPowermagicBomb=>SafeReadNullableInt(()=>magicBomb.Amount)", risksBody, StringComparison.Ordinal);
+        Assert.False(
+            risksBody.Contains("HittableEnemies", StringComparison.Ordinal),
+            "the player-played bomb damages enemies; it must not become a player-lethal row");
 
         // Poison is Unblockable, so its damage-after-block figure must not have block subtracted;
         // Constrict is only Unpowered and stays blockable.

@@ -493,6 +493,15 @@ class SceneGuidanceTests(unittest.TestCase):
         self.assertEqual("AbyssalBaths", result["event_id"])
         self.assertTrue(result["event_options"])
 
+    def test_compact_event_id_still_joins_the_risk_index(self) -> None:
+        """agent_view renames event.event_id to event.id; the risk rows must still join."""
+        state = {"screen": "EVENT", "event": {"id": "NEOW", "options": []}}
+
+        result = scene_guidance(state, root=REPO_ROOT)
+
+        self.assertEqual("NEOW", result["event_id"])
+        self.assertTrue(result["event_options"])
+
     def test_no_run_and_no_repository_still_answers(self) -> None:
         # `root=None` means "find my own checkout", so a checkout-less install is expressed as a path
         # that does not hold one: the tool must still answer, with no guidance rather than an error.

@@ -160,7 +160,7 @@ curl -s http://127.0.0.1:8080/state | jq .
   "request_id": "req_20260911_121549_7955_4",
   "data": {
     "service": "sts2-ai-agent",
-    "mod_version": "0.14.6",
+    "mod_version": "0.15.0",
     "protocol_version": "2026-03-11-v1",
     "game_version": "v0.111.0",
     "status": "ready",
@@ -460,6 +460,8 @@ curl -s http://127.0.0.1:8080/state | jq .
 | `incoming_damage` | 敌人意图总伤害扣除当前格挡后 ≥ 当前生命 | 只看意图，不含持续伤害 |
 | `poison_next_turn` | 中毒在**你下一回合开始时**的结算总量 ≥ 当前生命 | 无视格挡（`damage_after_block` 等于 `incoming_damage`），且在你能再出牌之前结算——本回合结束战斗即可避免 |
 | `constrict_turn_end` | 缠绕在你**本回合结束时**造成的伤害扣格挡后 ≥ 当前生命 | 可被格挡，所以 `damage_after_block` 与 `incoming_damage` 常不同 |
+| `doom_turn_end` | 厄运层数 ≥ 当前生命 | 你的回合结束时直接击杀，格挡不参与比较；`incoming_damage` 为空，因为它不是一段伤害 |
+| `magic_bomb_turn_end` | 魔法炸弹在你的回合结束后造成的伤害 ≥ 当前生命 | 无视格挡。玩家自己打出的炸弹打的是敌人，不进这张表 |
 | `sandpit_countdown` | 沙坑计数 ≤ 1 | 结束回合视为致命，除非先杀 Boss 或已经用 Frantic Escape 抬高计数 |
 
 也就是说这个字段覆盖的是「结束回合之后、你还能行动之前」会落下的所有伤害，而不只是敌人意图——
@@ -1072,6 +1074,7 @@ compact 的 `combat` 原样携带 `/state` 的 `action_readiness`、`end_turn_wi
 | `run.potions[]` | `description` | 药水效果原文；配合 `usable` / `discard` / `target` / `targets` 一起决定是否用掉 |
 | `combat.draw[]` / `combat.discard[]` / `combat.exhaust[]` / `run.deck[]` / `run.piles.*` | `card_ids` | 合并组代表的卡牌 ID（去重、升序）；组内若含不同 ID 会全部列出，`line` 仍带 `*N` 数量后缀 |
 | `selection.cards[]` / `reward.cards[]` / `shop.cards[]` / `bundles[].cards[]` | `card_id` | 选择屏 / 奖励 / 商店 / 卡包的卡牌 ID |
+| `shop.relics[]` / `shop.potions[]` | `relic_id` / `potion_id` | 商店在售遗物与药水的 ID。`line` 只有名字和价格，查 `get_game_data_item` 用这两列，不必为此回退到完整 `/state` |
 | `run` | `relic_ids` | 与 `run.relics` 同序、等长的遗物 ID 列表（`relics` 保持原有名字数组不变） |
 | `run` | `relic_stacks` / `relic_descriptions` | 与 `run.relics` 同序、等长的计数与效果原文。计数遗物（笔尖 `AttacksPlayed % 10`、念珠、五轮书等）的层数只在这里，`relics` 里只有名字——**不读这两列就看不到「笔尖 9/10」这类时机** |
 | `map` | `nodes[]` | 全图节点：`coord`（`"row,col"`）、`node_type`、`visited`、`children[]`（同样 `"row,col"`）。`options[]` 只给当前可走的 1–3 个，**只有 `nodes[]` 能用来做跨楼层路线规划** |

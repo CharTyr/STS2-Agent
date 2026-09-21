@@ -414,6 +414,7 @@ internal static class TestRunner
         yield return ("Playbook.UnknownScreenGetsTheIndex", () => Task.Run(PlaybookSectionsTests.UnknownScreenGetsTheSectionIndexNotNothing));
         yield return ("Playbook.SystemPromptSlicesTheReferences", () => Task.Run(PlaybookSectionsTests.PlaySystemCarriesTheSliceNotTheDocuments));
         yield return ("Playbook.StaticPromptBudget", () => Task.Run(PlaybookSectionsTests.TheStaticPromptStaysUnderItsBudget));
+        yield return ("Playbook.StrategyUsesCompactFields", () => Task.Run(PlaybookSectionsTests.StrategyNamesCompactFieldsNotRawOnes));
         yield return ("Mcp.SceneGuidanceTool", McpServiceTests.ToolsCall_SceneGuidanceFollowsTheScreen);
         yield return ("Mcp.IndexRejection", McpServiceTests.ToolsCall_IndexRejectionNamesTheValidIndices);
         yield return ("Mcp.RawStateFlag", McpServiceTests.ToolsCall_RawStateFlagReachesTheBridge);
