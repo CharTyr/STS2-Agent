@@ -1186,3 +1186,44 @@ Five tasks, all merged through PRs #166-#171. Companion identity now accepts rea
 ### Status
 
 [OK] **Completed**
+
+
+## Session 31: Overlay visual redesign and live-test defect fixes
+
+**Date**: 2026-09-21
+**Task**: Overlay visual redesign and live-test defect fixes
+**Branch**: `feat/overlay-visual-redesign`
+
+### Summary
+
+Redesigned the in-game overlay (themes, layout, controls), split AgentOverlayHost into pages and settings partials, and fixed six defects that only a running game could show.
+
+### Main Changes
+
+- Seven colour themes instead of four, including the first light one (Ivory), with a swatch-grid picker that previews each palette.
+- Layout pass: play tab became a dashboard, settings gained a jump bar and a fixed footer, co-op tab inverted so actions precede status, chat footer compacted.
+- Split AgentOverlayHost.cs into Pages/Settings partials and extracted OverlaySwatch.cs, lowering the base file's size budget from 1,420 to 1,150.
+- Fixed: swatch preview never drew (custom _Draw never called); theme switch skipped PanelContainers; long labels widened the panel to 691px and clipped every card; theme selection was overwritten by the rebuild a theme change triggers; jump buttons landed sections at the viewport bottom; ivory's drop shadow read as a smudge.
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `a3edf1b` | (see git log) |
+| `d39ef61` | test(ui): whitelist the three overlay files split out this session |
+
+### Testing
+
+- [OK] preflight-release.ps1 exit 0 - 12 static gates ok
+- [OK] 572 core unit and contract tests pass (5 new OverlayLayout.* contracts added)
+- [OK] SourceCoverage.UncompiledWhitelist caught the three split files only after they were committed, since it checks tracked sources
+- [OK] Live game: mod loaded as 0.14.0, 27/27 reflected members, state-invariants failure_count 0, screenshots confirmed each visual fix
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- Open a PR from feat/overlay-visual-redesign into dev; origin/dev has diverged so the documented fast-forward catch-up needs a human decision.
+- Enable the mod in the game settings was needed to test at all: the Steam profile had both STS2AIAgent entries disabled, and start-game-session.ps1's --clientId seeding is ignored when the game launches through Steam.
