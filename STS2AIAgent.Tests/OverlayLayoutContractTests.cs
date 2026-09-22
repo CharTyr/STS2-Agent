@@ -215,13 +215,65 @@ internal static class OverlayLayoutContractTests
     }
 
     /// <summary>
-    /// The dynamic labels that can hold a sentence are reflowing ones.
+    /// The active-play control uses a vertical stack so its long pause label cannot push the disabled
+    /// single-step button out of a narrow overlay.
     /// </summary>
-    /// <remarks>
-    /// These are the fields a literal scan cannot see, because their text arrives from the runtime:
-    /// the co-op hint alone measured 659 pixels unwrapped. Named one by one rather than pattern-matched
-    /// because the list is short and the failure is silent.
-    /// </remarks>
+    public static void PlayControlsDoNotRequireOneWideRow()
+    {
+        var source = AgentSourceFixture.Read(Pages);
+        var page = AgentSourceFixture.MethodBody(source, "BuildPlayPage");
+        var refresh = AgentSourceFixture.MethodBody(source, "RefreshDynamic");
+
+        Assert.Contains("playControls.AddChild(_playToggle);", page);
+        Assert.Contains("playControls.AddChild(_stepButton);", page);
+        Assert.False(
+            page.Contains("UiFactory.Row(_playToggle, _stepButton)", StringComparison.Ordinal),
+            "The long pause button and single-step control share a horizontal row again.");
+        Assert.Contains("_stepButton.Visible = !playing;", refresh);
+    }
+
+    /// <summary>
+    /// Session and run usage are sentences, not numerals, so they cannot share one horizontal row.
+    /// </summary>
+    public static void UsageSentencesDoNotShareARow()
+    {
+        var source = AgentSourceFixture.Read(Pages);
+        var decisions = AgentSourceFixture.MethodBody(source, "BuildDecisionPage");
+        var usageCard = decisions.IndexOf("Loc.T(\"用量\")", StringComparison.Ordinal);
+        var nextCard = decisions.IndexOf("Loc.T(\"决策记录\")", StringComparison.Ordinal);
+        Assert.True(usageCard >= 0 && nextCard > usageCard, "The decision page no longer builds a usage card.");
+        var usage = decisions[usageCard..nextCard];
+        Assert.False(
+            usage.Contains("UiFactory.Row(", StringComparison.Ordinal),
+            "Session and run usage are sentences; a side-by-side row clips them inside a 440px panel.");
+    }
+
+    /// <summary>
+    /// Metric values receive data at runtime and must reflow inside their tile instead of setting the
+    /// horizontal minimum for the whole dashboard row.
+    /// </summary>
+    public static void MetricValuesReflowInsideTheirTiles()
+    {
+        var source = AgentSourceFixture.Read("STS2AIAgent/Ui/UiFactory.cs");
+        var metric = AgentSourceFixture.MethodBody(source, "MetricTile");
+
+        Assert.Contains("valueLabel.AutowrapMode = TextServer.AutowrapMode.WordSmart;", metric);
+        Assert.Contains("valueLabel.SizeFlagsHorizontal = Control.SizeFlags.ExpandFill;", metric);
+    }
+
+    /// <summary>
+    /// A decision reason is rich text, not a <see cref="Label"/>, so the normal label helper cannot
+    /// protect the decision log from a long English reason.
+    /// </summary>
+    public static void RichLogsReflowInsteadOfClippingHorizontally()
+    {
+        var source = AgentSourceFixture.Read("STS2AIAgent/Ui/UiFactory.cs");
+        var rich = AgentSourceFixture.MethodBody(source, "Rich");
+
+        Assert.Contains("AutowrapMode = TextServer.AutowrapMode.WordSmart", rich);
+        Assert.Contains("CustomMinimumSize = new Vector2(MinReflowWidth, 0)", rich);
+    }
+
     public static void SentenceBearingFieldsReflow()
     {
         var pages = AgentSourceFixture.Read(Pages);
@@ -242,7 +294,14 @@ internal static class OverlayLayoutContractTests
                      // measured 577 pixels wide live, which is what clipped the co-op page.
                      (pages, "_sessionDetail = UiFactory.Wrapped(", Pages),
                      (pages, "_sessionNext = UiFactory.Wrapped(", Pages),
-                     (pages, "_sessionConfigNotice = UiFactory.Wrapped(", Pages)
+                     (pages, "_sessionConfigNotice = UiFactory.Wrapped(", Pages),
+                     // Play and decision pages fill these after build. A heading-sized "-" becomes
+                     // a usage sentence or a model reason and sets the row width if it cannot wrap.
+                     (pages, "_playStatus = UiFactory.Wrapped(", Pages),
+                     (pages, "_playSummary = UiFactory.Wrapped(", Pages),
+                     (pages, "_playThought = UiFactory.Wrapped(", Pages),
+                     (pages, "_decisionUsage = UiFactory.Wrapped(", Pages),
+                     (pages, "_decisionRunSpend = UiFactory.Wrapped(", Pages)
                  })
         {
             Assert.Contains(field, source);

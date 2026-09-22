@@ -776,6 +776,10 @@ internal static class TestRunner
         yield return ("OverlayLayout.ChatFooterCompact", () => Task.Run(OverlayLayoutContractTests.ChatFooterKeepsItsHeightForMessages));
         yield return ("OverlayLayout.LongLabelsReflow", () => Task.Run(OverlayLayoutContractTests.LongLabelsGoThroughTheReflowingHelper));
         yield return ("OverlayLayout.SentenceFieldsReflow", () => Task.Run(OverlayLayoutContractTests.SentenceBearingFieldsReflow));
+        yield return ("OverlayLayout.PlayControlsStack", () => Task.Run(OverlayLayoutContractTests.PlayControlsDoNotRequireOneWideRow));
+        yield return ("OverlayLayout.UsageSentencesStack", () => Task.Run(OverlayLayoutContractTests.UsageSentencesDoNotShareARow));
+        yield return ("OverlayLayout.MetricValuesReflow", () => Task.Run(OverlayLayoutContractTests.MetricValuesReflowInsideTheirTiles));
+        yield return ("OverlayLayout.RichLogsReflow", () => Task.Run(OverlayLayoutContractTests.RichLogsReflowInsteadOfClippingHorizontally));
         yield return ("OverlayLayout.ThemeRepaintsSurfaces", () => Task.Run(OverlayLayoutContractTests.ThemeSwitchRepaintsSurfacesNotJustText));
         yield return ("OverlayLayout.ChromeIsTagged", () => Task.Run(OverlayLayoutContractTests.OverlayChromeIsTaggedForRepaint));
         yield return ("OverlayLayout.SwatchUsesChildNodes", () => Task.Run(OverlayLayoutContractTests.SwatchPreviewUsesChildNodes));
