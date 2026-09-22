@@ -455,6 +455,11 @@ internal static class TestRunner
         yield return ("AgentLoop.WaitPending", AgentLoopTests.PlayOnce_WaitsWhenActIsPending);
         yield return ("AgentLoop.NoVisionCapture", AgentLoopTests.PlayOnce_DoesNotCaptureWithoutVision);
         yield return ("AgentLoop.PerModelThinking", AgentLoopTests.PlayOnce_UsesPerModelThinkingIntensity);
+        yield return ("Context.DefaultWindow", () => Task.Run(ContextCompactionTests.DefaultWindowIs256000AndUnsetMeansDefault));
+        yield return ("Context.TriggerAtEightyPercent", () => Task.Run(ContextCompactionTests.CompactionStartsAtEightyPercentOfTheModelWindow));
+        yield return ("Context.SummaryKeepsRecent", () => Task.Run(ContextCompactionTests.SummaryReplacesOlderDecisionsAndKeepsRecentOnes));
+        yield return ("Context.BelowThreshold", () => Task.Run(ContextCompactionTests.BelowTheThresholdKeepsTheWholeHistory));
+        yield return ("Context.ShortHistoryStaysWhole", () => Task.Run(ContextCompactionTests.ShortHistoryIsNotSummarized));
         yield return ("AgentLoop.ReasoningBudget", AgentLoopTests.PlayOnce_MarksReasoningBudgetExhaustionForRecovery);
         yield return ("AgentLoop.ToolStreamDemotion", AgentLoopTests.PlayOnce_DemotesToollessStreamToNonStreamingOnce);
         yield return ("AgentLoop.JsonActNoTools", AgentLoopTests.PlayOnce_TextOnlyJsonActWithoutTools);

@@ -176,6 +176,11 @@ internal sealed class AgentSettings
                     ? "medium"
                     : ThinkingIntensity;
             }
+
+            if (model.ContextWindow is <= 0)
+            {
+                model.ContextWindow = null;
+            }
         }
 
         if (string.IsNullOrWhiteSpace(ThinkingIntensity))
@@ -282,6 +287,12 @@ internal sealed class LlmModelConfig
     public string ThinkingMode { get; set; } = "auto";
 
     public string ThinkingIntensity { get; set; } = string.Empty;
+
+    /// <summary>
+    /// This model's input context window, in tokens. Null or a non-positive value means the default
+    /// 256,000. It is a model capability, not a spend cap.
+    /// </summary>
+    public int? ContextWindow { get; set; }
 
     public string Label => string.IsNullOrWhiteSpace(DisplayName) ? Model : DisplayName;
 

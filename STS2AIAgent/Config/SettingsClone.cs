@@ -31,7 +31,8 @@ internal static class SettingsClone
                 SupportsVision = model.SupportsVision,
                 SupportsTools = model.SupportsTools,
                 ThinkingMode = model.ThinkingMode,
-                ThinkingIntensity = model.ThinkingIntensity
+                ThinkingIntensity = model.ThinkingIntensity,
+                ContextWindow = model.ContextWindow
             }).ToList(),
             ConversationModelId = source.ConversationModelId,
             PlayModelId = source.PlayModelId,
