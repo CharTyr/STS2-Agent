@@ -14,6 +14,16 @@ internal static class SessionControlContractTests
         Assert.Contains("companion_process_exited = roleData.companion_process_exited", source, StringComparison.Ordinal);
     }
 
+    public static void RouterExposesLocalMcpControl()
+    {
+        var source = AgentSourceFixture.Read("STS2AIAgent/Server/Router.cs");
+        var body = AgentSourceFixture.MethodBody(source, "HandleAsync");
+        Assert.Contains("/mcp/control", body, StringComparison.Ordinal);
+        Assert.Contains("AgentRuntime.Instance.SetMcpEnabled(mcpControl.running.Value)", body, StringComparison.Ordinal);
+        Assert.Contains("mcp_enabled = AgentRuntime.Instance.McpRunning", body, StringComparison.Ordinal);
+        Assert.Contains("MCP control is only available on loopback.", body, StringComparison.Ordinal);
+    }
+
     public static void WorkshopStagingKeepsLocalCandidate()
     {
         var source = AgentSourceFixture.Read("STS2AIAgent/Multiplayer/LocalDualInstanceLauncher.cs");
