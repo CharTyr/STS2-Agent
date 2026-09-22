@@ -54,6 +54,14 @@ internal static class SettingsClone
             MaxSessionRequests = source.MaxSessionRequests,
             ProactiveChatEnabled = source.ProactiveChatEnabled,
             ProactiveChatTone = source.ProactiveChatTone,
+            OverlayPlayMode = source.OverlayPlayMode,
+            ShowThinkingInChat = source.ShowThinkingInChat,
+            DualLayerSoloEnabled = source.DualLayerSoloEnabled,
+            DualLayerCoopEnabled = source.DualLayerCoopEnabled,
+            JevBaseUrl = source.JevBaseUrl,
+            JevApiKey = source.JevApiKey,
+            JevModel = source.JevModel,
+            JevConfidenceThreshold = source.JevConfidenceThreshold,
             RoleTests = source.RoleTests.Select(test => new ModelRoleTestRecord
             {
                 Role = test.Role,

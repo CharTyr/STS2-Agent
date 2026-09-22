@@ -46,6 +46,14 @@ internal sealed partial class AgentOverlayHost
     private string? _themeSelectedId;
     private Control? _themePicker;
 
+    /// <summary>The Jev section's editors and its connection-test feedback.</summary>
+    private LineEdit? _jevBaseUrlEdit;
+    private LineEdit? _jevApiKeyEdit;
+    private LineEdit? _jevModelEdit;
+    private LineEdit? _jevThresholdEdit;
+    private Button? _jevTestButton;
+    private Label? _jevTestStatus;
+
     /// <summary>The selection, seeded from settings the first time this page is built.</summary>
     private string SelectedTheme => _themeSelectedId ??= OverlayThemeCatalog.DefaultId;
 
@@ -121,7 +129,9 @@ internal sealed partial class AgentOverlayHost
         ("appearance", Loc.T("外观")),
         ("endpoints", Loc.T("端点")),
         ("models", Loc.T("模型")),
-        ("bindings", Loc.T("角色绑定"))
+        ("bindings", Loc.T("角色绑定")),
+        ("jev", Loc.T("Jev 执行层")),
+        ("connect", Loc.T("接入"))
     };
 
     /// <summary>
@@ -458,11 +468,102 @@ internal sealed partial class AgentOverlayHost
             _proactiveChatToggle = null;
             _proactiveToneCombo = null;
         }
+
+        AddSettingsSection("jev", Loc.T("Jev 执行层"));
+        _settingsBody.AddChild(BuildJevSection(settings));
+
+        AddSettingsSection("connect", Loc.T("接入"));
+        _settingsBody.AddChild(BuildConnectSection());
         }
         finally
         {
             _rebuildingSettings = false;
         }
+    }
+
+    /// <summary>
+    /// The Jev execution-model section: base URL, API key, model and the confidence threshold, plus a
+    /// connection test. These feed the dual-layer decision mode toggled from the play page.
+    /// </summary>
+    private Control BuildJevSection(AgentSettings settings)
+    {
+        var column = UiFactory.Column();
+        column.AddChild(UiFactory.Wrapped(Loc.T("双层决策模式由 Jev（TypeSafe System One 模型）逐步操作游戏，LLM 只做战略规划。在游玩页按模式开启。"), UiFactory.FontCaption));
+
+        _jevBaseUrlEdit = UiFactory.Line(settings.JevBaseUrl, "https://api.typesafe.ai");
+        _jevApiKeyEdit = UiFactory.Line(settings.JevApiKey, "API Key", secret: true);
+        _jevModelEdit = UiFactory.Line(settings.JevModel, "jev-latest");
+        _jevThresholdEdit = UiFactory.Line(settings.JevConfidenceThreshold.ToString("0.00"), "0.35");
+        WatchLine(_jevBaseUrlEdit);
+        WatchLine(_jevApiKeyEdit);
+        WatchLine(_jevModelEdit);
+        WatchLine(_jevThresholdEdit);
+        column.AddChild(Labeled(Loc.T("Base URL"), _jevBaseUrlEdit));
+        column.AddChild(Labeled(Loc.T("API Key"), _jevApiKeyEdit));
+        column.AddChild(Labeled(Loc.T("模型"), _jevModelEdit));
+        column.AddChild(Labeled(Loc.T("置信度阈值（0-1，低于则回退 LLM）"), _jevThresholdEdit));
+
+        _jevTestButton = UiFactory.Button(Loc.T("测试 Jev 连接"), () => _ = TestJevConnectionAsync(), UiFactory.ButtonKind.Ghost);
+        _jevTestStatus = UiFactory.Wrapped("", UiFactory.FontCaption);
+        column.AddChild(UiFactory.Row(_jevTestButton));
+        column.AddChild(_jevTestStatus);
+        return UiFactory.Card(Loc.T("Jev 执行层"), column);
+    }
+
+    private async Task TestJevConnectionAsync()
+    {
+        SaveSettingsFromUi();
+        if (_jevTestStatus != null)
+        {
+            _jevTestStatus.Text = Loc.T("正在测试…");
+        }
+
+        var result = await AgentRuntime.Instance.TestJevConnectionAsync(CancellationToken.None);
+        if (_jevTestStatus != null)
+        {
+            _jevTestStatus.Text = result;
+        }
+    }
+
+    /// <summary>
+    /// The connect section: the MCP service switch and the client configuration to paste into an
+    /// external client. Moved into settings from its own tab; the settings page's scroll carries it.
+    /// </summary>
+    private Control BuildConnectSection()
+    {
+        var page = UiFactory.Column();
+        page.AddChild(UiFactory.Wrapped(Loc.T("选择：一起玩只用游戏内窗口，不必打开 MCP。外部客户端用本页开关。Python sidecar 仅 stdio / layered / full。")));
+        _mcpToggle = UiFactory.Check(Loc.T("打开 MCP 服务"), AgentRuntime.Instance.McpRunning);
+        _mcpToggle.Toggled += on => AgentRuntime.Instance.SetMcpEnabled(on);
+        _mcpStatus = UiFactory.Wrapped(AgentRuntime.Instance.McpStatus, UiFactory.FontBody);
+
+        _mcpInfoBox = UiFactory.Column();
+        _mcpUrlLabel = UiFactory.Label("", UiFactory.FontBody);
+        _mcpInfoBox.AddChild(_mcpUrlLabel);
+        var copyUrl = UiFactory.Button(Loc.T("复制地址"), () =>
+        {
+            var url = AgentRuntime.Instance.McpUrl;
+            if (!string.IsNullOrWhiteSpace(url))
+            {
+                CopyText(url);
+            }
+        }, UiFactory.ButtonKind.Primary);
+        var copyCfg = UiFactory.Button(Loc.T("复制配置"), () => CopyText(AgentRuntime.Instance.McpClientConfig));
+        _mcpInfoBox.AddChild(UiFactory.Row(copyUrl, copyCfg));
+        _mcpConfigEdit = UiFactory.Multiline("", 120);
+        _mcpConfigEdit.Editable = false;
+        _mcpInfoBox.AddChild(_mcpConfigEdit);
+        _mcpInfoBox.AddChild(UiFactory.Wrapped(Loc.T("把配置贴进外部客户端的 MCP 设置。服务只监听本机 127.0.0.1。")));
+        _mcpInfoBox.Visible = AgentRuntime.Instance.McpRunning;
+
+        page.AddChild(UiFactory.Card(
+            Loc.T("服务开关"),
+            UiFactory.Wrapped(Loc.T("游戏内自动打不需要打开。只有 Cursor / Claude / Codex 等外部客户端才需要。")),
+            _mcpToggle,
+            _mcpStatus));
+        page.AddChild(UiFactory.Card(Loc.T("客户端配置"), _mcpInfoBox));
+        page.AddChild(UiFactory.Wrapped(Loc.T("本机 HTTP API 始终可用：GET /health /state ，POST /action。MCP 打开后才会在同一端口暴露 /mcp。地址以本页复制为准，不要写死 8080 或 8765。")));
+        return page;
     }
 
     private Control BuildEndpointCard(LlmEndpoint endpoint, int index)

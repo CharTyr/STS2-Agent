@@ -239,7 +239,7 @@ internal static class Router
                 if (mcp == null || !mcp.Enabled)
                 {
                     statusCode = 403;
-                    await WriteErrorAsync(response, 403, "mcp_disabled", "MCP is turned off. Enable it in the in-game overlay Connect tab.", requestId);
+                    await WriteErrorAsync(response, 403, "mcp_disabled", "MCP is turned off. Enable it in the in-game overlay Settings page, under Connect.", requestId);
                     return;
                 }
 

@@ -163,9 +163,10 @@ internal static class CoopRouteTests
         // and that changes with no runtime event to subscribe to. Refreshing on tab entry alone left
         // the button greyed out for a panel that was already open when the boot modal cleared; the
         // live pass found it, and the panel tick that already polls the play page now re-reads it too.
+        // The multiplayer section lives on the play page now, so the tick polls it there.
         Assert.Contains("RefreshContinueAvailability();", overlay);
         var tick = AgentSourceFixture.MethodBody(overlay, "OnProcessFrame");
-        Assert.Contains("if (IsTabVisible(OverlayTabCatalog.Dual))", tick);
+        Assert.Contains("if (IsTabVisible(OverlayTabCatalog.Play))", tick);
         Assert.Contains("RefreshContinueAvailability();", tick);
     }
 

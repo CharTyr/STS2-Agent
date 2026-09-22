@@ -38,6 +38,28 @@ internal static partial class Loc
         map["发送"] = "Send";
         map["清空"] = "Clear";
         map["在下方输入后点发送。"] = "Type below, then press Send.";
+
+        // Play page: the solo/multiplayer mode switch, the dual-layer toggles, and the Jev panel.
+        map["单人"] = "Solo";
+        map["多人"] = "Multiplayer";
+        map["显示思考内容"] = "Show reasoning";
+        map["和 AI 说这局怎么打；它会参考你的话做下一次决策。"] =
+            "Tell the AI how to play this run; it weighs what you say on its next decision.";
+        map["双层决策模式（Jev 执行 + LLM 规划）"] = "Dual-layer decisions (Jev acts, LLM plans)";
+        map["Jev 未配置。到设置页填写 API Key 后即可用双层决策。"] =
+            "Jev is not configured. Add its API key on the settings page to use dual-layer decisions.";
+        map["Jev 已配置（{0}）。双层决策开启后由 Jev 逐步操作，LLM 只调整策略。"] =
+            "Jev is configured ({0}). With dual-layer on, Jev takes each action and the LLM only plans strategy.";
+        map["Jev 执行层"] = "Jev execution layer";
+        map["Jev 最近选择"] = "Jev's last choice";
+        map["概率分布"] = "Probabilities";
+
+        // Settings page: the Jev execution-model section.
+        map["双层决策模式由 Jev（TypeSafe System One 模型）逐步操作游戏，LLM 只做战略规划。在游玩页按模式开启。"] =
+            "In dual-layer mode Jev (the TypeSafe System One model) takes each action while the LLM only plans strategy. Enable it per mode on the play page.";
+        map["置信度阈值（0-1，低于则回退 LLM）"] = "Confidence threshold (0-1; below it the LLM takes over)";
+        map["测试 Jev 连接"] = "Test Jev connection";
+        map["正在测试…"] = "Testing…";
         map["你"] = "You";
         map["助手"] = "Assistant";
 

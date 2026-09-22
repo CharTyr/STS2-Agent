@@ -191,7 +191,7 @@ internal sealed partial class NativeMcpServer
     {
         if (!Enabled)
         {
-            return RestError(403, "mcp_disabled", "MCP is turned off. Enable it in the in-game overlay Connect tab.");
+            return RestError(403, "mcp_disabled", "MCP is turned off. Enable it in the in-game overlay Settings page, under Connect.");
         }
 
         if (!TryAuthorizeOrigin(origin, host, EndpointUrl, out var allowOrigin))

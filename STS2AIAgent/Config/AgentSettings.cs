@@ -54,6 +54,42 @@ internal sealed class AgentSettings
 
     public string ProactiveChatTone { get; set; } = STS2AIAgent.Agent.ProactiveChatTones.Default;
 
+    /// <summary>
+    /// Which mode the overlay's play page shows: <c>"solo"</c> (single-player AI play) or
+    /// <c>"coop"</c> (multiplayer AI teammate). Only one mode is active at a time; the play page
+    /// switches its whole content area on this value.
+    /// </summary>
+    public string OverlayPlayMode { get; set; } = "solo";
+
+    /// <summary>Whether the play-page conversation renders the model's reasoning alongside its replies.</summary>
+    public bool ShowThinkingInChat { get; set; }
+
+    /// <summary>Dual-layer decision mode for solo play: Jev executes each action, the LLM only plans strategy.</summary>
+    public bool DualLayerSoloEnabled { get; set; }
+
+    /// <summary>Dual-layer decision mode for the multiplayer AI teammate.</summary>
+    public bool DualLayerCoopEnabled { get; set; }
+
+    /// <summary>TypeSafe API base URL for the Jev execution model.</summary>
+    public string JevBaseUrl { get; set; } = "https://api.typesafe.ai";
+
+    /// <summary>TypeSafe API key for the Jev execution model. Secret; never logged or exported.</summary>
+    public string JevApiKey { get; set; } = string.Empty;
+
+    /// <summary>Jev model id or alias (for example <c>jev-latest</c>).</summary>
+    public string JevModel { get; set; } = "jev-latest";
+
+    /// <summary>
+    /// Confidence below which a Jev decision falls back to the LLM for that turn. Clamped to 0..1.
+    /// </summary>
+    public double JevConfidenceThreshold { get; set; } = 0.35;
+
+    /// <summary>True when the Jev execution model has enough configuration to be usable.</summary>
+    public bool HasJevConfigured()
+    {
+        return !string.IsNullOrWhiteSpace(JevApiKey) && !string.IsNullOrWhiteSpace(JevBaseUrl);
+    }
+
     public STS2AIAgent.Agent.SessionBudgetGuard CreateBudgetGuard(int initialTokens = 0, int initialRequests = 0)
     {
         return new STS2AIAgent.Agent.SessionBudgetGuard(MaxSessionTokens, MaxSessionRequests, initialTokens, initialRequests);
@@ -221,6 +257,28 @@ internal sealed class AgentSettings
         }
 
         ProactiveChatTone = STS2AIAgent.Agent.ProactiveChatTones.Normalize(ProactiveChatTone);
+
+        if (string.IsNullOrWhiteSpace(OverlayPlayMode) ||
+            (OverlayPlayMode != "solo" && OverlayPlayMode != "coop"))
+        {
+            OverlayPlayMode = "solo";
+        }
+
+        JevBaseUrl = string.IsNullOrWhiteSpace(JevBaseUrl)
+            ? "https://api.typesafe.ai"
+            : JevBaseUrl.Trim().TrimEnd('/');
+        JevApiKey = JevApiKey?.Trim() ?? string.Empty;
+        if (string.IsNullOrWhiteSpace(JevModel))
+        {
+            JevModel = "jev-latest";
+        }
+
+        if (double.IsNaN(JevConfidenceThreshold) || double.IsInfinity(JevConfidenceThreshold))
+        {
+            JevConfidenceThreshold = 0.35;
+        }
+
+        JevConfidenceThreshold = Math.Clamp(JevConfidenceThreshold, 0.0, 1.0);
     }
 
     private ResolvedModel ResolveRoleModel(string? modelId, bool required, string roleName)

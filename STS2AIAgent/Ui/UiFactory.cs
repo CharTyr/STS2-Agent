@@ -409,6 +409,21 @@ internal static class UiFactory
     }
 
     /// <summary>
+    /// A two-or-more-way exclusive switch drawn as a row of segments, exactly one of them filled.
+    /// </summary>
+    /// <remarks>
+    /// This is the play page's solo/multiplayer mode switch. It reuses the tab button's active/idle
+    /// styling so the selected segment reads the same way the selected tab does, and it rebuilds its
+    /// buttons on each select rather than restyling in place -- the same trade the tab row makes,
+    /// because a Godot <c>StyleBox</c> is set per control and swapping two buttons is cheaper to read
+    /// than mutating two sets of overrides.
+    /// </remarks>
+    public static SegmentedSwitch SegmentedSwitch(IReadOnlyList<string> options, int selected, Action<int>? onSelected)
+    {
+        return new SegmentedSwitch(options, selected, onSelected);
+    }
+
+    /// <summary>
     /// A label. Wrapping is <b>off</b> by default; use <see cref="Wrapped"/> for text that has to
     /// reflow.
     /// </summary>

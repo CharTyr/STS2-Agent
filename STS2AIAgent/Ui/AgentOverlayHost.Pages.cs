@@ -28,10 +28,10 @@ namespace STS2AIAgent.Ui;
 /// </remarks>
 internal sealed partial class AgentOverlayHost
 {
-    /// <summary>The chat page's first-run state: shown while no turn has been recorded.</summary>
+    /// <summary>The chat card's first-run state: shown while no turn has been recorded.</summary>
     private Control? _chatEmpty;
 
-    /// <summary>The decision page's three live labels: usage, run spend, and the log itself.</summary>
+    /// <summary>The decision log's three live labels: usage, run spend, and the log itself.</summary>
     private RichTextLabel? _decisionLog;
     private Label? _decisionUsage;
     private Label? _decisionRunSpend;
@@ -40,65 +40,128 @@ internal sealed partial class AgentOverlayHost
     private Control? _teammateLivePill;
     private UiFactory.ButtonKind? _teammateLiveTone;
 
-    private Control BuildChatPage()
-    {
-        var page = new Control { MouseFilter = Control.MouseFilterEnum.Ignore };
+    /// <summary>The play page's solo/multiplayer sections and the switch that swaps between them.</summary>
+    private SegmentedSwitch? _playModeSwitch;
+    private Control? _soloSection;
+    private Control? _coopSection;
 
-        // The empty state is a card, not a line of grey text: a first-run player opening the panel got
-        // an empty box and no idea what to type. It disappears the moment a turn exists.
+    /// <summary>The per-mode dual-layer toggles and the solo Jev panel's live labels.</summary>
+    private CheckBox? _dualLayerSoloCheck;
+    private CheckBox? _dualLayerCoopCheck;
+    private Control? _jevPanel;
+    private Label? _jevStatus;
+    private Label? _jevLastChoice;
+    private Label? _jevProbabilities;
+    private CheckBox? _showThinking;
+
+    /// <summary>
+    /// The conversation card: the log, the empty state, and the compose row, as one card inside the
+    /// play page's solo section.
+    /// </summary>
+    /// <remarks>
+    /// The conversation used to be its own tab with a fixed footer; it is now the centre of the solo
+    /// play page, because the conversation is where the model's decisions and results are read. The
+    /// empty state is a card, not a line of grey text: a first-run player opening the panel got an
+    /// empty box and no idea what to type. It disappears the moment a turn exists.
+    /// </remarks>
+    private Control BuildChatCard()
+    {
+        var column = UiFactory.Column();
+
         _chatEmpty = UiFactory.Card(
             Loc.T("和 AI 聊聊这局"),
             UiFactory.Wrapped(Loc.T("问它这手牌怎么打、这个遗物值不值得买、刚才那步为什么那么出。")),
             UiFactory.Wrapped(Loc.T("对话默认只读；要它真的动手，勾选下方的「允许代打」。")));
-        _chatEmpty.SetAnchorsAndOffsetsPreset(Control.LayoutPreset.TopWide);
-        page.AddChild(_chatEmpty);
+        column.AddChild(_chatEmpty);
 
         _chatLog = UiFactory.Rich();
         _chatLog.FitContent = false;
         _chatLog.SizeFlagsHorizontal = Control.SizeFlags.ExpandFill;
-        _chatLog.SizeFlagsVertical = Control.SizeFlags.ExpandFill;
-        var scroll = UiFactory.Scroll(_chatLog, 120);
-        scroll.SetAnchorsAndOffsetsPreset(Control.LayoutPreset.FullRect);
-        page.AddChild(scroll);
-        return page;
-    }
+        _chatLog.CustomMinimumSize = new Vector2(0, 160);
+        column.AddChild(_chatLog);
 
-    private Control BuildChatFooter()
-    {
-        var footer = UiFactory.Column();
-        footer.SizeFlagsVertical = Control.SizeFlags.ShrinkBegin;
         var settings = AgentRuntime.Instance.Settings;
         _attachState = UiFactory.Check(Loc.T("附带当前状态"), settings.AttachStateInChat);
         _attachShot = UiFactory.Check(Loc.T("附带截图（视觉）"), settings.AttachScreenshotInChat);
         _allowAct = UiFactory.Check(Loc.T("允许代打"), false);
+        _showThinking = UiFactory.Check(Loc.T("显示思考内容"), settings.ShowThinkingInChat);
         _attachState.Toggled += _ => PersistChatFlags();
         _attachShot.Toggled += _ => PersistChatFlags();
+        _showThinking.Toggled += on =>
+        {
+            var next = CloneSettings(AgentRuntime.Instance.Settings);
+            next.ShowThinkingInChat = on;
+            AgentRuntime.Instance.SaveSettings(next);
+        };
 
-        // One row for the three switches and a shorter box for the message. The footer is a fixed cost
-        // against a panel that is 72% of the viewport, and two stacked rows of checkboxes plus a
-        // 70-pixel editor was spending most of a third of the page on flags the player sets once --
-        // height the message log never got back.
-        footer.AddChild(UiFactory.Row(_attachState, _attachShot, _allowAct));
+        column.AddChild(UiFactory.Row(_attachState, _attachShot));
+        column.AddChild(UiFactory.Row(_allowAct, _showThinking));
         _chatInput = UiFactory.Multiline("", 52);
-        footer.AddChild(_chatInput);
+        _chatInput.PlaceholderText = Loc.T("和 AI 说这局怎么打；它会参考你的话做下一次决策。");
+        _chatInput.CustomMinimumSize = new Vector2(UiFactory.MinReflowWidth, 52);
+        column.AddChild(_chatInput);
         _sendButton = UiFactory.Button(Loc.T("发送"), () => _ = SendChatAsync(), UiFactory.ButtonKind.Primary);
         var clear = UiFactory.Button(Loc.T("清空"), () => AgentRuntime.Instance.ClearChat(), UiFactory.ButtonKind.Ghost);
-        footer.AddChild(UiFactory.Row(_sendButton, clear));
-        return footer;
+        column.AddChild(UiFactory.Row(_sendButton, clear));
+
+        return UiFactory.Card(Loc.T("对话"), column);
     }
 
     /// <summary>
-    /// The play dashboard: a status hero, a three-tile row, then the reasoning.
+    /// The play page: a solo/multiplayer mode switch on top, then the active mode's section.
     /// </summary>
     /// <remarks>
-    /// Four flat label rows used to run down this page, which is why "is it playing, and what is it
-    /// doing" took a second read every time. The state is now the largest thing on the page and the
-    /// three facts that qualify it -- which screen, which action, what it has cost -- are tiles beside
-    /// each other where a glance lands, instead of three more lines to read in order.
+    /// The overlay is organised around how the player wants the AI to play, not around one tab per
+    /// feature. Solo play (this window's LLM, or an external MCP client driving the same loop) and
+    /// multiplayer (a companion instance playing alongside the human) are the two modes; only one is
+    /// active at a time, so they share this page behind a switch rather than two tabs. The choice is
+    /// persisted so the page reopens on the mode the player last used.
     /// </remarks>
     private Control BuildPlayPage()
     {
         var page = UiFactory.Column();
+
+        var settings = AgentRuntime.Instance.Settings;
+        var coop = settings.OverlayPlayMode == "coop";
+        _playModeSwitch = UiFactory.SegmentedSwitch(
+            new[] { Loc.T("单人"), Loc.T("多人") },
+            coop ? 1 : 0,
+            OnPlayModeSelected);
+        page.AddChild(_playModeSwitch);
+
+        _soloSection = BuildSoloSection();
+        _coopSection = BuildCoopSection();
+        _soloSection.Visible = !coop;
+        _coopSection.Visible = coop;
+        page.AddChild(_soloSection);
+        page.AddChild(_coopSection);
+
+        return UiFactory.Scroll(page, 120);
+    }
+
+    /// <summary>
+    /// Applies a mode-switch selection: swaps the visible section and persists the choice, so the
+    /// page reopens on the mode the player last used.
+    /// </summary>
+    private void OnPlayModeSelected(int index)
+    {
+        var coop = index == 1;
+        if (_soloSection != null) _soloSection.Visible = !coop;
+        if (_coopSection != null) _coopSection.Visible = coop;
+
+        var settings = CloneSettings(AgentRuntime.Instance.Settings);
+        settings.OverlayPlayMode = coop ? "coop" : "solo";
+        AgentRuntime.Instance.SaveSettings(settings);
+        RefreshDynamic();
+    }
+
+    /// <summary>
+    /// The solo mode section: play controls and metrics, then the conversation the decisions are
+    /// read through, then the Jev panel and the decision log.
+    /// </summary>
+    private Control BuildSoloSection()
+    {
+        var section = UiFactory.Column();
 
         // The hero names the state, and colours it: green while the loop runs, muted while it waits.
         _playStatus = UiFactory.Wrapped(Loc.T("状态：-"), UiFactory.FontTitle, muted: false);
@@ -112,7 +175,7 @@ internal sealed partial class AgentOverlayHost
         var playControls = UiFactory.Column();
         playControls.AddChild(_playToggle);
         playControls.AddChild(_stepButton);
-        page.AddChild(UiFactory.Card(
+        section.AddChild(UiFactory.Card(
             Loc.T("当前回合"),
             _playStatus,
             _playSummary,
@@ -121,15 +184,77 @@ internal sealed partial class AgentOverlayHost
         _playScreen = UiFactory.Label("-", UiFactory.FontHeading);
         _playAction = UiFactory.Label("-", UiFactory.FontHeading);
         _playUsage = UiFactory.Label("-", UiFactory.FontHeading);
-        page.AddChild(UiFactory.Row(
+        section.AddChild(UiFactory.Row(
             UiFactory.MetricTile(Loc.T("屏幕"), _playScreen),
             UiFactory.MetricTile(Loc.T("最近动作"), _playAction),
             UiFactory.MetricTile(Loc.T("Token"), _playUsage)));
 
+        // The dual-layer toggle for solo play. When it is on, Jev picks each action and the LLM only
+        // plans strategy; the panel below the conversation shows what Jev chose.
+        _dualLayerSoloCheck = UiFactory.Check(
+            Loc.T("双层决策模式（Jev 执行 + LLM 规划）"),
+            AgentRuntime.Instance.Settings.DualLayerSoloEnabled);
+        _dualLayerSoloCheck.Toggled += on =>
+        {
+            var next = CloneSettings(AgentRuntime.Instance.Settings);
+            next.DualLayerSoloEnabled = on;
+            AgentRuntime.Instance.SaveSettings(next);
+            RefreshDynamic();
+        };
+        section.AddChild(_dualLayerSoloCheck);
+
         _playThought = UiFactory.Wrapped("-", UiFactory.FontBody);
-        page.AddChild(UiFactory.Card(Loc.T("思考"), _playThought));
-        page.AddChild(UiFactory.Wrapped(Loc.T("自动游玩走 compact 状态和工具，与 MCP 相同，不需要视觉即可打完全部流程。对话默认只读；勾选「允许代打」或明确说「帮我打」才会执行动作。")));
-        return UiFactory.Scroll(page, 120);
+        section.AddChild(UiFactory.Card(Loc.T("思考"), _playThought));
+
+        section.AddChild(BuildChatCard());
+        section.AddChild(BuildJevPanel());
+        section.AddChild(BuildDecisionCard());
+        section.AddChild(UiFactory.Wrapped(Loc.T("自动游玩走 compact 状态和工具，与 MCP 相同，不需要视觉即可打完全部流程。对话默认只读；勾选「允许代打」或明确说「帮我打」才会执行动作。")));
+        return section;
+    }
+
+    /// <summary>
+    /// The Jev panel: shown under the conversation while solo dual-layer mode is on. Child task
+    /// jev-two-layer-engine wires the live values; until then it explains itself.
+    /// </summary>
+    private Control BuildJevPanel()
+    {
+        var column = UiFactory.Column();
+        _jevStatus = UiFactory.Wrapped(Loc.T("Jev 未配置。到设置页填写 API Key 后即可用双层决策。"), UiFactory.FontCaption);
+        _jevLastChoice = UiFactory.Wrapped("-", UiFactory.FontBody, muted: false);
+        _jevProbabilities = UiFactory.Wrapped("-", UiFactory.FontCaption);
+        column.AddChild(_jevStatus);
+        column.AddChild(UiFactory.Row(
+            UiFactory.MetricTile(Loc.T("Jev 最近选择"), _jevLastChoice),
+            UiFactory.MetricTile(Loc.T("概率分布"), _jevProbabilities)));
+        _jevPanel = UiFactory.Card(Loc.T("Jev 执行层"), column);
+        return _jevPanel;
+    }
+
+    /// <summary>
+    /// The decision log card: this session's usage on top, then the recorded decisions newest first.
+    /// Moved into the play page from its own tab.
+    /// </summary>
+    private Control BuildDecisionCard()
+    {
+        var column = UiFactory.Column();
+        _decisionUsage = UiFactory.Wrapped("-", UiFactory.FontHeading, muted: false);
+        _decisionRunSpend = UiFactory.Wrapped("-", UiFactory.FontHeading, muted: false);
+
+        // Two counters stacked rather than side by side: these are full sentences ("Token 消耗：66,184
+        // ..."), not metric numerals, and a side-by-side row clipped the request count off the right
+        // edge in the live pass.
+        column.AddChild(UiFactory.MetricTile(Loc.T("本次会话"), _decisionUsage));
+        column.AddChild(UiFactory.MetricTile(Loc.T("本局"), _decisionRunSpend));
+        column.AddChild(UiFactory.Wrapped(Loc.T("最新在前：动作、理由、来源，以及该步消耗的 Token。")));
+        _decisionLog = UiFactory.Rich();
+        _decisionLog.FitContent = false;
+        // Newest first, so follow-to-bottom would scroll away from the line that just arrived.
+        _decisionLog.ScrollFollowing = false;
+        _decisionLog.CustomMinimumSize = new Vector2(0, 140);
+        _decisionLog.SizeFlagsHorizontal = Control.SizeFlags.ExpandFill;
+        column.AddChild(_decisionLog);
+        return UiFactory.Card(Loc.T("决策记录"), column);
     }
 
     /// <summary>
@@ -164,10 +289,20 @@ internal sealed partial class AgentOverlayHost
     /// rather than pinned at 130 pixels: the point of the reorder is lost if a fixed chat box pushes
     /// the actions off the bottom anyway.
     /// </remarks>
-    private Control BuildDualPage()
+    /// <summary>
+    /// The multiplayer mode section: the actions first, then what the teammate is doing, then the
+    /// chat. Moved into the play page from its own tab; the play page's scroll carries it now.
+    /// </summary>
+    /// <remarks>
+    /// The order used to be status, invite, control, chat -- which put the section's whole reason for
+    /// existing ("invite the teammate", "pause the teammate") below a card of text, and mid-fight the
+    /// pause button was a scroll away. Actions now come first because they are what the player came
+    /// here to press; the status card answers the question they ask next; the chat, which is the only
+    /// part that has to be scrolled to, is last.
+    /// </remarks>
+    private Control BuildCoopSection()
     {
         var page = UiFactory.Column();
-        page.AddChild(UiFactory.Label(Loc.T("和 AI 一起爬塔"), UiFactory.FontTitle));
         page.AddChild(UiFactory.Wrapped(Loc.T("可以一起玩：你打自己的角色，AI 打另一个角色，同一座塔往上爬。大厅仍是 4 人位，还可以再邀 2 名在线玩家。")));
 
         _sessionHeadline = UiFactory.Label(Loc.T("状态：-"), UiFactory.FontTitle);
@@ -236,6 +371,7 @@ internal sealed partial class AgentOverlayHost
 
         _teamChat = UiFactory.Rich();
         _teamChat.FitContent = false;
+        _teamChat.CustomMinimumSize = new Vector2(0, 120);
         _teamInput = UiFactory.Multiline("", 56);
         _teamInput.PlaceholderText = Loc.T("一起集火哪个敌人？这条路线你怎么看？");
         // A text editor reports its placeholder as its minimum width, and the placeholder here is a full
@@ -253,97 +389,21 @@ internal sealed partial class AgentOverlayHost
             _teamStatus,
             UiFactory.Wrapped(Loc.T("聊天不会替你出牌，也不会恢复已暂停的队友。建议会供队友下一次决策参考。")),
             UiFactory.Wrapped(Loc.T("如果队友窗口未能连接，请检查游戏日志和 Steam 双开限制。"))));
-        // The teammate page is the longest one: cards, four action rows and a chat box. Without a
-        // scroll container the bottom half is simply unreachable -- the panel clips its contents.
-        var scroll = UiFactory.Scroll(page, 120);
-        scroll.Resized += () => LayoutDualChat(scroll.Size.Y);
-        return scroll;
-    }
 
-    /// <summary>
-    /// Sizes the teammate chat's log box from the page height, so the log gives up room before the
-    /// action rows above it are pushed out of view.
-    /// </summary>
-    /// <remarks>
-    /// A floor as well as a ceiling: below roughly a third of the page an empty two-line log is
-    /// useless, and the scroll container can carry the difference. Above it, the log grows with the
-    /// window instead of the fixed 130 pixels it used to claim on every window size.
-    /// </remarks>
-    private void LayoutDualChat(float pageHeight)
-    {
-        if (_teamChat == null || pageHeight < 120)
+        // The dual-layer toggle for the multiplayer teammate. The companion instance runs its own Jev
+        // loop (it has no overlay), so this switch is the host-side control for it.
+        _dualLayerCoopCheck = UiFactory.Check(
+            Loc.T("双层决策模式（Jev 执行 + LLM 规划）"),
+            AgentRuntime.Instance.Settings.DualLayerCoopEnabled);
+        _dualLayerCoopCheck.Toggled += on =>
         {
-            return;
-        }
-
-        _teamChat.CustomMinimumSize = new Vector2(0, Math.Clamp(pageHeight * 0.22f, 96f, 220f));
-    }
-
-    private Control BuildConnectPage()
-    {
-        var page = UiFactory.Column();
-        page.AddChild(UiFactory.Label(Loc.T("MCP 接入"), UiFactory.FontTitle));
-        page.AddChild(UiFactory.Wrapped(Loc.T("选择：一起玩只用游戏内窗口，不必打开 MCP。外部客户端用本页开关。Python sidecar 仅 stdio / layered / full。")));
-        _mcpToggle = UiFactory.Check(Loc.T("打开 MCP 服务"), AgentRuntime.Instance.McpRunning);
-        _mcpToggle.Toggled += on => AgentRuntime.Instance.SetMcpEnabled(on);
-        _mcpStatus = UiFactory.Wrapped(AgentRuntime.Instance.McpStatus, UiFactory.FontBody);
-
-        _mcpInfoBox = UiFactory.Column();
-        _mcpUrlLabel = UiFactory.Label("", UiFactory.FontBody);
-        _mcpInfoBox.AddChild(_mcpUrlLabel);
-        var copyUrl = UiFactory.Button(Loc.T("复制地址"), () =>
-        {
-            var url = AgentRuntime.Instance.McpUrl;
-            if (!string.IsNullOrWhiteSpace(url))
-            {
-                CopyText(url);
-            }
-        }, UiFactory.ButtonKind.Primary);
-        var copyCfg = UiFactory.Button(Loc.T("复制配置"), () => CopyText(AgentRuntime.Instance.McpClientConfig));
-        _mcpInfoBox.AddChild(UiFactory.Row(copyUrl, copyCfg));
-        _mcpConfigEdit = UiFactory.Multiline("", 120);
-        _mcpConfigEdit.Editable = false;
-        _mcpInfoBox.AddChild(_mcpConfigEdit);
-        _mcpInfoBox.AddChild(UiFactory.Wrapped(Loc.T("把配置贴进外部客户端的 MCP 设置。服务只监听本机 127.0.0.1。")));
-        _mcpInfoBox.Visible = AgentRuntime.Instance.McpRunning;
-
-        page.AddChild(UiFactory.Card(
-            Loc.T("服务开关"),
-            UiFactory.Wrapped(Loc.T("游戏内自动打不需要打开。只有 Cursor / Claude / Codex 等外部客户端才需要。")),
-            _mcpToggle,
-            _mcpStatus));
-        page.AddChild(UiFactory.Card(Loc.T("客户端配置"), _mcpInfoBox));
-        page.AddChild(UiFactory.Wrapped(Loc.T("本机 HTTP API 始终可用：GET /health /state ，POST /action。MCP 打开后才会在同一端口暴露 /mcp。地址以本页复制为准，不要写死 8080 或 8765。")));
-        return UiFactory.Scroll(page, 120);
-    }
-
-    /// <summary>
-    /// The decision log tab: this session's usage on top, then the recorded decisions newest first.
-    /// </summary>
-    private Control BuildDecisionPage()
-    {
-        var page = UiFactory.Column();
-        _decisionUsage = UiFactory.Wrapped("-", UiFactory.FontHeading, muted: false);
-        _decisionRunSpend = UiFactory.Wrapped("-", UiFactory.FontHeading, muted: false);
-
-        // Two counters side by side rather than two sentences: "what has this cost me" is the
-        // question this page is opened to answer, and a number to read beats a clause to parse.
-        // These two strings are full sentences ("Token 消耗：66,184 ..."), not metric numerals.
-        // A side-by-side tile row gives each about 180px, which is why the live log clipped the
-        // request count off the right edge. Stack them so each line gets the card width.
-        page.AddChild(UiFactory.Card(
-            Loc.T("用量"),
-            UiFactory.MetricTile(Loc.T("本次会话"), _decisionUsage),
-            UiFactory.MetricTile(Loc.T("本局"), _decisionRunSpend)));
-        page.AddChild(UiFactory.Heading(Loc.T("决策记录")));
-        page.AddChild(UiFactory.Wrapped(Loc.T("最新在前：动作、理由、来源，以及该步消耗的 Token。")));
-        _decisionLog = UiFactory.Rich();
-        _decisionLog.FitContent = false;
-        // Newest first, so follow-to-bottom would scroll away from the line that just arrived.
-        _decisionLog.ScrollFollowing = false;
-        _decisionLog.SizeFlagsHorizontal = Control.SizeFlags.ExpandFill;
-        _decisionLog.SizeFlagsVertical = Control.SizeFlags.ExpandFill;
-        page.AddChild(UiFactory.Scroll(_decisionLog, 120));
+            var next = CloneSettings(AgentRuntime.Instance.Settings);
+            next.DualLayerCoopEnabled = on;
+            AgentRuntime.Instance.SaveSettings(next);
+            RefreshDynamic();
+        };
+        page.AddChild(_dualLayerCoopCheck);
+        // The play page's own scroll carries this section now; the section returns its plain column.
         return page;
     }
 
@@ -720,6 +780,43 @@ internal sealed partial class AgentOverlayHost
                     _chatLog.AppendText(FormatTurn(turn.Role == "user" ? Loc.T("你") : Loc.T("助手"), turn.Text));
                 }
             }
+        }
+
+        // The mode switch and the dual-layer toggles mirror settings that can change off this page
+        // (a settings save, or the mode switch itself), so the refresh pass re-syncs them rather
+        // than trusting the last click to be the only writer.
+        var mode = AgentRuntime.Instance.Settings;
+        var coopMode = mode.OverlayPlayMode == "coop";
+        if (_playModeSwitch != null)
+        {
+            _playModeSwitch.SetSelected(coopMode ? 1 : 0);
+        }
+
+        if (_soloSection != null) _soloSection.Visible = !coopMode;
+        if (_coopSection != null) _coopSection.Visible = coopMode;
+
+        if (_dualLayerSoloCheck != null)
+        {
+            _dualLayerSoloCheck.SetPressedNoSignal(mode.DualLayerSoloEnabled);
+        }
+
+        if (_dualLayerCoopCheck != null)
+        {
+            _dualLayerCoopCheck.SetPressedNoSignal(mode.DualLayerCoopEnabled);
+        }
+
+        // The Jev panel is only meaningful while solo dual-layer mode is on; hide it otherwise so it
+        // does not read as a second, dead dashboard.
+        if (_jevPanel != null)
+        {
+            _jevPanel.Visible = mode.DualLayerSoloEnabled;
+        }
+
+        if (_jevStatus != null)
+        {
+            _jevStatus.Text = mode.HasJevConfigured()
+                ? Loc.T("Jev 已配置（{0}）。双层决策开启后由 Jev 逐步操作，LLM 只调整策略。", mode.JevModel)
+                : Loc.T("Jev 未配置。到设置页填写 API Key 后即可用双层决策。");
         }
     }
 

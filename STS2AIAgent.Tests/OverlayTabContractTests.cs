@@ -35,8 +35,8 @@ internal static class OverlayTabContractTests
         // The switch that names every page stays with the tab data it switches over, while the bodies
         // it dispatches to live with the other pages.
         Assert.Contains("private Control BuildPageForTab(string tab)", tabs);
-        Assert.Contains("private Control BuildDecisionPage()", pages);
-        Assert.Contains("private Control BuildChatPage()", pages);
+        Assert.Contains("private Control BuildPlayPage()", pages);
+        Assert.Contains("private Control BuildChatCard()", pages);
         Assert.Contains("private void RefreshDynamic()", pages);
 
         Assert.False(
@@ -46,31 +46,26 @@ internal static class OverlayTabContractTests
             baseFile.Contains("private void ShowTab(string tab)", StringComparison.Ordinal),
             "ShowTab belongs with the tab construction it switches between.");
         Assert.False(
-            baseFile.Contains("private Control BuildDecisionPage()", StringComparison.Ordinal),
+            baseFile.Contains("private Control BuildPlayPage()", StringComparison.Ordinal),
             "The page bodies belong in AgentOverlayHost.Pages.cs, beside the refresh pass that repaints them.");
 
         // ShowTab keeps its string call sites in the base file: the startup tab is chosen from runtime
         // state, and those call sites are the overlay's, not the tabs file's.
-        Assert.Contains("ShowTab(\"dual\")", baseFile);
         Assert.Contains("ShowTab(\"play\")", baseFile);
         Assert.Contains("ShowTab(\"settings\")", baseFile);
     }
 
     /// <summary>
-    /// The five tabs that existed before the decision log keep their ids and positions, so showing
-    /// them is a move and not a reshuffle.
+    /// The overlay is organised around two modes of play rather than a tab per feature: the play page
+    /// and the settings page. The catalog is the single place that order is decided.
     /// </summary>
     public static void ExistingTabsKeepTheirOrder()
     {
         var ids = OverlayTabCatalog.Tabs.Select(tab => tab.Id).ToArray();
 
-        Assert.Equal(6, ids.Length);
-        Assert.Equal(OverlayTabCatalog.Dual, ids[0]);
-        Assert.Equal(OverlayTabCatalog.Chat, ids[1]);
-        Assert.Equal(OverlayTabCatalog.Play, ids[2]);
-        Assert.Equal(OverlayTabCatalog.Settings, ids[3]);
-        Assert.Equal(OverlayTabCatalog.Connect, ids[4]);
-        Assert.Equal(OverlayTabCatalog.Decisions, ids[5]);
+        Assert.Equal(2, ids.Length);
+        Assert.Equal(OverlayTabCatalog.Play, ids[0]);
+        Assert.Equal(OverlayTabCatalog.Settings, ids[1]);
     }
 
     /// <summary>Every catalog entry has a page builder, and every page builder has a catalog entry.</summary>
@@ -94,10 +89,10 @@ internal static class OverlayTabContractTests
     /// </summary>
     public static void TabsThatChangeWithoutAnEventRefreshOnShow()
     {
-        Assert.True(OverlayTabCatalog.RefreshesOnShow(OverlayTabCatalog.Dual));
-        Assert.True(OverlayTabCatalog.RefreshesOnShow(OverlayTabCatalog.Decisions));
-        Assert.False(OverlayTabCatalog.RefreshesOnShow(OverlayTabCatalog.Chat));
-        Assert.False(OverlayTabCatalog.RefreshesOnShow(OverlayTabCatalog.Play));
+        // The play page hosts the conversation, the decision log and the Jev panel, all of which can
+        // change with nothing to subscribe to, so it re-reads on entry. Settings is a static form.
+        Assert.True(OverlayTabCatalog.RefreshesOnShow(OverlayTabCatalog.Play));
+        Assert.False(OverlayTabCatalog.RefreshesOnShow(OverlayTabCatalog.Settings));
         Assert.False(OverlayTabCatalog.RefreshesOnShow("no-such-tab"));
     }
 
@@ -139,7 +134,7 @@ internal static class OverlayTabContractTests
         Assert.Contains("RefreshDecisionPage(facing);", refresh);
 
         var tick = AgentSourceFixture.MethodBody(overlay, "OnProcessFrame");
-        Assert.Contains("if (IsTabVisible(OverlayTabCatalog.Decisions))", tick);
+        Assert.Contains("if (IsTabVisible(OverlayTabCatalog.Play))", tick);
         Assert.Contains("RefreshDecisionPage(AgentRuntime.Instance.PlayerFacing());", tick);
 
         var page = AgentSourceFixture.MethodBody(overlay, "RefreshDecisionPage");

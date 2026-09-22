@@ -1,0 +1,30 @@
+{
+  "id": "dual-mode-ui-jev-two-layer",
+  "name": "dual-mode-ui-jev-two-layer",
+  "title": "双模式 UI 重组与 Jev 双层决策模式",
+  "description": "",
+  "status": "planning",
+  "dev_type": null,
+  "scope": null,
+  "package": null,
+  "priority": "P2",
+  "creator": "CharTyr",
+  "assignee": "CharTyr",
+  "createdAt": "2026-09-22",
+  "completedAt": null,
+  "branch": null,
+  "base_branch": "main",
+  "worktree_path": null,
+  "commit": null,
+  "pr_url": null,
+  "subtasks": [],
+  "children": [
+    "09-22-overlay-two-tab-reorg",
+    "09-22-jev-two-layer-engine",
+    "09-22-play-session-persistence"
+  ],
+  "parent": null,
+  "relatedFiles": [],
+  "notes": "",
+  "meta": {}
+}

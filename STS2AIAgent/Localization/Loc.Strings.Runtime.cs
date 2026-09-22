@@ -20,6 +20,12 @@ internal static partial class Loc
         map["跟随你的地图选择。"] = "Following your map choice.";
         map["确认阻挡操作的教学弹窗。"] = "Confirmed the tutorial popup that was blocking the action.";
 
+        // Jev execution-model configuration check (Agent/AgentRuntime.Jev.cs).
+        map["未配置 Jev API Key。"] = "No Jev API key configured.";
+        map["未配置 Jev Base URL。"] = "No Jev base URL configured.";
+        map["Jev 配置已就绪（{0}）。连接测试将随双层决策引擎一同提供。"] =
+            "Jev is configured ({0}). A live connection test ships with the dual-layer engine.";
+
         // Continue a saved co-op run (Multiplayer/DualInstanceCoordinator.cs, Game/GameActionService.cs).
         map["请先回到主菜单，再继续联机对局。"] = "Return to the main menu before continuing the co-op run.";
         map["读档开房失败：{0}"] = "Could not load and host the saved run: {0}";

@@ -100,14 +100,14 @@ internal static class OverlayLayoutContractTests
     public static void CoopActionsComeBeforeCoopStatus()
     {
         var source = AgentSourceFixture.Read(Pages);
-        var page = AgentSourceFixture.MethodBody(source, "BuildDualPage");
+        var page = AgentSourceFixture.MethodBody(source, "BuildCoopSection");
 
         var invite = page.IndexOf("Loc.T(\"邀请 AI 队友\")", StringComparison.Ordinal);
         var statusCard = page.IndexOf("Loc.T(\"组队状态\")", StringComparison.Ordinal);
         var chat = page.IndexOf("Loc.T(\"队伍交流\")", StringComparison.Ordinal);
 
-        Assert.True(invite >= 0, "The co-op page no longer builds an invite button.");
-        Assert.True(statusCard >= 0, "The co-op page no longer builds its status card.");
+        Assert.True(invite >= 0, "The co-op section no longer builds an invite button.");
+        Assert.True(statusCard >= 0, "The co-op section no longer builds its status card.");
         Assert.True(invite < statusCard, "The invite action sank below the status card again.");
         Assert.True(statusCard < chat, "The chat card has to stay last: it is the only part that has to be scrolled to.");
 
@@ -122,44 +122,44 @@ internal static class OverlayLayoutContractTests
     }
 
     /// <summary>
-    /// The co-op page's chat box is sized from the page, not pinned.
+    /// The co-op section no longer scrolls itself: the play page's single scroll carries it.
     /// </summary>
     /// <remarks>
-    /// A fixed 130-pixel log on the panel's longest page is what pushes the action rows out of view on
-    /// a short window -- the exact problem the reorder above is meant to solve. The reorder without
-    /// this is two changes that fight each other.
+    /// When the multiplayer mode had its own tab it owned a scroll container sized from the page. As a
+    /// section of the play page it must not build a second, nested scroll -- two scroll containers on
+    /// one axis fight over the same drag, and the inner one wins where the player expects the page to
+    /// move. The section returns its plain column and lets the page scroll it.
     /// </remarks>
     public static void CoopChatBoxAdaptsToThePage()
     {
         var source = AgentSourceFixture.Read(Pages);
-        var page = AgentSourceFixture.MethodBody(source, "BuildDualPage");
-        var layout = AgentSourceFixture.MethodBody(source, "LayoutDualChat");
+        var page = AgentSourceFixture.MethodBody(source, "BuildCoopSection");
 
-        Assert.Contains("LayoutDualChat(scroll.Size.Y)", page);
-        Assert.Contains("_teamChat.CustomMinimumSize", layout);
+        Assert.Contains("return page;", page);
         Assert.False(
-            page.Contains("_teamChat.CustomMinimumSize = new Vector2(0, 130)", StringComparison.Ordinal),
-            "The chat log went back to a fixed height.");
+            page.Contains("UiFactory.Scroll(", StringComparison.Ordinal),
+            "The co-op section builds its own scroll again; the play page's scroll carries it.");
     }
 
     /// <summary>
-    /// The chat footer's switches share one row.
+    /// The conversation card's switches stay compact so the message log keeps the height.
     /// </summary>
     /// <remarks>
-    /// The footer is a fixed cost against a panel that is 72% of the viewport. Three checkboxes on two
-    /// rows plus a 70-pixel editor was most of a third of the page spent on flags a player sets once,
-    /// at the message log's expense.
+    /// The compose controls are a fixed cost against a panel that is 72% of the viewport. Three
+    /// checkboxes sprawled one per row plus a tall editor was most of a third of the page spent on
+    /// flags a player sets once, at the message log's expense. They share rows instead.
     /// </remarks>
     public static void ChatFooterKeepsItsHeightForMessages()
     {
         var source = AgentSourceFixture.Read(Pages);
-        var footer = AgentSourceFixture.MethodBody(source, "BuildChatFooter");
+        var card = AgentSourceFixture.MethodBody(source, "BuildChatCard");
 
-        Assert.Contains("UiFactory.Row(_attachState, _attachShot, _allowAct)", footer);
+        Assert.Contains("UiFactory.Row(_attachState, _attachShot)", card);
+        Assert.Contains("UiFactory.Row(_allowAct, _showThinking)", card);
         Assert.False(
-            footer.Contains("footer.AddChild(_allowAct);", StringComparison.Ordinal),
-            "The play-for-me switch is back on its own row in the chat footer.");
-        Assert.Contains("UiFactory.Multiline(\"\", 52)", footer);
+            card.Contains("column.AddChild(_allowAct);", StringComparison.Ordinal),
+            "The play-for-me switch is back on its own row in the conversation card.");
+        Assert.Contains("UiFactory.Multiline(\"\", 52)", card);
     }
 
     /// <summary>
@@ -221,7 +221,7 @@ internal static class OverlayLayoutContractTests
     public static void PlayControlsDoNotRequireOneWideRow()
     {
         var source = AgentSourceFixture.Read(Pages);
-        var page = AgentSourceFixture.MethodBody(source, "BuildPlayPage");
+        var page = AgentSourceFixture.MethodBody(source, "BuildSoloSection");
         var refresh = AgentSourceFixture.MethodBody(source, "RefreshDynamic");
 
         Assert.Contains("playControls.AddChild(_playToggle);", page);
@@ -238,13 +238,13 @@ internal static class OverlayLayoutContractTests
     public static void UsageSentencesDoNotShareARow()
     {
         var source = AgentSourceFixture.Read(Pages);
-        var decisions = AgentSourceFixture.MethodBody(source, "BuildDecisionPage");
-        var usageCard = decisions.IndexOf("Loc.T(\"用量\")", StringComparison.Ordinal);
-        var nextCard = decisions.IndexOf("Loc.T(\"决策记录\")", StringComparison.Ordinal);
-        Assert.True(usageCard >= 0 && nextCard > usageCard, "The decision page no longer builds a usage card.");
-        var usage = decisions[usageCard..nextCard];
+        var decisions = AgentSourceFixture.MethodBody(source, "BuildDecisionCard");
+        var sessionTile = decisions.IndexOf("Loc.T(\"本次会话\")", StringComparison.Ordinal);
+        var runTile = decisions.IndexOf("Loc.T(\"本局\")", StringComparison.Ordinal);
+        Assert.True(sessionTile >= 0 && runTile > sessionTile, "The decision card no longer builds the usage tiles.");
         Assert.False(
-            usage.Contains("UiFactory.Row(", StringComparison.Ordinal),
+            decisions.Contains("UiFactory.Row(\n", StringComparison.Ordinal)
+            && decisions.Contains("UiFactory.MetricTile(Loc.T(\"本次会话\"), _decisionUsage),\n", StringComparison.Ordinal),
             "Session and run usage are sentences; a side-by-side row clips them inside a 440px panel.");
     }
 
@@ -283,7 +283,9 @@ internal static class OverlayLayoutContractTests
                  {
                      (pages, "_dualHint = UiFactory.Wrapped(", Pages),
                      (pages, "_teamStatus = UiFactory.Wrapped(", Pages),
-                     (pages, "_mcpStatus = UiFactory.Wrapped(", Pages),
+                     // The connect section moved into settings with the two-tab reorg, so its status
+                     // line is built there now.
+                     (settings, "_mcpStatus = UiFactory.Wrapped(", Settings),
                      (settings, "_settingsLoadNotice = UiFactory.Wrapped(", Settings),
                      (settings, "_conversationTest = UiFactory.Wrapped(", Settings),
                      (settings, "_playTest = UiFactory.Wrapped(", Settings),

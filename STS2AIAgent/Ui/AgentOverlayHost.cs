@@ -74,7 +74,6 @@ internal sealed partial class AgentOverlayHost
     private TextEdit? _mcpConfigEdit;
     private Control? _mcpInfoBox;
     private Control? _pageHost;
-    private Control? _chatFooter;
     /// <summary>Diagnostic state: the content column to measure, and the page already reported.</summary>
     private Control? _contentColumn;
     private string? _overflowReportedFor;
@@ -258,8 +257,6 @@ internal sealed partial class AgentOverlayHost
         };
         BuildPages(_pageHost);
         layout.AddChild(_pageHost);
-        _chatFooter = BuildChatFooter();
-        layout.AddChild(_chatFooter);
         chrome.AddChild(layout);
         _panel.AddChild(chrome);
         _panel.Visible = startupSettings.OverlayVisibleOnStart || !startupSettings.HasSeenFirstRunGuide;
@@ -270,17 +267,16 @@ internal sealed partial class AgentOverlayHost
         _layer.TreeEntered += OnOverlayEnteredTree;
         root.CallDeferred(Node.MethodName.AddChild, _layer);
         _tree.ProcessFrame += OnProcessFrame;
-        if (InstanceRole.IsCompanion)
-        {
-            ShowTab("play");
-        }
-        else if (!startupSettings.HasSeenFirstRunGuide)
+        // Land on the tab that gets the player playing: settings when nothing is configured yet,
+        // otherwise the play page (which hosts both the solo and the multiplayer modes). The
+        // companion instance has no overlay (ModEntry skips it), so there is no companion branch here.
+        if (!startupSettings.HasSeenFirstRunGuide)
         {
             ShowTab("settings");
         }
         else
         {
-            ShowTab("dual");
+            ShowTab("play");
         }
         RefreshDynamic();
         var languageBefore = Loc.Current;
@@ -597,6 +593,28 @@ internal sealed partial class AgentOverlayHost
         }
 
         ModelRoleProbe.InvalidateMismatched(current);
+
+        if (_jevBaseUrlEdit != null)
+        {
+            current.JevBaseUrl = _jevBaseUrlEdit.Text.Trim();
+        }
+
+        if (_jevApiKeyEdit != null)
+        {
+            current.JevApiKey = _jevApiKeyEdit.Text.Trim();
+        }
+
+        if (_jevModelEdit != null)
+        {
+            current.JevModel = _jevModelEdit.Text.Trim();
+        }
+
+        if (_jevThresholdEdit != null &&
+            double.TryParse(_jevThresholdEdit.Text.Trim(), out var threshold))
+        {
+            current.JevConfidenceThreshold = threshold;
+        }
+
         return current;
     }
 
@@ -862,9 +880,11 @@ internal sealed partial class AgentOverlayHost
                     }
                 }
 
-                // The tab-visible refresh in ShowTab covers switching into this page; this covers the
-                // page that is already open while the screen underneath changes on its own.
-                if (IsTabVisible(OverlayTabCatalog.Dual))
+                // The play page hosts the multiplayer section, the decision log and the Jev panel, all
+                // of which mirror state that can change with no runtime event to subscribe to (an action
+                // submitted over the HTTP API records a decision without raising Changed). The page that
+                // is already open re-reads them on the same tick.
+                if (IsTabVisible(OverlayTabCatalog.Play))
                 {
                     RefreshContinueAvailability();
                     // Cached inside the runtime and throttled there: this runs on the game thread, so
@@ -874,13 +894,7 @@ internal sealed partial class AgentOverlayHost
                     {
                         _teammateLive.Text = TeammateLiveText();
                     }
-                }
 
-                // Decisions reach the log from paths with no runtime event to subscribe to (an action
-                // submitted over the HTTP API records one without raising Changed), so the page that
-                // is already open re-reads it on the same tick.
-                if (IsTabVisible(OverlayTabCatalog.Decisions))
-                {
                     RefreshDecisionPage(AgentRuntime.Instance.PlayerFacing());
                 }
             }
