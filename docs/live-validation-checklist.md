@@ -26,7 +26,21 @@ save_and_quit`. It also read the latest accepted decision (`play_card`) and did 
 The in-process `/mcp` endpoint stayed disabled, so this is the sidecar client path, not the native
 MCP socket. Evidence: `build/validation-2026-09-22/external-readonly.json` (gitignored).
 
-Still open on this candidate: Act 2 and Act 3 completion, an external agent playing a full run
+The same unattended run later ended naturally. The isolated history
+`default\2026092212\modded\profile1\saves\history\1790036839.run` records
+`killed_by_encounter=ENCOUNTER.INFESTED_PRISMS_ELITE` after `ENCOUNTER.VANTOM_BOSS`. The last
+accepted decisions were combat plays at 2 HP, then `continue_game_over` and `return_to_main_menu`.
+`/health` then reported `play_phase=paused` and `stop_kind=run_end`; the visible screen was
+`TIMELINE`, the post-run unlock, not a false failure stop. The Steam profile hash was unchanged
+after that end: 184 files, `6E79BB6957AE0BB07679DC85F2B42C10D54B6C1135355F0BC09BFAA87329D22C`.
+
+After that run ended, the deployed `POST /mcp/control` route was exercised on a fresh isolated
+launch. `{"running": true}` returned `mcp_enabled: true`; native `initialize` and `tools/list`
+both returned 200 and advertised `health_check` and `act`; `{"running": false}` returned
+`mcp_enabled: false`. No game action was sent. Evidence:
+`build/validation-2026-09-22/mcp-control.json` (gitignored).
+
+Still open on this candidate: a win through Act 2 and Act 3, an external agent playing a full run
 through `act`, Vision attached to a live turn, the Steam two-instance path, `BESTIARY`, the
 remaining mechanic-matrix samples, and a typed teammate signal over the wire.
 
