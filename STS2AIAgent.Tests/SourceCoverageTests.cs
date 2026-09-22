@@ -74,6 +74,12 @@ internal static class SourceCoverageTests
         // The play-session persistence wiring (dirty tracking, flush, restore around the run boundary).
         // An AgentRuntime partial touching the live history/decisions, so it stays unlinked too.
         "STS2AIAgent/Agent/AgentRuntime.Session.cs",
+        // The per-model verification surface (ping + tool-calling probe, recorded per model). An
+        // AgentRuntime partial, so it stays unlinked with the base file; the Roslyn pass still parses it.
+        "STS2AIAgent/Agent/AgentRuntime.ModelTest.cs",
+        // The conversation card (chat log rendering, scroll-to-bottom, the chat-side option row). A
+        // Godot control builder, unlinked like the pages file it was split out of.
+        "STS2AIAgent/Ui/AgentOverlayHost.ChatCard.cs",
         // The play page's solo/multiplayer mode switch. A Godot control, so it stays unlinked like the
         // overlay host it serves.
         "STS2AIAgent/Ui/SegmentedSwitch.cs",

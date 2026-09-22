@@ -25,7 +25,7 @@ internal sealed class GameBridge : IGameBridge
         {
             var state = GameStateService.BuildStatePayload();
             return JsonSerializer.Serialize(state.agent_view ?? state, JsonOptions);
-        });
+        }, cancellationToken);
     }
 
     public Task<string> GetRawStateJsonAsync(CancellationToken cancellationToken)
@@ -34,7 +34,7 @@ internal sealed class GameBridge : IGameBridge
         {
             var state = GameStateService.BuildStatePayload();
             return JsonSerializer.Serialize(state, JsonOptions);
-        });
+        }, cancellationToken);
     }
 
     public Task<string> GetAvailableActionsJsonAsync(CancellationToken cancellationToken)
@@ -43,7 +43,7 @@ internal sealed class GameBridge : IGameBridge
         {
             var payload = GameStateService.BuildAvailableActionsPayload();
             return JsonSerializer.Serialize(payload.actions, JsonOptions);
-        });
+        }, cancellationToken);
     }
 
     /// <summary>
@@ -63,12 +63,12 @@ internal sealed class GameBridge : IGameBridge
     public Task<string> GetActionSnapshotJsonAsync(CancellationToken cancellationToken)
     {
         return GameThread.InvokeAsync(() =>
-            JsonSerializer.Serialize(GameStateService.BuildDecisionSnapshotPayload(), JsonOptions));
+            JsonSerializer.Serialize(GameStateService.BuildDecisionSnapshotPayload(), JsonOptions), cancellationToken);
     }
 
     public Task<string> GetScreenAsync(CancellationToken cancellationToken)
     {
-        return GameThread.InvokeAsync(() => GameStateService.BuildStatePayload().screen);
+        return GameThread.InvokeAsync(() => GameStateService.BuildStatePayload().screen, cancellationToken);
     }
 
     public Task<string> ActAsync(
@@ -185,6 +185,16 @@ internal sealed class GameBridge : IGameBridge
         while (DateTime.UtcNow < deadline)
         {
             cancellationToken.ThrowIfCancellationRequested();
+            // Each probe gets its own deadline: the outer loop's deadline is only checked between
+            // iterations, and a posted callback that never runs must not hang the turn past the
+            // point where the wait was supposed to give up (or the caller cancel).
+            var probeBudget = TimeSpan.FromSeconds(5);
+            var remaining = deadline - DateTime.UtcNow;
+            if (remaining < probeBudget)
+            {
+                probeBudget = remaining;
+            }
+
             var actionable = await GameThread.InvokeAsync(() =>
             {
                 var state = GameStateService.BuildStatePayload();
@@ -221,7 +231,7 @@ internal sealed class GameBridge : IGameBridge
 
                 return (state.available_actions ?? Array.Empty<string>())
                     .Any(name => !PassiveActions.Contains(name));
-            });
+            }, probeBudget, cancellationToken);
 
             if (actionable)
             {

@@ -87,14 +87,15 @@ internal sealed class JevClient : IJevClient
         string model,
         HttpClient? httpClient = null,
         int maxRetries = DefaultMaxRetries,
-        Func<int, TimeSpan>? retryDelay = null)
+        Func<int, TimeSpan>? retryDelay = null,
+        TimeSpan? requestTimeout = null)
     {
         _baseUrl = (baseUrl ?? string.Empty).Trim().TrimEnd('/');
         _apiKey = (apiKey ?? string.Empty).Trim();
         _model = model ?? string.Empty;
         _maxRetries = maxRetries;
         _retryDelay = retryDelay ?? DefaultRetryDelay;
-        _http = httpClient ?? new HttpClient { Timeout = DefaultRequestTimeout };
+        _http = httpClient ?? new HttpClient { Timeout = requestTimeout is { } t && t > TimeSpan.Zero ? t : DefaultRequestTimeout };
 
         // Reported here rather than on the first request, because an unconfigured client is a
         // configuration mistake and every call it makes would 401 anyway.

@@ -21,8 +21,12 @@ namespace STS2AIAgent.Agent;
 /// </remarks>
 internal sealed class PlaySessionStore
 {
-    /// <summary>Cap on persisted chat turns; the overlay keeps the same number in memory.</summary>
-    internal const int MaxChatTurns = 80;
+    /// <summary>
+    /// Cap on persisted chat turns. The overlay renders the in-memory tail and a continued run
+    /// restores the same tail, so this is the shared number between the runtime's history cap and the
+    /// file: a longer on-screen log is not silently cut in half by what was saved.
+    /// </summary>
+    internal const int MaxChatTurns = 200;
 
     /// <summary>Cap on persisted decisions, matching the live <see cref="DecisionLog"/> window.</summary>
     internal const int MaxDecisions = 200;

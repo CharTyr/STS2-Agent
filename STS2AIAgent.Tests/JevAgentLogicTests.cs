@@ -252,6 +252,43 @@ internal static class JevAgentLogicTests
         Assert.Equal("choose_event_option:1", eventOptions[0].Id);
     }
 
+    // ---- JevOptionEnumerator: REWARD ----------------------------------------
+
+    /// <summary>
+    /// A reward frame with a pending card choice expands resolve_rewards into one option per card
+    /// plus an explicit skip, so the execution model makes the deck-building decision instead of the
+    /// game side silently taking the first card.
+    /// </summary>
+    public static void Enumerate_RewardCardChoiceExpandsResolveRewards()
+    {
+        var options = JevOptionEnumerator.Enumerate(RewardSnapshot);
+        var ids = options.Select(option => option.Id).ToList();
+
+        Assert.True(ids.Contains("resolve_rewards:0"), "first card is its own option");
+        Assert.True(ids.Contains("resolve_rewards:1"), "second card is its own option");
+        Assert.True(ids.Contains("resolve_rewards:skip"), "an explicit skip option exists");
+        Assert.False(ids.Contains("resolve_rewards"), "the bare macro is gone while cards are pending");
+
+        var take = options.First(option => option.Id == "resolve_rewards:1");
+        Assert.Equal("resolve_rewards", take.Action);
+        Assert.Equal(1, take.OptionIndex);
+        Assert.True(take.Description.Contains("Demon Form", StringComparison.Ordinal), take.Description);
+
+        var skip = options.First(option => option.Id == "resolve_rewards:skip");
+        Assert.Equal(-1, skip.OptionIndex);
+    }
+
+    /// <summary>With no card choice pending, resolve_rewards stays a single bare cleanup option.</summary>
+    public static void Enumerate_RewardWithoutCardsKeepsBareMacro()
+    {
+        var options = JevOptionEnumerator.Enumerate(RewardNoCardSnapshot);
+        var ids = options.Select(option => option.Id).ToList();
+
+        Assert.True(ids.Contains("resolve_rewards"), "no card choice means plain cleanup");
+        Assert.False(ids.Any(id => id.StartsWith("resolve_rewards:", StringComparison.Ordinal)),
+            "no per-card options without a pending choice");
+    }
+
     // ---- JevOptionEnumerator: no-arg fallback -------------------------------
 
     public static void Enumerate_NoArgFallbackScreenYieldsSingleOptions()
@@ -407,6 +444,53 @@ internal static class JevAgentLogicTests
   },
   "available_actions": [
     {"name": "open_chest", "requires_index": false, "requires_target": false}
+  ]
+}
+""";
+
+    private const string RewardSnapshot = """
+{
+  "state": {
+    "screen": "REWARD",
+    "available_actions": ["resolve_rewards", "choose_reward_card", "skip_reward_cards"],
+    "reward": {
+      "pending_card_choice": true,
+      "can_proceed": false,
+      "rewards": [
+        {"i": 0, "line": "card: Choose a card", "claimable": true}
+      ],
+      "cards": [
+        {"i": 0, "line": "Strike"},
+        {"i": 1, "line": "Demon Form"}
+      ],
+      "alternatives": []
+    }
+  },
+  "available_actions": [
+    {"name": "resolve_rewards", "requires_index": false, "requires_target": false},
+    {"name": "choose_reward_card", "requires_index": true, "requires_target": false},
+    {"name": "skip_reward_cards", "requires_index": false, "requires_target": false}
+  ]
+}
+""";
+
+    private const string RewardNoCardSnapshot = """
+{
+  "state": {
+    "screen": "REWARD",
+    "available_actions": ["resolve_rewards"],
+    "reward": {
+      "pending_card_choice": false,
+      "can_proceed": true,
+      "rewards": [
+        {"i": 0, "line": "gold: 99", "claimable": true}
+      ],
+      "cards": [],
+      "alternatives": []
+    }
+  },
+  "available_actions": [
+    {"name": "resolve_rewards", "requires_index": false, "requires_target": false}
   ]
 }
 """;

@@ -4,6 +4,28 @@
 
 ## Unreleased
 
+- **Dual-layer mode actually engages now, and reward card picks are real decisions.** Three
+  live-pass fixes: the Jev execution decider was built once at mod startup, so a Jev API key
+  entered afterwards never took effect until a restart — the decider is now resolved from the live
+  configuration on every turn. The Jev "test connection" button was a configuration stub; it now
+  performs the real `GET /v1/models` round trip. And `resolve_rewards` / `collect_rewards_and_proceed`
+  called without an explicit `option_index` no longer take the first card silently: the reward flow
+  stops at the card selection (`reward.pending_card_choice = true`, action returns `pending`) so the
+  model makes the deck-building call with `choose_reward_card` / `skip_reward_cards` (or an explicit
+  `option_index`, `-1` to skip). In dual-layer mode the Jev option list expands `resolve_rewards`
+  into one option per offered card plus an explicit skip, instead of a bare macro that executed with
+  no index.
+- **Auto-play stalls are visible and bounded.** Every game-thread call the loop awaits now has a
+  deadline and honors cancellation — a game thread that stops pumping used to hang the turn forever,
+  leaving the pause button dead. The status line reports the turn's current phase with elapsed time
+  instead of sitting on "requesting the model" for the whole turn. A run that waits for an actionable
+  state for two minutes straight now stops with a visible reason instead of retrying silently
+  forever. LLM and Jev per-request timeouts are configurable in settings
+  (`LlmRequestTimeoutSeconds` / `JevRequestTimeoutSeconds`), and unexpected turn failures keep their
+  exception type instead of a bare message.
+- **The model's real thinking is no longer overwritten by its one-line act reason.** When a
+  provider returns `reasoning_content`, that is what the thought view shows; the short reason in the
+  act arguments only fills in when the provider sent no reasoning.
 - **A run's conversation and decision context now survive "continue game".** Each run's play session
   (the chat history, the recent-decision memory the loop compacts from, and the dual-layer play
   strategy) is persisted to a per-run file under `sessions/` beside the settings, written atomically

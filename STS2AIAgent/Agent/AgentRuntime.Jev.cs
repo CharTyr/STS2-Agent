@@ -27,6 +27,78 @@ internal sealed partial class AgentRuntime
     public PlayStrategy CurrentStrategy => _strategyStore.Current;
 
     /// <summary>
+    /// The slow half of the dual-layer engine, wired to the same store the decider reads. Created
+    /// once with the runtime; its cadence guard makes a turn cheap unless the context changed or
+    /// Jev has been unsure for a streak.
+    /// </summary>
+    private StrategyPlanner? _strategyPlanner;
+    private int _strategyRefreshInFlight;
+
+    private StrategyPlanner Planner => _strategyPlanner ??= new StrategyPlanner(
+        new DefaultLlmClientFactory(),
+        () =>
+        {
+            lock (_gate)
+            {
+                return _settings;
+            }
+        },
+        _strategyStore);
+
+    /// <summary>
+    /// Feeds one finished turn to the planner: the screen/act context key and the Jev confidence.
+    /// When the planner decides a replan is due, it runs in the background -- the play loop never
+    /// waits for a strategy, and the decider keeps the previous one until the new plan lands.
+    /// </summary>
+    private void ObserveStrategyContext(string? screen, string? act, double? confidence)
+    {
+        bool dualLayerOn;
+        double threshold;
+        lock (_gate)
+        {
+            dualLayerOn = InstanceRole.IsCompanion ? _settings.DualLayerCoopEnabled : _settings.DualLayerSoloEnabled;
+            threshold = _settings.JevConfidenceThreshold;
+        }
+
+        if (!dualLayerOn || ResolveJevDecider() == null)
+        {
+            return;
+        }
+
+        var contextKey = (screen ?? "UNKNOWN") + "|" + (act ?? "");
+        if (!Planner.ShouldRefresh(contextKey, confidence, threshold))
+        {
+            return;
+        }
+
+        if (Interlocked.CompareExchange(ref _strategyRefreshInFlight, 1, 0) != 0)
+        {
+            return;
+        }
+
+        _ = Task.Run(async () =>
+        {
+            try
+            {
+                var summary = await _loop.DescribeCurrentStateForPlanningAsync(_lifetime.Token);
+                var adopted = await Planner.RefreshAsync(summary, _lifetime.Token);
+                NoteEvent(adopted ? "strategy refreshed by planner" : "strategy refresh produced no new plan");
+            }
+            catch (OperationCanceledException)
+            {
+            }
+            catch (Exception ex)
+            {
+                NoteEvent("strategy refresh failed: " + DiagnosticExport.Redact(ex.Message));
+            }
+            finally
+            {
+                Interlocked.Exchange(ref _strategyRefreshInFlight, 0);
+            }
+        });
+    }
+
+    /// <summary>
     /// Builds the Jev execution decider when the configuration is complete enough to call Jev, or null
     /// when it is not -- a missing key or base URL leaves the loop on the plain LLM path rather than
     /// constructing a client that can only fail.
@@ -44,8 +116,40 @@ internal sealed partial class AgentRuntime
             return null;
         }
 
-        var client = new JevClient(settings.JevBaseUrl, settings.JevApiKey, settings.JevModel);
+        // The per-request timeout is configurable: five minutes suits a batch job, but a play turn
+        // that stalls should fail visibly in about a minute and a half, not hold the loop silently.
+        var timeout = settings.JevRequestTimeoutSeconds is > 0 ? TimeSpan.FromSeconds(settings.JevRequestTimeoutSeconds.Value) : (TimeSpan?)null;
+        var client = new JevClient(settings.JevBaseUrl, settings.JevApiKey, settings.JevModel, requestTimeout: timeout);
         return new JevExecutionDecider(client, settings.JevModel);
+    }
+
+    /// <summary>The cached decider and the configuration fingerprint it was built from.</summary>
+    private IActionDecider? _jevDecider;
+    private string _jevDeciderFingerprint = string.Empty;
+
+    /// <summary>
+    /// The live decider the loop asks for on every turn. Building the decider once at construction
+    /// froze it to the configuration that existed before the player ever opened settings -- entering
+    /// the Jev key later left the dual-layer toggle permanently dead until a restart. Rebuilds only
+    /// when the Jev configuration fingerprint changes, so a turn that finds the same settings pays
+    /// one string comparison.
+    /// </summary>
+    private IActionDecider? ResolveJevDecider()
+    {
+        lock (_gate)
+        {
+            var fingerprint = _settings.HasJevConfigured()
+                ? string.Join('\n', _settings.JevBaseUrl, _settings.JevApiKey, _settings.JevModel, _settings.JevRequestTimeoutSeconds?.ToString() ?? "")
+                : string.Empty;
+            if (fingerprint == _jevDeciderFingerprint)
+            {
+                return _jevDecider;
+            }
+
+            _jevDeciderFingerprint = fingerprint;
+            _jevDecider = fingerprint.Length == 0 ? null : BuildJevDecider();
+            return _jevDecider;
+        }
     }
 
     /// <summary>
@@ -75,23 +179,35 @@ internal sealed partial class AgentRuntime
     }
 
     /// <summary>
-    /// Validates the Jev execution-model configuration. The real round-trip ping lands with the Jev
-    /// engine (child task jev-two-layer-engine); until then this reports whether the configuration is
-    /// complete enough to use, so the settings page's test button is never a no-op.
+    /// Validates the Jev execution-model configuration with a real round trip: a configured client
+    /// pings <c>GET /v1/models</c> and the answer (or the classified failure) is what the settings
+    /// page shows.
     /// </summary>
-    public Task<string> TestJevConnectionAsync(CancellationToken cancellationToken)
+    public async Task<string> TestJevConnectionAsync(CancellationToken cancellationToken)
     {
         var settings = Settings;
         if (string.IsNullOrWhiteSpace(settings.JevApiKey))
         {
-            return Task.FromResult(Loc.T("未配置 Jev API Key。"));
+            return Loc.T("未配置 Jev API Key。");
         }
 
         if (string.IsNullOrWhiteSpace(settings.JevBaseUrl))
         {
-            return Task.FromResult(Loc.T("未配置 Jev Base URL。"));
+            return Loc.T("未配置 Jev Base URL。");
         }
 
-        return Task.FromResult(Loc.T("Jev 配置已就绪（{0}）。连接测试将随双层决策引擎一同提供。", settings.JevModel));
+        try
+        {
+            var client = new JevClient(settings.JevBaseUrl, settings.JevApiKey, settings.JevModel);
+            return await client.PingAsync(cancellationToken);
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch (Exception ex)
+        {
+            return Loc.T("Jev 连接失败：{0}", ex.Message);
+        }
     }
 }

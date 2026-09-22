@@ -117,8 +117,12 @@ internal static partial class Loc
             "Start by entering an OpenAI-compatible endpoint URL and model name in Settings. For local Ollama / LM Studio you can leave the API key blank.";
         map["配置已填写，但尚未验证游玩模型。点「测试连接」会向配置的服务发送测试请求；通过后再邀请队友。"] =
             "Your setup is filled in, but the play model is not verified yet. “Test connection” sends a test request to the configured service; invite your teammate after it passes.";
+        map["配置已填写，但主模型尚未验证。在设置页点该模型卡片上的「测试」做一次真实调用（含工具调用检测）；通过后即可到「游玩」页开始自动游玩。"] =
+            "Your setup is filled in, but the main model is not verified yet. On the Settings page, press “Test” on that model's card for a real call (including a tool-calling probe); once it passes, go to the “Play” page to start auto-play.";
         map["游玩模型已验证。回到主菜单打开「AI 队友」邀请。本地 1 人 + 1 AI 同一局：你打你的角色，AI 自动打另一个。大厅仍为 4 人位。"] =
             "The play model is verified. Go back to the main menu and open the “AI teammate” page to invite. Local play is 1 human + 1 AI in one run: you play your character while the AI plays the other. The lobby still holds 4.";
+        map["主模型已验证。到「游玩」页点「开始自动游玩」即可单人游玩；想和 AI 队友双打，把游玩页顶部切到「多人」再邀请：本地 1 人 + 1 AI 同一局，大厅仍为 4 人位。"] =
+            "The main model is verified. Press “Start auto-play” on the “Play” page for solo play; for co-op with the AI teammate, switch the top of the Play page to “Multiplayer” and invite: local play is 1 human + 1 AI in one run, and the lobby still holds 4.";
         map["模型端点地址无效，请在设置中填写完整的 HTTP 或 HTTPS 地址。"] =
             "The model endpoint address is invalid. Enter a full HTTP or HTTPS address in Settings.";
 
