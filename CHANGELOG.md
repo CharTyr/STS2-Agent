@@ -2,6 +2,51 @@
 
 > Release attribution is recorded against tags or release commits. Post-tag maintenance is listed separately; current validation limits are maintained in [PRODUCT_PLAN_CURRENT.md](https://github.com/CharTyr/STS2-Agent/blob/main/PRODUCT_PLAN_CURRENT.md).
 
+## Unreleased
+
+- **Thinking models stop being misdiagnosed.** DeepSeek-style, Qwen-style, step-5-preview and
+  every provider that answers in `reasoning_content` before it produces content used to surface
+  in the mod as `模型未给出可执行动作` even when the model had done the thinking and run out of
+  the completion budget mid-reasoning. The OpenAI-compatible client now reads `finish_reason`
+  (both from the non-streaming payload and from whichever SSE chunk carries the final message),
+  and when the loop returns with no action, an empty `content`, and `finish_reason=length` the
+  error says exactly that — reasoning budget consumed the turn, not "model did not try".
+- **An empty assistant message no longer reads as a generic failure.** When a thinking model
+  legitimately leaves `content` empty but filled `reasoning_content`, the failure text names the
+  reasoning and says the message was empty, instead of pretending the model said nothing at all.
+- **Default completion requests stop sending `max_tokens`.** Only the health probe (`/health`)
+  still pins `max_tokens: 16` to keep pings cheap; play and chat requests leave the completion
+  budget to the provider, which is what thinking models assume.
+- **Normal long thinking no longer triggers the generic three-strike stop.** A streamed response
+  with reasoning but no action and `finish_reason=length` is now a bounded, budget-accounted
+  continuation state: the agent backs off and tries again instead of classifying the thinking as a
+  failed decision. It still stops after five consecutive provider-limited turns with an actionable
+  explanation, preventing an endpoint with an impossible output cap from spending forever.
+- **Step-5 reasoning settings reach the API.** `step-5-*` models now infer the standard
+  `reasoning_effort` request shape, so selecting Low sends `reasoning_effort: "low"` instead of
+  merely appending a natural-language hint. Streaming now reads a terminal `finish_reason` from
+  the normal delta-shaped final chunk as well as message-shaped chunks.
+- **Tool-using play models automatically recover from one stream-only provider limitation.** If a
+  gameplay response streams prose instead of a required tool call, the mod makes one safe
+  non-streaming retry before treating it as a model failure. No game action has been accepted at
+  that point, and both calls remain visible to the session budget. This covers providers whose
+  non-streaming compatibility path serializes tools correctly while their SSE path does not.
+- **Vision has a read-only live frame.** `GET /vision/screenshot` returns the current game viewport
+  as JPEG on loopback. It does not play a card or send the image to a model, so the screenshot path
+  can be checked without starting a run.
+- **Native MCP can be switched on without restarting the game.** `POST /mcp/control` with
+  `{"running": true|false}` is loopback-only and calls the same switch as the overlay Connect tab.
+  Editing the settings file no longer has to be followed by a restart before an external client can
+  reach `/mcp`. The switch does not start or stop autoplay.
+- **A full context window compresses history instead of ending the run.** Each model has its own
+  context window, defaulting to 256,000 tokens and editable per model. Once a measured play prompt
+  reaches 80% of that window, older accepted decisions are replaced by one continuation summary.
+  The latest state and the six newest decisions stay verbatim, and the decision log itself is not
+  rewritten. A blank session spend cap still means no cap; filling the context window is not one.
+- **The overlay no longer clips long play and decision text.** The pause control gets the full card
+  width while autoplay is running, usage sentences stack instead of sharing a tile row, and decision
+  reasons wrap inside the 440px panel instead of running off its right edge.
+
 ## v0.15.0 - 2026-09-22
 
 > A harness pass over everything an AI pays for when it plays this game through the mod: the state

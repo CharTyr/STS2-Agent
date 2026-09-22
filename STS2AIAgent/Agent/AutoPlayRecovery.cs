@@ -12,6 +12,7 @@ internal sealed class AutoPlayRecovery
     private string? _lastFingerprint;
     private int _repeats;
     private int _unsettled;
+    private int _reasoningBudgetExhausted;
 
     public (string? StopReason, string? StopKind, TimeSpan Delay) Observe(AgentTurnResult result)
     {
@@ -45,12 +46,32 @@ internal sealed class AutoPlayRecovery
             return (null, null, TimeSpan.FromSeconds(Math.Pow(2, Math.Min(_unsettled, 3))));
         }
 
+        // A thinking model can use the provider's whole response window before it gets to the tool
+        // call. That is normal partial progress, not the generic model-failure lane. The retry is
+        // bounded separately so an endpoint with an impossible provider cap cannot spend forever.
+        if (result.ReasoningBudgetExhausted)
+        {
+            _reasoningBudgetExhausted++;
+            if (_reasoningBudgetExhausted >= NoProgressPolicy.ReasoningBudgetLimit)
+            {
+                return (
+                    Loc.T(
+                        "连续 {0} 次思考已耗尽模型输出预算而未给出动作，已停止自动游玩。降低思考强度或提高服务商输出预算后再继续。",
+                        NoProgressPolicy.ReasoningBudgetLimit),
+                    StopKindPolicy.Failed,
+                    TimeSpan.Zero);
+            }
+
+            return (null, null, TimeSpan.FromSeconds(Math.Pow(2, Math.Min(_reasoningBudgetExhausted, 3))));
+        }
+
         // A settled action is a success, but success alone is not progress: the same action landing
         // on the same state over and over is a spin that never raises an error.
         if (result.Error == null && result.Acted != null)
         {
             // A settled turn ends any run of unconfirmed ones.
             _unsettled = 0;
+            _reasoningBudgetExhausted = 0;
             _failures = 0;
 
             var repeats = NoProgressPolicy.IsRepeat(

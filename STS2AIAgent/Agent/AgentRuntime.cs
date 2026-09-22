@@ -58,6 +58,7 @@ internal sealed partial class AgentRuntime
     private LlmUsage _sessionUsage = LlmUsage.Empty;
     private int _sessionRequests;
     private bool _sessionUsageKnown;
+    private int _lastPromptTokens;
     private string? _stopKind;
     private string? _stopDetail;
     private string? _stopRole;
@@ -97,6 +98,14 @@ internal sealed partial class AgentRuntime
                 lock (_gate)
                 {
                     return _budgetGuard;
+                }
+            },
+            () => _decisions.Snapshot(40),
+            () =>
+            {
+                lock (_gate)
+                {
+                    return _lastPromptTokens;
                 }
             });
     }

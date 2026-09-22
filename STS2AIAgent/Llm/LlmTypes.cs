@@ -124,6 +124,8 @@ internal sealed class LlmCompletion
 
     public IReadOnlyList<LlmToolCall> ToolCalls { get; init; } = Array.Empty<LlmToolCall>();
 
+    public string? FinishReason { get; init; }
+
     public LlmUsage? Usage { get; init; }
 }
 

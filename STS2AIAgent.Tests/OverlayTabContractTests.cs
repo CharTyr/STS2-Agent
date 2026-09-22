@@ -144,6 +144,7 @@ internal static class OverlayTabContractTests
 
         var page = AgentSourceFixture.MethodBody(overlay, "RefreshDecisionPage");
         Assert.Contains("AgentRuntime.Instance.RecentDecisions(DecisionLogView.RecentLimit)", page);
+        Assert.Contains("Muted(string.Join(\"\\n\", parts))", page);
         Assert.False(
             page.Contains("decisions.jsonl", StringComparison.Ordinal),
             "The overlay must render the runtime's in-memory snapshot, not the decision JSONL file.");

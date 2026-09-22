@@ -36,23 +36,23 @@ class ApiSchemaTests(unittest.TestCase):
             (ROOT / "docs" / "openapi.json").read_text(encoding="utf-8"),
         )
         self.assertEqual(json.loads(api_schema.render_spec(self.spec)), self.spec)
-        self.assertEqual(api_schema.check_spec(ROOT)[1], "OpenAPI 3.1.0 contains 13 path(s)")
+        self.assertEqual(api_schema.check_spec(ROOT)[1], "OpenAPI 3.1.0 contains 15 path(s)")
 
     def test_source_owned_routes_and_methods_have_one_operation_each(self) -> None:
         paths = self.spec["paths"]
         self.assertEqual(
             set(paths),
             {
-                "/health", "/state", "/decision-snapshot", "/actions/available", "/action",
-                "/session/control", "/teammate/control", "/companion/control", "/companion/message",
+                "/health", "/vision/screenshot", "/state", "/decision-snapshot", "/actions/available", "/action",
+                "/session/control", "/mcp/control", "/teammate/control", "/companion/control", "/companion/message",
                 "/data/{collection}", "/decisions", "/events/stream", "/mcp",
             },
         )
         self.assertEqual(set(paths["/mcp"]) & {"options", "delete", "post"}, {"options", "delete", "post"})
         for ordinary_path, method in (
-            ("/health", "get"), ("/state", "get"), ("/decision-snapshot", "get"),
+            ("/health", "get"), ("/vision/screenshot", "get"), ("/state", "get"), ("/decision-snapshot", "get"),
             ("/actions/available", "get"),
-            ("/action", "post"), ("/session/control", "post"), ("/teammate/control", "post"),
+            ("/action", "post"), ("/session/control", "post"), ("/mcp/control", "post"), ("/teammate/control", "post"),
             ("/companion/control", "post"), ("/companion/message", "post"),
             ("/data/{collection}", "get"), ("/decisions", "get"), ("/events/stream", "get"),
         ):

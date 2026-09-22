@@ -210,6 +210,8 @@ internal static partial class Loc
         map["工具调用"] = "Tool calling";
         map["思考方式"] = "Thinking mode";
         map["思考强度"] = "Thinking effort";
+        map["上下文窗口"] = "Context window";
+        map["默认 256000"] = "Default 256000";
         map["新端点"] = "New endpoint";
         map["新模型"] = "New model";
         map["(默认/无)"] = "(Default/none)";

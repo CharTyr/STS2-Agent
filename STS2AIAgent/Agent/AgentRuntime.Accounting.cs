@@ -30,6 +30,10 @@ internal sealed partial class AgentRuntime
             {
                 _sessionUsage = LlmUsage.Combine(_sessionUsage, result.Usage) ?? LlmUsage.Empty;
                 _sessionUsageKnown = true;
+                if (result.Usage.PromptTokens > 0)
+                {
+                    _lastPromptTokens = result.Usage.PromptTokens;
+                }
             }
 
             _sessionRequests += Math.Max(0, result.RequestsSpent);

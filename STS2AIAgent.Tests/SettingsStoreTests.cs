@@ -248,6 +248,7 @@ internal static class SettingsStoreTests
         source.OverlayTheme = "ivory";
         source.OverlayLeft = 12;
         source.OverlayTop = 34;
+        source.Models[0].ContextWindow = 128_000;
         source.Endpoints[0].ApiKey = "sk-clone";
         source.CompanionAutoSelectCharacter = false;
 
@@ -264,6 +265,7 @@ internal static class SettingsStoreTests
         Assert.Equal("ivory", clone.OverlayTheme);
         Assert.Equal(12f, clone.OverlayLeft);
         Assert.Equal(34f, clone.OverlayTop);
+        Assert.Equal(128_000, clone.Models[0].ContextWindow);
         Assert.Equal("sk-clone", clone.Endpoints[0].ApiKey);
         Assert.False(clone.CompanionAutoSelectCharacter);
         Assert.Equal(source.ConversationModelId, clone.ConversationModelId);

@@ -529,6 +529,9 @@ internal sealed partial class AgentOverlayHost
             model.SupportsTools = editor.Tools.ButtonPressed;
             model.ThinkingMode = SelectedText(editor.ThinkingMode);
             model.ThinkingIntensity = SelectedText(editor.ThinkingIntensity);
+            model.ContextWindow = int.TryParse(editor.ContextWindow.Text.Trim(), out var contextWindow) && contextWindow > 0
+                ? contextWindow
+                : null;
             if (editor.Endpoint.Selected >= 0)
             {
                 model.EndpointId = editor.Endpoint.GetItemMetadata(editor.Endpoint.Selected).AsString();

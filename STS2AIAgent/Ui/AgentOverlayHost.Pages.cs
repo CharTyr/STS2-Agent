@@ -101,15 +101,22 @@ internal sealed partial class AgentOverlayHost
         var page = UiFactory.Column();
 
         // The hero names the state, and colours it: green while the loop runs, muted while it waits.
-        _playStatus = UiFactory.Label(Loc.T("状态：-"), UiFactory.FontTitle);
-        _playSummary = UiFactory.Label(Loc.T("等待开始。"), UiFactory.FontCaption, muted: true);
+        _playStatus = UiFactory.Wrapped(Loc.T("状态：-"), UiFactory.FontTitle, muted: false);
+        _playSummary = UiFactory.Wrapped(Loc.T("等待开始。"), UiFactory.FontCaption);
         _playToggle = UiFactory.Button(Loc.T("开始自动游玩"), TogglePlay, UiFactory.ButtonKind.Primary);
         _stepButton = UiFactory.Button(Loc.T("单步"), () => _ = AgentRuntime.Instance.StepOnceAsync(CancellationToken.None));
+        // A horizontal row cannot hold "暂停自动游玩" and "单步" inside a 440px panel: the primary
+        // button's natural width plus padding pushes the second control past the card edge, which
+        // is the clipped empty frame measured live on 2026-09-22. Stack them, and hide the step
+        // button while autoplay owns the turn so the pause control gets the full card width.
+        var playControls = UiFactory.Column();
+        playControls.AddChild(_playToggle);
+        playControls.AddChild(_stepButton);
         page.AddChild(UiFactory.Card(
             Loc.T("当前回合"),
             _playStatus,
             _playSummary,
-            UiFactory.Row(_playToggle, _stepButton)));
+            playControls));
 
         _playScreen = UiFactory.Label("-", UiFactory.FontHeading);
         _playAction = UiFactory.Label("-", UiFactory.FontHeading);
@@ -119,7 +126,7 @@ internal sealed partial class AgentOverlayHost
             UiFactory.MetricTile(Loc.T("最近动作"), _playAction),
             UiFactory.MetricTile(Loc.T("Token"), _playUsage)));
 
-        _playThought = UiFactory.Label("-", UiFactory.FontBody, muted: true);
+        _playThought = UiFactory.Wrapped("-", UiFactory.FontBody);
         page.AddChild(UiFactory.Card(Loc.T("思考"), _playThought));
         page.AddChild(UiFactory.Wrapped(Loc.T("自动游玩走 compact 状态和工具，与 MCP 相同，不需要视觉即可打完全部流程。对话默认只读；勾选「允许代打」或明确说「帮我打」才会执行动作。")));
         return UiFactory.Scroll(page, 120);
@@ -316,16 +323,18 @@ internal sealed partial class AgentOverlayHost
     private Control BuildDecisionPage()
     {
         var page = UiFactory.Column();
-        _decisionUsage = UiFactory.Label("-", UiFactory.FontHeading);
-        _decisionRunSpend = UiFactory.Label("-", UiFactory.FontHeading);
+        _decisionUsage = UiFactory.Wrapped("-", UiFactory.FontHeading, muted: false);
+        _decisionRunSpend = UiFactory.Wrapped("-", UiFactory.FontHeading, muted: false);
 
         // Two counters side by side rather than two sentences: "what has this cost me" is the
         // question this page is opened to answer, and a number to read beats a clause to parse.
+        // These two strings are full sentences ("Token 消耗：66,184 ..."), not metric numerals.
+        // A side-by-side tile row gives each about 180px, which is why the live log clipped the
+        // request count off the right edge. Stack them so each line gets the card width.
         page.AddChild(UiFactory.Card(
             Loc.T("用量"),
-            UiFactory.Row(
-                UiFactory.MetricTile(Loc.T("本次会话"), _decisionUsage),
-                UiFactory.MetricTile(Loc.T("本局"), _decisionRunSpend))));
+            UiFactory.MetricTile(Loc.T("本次会话"), _decisionUsage),
+            UiFactory.MetricTile(Loc.T("本局"), _decisionRunSpend)));
         page.AddChild(UiFactory.Heading(Loc.T("决策记录")));
         page.AddChild(UiFactory.Wrapped(Loc.T("最新在前：动作、理由、来源，以及该步消耗的 Token。")));
         _decisionLog = UiFactory.Rich();
@@ -395,7 +404,10 @@ internal sealed partial class AgentOverlayHost
             parts.Add(entry.total_tokens is { } tokens
                 ? Loc.T("本次 Token：{0}", tokens.ToString("N0"))
                 : Loc.T("本次 Token：未知"));
-            _decisionLog.AppendText(Accent($"{entry.id}. {entry.action}") + "  " + Muted(string.Join(" · ", parts)) + "\n\n");
+            // The action stays on its own line. A reason such as "Play Dismantle (14 dmg with STR 3)
+            // on the 1st Inklet" plus source and token count is wider than the panel even after the
+            // rich label wraps, and one joined line is what the 2026-09-22 screenshot clipped.
+            _decisionLog.AppendText(Accent($"{entry.id}. {entry.action}") + "\n" + Muted(string.Join("\n", parts)) + "\n\n");
         }
     }
 
@@ -602,6 +614,7 @@ internal sealed partial class AgentOverlayHost
         if (_stepButton != null)
         {
             _stepButton.Disabled = playing;
+            _stepButton.Visible = !playing;
         }
 
         if (_sendButton != null)
@@ -861,5 +874,6 @@ internal sealed partial class AgentOverlayHost
         CheckBox Vision,
         CheckBox Tools,
         OptionButton ThinkingMode,
-        OptionButton ThinkingIntensity);
+        OptionButton ThinkingIntensity,
+        LineEdit ContextWindow);
 }

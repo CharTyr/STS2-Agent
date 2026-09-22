@@ -73,6 +73,7 @@ ANONYMOUS_FIELD = re.compile(r"^\s*(?P<name>[a-z][a-z0-9_]*)\s*(?:=|,|$)", re.MU
 # expression in Router.HandleAsync.
 ROUTE_RESPONSE_FIELDS = {
     "/session/control": ("phase", "play_running", "play_phase"),
+    "/mcp/control": ("mcp_enabled",),
     "/teammate/control": ("phase", "play_running", "play_phase", "companion_auto_play"),
     "/companion/control": ("phase",),
     "/companion/message": ("reply",),
@@ -414,6 +415,7 @@ def parse_router_response_fields(router_source: str) -> None:
     """Ensure each schema override still names exactly Router's anonymous response fields."""
     markers = {
         "/session/control": 'request.Url?.AbsolutePath == "/session/control"',
+        "/mcp/control": 'request.Url?.AbsolutePath == "/mcp/control"',
         "/teammate/control": 'request.Url?.AbsolutePath == "/teammate/control"',
         "/companion/control": 'if (request.Url.AbsolutePath == "/companion/control")',
         "/companion/message": "var reply = await AgentRuntime.Instance.ReplyToTeammateAsync",
@@ -557,6 +559,18 @@ def build_paths(
     )
     paths: dict[str, Any] = {
         "/health": {"get": ordinary_operation("Read mod health and API discovery data.", ref("HealthData"))},
+        "/vision/screenshot": {
+            "get": {
+                "summary": "Read one JPEG frame of the current game viewport.",
+                "responses": {
+                    "200": {
+                        "description": "Raw JPEG bytes. This route does not use the JSON request_id envelope.",
+                        "content": {"image/jpeg": {"schema": {"type": "string", "contentMediaType": "image/jpeg"}}},
+                    },
+                    "default": error_response(),
+                },
+            }
+        },
         "/state": {"get": ordinary_operation("Read the complete game-state snapshot.", ref("GameStatePayload"))},
         "/decision-snapshot": {
             "get": ordinary_operation(
@@ -575,6 +589,13 @@ def build_paths(
         "/session/control": {
             "post": ordinary_operation(
                 "Start or pause local autoplay.", ref("SessionControlResponseData"),
+                request_body=json_body(ref("SessionControlRequest")),
+            )
+        },
+        "/mcp/control": {
+            "post": ordinary_operation(
+                "Enable or disable native MCP without restarting the game.",
+                ref("McpControlResponseData"),
                 request_body=json_body(ref("SessionControlRequest")),
             )
         },
@@ -675,7 +696,7 @@ def build_components(
     component_names = set(payload_classes) | {
         "ActionRequest", "ActionResponsePayload", "DecisionLogEntry", "GameEventEnvelope",
         "HealthData", "ApiSuccessEnvelope", "ApiErrorEnvelope", "ApiError", "SessionControlRequest",
-        "SessionControlResponseData", "TeammateControlResponseData", "CompanionControlResponseData",
+        "SessionControlResponseData", "McpControlResponseData", "TeammateControlResponseData", "CompanionControlResponseData",
         "CompanionMessageRequest", "CompanionMessageResponseData", "TeamIntent", "GameDataItem",
         "McpOpaqueRequest", "McpOpaqueResponse", "McpSessionReset",
     }
@@ -736,6 +757,7 @@ def build_components(
                 [CSharpProperty("phase", "string"), CSharpProperty("play_running", "bool"), CSharpProperty("play_phase", "string")],
                 component_names,
             ),
+            "McpControlResponseData": object_schema([CSharpProperty("mcp_enabled", "bool")], component_names),
             "TeammateControlResponseData": object_schema(
                 [CSharpProperty("phase", "string"), CSharpProperty("play_running", "bool"), CSharpProperty("play_phase", "string"), CSharpProperty("companion_auto_play", "bool")],
                 component_names,

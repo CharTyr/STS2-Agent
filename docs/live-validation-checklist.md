@@ -1,5 +1,75 @@
 # Live validation checklist
 
+## Status as of 2026-09-22 (isolated natural run, Act 1 cleared)
+
+Isolated profile `default\2026092212` (`--windowed --force-steam off --clientId 2026092212`), API
+`http://127.0.0.1:18080`, play model StepFun `step-5-preview` at `reasoning_effort: low`, vision
+attachment off. The run started from a saved floor-6 combat and was not steered by hand after
+autoplay resumed.
+
+- The in-game loop crossed a natural Act 1 without a human taking the seat: floor 6 combat through
+  floor 17 `VANTOM` (`墨影幻灵`, 173 HP), including the boss hand-replacement `CARD_SELECTION`, then
+  returned to `MAP` at floor 17 with `act_id=1` and the next boss `THE_INSATIABLE_BOSS`. The next
+  sample was floor 18 `EVENT`. Autoplay stayed `running`; `stop_kind` stayed empty after the
+  isolated session spend cap was removed.
+- A 1,500,000-token session cap had stopped the same run at the earlier floor-14 combat. That cap
+  was configuration, not a model failure. Session spend limits remain opt-in; context pressure is
+  now handled by per-model compaction at 80% of a default 256,000-token window (`09a65cc`).
+- Evidence: `build/validation-2026-09-22/natural-run.jsonl` (gitignored). The real Steam profile
+  `76561198420578597` stayed byte-identical around the Act 1 clear: 184 files, aggregate SHA256
+  `6E79BB6957AE0BB07679DC85F2B42C10D54B6C1135355F0BC09BFAA87329D22C` before and after.
+
+The external Python client can read that same live process without taking the seat. `Sts2Client`
+pointed at `http://127.0.0.1:18080` returned `play_phase=running`, floor 24, Act 1,
+`boss_id=THE_INSATIABLE_BOSS`, HP 37/87, and the live action list `end_turn, play_card,
+save_and_quit`. It also read the latest accepted decision (`play_card`) and did not call `act`.
+The in-process `/mcp` endpoint stayed disabled, so this is the sidecar client path, not the native
+MCP socket. Evidence: `build/validation-2026-09-22/external-readonly.json` (gitignored).
+
+The same unattended run later ended naturally. The isolated history
+`default\2026092212\modded\profile1\saves\history\1790036839.run` records
+`killed_by_encounter=ENCOUNTER.INFESTED_PRISMS_ELITE` after `ENCOUNTER.VANTOM_BOSS`. The last
+accepted decisions were combat plays at 2 HP, then `continue_game_over` and `return_to_main_menu`.
+`/health` then reported `play_phase=paused` and `stop_kind=run_end`; the visible screen was
+`TIMELINE`, the post-run unlock, not a false failure stop. The Steam profile hash was unchanged
+after that end: 184 files, `6E79BB6957AE0BB07679DC85F2B42C10D54B6C1135355F0BC09BFAA87329D22C`.
+
+After that run ended, the deployed `POST /mcp/control` route was exercised on a fresh isolated
+launch. `{"running": true}` returned `mcp_enabled: true`; native `initialize` and `tools/list`
+both returned 200 and advertised `health_check` and `act`; `{"running": false}` returned
+`mcp_enabled: false`. No game action was sent. Evidence:
+`build/validation-2026-09-22/mcp-control.json` (gitignored).
+
+On the resulting main menu, the same native socket answered read-only `decide` and
+`get_scene_guidance`. `decide` returned 200 with `MAIN_MENU`, `available_actions`, and scene
+guidance; `get_scene_guidance` returned 200 and a non-empty playbook. Evidence:
+`build/validation-2026-09-22/mcp-decide.json` (gitignored).
+
+The same socket then executed a reversible `act` pair: `open_timeline` completed on `TIMELINE`,
+and `close_main_menu_submenu` completed back on `MAIN_MENU`. Both tool results had
+`isError: false` and `status: completed`. MCP was switched off afterward, and the Steam profile
+hash was unchanged. This is one external action round-trip, not an external agent playing a full
+run. Evidence: `build/validation-2026-09-22/mcp-act-open.txt` and `mcp-act-close.txt` (gitignored).
+
+`GET /vision/screenshot` was then deployed and called on the isolated main menu. It returned
+80,937 bytes of JPEG (`FF D8`), 1280x720, showing the Slay the Spire II main menu and the agent
+overlay. No model call and no game action were made. Evidence:
+`build/validation-2026-09-22/menu-screenshot.jpg` (gitignored). This proves the live capture path,
+not a model consuming the image during a decision.
+
+Accepted closeout for this candidate, per the operator on 2026-09-22:
+
+- A full three-act win and an external agent playing a complete run are out of scope. The accepted
+  play proof is the unattended Act 1 boss clear plus the natural Act 2 death recorded above.
+- Steam itself cannot run two copies. The supported co-op path is the game's local dual-instance
+  launcher, which was already verified; a Steam-hosted two-client path is not a missing mod feature.
+- `BESTIARY` remains unopened on this profile because the compendium hub draws no bestiary tile
+  when `NBestiary.CanBeShown()` is false. A guessed node path was not shipped.
+- A model consuming a live screenshot during a decision, the remaining mechanic-matrix samples, and
+  a typed teammate signal over the wire are still open. None of them blocked the accepted play proof.
+
+
+
 Items that deterministic offline tests cannot settle: they need the game running with the mod
 deployed. Collecting them in one place keeps "we proved it offline" from being read as "we saw it
 work".

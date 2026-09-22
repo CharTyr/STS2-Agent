@@ -1083,6 +1083,57 @@ internal static class AgentLoopTests
         Assert.Equal(1, factory.PingCalls);
     }
 
+    public static void CompletionErrors_ExplainsThinkingModelSilence()
+    {
+        var sunk = new LlmCompletion { Content = "", Reasoning = new string('x', 900), FinishReason = "length" };
+        var message = CompletionErrors.Empty(sunk, null, 1);
+        Assert.NotNull(message);
+        Assert.Contains("finish_reason=length", message!);
+        Assert.Contains("reasoning_content", message);
+        Assert.True(CompletionErrors.IsReasoningBudgetExhausted(sunk));
+
+        Assert.False(CompletionErrors.IsReasoningBudgetExhausted(new LlmCompletion { Content = "", Reasoning = "", FinishReason = "length" }));
+        Assert.False(CompletionErrors.IsReasoningBudgetExhausted(new LlmCompletion { Content = "answer", Reasoning = "thought", FinishReason = "length" }));
+        Assert.False(CompletionErrors.IsReasoningBudgetExhausted(new LlmCompletion { Content = "", Reasoning = "thought", FinishReason = "stop" }));
+
+        var silent = new LlmCompletion { Content = "", Reasoning = "", FinishReason = "stop" };
+        Assert.NotNull(CompletionErrors.Empty(silent, null, 3));
+    }
+
+    public static async Task PlayOnce_MarksReasoningBudgetExhaustionForRecovery()
+    {
+        var factory = new ScriptedClientFactory(new[]
+        {
+            new LlmCompletion { Content = "", Reasoning = "I need to evaluate targets.", FinishReason = "length" },
+            new LlmCompletion { Content = "", Reasoning = "I still need to evaluate targets.", FinishReason = "length" }
+        });
+        var result = await new AgentLoop(new FakeBridge(), factory, AgentSettings.CreateDefault).PlayOnceAsync(CancellationToken.None);
+        Assert.True(result.ReasoningBudgetExhausted);
+        Assert.NotNull(result.Error);
+        Assert.Equal(2, result.RequestsSpent);
+    }
+
+    public static async Task PlayOnce_DemotesToollessStreamToNonStreamingOnce()
+    {
+        var bridge = new FakeBridge();
+        var factory = new ScriptedClientFactory(new[]
+        {
+            new LlmCompletion { Content = "I will act next." },
+            new LlmCompletion
+            {
+                ToolCalls = new[] { new LlmToolCall { Id = "act-after-demotion", Name = "act", ArgumentsJson = "{\"action\":\"play_card\",\"card_index\":0}" } }
+            }
+        });
+
+        var result = await new AgentLoop(bridge, factory, AgentSettings.CreateDefault).PlayOnceAsync(CancellationToken.None);
+        Assert.Equal("play_card", result.Acted);
+        Assert.Equal(1, bridge.ActCalls);
+        Assert.Equal(2, factory.Requests.Count);
+        Assert.True(factory.Requests[0].Stream);
+        Assert.False(factory.Requests[1].Stream);
+        Assert.Equal(2, result.RequestsSpent);
+    }
+
     public static async Task ModelProbeStillReportsProviderFailure()
     {
         var factory = new ProbeClientFactory(_ => Task.FromException<string>(new OperationCanceledException("provider timeout")));
@@ -1233,6 +1284,8 @@ internal static class AgentLoopTests
 
         public LlmRequest? LastRequest { get; private set; }
 
+        public List<LlmRequest> Requests { get; } = new();
+
         public bool CancelCompletions { get; set; }
         public Action? OnRequest { get; set; }
         public Exception? CompleteThrows { get; set; }
@@ -1240,7 +1293,7 @@ internal static class AgentLoopTests
         public ILlmClient Create(LlmEndpoint endpoint) =>
             new ScriptedClient(
                 _completions,
-                request => { LastRequest = request; OnRequest?.Invoke(); },
+                request => { LastRequest = request; Requests.Add(request); OnRequest?.Invoke(); },
                 CancelCompletions,
                 CompleteThrows);
     }

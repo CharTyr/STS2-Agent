@@ -67,6 +67,7 @@ curl -s http://127.0.0.1:8080/state | jq .
 | `state_unavailable` | 503 | 游戏状态暂时不可安全读取（如正在过渡） | 是 |
 | `forbidden_actor` | 403 | 多人场景下试图为其它角色执行动作 | 否 |
 | `mcp_disabled` | 403 | 请求 /mcp 但原生 MCP 未开启 | 否 |
+| `screenshot_unavailable` | 409 | 游戏视口还不能截图 | 是 |
 | `session_not_ready` | 409 | 会话尚未就绪（如组队未完成） | 是 |
 | `pause_pending` | 409 | 暂停尚未完成，需稍后重试 | 是 |
 | `internal_error` | 500 | 服务内部异常 | 否 |
@@ -1890,6 +1891,38 @@ Invoke-RestMethod -Uri 'http://127.0.0.1:8080/data/cards' | ConvertTo-Json -Dept
   "ok": true,
   "request_id": "…",
   "data": []
+}
+```
+
+---
+
+## `GET /vision/screenshot`
+
+读取当前游戏视口的一帧 JPEG。这是视觉路径的只读出口，不执行游戏动作，也不把截图发给模型。
+
+- 仅接受 loopback 请求，非本机来源返回 403 `local_only`
+- 成功时 `Content-Type: image/jpeg`，响应体就是图片字节，不套 JSON 信封
+- 视口还没准备好时返回 409 `screenshot_unavailable`
+
+---
+
+## `POST /mcp/control`
+
+开启或关闭进程内原生 MCP。游戏内「接入」页的开关走同一个 `SetMcpEnabled`，外部客户端不用重启游戏、也不用改设置文件后再等热加载。
+
+- 仅接受 loopback 请求，非本机来源返回 403 `local_only`
+- 请求体 `{"running": true}` 开启，`{"running": false}` 关闭；字段缺失或不是布尔值返回 400 `invalid_request`
+- 这个开关不启动、不暂停自动游玩，也不执行游戏动作
+
+### 响应示例
+
+```json
+{
+  "ok": true,
+  "request_id": "req_20260922_140000_1",
+  "data": {
+    "mcp_enabled": true
+  }
 }
 ```
 

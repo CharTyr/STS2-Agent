@@ -153,6 +153,9 @@ internal static class TestRunner
         yield return ("Recovery.SuccessResets", AutoPlayRecoveryTests.SuccessfulActionResetsFailures);
         yield return ("Recovery.CancelBackoff", AutoPlayRecoveryTests.CancelDuringBackoffPreventsNextTurn);
         yield return ("Recovery.TimeoutNotCancel", AutoPlayRecoveryTests.TimeoutFailureDoesNotLookLikeUserCancel);
+        yield return ("Recovery.ThinkingBudgetKeepsFailures", AutoPlayRecoveryTests.ThinkingBudgetExhaustionDoesNotSpendGenericFailureBudget);
+        yield return ("Recovery.ThinkingBudgetLimit", AutoPlayRecoveryTests.ThinkingBudgetExhaustionStopsAtItsOwnLimit);
+        yield return ("Recovery.ThinkingBudgetReset", AutoPlayRecoveryTests.SuccessfulActionClearsThinkingBudgetExhaustion);
         yield return ("Recovery.UnchangedActionStops", AutoPlayRecoveryTests.UnchangedActionStopsTheLoop);
         yield return ("Recovery.ProgressResetsRepeat", AutoPlayRecoveryTests.ProgressResetsTheRepeatRun);
         yield return ("Recovery.UnsettledBudget", AutoPlayRecoveryTests.UnsettledTurnsDoNotSpendTheRetryBudget);
@@ -173,6 +176,8 @@ internal static class TestRunner
         yield return ("AgentLoop.RequestBudgetStopsNextRound", AgentLoopTests.PlayOnce_StopsFurtherLlmCallsWhenRequestBudgetIsSpent);
         yield return ("TeamControl.TransportAck", TeamConversationTests.PauseControlHasExplicitAcknowledgement);
         yield return ("Session.LocalControlContract", () => Task.Run(SessionControlContractTests.RouterExposesLocalSessionControl));
+        yield return ("Session.LocalMcpControl", () => Task.Run(SessionControlContractTests.RouterExposesLocalMcpControl));
+        yield return ("Session.LocalScreenshot", () => Task.Run(SessionControlContractTests.RouterExposesLocalScreenshot));
         yield return ("CoopStartup.KeepLocalCandidate", () => Task.Run(SessionControlContractTests.WorkshopStagingKeepsLocalCandidate));
         yield return ("TeamChat.ReadOnly", AgentLoopTests.TeamChat_CannotActEvenWithPlayIntent);
         yield return ("TeamChat.NextDecision", AgentLoopTests.TeamSuggestion_ReachesNextPlayDecision);
@@ -226,6 +231,7 @@ internal static class TestRunner
         yield return ("Session.ResetStatsBlockedRunning", () => Task.Run(PlayerExperienceTests.ResetStatsBlockedWhileRunning));
         yield return ("Thinking.gpt-4o", () => Task.Run(() => ThinkingRequestBuilderTests.Infer("gpt-4o", "auto", "prompt")));
         yield return ("Thinking.gpt-5", () => Task.Run(() => ThinkingRequestBuilderTests.Infer("gpt-5", "auto", "reasoning_effort")));
+        yield return ("Thinking.step-5", () => Task.Run(() => ThinkingRequestBuilderTests.Infer("step-5-preview", "auto", "reasoning_effort")));
         yield return ("Thinking.o3-mini", () => Task.Run(() => ThinkingRequestBuilderTests.Infer("o3-mini", "auto", "reasoning_effort")));
         yield return ("Thinking.deepseek", () => Task.Run(() => ThinkingRequestBuilderTests.Infer("deepseek-chat", "auto", "deepseek")));
         yield return ("Thinking.explicit", () => Task.Run(() => ThinkingRequestBuilderTests.Infer("anything", "reasoning_effort", "reasoning_effort")));
@@ -246,6 +252,9 @@ internal static class TestRunner
         yield return ("OpenAI.MaxTokensFieldRename", () => Task.Run(OpenAiCompatibleClientTests.MaxTokensField_RenamesOnlyWhenThereIsAValueToMove));
         yield return ("OpenAI.PingCompletionTokensRetry", OpenAiCompatibleClientTests.Ping_RetriesWithCompletionTokensWhenTheEndpointRefusesMaxTokens);
         yield return ("OpenAI.PingUnrelated400NotRetried", OpenAiCompatibleClientTests.Ping_DoesNotRetryA400ThatIsNotAboutTheParameter);
+        yield return ("OpenAI.ParseCompletionFinishReason", () => Task.Run(OpenAiCompatibleClientTests.ParseCompletion_ReadsFinishReason));
+        yield return ("OpenAI.ParseSseFinishReason", () => Task.Run(OpenAiCompatibleClientTests.ParseSsePayload_ReadsFinishReasonFromMessageChoice));
+        yield return ("OpenAI.ParseSseDeltaFinishReason", () => Task.Run(OpenAiCompatibleClientTests.ParseSsePayload_ReadsFinishReasonFromDeltaChoice));
         yield return ("Budget.NoLimit", () => Task.Run(SessionBudgetGuardTests.NoLimit_NeverStops));
         yield return ("Budget.MaxTokens", () => Task.Run(SessionBudgetGuardTests.MaxTokens_StopsWhenExceeded));
         yield return ("Budget.MaxRequests", () => Task.Run(SessionBudgetGuardTests.MaxRequests_StopsEvenWithoutUsage));
@@ -374,6 +383,7 @@ internal static class TestRunner
         yield return ("DevAudit.ModelProbeHonorsPreCancellation", AgentLoopTests.ModelProbeHonorsPreCancellation);
         yield return ("DevAudit.ModelProbePropagatesInFlightCancellation", AgentLoopTests.ModelProbePropagatesInFlightCancellation);
         yield return ("DevAudit.ModelProbeStillReportsProviderFailure", AgentLoopTests.ModelProbeStillReportsProviderFailure);
+        yield return ("CompletionErrors.ThinkingModelSilence", () => Task.Run(AgentLoopTests.CompletionErrors_ExplainsThinkingModelSilence));
         yield return ("DevAudit.DiffExactCapIsComplete", () => Task.Run(DevAuditRegressionTests.DiffExactCapIsComplete));
         yield return ("DevAudit.DiffDeepComparisonReportsItsLimit", () => Task.Run(DevAuditRegressionTests.DiffDeepComparisonReportsItsLimit));
         yield return ("DevAudit.DiffKeepsIntegerPrecision", () => Task.Run(DevAuditRegressionTests.DiffKeepsIntegerPrecision));
@@ -447,6 +457,13 @@ internal static class TestRunner
         yield return ("AgentLoop.WaitPending", AgentLoopTests.PlayOnce_WaitsWhenActIsPending);
         yield return ("AgentLoop.NoVisionCapture", AgentLoopTests.PlayOnce_DoesNotCaptureWithoutVision);
         yield return ("AgentLoop.PerModelThinking", AgentLoopTests.PlayOnce_UsesPerModelThinkingIntensity);
+        yield return ("Context.DefaultWindow", () => Task.Run(ContextCompactionTests.DefaultWindowIs256000AndUnsetMeansDefault));
+        yield return ("Context.TriggerAtEightyPercent", () => Task.Run(ContextCompactionTests.CompactionStartsAtEightyPercentOfTheModelWindow));
+        yield return ("Context.SummaryKeepsRecent", () => Task.Run(ContextCompactionTests.SummaryReplacesOlderDecisionsAndKeepsRecentOnes));
+        yield return ("Context.BelowThreshold", () => Task.Run(ContextCompactionTests.BelowTheThresholdKeepsTheWholeHistory));
+        yield return ("Context.ShortHistoryStaysWhole", () => Task.Run(ContextCompactionTests.ShortHistoryIsNotSummarized));
+        yield return ("AgentLoop.ReasoningBudget", AgentLoopTests.PlayOnce_MarksReasoningBudgetExhaustionForRecovery);
+        yield return ("AgentLoop.ToolStreamDemotion", AgentLoopTests.PlayOnce_DemotesToollessStreamToNonStreamingOnce);
         yield return ("AgentLoop.JsonActNoTools", AgentLoopTests.PlayOnce_TextOnlyJsonActWithoutTools);
         yield return ("AgentLoop.CrystalJsonNoTools", AgentLoopTests.PlayOnce_TextOnlyCrystalJsonForwardsCoordinatesAndNullTool);
         yield return ("AgentLoop.WaitTool", AgentLoopTests.PlayOnce_WaitUntilActionableTool);
@@ -766,6 +783,10 @@ internal static class TestRunner
         yield return ("OverlayLayout.ChatFooterCompact", () => Task.Run(OverlayLayoutContractTests.ChatFooterKeepsItsHeightForMessages));
         yield return ("OverlayLayout.LongLabelsReflow", () => Task.Run(OverlayLayoutContractTests.LongLabelsGoThroughTheReflowingHelper));
         yield return ("OverlayLayout.SentenceFieldsReflow", () => Task.Run(OverlayLayoutContractTests.SentenceBearingFieldsReflow));
+        yield return ("OverlayLayout.PlayControlsStack", () => Task.Run(OverlayLayoutContractTests.PlayControlsDoNotRequireOneWideRow));
+        yield return ("OverlayLayout.UsageSentencesStack", () => Task.Run(OverlayLayoutContractTests.UsageSentencesDoNotShareARow));
+        yield return ("OverlayLayout.MetricValuesReflow", () => Task.Run(OverlayLayoutContractTests.MetricValuesReflowInsideTheirTiles));
+        yield return ("OverlayLayout.RichLogsReflow", () => Task.Run(OverlayLayoutContractTests.RichLogsReflowInsteadOfClippingHorizontally));
         yield return ("OverlayLayout.ThemeRepaintsSurfaces", () => Task.Run(OverlayLayoutContractTests.ThemeSwitchRepaintsSurfacesNotJustText));
         yield return ("OverlayLayout.ChromeIsTagged", () => Task.Run(OverlayLayoutContractTests.OverlayChromeIsTaggedForRepaint));
         yield return ("OverlayLayout.SwatchUsesChildNodes", () => Task.Run(OverlayLayoutContractTests.SwatchPreviewUsesChildNodes));

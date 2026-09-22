@@ -50,6 +50,7 @@ internal static class ThinkingRequestBuilder
         }
 
         if (name.Contains("gpt-5", StringComparison.Ordinal) ||
+            name.Contains("step-5", StringComparison.Ordinal) ||
             name.Contains("o1", StringComparison.Ordinal) ||
             name.Contains("o3", StringComparison.Ordinal) ||
             name.Contains("o4", StringComparison.Ordinal))

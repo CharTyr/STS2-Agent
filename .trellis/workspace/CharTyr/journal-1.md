@@ -1428,3 +1428,38 @@ Explored STS2-Agent beyond token usage, then shipped one-frame decision snapshot
 ### Status
 
 [OK] **Completed**
+
+
+## Session 36: Close live validation gaps
+
+**Date**: 2026-09-22
+**Task**: Close live validation gaps
+**Branch**: `dev`
+
+### Summary
+
+Isolated autoplay cleared Act 1 and ended naturally in Act 2. Thinking-model failures, StepFun stream tool loss, context compaction, overlay clipping, MCP control, and live screenshot capture were fixed and recorded. Full three-act wins, external full runs, and Steam-client dual launch were closed out as out of scope.
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `d6b5d80` | (see git log) |
+| `69e5f3b` | (see git log) |
+| `7520faf` | (see git log) |
+| `c6bba38` | (see git log) |
+| `7c5917c` | (see git log) |
+| `0a55bee` | (see git log) |
+| `68df33b` | (see git log) |
+| `993c6c3` | (see git log) |
+| `5a48ba0` | (see git log) |
+| `a1a006d` | (see git log) |
+| `09a65cc` | (see git log) |
+| `5da06d1` | (see git log) |
+| `bce6e06` | (see git log) |
+| `2b6fb17` | (see git log) |
+| `5389971` | (see git log) |
+
+### Status
+
+[OK] **Completed**
