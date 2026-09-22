@@ -43,10 +43,21 @@
 ### P2 — 首次配置引导文案更新
 - `FirstRunSetup` 与设置页"首次配置"段的文案按新双 tab UI 重写（游玩/设置 tab、主模型单一化、逐模型测试、Jev 配置位置）。
 
-### P3 — agent loop 架构评估（pi agent）
-- pi (earendil-works/pi) 是 TypeScript/Node 工具包，无法直接嵌入 C# Godot 进程。
-- 现实路径：**参照 pi-agent-core 的事件驱动 loop 设计重构 C# AgentLoop**（事件流、transformContext/convertToLlm 分离、beforeToolCall/afterToolCall 钩子、finishTurn、显式 error surfacing），而不是引入 Node sidecar（违背"玩家零依赖"目标）。
-- 本轮先做错误 surfacing + 状态可见性（P0 卡死修复的一部分），完整重构另立任务。
+### P3 — agent loop 架构评估（pi agent）— 结论（2026-09-22）
+
+- pi (earendil-works/pi) 是 **TypeScript/Node** 工具包（`pi-agent-core` / `pi-ai` / `pi-coding-agent`，npm 分发）。本 Mod 是游戏进程内的 C#/.NET 9 Godot 插件，**无法直接嵌入** pi；作为 sidecar 引入则要求玩家装 Node，违背"玩家零依赖"的产品目标（原生 MCP 面正是为了不装 Python 而存在）。
+- **采纳其设计而非其代码**：pi-agent-core 的事件流模型（agent_start/turn_start/message_update/tool_execution_end/agent_end）、transformContext/convertToLlm 分离、beforeToolCall/afterToolCall 钩子、finishTurn 显式终局——对应到本轮修复：分阶段心跳（PlayPhases + StatusWithElapsed）≈ 事件流的最小可用版；异常类型保留 + NoteEvent ≈ 显式 error surfacing；GameThread 超时/取消 ≈ "所有等待都有 deadline 且可取消"。
+- 完整事件流重构（把 `AutoPlayRecovery` 的隐式 `(StopReason, Delay)` 元组换成显式状态机、`CompleteWithToolsAsync` 抽成事件流内核）另立任务，不在本轮范围。
+
+## 实机复测要点（给用户）
+
+1. **必须用本分支重新构建的 DLL**（v0.15.0 及更早的 release 构建里根本没有双层决策代码）。构建：`scripts/build-mod.ps1 -Configuration Release`（已执行并部署到游戏 mods 目录），然后重启游戏。
+2. 双层决策：设置页填 Jev Base URL + API Key → 点「测试 Jev 连接」（现在是真实 ping）→ 游玩页开「双层决策模式」→ 开始自动游玩。决策记录里 Jev 执行的动作为 `来源：jev` 并带置信度；Jev 面板显示最近选择与概率。
+3. 战利品选牌：奖励屏遇到卡牌奖励时会**停下等决策**（不再自动拿第一张）；LLM/Jev 显式选牌或跳过后才继续。
+4. 卡死排查：状态栏现在显示当前阶段+已等待秒数；连续等待超过 2 分钟会停机并给出可见原因。
+5. 对话区：思考内容（勾选「显示思考内容」）与每个动作决策都以气泡进入对话流；对话上限 200 条，超出时顶部显示"已省略更早的 N 条"。
+6. 模型设置：每张模型卡片有「测试」按钮（真实调用 + 工具调用检测），通过显示 ✅ 徽标；主模型一个即可（对话与游玩共用）；视觉模型在「显示高级选项」里；思考强度与回复语言在游玩页对话卡上直接调。
+
 
 ## 执行顺序
 
