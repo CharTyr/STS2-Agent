@@ -268,7 +268,7 @@ internal static class Router
                     throw new ApiException(403, "local_only", "Screenshots are only available on loopback.");
                 }
 
-                var jpeg = await GameThread.InvokeAsync(STS2AIAgent.Vision.ScreenshotService.CaptureJpeg);
+                var jpeg = await GameThread.InvokeAsync(() => STS2AIAgent.Vision.ScreenshotService.CaptureJpeg());
                 if (jpeg == null || jpeg.Length == 0)
                 {
                     throw new ApiException(409, "screenshot_unavailable", "The game viewport did not produce a screenshot.");
