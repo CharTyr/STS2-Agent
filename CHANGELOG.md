@@ -31,6 +31,11 @@
   non-streaming retry before treating it as a model failure. No game action has been accepted at
   that point, and both calls remain visible to the session budget. This covers providers whose
   non-streaming compatibility path serializes tools correctly while their SSE path does not.
+- **A full context window compresses history instead of ending the run.** Each model has its own
+  context window, defaulting to 256,000 tokens and editable per model. Once a measured play prompt
+  reaches 80% of that window, older accepted decisions are replaced by one continuation summary.
+  The latest state and the six newest decisions stay verbatim, and the decision log itself is not
+  rewritten. A blank session spend cap still means no cap; filling the context window is not one.
 - **The overlay no longer clips long play and decision text.** The pause control gets the full card
   width while autoplay is running, usage sentences stack instead of sharing a tile row, and decision
   reasons wrap inside the 440px panel instead of running off its right edge.

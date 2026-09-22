@@ -542,6 +542,8 @@ internal sealed partial class AgentOverlayHost
 
         SelectByText(thinkingIntensity, model.ThinkingIntensity);
         WatchCombo(thinkingIntensity);
+        var contextWindow = UiFactory.Line(model.ContextWindow?.ToString() ?? "", Loc.T("默认 256000"));
+        WatchLine(contextWindow);
         var remove = UiFactory.Button(Loc.T("删除"), () => RemoveModel(index));
         column.AddChild(UiFactory.Row(display, remove));
         column.AddChild(UiFactory.Row(modelName, endpointCombo));
@@ -550,9 +552,10 @@ internal sealed partial class AgentOverlayHost
             column.AddChild(UiFactory.Row(vision, tools));
             column.AddChild(Labeled(Loc.T("思考方式"), thinkingMode));
             column.AddChild(Labeled(Loc.T("思考强度"), thinkingIntensity));
+            column.AddChild(Labeled(Loc.T("上下文窗口"), contextWindow));
         }
         box.AddChild(column);
-        _modelEditors.Add(new ModelEditors(model.Id, display, modelName, endpointCombo, vision, tools, thinkingMode, thinkingIntensity));
+        _modelEditors.Add(new ModelEditors(model.Id, display, modelName, endpointCombo, vision, tools, thinkingMode, thinkingIntensity, contextWindow));
         return box;
     }
 

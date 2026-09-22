@@ -874,5 +874,6 @@ internal sealed partial class AgentOverlayHost
         CheckBox Vision,
         CheckBox Tools,
         OptionButton ThinkingMode,
-        OptionButton ThinkingIntensity);
+        OptionButton ThinkingIntensity,
+        LineEdit ContextWindow);
 }
