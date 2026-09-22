@@ -29,3 +29,6 @@ node_modules/
 
 # Local Steam workshop uploader output
 mod-uploader.log
+
+# Local validation run logs
+.baseline-logs/
