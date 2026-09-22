@@ -26,6 +26,11 @@
   `reasoning_effort` request shape, so selecting Low sends `reasoning_effort: "low"` instead of
   merely appending a natural-language hint. Streaming now reads a terminal `finish_reason` from
   the normal delta-shaped final chunk as well as message-shaped chunks.
+- **Tool-using play models automatically recover from one stream-only provider limitation.** If a
+  gameplay response streams prose instead of a required tool call, the mod makes one safe
+  non-streaming retry before treating it as a model failure. No game action has been accepted at
+  that point, and both calls remain visible to the session budget. This covers providers whose
+  non-streaming compatibility path serializes tools correctly while their SSE path does not.
 
 ## v0.15.0 - 2026-09-22
 
