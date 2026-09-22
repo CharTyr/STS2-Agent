@@ -213,6 +213,7 @@ internal static partial class Loc
         map["外挂视觉模型（可空）"] = "External vision model (optional)";
         map["测试"] = "Test";
         map["正在测试模型…"] = "Testing the model…";
+        map["请先在「模型绑定」选择主模型。"] = "Pick a main model under “Model binding” first.";
         map["⚪ 未测试。点「测试」做一次真实调用（含工具调用检测）。"] =
             "⚪ Not tested. Press “Test” for a real call (including a tool-calling probe).";
         map["⚪ 配置已修改，需重新测试。"] = "⚪ Configuration changed; test again.";

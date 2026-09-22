@@ -432,6 +432,20 @@ internal sealed partial class AgentOverlayHost
     private async Task TestConnectionAsync()
     {
         SaveSettingsFromUi();
+        // The footer button tests the main model with the full probe (connectivity + tool calling);
+        // the per-card buttons cover every other model individually.
+        var mainId = AgentRuntime.Instance.Settings.ConversationModelId;
+        if (string.IsNullOrWhiteSpace(mainId))
+        {
+            SetSaveStatus(Loc.T("请先在「模型绑定」选择主模型。"));
+            return;
+        }
+
+        SetSaveStatus(Loc.T("正在测试模型…"));
+        var result = await AgentRuntime.Instance.TestModelAsync(mainId, CancellationToken.None);
+        SetSaveStatus(result);
+        // Keep the role-level records fresh too: the first-run guidance and the co-op gate still
+        // read them, and a verified main model is what they are asking about.
         await AgentRuntime.Instance.TestConnectionAsync(CancellationToken.None);
         _settingsDirty = false;
         RebuildSettingsForm();

@@ -43,7 +43,10 @@ INDEX_PATHS_BY_ACTION: dict[str, str] = {
     "choose_event_option": "event.options",
     "choose_reward_card": "reward.cards",
     "claim_reward": "reward.rewards",
-    "resolve_rewards": "reward.rewards",
+    # resolve_rewards spends its option_index on the card choice (0/1/2 pick, -1 skip), so the
+    # payload path a rejected index points into is reward.cards -- the same list choose_reward_card
+    # reads. It used to name reward.rewards, which is the claimable-rewards list, not the cards.
+    "resolve_rewards": "reward.cards",
     "select_deck_card": "selection.cards",
     "select_character": "character_select.characters",
     "buy_card": "shop.cards",
