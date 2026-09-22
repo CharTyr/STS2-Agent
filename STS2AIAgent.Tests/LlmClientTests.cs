@@ -338,6 +338,43 @@ internal static class OpenAiCompatibleClientTests
         Assert.Equal(60, completion.Usage.TotalTokens);
     }
 
+    public static void ParseCompletion_ReadsFinishReason()
+    {
+        const string payload = """
+        {
+          "choices": [
+            {
+              "message": {
+                "role": "assistant",
+                "content": "",
+                "reasoning": "thinking out loud"
+              },
+              "finish_reason": "length"
+            }
+          ]
+        }
+        """;
+
+        var completion = OpenAiCompatibleClient.ParseCompletion(payload);
+        Assert.Equal("", completion.Content);
+        Assert.Equal("thinking out loud", completion.Reasoning);
+        Assert.Equal("length", completion.FinishReason);
+    }
+
+    public static void ParseSsePayload_ReadsFinishReasonFromMessageChoice()
+    {
+        const string payload = """
+        data: {"choices":[{"delta":{"content":""},"index":0}]}
+        data: {"choices":[{"message":{"role":"assistant","content":"","reasoning":"deep thought"},"finish_reason":"length","index":0}]}
+        data: [DONE]
+        """;
+
+        var completion = OpenAiCompatibleClient.ParseSsePayload(payload);
+        Assert.True(completion.Content is null or "", "SSE empty assistant message was not passed through");
+        Assert.Equal("deep thought", completion.Reasoning);
+        Assert.Equal("length", completion.FinishReason);
+    }
+
     public static void LlmUsage_CombineAndAdd()
     {
         var u1 = new LlmUsage { PromptTokens = 10, CompletionTokens = 5, TotalTokens = 15 };

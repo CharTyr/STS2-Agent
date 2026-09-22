@@ -2,6 +2,22 @@
 
 > Release attribution is recorded against tags or release commits. Post-tag maintenance is listed separately; current validation limits are maintained in [PRODUCT_PLAN_CURRENT.md](https://github.com/CharTyr/STS2-Agent/blob/main/PRODUCT_PLAN_CURRENT.md).
 
+## Unreleased
+
+- **Thinking models stop being misdiagnosed.** DeepSeek-style, Qwen-style, step-5-preview and
+  every provider that answers in `reasoning_content` before it produces content used to surface
+  in the mod as `模型未给出可执行动作` even when the model had done the thinking and run out of
+  the completion budget mid-reasoning. The OpenAI-compatible client now reads `finish_reason`
+  (both from the non-streaming payload and from whichever SSE chunk carries the final message),
+  and when the loop returns with no action, an empty `content`, and `finish_reason=length` the
+  error says exactly that — reasoning budget consumed the turn, not "model did not try".
+- **An empty assistant message no longer reads as a generic failure.** When a thinking model
+  legitimately leaves `content` empty but filled `reasoning_content`, the failure text names the
+  reasoning and says the message was empty, instead of pretending the model said nothing at all.
+- **Default completion requests stop sending `max_tokens`.** Only the health probe (`/health`)
+  still pins `max_tokens: 16` to keep pings cheap; play and chat requests leave the completion
+  budget to the provider, which is what thinking models assume.
+
 ## v0.15.0 - 2026-09-22
 
 > A harness pass over everything an AI pays for when it plays this game through the mod: the state

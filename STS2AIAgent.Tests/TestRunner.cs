@@ -246,6 +246,8 @@ internal static class TestRunner
         yield return ("OpenAI.MaxTokensFieldRename", () => Task.Run(OpenAiCompatibleClientTests.MaxTokensField_RenamesOnlyWhenThereIsAValueToMove));
         yield return ("OpenAI.PingCompletionTokensRetry", OpenAiCompatibleClientTests.Ping_RetriesWithCompletionTokensWhenTheEndpointRefusesMaxTokens);
         yield return ("OpenAI.PingUnrelated400NotRetried", OpenAiCompatibleClientTests.Ping_DoesNotRetryA400ThatIsNotAboutTheParameter);
+        yield return ("OpenAI.ParseCompletionFinishReason", () => Task.Run(OpenAiCompatibleClientTests.ParseCompletion_ReadsFinishReason));
+        yield return ("OpenAI.ParseSseFinishReason", () => Task.Run(OpenAiCompatibleClientTests.ParseSsePayload_ReadsFinishReasonFromMessageChoice));
         yield return ("Budget.NoLimit", () => Task.Run(SessionBudgetGuardTests.NoLimit_NeverStops));
         yield return ("Budget.MaxTokens", () => Task.Run(SessionBudgetGuardTests.MaxTokens_StopsWhenExceeded));
         yield return ("Budget.MaxRequests", () => Task.Run(SessionBudgetGuardTests.MaxRequests_StopsEvenWithoutUsage));
@@ -374,6 +376,7 @@ internal static class TestRunner
         yield return ("DevAudit.ModelProbeHonorsPreCancellation", AgentLoopTests.ModelProbeHonorsPreCancellation);
         yield return ("DevAudit.ModelProbePropagatesInFlightCancellation", AgentLoopTests.ModelProbePropagatesInFlightCancellation);
         yield return ("DevAudit.ModelProbeStillReportsProviderFailure", AgentLoopTests.ModelProbeStillReportsProviderFailure);
+        yield return ("CompletionErrors.ThinkingModelSilence", () => Task.Run(AgentLoopTests.CompletionErrors_ExplainsThinkingModelSilence));
         yield return ("DevAudit.DiffExactCapIsComplete", () => Task.Run(DevAuditRegressionTests.DiffExactCapIsComplete));
         yield return ("DevAudit.DiffDeepComparisonReportsItsLimit", () => Task.Run(DevAuditRegressionTests.DiffDeepComparisonReportsItsLimit));
         yield return ("DevAudit.DiffKeepsIntegerPrecision", () => Task.Run(DevAuditRegressionTests.DiffKeepsIntegerPrecision));

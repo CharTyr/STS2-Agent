@@ -411,7 +411,9 @@ internal sealed class AgentLoop
                         Reasoning = lastReasoning,
                         Acted = acted,
                         ActResultJson = actResult,
-                        Error = acted == null ? lastActError : null,
+                        Error = acted == null
+                            ? (lastActError ?? CompletionErrors.Empty(completion, completion.Reasoning, rounds))
+                            : null,
                         StateFingerprint = actFingerprint,
                         ExecutedUnsettled = actUnsettled,
                         ToolRounds = rounds,
