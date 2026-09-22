@@ -60,6 +60,8 @@ internal sealed partial class NativeMcpServer
     private readonly IGameBridge _bridge;
     private readonly Func<object> _health;
     private readonly DecisionLog? _decisions;
+    private readonly StrategyStore? _strategyStore;
+    private readonly Func<(bool DualLayer, bool JevConfigured)>? _dualLayerStatus;
     private readonly string _version;
     private bool _enabled;
     private string? _endpointUrl;
@@ -69,11 +71,15 @@ internal sealed partial class NativeMcpServer
         IGameBridge bridge,
         Func<object> health,
         string version,
-        DecisionLog? decisions = null)
+        DecisionLog? decisions = null,
+        StrategyStore? strategyStore = null,
+        Func<(bool DualLayer, bool JevConfigured)>? dualLayerStatus = null)
     {
         _bridge = bridge;
         _health = health;
         _decisions = decisions;
+        _strategyStore = strategyStore;
+        _dualLayerStatus = dualLayerStatus;
         _version = string.IsNullOrWhiteSpace(version) ? "0.0.0" : version.Trim();
     }
 
@@ -89,9 +95,11 @@ internal sealed partial class NativeMcpServer
         IGameBridge bridge,
         Func<object> health,
         string version,
-        DecisionLog? decisions = null)
+        DecisionLog? decisions = null,
+        StrategyStore? strategyStore = null,
+        Func<(bool DualLayer, bool JevConfigured)>? dualLayerStatus = null)
     {
-        var server = new NativeMcpServer(bridge, health, version, decisions);
+        var server = new NativeMcpServer(bridge, health, version, decisions, strategyStore, dualLayerStatus);
         _runtime = server;
         return server;
     }

@@ -18,7 +18,8 @@ internal sealed partial class AgentRuntime
                 result.Reasoning,
                 result.StateFingerprint,
                 result.RequestsSpent,
-                result.Usage?.TotalTokens);
+                result.Usage?.TotalTokens,
+                confidence: result.Confidence);
         }
     }
 

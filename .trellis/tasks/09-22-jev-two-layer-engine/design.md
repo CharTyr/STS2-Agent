@@ -80,6 +80,22 @@ if (_decider is { } decider && _strategyStore is { } store)
 - Jev 失败/超时/低置信 → 回退 LLM 路径，不抛停整局；连续失败由 `AutoPlayRecovery` 既有策略兜底。
 - 取消：全程传 `CancellationToken`；`AgentTurnCanceledException` 交回 receipt。
 - 预算：每次 Jev 调用 `RequestsSpent+=1`；usage 未知保持 null。
+
+## 已实测验证的 API 契约（2026-09-22，真实 key + 官方文档双重确认）
+
+> 以下来自对 `https://api.typesafe.ai` 的真实调用 + `docs.typesafe.ai` 官方文档，二者一致。实现以此为准。
+
+- **请求** `POST /v1/systemone`，`Authorization: Bearer <key>`，body `{state, model, questions:{id:{type, instructions, criteria}}}`。
+  - `state` 可为字符串或对象（我们传对象：同帧 `{state, available_actions}` 的 state 部分）。
+  - `criteria`：choice = map（optionId→描述，≤255 项）；score = 有序 level 描述数组（2-10 级）；noul 无。
+  - `instructions` 与 `criteria` 均接受 JSON 结构（typesafe-mario 的分面 instructions 对象合法）。
+- **响应** `{model, answers, usage:{input_tokens, output_tokens}}`。`model` 是解析后的版本号（如 `jev-1.13.0`），不等于请求别名 `jev-latest`。
+- **choice 答案** `{type:"choice", choice, confidence, probabilities:{optionId→p}}`。
+- **score 答案** `{type:"score", score:<浮点>, confidence, legend:{index→level标签}, probabilities:{index→p}}`。注意 score 是 **float**（如 1.82），不是 int。
+- **noul 答案** `{type:"noul", noul:<0-1>}`，**无 confidence**。
+- **confidence** 由概率分布推导（越集中越高），Choice/Score 都有；官方推荐模式正是 **confidence-gated routing**（高置信执行、低置信升级）——与本设计一致。
+- **错误**：无效 key → HTTP 401（空 body）→ 映射 Config。429 → 读 `retry-after` 退避。
+- **`GET /v1/models`** → `{models:[{name, description, release_date}]}`，用于 PingAsync 验证 key。当前有 `jev-latest` 与 `jev-preview`。
 - no-progress：Jev 路径必须填 `StateFingerprint`。
 
 ## 测试

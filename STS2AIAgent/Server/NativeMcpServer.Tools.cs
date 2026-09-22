@@ -71,6 +71,14 @@ internal sealed partial class NativeMcpServer
                         ReadObject(arguments, "after"),
                         Math.Clamp(ReadInt(arguments, "limit") ?? StateViews.MaxDiffEntries, 1, 200)),
                     JsonOptions);
+            case "get_planner_briefing":
+                return GetPlannerBriefingJson();
+            case "update_play_strategy":
+                // The strategy keys are read inline so the argument-name comparison can see them.
+                return UpdatePlayStrategyJson(
+                    ReadString(arguments, "posture"),
+                    ReadString(arguments, "instructions"),
+                    ReadObject(arguments, "option_hints"));
             default:
                 return JsonSerializer.Serialize(new
                 {
@@ -106,6 +114,88 @@ internal sealed partial class NativeMcpServer
         return JsonSerializer.Serialize(
             BuildSceneGuidance(PlaybookSections.ScreenOfCompactState(stateJson)),
             JsonOptionsKeepingNulls);
+    }
+
+    /// <summary>
+    /// The current play strategy and the dual-layer status, for an external planner about to steer the
+    /// Jev execution model. Reads the injected store -- the same one the in-game planner writes -- so
+    /// the briefing an MCP client sees is the strategy the decider is actually following. When the
+    /// store was not bound (an offline harness), the tool says so rather than throwing.
+    /// </summary>
+    private string GetPlannerBriefingJson()
+    {
+        if (_strategyStore == null || _dualLayerStatus == null)
+        {
+            return JsonSerializer.Serialize(new
+            {
+                error = AgentErrorEnvelope.ToPayload(
+                    new ApiException(503, "unavailable", "The dual-layer strategy store is not bound on this instance."))
+            }, JsonOptions);
+        }
+
+        var status = _dualLayerStatus();
+        return JsonSerializer.Serialize(new
+        {
+            strategy = JsonSerializer.Deserialize<JsonElement>(_strategyStore.Current.ToJson()),
+            dual_layer = status.DualLayer,
+            jev_configured = status.JevConfigured
+        }, JsonOptionsKeepingNulls);
+    }
+
+    /// <summary>
+    /// Applies a planner's strategy update. Any field the caller omits keeps the current value, so a
+    /// client can nudge the posture without restating the instructions; a body with no recognizable
+    /// field at all is rejected rather than stored as an empty strategy.
+    /// </summary>
+    private string UpdatePlayStrategyJson(string? posture, string? instructions, JsonElement? optionHints)
+    {
+        if (_strategyStore == null)
+        {
+            return JsonSerializer.Serialize(new
+            {
+                error = AgentErrorEnvelope.ToPayload(
+                    new ApiException(503, "unavailable", "The dual-layer strategy store is not bound on this instance."))
+            }, JsonOptions);
+        }
+
+        var current = _strategyStore.Current;
+        var hints = current.OptionHints;
+        if (optionHints is { ValueKind: JsonValueKind.Object } hintsElement)
+        {
+            var parsed = new Dictionary<string, string>(StringComparer.Ordinal);
+            foreach (var property in hintsElement.EnumerateObject())
+            {
+                if (property.Value.ValueKind == JsonValueKind.String)
+                {
+                    parsed[property.Name] = property.Value.GetString() ?? string.Empty;
+                }
+            }
+
+            hints = parsed;
+        }
+
+        if (posture == null && instructions == null && optionHints == null)
+        {
+            return JsonSerializer.Serialize(new
+            {
+                error = AgentErrorEnvelope.ToPayload(
+                    new ApiException(400, "invalid_request", "Provide at least one of posture, instructions, or option_hints."))
+            }, JsonOptions);
+        }
+
+        _strategyStore.Update(new PlayStrategy
+        {
+            Posture = posture ?? current.Posture,
+            Instructions = instructions ?? current.Instructions,
+            OptionHints = hints,
+            UpdatedAt = DateTimeOffset.UtcNow.ToString("O"),
+            Source = "mcp"
+        });
+
+        return JsonSerializer.Serialize(new
+        {
+            strategy = JsonSerializer.Deserialize<JsonElement>(_strategyStore.Current.ToJson())
+        }, JsonOptionsKeepingNulls);
     }
 
     /// <summary>

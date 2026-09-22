@@ -68,6 +68,12 @@ internal static class SourceCoverageTests
         "STS2AIAgent/Agent/AgentRuntime.Team.cs",
         // Accounting remains on the game runtime, but is separated from UI status updates.
         "STS2AIAgent/Agent/AgentRuntime.Accounting.cs",
+        // The Jev surface of the runtime (the shared strategy store and the decider construction). An
+        // AgentRuntime partial, so it stays unlinked with the base file; the Roslyn pass still parses it.
+        "STS2AIAgent/Agent/AgentRuntime.Jev.cs",
+        // The play page's solo/multiplayer mode switch. A Godot control, so it stays unlinked like the
+        // overlay host it serves.
+        "STS2AIAgent/Ui/SegmentedSwitch.cs",
         "STS2AIAgent/Game/GameDataExportService.cs",
         "STS2AIAgent/Server/Router.cs",
         "STS2AIAgent/Server/GameEventService.cs",

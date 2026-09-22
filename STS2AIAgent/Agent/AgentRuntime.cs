@@ -107,6 +107,19 @@ internal sealed partial class AgentRuntime
                 {
                     return _lastPromptTokens;
                 }
+            },
+            // The dual-layer engine: the decider is injected whenever Jev is configured, and the loop's
+            // branch gates it on the live per-role toggle, so toggling the mode needs no rebuild. The
+            // store is the same instance the MCP route and the in-game planner write, which is what
+            // makes the overlay path and the MCP path one experience.
+            decider: BuildJevDecider(),
+            strategyStore: _strategyStore,
+            confidenceThreshold: () =>
+            {
+                lock (_gate)
+                {
+                    return _settings.JevConfidenceThreshold;
+                }
             });
     }
 
@@ -261,7 +274,8 @@ internal sealed partial class AgentRuntime
         string? stateFingerprint = null,
         int requestsSpent = 0,
         int? totalTokens = null,
-        string? runId = null)
+        string? runId = null,
+        double? confidence = null)
     {
         return _decisions.Record(
             source,
@@ -272,7 +286,8 @@ internal sealed partial class AgentRuntime
             totalTokens,
             // The caller may know the run (the HTTP route and the native MCP tool both do); when it
             // does not, the boundary's observation is the best available answer.
-            runId: runId ?? _runBoundary.RunId);
+            runId: runId ?? _runBoundary.RunId,
+            confidence: confidence);
     }
 
     public LlmUsage SessionUsage
@@ -351,7 +366,9 @@ internal sealed partial class AgentRuntime
             new GameBridge(),
             Router.BuildHealthData,
             Router.ModVersion,
-            _decisions);
+            _decisions,
+            _strategyStore,
+            DualLayerStatus);
         // The overlay, /decisions, and the SSE stream are three views of one log, so the mirror is
         // attached once, here, rather than each writer remembering to announce itself.
         _decisions.Recorded += GameEventService.Instance.PublishDecision;

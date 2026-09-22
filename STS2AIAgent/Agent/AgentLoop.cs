@@ -21,6 +21,9 @@ internal sealed partial class AgentLoop
     private readonly Func<SessionBudgetGuard?>? _budgetGuard;
     private readonly Func<IReadOnlyList<DecisionLogEntry>>? _recentDecisions;
     private readonly Func<int>? _lastPromptTokens;
+    private readonly IActionDecider? _decider;
+    private readonly StrategyStore? _strategyStore;
+    private readonly Func<double>? _confidenceThreshold;
 
     public AgentLoop(
         IGameBridge bridge,
@@ -29,7 +32,10 @@ internal sealed partial class AgentLoop
         Func<string?>? teamContext = null,
         Func<SessionBudgetGuard?>? budgetGuard = null,
         Func<IReadOnlyList<DecisionLogEntry>>? recentDecisions = null,
-        Func<int>? lastPromptTokens = null)
+        Func<int>? lastPromptTokens = null,
+        IActionDecider? decider = null,
+        StrategyStore? strategyStore = null,
+        Func<double>? confidenceThreshold = null)
     {
         _bridge = bridge;
         _factory = factory;
@@ -38,6 +44,9 @@ internal sealed partial class AgentLoop
         _budgetGuard = budgetGuard;
         _recentDecisions = recentDecisions;
         _lastPromptTokens = lastPromptTokens;
+        _decider = decider;
+        _strategyStore = strategyStore;
+        _confidenceThreshold = confidenceThreshold;
     }
 
     public async Task<AgentTurnResult> ChatAsync(
@@ -120,6 +129,24 @@ internal sealed partial class AgentLoop
         var stateJson = await _bridge.GetCompactStateJsonAsync(cancellationToken);
         checkState?.Invoke(stateJson);
 
+        // Dual-layer mode: when a decider is wired in, Jev picks the concrete action and the LLM only
+        // plans. A confident-enough Jev answer is executed here and the LLM prompt below never runs;
+        // a low-confidence or failed answer falls through to it, so an unsure fast model can never
+        // strand the turn -- the slow path is always there to take over. The per-role toggle is read
+        // live from settings, so switching the mode off stops Jev on the very next turn without
+        // rebuilding the loop. The companion instance reads the co-op toggle; the host reads solo.
+        var dualLayerOn = _teamContext != null
+            ? settings.DualLayerCoopEnabled
+            : settings.DualLayerSoloEnabled;
+        if (dualLayerOn && _decider is { } decider && _strategyStore is { } store)
+        {
+            var jevTurn = await TryDecideWithJevAsync(decider, store, cancellationToken, checkState);
+            if (jevTurn != null)
+            {
+                return jevTurn;
+            }
+        }
+
         // Order is the cache contract: everything that does not change between two decisions on the
         // same screen comes first, and only this step's state and the instruction it answers come
         // last. The state used to sit at index 1, which invalidated every message after it on every
@@ -183,6 +210,59 @@ internal sealed partial class AgentLoop
             checkState,
             initialUsage: visionNote.Usage,
             initialRequests: visionNote.RequestsSpent);
+    }
+
+    /// <summary>
+    /// The dual-layer branch of <see cref="PlayOnceAsync"/>: lets Jev pick and execute the action when
+    /// its confidence clears the threshold, and returns null to fall through to the LLM path otherwise.
+    /// </summary>
+    /// <remarks>
+    /// The threshold is read through a provider rather than captured, so a settings change takes effect
+    /// on the next turn without rebuilding the loop. A Jev decision that errors, that names no option,
+    /// or that scores below the threshold all return null -- the LLM path is the fallback for every one
+    /// of them, which is what makes the fast model safe to trust with the click. The executed turn fills
+    /// the same fields an LLM turn does (fingerprint for the no-progress guard, usage and request count
+    /// for the budget, confidence for the decision log), so downstream accounting cannot tell the two
+    /// paths apart except by the confidence value itself.
+    /// </remarks>
+    private async Task<AgentTurnResult?> TryDecideWithJevAsync(
+        IActionDecider decider,
+        StrategyStore store,
+        CancellationToken cancellationToken,
+        Action<string>? checkState)
+    {
+        var threshold = _confidenceThreshold?.Invoke() ?? 0.35;
+        var snapshotJson = await _bridge.GetActionSnapshotJsonAsync(cancellationToken);
+        var decision = await decider.DecideAsync(snapshotJson, store.Current, cancellationToken);
+
+        if (decision.Error != null
+            || string.IsNullOrWhiteSpace(decision.Action)
+            || decision.Confidence == null
+            || decision.Confidence.Value < threshold)
+        {
+            return null;
+        }
+
+        var outcome = await ExecuteActAsync(decision.ToActArgumentsJson(), cancellationToken, checkState);
+        if (outcome.Error != null)
+        {
+            // The action Jev picked was rejected (the frame moved, or the index validator disagreed).
+            // Fall through to the LLM path rather than reporting a failed turn.
+            return null;
+        }
+
+        return new AgentTurnResult
+        {
+            Acted = outcome.Action,
+            ActResultJson = outcome.ResultJson,
+            StateFingerprint = outcome.Fingerprint,
+            ExecutedUnsettled = outcome.Unsettled,
+            Reasoning = decision.Reason,
+            Usage = decision.Usage,
+            RequestsSpent = decision.RequestsSpent,
+            Confidence = decision.Confidence,
+            ToolRounds = 0
+        };
     }
 
     public async Task<string> TestConnectionAsync(CancellationToken cancellationToken)

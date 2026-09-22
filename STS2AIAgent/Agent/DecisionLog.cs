@@ -12,7 +12,8 @@ internal sealed record DecisionLogEntry(
     string? state_fingerprint,
     int requests_spent,
     int? total_tokens,
-    string? run_id);
+    string? run_id,
+    double? confidence = null);
 
 /// <summary>
 /// What one run has cost so far: how many decisions were recorded for it and what they spent.
@@ -72,7 +73,8 @@ internal sealed class DecisionLog
         int requestsSpent = 0,
         int? totalTokens = null,
         DateTimeOffset? timestamp = null,
-        string? runId = null)
+        string? runId = null,
+        double? confidence = null)
     {
         var safeSource = Clean(source, "unknown", 48);
         var safeAction = Clean(action, "unknown", 96);
@@ -98,7 +100,8 @@ internal sealed class DecisionLog
                 safeFingerprint,
                 Math.Max(0, requestsSpent),
                 totalTokens is >= 0 ? totalTokens : null,
-                safeRunId);
+                safeRunId,
+                confidence is >= 0.0 and <= 1.0 ? confidence : null);
 
             _entries.Add(entry);
             if (_entries.Count > _capacity)

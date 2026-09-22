@@ -4,6 +4,16 @@
 
 ## Unreleased
 
+- **Dual-layer decision mode (Jev + LLM planner).** A new per-mode toggle (single-player and
+  co-op each have their own) hands the actual clicking to the TypeSafe Jev fast model while the
+  LLM only plans strategy. When enabled and Jev is configured (base URL + API key in Settings),
+  each turn asks Jev which concrete on-screen option to take; a confident-enough answer executes
+  immediately, and a low-confidence or failed one falls back to the normal LLM play path, so an
+  unsure fast model can never strand a turn. The confidence threshold is configurable. The current
+  play strategy is readable and writable from outside via `GET`/`POST /strategy` (loopback only)
+  and the MCP tools `get_planner_briefing` / `update_play_strategy`, and the in-game planner and
+  an external MCP planner steer the same store — the overlay path and the MCP path are one
+  experience. Decisions made by Jev carry their confidence into the decision log.
 - **Thinking models stop being misdiagnosed.** DeepSeek-style, Qwen-style, step-5-preview and
   every provider that answers in `reasoning_content` before it produces content used to surface
   in the mod as `模型未给出可执行动作` even when the model had done the thinking and run out of

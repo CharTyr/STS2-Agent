@@ -28,9 +28,12 @@ from sts2_mcp.server import create_server
 
 CHARS_PER_TOKEN = 4
 
-# 15 tools: the guided profile (14 shared with the native mod surface + the sidecar-only
+# 17 tools: the guided profile (16 shared with the native mod surface + the sidecar-only
 # `wait_for_event`). scripts/test-mcp-tool-profile.ps1 pins the same list as ESSENTIAL_TOOLS.
-GUIDED_TOOL_BUDGET = 15
+# Raised 15 -> 17 on 2026-10-05 when the dual-layer planner tools (`get_planner_briefing`,
+# `update_play_strategy`) joined the guided surface: the native mod surface exposes them through
+# `AgentTools.Mcp`, and the alignment contract keeps the two guided surfaces identical.
+GUIDED_TOOL_BUDGET = 17
 
 
 class _DummyClient:
@@ -96,11 +99,13 @@ def _tools(profile: str, *, debug: bool = False) -> list[Any]:
 # (8,239 of those chars were narrative prose the skill already carries), now guided 8,255,
 # layered 11,411, full 22,375, guided+debug 8,912. The headroom is ~5-9%: enough for a reworded
 # sentence, nowhere near enough for that prose to come back.
+# Re-measured 2026-10-05 after the dual-layer planner tools joined guided: guided 9,559,
+# layered 12,715, full 23,679, guided+debug 10,216. The ceilings below sit ~5% over those.
 ENVELOPE_BUDGETS: dict[str, int] = {
-    "guided": 9_000,
-    "layered": 12_400,
-    "full": 24_000,
-    "guided+debug": 9_700,
+    "guided": 10_000,
+    "layered": 13_300,
+    "full": 24_800,
+    "guided+debug": 10_700,
 }
 
 # What each guided tool cost on the wire before the trim, per the 2026-10-04 measurement that
@@ -144,6 +149,10 @@ _TOOL_BUDGETS: dict[str, int] = {
     "wait_for_event": 370,
     "get_run_summary": 310,
     "get_decision_log": 310,
+    # The dual-layer planner tools, added 2026-10-05. Measured 161 / 424 on the wire; the ceilings
+    # sit a little over so a reworded sentence fits but the prose they replaced cannot come back.
+    "get_planner_briefing": 250,
+    "update_play_strategy": 550,
     # `get_available_actions`, `get_raw_game_state`, and `health_check` have no row: they were
     # already one line each before the trim, so their pre-trim cost (167 / 151 / 134) is lower than
     # any ceiling worth writing. `DEFAULT_TOOL_BUDGET` plus the guided envelope cover them.

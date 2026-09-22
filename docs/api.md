@@ -1801,6 +1801,37 @@ Invoke-RestMethod -Uri 'http://127.0.0.1:8080/teammate/control' -Method POST -Co
 
 ---
 
+## `GET /strategy` 与 `POST /strategy`
+
+双层决策模式（dual-layer）的策略面。开启后由 TypeSafe Jev 模型逐动作执行，LLM 只做战略规划；这两条路由是外部规划器（planner）读取与调整 Jev 当前所遵循策略的入口。游戏内规划器与外部 MCP 客户端写的是同一个 `StrategyStore`，因此两条路径是同一种体验。
+
+- 鉴权：仅 loopback（非本机 403 `local_only`），与其他本机控制端点同级
+- `GET /strategy` 响应 `data.strategy`（当前策略：`posture` / `instructions` / `option_hints` / `updated_at` / `source`）、`data.dual_layer`（本实例的双层开关状态，host 读单人开关、companion 读多人开关）、`data.jev_configured`（Jev 的 base URL 与 key 是否已配齐）
+- `POST /strategy` 请求体 `{"strategy": {...}}`（或直接是策略对象）；`posture` / `instructions` / `option_hints` 均可选，省略的字段保留当前值。`source` 会被记为 `mcp`、`updated_at` 记为当前时间。策略对象无法解析时返回 400 `invalid_request`
+- 策略字段约定：`posture` 是整体倾向（如 `aggressive` / `defensive` / `balanced`）；`instructions` 是长期指导，**不要**点名具体卡牌下标或目标——它们每帧都变；`option_hints` 是按选项类别的微调
+
+### `GET /strategy` 响应示例
+
+```json
+{
+  "ok": true,
+  "request_id": "req_20261005_101500_0001_7",
+  "data": {
+    "strategy": {
+      "posture": "balanced",
+      "instructions": "优先格挡，血量低于 30% 时转防守。",
+      "option_hints": {},
+      "updated_at": "2026-10-05T10:15:00.0000000+08:00",
+      "source": "mcp"
+    },
+    "dual_layer": true,
+    "jev_configured": true
+  }
+}
+```
+
+---
+
 ## `POST /companion/control` 与 `POST /companion/message`
 
 AI 队友实例上的受控端点，由宿主进程在本地调用，普通玩家窗口不使用。

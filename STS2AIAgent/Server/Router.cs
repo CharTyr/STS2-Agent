@@ -233,6 +233,74 @@ internal static class Router
                 return;
             }
 
+            // The dual-layer strategy surface. An external planner reads the current strategy and a
+            // briefing here, and writes a new one back; the in-game planner uses the same store, so the
+            // two paths steer the same Jev decider. Local-only, like the other control routes.
+            if (request.HttpMethod == "GET" && request.Url?.AbsolutePath == "/strategy")
+            {
+                if (!request.IsLocal)
+                {
+                    throw new ApiException(403, "local_only", "The play strategy is only available on loopback.");
+                }
+
+                var current = AgentRuntime.Instance.CurrentStrategy;
+                await WriteJsonAsync(response, 200, new
+                {
+                    ok = true,
+                    request_id = requestId,
+                    data = new
+                    {
+                        strategy = JsonSerializer.Deserialize<JsonElement>(current.ToJson()),
+                        dual_layer = InstanceRole.IsCompanion
+                            ? AgentRuntime.Instance.Settings.DualLayerCoopEnabled
+                            : AgentRuntime.Instance.Settings.DualLayerSoloEnabled,
+                        jev_configured = AgentRuntime.Instance.Settings.HasJevConfigured()
+                    }
+                });
+                statusCode = 200;
+                return;
+            }
+
+            if (request.HttpMethod == "POST" && request.Url?.AbsolutePath == "/strategy")
+            {
+                if (!request.IsLocal)
+                {
+                    throw new ApiException(403, "local_only", "The play strategy is only available on loopback.");
+                }
+
+                if (request.ContentLength64 < 0 || request.ContentLength64 > 16000)
+                {
+                    throw new ApiException(400, "invalid_request", "A bounded JSON body is required.");
+                }
+
+                var body = await ReadJsonBodyAsync<JsonElement>(request, cancellationToken);
+                var strategyJson = body.ValueKind == JsonValueKind.Object && body.TryGetProperty("strategy", out var nested)
+                    ? nested.GetRawText()
+                    : body.GetRawText();
+                var strategy = PlayStrategy.TryParse(strategyJson);
+                if (strategy == null)
+                {
+                    throw new ApiException(400, "invalid_request", "strategy must be a JSON object with posture/instructions/option_hints.");
+                }
+
+                AgentRuntime.Instance.UpdatePlayStrategy(strategy with
+                {
+                    UpdatedAt = DateTimeOffset.UtcNow.ToString("O"),
+                    Source = "mcp"
+                });
+                await WriteJsonAsync(response, 200, new
+                {
+                    ok = true,
+                    request_id = requestId,
+                    data = new
+                    {
+                        strategy = JsonSerializer.Deserialize<JsonElement>(AgentRuntime.Instance.CurrentStrategy.ToJson())
+                    }
+                });
+                statusCode = 200;
+                return;
+            }
+
             if (IsMcpPath(request.Url?.AbsolutePath))
             {
                 var mcp = NativeMcpServer.Runtime;

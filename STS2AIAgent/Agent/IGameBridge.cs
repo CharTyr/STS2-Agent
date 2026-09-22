@@ -93,6 +93,13 @@ internal sealed class AgentTurnResult
     public LlmUsage? Usage { get; init; }
 
     public int RequestsSpent { get; init; }
+
+    /// <summary>
+    /// The execution model's confidence in the action it took, when the dual-layer path drove this
+    /// turn. Null on the plain LLM path, so "the LLM decided" and "Jev decided at low confidence" are
+    /// never the same shape.
+    /// </summary>
+    public double? Confidence { get; init; }
 }
 
 internal sealed class ChatTurn
