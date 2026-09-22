@@ -2065,6 +2065,15 @@
         },
         "type": "object"
       },
+      "McpControlResponseData": {
+        "additionalProperties": true,
+        "properties": {
+          "mcp_enabled": {
+            "type": "boolean"
+          }
+        },
+        "type": "object"
+      },
       "McpOpaqueRequest": {
         "additionalProperties": true,
         "description": "MCP Streamable HTTP JSON-RPC request. Native MCP owns its schema."
@@ -3607,6 +3616,55 @@
       "x-sts2-aliases": [
         "/mcp/"
       ]
+    },
+    "/mcp/control": {
+      "post": {
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SessionControlRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ApiSuccessEnvelope"
+                    },
+                    {
+                      "properties": {
+                        "data": {
+                          "$ref": "#/components/schemas/McpControlResponseData"
+                        }
+                      },
+                      "type": "object"
+                    }
+                  ]
+                }
+              }
+            },
+            "description": "Successful response."
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorEnvelope"
+                }
+              }
+            },
+            "description": "The normal HTTP error envelope."
+          }
+        },
+        "summary": "Enable or disable native MCP without restarting the game."
+      }
     },
     "/session/control": {
       "post": {
