@@ -40,6 +40,21 @@ If you cannot call tools, reply with a single JSON object and nothing else:
 Omit unused parameters; keep "reason" -- it is shown to the player. Do not wrap the JSON in markdown.
 """;
 
+    /// <summary>
+    /// The reply-language instruction for a settings value ("auto" / "zh" / "en"). "auto" adds
+    /// nothing: the chat system prompt already asks the model to follow the player's language, and
+    /// an empty instruction keeps the static prompt prefix byte-identical for the prefix cache.
+    /// </summary>
+    public static string ReplyLanguageInstruction(string? language)
+    {
+        return language switch
+        {
+            "zh" => "Always reply in Simplified Chinese (简体中文), including the reason you give for each action.",
+            "en" => "Always reply in English, including the reason you give for each action.",
+            _ => string.Empty
+        };
+    }
+
     public static string PlayContract { get; } = ExtractSharedContract(ReadEmbedded("STS2AIAgent.Sts2McpPlayer.Skill.md"));
 
     /// <summary>

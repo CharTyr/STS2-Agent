@@ -22,6 +22,12 @@ internal static class OverlayLayoutContractTests
     private const string Settings = "STS2AIAgent/Ui/AgentOverlayHost.Settings.cs";
 
     /// <summary>
+    /// The conversation card, its turn rendering and its scroll: split out of the pages file once the
+    /// chat stream started carrying reasoning and actions of its own.
+    /// </summary>
+    private const string ChatCard = "STS2AIAgent/Ui/AgentOverlayHost.ChatCard.cs";
+
+    /// <summary>
     /// Save must not live inside the scrolling form.
     /// </summary>
     /// <remarks>
@@ -148,18 +154,26 @@ internal static class OverlayLayoutContractTests
     /// The compose controls are a fixed cost against a panel that is 72% of the viewport. Three
     /// checkboxes sprawled one per row plus a tall editor was most of a third of the page spent on
     /// flags a player sets once, at the message log's expense. They share rows instead.
+    ///
+    /// The card moved to its own file when the conversation became the decision flow; the contract
+    /// follows it rather than reading a file that no longer declares it.
     /// </remarks>
     public static void ChatFooterKeepsItsHeightForMessages()
     {
-        var source = AgentSourceFixture.Read(Pages);
+        var source = AgentSourceFixture.Read(ChatCard);
         var card = AgentSourceFixture.MethodBody(source, "BuildChatCard");
 
         Assert.Contains("UiFactory.Row(_attachState, _attachShot)", card);
-        Assert.Contains("UiFactory.Row(_allowAct, _showThinking)", card);
+        Assert.Contains("column.AddChild(_showThinking);", card);
         Assert.False(
-            card.Contains("column.AddChild(_allowAct);", StringComparison.Ordinal),
-            "The play-for-me switch is back on its own row in the conversation card.");
+            card.Contains("UiFactory.Row(_showThinking", StringComparison.Ordinal),
+            "The reasoning switch is back in a row of its own; the flags share rows.");
         Assert.Contains("UiFactory.Multiline(\"\", 52)", card);
+        // The "let the AI act" switch is gone: acting is the auto-play and single-step controls' job,
+        // and a message that asks for a move is what releases one turn.
+        Assert.False(
+            card.Contains("_allowAct", StringComparison.Ordinal),
+            "The play-for-me switch is back in the conversation card.");
     }
 
     /// <summary>
@@ -301,7 +315,6 @@ internal static class OverlayLayoutContractTests
                      // a usage sentence or a model reason and sets the row width if it cannot wrap.
                      (pages, "_playStatus = UiFactory.Wrapped(", Pages),
                      (pages, "_playSummary = UiFactory.Wrapped(", Pages),
-                     (pages, "_playThought = UiFactory.Wrapped(", Pages),
                      (pages, "_decisionUsage = UiFactory.Wrapped(", Pages),
                      (pages, "_decisionRunSpend = UiFactory.Wrapped(", Pages)
                  })

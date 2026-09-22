@@ -40,6 +40,8 @@
     <Compile Include="..\STS2AIAgent\Llm\*.cs" Link="Llm\%(Filename)%(Extension)" />
     <Compile Include="..\STS2AIAgent\Agent\AgentLoop.cs" Link="Agent\AgentLoop.cs" />
     <Compile Include="..\STS2AIAgent\Agent\AgentLoop.Arguments.cs" Link="Agent\AgentLoop.Arguments.cs" />
+    <Compile Include="..\STS2AIAgent\Agent\AgentLoop.Probes.cs" Link="Agent\AgentLoop.Probes.cs" />
+    <Compile Include="..\STS2AIAgent\Agent\PlayPhases.cs" Link="Agent\PlayPhases.cs" />
     <Compile Include="..\STS2AIAgent\Agent\AgentTurnCanceledException.cs" Link="Agent\AgentTurnCanceledException.cs" />
     <Compile Include="..\STS2AIAgent\Agent\CompletionErrors.cs" Link="Agent\CompletionErrors.cs" />
     <Compile Include="..\STS2AIAgent\Agent\ContextCompaction.cs" Link="Agent\ContextCompaction.cs" />

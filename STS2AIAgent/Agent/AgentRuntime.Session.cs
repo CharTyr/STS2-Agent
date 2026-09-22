@@ -145,10 +145,10 @@ internal sealed partial class AgentRuntime
             _sessionDirty = false;
             if (record != null)
             {
-                _history.Clear();
+                ResetHistoryLocked();
                 if (record.Chat != null)
                 {
-                    _history.AddRange(record.Chat.TakeLast(80));
+                    _history.AddRange(record.Chat.TakeLast(ChatHistoryLimit));
                 }
 
                 _restoredDecisions = record.Decisions;
@@ -160,7 +160,7 @@ internal sealed partial class AgentRuntime
             else
             {
                 // A fresh run starts with an empty conversation and no restored memory.
-                _history.Clear();
+                ResetHistoryLocked();
                 _restoredDecisions = null;
             }
         }

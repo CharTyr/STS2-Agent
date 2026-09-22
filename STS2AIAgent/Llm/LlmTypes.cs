@@ -7,11 +7,18 @@ internal interface ILlmClient
     Task<LlmCompletion> CompleteAsync(LlmRequest request, CancellationToken cancellationToken);
 
     Task<string> PingAsync(string model, CancellationToken cancellationToken);
+
+    /// <summary>
+    /// Verifies the model actually calls tools, not just answers chat: sends a trivial request whose
+    /// only sensible answer is calling the offered tool, and returns true when a tool call comes
+    /// back. A model that cannot play this mod fails here even when the ping passed.
+    /// </summary>
+    Task<bool> ProbeToolCallingAsync(string model, CancellationToken cancellationToken);
 }
 
 internal interface ILlmClientFactory
 {
-    ILlmClient Create(LlmEndpoint endpoint);
+    ILlmClient Create(LlmEndpoint endpoint, TimeSpan? requestTimeout = null);
 }
 
 internal sealed class DefaultLlmClientFactory : ILlmClientFactory
@@ -21,9 +28,9 @@ internal sealed class DefaultLlmClientFactory : ILlmClientFactory
         Timeout = TimeSpan.FromMinutes(11)
     };
 
-    public ILlmClient Create(LlmEndpoint endpoint)
+    public ILlmClient Create(LlmEndpoint endpoint, TimeSpan? requestTimeout = null)
     {
-        return new OpenAiCompatibleClient(endpoint, httpClient: SharedHttp);
+        return new OpenAiCompatibleClient(endpoint, httpClient: SharedHttp, requestTimeout: requestTimeout);
     }
 }
 

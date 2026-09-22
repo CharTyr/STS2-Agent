@@ -355,8 +355,8 @@ internal sealed partial class AgentOverlayHost
         _settingsLoadNotice = UiFactory.Wrapped(FormatSettingsNotice(), 12);
         _settingsBody.AddChild(_settingsLoadNotice);
         AddSettingsSection("first-run", Loc.T("首次配置"));
-        _settingsBody.AddChild(UiFactory.Wrapped(Loc.T("添加端点 → 添加模型并绑定 → 选择对话/游玩用途 → 测试连接 → 保存。通过后再去「AI 队友」从主菜单邀请。默认网址和模型名不算已经可用。")));
-        _testNotice = UiFactory.Wrapped(Loc.T("测试连接会向配置的服务发送测试请求。对话通过不等于游玩已通过。本地服务可以留空 API Key。"), 12);
+        _settingsBody.AddChild(UiFactory.Wrapped(Loc.T("四步上手：① 在「端点」填接口地址和 Key（本地 Ollama / LM Studio 可留空 Key）→ ② 在「模型」添加模型并绑定端点 → ③ 点模型卡片上的「测试」做一次真实调用（含工具调用检测），通过会显示 ✅ → ④ 在「模型绑定」选主模型并保存。然后切到「游玩」页点「开始自动游玩」。想玩双人：游玩页顶部切到「多人」，邀请 AI 队友。")));
+        _testNotice = UiFactory.Wrapped(Loc.T("「测试」是对该模型的真实调用：先连通，再验证它会不会调用工具——不会调用工具的模型无法自动游玩。页脚的「测试连接」测的是当前主模型。"), 12);
         _settingsBody.AddChild(_testNotice);
         _conversationTest = UiFactory.Wrapped(ModelRoleProbe.FormatLine(firstRun.Conversation), 12);
         _playTest = UiFactory.Wrapped(ModelRoleProbe.FormatLine(firstRun.Play), 12);
@@ -405,16 +405,10 @@ internal sealed partial class AgentOverlayHost
             _settingsBody.AddChild(BuildModelCard(settings.Models[i], i, settings));
         }
 
-        AddSettingsSection("bindings", Loc.T("角色绑定"));
+        AddSettingsSection("bindings", Loc.T("模型绑定"));
         _conversationCombo = FillModelCombo(settings, settings.ConversationModelId, includeEmpty: false);
-        _playCombo = FillModelCombo(settings, settings.PlayModelId, includeEmpty: true);
-        _visionCombo = FillModelCombo(settings, settings.VisionModelId, includeEmpty: true);
-        _settingsBody.AddChild(Labeled(Loc.T("主对话模型"), _conversationCombo));
-        _settingsBody.AddChild(Labeled(Loc.T("游玩模型（可空=主对话）"), _playCombo));
-        _settingsBody.AddChild(Labeled(Loc.T("外挂视觉模型（可空）"), _visionCombo));
+        _settingsBody.AddChild(Labeled(Loc.T("主模型（对话与游玩）"), _conversationCombo));
         WatchCombo(_conversationCombo);
-        WatchCombo(_playCombo);
-        WatchCombo(_visionCombo);
         _showAdvanced = UiFactory.Check(Loc.T("显示高级选项"), _showAdvancedValue);
         _showAdvanced.Toggled += on =>
         {
@@ -425,6 +419,9 @@ internal sealed partial class AgentOverlayHost
         _settingsBody.AddChild(_showAdvanced);
         if (_showAdvancedValue)
         {
+            _visionCombo = FillModelCombo(settings, settings.VisionModelId, includeEmpty: true);
+            _settingsBody.AddChild(Labeled(Loc.T("外挂视觉模型（可空）"), _visionCombo));
+            WatchCombo(_visionCombo);
             _settingsBody.AddChild(UiFactory.Wrapped(Loc.T("视觉可选。不勾选「视觉」、不配外挂视觉时，仍用 compact 状态与工具打完全部内容。"), 11));
             _hotkeyEdit = UiFactory.Line(settings.Hotkey, "F8");
             WatchLine(_hotkeyEdit);
@@ -435,6 +432,10 @@ internal sealed partial class AgentOverlayHost
             WatchLine(_maxRequestsEdit);
             _settingsBody.AddChild(Labeled(Loc.T("会话 Token 上限"), _maxTokensEdit));
             _settingsBody.AddChild(Labeled(Loc.T("会话请求上限"), _maxRequestsEdit));
+            _llmTimeoutEdit = UiFactory.Line(settings.LlmRequestTimeoutSeconds?.ToString() ?? "", Loc.T("默认 600 秒"));
+            WatchLine(_llmTimeoutEdit);
+            _settingsBody.AddChild(Labeled(Loc.T("单次请求超时（秒）"), _llmTimeoutEdit));
+            _settingsBody.AddChild(UiFactory.Wrapped(Loc.T("服务商长时间不应答时按此时长报错，而不是一直转圈。"), 11));
             _budgetHint = UiFactory.Wrapped(_budgetInputError ?? Loc.T("非法预算输入会保留原来的安全上限，不会静默变成不限。"), 11);
             _settingsBody.AddChild(_budgetHint);
             _settingsBody.AddChild(UiFactory.Wrapped(Loc.T("预算护栏：达到上限时优雅停止自动游玩并提示，避免意外耗尽额度。"), 11));
@@ -460,9 +461,11 @@ internal sealed partial class AgentOverlayHost
         }
         else
         {
+            _visionCombo = null;
             _hotkeyEdit = null;
             _maxTokensEdit = null;
             _maxRequestsEdit = null;
+            _llmTimeoutEdit = null;
             _budgetHint = null;
             _settingsResetStatsButton = null;
             _proactiveChatToggle = null;
@@ -624,9 +627,7 @@ internal sealed partial class AgentOverlayHost
         WatchCombo(endpointCombo);
 
         var vision = UiFactory.Check(Loc.T("视觉"), model.SupportsVision);
-        var tools = UiFactory.Check(Loc.T("工具调用"), model.SupportsTools);
         WatchCheck(vision);
-        WatchCheck(tools);
         var thinkingMode = UiFactory.Combo();
         foreach (var item in new[] { "auto", "reasoning_effort", "deepseek", "prompt" })
         {
@@ -646,18 +647,208 @@ internal sealed partial class AgentOverlayHost
         var contextWindow = UiFactory.Line(model.ContextWindow?.ToString() ?? "", Loc.T("默认 256000"));
         WatchLine(contextWindow);
         var remove = UiFactory.Button(Loc.T("删除"), () => RemoveModel(index));
+
+        // The per-model test: a real ping plus a real tool-calling probe, and the badge beside it is
+        // the recorded verdict for exactly this endpoint+model+key. The badge lives on the card
+        // because "which model is proven" is the question the player asks while looking at the card,
+        // not while reading a summary paragraph at the top of the page.
+        var testButton = UiFactory.Button(Loc.T("测试"), () => _ = TestModelFromUiAsync(model.Id), UiFactory.ButtonKind.Ghost);
+        var badge = UiFactory.Wrapped(ModelTestBadgeText(model.Id), UiFactory.FontCaption);
         column.AddChild(UiFactory.Row(display, remove));
         column.AddChild(UiFactory.Row(modelName, endpointCombo));
+        column.AddChild(UiFactory.Row(testButton));
+        column.AddChild(badge);
         if (_showAdvancedValue)
         {
-            column.AddChild(UiFactory.Row(vision, tools));
+            column.AddChild(UiFactory.Row(vision));
             column.AddChild(Labeled(Loc.T("思考方式"), thinkingMode));
             column.AddChild(Labeled(Loc.T("思考强度"), thinkingIntensity));
             column.AddChild(Labeled(Loc.T("上下文窗口"), contextWindow));
         }
         box.AddChild(column);
-        _modelEditors.Add(new ModelEditors(model.Id, display, modelName, endpointCombo, vision, tools, thinkingMode, thinkingIntensity, contextWindow));
+        _modelEditors.Add(new ModelEditors(model.Id, display, modelName, endpointCombo, vision, thinkingMode, thinkingIntensity, contextWindow));
         return box;
+    }
+
+    /// <summary>The badge line under a model card: the recorded verdict, or the nudge to test.</summary>
+    private string ModelTestBadgeText(string modelId)
+    {
+        var record = AgentRuntime.Instance.ModelTestFor(modelId);
+        if (record == null)
+        {
+            return Loc.T("⚪ 未测试。点「测试」做一次真实调用（含工具调用检测）。");
+        }
+
+        if (!AgentRuntime.Instance.IsModelVerified(modelId))
+        {
+            return record.Status == "verified"
+                ? Loc.T("⚪ 配置已修改，需重新测试。")
+                : Loc.T("⚪ 未测试。点「测试」做一次真实调用（含工具调用检测）。");
+        }
+
+        return record.Tools == "supported"
+            ? Loc.T("✅ 已验证 · 工具调用可用（{0}）", ShortTime(record.TestedAt))
+            : Loc.T("⚠️ 已连通，但工具调用不可用——该模型无法自动游玩（{0}）", ShortTime(record.TestedAt));
+    }
+
+    private static string ShortTime(string? iso)
+    {
+        return DateTimeOffset.TryParse(iso, out var at) ? at.ToLocalTime().ToString("HH:mm") : "";
+    }
+
+    private async Task TestModelFromUiAsync(string modelId)
+    {
+        // Harvest first so the test runs against what the player sees, not the last saved copy.
+        SaveSettingsFromUi();
+        SetSaveStatus(Loc.T("正在测试模型…"));
+        var result = await AgentRuntime.Instance.TestModelAsync(modelId, CancellationToken.None);
+        SetSaveStatus(result);
+        RebuildSettingsForm();
+    }
+
+    /// <summary>The settings page's state line: reused for the per-model test's progress.</summary>
+    private void SetSaveStatus(string text)
+    {
+        if (_saveStatus != null)
+        {
+            _saveStatus.Text = text;
+        }
+    }
+
+    /// <summary>
+    /// Reads every editor on the settings form into a fresh settings clone. Lives beside the form
+    /// that builds those editors: a field added to the form without a harvest line here is a setting
+    /// that silently never saves, and the two belong in one file so that mistake is visible.
+    /// </summary>
+    private AgentSettings HarvestSettings()
+    {
+        var current = CloneSettings(AgentRuntime.Instance.Settings);
+        for (var i = 0; i < Math.Min(current.Endpoints.Count, _endpointEditors.Count); i++)
+        {
+            var editor = _endpointEditors[i];
+            var endpoint = current.Endpoints[i];
+            endpoint.Name = editor.Name.Text.Trim();
+            endpoint.BaseUrl = editor.Url.Text.Trim();
+            endpoint.ApiKey = editor.Key.Text;
+            endpoint.Enabled = editor.Enabled.ButtonPressed;
+        }
+
+        for (var i = 0; i < Math.Min(current.Models.Count, _modelEditors.Count); i++)
+        {
+            var editor = _modelEditors[i];
+            var model = current.Models[i];
+            model.DisplayName = editor.Display.Text.Trim();
+            model.Model = editor.ModelName.Text.Trim();
+            model.SupportsVision = editor.Vision.ButtonPressed;
+            // SupportsTools is not harvested from a checkbox anymore: the per-model test's
+            // tool-calling probe is the authority, and a hand tick could claim a capability the
+            // provider does not have.
+            model.ThinkingMode = SelectedText(editor.ThinkingMode);
+            model.ThinkingIntensity = SelectedText(editor.ThinkingIntensity);
+            model.ContextWindow = int.TryParse(editor.ContextWindow.Text.Trim(), out var contextWindow) && contextWindow > 0
+                ? contextWindow
+                : null;
+            if (editor.Endpoint.Selected >= 0)
+            {
+                model.EndpointId = editor.Endpoint.GetItemMetadata(editor.Endpoint.Selected).AsString();
+            }
+        }
+
+        if (_conversationCombo != null)
+        {
+            current.ConversationModelId = EmptyToNull(SelectedMetadata(_conversationCombo));
+        }
+
+        // One main model plays and chats: the play-role combo is gone from the page, and the stored
+        // PlayModelId is cleared so the runtime's fallback (play = conversation) is the only rule.
+        current.PlayModelId = null;
+
+        if (_visionCombo != null)
+        {
+            current.VisionModelId = EmptyToNull(SelectedMetadata(_visionCombo));
+        }
+        current.ThinkingIntensity = current.FindModel(current.ConversationModelId)?.ThinkingIntensity
+            ?? current.ThinkingIntensity;
+        if (_hotkeyEdit != null)
+        {
+            current.Hotkey = _hotkeyEdit.Text.Trim() is { Length: > 0 } hotkey ? hotkey : "F8";
+        }
+
+        if (_proactiveChatToggle != null)
+        {
+            current.ProactiveChatEnabled = _proactiveChatToggle.ButtonPressed;
+        }
+
+        if (_companionChoiceToggle != null)
+        {
+            current.CompanionAutoSelectCharacter = !_companionChoiceToggle.ButtonPressed;
+        }
+
+        if (_proactiveToneCombo != null)
+        {
+            current.ProactiveChatTone = ProactiveChatTones.Normalize(SelectedMetadata(_proactiveToneCombo));
+        }
+
+        // The swatch grid keeps the selection in a field rather than in a control: the tile that was
+        // clicked is freed by the rebuild that follows it. Normalised on the way in, so an id this
+        // build does not know cannot be written back out and leave the next start choosing between a
+        // stored value and a drawn one.
+        current.OverlayTheme = OverlayThemeCatalog.Normalize(SelectedTheme);
+
+        current.AttachStateInChat = _attachState?.ButtonPressed ?? true;
+        current.AttachScreenshotInChat = _attachShot?.ButtonPressed ?? false;
+        current.McpEnabled = _mcpToggle?.ButtonPressed ?? current.McpEnabled;
+        _budgetInputError = null;
+        if (_maxTokensEdit != null || _maxRequestsEdit != null)
+        {
+            if (!SessionBudgetLimits.TryHarvestBudget(
+                    current,
+                    _maxTokensEdit?.Text,
+                    _maxRequestsEdit?.Text,
+                    out var budgetError))
+            {
+                _budgetInputError = budgetError;
+            }
+        }
+
+        if (_llmTimeoutEdit != null)
+        {
+            current.LlmRequestTimeoutSeconds =
+                int.TryParse(_llmTimeoutEdit.Text.Trim(), out var seconds) && seconds > 0
+                    ? seconds
+                    : null;
+        }
+
+        ModelRoleProbe.InvalidateMismatched(current);
+
+        if (_jevBaseUrlEdit != null)
+        {
+            current.JevBaseUrl = _jevBaseUrlEdit.Text.Trim();
+        }
+
+        if (_jevApiKeyEdit != null)
+        {
+            current.JevApiKey = _jevApiKeyEdit.Text.Trim();
+        }
+
+        if (_jevModelEdit != null)
+        {
+            current.JevModel = _jevModelEdit.Text.Trim();
+        }
+
+        if (_jevThresholdEdit != null &&
+            double.TryParse(_jevThresholdEdit.Text.Trim(), out var threshold))
+        {
+            current.JevConfidenceThreshold = threshold;
+        }
+
+        return current;
+    }
+
+    private static AgentSettings CloneSettings(AgentSettings source)
+    {
+        // The copy lives in Config so the executable test project can cover it.
+        return SettingsClone.Clone(source);
     }
 
     private static Control Labeled(string label, Control child)

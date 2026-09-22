@@ -834,6 +834,12 @@ internal static class TestRunner
         yield return ("OverlayLayout.ChromeIsTagged", () => Task.Run(OverlayLayoutContractTests.OverlayChromeIsTaggedForRepaint));
         yield return ("OverlayLayout.SwatchUsesChildNodes", () => Task.Run(OverlayLayoutContractTests.SwatchPreviewUsesChildNodes));
         yield return ("OverlayLayout.JumpLandsAtTop", () => Task.Run(OverlayLayoutContractTests.JumpingToASectionPutsItAtTheTop));
+        yield return ("OverlayChat.TurnsCarryReasoningAndAction", () => Task.Run(OverlayChatStreamContractTests.ReasoningAndActionsBecomeConversationTurns));
+        yield return ("OverlayChat.OneCapForMemoryDiskAndLog", () => Task.Run(OverlayChatStreamContractTests.OneCapForMemoryDiskAndTheLog));
+        yield return ("OverlayChat.EachRoleDrawnAndFollowsNewest", () => Task.Run(OverlayChatStreamContractTests.TheLogDrawsEachRoleAndFollowsTheNewest));
+        yield return ("OverlayChat.ThrowingBlockCannotFreeze", () => Task.Run(OverlayChatStreamContractTests.AThrowingBlockCannotFreezeTheConversation));
+        yield return ("OverlayChat.NoActSwitch", () => Task.Run(OverlayChatStreamContractTests.TheConversationHasNoActSwitch));
+        yield return ("OverlayChat.JevPanelReadings", () => Task.Run(OverlayChatStreamContractTests.TheJevPanelShowsWhatJevChose));
         yield return ("ActionGate.FirstActionOwnsIt", () => Task.Run(ActionExecutionGateTests.AFreshGateAdmitsTheFirstAction));
         yield return ("ActionGate.ConcurrentRefused", () => Task.Run(ActionExecutionGateTests.AHeldGateRefusesTheSecondActionImmediately));
         yield return ("ActionGate.HeldAcrossAwait", ActionExecutionGateTests.TheLeaseIsHeldUntilTheAwaitedCoreTaskCompletes);

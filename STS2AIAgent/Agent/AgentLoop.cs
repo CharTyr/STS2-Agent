@@ -70,6 +70,12 @@ internal sealed partial class AgentLoop
         var settings = _settings();
         var resolved = options.TeammateConversation ? settings.ResolvePlayModel() : settings.ResolveConversationModel();
         var system = options.TeammateConversation ? PlayPrompt.TeammateChatSystem : PlayPrompt.ChatSystem;
+        var languageInstruction = PlayPrompt.ReplyLanguageInstruction(settings.ReplyLanguage);
+        if (languageInstruction.Length > 0)
+        {
+            system += Environment.NewLine + languageInstruction;
+        }
+
         if (!string.IsNullOrWhiteSpace(options.ExtraSystemInstruction))
         {
             system += Environment.NewLine + options.ExtraSystemInstruction.Trim();
@@ -80,7 +86,10 @@ internal sealed partial class AgentLoop
             LlmMessage.System(system)
         };
 
-        foreach (var turn in history.TakeLast(12))
+        // The conversation stream carries display-only turns as well -- the reasoning and the action a
+        // turn took, drawn as their own bubbles. They have roles no provider accepts, so only the two
+        // conversational roles are replayed; the rest exist for the page that renders them.
+        foreach (var turn in history.Where(turn => turn.Role is "user" or "assistant").TakeLast(12))
         {
             messages.Add(new LlmMessage { Role = turn.Role, Content = turn.Text });
         }
@@ -104,9 +113,12 @@ internal sealed partial class AgentLoop
         screenshot = visionNote.AttachToPrimary ? visionNote.Jpeg : null;
         messages.Add(LlmMessage.User(userText, screenshot));
 
+        // There is no "act" switch in the overlay: the conversation is read-only unless the player's
+        // own words ask it to play. The explicit phrase is the whole opt-in, so a message that is not
+        // asking for a move never moves one.
         var allowAct = !options.TeammateConversation &&
             !options.ReadOnly &&
-            (options.AllowAct || PlayIntent.Detect(userText));
+            PlayIntent.Detect(userText);
         AppendJsonActFallbackIfNeeded(messages, resolved, allowAct);
         var tools = allowAct ? AgentTools.Play : AgentTools.ReadOnly;
         return await CompleteWithToolsAsync(
@@ -120,11 +132,13 @@ internal sealed partial class AgentLoop
             initialRequests: visionNote.RequestsSpent);
     }
 
-    public async Task<AgentTurnResult> PlayOnceAsync(CancellationToken cancellationToken, Action<string>? checkState = null)
+    public async Task<AgentTurnResult> PlayOnceAsync(CancellationToken cancellationToken, Action<string>? checkState = null, Action<string>? reportPhase = null)
     {
+        reportPhase?.Invoke(PlayPhases.ReadingState);
         if (checkState != null) checkState(await _bridge.GetCompactStateJsonAsync(cancellationToken));
         var settings = _settings();
         var resolved = settings.ResolvePlayModel();
+        reportPhase?.Invoke(PlayPhases.WaitingForGame);
         var actionable = await _bridge.WaitUntilActionableAsync(TimeSpan.FromSeconds(20), cancellationToken);
         if (!actionable)
         {
@@ -152,6 +166,7 @@ internal sealed partial class AgentLoop
             : settings.DualLayerSoloEnabled;
         if (dualLayerOn && ResolveDecider() is { } decider && _strategyStore is { } store)
         {
+            reportPhase?.Invoke(PlayPhases.AskingJev);
             var jevTurn = await TryDecideWithJevAsync(decider, store, cancellationToken, checkState);
             if (jevTurn != null)
             {
@@ -159,6 +174,7 @@ internal sealed partial class AgentLoop
             }
         }
 
+        reportPhase?.Invoke(PlayPhases.RequestingModel);
         // Order is the cache contract: everything that does not change between two decisions on the
         // same screen comes first, and only this step's state and the instruction it answers come
         // last. The state used to sit at index 1, which invalidated every message after it on every
@@ -173,6 +189,14 @@ internal sealed partial class AgentLoop
             LlmMessage.System(
                 "Playbook for the screen in the latest state (" + screenLabel + "):\n" + PlayPrompt.PlaybookGuidance(screen))
         };
+
+        // The reply-language choice rides the static prefix: it changes only when the player changes
+        // the setting, so it never invalidates the per-step cache the way a state-bearing line would.
+        var playLanguage = PlayPrompt.ReplyLanguageInstruction(settings.ReplyLanguage);
+        if (playLanguage.Length > 0)
+        {
+            messages.Add(LlmMessage.System(playLanguage));
+        }
 
         var screenGuidance = PlayPrompt.ScreenGuidance(screen);
         if (!string.IsNullOrEmpty(screenGuidance))
@@ -273,6 +297,7 @@ internal sealed partial class AgentLoop
             Usage = decision.Usage,
             RequestsSpent = decision.RequestsSpent,
             Confidence = decision.Confidence,
+            Probabilities = decision.Probabilities,
             ToolRounds = 0
         };
     }
@@ -321,7 +346,7 @@ internal sealed partial class AgentLoop
 
             try
             {
-                var client = _factory.Create(resolved.Endpoint);
+                var client = CreateClient(resolved.Endpoint);
                 await client.PingAsync(resolved.Model.Model, cancellationToken);
                 cancellationToken.ThrowIfCancellationRequested();
                 var record = ModelRoleProbe.FromSuccess(role, resolved);
@@ -406,7 +431,7 @@ internal sealed partial class AgentLoop
 
         try
         {
-            var client = _factory.Create(resolved.Endpoint);
+            var client = CreateClient(resolved.Endpoint);
             for (var round = 0; round < MaxToolRounds; round++)
             {
                 cancellationToken.ThrowIfCancellationRequested();
@@ -696,7 +721,7 @@ internal sealed partial class AgentLoop
         try
         {
             cancellationToken.ThrowIfCancellationRequested();
-            var client = _factory.Create(vision.Endpoint);
+            var client = CreateClient(vision.Endpoint);
             visionRequests = 1;
             var completion = await client.CompleteAsync(new LlmRequest
             {

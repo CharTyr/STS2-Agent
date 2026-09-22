@@ -42,8 +42,10 @@ internal static class AgentTurnIntegrityTests
     {
         var bridge = new Bridge { FailPostActionRead = true };
         var client = new Client(Act(), Act(), new LlmCompletion { Content = "done" });
-        var result = await Loop(bridge, client).ChatAsync("play", Array.Empty<ChatTurn>(),
-            new ChatOptions { AllowAct = true }, CancellationToken.None);
+        // The message itself is the opt-in: with no act switch left on the conversation, a turn only
+        // reaches the act tool when the player's own words ask for it.
+        var result = await Loop(bridge, client).ChatAsync("帮我打这回合", Array.Empty<ChatTurn>(),
+            new ChatOptions(), CancellationToken.None);
         Assert.Equal(1, bridge.ActCalls);
         Assert.Equal("play_card", result.Acted);
     }
@@ -516,8 +518,9 @@ internal static class AgentTurnIntegrityTests
         public int Calls { get; private set; }
         public Action<int>? OnRequest { get; init; }
         public List<LlmRequest> Requests { get; } = new();
-        public ILlmClient Create(LlmEndpoint endpoint) => this;
+        public ILlmClient Create(LlmEndpoint endpoint, TimeSpan? requestTimeout = null) => this;
         public Task<string> PingAsync(string model, CancellationToken token) => throw new InvalidOperationException("No real provider calls.");
+        public Task<bool> ProbeToolCallingAsync(string model, CancellationToken token) => Task.FromResult(true);
         public Task<LlmCompletion> CompleteAsync(LlmRequest request, CancellationToken token)
         {
             token.ThrowIfCancellationRequested();

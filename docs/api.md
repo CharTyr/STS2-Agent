@@ -2152,12 +2152,12 @@ Python sidecar 另加 `event_id`、`event_options` 与 `guidance_source`：它�
 
 - **前提**：`screen = "REWARD"`（`reward.rewards[]` 中有可领取项，或已处于卡牌奖励子界面）
 - **参数**（两者都可省略）
-  - `option_index`：`-1` 跳过卡牌奖励；`0/1/2...` 选择对应位置的卡牌；缺省为自动（第一张）
+  - `option_index`：`-1` 跳过卡牌奖励；`0/1/2...` 选择对应位置的卡牌（索引对应 `reward.card_options[]`）；**缺省时不再自动选牌**——遇到卡牌选择会停下并返回 `pending`，由调用方决策
   - `card_index`：`option_index` 的向后兼容别名，语义相同
-- **行为**：与 `collect_rewards_and_proceed` 共用同一套奖励推进流程；显式选择只作用于本次调用遇到的第一处卡牌奖励选择，同一次调用内后续卡牌奖励按自动（第一张）处理
-- **稳定条件**：奖励流程结束或界面切换
+- **行为**：与 `collect_rewards_and_proceed` 共用同一套奖励推进流程；显式选择只作用于本次调用遇到的第一处卡牌奖励选择。未携带选择时，流程在卡牌选择界面停下（`reward.pending_card_choice = true`），返回 `pending`——卡牌是构筑决策，不再由 Mod 代取第一张
+- **稳定条件**：奖励流程结束、界面切换，或停在卡牌选择界面等待决策
 - **超时**：20 秒
-- **重试语义**：显式选择属于**携带它的那一次调用**。若本次调用返回 `pending`，用相同参数重试 `resolve_rewards` 会重新携带该选择；若改用 `collect_rewards_and_proceed` 重试，卡牌奖励按**自动（第一张）**处理，显式选择不会跨调用保留
+- **重试语义**：显式选择属于**携带它的那一次调用**。若本次调用返回 `pending`，用相同参数重试 `resolve_rewards` 会重新携带该选择；不带选择重试（或改用 `collect_rewards_and_proceed`）会再次停在卡牌选择处，不会自动取牌
 
 ```json
 {
@@ -2225,10 +2225,10 @@ Python sidecar 另加 `event_id`、`event_options` 与 `guidance_source`：它�
 - **参数**：无
 - **行为**：
   1. 逐个领取可领取的奖励（跳过无空位的药水）
-  2. 遇到卡牌选择时**自动选择第一张**
-  3. 点击继续按钮
+  2. 遇到卡牌选择时**停下并返回 `pending`**（`reward.pending_card_choice = true`），由调用方用 `choose_reward_card` / `skip_reward_cards` 决策——不再自动选择第一张
+  3. 无卡牌决策待处理时点击继续按钮
 - **超时**：20 秒
-- **注意**：适合无人值守推进。如需精确控制构筑决策，请用 `claim_reward` + `choose_reward_card` / `skip_reward_cards` 组合
+- **注意**：适合无人值守推进非卡牌奖励。卡牌选择是构筑决策，需用 `choose_reward_card` / `skip_reward_cards` 或带 `option_index` 的 `resolve_rewards` 显式做出
 
 ```
 请求: { "action": "collect_rewards_and_proceed" }
@@ -2509,7 +2509,8 @@ Python sidecar 另加 `event_id`、`event_options` 与 `guidance_source`：它�
 
 ```
 1. GET /state                          → screen=REWARD
-2a. POST /action { collect_rewards_and_proceed }  → 自动收取（简单模式）
+2a. POST /action { collect_rewards_and_proceed }  → 收取非卡牌奖励；若有卡牌选择会停在选牌界面（pending_card_choice=true）
+    POST /action { choose_reward_card, option_index=2 }  → 按构筑决策选卡（或 skip_reward_cards 跳过）
 --- 或 ---
 2b. POST /action { claim_reward, option_index=0 }  → 手动领取金币
     POST /action { claim_reward, option_index=1 }  → 点击卡牌奖励

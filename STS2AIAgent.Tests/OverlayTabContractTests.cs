@@ -29,6 +29,9 @@ internal static class OverlayTabContractTests
         var baseFile = AgentSourceFixture.Read("STS2AIAgent/Ui/AgentOverlayHost.cs");
         var tabs = AgentSourceFixture.Read("STS2AIAgent/Ui/AgentOverlayHost.Tabs.cs");
         var pages = AgentSourceFixture.Read("STS2AIAgent/Ui/AgentOverlayHost.Pages.cs");
+        // The conversation card moved again when the chat stream started carrying the turn's own
+        // reasoning and action: it is the one card with a rendering loop of its own.
+        var chatCard = AgentSourceFixture.Read("STS2AIAgent/Ui/AgentOverlayHost.ChatCard.cs");
 
         Assert.Contains("private Control BuildTabs()", tabs);
         Assert.Contains("private void ShowTab(string tab)", tabs);
@@ -36,7 +39,7 @@ internal static class OverlayTabContractTests
         // it dispatches to live with the other pages.
         Assert.Contains("private Control BuildPageForTab(string tab)", tabs);
         Assert.Contains("private Control BuildPlayPage()", pages);
-        Assert.Contains("private Control BuildChatCard()", pages);
+        Assert.Contains("private Control BuildChatCard()", chatCard);
         Assert.Contains("private void RefreshDynamic()", pages);
 
         Assert.False(

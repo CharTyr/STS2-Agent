@@ -465,10 +465,9 @@ internal sealed partial class AgentRuntime
         string text,
         bool attachState,
         bool attachScreenshot,
-        bool allowAct,
         CancellationToken cancellationToken)
     {
-        return Task.Run(() => SendChatCoreAsync(text, attachState, attachScreenshot, allowAct, cancellationToken), cancellationToken);
+        return Task.Run(() => SendChatCoreAsync(text, attachState, attachScreenshot, cancellationToken), cancellationToken);
     }
 
     public Task<string> TestConnectionAsync(CancellationToken cancellationToken)
@@ -601,21 +600,10 @@ internal sealed partial class AgentRuntime
         return TryContinueDualInstanceAsync(settings, companionAutoPlay, cancellationToken) ?? Task.CompletedTask;
     }
 
-    public void ClearChat()
-    {
-        lock (_gate)
-        {
-            _history.Clear();
-        }
-
-        RaiseChanged();
-    }
-
     private async Task SendChatCoreAsync(
         string text,
         bool attachState,
         bool attachScreenshot,
-        bool allowAct,
         CancellationToken cancellationToken)
     {
         text = text.Trim();
@@ -658,8 +646,7 @@ internal sealed partial class AgentRuntime
                 new ChatOptions
                 {
                     AttachState = attachState,
-                    AttachScreenshot = attachScreenshot,
-                    AllowAct = allowAct
+                    AttachScreenshot = attachScreenshot
                 },
                 cancellationToken);
                 RecordTurnReceipt(result, recordBudget: true);
@@ -677,6 +664,7 @@ internal sealed partial class AgentRuntime
             var reply = result.Error != null
                 ? result.Error
                 : string.IsNullOrWhiteSpace(result.AssistantText) ? Loc.T("(无文本回复)") : result.AssistantText;
+            AppendTurnTraces(result);
             AddHistory("assistant", reply);
             _lastThought = result.Reasoning ?? reply;
             if (!string.IsNullOrWhiteSpace(result.Acted))
@@ -991,7 +979,11 @@ internal sealed partial class AgentRuntime
                     }
 
                     SetRequestingModelStatus();
-                    var turn = await _loop.PlayOnceAsync(token, boundary.Check);
+                    var turn = await _loop.PlayOnceAsync(token, boundary.Check, SetPlayPhase);
+                    // Feed the strategy planner the turn's context: the screen/phase the snapshot
+                    // saw and the confidence the Jev path reported (null on the LLM path). The
+                    // planner decides for itself whether this context deserves a replan.
+                    ObserveStrategyContext(snapshot.Item1, snapshot.Item2, turn.Confidence);
                     return turn;
                 }
                 finally
@@ -1287,22 +1279,6 @@ internal sealed partial class AgentRuntime
         }
     }
 
-    private void AddHistory(string role, string text)
-    {
-        lock (_gate)
-        {
-            _history.Add(new ChatTurn { Role = role, Text = text });
-            if (_history.Count > 80)
-            {
-                _history.RemoveRange(0, _history.Count - 80);
-            }
-
-            _sessionDirty = true;
-        }
-
-        RaiseChanged();
-    }
-
     private void AppendLog(string line)
     {
         Log.Info($"{LogPrefix} {line}");
@@ -1324,6 +1300,42 @@ internal sealed partial class AgentRuntime
         _status = Loc.T("正在请求模型…");
         _requestingModelStatus = true;
         RaiseChanged();
+    }
+
+    /// <summary>When the current in-flight phase started, so the status line can show elapsed time.</summary>
+    private DateTimeOffset _phaseStartedAt;
+
+    /// <summary>
+    /// Reports which stage of a turn the loop is in ("reading state", "waiting for the game",
+    /// "requesting the model", "asking Jev", "executing the action"). A turn is a chain of waits
+    /// that each used to leave the status line on the previous stage's text -- or on "requesting
+    /// the model" for the whole turn -- so a stall was indistinguishable from a slow answer. The
+    /// elapsed suffix makes a stuck stage visible as a growing counter rather than frozen text.
+    /// </summary>
+    private void SetPlayPhase(string phase)
+    {
+        _phaseStartedAt = DateTimeOffset.UtcNow;
+        _status = phase;
+        _requestingModelStatus = true;
+        RaiseChanged();
+    }
+
+    /// <summary>The status text with the current phase's elapsed time appended while a turn runs.</summary>
+    public string StatusWithElapsed
+    {
+        get
+        {
+            var status = Status;
+            if (!_requestingModelStatus || _phaseStartedAt == default)
+            {
+                return status;
+            }
+
+            var elapsed = DateTimeOffset.UtcNow - _phaseStartedAt;
+            return elapsed.TotalSeconds < 2
+                ? status
+                : Loc.T("{0}（已等待 {1} 秒）", status, (int)elapsed.TotalSeconds);
+        }
     }
 
     private void RaiseChanged()

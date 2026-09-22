@@ -111,6 +111,8 @@ internal static partial class Loc
             "{0} identical actions in a row left the state unchanged, so auto-play stopped. Review the current situation, then resume manually: {1}";
         map["连续 {0} 次动作已执行但界面一直没有稳定，已停止自动游玩。检查当前局面后可手动继续：{1}"] =
             "{0} actions in a row were executed, but the game never settled, so auto-play stopped. Review the current situation, then resume manually: {1}";
+        map["连续等待游戏可操作超过 {0} 次仍未恢复，已停止自动游玩。游戏可能停在需要手动处理的界面；处理后可手动继续。"] =
+            "Waited for an actionable state more than {0} times in a row without recovery, so auto-play stopped. The game may be sitting on a screen that needs a human; continue manually once it is handled.";
 
         // Agent/CurrentRunBoundary.cs (constants stay Chinese; wrapped at the throw site)
         map["当前局已离开，自动游玩已停止。开始另一局需要手动继续。"] =

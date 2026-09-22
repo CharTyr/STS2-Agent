@@ -27,6 +27,78 @@ internal sealed partial class AgentRuntime
     public PlayStrategy CurrentStrategy => _strategyStore.Current;
 
     /// <summary>
+    /// The slow half of the dual-layer engine, wired to the same store the decider reads. Created
+    /// once with the runtime; its cadence guard makes a turn cheap unless the context changed or
+    /// Jev has been unsure for a streak.
+    /// </summary>
+    private StrategyPlanner? _strategyPlanner;
+    private int _strategyRefreshInFlight;
+
+    private StrategyPlanner Planner => _strategyPlanner ??= new StrategyPlanner(
+        new DefaultLlmClientFactory(),
+        () =>
+        {
+            lock (_gate)
+            {
+                return _settings;
+            }
+        },
+        _strategyStore);
+
+    /// <summary>
+    /// Feeds one finished turn to the planner: the screen/act context key and the Jev confidence.
+    /// When the planner decides a replan is due, it runs in the background -- the play loop never
+    /// waits for a strategy, and the decider keeps the previous one until the new plan lands.
+    /// </summary>
+    private void ObserveStrategyContext(string? screen, string? act, double? confidence)
+    {
+        bool dualLayerOn;
+        double threshold;
+        lock (_gate)
+        {
+            dualLayerOn = InstanceRole.IsCompanion ? _settings.DualLayerCoopEnabled : _settings.DualLayerSoloEnabled;
+            threshold = _settings.JevConfidenceThreshold;
+        }
+
+        if (!dualLayerOn || ResolveJevDecider() == null)
+        {
+            return;
+        }
+
+        var contextKey = (screen ?? "UNKNOWN") + "|" + (act ?? "");
+        if (!Planner.ShouldRefresh(contextKey, confidence, threshold))
+        {
+            return;
+        }
+
+        if (Interlocked.CompareExchange(ref _strategyRefreshInFlight, 1, 0) != 0)
+        {
+            return;
+        }
+
+        _ = Task.Run(async () =>
+        {
+            try
+            {
+                var summary = await _loop.DescribeCurrentStateForPlanningAsync(_lifetime.Token);
+                var adopted = await Planner.RefreshAsync(summary, _lifetime.Token);
+                NoteEvent(adopted ? "strategy refreshed by planner" : "strategy refresh produced no new plan");
+            }
+            catch (OperationCanceledException)
+            {
+            }
+            catch (Exception ex)
+            {
+                NoteEvent("strategy refresh failed: " + DiagnosticExport.Redact(ex.Message));
+            }
+            finally
+            {
+                Interlocked.Exchange(ref _strategyRefreshInFlight, 0);
+            }
+        });
+    }
+
+    /// <summary>
     /// Builds the Jev execution decider when the configuration is complete enough to call Jev, or null
     /// when it is not -- a missing key or base URL leaves the loop on the plain LLM path rather than
     /// constructing a client that can only fail.
@@ -44,7 +116,10 @@ internal sealed partial class AgentRuntime
             return null;
         }
 
-        var client = new JevClient(settings.JevBaseUrl, settings.JevApiKey, settings.JevModel);
+        // The per-request timeout is configurable: five minutes suits a batch job, but a play turn
+        // that stalls should fail visibly in about a minute and a half, not hold the loop silently.
+        var timeout = settings.JevRequestTimeoutSeconds is > 0 ? TimeSpan.FromSeconds(settings.JevRequestTimeoutSeconds.Value) : (TimeSpan?)null;
+        var client = new JevClient(settings.JevBaseUrl, settings.JevApiKey, settings.JevModel, requestTimeout: timeout);
         return new JevExecutionDecider(client, settings.JevModel);
     }
 
@@ -64,7 +139,7 @@ internal sealed partial class AgentRuntime
         lock (_gate)
         {
             var fingerprint = _settings.HasJevConfigured()
-                ? string.Join('\n', _settings.JevBaseUrl, _settings.JevApiKey, _settings.JevModel)
+                ? string.Join('\n', _settings.JevBaseUrl, _settings.JevApiKey, _settings.JevModel, _settings.JevRequestTimeoutSeconds?.ToString() ?? "")
                 : string.Empty;
             if (fingerprint == _jevDeciderFingerprint)
             {

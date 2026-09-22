@@ -111,6 +111,50 @@ internal sealed class OpenAiCompatibleClient : ILlmClient
         return string.IsNullOrWhiteSpace(completion.Content) ? "ok" : completion.Content.Trim();
     }
 
+    public async Task<bool> ProbeToolCallingAsync(string model, CancellationToken cancellationToken)
+    {
+        // A minimal tool whose call is the only sensible answer. tool_choice "required" is part of
+        // the probe: a provider that silently ignores the whole tools array fails here even though
+        // its plain chat ping passed, which is exactly the model that cannot play.
+        var body = new Dictionary<string, object?>
+        {
+            ["model"] = model,
+            ["messages"] = new[]
+            {
+                new ChatMessageDto { Role = "user", Content = "Call the report_ready tool now. Do not answer with text." }
+            },
+            ["tools"] = new[]
+            {
+                ToToolDto(new LlmTool
+                {
+                    Name = "report_ready",
+                    Description = "Report that the model is ready. Call this tool instead of answering with text.",
+                    Parameters = new
+                    {
+                        type = "object",
+                        properties = new Dictionary<string, object?>
+                        {
+                            ["note"] = new { type = "string", description = "A short readiness note." }
+                        }
+                    }
+                })
+            },
+            ["tool_choice"] = "required",
+            ["max_tokens"] = 128
+        };
+
+        try
+        {
+            var completion = await SendCompletionAsync(body, stream: false, cancellationToken);
+            return completion.ToolCalls.Count > 0;
+        }
+        catch (LlmException)
+        {
+            // A 400 about tools/tool_choice is itself the answer: this endpoint cannot do tools.
+            return false;
+        }
+    }
+
     public static string ResolveCompletionsUrl(string baseUrl)
     {
         var trimmed = (baseUrl ?? string.Empty).Trim().TrimEnd('/');

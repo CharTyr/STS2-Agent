@@ -13,6 +13,14 @@ internal static partial class Loc
         map["已暂停自动游玩"] = "Auto-play paused";
         map["正在暂停，等待当前任务完成…"] = "Pausing; waiting for the current task to finish…";
         map["正在请求模型…"] = "Requesting the model…";
+        // The per-stage turn phases (Agent/PlayPhases.cs).
+        map["正在读取游戏状态…"] = "Reading the game state…";
+        map["正在等待游戏可操作…"] = "Waiting for the game to become actionable…";
+        map["正在请求 Jev 执行层…"] = "Asking the Jev execution layer…";
+        map["正在执行动作…"] = "Executing the action…";
+        // The elapsed-time suffix the status line grows while a turn sits in one stage
+        // (Agent/AgentRuntime.cs, StatusWithElapsed).
+        map["{0}（已等待 {1} 秒）"] = "{0} (waiting {1}s)";
         map["已执行 {0}"] = "Executed {0}";
         map["等待游戏可操作"] = "Waiting for the game";
         map["等待可操作状态"] = "Waiting for an actionable state";
@@ -26,6 +34,15 @@ internal static partial class Loc
         map["Jev 配置已就绪（{0}）。连接测试将随双层决策引擎一同提供。"] =
             "Jev is configured ({0}). A live connection test ships with the dual-layer engine.";
         map["Jev 连接失败：{0}"] = "Jev connection failed: {0}";
+        // The per-model connection test (Agent/AgentRuntime.ModelTest.cs).
+        map["找不到该模型。"] = "That model could not be found.";
+        map["该模型绑定的端点不可用。"] = "The endpoint this model is bound to is unavailable.";
+        map["连通成功，工具调用可用。"] = "Connected, and tool calling works.";
+        map["连通成功，但该模型未通过工具调用检测，无法用于自动游玩。"] =
+            "Connected, but the model failed the tool-calling probe and cannot play automatically.";
+        map["测试失败：{0}"] = "Test failed: {0}";
+        // The Jev panel's reading of the last dual-layer turn (Agent/AgentRuntime.Accounting.cs).
+        map["置信度 {0}%"] = "Confidence {0}%";
 
         // Continue a saved co-op run (Multiplayer/DualInstanceCoordinator.cs, Game/GameActionService.cs).
         map["请先回到主菜单，再继续联机对局。"] = "Return to the main menu before continuing the co-op run.";
