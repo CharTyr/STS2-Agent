@@ -100,7 +100,8 @@ internal sealed partial class AgentRuntime
                     return _budgetGuard;
                 }
             },
-            () => _decisions.Snapshot(40),
+            // The memory provider prefers a continued run's restored decisions over the live log.
+            RecentDecisionsForMemory,
             () =>
             {
                 lock (_gate)
@@ -267,29 +268,6 @@ internal sealed partial class AgentRuntime
     /// <summary>What the current run has cost so far, or the whole log when no run is known yet.</summary>
     public RunSpend CurrentRunSpend() => _decisions.Spend(_runBoundary.RunId);
 
-    internal DecisionLogEntry RecordDecision(
-        string source,
-        string action,
-        string? reason = null,
-        string? stateFingerprint = null,
-        int requestsSpent = 0,
-        int? totalTokens = null,
-        string? runId = null,
-        double? confidence = null)
-    {
-        return _decisions.Record(
-            source,
-            action,
-            reason,
-            stateFingerprint,
-            requestsSpent,
-            totalTokens,
-            // The caller may know the run (the HTTP route and the native MCP tool both do); when it
-            // does not, the boundary's observation is the best available answer.
-            runId: runId ?? _runBoundary.RunId,
-            confidence: confidence);
-    }
-
     public LlmUsage SessionUsage
     {
         get { lock (_gate) return _sessionUsage; }
@@ -384,6 +362,7 @@ internal sealed partial class AgentRuntime
     public void Shutdown()
     {
         StopAutoPlay();
+        FlushSessionIfDirty();
         NativeMcpServer.Runtime?.SetEnabled(false, McpEndpointUrl());
         try
         {
@@ -540,6 +519,7 @@ internal sealed partial class AgentRuntime
     {
         if (InstanceRole.IsCompanion) _companionAutoStartSuppressed = true;
         var task = _playSession.RequestPause();
+        FlushSessionIfDirty();
         SetStatus(task.IsCompleted ? Loc.T("已暂停自动游玩") : Loc.T("正在暂停，等待当前任务完成…"));
         NoteEvent(Status);
     }
@@ -1000,6 +980,8 @@ internal sealed partial class AgentRuntime
                     // "entered a run" flag that makes a return to the menu a stop. Starting auto-play
                     // is what installs a fresh boundary (see StartAutoPlay).
                     boundary.Check(snapshot.Item1, snapshot.Item2, snapshot.Item3);
+                    // Reconcile the persisted session with the run the boundary now reports.
+                    ObserveSessionRunBoundary(boundary.RunId);
                     moment = ObserveProactiveMoment(snapshot.Item1, snapshot.Item4);
                     var immediate = await TryCompanionImmediateAsync(token);
                     if (immediate != null)
@@ -1313,6 +1295,8 @@ internal sealed partial class AgentRuntime
             {
                 _history.RemoveRange(0, _history.Count - 80);
             }
+
+            _sessionDirty = true;
         }
 
         RaiseChanged();

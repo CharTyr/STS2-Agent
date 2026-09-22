@@ -284,6 +284,17 @@ internal static class TestRunner
         yield return ("JevLogic.EnumerateNoArgFallback", () => Task.Run(JevAgentLogicTests.Enumerate_NoArgFallbackScreenYieldsSingleOptions));
         yield return ("JevLogic.EnumerateCapsAt255", () => Task.Run(JevAgentLogicTests.Enumerate_CapsAt255WithCardPlaysFirst));
         yield return ("JevLogic.EnumerateMalformedSafe", () => Task.Run(JevAgentLogicTests.Enumerate_MalformedInputDoesNotThrow));
+        // Per-run play-session persistence.
+        yield return ("Session.RoundTrips", () => Task.Run(PlaySessionStoreTests.SaveThenLoadRoundTripsEveryField));
+        yield return ("Session.LoadMissingIsNull", () => Task.Run(PlaySessionStoreTests.LoadReturnsNullWhenNoSessionExists));
+        yield return ("Session.RunUnknownNotPersisted", () => Task.Run(PlaySessionStoreTests.RunUnknownIsNeverPersisted));
+        yield return ("Session.IsolatedByRunId", () => Task.Run(PlaySessionStoreTests.SessionsAreIsolatedByRunId));
+        yield return ("Session.CorruptRestoresBackup", () => Task.Run(PlaySessionStoreTests.CorruptFileIsMovedAsideAndBackupRestored));
+        yield return ("Session.CorruptNoBackupIsNull", () => Task.Run(PlaySessionStoreTests.CorruptFileWithoutBackupYieldsNullNotThrow));
+        yield return ("Session.ChatTrimmedToCap", () => Task.Run(PlaySessionStoreTests.ChatIsTrimmedToTheCapKeepingNewest));
+        yield return ("Session.RedactsSecrets", () => Task.Run(PlaySessionStoreTests.SecretsInChatTextAreRedactedBeforeDisk));
+        yield return ("Session.Delete", () => Task.Run(PlaySessionStoreTests.DeleteRemovesTheSession));
+        yield return ("Session.RunIdPathSafe", () => Task.Run(PlaySessionStoreTests.RunIdWithPathSeparatorsCannotEscapeTheDirectory));
         yield return ("Budget.NoLimit", () => Task.Run(SessionBudgetGuardTests.NoLimit_NeverStops));
         yield return ("Budget.MaxTokens", () => Task.Run(SessionBudgetGuardTests.MaxTokens_StopsWhenExceeded));
         yield return ("Budget.MaxRequests", () => Task.Run(SessionBudgetGuardTests.MaxRequests_StopsEvenWithoutUsage));

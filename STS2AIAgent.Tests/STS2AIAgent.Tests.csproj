@@ -64,6 +64,8 @@
     <Compile Include="..\STS2AIAgent\Agent\JevOptionEnumerator.cs" Link="Agent\JevOptionEnumerator.cs" />
     <Compile Include="..\STS2AIAgent\Agent\StrategyPlanner.cs" Link="Agent\StrategyPlanner.cs" />
     <Compile Include="..\STS2AIAgent\Agent\JevExecutionDecider.cs" Link="Agent\JevExecutionDecider.cs" />
+    <Compile Include="..\STS2AIAgent\Agent\PlaySessionRecord.cs" Link="Agent\PlaySessionRecord.cs" />
+    <Compile Include="..\STS2AIAgent\Agent\PlaySessionStore.cs" Link="Agent\PlaySessionStore.cs" />
     <!--
       A glob, not one file: NativeMcpServer is a partial class (transport in the base file, tool
       execution in NativeMcpServer.Tools.cs). Naming the base file alone compiled the class without

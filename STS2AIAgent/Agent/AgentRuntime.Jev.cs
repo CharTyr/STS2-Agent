@@ -70,6 +70,7 @@ internal sealed partial class AgentRuntime
     public void UpdatePlayStrategy(PlayStrategy strategy)
     {
         _strategyStore.Update(strategy);
+        MarkSessionDirty();
         RaiseChanged();
     }
 

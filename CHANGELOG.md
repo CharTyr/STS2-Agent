@@ -4,6 +4,14 @@
 
 ## Unreleased
 
+- **A run's conversation and decision context now survive "continue game".** Each run's play session
+  (the chat history, the recent-decision memory the loop compacts from, and the dual-layer play
+  strategy) is persisted to a per-run file under `sessions/` beside the settings, written atomically
+  with a last-good backup. Continuing a saved run restores all three: the chat repaints, the decision
+  memory resumes, and Jev resumes its strategy. Switching models keeps the context (it is bound to the
+  run, not the model), a new run starts a fresh session, and the placeholder pre-run state is never
+  persisted. Persistence is best-effort — a corrupt or unwritable file never blocks play — and chat
+  text is redacted before it reaches disk so a pasted API key cannot be written out.
 - **Dual-layer decision mode (Jev + LLM planner).** A new per-mode toggle (single-player and
   co-op each have their own) hands the actual clicking to the TypeSafe Jev fast model while the
   LLM only plans strategy. When enabled and Jev is configured (base URL + API key in Settings),
