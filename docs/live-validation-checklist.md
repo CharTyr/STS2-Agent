@@ -19,9 +19,16 @@ autoplay resumed.
   `76561198420578597` stayed byte-identical around the Act 1 clear: 184 files, aggregate SHA256
   `6E79BB6957AE0BB07679DC85F2B42C10D54B6C1135355F0BC09BFAA87329D22C` before and after.
 
-Still open on this candidate: Act 2 and Act 3 completion, Vision attached to a live turn, the Steam
-two-instance path, `BESTIARY`, the remaining mechanic-matrix samples, and a typed teammate signal
-over the wire.
+The external Python client can read that same live process without taking the seat. `Sts2Client`
+pointed at `http://127.0.0.1:18080` returned `play_phase=running`, floor 24, Act 1,
+`boss_id=THE_INSATIABLE_BOSS`, HP 37/87, and the live action list `end_turn, play_card,
+save_and_quit`. It also read the latest accepted decision (`play_card`) and did not call `act`.
+The in-process `/mcp` endpoint stayed disabled, so this is the sidecar client path, not the native
+MCP socket. Evidence: `build/validation-2026-09-22/external-readonly.json` (gitignored).
+
+Still open on this candidate: Act 2 and Act 3 completion, an external agent playing a full run
+through `act`, Vision attached to a live turn, the Steam two-instance path, `BESTIARY`, the
+remaining mechanic-matrix samples, and a typed teammate signal over the wire.
 
 
 
