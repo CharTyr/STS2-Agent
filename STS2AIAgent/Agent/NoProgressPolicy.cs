@@ -25,6 +25,13 @@ internal static class NoProgressPolicy
     public const int UnsettledLimit = 5;
 
     /// <summary>
+    /// How many consecutive provider-limited thinking completions may be retried. They are normal
+    /// thinking progress rather than generic model failures, but repeating the same capped request
+    /// forever would burn an uncapped session.
+    /// </summary>
+    public const int ReasoningBudgetLimit = 5;
+
+    /// <summary>
     /// True when the latest successful action repeats the previous one <em>and</em> the state
     /// fingerprint did not move. A changed action or a changed state is progress. Missing data
     /// never counts as a repeat: a turn without a fingerprint cannot prove the game stood still.

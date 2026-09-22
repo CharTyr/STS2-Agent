@@ -375,6 +375,18 @@ internal static class OpenAiCompatibleClientTests
         Assert.Equal("length", completion.FinishReason);
     }
 
+    public static void ParseSsePayload_ReadsFinishReasonFromDeltaChoice()
+    {
+        const string payload = """
+        data: {"choices":[{"delta":{"reasoning_content":"deep thought"},"finish_reason":"length","index":0}]}
+        data: [DONE]
+        """;
+
+        var completion = OpenAiCompatibleClient.ParseSsePayload(payload);
+        Assert.Equal("deep thought", completion.Reasoning);
+        Assert.Equal("length", completion.FinishReason);
+    }
+
     public static void LlmUsage_CombineAndAdd()
     {
         var u1 = new LlmUsage { PromptTokens = 10, CompletionTokens = 5, TotalTokens = 15 };

@@ -67,6 +67,14 @@ internal sealed class AgentTurnResult
     public bool ExecutedUnsettled { get; init; }
 
     /// <summary>
+    /// The provider ended a normal thinking completion at its own output limit after emitting
+    /// reasoning but before any content or tool call. This is retryable model progress, not one of
+    /// the generic three-strike decision failures; the recovery policy still bounds consecutive
+    /// occurrences and every attempt remains subject to the session budget.
+    /// </summary>
+    public bool ReasoningBudgetExhausted { get; init; }
+
+    /// <summary>
     /// Fingerprint of the compact state observed right after the action, for the no-progress guard.
     /// Null when the turn executed nothing or no state could be read.
     /// </summary>

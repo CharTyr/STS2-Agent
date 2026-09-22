@@ -414,6 +414,7 @@ internal sealed class AgentLoop
                         Error = acted == null
                             ? (lastActError ?? CompletionErrors.Empty(completion, completion.Reasoning, rounds))
                             : null,
+                        ReasoningBudgetExhausted = acted == null && CompletionErrors.IsReasoningBudgetExhausted(completion),
                         StateFingerprint = actFingerprint,
                         ExecutedUnsettled = actUnsettled,
                         ToolRounds = rounds,

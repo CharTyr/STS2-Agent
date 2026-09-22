@@ -1085,14 +1085,31 @@ internal static class AgentLoopTests
 
     public static void CompletionErrors_ExplainsThinkingModelSilence()
     {
-        var sank = new LlmCompletion { Content = "", Reasoning = new string('x', 900), FinishReason = "length" };
-        var message = CompletionErrors.Empty(sank, null, 1);
+        var sunk = new LlmCompletion { Content = "", Reasoning = new string('x', 900), FinishReason = "length" };
+        var message = CompletionErrors.Empty(sunk, null, 1);
         Assert.NotNull(message);
         Assert.Contains("finish_reason=length", message!);
         Assert.Contains("reasoning_content", message);
+        Assert.True(CompletionErrors.IsReasoningBudgetExhausted(sunk));
+
+        Assert.False(CompletionErrors.IsReasoningBudgetExhausted(new LlmCompletion { Content = "", Reasoning = "", FinishReason = "length" }));
+        Assert.False(CompletionErrors.IsReasoningBudgetExhausted(new LlmCompletion { Content = "answer", Reasoning = "thought", FinishReason = "length" }));
+        Assert.False(CompletionErrors.IsReasoningBudgetExhausted(new LlmCompletion { Content = "", Reasoning = "thought", FinishReason = "stop" }));
 
         var silent = new LlmCompletion { Content = "", Reasoning = "", FinishReason = "stop" };
         Assert.NotNull(CompletionErrors.Empty(silent, null, 3));
+    }
+
+    public static async Task PlayOnce_MarksReasoningBudgetExhaustionForRecovery()
+    {
+        var factory = new ScriptedClientFactory(new[]
+        {
+            new LlmCompletion { Content = "", Reasoning = "I need to evaluate targets.", FinishReason = "length" }
+        });
+        var result = await new AgentLoop(new FakeBridge(), factory, AgentSettings.CreateDefault).PlayOnceAsync(CancellationToken.None);
+        Assert.True(result.ReasoningBudgetExhausted);
+        Assert.NotNull(result.Error);
+        Assert.Equal(1, result.RequestsSpent);
     }
 
     public static async Task ModelProbeStillReportsProviderFailure()
