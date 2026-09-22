@@ -25,6 +25,7 @@ internal static partial class Loc
         map["未配置 Jev Base URL。"] = "No Jev base URL configured.";
         map["Jev 配置已就绪（{0}）。连接测试将随双层决策引擎一同提供。"] =
             "Jev is configured ({0}). A live connection test ships with the dual-layer engine.";
+        map["Jev 连接失败：{0}"] = "Jev connection failed: {0}";
 
         // Continue a saved co-op run (Multiplayer/DualInstanceCoordinator.cs, Game/GameActionService.cs).
         map["请先回到主菜单，再继续联机对局。"] = "Return to the main menu before continuing the co-op run.";

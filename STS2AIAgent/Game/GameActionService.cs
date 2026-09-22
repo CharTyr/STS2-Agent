@@ -479,6 +479,16 @@ internal static partial class GameActionService
         var options = GameStateService.GetCardRewardOptions(cardRewardScreen);
         var resolution = RewardChoicePolicy.Resolve(choice.ConsumePendingChoice(), options.Count);
 
+        // A card reward is a deck-building decision, not a cleanup step: when the caller gave no
+        // explicit choice, the drain stops here with the selection screen still open instead of
+        // silently taking the first card. The state it returns carries reward.pending_card_choice
+        // = true, and the next decision picks choose_reward_card / skip_reward_cards on its own
+        // merits. Hands-off callers pass an explicit option_index (or -1 to skip).
+        if (resolution.Kind == RewardChoiceKind.Auto)
+        {
+            return false;
+        }
+
         // An explicit index missing from the live option list must fail instead of
         // silently falling back to the first option. "No choice given" with no options
         // yet keeps waiting, matching the documented auto behavior.

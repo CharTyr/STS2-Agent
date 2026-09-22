@@ -127,6 +127,15 @@ internal static class JevOptionEnumerator
                     continue;
                 }
 
+                // resolve_rewards is a flow macro, not a concrete pick: left bare it executes with no
+                // index and the game side takes the first card by default. Expand it over the card
+                // reward list so choosing it is a real deck-building decision, with an explicit skip.
+                if (string.Equals(name, "resolve_rewards", StringComparison.OrdinalIgnoreCase))
+                {
+                    ExpandResolveRewards(state, options);
+                    continue;
+                }
+
                 var needsSomething = descriptor.RequiresIndex
                     || descriptor.RequiresTarget
                     || descriptor.RequiresCoordinates
@@ -315,6 +324,46 @@ internal static class JevOptionEnumerator
         {
             AddOption(options, id: action, action: action, description: action);
         }
+    }
+
+    private static void ExpandResolveRewards(JsonElement state, List<JevOption> options)
+    {
+        // reward.cards is the card-reward list in the compact view; each entry carries i and line.
+        // When no card choice is pending the list is empty and the macro stays a single bare option
+        // (draining gold/relics/potions only, which has no card to decide).
+        if (TryGetProperty(state, "reward", out var reward) && TryGetArray(reward, "cards", out var cards))
+        {
+            var expanded = 0;
+            foreach (var card in cards.EnumerateArray())
+            {
+                if (card.ValueKind != JsonValueKind.Object || !TryReadIndex(card, out var index))
+                {
+                    continue;
+                }
+
+                expanded++;
+                var line = ReadItemLine(card);
+                AddOption(
+                    options,
+                    id: $"resolve_rewards:{index}",
+                    action: "resolve_rewards",
+                    description: string.IsNullOrEmpty(line) ? $"Take card {index} and finish rewards" : $"Take {line}",
+                    optionIndex: index);
+            }
+
+            if (expanded > 0)
+            {
+                AddOption(
+                    options,
+                    id: "resolve_rewards:skip",
+                    action: "resolve_rewards",
+                    description: "Skip the card reward and finish rewards",
+                    optionIndex: -1);
+                return;
+            }
+        }
+
+        AddOption(options, id: "resolve_rewards", action: "resolve_rewards", description: "resolve_rewards");
     }
 
     private static string TargetLabel(string line, int target, Dictionary<int, string> enemyNames)

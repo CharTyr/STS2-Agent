@@ -109,11 +109,12 @@ internal sealed partial class AgentRuntime
                     return _lastPromptTokens;
                 }
             },
-            // The dual-layer engine: the decider is injected whenever Jev is configured, and the loop's
-            // branch gates it on the live per-role toggle, so toggling the mode needs no rebuild. The
-            // store is the same instance the MCP route and the in-game planner write, which is what
-            // makes the overlay path and the MCP path one experience.
-            decider: BuildJevDecider(),
+            // The dual-layer engine: the decider is resolved live on every turn, because the Jev
+            // configuration typically appears after this runtime is constructed -- a decider captured
+            // here is frozen to the pre-settings state and the toggle never turns on. The store is
+            // the same instance the MCP route and the in-game planner write, which is what makes the
+            // overlay path and the MCP path one experience.
+            deciderProvider: ResolveJevDecider,
             strategyStore: _strategyStore,
             confidenceThreshold: () =>
             {

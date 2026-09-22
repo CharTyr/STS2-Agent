@@ -282,6 +282,8 @@ internal static class TestRunner
         yield return ("JevLogic.EnumerateMapNodes", () => Task.Run(JevAgentLogicTests.Enumerate_MapNodeOptions));
         yield return ("JevLogic.EnumerateSkipsLocks", () => Task.Run(JevAgentLogicTests.Enumerate_IndexedOptionsExpandTargetsAndSkipLocks));
         yield return ("JevLogic.EnumerateNoArgFallback", () => Task.Run(JevAgentLogicTests.Enumerate_NoArgFallbackScreenYieldsSingleOptions));
+        yield return ("JevLogic.EnumerateRewardCards", () => Task.Run(JevAgentLogicTests.Enumerate_RewardCardChoiceExpandsResolveRewards));
+        yield return ("JevLogic.EnumerateRewardNoCards", () => Task.Run(JevAgentLogicTests.Enumerate_RewardWithoutCardsKeepsBareMacro));
         yield return ("JevLogic.EnumerateCapsAt255", () => Task.Run(JevAgentLogicTests.Enumerate_CapsAt255WithCardPlaysFirst));
         yield return ("JevLogic.EnumerateMalformedSafe", () => Task.Run(JevAgentLogicTests.Enumerate_MalformedInputDoesNotThrow));
         // Per-run play-session persistence.
@@ -540,7 +542,7 @@ internal static class TestRunner
         yield return ("CrystalSettle.ScreenChange", () => Task.Run(CrystalSphereSettlePolicyTests.AcceptsChildScreenButNotMissingMinigame));
         yield return ("RewardChoice.ExplicitPick", () => Task.Run(RewardChoicePolicyTests.ExplicitIndexPicksThatOption));
         yield return ("RewardChoice.OutOfRange", () => Task.Run(RewardChoicePolicyTests.ExplicitOutOfRangeIndexIsInvalid));
-        yield return ("RewardChoice.AutoFirstCard", () => Task.Run(RewardChoicePolicyTests.MissingIndexKeepsFirstCardBehavior));
+        yield return ("RewardChoice.AutoFirstCard", () => Task.Run(RewardChoicePolicyTests.MissingIndexResolvesToTheAutomaticKind));
         yield return ("RewardChoice.SkipAnyCount", () => Task.Run(RewardChoicePolicyTests.SkipIsValidWithoutOptions));
         yield return ("RewardChoice.AutoWithoutOptions", () => Task.Run(RewardChoicePolicyTests.AutoWithoutOptionsIsNotAPick));
         yield return ("RewardFlowChoice.ExplicitChoiceSpentOnce", () => Task.Run(RewardFlowChoiceStateTests.ExplicitChoiceIsSpentOnce));
@@ -561,6 +563,7 @@ internal static class TestRunner
         yield return ("RewardChoiceThreading.NoStaticState", () => Task.Run(RewardChoiceThreadingContractTests.RewardChoiceIsNeverStaticState));
         yield return ("RewardChoiceThreading.DrainForwardsChoice", () => Task.Run(RewardChoiceThreadingContractTests.DrainTakesAndForwardsTheChoice));
         yield return ("RewardChoiceThreading.CollectAsksAuto", () => Task.Run(RewardChoiceThreadingContractTests.CollectRewardsAsksForTheAutomaticChoice));
+        yield return ("RewardChoiceThreading.AutoStopsAtCard", () => Task.Run(RewardChoiceThreadingContractTests.AutomaticChoiceStopsAtTheCardDecision));
         yield return ("MenuTransition.ModalNotExit", () => Task.Run(MenuTransitionPolicyTests.ABlockingModalIsNotAMenuExit));
         yield return ("MenuTransition.UnchangedScreen", () => Task.Run(MenuTransitionPolicyTests.UnchangedOrUnknownScreenIsNotAMenuExit));
         yield return ("MenuTransition.ModalNotEmbark", () => Task.Run(MenuTransitionPolicyTests.AModalDoesNotSettleASingleplayerEmbark));

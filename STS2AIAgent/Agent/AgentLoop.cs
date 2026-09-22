@@ -22,6 +22,7 @@ internal sealed partial class AgentLoop
     private readonly Func<IReadOnlyList<DecisionLogEntry>>? _recentDecisions;
     private readonly Func<int>? _lastPromptTokens;
     private readonly IActionDecider? _decider;
+    private readonly Func<IActionDecider?>? _deciderProvider;
     private readonly StrategyStore? _strategyStore;
     private readonly Func<double>? _confidenceThreshold;
 
@@ -35,7 +36,8 @@ internal sealed partial class AgentLoop
         Func<int>? lastPromptTokens = null,
         IActionDecider? decider = null,
         StrategyStore? strategyStore = null,
-        Func<double>? confidenceThreshold = null)
+        Func<double>? confidenceThreshold = null,
+        Func<IActionDecider?>? deciderProvider = null)
     {
         _bridge = bridge;
         _factory = factory;
@@ -47,6 +49,16 @@ internal sealed partial class AgentLoop
         _decider = decider;
         _strategyStore = strategyStore;
         _confidenceThreshold = confidenceThreshold;
+        // A live provider wins over the captured instance: the runtime constructs once, but the
+        // Jev configuration can appear after that, and a decider frozen at construction is the
+        // dual-layer toggle that never turns on.
+        _deciderProvider = deciderProvider;
+    }
+
+    /// <summary>The decider for this turn: the live provider's answer when wired, else the captured one.</summary>
+    private IActionDecider? ResolveDecider()
+    {
+        return _deciderProvider?.Invoke() ?? _decider;
     }
 
     public async Task<AgentTurnResult> ChatAsync(
@@ -138,7 +150,7 @@ internal sealed partial class AgentLoop
         var dualLayerOn = _teamContext != null
             ? settings.DualLayerCoopEnabled
             : settings.DualLayerSoloEnabled;
-        if (dualLayerOn && _decider is { } decider && _strategyStore is { } store)
+        if (dualLayerOn && ResolveDecider() is { } decider && _strategyStore is { } store)
         {
             var jevTurn = await TryDecideWithJevAsync(decider, store, cancellationToken, checkState);
             if (jevTurn != null)
@@ -378,7 +390,10 @@ internal sealed partial class AgentLoop
             acted = action;
             actResult = response;
             actUnsettled = true;
-            lastReasoning = reason ?? lastReasoning;
+            // The one-line reason the model put in the act arguments is a fallback, not an override:
+            // the provider's real reasoning_content is the thinking the player asked to see, and it
+            // must survive the act that followed it.
+            lastReasoning ??= reason;
         }
 
         AgentTurnResult Receipt() => new()
@@ -485,7 +500,10 @@ internal sealed partial class AgentLoop
                             (action, response) => RememberAccepted(action, response, fallbackReason));
                         if (parsedAct.Error == null)
                         {
-                            lastReasoning = fallbackReason ?? lastReasoning;
+                            // The provider's reasoning_content (already in lastReasoning from this
+                            // completion) is the thinking; the act-args reason only fills the gap
+                            // when the provider sent none.
+                            lastReasoning ??= fallbackReason;
                             acted = parsedAct.Action;
                             actResult = parsedAct.ResultJson;
                             actFingerprint = parsedAct.Fingerprint;
@@ -559,7 +577,8 @@ internal sealed partial class AgentLoop
                         messages.Add(LlmMessage.Tool(call.Id, actOutcome.ResultJson));
                         if (actOutcome.Error == null)
                         {
-                            lastReasoning = actReason ?? lastReasoning;
+                            // Real reasoning_content wins; the act-args reason is the fallback.
+                            lastReasoning ??= actReason;
                             acted = actOutcome.Action;
                             actResult = actOutcome.ResultJson;
                             actFingerprint = actOutcome.Fingerprint;

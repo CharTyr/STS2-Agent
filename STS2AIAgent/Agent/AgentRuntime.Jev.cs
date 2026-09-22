@@ -48,6 +48,35 @@ internal sealed partial class AgentRuntime
         return new JevExecutionDecider(client, settings.JevModel);
     }
 
+    /// <summary>The cached decider and the configuration fingerprint it was built from.</summary>
+    private IActionDecider? _jevDecider;
+    private string _jevDeciderFingerprint = string.Empty;
+
+    /// <summary>
+    /// The live decider the loop asks for on every turn. Building the decider once at construction
+    /// froze it to the configuration that existed before the player ever opened settings -- entering
+    /// the Jev key later left the dual-layer toggle permanently dead until a restart. Rebuilds only
+    /// when the Jev configuration fingerprint changes, so a turn that finds the same settings pays
+    /// one string comparison.
+    /// </summary>
+    private IActionDecider? ResolveJevDecider()
+    {
+        lock (_gate)
+        {
+            var fingerprint = _settings.HasJevConfigured()
+                ? string.Join('\n', _settings.JevBaseUrl, _settings.JevApiKey, _settings.JevModel)
+                : string.Empty;
+            if (fingerprint == _jevDeciderFingerprint)
+            {
+                return _jevDecider;
+            }
+
+            _jevDeciderFingerprint = fingerprint;
+            _jevDecider = fingerprint.Length == 0 ? null : BuildJevDecider();
+            return _jevDecider;
+        }
+    }
+
     /// <summary>
     /// The dual-layer status the MCP planner briefing reports: whether the mode is on for this
     /// instance's role, and whether the Jev configuration is complete. Read under the gate so a
@@ -75,23 +104,35 @@ internal sealed partial class AgentRuntime
     }
 
     /// <summary>
-    /// Validates the Jev execution-model configuration. The real round-trip ping lands with the Jev
-    /// engine (child task jev-two-layer-engine); until then this reports whether the configuration is
-    /// complete enough to use, so the settings page's test button is never a no-op.
+    /// Validates the Jev execution-model configuration with a real round trip: a configured client
+    /// pings <c>GET /v1/models</c> and the answer (or the classified failure) is what the settings
+    /// page shows.
     /// </summary>
-    public Task<string> TestJevConnectionAsync(CancellationToken cancellationToken)
+    public async Task<string> TestJevConnectionAsync(CancellationToken cancellationToken)
     {
         var settings = Settings;
         if (string.IsNullOrWhiteSpace(settings.JevApiKey))
         {
-            return Task.FromResult(Loc.T("未配置 Jev API Key。"));
+            return Loc.T("未配置 Jev API Key。");
         }
 
         if (string.IsNullOrWhiteSpace(settings.JevBaseUrl))
         {
-            return Task.FromResult(Loc.T("未配置 Jev Base URL。"));
+            return Loc.T("未配置 Jev Base URL。");
         }
 
-        return Task.FromResult(Loc.T("Jev 配置已就绪（{0}）。连接测试将随双层决策引擎一同提供。", settings.JevModel));
+        try
+        {
+            var client = new JevClient(settings.JevBaseUrl, settings.JevApiKey, settings.JevModel);
+            return await client.PingAsync(cancellationToken);
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch (Exception ex)
+        {
+            return Loc.T("Jev 连接失败：{0}", ex.Message);
+        }
     }
 }
