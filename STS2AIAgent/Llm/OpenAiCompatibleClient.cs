@@ -287,6 +287,13 @@ internal sealed class OpenAiCompatibleClient : ILlmClient
                 }
 
                 var choice = choices[0];
+                if (string.IsNullOrEmpty(finishReason) &&
+                    choice.TryGetProperty("finish_reason", out var finishElement) &&
+                    finishElement.ValueKind == JsonValueKind.String)
+                {
+                    finishReason = finishElement.GetString();
+                }
+
                 if (choice.TryGetProperty("delta", out var delta))
                 {
                     AccumulateDelta(delta, content, reasoning, toolCalls);

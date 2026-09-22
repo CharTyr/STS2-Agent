@@ -105,6 +105,8 @@ internal static partial class Loc
         map["模型未给出可执行动作"] = "The model did not return a usable action";
         map["连续 3 次决策未成功，已停止自动游玩。检查当前局面后可手动继续：{0}"] =
             "3 decisions in a row failed, so auto-play stopped. Review the current situation, then resume manually: {0}";
+        map["连续 {0} 次思考已耗尽模型输出预算而未给出动作，已停止自动游玩。降低思考强度或提高服务商输出预算后再继续。"] =
+            "Thinking used the model output budget {0} times in a row before an action was produced, so auto-play stopped. Lower thinking effort or raise the provider output budget, then resume.";
         map["连续 {0} 次重复同一个动作且状态没有变化，已停止自动游玩。检查当前局面后可手动继续：{1}"] =
             "{0} identical actions in a row left the state unchanged, so auto-play stopped. Review the current situation, then resume manually: {1}";
         map["连续 {0} 次动作已执行但界面一直没有稳定，已停止自动游玩。检查当前局面后可手动继续：{1}"] =

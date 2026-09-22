@@ -153,6 +153,9 @@ internal static class TestRunner
         yield return ("Recovery.SuccessResets", AutoPlayRecoveryTests.SuccessfulActionResetsFailures);
         yield return ("Recovery.CancelBackoff", AutoPlayRecoveryTests.CancelDuringBackoffPreventsNextTurn);
         yield return ("Recovery.TimeoutNotCancel", AutoPlayRecoveryTests.TimeoutFailureDoesNotLookLikeUserCancel);
+        yield return ("Recovery.ThinkingBudgetKeepsFailures", AutoPlayRecoveryTests.ThinkingBudgetExhaustionDoesNotSpendGenericFailureBudget);
+        yield return ("Recovery.ThinkingBudgetLimit", AutoPlayRecoveryTests.ThinkingBudgetExhaustionStopsAtItsOwnLimit);
+        yield return ("Recovery.ThinkingBudgetReset", AutoPlayRecoveryTests.SuccessfulActionClearsThinkingBudgetExhaustion);
         yield return ("Recovery.UnchangedActionStops", AutoPlayRecoveryTests.UnchangedActionStopsTheLoop);
         yield return ("Recovery.ProgressResetsRepeat", AutoPlayRecoveryTests.ProgressResetsTheRepeatRun);
         yield return ("Recovery.UnsettledBudget", AutoPlayRecoveryTests.UnsettledTurnsDoNotSpendTheRetryBudget);
@@ -226,6 +229,7 @@ internal static class TestRunner
         yield return ("Session.ResetStatsBlockedRunning", () => Task.Run(PlayerExperienceTests.ResetStatsBlockedWhileRunning));
         yield return ("Thinking.gpt-4o", () => Task.Run(() => ThinkingRequestBuilderTests.Infer("gpt-4o", "auto", "prompt")));
         yield return ("Thinking.gpt-5", () => Task.Run(() => ThinkingRequestBuilderTests.Infer("gpt-5", "auto", "reasoning_effort")));
+        yield return ("Thinking.step-5", () => Task.Run(() => ThinkingRequestBuilderTests.Infer("step-5-preview", "auto", "reasoning_effort")));
         yield return ("Thinking.o3-mini", () => Task.Run(() => ThinkingRequestBuilderTests.Infer("o3-mini", "auto", "reasoning_effort")));
         yield return ("Thinking.deepseek", () => Task.Run(() => ThinkingRequestBuilderTests.Infer("deepseek-chat", "auto", "deepseek")));
         yield return ("Thinking.explicit", () => Task.Run(() => ThinkingRequestBuilderTests.Infer("anything", "reasoning_effort", "reasoning_effort")));
@@ -248,6 +252,7 @@ internal static class TestRunner
         yield return ("OpenAI.PingUnrelated400NotRetried", OpenAiCompatibleClientTests.Ping_DoesNotRetryA400ThatIsNotAboutTheParameter);
         yield return ("OpenAI.ParseCompletionFinishReason", () => Task.Run(OpenAiCompatibleClientTests.ParseCompletion_ReadsFinishReason));
         yield return ("OpenAI.ParseSseFinishReason", () => Task.Run(OpenAiCompatibleClientTests.ParseSsePayload_ReadsFinishReasonFromMessageChoice));
+        yield return ("OpenAI.ParseSseDeltaFinishReason", () => Task.Run(OpenAiCompatibleClientTests.ParseSsePayload_ReadsFinishReasonFromDeltaChoice));
         yield return ("Budget.NoLimit", () => Task.Run(SessionBudgetGuardTests.NoLimit_NeverStops));
         yield return ("Budget.MaxTokens", () => Task.Run(SessionBudgetGuardTests.MaxTokens_StopsWhenExceeded));
         yield return ("Budget.MaxRequests", () => Task.Run(SessionBudgetGuardTests.MaxRequests_StopsEvenWithoutUsage));
@@ -450,6 +455,7 @@ internal static class TestRunner
         yield return ("AgentLoop.WaitPending", AgentLoopTests.PlayOnce_WaitsWhenActIsPending);
         yield return ("AgentLoop.NoVisionCapture", AgentLoopTests.PlayOnce_DoesNotCaptureWithoutVision);
         yield return ("AgentLoop.PerModelThinking", AgentLoopTests.PlayOnce_UsesPerModelThinkingIntensity);
+        yield return ("AgentLoop.ReasoningBudget", AgentLoopTests.PlayOnce_MarksReasoningBudgetExhaustionForRecovery);
         yield return ("AgentLoop.JsonActNoTools", AgentLoopTests.PlayOnce_TextOnlyJsonActWithoutTools);
         yield return ("AgentLoop.CrystalJsonNoTools", AgentLoopTests.PlayOnce_TextOnlyCrystalJsonForwardsCoordinatesAndNullTool);
         yield return ("AgentLoop.WaitTool", AgentLoopTests.PlayOnce_WaitUntilActionableTool);

@@ -10,6 +10,14 @@ namespace STS2AIAgent.Agent;
 /// </summary>
 internal static class CompletionErrors
 {
+    public static bool IsReasoningBudgetExhausted(LlmCompletion completion)
+    {
+        return completion.ToolCalls.Count == 0
+            && string.IsNullOrWhiteSpace(completion.Content)
+            && !string.IsNullOrWhiteSpace(completion.Reasoning)
+            && string.Equals(completion.FinishReason, "length", StringComparison.OrdinalIgnoreCase);
+    }
+
     public static string? Empty(LlmCompletion completion, string? lastReasoning, int toolRounds)
     {
         if (completion.ToolCalls.Count > 0)

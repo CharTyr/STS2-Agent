@@ -17,6 +17,15 @@
 - **Default completion requests stop sending `max_tokens`.** Only the health probe (`/health`)
   still pins `max_tokens: 16` to keep pings cheap; play and chat requests leave the completion
   budget to the provider, which is what thinking models assume.
+- **Normal long thinking no longer triggers the generic three-strike stop.** A streamed response
+  with reasoning but no action and `finish_reason=length` is now a bounded, budget-accounted
+  continuation state: the agent backs off and tries again instead of classifying the thinking as a
+  failed decision. It still stops after five consecutive provider-limited turns with an actionable
+  explanation, preventing an endpoint with an impossible output cap from spending forever.
+- **Step-5 reasoning settings reach the API.** `step-5-*` models now infer the standard
+  `reasoning_effort` request shape, so selecting Low sends `reasoning_effort: "low"` instead of
+  merely appending a natural-language hint. Streaming now reads a terminal `finish_reason` from
+  the normal delta-shaped final chunk as well as message-shaped chunks.
 
 ## v0.15.0 - 2026-09-22
 

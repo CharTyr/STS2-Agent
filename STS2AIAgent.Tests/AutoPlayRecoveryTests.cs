@@ -150,6 +150,69 @@ internal static class AutoPlayRecoveryTests
         Assert.True(calls >= 2, "timeout LlmException must be retryable, not treated as user cancel");
     }
 
+    public static Task ThinkingBudgetExhaustionDoesNotSpendGenericFailureBudget()
+    {
+        var policy = new AutoPlayRecovery();
+        var exhausted = new AgentTurnResult
+        {
+            Error = "The model returned an empty assistant message.",
+            ReasoningBudgetExhausted = true
+        };
+
+        Assert.Null(policy.Observe(new AgentTurnResult { Error = "network" }).StopReason);
+        Assert.Null(policy.Observe(new AgentTurnResult { Error = "network" }).StopReason);
+        Assert.Null(policy.Observe(exhausted).StopReason);
+        Assert.NotNull(policy.Observe(new AgentTurnResult { Error = "network" }).StopReason);
+        return Task.CompletedTask;
+    }
+
+    public static Task ThinkingBudgetExhaustionStopsAtItsOwnLimit()
+    {
+        var policy = new AutoPlayRecovery();
+        var exhausted = new AgentTurnResult
+        {
+            Error = "The model returned an empty assistant message.",
+            ReasoningBudgetExhausted = true
+        };
+
+        for (var turn = 1; turn < NoProgressPolicy.ReasoningBudgetLimit; turn++)
+        {
+            var next = policy.Observe(exhausted);
+            Assert.Null(next.StopReason);
+            Assert.True(next.Delay > TimeSpan.Zero, "a provider-limited thinking turn should back off before retrying");
+        }
+
+        var stop = policy.Observe(exhausted);
+        Assert.NotNull(stop.StopReason);
+        Assert.Equal(StopKindPolicy.Failed, stop.StopKind);
+        Assert.Contains("输出预算", stop.StopReason!, StringComparison.Ordinal);
+        return Task.CompletedTask;
+    }
+
+    public static Task SuccessfulActionClearsThinkingBudgetExhaustion()
+    {
+        var policy = new AutoPlayRecovery();
+        var exhausted = new AgentTurnResult
+        {
+            Error = "The model returned an empty assistant message.",
+            ReasoningBudgetExhausted = true
+        };
+
+        for (var turn = 1; turn < NoProgressPolicy.ReasoningBudgetLimit; turn++)
+        {
+            Assert.Null(policy.Observe(exhausted).StopReason);
+        }
+
+        Assert.Null(policy.Observe(new AgentTurnResult { Acted = "end_turn", StateFingerprint = "progress" }).StopReason);
+        for (var turn = 1; turn < NoProgressPolicy.ReasoningBudgetLimit; turn++)
+        {
+            Assert.Null(policy.Observe(exhausted).StopReason);
+        }
+
+        Assert.NotNull(policy.Observe(exhausted).StopReason);
+        return Task.CompletedTask;
+    }
+
     // --- No-progress guard -----------------------------------------------------------------------
 
     /// <summary>
