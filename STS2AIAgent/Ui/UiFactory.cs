@@ -648,6 +648,11 @@ internal static class UiFactory
         var col = Column();
         col.AddThemeConstantOverride("separation", 2);
         var caption = Label(title, FontCaption, muted: true);
+        // The value is "-" when the tile is built and a sentence once the runtime fills it. An
+        // unwrapped heading reports that sentence as its minimum width and stretches the whole row
+        // past the panel. WordSmart plus ExpandFill lets the tile stay at its 96px floor.
+        valueLabel.AutowrapMode = TextServer.AutowrapMode.WordSmart;
+        valueLabel.SizeFlagsHorizontal = Control.SizeFlags.ExpandFill;
         col.AddChild(caption);
         col.AddChild(valueLabel);
         if (!string.IsNullOrWhiteSpace(hint))
@@ -831,12 +836,19 @@ internal static class UiFactory
 
     public static RichTextLabel Rich(bool follow = true)
     {
+        // A rich log is the one place a sentence never goes through Wrapped. Without an explicit
+        // wrap and a width floor, Godot sizes the label to the longest unwrapped BBCode line, which
+        // is how a model reason pushed the decision page past the 440px panel. Measured live on
+        // 2026-09-22: "Play Dismantle (14 dmg..." ran off the right edge while the parent scroll
+        // had horizontal scrolling disabled.
         var label = new RichTextLabel
         {
             BbcodeEnabled = true,
             FitContent = true,
             ScrollFollowing = follow,
             SelectionEnabled = true,
+            AutowrapMode = TextServer.AutowrapMode.WordSmart,
+            CustomMinimumSize = new Vector2(MinReflowWidth, 0),
             MouseFilter = Control.MouseFilterEnum.Stop
         };
         label.AddThemeFontSizeOverride("normal_font_size", FontBody);

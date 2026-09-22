@@ -31,6 +31,9 @@
   non-streaming retry before treating it as a model failure. No game action has been accepted at
   that point, and both calls remain visible to the session budget. This covers providers whose
   non-streaming compatibility path serializes tools correctly while their SSE path does not.
+- **The overlay no longer clips long play and decision text.** The pause control gets the full card
+  width while autoplay is running, usage sentences stack instead of sharing a tile row, and decision
+  reasons wrap inside the 440px panel instead of running off its right edge.
 
 ## v0.15.0 - 2026-09-22
 
