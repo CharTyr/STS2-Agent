@@ -51,8 +51,15 @@ and `close_main_menu_submenu` completed back on `MAIN_MENU`. Both tool results h
 hash was unchanged. This is one external action round-trip, not an external agent playing a full
 run. Evidence: `build/validation-2026-09-22/mcp-act-open.txt` and `mcp-act-close.txt` (gitignored).
 
+`GET /vision/screenshot` was then deployed and called on the isolated main menu. It returned
+80,937 bytes of JPEG (`FF D8`), 1280x720, showing the Slay the Spire II main menu and the agent
+overlay. No model call and no game action were made. Evidence:
+`build/validation-2026-09-22/menu-screenshot.jpg` (gitignored). This proves the live capture path,
+not a model consuming the image during a decision.
+
 Still open on this candidate: a win through Act 2 and Act 3, an external agent playing a full run
-through `act`, Vision attached to a live turn, the Steam two-instance path, `BESTIARY`, the
+through `act`, a model consuming a live screenshot during a decision, the Steam two-instance path,
+`BESTIARY`, the
 remaining mechanic-matrix samples, and a typed teammate signal over the wire.
 
 
