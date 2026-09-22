@@ -276,6 +276,7 @@ internal sealed class AgentLoop
         var rounds = 0;
         var accumulatedUsage = initialUsage;
         var requestsSpent = initialRequests;
+        var toolStreamFallbackTried = false;
 
         void RememberAccepted(string action, string response, string? reason)
         {
@@ -306,7 +307,8 @@ internal sealed class AgentLoop
                     Messages = messages.ToArray(),
                     Tools = resolved.Model.SupportsTools ? tools : null,
                     Thinking = resolved.Model.GetThinkingIntensity(),
-                    ThinkingMode = resolved.Model.ThinkingMode
+                    ThinkingMode = resolved.Model.ThinkingMode,
+                    Stream = !(allowAct && resolved.Model.SupportsTools && toolStreamFallbackTried)
                 };
 
                 var budgetReason = _budgetGuard?.Invoke()?.CheckBudget(requestsSpent, accumulatedUsage?.TotalTokens ?? 0);
@@ -363,6 +365,21 @@ internal sealed class AgentLoop
                 lastReasoning = completion.Reasoning ?? lastReasoning;
                 if (completion.ToolCalls.Count == 0)
                 {
+                    // A few OpenAI-compatible providers serialize tools correctly only for their
+                    // non-streaming response path. No action has been accepted at this point, so
+                    // one request demotion is safe; do not loop forever if the provider is simply
+                    // refusing to call a tool.
+                    if (allowAct &&
+                        acted == null &&
+                        stopAfterAct &&
+                        resolved.Model.SupportsTools &&
+                        request.Stream &&
+                        !toolStreamFallbackTried)
+                    {
+                        toolStreamFallbackTried = true;
+                        continue;
+                    }
+
                     if (allowAct &&
                         acted == null &&
                         !resolved.Model.SupportsTools &&
