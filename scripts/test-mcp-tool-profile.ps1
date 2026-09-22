@@ -38,6 +38,10 @@ ESSENTIAL_TOOLS = {
     "wait_until_actionable",
     "decide",
     "act",
+    # Dual-layer planner tools, added 2026-10-05 with the Jev engine. They are on the guided surface
+    # because the native mod surface exposes them through AgentTools.Mcp and the two stay aligned.
+    "get_planner_briefing",
+    "update_play_strategy",
 }
 LAYERED_TOOLS = {
     "create_planner_handoff",

@@ -65,6 +65,7 @@ curl -s http://127.0.0.1:8080/state | jq .
 | `invalid_target` | 409 | 目标索引超出范围 | 否 |
 | `action_in_flight` | 409 | 已有动作正在执行（含它正在等待的状态转换）。本次请求**没有执行、也没有排队**：等上一个动作的响应返回、重新读一次 `/state` 再重试。详情带 `in_flight_action`，即占用中的动作名 | 是 |
 | `state_unavailable` | 503 | 游戏状态暂时不可安全读取（如正在过渡） | 是 |
+| `unavailable` | 503 | 双层策略面（`GET`/`POST /strategy`、MCP 工具 `get_planner_briefing`/`update_play_strategy`）所在的实例没有绑定策略存储（如离线测试环境）。正常游戏内实例不会出现 | 是 |
 | `forbidden_actor` | 403 | 多人场景下试图为其它角色执行动作 | 否 |
 | `mcp_disabled` | 403 | 请求 /mcp 但原生 MCP 未开启 | 否 |
 | `screenshot_unavailable` | 409 | 游戏视口还不能截图 | 是 |

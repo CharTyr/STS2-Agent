@@ -189,6 +189,7 @@
               "invalid_target",
               "action_in_flight",
               "state_unavailable",
+              "unavailable",
               "forbidden_actor",
               "mcp_disabled",
               "screenshot_unavailable",
@@ -1278,6 +1279,13 @@
           "action": {
             "type": "string"
           },
+          "confidence": {
+            "format": "double",
+            "type": [
+              "number",
+              "null"
+            ]
+          },
           "id": {
             "format": "int64",
             "type": "integer"
@@ -2231,6 +2239,31 @@
         },
         "type": "object"
       },
+      "PlayStrategy": {
+        "additionalProperties": true,
+        "description": "The dual-layer play strategy the Jev execution model follows.",
+        "properties": {
+          "instructions": {
+            "type": "string"
+          },
+          "option_hints": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object"
+          },
+          "posture": {
+            "type": "string"
+          },
+          "source": {
+            "type": "string"
+          },
+          "updated_at": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
       "RestOptionPayload": {
         "additionalProperties": true,
         "properties": {
@@ -2948,6 +2981,39 @@
           },
           "relic_id": {
             "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "StrategyData": {
+        "additionalProperties": true,
+        "properties": {
+          "strategy": {
+            "$ref": "#/components/schemas/PlayStrategy"
+          }
+        },
+        "type": "object"
+      },
+      "StrategyStatusData": {
+        "additionalProperties": true,
+        "properties": {
+          "dual_layer": {
+            "type": "boolean"
+          },
+          "jev_configured": {
+            "type": "boolean"
+          },
+          "strategy": {
+            "$ref": "#/components/schemas/PlayStrategy"
+          }
+        },
+        "type": "object"
+      },
+      "StrategyUpdateRequest": {
+        "additionalProperties": true,
+        "properties": {
+          "strategy": {
+            "$ref": "#/components/schemas/PlayStrategy"
           }
         },
         "type": "object"
@@ -3753,6 +3819,92 @@
           }
         },
         "summary": "Read the complete game-state snapshot."
+      }
+    },
+    "/strategy": {
+      "get": {
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ApiSuccessEnvelope"
+                    },
+                    {
+                      "properties": {
+                        "data": {
+                          "$ref": "#/components/schemas/StrategyStatusData"
+                        }
+                      },
+                      "type": "object"
+                    }
+                  ]
+                }
+              }
+            },
+            "description": "Successful response."
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorEnvelope"
+                }
+              }
+            },
+            "description": "The normal HTTP error envelope."
+          }
+        },
+        "summary": "Read the current dual-layer play strategy and the Jev execution layer's status."
+      },
+      "post": {
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/StrategyUpdateRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ApiSuccessEnvelope"
+                    },
+                    {
+                      "properties": {
+                        "data": {
+                          "$ref": "#/components/schemas/StrategyData"
+                        }
+                      },
+                      "type": "object"
+                    }
+                  ]
+                }
+              }
+            },
+            "description": "Successful response."
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorEnvelope"
+                }
+              }
+            },
+            "description": "The normal HTTP error envelope."
+          }
+        },
+        "summary": "Write a new dual-layer play strategy for the Jev execution model."
       }
     },
     "/teammate/control": {
