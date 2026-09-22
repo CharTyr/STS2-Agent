@@ -40,6 +40,11 @@ both returned 200 and advertised `health_check` and `act`; `{"running": false}` 
 `mcp_enabled: false`. No game action was sent. Evidence:
 `build/validation-2026-09-22/mcp-control.json` (gitignored).
 
+On the resulting main menu, the same native socket answered read-only `decide` and
+`get_scene_guidance`. `decide` returned 200 with `MAIN_MENU`, `available_actions`, and scene
+guidance; `get_scene_guidance` returned 200 and a non-empty playbook. `act` was not called, and
+MCP was switched back off. Evidence: `build/validation-2026-09-22/mcp-decide.json` (gitignored).
+
 Still open on this candidate: a win through Act 2 and Act 3, an external agent playing a full run
 through `act`, Vision attached to a live turn, the Steam two-instance path, `BESTIARY`, the
 remaining mechanic-matrix samples, and a typed teammate signal over the wire.
