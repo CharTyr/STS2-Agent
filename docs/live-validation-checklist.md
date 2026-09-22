@@ -57,10 +57,16 @@ overlay. No model call and no game action were made. Evidence:
 `build/validation-2026-09-22/menu-screenshot.jpg` (gitignored). This proves the live capture path,
 not a model consuming the image during a decision.
 
-Still open on this candidate: a win through Act 2 and Act 3, an external agent playing a full run
-through `act`, a model consuming a live screenshot during a decision, the Steam two-instance path,
-`BESTIARY`, the
-remaining mechanic-matrix samples, and a typed teammate signal over the wire.
+Accepted closeout for this candidate, per the operator on 2026-09-22:
+
+- A full three-act win and an external agent playing a complete run are out of scope. The accepted
+  play proof is the unattended Act 1 boss clear plus the natural Act 2 death recorded above.
+- Steam itself cannot run two copies. The supported co-op path is the game's local dual-instance
+  launcher, which was already verified; a Steam-hosted two-client path is not a missing mod feature.
+- `BESTIARY` remains unopened on this profile because the compendium hub draws no bestiary tile
+  when `NBestiary.CanBeShown()` is false. A guessed node path was not shipped.
+- A model consuming a live screenshot during a decision, the remaining mechanic-matrix samples, and
+  a typed teammate signal over the wire are still open. None of them blocked the accepted play proof.
 
 
 
