@@ -1,5 +1,30 @@
 # Live validation checklist
 
+## Status as of 2026-09-22 (isolated natural run, Act 1 cleared)
+
+Isolated profile `default\2026092212` (`--windowed --force-steam off --clientId 2026092212`), API
+`http://127.0.0.1:18080`, play model StepFun `step-5-preview` at `reasoning_effort: low`, vision
+attachment off. The run started from a saved floor-6 combat and was not steered by hand after
+autoplay resumed.
+
+- The in-game loop crossed a natural Act 1 without a human taking the seat: floor 6 combat through
+  floor 17 `VANTOM` (`墨影幻灵`, 173 HP), including the boss hand-replacement `CARD_SELECTION`, then
+  returned to `MAP` at floor 17 with `act_id=1` and the next boss `THE_INSATIABLE_BOSS`. The next
+  sample was floor 18 `EVENT`. Autoplay stayed `running`; `stop_kind` stayed empty after the
+  isolated session spend cap was removed.
+- A 1,500,000-token session cap had stopped the same run at the earlier floor-14 combat. That cap
+  was configuration, not a model failure. Session spend limits remain opt-in; context pressure is
+  now handled by per-model compaction at 80% of a default 256,000-token window (`09a65cc`).
+- Evidence: `build/validation-2026-09-22/natural-run.jsonl` (gitignored). The real Steam profile
+  `76561198420578597` stayed byte-identical around the Act 1 clear: 184 files, aggregate SHA256
+  `6E79BB6957AE0BB07679DC85F2B42C10D54B6C1135355F0BC09BFAA87329D22C` before and after.
+
+Still open on this candidate: Act 2 and Act 3 completion, Vision attached to a live turn, the Steam
+two-instance path, `BESTIARY`, the remaining mechanic-matrix samples, and a typed teammate signal
+over the wire.
+
+
+
 Items that deterministic offline tests cannot settle: they need the game running with the mod
 deployed. Collecting them in one place keeps "we proved it offline" from being read as "we saw it
 work".
