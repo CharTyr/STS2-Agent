@@ -24,6 +24,16 @@ internal static class SessionControlContractTests
         Assert.Contains("MCP control is only available on loopback.", body, StringComparison.Ordinal);
     }
 
+    public static void RouterExposesLocalScreenshot()
+    {
+        var source = AgentSourceFixture.Read("STS2AIAgent/Server/Router.cs");
+        var body = AgentSourceFixture.MethodBody(source, "HandleAsync");
+        Assert.Contains("/vision/screenshot", body, StringComparison.Ordinal);
+        Assert.Contains("ScreenshotService.CaptureJpeg", body, StringComparison.Ordinal);
+        Assert.Contains("image/jpeg", body, StringComparison.Ordinal);
+        Assert.Contains("Screenshots are only available on loopback.", body, StringComparison.Ordinal);
+    }
+
     public static void WorkshopStagingKeepsLocalCandidate()
     {
         var source = AgentSourceFixture.Read("STS2AIAgent/Multiplayer/LocalDualInstanceLauncher.cs");

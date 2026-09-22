@@ -559,6 +559,18 @@ def build_paths(
     )
     paths: dict[str, Any] = {
         "/health": {"get": ordinary_operation("Read mod health and API discovery data.", ref("HealthData"))},
+        "/vision/screenshot": {
+            "get": {
+                "summary": "Read one JPEG frame of the current game viewport.",
+                "responses": {
+                    "200": {
+                        "description": "Raw JPEG bytes. This route does not use the JSON request_id envelope.",
+                        "content": {"image/jpeg": {"schema": {"type": "string", "contentMediaType": "image/jpeg"}}},
+                    },
+                    "default": error_response(),
+                },
+            }
+        },
         "/state": {"get": ordinary_operation("Read the complete game-state snapshot.", ref("GameStatePayload"))},
         "/decision-snapshot": {
             "get": ordinary_operation(

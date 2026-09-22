@@ -191,6 +191,7 @@
               "state_unavailable",
               "forbidden_actor",
               "mcp_disabled",
+              "screenshot_unavailable",
               "session_not_ready",
               "pause_pending",
               "internal_error",
@@ -3801,6 +3802,34 @@
           }
         },
         "summary": "Start or pause the host's AI teammate."
+      }
+    },
+    "/vision/screenshot": {
+      "get": {
+        "responses": {
+          "200": {
+            "content": {
+              "image/jpeg": {
+                "schema": {
+                  "contentMediaType": "image/jpeg",
+                  "type": "string"
+                }
+              }
+            },
+            "description": "Raw JPEG bytes. This route does not use the JSON request_id envelope."
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorEnvelope"
+                }
+              }
+            },
+            "description": "The normal HTTP error envelope."
+          }
+        },
+        "summary": "Read one JPEG frame of the current game viewport."
       }
     }
   },

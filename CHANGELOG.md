@@ -31,6 +31,9 @@
   non-streaming retry before treating it as a model failure. No game action has been accepted at
   that point, and both calls remain visible to the session budget. This covers providers whose
   non-streaming compatibility path serializes tools correctly while their SSE path does not.
+- **Vision has a read-only live frame.** `GET /vision/screenshot` returns the current game viewport
+  as JPEG on loopback. It does not play a card or send the image to a model, so the screenshot path
+  can be checked without starting a run.
 - **Native MCP can be switched on without restarting the game.** `POST /mcp/control` with
   `{"running": true|false}` is loopback-only and calls the same switch as the overlay Connect tab.
   Editing the settings file no longer has to be followed by a restart before an external client can

@@ -177,6 +177,7 @@ internal static class TestRunner
         yield return ("TeamControl.TransportAck", TeamConversationTests.PauseControlHasExplicitAcknowledgement);
         yield return ("Session.LocalControlContract", () => Task.Run(SessionControlContractTests.RouterExposesLocalSessionControl));
         yield return ("Session.LocalMcpControl", () => Task.Run(SessionControlContractTests.RouterExposesLocalMcpControl));
+        yield return ("Session.LocalScreenshot", () => Task.Run(SessionControlContractTests.RouterExposesLocalScreenshot));
         yield return ("CoopStartup.KeepLocalCandidate", () => Task.Run(SessionControlContractTests.WorkshopStagingKeepsLocalCandidate));
         yield return ("TeamChat.ReadOnly", AgentLoopTests.TeamChat_CannotActEvenWithPlayIntent);
         yield return ("TeamChat.NextDecision", AgentLoopTests.TeamSuggestion_ReachesNextPlayDecision);

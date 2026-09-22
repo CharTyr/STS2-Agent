@@ -261,6 +261,28 @@ internal static class Router
             }
 
             if (request.HttpMethod.Equals("GET", StringComparison.OrdinalIgnoreCase) &&
+                request.Url?.AbsolutePath == "/vision/screenshot")
+            {
+                if (!request.IsLocal)
+                {
+                    throw new ApiException(403, "local_only", "Screenshots are only available on loopback.");
+                }
+
+                var jpeg = await GameThread.InvokeAsync(STS2AIAgent.Vision.ScreenshotService.CaptureJpeg);
+                if (jpeg == null || jpeg.Length == 0)
+                {
+                    throw new ApiException(409, "screenshot_unavailable", "The game viewport did not produce a screenshot.");
+                }
+
+                response.StatusCode = 200;
+                response.ContentType = "image/jpeg";
+                response.ContentLength64 = jpeg.Length;
+                await response.OutputStream.WriteAsync(jpeg, cancellationToken);
+                statusCode = 200;
+                return;
+            }
+
+            if (request.HttpMethod.Equals("GET", StringComparison.OrdinalIgnoreCase) &&
                 request.Url?.AbsolutePath == "/state")
             {
                 var state = await GameThread.InvokeAsync(GameStateService.BuildStatePayload);
