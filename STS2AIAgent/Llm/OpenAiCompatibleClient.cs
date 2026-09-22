@@ -245,6 +245,7 @@ internal sealed class OpenAiCompatibleClient : ILlmClient
         var content = new StringBuilder();
         var reasoning = new StringBuilder();
         var toolCalls = new SortedDictionary<int, SseToolCall>();
+        string? finishReason = null;
         LlmUsage? usage = null;
 
         foreach (var rawLine in payload.Split('\n'))
@@ -303,6 +304,11 @@ internal sealed class OpenAiCompatibleClient : ILlmClient
                         reasoning.Append(parsed.Reasoning);
                     }
 
+                    if (string.IsNullOrEmpty(finishReason) && !string.IsNullOrEmpty(parsed.FinishReason))
+                    {
+                        finishReason = parsed.FinishReason;
+                    }
+
                     for (var i = 0; i < parsed.ToolCalls.Count; i++)
                     {
                         var call = parsed.ToolCalls[i];
@@ -327,6 +333,7 @@ internal sealed class OpenAiCompatibleClient : ILlmClient
                 Name = call.Name ?? string.Empty,
                 ArgumentsJson = call.Arguments.Length == 0 ? "{}" : call.Arguments.ToString()
             }).Where(call => !string.IsNullOrWhiteSpace(call.Id) && !string.IsNullOrWhiteSpace(call.Name)).ToArray(),
+            FinishReason = finishReason,
             Usage = usage
         };
     }
@@ -426,12 +433,16 @@ internal sealed class OpenAiCompatibleClient : ILlmClient
         var content = ReadContent(message);
         var reasoning = ReadOptionalString(message, "reasoning_content") ?? ReadOptionalString(message, "reasoning");
         var toolCalls = ReadToolCalls(message);
+        var finishReason = choices[0].TryGetProperty("finish_reason", out var finishElement) && finishElement.ValueKind == JsonValueKind.String
+            ? finishElement.GetString()
+            : null;
         var usage = ReadUsage(root);
         return new LlmCompletion
         {
             Content = content,
             Reasoning = reasoning,
             ToolCalls = toolCalls,
+            FinishReason = finishReason,
             Usage = usage
         };
     }

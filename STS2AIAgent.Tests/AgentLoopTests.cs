@@ -1083,6 +1083,18 @@ internal static class AgentLoopTests
         Assert.Equal(1, factory.PingCalls);
     }
 
+    public static void CompletionErrors_ExplainsThinkingModelSilence()
+    {
+        var sank = new LlmCompletion { Content = "", Reasoning = new string('x', 900), FinishReason = "length" };
+        var message = CompletionErrors.Empty(sank, null, 1);
+        Assert.NotNull(message);
+        Assert.Contains("finish_reason=length", message!);
+        Assert.Contains("reasoning_content", message);
+
+        var silent = new LlmCompletion { Content = "", Reasoning = "", FinishReason = "stop" };
+        Assert.NotNull(CompletionErrors.Empty(silent, null, 3));
+    }
+
     public static async Task ModelProbeStillReportsProviderFailure()
     {
         var factory = new ProbeClientFactory(_ => Task.FromException<string>(new OperationCanceledException("provider timeout")));

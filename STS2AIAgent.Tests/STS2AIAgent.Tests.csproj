@@ -40,6 +40,7 @@
     <Compile Include="..\STS2AIAgent\Llm\*.cs" Link="Llm\%(Filename)%(Extension)" />
     <Compile Include="..\STS2AIAgent\Agent\AgentLoop.cs" Link="Agent\AgentLoop.cs" />
     <Compile Include="..\STS2AIAgent\Agent\AgentTurnCanceledException.cs" Link="Agent\AgentTurnCanceledException.cs" />
+    <Compile Include="..\STS2AIAgent\Agent\CompletionErrors.cs" Link="Agent\CompletionErrors.cs" />
     <Compile Include="..\STS2AIAgent\Agent\AgentTools.cs" Link="Agent\AgentTools.cs" />
     <Compile Include="..\STS2AIAgent\Agent\ActIndexValidator.cs" Link="Agent\ActIndexValidator.cs" />
     <Compile Include="..\STS2AIAgent\Agent\ActJsonParser.cs" Link="Agent\ActJsonParser.cs" />
