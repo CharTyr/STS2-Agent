@@ -42,8 +42,14 @@ both returned 200 and advertised `health_check` and `act`; `{"running": false}` 
 
 On the resulting main menu, the same native socket answered read-only `decide` and
 `get_scene_guidance`. `decide` returned 200 with `MAIN_MENU`, `available_actions`, and scene
-guidance; `get_scene_guidance` returned 200 and a non-empty playbook. `act` was not called, and
-MCP was switched back off. Evidence: `build/validation-2026-09-22/mcp-decide.json` (gitignored).
+guidance; `get_scene_guidance` returned 200 and a non-empty playbook. Evidence:
+`build/validation-2026-09-22/mcp-decide.json` (gitignored).
+
+The same socket then executed a reversible `act` pair: `open_timeline` completed on `TIMELINE`,
+and `close_main_menu_submenu` completed back on `MAIN_MENU`. Both tool results had
+`isError: false` and `status: completed`. MCP was switched off afterward, and the Steam profile
+hash was unchanged. This is one external action round-trip, not an external agent playing a full
+run. Evidence: `build/validation-2026-09-22/mcp-act-open.txt` and `mcp-act-close.txt` (gitignored).
 
 Still open on this candidate: a win through Act 2 and Act 3, an external agent playing a full run
 through `act`, Vision attached to a live turn, the Steam two-instance path, `BESTIARY`, the
