@@ -8,8 +8,8 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-1.md`
-- **Total Sessions**: 36
-- **Last Active**: 2026-09-22
+- **Total Sessions**: 37
+- **Last Active**: 2026-09-23
 <!-- @@@/auto:current-status -->
 
 ---
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-1.md` | ~1465 | Active |
+| `journal-1.md` | ~1499 | Active |
 <!-- @@@/auto:active-documents -->
 
 ---
@@ -29,6 +29,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 37 | 2026-09-23 | 审查修复集成与收尾 | `628ba75`, `455641f` | `dev` |
 | 36 | 2026-09-22 | Close live validation gaps | `d6b5d80`, `69e5f3b`, `7520faf`, `c6bba38`, `7c5917c`, `0a55bee`, `68df33b`, `993c6c3`, `5a48ba0`, `a1a006d`, `09a65cc`, `5da06d1`, `bce6e06`, `2b6fb17`, `5389971` | `dev` |
 | 35 | 2026-09-22 | Deepen harness reliability and decision seams | `971f2f3` | `dev` |
 | 34 | 2026-09-21 | Optimize the AI-play harness: cheaper prompts, smaller state, recoverable tools | `46b2cdd`, `5fcb7df`, `78b1546`, `d5f780b`, `cbb550b`, `13352db`, `41e34e1`, `712d77c` | `dev` |
