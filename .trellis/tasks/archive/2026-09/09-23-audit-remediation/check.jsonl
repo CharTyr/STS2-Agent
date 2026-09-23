@@ -1,0 +1,6 @@
+{"file":".trellis/spec/mod/index.md","reason":"按层执行 Mod 测试和跨边界质量清单"}
+{"file":".trellis/spec/mod/agent-and-ui.md","reason":"预算/会话/线程边界和测试缝验收"}
+{"file":".trellis/spec/mod/game-actions.md","reason":"同屏快照、动作及错误契约审查"}
+{"file":".trellis/spec/mcp/contracts-and-tests.md","reason":"双面 schema、Python unit 和一致性闸门"}
+{"file":".trellis/spec/operations/validation-and-release.md","reason":"区分离线、实机以及发布脚本副作用"}
+{"file":".trellis/spec/guides/cross-layer-thinking-guide.md","reason":"逐向追踪变更字段及消费者"}

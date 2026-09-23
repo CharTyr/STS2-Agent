@@ -1,0 +1,8 @@
+{"file":".trellis/spec/mod/index.md","reason":"模块线程、状态、动作与 Agent 边界入口"}
+{"file":".trellis/spec/mod/agent-and-ui.md","reason":"运行时、会话、预算及覆盖层编辑规范"}
+{"file":".trellis/spec/mod/architecture.md","reason":"HTTP/native MCP/桥接与源文件形状边界"}
+{"file":".trellis/spec/mod/game-actions.md","reason":"动作状态同帧、错误与可观察稳定条件"}
+{"file":".trellis/spec/mcp/contracts-and-tests.md","reason":"双 MCP 面一致性、工具与测试规范"}
+{"file":".trellis/spec/operations/validation-and-release.md","reason":"离线测试与部署/实机副作用边界"}
+{"file":".trellis/spec/guides/cross-layer-thinking-guide.md","reason":"跨状态动作代理 UI 与 MCP 数据流检查"}
+{"file":".trellis/spec/guides/code-reuse-thinking-guide.md","reason":"复用已有运行时与设置存储所有者"}
