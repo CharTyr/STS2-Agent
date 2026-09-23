@@ -10,9 +10,8 @@ namespace STS2AIAgent.Ui;
 /// <remarks>
 /// Split out of <c>AgentOverlayHost.Pages.cs</c> when the conversation became the decision flow: the
 /// stream now carries the model's reasoning and the action each turn took beside the player's own
-/// messages, and that rendering plus its scroll-to-bottom is enough code to matter. The ratchet
-/// watches the base file, so a card that keeps growing belongs in its own file rather than in the
-/// pages file that already holds every other card.
+/// messages. The cut is by what the members touch -- the chat log, its scroll bar, and the
+/// chat-side option dials all belong to this one card and to nothing else on the page.
 ///
 /// A turn's role decides how it is drawn -- "user" and "assistant" keep the accent speaker line the
 /// co-op chat uses, "action" is the accent-coloured decision record, and "thought" is muted because it
@@ -21,10 +20,13 @@ namespace STS2AIAgent.Ui;
 internal sealed partial class AgentOverlayHost
 {
     /// <summary>
-    /// How many turns the chat log draws. The runtime keeps the same number, so the log is the whole
-    /// history until the cap starts dropping and telling the player it did.
+    /// How many turns the chat log draws. The runtime keeps a longer history
+    /// (<see cref="AgentRuntime.ChatHistoryLimit"/>) so the session file and the model's context
+    /// survive; the drawn tail is smaller because the log is re-laid-out in BBCode on every refresh
+    /// and tick, and that work runs on the game thread. The omitted-count line above the log covers
+    /// the difference, so nothing is hidden without saying so.
     /// </summary>
-    private const int ChatTailLimit = AgentRuntime.ChatHistoryLimit;
+    private const int ChatTailLimit = 80;
 
     /// <summary>The chat card's first-run state: shown while no turn has been recorded.</summary>
     private Control? _chatEmpty;
@@ -191,15 +193,17 @@ internal sealed partial class AgentOverlayHost
 
         _chatLog.Clear();
 
-        // The cap has been dropping turns off the front. Saying so is the difference between a log
-        // that starts mid-sentence and one the player knows is a window.
+        // Two windows hide earlier turns: the runtime's history cap, and this log's smaller drawn
+        // tail. Saying so is the difference between a log that starts mid-sentence and one the
+        // player knows is a window.
         var trimmed = AgentRuntime.Instance.HistoryTrimmedCount;
-        if (trimmed > 0)
+        var start = Math.Max(0, history.Count - ChatTailLimit);
+        var omitted = trimmed + start;
+        if (omitted > 0)
         {
-            _chatLog.AppendText(Muted(Loc.T("已省略更早的 {0} 条消息", trimmed)) + "\n\n");
+            _chatLog.AppendText(Muted(Loc.T("已省略更早的 {0} 条消息", omitted)) + "\n\n");
         }
 
-        var start = Math.Max(0, history.Count - ChatTailLimit);
         for (var index = start; index < history.Count; index++)
         {
             var turn = history[index];

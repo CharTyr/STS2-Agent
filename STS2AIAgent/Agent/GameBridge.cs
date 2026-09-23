@@ -177,6 +177,13 @@ internal sealed class GameBridge : IGameBridge
         });
     }
 
+    /// <summary>
+    /// The per-probe deadline inside <see cref="WaitUntilActionableAsync"/>: the outer loop's deadline
+    /// is only checked between iterations, so each game-thread probe gets its own bound and a game
+    /// thread that stops pumping fails the wait instead of hanging the turn.
+    /// </summary>
+    private static readonly TimeSpan ActionableProbeBudget = TimeSpan.FromSeconds(5);
+
     public async Task<bool> WaitUntilActionableAsync(TimeSpan timeout, CancellationToken cancellationToken)
     {
         var deadline = DateTime.UtcNow + timeout;
@@ -185,10 +192,7 @@ internal sealed class GameBridge : IGameBridge
         while (DateTime.UtcNow < deadline)
         {
             cancellationToken.ThrowIfCancellationRequested();
-            // Each probe gets its own deadline: the outer loop's deadline is only checked between
-            // iterations, and a posted callback that never runs must not hang the turn past the
-            // point where the wait was supposed to give up (or the caller cancel).
-            var probeBudget = TimeSpan.FromSeconds(5);
+            var probeBudget = ActionableProbeBudget;
             var remaining = deadline - DateTime.UtcNow;
             if (remaining < probeBudget)
             {

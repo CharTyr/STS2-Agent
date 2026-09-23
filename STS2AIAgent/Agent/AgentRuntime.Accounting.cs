@@ -8,8 +8,8 @@ namespace STS2AIAgent.Agent;
 /// <remarks>
 /// This partial also owns the conversation stream the overlay renders: the history buffer, the cap
 /// that trims it, and the reasoning/action turns a completed turn appends to it. They live here
-/// rather than in the base file because they are written by the same code that accounts a turn, and
-/// the base file is the one the size ratchet counts.
+/// because of what they touch -- every one of them is written by the same receipt path that accounts
+/// a turn, and the history is itself a per-turn record.
 /// </remarks>
 internal sealed partial class AgentRuntime
 {

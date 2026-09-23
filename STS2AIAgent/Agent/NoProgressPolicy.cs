@@ -32,12 +32,12 @@ internal static class NoProgressPolicy
     public const int ReasoningBudgetLimit = 5;
 
     /// <summary>
-    /// How many consecutive turns may report "waiting for the game" before the session stops with a
+    /// How long a run may report "waiting for the game" continuously before the session stops with a
     /// visible reason. A wait used to be free forever: it spent no retry budget, so a state that
-    /// never became actionable looked like a hung loop with no error. Two minutes of waiting is slow
-    /// progress; beyond it the player needs a stop they can see, not another silent retry.
+    /// never became actionable looked like a hung loop with no error. Wall-clock, not turns: a turn
+    /// that waits out its own 20-second timeout must not stretch the budget into tens of minutes.
     /// </summary>
-    public const int WaitingForGameLimit = 120;
+    public static readonly TimeSpan WaitingForGameLimit = TimeSpan.FromSeconds(150);
 
     /// <summary>
     /// True when the latest successful action repeats the previous one <em>and</em> the state

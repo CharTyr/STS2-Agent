@@ -55,17 +55,19 @@ internal sealed class StrategyPlanner
     }
 
     /// <summary>
-    /// Asks the play model for a fresh strategy and stores it. Returns true when a new strategy was
-    /// adopted; a model failure or an unparseable reply returns false and leaves the store as it was,
-    /// so the decider keeps a working strategy rather than losing it to a bad plan.
+    /// Asks the play model for a fresh strategy and stores it. Returns the outcome and the request's
+    /// usage, so the caller can account it against the session budget -- a plan the budget never
+    /// hears about is an invisible spend. A model failure or an unparseable reply returns false and
+    /// leaves the store as it was, so the decider keeps a working strategy rather than losing it to
+    /// a bad plan.
     /// </summary>
-    public async Task<bool> RefreshAsync(string stateSummary, CancellationToken cancellationToken)
+    public async Task<(bool Adopted, LlmUsage? Usage)> RefreshAsync(string stateSummary, CancellationToken cancellationToken)
     {
         var settings = _settings();
         var resolved = settings.TryResolvePlayModel() ?? settings.TryResolveConversationModel();
         if (resolved == null)
         {
-            return false;
+            return (false, null);
         }
 
         var request = new LlmRequest
@@ -85,12 +87,15 @@ internal sealed class StrategyPlanner
             }
         };
 
-        var client = _factory.Create(resolved.Endpoint);
+        // The planner honors the same per-request timeout the play loop does; a stalled plan must
+        // not outwait the requests it plans for.
+        var timeout = settings.LlmRequestTimeoutSeconds is > 0 ? TimeSpan.FromSeconds(settings.LlmRequestTimeoutSeconds.Value) : (TimeSpan?)null;
+        var client = _factory.Create(resolved.Endpoint, timeout);
         var completion = await client.CompleteAsync(request, cancellationToken);
         var strategy = completion.Content == null ? null : PlayStrategy.TryParse(ExtractJson(completion.Content));
         if (strategy == null)
         {
-            return false;
+            return (false, completion.Usage);
         }
 
         _store.Update(strategy with
@@ -98,7 +103,7 @@ internal sealed class StrategyPlanner
             UpdatedAt = DateTimeOffset.UtcNow.ToString("O"),
             Source = "llm"
         });
-        return true;
+        return (true, completion.Usage);
     }
 
     /// <summary>

@@ -82,6 +82,7 @@ internal sealed partial class AgentRuntime
     {
         string? runId;
         List<ChatTurn> chat;
+        int chatTrimmed;
         IReadOnlyList<DecisionLogEntry> decisions;
         PlayStrategy strategy;
         lock (_gate)
@@ -93,6 +94,7 @@ internal sealed partial class AgentRuntime
 
             runId = _sessionRunId;
             chat = _history.ToList();
+            chatTrimmed = _historyTrimmed;
             decisions = _decisions.Snapshot(PlaySessionStore.MaxDecisions);
             strategy = _strategyStore.Current;
             _sessionDirty = false;
@@ -103,6 +105,7 @@ internal sealed partial class AgentRuntime
             RunId = runId!,
             Character = null,
             Chat = chat,
+            ChatTrimmed = chatTrimmed,
             Decisions = decisions.ToList(),
             Strategy = strategy
         });
@@ -151,6 +154,9 @@ internal sealed partial class AgentRuntime
                     _history.AddRange(record.Chat.TakeLast(ChatHistoryLimit));
                 }
 
+                // The omitted-count comes back with the chat, so a continued run's log still says
+                // how much earlier conversation the window is hiding.
+                _historyTrimmed = record.ChatTrimmed;
                 _restoredDecisions = record.Decisions;
                 if (record.Strategy != null)
                 {

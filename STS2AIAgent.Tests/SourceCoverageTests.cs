@@ -77,6 +77,9 @@ internal static class SourceCoverageTests
         // The per-model verification surface (ping + tool-calling probe, recorded per model). An
         // AgentRuntime partial, so it stays unlinked with the base file; the Roslyn pass still parses it.
         "STS2AIAgent/Agent/AgentRuntime.ModelTest.cs",
+        // The status line's writers (settled status, in-flight request flag, per-phase elapsed clock).
+        // An AgentRuntime partial reading the status fields, so it stays unlinked with the base file.
+        "STS2AIAgent/Agent/AgentRuntime.Status.cs",
         // The conversation card (chat log rendering, scroll-to-bottom, the chat-side option row). A
         // Godot control builder, unlinked like the pages file it was split out of.
         "STS2AIAgent/Ui/AgentOverlayHost.ChatCard.cs",

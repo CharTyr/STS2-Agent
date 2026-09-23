@@ -1286,58 +1286,6 @@ internal sealed partial class AgentRuntime
 
     public void NotifyStatus(string status) => SetStatus(status);
 
-    private void SetStatus(string status)
-    {
-        _status = status;
-        _requestingModelStatus = false;
-        RaiseChanged();
-    }
-
-    // The status line is the only player-visible record that a model request is in flight, and the
-    // chat path never sets _requestingModel, so the flag is kept next to the text it belongs to.
-    private void SetRequestingModelStatus()
-    {
-        _status = Loc.T("正在请求模型…");
-        _requestingModelStatus = true;
-        RaiseChanged();
-    }
-
-    /// <summary>When the current in-flight phase started, so the status line can show elapsed time.</summary>
-    private DateTimeOffset _phaseStartedAt;
-
-    /// <summary>
-    /// Reports which stage of a turn the loop is in ("reading state", "waiting for the game",
-    /// "requesting the model", "asking Jev", "executing the action"). A turn is a chain of waits
-    /// that each used to leave the status line on the previous stage's text -- or on "requesting
-    /// the model" for the whole turn -- so a stall was indistinguishable from a slow answer. The
-    /// elapsed suffix makes a stuck stage visible as a growing counter rather than frozen text.
-    /// </summary>
-    private void SetPlayPhase(string phase)
-    {
-        _phaseStartedAt = DateTimeOffset.UtcNow;
-        _status = phase;
-        _requestingModelStatus = true;
-        RaiseChanged();
-    }
-
-    /// <summary>The status text with the current phase's elapsed time appended while a turn runs.</summary>
-    public string StatusWithElapsed
-    {
-        get
-        {
-            var status = Status;
-            if (!_requestingModelStatus || _phaseStartedAt == default)
-            {
-                return status;
-            }
-
-            var elapsed = DateTimeOffset.UtcNow - _phaseStartedAt;
-            return elapsed.TotalSeconds < 2
-                ? status
-                : Loc.T("{0}（已等待 {1} 秒）", status, (int)elapsed.TotalSeconds);
-        }
-    }
-
     private void RaiseChanged()
     {
         Changed?.Invoke();

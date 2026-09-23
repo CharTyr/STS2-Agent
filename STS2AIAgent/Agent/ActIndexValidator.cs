@@ -75,6 +75,16 @@ internal static class ActIndexValidator
 
     private const string HandPath = "combat.hand";
 
+    /// <summary>
+    /// Option-index values that are commands rather than list positions, by action. A sentinel is
+    /// never judged against the payload list: resolve_rewards' -1 means "skip the card reward", and
+    /// no card list contains it.
+    /// </summary>
+    private static readonly Dictionary<string, HashSet<int>> IndexSentinels = new(StringComparer.OrdinalIgnoreCase)
+    {
+        ["resolve_rewards"] = new HashSet<int> { -1 }
+    };
+
     private const string HandTargetPath = "combat.hand[].targets";
 
     /// <summary>
@@ -176,10 +186,10 @@ internal static class ActIndexValidator
             }
             else if (!playCard && index is int option && optionList.Found)
             {
-                // resolve_rewards documents option_index -1 as "skip the card reward"; it is a
-                // sentinel, not a list position, so it is never judged against reward.cards.
-                var skipSentinel = string.Equals(action, "resolve_rewards", StringComparison.OrdinalIgnoreCase) && option == -1;
-                if (!skipSentinel && !optionList.Indices.Contains(option))
+                // A declared sentinel (resolve_rewards' -1 = skip) is a command, not a position, so
+                // it is never judged against the list.
+                var sentinel = IndexSentinels.TryGetValue(action, out var sentinels) && sentinels.Contains(option);
+                if (!sentinel && !optionList.Indices.Contains(option))
                 {
                     return OutOfRange($"option_index {option} is not in the latest payload for {action}.", "option_index", option, optionList.Field, optionList.Indices);
                 }

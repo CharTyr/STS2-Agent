@@ -51,6 +51,7 @@ internal sealed partial class AgentOverlayHost
     private LineEdit? _jevApiKeyEdit;
     private LineEdit? _jevModelEdit;
     private LineEdit? _jevThresholdEdit;
+    private LineEdit? _jevTimeoutEdit;
     private Button? _jevTestButton;
     private Label? _jevTestStatus;
 
@@ -497,14 +498,17 @@ internal sealed partial class AgentOverlayHost
         _jevApiKeyEdit = UiFactory.Line(settings.JevApiKey, "API Key", secret: true);
         _jevModelEdit = UiFactory.Line(settings.JevModel, "jev-latest");
         _jevThresholdEdit = UiFactory.Line(settings.JevConfidenceThreshold.ToString("0.00"), "0.35");
+        _jevTimeoutEdit = UiFactory.Line(settings.JevRequestTimeoutSeconds?.ToString() ?? "", Loc.T("默认 90 秒"));
         WatchLine(_jevBaseUrlEdit);
         WatchLine(_jevApiKeyEdit);
         WatchLine(_jevModelEdit);
         WatchLine(_jevThresholdEdit);
+        WatchLine(_jevTimeoutEdit);
         column.AddChild(Labeled(Loc.T("Base URL"), _jevBaseUrlEdit));
         column.AddChild(Labeled(Loc.T("API Key"), _jevApiKeyEdit));
         column.AddChild(Labeled(Loc.T("模型"), _jevModelEdit));
         column.AddChild(Labeled(Loc.T("置信度阈值（0-1，低于则回退 LLM）"), _jevThresholdEdit));
+        column.AddChild(Labeled(Loc.T("单次请求超时（秒）"), _jevTimeoutEdit));
 
         _jevTestButton = UiFactory.Button(Loc.T("测试 Jev 连接"), () => _ = TestJevConnectionAsync(), UiFactory.ButtonKind.Ghost);
         _jevTestStatus = UiFactory.Wrapped("", UiFactory.FontCaption);
@@ -840,6 +844,14 @@ internal sealed partial class AgentOverlayHost
             double.TryParse(_jevThresholdEdit.Text.Trim(), out var threshold))
         {
             current.JevConfidenceThreshold = threshold;
+        }
+
+        if (_jevTimeoutEdit != null)
+        {
+            current.JevRequestTimeoutSeconds =
+                int.TryParse(_jevTimeoutEdit.Text.Trim(), out var jevSeconds) && jevSeconds > 0
+                    ? jevSeconds
+                    : null;
         }
 
         return current;

@@ -44,7 +44,6 @@ internal static partial class Loc
         map["显示思考内容"] = "Show reasoning";
         map["回复语言"] = "Reply language";
         map["跟随玩家"] = "Follow the player";
-        map["思考强度"] = "Thinking intensity";
         map["和 AI 说这局怎么打；它会参考你的话做下一次决策。"] =
             "Tell the AI how to play this run; it weighs what you say on its next decision.";
         map["双层决策模式（Jev 执行 + LLM 规划）"] = "Dual-layer decisions (Jev acts, LLM plans)";
@@ -221,6 +220,7 @@ internal static partial class Loc
         map["⚠️ 已连通，但工具调用不可用——该模型无法自动游玩（{0}）"] =
             "⚠️ Connected, but tool calling failed — this model cannot auto-play ({0})";
         map["默认 600 秒"] = "Default 600 seconds";
+        map["默认 90 秒"] = "Default 90 seconds";
         map["单次请求超时（秒）"] = "Per-request timeout (seconds)";
         map["服务商长时间不应答时按此时长报错，而不是一直转圈。"] =
             "When the provider stops answering, the request fails after this long instead of spinning forever.";
