@@ -28,7 +28,7 @@
 1. **模式滑块**：`UiFactory` 新增 `SegmentedSwitch(options, selectedIndex, onSelect)`（两个 pill 按钮互斥，选中态实心，复用 TabButton 样式）。选中持久化到 `AgentSettings.OverlayPlayMode`（`"solo"`/`"coop"`，默认 `"solo"`）。
 2. **单人区**（`OverlayPlayMode == "solo"` 时可见）：
    - 控制条 card：开始/暂停 `_playToggle`、单步 `_stepButton`、三 metric tile（屏幕/最近动作/Token）——沿用现 play 页实现（Pages.cs:99-133）。
-   - 对话 card：`_chatLog`（Rich，ScrollFollowing）+ 输入 + 发送/清空 + 三勾选（附带状态/截图/允许代打）——从 chat 页与 chat footer 并入；新增「显示思考内容」勾选 `_showThinking`（持久化 `AgentSettings.ShowThinkingInChat`，默认 false），开启时把 `AgentTurnResult.Reasoning` 渲染进对话流。
+   - 对话 card：`_chatLog`（Rich，ScrollFollowing）+ 输入 + 发送/清空 + 两勾选（附带状态/截图）；2026-09-23 用户确认代打仅靠明确短语，不恢复授权勾选；运行中指令只作用后续回合——从 chat 页与 chat footer 并入；新增「显示思考内容」勾选 `_showThinking`（持久化 `AgentSettings.ShowThinkingInChat`，默认 false），开启时把 `AgentTurnResult.Reasoning` 渲染进对话流。
    - 决策渲染：把每次 act 的工具调用与结果以对话气泡形式追加进 `_chatLog`（来源标记 `agent_loop`/`jev`），使「对话即决策流」。
 3. **多人区**（`OverlayPlayMode == "coop"` 时可见）：现 dual 页内容整体迁入（邀请/继续/暂停/恢复/自动选角/组队状态/队伍交流，Pages.cs:167-261）。
 4. **Jev 面板 card**（当前模式双层开关开启时可见）：`_jevStatus`（连接/配置状态）、`_jevLastChoice`（所选动作 + 置信度 + 延迟）、`_jevProbabilities`（概率分布，Wrapped/Rich）。数据来自 `AgentRuntime` 暴露的最近 Jev 决策快照（子任务2提供 `AgentRuntime.LastJevDecision` 之类的只读属性；本任务先建容器与「未开启双层决策」空态）。
