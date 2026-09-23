@@ -4,7 +4,9 @@ param(
     [string]$BindHost = "127.0.0.1",
     [int]$Port = 8765,
     [string]$Path = "/mcp",
-    [string]$ApiBaseUrl = "http://127.0.0.1:8080"
+    # Honor STS2_API_BASE_URL like the stdio launcher does: the mod moves off 8080 when the port is
+    # busy, and a hard-coded default here silently pinned the server to the wrong instance.
+    [string]$ApiBaseUrl = $(if ($env:STS2_API_BASE_URL) { $env:STS2_API_BASE_URL } else { "http://127.0.0.1:8080" })
 )
 
 $ErrorActionPreference = "Stop"

@@ -61,13 +61,20 @@ internal sealed class LlmMessage
 
     public IReadOnlyList<LlmToolCall>? ToolCalls { get; init; }
 
+    /// <summary>
+    /// The provider's own <c>reasoning_content</c> for an assistant turn that called tools. Thinking
+    /// models (DeepSeek thinking mode, Kimi thinking) reject the next tool round with HTTP 400 unless
+    /// it is sent back; providers that never return it never get it echoed.
+    /// </summary>
+    public string? Reasoning { get; init; }
+
     public static LlmMessage System(string content) => new() { Role = "system", Content = content };
 
     public static LlmMessage User(string content, byte[]? imageJpeg = null) =>
         new() { Role = "user", Content = content, ImageJpeg = imageJpeg };
 
-    public static LlmMessage Assistant(string? content, IReadOnlyList<LlmToolCall>? toolCalls = null) =>
-        new() { Role = "assistant", Content = content, ToolCalls = toolCalls };
+    public static LlmMessage Assistant(string? content, IReadOnlyList<LlmToolCall>? toolCalls = null, string? reasoning = null) =>
+        new() { Role = "assistant", Content = content, ToolCalls = toolCalls, Reasoning = reasoning };
 
     public static LlmMessage Tool(string toolCallId, string content) =>
         new() { Role = "tool", ToolCallId = toolCallId, Content = content };

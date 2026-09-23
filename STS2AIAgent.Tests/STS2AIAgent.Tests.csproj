@@ -38,6 +38,7 @@
     <Compile Include="..\STS2AIAgent\Multiplayer\CompanionConnection.cs" Link="Multiplayer\CompanionConnection.cs" />
     <Compile Include="..\STS2AIAgent\Multiplayer\CompanionSettingsPatch.cs" Link="Multiplayer\CompanionSettingsPatch.cs" />
     <Compile Include="..\STS2AIAgent\Multiplayer\CompanionJevSnapshot.cs" Link="Multiplayer\CompanionJevSnapshot.cs" />
+    <Compile Include="..\STS2AIAgent\Multiplayer\CompanionHostWatch.cs" Link="Multiplayer\CompanionHostWatch.cs" />
     <Compile Include="..\STS2AIAgent\Ui\PlayModeSwitchPolicy.cs" Link="Ui\PlayModeSwitchPolicy.cs" />
     <Compile Include="..\STS2AIAgent\Config\*.cs" Link="Config\%(Filename)%(Extension)" />
     <Compile Include="..\STS2AIAgent\Llm\*.cs" Link="Llm\%(Filename)%(Extension)" />

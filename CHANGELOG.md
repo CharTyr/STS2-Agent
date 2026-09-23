@@ -4,6 +4,30 @@
 
 ## Unreleased
 
+- **Severe-usability sweep (2026-09-23).** Pause now works even when the game window stops rendering
+  frames: every game-thread call the auto-play turn makes (turn snapshot, act, game-data lookups,
+  screenshots, companion follow-ups, session observation) carries the pause token and a deadline. An
+  act abandoned while still queued never runs later. The map no longer offers `choose_map_node` during
+  the travel animation, when the game silently ignores the click and the agent kept re-sending it. The
+  AI teammate no longer stops itself after 150 s while the human host is still choosing a map node,
+  and it quits by itself when the host window closes, crashes or is killed, instead of running
+  invisibly and spending budget. LLM compatibility: DeepSeek/Kimi thinking modes keep working past the
+  first tool round (`reasoning_content` is echoed); OpenRouter-style keep-alive comments no longer
+  break streamed replies; tool calls with numeric ids, object arguments or no id are no longer dropped
+  or fatal. A card-reward skip clicks the enabled Skip, not a disabled alternative. A reward flow
+  stopped at a card choice now says so instead of "still transitioning". A finished event's proceed
+  during an act transition returns a retryable 503 instead of a 500. In co-op, an `AnyPlayer` potion
+  aimed at a teammate who just died fails visibly instead of hitting the local player. In dual-layer
+  mode, Jev is no longer offered rest, reward, epoch or shop options the game would reject. The
+  per-model Test also verifies the model's roles, so a green badge no longer launches a teammate that
+  just stands still, and a failed test shows its reason on the card. `/vision/screenshot` hides the
+  overlay. Monster `damage_values`/`block_values` (always null) are no longer projected to agents; live
+  damage stays in `combat.enemies[].intents`. The overlay no longer builds a full state payload each
+  refresh just for the screen name, and long co-op status lines wrap. Scripts: the network MCP
+  launchers honor `STS2_API_BASE_URL`; `start-game-session.ps1` fails when the old port isn't released;
+  `build-mod.sh --skip-install` no longer requires a mods directory. Offline build, C# and Python tests,
+  and gates pass; live-game validation of these paths is still pending.
+
 - **Audit remediation integrates solo/co-op lifecycle, run-scoped guidance, and Jev status.**
   A mode switch pauses the active loop or companion before saving the new mode; external
   start routes honor the selected mode and do not start a second loop during a switch.

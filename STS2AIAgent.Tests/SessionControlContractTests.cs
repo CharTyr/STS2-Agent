@@ -29,7 +29,10 @@ internal static class SessionControlContractTests
         var source = AgentSourceFixture.Read("STS2AIAgent/Server/Router.cs");
         var body = AgentSourceFixture.MethodBody(source, "HandleAsync");
         Assert.Contains("/vision/screenshot", body, StringComparison.Ordinal);
-        Assert.Contains("ScreenshotService.CaptureJpeg", body, StringComparison.Ordinal);
+        // The bridge's capture hides the overlay for a frame; a direct CaptureJpeg drew the mod's panel.
+        Assert.Contains("CaptureScreenshotJpegAsync", body, StringComparison.Ordinal);
+        Assert.False(body.Contains("ScreenshotService.CaptureJpeg", StringComparison.Ordinal),
+            "The HTTP screenshot must go through GameBridge.CaptureScreenshotJpegAsync so the overlay is hidden.");
         Assert.Contains("image/jpeg", body, StringComparison.Ordinal);
         Assert.Contains("Screenshots are only available on loopback.", body, StringComparison.Ordinal);
     }

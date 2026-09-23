@@ -31,6 +31,25 @@ internal static class LocalDualInstanceLauncher
 
     public static bool CompanionProcessExited => _companionProcess is { HasExited: true };
 
+    /// <summary>
+    /// Best-effort, non-blocking close of the companion window when the host shuts down normally.
+    /// The companion's own host watchdog is the backstop for crashes and force-kills.
+    /// </summary>
+    public static void TryCloseCompanion()
+    {
+        try
+        {
+            if (_companionProcess is { HasExited: false } process)
+            {
+                process.CloseMainWindow();
+            }
+        }
+        catch (Exception ex)
+        {
+            Log.Warn($"{LogPrefix} Could not close the companion window: {ex.Message}");
+        }
+    }
+
     public static string? ResolveGameExe()
     {
         try
@@ -272,6 +291,10 @@ internal static class LocalDualInstanceLauncher
             .ToString(System.Globalization.CultureInfo.InvariantCulture);
         startInfo.Environment["STS2_AGENT_AUTOPLAY"] = companionAutoPlay ? "1" : "0";
         startInfo.Environment["STS2_AGENT_SETTINGS_PATH"] = companionSettingsPath;
+        // The companion quits by itself once this host is gone (see CompanionHostWatch), so closing
+        // or crashing the host never leaves an invisible AI teammate running and spending.
+        startInfo.Environment[CompanionHostWatch.EnvironmentName] = System.Environment.ProcessId
+            .ToString(System.Globalization.CultureInfo.InvariantCulture);
         var sessionToken = CompanionConnection.CreateToken();
         startInfo.Environment[CompanionConnection.TokenEnvironment] = sessionToken;
 

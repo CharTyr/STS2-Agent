@@ -267,7 +267,9 @@ internal sealed partial class AgentOverlayHost
         // column to 691 and clipped every card against a 440-pixel panel. Every dynamic label that can
         // hold a sentence goes through Wrapped for the same reason.
         _dualHint = UiFactory.Wrapped(DualHintText(), UiFactory.FontCaption);
-        _dualStatus = UiFactory.Label(Loc.T("队友尚未加入。"), UiFactory.FontBody, muted: true);
+        // Wrapped for the same reason: launch results ("AI 队友窗口已经在运行…", Steam-blocked errors
+        // with an exception message) are full sentences wider than the panel.
+        _dualStatus = UiFactory.Wrapped(Loc.T("队友尚未加入。"), UiFactory.FontBody, muted: true);
         // The companion's own live state, not the host's view of the shared run: the host already
         // knows the process is alive, and what a co-op player needs mid-fight is the other
         // character's health and whether it can act. Drawn as a tone chip rather than a sentence, so
@@ -283,7 +285,8 @@ internal sealed partial class AgentOverlayHost
         _dualContinueButton = UiFactory.Button(Loc.T("继续上次联机对局"), () => _ = ContinueDualAsync());
         _teamPause = UiFactory.Button(Loc.T("暂停队友"), () => _ = AgentRuntime.Instance.ControlTeammateAsync(false, CancellationToken.None));
         _teamResume = UiFactory.Button(Loc.T("继续游玩"), () => _ = AgentRuntime.Instance.ControlTeammateAsync(true, CancellationToken.None));
-        _teamControlStatus = UiFactory.Label(AgentRuntime.Instance.TeamControlStatus, UiFactory.FontCaption, muted: true);        page.AddChild(UiFactory.Card(
+        _teamControlStatus = UiFactory.Wrapped(AgentRuntime.Instance.TeamControlStatus, UiFactory.FontCaption, muted: true);
+        page.AddChild(UiFactory.Card(
             Loc.T("邀请与控制"),
             _companionChoiceToggle,
             _dualHint,
@@ -537,11 +540,11 @@ internal sealed partial class AgentOverlayHost
             {
                 try
                 {
-                    _playScreen.Text = GameStateService.BuildStatePayload().screen;
+                    _playScreen.Text = Loc.T("屏幕：{0}", GameStateService.CurrentScreenName());
                 }
                 catch
                 {
-                    _playScreen.Text = "-";
+                    _playScreen.Text = Loc.T("屏幕：-");
                 }
             }
 

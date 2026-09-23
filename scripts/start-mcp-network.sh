@@ -8,7 +8,7 @@ repo_root_input=""
 host="127.0.0.1"
 port="8765"
 path="/mcp"
-api_base_url="http://127.0.0.1:8080"
+api_base_url="${STS2_API_BASE_URL:-http://127.0.0.1:8080}"
 
 usage() {
   cat <<'EOF'

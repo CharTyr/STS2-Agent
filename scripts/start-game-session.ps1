@@ -104,11 +104,13 @@ function Wait-ForPortRelease {
         }
 
         if (-not $listenerActive) {
-            return
+            return $true
         }
 
         Start-Sleep -Seconds $SleepSeconds
     }
+
+    return $false
 }
 
 function Resolve-SteamExe {
@@ -446,7 +448,12 @@ if (-not $KeepExistingProcesses) {
     if ($existing) {
         Stop-Process -Id $existing.Id -Force
         Start-Sleep -Seconds 2
-        Wait-ForPortRelease -MaxAttempts 10 -SleepSeconds 1 -Port $ApiPort
+        # The mod refuses to fall back to another port when STS2_API_PORT is set, so launching
+        # while the old listener lingers would start a game with no API (or let /health answer
+        # from the old instance). Fail like the POSIX launcher does.
+        if (-not (Wait-ForPortRelease -MaxAttempts 10 -SleepSeconds 1 -Port $ApiPort)) {
+            throw "Timed out waiting for port $ApiPort to be released before starting a new game session."
+        }
     }
 }
 

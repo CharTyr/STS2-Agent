@@ -71,7 +71,7 @@ internal sealed class GameBridge : IGameBridge
 
     public Task<string> GetScreenAsync(CancellationToken cancellationToken)
     {
-        return GameThread.InvokeAsync(() => GameStateService.BuildStatePayload().screen, cancellationToken);
+        return GameThread.InvokeAsync(() => GameStateService.CurrentScreenName(), cancellationToken);
     }
 
     public Task<string> ActAsync(
@@ -85,6 +85,8 @@ internal sealed class GameBridge : IGameBridge
         CancellationToken cancellationToken,
         bool rawState = false)
     {
+        // Abandonable only while queued: a game thread that stops pumping used to leave this await
+        // hanging with pause unable to break it. Once the action starts it runs under its own waits.
         return GameThread.InvokeAsync(async () =>
         {
             cancellationToken.ThrowIfCancellationRequested();
@@ -126,8 +128,17 @@ internal sealed class GameBridge : IGameBridge
                 // boundary would send; keep it observable in-process through the shared envelope.
                 return AgentErrorEnvelope.Serialize(ex, JsonOptions);
             }
-        });
+        }, GameThreadStartBudget, cancellationToken);
     }
+
+    /// <summary>
+    /// How long a posted act/screenshot may wait for the game thread to pick it up before the turn
+    /// fails visibly (a normal frame starts it within milliseconds).
+    /// </summary>
+    private static readonly TimeSpan GameThreadStartBudget = TimeSpan.FromSeconds(15);
+
+    /// <summary>Deadline for read-only game-data exports; a late run is discarded harmlessly.</summary>
+    private static readonly TimeSpan GameDataReadBudget = TimeSpan.FromSeconds(15);
 
     public Task<string> GetGameDataItemJsonAsync(string collection, string itemId, CancellationToken cancellationToken)
     {
@@ -140,7 +151,7 @@ internal sealed class GameBridge : IGameBridge
 
             var item = GameDataFilter.FindItem(element, itemId);
             return JsonSerializer.Serialize(item, JsonOptions);
-        });
+        }, GameDataReadBudget, cancellationToken);
     }
 
     public Task<string> GetGameDataItemsJsonAsync(string collection, IReadOnlyList<string> itemIds, CancellationToken cancellationToken)
@@ -153,7 +164,7 @@ internal sealed class GameBridge : IGameBridge
             }
 
             return JsonSerializer.Serialize(GameDataFilter.FindItems(element, itemIds), JsonOptions);
-        });
+        }, GameDataReadBudget, cancellationToken);
     }
 
     public Task<string> GetRelevantGameDataJsonAsync(string collection, IReadOnlyList<string> itemIds, CancellationToken cancellationToken)
@@ -177,7 +188,7 @@ internal sealed class GameBridge : IGameBridge
             }
 
             return JsonSerializer.Serialize(GameDataFilter.ProjectRelevant(state.screen, collection, element, ids), JsonOptions);
-        });
+        }, GameDataReadBudget, cancellationToken);
     }
 
     /// <summary>
@@ -266,7 +277,7 @@ internal sealed class GameBridge : IGameBridge
             {
                 ScreenshotService.EndCapture?.Invoke();
             }
-        });
+        }, GameThreadStartBudget, cancellationToken);
     }
 
     private static bool TryExportCollection(string collection, out JsonElement element, out string errorJson)

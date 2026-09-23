@@ -92,7 +92,7 @@ internal static partial class GameStateService
                     .First());
 
         var availableNodes = visibleNodes.Values
-            .Where(node => node.IsEnabled)
+            .Where(node => IsMapNodeClickable(mapScreen!, node))
             .OrderBy(node => node.Point.coord.row)
             .ThenBy(node => node.Point.coord.col)
             .ToArray();
@@ -244,10 +244,29 @@ internal static partial class GameStateService
         }
 
         return FindDescendants<NMapPoint>(mapScreen!)
-            .Where(node => GodotObject.IsInstanceValid(node) && node.IsEnabled)
+            .Where(node => GodotObject.IsInstanceValid(node) && IsMapNodeClickable(mapScreen!, node))
             .OrderBy(node => node.Point.coord.row)
             .ThenBy(node => node.Point.coord.col)
             .ToArray();
+    }
+
+    /// <summary>
+    /// Whether a click on this map point would be honoured right now -- the game's own
+    /// <c>NMapPoint.IsTravelable</c> rule, not the point's <c>IsEnabled</c> alone. <c>IsEnabled</c> is a
+    /// cache the game refreshes only when a point's state changes, never when travel is toggled:
+    /// once a node is picked, <c>TravelToMapCoord</c> turns travel off while every next-row point
+    /// stays enabled for the whole path/fade animation. Reading the cache kept <c>choose_map_node</c>
+    /// advertised for seconds while <c>OnRelease</c> silently ignored the click, and the agent
+    /// re-sent it in a loop.
+    /// </summary>
+    private static bool IsMapNodeClickable(NMapScreen mapScreen, NMapPoint node)
+    {
+        if (!node.IsEnabled || mapScreen.IsTraveling)
+        {
+            return false;
+        }
+
+        return mapScreen.IsTravelEnabled || mapScreen.IsDebugTravelEnabled;
     }
 
     private static IReadOnlyList<MapPoint> GetAllMapPoints(ActMap map)

@@ -774,7 +774,7 @@ internal sealed partial class AgentOverlayHost
                 {
                     try
                     {
-                        _playScreen.Text = Loc.T("屏幕：{0}", GameStateService.BuildStatePayload().screen);
+                        _playScreen.Text = Loc.T("屏幕：{0}", GameStateService.CurrentScreenName());
                     }
                     catch
                     {

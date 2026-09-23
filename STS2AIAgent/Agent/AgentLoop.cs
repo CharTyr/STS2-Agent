@@ -476,7 +476,9 @@ internal sealed partial class AgentLoop
                     };
                 }
 
-                messages.Add(LlmMessage.Assistant(completion.Content, completion.ToolCalls));
+                // Carry the provider's reasoning back with the tool-call turn: DeepSeek/Kimi thinking
+                // modes reject the next tool round with HTTP 400 when it is missing.
+                messages.Add(LlmMessage.Assistant(completion.Content, completion.ToolCalls, completion.Reasoning));
                 foreach (var call in completion.ToolCalls)
                 {
                     cancellationToken.ThrowIfCancellationRequested();

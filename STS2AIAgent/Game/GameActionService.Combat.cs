@@ -726,6 +726,13 @@ internal static partial class GameActionService
         {
             TargetType.AnyEnemy => ResolvePotionEnemyTarget(request, combatState, potion),
             TargetType.AnyPlayer when GameStateService.PotionRequiresTarget(combatState, potion) => ResolvePotionPlayerTarget(request, combatState, potion),
+            // An explicit player target stays authoritative even when the requirement was re-derived
+            // as false since the caller's /state (a teammate died in between): falling through to the
+            // owner silently spent the potion on the local player instead of the chosen teammate.
+            // A target that is no longer valid now fails as a visible 409 invalid_target.
+            TargetType.AnyPlayer when request.target_index != null
+                && combatState != null
+                && combatState.PlayerCreatures.Count > 1 => ResolvePotionPlayerTarget(request, combatState, potion),
             TargetType.TargetedNoCreature => null,
             // AoE / random-target potions resolve their targets inside the game.
             // Passing Owner.Creature here makes the game silently discard the use

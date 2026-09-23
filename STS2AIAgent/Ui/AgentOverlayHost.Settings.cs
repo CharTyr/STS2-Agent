@@ -459,7 +459,8 @@ internal sealed partial class AgentOverlayHost
             _settingsBody.AddChild(UiFactory.Wrapped(Loc.T("默认关闭。开启后仅在战斗开始与结束时各说一句，每次开始自动游玩最多 6 句，两句之间至少间隔 75 秒（暂停或继续自动游玩不会缩短这个间隔）；不会代打，也遵守预算上限。"), 11));
             _settingsBody.AddChild(UiFactory.Button(Loc.T("重置窗口位置"), ResetPlacement));
             _settingsBody.AddChild(UiFactory.Label(Loc.T("拖动标题栏可移动窗口，位置会保存。"), 11, muted: true));
-            _settingsBody.AddChild(UiFactory.Label(Loc.T("配置文件：{0}", AgentRuntime.Instance.SettingsPath), 11, muted: true));
+            // Wrapped: a Windows profile path is one long word wider than the panel.
+            _settingsBody.AddChild(UiFactory.Wrapped(Loc.T("配置文件：{0}", AgentRuntime.Instance.SettingsPath), 11));
         }
         else
         {
@@ -688,9 +689,14 @@ internal sealed partial class AgentOverlayHost
 
         if (!AgentRuntime.Instance.IsModelVerified(modelId))
         {
-            return record.Status == "verified"
-                ? Loc.T("⚪ 配置已修改，需重新测试。")
-                : Loc.T("⚪ 未测试。点「测试」做一次真实调用（含工具调用检测）。");
+            return record.Status switch
+            {
+                "verified" => Loc.T("⚪ 配置已修改，需重新测试。"),
+                // A failed test must not look like "never tested": the player just pressed the
+                // button and needs the reason on the card, not in a line the rebuild erases.
+                "failed" => Loc.T("⚠️ 测试失败（{0}）：{1}", ShortTime(record.TestedAt), record.Error ?? ""),
+                _ => Loc.T("⚪ 未测试。点「测试」做一次真实调用（含工具调用检测）。")
+            };
         }
 
         return record.Tools == "supported"
@@ -709,8 +715,10 @@ internal sealed partial class AgentOverlayHost
         SaveSettingsFromUi();
         SetSaveStatus(Loc.T("正在测试模型…"));
         var result = await AgentRuntime.Instance.TestModelAsync(modelId, CancellationToken.None);
-        SetSaveStatus(result);
+        // Rebuild first: RebuildSettingsForm recreates _saveStatus, so a status written before it
+        // was discarded and the player never saw the test verdict.
         RebuildSettingsForm();
+        SetSaveStatus(result);
     }
 
     /// <summary>The settings page's state line: reused for the per-model test's progress.</summary>

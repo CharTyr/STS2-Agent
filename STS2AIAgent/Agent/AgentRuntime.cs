@@ -365,6 +365,7 @@ internal sealed partial class AgentRuntime
         {
             SetStatus(Loc.T("同伴实例：正在加入大厅"));
             _ = Task.Run(() => CompanionEntryAsync(_lifetime.Token));
+            _ = Task.Run(() => WatchHostAsync(_lifetime.Token));
         }
     }
 
@@ -372,6 +373,10 @@ internal sealed partial class AgentRuntime
     {
         StopAutoPlay();
         FlushSessionIfDirty();
+        if (!InstanceRole.IsCompanion)
+        {
+            LocalDualInstanceLauncher.TryCloseCompanion();
+        }
         NativeMcpServer.Runtime?.SetEnabled(false, McpEndpointUrl());
         try
         {
@@ -989,11 +994,13 @@ internal sealed partial class AgentRuntime
                 {
                     _requestingModel = true;
                     RaiseChanged();
+                    // Bounded and token-aware: a game thread that stops pumping must fail this turn
+                    // visibly and let pause through, not wedge the loop in "stopping" forever.
                     var snapshot = await GameThread.InvokeAsync(() =>
                     {
                         var payload = GameStateService.BuildStatePayload();
                         return (payload.screen, payload.session.phase, payload.run_id, payload.in_combat, payload.run?.act_id);
-                    });
+                    }, TurnGameThreadBudget, token);
                     // Do not re-arm the boundary here: replacing it before checking would clear the
                     // "entered a run" flag that makes a return to the menu a stop. Starting auto-play
                     // is what installs a fresh boundary (see StartAutoPlay).
@@ -1040,6 +1047,12 @@ internal sealed partial class AgentRuntime
         finally { CancelStrategyRefresh(); FlushSessionIfDirty(); RaiseChanged(); }
     }
 
+    /// <summary>
+    /// Deadline for the auto-play turn's own game-thread posts (the turn snapshot and the companion's
+    /// immediate decision). A normal frame runs them within milliseconds.
+    /// </summary>
+    private static readonly TimeSpan TurnGameThreadBudget = TimeSpan.FromSeconds(15);
+
     private async Task<AgentTurnResult?> TryCompanionImmediateAsync(CancellationToken cancellationToken)
     {
         var followMapVotes = InstanceRole.IsCompanion;
@@ -1058,7 +1071,7 @@ internal sealed partial class AgentRuntime
                 payload.modal?.can_dismiss == true,
                 payload.in_combat,
                 followMapVotes);
-        });
+        }, TurnGameThreadBudget, cancellationToken);
 
         if (decision.Kind == CompanionImmediateDecision.Wait)
         {
@@ -1089,7 +1102,7 @@ internal sealed partial class AgentRuntime
                 client_context = new { source = "companion_follow", instance_role = InstanceRole.Current }
             });
             return response.message ?? response.action;
-        });
+        }, TurnGameThreadBudget, cancellationToken);
 
         var reasoning = string.Equals(acted, "confirm_modal", StringComparison.OrdinalIgnoreCase)
             ? Loc.T("确认阻挡操作的教学弹窗。")

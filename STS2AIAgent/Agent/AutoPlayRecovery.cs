@@ -27,6 +27,15 @@ internal sealed class AutoPlayRecovery
         // its own 20-second timeout must not stretch the budget into tens of minutes.
         if (result.WaitingForGame)
         {
+            // A wait on the human player (the companion waiting for the host's map pick) is not a
+            // hang: the host may take minutes, and stopping the teammate with "the game may be stuck"
+            // blamed the wrong party. Only game-driven waits run the wall clock.
+            if (result.WaitingForPlayer)
+            {
+                _waitingForGameSince = default;
+                return (null, null, TimeSpan.FromSeconds(1));
+            }
+
             if (_waitingForGameSince == default)
             {
                 _waitingForGameSince = DateTimeOffset.UtcNow;

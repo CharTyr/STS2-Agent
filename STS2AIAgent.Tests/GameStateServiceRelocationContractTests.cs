@@ -33,6 +33,11 @@ namespace STS2AIAgent.Tests;
 /// <c>BuildCombatLethalRiskPayloads</c> was regenerated again when Doom and Magic Bomb joined the
 /// flag the strategy text tells a model to trust. The player-played bomb stays out: it damages
 /// enemies, not the player who played it.
+///
+/// <c>GetAvailableMapNodes</c> and <c>BuildMapPayload</c> were regenerated on 2026-09-23 when the
+/// clickable-node filter moved from the stale <c>NMapPoint.IsEnabled</c> cache to the game's own
+/// travelability rule (<c>IsMapNodeClickable</c>): during the travel animation the cache kept
+/// <c>choose_map_node</c> advertised while the game ignored the click.
 /// </remarks>
 internal static class GameStateServiceRelocationContractTests
 {
@@ -73,7 +78,7 @@ internal static class GameStateServiceRelocationContractTests
         ["GetBundleConfirmButtons"] = ("STS2AIAgent/Game/GameStateService.Rewards.cs", "661299b6ef79e6c810c325402bcf023ad677e441218dbdcaf634ac24a217729c"),
         ["GetBundleOptions"] = ("STS2AIAgent/Game/GameStateService.Rewards.cs", "b0a150308269400420ee1b0b9990bd22ffcb706ab8619316313dad25bff41d77"),
         ["GetFakeMerchantButton"] = ("STS2AIAgent/Game/GameStateService.Shop.cs", "b549065768ec19025b0d247cea4764ae3d8f83fac807f1a4508e8db2f4b1f2be"),
-        ["GetAvailableMapNodes"] = ("STS2AIAgent/Game/GameStateService.Map.cs", "8470f69f787dd5af7d863f6f6961c722a24eae43c19926ee02e64514ff078c50"),
+        ["GetAvailableMapNodes"] = ("STS2AIAgent/Game/GameStateService.Map.cs", "f67c78291928132ffcc53ea1e39a5784d1d2754ccc7a71994296918bbccec9ab"),
         ["GetRewardButtons"] = ("STS2AIAgent/Game/GameStateService.Rewards.cs", "8b6886a96eb7478c811f70fbb3319c40da7a1dbc870474cf3ac1b2db0bb4d1bd"),
         ["GetRewardProceedButton"] = ("STS2AIAgent/Game/GameStateService.Rewards.cs", "677bbc3328f28aec6b93761c2df5db2b8af2c08cf529da142b861d37ef4a9eff"),
         ["GetCardRewardOptions"] = ("STS2AIAgent/Game/GameStateService.Rewards.cs", "0d32022188d35d1eb975a3454e698d9212de16bbb6a6a718481f8825949b3c57"),
@@ -124,7 +129,7 @@ internal static class GameStateServiceRelocationContractTests
         ["TryGetMemberValue"] = ("STS2AIAgent/Game/GameStateService.cs", "e836d94766bdb94033d236744ba1614100023dc4fcfa20c663e207041f9022d9"),
         ["BuildMultiplayerPayload"] = ("STS2AIAgent/Game/GameStateService.Menus.cs", "fd638afff65048407a7b5a592a642176c7f8b8867ab0022c471b55ea25c158cd"),
         ["BuildMultiplayerLobbyPayload"] = ("STS2AIAgent/Game/GameStateService.Menus.cs", "0370cd7fb6abc690af47ac5b0f3cc7db1424d214f5efa840af620d5761add1aa"),
-        ["BuildMapPayload"] = ("STS2AIAgent/Game/GameStateService.Map.cs", "c33a54df0ca7b0b3c46f1f94f4e801d11777f1f6301c876b72bc81ad47e3570e"),
+        ["BuildMapPayload"] = ("STS2AIAgent/Game/GameStateService.Map.cs", "fe1149246895f8ccb82a3e6627328ac4442037e59e73f540bf3accf4580785e2"),
         ["BuildSelectionPayload"] = ("STS2AIAgent/Game/GameStateService.Rewards.cs", "9043e2ec637810972058b06ea3d437ebc2b428539922bdbbd4feadbcb0c067e3"),
         ["BuildCharacterSelectPayload"] = ("STS2AIAgent/Game/GameStateService.Menus.cs", "c7e28df2cbbdb89eb640d940a41803dc11bf66babcaef667e55b6a8e2a3e1d96"),
         ["BuildEventPayload"] = ("STS2AIAgent/Game/GameStateService.Rooms.cs", "072fb8972e2738c52551e7c6e4902daa8d62747f826cfeb60060a58f5c6f5da6"),

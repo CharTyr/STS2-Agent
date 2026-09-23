@@ -235,6 +235,7 @@ internal static partial class Loc
         map["⚪ 未测试。点「测试」做一次真实调用（含工具调用检测）。"] =
             "⚪ Not tested. Press “Test” for a real call (including a tool-calling probe).";
         map["⚪ 配置已修改，需重新测试。"] = "⚪ Configuration changed; test again.";
+        map["⚠️ 测试失败（{0}）：{1}"] = "⚠️ Test failed ({0}): {1}";
         map["✅ 已验证 · 工具调用可用（{0}）"] = "✅ Verified · tool calling works ({0})";
         map["⚠️ 已连通，但工具调用不可用——该模型无法自动游玩（{0}）"] =
             "⚠️ Connected, but tool calling failed — this model cannot auto-play ({0})";

@@ -7,7 +7,7 @@ param(
     [string]$Path = "/mcp",
     [ValidateSet("guided", "full", "legacy")]
     [string]$ToolProfile = "guided",
-    [string]$ApiBaseUrl = "http://127.0.0.1:8080",
+    [string]$ApiBaseUrl = $(if ($env:STS2_API_BASE_URL) { $env:STS2_API_BASE_URL } else { "http://127.0.0.1:8080" }),
     [string]$BearerToken = $env:STS2_NETWORK_BEARER_TOKEN,
     [switch]$StatelessHttp,
     [switch]$JsonResponse

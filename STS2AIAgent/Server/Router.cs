@@ -377,7 +377,10 @@ internal static class Router
                     throw new ApiException(403, "local_only", "Screenshots are only available on loopback.");
                 }
 
-                var jpeg = await GameThread.InvokeAsync(() => STS2AIAgent.Vision.ScreenshotService.CaptureJpeg());
+                // Through the bridge's capture rather than a direct viewport grab: the bridge hides
+                // the overlay for one frame first, so an external client sees the game rather than
+                // the mod's own panel drawn over it.
+                var jpeg = await new GameBridge().CaptureScreenshotJpegAsync(cancellationToken);
                 if (jpeg == null || jpeg.Length == 0)
                 {
                     throw new ApiException(409, "screenshot_unavailable", "The game viewport did not produce a screenshot.");

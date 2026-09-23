@@ -284,7 +284,8 @@ internal static class JevOptionEnumerator
         {
             if (item.ValueKind != JsonValueKind.Object
                 || !TryReadIndex(item, out var index)
-                || IsLocked(item))
+                || IsLocked(item)
+                || IsUnavailable(action, item))
             {
                 continue;
             }
@@ -515,6 +516,29 @@ internal static class JevOptionEnumerator
     private static bool IsLocked(JsonElement item)
     {
         return ReadBool(item, "locked") || ReadBool(item, "is_locked");
+    }
+
+    /// <summary>
+    /// The availability flag the compact view publishes per action, beyond <c>locked</c>. An item
+    /// whose flag is explicitly false is one the executor 409s (a claimed reward, a disabled rest
+    /// option, a non-actionable epoch, an unaffordable or sold-out shop item): offering it let Jev pick
+    /// it, which wasted the paid Jev request and then forced a full LLM turn for the same screen.
+    /// Absent flags keep the option, matching <see cref="ReadBoolOrAbsent"/>.
+    /// </summary>
+    private static readonly Dictionary<string, string[]> AvailabilityFlags = new(StringComparer.OrdinalIgnoreCase)
+    {
+        ["claim_reward"] = new[] { "claimable" },
+        ["choose_rest_option"] = new[] { "enabled", "is_enabled" },
+        ["choose_timeline_epoch"] = new[] { "actionable", "is_actionable" },
+        ["buy_card"] = new[] { "affordable", "stocked", "enough_gold", "is_stocked" },
+        ["buy_relic"] = new[] { "affordable", "stocked", "enough_gold", "is_stocked" },
+        ["buy_potion"] = new[] { "affordable", "stocked", "enough_gold", "is_stocked" }
+    };
+
+    private static bool IsUnavailable(string action, JsonElement item)
+    {
+        return AvailabilityFlags.TryGetValue(action, out var flags)
+            && flags.Any(flag => !ReadBoolOrAbsent(item, flag));
     }
 
     private static string ReadItemLine(JsonElement item)

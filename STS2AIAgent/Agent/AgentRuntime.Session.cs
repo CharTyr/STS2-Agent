@@ -180,12 +180,15 @@ internal sealed partial class AgentRuntime
     {
         token.ThrowIfCancellationRequested();
         // Confirm within the posted work, not after awaiting its response on an arbitrary thread.
+        // The token reaches the post itself, so pause can break this wait when the game thread stops
+        // pumping instead of only being checked inside a callback that never runs.
         await GameThread.InvokeAsync(() =>
         {
             token.ThrowIfCancellationRequested();
             var state = GameStateService.BuildStatePayload();
             ObserveSessionStateSnapshot(state.run_id, state.screen, state.session.phase);
-        });
+            return true;
+        }, token);
     }
 
     private void ObserveSessionState(string json)

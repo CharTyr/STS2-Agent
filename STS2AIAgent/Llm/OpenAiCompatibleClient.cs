@@ -275,8 +275,25 @@ internal sealed class OpenAiCompatibleClient : ILlmClient
 
     internal static bool LooksLikeSse(string payload)
     {
-        var trimmed = payload.AsSpan().TrimStart();
-        return trimmed.StartsWith("data:", StringComparison.Ordinal);
+        // Gateways (OpenRouter's ": OPENROUTER PROCESSING", retry hints) open the stream with SSE
+        // comment/field lines before the first data line. Sniffing only for a leading "data:" sent
+        // that body to the JSON parser and killed the turn with a raw JsonException.
+        foreach (var rawLine in payload.Split('\n'))
+        {
+            var line = rawLine.Trim();
+            if (line.Length == 0)
+            {
+                continue;
+            }
+
+            return line.StartsWith("data:", StringComparison.Ordinal)
+                || line.StartsWith(':')
+                || line.StartsWith("event:", StringComparison.Ordinal)
+                || line.StartsWith("retry:", StringComparison.Ordinal)
+                || line.StartsWith("id:", StringComparison.Ordinal);
+        }
+
+        return false;
     }
 
     internal static LlmCompletion ParseSsePayload(string payload)
@@ -373,12 +390,14 @@ internal sealed class OpenAiCompatibleClient : ILlmClient
         {
             Content = content.Length == 0 ? null : content.ToString(),
             Reasoning = reasoning.Length == 0 ? null : reasoning.ToString(),
-            ToolCalls = toolCalls.Values.Select(call => new LlmToolCall
+            // A stream that never sent an id (some local servers) still carried a real call: give it a
+            // stable synthetic id instead of dropping the model's act on the floor.
+            ToolCalls = toolCalls.Select(pair => new LlmToolCall
             {
-                Id = call.Id ?? string.Empty,
-                Name = call.Name ?? string.Empty,
-                ArgumentsJson = call.Arguments.Length == 0 ? "{}" : call.Arguments.ToString()
-            }).Where(call => !string.IsNullOrWhiteSpace(call.Id) && !string.IsNullOrWhiteSpace(call.Name)).ToArray(),
+                Id = string.IsNullOrWhiteSpace(pair.Value.Id) ? $"call_{pair.Key + 1}" : pair.Value.Id!,
+                Name = pair.Value.Name ?? string.Empty,
+                ArgumentsJson = pair.Value.Arguments.Length == 0 ? "{}" : pair.Value.Arguments.ToString()
+            }).Where(call => !string.IsNullOrWhiteSpace(call.Name)).ToArray(),
             FinishReason = finishReason,
             Usage = usage
         };
@@ -420,9 +439,10 @@ internal sealed class OpenAiCompatibleClient : ILlmClient
                 toolCalls[index] = acc;
             }
 
-            if (call.TryGetProperty("id", out var idElement) && idElement.ValueKind == JsonValueKind.String)
+            // Some providers repeat "id": "" on every later chunk; only a non-empty id may set it.
+            if (call.TryGetProperty("id", out var idElement) && ReadLooseString(idElement) is { Length: > 0 } streamedId)
             {
-                acc.Id = idElement.GetString();
+                acc.Id = streamedId;
             }
 
             if (!call.TryGetProperty("function", out var function) || function.ValueKind != JsonValueKind.Object)
@@ -435,9 +455,17 @@ internal sealed class OpenAiCompatibleClient : ILlmClient
                 acc.Name = nameElement.GetString();
             }
 
-            if (function.TryGetProperty("arguments", out var argsElement) && argsElement.ValueKind == JsonValueKind.String)
+            if (function.TryGetProperty("arguments", out var argsElement))
             {
-                acc.Arguments.Append(argsElement.GetString());
+                if (argsElement.ValueKind == JsonValueKind.String)
+                {
+                    acc.Arguments.Append(argsElement.GetString());
+                }
+                else if (argsElement.ValueKind == JsonValueKind.Object)
+                {
+                    // A whole-object arguments chunk (Ollama-style) replaces rather than appends.
+                    acc.Arguments.Clear().Append(argsElement.GetRawText());
+                }
             }
         }
     }
@@ -527,6 +555,13 @@ internal sealed class OpenAiCompatibleClient : ILlmClient
                     Arguments = call.ArgumentsJson
                 }
             }).ToList();
+
+            // Only on an assistant tool-call turn, and only what the provider itself returned: thinking
+            // models 400 the next tool round without it, and it is never invented for anyone else.
+            if (message.Role == "assistant" && !string.IsNullOrEmpty(message.Reasoning))
+            {
+                dto.ReasoningContent = message.Reasoning;
+            }
         }
 
         if (message.ImageJpeg is { Length: > 0 })
@@ -673,6 +708,16 @@ internal sealed class OpenAiCompatibleClient : ILlmClient
             : null;
     }
 
+    private static string? ReadLooseString(JsonElement element)
+    {
+        return element.ValueKind switch
+        {
+            JsonValueKind.String => element.GetString(),
+            JsonValueKind.Number => element.GetRawText(),
+            _ => null
+        };
+    }
+
     private static IReadOnlyList<LlmToolCall> ReadToolCalls(JsonElement message)
     {
         if (!message.TryGetProperty("tool_calls", out var toolCalls) || toolCalls.ValueKind != JsonValueKind.Array)
@@ -681,19 +726,36 @@ internal sealed class OpenAiCompatibleClient : ILlmClient
         }
 
         var result = new List<LlmToolCall>();
+        var position = 0;
         foreach (var call in toolCalls.EnumerateArray())
         {
-            var id = call.TryGetProperty("id", out var idElement) ? idElement.GetString() : null;
-            var function = call.TryGetProperty("function", out var functionElement) ? functionElement : default;
-            var name = function.ValueKind == JsonValueKind.Object && function.TryGetProperty("name", out var nameElement)
-                ? nameElement.GetString()
-                : null;
-            var args = function.ValueKind == JsonValueKind.Object && function.TryGetProperty("arguments", out var argsElement)
-                ? argsElement.GetString()
-                : "{}";
-            if (string.IsNullOrWhiteSpace(id) || string.IsNullOrWhiteSpace(name))
+            position++;
+            if (call.ValueKind != JsonValueKind.Object)
             {
                 continue;
+            }
+
+            // Compat shims differ: a numeric id, an object-valued arguments, or no id at all. Reading
+            // them with GetString() threw an unclassified InvalidOperationException that killed the
+            // turn, and a missing id silently dropped the model's act call.
+            var id = call.TryGetProperty("id", out var idElement) ? ReadLooseString(idElement) : null;
+            var function = call.TryGetProperty("function", out var functionElement) ? functionElement : default;
+            var name = function.ValueKind == JsonValueKind.Object && function.TryGetProperty("name", out var nameElement)
+                ? ReadLooseString(nameElement)
+                : null;
+            var args = function.ValueKind == JsonValueKind.Object && function.TryGetProperty("arguments", out var argsElement)
+                ? argsElement.ValueKind is JsonValueKind.Object or JsonValueKind.Array
+                    ? argsElement.GetRawText()
+                    : ReadLooseString(argsElement)
+                : "{}";
+            if (string.IsNullOrWhiteSpace(name))
+            {
+                continue;
+            }
+
+            if (string.IsNullOrWhiteSpace(id))
+            {
+                id = $"call_{position}";
             }
 
             result.Add(new LlmToolCall
@@ -723,6 +785,10 @@ internal sealed class OpenAiCompatibleClient : ILlmClient
         [JsonPropertyName("tool_calls")]
         [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
         public List<ChatToolCallDto>? ToolCalls { get; set; }
+
+        [JsonPropertyName("reasoning_content")]
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        public string? ReasoningContent { get; set; }
     }
 
     private sealed class ChatToolCallDto

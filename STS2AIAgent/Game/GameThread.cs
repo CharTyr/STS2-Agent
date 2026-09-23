@@ -147,6 +147,64 @@ internal static class GameThread
         return completionSource.Task;
     }
 
+    /// <summary>
+    /// <see cref="InvokeAsync{T}(Func{Task{T}})"/> that the caller can abandon -- by its token or
+    /// <paramref name="startTimeout"/> -- only while the work is still queued. A game thread that
+    /// stops pumping used to leave the agent's act/screenshot awaits hanging with pause unable to break
+    /// them. Abandonment is claimed atomically against the start, so an abandoned callback never runs
+    /// later (no action lands after the player paused), and work that already started is seen through:
+    /// a half-executed action is bounded by its own waits and must not be reported as not done.
+    /// </summary>
+    public static async Task<T> InvokeAsync<T>(Func<Task<T>> action, TimeSpan startTimeout, CancellationToken cancellationToken)
+    {
+        if (_syncContext == null)
+        {
+            throw new InvalidOperationException("Game thread context has not been initialized.");
+        }
+
+        if (Environment.CurrentManagedThreadId == _threadId)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            return await action();
+        }
+
+        // 0 = queued, 1 = started, 2 = abandoned.
+        var claim = new System.Runtime.CompilerServices.StrongBox<int>(0);
+        var completionSource = new TaskCompletionSource<T>(TaskCreationOptions.RunContinuationsAsynchronously);
+        _syncContext.Post(_ =>
+        {
+            if (Interlocked.CompareExchange(ref claim.Value, 1, 0) != 0)
+            {
+                completionSource.TrySetCanceled();
+                return;
+            }
+
+            _ = InvokeAsyncCoreAsync(action, completionSource);
+        }, null);
+
+        using var timeoutCts = new CancellationTokenSource(startTimeout);
+        using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, timeoutCts.Token);
+        var wait = Task.Delay(Timeout.InfiniteTimeSpan, linkedCts.Token);
+        var completed = await Task.WhenAny(completionSource.Task, wait);
+        if (completed == completionSource.Task)
+        {
+            return await completionSource.Task;
+        }
+
+        if (Interlocked.CompareExchange(ref claim.Value, 2, 0) == 0)
+        {
+            if (cancellationToken.IsCancellationRequested)
+            {
+                throw new OperationCanceledException(cancellationToken);
+            }
+
+            throw new TimeoutException("The game thread did not start the posted work in time.");
+        }
+
+        // Started before the abandon could be claimed: the work owns its own bounds; see it through.
+        return await completionSource.Task;
+    }
+
     private static async Task InvokeAsyncCoreAsync<T>(Func<Task<T>> action, TaskCompletionSource<T> completionSource)
     {
         try

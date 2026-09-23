@@ -452,6 +452,18 @@ internal static partial class GameActionService
                 });
             }
 
+            // NEventRoom.Proceed dereferences NMapScreen.Instance synchronously; during an act
+            // transition it can be null, which surfaced as a bare 500 instead of a retryable state.
+            if (NMapScreen.Instance == null)
+            {
+                throw new ApiException(503, "state_unavailable", "The map screen is not ready yet; retry the event proceed shortly.", new
+                {
+                    action = "choose_event_option",
+                    screen,
+                    option_index = request.option_index
+                }, retryable: true);
+            }
+
             var proceedTimeout = TimeSpan.FromSeconds(10);
             var proceedTask = NEventRoom.Proceed();
             var completedProceedTask = await WaitForGameTaskAsync(proceedTask, proceedTimeout);
