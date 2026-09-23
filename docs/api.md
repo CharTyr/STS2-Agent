@@ -162,7 +162,7 @@ curl -s http://127.0.0.1:8080/state | jq .
   "request_id": "req_20260911_121549_7955_4",
   "data": {
     "service": "sts2-ai-agent",
-    "mod_version": "0.15.0",
+    "mod_version": "0.16.0",
     "protocol_version": "2026-03-11-v1",
     "game_version": "v0.111.0",
     "status": "ready",

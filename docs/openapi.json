@@ -3397,7 +3397,7 @@
   "info": {
     "description": "Generated from Router routes and C# wire payload declarations. Human guidance remains in docs/api.md.",
     "title": "STS2 AI Agent Mod HTTP API",
-    "version": "0.15.0"
+    "version": "0.16.0"
   },
   "jsonSchemaDialect": "https://json-schema.org/draft/2020-12/schema",
   "openapi": "3.1.0",

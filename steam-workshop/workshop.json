@@ -1,7 +1,7 @@
 {
   "title": "STS2 AI Agent",
   "visibility": "public",
-  "changeNote": "v0.15.0: the AI reads the fields it is actually handed. Strategy advice now uses the compact state names, shop relics and potions carry their ids, and ending a turn reports Doom and Magic Bomb as lethal. Each decision also costs less: one screen of guidance, a compact action result, and a shorter tool list. Nothing changes for your runs: no cards, no numbers, no saves are touched.",
+  "changeNote": "v0.16.0: watch the model think. With \"show reasoning\" on, a thinking model's reasoning now appears in the conversation while it is still deciding. The panel no longer cuts off its right edge (the chat options row was too wide), and the Token reading shows in full. Dual-layer mode: the planner's advice now actually reaches Jev, led by a one-sentence goal. Screenshots for vision no longer include the panel. Nothing changes for your runs: no cards, no numbers, no saves are touched.",
   "tags": [
     "Tools & APIs",
     "Utility",
