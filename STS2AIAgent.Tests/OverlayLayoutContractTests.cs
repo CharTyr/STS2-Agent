@@ -285,7 +285,9 @@ internal static class OverlayLayoutContractTests
         var settings = AgentSourceFixture.Read(Settings);
         var pages = AgentSourceFixture.Read(Pages);
         var settingsForm = AgentSourceFixture.MethodBody(settings, "RebuildSettingsForm");
-        var solo = AgentSourceFixture.MethodBody(pages, "BuildSoloSection");
+        // Line endings normalized: CI checks sources out with CRLF, which would make the multi-line
+        // negative check below pass vacuously.
+        var solo = AgentSourceFixture.MethodBody(pages, "BuildSoloSection").Replace("\r\n", "\n");
 
         Assert.Contains("_deleteWarning = UiFactory.Wrapped(", settingsForm,
             StringComparison.Ordinal);
@@ -296,7 +298,9 @@ internal static class OverlayLayoutContractTests
             StringComparison.Ordinal);
         Assert.False(settingsForm.Contains("_settingsBody.AddChild(UiFactory.Label(Loc.T(\"下一步：{0}\"", StringComparison.Ordinal),
             "The first-run next-step line must be wrapped instead of widening the settings page.");
-        Assert.False(solo.Contains("section.AddChild(UiFactory.Row(\n            UiFactory.MetricTile", StringComparison.Ordinal),
+        // The Token tile closing a Row(...) call is the old three-tile row; the screen/action pair may
+        // share a row, the Token reading may not.
+        Assert.False(solo.Contains("UiFactory.MetricTile(Loc.T(\"Token\"), _playUsage)))", StringComparison.Ordinal),
             "Three min-width metric tiles in one row truncate the Token field in the 440px panel.");
         Assert.Contains("section.AddChild(UiFactory.MetricTile(Loc.T(\"Token\"), _playUsage));", solo,
             StringComparison.Ordinal);

@@ -123,7 +123,8 @@ internal static class LiveReasoningWiringTests
         // runs after a turn (whose error path appends nothing that could replace the partial).
         var step = AgentSourceFixture.MethodBody(AgentSourceFixture.Read(Runtime), "StepOnceCoreAsync");
         Assert.Contains("ClearLiveThought();", step[step.IndexOf("finally", StringComparison.Ordinal)..]);
-        Assert.Contains("try { await TryProactiveChatAsync(moment, token); }\n                finally { ClearLiveThought();", turn);
+        // One line, not a span: CI checks sources out with CRLF, and a "\n" in the needle never matches.
+        Assert.Contains("finally { ClearLiveThought(); FlushSessionIfDirty(); _turnGate.Release(); }", turn);
         Assert.Contains("ClearLiveThought();", AgentSourceFixture.MethodBody(AgentSourceFixture.Read(Status), "SetRequestingModelStatus"));
     }
 
