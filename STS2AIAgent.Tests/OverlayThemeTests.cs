@@ -156,7 +156,9 @@ internal static class OverlayThemeTests
         var persist = AgentSourceFixture.MethodBody(overlay, "PersistHarvested");
         Assert.Contains("RebuildInPlace", persist);
 
-        var harvest = AgentSourceFixture.MethodBody(overlay, "HarvestSettings");
+        // The harvest moved to the settings partial with the form it reads; the contract follows it.
+        var hostFile = AgentSourceFixture.Read("STS2AIAgent/Ui/AgentOverlayHost.Settings.cs");
+        var harvest = AgentSourceFixture.MethodBody(hostFile, "HarvestSettings");
         Assert.Contains("current.OverlayTheme = OverlayThemeCatalog.Normalize(SelectedTheme);", harvest);
 
         // The swatch grid is what creates the selector now, and it has to be selectable outside the

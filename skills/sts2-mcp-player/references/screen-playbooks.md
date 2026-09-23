@@ -63,7 +63,8 @@ This file is about **how to drive a screen**. For **what to choose** where the c
 
 ## REWARD
 
-- Prefer `collect_rewards_and_proceed` for hands-off reward cleanup. An empty rewards overlay with `can_proceed=false` is still that action; it should close the overlay instead of staying pending.
+- A card reward is a deck-building decision: `resolve_rewards` / `collect_rewards_and_proceed` called without `option_index` now STOP at the card selection and return `pending` with `reward.pending_card_choice = true` instead of taking the first card. Decide the card on its merits, then call `choose_reward_card` (or `skip_reward_cards`), or re-call `resolve_rewards` with an explicit `option_index` (0/1/2 = that card, -1 = skip).
+- Use `collect_rewards_and_proceed` for hands-off cleanup only when no card choice is pending (`reward.pending_card_choice = false`). An empty rewards overlay with `can_proceed=false` is still that action; it should close the overlay instead of staying pending.
 - If `reward.pending_card_choice = true`, use `choose_reward_card` or `skip_reward_cards`.
 - If `skip_reward_cards` closes only the overlay, re-read state to see whether the parent reward remains claimable.
 - Do not use `proceed` on reward flows.

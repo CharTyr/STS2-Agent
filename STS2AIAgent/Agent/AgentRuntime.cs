@@ -100,12 +100,27 @@ internal sealed partial class AgentRuntime
                     return _budgetGuard;
                 }
             },
-            () => _decisions.Snapshot(40),
+            // The memory provider prefers a continued run's restored decisions over the live log.
+            RecentDecisionsForMemory,
             () =>
             {
                 lock (_gate)
                 {
                     return _lastPromptTokens;
+                }
+            },
+            // The dual-layer engine: the decider is resolved live on every turn, because the Jev
+            // configuration typically appears after this runtime is constructed -- a decider captured
+            // here is frozen to the pre-settings state and the toggle never turns on. The store is
+            // the same instance the MCP route and the in-game planner write, which is what makes the
+            // overlay path and the MCP path one experience.
+            deciderProvider: ResolveJevDecider,
+            strategyStore: _strategyStore,
+            confidenceThreshold: () =>
+            {
+                lock (_gate)
+                {
+                    return _settings.JevConfidenceThreshold;
                 }
             });
     }
@@ -254,27 +269,6 @@ internal sealed partial class AgentRuntime
     /// <summary>What the current run has cost so far, or the whole log when no run is known yet.</summary>
     public RunSpend CurrentRunSpend() => _decisions.Spend(_runBoundary.RunId);
 
-    internal DecisionLogEntry RecordDecision(
-        string source,
-        string action,
-        string? reason = null,
-        string? stateFingerprint = null,
-        int requestsSpent = 0,
-        int? totalTokens = null,
-        string? runId = null)
-    {
-        return _decisions.Record(
-            source,
-            action,
-            reason,
-            stateFingerprint,
-            requestsSpent,
-            totalTokens,
-            // The caller may know the run (the HTTP route and the native MCP tool both do); when it
-            // does not, the boundary's observation is the best available answer.
-            runId: runId ?? _runBoundary.RunId);
-    }
-
     public LlmUsage SessionUsage
     {
         get { lock (_gate) return _sessionUsage; }
@@ -351,7 +345,9 @@ internal sealed partial class AgentRuntime
             new GameBridge(),
             Router.BuildHealthData,
             Router.ModVersion,
-            _decisions);
+            _decisions,
+            _strategyStore,
+            DualLayerStatus);
         // The overlay, /decisions, and the SSE stream are three views of one log, so the mirror is
         // attached once, here, rather than each writer remembering to announce itself.
         _decisions.Recorded += GameEventService.Instance.PublishDecision;
@@ -367,6 +363,7 @@ internal sealed partial class AgentRuntime
     public void Shutdown()
     {
         StopAutoPlay();
+        FlushSessionIfDirty();
         NativeMcpServer.Runtime?.SetEnabled(false, McpEndpointUrl());
         try
         {
@@ -468,10 +465,9 @@ internal sealed partial class AgentRuntime
         string text,
         bool attachState,
         bool attachScreenshot,
-        bool allowAct,
         CancellationToken cancellationToken)
     {
-        return Task.Run(() => SendChatCoreAsync(text, attachState, attachScreenshot, allowAct, cancellationToken), cancellationToken);
+        return Task.Run(() => SendChatCoreAsync(text, attachState, attachScreenshot, cancellationToken), cancellationToken);
     }
 
     public Task<string> TestConnectionAsync(CancellationToken cancellationToken)
@@ -523,6 +519,7 @@ internal sealed partial class AgentRuntime
     {
         if (InstanceRole.IsCompanion) _companionAutoStartSuppressed = true;
         var task = _playSession.RequestPause();
+        FlushSessionIfDirty();
         SetStatus(task.IsCompleted ? Loc.T("已暂停自动游玩") : Loc.T("正在暂停，等待当前任务完成…"));
         NoteEvent(Status);
     }
@@ -603,21 +600,10 @@ internal sealed partial class AgentRuntime
         return TryContinueDualInstanceAsync(settings, companionAutoPlay, cancellationToken) ?? Task.CompletedTask;
     }
 
-    public void ClearChat()
-    {
-        lock (_gate)
-        {
-            _history.Clear();
-        }
-
-        RaiseChanged();
-    }
-
     private async Task SendChatCoreAsync(
         string text,
         bool attachState,
         bool attachScreenshot,
-        bool allowAct,
         CancellationToken cancellationToken)
     {
         text = text.Trim();
@@ -660,8 +646,7 @@ internal sealed partial class AgentRuntime
                 new ChatOptions
                 {
                     AttachState = attachState,
-                    AttachScreenshot = attachScreenshot,
-                    AllowAct = allowAct
+                    AttachScreenshot = attachScreenshot
                 },
                 cancellationToken);
                 RecordTurnReceipt(result, recordBudget: true);
@@ -679,6 +664,7 @@ internal sealed partial class AgentRuntime
             var reply = result.Error != null
                 ? result.Error
                 : string.IsNullOrWhiteSpace(result.AssistantText) ? Loc.T("(无文本回复)") : result.AssistantText;
+            AppendTurnTraces(result);
             AddHistory("assistant", reply);
             _lastThought = result.Reasoning ?? reply;
             if (!string.IsNullOrWhiteSpace(result.Acted))
@@ -983,6 +969,8 @@ internal sealed partial class AgentRuntime
                     // "entered a run" flag that makes a return to the menu a stop. Starting auto-play
                     // is what installs a fresh boundary (see StartAutoPlay).
                     boundary.Check(snapshot.Item1, snapshot.Item2, snapshot.Item3);
+                    // Reconcile the persisted session with the run the boundary now reports.
+                    ObserveSessionRunBoundary(boundary.RunId);
                     moment = ObserveProactiveMoment(snapshot.Item1, snapshot.Item4);
                     var immediate = await TryCompanionImmediateAsync(token);
                     if (immediate != null)
@@ -991,7 +979,11 @@ internal sealed partial class AgentRuntime
                     }
 
                     SetRequestingModelStatus();
-                    var turn = await _loop.PlayOnceAsync(token, boundary.Check);
+                    var turn = await _loop.PlayOnceAsync(token, boundary.Check, SetPlayPhase);
+                    // Feed the strategy planner the turn's context: the screen/phase the snapshot
+                    // saw and the confidence the Jev path reported (null on the LLM path). The
+                    // planner decides for itself whether this context deserves a replan.
+                    ObserveStrategyContext(snapshot.Item1, snapshot.Item2, turn.Confidence);
                     return turn;
                 }
                 finally
@@ -1287,20 +1279,6 @@ internal sealed partial class AgentRuntime
         }
     }
 
-    private void AddHistory(string role, string text)
-    {
-        lock (_gate)
-        {
-            _history.Add(new ChatTurn { Role = role, Text = text });
-            if (_history.Count > 80)
-            {
-                _history.RemoveRange(0, _history.Count - 80);
-            }
-        }
-
-        RaiseChanged();
-    }
-
     private void AppendLog(string line)
     {
         Log.Info($"{LogPrefix} {line}");
@@ -1322,6 +1300,42 @@ internal sealed partial class AgentRuntime
         _status = Loc.T("正在请求模型…");
         _requestingModelStatus = true;
         RaiseChanged();
+    }
+
+    /// <summary>When the current in-flight phase started, so the status line can show elapsed time.</summary>
+    private DateTimeOffset _phaseStartedAt;
+
+    /// <summary>
+    /// Reports which stage of a turn the loop is in ("reading state", "waiting for the game",
+    /// "requesting the model", "asking Jev", "executing the action"). A turn is a chain of waits
+    /// that each used to leave the status line on the previous stage's text -- or on "requesting
+    /// the model" for the whole turn -- so a stall was indistinguishable from a slow answer. The
+    /// elapsed suffix makes a stuck stage visible as a growing counter rather than frozen text.
+    /// </summary>
+    private void SetPlayPhase(string phase)
+    {
+        _phaseStartedAt = DateTimeOffset.UtcNow;
+        _status = phase;
+        _requestingModelStatus = true;
+        RaiseChanged();
+    }
+
+    /// <summary>The status text with the current phase's elapsed time appended while a turn runs.</summary>
+    public string StatusWithElapsed
+    {
+        get
+        {
+            var status = Status;
+            if (!_requestingModelStatus || _phaseStartedAt == default)
+            {
+                return status;
+            }
+
+            var elapsed = DateTimeOffset.UtcNow - _phaseStartedAt;
+            return elapsed.TotalSeconds < 2
+                ? status
+                : Loc.T("{0}（已等待 {1} 秒）", status, (int)elapsed.TotalSeconds);
+        }
     }
 
     private void RaiseChanged()

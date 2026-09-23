@@ -52,12 +52,8 @@ internal sealed partial class AgentOverlayHost
     {
         return tab switch
         {
-            OverlayTabCatalog.Chat => BuildChatPage(),
-            OverlayTabCatalog.Settings => BuildSettingsPage(),
             OverlayTabCatalog.Play => BuildPlayPage(),
-            OverlayTabCatalog.Dual => BuildDualPage(),
-            OverlayTabCatalog.Connect => BuildConnectPage(),
-            OverlayTabCatalog.Decisions => BuildDecisionPage(),
+            OverlayTabCatalog.Settings => BuildSettingsPage(),
             _ => throw new InvalidOperationException(
                 $"No page builder for tab '{tab}'. Every OverlayTabCatalog entry needs one.")
         };
@@ -85,9 +81,8 @@ internal sealed partial class AgentOverlayHost
         // on every page and the player has to read six labels to find out where they are.
         RebuildTabButtons();
 
-        if (_chatFooter != null) _chatFooter.Visible = tab == OverlayTabCatalog.Chat;
-        // The Continue button's availability follows the current screen, which changes without any
-        // runtime event; re-read it whenever this tab comes into view.
+        // The play page's content (conversation, decision log, Jev panel) changes with nothing to
+        // subscribe to; re-read it whenever this tab comes into view.
         if (OverlayTabCatalog.RefreshesOnShow(tab)) RefreshDynamic();
     }
 

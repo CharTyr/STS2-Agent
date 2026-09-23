@@ -69,20 +69,20 @@ For a change crossing state, action, agent, UI, or MCP, trace it in both directi
 
 ## Code shape and its known debts
 
-Measured 2026-09-21 across 128 mod source files totalling 37,934 lines (git-tracked only, which is what the gate counts -- a working tree also holds whatever the developer left in it). These numbers are here
+Measured 2026-10-05 across 148 mod source files totalling 42,371 lines (git-tracked only, which is what the gate counts -- a working tree also holds whatever the developer left in it). These numbers are here
 because nobody was counting, and that is how a codebase stops being navigable -- not through a bad
 commit, but through a thousand good ones. The `arch-facts` gate checks this table against the
 files, so it cannot quietly go stale the way it did between ADR 0001 and the splits below.
 
 | File | Lines |
 | --- | ---: |
-| [AgentRuntime.cs](../../../STS2AIAgent/Agent/AgentRuntime.cs) | 1,322 |
-| [GameStateService.cs](../../../STS2AIAgent/Game/GameStateService.cs) | 1,336 |
-| [GameStateService.Payloads.cs](../../../STS2AIAgent/Game/GameStateService.Payloads.cs) | 1,251 |
-| [GameStateService.AgentView.cs](../../../STS2AIAgent/Game/GameStateService.AgentView.cs) | 1,236 |
-| [GameActionService.cs](../../../STS2AIAgent/Game/GameActionService.cs) | 1,180 |
+| [AgentRuntime.cs](../../../STS2AIAgent/Agent/AgentRuntime.cs) | 1,345 |
+| [GameStateService.cs](../../../STS2AIAgent/Game/GameStateService.cs) | 1,379 |
+| [GameStateService.Payloads.cs](../../../STS2AIAgent/Game/GameStateService.Payloads.cs) | 1,293 |
+| [GameStateService.AgentView.cs](../../../STS2AIAgent/Game/GameStateService.AgentView.cs) | 1,238 |
+| [GameActionService.cs](../../../STS2AIAgent/Game/GameActionService.cs) | 1,219 |
 | [GameActionService.Rooms.cs](../../../STS2AIAgent/Game/GameActionService.Rooms.cs) | 1,136 |
-| [AgentOverlayHost.cs](../../../STS2AIAgent/Ui/AgentOverlayHost.cs) | 1,120 |
+| [AgentOverlayHost.cs](../../../STS2AIAgent/Ui/AgentOverlayHost.cs) | 1,025 |
 
 The overlay used to be the second name on that list. It moved to the bottom of it on 2026-10-01, when
 the page bodies and the single refresh pass moved to `AgentOverlayHost.Pages.cs` and the settings form
@@ -286,13 +286,15 @@ The extractions that did happen kept that property, and the fourth one is what s
   swatch was the one thing in it that paints an *inactive* palette rather than the active one, which
   made it the piece that could leave without dragging anything with it.
 
-The base file went 1,829 -> 1,347 -> 1,059 -> 1,120 lines without changing what any tab does, and it
-kept every field those pages read. The last step is up rather than down -- the live pass on 2026-10-01
-added the palette repaint walk and the drag-handle type change -- but the budget still came down over
-the session as a whole, from 1,420 to 1,150, because two extractions happened alongside those
-additions. That is the ratchet behaving as intended rather than an exception to it. What is left in the
-file is the host's own job: attach and teardown, placement and drag, settings harvest and persistence,
-and the screen resolution the tabs switch on. That is why the seams are
+The base file went 1,829 -> 1,347 -> 1,059 -> 1,120 -> 1,025 lines without changing what any tab does,
+and it kept every field those pages read. The 1,120 step was up rather than down -- the live pass on
+2026-10-01 added the palette repaint walk and the drag-handle type change -- and the step back down
+came from the settings harvest following the form into `AgentOverlayHost.Settings.cs` (the harvest
+grows with the form, not with the window chrome). The budget came down over the session as a whole,
+from 1,420 to 1,150, because two extractions happened alongside those additions. That is the ratchet
+behaving as intended rather than an exception to it. What is left in the
+file is the host's own job: attach and teardown, placement and drag, and the screen resolution the
+tabs switch on. That is why the seams are
 where they are: `ShowTab(string)` and the string call sites stayed with the host, the pages moved as
 one unit, and `OverlayTabContractTests` fails if a catalog entry has no page builder, if a page
 builder has no catalog entry, or if the page builders drift back into the base file.

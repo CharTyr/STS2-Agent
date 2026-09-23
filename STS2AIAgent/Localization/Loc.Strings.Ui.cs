@@ -15,15 +15,15 @@ internal static partial class Loc
         map["和 AI 聊聊这局"] = "Ask the AI about this run";
         map["问它这手牌怎么打、这个遗物值不值得买、刚才那步为什么那么出。"] =
             "Ask how to play this hand, whether that relic is worth buying, or why it made the move it just made.";
-        map["对话默认只读；要它真的动手，勾选下方的「允许代打」。"] =
-            "Chat is read-only by default; tick “Let the AI play for you” below to let it actually act.";
+        map["对话默认只读；要它动手，用上方的「开始自动游玩」或「单步」，或者明确说「帮我打」。"] =
+            "Chat is read-only; to make it act, use “Start auto-play” or “Single step” above, or say “play for me” in a message.";
         map["正在自动决策并执行动作。"] = "Deciding and acting on its own.";
         map["等待开始。"] = "Waiting to start.";
-        map["还没有思考记录。开始自动游玩或单步一次后会显示。"] =
-            "No reasoning recorded yet. Start auto-play, or take a single step, and it will show up here.";
         map["屏幕"] = "Screen";
         map["最近动作"] = "Last action";
         map["思考"] = "Reasoning";
+        map["动作"] = "Action";
+        map["已省略更早的 {0} 条消息"] = "{0} earlier messages omitted";
         map["本次会话"] = "This session";
         map["本局"] = "This run";
         map["跳到「{0}」"] = "Jump to “{0}”";
@@ -34,10 +34,34 @@ internal static partial class Loc
         map["接入"] = "Connect";
         map["附带当前状态"] = "Attach current state";
         map["附带截图（视觉）"] = "Attach screenshot (vision)";
-        map["允许代打"] = "Let the AI play for you";
         map["发送"] = "Send";
         map["清空"] = "Clear";
         map["在下方输入后点发送。"] = "Type below, then press Send.";
+
+        // Play page: the solo/multiplayer mode switch, the dual-layer toggles, and the Jev panel.
+        map["单人"] = "Solo";
+        map["多人"] = "Multiplayer";
+        map["显示思考内容"] = "Show reasoning";
+        map["回复语言"] = "Reply language";
+        map["跟随玩家"] = "Follow the player";
+        map["思考强度"] = "Thinking intensity";
+        map["和 AI 说这局怎么打；它会参考你的话做下一次决策。"] =
+            "Tell the AI how to play this run; it weighs what you say on its next decision.";
+        map["双层决策模式（Jev 执行 + LLM 规划）"] = "Dual-layer decisions (Jev acts, LLM plans)";
+        map["Jev 未配置。到设置页填写 API Key 后即可用双层决策。"] =
+            "Jev is not configured. Add its API key on the settings page to use dual-layer decisions.";
+        map["Jev 已配置（{0}）。双层决策开启后由 Jev 逐步操作，LLM 只调整策略。"] =
+            "Jev is configured ({0}). With dual-layer on, Jev takes each action and the LLM only plans strategy.";
+        map["Jev 执行层"] = "Jev execution layer";
+        map["Jev 最近选择"] = "Jev's last choice";
+        map["概率分布"] = "Probabilities";
+
+        // Settings page: the Jev execution-model section.
+        map["双层决策模式由 Jev（TypeSafe System One 模型）逐步操作游戏，LLM 只做战略规划。在游玩页按模式开启。"] =
+            "In dual-layer mode Jev (the TypeSafe System One model) takes each action while the LLM only plans strategy. Enable it per mode on the play page.";
+        map["置信度阈值（0-1，低于则回退 LLM）"] = "Confidence threshold (0-1; below it the LLM takes over)";
+        map["测试 Jev 连接"] = "Test Jev connection";
+        map["正在测试…"] = "Testing…";
         map["你"] = "You";
         map["助手"] = "Assistant";
 
@@ -82,8 +106,8 @@ internal static partial class Loc
         map["屏幕：{0}"] = "Screen: {0}";
         map["最近动作：{0}"] = "Last action: {0}";
         map["思考：{0}"] = "Thinking: {0}";
-        map["自动游玩走 compact 状态和工具，与 MCP 相同，不需要视觉即可打完全部流程。对话默认只读；勾选「允许代打」或明确说「帮我打」才会执行动作。"] =
-            "Auto-play uses the same compact state and tools as MCP, so vision is optional — it can play through the entire run without it. Chat is read-only by default; actions run only if you check “Let the AI play for you” or explicitly ask it to play for you.";
+        map["自动游玩走 compact 状态和工具，与 MCP 相同，不需要视觉即可打完全部流程。对话默认只读：要动手就用「开始自动游玩」或「单步」，或者在消息里明确说「帮我打」。"] =
+            "Auto-play uses the same compact state and tools as MCP, so vision is optional — it can play through the entire run without it. Chat is read-only: use “Start auto-play” or “Single step” to act, or ask it explicitly to play for you.";
 
         // AI teammate page.
         map["和 AI 一起爬塔"] = "Climb the tower with AI";
@@ -173,14 +197,33 @@ internal static partial class Loc
         map["首次配置"] = "First-time setup";
         map["添加端点 → 添加模型并绑定 → 选择对话/游玩用途 → 测试连接 → 保存。通过后再去「AI 队友」从主菜单邀请。默认网址和模型名不算已经可用。"] =
             "Add an endpoint → add a model and bind it → assign chat/play roles → test the connection → save. Once it passes, go to “AI teammate” and invite from the main menu. The default URL and model name do not count as working.";
+        map["四步上手：① 在「端点」填接口地址和 Key（本地 Ollama / LM Studio 可留空 Key）→ ② 在「模型」添加模型并绑定端点 → ③ 点模型卡片上的「测试」做一次真实调用（含工具调用检测），通过会显示 ✅ → ④ 在「模型绑定」选主模型并保存。然后切到「游玩」页点「开始自动游玩」。想玩双人：游玩页顶部切到「多人」，邀请 AI 队友。"] =
+            "Four steps: ① fill in the endpoint URL and key under “Endpoints” (local Ollama / LM Studio can leave the key blank) → ② add a model under “Models” and bind the endpoint → ③ press “Test” on the model card for a real call (including a tool-calling probe); a pass shows ✅ → ④ pick the main model under “Model binding” and save. Then switch to the “Play” page and press “Start auto-play”. For co-op: switch the top of the Play page to “Multiplayer” and invite the AI teammate.";
         map["测试连接会向配置的服务发送测试请求。对话通过不等于游玩已通过。本地服务可以留空 API Key。"] =
             "Testing sends a real request to the configured service. A passing chat test does not mean the play model is verified. For local services you can leave the API key blank.";
+        map["「测试」是对该模型的真实调用：先连通，再验证它会不会调用工具——不会调用工具的模型无法自动游玩。页脚的「测试连接」测的是当前主模型。"] =
+            "“Test” makes real calls against that model: connectivity first, then a tool-calling probe — a model that cannot call tools cannot auto-play. The footer “Test connection” tests the current main model.";
         map["端点"] = "Endpoints";
         map["模型"] = "Models";
         map["角色绑定"] = "Role assignment";
+        map["模型绑定"] = "Model binding";
         map["主对话模型"] = "Main chat model";
+        map["主模型（对话与游玩）"] = "Main model (chat and play)";
         map["游玩模型（可空=主对话）"] = "Play model (blank = chat model)";
         map["外挂视觉模型（可空）"] = "External vision model (optional)";
+        map["测试"] = "Test";
+        map["正在测试模型…"] = "Testing the model…";
+        map["请先在「模型绑定」选择主模型。"] = "Pick a main model under “Model binding” first.";
+        map["⚪ 未测试。点「测试」做一次真实调用（含工具调用检测）。"] =
+            "⚪ Not tested. Press “Test” for a real call (including a tool-calling probe).";
+        map["⚪ 配置已修改，需重新测试。"] = "⚪ Configuration changed; test again.";
+        map["✅ 已验证 · 工具调用可用（{0}）"] = "✅ Verified · tool calling works ({0})";
+        map["⚠️ 已连通，但工具调用不可用——该模型无法自动游玩（{0}）"] =
+            "⚠️ Connected, but tool calling failed — this model cannot auto-play ({0})";
+        map["默认 600 秒"] = "Default 600 seconds";
+        map["单次请求超时（秒）"] = "Per-request timeout (seconds)";
+        map["服务商长时间不应答时按此时长报错，而不是一直转圈。"] =
+            "When the provider stops answering, the request fails after this long instead of spinning forever.";
         map["显示高级选项"] = "Show advanced options";
         map["视觉可选。不勾选「视觉」、不配外挂视觉时，仍用 compact 状态与工具打完全部内容。"] =
             "Vision is optional. Without checking “Vision” or setting an external vision model, auto-play still plays through all content using the compact state and tools.";

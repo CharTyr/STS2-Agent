@@ -93,6 +93,20 @@ internal sealed class AgentTurnResult
     public LlmUsage? Usage { get; init; }
 
     public int RequestsSpent { get; init; }
+
+    /// <summary>
+    /// The execution model's confidence in the action it took, when the dual-layer path drove this
+    /// turn. Null on the plain LLM path, so "the LLM decided" and "Jev decided at low confidence" are
+    /// never the same shape.
+    /// </summary>
+    public double? Confidence { get; init; }
+
+    /// <summary>
+    /// The execution model's per-option scores for the same turn, keyed by option id. Null whenever
+    /// the decider does not score itself, so the panel shows the confidence alone rather than a
+    /// distribution it made up.
+    /// </summary>
+    public IReadOnlyDictionary<string, double>? Probabilities { get; init; }
 }
 
 internal sealed class ChatTurn
@@ -110,9 +124,7 @@ internal sealed class ChatOptions
 
     public bool AttachScreenshot { get; init; }
 
-    public bool AllowAct { get; init; }
-
-    // A read-only chat must not act even when AllowAct or the message text asks for play.
+    // A read-only chat must not act even when the message text asks for play.
     public bool ReadOnly { get; init; }
 
     // Extra system instruction for this turn, e.g. the selected proactive-chat tone.

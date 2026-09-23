@@ -16,15 +16,16 @@ namespace STS2AIAgent.Ui;
 ///
 /// This half stays free of Godot on purpose: the executable test project links it, so the tab list
 /// and its labels can be pinned without a running game.
+///
+/// The overlay is organised around two modes of play rather than a tab per feature: the play page
+/// carries a solo/multiplayer switch plus the conversation, decision log and Jev panel, and the
+/// settings page carries model, budget, Jev and MCP-access configuration. Everything that used to be
+/// its own tab (chat, AI teammate, connect, decisions) is a section of one of these two pages.
 /// </remarks>
 internal static class OverlayTabCatalog
 {
-    internal const string Chat = "chat";
-    internal const string Settings = "settings";
     internal const string Play = "play";
-    internal const string Dual = "dual";
-    internal const string Connect = "connect";
-    internal const string Decisions = "decisions";
+    internal const string Settings = "settings";
 
     /// <summary>
     /// One tab: the id <c>ShowTab</c> accepts, its Chinese source label, and whether showing it
@@ -33,17 +34,15 @@ internal static class OverlayTabCatalog
     internal readonly record struct TabDefinition(string Id, string Label, bool RefreshOnShow);
 
     /// <summary>
-    /// The tabs in the order the header row shows them. <see cref="Decisions"/> was appended rather
-    /// than inserted, so the five tabs that existed before it keep their positions.
+    /// The tabs in the order the header row shows them. The play page re-reads on entry because the
+    /// conversation, decision log and Jev panel all mirror state that can change with nothing to
+    /// subscribe to (an action submitted over the HTTP API records a decision without raising the
+    /// runtime's Changed event).
     /// </summary>
     private static readonly TabDefinition[] OrderedTabs =
     {
-        new(Dual, "AI 队友", true),
-        new(Chat, "对话", false),
-        new(Play, "游玩", false),
-        new(Settings, "设置", false),
-        new(Connect, "接入", false),
-        new(Decisions, "决策日志", true)
+        new(Play, "游玩", true),
+        new(Settings, "设置", false)
     };
 
     public static IReadOnlyList<TabDefinition> Tabs => OrderedTabs;
@@ -60,8 +59,8 @@ internal static class OverlayTabCatalog
 
     /// <summary>
     /// True when the tab's content can change with nothing to subscribe to -- the game screen behind
-    /// the play and teammate pages, or the decision log the panel tick owns -- so entering it has to
-    /// re-read that state.
+    /// the play page, or the decision log the panel tick owns -- so entering it has to re-read that
+    /// state.
     /// </summary>
     public static bool RefreshesOnShow(string id)
     {

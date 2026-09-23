@@ -4,6 +4,46 @@
 
 ## Unreleased
 
+- **Dual-layer mode actually engages now, and reward card picks are real decisions.** Three
+  live-pass fixes: the Jev execution decider was built once at mod startup, so a Jev API key
+  entered afterwards never took effect until a restart — the decider is now resolved from the live
+  configuration on every turn. The Jev "test connection" button was a configuration stub; it now
+  performs the real `GET /v1/models` round trip. And `resolve_rewards` / `collect_rewards_and_proceed`
+  called without an explicit `option_index` no longer take the first card silently: the reward flow
+  stops at the card selection (`reward.pending_card_choice = true`, action returns `pending`) so the
+  model makes the deck-building call with `choose_reward_card` / `skip_reward_cards` (or an explicit
+  `option_index`, `-1` to skip). In dual-layer mode the Jev option list expands `resolve_rewards`
+  into one option per offered card plus an explicit skip, instead of a bare macro that executed with
+  no index.
+- **Auto-play stalls are visible and bounded.** Every game-thread call the loop awaits now has a
+  deadline and honors cancellation — a game thread that stops pumping used to hang the turn forever,
+  leaving the pause button dead. The status line reports the turn's current phase with elapsed time
+  instead of sitting on "requesting the model" for the whole turn. A run that waits for an actionable
+  state for two minutes straight now stops with a visible reason instead of retrying silently
+  forever. LLM and Jev per-request timeouts are configurable in settings
+  (`LlmRequestTimeoutSeconds` / `JevRequestTimeoutSeconds`), and unexpected turn failures keep their
+  exception type instead of a bare message.
+- **The model's real thinking is no longer overwritten by its one-line act reason.** When a
+  provider returns `reasoning_content`, that is what the thought view shows; the short reason in the
+  act arguments only fills in when the provider sent no reasoning.
+- **A run's conversation and decision context now survive "continue game".** Each run's play session
+  (the chat history, the recent-decision memory the loop compacts from, and the dual-layer play
+  strategy) is persisted to a per-run file under `sessions/` beside the settings, written atomically
+  with a last-good backup. Continuing a saved run restores all three: the chat repaints, the decision
+  memory resumes, and Jev resumes its strategy. Switching models keeps the context (it is bound to the
+  run, not the model), a new run starts a fresh session, and the placeholder pre-run state is never
+  persisted. Persistence is best-effort — a corrupt or unwritable file never blocks play — and chat
+  text is redacted before it reaches disk so a pasted API key cannot be written out.
+- **Dual-layer decision mode (Jev + LLM planner).** A new per-mode toggle (single-player and
+  co-op each have their own) hands the actual clicking to the TypeSafe Jev fast model while the
+  LLM only plans strategy. When enabled and Jev is configured (base URL + API key in Settings),
+  each turn asks Jev which concrete on-screen option to take; a confident-enough answer executes
+  immediately, and a low-confidence or failed one falls back to the normal LLM play path, so an
+  unsure fast model can never strand a turn. The confidence threshold is configurable. The current
+  play strategy is readable and writable from outside via `GET`/`POST /strategy` (loopback only)
+  and the MCP tools `get_planner_briefing` / `update_play_strategy`, and the in-game planner and
+  an external MCP planner steer the same store — the overlay path and the MCP path are one
+  experience. Decisions made by Jev carry their confidence into the decision log.
 - **Thinking models stop being misdiagnosed.** DeepSeek-style, Qwen-style, step-5-preview and
   every provider that answers in `reasoning_content` before it produces content used to surface
   in the mod as `模型未给出可执行动作` even when the model had done the thinking and run out of

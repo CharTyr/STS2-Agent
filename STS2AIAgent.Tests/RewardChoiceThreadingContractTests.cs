@@ -63,4 +63,20 @@ internal static class RewardChoiceThreadingContractTests
             body,
             StringComparison.Ordinal);
     }
+
+    public static void AutomaticChoiceStopsAtTheCardDecision()
+    {
+        // A card reward is a deck-building decision: a drain that reaches the card screen with no
+        // explicit choice must stop there (pending, reward.pending_card_choice = true) instead of
+        // silently taking the first card. Pin the early return that makes Auto the stopping kind.
+        var source = AgentSourceFixture.ReadActionService();
+        var resolve = Body(source, "TryResolveCardRewardAsync");
+
+        var autoBranch = resolve.IndexOf("resolution.Kind==RewardChoiceKind.Auto", StringComparison.Ordinal);
+        Assert.True(autoBranch >= 0, "TryResolveCardRewardAsync must special-case the automatic choice.");
+        var returnIndex = resolve.IndexOf("returnfalse;", autoBranch, StringComparison.Ordinal);
+        var pickIndex = resolve.IndexOf("options[resolution.Index]", StringComparison.Ordinal);
+        Assert.True(returnIndex >= 0 && returnIndex < pickIndex,
+            "The automatic choice must return before the first-card pick it used to fall through to.");
+    }
 }

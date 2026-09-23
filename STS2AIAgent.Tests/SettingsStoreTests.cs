@@ -134,6 +134,34 @@ internal static class SettingsStoreTests
         Assert.True(loaded.ProactiveChatEnabled);
     }
 
+    public static void DualLayerFields_AreNormalized()
+    {
+        // An unknown play mode falls back to solo, a blank Jev model to the default, and the
+        // confidence threshold is clamped into 0..1 -- a stored NaN or a hand-edited value must not
+        // reach the decider.
+        var settings = new AgentSettings
+        {
+            OverlayPlayMode = "sideways",
+            JevModel = "   ",
+            JevBaseUrl = "https://jev.example.com/",
+            JevConfidenceThreshold = double.NaN
+        };
+        settings.EnsureValidShape();
+
+        Assert.Equal("solo", settings.OverlayPlayMode);
+        Assert.Equal("jev-latest", settings.JevModel);
+        Assert.Equal("https://jev.example.com", settings.JevBaseUrl);
+        Assert.Equal(0.35, settings.JevConfidenceThreshold);
+
+        var high = new AgentSettings { JevConfidenceThreshold = 4.2 };
+        high.EnsureValidShape();
+        Assert.Equal(1.0, high.JevConfidenceThreshold);
+
+        var low = new AgentSettings { JevConfidenceThreshold = -1.0 };
+        low.EnsureValidShape();
+        Assert.Equal(0.0, low.JevConfidenceThreshold);
+    }
+
     public static void Load_CorruptJson_BacksUpOriginalAndDoesNotLoseSecret()
     {
         var path = NewSettingsPath();
@@ -251,6 +279,14 @@ internal static class SettingsStoreTests
         source.Models[0].ContextWindow = 128_000;
         source.Endpoints[0].ApiKey = "sk-clone";
         source.CompanionAutoSelectCharacter = false;
+        source.OverlayPlayMode = "coop";
+        source.ShowThinkingInChat = true;
+        source.DualLayerSoloEnabled = true;
+        source.DualLayerCoopEnabled = true;
+        source.JevBaseUrl = "https://jev.example.com/";
+        source.JevApiKey = "jev-clone";
+        source.JevModel = "jev-clone-model";
+        source.JevConfidenceThreshold = 0.62;
 
         var clone = SettingsClone.Clone(source);
 
@@ -269,6 +305,16 @@ internal static class SettingsStoreTests
         Assert.Equal("sk-clone", clone.Endpoints[0].ApiKey);
         Assert.False(clone.CompanionAutoSelectCharacter);
         Assert.Equal(source.ConversationModelId, clone.ConversationModelId);
+        Assert.Equal("coop", clone.OverlayPlayMode);
+        Assert.True(clone.ShowThinkingInChat);
+        Assert.True(clone.DualLayerSoloEnabled);
+        Assert.True(clone.DualLayerCoopEnabled);
+        // Clone normalizes the source first (EnsureValidShape), so the base URL's trailing slash is
+        // already gone by the time it is copied.
+        Assert.Equal("https://jev.example.com", clone.JevBaseUrl);
+        Assert.Equal("jev-clone", clone.JevApiKey);
+        Assert.Equal("jev-clone-model", clone.JevModel);
+        Assert.Equal(0.62, clone.JevConfidenceThreshold);
     }
 
     public static void Clone_IsDeep()

@@ -278,6 +278,22 @@ def create_server(client: Sts2Client | None = None, tool_profile: str | None = N
         return scene_guidance(sts2.get_state())
 
     @mcp.tool
+    def get_planner_briefing() -> dict[str, Any]:
+        """Read the current dual-layer play strategy and the Jev execution layer's status."""
+        return sts2.get_strategy()
+
+    @mcp.tool
+    def update_play_strategy(
+        posture: str | None = None,
+        instructions: str | None = None,
+        option_hints: dict[str, str] | None = None,
+    ) -> dict[str, Any]:
+        """Write a new dual-layer play strategy; omitted fields keep their current values."""
+        return sts2.update_strategy(
+            posture=posture, instructions=instructions, option_hints=option_hints
+        )
+
+    @mcp.tool
     def decide() -> dict[str, Any]:
         """Read everything one decision needs in a single call.
 
