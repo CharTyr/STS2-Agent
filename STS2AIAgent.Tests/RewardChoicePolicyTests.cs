@@ -29,8 +29,12 @@ internal static class RewardChoicePolicyTests
         Assert.NotNull(below.Reason);
     }
 
-    public static void MissingIndexKeepsFirstCardBehavior()
+    public static void MissingIndexResolvesToTheAutomaticKind()
     {
+        // Auto resolves to index 0 as a descriptor, but the drain never executes it: the handler
+        // stops at the card screen for an automatic choice (see
+        // RewardChoiceThreadingContractTests.AutomaticChoiceStopsAtTheCardDecision), so this index
+        // is a placeholder, not a pick.
         var resolution = RewardChoicePolicy.Resolve(RewardChoicePolicy.AutoChoice, 2);
 
         Assert.Equal(RewardChoiceKind.Auto, resolution.Kind);

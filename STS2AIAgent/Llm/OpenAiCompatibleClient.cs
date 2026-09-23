@@ -111,6 +111,45 @@ internal sealed class OpenAiCompatibleClient : ILlmClient
         return string.IsNullOrWhiteSpace(completion.Content) ? "ok" : completion.Content.Trim();
     }
 
+    /// <summary>
+    /// Verifies the model actually calls tools, not just answers chat. The caller supplies the tool
+    /// and the prompt: the per-model test passes the real <c>act</c> tool with a miniature game
+    /// decision, so a provider that chokes on the actual play schema fails here rather than on a
+    /// synthetic stand-in. tool_choice "required" is part of the probe: a provider that silently
+    /// ignores the whole tools array fails even though its plain chat ping passed.
+    /// </summary>
+    public async Task<bool> ProbeToolCallingAsync(
+        string model,
+        LlmTool tool,
+        string prompt,
+        CancellationToken cancellationToken)
+    {
+        var body = new Dictionary<string, object?>
+        {
+            ["model"] = model,
+            ["messages"] = new[]
+            {
+                new ChatMessageDto { Role = "user", Content = prompt }
+            },
+            ["tools"] = new[] { ToToolDto(tool) },
+            ["tool_choice"] = "required",
+            ["max_tokens"] = 256
+        };
+
+        try
+        {
+            var completion = await SendCompletionAsync(body, stream: false, cancellationToken);
+            return completion.ToolCalls.Count > 0;
+        }
+        catch (LlmException ex) when (ex.StatusCode is >= 400 and < 500 and not 408 and not 429)
+        {
+            // A 4xx about tools/tool_choice is the endpoint saying it cannot do tools -- a verdict,
+            // not a failure. Anything transient (429, 5xx, timeout) keeps propagating so the caller
+            // records an unknown capability instead of downgrading a working model on a bad day.
+            throw new LlmToolProbeUnsupportedException(ex.Message, ex);
+        }
+    }
+
     public static string ResolveCompletionsUrl(string baseUrl)
     {
         var trimmed = (baseUrl ?? string.Empty).Trim().TrimEnd('/');

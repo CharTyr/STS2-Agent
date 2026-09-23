@@ -233,7 +233,7 @@ internal static class AgentLoopTests
         var settings = AgentSettings.CreateDefault();
         var loop = new AgentLoop(bridge, factory, () => settings);
         var result = await loop.ChatAsync("帮我出牌", Array.Empty<ChatTurn>(),
-            new ChatOptions { TeammateConversation = true, AllowAct = true }, CancellationToken.None);
+            new ChatOptions { TeammateConversation = true }, CancellationToken.None);
         Assert.Equal(0, bridge.ActCalls);
         Assert.Null(result.Acted);
         Assert.False(factory.LastRequest!.Tools!.Any(tool => tool.Name == "act"));
@@ -251,7 +251,7 @@ internal static class AgentLoopTests
         var settings = AgentSettings.CreateDefault();
         var loop = new AgentLoop(bridge, factory, () => settings);
         var result = await loop.ChatAsync("帮我出牌", Array.Empty<ChatTurn>(),
-            new ChatOptions { ReadOnly = true, AllowAct = true }, CancellationToken.None);
+            new ChatOptions { ReadOnly = true }, CancellationToken.None);
         Assert.Equal(0, bridge.ActCalls);
         Assert.Null(result.Acted);
         Assert.False(factory.LastRequest!.Tools!.Any(tool => tool.Name == "act"));
@@ -578,7 +578,7 @@ internal static class AgentLoopTests
         var result = await loop.ChatAsync(
             "这张牌怎么样",
             Array.Empty<ChatTurn>(),
-            new ChatOptions { AttachState = false, AttachScreenshot = false, AllowAct = false },
+            new ChatOptions { AttachState = false, AttachScreenshot = false },
             CancellationToken.None);
 
         Assert.Equal(0, bridge.ActCalls);
@@ -730,7 +730,7 @@ internal static class AgentLoopTests
         var result = await loop.ChatAsync(
             "帮我出牌",
             Array.Empty<ChatTurn>(),
-            new ChatOptions { AttachState = false, AttachScreenshot = false, AllowAct = false },
+            new ChatOptions { AttachState = false, AttachScreenshot = false },
             CancellationToken.None);
 
         Assert.Equal(1, bridge.ActCalls);
@@ -762,7 +762,7 @@ internal static class AgentLoopTests
         var result = await loop.ChatAsync(
             "Should I play a card?",
             Array.Empty<ChatTurn>(),
-            new ChatOptions { AttachState = false, AttachScreenshot = false, AllowAct = false },
+            new ChatOptions { AttachState = false, AttachScreenshot = false },
             CancellationToken.None);
 
         Assert.Equal(0, bridge.ActCalls);
@@ -1145,7 +1145,7 @@ internal static class AgentLoopTests
     private sealed class ProbeClientFactory(Func<CancellationToken, Task<string>> ping) : ILlmClientFactory, ILlmClient
     {
         public int PingCalls { get; private set; }
-        public ILlmClient Create(LlmEndpoint endpoint) => this;
+        public ILlmClient Create(LlmEndpoint endpoint, TimeSpan? requestTimeout = null) => this;
         public Task<string> PingAsync(string model, CancellationToken cancellationToken)
         {
             PingCalls++;
@@ -1153,6 +1153,8 @@ internal static class AgentLoopTests
         }
         public Task<LlmCompletion> CompleteAsync(LlmRequest request, CancellationToken cancellationToken) =>
             throw new InvalidOperationException("A model probe must not invoke gameplay completion.");
+        public Task<bool> ProbeToolCallingAsync(string model, LlmTool tool, string prompt, CancellationToken cancellationToken) =>
+            Task.FromResult(true);
     }
 
     private sealed class FakeBridge : IGameBridge
@@ -1290,7 +1292,7 @@ internal static class AgentLoopTests
         public Action? OnRequest { get; set; }
         public Exception? CompleteThrows { get; set; }
 
-        public ILlmClient Create(LlmEndpoint endpoint) =>
+        public ILlmClient Create(LlmEndpoint endpoint, TimeSpan? requestTimeout = null) =>
             new ScriptedClient(
                 _completions,
                 request => { LastRequest = request; Requests.Add(request); OnRequest?.Invoke(); },
@@ -1338,6 +1340,8 @@ internal static class AgentLoopTests
         }
 
         public Task<string> PingAsync(string model, CancellationToken cancellationToken) => Task.FromResult("pong");
+
+        public Task<bool> ProbeToolCallingAsync(string model, LlmTool tool, string prompt, CancellationToken cancellationToken) => Task.FromResult(true);
     }
 }
 

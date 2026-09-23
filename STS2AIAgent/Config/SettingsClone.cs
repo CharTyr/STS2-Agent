@@ -52,8 +52,19 @@ internal static class SettingsClone
             McpEnabled = source.McpEnabled,
             MaxSessionTokens = source.MaxSessionTokens,
             MaxSessionRequests = source.MaxSessionRequests,
+            LlmRequestTimeoutSeconds = source.LlmRequestTimeoutSeconds,
+            JevRequestTimeoutSeconds = source.JevRequestTimeoutSeconds,
             ProactiveChatEnabled = source.ProactiveChatEnabled,
             ProactiveChatTone = source.ProactiveChatTone,
+            OverlayPlayMode = source.OverlayPlayMode,
+            ShowThinkingInChat = source.ShowThinkingInChat,
+            ReplyLanguage = source.ReplyLanguage,
+            DualLayerSoloEnabled = source.DualLayerSoloEnabled,
+            DualLayerCoopEnabled = source.DualLayerCoopEnabled,
+            JevBaseUrl = source.JevBaseUrl,
+            JevApiKey = source.JevApiKey,
+            JevModel = source.JevModel,
+            JevConfidenceThreshold = source.JevConfidenceThreshold,
             RoleTests = source.RoleTests.Select(test => new ModelRoleTestRecord
             {
                 Role = test.Role,
@@ -67,6 +78,15 @@ internal static class SettingsClone
                 StatusCode = test.StatusCode,
                 Error = test.Error,
                 NextStep = test.NextStep,
+                TestedAt = test.TestedAt
+            }).ToList(),
+            ModelTests = source.ModelTests.Select(test => new ModelTestRecord
+            {
+                ModelId = test.ModelId,
+                Status = test.Status,
+                Tools = test.Tools,
+                Fingerprint = test.Fingerprint,
+                Error = test.Error,
                 TestedAt = test.TestedAt
             }).ToList()
         };

@@ -49,7 +49,11 @@ CLASS_DECLARATION = re.compile(r"\binternal\s+(?:sealed\s+)?class\s+(?P<name>[A-
 RECORD_DECLARATION = re.compile(
     r"\binternal\s+(?:sealed\s+)?record\s+(?:struct\s+)?(?P<name>[A-Za-z_][A-Za-z0-9_]*)\s*\("
 )
-RECORD_PARAMETER = re.compile(r"^(?P<type>[A-Za-z_][A-Za-z0-9_]*(?:\[\])*(?:\?)?)\s+(?P<name>@?[a-z][a-z0-9_]*)$")
+# A record parameter may carry a default (`double? confidence = null`); the default does not change
+# the wire type, so the regex captures type and name and permits an optional `= <value>` tail.
+RECORD_PARAMETER = re.compile(
+    r"^(?P<type>[A-Za-z_][A-Za-z0-9_]*(?:\[\])*(?:\?)?)\s+(?P<name>@?[a-z][a-z0-9_]*)(?:\s*=\s*[^\s].*)?$"
+)
 ACTION_SWITCH = re.compile(r'^\s*"(?P<name>[a-z][a-z0-9_]*)"\s*=>', re.MULTILINE)
 ROUTE_LITERAL = re.compile(r'"(?P<path>/[a-z0-9/_.-]*)"')
 METHOD_EQUALS = re.compile(r'request\.HttpMethod\.Equals\(\s*"(?P<method>[A-Z]+)"')
@@ -605,6 +609,17 @@ def build_paths(
                 request_body=json_body(ref("SessionControlRequest")),
             )
         },
+        "/strategy": {
+            "get": ordinary_operation(
+                "Read the current dual-layer play strategy and the Jev execution layer's status.",
+                ref("StrategyStatusData"),
+            ),
+            "post": ordinary_operation(
+                "Write a new dual-layer play strategy for the Jev execution model.",
+                ref("StrategyData"),
+                request_body=json_body(ref("StrategyUpdateRequest")),
+            ),
+        },
         "/companion/control": {
             "post": ordinary_operation(
                 "Control the companion instance itself.", ref("CompanionControlResponseData"),
@@ -699,6 +714,7 @@ def build_components(
         "SessionControlResponseData", "McpControlResponseData", "TeammateControlResponseData", "CompanionControlResponseData",
         "CompanionMessageRequest", "CompanionMessageResponseData", "TeamIntent", "GameDataItem",
         "McpOpaqueRequest", "McpOpaqueResponse", "McpSessionReset",
+        "PlayStrategy", "StrategyStatusData", "StrategyData", "StrategyUpdateRequest",
     }
     schemas: dict[str, Any] = {
         name: object_schema(properties, component_names) for name, properties in sorted(payload_classes.items())
@@ -764,6 +780,28 @@ def build_components(
             ),
             "CompanionControlResponseData": object_schema([CSharpProperty("phase", "string")], component_names),
             "CompanionMessageResponseData": object_schema([CSharpProperty("reply", "string")], component_names),
+            "PlayStrategy": {
+                "description": "The dual-layer play strategy the Jev execution model follows.",
+                "type": "object",
+                "properties": {
+                    "posture": {"type": "string"},
+                    "instructions": {"type": "string"},
+                    "option_hints": {"type": "object", "additionalProperties": {"type": "string"}},
+                    "updated_at": {"type": "string"},
+                    "source": {"type": "string"},
+                },
+                "additionalProperties": True,
+            },
+            "StrategyStatusData": object_schema(
+                [CSharpProperty("strategy", "PlayStrategy"), CSharpProperty("dual_layer", "bool"), CSharpProperty("jev_configured", "bool")],
+                component_names,
+            ),
+            "StrategyData": object_schema([CSharpProperty("strategy", "PlayStrategy")], component_names),
+            "StrategyUpdateRequest": {
+                "type": "object",
+                "properties": {"strategy": ref("PlayStrategy")},
+                "additionalProperties": True,
+            },
             "TeamIntent": {
                 "description": "Optional typed teammate signal. Unknown fields are intentionally ignored for forward compatibility.",
                 "type": "object",

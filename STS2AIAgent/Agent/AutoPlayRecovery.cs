@@ -13,6 +13,7 @@ internal sealed class AutoPlayRecovery
     private int _repeats;
     private int _unsettled;
     private int _reasoningBudgetExhausted;
+    private DateTimeOffset _waitingForGameSince;
 
     public (string? StopReason, string? StopKind, TimeSpan Delay) Observe(AgentTurnResult result)
     {
@@ -20,9 +21,32 @@ internal sealed class AutoPlayRecovery
             return (Loc.T("请检查模型、端点或凭据后再继续：{0}", result.Error), StopKindPolicy.Configuration, TimeSpan.Zero);
 
         // Waiting for the human player or an animation must not spend the model retry budget.
-        // It also must not erase failures observed before the wait.
+        // It also must not erase failures observed before the wait. But a wait that never ends is
+        // indistinguishable from a hang: past the limit the run stops with a visible reason instead
+        // of retrying silently forever. The limit is wall-clock, not turns -- a turn that waits out
+        // its own 20-second timeout must not stretch the budget into tens of minutes.
         if (result.WaitingForGame)
+        {
+            if (_waitingForGameSince == default)
+            {
+                _waitingForGameSince = DateTimeOffset.UtcNow;
+            }
+
+            if (DateTimeOffset.UtcNow - _waitingForGameSince >= NoProgressPolicy.WaitingForGameLimit)
+            {
+                return (
+                    Loc.T(
+                        "连续等待游戏可操作超过 {0} 秒仍未恢复，已停止自动游玩。游戏可能停在需要手动处理的界面；处理后可手动继续。",
+                        (int)NoProgressPolicy.WaitingForGameLimit.TotalSeconds),
+                    StopKindPolicy.Failed,
+                    TimeSpan.Zero);
+            }
+
             return (null, null, TimeSpan.FromSeconds(1));
+        }
+
+        // Any non-waiting turn ends the wait streak.
+        _waitingForGameSince = default;
 
         // The action executed and the response is still "pending": the game accepted what the model
         // asked for, so this must not spend the retry budget -- but an unbounded run of them is a
@@ -156,7 +180,10 @@ internal sealed class AutoPlayRecovery
                     throw;
                 }
                 catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) { throw; }
-                catch (Exception ex) { result = new AgentTurnResult { Error = ex.Message }; }
+                // Keep the exception type in the message: a bare ex.Message loses the difference
+                // between a timeout, a refused connection and a serialization bug, and the turn
+                // receipt is the only place the failure is ever shown.
+                catch (Exception ex) { result = new AgentTurnResult { Error = ex.GetType().Name + ": " + ex.Message }; }
                 budgetReason = Commit(result, cancellationToken.IsCancellationRequested);
             }
             finally

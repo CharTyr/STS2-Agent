@@ -33,12 +33,10 @@ internal sealed partial class AgentOverlayHost
     private TextEdit? _chatInput;
     private CheckBox? _attachState;
     private CheckBox? _attachShot;
-    private CheckBox? _allowAct;
     private Label? _playStatus;
     private Label? _playSummary;
     private Label? _playScreen;
     private Label? _playAction;
-    private Label? _playThought;
     private Label? _playUsage;
     private LineEdit? _maxTokensEdit;
     private LineEdit? _maxRequestsEdit;
@@ -74,7 +72,6 @@ internal sealed partial class AgentOverlayHost
     private TextEdit? _mcpConfigEdit;
     private Control? _mcpInfoBox;
     private Control? _pageHost;
-    private Control? _chatFooter;
     /// <summary>Diagnostic state: the content column to measure, and the page already reported.</summary>
     private Control? _contentColumn;
     private string? _overflowReportedFor;
@@ -86,9 +83,9 @@ internal sealed partial class AgentOverlayHost
     private readonly List<EndpointEditors> _endpointEditors = new();
     private readonly List<ModelEditors> _modelEditors = new();
     private OptionButton? _conversationCombo;
-    private OptionButton? _playCombo;
     private OptionButton? _visionCombo;
     private LineEdit? _hotkeyEdit;
+    private LineEdit? _llmTimeoutEdit;
     private Label? _saveStatus;
     private Label? _testNotice;
     private Label? _conversationTest;
@@ -258,8 +255,6 @@ internal sealed partial class AgentOverlayHost
         };
         BuildPages(_pageHost);
         layout.AddChild(_pageHost);
-        _chatFooter = BuildChatFooter();
-        layout.AddChild(_chatFooter);
         chrome.AddChild(layout);
         _panel.AddChild(chrome);
         _panel.Visible = startupSettings.OverlayVisibleOnStart || !startupSettings.HasSeenFirstRunGuide;
@@ -270,17 +265,16 @@ internal sealed partial class AgentOverlayHost
         _layer.TreeEntered += OnOverlayEnteredTree;
         root.CallDeferred(Node.MethodName.AddChild, _layer);
         _tree.ProcessFrame += OnProcessFrame;
-        if (InstanceRole.IsCompanion)
-        {
-            ShowTab("play");
-        }
-        else if (!startupSettings.HasSeenFirstRunGuide)
+        // Land on the tab that gets the player playing: settings when nothing is configured yet,
+        // otherwise the play page (which hosts both the solo and the multiplayer modes). The
+        // companion instance has no overlay (ModEntry skips it), so there is no companion branch here.
+        if (!startupSettings.HasSeenFirstRunGuide)
         {
             ShowTab("settings");
         }
         else
         {
-            ShowTab("dual");
+            ShowTab("play");
         }
         RefreshDynamic();
         var languageBefore = Loc.Current;
@@ -506,105 +500,9 @@ internal sealed partial class AgentOverlayHost
         return fallback ?? "";
     }
 
-    private AgentSettings HarvestSettings()
-    {
-        var current = CloneSettings(AgentRuntime.Instance.Settings);
-        for (var i = 0; i < Math.Min(current.Endpoints.Count, _endpointEditors.Count); i++)
-        {
-            var editor = _endpointEditors[i];
-            var endpoint = current.Endpoints[i];
-            endpoint.Name = editor.Name.Text.Trim();
-            endpoint.BaseUrl = editor.Url.Text.Trim();
-            endpoint.ApiKey = editor.Key.Text;
-            endpoint.Enabled = editor.Enabled.ButtonPressed;
-        }
-
-        for (var i = 0; i < Math.Min(current.Models.Count, _modelEditors.Count); i++)
-        {
-            var editor = _modelEditors[i];
-            var model = current.Models[i];
-            model.DisplayName = editor.Display.Text.Trim();
-            model.Model = editor.ModelName.Text.Trim();
-            model.SupportsVision = editor.Vision.ButtonPressed;
-            model.SupportsTools = editor.Tools.ButtonPressed;
-            model.ThinkingMode = SelectedText(editor.ThinkingMode);
-            model.ThinkingIntensity = SelectedText(editor.ThinkingIntensity);
-            model.ContextWindow = int.TryParse(editor.ContextWindow.Text.Trim(), out var contextWindow) && contextWindow > 0
-                ? contextWindow
-                : null;
-            if (editor.Endpoint.Selected >= 0)
-            {
-                model.EndpointId = editor.Endpoint.GetItemMetadata(editor.Endpoint.Selected).AsString();
-            }
-        }
-
-        if (_conversationCombo != null)
-        {
-            current.ConversationModelId = EmptyToNull(SelectedMetadata(_conversationCombo));
-        }
-
-        if (_playCombo != null)
-        {
-            current.PlayModelId = EmptyToNull(SelectedMetadata(_playCombo));
-        }
-
-        if (_visionCombo != null)
-        {
-            current.VisionModelId = EmptyToNull(SelectedMetadata(_visionCombo));
-        }
-        current.ThinkingIntensity = current.FindModel(current.ConversationModelId)?.ThinkingIntensity
-            ?? current.ThinkingIntensity;
-        if (_hotkeyEdit != null)
-        {
-            current.Hotkey = _hotkeyEdit.Text.Trim() is { Length: > 0 } hotkey ? hotkey : "F8";
-        }
-
-        if (_proactiveChatToggle != null)
-        {
-            current.ProactiveChatEnabled = _proactiveChatToggle.ButtonPressed;
-        }
-
-        if (_companionChoiceToggle != null)
-        {
-            current.CompanionAutoSelectCharacter = !_companionChoiceToggle.ButtonPressed;
-        }
-
-        if (_proactiveToneCombo != null)
-        {
-            current.ProactiveChatTone = ProactiveChatTones.Normalize(SelectedMetadata(_proactiveToneCombo));
-        }
-
-        // The swatch grid keeps the selection in a field rather than in a control: the tile that was
-        // clicked is freed by the rebuild that follows it. Normalised on the way in, so an id this
-        // build does not know cannot be written back out and leave the next start choosing between a
-        // stored value and a drawn one.
-        current.OverlayTheme = OverlayThemeCatalog.Normalize(SelectedTheme);
-
-        current.AttachStateInChat = _attachState?.ButtonPressed ?? true;
-        current.AttachScreenshotInChat = _attachShot?.ButtonPressed ?? false;
-        current.McpEnabled = _mcpToggle?.ButtonPressed ?? current.McpEnabled;
-        _budgetInputError = null;
-        if (_maxTokensEdit != null || _maxRequestsEdit != null)
-        {
-            if (!SessionBudgetLimits.TryHarvestBudget(
-                    current,
-                    _maxTokensEdit?.Text,
-                    _maxRequestsEdit?.Text,
-                    out var budgetError))
-            {
-                _budgetInputError = budgetError;
-            }
-        }
-
-        ModelRoleProbe.InvalidateMismatched(current);
-        return current;
-    }
-
-    private static AgentSettings CloneSettings(AgentSettings source)
-    {
-        // The copy lives in Config so the executable test project can cover it.
-        return SettingsClone.Clone(source);
-    }
+    // HarvestSettings and CloneSettings live in AgentOverlayHost.Settings.cs with the form they read:
+    // the host file is at its size budget, and the harvest grows with the settings form, not with
+    // the window chrome this file owns.
 
     private void ToggleVisible()
     {
@@ -862,10 +760,20 @@ internal sealed partial class AgentOverlayHost
                     }
                 }
 
-                // The tab-visible refresh in ShowTab covers switching into this page; this covers the
-                // page that is already open while the screen underneath changes on its own.
-                if (IsTabVisible(OverlayTabCatalog.Dual))
+                // The play page hosts the multiplayer section, the decision log and the Jev panel, all
+                // of which mirror state that can change with no runtime event to subscribe to (an action
+                // submitted over the HTTP API records a decision without raising Changed). The page that
+                // is already open re-reads them on the same tick.
+                if (IsTabVisible(OverlayTabCatalog.Play))
                 {
+                    // The status line carries the turn's phase with an elapsed counter; the tick is
+                    // what makes the counter move while a long request is in flight.
+                    if (_playStatus != null)
+                    {
+                        _playStatus.Text = AgentRuntime.Instance.StatusWithElapsed;
+                    }
+
+                    RefreshChatLog();
                     RefreshContinueAvailability();
                     // Cached inside the runtime and throttled there: this runs on the game thread, so
                     // it asks for a refresh and renders whatever the last one produced.
@@ -874,13 +782,7 @@ internal sealed partial class AgentOverlayHost
                     {
                         _teammateLive.Text = TeammateLiveText();
                     }
-                }
 
-                // Decisions reach the log from paths with no runtime event to subscribe to (an action
-                // submitted over the HTTP API records one without raising Changed), so the page that
-                // is already open re-reads it on the same tick.
-                if (IsTabVisible(OverlayTabCatalog.Decisions))
-                {
                     RefreshDecisionPage(AgentRuntime.Instance.PlayerFacing());
                 }
             }

@@ -66,6 +66,51 @@ internal static class GameThread
         return completionSource.Task;
     }
 
+    /// <summary>
+    /// <see cref="InvokeAsync{T}(Func{T})"/> with a deadline and a caller token. A posted callback
+    /// that never runs (the game thread is not pumping, or a synchronous long task is ahead of it)
+    /// used to hang the awaiting agent turn forever -- the caller's cancellation token never reached
+    /// the post, so even pausing auto-play could not break the wait. Here the await completes with
+    /// <see cref="TimeoutException"/> or <see cref="OperationCanceledException"/> instead; the late
+    /// callback's result is discarded by the already-completed source.
+    /// </summary>
+    public static async Task<T> InvokeAsync<T>(Func<T> action, TimeSpan timeout, CancellationToken cancellationToken)
+    {
+        var task = InvokeAsync(action);
+        if (task.IsCompleted)
+        {
+            return await task;
+        }
+
+        using var timeoutCts = new CancellationTokenSource(timeout);
+        using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, timeoutCts.Token);
+        // Task.Delay with a token completes (canceled) the moment either fires; WhenAny treats a
+        // canceled task as completed, so the first finisher decides. No ConfigureAwait(false): this
+        // class's contract is to keep callers on the context they came from, because game-adjacent
+        // continuations break on a thread-pool thread.
+        var wait = Task.Delay(Timeout.InfiniteTimeSpan, linkedCts.Token);
+        var completed = await Task.WhenAny(task, wait);
+        if (completed == task)
+        {
+            return await task;
+        }
+
+        if (cancellationToken.IsCancellationRequested)
+        {
+            throw new OperationCanceledException(cancellationToken);
+        }
+
+        throw new TimeoutException("The game thread did not run the posted action in time.");
+    }
+
+    /// <summary>Cancellation-aware overload without an explicit timeout: the caller's token breaks the wait.</summary>
+    public static Task<T> InvokeAsync<T>(Func<T> action, CancellationToken cancellationToken)
+    {
+        // No clock of its own: the caller's token is the whole deadline, so this is the timeout
+        // overload with an unbounded clock rather than a second copy of the wait loop.
+        return InvokeAsync(action, Timeout.InfiniteTimeSpan, cancellationToken);
+    }
+
     public static Task InvokeAsync(Action action)
     {
         return InvokeAsync(() =>

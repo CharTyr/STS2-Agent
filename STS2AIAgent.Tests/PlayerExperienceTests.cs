@@ -427,7 +427,7 @@ internal static class PlayerExperienceTests
 
         public RolePingFactory(Func<LlmEndpoint, ILlmClient> create) => _create = create;
 
-        public ILlmClient Create(LlmEndpoint endpoint) => _create(endpoint);
+        public ILlmClient Create(LlmEndpoint endpoint, TimeSpan? requestTimeout = null) => _create(endpoint);
     }
 
     private sealed class PingClient : ILlmClient
@@ -458,5 +458,8 @@ internal static class PlayerExperienceTests
 
             return Task.FromResult(_reply ?? "pong");
         }
+
+        public Task<bool> ProbeToolCallingAsync(string model, LlmTool tool, string prompt, CancellationToken cancellationToken) =>
+            Task.FromResult(true);
     }
 }

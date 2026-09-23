@@ -65,6 +65,7 @@ curl -s http://127.0.0.1:8080/state | jq .
 | `invalid_target` | 409 | 目标索引超出范围 | 否 |
 | `action_in_flight` | 409 | 已有动作正在执行（含它正在等待的状态转换）。本次请求**没有执行、也没有排队**：等上一个动作的响应返回、重新读一次 `/state` 再重试。详情带 `in_flight_action`，即占用中的动作名 | 是 |
 | `state_unavailable` | 503 | 游戏状态暂时不可安全读取（如正在过渡） | 是 |
+| `unavailable` | 503 | 双层策略面（`GET`/`POST /strategy`、MCP 工具 `get_planner_briefing`/`update_play_strategy`）所在的实例没有绑定策略存储（如离线测试环境）。正常游戏内实例不会出现 | 是 |
 | `forbidden_actor` | 403 | 多人场景下试图为其它角色执行动作 | 否 |
 | `mcp_disabled` | 403 | 请求 /mcp 但原生 MCP 未开启 | 否 |
 | `screenshot_unavailable` | 409 | 游戏视口还不能截图 | 是 |
@@ -1801,6 +1802,37 @@ Invoke-RestMethod -Uri 'http://127.0.0.1:8080/teammate/control' -Method POST -Co
 
 ---
 
+## `GET /strategy` 与 `POST /strategy`
+
+双层决策模式（dual-layer）的策略面。开启后由 TypeSafe Jev 模型逐动作执行，LLM 只做战略规划；这两条路由是外部规划器（planner）读取与调整 Jev 当前所遵循策略的入口。游戏内规划器与外部 MCP 客户端写的是同一个 `StrategyStore`，因此两条路径是同一种体验。
+
+- 鉴权：仅 loopback（非本机 403 `local_only`），与其他本机控制端点同级
+- `GET /strategy` 响应 `data.strategy`（当前策略：`posture` / `instructions` / `option_hints` / `updated_at` / `source`）、`data.dual_layer`（本实例的双层开关状态，host 读单人开关、companion 读多人开关）、`data.jev_configured`（Jev 的 base URL 与 key 是否已配齐）
+- `POST /strategy` 请求体 `{"strategy": {...}}`（或直接是策略对象）；`posture` / `instructions` / `option_hints` 均可选，省略的字段保留当前值。`source` 会被记为 `mcp`、`updated_at` 记为当前时间。策略对象无法解析时返回 400 `invalid_request`
+- 策略字段约定：`posture` 是整体倾向（如 `aggressive` / `defensive` / `balanced`）；`instructions` 是长期指导，**不要**点名具体卡牌下标或目标——它们每帧都变；`option_hints` 是按选项类别的微调
+
+### `GET /strategy` 响应示例
+
+```json
+{
+  "ok": true,
+  "request_id": "req_20261005_101500_0001_7",
+  "data": {
+    "strategy": {
+      "posture": "balanced",
+      "instructions": "优先格挡，血量低于 30% 时转防守。",
+      "option_hints": {},
+      "updated_at": "2026-10-05T10:15:00.0000000+08:00",
+      "source": "mcp"
+    },
+    "dual_layer": true,
+    "jev_configured": true
+  }
+}
+```
+
+---
+
 ## `POST /companion/control` 与 `POST /companion/message`
 
 AI 队友实例上的受控端点，由宿主进程在本地调用，普通玩家窗口不使用。
@@ -2120,12 +2152,12 @@ Python sidecar 另加 `event_id`、`event_options` 与 `guidance_source`：它�
 
 - **前提**：`screen = "REWARD"`（`reward.rewards[]` 中有可领取项，或已处于卡牌奖励子界面）
 - **参数**（两者都可省略）
-  - `option_index`：`-1` 跳过卡牌奖励；`0/1/2...` 选择对应位置的卡牌；缺省为自动（第一张）
+  - `option_index`：`-1` 跳过卡牌奖励；`0/1/2...` 选择对应位置的卡牌（索引对应 `reward.card_options[]`）；**缺省时不再自动选牌**——遇到卡牌选择会停下并返回 `pending`，由调用方决策
   - `card_index`：`option_index` 的向后兼容别名，语义相同
-- **行为**：与 `collect_rewards_and_proceed` 共用同一套奖励推进流程；显式选择只作用于本次调用遇到的第一处卡牌奖励选择，同一次调用内后续卡牌奖励按自动（第一张）处理
-- **稳定条件**：奖励流程结束或界面切换
+- **行为**：与 `collect_rewards_and_proceed` 共用同一套奖励推进流程；显式选择只作用于本次调用遇到的第一处卡牌奖励选择。未携带选择时，流程在卡牌选择界面停下（`reward.pending_card_choice = true`），返回 `pending`——卡牌是构筑决策，不再由 Mod 代取第一张
+- **稳定条件**：奖励流程结束、界面切换，或停在卡牌选择界面等待决策
 - **超时**：20 秒
-- **重试语义**：显式选择属于**携带它的那一次调用**。若本次调用返回 `pending`，用相同参数重试 `resolve_rewards` 会重新携带该选择；若改用 `collect_rewards_and_proceed` 重试，卡牌奖励按**自动（第一张）**处理，显式选择不会跨调用保留
+- **重试语义**：显式选择属于**携带它的那一次调用**。若本次调用返回 `pending`，用相同参数重试 `resolve_rewards` 会重新携带该选择；不带选择重试（或改用 `collect_rewards_and_proceed`）会再次停在卡牌选择处，不会自动取牌
 
 ```json
 {
@@ -2193,10 +2225,10 @@ Python sidecar 另加 `event_id`、`event_options` 与 `guidance_source`：它�
 - **参数**：无
 - **行为**：
   1. 逐个领取可领取的奖励（跳过无空位的药水）
-  2. 遇到卡牌选择时**自动选择第一张**
-  3. 点击继续按钮
+  2. 遇到卡牌选择时**停下并返回 `pending`**（`reward.pending_card_choice = true`），由调用方用 `choose_reward_card` / `skip_reward_cards` 决策——不再自动选择第一张
+  3. 无卡牌决策待处理时点击继续按钮
 - **超时**：20 秒
-- **注意**：适合无人值守推进。如需精确控制构筑决策，请用 `claim_reward` + `choose_reward_card` / `skip_reward_cards` 组合
+- **注意**：适合无人值守推进非卡牌奖励。卡牌选择是构筑决策，需用 `choose_reward_card` / `skip_reward_cards` 或带 `option_index` 的 `resolve_rewards` 显式做出
 
 ```
 请求: { "action": "collect_rewards_and_proceed" }
@@ -2477,7 +2509,8 @@ Python sidecar 另加 `event_id`、`event_options` 与 `guidance_source`：它�
 
 ```
 1. GET /state                          → screen=REWARD
-2a. POST /action { collect_rewards_and_proceed }  → 自动收取（简单模式）
+2a. POST /action { collect_rewards_and_proceed }  → 收取非卡牌奖励；若有卡牌选择会停在选牌界面（pending_card_choice=true）
+    POST /action { choose_reward_card, option_index=2 }  → 按构筑决策选卡（或 skip_reward_cards 跳过）
 --- 或 ---
 2b. POST /action { claim_reward, option_index=0 }  → 手动领取金币
     POST /action { claim_reward, option_index=1 }  → 点击卡牌奖励

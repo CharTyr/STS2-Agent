@@ -32,6 +32,14 @@ internal static class NoProgressPolicy
     public const int ReasoningBudgetLimit = 5;
 
     /// <summary>
+    /// How long a run may report "waiting for the game" continuously before the session stops with a
+    /// visible reason. A wait used to be free forever: it spent no retry budget, so a state that
+    /// never became actionable looked like a hung loop with no error. Wall-clock, not turns: a turn
+    /// that waits out its own 20-second timeout must not stretch the budget into tens of minutes.
+    /// </summary>
+    public static readonly TimeSpan WaitingForGameLimit = TimeSpan.FromSeconds(150);
+
+    /// <summary>
     /// True when the latest successful action repeats the previous one <em>and</em> the state
     /// fingerprint did not move. A changed action or a changed state is progress. Missing data
     /// never counts as a repeat: a turn without a fingerprint cannot prove the game stood still.

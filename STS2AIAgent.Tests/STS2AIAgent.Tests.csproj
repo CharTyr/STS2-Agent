@@ -40,6 +40,8 @@
     <Compile Include="..\STS2AIAgent\Llm\*.cs" Link="Llm\%(Filename)%(Extension)" />
     <Compile Include="..\STS2AIAgent\Agent\AgentLoop.cs" Link="Agent\AgentLoop.cs" />
     <Compile Include="..\STS2AIAgent\Agent\AgentLoop.Arguments.cs" Link="Agent\AgentLoop.Arguments.cs" />
+    <Compile Include="..\STS2AIAgent\Agent\AgentLoop.Probes.cs" Link="Agent\AgentLoop.Probes.cs" />
+    <Compile Include="..\STS2AIAgent\Agent\PlayPhases.cs" Link="Agent\PlayPhases.cs" />
     <Compile Include="..\STS2AIAgent\Agent\AgentTurnCanceledException.cs" Link="Agent\AgentTurnCanceledException.cs" />
     <Compile Include="..\STS2AIAgent\Agent\CompletionErrors.cs" Link="Agent\CompletionErrors.cs" />
     <Compile Include="..\STS2AIAgent\Agent\ContextCompaction.cs" Link="Agent\ContextCompaction.cs" />
@@ -57,6 +59,15 @@
     <Compile Include="..\STS2AIAgent\Agent\PlayPrompt.cs" Link="Agent\PlayPrompt.cs" />
     <Compile Include="..\STS2AIAgent\Agent\ProactiveChatPolicy.cs" Link="Agent\ProactiveChatPolicy.cs" />
     <Compile Include="..\STS2AIAgent\Agent\McpProcessLauncher.cs" Link="Agent\McpProcessLauncher.cs" />
+    <Compile Include="..\STS2AIAgent\Agent\ExecutionDecision.cs" Link="Agent\ExecutionDecision.cs" />
+    <Compile Include="..\STS2AIAgent\Agent\IActionDecider.cs" Link="Agent\IActionDecider.cs" />
+    <Compile Include="..\STS2AIAgent\Agent\PlayStrategy.cs" Link="Agent\PlayStrategy.cs" />
+    <Compile Include="..\STS2AIAgent\Agent\StrategyStore.cs" Link="Agent\StrategyStore.cs" />
+    <Compile Include="..\STS2AIAgent\Agent\JevOptionEnumerator.cs" Link="Agent\JevOptionEnumerator.cs" />
+    <Compile Include="..\STS2AIAgent\Agent\StrategyPlanner.cs" Link="Agent\StrategyPlanner.cs" />
+    <Compile Include="..\STS2AIAgent\Agent\JevExecutionDecider.cs" Link="Agent\JevExecutionDecider.cs" />
+    <Compile Include="..\STS2AIAgent\Agent\PlaySessionRecord.cs" Link="Agent\PlaySessionRecord.cs" />
+    <Compile Include="..\STS2AIAgent\Agent\PlaySessionStore.cs" Link="Agent\PlaySessionStore.cs" />
     <!--
       A glob, not one file: NativeMcpServer is a partial class (transport in the base file, tool
       execution in NativeMcpServer.Tools.cs). Naming the base file alone compiled the class without
