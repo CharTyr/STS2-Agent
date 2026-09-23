@@ -1497,3 +1497,37 @@ Isolated autoplay cleared Act 1 and ended naturally in Act 2. Thinking-model fai
 ### Next Steps
 
 - 在隔离存档与受控额度下验证双开、真实 Jev 429、切局与运行中指令；单独处理未提交的 09-22 UI 任务文档。
+
+
+## Session 38: 过时文档归档与状态页收口
+
+**Date**: 2026-09-23
+**Task**: 过时文档归档与状态页收口
+**Branch**: `dev`
+
+### Summary
+
+将 7 份带日期的旧审查/验证记录原文迁入 history/ 并登记索引，docs/ 原路径保留历史快照跳转页；PRODUCT_PLAN_CURRENT.md 更新为 v0.15.0 本地审查修复状态并明确实机未验收；architecture.md 源码统计刷新为 164 文件 / 45,050 行。12 项离线闸门与 git diff --check 通过。
+
+### Main Changes
+
+- docs 归档：5 份 2026-03/08 快照 + 2 份 2026-09-21 审查记录移入 history/，原路径留跳转页。
+- 当前状态页区分本轮 v0.15.0 修复与旧版记录；修正 09-22 任务指向已归档任务的链接。
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `a58f243` | (see git log) |
+
+### Testing
+
+- [OK] python scripts/check_verification_gates.py 12 项全过；git diff --check 通过。
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- 09-22 四个任务仍在规划/进行中，其文档草稿改动保留未提交；真实双开与 Jev 服务实机验收待做。
