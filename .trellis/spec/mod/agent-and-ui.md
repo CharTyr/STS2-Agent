@@ -12,7 +12,9 @@
 - actions with `action`, `status`, `stable`, `message`, and compact state; and
 - bounded actionable waits and optional JPEG screenshots.
 
-`GameBridge` already calls `GameThread.InvokeAsync` for game access. `AgentLoop` should call the interface and should not import Godot types or reach into `GameStateService` directly. The fake bridge in [McpServiceTests](../../../STS2AIAgent.Tests/McpServiceTests.cs) demonstrates the expected test seam; [AgentLoopTests](../../../STS2AIAgent.Tests/AgentLoopTests.cs) exercises state checks, action legality, pause behavior, and run boundaries without a live game.
+`GameBridge` already calls `GameThread.InvokeAsync` for game access. It serializes and dispatches; it does not call `AgentRuntime`. Session observation belongs to the caller that already holds the fresh frame: `Router` for `/state`, `/action`, and `/strategy`, and `AgentRuntime` for its own game-thread read. A compact frame or `CurrentRunBoundary.RunId` may confirm the same run, but only `ObserveSessionStateSnapshot` on a fresh raw frame may switch or clear the live session.
+
+`AgentLoop` should call the interface and should not import Godot types or reach into `GameStateService` directly. The fake bridge in [McpServiceTests](../../../STS2AIAgent.Tests/McpServiceTests.cs) demonstrates the expected test seam; [AgentLoopTests](../../../STS2AIAgent.Tests/AgentLoopTests.cs) exercises state checks, action legality, pause behavior, and run boundaries without a live game.
 
 ## `AgentRuntime` owns application orchestration
 
