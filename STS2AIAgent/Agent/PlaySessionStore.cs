@@ -211,6 +211,8 @@ internal sealed class PlaySessionStore
     {
         Posture = DiagnosticExport.Redact(strategy.Posture ?? "balanced"),
         Instructions = DiagnosticExport.Redact(strategy.Instructions ?? ""),
+        Goal = PlayStrategy.ClampGoal(DiagnosticExport.Redact(strategy.Goal ?? "")),
+        PlanScreen = DiagnosticExport.Redact(strategy.PlanScreen ?? ""),
         Source = DiagnosticExport.Redact(strategy.Source ?? PlayStrategy.DefaultSource),
         UpdatedAt = DiagnosticExport.Redact(strategy.UpdatedAt ?? PlayStrategy.DefaultTimestamp),
         OptionHints = (strategy.OptionHints ?? new Dictionary<string, string>())

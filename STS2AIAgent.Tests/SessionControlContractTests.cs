@@ -37,6 +37,70 @@ internal static class SessionControlContractTests
         Assert.Contains("Screenshots are only available on loopback.", body, StringComparison.Ordinal);
     }
 
+    /// <summary>
+    /// The live defect: a JPEG delivered with the agent panel drawn over the game
+    /// (<c>build/live-2026-09-23/menu-capture.jpg</c>) even though the route went through the bridge.
+    /// </summary>
+    /// <remarks>
+    /// The bridge was hiding the overlay all along; it waited for the wrong frame. Godot's SceneTree
+    /// <c>ProcessFrame</c> (what <c>WaitForNextFrameAsync</c> resolves on) is emitted before the
+    /// RenderingServer updates the viewports for that frame, so the capture read the frame that had
+    /// been drawn with the panel still on it. These contracts pin the things the offline suite cannot
+    /// execute: the wait ends on a drawn frame, the bridge runs the tested capture policy, and the
+    /// capture lease has exactly one owner.
+    /// </remarks>
+    public static void ScreenshotWaitsForADrawnFrameAndRestoresTheOverlay()
+    {
+        var bridge = AgentSourceFixture.Read("STS2AIAgent/Agent/GameBridge.cs");
+        var capture = AgentSourceFixture.MethodBody(bridge, "CaptureScreenshotJpegAsync");
+        Assert.Contains("ScreenshotPolicy.CaptureAsync", capture, StringComparison.Ordinal);
+        Assert.Contains("ScreenshotService.CreateCaptureHost()", capture, StringComparison.Ordinal);
+        Assert.False(capture.Contains("ScreenshotService.BeginCapture", StringComparison.Ordinal),
+            "the capture sequence belongs to the tested policy, not to the bridge");
+        Assert.False(capture.Contains("WaitForNextFrameAsync", StringComparison.Ordinal),
+            "WaitForNextFrameAsync resolves on ProcessFrame, which is emitted before the frame is drawn");
+        // The lease is taken on the calling thread, before the game-thread post: waiting for it inside
+        // the game thread would freeze the game for the length of another capture's frame wait.
+        Assert.Contains("using var gate = await ScreenshotGateLeaseAsync(cancellationToken)", capture, StringComparison.Ordinal);
+        // One process-wide gate and policy: overlapping captures must not interleave their
+        // hide/restore pairs, and a per-request instance would do exactly that.
+        Assert.Contains("private static readonly SemaphoreSlim ScreenshotGate = new(1, 1);", bridge, StringComparison.Ordinal);
+        Assert.Contains("private static readonly ScreenshotCapturePolicy ScreenshotPolicy", bridge, StringComparison.Ordinal);
+
+        var service = AgentSourceFixture.Read("STS2AIAgent/Vision/ScreenshotService.cs");
+        Assert.Contains("RenderingServer.SignalName.FramePostDraw", service, StringComparison.Ordinal);
+        Assert.False(service.Contains("SignalName.ProcessFrame", StringComparison.Ordinal),
+            "the read-back must wait for the frame the RenderingServer finished, not for ProcessFrame");
+        // The wait is bounded so a minimized or occluded window fails the capture instead of hanging
+        // the request or handing back a stale frame.
+        Assert.Contains("Task.WhenAny", service, StringComparison.Ordinal);
+        Assert.Contains("IsOverlayVisible", service, StringComparison.Ordinal);
+        Assert.Contains("RestoreOverlay", service, StringComparison.Ordinal);
+
+        var policy = AgentSourceFixture.Read("STS2AIAgent/Agent/ScreenshotCapturePolicy.cs");
+        Assert.Contains("FramesToSettleAfterHide", policy, StringComparison.Ordinal);
+        var finallyBody = policy[policy.IndexOf("finally", StringComparison.Ordinal)..];
+        Assert.Contains("RestoreOverlay", finallyBody, StringComparison.Ordinal);
+        // Exactly one owner for the lease, and it is the bridge. A release in the policy as well as
+        // the bridge's own disposal raised the semaphore past its maximum and threw out of a
+        // game-thread callback.
+        Assert.False(policy.Contains("Release()", StringComparison.Ordinal),
+            "the capture lease is released by the caller's lease object, never by the policy");
+        Assert.Contains("ScreenshotGateLease", bridge, StringComparison.Ordinal);
+
+        // A read-back that somehow resumed off the game thread is "no screenshot" (the documented
+        // 409 screenshot_unavailable), not an exception the route turns into a 500.
+        var readBack = AgentSourceFixture.MethodBody(service, "TryCaptureJpeg");
+        Assert.False(readBack.Contains("throw new", StringComparison.Ordinal),
+            "TryCaptureJpeg throws again; the route maps that to a 500 instead of screenshot_unavailable");
+
+        // A theme or language rebuild during a capture keeps the capture-hidden panel hidden until the
+        // capture's own restore, instead of reading the hidden panel as "the player closed it".
+        var overlay = AgentSourceFixture.Read("STS2AIAgent/Ui/AgentOverlayHost.cs");
+        var rebuild = AgentSourceFixture.MethodBody(overlay, "RebuildInPlace");
+        Assert.Contains("_captureHidden", rebuild, StringComparison.Ordinal);
+    }
+
     public static void WorkshopStagingKeepsLocalCandidate()
     {
         var source = AgentSourceFixture.Read("STS2AIAgent/Multiplayer/LocalDualInstanceLauncher.cs");

@@ -98,10 +98,16 @@ internal sealed class StrategyPlanner
                 LlmMessage.System(
                     "You are the strategy planner for a Slay the Spire 2 agent. A fast execution model "
                     + "picks each concrete action; you only set the standing strategy it follows. Reply with a "
-                    + "single JSON object and nothing else, with these keys: \"posture\" (\"aggressive\", "
-                    + "\"defensive\", or \"balanced\"), \"instructions\" (one or two sentences of standing "
-                    + "guidance), and \"option_hints\" (an object mapping option kinds to short nudges, may be "
-                    + "empty). Do not name specific card indices or targets; they change every frame."),
+                    + "single JSON object and nothing else, with these keys: \"goal\" (one short sentence naming "
+                    + "the macro objective for this screen or act, for example \"kill the weakest enemy before "
+                    + "it acts\"), \"posture\" (\"aggressive\", \"defensive\", or \"balanced\"), \"instructions\" "
+                    + "(one or two sentences of standing guidance), and \"option_hints\" (an object mapping "
+                    + "option kinds to short nudges, may be empty). An option kind is the action name the "
+                    + "executor chooses among -- play_card, end_turn, use_potion, choose_map_node, "
+                    + "choose_reward_card, and so on -- never a card, target, or option index. The executor "
+                    + "re-keys your hints onto the options the current frame actually offers, so a hint naming "
+                    + "an index is dropped instead of applied. Do not name specific card indices or targets; "
+                    + "they change every frame."),
                 LlmMessage.User(BuildContext(stateSummary, _store.Current, recentDecisions, runId))
             }
         };
@@ -120,10 +126,17 @@ internal sealed class StrategyPlanner
             return (false, completion.Usage);
         }
 
+        // The plan states which frame it was written for. The refresh key is run+screen+act, so a
+        // combat plan is reused by every later combat in the act; recording the screen and round is
+        // what lets the executor tell a live plan from guidance carried over from another encounter.
+        // A summary the planner's own read cap truncated mid-JSON yields no scope rather than throwing.
+        var scope = JevOptionEnumerator.ReadScope(stateSummary);
         var adopted = _store.TryUpdate(strategy with
         {
             UpdatedAt = DateTimeOffset.UtcNow.ToString("O"),
-            Source = "llm"
+            Source = "llm",
+            PlanScreen = scope.Screen ?? string.Empty,
+            PlanRound = scope.Round
         }, revision);
         return (adopted, completion.Usage);
     }

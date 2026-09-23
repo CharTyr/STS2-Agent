@@ -352,7 +352,9 @@ internal sealed partial class AgentOverlayHost
 
         // Not an anchored section: it is the form's own state line, and a jump button that scrolls to
         // "unsaved" would be a button whose only job is to tell the player the form is dirty.
-        _saveStatus = UiFactory.Label(_settingsDirty ? Loc.T("未保存") : Loc.T("已保存"), 12, muted: true);
+        // Wrapped: after a save this can carry the budget-input error sentence, which is wider than
+        // the settings column and would clip the panel exactly like the model-delete warning did.
+        _saveStatus = UiFactory.Wrapped(_settingsDirty ? Loc.T("未保存") : Loc.T("已保存"), 12);
         _settingsBody.AddChild(_saveStatus);
         _settingsLoadNotice = UiFactory.Wrapped(FormatSettingsNotice(), 12);
         _settingsBody.AddChild(_settingsLoadNotice);
@@ -368,10 +370,12 @@ internal sealed partial class AgentOverlayHost
         _settingsBody.AddChild(_visionTest);
         if (firstRun.Play.Status == "failed" && !string.IsNullOrWhiteSpace(firstRun.Play.NextStep))
         {
-            _settingsBody.AddChild(UiFactory.Label(Loc.T("下一步：{0}", firstRun.Play.NextStep), 12));
+            _settingsBody.AddChild(UiFactory.Wrapped(Loc.T("下一步：{0}", firstRun.Play.NextStep), 12));
         }
 
-        _deleteWarning = UiFactory.Label("", 12);
+        // Removing a bound model reports all affected roles. That sentence must reflow instead of
+        // stretching the settings column and clipping the controls on every other page.
+        _deleteWarning = UiFactory.Wrapped("", 12);
         _settingsBody.AddChild(_deleteWarning);
 
         // Appearance sits above the endpoint forms on purpose: it is the one setting on this page a

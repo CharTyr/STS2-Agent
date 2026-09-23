@@ -31,6 +31,22 @@ internal sealed record JevOption
 }
 
 /// <summary>
+/// The planner's per-option hints after being bound to one frame. <see cref="OptionHints"/> is keyed
+/// by live <see cref="JevOption.Id"/> only, and <see cref="DroppedKeys"/> names the hints that matched
+/// neither a live option nor a live option kind and were therefore not forwarded at all.
+/// </summary>
+internal readonly record struct AlignedHints(
+    IReadOnlyDictionary<string, string> OptionHints,
+    IReadOnlyList<string> DroppedKeys);
+
+/// <summary>The part of a snapshot a standing plan is compared against.</summary>
+/// <remarks>
+/// <see cref="Round"/> is the combat round counter, which restarts at 1 for each encounter; a frame
+/// whose round is below the round a plan recorded proves that plan predates the current encounter.
+/// </remarks>
+internal readonly record struct FrameScope(string? Screen, int? Round);
+
+/// <summary>
 /// Expands a decision snapshot into the flat list of concrete options Jev picks from.
 /// </summary>
 /// <remarks>
@@ -81,6 +97,205 @@ internal static class JevOptionEnumerator
 
     /// <summary>Actions that are always expanded by a known index list even if the frame forgot the flag.</summary>
     private static readonly HashSet<string> AlwaysIndexed = new(IndexedPaths.Keys, StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// Hard cap on the hints one request may carry after re-keying. A kind hint can fan out over every
+    /// option of that kind (255 at the enumerator's own ceiling), and a request that repeats a nudge
+    /// hundreds of times costs more than the guide is worth; options past the cap keep no nudge.
+    /// </summary>
+    internal const int MaxAlignedHintEntries = 64;
+
+    /// <summary>The option kind an enumerated option belongs to: its action name.</summary>
+    internal static string KindOf(JevOption option) => option.Action;
+
+    /// <summary>
+    /// Reads the screen and combat round out of a snapshot, tolerantly: a truncated or non-JSON summary
+    /// yields nulls rather than throwing, because the planner's own state read is capped and may cut
+    /// the JSON mid-object.
+    /// </summary>
+    internal static FrameScope ReadScope(string? snapshotJson)
+    {
+        if (string.IsNullOrWhiteSpace(snapshotJson))
+        {
+            return new FrameScope(null, null);
+        }
+
+        try
+        {
+            using var document = JsonDocument.Parse(snapshotJson);
+            var root = document.RootElement;
+            if (root.ValueKind != JsonValueKind.Object)
+            {
+                return new FrameScope(null, null);
+            }
+
+            var state = root.TryGetProperty("state", out var nested) && nested.ValueKind == JsonValueKind.Object
+                ? nested
+                : root;
+            var screen = ReadString(state, "screen");
+            int? round = state.TryGetProperty("turn", out var turn)
+                && turn.ValueKind == JsonValueKind.Number
+                && turn.TryGetInt32(out var value)
+                && value >= 0
+                ? value
+                : null;
+            return new FrameScope(string.IsNullOrWhiteSpace(screen) ? null : screen, round);
+        }
+        catch (JsonException)
+        {
+            // The planner's summary is the compact state cut at 4,000 characters, which is not a
+            // whole document on nearly every combat frame. `screen` and `turn` sit at the head of it,
+            // so read forward until the cut instead of giving up on the whole plan scope.
+            return ReadScopePrefix(snapshotJson);
+        }
+    }
+
+    /// <summary>
+    /// Reads <c>screen</c> / <c>turn</c> from the head of a possibly truncated JSON object, at the root
+    /// or inside a root <c>state</c> object, stopping at the first token the cut makes unreadable.
+    /// </summary>
+    private static FrameScope ReadScopePrefix(string json)
+    {
+        string? screen = null;
+        int? round = null;
+        var reader = new Utf8JsonReader(System.Text.Encoding.UTF8.GetBytes(json), isFinalBlock: false, state: default);
+        var scopeDepth = 1;
+        try
+        {
+            while (reader.Read())
+            {
+                if (reader.TokenType != JsonTokenType.PropertyName || reader.CurrentDepth != scopeDepth)
+                {
+                    continue;
+                }
+
+                var name = reader.GetString();
+                if (!reader.Read())
+                {
+                    break;
+                }
+
+                if (name == "state" && scopeDepth == 1 && reader.TokenType == JsonTokenType.StartObject)
+                {
+                    scopeDepth = 2;
+                }
+                else if (name == "screen" && reader.TokenType == JsonTokenType.String)
+                {
+                    screen = reader.GetString();
+                }
+                else if (name == "turn" && reader.TokenType == JsonTokenType.Number
+                         && reader.TryGetInt32(out var value) && value >= 0)
+                {
+                    round = value;
+                }
+
+                if (screen != null && round != null)
+                {
+                    break;
+                }
+            }
+        }
+        catch (JsonException)
+        {
+            // The cut: keep whatever was read before it.
+        }
+
+        return new FrameScope(string.IsNullOrWhiteSpace(screen) ? null : screen, round);
+    }
+
+    /// <summary>
+    /// Binds a strategy's option hints to the concrete options of one frame.
+    /// </summary>
+    /// <remarks>
+    /// The planner speaks in option KINDS -- its prompt and the MCP strategy schema both say "keyed by
+    /// option kind" -- while the choice question it guides is keyed by concrete option IDS
+    /// (<c>play_card:0-&gt;1</c>). Nothing used to bridge the two, so a kind-keyed nudge named no
+    /// criterion at all and a concrete nudge left over from an earlier frame was forwarded as though the
+    /// option still existed. This re-keys both onto the ids this frame actually offers:
+    /// <list type="number">
+    /// <item>a hint that already names a live option id is kept as it is (the most specific guidance);</item>
+    /// <item>a hint that names a live option kind fans out over that kind's live ids, in frame order, up
+    /// to <see cref="MaxAlignedHintEntries"/>;</item>
+    /// <item>anything else is dropped and reported rather than sent, because an id Jev cannot choose is
+    /// not guidance.</item>
+    /// </list>
+    /// The result is the enforced invariant: every key of <see cref="AlignedHints.OptionHints"/> is a
+    /// key of the same request's <c>criteria</c>.
+    /// </remarks>
+    internal static AlignedHints AlignHints(
+        IReadOnlyDictionary<string, string>? hints,
+        IReadOnlyList<JevOption> options)
+    {
+        var aligned = new Dictionary<string, string>(StringComparer.Ordinal);
+        var dropped = new List<string>();
+        if (hints == null || hints.Count == 0)
+        {
+            return new AlignedHints(aligned, dropped);
+        }
+
+        var liveIds = new HashSet<string>(StringComparer.Ordinal);
+        var idsByKind = new Dictionary<string, List<string>>(StringComparer.OrdinalIgnoreCase);
+        foreach (var option in options)
+        {
+            liveIds.Add(option.Id);
+            var kind = KindOf(option);
+            if (!idsByKind.TryGetValue(kind, out var ids))
+            {
+                ids = new List<string>();
+                idsByKind[kind] = ids;
+            }
+
+            ids.Add(option.Id);
+        }
+
+        // Pass 1: concrete ids first, so a kind-wide nudge can never overwrite a specific one.
+        var kindHints = new List<KeyValuePair<string, string>>();
+        foreach (var (key, value) in hints)
+        {
+            if (string.IsNullOrWhiteSpace(key) || string.IsNullOrWhiteSpace(value))
+            {
+                continue;
+            }
+
+            if (liveIds.Contains(key))
+            {
+                // Past the cap a live id is still reported, and the scan goes on: breaking here used
+                // to drop every later key -- unknown ones included -- without a trace in DroppedKeys.
+                if (aligned.Count >= MaxAlignedHintEntries)
+                {
+                    dropped.Add(key);
+                    continue;
+                }
+
+                aligned[key] = value;
+                continue;
+            }
+
+            if (idsByKind.ContainsKey(key))
+            {
+                kindHints.Add(new KeyValuePair<string, string>(key, value));
+                continue;
+            }
+
+            dropped.Add(key);
+        }
+
+        // Pass 2: a kind hint reaches every live option of that kind.
+        foreach (var (key, value) in kindHints)
+        {
+            foreach (var id in idsByKind[key])
+            {
+                if (aligned.Count >= MaxAlignedHintEntries)
+                {
+                    return new AlignedHints(aligned, dropped);
+                }
+
+                aligned.TryAdd(id, value);
+            }
+        }
+
+        return new AlignedHints(aligned, dropped);
+    }
 
     public static List<JevOption> Enumerate(string snapshotJson)
     {

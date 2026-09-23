@@ -27,6 +27,7 @@ internal sealed partial class AgentLoop
     private readonly Func<double>? _confidenceThreshold;
     private readonly Func<string, (string Id, string Text)?>? _peekPlayInstruction;
     private readonly Action<string>? _acknowledgePlayInstruction;
+    private readonly Action<string>? _onReasoningDelta;
 
     public AgentLoop(
         IGameBridge bridge,
@@ -41,7 +42,8 @@ internal sealed partial class AgentLoop
         Func<double>? confidenceThreshold = null,
         Func<IActionDecider?>? deciderProvider = null,
         Func<string, (string Id, string Text)?>? peekPlayInstruction = null,
-        Action<string>? acknowledgePlayInstruction = null)
+        Action<string>? acknowledgePlayInstruction = null,
+        Action<string>? onReasoningDelta = null)
     {
         _bridge = bridge;
         _factory = factory;
@@ -55,6 +57,9 @@ internal sealed partial class AgentLoop
         _confidenceThreshold = confidenceThreshold;
         _peekPlayInstruction = peekPlayInstruction;
         _acknowledgePlayInstruction = acknowledgePlayInstruction;
+        // The streaming partial the caller wants to show while a reply is still arriving. It stays a
+        // callback rather than a field on the result because a partial is only meaningful in flight.
+        _onReasoningDelta = onReasoningDelta;
         // A live provider wins over the captured instance: the runtime constructs once, but the
         // Jev configuration can appear after that, and a decider frozen at construction is the
         // dual-layer toggle that never turns on.
@@ -335,7 +340,10 @@ internal sealed partial class AgentLoop
                     Tools = resolved.Model.SupportsTools ? tools : null,
                     Thinking = resolved.Model.GetThinkingIntensity(),
                     ThinkingMode = resolved.Model.ThinkingMode,
-                    Stream = !(allowAct && resolved.Model.SupportsTools && toolStreamFallbackTried)
+                    Stream = !(allowAct && resolved.Model.SupportsTools && toolStreamFallbackTried),
+                    // The only request a player watches think: the turn's own completion. Vision
+                    // captions and role probes run without a callback, so their reasoning is not shown.
+                    OnReasoningDelta = _onReasoningDelta
                 };
 
                 var budgetReason = _budgetGuard?.Invoke()?.CheckBudget(requestsSpent, accumulatedUsage?.TotalTokens ?? 0);

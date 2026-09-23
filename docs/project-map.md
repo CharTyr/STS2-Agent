@@ -84,6 +84,12 @@ one action runs at a time.
   construction time.
 - **Secrets.** API keys are never logged, exported or persisted outside the settings file:
   `DiagnosticExport.Redact`, and session files redact chat.
+- **Reasoning is display-only.** A provider's `reasoning_content` reaches the player only through
+  `LiveThoughtBuffer`, and only while `ShowThinkingInChat` is on: with the switch off (the default) it is
+  not stored at all. Either way it is never persisted, logged, exported or replayed to a provider -- the
+  tool-call echo is the provider's own field, not this buffer. The buffer empties when a turn records its
+  reasoning, when a turn ends without one, and when a request starts, so a partial can neither double a
+  completed bubble nor outlive its turn.
 
 ## 3. Mod entry, overlay UI, configuration
 
@@ -92,7 +98,7 @@ one action runs at a time.
 - `STS2AIAgent/Ui/AgentOverlayHost.cs` — overlay chrome and lifecycle: CanvasLayer install and retry until `NGame.Instance`, placement/drag/edge-tab (clamped on-screen), hotkey poll, the 800 ms `OnProcessFrame` tick, `ToggleVisible`, `RebuildInPlace`.
 - `STS2AIAgent/Ui/AgentOverlayHost.Tabs.cs` — `_pages`, `BuildPages`, `ShowTab` (flushes dirty settings when leaving Settings), tab row.
 - `STS2AIAgent/Ui/AgentOverlayHost.Pages.cs` — Play and co-op page bodies plus the whole `RefreshDynamic` pass (`RefreshModeControls`, `RefreshJevReading`, `ApplyTone`).
-- `STS2AIAgent/Ui/AgentOverlayHost.ChatCard.cs` — conversation card, `RefreshChatLog`, `ChatTailLimit = 80`.
+- `STS2AIAgent/Ui/AgentOverlayHost.ChatCard.cs` — conversation card, `RefreshChatLog` (draws the recorded turns, then the in-flight `AgentRuntime.LiveThought` partial when the reasoning switch is on), `ChatTailLimit = 80`.
 - `STS2AIAgent/Ui/AgentOverlayHost.Settings.cs` — settings form: `BuildSettingsPage`, `RebuildSettingsForm`, `HarvestSettings` (the only reader of form fields), `SaveSettingsFromUi`, model cards and the per-model Test button, the Jev section, advanced options.
 - `STS2AIAgent/Ui/AgentOverlayHost.PlayControl.cs` — solo/co-op mode switch (`ChangePlayModeAsync`: pause first, then commit) and companion Jev settings sync.
 - `STS2AIAgent/Ui/UiFactory.cs` — every control and palette→StyleBox. `Label` does **not** wrap (reports its full text as min width); `Wrapped` does, with a 120 px floor. `Row` stretches its children, `TightRow` doesn't. Also `TryParseHotkey`.
@@ -114,7 +120,7 @@ one action runs at a time.
 - `STS2AIAgent/Localization/Loc.cs` — `Loc.T`, the language switch, the `LanguageChanged` event.
 - `STS2AIAgent/Localization/LocSource.cs` — resolves the player's language (settings file first, then the game's manager).
 - `STS2AIAgent/Localization/Loc.Strings.Ui.cs` / `STS2AIAgent/Localization/Loc.Strings.Runtime.cs` / `STS2AIAgent/Localization/Loc.Strings.Facing.cs` / `STS2AIAgent/Localization/Loc.Strings.Game.cs` / `STS2AIAgent/Localization/Loc.Strings.Support.cs` — the zh→en tables, split by area.
-- `STS2AIAgent/Vision/ScreenshotService.cs` — JPEG capture of the game viewport, with `BeginCapture`/`EndCapture` hooks that hide the overlay during capture.
+- `STS2AIAgent/Vision/ScreenshotService.cs` — JPEG readback of the game viewport; the Godot capture host hides/restores the overlay and waits for `RenderingServer.FramePostDraw`, not `SceneTree.ProcessFrame` (which still shows the old frame). The capture gate and deadline policy are in `ScreenshotCapturePolicy`.
 
 ### Flows
 - **Install → tick:** `Install` → `TryBuildOrRetry` → `Build` (`UiFactory.UseTheme` **before** the first control) → pages → `ShowTab` → the 800 ms tick (`RefreshDynamic`, screen label via `GameStateService.CurrentScreenName()`, never a full state build). `AgentRuntime.Changed` → `GameThread.InvokeAsync(RefreshDynamic)`.
@@ -124,7 +130,7 @@ one action runs at a time.
 
 ### Traps
 - Post-await UI writes: wrap them in `GameThread.InvokeAsync`. That call throws `InvalidOperationException` during shutdown races, so catch it.
-- Any label that can hold a sentence or a path must use `UiFactory.Wrapped`, not `Label`. Clipping at the 440 px panel has been re-found in live passes three times.
+- Any label that can hold a sentence or a path must use `UiFactory.Wrapped`, not `Label`, including a deletion error that starts empty and later becomes long. Three horizontally adjacent metric tiles also clip an expanding Token value; put that metric on its own full-width row. `Wrapped` has a 120 px floor, so a row with two `Wrapped` labels plus two drop-downs (the chat options row, measured 457 px on 2026-09-24) overflows by itself: one label/control pair per row. After a layout change, read the `[STS2AIAgent.Wide]` line in the game log (`offenders=0` per tab). Clipping at the 440 px panel has been re-found in live passes.
 - `_settingsDirty` is set only by `WatchLine/WatchCheck/WatchCombo`. Toggles that save immediately (theme, language, companion choice, dual-layer) bypass it on purpose.
 - A new setting touches `AgentSettings`, `SettingsClone`, `HarvestSettings` and `EnsureValidShape`.
 
@@ -142,8 +148,9 @@ one action runs at a time.
 - `STS2AIAgent/Agent/AgentRuntime.ModeControl.cs` — solo/co-op mutual exclusion: `TryBeginPlayModeSwitch`/`EndPlayModeSwitch`, start gates.
 - `STS2AIAgent/Agent/AgentRuntime.Accounting.cs` — `AccountTurn`, `RecordTurnReceipt`, `ApplyPlayResult`, the chat history buffer, Jev panel readings, `DescribeActResult`.
 - `STS2AIAgent/Agent/AgentRuntime.Session.cs` — run-scoped session: `ObserveSessionStateSnapshot` (only a fresh **raw** game-thread frame may switch or clear the session), `FlushSessionIfDirty`, `RecordDecision`.
-- `STS2AIAgent/Agent/AgentRuntime.Status.cs` — status line: `SetStatus`, `SetPlayPhase` (phase plus elapsed seconds).
+- `STS2AIAgent/Agent/AgentRuntime.Status.cs` — status line: `SetStatus`, `SetPlayPhase` (phase plus elapsed seconds), `SetRequestingModelStatus` (also drops the previous request's streamed reasoning).
 - `STS2AIAgent/Agent/AgentRuntime.PlayInstructions.cs` — messages sent during solo auto-play become bounded, one-shot, run-scoped guidance for the next decision.
+- `STS2AIAgent/Agent/LiveThoughtBuffer.cs` — the reasoning a model is still producing, streamed so the conversation can show it before the turn completes. Display-only (never persisted, never replayed); the player's "show reasoning" switch gates storage, and `Reset` is what stops a completed turn from drawing a second thought bubble.
 - `STS2AIAgent/Agent/AgentRuntime.Jev.cs` — `StrategyStore`, `StrategyPlanner` wiring, `BuildJevDecider` (re-resolved from live settings every turn), `TestJevConnectionAsync`.
 - `STS2AIAgent/Agent/AgentRuntime.Team.cs` — AI teammate chat and status (`SendTeamMessageAsync`, `ReplyToTeammateAsync`, live status throttle).
 - `STS2AIAgent/Agent/AgentRuntime.ModelTest.cs` — `TestModelAsync`, `ModelTestFor`, `IsModelVerified` (fingerprint match).
@@ -170,6 +177,8 @@ one action runs at a time.
 - `STS2AIAgent/Agent/AgentTools.cs` — tool schemas for `ReadOnly`, `Play` (last = `act`), `Chat`, vision, and the MCP subset.
 - `STS2AIAgent/Agent/IGameBridge.cs` — the seam interface plus `AgentTurnResult`/`ChatTurn` records (test fakes implement it).
 - `STS2AIAgent/Agent/GameBridge.cs` — the implementation: every call is a bounded, token-carrying `GameThread` post. `ActAsync` → `GameActionService.ExecuteAsync`, compact or raw state reads, `WaitUntilActionableAsync` (5 s per probe), game-data lookups, screenshots.
+- `STS2AIAgent/Agent/IScreenshotCaptureHost.cs` — the game-side half of a screenshot: overlay visibility, hide/restore, one bounded wait for a frame the renderer actually drew, and the JPEG read-back. Implemented by `ScreenshotService`'s Godot host, faked by the offline tests.
+- `STS2AIAgent/Agent/ScreenshotCapturePolicy.cs` — sequences a screenshot *after `GameBridge` acquires the shared lease off the game thread*: remember visibility → hide → wait for two drawn frames → read back → restore in a `finally`. `GameBridge` releases the lease afterward, including on a canceled/failed post; no stale frame is returned after a timeout.
 - `STS2AIAgent/Agent/StateViews.cs` — run summary and state diff (mirrors `mcp_server/src/sts2_mcp/state_views.py`).
 - `STS2AIAgent/Agent/GameDataFilter.cs` — scene-aware field projections for game data (mirrors `mcp_server/src/sts2_mcp/game_data.py`).
 - `STS2AIAgent/Agent/GameDataExportSchema.cs` — field inventory of `/data/{collection}` (two-way test against the export code).
@@ -182,25 +191,25 @@ one action runs at a time.
 
 ### Files — dual-layer (Jev) and per-run persistence
 - `STS2AIAgent/Agent/IActionDecider.cs` — the execution-decider seam.
-- `STS2AIAgent/Agent/JevExecutionDecider.cs` — asks the Jev fast model to pick one enumerated option; low confidence or failure falls back to the LLM.
-- `STS2AIAgent/Agent/JevOptionEnumerator.cs` — turns the current `/state` into concrete Jev options (action + params). **Its index paths must match `ActIndexValidator.OptionPaths` and the handlers.** Reward cards expand into one option per card plus an explicit skip.
+- `STS2AIAgent/Agent/JevExecutionDecider.cs` — asks the Jev fast model to pick one enumerated option, forwards a bounded planner goal plus strategy scope and aligns option hints to live criterion IDs; low confidence or failure falls back to the LLM.
+- `STS2AIAgent/Agent/JevOptionEnumerator.cs` — turns the current `/state` into concrete Jev options (action + params), reads frame scope and re-keys type-level planner hints onto concrete option IDs. **Its index paths must match `ActIndexValidator.OptionPaths` and the handlers.** Reward cards expand into one option per card plus an explicit skip.
 - `STS2AIAgent/Agent/ExecutionDecision.cs` — Jev decision record (choice, confidence, probabilities, danger score, latency).
-- `STS2AIAgent/Agent/StrategyPlanner.cs` — background LLM strategy refresh (context switch, low-confidence streak, every N moves). Budget-reserved, cancelable, version-guarded.
+- `STS2AIAgent/Agent/StrategyPlanner.cs` — background LLM strategy refresh (context switch, low-confidence streak, every N moves); requests a short macro goal and option-kind hints, and records the source screen/round. Budget-reserved, cancelable, version-guarded.
 - `STS2AIAgent/Agent/StrategyStore.cs` — the current play strategy (immutable snapshots).
-- `STS2AIAgent/Agent/PlayStrategy.cs` — the strategy record.
+- `STS2AIAgent/Agent/PlayStrategy.cs` — backward-compatible strategy record: existing instructions plus bounded macro goal, source screen/round and kind-level hints. `PlayStrategyUpdate` is the one partial-update merge (omitted fields keep their values, empty update rejected) shared by `POST /strategy` and native MCP `update_play_strategy`; a new externally writable field goes there, not into either writer.
 - `STS2AIAgent/Agent/PlannerBriefingProjection.cs` — the run-scoped briefing shared by HTTP and both MCP `get_planner_briefing` surfaces.
-- `STS2AIAgent/Agent/PlaySessionStore.cs` — per-run session files under `sessions/`: atomic writes with a last-good backup, run-identity validation, legacy migration, safe delete.
+- `STS2AIAgent/Agent/PlaySessionStore.cs` — per-run session files under `sessions/`: atomic writes with a last-good backup, run-identity validation, legacy migration, safe delete. Normalize/redact every persisted strategy text field, including newly added goals and source screen, before writing.
 - `STS2AIAgent/Agent/PlaySessionRecord.cs` — persisted shape (chat, decisions, strategy; redacted).
 - `STS2AIAgent/Agent/PlaySessionMemory.cs` — bounded recent-decision memory for the active run.
 - `STS2AIAgent/Llm/IJevClient.cs` / `STS2AIAgent/Llm/JevClient.cs` / `STS2AIAgent/Llm/JevTypes.cs` — TypeSafe Jev HTTP client (pooled connection, URL validation, a 429 retried at most once within the turn budget, each attempt billed separately, credentials redacted from errors).
 
 ### Flows
-- **Turn:** `StartAutoPlay` → `AutoPlaySession.TryStart(AutoPlayLoopAsync)` → `AutoPlayRecovery.RunAsync` takes `_turnGate` → snapshot (bounded game-thread read) → `CurrentRunBoundary.Check` → session observe → `TryCompanionImmediateAsync` → `AgentLoop.PlayOnceAsync` → (dual-layer on and no pending instruction) `TryDecideWithJevAsync`, otherwise `PlayWithModelAsync` → `CompleteWithToolsAsync` → model calls `act` → `ExecuteActAsync` → `ActIndexValidator` against a fresh decision snapshot → `GameBridge.ActAsync` → `GameActionService.ExecuteAsync` → `AgentTurnResult` → commit (budget `Observe`, `ApplyPlayResult`, `RecordTurnReceipt`, decision log and session) → `Observe` (stop or backoff) → `afterTurn` (proactive chat, same gate).
+- **Turn:** `StartAutoPlay` → `AutoPlaySession.TryStart(AutoPlayLoopAsync)` → `AutoPlayRecovery.RunAsync` takes `_turnGate` → snapshot (bounded game-thread read) → `CurrentRunBoundary.Check` → session observe → `TryCompanionImmediateAsync` → `AgentLoop.PlayOnceAsync` → (dual-layer on and no pending instruction) `TryDecideWithJevAsync`, otherwise `PlayWithModelAsync` → `CompleteWithToolsAsync` → model calls `act` → `ExecuteActAsync` → `ActIndexValidator` against a fresh decision snapshot → `GameBridge.ActAsync` → `GameActionService.ExecuteAsync` → `AgentTurnResult` → commit (budget `Observe`, `ApplyPlayResult`, `RecordTurnReceipt`, decision log and session) → `Observe` (stop or backoff) → `afterTurn` (proactive chat, same gate). While the model request is in flight, `LlmRequest.OnReasoningDelta` → `AgentRuntime.ReportReasoningDelta` fills `LiveThoughtBuffer` (only when the player's switch is on), the overlay's 800 ms tick draws it, and the turn's own `finally` plus `AppendTurnTraces` clear it — so the streamed bubble yields to the recorded one and never outlives the turn.
 - **Pause:** `StopAutoPlay` → `RequestPause` cancels the CTS → every dispatch boundary and game-thread post observes it → the interrupted receipt is committed → `Phase = paused`.
 - **Chat:** `SendChatCoreAsync`. While auto-play runs, a message becomes a queued play instruction. Otherwise: budget check → `_turnGate` → `AgentLoop.ChatAsync` (read-only tools unless `PlayIntent` matches).
 - **Stops:** budget → `budget`; left the run or a new run → `run_end`; 401/403 → `config`; 3 consecutive failures, repeats, unsettled streaks or a 150 s game-driven wait → `failed`, with a visible reason.
 - **Jev turn** (dual-layer on for this mode, Jev configured, no queued play instruction): decision snapshot → `JevOptionEnumerator.Enumerate` (≤255 options; card plays first; ids like `play_card:0->1`, `choose_map_node:2`, `resolve_rewards:skip`) → `JevExecutionDecider` → `/v1/systemone` (a 429 is retried at most once within the turn deadline; each attempt is billed) → confidence below the threshold (default 0.35), an unknown id or an error → empty receipt → **LLM fallback** (`PlayWithModelAsync`). An executed act returns early; a rejected act also falls back (the cost is doubled work, not a stall).
-- **Planner:** `ObserveStrategyContext` → `ShouldRefresh` (context key `runId|screen|act` changed, 3 low-confidence turns in a row, or every 10 turns) → background `Task.Run` (one in flight) → reserves one request under `_turnGate` → `StrategyStore.TryUpdate(expectedRevision)`. Pause, run change and settings change cancel or supersede it.
+- **Planner:** `ObserveStrategyContext` → `ShouldRefresh` (context key `runId|screen|act` changed, 3 low-confidence turns in a row, or every 10 turns) → background `Task.Run` (one in flight) → reserves one request under `_turnGate` → `StrategyStore.TryUpdate(expectedRevision)`. A plan has a macro goal, original instructions and option-*kind* hints. On each Jev request `AlignHints` maps hints to current concrete IDs, drops stale ones and marks cross-encounter scope. Pause, run change and settings change cancel or supersede a refresh.
 - **Session across runs:** a fresh raw frame (`/state`, `/action`, `/strategy`, the turn snapshot) → `ObserveSessionStateSnapshot` → at a new run: flush the old run, `Load(newRunId)`, restore chat, `PlaySessionMemory` and strategy. Continue game re-adopts a retired run id. A late decision for a retired run is appended to *that* run's file and never to the live session. Files: `sessions/<runId>.json` (reserved or overlong seeds are hashed, prefixed `@`), `.tmp` → `File.Replace` → `.bak`, corrupt files are kept as `.corrupt-<stamp>`, `run_unknown` is never persisted, and every string is redacted.
 
 ### Traps
@@ -354,7 +363,8 @@ but hasn't settled; the agent treats a run of these as a stall (`NoProgressPolic
 - `STS2AIAgent/Server/EventPollingCoordinator.cs` — polling cadence and fallback.
 - `STS2AIAgent/Server/EventStreamSubscribers.cs` / `STS2AIAgent/Server/GameEventSubscriberHub.cs` — SSE subscriber registry and fan-out.
 - `STS2AIAgent/Server/EventChurnPolicy.cs` / `STS2AIAgent/Server/ConsecutiveRepeatSuppressor.cs` — suppress event churn and repeated events.
-- `STS2AIAgent/Llm/OpenAiCompatibleClient.cs` — chat completions with tools, reasoning content, ping, and the tool-calling probe (`ProbeToolCallingAsync`).
+- `STS2AIAgent/Llm/OpenAiCompatibleClient.cs` — chat completions with tools, reasoning content, ping, and the tool-calling probe (`ProbeToolCallingAsync`). A successful streamed body is read incrementally: the SSE/JSON decision is made on the first non-blank line, complete lines go to `SseCompletionAccumulator`, and each reasoning delta is reported through `LlmRequest.OnReasoningDelta` while the reply is still arriving.
+- `STS2AIAgent/Llm/SseCompletionAccumulator.cs` — the SSE state of one completion, fed one line at a time: delta/content/reasoning accumulation, whole-`message` tolerance, synthetic tool-call ids. `ParseSsePayload` is this accumulator fed in one pass, so a streamed read and a buffered read cannot disagree.
 - `STS2AIAgent/Llm/LlmTypes.cs` — request and response DTOs, `ResolvedModel`, `LlmException`.
 - `STS2AIAgent/Llm/MaxTokensField.cs` — `max_tokens` vs `max_completion_tokens` per provider.
 - `STS2AIAgent/Llm/ThinkingRequestBuilder.cs` — provider-specific thinking/reasoning request fields.
@@ -376,13 +386,20 @@ but hasn't settled; the agent treats a run of these as a stall (`NoProgressPolic
 ### Flows
 - **HTTP:** `HttpServer` listen loop → `Router.HandleAsync` (every route in one try/catch/finally, so a bad request never kills the listener) → `GameThread.InvokeAsync(...)` → envelope `{ok, request_id, data | error{code,message,retryable,details}}`. `/action` binds the decision to the pre-action `run_id`, and session observation happens on that same game-thread read.
 - **SSE:** `GameEventService` polls state on the game thread, diffs it, and publishes typed events. Each `/events/stream` subscription is disposed via `using` when the client disconnects.
-- **LLM request:** `OpenAiCompatibleClient.CompleteAsync` → stream by default. `LooksLikeSse` sniffs the first non-blank line (`data:`/`:`/`event:`/`retry:`/`id:`), so gateway keep-alive comments are fine. A 400/415/422 while streaming → one non-stream retry (deliberate trade-off). Tool calls tolerate numeric ids, object `arguments` and missing ids (an id is synthesized, never dropped). The assistant tool-call turn echoes the provider's `reasoning_content` (DeepSeek and Kimi thinking modes return 400 without it; nothing is sent to providers that never returned it).
+- **LLM request:** `OpenAiCompatibleClient.CompleteAsync` → stream by default, and a streamed body is read
+  as it arrives: `LooksLikeSse` decides per first non-blank line (so gateway keep-alive comments are fine,
+  and a provider that ignores `stream: true` is buffered and parsed as JSON), complete lines feed
+  `SseCompletionAccumulator`, and every reasoning delta is handed to `LlmRequest.OnReasoningDelta` before
+  the reply finishes. A 400/415/422 while streaming → one non-stream retry (deliberate trade-off). Tool
+  calls tolerate numeric ids, object `arguments` and missing ids (an id is synthesized, never dropped).
+  The assistant tool-call turn echoes the provider's `reasoning_content` (DeepSeek and Kimi thinking modes
+  return 400 without it; nothing is sent to providers that never returned it).
 - **Co-op invite:** overlay `LaunchDualAsync` → `CoopLaunchPolicy` (verified play role → the companion auto-plays) → `LocalDualInstanceLauncher.LaunchCompanionAsync` (isolated settings, env: role, port, token, host PID, autoplay) → wait for `/health` from the expected PID (90 s) → `DualInstanceCoordinator` hosts the lobby, the companion joins, run start or continue. The host talks to the companion over HTTP with the `X-STS2-Companion-Session` token.
 
 ### Provider quirks the client handles
 | Provider | Handling |
 |---|---|
-| DeepSeek / Kimi (thinking) | `reasoning_content` is read for the thought view and echoed on tool-call turns |
+| DeepSeek / Kimi (thinking) | `reasoning_content` is streamed to the thought view as it arrives (`LlmRequest.OnReasoningDelta`) and echoed on tool-call turns |
 | OpenRouter / gateways | leading SSE comments (`: OPENROUTER PROCESSING`) accepted |
 | Ollama / LM Studio / local | empty API key allowed; object `arguments` and missing tool-call ids tolerated |
 | Providers rejecting `max_tokens` / thinking fields | `MaxTokensField` and `ThinkingRequestBuilder` choose per provider |

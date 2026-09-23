@@ -15,20 +15,25 @@ internal static class JevAgentLogicTests
     // ---- PlayStrategy -------------------------------------------------------
 
     /// <summary>
-    /// A strategy written to JSON and read back has to keep every field, including the per-option
-    /// hints, or a planner's guidance silently degrades across a reload.
+    /// A strategy written to JSON and read back has to keep every field, including the macro goal, the
+    /// screen/round the plan was written for, and the per-option hints, or a planner's guidance silently
+    /// degrades across a reload.
     /// </summary>
     public static void PlayStrategy_RoundTripsEveryField()
     {
         var strategy = new PlayStrategy
         {
             Posture = "aggressive",
+            Goal = "kill the weakest enemy before it acts",
             Instructions = "go for lethal on the Guy",
             OptionHints = new Dictionary<string, string>(StringComparer.Ordinal)
             {
-                ["play_card:0->1"] = "prefer this strike",
+                // The planner's contract: hints are keyed by option KIND; the executor re-keys them.
+                ["play_card"] = "prefer this strike",
                 ["end_turn"] = "only as a last resort"
             },
+            PlanScreen = "COMBAT",
+            PlanRound = 3,
             UpdatedAt = "2026-10-02T12:00:00Z",
             Source = "llm"
         };
@@ -48,9 +53,20 @@ internal static class JevAgentLogicTests
         Assert.NotNull(parsed);
         Assert.Equal("defensive", parsed!.Posture);
         Assert.Equal(string.Empty, parsed.Instructions);
+        Assert.Equal(string.Empty, parsed.Goal);
+        Assert.Equal(string.Empty, parsed.PlanScreen);
+        Assert.Null(parsed.PlanRound);
         Assert.Equal(PlayStrategy.DefaultSource, parsed.Source);
         Assert.Equal(PlayStrategy.DefaultTimestamp, parsed.UpdatedAt);
         Assert.Equal(0, parsed.OptionHints.Count);
+
+        // A plan that records the frame it was written for keeps that scope; a bad round is absent.
+        var scoped = PlayStrategy.TryParse("""{"goal":"hold the line","plan_screen":"COMBAT","plan_round":4}""");
+        Assert.Equal("hold the line", scoped!.Goal);
+        Assert.Equal("COMBAT", scoped.PlanScreen);
+        Assert.Equal(4, scoped.PlanRound!.Value);
+        Assert.Null(PlayStrategy.TryParse("""{"plan_round":-1}""")!.PlanRound);
+        Assert.Null(PlayStrategy.TryParse("""{"plan_round":"3"}""")!.PlanRound);
 
         var empty = PlayStrategy.TryParse("""{}""");
         Assert.NotNull(empty);
@@ -67,6 +83,9 @@ internal static class JevAgentLogicTests
         Assert.Equal("balanced", PlayStrategy.Default.Posture);
         Assert.Equal(PlayStrategy.DefaultSource, PlayStrategy.Default.Source);
         Assert.Equal(string.Empty, PlayStrategy.Default.Instructions);
+        Assert.Equal(string.Empty, PlayStrategy.Default.Goal);
+        Assert.Equal(string.Empty, PlayStrategy.Default.PlanScreen);
+        Assert.Null(PlayStrategy.Default.PlanRound);
         Assert.Equal(0, PlayStrategy.Default.OptionHints.Count);
     }
 
@@ -339,7 +358,10 @@ internal static class JevAgentLogicTests
     private static void AssertSameStrategy(PlayStrategy expected, PlayStrategy actual)
     {
         Assert.Equal(expected.Posture, actual.Posture);
+        Assert.Equal(expected.Goal, actual.Goal);
         Assert.Equal(expected.Instructions, actual.Instructions);
+        Assert.Equal(expected.PlanScreen, actual.PlanScreen);
+        Assert.Equal(expected.PlanRound, actual.PlanRound);
         Assert.Equal(expected.UpdatedAt, actual.UpdatedAt);
         Assert.Equal(expected.Source, actual.Source);
         Assert.Equal(expected.OptionHints.Count, actual.OptionHints.Count);

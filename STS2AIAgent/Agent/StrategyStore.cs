@@ -48,6 +48,24 @@ internal sealed class StrategyStore
         Changed?.Invoke();
     }
 
+    /// <summary>
+    /// Read-modify-write under the store's lock: <paramref name="merge"/> sees the strategy that is
+    /// current at the moment of the write, so a planner plan landing between an external caller's read
+    /// and its write cannot be reverted with the stale fields the caller read. Returns what was stored.
+    /// </summary>
+    public PlayStrategy UpdateMerged(Func<PlayStrategy, PlayStrategy> merge)
+    {
+        PlayStrategy stored;
+        lock (_gate)
+        {
+            stored = Freeze(merge(_current));
+            _current = stored;
+            _revision++;
+        }
+        Changed?.Invoke();
+        return stored;
+    }
+
     /// <summary>A plan may land only if no run restore, pause, or newer MCP plan superseded it.</summary>
     public bool TryUpdate(PlayStrategy strategy, long expectedRevision)
     {

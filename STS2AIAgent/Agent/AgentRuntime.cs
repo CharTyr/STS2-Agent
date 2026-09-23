@@ -126,7 +126,10 @@ internal sealed partial class AgentRuntime
                 }
             },
             peekPlayInstruction: PeekPlayInstruction,
-            acknowledgePlayInstruction: AcknowledgePlayInstruction);
+            acknowledgePlayInstruction: AcknowledgePlayInstruction,
+            // Streamed partials go straight back to the runtime; the overlay reads the accumulated
+            // text on its own tick, and the buffer decides whether the player asked to see any of it.
+            onReasoningDelta: ReportReasoningDelta);
     }
 
     public AgentSettings Settings
@@ -396,6 +399,7 @@ internal sealed partial class AgentRuntime
         {
             _settings = settings;
             _budgetGuard.UpdateLimits(settings.MaxSessionTokens, settings.MaxSessionRequests);
+            if (!settings.ShowThinkingInChat) _liveThought.Reset();
         }
 
         ApplyMcpFromSettings();
@@ -693,8 +697,6 @@ internal sealed partial class AgentRuntime
                 FlushSessionIfDirty();
                 _turnGate.Release();
             }
-
-
         }
         catch (OperationCanceledException)
         {
@@ -705,6 +707,7 @@ internal sealed partial class AgentRuntime
             AddHistory("assistant", Loc.T("请求失败：{0}", ex.Message));
             SetStatus(Loc.T("对话失败"));
         }
+        finally { ClearLiveThought(); } // No partial reasoning survives canceled or failed idle chat.
     }
 
     private async Task<string> TestConnectionCoreAsync(bool force, CancellationToken cancellationToken)
@@ -791,6 +794,7 @@ internal sealed partial class AgentRuntime
             }
             finally
             {
+                ClearLiveThought(); // A failed single step must not leave its partial reasoning up.
                 FlushSessionIfDirty();
                 _turnGate.Release();
             }
@@ -1033,6 +1037,9 @@ internal sealed partial class AgentRuntime
                 finally
                 {
                     _requestingModel = false;
+                    // Before the receipt is committed: a turn that threw, paused or stopped must not
+                    // leave a streamed reasoning bubble standing.
+                    ClearLiveThought();
                 }
 
             }, ApplyPlayResult, cancellationToken, delay: null, budgetGuard: budgetGuard,
@@ -1040,7 +1047,7 @@ internal sealed partial class AgentRuntime
             {
                 await _turnGate.WaitAsync(token);
                 try { await TryProactiveChatAsync(moment, token); }
-                finally { FlushSessionIfDirty(); _turnGate.Release(); }
+                finally { ClearLiveThought(); FlushSessionIfDirty(); _turnGate.Release(); }
             },
             reportInterrupted: result => RecordTurnReceipt(result), turnGate: _turnGate);
         }

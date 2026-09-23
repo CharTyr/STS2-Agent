@@ -166,6 +166,32 @@ internal static partial class PlaySessionStoreTests
         });
     }
 
+    public static void NewStrategyFieldsAreRedactedBeforeDisk()
+    {
+        WithStore(store =>
+        {
+            const string secret = "sk-abcdefghijklmnopqrstuvwxyz0123456789";
+            store.Save(new PlaySessionRecord
+            {
+                RunId = "seed-strategy-secret",
+                Chat = new List<ChatTurn>(),
+                Strategy = new PlayStrategy
+                {
+                    Goal = "Follow " + secret,
+                    PlanScreen = "screen " + secret,
+                    PlanRound = 3,
+                    Source = "llm"
+                }
+            });
+
+            var path = Directory.GetFiles(store.Directory, "seed-strategy-secret.json").Single();
+            var raw = File.ReadAllText(path);
+            Assert.False(raw.Contains(secret, StringComparison.Ordinal),
+                "new persisted planner fields must be redacted like the older instructions and hints");
+            Assert.Equal(3, store.Load("seed-strategy-secret")!.Strategy!.PlanRound);
+        });
+    }
+
     public static void DeleteRemovesTheSession()
     {
         WithStore(store =>

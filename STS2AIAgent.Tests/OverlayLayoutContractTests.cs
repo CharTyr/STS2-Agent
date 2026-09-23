@@ -276,6 +276,50 @@ internal static class OverlayLayoutContractTests
     }
 
     /// <summary>
+    /// A model removal can report a long binding warning, and a live Token reading can grow to six
+    /// figures. Neither may enlarge the settings page nor make the play metrics clip horizontally.
+    /// These are separate routes to the same reported overflow after deleting the first model.
+    /// </summary>
+    public static void ModelDeletionAndPlayMetricsCannotStretchThePanel()
+    {
+        var settings = AgentSourceFixture.Read(Settings);
+        var pages = AgentSourceFixture.Read(Pages);
+        var settingsForm = AgentSourceFixture.MethodBody(settings, "RebuildSettingsForm");
+        var solo = AgentSourceFixture.MethodBody(pages, "BuildSoloSection");
+
+        Assert.Contains("_deleteWarning = UiFactory.Wrapped(", settingsForm,
+            StringComparison.Ordinal);
+        // The save status carries the budget-input error sentence after a save; unwrapped, that
+        // ~420 px CJK line widens the settings column past the panel.
+        Assert.Contains("_saveStatus = UiFactory.Wrapped(", settings, StringComparison.Ordinal);
+        Assert.Contains("Loc.T(\"下一步：{0}\", firstRun.Play.NextStep), 12)", settingsForm,
+            StringComparison.Ordinal);
+        Assert.False(settingsForm.Contains("_settingsBody.AddChild(UiFactory.Label(Loc.T(\"下一步：{0}\"", StringComparison.Ordinal),
+            "The first-run next-step line must be wrapped instead of widening the settings page.");
+        Assert.False(solo.Contains("section.AddChild(UiFactory.Row(\n            UiFactory.MetricTile", StringComparison.Ordinal),
+            "Three min-width metric tiles in one row truncate the Token field in the 440px panel.");
+        Assert.Contains("section.AddChild(UiFactory.MetricTile(Loc.T(\"Token\"), _playUsage));", solo,
+            StringComparison.Ordinal);
+        // With its own full-width, word-wrapping row, the usage sentence is shown whole: the old
+        // 24-character cut is what left players reading "Token 消耗：尚无（未收到 usage） |...".
+        var refresh = AgentSourceFixture.MethodBody(pages, "RefreshDynamic");
+        Assert.False(refresh.Contains("_playUsage.Text = Trim(", StringComparison.Ordinal),
+            "The Token reading is cut to 24 characters again even though it has its own wrapping row.");
+
+        // The root cause measured live on 2026-09-24 with no model deleted at all: the play page's
+        // content reported a 457 px minimum inside the 440 px panel ([STS2AIAgent.Wide] offenders were
+        // the chat card and its columns), clipping every control's right edge on that page. The chat
+        // options were one row of two Wrapped labels (120 px floor each) and two drop-downs. Each
+        // label/drop-down pair gets its own row.
+        var chat = AgentSourceFixture.Read("STS2AIAgent/Ui/AgentOverlayHost.ChatCard.cs");
+        var options = AgentSourceFixture.MethodBody(chat, "BuildChatOptionsRow");
+        Assert.Contains("UiFactory.Row(UiFactory.Wrapped(Loc.T(\"回复语言\"), 12), language)", options,
+            StringComparison.Ordinal);
+        Assert.Contains("UiFactory.Row(UiFactory.Wrapped(Loc.T(\"思考强度\"), 12), intensity)", options,
+            StringComparison.Ordinal);
+    }
+
+    /// <summary>
     /// A decision reason is rich text, not a <see cref="Label"/>, so the normal label helper cannot
     /// protect the decision log from a long English reason.
     /// </summary>

@@ -315,20 +315,19 @@ internal static class Router
                 }
 
                 var body = await ReadJsonBodyAsync<JsonElement>(request, cancellationToken);
-                var strategyJson = body.ValueKind == JsonValueKind.Object && body.TryGetProperty("strategy", out var nested)
-                    ? nested.GetRawText()
-                    : body.GetRawText();
-                var strategy = PlayStrategy.TryParse(strategyJson);
-                if (strategy == null)
+                var strategyElement = body.ValueKind == JsonValueKind.Object && body.TryGetProperty("strategy", out var nested)
+                    ? nested
+                    : body;
+                // A partial update: omitted fields keep their current values, as documented. TryParse
+                // would fill them with defaults and wipe the standing plan on a posture-only nudge.
+                var update = PlayStrategyUpdate.TryRead(strategyElement);
+                if (update == null)
                 {
-                    throw new ApiException(400, "invalid_request", "strategy must be a JSON object with posture/instructions/option_hints.");
+                    throw new ApiException(400, "invalid_request",
+                        "strategy must be a JSON object with at least one of posture/goal/instructions/option_hints.");
                 }
 
-                AgentRuntime.Instance.UpdatePlayStrategy(strategy with
-                {
-                    UpdatedAt = DateTimeOffset.UtcNow.ToString("O"),
-                    Source = "mcp"
-                });
+                AgentRuntime.Instance.UpdatePlayStrategy(update);
                 await WriteJsonAsync(response, 200, new
                 {
                     ok = true,

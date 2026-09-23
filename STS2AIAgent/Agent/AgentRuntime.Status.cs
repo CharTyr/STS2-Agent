@@ -31,6 +31,9 @@ internal sealed partial class AgentRuntime
     // chat path never sets _requestingModel, so the flag is kept next to the text it belongs to.
     private void SetRequestingModelStatus()
     {
+        // A new request starts here, so the previous one's streamed reasoning is over: without this a
+        // partial left behind by a canceled chat turn would reappear beside the next request's text.
+        ClearLiveThought();
         _status = Loc.T("正在请求模型…");
         _requestingModelStatus = true;
         _phaseStartedAt = DateTimeOffset.UtcNow;

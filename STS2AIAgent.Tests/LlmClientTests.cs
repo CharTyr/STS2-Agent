@@ -468,6 +468,194 @@ internal static class OpenAiCompatibleClientTests
         Assert.True(elapsed.Elapsed < TimeSpan.FromSeconds(3), $"user cancel took {elapsed.Elapsed}");
     }
 
+    /// <summary>
+    /// A thinking model's reasoning reaches the caller while the reply is still arriving, which is the
+    /// whole point of the incremental read: the overlay shows the model thinking instead of a blank
+    /// panel until the turn completes.
+    /// </summary>
+    /// <remarks>
+    /// The body is delivered in two pieces with the test owning the gate between them, so "before
+    /// completion" is measured rather than assumed: the first thought is asserted while the request is
+    /// still open, and only then is the rest of the stream allowed to exist. A buffered
+    /// <c>ReadAsStringAsync</c> cannot pass this, which is exactly what it is here to catch.
+    /// </remarks>
+    public static async Task CompleteAsync_StreamsReasoningBeforeCompletion()
+    {
+        var release = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var firstPartial = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var partials = new List<string>();
+        var client = new OpenAiCompatibleClient(
+            new LlmEndpoint { BaseUrl = "https://example.test/v1" },
+            new FixedResponseHandler(new GatedSseContent(
+                "data: {\"choices\":[{\"delta\":{\"reasoning_content\":\"count the hand\"},\"index\":0}]}\n\n",
+                release.Task,
+                "data: {\"choices\":[{\"delta\":{\"reasoning_content\":\" then end the turn\"},\"index\":0}]}\n\n"
+                + "data: {\"choices\":[{\"delta\":{},\"finish_reason\":\"stop\",\"index\":0}]}\n\n"
+                + "data: [DONE]\n\n")));
+
+        var completionTask = client.CompleteAsync(new LlmRequest
+        {
+            Model = "deepseek-chat",
+            Messages = new[] { LlmMessage.User("hi") },
+            OnReasoningDelta = partial =>
+            {
+                partials.Add(partial);
+                firstPartial.TrySetResult();
+            }
+        }, CancellationToken.None);
+
+        await firstPartial.Task.WaitAsync(TimeSpan.FromSeconds(10));
+        Assert.False(
+            completionTask.IsCompleted,
+            "the first reasoning partial only arrived together with the completed reply, so the body was buffered whole");
+        Assert.Equal("count the hand", partials[0]);
+
+        release.SetResult();
+        var completion = await completionTask.WaitAsync(TimeSpan.FromSeconds(10));
+        Assert.Equal("count the hand then end the turn", completion.Reasoning);
+        Assert.Equal("stop", completion.FinishReason);
+        Assert.Equal(2, partials.Count);
+        // The last partial is the completed reasoning: the streamed text is the same text, not a teaser.
+        Assert.Equal(completion.Reasoning, partials[^1]);
+    }
+
+    /// <summary>
+    /// A provider that ignores <c>stream: true</c> and answers with one JSON object is still parsed: the
+    /// streaming read decides per first line and buffers the rest when the body is not SSE.
+    /// </summary>
+    public static async Task CompleteAsync_StreamFlagIgnoredStillParsesJson()
+    {
+        var handler = new RecordingHandler("""
+        {"choices":[{"message":{"role":"assistant","content":"pong","reasoning_content":"quietly"}}]}
+        """);
+        var client = new OpenAiCompatibleClient(
+            new LlmEndpoint { BaseUrl = "https://example.test/v1" },
+            handler);
+
+        var partials = new List<string>();
+        var completion = await client.CompleteAsync(new LlmRequest
+        {
+            Model = "local-model",
+            Messages = new[] { LlmMessage.User("hi") },
+            OnReasoningDelta = partials.Add
+        }, CancellationToken.None);
+
+        Assert.Equal("pong", completion.Content);
+        Assert.Equal("quietly", completion.Reasoning);
+        Assert.True(partials.Count == 0, "a non-SSE body has no partials to report");
+    }
+
+    private sealed class FixedResponseHandler : HttpMessageHandler
+    {
+        private readonly HttpContent _content;
+
+        public FixedResponseHandler(HttpContent content)
+        {
+            _content = content;
+        }
+
+        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken) =>
+            Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK) { Content = _content });
+    }
+
+    /// <summary>
+    /// A response body in two pieces, the second of which does not exist until the test releases its
+    /// gate. Reading it as a stream is what makes the partial-before-completion assertion meaningful.
+    /// </summary>
+    private sealed class GatedSseContent : HttpContent
+    {
+        private readonly byte[] _first;
+        private readonly byte[] _second;
+        private readonly Task _gate;
+
+        public GatedSseContent(string first, Task gate, string second)
+        {
+            _first = Encoding.UTF8.GetBytes(first);
+            _second = Encoding.UTF8.GetBytes(second);
+            _gate = gate;
+        }
+
+        protected override Task SerializeToStreamAsync(Stream stream, TransportContext? context) =>
+            throw new NotSupportedException("This body is only ever read as a stream.");
+
+        protected override bool TryComputeLength(out long length)
+        {
+            length = -1;
+            return false;
+        }
+
+        protected override Task<Stream> CreateContentReadStreamAsync() =>
+            Task.FromResult<Stream>(new GatedSseStream(_first, _gate, _second));
+    }
+
+    private sealed class GatedSseStream : Stream
+    {
+        private readonly byte[][] _chunks;
+        private readonly Task _gate;
+        private int _chunk;
+        private int _offset;
+        private bool _gateAwaited;
+
+        public GatedSseStream(byte[] first, Task gate, byte[] second)
+        {
+            _chunks = new[] { first, second };
+            _gate = gate;
+        }
+
+        public override bool CanRead => true;
+
+        public override bool CanSeek => false;
+
+        public override bool CanWrite => false;
+
+        public override long Length => throw new NotSupportedException();
+
+        public override long Position
+        {
+            get => throw new NotSupportedException();
+            set => throw new NotSupportedException();
+        }
+
+        public override async ValueTask<int> ReadAsync(Memory<byte> buffer, CancellationToken cancellationToken = default)
+        {
+            if (_chunk == 1 && !_gateAwaited)
+            {
+                _gateAwaited = true;
+                await _gate.WaitAsync(cancellationToken);
+            }
+
+            if (_chunk >= _chunks.Length)
+            {
+                return 0;
+            }
+
+            var chunk = _chunks[_chunk];
+            var count = Math.Min(buffer.Length, chunk.Length - _offset);
+            chunk.AsMemory(_offset, count).CopyTo(buffer);
+            _offset += count;
+            if (_offset >= chunk.Length)
+            {
+                _chunk++;
+                _offset = 0;
+            }
+
+            return count;
+        }
+
+        public override int Read(byte[] buffer, int offset, int count) =>
+            ReadAsync(buffer.AsMemory(offset, count)).AsTask().GetAwaiter().GetResult();
+
+        public override void Flush()
+        {
+        }
+
+        public override long Seek(long offset, SeekOrigin origin) => throw new NotSupportedException();
+
+        public override void SetLength(long value) => throw new NotSupportedException();
+
+        public override void Write(byte[] buffer, int offset, int count) => throw new NotSupportedException();
+    }
+
     private sealed class ScriptedHandler : HttpMessageHandler
     {
         private readonly Queue<(HttpStatusCode Status, string Body)> _script;

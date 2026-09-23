@@ -4,12 +4,14 @@ Use this reference when the task is not ordinary play, but smoke testing, protoc
 
 ## Tool Profiles
 
-- Guided profile is the default and should stay compact — its 15 tools are
+- Guided profile is the default and should stay compact — its 17 tools are
   `health_check`, `get_game_state`, `get_raw_game_state`, `get_available_actions`,
   `get_decision_log`, `get_run_summary`, `get_scene_guidance`, `diff_state`,
   `get_game_data_item`, `get_game_data_items`, `get_relevant_game_data`,
-  `wait_for_event`, `wait_until_actionable`, `decide`, `act`. The per-argument
-  contract is each tool's own docstring in `mcp_server/src/sts2_mcp/server.py`.
+  `wait_for_event`, `wait_until_actionable`, `decide`, `act`, and the dual-layer planner pair
+  `get_planner_briefing` / `update_play_strategy`. The authoritative list is `ESSENTIAL_TOOLS` in
+  `scripts/test-mcp-tool-profile.ps1`; the per-argument contract is each tool's own docstring in
+  `mcp_server/src/sts2_mcp/server.py`.
 - `run_console_command` and `inject_event_churn` are not part of any profile: they appear in
   every profile when debug actions are enabled, and in none when they are not.
 - Full profile exposes legacy per-action tools and is appropriate only when a harness explicitly needs them.
@@ -56,6 +58,14 @@ Use this reference when the task is not ordinary play, but smoke testing, protoc
 - Console `room` travel uses the game's internal room names, which do not always match the state screen name: a rest site is `RestSite`, not `Rest` (verified live 2026-09-17: `room Rest` answers `Room 'REST' not found`). Other observed names: `Treasure`.
 - A console command that succeeded reads as a failure when retried while already standing in the resulting state — re-issuing `room Treasure` inside a treasure room answers 409. Treat that as idempotence noise, not a contract failure.
 - Keep the game process stopped at the end of automated suites unless the caller explicitly wants a live session left open.
+- Validate the in-game auto-play by letting the in-overlay model play. Driving the run yourself through
+  `act` tests the action API, not the auto-play; it is recorded as `source=http_api` / `native_mcp`,
+  never as a model decision.
+- Decision sources in `get_decision_log`: `agent_loop` (in-game LLM), `jev` (dual-layer executor, carries
+  `confidence`), `http_api` and `native_mcp` (external actions). A `jev` row is what proves the Jev
+  executor acted; a dual-layer setting alone does not.
+- A screenshot check passes only by looking at the image: an HTTP 200 with a valid JPEG can still show
+  the overlay.
 
 ## Known Non-Blocking Noise
 

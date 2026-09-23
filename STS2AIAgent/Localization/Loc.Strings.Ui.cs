@@ -22,6 +22,7 @@ internal static partial class Loc
         map["屏幕"] = "Screen";
         map["最近动作"] = "Last action";
         map["思考"] = "Reasoning";
+        map["思考中"] = "Thinking";
         map["动作"] = "Action";
         map["已省略更早的 {0} 条消息"] = "{0} earlier messages omitted";
         map["本次会话"] = "This session";

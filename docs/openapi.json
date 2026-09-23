@@ -2357,6 +2357,10 @@
         "additionalProperties": true,
         "description": "The dual-layer play strategy the Jev execution model follows.",
         "properties": {
+          "goal": {
+            "maxLength": 400,
+            "type": "string"
+          },
           "instructions": {
             "type": "string"
           },
@@ -2365,6 +2369,18 @@
               "type": "string"
             },
             "type": "object"
+          },
+          "plan_round": {
+            "minimum": 0,
+            "readOnly": true,
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "plan_screen": {
+            "readOnly": true,
+            "type": "string"
           },
           "posture": {
             "type": "string"

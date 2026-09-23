@@ -47,6 +47,15 @@ internal sealed class LlmRequest
     public string ThinkingMode { get; init; } = "auto";
 
     public bool Stream { get; init; } = true;
+
+    /// <summary>
+    /// Called with the reasoning accumulated so far each time a streamed reply adds to it, so a
+    /// thinking model's progress can be shown while the turn is still in flight instead of only once
+    /// it completes. Only reasoning is reported: content and tool arguments stay with the final
+    /// completion, which is what the turn's legality checks and receipts read. Null -- the default --
+    /// means the caller wants no partials at all.
+    /// </summary>
+    public Action<string>? OnReasoningDelta { get; init; }
 }
 
 internal sealed class LlmMessage

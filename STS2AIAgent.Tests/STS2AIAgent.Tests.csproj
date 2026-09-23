@@ -12,6 +12,12 @@
     <Compile Include="..\STS2AIAgent\Game\ReflectedMemberResolver.cs" Link="Game\ReflectedMemberResolver.cs" />
     <Compile Include="..\STS2AIAgent\Game\StateBuildTiming.cs" Link="Game\StateBuildTiming.cs" />
     <Compile Include="..\STS2AIAgent\Agent\AutoPlayRecovery.cs" Link="Agent\AutoPlayRecovery.cs" />
+    <!--
+      The streamed reasoning buffer. It is Godot-free on purpose: the two rules that matter for it
+      (the player's switch gates what is stored, and a completed turn leaves nothing behind) cannot be
+      exercised through the overlay, so they live in a class this offline suite compiles.
+    -->
+    <Compile Include="..\STS2AIAgent\Agent\LiveThoughtBuffer.cs" Link="Agent\LiveThoughtBuffer.cs" />
     <Compile Include="..\STS2AIAgent\Agent\CurrentRunBoundary.cs" Link="Agent\CurrentRunBoundary.cs" />
     <Compile Include="..\STS2AIAgent\Agent\StopKindPolicy.cs" Link="Agent\StopKindPolicy.cs" />
     <Compile Include="..\STS2AIAgent\Agent\DualLaunchOutcome.cs" Link="Agent\DualLaunchOutcome.cs" />
@@ -97,6 +103,14 @@
     <Compile Include="..\STS2AIAgent\Game\EventOptionLocalization.cs" Link="Game\EventOptionLocalization.cs" />
     <Compile Include="..\STS2AIAgent\Agent\GameDataExportSchema.cs" Link="Agent\GameDataExportSchema.cs" />
     <Compile Include="..\STS2AIAgent\Server\ApiException.cs" Link="Server\ApiException.cs" />
+    <!--
+      The screenshot sequence: gate, hide/restore pair, rendered-frame wait, read-back. Both files are
+      Godot-free on purpose, so the offline suite compiles the real sequencing instead of a copy of
+      it. The Godot half of the seam (ScreenshotService's host and its RenderingServer frame wait)
+      cannot be linked here and is covered by the source contract in SessionControlContractTests.
+    -->
+    <Compile Include="..\STS2AIAgent\Agent\IScreenshotCaptureHost.cs" Link="Agent\IScreenshotCaptureHost.cs" />
+    <Compile Include="..\STS2AIAgent\Agent\ScreenshotCapturePolicy.cs" Link="Agent\ScreenshotCapturePolicy.cs" />
     <!--
       The one-action lease. It reaches nothing from the game or Godot, only ApiException, so the
       offline suite compiles the real class and tests its own rules (first caller wins, everyone else

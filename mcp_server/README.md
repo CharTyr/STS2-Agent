@@ -14,10 +14,11 @@
 
 `STS2_MCP_TOOL_PROFILE`（或在代码里 `create_server(tool_profile=...)`）选档：
 
-- `guided` — 默认 profile，15 个工具：`health_check`、`get_game_state`、`get_raw_game_state`、
+- `guided` — 默认 profile，17 个工具：`health_check`、`get_game_state`、`get_raw_game_state`、
   `get_available_actions`、`get_decision_log`、`get_run_summary`、`get_scene_guidance`、`diff_state`、
   `get_game_data_item`、`get_game_data_items`、`get_relevant_game_data`、`wait_for_event`、
-  `wait_until_actionable`、`decide`、`act`。用途见下方「当前工具」表
+  `wait_until_actionable`、`decide`、`act`、`get_planner_briefing`、`update_play_strategy`。用途见下方「当前工具」表；
+  实时清单以 `scripts/test-mcp-tool-profile.ps1` 的 `ESSENTIAL_TOOLS` 为准
 - `layered` — 面向主 / 副 Agent 分层编排，在 guided 基础上额外暴露 8 个 handoff / knowledge 工具：
   `get_planner_context`、`create_planner_handoff`、`get_combat_context`、`create_combat_handoff`、
   `complete_combat_handoff`、`append_combat_knowledge`、`append_event_knowledge`、`complete_event_handoff`
@@ -25,7 +26,7 @@
 
 ## 当前工具
 
-下表是 guided 的 15 个工具与一句话用途。**每个工具的逐参数契约不在本文件复述**：以
+下表是 guided 的 17 个工具与一句话用途。**每个工具的逐参数契约不在本文件复述**：以
 [src/sts2_mcp/server.py](src/sts2_mcp/server.py) 里它自己的 docstring 与 input schema 为准，那里改了这里不会漂。
 
 | 工具 | 用途 |
@@ -45,6 +46,8 @@
 | `wait_until_actionable` | 等到重新可操作，返回 `matched`（有事件命中）与 `actionable` |
 | `decide` | 一次调用给出 `state` + `available_actions` + `scene_guidance`，即一次决策要读的全部内容 |
 | `act` | 统一动作入口（动作名 + 参数，附 `reason`）；返回动作之后的 compact `state` |
+| `get_planner_briefing` | 双层模式的规划简报：当前策略、双层 / Jev 开关、本局摘要、Jev 最近选择与置信度趋势（转发 `GET /strategy`） |
+| `update_play_strategy` | 更新 Jev 遵循的策略：`goal`（一句宏观目标）/ `posture` / `instructions` / 按动作类别的 `option_hints`；省略的字段保留原值 |
 
 layered / full 的额外工具见上文「Tool Profile」；legacy per-action tools 见下方区块。
 

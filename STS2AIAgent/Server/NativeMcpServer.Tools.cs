@@ -77,6 +77,7 @@ internal sealed partial class NativeMcpServer
                 // The strategy keys are read inline so the argument-name comparison can see them.
                 return UpdatePlayStrategyJson(
                     ReadString(arguments, "posture"),
+                    ReadString(arguments, "goal"),
                     ReadString(arguments, "instructions"),
                     ReadObject(arguments, "option_hints"));
             default:
@@ -143,7 +144,7 @@ internal sealed partial class NativeMcpServer
     /// client can nudge the posture without restating the instructions; a body with no recognizable
     /// field at all is rejected rather than stored as an empty strategy.
     /// </summary>
-    private string UpdatePlayStrategyJson(string? posture, string? instructions, JsonElement? optionHints)
+    private string UpdatePlayStrategyJson(string? posture, string? goal, string? instructions, JsonElement? optionHints)
     {
         if (_strategyStore == null)
         {
@@ -154,8 +155,7 @@ internal sealed partial class NativeMcpServer
             }, JsonOptions);
         }
 
-        var current = _strategyStore.Current;
-        var hints = current.OptionHints;
+        IReadOnlyDictionary<string, string>? hints = null;
         if (optionHints is { ValueKind: JsonValueKind.Object } hintsElement)
         {
             var parsed = new Dictionary<string, string>(StringComparer.Ordinal);
@@ -170,23 +170,20 @@ internal sealed partial class NativeMcpServer
             hints = parsed;
         }
 
-        if (posture == null && instructions == null && optionHints == null)
+        // The same merge POST /strategy uses: named fields replace, omitted fields -- the macro goal
+        // included -- keep their current values.
+        var update = new PlayStrategyUpdate(posture, goal, instructions, hints);
+        if (update.IsEmpty)
         {
             return JsonSerializer.Serialize(new
             {
                 error = AgentErrorEnvelope.ToPayload(
-                    new ApiException(400, "invalid_request", "Provide at least one of posture, instructions, or option_hints."))
+                    new ApiException(400, "invalid_request", "Provide at least one of posture, goal, instructions, or option_hints."))
             }, JsonOptions);
         }
 
-        _strategyStore.Update(new PlayStrategy
-        {
-            Posture = posture ?? current.Posture,
-            Instructions = instructions ?? current.Instructions,
-            OptionHints = hints,
-            UpdatedAt = DateTimeOffset.UtcNow.ToString("O"),
-            Source = "mcp"
-        });
+        // Merged inside the store's lock: a planner plan landing mid-call is kept, not reverted.
+        _strategyStore.UpdateMerged(current => update.ApplyTo(current, "mcp"));
 
         return JsonSerializer.Serialize(new
         {

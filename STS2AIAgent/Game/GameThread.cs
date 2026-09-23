@@ -32,6 +32,13 @@ internal static class GameThread
         }
     }
 
+    /// <summary>
+    /// True when the caller is already running on the captured game thread. Used by the screenshot
+    /// read-back, which must fail loudly rather than touch Godot's viewport from a continuation that
+    /// resumed on a background thread.
+    /// </summary>
+    public static bool IsCurrentThread => Environment.CurrentManagedThreadId == _threadId;
+
     public static Task<T> InvokeAsync<T>(Func<T> action)
     {
         if (_syncContext == null)

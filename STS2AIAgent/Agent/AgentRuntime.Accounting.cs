@@ -22,10 +22,22 @@ internal sealed partial class AgentRuntime
     internal const int ChatHistoryLimit = PlaySessionStore.MaxChatTurns;
 
     /// <summary>How much of a turn's reasoning a single "thought" bubble carries.</summary>
-    private const int ThoughtBubbleChars = 600;
+    /// <remarks>
+    /// The live stream bubble uses the same budget, deliberately: the bubble a player is watching grow
+    /// becomes the recorded bubble, character for character, rather than a different clip appearing
+    /// when the turn lands.
+    /// </remarks>
+    private const int ThoughtBubbleChars = LiveThoughtBuffer.MaxChars;
 
     /// <summary>How much of it the "action" bubble repeats beside the action name.</summary>
     private const int ActionBubbleReasonChars = 140;
+
+    /// <summary>
+    /// The reasoning of the request currently in flight, streamed from the provider as it arrives. This
+    /// is display-only state that is never persisted and never replayed; see
+    /// <see cref="LiveThoughtBuffer"/> for why it is emptied where it is.
+    /// </summary>
+    private readonly LiveThoughtBuffer _liveThought = new();
 
     /// <summary>Turns dropped off the front of the history, so the page can say how many.</summary>
     private int _historyTrimmed;
@@ -81,9 +93,14 @@ internal sealed partial class AgentRuntime
     /// is the record the player came to this page for. These append without notifying, because the
     /// caller repaints anyway (its own <c>AddHistory</c>, or the status line it sets next), and a
     /// turn should not cost three full refresh passes.
+    ///
+    /// The streamed partial is dropped here, before the recorded bubble is added: a turn that streamed
+    /// its reasoning and then records it must not leave two reasoning bubbles in the log.
     /// </remarks>
     private void AppendTurnTraces(AgentTurnResult result)
     {
+        _liveThought.Reset();
+
         if (ShowsThinkingInChat() && !string.IsNullOrWhiteSpace(result.Reasoning))
         {
             AddHistoryCore("thought", Clip(result.Reasoning, ThoughtBubbleChars), notify: false);
@@ -152,6 +169,9 @@ internal sealed partial class AgentRuntime
     {
         _history.Clear();
         _historyTrimmed = 0;
+        // A cleared conversation, or a run boundary swapping the whole context, takes the in-flight
+        // partial with it: nothing about the previous context is left to reappear under the next one.
+        _liveThought.Reset();
     }
 
     private bool ShowsThinkingInChat()
@@ -160,6 +180,37 @@ internal sealed partial class AgentRuntime
         {
             return _settings.ShowThinkingInChat;
         }
+    }
+
+    /// <summary>
+    /// The reasoning of the request in flight, so the conversation can draw it while the model is still
+    /// thinking. Empty whenever nothing is streaming, which is the normal state outside a turn.
+    /// </summary>
+    public string LiveThought => _liveThought.Text;
+
+    /// <summary>
+    /// Takes one streamed reasoning partial from the model client. The player's own switch is the gate:
+    /// with reasoning display off (the default) nothing is stored at all, so a thinking model's
+    /// scratchpad neither reaches the overlay nor sits in memory for one.
+    /// </summary>
+    /// <remarks>
+    /// Called from the provider's read loop, which is not the game thread. Nothing here touches a Godot
+    /// node -- the overlay picks the text up on its own tick -- so the callback stays a plain field
+    /// write and a measured setting read.
+    /// </remarks>
+    private void ReportReasoningDelta(string accumulated)
+    {
+        _liveThought.Report(accumulated, ShowsThinkingInChat());
+    }
+
+    /// <summary>
+    /// Drops the streamed partial when a request ends without a recorded bubble to replace it (a pause,
+    /// a cancel, a provider failure). Without this the panel would keep a "thinking…" bubble for a turn
+    /// that is already over.
+    /// </summary>
+    private void ClearLiveThought()
+    {
+        _liveThought.Reset();
     }
 
     /// <summary>

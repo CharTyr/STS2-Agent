@@ -828,8 +828,12 @@ def build_components(
                 "type": "object",
                 "properties": {
                     "posture": {"type": "string"},
+                    "goal": {"type": "string", "maxLength": 400},
                     "instructions": {"type": "string"},
                     "option_hints": {"type": "object", "additionalProperties": {"type": "string"}},
+                    # Provenance the in-game planner records; POST /strategy ignores both.
+                    "plan_screen": {"type": "string", "readOnly": True},
+                    "plan_round": {"type": ["integer", "null"], "minimum": 0, "readOnly": True},
                     "updated_at": {"type": "string"},
                     "source": {"type": "string"},
                 },

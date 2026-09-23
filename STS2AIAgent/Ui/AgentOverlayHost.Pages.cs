@@ -119,10 +119,13 @@ internal sealed partial class AgentOverlayHost
         _playScreen = UiFactory.Label("-", UiFactory.FontHeading);
         _playAction = UiFactory.Label("-", UiFactory.FontHeading);
         _playUsage = UiFactory.Label("-", UiFactory.FontHeading);
+        // The three readings have a 96px floor each, but their live values (especially the Token
+        // sentence) grow well past that. Keep the short screen/action readings together and give
+        // the usage sentence its own full-width row rather than clipping the right-hand tile.
         section.AddChild(UiFactory.Row(
             UiFactory.MetricTile(Loc.T("屏幕"), _playScreen),
-            UiFactory.MetricTile(Loc.T("最近动作"), _playAction),
-            UiFactory.MetricTile(Loc.T("Token"), _playUsage)));
+            UiFactory.MetricTile(Loc.T("最近动作"), _playAction)));
+        section.AddChild(UiFactory.MetricTile(Loc.T("Token"), _playUsage));
 
         // The dual-layer toggle for solo play. When it is on, Jev picks each action and the LLM only
         // plans strategy; the panel below the conversation shows what Jev chose.
@@ -555,10 +558,11 @@ internal sealed partial class AgentOverlayHost
 
             if (_playUsage != null)
             {
-                _playUsage.Text = Trim(PlayerFacingSession.FormatUsage(
+                // Whole sentence: the tile has its own full-width row and wraps (see BuildSoloSection).
+                _playUsage.Text = PlayerFacingSession.FormatUsage(
                     AgentRuntime.Instance.SessionUsageKnown,
                     AgentRuntime.Instance.SessionUsage,
-                    AgentRuntime.Instance.SessionRequests), 24);
+                    AgentRuntime.Instance.SessionRequests);
             }
 
             var facing = AgentRuntime.Instance.PlayerFacing();

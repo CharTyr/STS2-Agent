@@ -1,5 +1,10 @@
 # Live validation checklist
 
+> The 2026-09-23 severe-usability sweep has an [acceptance plan](validation-severe-usability-2026-09-23.md)
+> and a [partial isolated live-game report](live-validation-2026-09-23-results.md). The latter records
+> a screenshot failure and remaining unverified paths; it is **not** a full acceptance sign-off.
+> Everything below is historical evidence from earlier builds, not proof for that candidate.
+
 ## Status as of 2026-09-22 (isolated natural run, Act 1 cleared)
 
 Isolated profile `default\2026092212` (`--windowed --force-steam off --clientId 2026092212`), API

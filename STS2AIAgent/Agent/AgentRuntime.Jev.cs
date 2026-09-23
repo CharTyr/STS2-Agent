@@ -233,6 +233,18 @@ internal sealed partial class AgentRuntime
     }
 
     /// <summary>
+    /// Applies an external planner's partial update (<c>POST /strategy</c>). The merge runs inside the
+    /// store's lock, so a plan the in-game planner lands at the same moment is never reverted.
+    /// </summary>
+    public PlayStrategy UpdatePlayStrategy(PlayStrategyUpdate update)
+    {
+        var stored = _strategyStore.UpdateMerged(current => update.ApplyTo(current, "mcp"));
+        MarkSessionDirty();
+        RaiseChanged();
+        return stored;
+    }
+
+    /// <summary>
     /// Validates the Jev execution-model configuration with a real round trip: a configured client
     /// pings <c>GET /v1/models</c> and the answer (or the classified failure) is what the settings
     /// page shows.

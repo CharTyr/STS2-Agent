@@ -73,5 +73,45 @@ class BriefingToolTests(unittest.TestCase):
         request.assert_called_once_with("GET", "/strategy")
 
 
+class StrategyUpdateTests(unittest.TestCase):
+    """An external planner can set the macro goal, and an omitted field is never sent as a reset."""
+
+    def test_client_sends_only_the_named_fields_including_goal(self) -> None:
+        client = Sts2Client(base_url="http://127.0.0.1:8080")
+        with patch.object(client, "_request", return_value={}) as request:
+            client.update_strategy(posture="defensive", goal="hold potions for the elite")
+        request.assert_called_once_with(
+            "POST", "/strategy", {"strategy": {"posture": "defensive", "goal": "hold potions for the elite"}}
+        )
+
+    def test_positional_callers_keep_their_meaning(self) -> None:
+        client = Sts2Client(base_url="http://127.0.0.1:8080")
+        with patch.object(client, "_request", return_value={}) as request:
+            client.update_strategy("aggressive", "strip block first", {"play_card": "prefer attacks"})
+        request.assert_called_once_with(
+            "POST",
+            "/strategy",
+            {"strategy": {
+                "posture": "aggressive",
+                "instructions": "strip block first",
+                "option_hints": {"play_card": "prefer attacks"},
+            }},
+        )
+
+    def test_tool_forwards_goal(self) -> None:
+        calls: list[dict[str, Any]] = []
+
+        class _Client(BriefingClient):
+            def update_strategy(self, **kwargs: Any) -> dict[str, Any]:
+                calls.append(kwargs)
+                return {"strategy": kwargs}
+
+        server = create_server(client=_Client({}), tool_profile="guided")  # type: ignore[arg-type]
+        tool = asyncio.run(server.get_tool("update_play_strategy"))
+        tool.fn(goal="kill the weakest enemy first")
+        self.assertEqual(calls[0]["goal"], "kill the weakest enemy first")
+        self.assertIsNone(calls[0]["posture"])
+
+
 if __name__ == "__main__":
     unittest.main()

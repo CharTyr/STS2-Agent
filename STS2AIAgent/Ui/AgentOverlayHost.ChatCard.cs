@@ -146,12 +146,14 @@ internal sealed partial class AgentOverlayHost
             }
         };
 
-        var row = UiFactory.Row();
-        row.AddChild(UiFactory.Wrapped(Loc.T("回复语言"), 12));
-        row.AddChild(language);
-        row.AddChild(UiFactory.Wrapped(Loc.T("思考强度"), 12));
-        row.AddChild(intensity);
-        return row;
+        // One label/drop-down pair per row. All four in one row measured a 457 px minimum inside the
+        // 440 px panel (two Wrapped labels floor at 120 px each), which widened the whole play page and
+        // clipped the right edge of every control on it.
+        var rows = UiFactory.Column();
+        rows.SizeFlagsVertical = Control.SizeFlags.ShrinkBegin;
+        rows.AddChild(UiFactory.Row(UiFactory.Wrapped(Loc.T("回复语言"), 12), language));
+        rows.AddChild(UiFactory.Row(UiFactory.Wrapped(Loc.T("思考强度"), 12), intensity));
+        return rows;
     }
 
     private static void SelectComboByMetadata(OptionButton combo, string? id)
@@ -224,6 +226,17 @@ internal sealed partial class AgentOverlayHost
             }
 
             _chatLog.AppendText(FormatTurn(turn.Role == "user" ? Loc.T("你") : Loc.T("助手"), turn.Text));
+        }
+
+        // The reasoning of the request in flight, drawn after the recorded turns so it reads as what the
+        // model is doing right now. It is not a history entry: the runtime drops it when the completed
+        // turn records its own reasoning bubble, which is why this can never double the same thought.
+        // Gated on the same switch as the recorded bubble -- the runtime already refuses to store one
+        // while the switch is off, and a log that keeps a stale partial hidden is not a display either.
+        var liveThought = AgentRuntime.Instance.LiveThought;
+        if (showThinking && liveThought.Length > 0)
+        {
+            _chatLog.AppendText(FormatChatBubble(Loc.T("思考中"), UiFactory.Muted, liveThought, mutedBody: true));
         }
 
         Callable.From(ScrollChatToBottom).CallDeferred();
