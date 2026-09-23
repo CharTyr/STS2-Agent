@@ -85,9 +85,11 @@ internal static class GameThread
         using var timeoutCts = new CancellationTokenSource(timeout);
         using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, timeoutCts.Token);
         // Task.Delay with a token completes (canceled) the moment either fires; WhenAny treats a
-        // canceled task as completed, so the first finisher decides.
+        // canceled task as completed, so the first finisher decides. No ConfigureAwait(false): this
+        // class's contract is to keep callers on the context they came from, because game-adjacent
+        // continuations break on a thread-pool thread.
         var wait = Task.Delay(Timeout.InfiniteTimeSpan, linkedCts.Token);
-        var completed = await Task.WhenAny(task, wait).ConfigureAwait(false);
+        var completed = await Task.WhenAny(task, wait);
         if (completed == task)
         {
             return await task;
@@ -102,22 +104,11 @@ internal static class GameThread
     }
 
     /// <summary>Cancellation-aware overload without an explicit timeout: the caller's token breaks the wait.</summary>
-    public static async Task<T> InvokeAsync<T>(Func<T> action, CancellationToken cancellationToken)
+    public static Task<T> InvokeAsync<T>(Func<T> action, CancellationToken cancellationToken)
     {
-        var task = InvokeAsync(action);
-        if (task.IsCompleted)
-        {
-            return await task;
-        }
-
-        var wait = Task.Delay(Timeout.InfiniteTimeSpan, cancellationToken);
-        var completed = await Task.WhenAny(task, wait).ConfigureAwait(false);
-        if (completed == task)
-        {
-            return await task;
-        }
-
-        throw new OperationCanceledException(cancellationToken);
+        // No clock of its own: the caller's token is the whole deadline, so this is the timeout
+        // overload with an unbounded clock rather than a second copy of the wait loop.
+        return InvokeAsync(action, Timeout.InfiniteTimeSpan, cancellationToken);
     }
 
     public static Task InvokeAsync(Action action)

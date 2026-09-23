@@ -1,4 +1,5 @@
 using STS2AIAgent.Config;
+using STS2AIAgent.Llm;
 using STS2AIAgent.Localization;
 
 namespace STS2AIAgent.Agent;
@@ -8,9 +9,9 @@ namespace STS2AIAgent.Agent;
 /// ping plus a real tool-calling probe, recorded per model so the card can wear its own badge.
 /// </summary>
 /// <remarks>
-/// Split from <c>AgentRuntime.cs</c> for the same reason as the other partials: the base file is at
-/// its size budget, and the per-model probe grows with the settings redesign rather than with the
-/// runtime's session plumbing.
+/// Its own partial because of what these members touch: the settings model list, the probe client,
+/// and the per-model test records -- nothing in the play loop or the session plumbing reaches them,
+/// and they reach nothing back except a settings save.
 /// </remarks>
 internal sealed partial class AgentRuntime
 {
@@ -51,15 +52,33 @@ internal sealed partial class AgentRuntime
 
         try
         {
-            var client = _loop.CreateProbeClient(endpoint);
+            var client = _loop.CreateClient(endpoint);
             await client.PingAsync(model.Model, cancellationToken);
-            var tools = await client.ProbeToolCallingAsync(model.Model, cancellationToken);
+            // The probe is a miniature play decision against the real act tool: a mock combat frame
+            // whose only sensible answer is calling act with end_turn. A provider that passes the
+            // ping but cannot drive the actual play schema fails here, which is the difference
+            // between "can chat" and "can play".
+            var tools = await client.ProbeToolCallingAsync(
+                model.Model,
+                AgentTools.Play[^1],
+                "You are playing Slay the Spire 2. Current state: COMBAT, you have 0 energy, your hand "
+                + "is empty, one enemy has 12 HP. Available actions: [\"end_turn\"]. Call the act tool "
+                + "with action \"end_turn\" and a one-sentence reason. Do not answer with plain text.",
+                cancellationToken);
             record.Status = "verified";
+            // A clean "no tool call came back" is the only unsupported verdict: the provider took the
+            // request and chose not to call. A thrown 4xx means the schema itself was rejected. Both
+            // differ from a transient failure, which must not downgrade a working model.
             record.Tools = tools ? "supported" : "unsupported";
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
             throw;
+        }
+        catch (LlmToolProbeUnsupportedException)
+        {
+            record.Status = "verified";
+            record.Tools = "unsupported";
         }
         catch (Exception ex)
         {
@@ -74,21 +93,23 @@ internal sealed partial class AgentRuntime
             current.ModelTests.RemoveAll(item => string.Equals(item.ModelId, model.Id, StringComparison.OrdinalIgnoreCase));
             current.ModelTests.Add(record);
             var target = current.FindModel(model.Id);
+            // The probe is the authority only when it actually answered: a transient failure leaves
+            // SupportsTools where it was rather than downgrading a working model on a bad day.
             if (target != null && record.Status == "verified")
             {
-                // The probe is the authority: a model that cannot call tools cannot play, and the
-                // checkbox it replaces used to let the player claim otherwise.
                 target.SupportsTools = record.Tools == "supported";
             }
+        }
 
-            try
-            {
-                SaveSettings(current);
-            }
-            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
-            {
-                NoteEvent("model test result could not be saved: " + ex.Message);
-            }
+        try
+        {
+            // The record was already written into the live settings under the gate; this persists
+            // the same object. Done outside the gate: SaveSettings takes it and does file IO.
+            SaveSettings(Settings);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            NoteEvent("model test result could not be saved: " + ex.Message);
         }
 
         RaiseChanged();

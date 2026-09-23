@@ -167,7 +167,7 @@ internal sealed partial class AgentLoop
         if (dualLayerOn && ResolveDecider() is { } decider && _strategyStore is { } store)
         {
             reportPhase?.Invoke(PlayPhases.AskingJev);
-            var jevTurn = await TryDecideWithJevAsync(decider, store, cancellationToken, checkState);
+            var jevTurn = await TryDecideWithJevAsync(decider, store, cancellationToken, checkState, reportPhase);
             if (jevTurn != null)
             {
                 return jevTurn;
@@ -245,7 +245,8 @@ internal sealed partial class AgentLoop
             cancellationToken,
             checkState,
             initialUsage: visionNote.Usage,
-            initialRequests: visionNote.RequestsSpent);
+            initialRequests: visionNote.RequestsSpent,
+            reportPhase: reportPhase);
     }
 
     /// <summary>
@@ -265,7 +266,8 @@ internal sealed partial class AgentLoop
         IActionDecider decider,
         StrategyStore store,
         CancellationToken cancellationToken,
-        Action<string>? checkState)
+        Action<string>? checkState,
+        Action<string>? reportPhase = null)
     {
         var threshold = _confidenceThreshold?.Invoke() ?? 0.35;
         var snapshotJson = await _bridge.GetActionSnapshotJsonAsync(cancellationToken);
@@ -279,6 +281,7 @@ internal sealed partial class AgentLoop
             return null;
         }
 
+        reportPhase?.Invoke(PlayPhases.ExecutingAction);
         var outcome = await ExecuteActAsync(decision.ToActArgumentsJson(), cancellationToken, checkState);
         if (outcome.Error != null)
         {
@@ -396,7 +399,8 @@ internal sealed partial class AgentLoop
         CancellationToken cancellationToken,
         Action<string>? checkState = null,
         LlmUsage? initialUsage = null,
-        int initialRequests = 0)
+        int initialRequests = 0,
+        Action<string>? reportPhase = null)
     {
         string? lastText = null;
         string? lastReasoning = null;
@@ -521,6 +525,7 @@ internal sealed partial class AgentLoop
                         ActJsonParser.TryParse(completion.Content, out var actJson))
                     {
                         var fallbackReason = TryReadActReason(actJson);
+                        reportPhase?.Invoke(PlayPhases.ExecutingAction);
                         var parsedAct = await ExecuteActAsync(actJson, cancellationToken, checkState,
                             (action, response) => RememberAccepted(action, response, fallbackReason));
                         if (parsedAct.Error == null)
@@ -597,6 +602,7 @@ internal sealed partial class AgentLoop
                         }
 
                         var actReason = TryReadActReason(call.ArgumentsJson);
+                        reportPhase?.Invoke(PlayPhases.ExecutingAction);
                         var actOutcome = await ExecuteActAsync(call.ArgumentsJson, cancellationToken, checkState,
                             (action, response) => RememberAccepted(action, response, actReason));
                         messages.Add(LlmMessage.Tool(call.Id, actOutcome.ResultJson));

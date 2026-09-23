@@ -459,7 +459,7 @@ internal static class PlayerExperienceTests
             return Task.FromResult(_reply ?? "pong");
         }
 
-        public Task<bool> ProbeToolCallingAsync(string model, CancellationToken cancellationToken) =>
+        public Task<bool> ProbeToolCallingAsync(string model, LlmTool tool, string prompt, CancellationToken cancellationToken) =>
             Task.FromResult(true);
     }
 }

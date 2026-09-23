@@ -19,10 +19,15 @@
   deadline and honors cancellation — a game thread that stops pumping used to hang the turn forever,
   leaving the pause button dead. The status line reports the turn's current phase with elapsed time
   instead of sitting on "requesting the model" for the whole turn. A run that waits for an actionable
-  state for two minutes straight now stops with a visible reason instead of retrying silently
+  state for 150 seconds straight now stops with a visible reason instead of retrying silently
   forever. LLM and Jev per-request timeouts are configurable in settings
   (`LlmRequestTimeoutSeconds` / `JevRequestTimeoutSeconds`), and unexpected turn failures keep their
   exception type instead of a bare message.
+- **Per-model verification is a real play probe.** Each model card's Test button runs a connectivity
+  ping plus a miniature play decision against the real `act` tool (a mock combat frame whose only
+  correct answer is a tool call), and the card wears the verdict as a badge. A transient failure
+  (429/5xx/timeout) no longer downgrades a working model's recorded tool capability — only a clean
+  "no tool call" or a schema-rejecting 4xx does.
 - **The model's real thinking is no longer overwritten by its one-line act reason.** When a
   provider returns `reasoning_content`, that is what the thought view shows; the short reason in the
   act arguments only fills in when the provider sent no reasoning.

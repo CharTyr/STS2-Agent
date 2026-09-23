@@ -1153,7 +1153,7 @@ internal static class AgentLoopTests
         }
         public Task<LlmCompletion> CompleteAsync(LlmRequest request, CancellationToken cancellationToken) =>
             throw new InvalidOperationException("A model probe must not invoke gameplay completion.");
-        public Task<bool> ProbeToolCallingAsync(string model, CancellationToken cancellationToken) =>
+        public Task<bool> ProbeToolCallingAsync(string model, LlmTool tool, string prompt, CancellationToken cancellationToken) =>
             Task.FromResult(true);
     }
 
@@ -1341,7 +1341,7 @@ internal static class AgentLoopTests
 
         public Task<string> PingAsync(string model, CancellationToken cancellationToken) => Task.FromResult("pong");
 
-        public Task<bool> ProbeToolCallingAsync(string model, CancellationToken cancellationToken) => Task.FromResult(true);
+        public Task<bool> ProbeToolCallingAsync(string model, LlmTool tool, string prompt, CancellationToken cancellationToken) => Task.FromResult(true);
     }
 }
 

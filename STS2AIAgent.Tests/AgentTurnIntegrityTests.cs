@@ -520,7 +520,7 @@ internal static class AgentTurnIntegrityTests
         public List<LlmRequest> Requests { get; } = new();
         public ILlmClient Create(LlmEndpoint endpoint, TimeSpan? requestTimeout = null) => this;
         public Task<string> PingAsync(string model, CancellationToken token) => throw new InvalidOperationException("No real provider calls.");
-        public Task<bool> ProbeToolCallingAsync(string model, CancellationToken token) => Task.FromResult(true);
+        public Task<bool> ProbeToolCallingAsync(string model, LlmTool tool, string prompt, CancellationToken token) => Task.FromResult(true);
         public Task<LlmCompletion> CompleteAsync(LlmRequest request, CancellationToken token)
         {
             token.ThrowIfCancellationRequested();

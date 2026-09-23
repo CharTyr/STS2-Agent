@@ -111,36 +111,29 @@ internal sealed class OpenAiCompatibleClient : ILlmClient
         return string.IsNullOrWhiteSpace(completion.Content) ? "ok" : completion.Content.Trim();
     }
 
-    public async Task<bool> ProbeToolCallingAsync(string model, CancellationToken cancellationToken)
+    /// <summary>
+    /// Verifies the model actually calls tools, not just answers chat. The caller supplies the tool
+    /// and the prompt: the per-model test passes the real <c>act</c> tool with a miniature game
+    /// decision, so a provider that chokes on the actual play schema fails here rather than on a
+    /// synthetic stand-in. tool_choice "required" is part of the probe: a provider that silently
+    /// ignores the whole tools array fails even though its plain chat ping passed.
+    /// </summary>
+    public async Task<bool> ProbeToolCallingAsync(
+        string model,
+        LlmTool tool,
+        string prompt,
+        CancellationToken cancellationToken)
     {
-        // A minimal tool whose call is the only sensible answer. tool_choice "required" is part of
-        // the probe: a provider that silently ignores the whole tools array fails here even though
-        // its plain chat ping passed, which is exactly the model that cannot play.
         var body = new Dictionary<string, object?>
         {
             ["model"] = model,
             ["messages"] = new[]
             {
-                new ChatMessageDto { Role = "user", Content = "Call the report_ready tool now. Do not answer with text." }
+                new ChatMessageDto { Role = "user", Content = prompt }
             },
-            ["tools"] = new[]
-            {
-                ToToolDto(new LlmTool
-                {
-                    Name = "report_ready",
-                    Description = "Report that the model is ready. Call this tool instead of answering with text.",
-                    Parameters = new
-                    {
-                        type = "object",
-                        properties = new Dictionary<string, object?>
-                        {
-                            ["note"] = new { type = "string", description = "A short readiness note." }
-                        }
-                    }
-                })
-            },
+            ["tools"] = new[] { ToToolDto(tool) },
             ["tool_choice"] = "required",
-            ["max_tokens"] = 128
+            ["max_tokens"] = 256
         };
 
         try
@@ -148,10 +141,12 @@ internal sealed class OpenAiCompatibleClient : ILlmClient
             var completion = await SendCompletionAsync(body, stream: false, cancellationToken);
             return completion.ToolCalls.Count > 0;
         }
-        catch (LlmException)
+        catch (LlmException ex) when (ex.StatusCode is >= 400 and < 500 and not 408 and not 429)
         {
-            // A 400 about tools/tool_choice is itself the answer: this endpoint cannot do tools.
-            return false;
+            // A 4xx about tools/tool_choice is the endpoint saying it cannot do tools -- a verdict,
+            // not a failure. Anything transient (429, 5xx, timeout) keeps propagating so the caller
+            // records an unknown capability instead of downgrading a working model on a bad day.
+            throw new LlmToolProbeUnsupportedException(ex.Message, ex);
         }
     }
 

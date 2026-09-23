@@ -9,11 +9,11 @@ internal interface ILlmClient
     Task<string> PingAsync(string model, CancellationToken cancellationToken);
 
     /// <summary>
-    /// Verifies the model actually calls tools, not just answers chat: sends a trivial request whose
-    /// only sensible answer is calling the offered tool, and returns true when a tool call comes
-    /// back. A model that cannot play this mod fails here even when the ping passed.
+    /// Verifies the model actually calls tools, not just answers chat: the caller supplies the tool
+    /// and a prompt whose only sensible answer is calling it, and a true return means a tool call
+    /// came back. A model that cannot play this mod fails here even when the ping passed.
     /// </summary>
-    Task<bool> ProbeToolCallingAsync(string model, CancellationToken cancellationToken);
+    Task<bool> ProbeToolCallingAsync(string model, LlmTool tool, string prompt, CancellationToken cancellationToken);
 }
 
 internal interface ILlmClientFactory
@@ -156,5 +156,17 @@ internal sealed class LlmException : Exception
     public LlmException(string message, Exception inner, int statusCode) : base(message, inner)
     {
         StatusCode = statusCode;
+    }
+}
+
+/// <summary>
+/// The tool-calling probe's definitive "no": the provider rejected the tools schema with a 4xx, so
+/// the model genuinely cannot call tools here. Distinct from a transient failure, which must not
+/// be recorded as a missing capability.
+/// </summary>
+internal sealed class LlmToolProbeUnsupportedException : Exception
+{
+    public LlmToolProbeUnsupportedException(string message, Exception inner) : base(message, inner)
+    {
     }
 }

@@ -81,7 +81,10 @@ internal sealed partial class AgentRuntime
             try
             {
                 var summary = await _loop.DescribeCurrentStateForPlanningAsync(_lifetime.Token);
-                var adopted = await Planner.RefreshAsync(summary, _lifetime.Token);
+                var (adopted, usage) = await Planner.RefreshAsync(summary, _lifetime.Token);
+                // The plan costs a real request; the session budget must see it, or the planner is
+                // an invisible spend running behind the play loop's back.
+                AccountTurn(new AgentTurnResult { Usage = usage, RequestsSpent = 1 }, recordBudget: true);
                 NoteEvent(adopted ? "strategy refreshed by planner" : "strategy refresh produced no new plan");
             }
             catch (OperationCanceledException)
@@ -116,9 +119,10 @@ internal sealed partial class AgentRuntime
             return null;
         }
 
-        // The per-request timeout is configurable: five minutes suits a batch job, but a play turn
-        // that stalls should fail visibly in about a minute and a half, not hold the loop silently.
-        var timeout = settings.JevRequestTimeoutSeconds is > 0 ? TimeSpan.FromSeconds(settings.JevRequestTimeoutSeconds.Value) : (TimeSpan?)null;
+        // The per-request timeout is configurable; unset means 90 seconds. Five minutes suits a
+        // batch job, but a play turn that stalls should fail visibly in about a minute and a half,
+        // not hold the loop silently.
+        var timeout = TimeSpan.FromSeconds(settings.JevRequestTimeoutSeconds is > 0 ? settings.JevRequestTimeoutSeconds.Value : 90);
         var client = new JevClient(settings.JevBaseUrl, settings.JevApiKey, settings.JevModel, requestTimeout: timeout);
         return new JevExecutionDecider(client, settings.JevModel);
     }
@@ -198,7 +202,8 @@ internal sealed partial class AgentRuntime
 
         try
         {
-            var client = new JevClient(settings.JevBaseUrl, settings.JevApiKey, settings.JevModel);
+            var timeout = TimeSpan.FromSeconds(settings.JevRequestTimeoutSeconds is > 0 ? settings.JevRequestTimeoutSeconds.Value : 90);
+            var client = new JevClient(settings.JevBaseUrl, settings.JevApiKey, settings.JevModel, requestTimeout: timeout);
             return await client.PingAsync(cancellationToken);
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)

@@ -22,7 +22,7 @@ internal sealed class AgentSettings
     /// </summary>
     public int? LlmRequestTimeoutSeconds { get; set; }
 
-    /// <summary>Per-request timeout for Jev system-one calls, in seconds. Default 90 when unset.</summary>
+    /// <summary>Per-request timeout for Jev system-one calls, in seconds. Null or non-positive means 90.</summary>
     public int? JevRequestTimeoutSeconds { get; set; }
 
     public string Hotkey { get; set; } = "F8";

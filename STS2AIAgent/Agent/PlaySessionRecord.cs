@@ -35,6 +35,14 @@ internal sealed record PlaySessionRecord
     [JsonPropertyName("chat")]
     public List<ChatTurn>? Chat { get; init; }
 
+    /// <summary>
+    /// How many earlier turns the history cap had already dropped when this snapshot was written.
+    /// Restored with the chat so the log's "earlier messages omitted" line survives a continue
+    /// instead of the window silently restarting.
+    /// </summary>
+    [JsonPropertyName("chat_trimmed")]
+    public int ChatTrimmed { get; init; }
+
     /// <summary>The recent decisions feeding <see cref="ContextCompaction"/>, oldest first.</summary>
     [JsonPropertyName("decisions")]
     public List<DecisionLogEntry>? Decisions { get; init; }
