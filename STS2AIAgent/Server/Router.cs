@@ -46,6 +46,19 @@ internal static class Router
         {
             Log.Info($"{LogPrefix} {requestId} {request.HttpMethod} {request.Url?.AbsolutePath}");
 
+            if (request.HttpMethod == "GET" && request.Url?.AbsolutePath == "/companion/jev")
+            {
+                if (!InstanceRole.IsCompanion || !request.IsLocal || !CompanionConnection.IsAuthorized(
+                    Environment.GetEnvironmentVariable(CompanionConnection.TokenEnvironment), request.Headers[CompanionConnection.TokenHeader]))
+                    throw new ApiException(403, "companion_session_required", "This endpoint requires the active local companion session.");
+                await WriteJsonAsync(response, 200, new
+                {
+                    ok = true, request_id = requestId, data = AgentRuntime.Instance.CompanionJevStatus()
+                });
+                statusCode = 200;
+                return;
+            }
+
             if (request.HttpMethod == "POST" && request.Url?.AbsolutePath is "/companion/message" or "/companion/control")
             {
                 if (!InstanceRole.IsCompanion || !request.IsLocal || !CompanionConnection.IsAuthorized(
@@ -56,9 +69,34 @@ internal static class Router
                 using var body = await ReadCompanionBodyAsync(request, cancellationToken);
                 if (request.Url.AbsolutePath == "/companion/control")
                 {
-                    if (body.RootElement.ValueKind != System.Text.Json.JsonValueKind.Object ||
-                        !body.RootElement.TryGetProperty("running", out var running) ||
-                        running.ValueKind is not (System.Text.Json.JsonValueKind.True or System.Text.Json.JsonValueKind.False))
+                    if (body.RootElement.ValueKind != JsonValueKind.Object)
+                        throw new ApiException(400, "invalid_request", "A control object is required.");
+                    if (body.RootElement.TryGetProperty("settings", out var patchElement))
+                    {
+                        // Settings-only patch: never serialize the secret-bearing input into a
+                        // response, diagnostic or exception message. Legacy running requests follow
+                        // their original path below, and mixed bodies are refused rather than guessed.
+                        if (body.RootElement.TryGetProperty("running", out _)
+                            || patchElement.ValueKind != JsonValueKind.Object)
+                            throw new ApiException(400, "invalid_request", "Use either settings or running, not both.");
+                        var patch = patchElement.Deserialize<CompanionSettingsPatch>();
+                        if (patch == null || !patch.IsValid)
+                            throw new ApiException(400, "invalid_request", "Invalid companion Jev settings.");
+                        bool enabled;
+                        try { enabled = AgentRuntime.Instance.ApplyCompanionSettings(patch); }
+                        catch (ArgumentException) { throw new ApiException(400, "invalid_request", "Invalid companion Jev settings."); }
+                        catch (InvalidOperationException) { throw new ApiException(409, "companion_not_ready", "Companion settings update unavailable."); }
+                        await WriteJsonAsync(response, 200, new
+                        {
+                            ok = true, request_id = requestId,
+                            data = new { phase = AgentRuntime.Instance.PlayPhase,
+                                settings_applied = true, dual_layer_coop_enabled = enabled }
+                        });
+                        statusCode = 200;
+                        return;
+                    }
+                    if (!body.RootElement.TryGetProperty("running", out var running) ||
+                        running.ValueKind is not (JsonValueKind.True or JsonValueKind.False))
                         throw new ApiException(400, "invalid_request", "running must be a boolean.");
                     string phase;
                     try { phase = await AgentRuntime.Instance.SetCompanionRunningAsync(running.GetBoolean(), cancellationToken); }
@@ -243,19 +281,22 @@ internal static class Router
                     throw new ApiException(403, "local_only", "The play strategy is only available on loopback.");
                 }
 
-                var current = AgentRuntime.Instance.CurrentStrategy;
+                var runtime = AgentRuntime.Instance;
+                var rawState = await GameThread.InvokeAsync(() =>
+                {
+                    var state = GameStateService.BuildStatePayload();
+                    runtime.ObserveSessionStateSnapshot(state.run_id, state.screen, state.session.phase);
+                    return JsonSerializer.Serialize(state);
+                }, cancellationToken);
+                var current = runtime.CurrentStrategy;
+                var status = runtime.DualLayerStatus();
+                var briefing = PlannerBriefingProjection.Build(rawState, current, status.DualLayer,
+                    status.JevConfigured, runtime.DecisionLogForBriefing);
                 await WriteJsonAsync(response, 200, new
                 {
                     ok = true,
                     request_id = requestId,
-                    data = new
-                    {
-                        strategy = JsonSerializer.Deserialize<JsonElement>(current.ToJson()),
-                        dual_layer = InstanceRole.IsCompanion
-                            ? AgentRuntime.Instance.Settings.DualLayerCoopEnabled
-                            : AgentRuntime.Instance.Settings.DualLayerSoloEnabled,
-                        jev_configured = AgentRuntime.Instance.Settings.HasJevConfigured()
-                    }
+                    data = briefing
                 });
                 statusCode = 200;
                 return;
@@ -353,7 +394,13 @@ internal static class Router
             if (request.HttpMethod.Equals("GET", StringComparison.OrdinalIgnoreCase) &&
                 request.Url?.AbsolutePath == "/state")
             {
-                var state = await GameThread.InvokeAsync(GameStateService.BuildStatePayload);
+                var state = await GameThread.InvokeAsync(() =>
+                {
+                    var current = GameStateService.BuildStatePayload();
+                    // Confirm on the game thread, before another request can observe a newer run.
+                    AgentRuntime.Instance.ObserveSessionStateSnapshot(current.run_id, current.screen, current.session.phase);
+                    return current;
+                });
                 await WriteJsonAsync(response, 200, new
                 {
                     ok = true,
@@ -458,13 +505,22 @@ internal static class Router
                     throw new ApiException(400, "invalid_request", "Request body must contain an action field.");
                 }
 
-                var actionResponse = await GameThread.InvokeAsync(() => GameActionService.ExecuteAsync(actionRequest));
+                // Capture the run before an accepted action changes screens or ends the run. The
+                // identity and action share one game-thread work unit; neither is inferred from the
+                // autoplay boundary or from the action's post-transition state.
+                var (actionRunId, actionResponse) = await GameThread.InvokeAsync(async () =>
+                {
+                    var before = GameStateService.BuildStatePayload();
+                    AgentRuntime.Instance.ObserveSessionStateSnapshot(before.run_id, before.screen, before.session.phase);
+                    var result = await GameActionService.ExecuteAsync(actionRequest);
+                    return (before.run_id, result);
+                });
                 var decisionReason = DecisionContext.ReadReason(actionRequest.client_context);
                 AgentRuntime.Instance.RecordDecision(
                     "http_api",
                     actionRequest.action,
                     decisionReason,
-                    runId: AgentRuntime.Instance.CurrentRunId);
+                    runId: actionRunId, runIdObserved: true);
                 await WriteJsonAsync(response, 200, new
                 {
                     ok = true,

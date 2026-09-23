@@ -4,6 +4,39 @@
 
 ## Unreleased
 
+- **Audit remediation integrates solo/co-op lifecycle, run-scoped guidance, and Jev status.**
+  A mode switch pauses the active loop or companion before saving the new mode; external
+  start routes honor the selected mode and do not start a second loop during a switch.
+  Messages sent during solo auto-play become bounded, one-time guidance for the same run;
+  action receipts expose a short status without dumping raw tool results. A running local
+  companion accepts token-protected Jev setting changes and reports its own non-secret
+  choice, probability, danger, and latency readings. HTTP and both MCP planner briefing
+  surfaces share a run-scoped projection. HTTP actions bind decisions to the pre-action
+  game run; late decisions cannot resurrect an old active session. Offline tests and
+  static checks cover these paths; live dual-window play and the real Jev service remain
+  to be validated.
+
+- **Jev turns keep their full request, token, and action receipts.** Fallback, rejected actions,
+  cancellation, and run boundaries retain completed work. Both the execution request and any LLM
+  or vision fallback check the remaining budget. Low confidence still reaches the strategy planner
+  when the LLM performs the action. Nested snapshots select the correct screen guidance, and
+  missing required action parameters no longer become selectable placeholders. Play requests use
+  one bounded turn deadline; a Jev 429 can retry only once when time and request budget remain,
+  with each actual attempt counted separately. The Jev transport reuses its connection pool,
+  validates service URLs, and redacts echoed credentials before formatting errors.
+- **Continued-run memory includes subsequent decisions and stays isolated from other runs.**
+  All decision writers feed the active run's bounded memory. Chat, single-step, interrupted play,
+  strategy updates, and chat clearing participate in persistence. Failed writes retain their latest
+  snapshot for retry, and a concurrent update cannot be marked clean by an older save. Session files
+  validate run identity, tolerate null entries, redact strategy text, preserve load timestamps, and
+  avoid Windows filename collisions while retaining legacy loading and safe deletion.
+- **Background plans obey the play lifecycle and budget.** Requests reserve budget under the turn
+  gate before dispatch. Failed attempts count once, while a missing model makes no request.
+  Pause, run changes, settings changes, and newer external strategies invalidate stale responses.
+  Strategy hints use immutable snapshots, and low-confidence refresh streaks reset after triggering.
+  The September 23 audit adds 42 offline regressions for these paths; real-game validation remains
+  separate from the offline build and test suite.
+
 - **Dual-layer mode actually engages now, and reward card picks are real decisions.** Three
   live-pass fixes: the Jev execution decider was built once at mod startup, so a Jev API key
   entered afterwards never took effect until a restart — the decider is now resolved from the live

@@ -1,3 +1,4 @@
+using System.Text.Json;
 using STS2AIAgent.Config;
 using STS2AIAgent.Llm;
 using STS2AIAgent.Localization;
@@ -32,6 +33,8 @@ internal sealed partial class AgentRuntime
     /// <summary>The execution model's last reading, for the Jev panel. Null before its first turn.</summary>
     private string? _lastJevChoice;
     private string? _lastJevProbabilities;
+    private string? _lastJevDanger;
+    private string? _lastJevLatency;
 
     /// <summary>How many earlier turns the cap has dropped; 0 means the log starts at the beginning.</summary>
     public int HistoryTrimmedCount
@@ -44,6 +47,10 @@ internal sealed partial class AgentRuntime
 
     /// <summary>Its confidence and per-option scores, as one line of display text.</summary>
     public string LastJevProbabilities => _lastJevProbabilities ?? "-";
+
+    public string LastJevDanger => _lastJevDanger ?? "-";
+
+    public string LastJevLatency => _lastJevLatency ?? "-";
 
     private void RecordTurnReceipt(AgentTurnResult result, bool recordBudget = false)
     {
@@ -88,7 +95,10 @@ internal sealed partial class AgentRuntime
         }
 
         var reason = Clip(result.Reasoning, ActionBubbleReasonChars);
-        AddHistoryCore("action", reason.Length == 0 ? result.Acted : result.Acted + " — " + reason, notify: false);
+        var action = reason.Length == 0 ? result.Acted : result.Acted + " — " + reason;
+        var outcome = DescribeActResult(result.ActResultJson);
+        if (outcome.Length > 0) action += " · " + outcome;
+        AddHistoryCore("action", action, notify: false);
     }
 
     /// <summary>
@@ -109,6 +119,7 @@ internal sealed partial class AgentRuntime
             }
 
             _sessionDirty = true;
+            _sessionRevision++;
         }
 
         if (notify)
@@ -126,8 +137,10 @@ internal sealed partial class AgentRuntime
         lock (_gate)
         {
             ResetHistoryLocked();
+            MarkSessionDirty();
         }
 
+        FlushSessionIfDirty();
         RaiseChanged();
     }
 
@@ -150,22 +163,26 @@ internal sealed partial class AgentRuntime
     }
 
     /// <summary>
-    /// Keeps the Jev panel's two lines current. Only a dual-layer turn carries a confidence, so the
-    /// panel never reports a reading for a decision the execution model did not make.
+    /// Keeps the Jev panel's reading current. The elapsed field identifies an attempted Jev turn
+    /// even when a low-confidence choice handed the actual move to the regular model.
     /// </summary>
     private void RecordJevReading(AgentTurnResult result)
     {
-        if (result.Confidence == null)
+        if (result.JevElapsedMilliseconds == null && result.Confidence == null)
         {
             return;
         }
 
-        var choice = Clip(result.Reasoning ?? result.Acted, 90);
+        var choice = Clip(result.Acted ?? (result.JevElapsedMilliseconds == null ? result.Reasoning : null), 90);
         var probabilities = FormatJevReading(result);
         lock (_gate)
         {
             _lastJevChoice = choice.Length == 0 ? "-" : choice;
             _lastJevProbabilities = probabilities;
+            _lastJevDanger = result.DangerScore is { } danger && double.IsFinite(danger)
+                ? Loc.T("危险度 {0}", danger.ToString("0.##")) : "-";
+            _lastJevLatency = result.JevElapsedMilliseconds is { } elapsed
+                ? Loc.T("耗时 {0} 毫秒", elapsed) : "-";
         }
     }
 
@@ -186,6 +203,27 @@ internal sealed partial class AgentRuntime
         }
 
         return parts.Count == 0 ? "-" : string.Join(" · ", parts);
+    }
+
+    /// <summary>Summarize only safe action envelope fields, not the raw state or provider response.</summary>
+    private static string DescribeActResult(string? json)
+    {
+        if (string.IsNullOrWhiteSpace(json)) return string.Empty;
+        try
+        {
+            using var document = JsonDocument.Parse(json);
+            var root = document.RootElement;
+            if (root.ValueKind != JsonValueKind.Object) return string.Empty;
+            var status = root.TryGetProperty("status", out var phase) && phase.ValueKind == JsonValueKind.String
+                ? phase.GetString() : null;
+            if (status == null && root.TryGetProperty("data", out var data) && data.ValueKind == JsonValueKind.Object
+                && data.TryGetProperty("status", out var nested) && nested.ValueKind == JsonValueKind.String)
+                status = nested.GetString();
+            if (status is not ("completed" or "pending" or "failed" or "rejected" or "outcome_unknown"))
+                return string.Empty;
+            return Clip(status, 32);
+        }
+        catch (JsonException) { return string.Empty; }
     }
 
     /// <summary>One turn's text as a single display line, clipped on a character budget.</summary>

@@ -1,5 +1,6 @@
 using STS2AIAgent.Config;
 using STS2AIAgent.Llm;
+using System.Text.Json;
 
 namespace STS2AIAgent.Agent;
 
@@ -14,6 +15,15 @@ namespace STS2AIAgent.Agent;
 /// </remarks>
 internal sealed partial class AgentLoop
 {
+    internal async Task<string?> GetCurrentRunIdAsync(CancellationToken token)
+    {
+        var json = await _bridge.GetCompactStateJsonAsync(token);
+        using var document = JsonDocument.Parse(json);
+        return document.RootElement.ValueKind == JsonValueKind.Object
+            && document.RootElement.TryGetProperty("run_id", out var id) && id.ValueKind == JsonValueKind.String
+            ? id.GetString() : null;
+    }
+
     /// <summary>
     /// Creates a client for the endpoint with the configured per-request timeout applied. The
     /// settings value is read live so a change takes effect on the next request. Internal rather

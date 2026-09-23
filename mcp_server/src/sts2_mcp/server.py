@@ -279,7 +279,7 @@ def create_server(client: Sts2Client | None = None, tool_profile: str | None = N
 
     @mcp.tool
     def get_planner_briefing() -> dict[str, Any]:
-        """Read the current dual-layer play strategy and the Jev execution layer's status."""
+        """Forward /strategy: live strategy, current run and same-run Jev trend."""
         return sts2.get_strategy()
 
     @mcp.tool

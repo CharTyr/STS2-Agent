@@ -84,6 +84,50 @@ internal sealed class CompanionConnection
         return data.GetProperty("phase").GetString() ?? "unknown";
     }
 
+    /// <summary>Pushes a whitelisted settings-only patch to the verified companion, without replay.</summary>
+    public async Task<bool> ApplyJevSettingsAsync(CompanionSettingsPatch patch, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(patch);
+        if (!patch.IsValid) throw new ArgumentException("Invalid companion Jev settings.", nameof(patch));
+        using var deadline = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        deadline.CancelAfter(TimeSpan.FromSeconds(8));
+        var data = await SendAsync("control", new { settings = patch }, deadline.Token);
+        if (!data.TryGetProperty("settings_applied", out var applied) || applied.ValueKind != JsonValueKind.True
+            || !data.TryGetProperty("dual_layer_coop_enabled", out var enabled)
+            || enabled.ValueKind is not (JsonValueKind.True or JsonValueKind.False))
+        {
+            throw new InvalidOperationException("Companion settings confirmation is unavailable.");
+        }
+        return enabled.GetBoolean();
+    }
+
+    /// <summary>Read Jev facts from the companion itself, not the host's last solo turn.</summary>
+    public async Task<CompanionJevSnapshot?> TryReadJevAsync(CancellationToken cancellationToken)
+    {
+        try
+        {
+            using var deadline = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+            deadline.CancelAfter(TimeSpan.FromSeconds(3));
+            var health = await _http.GetStringAsync($"http://127.0.0.1:{_port}/health", deadline.Token);
+            if (!CompanionHealth.IsExpectedProcess(health, _port, _pid)) return null;
+            using var request = new HttpRequestMessage(HttpMethod.Get, $"http://127.0.0.1:{_port}/companion/jev");
+            request.Headers.Add(TokenHeader, _token);
+            using var response = await _http.SendAsync(request, deadline.Token);
+            if (!response.IsSuccessStatusCode) return null;
+            using var body = JsonDocument.Parse(await response.Content.ReadAsStringAsync(deadline.Token));
+            if (body.RootElement.GetProperty("ok").ValueKind != JsonValueKind.True) return null;
+            return body.RootElement.GetProperty("data").Deserialize<CompanionJevSnapshot>();
+        }
+        catch (Exception ex) when (ex is HttpRequestException or JsonException or InvalidOperationException or TaskCanceledException or System.IO.IOException)
+        {
+            return null;
+        }
+        catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
+        {
+            return null;
+        }
+    }
+
     private async Task<JsonElement> SendAsync(string operation, object payload, CancellationToken cancellationToken)
     {
         // A stale session must never send messages to a replacement process that

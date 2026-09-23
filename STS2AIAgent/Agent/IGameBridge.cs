@@ -107,6 +107,12 @@ internal sealed class AgentTurnResult
     /// distribution it made up.
     /// </summary>
     public IReadOnlyDictionary<string, double>? Probabilities { get; init; }
+
+    /// <summary>Optional Jev danger score in [0,4]; independent of action confidence.</summary>
+    public double? DangerScore { get; init; }
+
+    /// <summary>Elapsed Jev milliseconds including retry wait; null for plain LLM turns.</summary>
+    public long? JevElapsedMilliseconds { get; init; }
 }
 
 internal sealed class ChatTurn

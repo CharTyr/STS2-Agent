@@ -1,6 +1,7 @@
 using Godot;
 using STS2AIAgent.Agent;
 using STS2AIAgent.Config;
+using STS2AIAgent.Game;
 using STS2AIAgent.Localization;
 
 namespace STS2AIAgent.Ui;
@@ -519,17 +520,19 @@ internal sealed partial class AgentOverlayHost
 
     private async Task TestJevConnectionAsync()
     {
+        var before = AgentRuntime.Instance.Settings;
         SaveSettingsFromUi();
-        if (_jevTestStatus != null)
+        if (!ReferenceEquals(before, AgentRuntime.Instance.Settings))
+            await SaveSettingsAndSyncJevAsync();
+        await GameThread.InvokeAsync(() =>
         {
-            _jevTestStatus.Text = Loc.T("正在测试…");
-        }
-
+            if (_jevTestStatus != null && _jevTestStatus.IsInsideTree()) _jevTestStatus.Text = Loc.T("正在测试…");
+        });
         var result = await AgentRuntime.Instance.TestJevConnectionAsync(CancellationToken.None);
-        if (_jevTestStatus != null)
+        await GameThread.InvokeAsync(() =>
         {
-            _jevTestStatus.Text = result;
-        }
+            if (_jevTestStatus != null && _jevTestStatus.IsInsideTree()) _jevTestStatus.Text = result;
+        });
     }
 
     /// <summary>

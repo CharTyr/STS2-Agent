@@ -6,6 +6,7 @@ using STS2AIAgent.Agent;
 using STS2AIAgent.Config;
 using STS2AIAgent.Game;
 using STS2AIAgent.Localization;
+using STS2AIAgent.Multiplayer;
 using STS2AIAgent.Server;
 using STS2AIAgent.Vision;
 
@@ -102,6 +103,23 @@ internal sealed partial class AgentOverlayHost
     private Label? _sessionConfigNotice;
     private Button? _resetStatsButton;
     private Button? _settingsResetStatsButton;
+
+    // Play-mode and companion-Jev state stays with the host. The play-control partial only writes it.
+    private bool _playModeSwitching;
+    private string? _modeSwitchNotice;
+    private Label? _modeSwitchStatus;
+    private string? _companionSettingsNotice;
+    private Label? _companionSettingsStatus;
+    private bool _companionSettingsSyncing;
+    private string? _lastConfirmedCompanionSettings;
+    private CompanionConnection? _lastConfirmedCompanionConnection;
+    private bool _companionJevRefreshing;
+    private long _companionJevAtMs;
+    private CompanionJevSnapshot? _companionJev;
+    private CompanionConnection? _companionJevSource;
+    private Label? _jevDanger;
+    private Label? _jevLatency;
+    private readonly SemaphoreSlim _companionSettingsGate = new(1, 1);
 
     public static void Install()
     {
@@ -433,6 +451,10 @@ internal sealed partial class AgentOverlayHost
         {
             return;
         }
+
+        // The saved host settings are authoritative. Forward only the whitelisted Jev fields
+        // to an already-running companion, then display its independent confirmation status.
+        _ = SaveSettingsAndSyncJevAsync();
 
         if (_saveStatus != null)
         {

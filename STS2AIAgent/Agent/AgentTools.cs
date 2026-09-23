@@ -137,7 +137,7 @@ internal static class AgentTools
         Tool("get_run_summary", "Summarise the current run in one call: character, floor, act, boss, HP, gold, and the deck/relic/potion counts."),
         Tool("get_scene_guidance", "Return the strategy rules that apply to the screen the game is on right now, plus how to drive it. Empty strategy on a screen with no strategic choice."),
         Tool("diff_state", "Compare two /state payloads and report the paths that differ. Use it to see exactly what an action changed.", DiffStateParameters),
-        Tool("get_planner_briefing", "Read the current dual-layer play strategy and whether the Jev execution layer is configured and enabled. In dual-layer mode an external planner uses this to see what the fast model is currently following before it adjusts the strategy."),
+        Tool("get_planner_briefing", "Read the current strategy, dual-layer/Jev flags, current-run summary and screen, plus up to five same-run Jev choices and their confidence trend. Missing run or scores remain null/empty. Use this read-only snapshot before adjusting the play strategy."),
         Tool("update_play_strategy", "Write a new dual-layer play strategy: a posture (aggressive/defensive/balanced), standing instructions, and optional per-option hints. The Jev execution model follows it on the next action. Only meaningful when dual-layer mode is on.", StrategyParameters)
     }.Concat(Play).ToArray();
 

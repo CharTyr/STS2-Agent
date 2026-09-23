@@ -153,10 +153,8 @@ internal static class JevOptionEnumerator
                     continue;
                 }
 
-                // Requires an index/target/tool/coordinates we cannot expand from the compact payload
-                // (an optional tool, a raw grid sheet, a potion on an exotic screen). Keep one selectable
-                // option so Jev can still name the action; the validator rejects it if the frame changed.
-                AddOption(options, name, name, description: name);
+                // Missing required arguments cannot form a legal option. Let the LLM fallback
+                // inspect that screen rather than paying Jev to choose an unusable placeholder.
             }
 
             return DeduplicateAndCap(options);
@@ -279,12 +277,9 @@ internal static class JevOptionEnumerator
     {
         if (!TryGetArrayAt(state, path, out var array))
         {
-            // The legal list is not in this frame's compact view; keep the action selectable anyway.
-            AddOption(options, id: action, action: action, description: action);
             return;
         }
 
-        var expanded = 0;
         foreach (var item in array.EnumerateArray())
         {
             if (item.ValueKind != JsonValueKind.Object
@@ -294,7 +289,6 @@ internal static class JevOptionEnumerator
                 continue;
             }
 
-            expanded++;
             var line = ReadItemLine(item);
             var targets = ReadTargetList(item);
             if (targets.Count == 0)
@@ -320,10 +314,6 @@ internal static class JevOptionEnumerator
             }
         }
 
-        if (expanded == 0)
-        {
-            AddOption(options, id: action, action: action, description: action);
-        }
     }
 
     private static void ExpandResolveRewards(JsonElement state, List<JevOption> options)

@@ -63,7 +63,10 @@ internal sealed class GameBridge : IGameBridge
     public Task<string> GetActionSnapshotJsonAsync(CancellationToken cancellationToken)
     {
         return GameThread.InvokeAsync(() =>
-            JsonSerializer.Serialize(GameStateService.BuildDecisionSnapshotPayload(), JsonOptions), cancellationToken);
+        {
+            var snapshot = GameStateService.BuildDecisionSnapshotPayload();
+            return JsonSerializer.Serialize(snapshot, JsonOptions);
+        }, cancellationToken);
     }
 
     public Task<string> GetScreenAsync(CancellationToken cancellationToken)

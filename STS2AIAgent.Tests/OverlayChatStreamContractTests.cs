@@ -135,7 +135,12 @@ internal static class OverlayChatStreamContractTests
         Assert.Contains("RecordJevReading(result);", AgentSourceFixture.MethodBody(accounting, "RecordTurnReceipt"));
 
         var refresh = AgentSourceFixture.MethodBody(AgentSourceFixture.Read(Pages), "RefreshDynamic");
-        Assert.Contains("_jevLastChoice.Text = Trim(AgentRuntime.Instance.LastJevChoice", refresh);
-        Assert.Contains("_jevProbabilities.Text = Trim(AgentRuntime.Instance.LastJevProbabilities", refresh);
+        Assert.Contains("RefreshJevReading(coopMode, mode);", refresh);
+        var modeReading = AgentSourceFixture.MethodBody(
+            AgentSourceFixture.Read("STS2AIAgent/Ui/AgentOverlayHost.PlayControl.cs"), "RefreshJevReading");
+        Assert.Contains("companion?.Choice : AgentRuntime.Instance.LastJevChoice", modeReading);
+        Assert.Contains("companion?.Probabilities : AgentRuntime.Instance.LastJevProbabilities", modeReading);
+        Assert.Contains("companion?.Danger : AgentRuntime.Instance.LastJevDanger", modeReading);
+        Assert.Contains("companion?.Latency : AgentRuntime.Instance.LastJevLatency", modeReading);
     }
 }

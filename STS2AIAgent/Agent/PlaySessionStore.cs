@@ -1,5 +1,7 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using System.Security.Cryptography;
+using System.Text;
 using STS2AIAgent.Config;
 
 namespace STS2AIAgent.Agent;
@@ -80,15 +82,20 @@ internal sealed class PlaySessionStore
             {
                 if (!File.Exists(path))
                 {
-                    return null;
+                    // Continue legacy seed-named files only after validating their identity.
+                    var legacy = LegacyPathFor(runId!);
+                    if (File.Exists(path + ".bak")) return RecoverFromCorrupt(path, runId!);
+                    if (!File.Exists(legacy)) return File.Exists(legacy + ".bak") ? RecoverFromCorrupt(legacy, runId!) : null;
+                    path = legacy;
                 }
 
                 var record = JsonSerializer.Deserialize<PlaySessionRecord>(File.ReadAllText(path), JsonOptions);
-                return record == null ? RecoverFromCorrupt(path) : Normalize(record);
+                if (record == null) return RecoverFromCorrupt(path, runId!);
+                return record.RunId == runId ? Normalize(record) : null;
             }
-            catch (Exception ex) when (ex is IOException or JsonException or UnauthorizedAccessException)
+            catch (Exception ex) when (ex is IOException or JsonException or UnauthorizedAccessException or ArgumentException or NotSupportedException)
             {
-                return RecoverFromCorrupt(path);
+                return RecoverFromCorrupt(path, runId!);
             }
         }
     }
@@ -97,22 +104,26 @@ internal sealed class PlaySessionStore
     /// Persists <paramref name="record"/> atomically, redacting text and trimming to the caps first.
     /// The placeholder run and any IO failure are swallowed -- persistence never blocks play.
     /// </summary>
-    public void Save(PlaySessionRecord record)
+    public bool Save(PlaySessionRecord record)
     {
         if (!IsPersistable(record.RunId))
         {
-            return;
+            return false;
         }
 
         lock (_gate)
         {
             try
             {
-                WriteAtomic(PathFor(record.RunId), Normalize(record));
+                var path = PathFor(record.RunId);
+                if (!PreserveLegacyCollision(path, record.RunId)) return false;
+                WriteAtomic(path, Normalize(record) with { UpdatedAt = DateTimeOffset.UtcNow.ToString("O") });
+                return true;
             }
-            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException or NotSupportedException)
             {
-                // Best-effort: a session that cannot be written is lost, not fatal.
+                // Leave the runtime dirty so a later flush can retry.
+                return false;
             }
         }
     }
@@ -129,10 +140,21 @@ internal sealed class PlaySessionStore
         {
             try
             {
-                var path = PathFor(runId!);
-                if (File.Exists(path))
+                var canonical = PathFor(runId!);
+                foreach (var path in new[] { canonical, LegacyPathFor(runId!) }.Distinct(StringComparer.Ordinal))
                 {
-                    File.Delete(path);
+                    foreach (var suffix in new[] { "", ".bak", ".tmp" })
+                    {
+                        var file = path + suffix;
+                        if (!File.Exists(file)) continue;
+                        // Legacy names can collide. Never delete another run's surviving file.
+                        try
+                        {
+                            if (JsonSerializer.Deserialize<PlaySessionRecord>(File.ReadAllText(file), JsonOptions)?.RunId != runId) continue;
+                        }
+                        catch (JsonException) { if (path != canonical) continue; }
+                        File.Delete(file);
+                    }
                 }
             }
             catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
@@ -153,51 +175,72 @@ internal sealed class PlaySessionStore
     /// </summary>
     private static PlaySessionRecord Normalize(PlaySessionRecord record)
     {
-        var chat = record.Chat == null
-            ? new List<ChatTurn>()
-            : record.Chat
-                .Select(turn => new ChatTurn { Role = turn.Role, Text = DiagnosticExport.Redact(turn.Text) })
+        var validChat = (record.Chat ?? new List<ChatTurn>()).Where(turn => turn != null).ToList();
+        var chat = validChat
+                .Select(turn => new ChatTurn { Role = DiagnosticExport.Redact(turn.Role ?? "assistant"), Text = DiagnosticExport.Redact(turn.Text ?? "") })
                 .TakeLast(MaxChatTurns)
                 .ToList();
 
         var decisions = record.Decisions == null
             ? new List<DecisionLogEntry>()
             : record.Decisions
-                .Select(entry => entry with { reason = DiagnosticExport.Redact(entry.reason) })
+                .Where(entry => entry != null && entry.run_id == record.RunId)
+                .Select(entry => entry with
+                {
+                    timestamp = DiagnosticExport.Redact(entry.timestamp ?? ""),
+                    source = DiagnosticExport.Redact(entry.source ?? "unknown"),
+                    action = DiagnosticExport.Redact(entry.action ?? "unknown"),
+                    reason = DiagnosticExport.Redact(entry.reason),
+                    state_fingerprint = DiagnosticExport.Redact(entry.state_fingerprint),
+                    confidence = entry.confidence is >= 0 and <= 1 ? entry.confidence : null
+                })
                 .TakeLast(MaxDecisions)
                 .ToList();
 
         return record with
         {
-            UpdatedAt = DateTimeOffset.UtcNow.ToString("O"),
+            Character = DiagnosticExport.Redact(record.Character),
+            ChatTrimmed = (int)Math.Min(int.MaxValue, (long)Math.Max(0, record.ChatTrimmed) + Math.Max(0, validChat.Count - MaxChatTurns)),
             Chat = chat,
-            Decisions = decisions
+            Decisions = decisions,
+            Strategy = record.Strategy == null ? null : NormalizeStrategy(record.Strategy)
         };
     }
 
-    /// <summary>Moves a corrupt file aside and restores the last-good backup when one exists.</summary>
-    private PlaySessionRecord? RecoverFromCorrupt(string path)
+    private static PlayStrategy NormalizeStrategy(PlayStrategy strategy) => strategy with
+    {
+        Posture = DiagnosticExport.Redact(strategy.Posture ?? "balanced"),
+        Instructions = DiagnosticExport.Redact(strategy.Instructions ?? ""),
+        Source = DiagnosticExport.Redact(strategy.Source ?? PlayStrategy.DefaultSource),
+        UpdatedAt = DiagnosticExport.Redact(strategy.UpdatedAt ?? PlayStrategy.DefaultTimestamp),
+        OptionHints = (strategy.OptionHints ?? new Dictionary<string, string>())
+            .GroupBy(pair => DiagnosticExport.Redact(pair.Key))
+            .ToDictionary(group => group.Key, group => DiagnosticExport.Redact(group.Last().Value ?? ""), StringComparer.Ordinal)
+    };
+
+    /// <summary>Copies a corrupt file aside and restores the last-good backup when one exists.</summary>
+    private PlaySessionRecord? RecoverFromCorrupt(string path, string runId)
     {
         try
         {
             var backup = path + ".bak";
             if (File.Exists(path))
             {
-                var stamp = DateTime.UtcNow.ToString("yyyyMMddHHmmssfff");
+                var stamp = DateTime.UtcNow.ToString("yyyyMMddHHmmssfff") + "-" + Guid.NewGuid().ToString("N")[..8];
                 File.Copy(path, path + ".corrupt-" + stamp, overwrite: false);
             }
 
             if (File.Exists(backup))
             {
                 var record = JsonSerializer.Deserialize<PlaySessionRecord>(File.ReadAllText(backup), JsonOptions);
-                if (record != null)
+                if (record?.RunId == runId)
                 {
                     File.Copy(backup, path, overwrite: true);
                     return Normalize(record);
                 }
             }
         }
-        catch (Exception ex) when (ex is IOException or JsonException or UnauthorizedAccessException)
+        catch (Exception ex) when (ex is IOException or JsonException or UnauthorizedAccessException or ArgumentException or NotSupportedException)
         {
         }
 
@@ -238,10 +281,44 @@ internal sealed class PlaySessionStore
         }
     }
 
+    // An old "Seed.json" can be the same Windows path as the new canonical "seed.json".
+    // Preserve another run in its own canonical location before replacing either legacy copy.
+    private bool PreserveLegacyCollision(string path, string runId)
+    {
+        foreach (var source in new[] { path, path + ".bak" })
+        {
+            if (!File.Exists(source)) continue;
+            PlaySessionRecord? previous;
+            try { previous = JsonSerializer.Deserialize<PlaySessionRecord>(File.ReadAllText(source), JsonOptions); }
+            catch (JsonException) { continue; }
+            if (previous == null || previous.RunId == runId || !IsPersistable(previous.RunId)) continue;
+            var target = PathFor(previous.RunId);
+            if (string.Equals(path, target, StringComparison.OrdinalIgnoreCase)) return false;
+            if (File.Exists(target))
+            {
+                try
+                {
+                    if (JsonSerializer.Deserialize<PlaySessionRecord>(File.ReadAllText(target), JsonOptions)?.RunId == previous.RunId) continue;
+                }
+                catch (JsonException) { }
+            }
+            WriteAtomic(target, Normalize(previous));
+        }
+        return true;
+    }
+
     private string PathFor(string runId)
     {
-        // A run seed is opaque game data; keep it from becoming a path by stripping separators.
-        var safe = string.Concat(runId.Select(c => c is '/' or '\\' or ':' ? '_' : c));
-        return System.IO.Path.Combine(_directory, safe + ".json");
+        // Hash case-sensitive, reserved, invalid and overlong seeds instead of replacing characters.
+        // Ordinary lowercase names stay compatible with earlier versions and their backups.
+        var reserved = runId is "con" or "prn" or "aux" or "nul"
+            || (runId.Length == 4 && (runId.StartsWith("com") || runId.StartsWith("lpt")) && char.IsDigit(runId[3]));
+        var simple = runId.Length <= 96 && !reserved
+            && runId.All(c => c is >= 'a' and <= 'z' or >= '0' and <= '9' or '_' or '-');
+        var name = simple ? runId : "@" + Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(runId))).ToLowerInvariant();
+        return System.IO.Path.Combine(_directory, name + ".json");
     }
+
+    private string LegacyPathFor(string runId) => System.IO.Path.Combine(_directory,
+        string.Concat(runId.Select(c => c is '/' or '\\' or ':' ? '_' : c)) + ".json");
 }

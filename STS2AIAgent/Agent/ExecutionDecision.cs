@@ -49,6 +49,12 @@ internal sealed record ExecutionDecision
     /// <summary>Optional per-option probabilities keyed by <see cref="JevOption.Id"/>; null when unscored.</summary>
     public IReadOnlyDictionary<string, double>? Probabilities { get; init; }
 
+    /// <summary>Optional Jev danger score on its 0..4 ordinal scale, not action confidence.</summary>
+    public double? DangerScore { get; init; }
+
+    /// <summary>Total Jev elapsed milliseconds, including bounded 429 backoff. Null if Jev was never asked.</summary>
+    public long? JevElapsedMilliseconds { get; init; }
+
     /// <summary>Model usage for this turn; null for a pure-Jev turn that never called the provider.</summary>
     public LlmUsage? Usage { get; init; }
 

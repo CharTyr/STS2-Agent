@@ -1807,7 +1807,7 @@ Invoke-RestMethod -Uri 'http://127.0.0.1:8080/teammate/control' -Method POST -Co
 双层决策模式（dual-layer）的策略面。开启后由 TypeSafe Jev 模型逐动作执行，LLM 只做战略规划；这两条路由是外部规划器（planner）读取与调整 Jev 当前所遵循策略的入口。游戏内规划器与外部 MCP 客户端写的是同一个 `StrategyStore`，因此两条路径是同一种体验。
 
 - 鉴权：仅 loopback（非本机 403 `local_only`），与其他本机控制端点同级
-- `GET /strategy` 响应 `data.strategy`（当前策略：`posture` / `instructions` / `option_hints` / `updated_at` / `source`）、`data.dual_layer`（本实例的双层开关状态，host 读单人开关、companion 读多人开关）、`data.jev_configured`（Jev 的 base URL 与 key 是否已配齐）
+- `GET /strategy` 响应保留 `data.strategy`（当前策略：`posture` / `instructions` / `option_hints` / `updated_at` / `source`）、`data.dual_layer`（本实例的双层开关状态，host 读单人开关、companion 读多人开关）、`data.jev_configured`（Jev 的 base URL 与 key 是否已配齐）；新增只读 `data.run_summary`（与 `get_run_summary` 的 `run` 相同的原始状态摘要；无有效 `run_id` 时为 `null`）、`data.screen`（当前原始状态屏幕名，可空）、`data.recent_jev_decisions`（同一 `run_id` 最多 5 个 Jev 已接受决策，按时间从旧到新，仅 `id` / `timestamp` / `action` / `confidence`）、`data.confidence_trend`（有信心样本时含 `count`、`average`、`latest`、`direction`；否则 `null`）。`direction` 为 `rising` / `falling` / `steady`，单个样本为 `insufficient_data`；该趋势按最多 5 个近期 Jev 决策中具有 `confidence` 的样本计算。无局时决策列表为空，不借用上一局。此响应由与原生 MCP `get_planner_briefing` 相同的 C# 投影生成，Python MCP 直接转发 `/strategy` 的 `data`，不另行跨帧读取 `/state`/`/decisions`。不包含理由、提示词、Jev key 或请求体。
 - `POST /strategy` 请求体 `{"strategy": {...}}`（或直接是策略对象）；`posture` / `instructions` / `option_hints` 均可选，省略的字段保留当前值。`source` 会被记为 `mcp`、`updated_at` 记为当前时间。策略对象无法解析时返回 400 `invalid_request`
 - 策略字段约定：`posture` 是整体倾向（如 `aggressive` / `defensive` / `balanced`）；`instructions` 是长期指导，**不要**点名具体卡牌下标或目标——它们每帧都变；`option_hints` 是按选项类别的微调
 
@@ -1826,20 +1826,43 @@ Invoke-RestMethod -Uri 'http://127.0.0.1:8080/teammate/control' -Method POST -Co
       "source": "mcp"
     },
     "dual_layer": true,
-    "jev_configured": true
+    "jev_configured": true,
+    "run_summary": {
+      "character_id": "IRONCLAD",
+      "character_name": "Ironclad",
+      "floor": 5,
+      "act_id": "ACT_1",
+      "boss_id": "THE_GUARDIAN",
+      "ascension": 0,
+      "current_hp": 63,
+      "max_hp": 80,
+      "gold": 110,
+      "max_energy": 3,
+      "deck_size": 12,
+      "relic_count": 2,
+      "potion_count": 2,
+      "potions_occupied": 1,
+      "party": []
+    },
+    "screen": "COMBAT",
+    "recent_jev_decisions": [
+      {"id": 42, "timestamp": "2026-10-05T10:14:59Z", "action": "play_card", "confidence": 0.82}
+    ],
+    "confidence_trend": {"count": 1, "average": 0.82, "latest": 0.82, "direction": "insufficient_data"}
   }
 }
 ```
 
 ---
 
-## `POST /companion/control` 与 `POST /companion/message`
+## `GET /companion/jev`、`POST /companion/control` 与 `POST /companion/message`
 
 AI 队友实例上的受控端点，由宿主进程在本地调用，普通玩家窗口不使用。
 
 - 仅在 `companion` 实例、loopback，且请求头 `X-STS2-Companion-Session` 与实例持有的会话令牌一致时可用；否则返回 403 `companion_session_required`
 - 令牌由宿主拉起队友进程时生成，通过环境变量传给队友，只存在于本机双开场景
-- `POST /companion/control`：请求体 `{"running": true|false}`，响应 `data.phase`；队友被远程暂停后不会再自行启动
+- `GET /companion/jev`：无需请求体；响应 `data` 为 `CompanionJevSnapshot`，包含 `choice`、`probabilities`、`danger`、`latency`（当前队友对应 Jev 面板的可空文本；尚无读数时为空态）和 `dual_layer_coop_enabled`（当前队友生效的多人双层开关，布尔值）。仅返回队友实例读数，不返回 API Key、会话令牌、设置全文或上一实例的伪读数；该端点不是通用公开健康检查，仅供持令牌宿主轮询
+- `POST /companion/control`：旧请求体 `{"running": true|false}` 仍然有效，响应 `data.phase`；队友被远程暂停后不会再自行启动。另可单独传 `{"settings": {"dual_layer_coop_enabled": true, "jev_base_url": "...", "jev_api_key": "...", "jev_model": "...", "jev_confidence_threshold": 0.6, "jev_request_timeout_seconds": 90}}`，仅将这些白名单字段同步给当前队友并在下一回合生效；不得与 `running` 同时传。响应仅含 `data.phase` / `data.settings_applied` / `data.dual_layer_coop_enabled`，**不会回显 key**
 - `POST /companion/message`：请求体 `{"message": "..."}`（1–2000 字符），响应 `data.reply` 为队友的回复
 
 ### `POST /companion/message` 的带类型信号（可选）

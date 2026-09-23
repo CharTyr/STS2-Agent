@@ -249,7 +249,7 @@ internal static class JevClientTests
         }
 
         Assert.NotNull(caught);
-        Assert.Equal(JevExceptionKind.Server, caught!.Kind);
+        Assert.Equal(JevExceptionKind.Network, caught!.Kind);
         Assert.Equal<int?>(500, caught.StatusCode);
         Assert.Equal(1, handler.RequestCount);
     }

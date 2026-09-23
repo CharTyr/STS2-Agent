@@ -44,9 +44,9 @@ internal sealed partial class AgentOverlayHost
     /// empty state is a card, not a line of grey text: a first-run player opening the panel got an
     /// empty box and no idea what to type. It disappears the moment a turn exists.
     ///
-    /// There is no "let the AI act" switch: the conversation is read-only, and acting is what the
-    /// auto-play and single-step controls are for. A message that itself asks for a move still
-    /// releases that one turn -- see <c>PlayIntent</c> -- which is the phrase the hint names.
+    /// There is no "let the AI act" switch: idle conversation is read-only unless the player
+    /// explicitly asks it to take one turn (PlayIntent). During autoplay, messages guide a later
+    /// decision; they never execute a second action concurrently.
     /// </remarks>
     private Control BuildChatCard()
     {
@@ -55,7 +55,7 @@ internal sealed partial class AgentOverlayHost
         _chatEmpty = UiFactory.Card(
             Loc.T("和 AI 聊聊这局"),
             UiFactory.Wrapped(Loc.T("问它这手牌怎么打、这个遗物值不值得买、刚才那步为什么那么出。")),
-            UiFactory.Wrapped(Loc.T("对话默认只读；要它动手，用上方的「开始自动游玩」或「单步」，或者明确说「帮我打」。")));
+            UiFactory.Wrapped(Loc.T("闲聊默认只读；明确说「帮我打」才代打一手。自动游玩中发消息会影响后续决策，不会并发出牌。")));
         column.AddChild(_chatEmpty);
 
         _chatLog = UiFactory.Rich();

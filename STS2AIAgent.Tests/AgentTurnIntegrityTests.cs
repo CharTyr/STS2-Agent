@@ -5,7 +5,7 @@ using STS2AIAgent.Llm;
 
 namespace STS2AIAgent.Tests;
 
-internal static class AgentTurnIntegrityTests
+internal static partial class AgentTurnIntegrityTests
 {
     private static LlmCompletion Act(string args = "{\"action\":\"play_card\",\"card_index\":0}") => new()
     {

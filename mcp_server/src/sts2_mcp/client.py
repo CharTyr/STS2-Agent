@@ -130,8 +130,13 @@ class Sts2Client(Sts2ActionMethods):
         return self._request("GET", "/decision-snapshot")
 
     def get_strategy(self) -> dict[str, Any]:
-        """`GET /strategy`: the current dual-layer play strategy plus the dual-layer and
-        Jev-configured flags. Local-only on the mod side."""
+        """`GET /strategy`: the authoritative planner briefing from the mod.
+
+        The mod supplies strategy, dual_layer and jev_configured, and on newer builds also
+        run_summary, screen, recent_jev_decisions and confidence_trend. Keep its response
+        unchanged: a sidecar-side /state or /decisions read could refer to another frame/run.
+        Local-only on the mod side.
+        """
         return self._request("GET", "/strategy")
 
     def update_strategy(

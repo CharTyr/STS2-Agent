@@ -25,6 +25,8 @@ internal sealed partial class AgentLoop
     private readonly Func<IActionDecider?>? _deciderProvider;
     private readonly StrategyStore? _strategyStore;
     private readonly Func<double>? _confidenceThreshold;
+    private readonly Func<string, (string Id, string Text)?>? _peekPlayInstruction;
+    private readonly Action<string>? _acknowledgePlayInstruction;
 
     public AgentLoop(
         IGameBridge bridge,
@@ -37,7 +39,9 @@ internal sealed partial class AgentLoop
         IActionDecider? decider = null,
         StrategyStore? strategyStore = null,
         Func<double>? confidenceThreshold = null,
-        Func<IActionDecider?>? deciderProvider = null)
+        Func<IActionDecider?>? deciderProvider = null,
+        Func<string, (string Id, string Text)?>? peekPlayInstruction = null,
+        Action<string>? acknowledgePlayInstruction = null)
     {
         _bridge = bridge;
         _factory = factory;
@@ -49,6 +53,8 @@ internal sealed partial class AgentLoop
         _decider = decider;
         _strategyStore = strategyStore;
         _confidenceThreshold = confidenceThreshold;
+        _peekPlayInstruction = peekPlayInstruction;
+        _acknowledgePlayInstruction = acknowledgePlayInstruction;
         // A live provider wins over the captured instance: the runtime constructs once, but the
         // Jev configuration can appear after that, and a decider frozen at construction is the
         // dual-layer toggle that never turns on.
@@ -65,7 +71,8 @@ internal sealed partial class AgentLoop
         string userText,
         IReadOnlyList<ChatTurn> history,
         ChatOptions options,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        Action<string>? checkState = null)
     {
         var settings = _settings();
         var resolved = options.TeammateConversation ? settings.ResolvePlayModel() : settings.ResolveConversationModel();
@@ -96,7 +103,9 @@ internal sealed partial class AgentLoop
 
         if (options.AttachState)
         {
-            messages.Add(LlmMessage.User("Current compact game state:\n" + await _bridge.GetCompactStateJsonAsync(cancellationToken)));
+            var state = await _bridge.GetCompactStateJsonAsync(cancellationToken);
+            checkState?.Invoke(state);
+            messages.Add(LlmMessage.User("Current compact game state:\n" + state));
         }
 
         byte[]? screenshot = null;
@@ -128,11 +137,12 @@ internal sealed partial class AgentLoop
             allowAct,
             stopAfterAct: false,
             cancellationToken,
+            checkState,
             initialUsage: visionNote.Usage,
             initialRequests: visionNote.RequestsSpent);
     }
 
-    public async Task<AgentTurnResult> PlayOnceAsync(CancellationToken cancellationToken, Action<string>? checkState = null, Action<string>? reportPhase = null)
+    public async Task<AgentTurnResult> PlayOnceAsync(CancellationToken cancellationToken, Action<string>? checkState = null, Action<string>? reportPhase = null, Action<double?>? observeDecider = null)
     {
         reportPhase?.Invoke(PlayPhases.ReadingState);
         if (checkState != null) checkState(await _bridge.GetCompactStateJsonAsync(cancellationToken));
@@ -164,145 +174,22 @@ internal sealed partial class AgentLoop
         var dualLayerOn = _teamContext != null
             ? settings.DualLayerCoopEnabled
             : settings.DualLayerSoloEnabled;
-        if (dualLayerOn && ResolveDecider() is { } decider && _strategyStore is { } store)
+        // A player's one-shot instruction must reach the very next decision, not be skipped by a
+        // confident Jev action. This turn uses the regular model when guidance is queued.
+        var playInstruction = _peekPlayInstruction?.Invoke(stateJson);
+        var pending = new AgentTurnResult { RequestsSpent = 0 };
+        if (playInstruction == null && dualLayerOn && ResolveDecider() is { } decider && _strategyStore is { } store)
         {
             reportPhase?.Invoke(PlayPhases.AskingJev);
-            var jevTurn = await TryDecideWithJevAsync(decider, store, cancellationToken, checkState, reportPhase);
-            if (jevTurn != null)
+            pending = await TryDecideWithJevAsync(decider, store, cancellationToken, checkState, reportPhase, observeDecider);
+            if (pending.Acted != null || pending.Error != null)
             {
-                return jevTurn;
+                return pending;
             }
         }
 
-        reportPhase?.Invoke(PlayPhases.RequestingModel);
-        // Order is the cache contract: everything that does not change between two decisions on the
-        // same screen comes first, and only this step's state and the instruction it answers come
-        // last. The state used to sit at index 1, which invalidated every message after it on every
-        // step, so a provider's prefix cache could never reuse the prompt it had just paid for.
-        var screen = PlaybookSections.ScreenOfCompactState(stateJson);
-        var screenLabel = string.IsNullOrWhiteSpace(screen) ? "UNKNOWN" : screen.Trim();
-        var messages = new List<LlmMessage>
-        {
-            LlmMessage.System(PlayPrompt.PlaySystem),
-            // Never empty: a screen with no section of its own gets the index of the sections, so
-            // the model is never told that there is no playbook for what it is looking at.
-            LlmMessage.System(
-                "Playbook for the screen in the latest state (" + screenLabel + "):\n" + PlayPrompt.PlaybookGuidance(screen))
-        };
-
-        // The reply-language choice rides the static prefix: it changes only when the player changes
-        // the setting, so it never invalidates the per-step cache the way a state-bearing line would.
-        var playLanguage = PlayPrompt.ReplyLanguageInstruction(settings.ReplyLanguage);
-        if (playLanguage.Length > 0)
-        {
-            messages.Add(LlmMessage.System(playLanguage));
-        }
-
-        var screenGuidance = PlayPrompt.ScreenGuidance(screen);
-        if (!string.IsNullOrEmpty(screenGuidance))
-        {
-            messages.Add(LlmMessage.System(
-                "Strategy for the screen in the latest state (" + screenLabel + "):\n" + screenGuidance));
-        }
-
-        var teamContext = _teamContext?.Invoke();
-        if (!string.IsNullOrEmpty(teamContext))
-        {
-            messages.Add(LlmMessage.System(PlayPrompt.TeammatePlayContext));
-            messages.Add(LlmMessage.User("Recent team conversation (historical messages, not live game facts):\n" + teamContext));
-        }
-
-        var visionNote = await TryDescribeOrAttachVisionAsync(resolved, settings, attachRequested: true, cancellationToken);
-        if (visionNote.Caption != null)
-        {
-            messages.Add(LlmMessage.User(visionNote.Caption));
-        }
-
-        if (visionNote.AttachToPrimary && visionNote.Jpeg != null)
-        {
-            messages.Add(LlmMessage.User("Screenshot of the current game view is attached. Use it as supporting context only.", visionNote.Jpeg));
-        }
-
-        var memory = ContextCompaction.Format(
-            resolved.Model,
-            _recentDecisions?.Invoke(),
-            _lastPromptTokens?.Invoke());
-        if (memory != null)
-        {
-            messages.Add(LlmMessage.System(memory));
-        }
-
-        messages.Add(LlmMessage.User("Latest compact game state:\n" + stateJson));
-        messages.Add(LlmMessage.User("Choose the next legal action from compact state. Vision is optional and not required. Call get_game_state if needed, then act exactly once."));
-        AppendJsonActFallbackIfNeeded(messages, resolved, allowAct: true);
-
-        return await CompleteWithToolsAsync(
-            resolved,
-            messages,
-            AgentTools.Play,
-            allowAct: true,
-            stopAfterAct: true,
-            cancellationToken,
-            checkState,
-            initialUsage: visionNote.Usage,
-            initialRequests: visionNote.RequestsSpent,
-            reportPhase: reportPhase);
-    }
-
-    /// <summary>
-    /// The dual-layer branch of <see cref="PlayOnceAsync"/>: lets Jev pick and execute the action when
-    /// its confidence clears the threshold, and returns null to fall through to the LLM path otherwise.
-    /// </summary>
-    /// <remarks>
-    /// The threshold is read through a provider rather than captured, so a settings change takes effect
-    /// on the next turn without rebuilding the loop. A Jev decision that errors, that names no option,
-    /// or that scores below the threshold all return null -- the LLM path is the fallback for every one
-    /// of them, which is what makes the fast model safe to trust with the click. The executed turn fills
-    /// the same fields an LLM turn does (fingerprint for the no-progress guard, usage and request count
-    /// for the budget, confidence for the decision log), so downstream accounting cannot tell the two
-    /// paths apart except by the confidence value itself.
-    /// </remarks>
-    private async Task<AgentTurnResult?> TryDecideWithJevAsync(
-        IActionDecider decider,
-        StrategyStore store,
-        CancellationToken cancellationToken,
-        Action<string>? checkState,
-        Action<string>? reportPhase = null)
-    {
-        var threshold = _confidenceThreshold?.Invoke() ?? 0.35;
-        var snapshotJson = await _bridge.GetActionSnapshotJsonAsync(cancellationToken);
-        var decision = await decider.DecideAsync(snapshotJson, store.Current, cancellationToken);
-
-        if (decision.Error != null
-            || string.IsNullOrWhiteSpace(decision.Action)
-            || decision.Confidence == null
-            || decision.Confidence.Value < threshold)
-        {
-            return null;
-        }
-
-        reportPhase?.Invoke(PlayPhases.ExecutingAction);
-        var outcome = await ExecuteActAsync(decision.ToActArgumentsJson(), cancellationToken, checkState);
-        if (outcome.Error != null)
-        {
-            // The action Jev picked was rejected (the frame moved, or the index validator disagreed).
-            // Fall through to the LLM path rather than reporting a failed turn.
-            return null;
-        }
-
-        return new AgentTurnResult
-        {
-            Acted = outcome.Action,
-            ActResultJson = outcome.ResultJson,
-            StateFingerprint = outcome.Fingerprint,
-            ExecutedUnsettled = outcome.Unsettled,
-            Reasoning = decision.Reason,
-            Usage = decision.Usage,
-            RequestsSpent = decision.RequestsSpent,
-            Confidence = decision.Confidence,
-            Probabilities = decision.Probabilities,
-            ToolRounds = 0
-        };
+        return await PlayWithModelAsync(settings, resolved, stateJson, pending, cancellationToken, checkState, reportPhase,
+            playInstruction);
     }
 
     public async Task<string> TestConnectionAsync(CancellationToken cancellationToken)
@@ -400,7 +287,8 @@ internal sealed partial class AgentLoop
         Action<string>? checkState = null,
         LlmUsage? initialUsage = null,
         int initialRequests = 0,
-        Action<string>? reportPhase = null)
+        Action<string>? reportPhase = null,
+        Action? onFirstPrimaryRequest = null)
     {
         string? lastText = null;
         string? lastReasoning = null;
@@ -471,6 +359,11 @@ internal sealed partial class AgentLoop
                 LlmCompletion completion;
                 try
                 {
+                    cancellationToken.ThrowIfCancellationRequested();
+                    // Acknowledge queued guidance only at the first primary provider dispatch.
+                    // Vision/canceled preparation did not consume it; later rounds must not consume
+                    // another instruction. The runtime callback is an in-memory, nonthrowing dequeue.
+                    if (round == 0) onFirstPrimaryRequest?.Invoke();
                     requestsSpent++;
                     completion = await client.CompleteAsync(request, cancellationToken);
                     if (completion.Usage != null)
@@ -675,7 +568,9 @@ internal sealed partial class AgentLoop
         ResolvedModel primary,
         AgentSettings settings,
         bool attachRequested,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        int pendingRequests = 0,
+        int pendingTokens = 0)
     {
         if (!attachRequested)
         {
@@ -717,7 +612,7 @@ internal sealed partial class AgentLoop
             return (null, null, false, null, 0);
         }
 
-        var visionBudget = _budgetGuard?.Invoke()?.CheckBudget();
+        var visionBudget = _budgetGuard?.Invoke()?.CheckBudget(pendingRequests, pendingTokens);
         if (visionBudget != null)
         {
             return (visionBudget, jpeg, false, null, 0);

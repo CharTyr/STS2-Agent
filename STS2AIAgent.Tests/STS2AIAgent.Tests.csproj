@@ -36,11 +36,15 @@
     <Compile Include="..\STS2AIAgent\Multiplayer\TeamIntent.cs" Link="Multiplayer\TeamIntent.cs" />
     <Compile Include="..\STS2AIAgent\Multiplayer\TeammateStatus.cs" Link="Multiplayer\TeammateStatus.cs" />
     <Compile Include="..\STS2AIAgent\Multiplayer\CompanionConnection.cs" Link="Multiplayer\CompanionConnection.cs" />
+    <Compile Include="..\STS2AIAgent\Multiplayer\CompanionSettingsPatch.cs" Link="Multiplayer\CompanionSettingsPatch.cs" />
+    <Compile Include="..\STS2AIAgent\Multiplayer\CompanionJevSnapshot.cs" Link="Multiplayer\CompanionJevSnapshot.cs" />
+    <Compile Include="..\STS2AIAgent\Ui\PlayModeSwitchPolicy.cs" Link="Ui\PlayModeSwitchPolicy.cs" />
     <Compile Include="..\STS2AIAgent\Config\*.cs" Link="Config\%(Filename)%(Extension)" />
     <Compile Include="..\STS2AIAgent\Llm\*.cs" Link="Llm\%(Filename)%(Extension)" />
     <Compile Include="..\STS2AIAgent\Agent\AgentLoop.cs" Link="Agent\AgentLoop.cs" />
     <Compile Include="..\STS2AIAgent\Agent\AgentLoop.Arguments.cs" Link="Agent\AgentLoop.Arguments.cs" />
     <Compile Include="..\STS2AIAgent\Agent\AgentLoop.Probes.cs" Link="Agent\AgentLoop.Probes.cs" />
+    <Compile Include="..\STS2AIAgent\Agent\AgentLoop.Decision.cs" Link="Agent\AgentLoop.Decision.cs" />
     <Compile Include="..\STS2AIAgent\Agent\PlayPhases.cs" Link="Agent\PlayPhases.cs" />
     <Compile Include="..\STS2AIAgent\Agent\AgentTurnCanceledException.cs" Link="Agent\AgentTurnCanceledException.cs" />
     <Compile Include="..\STS2AIAgent\Agent\CompletionErrors.cs" Link="Agent\CompletionErrors.cs" />
@@ -68,6 +72,8 @@
     <Compile Include="..\STS2AIAgent\Agent\JevExecutionDecider.cs" Link="Agent\JevExecutionDecider.cs" />
     <Compile Include="..\STS2AIAgent\Agent\PlaySessionRecord.cs" Link="Agent\PlaySessionRecord.cs" />
     <Compile Include="..\STS2AIAgent\Agent\PlaySessionStore.cs" Link="Agent\PlaySessionStore.cs" />
+    <Compile Include="..\STS2AIAgent\Agent\PlaySessionMemory.cs" Link="Agent\PlaySessionMemory.cs" />
+    <Compile Include="..\STS2AIAgent\Agent\PlannerBriefingProjection.cs" Link="Agent\PlannerBriefingProjection.cs" />
     <!--
       A glob, not one file: NativeMcpServer is a partial class (transport in the base file, tool
       execution in NativeMcpServer.Tools.cs). Naming the base file alone compiled the class without

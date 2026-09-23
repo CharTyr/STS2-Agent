@@ -10,7 +10,7 @@ namespace STS2AIAgent.Tests;
 /// Each test runs in a fresh temp directory so the files are real but isolated, and the directory is
 /// deleted afterwards. No game, no network -- the store is pure file IO over a DTO.
 /// </remarks>
-internal static class PlaySessionStoreTests
+internal static partial class PlaySessionStoreTests
 {
     public static void SaveThenLoadRoundTripsEveryField()
     {
@@ -41,7 +41,7 @@ internal static class PlaySessionStoreTests
             Assert.Equal(2, loaded.Chat!.Count);
             Assert.Equal("先打哪张？", loaded.Chat[0].Text);
             Assert.Single(loaded.Decisions!);
-            Assert.Equal("play_card", loaded.Decisions[0].action);
+            Assert.Equal("play_card", loaded.Decisions![0].action);
             Assert.Equal(0.9, loaded.Decisions[0].confidence);
             Assert.NotNull(loaded.Strategy);
             Assert.Equal("aggressive", loaded.Strategy!.Posture);

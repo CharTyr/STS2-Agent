@@ -110,6 +110,17 @@ internal static class TestRunner
 
     private static IEnumerable<(string Name, Func<Task> Body)> AllTests()
     {
+        foreach (var test in AuditRegressionTests.All()) yield return test;
+        foreach (var test in AuditRemediationJevTests.All()) yield return test;
+        foreach (var test in AuditRemediationSessionTests.All()) yield return test;
+        yield return ("ModeSwitch.ConfirmedPause", () => Task.Run(AuditRemediationUiTests.ModeSwitchRequiresConfirmedPause));
+        yield return ("Companion.JevPatchOnly", () => Task.Run(AuditRemediationUiTests.CompanionPatchOnlyChangesJevFields));
+        yield return ("Companion.InvalidPatch", () => Task.Run(AuditRemediationUiTests.CompanionPatchRejectsUnsafeValuesBeforeMutation));
+        yield return ("Companion.SafeStatus", () => Task.Run(AuditRemediationUiTests.CompanionStatusDoesNotReturnKey));
+        yield return ("Briefing.FiltrationAndRedaction", () => Task.Run(AuditRemediationBriefingTests.Build_FiltersOldRunsAndRedactsDecisionDetails));
+        yield return ("Briefing.UnknownRunDoesNotFallback", () => Task.Run(AuditRemediationBriefingTests.Build_UnknownRunNeverFallsBackToOldDecisions));
+        yield return ("Briefing.BoundedOrdering", () => Task.Run(AuditRemediationBriefingTests.Build_BoundsDecisionsAndKeepsTheirOrder));
+        yield return ("Briefing.UnscoredDoesNotInventTrend", () => Task.Run(AuditRemediationBriefingTests.Build_NoScoreDoesNotInventTrend));
         yield return ("FirstRun.DefaultUnverified", () => Task.Run(PlayerExperienceTests.DefaultSettingsAreUnverifiedAndNotInvitable));
         yield return ("FirstRun.VerifiedInvite", () => Task.Run(PlayerExperienceTests.VerifiedPlayFingerprintAllowsInvite));
         yield return ("FirstRun.KeyChangeInvalidates", () => Task.Run(PlayerExperienceTests.ChangingKeyInvalidatesVerification));
