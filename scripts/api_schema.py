@@ -79,7 +79,9 @@ ROUTE_RESPONSE_FIELDS = {
     "/session/control": ("phase", "play_running", "play_phase"),
     "/mcp/control": ("mcp_enabled",),
     "/teammate/control": ("phase", "play_running", "play_phase", "companion_auto_play"),
-    "/companion/control": ("phase",),
+    "/companion/control": ("phase", "settings_applied", "dual_layer_coop_enabled"),
+    # The source parser checks the settings-only projection; the legacy control response
+    # with only phase is still explicitly modeled as a separate oneOf branch.
     "/companion/message": ("reply",),
 }
 
@@ -622,8 +624,16 @@ def build_paths(
         },
         "/companion/control": {
             "post": ordinary_operation(
-                "Control the companion instance itself.", ref("CompanionControlResponseData"),
-                parameters=[companion_header], request_body=json_body(ref("SessionControlRequest")),
+                "Pause/resume the companion, or atomically update its allowlisted Jev settings.",
+                {"oneOf": [ref("CompanionControlResponseData"), ref("CompanionSettingsResponseData")]},
+                parameters=[companion_header],
+                request_body=json_body({"oneOf": [ref("SessionControlRequest"), ref("CompanionSettingsRequest")]}),
+            )
+        },
+        "/companion/jev": {
+            "get": ordinary_operation(
+                "Read a token-protected, non-secret Jev status from the active companion.",
+                ref("CompanionJevSnapshot"), parameters=[companion_header],
             )
         },
         "/companion/message": {
@@ -712,6 +722,7 @@ def build_components(
         "ActionRequest", "ActionResponsePayload", "DecisionLogEntry", "GameEventEnvelope",
         "HealthData", "ApiSuccessEnvelope", "ApiErrorEnvelope", "ApiError", "SessionControlRequest",
         "SessionControlResponseData", "McpControlResponseData", "TeammateControlResponseData", "CompanionControlResponseData",
+        "CompanionSettingsRequest", "CompanionSettingsPatch", "CompanionSettingsResponseData", "CompanionJevSnapshot",
         "CompanionMessageRequest", "CompanionMessageResponseData", "TeamIntent", "GameDataItem",
         "McpOpaqueRequest", "McpOpaqueResponse", "McpSessionReset",
         "PlayStrategy", "StrategyStatusData", "StrategyData", "StrategyUpdateRequest",
@@ -779,23 +790,74 @@ def build_components(
                 component_names,
             ),
             "CompanionControlResponseData": object_schema([CSharpProperty("phase", "string")], component_names),
+            "CompanionSettingsPatch": {
+                "type": "object", "description": "Token-protected settings-only allowlist; never returned in responses.",
+                "properties": {
+                    "dual_layer_coop_enabled": {"type": "boolean"},
+                    "jev_base_url": {"type": "string", "maxLength": 2048},
+                    "jev_api_key": {"type": "string", "maxLength": 4096, "writeOnly": True},
+                    "jev_model": {"type": "string", "maxLength": 256},
+                    "jev_confidence_threshold": {"type": "number", "minimum": 0, "maximum": 1},
+                    "jev_request_timeout_seconds": {"oneOf": [{"type": "integer", "minimum": 1, "maximum": 3600}, {"type": "null"}]},
+                },
+                "required": ["dual_layer_coop_enabled", "jev_base_url", "jev_api_key", "jev_model", "jev_confidence_threshold"],
+                "additionalProperties": False,
+            },
+            "CompanionSettingsRequest": {
+                "type": "object", "properties": {"settings": ref("CompanionSettingsPatch")},
+                "required": ["settings"], "additionalProperties": False,
+            },
+            "CompanionSettingsResponseData": object_schema(
+                [CSharpProperty("phase", "string"), CSharpProperty("settings_applied", "bool"), CSharpProperty("dual_layer_coop_enabled", "bool")],
+                component_names,
+            ),
+            "CompanionJevSnapshot": {
+                "type": "object", "properties": {
+                    "choice": {"type": ["string", "null"]},
+                    "probabilities": {"type": ["string", "null"]},
+                    "danger": {"type": ["string", "null"]},
+                    "latency": {"type": ["string", "null"]},
+                    "dual_layer_coop_enabled": {"type": "boolean"},
+                },
+                "required": ["choice", "probabilities", "danger", "latency", "dual_layer_coop_enabled"],
+                "additionalProperties": False,
+            },
             "CompanionMessageResponseData": object_schema([CSharpProperty("reply", "string")], component_names),
             "PlayStrategy": {
                 "description": "The dual-layer play strategy the Jev execution model follows.",
                 "type": "object",
                 "properties": {
                     "posture": {"type": "string"},
+                    "goal": {"type": "string", "maxLength": 400},
                     "instructions": {"type": "string"},
                     "option_hints": {"type": "object", "additionalProperties": {"type": "string"}},
+                    # Provenance the in-game planner records; POST /strategy ignores both.
+                    "plan_screen": {"type": "string", "readOnly": True},
+                    "plan_round": {"type": ["integer", "null"], "minimum": 0, "readOnly": True},
                     "updated_at": {"type": "string"},
                     "source": {"type": "string"},
                 },
                 "additionalProperties": True,
             },
-            "StrategyStatusData": object_schema(
-                [CSharpProperty("strategy", "PlayStrategy"), CSharpProperty("dual_layer", "bool"), CSharpProperty("jev_configured", "bool")],
-                component_names,
-            ),
+            "StrategyStatusData": {
+                "type": "object", "description": "Shared HTTP/native MCP run-scoped planner briefing.",
+                "properties": {
+                    "strategy": ref("PlayStrategy"), "dual_layer": {"type": "boolean"},
+                    "jev_configured": {"type": "boolean"},
+                    "run_summary": {"oneOf": [{"type": "object", "additionalProperties": True}, {"type": "null"}]},
+                    "screen": {"type": ["string", "null"]},
+                    "recent_jev_decisions": {"type": "array", "maxItems": 5, "items": {"type": "object", "properties": {
+                        "id": {"type": "integer"}, "timestamp": {"type": "string"},
+                        "action": {"type": "string"}, "confidence": {"type": ["number", "null"]}},
+                        "required": ["id", "timestamp", "action", "confidence"], "additionalProperties": False}},
+                    "confidence_trend": {"oneOf": [{"type": "object", "properties": {
+                        "count": {"type": "integer"}, "average": {"type": "number"},
+                        "latest": {"type": "number"}, "direction": {"type": "string"}},
+                        "required": ["count", "average", "latest", "direction"], "additionalProperties": False}, {"type": "null"}]},
+                },
+                "required": ["strategy", "dual_layer", "jev_configured", "run_summary", "screen", "recent_jev_decisions", "confidence_trend"],
+                "additionalProperties": True,
+            },
             "StrategyData": object_schema([CSharpProperty("strategy", "PlayStrategy")], component_names),
             "StrategyUpdateRequest": {
                 "type": "object",

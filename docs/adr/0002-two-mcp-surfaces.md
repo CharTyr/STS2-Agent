@@ -3,9 +3,14 @@
 状态：**已接受，暂不实施**（记录决定与触发条件）
 日期：2026-09-17
 
-> 后续补充（2026-09-21）：下表记录的是撰写当天的工具数。工具面此后继续增长——当前
+> 后续补充（2026-09-21）：下表记录的是撰写当天的工具数。工具面此后继续增长——当时
 > `guided` 档共 15 个工具，其中 14 个在两个面上同名同参数，`wait_for_event` 仍为 sidecar
 > 专属。实时清单以 `scripts/test-mcp-tool-profile.ps1` 的 `ESSENTIAL_TOOLS` 为准，本文不再复述。
+>
+> 再补充（2026-09-23）：双层规划工具 `get_planner_briefing` / `update_play_strategy` 加入后，
+> `guided` 为 17 个工具，16 个两面共有，`wait_for_event` 仍为 sidecar 专属。`update_play_strategy`
+> 的两面实现共用 `PlayStrategyUpdate` 合并（省略字段保留原值），印证了本 ADR 的「一份契约」原则：
+> 此前两面各写一份合并，HTTP 这一面把省略字段重置成了默认值。
 
 ## 背景
 

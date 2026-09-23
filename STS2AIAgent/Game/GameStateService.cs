@@ -205,6 +205,13 @@ internal static partial class GameStateService
         return payload;
     }
 
+    /// <summary>
+    /// The current screen name without building the whole state. The overlay reads this on every
+    /// runtime change and refresh tick; a full <see cref="BuildStatePayload"/> there stalled the game
+    /// thread and polluted the state-build timing samples for a single string.
+    /// </summary>
+    public static string CurrentScreenName() => ResolveScreen(ActiveScreenContext.Instance.GetCurrentScreen());
+
     public static AvailableActionsPayload BuildAvailableActionsPayload()
     {
         var currentScreen = ActiveScreenContext.Instance.GetCurrentScreen();

@@ -3,6 +3,7 @@ using System.Net.Http.Headers;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using STS2AIAgent.Agent;
 
 namespace STS2AIAgent.Llm;
 
@@ -25,7 +26,7 @@ namespace STS2AIAgent.Llm;
 internal sealed class JevClient : IJevClient
 {
     /// <summary>
-    /// Timeout applied to a <see cref="HttpClient"/> this class creates. Ten minutes would suit a chat
+    /// Timeout applied to each request using the dedicated shared connection pool. Ten minutes would suit a chat
     /// completion; Jev answers a fixed set of questions, so five is generous and still bounded.
     /// </summary>
     internal static readonly TimeSpan DefaultRequestTimeout = TimeSpan.FromMinutes(5);
@@ -55,7 +56,9 @@ internal sealed class JevClient : IJevClient
         DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull
     };
 
+    private static readonly HttpClient SharedHttp = new() { Timeout = Timeout.InfiniteTimeSpan };
     private readonly HttpClient _http;
+    private readonly TimeSpan? _requestTimeout;
 
     private readonly string _baseUrl;
 
@@ -71,8 +74,8 @@ internal sealed class JevClient : IJevClient
     /// <param name="apiKey">Bearer token. Secret: never logged, never rendered in an exception.</param>
     /// <param name="model">Default Jev model id, used when a request leaves its own blank.</param>
     /// <param name="httpClient">
-    /// Client to send through. An injected one is used as-is -- its timeout is the caller's business;
-    /// without one this class creates its own with <see cref="DefaultRequestTimeout"/>.
+    /// Optional transport. Its own timeout is left intact; an explicit requestTimeout adds a per-call
+    /// deadline. Without an injected transport, the shared pool uses DefaultRequestTimeout per attempt.
     /// </param>
     /// <param name="maxRetries">Retries after the first attempt. Zero disables retrying.</param>
     /// <param name="retryDelay">
@@ -95,7 +98,10 @@ internal sealed class JevClient : IJevClient
         _model = model ?? string.Empty;
         _maxRetries = maxRetries;
         _retryDelay = retryDelay ?? DefaultRetryDelay;
-        _http = httpClient ?? new HttpClient { Timeout = requestTimeout is { } t && t > TimeSpan.Zero ? t : DefaultRequestTimeout };
+        _http = httpClient ?? SharedHttp;
+        _requestTimeout = requestTimeout is { } t && t > TimeSpan.Zero
+            ? TimeSpan.FromMilliseconds(Math.Min(t.TotalMilliseconds, uint.MaxValue - 1d))
+            : httpClient == null ? DefaultRequestTimeout : null;
 
         // Reported here rather than on the first request, because an unconfigured client is a
         // configuration mistake and every call it makes would 401 anyway.
@@ -103,6 +109,11 @@ internal sealed class JevClient : IJevClient
         {
             throw new JevException("Jev base URL is empty.", JevExceptionKind.Config);
         }
+
+        if (!Uri.TryCreate(_baseUrl, UriKind.Absolute, out var uri)
+            || uri.Scheme is not ("http" or "https") || uri.UserInfo.Length != 0
+            || uri.Query.Length != 0 || uri.Fragment.Length != 0)
+            throw new JevException("Jev base URL must be an HTTP(S) service URL without credentials, query, or fragment.", JevExceptionKind.Config);
 
         if (_apiKey.Length == 0)
         {
@@ -184,7 +195,8 @@ internal sealed class JevClient : IJevClient
                         throw new JevException(
                             $"Jev rate limit persisted through {attempt - 1} retries.",
                             JevExceptionKind.RateLimited,
-                            RateLimitedStatus);
+                            RateLimitedStatus,
+                            retryAfterSeconds: Math.Clamp(seconds, 0, MaxRetryAfterSeconds));
                     }
 
                     if (response.IsSuccessStatusCode)
@@ -212,11 +224,13 @@ internal sealed class JevClient : IJevClient
         Func<HttpRequestMessage> requestFactory,
         CancellationToken cancellationToken)
     {
+        using var timeout = _requestTimeout.HasValue ? CancellationTokenSource.CreateLinkedTokenSource(cancellationToken) : null;
+        if (timeout != null) timeout.CancelAfter(_requestTimeout!.Value);
         HttpRequestMessage? request = null;
         try
         {
             request = requestFactory();
-            var response = await _http.SendAsync(request, HttpCompletionOption.ResponseContentRead, cancellationToken);
+            var response = await _http.SendAsync(request, HttpCompletionOption.ResponseContentRead, timeout?.Token ?? cancellationToken);
             return new AttemptOutcome(response, null);
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
@@ -227,11 +241,11 @@ internal sealed class JevClient : IJevClient
         }
         catch (OperationCanceledException ex)
         {
-            return new AttemptOutcome(null, new JevException("Jev request timed out.", ClassifyCancellation(ex), ex));
+            return new AttemptOutcome(null, new JevException("Jev request timed out.", timeout?.IsCancellationRequested == true ? JevExceptionKind.Network : ClassifyCancellation(ex)));
         }
         catch (HttpRequestException ex)
         {
-            return new AttemptOutcome(null, new JevException($"Jev request failed: {ex.Message}", JevExceptionKind.Network, ex));
+            return new AttemptOutcome(null, new JevException($"Jev request failed: {SafeText(ex.Message)}", JevExceptionKind.Network));
         }
         finally
         {
@@ -268,11 +282,13 @@ internal sealed class JevClient : IJevClient
             : null;
     }
 
-    private static async Task<JevException> ToFailureAsync(HttpResponseMessage response, CancellationToken cancellationToken)
+    private async Task<JevException> ToFailureAsync(HttpResponseMessage response, CancellationToken cancellationToken)
     {
         var status = (int)response.StatusCode;
         var body = Snapshot(await ReadBodyAsync(response, cancellationToken));
-        var kind = status is 401 or 403 ? JevExceptionKind.Config : JevExceptionKind.Server;
+        var kind = status >= 400 && status < 500 && status is not (408 or 429)
+            ? JevExceptionKind.Config
+            : JevExceptionKind.Network;
         return new JevException($"Jev HTTP {status}: {body}", kind, status);
     }
 
@@ -285,7 +301,7 @@ internal sealed class JevClient : IJevClient
         }
         catch (JsonException ex)
         {
-            throw new JevException($"Jev response was not valid JSON: {ex.Message}", JevExceptionKind.Server);
+            throw new JevException($"Jev response was not valid JSON: {SafeText(ex.Message)}", JevExceptionKind.Server);
         }
 
         if (response?.Answers is null)
@@ -338,9 +354,11 @@ internal sealed class JevClient : IJevClient
         return await response.Content.ReadAsStringAsync(cancellationToken) ?? string.Empty;
     }
 
-    private static string Snapshot(string body)
+    private string SafeText(string text) => DiagnosticExport.Redact(text.Replace(_apiKey, "[redacted]", StringComparison.Ordinal));
+
+    private string Snapshot(string body)
     {
-        var trimmed = body.Trim();
+        var trimmed = SafeText(body).Trim();
         return trimmed.Length > 400 ? trimmed[..400] + "..." : trimmed;
     }
 

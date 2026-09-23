@@ -137,8 +137,8 @@ internal static class AgentTools
         Tool("get_run_summary", "Summarise the current run in one call: character, floor, act, boss, HP, gold, and the deck/relic/potion counts."),
         Tool("get_scene_guidance", "Return the strategy rules that apply to the screen the game is on right now, plus how to drive it. Empty strategy on a screen with no strategic choice."),
         Tool("diff_state", "Compare two /state payloads and report the paths that differ. Use it to see exactly what an action changed.", DiffStateParameters),
-        Tool("get_planner_briefing", "Read the current dual-layer play strategy and whether the Jev execution layer is configured and enabled. In dual-layer mode an external planner uses this to see what the fast model is currently following before it adjusts the strategy."),
-        Tool("update_play_strategy", "Write a new dual-layer play strategy: a posture (aggressive/defensive/balanced), standing instructions, and optional per-option hints. The Jev execution model follows it on the next action. Only meaningful when dual-layer mode is on.", StrategyParameters)
+        Tool("get_planner_briefing", "Read the current strategy, dual-layer/Jev flags, current-run summary and screen, plus up to five same-run Jev choices and their confidence trend. Missing run or scores remain null/empty. Use this read-only snapshot before adjusting the play strategy."),
+        Tool("update_play_strategy", "Update the dual-layer play strategy the Jev executor follows from its next action; omitted fields keep their values. Only meaningful when dual-layer mode is on.", StrategyParameters)
     }.Concat(Play).ToArray();
 
     /// <summary>The parameters <c>update_play_strategy</c> accepts: the strategy fields, all optional.</summary>
@@ -148,8 +148,9 @@ internal static class AgentTools
         properties = new
         {
             posture = new { type = "string", description = "Overall bias: aggressive, defensive, or balanced." },
+            goal = new { type = "string", description = "One-sentence macro objective; leads each Jev choice." },
             instructions = new { type = "string", description = "Standing guidance the execution model follows. Do not name specific indices; they change every frame." },
-            option_hints = new { type = "object", description = "Optional per-option nudges keyed by option kind." }
+            option_hints = new { type = "object", description = "Nudges keyed by action kind (play_card, end_turn...), never an index." }
         }
     };
 

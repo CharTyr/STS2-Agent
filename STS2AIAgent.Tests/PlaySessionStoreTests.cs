@@ -10,7 +10,7 @@ namespace STS2AIAgent.Tests;
 /// Each test runs in a fresh temp directory so the files are real but isolated, and the directory is
 /// deleted afterwards. No game, no network -- the store is pure file IO over a DTO.
 /// </remarks>
-internal static class PlaySessionStoreTests
+internal static partial class PlaySessionStoreTests
 {
     public static void SaveThenLoadRoundTripsEveryField()
     {
@@ -41,7 +41,7 @@ internal static class PlaySessionStoreTests
             Assert.Equal(2, loaded.Chat!.Count);
             Assert.Equal("先打哪张？", loaded.Chat[0].Text);
             Assert.Single(loaded.Decisions!);
-            Assert.Equal("play_card", loaded.Decisions[0].action);
+            Assert.Equal("play_card", loaded.Decisions![0].action);
             Assert.Equal(0.9, loaded.Decisions[0].confidence);
             Assert.NotNull(loaded.Strategy);
             Assert.Equal("aggressive", loaded.Strategy!.Posture);
@@ -163,6 +163,32 @@ internal static class PlaySessionStoreTests
             var raw = File.ReadAllText(path);
             Assert.False(raw.Contains("sk-abcdefghijklmnopqrstuvwxyz0123456789", StringComparison.Ordinal),
                 "the raw file must not contain the API key");
+        });
+    }
+
+    public static void NewStrategyFieldsAreRedactedBeforeDisk()
+    {
+        WithStore(store =>
+        {
+            const string secret = "sk-abcdefghijklmnopqrstuvwxyz0123456789";
+            store.Save(new PlaySessionRecord
+            {
+                RunId = "seed-strategy-secret",
+                Chat = new List<ChatTurn>(),
+                Strategy = new PlayStrategy
+                {
+                    Goal = "Follow " + secret,
+                    PlanScreen = "screen " + secret,
+                    PlanRound = 3,
+                    Source = "llm"
+                }
+            });
+
+            var path = Directory.GetFiles(store.Directory, "seed-strategy-secret.json").Single();
+            var raw = File.ReadAllText(path);
+            Assert.False(raw.Contains(secret, StringComparison.Ordinal),
+                "new persisted planner fields must be redacted like the older instructions and hints");
+            Assert.Equal(3, store.Load("seed-strategy-secret")!.Strategy!.PlanRound);
         });
     }
 

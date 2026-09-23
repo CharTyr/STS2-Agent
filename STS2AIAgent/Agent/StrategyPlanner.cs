@@ -24,11 +24,15 @@ internal sealed class StrategyPlanner
     /// <summary>How many consecutive low-confidence decisions trigger a replan.</summary>
     private const int LowConfidenceStreakThreshold = 3;
 
+    /// <summary>Refresh once per this many decisions even when the screen has not changed.</summary>
+    internal const int PeriodicRefreshTurns = 10;
+
     private readonly ILlmClientFactory _factory;
     private readonly Func<AgentSettings> _settings;
     private readonly StrategyStore _store;
     private string? _lastContextKey;
     private int _lowConfidenceStreak;
+    private int _turnsSinceRefresh;
 
     public StrategyPlanner(ILlmClientFactory factory, Func<AgentSettings> settings, StrategyStore store)
     {
@@ -39,8 +43,9 @@ internal sealed class StrategyPlanner
 
     /// <summary>
     /// Notes the outcome of a Jev decision and reports whether the planner should run: on a context
-    /// change (a new screen/act/boss, keyed by the caller-supplied string) or after a streak of
-    /// low-confidence decisions. A confident decision resets the streak.
+    /// change (a new screen/act/boss, keyed by the caller-supplied string), after a streak of
+    /// low-confidence decisions, or every <see cref="PeriodicRefreshTurns"/> turns.
+    /// A confident decision resets only the low-confidence streak.
     /// </summary>
     public bool ShouldRefresh(string contextKey, double? confidence, double threshold)
     {
@@ -51,7 +56,15 @@ internal sealed class StrategyPlanner
             ? _lowConfidenceStreak + 1
             : 0;
 
-        return contextChanged || _lowConfidenceStreak >= LowConfidenceStreakThreshold;
+        if (_turnsSinceRefresh < PeriodicRefreshTurns) _turnsSinceRefresh++;
+        var refresh = contextChanged || _lowConfidenceStreak >= LowConfidenceStreakThreshold
+            || _turnsSinceRefresh >= PeriodicRefreshTurns;
+        if (refresh)
+        {
+            _lowConfidenceStreak = 0;
+            _turnsSinceRefresh = 0;
+        }
+        return refresh;
     }
 
     /// <summary>
@@ -61,8 +74,12 @@ internal sealed class StrategyPlanner
     /// leaves the store as it was, so the decider keeps a working strategy rather than losing it to
     /// a bad plan.
     /// </summary>
-    public async Task<(bool Adopted, LlmUsage? Usage)> RefreshAsync(string stateSummary, CancellationToken cancellationToken)
+    public async Task<(bool Adopted, LlmUsage? Usage)> RefreshAsync(string stateSummary, CancellationToken cancellationToken,
+        Func<CancellationToken, Task<bool>>? tryBeginRequest = null, long? expectedRevision = null,
+        IReadOnlyList<DecisionLogEntry>? recentDecisions = null, string? runId = null)
     {
+        cancellationToken.ThrowIfCancellationRequested();
+        var revision = expectedRevision ?? _store.Revision;
         var settings = _settings();
         var resolved = settings.TryResolvePlayModel() ?? settings.TryResolveConversationModel();
         if (resolved == null)
@@ -74,16 +91,24 @@ internal sealed class StrategyPlanner
         {
             Model = resolved.Model.Model,
             Stream = false,
+            Thinking = resolved.Model.GetThinkingIntensity(),
+            ThinkingMode = resolved.Model.ThinkingMode,
             Messages = new[]
             {
                 LlmMessage.System(
                     "You are the strategy planner for a Slay the Spire 2 agent. A fast execution model "
                     + "picks each concrete action; you only set the standing strategy it follows. Reply with a "
-                    + "single JSON object and nothing else, with these keys: \"posture\" (\"aggressive\", "
-                    + "\"defensive\", or \"balanced\"), \"instructions\" (one or two sentences of standing "
-                    + "guidance), and \"option_hints\" (an object mapping option kinds to short nudges, may be "
-                    + "empty). Do not name specific card indices or targets; they change every frame."),
-                LlmMessage.User("Current game state summary:\n" + stateSummary)
+                    + "single JSON object and nothing else, with these keys: \"goal\" (one short sentence naming "
+                    + "the macro objective for this screen or act, for example \"kill the weakest enemy before "
+                    + "it acts\"), \"posture\" (\"aggressive\", \"defensive\", or \"balanced\"), \"instructions\" "
+                    + "(one or two sentences of standing guidance), and \"option_hints\" (an object mapping "
+                    + "option kinds to short nudges, may be empty). An option kind is the action name the "
+                    + "executor chooses among -- play_card, end_turn, use_potion, choose_map_node, "
+                    + "choose_reward_card, and so on -- never a card, target, or option index. The executor "
+                    + "re-keys your hints onto the options the current frame actually offers, so a hint naming "
+                    + "an index is dropped instead of applied. Do not name specific card indices or targets; "
+                    + "they change every frame."),
+                LlmMessage.User(BuildContext(stateSummary, _store.Current, recentDecisions, runId))
             }
         };
 
@@ -91,19 +116,56 @@ internal sealed class StrategyPlanner
         // not outwait the requests it plans for.
         var timeout = settings.LlmRequestTimeoutSeconds is > 0 ? TimeSpan.FromSeconds(settings.LlmRequestTimeoutSeconds.Value) : (TimeSpan?)null;
         var client = _factory.Create(resolved.Endpoint, timeout);
+        if (tryBeginRequest != null && !await tryBeginRequest(cancellationToken)) return (false, null);
+        cancellationToken.ThrowIfCancellationRequested();
         var completion = await client.CompleteAsync(request, cancellationToken);
+        if (cancellationToken.IsCancellationRequested) return (false, completion.Usage);
         var strategy = completion.Content == null ? null : PlayStrategy.TryParse(ExtractJson(completion.Content));
         if (strategy == null)
         {
             return (false, completion.Usage);
         }
 
-        _store.Update(strategy with
+        // The plan states which frame it was written for. The refresh key is run+screen+act, so a
+        // combat plan is reused by every later combat in the act; recording the screen and round is
+        // what lets the executor tell a live plan from guidance carried over from another encounter.
+        // A summary the planner's own read cap truncated mid-JSON yields no scope rather than throwing.
+        var scope = JevOptionEnumerator.ReadScope(stateSummary);
+        var adopted = _store.TryUpdate(strategy with
         {
             UpdatedAt = DateTimeOffset.UtcNow.ToString("O"),
-            Source = "llm"
-        });
-        return (true, completion.Usage);
+            Source = "llm",
+            PlanScreen = scope.Screen ?? string.Empty,
+            PlanRound = scope.Round
+        }, revision);
+        return (adopted, completion.Usage);
+    }
+
+    /// <summary>
+    /// The strategy and recent accepted actions are historical context only; filtering on the
+    /// caller's current run prevents an old game's index from masquerading as a live option.
+    /// </summary>
+    private static string BuildContext(string stateSummary, PlayStrategy current,
+        IReadOnlyList<DecisionLogEntry>? entries, string? runId)
+    {
+        var lines = new List<string>
+        {
+            "Current game state summary:",
+            stateSummary.Length > 6000 ? stateSummary[..6000] : stateSummary,
+            "Current standing strategy (historical guidance, not a fresh action):",
+            current.ToJson(),
+            "Recent accepted decisions from this run (do not reuse indices):"
+        };
+        if (!string.IsNullOrWhiteSpace(runId) && runId != "run_unknown" && entries != null)
+        {
+            foreach (var entry in entries.Where(e => string.Equals(e.run_id, runId, StringComparison.Ordinal)).TakeLast(6))
+            {
+                var reason = entry.reason?.Replace('\r', ' ').Replace('\n', ' ');
+                lines.Add("- " + entry.action + (reason == null ? "" : ": " + reason[..Math.Min(reason.Length, 160)]));
+            }
+        }
+
+        return string.Join("\n", lines);
     }
 
     /// <summary>

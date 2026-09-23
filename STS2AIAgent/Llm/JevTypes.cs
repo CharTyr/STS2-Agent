@@ -172,11 +172,15 @@ internal sealed class JevException : Exception
     /// <summary>The HTTP status, when the failure came back with one.</summary>
     public int? StatusCode { get; }
 
-    public JevException(string message, JevExceptionKind kind, int? statusCode = null)
+    /// <summary>Bounded whole-second retry hint, only present for a 429 response.</summary>
+    public int? RetryAfterSeconds { get; }
+
+    public JevException(string message, JevExceptionKind kind, int? statusCode = null, int? retryAfterSeconds = null)
         : base(message)
     {
         Kind = kind;
         StatusCode = statusCode;
+        RetryAfterSeconds = retryAfterSeconds;
     }
 
     public JevException(string message, JevExceptionKind kind, Exception inner)

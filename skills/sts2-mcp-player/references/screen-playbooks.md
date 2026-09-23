@@ -45,6 +45,7 @@ This file is about **how to drive a screen**. For **what to choose** where the c
 - Recompute node indexes after every room transition.
 - In multiplayer, read `map.local_vote` and `map.votes`. If `local_vote` is already set, call `wait_until_actionable` instead of voting again. If another player has voted and you have not, follow that option.
 - `choose_map_node` should not be considered done until the returned screen matches the destination room or stabilized combat entry.
+- While the map animates travel after a pick, no node is selectable and `choose_map_node` is absent (raw `map.is_traveling = true`). The game would ignore a click then: call `wait_until_actionable`; never re-send the pick.
 
 ## COMBAT
 

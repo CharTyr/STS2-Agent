@@ -6,6 +6,7 @@ using STS2AIAgent.Agent;
 using STS2AIAgent.Config;
 using STS2AIAgent.Game;
 using STS2AIAgent.Localization;
+using STS2AIAgent.Multiplayer;
 using STS2AIAgent.Server;
 using STS2AIAgent.Vision;
 
@@ -103,6 +104,23 @@ internal sealed partial class AgentOverlayHost
     private Button? _resetStatsButton;
     private Button? _settingsResetStatsButton;
 
+    // Play-mode and companion-Jev state stays with the host. The play-control partial only writes it.
+    private bool _playModeSwitching;
+    private string? _modeSwitchNotice;
+    private Label? _modeSwitchStatus;
+    private string? _companionSettingsNotice;
+    private Label? _companionSettingsStatus;
+    private bool _companionSettingsSyncing;
+    private string? _lastConfirmedCompanionSettings;
+    private CompanionConnection? _lastConfirmedCompanionConnection;
+    private bool _companionJevRefreshing;
+    private long _companionJevAtMs;
+    private CompanionJevSnapshot? _companionJev;
+    private CompanionConnection? _companionJevSource;
+    private Label? _jevDanger;
+    private Label? _jevLatency;
+    private readonly SemaphoreSlim _companionSettingsGate = new(1, 1);
+
     public static void Install()
     {
         if (_instance != null)
@@ -114,6 +132,9 @@ internal sealed partial class AgentOverlayHost
         AgentRuntime.Instance.Changed += _instance.OnRuntimeChanged;
         ScreenshotService.BeginCapture = HideForCapture;
         ScreenshotService.EndCapture = RestoreAfterCapture;
+        // The capture reads this before hiding: a screenshot must reproduce the player's view, so an
+        // overlay the player had already hidden stays hidden and is never reopened on top of the game.
+        ScreenshotService.OverlayVisibleProbe = IsPanelVisible;
         _instance.TryBuildOrRetry();
     }
 
@@ -126,9 +147,19 @@ internal sealed partial class AgentOverlayHost
 
         ScreenshotService.BeginCapture = null;
         ScreenshotService.EndCapture = null;
+        ScreenshotService.OverlayVisibleProbe = null;
         AgentRuntime.Instance.Changed -= _instance.OnRuntimeChanged;
         _instance.TearDown();
         _instance = null;
+    }
+
+    /// <summary>
+    /// True while the agent panel is on screen. Hiding is what a capture does to the panel, so this is
+    /// also the answer to "did the player have the window open" at the moment a capture started.
+    /// </summary>
+    private static bool IsPanelVisible()
+    {
+        return _instance?._panel?.Visible == true;
     }
 
     private static void HideForCapture()
@@ -154,14 +185,17 @@ internal sealed partial class AgentOverlayHost
         }
 
         _instance._captureHidden = false;
-        if (_instance._panel != null)
+        // The window can be rebuilt while a capture is in flight (a theme or language change rebuilds
+        // the whole tree). The new panel was built from the saved visibility, so touching a node that
+        // is no longer in the tree would only put the panel back on a detached subtree.
+        if (_instance._panel is { } panel && panel.IsInsideTree())
         {
-            _instance._panel.Visible = true;
+            panel.Visible = true;
         }
 
-        if (_instance._edgeTab != null)
+        if (_instance._edgeTab is { } edgeTab && edgeTab.IsInsideTree())
         {
-            _instance._edgeTab.Visible = true;
+            edgeTab.Visible = true;
         }
     }
 
@@ -433,6 +467,10 @@ internal sealed partial class AgentOverlayHost
         {
             return;
         }
+
+        // The saved host settings are authoritative. Forward only the whitelisted Jev fields
+        // to an already-running companion, then display its independent confirmation status.
+        _ = SaveSettingsAndSyncJevAsync();
 
         if (_saveStatus != null)
         {
@@ -752,7 +790,7 @@ internal sealed partial class AgentOverlayHost
                 {
                     try
                     {
-                        _playScreen.Text = Loc.T("屏幕：{0}", GameStateService.BuildStatePayload().screen);
+                        _playScreen.Text = Loc.T("屏幕：{0}", GameStateService.CurrentScreenName());
                     }
                     catch
                     {
@@ -852,13 +890,16 @@ internal sealed partial class AgentOverlayHost
     {
         // Keep the window where the player left it instead of flashing closed or jumping to chat.
         var hadPanel = _panel != null;
-        var wasVisible = _panel?.Visible ?? false;
+        // A capture in flight hid the panel; the player still had it open. Keep the new panel hidden
+        // until that capture's restore shows it, instead of flashing it into the frame being read.
+        var wasVisible = (_panel?.Visible ?? false) || _captureHidden;
         var tab = _tab;
         TearDown();
         TryBuildOrRetry();
         if (hadPanel && _panel != null)
         {
-            _panel.Visible = wasVisible;
+            _panel.Visible = wasVisible && !_captureHidden;
+            if (_captureHidden && _edgeTab != null) _edgeTab.Visible = false;
         }
 
         ShowTab(tab);

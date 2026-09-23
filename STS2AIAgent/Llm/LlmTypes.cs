@@ -47,6 +47,15 @@ internal sealed class LlmRequest
     public string ThinkingMode { get; init; } = "auto";
 
     public bool Stream { get; init; } = true;
+
+    /// <summary>
+    /// Called with the reasoning accumulated so far each time a streamed reply adds to it, so a
+    /// thinking model's progress can be shown while the turn is still in flight instead of only once
+    /// it completes. Only reasoning is reported: content and tool arguments stay with the final
+    /// completion, which is what the turn's legality checks and receipts read. Null -- the default --
+    /// means the caller wants no partials at all.
+    /// </summary>
+    public Action<string>? OnReasoningDelta { get; init; }
 }
 
 internal sealed class LlmMessage
@@ -61,13 +70,20 @@ internal sealed class LlmMessage
 
     public IReadOnlyList<LlmToolCall>? ToolCalls { get; init; }
 
+    /// <summary>
+    /// The provider's own <c>reasoning_content</c> for an assistant turn that called tools. Thinking
+    /// models (DeepSeek thinking mode, Kimi thinking) reject the next tool round with HTTP 400 unless
+    /// it is sent back; providers that never return it never get it echoed.
+    /// </summary>
+    public string? Reasoning { get; init; }
+
     public static LlmMessage System(string content) => new() { Role = "system", Content = content };
 
     public static LlmMessage User(string content, byte[]? imageJpeg = null) =>
         new() { Role = "user", Content = content, ImageJpeg = imageJpeg };
 
-    public static LlmMessage Assistant(string? content, IReadOnlyList<LlmToolCall>? toolCalls = null) =>
-        new() { Role = "assistant", Content = content, ToolCalls = toolCalls };
+    public static LlmMessage Assistant(string? content, IReadOnlyList<LlmToolCall>? toolCalls = null, string? reasoning = null) =>
+        new() { Role = "assistant", Content = content, ToolCalls = toolCalls, Reasoning = reasoning };
 
     public static LlmMessage Tool(string toolCallId, string content) =>
         new() { Role = "tool", ToolCallId = toolCallId, Content = content };

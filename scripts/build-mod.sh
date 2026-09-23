@@ -191,7 +191,7 @@ if [[ -z "$mods_dir" && -d "$game_root" ]]; then
   mods_dir="$(sts2_mods_dir_for "$app_bundle" "$game_root" || true)"
 fi
 
-if [[ -z "$mods_dir" ]]; then
+if [[ -z "$mods_dir" && "$skip_install" -eq 0 ]]; then
   echo "Could not determine the mods directory." >&2
   echo "Pass --mods-dir /path/to/mods or set STS2_MODS_DIR." >&2
   exit 1

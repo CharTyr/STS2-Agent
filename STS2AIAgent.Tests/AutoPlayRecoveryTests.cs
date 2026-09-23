@@ -91,6 +91,28 @@ internal static class AutoPlayRecoveryTests
         return Task.CompletedTask;
     }
 
+    /// <summary>
+    /// The companion's map wait is on the human host, who may deliberate for minutes. It must not run
+    /// the 150-second "game may be stuck" clock that stops auto-play; a game-driven wait still does.
+    /// </summary>
+    public static Task PlayerDrivenWaitNeverRunsTheStuckClock()
+    {
+        var clock = typeof(AutoPlayRecovery).GetField("_waitingForGameSince",
+            System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!;
+        var policy = new AutoPlayRecovery();
+        var hostWait = new AgentTurnResult { WaitingForGame = true, WaitingForPlayer = true };
+        Assert.Null(policy.Observe(hostWait).StopReason);
+        // Pretend the host has been deciding far past the limit.
+        clock.SetValue(policy, DateTimeOffset.UtcNow - NoProgressPolicy.WaitingForGameLimit - TimeSpan.FromMinutes(5));
+        Assert.Null(policy.Observe(hostWait).StopReason);
+
+        var gameWait = new AgentTurnResult { WaitingForGame = true };
+        Assert.Null(policy.Observe(gameWait).StopReason);
+        clock.SetValue(policy, DateTimeOffset.UtcNow - NoProgressPolicy.WaitingForGameLimit - TimeSpan.FromSeconds(1));
+        Assert.NotNull(policy.Observe(gameWait).StopReason);
+        return Task.CompletedTask;
+    }
+
     public static Task SuccessfulActionResetsFailures()
     {
         var policy = new AutoPlayRecovery();

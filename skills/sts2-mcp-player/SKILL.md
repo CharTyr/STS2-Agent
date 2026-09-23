@@ -22,7 +22,7 @@ Use a conservative SubAgent profile for STS2. The goal is to keep the tool surfa
 
 - Recommended plugin settings: `max_concurrent = 1`, `auto_discover = false`, `broadcast_iteration_progress = false`, `inject_status_to_main_prompt = false`
 - Recommended retention settings: `inject_completed_for_seconds = 120`, `status_retention_seconds = 900`
-- Recommended skill settings: `allowed_tool_names = ["health_check", "get_game_state", "get_raw_game_state", "get_available_actions", "get_decision_log", "get_run_summary", "get_scene_guidance", "diff_state", "get_game_data_item", "get_game_data_items", "get_relevant_game_data", "wait_for_event", "wait_until_actionable", "decide", "act"]`, `max_mcp_tools_per_iteration = 1`, `share_to_main_chat = false`
+- Recommended skill settings: `allowed_tool_names = ["health_check", "get_game_state", "get_raw_game_state", "get_available_actions", "get_decision_log", "get_run_summary", "get_scene_guidance", "diff_state", "get_game_data_item", "get_game_data_items", "get_relevant_game_data", "wait_for_event", "wait_until_actionable", "decide", "act", "get_planner_briefing", "update_play_strategy"]`, `max_mcp_tools_per_iteration = 1`, `share_to_main_chat = false`. This is the whole guided profile; the authoritative list is `ESSENTIAL_TOOLS` in `scripts/test-mcp-tool-profile.ps1`.
 
 ### Simplified Config
 
@@ -221,12 +221,44 @@ Both MCP surfaces expose the same tool face, and the read half of a decision can
 - Prefer `decide` when a step needs state and guidance together; it is the same answers as the individual read tools, from one call.
 - Use legacy per-action tools only when a harness explicitly needs tool-by-tool coverage.
 - Use `run_console_command` and `inject_event_churn` only in development flows where debug actions are enabled.
+- Check who is playing before you act. `health_check` reports `play_running`: when it is `true`, the
+  in-game auto-play loop owns the turns, and the mod does not stop an external `act` from racing it.
+  Either ask the player to pause auto-play first, or do not act at all and steer it as the planner
+  (see "Planning for the In-Game Loop" below).
 
 Both MCP surfaces (the mod's native `/mcp` and this Python sidecar) expose the same tool names and
 arguments. `get_scene_guidance` and `decide.scene_guidance` answer the same four keys on both:
 `screen`, `scene`, `guidance` (empty where the screen has no strategic choice) and `playbook` (never
 empty). The sidecar adds `event_id` / `event_options` / `guidance_source` from the offline index in
 `docs/game-knowledge/events.md`, which the mod does not ship.
+
+## Planning for the In-Game Loop
+
+In dual-layer mode the in-game loop splits the work: the fast Jev execution model picks each concrete
+action, and an LLM planner only sets the standing strategy Jev follows. The mod runs its own planner,
+and an external agent can take that role through two tools instead of playing moves itself.
+
+- Read first: `get_planner_briefing` answers the current `strategy`, whether `dual_layer` is on for this
+  instance and `jev_configured`, the `run_summary` and `screen`, up to five `recent_jev_decisions`
+  of this run, and a `confidence_trend`. A strategy only matters when `dual_layer` and
+  `jev_configured` are both true.
+- Write with `update_play_strategy`. Every field is optional and **an omitted field keeps its current
+  value**, so a posture nudge does not erase the plan:
+  - `goal`: one sentence naming the macro objective for this screen or act ("kill the weakest enemy
+    before it buffs", "hold potions for the elite"). It leads every Jev choice. Capped at 400 characters.
+  - `posture`: `aggressive`, `defensive`, or `balanced`.
+  - `instructions`: one or two sentences of standing guidance.
+  - `option_hints`: nudges keyed by **action kind** -- `play_card`, `end_turn`, `use_potion`,
+    `choose_map_node`, `choose_reward_card`, ... The mod re-keys them onto the options the current
+    frame actually offers (`play_card:0->1`). A key naming a card, target, or index is dropped, because
+    indexes change every frame. A map you send replaces the previous map whole.
+- `plan_screen` / `plan_round` in the strategy are read-only provenance from the in-game planner (which
+  screen and combat round a plan was written for). Rewriting `goal`, `instructions`, or `option_hints`
+  clears them; your strategy then applies until you or the in-game planner write again.
+- Refresh on evidence, not on a timer: a new act, a new kind of encounter, or a `confidence_trend`
+  that is low or `falling`. Repeated `end_turn` rows with distinct turns are normal play, not a stuck
+  loop; judge them against the hand and energy in the state, not against the count.
+- Do not `act` while planning for a running loop (see "Choose the Right Tool Surface").
 
 For validation flows, read [references/debug-and-validation.md](references/debug-and-validation.md).
 

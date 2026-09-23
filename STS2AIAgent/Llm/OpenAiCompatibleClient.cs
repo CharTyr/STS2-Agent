@@ -92,7 +92,7 @@ internal sealed class OpenAiCompatibleClient : ILlmClient
             };
         }
 
-        return await SendCompletionAsync(body, request.Stream, cancellationToken);
+        return await SendCompletionAsync(body, request.Stream, cancellationToken, request.OnReasoningDelta);
     }
 
     public async Task<string> PingAsync(string model, CancellationToken cancellationToken)
@@ -107,7 +107,7 @@ internal sealed class OpenAiCompatibleClient : ILlmClient
             ["max_tokens"] = 16
         };
 
-        var completion = await SendCompletionAsync(body, stream: false, cancellationToken);
+        var completion = await SendCompletionAsync(body, stream: false, cancellationToken, onReasoningDelta: null);
         return string.IsNullOrWhiteSpace(completion.Content) ? "ok" : completion.Content.Trim();
     }
 
@@ -138,7 +138,7 @@ internal sealed class OpenAiCompatibleClient : ILlmClient
 
         try
         {
-            var completion = await SendCompletionAsync(body, stream: false, cancellationToken);
+            var completion = await SendCompletionAsync(body, stream: false, cancellationToken, onReasoningDelta: null);
             return completion.ToolCalls.Count > 0;
         }
         catch (LlmException ex) when (ex.StatusCode is >= 400 and < 500 and not 408 and not 429)
@@ -169,7 +169,8 @@ internal sealed class OpenAiCompatibleClient : ILlmClient
     private async Task<LlmCompletion> SendCompletionAsync(
         Dictionary<string, object?> body,
         bool stream,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        Action<string>? onReasoningDelta)
     {
         // Each step is a documented provider difference, applied at most once, and tried in a loop
         // rather than as nested catches. `ShouldRetryWithoutStream` accepts any HTTP 400, so with
@@ -183,7 +184,7 @@ internal sealed class OpenAiCompatibleClient : ILlmClient
         {
             try
             {
-                return await SendOnceAsync(body, stream, cancellationToken);
+                return await SendOnceAsync(body, stream, cancellationToken, onReasoningDelta);
             }
             catch (LlmException ex) when (!streamDemotionTried && ShouldRetryWithoutStream(ex))
             {
@@ -209,7 +210,8 @@ internal sealed class OpenAiCompatibleClient : ILlmClient
     private async Task<LlmCompletion> SendOnceAsync(
         Dictionary<string, object?> body,
         bool stream,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        Action<string>? onReasoningDelta)
     {
         var url = ResolveCompletionsUrl(_endpoint.BaseUrl);
         using var request = new HttpRequestMessage(HttpMethod.Post, url);
@@ -245,201 +247,214 @@ internal sealed class OpenAiCompatibleClient : ILlmClient
 
         using (response)
         {
-            string payload;
-            try
-            {
-                payload = await response.Content.ReadAsStringAsync(linked);
-            }
-            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
-            {
-                throw;
-            }
-            catch (OperationCanceledException ex)
-            {
-                throw new LlmException("LLM request timed out.", ex, 408);
-            }
-
             if (!response.IsSuccessStatusCode)
             {
-                throw new LlmException(FormatError((int)response.StatusCode, payload), (int)response.StatusCode);
+                var errorPayload = await ReadBodyAsync(response, cancellationToken, linked);
+                throw new LlmException(FormatError((int)response.StatusCode, errorPayload), (int)response.StatusCode);
             }
 
-            if (stream && LooksLikeSse(payload))
-            {
-                return ParseSsePayload(payload);
-            }
-
-            return ParseCompletion(payload);
+            // A streamed reply is read as it arrives rather than buffered whole: that is what lets a
+            // thinking model's reasoning reach the overlay while the turn is still in flight.
+            return stream
+                ? await ReadStreamedCompletionAsync(response, onReasoningDelta, cancellationToken, linked)
+                : ParsePayload(await ReadBodyAsync(response, cancellationToken, linked));
         }
     }
 
-    internal static bool LooksLikeSse(string payload)
+    /// <summary>
+    /// Reads a successful response body incrementally, reporting reasoning as it arrives.
+    /// </summary>
+    /// <remarks>
+    /// The SSE/JSON decision is made on the first non-blank line and then held: a provider that ignores
+    /// <c>stream: true</c> and answers with one JSON object is buffered and parsed exactly as before,
+    /// while an SSE body is fed to <see cref="SseCompletionAccumulator"/> line by line. Only complete
+    /// lines are consumed, so a chunk boundary in the middle of a line -- or of a UTF-8 character --
+    /// cannot corrupt the parse.
+    /// </remarks>
+    private static async Task<LlmCompletion> ReadStreamedCompletionAsync(
+        HttpResponseMessage response,
+        Action<string>? onReasoningDelta,
+        CancellationToken cancellationToken,
+        CancellationToken linked)
     {
-        var trimmed = payload.AsSpan().TrimStart();
-        return trimmed.StartsWith("data:", StringComparison.Ordinal);
+        Stream stream;
+        try
+        {
+            stream = await response.Content.ReadAsStreamAsync(linked);
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch (OperationCanceledException ex)
+        {
+            throw new LlmException("LLM request timed out.", ex, 408);
+        }
+
+        var accumulator = new SseCompletionAccumulator();
+        var buffered = new StringBuilder();
+        bool? isSse = null;
+        var decoder = Encoding.UTF8.GetDecoder();
+        var bytes = new byte[4096];
+        var chars = new char[4096];
+        var line = new StringBuilder();
+
+        void Consume(string raw)
+        {
+            if (isSse == null)
+            {
+                // Gateways open a stream with comment/keep-alive lines; blank separators carry nothing.
+                var trimmed = raw.Trim();
+                if (trimmed.Length == 0)
+                {
+                    return;
+                }
+
+                isSse = LooksLikeSseLine(trimmed);
+            }
+
+            if (isSse == true)
+            {
+                if (accumulator.AppendLine(raw))
+                {
+                    NotifyReasoningDelta(onReasoningDelta, accumulator.ReasoningSoFar);
+                }
+
+                return;
+            }
+
+            buffered.Append(raw).Append('\n');
+        }
+
+        using (stream)
+        {
+            while (true)
+            {
+                int read;
+                try
+                {
+                    read = await stream.ReadAsync(bytes.AsMemory(0, bytes.Length), linked);
+                }
+                catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+                {
+                    throw;
+                }
+                catch (OperationCanceledException ex)
+                {
+                    throw new LlmException("LLM request timed out.", ex, 408);
+                }
+
+                if (read <= 0)
+                {
+                    break;
+                }
+
+                var decoded = decoder.GetChars(bytes, 0, read, chars, 0);
+                for (var index = 0; index < decoded; index++)
+                {
+                    if (chars[index] != '\n')
+                    {
+                        line.Append(chars[index]);
+                        continue;
+                    }
+
+                    Consume(line.ToString());
+                    line.Clear();
+                }
+            }
+
+            if (line.Length > 0)
+            {
+                Consume(line.ToString());
+            }
+        }
+
+        return isSse == true ? accumulator.Build() : ParsePayload(buffered.ToString());
     }
 
-    internal static LlmCompletion ParseSsePayload(string payload)
+    /// <summary>
+    /// Hands the reasoning accumulated so far to the caller's display callback. A display callback must
+    /// never be able to kill the provider stream, so a throw from it is swallowed here rather than
+    /// surfacing as a failed turn.
+    /// </summary>
+    private static void NotifyReasoningDelta(Action<string>? callback, string reasoning)
     {
-        var content = new StringBuilder();
-        var reasoning = new StringBuilder();
-        var toolCalls = new SortedDictionary<int, SseToolCall>();
-        string? finishReason = null;
-        LlmUsage? usage = null;
-
-        foreach (var rawLine in payload.Split('\n'))
-        {
-            var line = rawLine.TrimEnd('\r');
-            if (!line.StartsWith("data:", StringComparison.Ordinal))
-            {
-                continue;
-            }
-
-            var data = line.Length <= 5 ? string.Empty : line[5..].Trim();
-            if (data.Length == 0 || data == "[DONE]")
-            {
-                continue;
-            }
-
-            JsonDocument document;
-            try
-            {
-                document = JsonDocument.Parse(data);
-            }
-            catch (JsonException)
-            {
-                continue;
-            }
-
-            using (document)
-            {
-                if (ReadUsage(document.RootElement) is { } chunkUsage)
-                {
-                    usage = chunkUsage;
-                }
-
-                if (!document.RootElement.TryGetProperty("choices", out var choices) ||
-                    choices.ValueKind != JsonValueKind.Array ||
-                    choices.GetArrayLength() == 0)
-                {
-                    continue;
-                }
-
-                var choice = choices[0];
-                if (string.IsNullOrEmpty(finishReason) &&
-                    choice.TryGetProperty("finish_reason", out var finishElement) &&
-                    finishElement.ValueKind == JsonValueKind.String)
-                {
-                    finishReason = finishElement.GetString();
-                }
-
-                if (choice.TryGetProperty("delta", out var delta))
-                {
-                    AccumulateDelta(delta, content, reasoning, toolCalls);
-                }
-                else if (choice.TryGetProperty("message", out var message))
-                {
-                    var parsed = ParseCompletion(data);
-                    if (!string.IsNullOrEmpty(parsed.Content))
-                    {
-                        content.Append(parsed.Content);
-                    }
-
-                    if (!string.IsNullOrEmpty(parsed.Reasoning))
-                    {
-                        reasoning.Append(parsed.Reasoning);
-                    }
-
-                    if (string.IsNullOrEmpty(finishReason) && !string.IsNullOrEmpty(parsed.FinishReason))
-                    {
-                        finishReason = parsed.FinishReason;
-                    }
-
-                    for (var i = 0; i < parsed.ToolCalls.Count; i++)
-                    {
-                        var call = parsed.ToolCalls[i];
-                        toolCalls[i] = new SseToolCall
-                        {
-                            Id = call.Id,
-                            Name = call.Name,
-                            Arguments = new StringBuilder(call.ArgumentsJson)
-                        };
-                    }
-                }
-            }
-        }
-
-        return new LlmCompletion
-        {
-            Content = content.Length == 0 ? null : content.ToString(),
-            Reasoning = reasoning.Length == 0 ? null : reasoning.ToString(),
-            ToolCalls = toolCalls.Values.Select(call => new LlmToolCall
-            {
-                Id = call.Id ?? string.Empty,
-                Name = call.Name ?? string.Empty,
-                ArgumentsJson = call.Arguments.Length == 0 ? "{}" : call.Arguments.ToString()
-            }).Where(call => !string.IsNullOrWhiteSpace(call.Id) && !string.IsNullOrWhiteSpace(call.Name)).ToArray(),
-            FinishReason = finishReason,
-            Usage = usage
-        };
-    }
-
-    private static void AccumulateDelta(
-        JsonElement delta,
-        StringBuilder content,
-        StringBuilder reasoning,
-        SortedDictionary<int, SseToolCall> toolCalls)
-    {
-        if (delta.TryGetProperty("content", out var contentElement) && contentElement.ValueKind == JsonValueKind.String)
-        {
-            content.Append(contentElement.GetString());
-        }
-
-        var reasoningText = ReadOptionalString(delta, "reasoning_content") ?? ReadOptionalString(delta, "reasoning");
-        if (!string.IsNullOrEmpty(reasoningText))
-        {
-            reasoning.Append(reasoningText);
-        }
-
-        if (!delta.TryGetProperty("tool_calls", out var calls) || calls.ValueKind != JsonValueKind.Array)
+        if (callback == null || reasoning.Length == 0)
         {
             return;
         }
 
-        foreach (var call in calls.EnumerateArray())
+        try
         {
-            var index = 0;
-            if (call.TryGetProperty("index", out var indexElement) && indexElement.TryGetInt32(out var parsedIndex))
-            {
-                index = parsedIndex;
-            }
+            callback(reasoning);
+        }
+        catch (Exception)
+        {
+        }
+    }
 
-            if (!toolCalls.TryGetValue(index, out var acc))
-            {
-                acc = new SseToolCall();
-                toolCalls[index] = acc;
-            }
+    private static async Task<string> ReadBodyAsync(
+        HttpResponseMessage response,
+        CancellationToken cancellationToken,
+        CancellationToken linked)
+    {
+        try
+        {
+            return await response.Content.ReadAsStringAsync(linked);
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch (OperationCanceledException ex)
+        {
+            throw new LlmException("LLM request timed out.", ex, 408);
+        }
+    }
 
-            if (call.TryGetProperty("id", out var idElement) && idElement.ValueKind == JsonValueKind.String)
-            {
-                acc.Id = idElement.GetString();
-            }
+    private static LlmCompletion ParsePayload(string payload) =>
+        LooksLikeSse(payload) ? ParseSsePayload(payload) : ParseCompletion(payload);
 
-            if (!call.TryGetProperty("function", out var function) || function.ValueKind != JsonValueKind.Object)
+    internal static bool LooksLikeSse(string payload)
+    {
+        // Gateways (OpenRouter's ": OPENROUTER PROCESSING", retry hints) open the stream with SSE
+        // comment/field lines before the first data line. Sniffing only for a leading "data:" sent
+        // that body to the JSON parser and killed the turn with a raw JsonException.
+        foreach (var rawLine in payload.Split('\n'))
+        {
+            var line = rawLine.Trim();
+            if (line.Length == 0)
             {
                 continue;
             }
 
-            if (function.TryGetProperty("name", out var nameElement) && nameElement.ValueKind == JsonValueKind.String)
-            {
-                acc.Name = nameElement.GetString();
-            }
-
-            if (function.TryGetProperty("arguments", out var argsElement) && argsElement.ValueKind == JsonValueKind.String)
-            {
-                acc.Arguments.Append(argsElement.GetString());
-            }
+            return LooksLikeSseLine(line);
         }
+
+        return false;
+    }
+
+    /// <summary>Whether one non-blank line is an SSE field, so a streaming read can decide per line.</summary>
+    internal static bool LooksLikeSseLine(string line) =>
+        line.StartsWith("data:", StringComparison.Ordinal)
+        || line.StartsWith(':')
+        || line.StartsWith("event:", StringComparison.Ordinal)
+        || line.StartsWith("retry:", StringComparison.Ordinal)
+        || line.StartsWith("id:", StringComparison.Ordinal);
+
+    /// <summary>
+    /// Parses a complete SSE body. Kept as the whole-body entry point -- and implemented on the same
+    /// accumulator the streaming read uses, so the two cannot drift.
+    /// </summary>
+    internal static LlmCompletion ParseSsePayload(string payload)
+    {
+        var accumulator = new SseCompletionAccumulator();
+        foreach (var rawLine in payload.Split('\n'))
+        {
+            accumulator.AppendLine(rawLine);
+        }
+
+        return accumulator.Build();
     }
 
     private static bool ShouldRetryWithoutStream(LlmException ex)
@@ -450,15 +465,6 @@ internal sealed class OpenAiCompatibleClient : ILlmClient
                message.Contains("HTTP 415", StringComparison.Ordinal) ||
                message.Contains("HTTP 422", StringComparison.Ordinal) ||
                message.Contains("stream", StringComparison.OrdinalIgnoreCase);
-    }
-
-    private sealed class SseToolCall
-    {
-        public string? Id { get; set; }
-
-        public string? Name { get; set; }
-
-        public StringBuilder Arguments { get; set; } = new();
     }
 
     internal static LlmCompletion ParseCompletion(string payload)
@@ -527,6 +533,13 @@ internal sealed class OpenAiCompatibleClient : ILlmClient
                     Arguments = call.ArgumentsJson
                 }
             }).ToList();
+
+            // Only on an assistant tool-call turn, and only what the provider itself returned: thinking
+            // models 400 the next tool round without it, and it is never invented for anyone else.
+            if (message.Role == "assistant" && !string.IsNullOrEmpty(message.Reasoning))
+            {
+                dto.ReasoningContent = message.Reasoning;
+            }
         }
 
         if (message.ImageJpeg is { Length: > 0 })
@@ -666,11 +679,21 @@ internal sealed class OpenAiCompatibleClient : ILlmClient
         return null;
     }
 
-    private static string? ReadOptionalString(JsonElement message, string name)
+    internal static string? ReadOptionalString(JsonElement message, string name)
     {
         return message.TryGetProperty(name, out var value) && value.ValueKind == JsonValueKind.String
             ? value.GetString()
             : null;
+    }
+
+    internal static string? ReadLooseString(JsonElement element)
+    {
+        return element.ValueKind switch
+        {
+            JsonValueKind.String => element.GetString(),
+            JsonValueKind.Number => element.GetRawText(),
+            _ => null
+        };
     }
 
     private static IReadOnlyList<LlmToolCall> ReadToolCalls(JsonElement message)
@@ -681,19 +704,36 @@ internal sealed class OpenAiCompatibleClient : ILlmClient
         }
 
         var result = new List<LlmToolCall>();
+        var position = 0;
         foreach (var call in toolCalls.EnumerateArray())
         {
-            var id = call.TryGetProperty("id", out var idElement) ? idElement.GetString() : null;
-            var function = call.TryGetProperty("function", out var functionElement) ? functionElement : default;
-            var name = function.ValueKind == JsonValueKind.Object && function.TryGetProperty("name", out var nameElement)
-                ? nameElement.GetString()
-                : null;
-            var args = function.ValueKind == JsonValueKind.Object && function.TryGetProperty("arguments", out var argsElement)
-                ? argsElement.GetString()
-                : "{}";
-            if (string.IsNullOrWhiteSpace(id) || string.IsNullOrWhiteSpace(name))
+            position++;
+            if (call.ValueKind != JsonValueKind.Object)
             {
                 continue;
+            }
+
+            // Compat shims differ: a numeric id, an object-valued arguments, or no id at all. Reading
+            // them with GetString() threw an unclassified InvalidOperationException that killed the
+            // turn, and a missing id silently dropped the model's act call.
+            var id = call.TryGetProperty("id", out var idElement) ? ReadLooseString(idElement) : null;
+            var function = call.TryGetProperty("function", out var functionElement) ? functionElement : default;
+            var name = function.ValueKind == JsonValueKind.Object && function.TryGetProperty("name", out var nameElement)
+                ? ReadLooseString(nameElement)
+                : null;
+            var args = function.ValueKind == JsonValueKind.Object && function.TryGetProperty("arguments", out var argsElement)
+                ? argsElement.ValueKind is JsonValueKind.Object or JsonValueKind.Array
+                    ? argsElement.GetRawText()
+                    : ReadLooseString(argsElement)
+                : "{}";
+            if (string.IsNullOrWhiteSpace(name))
+            {
+                continue;
+            }
+
+            if (string.IsNullOrWhiteSpace(id))
+            {
+                id = $"call_{position}";
             }
 
             result.Add(new LlmToolCall
@@ -723,6 +763,10 @@ internal sealed class OpenAiCompatibleClient : ILlmClient
         [JsonPropertyName("tool_calls")]
         [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
         public List<ChatToolCallDto>? ToolCalls { get; set; }
+
+        [JsonPropertyName("reasoning_content")]
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        public string? ReasoningContent { get; set; }
     }
 
     private sealed class ChatToolCallDto

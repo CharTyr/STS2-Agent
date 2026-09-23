@@ -130,8 +130,13 @@ class Sts2Client(Sts2ActionMethods):
         return self._request("GET", "/decision-snapshot")
 
     def get_strategy(self) -> dict[str, Any]:
-        """`GET /strategy`: the current dual-layer play strategy plus the dual-layer and
-        Jev-configured flags. Local-only on the mod side."""
+        """`GET /strategy`: the authoritative planner briefing from the mod.
+
+        The mod supplies strategy, dual_layer and jev_configured, and on newer builds also
+        run_summary, screen, recent_jev_decisions and confidence_trend. Keep its response
+        unchanged: a sidecar-side /state or /decisions read could refer to another frame/run.
+        Local-only on the mod side.
+        """
         return self._request("GET", "/strategy")
 
     def update_strategy(
@@ -139,15 +144,11 @@ class Sts2Client(Sts2ActionMethods):
         posture: str | None = None,
         instructions: str | None = None,
         option_hints: dict[str, str] | None = None,
+        goal: str | None = None,
     ) -> dict[str, Any]:
-        """`POST /strategy` with a `strategy` object; omitted fields keep their current values."""
-        strategy: dict[str, Any] = {}
-        if posture is not None:
-            strategy["posture"] = posture
-        if instructions is not None:
-            strategy["instructions"] = instructions
-        if option_hints is not None:
-            strategy["option_hints"] = option_hints
+        """`POST /strategy`; omitted fields keep their values. `goal` is last for positional callers."""
+        fields = {"posture": posture, "goal": goal, "instructions": instructions, "option_hints": option_hints}
+        strategy: dict[str, Any] = {key: value for key, value in fields.items() if value is not None}
         return self._request("POST", "/strategy", {"strategy": strategy})
 
     def get_action_catalog(self) -> AvailableActions:

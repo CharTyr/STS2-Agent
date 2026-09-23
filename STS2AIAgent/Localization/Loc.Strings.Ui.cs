@@ -22,6 +22,7 @@ internal static partial class Loc
         map["屏幕"] = "Screen";
         map["最近动作"] = "Last action";
         map["思考"] = "Reasoning";
+        map["思考中"] = "Thinking";
         map["动作"] = "Action";
         map["已省略更早的 {0} 条消息"] = "{0} earlier messages omitted";
         map["本次会话"] = "This session";
@@ -54,6 +55,25 @@ internal static partial class Loc
         map["Jev 执行层"] = "Jev execution layer";
         map["Jev 最近选择"] = "Jev's last choice";
         map["概率分布"] = "Probabilities";
+        map["危险度"] = "Danger score";
+        map["耗时"] = "Latency";
+        map["闲聊默认只读；明确说「帮我打」才代打一手。自动游玩中发消息会影响后续决策，不会并发出牌。"] =
+            "Chat is read-only by default; say “play for me” for one move. Messages sent during auto-play guide later decisions without taking a concurrent turn.";
+        map["自动游玩走 compact 状态和工具；进行中发消息只影响后续决策。空闲聊天要代打一手须明确说「帮我打」。"] =
+            "Auto-play uses compact state and tools; messages during play guide a later decision. When idle, say “play for me” explicitly for one move.";
+        map["正在暂停当前模式；已提交的动作会先完成…"] = "Pausing the current mode; an already submitted action will finish first…";
+        map["当前模式尚未确认暂停，仍保持原模式。"] = "Pause was not confirmed; the current mode remains selected.";
+        map["已切换模式。另一模式不会自动开始。"] = "Mode switched. The other mode will not start automatically.";
+        map["保存模式失败，仍保持原模式。"] = "Could not save the new mode; the previous mode remains selected.";
+        map["无法确认暂停，仍保持原模式。"] = "Could not confirm the pause; the previous mode remains selected.";
+        map["保存 Jev 配置失败；队友配置未确认。"] = "Could not save Jev settings; teammate configuration is not confirmed.";
+        map["队友配置未确认，请检查连接后重试。"] = "Teammate configuration was not confirmed. Check the connection and retry.";
+        map["队友未连接；设置已保存，下次邀请时生效。"] = "Teammate is disconnected; the saved settings will apply on the next invitation.";
+        map["队友 Jev 配置已确认，下次决策生效。"] = "Teammate Jev settings confirmed; they apply to the next decision.";
+        map["队友 Jev 开关与本机不一致，尚未确认生效。"] = "The teammate Jev toggle differs from this window; the update is not confirmed.";
+        map["正在读取队友的 Jev 状态…"] = "Reading the teammate's Jev status…";
+        map["队友 Jev 状态暂不可用，请检查连接与配置同步。"] =
+            "Teammate Jev status is unavailable. Check the connection and settings synchronization.";
 
         // Settings page: the Jev execution-model section.
         map["双层决策模式由 Jev（TypeSafe System One 模型）逐步操作游戏，LLM 只做战略规划。在游玩页按模式开启。"] =
@@ -216,6 +236,7 @@ internal static partial class Loc
         map["⚪ 未测试。点「测试」做一次真实调用（含工具调用检测）。"] =
             "⚪ Not tested. Press “Test” for a real call (including a tool-calling probe).";
         map["⚪ 配置已修改，需重新测试。"] = "⚪ Configuration changed; test again.";
+        map["⚠️ 测试失败（{0}）：{1}"] = "⚠️ Test failed ({0}): {1}";
         map["✅ 已验证 · 工具调用可用（{0}）"] = "✅ Verified · tool calling works ({0})";
         map["⚠️ 已连通，但工具调用不可用——该模型无法自动游玩（{0}）"] =
             "⚠️ Connected, but tool calling failed — this model cannot auto-play ({0})";

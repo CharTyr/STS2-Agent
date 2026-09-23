@@ -160,8 +160,6 @@ _SCENE_FIELD_SETS: dict[str, dict[str, list[str]]] = {
             "min_hp",
             "max_hp",
             "moves",
-            "damage_values",
-            "block_values",
         ],
         "powers": [
             "id",

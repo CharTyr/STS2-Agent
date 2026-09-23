@@ -14,7 +14,10 @@ internal static class GameDataFilter
         ["combat"] = new Dictionary<string, string[]>(StringComparer.OrdinalIgnoreCase)
         {
             ["cards"] = new[] { "id", "name", "description", "type", "rarity", "target", "cost", "is_x_cost", "star_cost", "is_x_star_cost", "damage", "block", "keywords", "tags", "vars", "upgrade" },
-            ["monsters"] = new[] { "id", "name", "type", "min_hp", "max_hp", "moves", "damage_values", "block_values" },
+            // No damage_values/block_values: the static export has no per-move numbers and emits them as
+            // null, which read as "this monster deals nothing". Live incoming damage is in
+            // combat.enemies[].intents. Mirrors _SCENE_FIELD_SETS in game_data.py.
+            ["monsters"] = new[] { "id", "name", "type", "min_hp", "max_hp", "moves" },
             ["powers"] = new[] { "id", "name", "description", "type", "stack_type", "allow_negative" },
             ["potions"] = new[] { "id", "name", "description", "rarity", "pool", "usage", "target_type" }
         },

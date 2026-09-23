@@ -1,3 +1,4 @@
+using System.Text.Json;
 using STS2AIAgent.Config;
 using STS2AIAgent.Llm;
 using STS2AIAgent.Localization;
@@ -21,10 +22,22 @@ internal sealed partial class AgentRuntime
     internal const int ChatHistoryLimit = PlaySessionStore.MaxChatTurns;
 
     /// <summary>How much of a turn's reasoning a single "thought" bubble carries.</summary>
-    private const int ThoughtBubbleChars = 600;
+    /// <remarks>
+    /// The live stream bubble uses the same budget, deliberately: the bubble a player is watching grow
+    /// becomes the recorded bubble, character for character, rather than a different clip appearing
+    /// when the turn lands.
+    /// </remarks>
+    private const int ThoughtBubbleChars = LiveThoughtBuffer.MaxChars;
 
     /// <summary>How much of it the "action" bubble repeats beside the action name.</summary>
     private const int ActionBubbleReasonChars = 140;
+
+    /// <summary>
+    /// The reasoning of the request currently in flight, streamed from the provider as it arrives. This
+    /// is display-only state that is never persisted and never replayed; see
+    /// <see cref="LiveThoughtBuffer"/> for why it is emptied where it is.
+    /// </summary>
+    private readonly LiveThoughtBuffer _liveThought = new();
 
     /// <summary>Turns dropped off the front of the history, so the page can say how many.</summary>
     private int _historyTrimmed;
@@ -32,6 +45,8 @@ internal sealed partial class AgentRuntime
     /// <summary>The execution model's last reading, for the Jev panel. Null before its first turn.</summary>
     private string? _lastJevChoice;
     private string? _lastJevProbabilities;
+    private string? _lastJevDanger;
+    private string? _lastJevLatency;
 
     /// <summary>How many earlier turns the cap has dropped; 0 means the log starts at the beginning.</summary>
     public int HistoryTrimmedCount
@@ -44,6 +59,10 @@ internal sealed partial class AgentRuntime
 
     /// <summary>Its confidence and per-option scores, as one line of display text.</summary>
     public string LastJevProbabilities => _lastJevProbabilities ?? "-";
+
+    public string LastJevDanger => _lastJevDanger ?? "-";
+
+    public string LastJevLatency => _lastJevLatency ?? "-";
 
     private void RecordTurnReceipt(AgentTurnResult result, bool recordBudget = false)
     {
@@ -74,9 +93,14 @@ internal sealed partial class AgentRuntime
     /// is the record the player came to this page for. These append without notifying, because the
     /// caller repaints anyway (its own <c>AddHistory</c>, or the status line it sets next), and a
     /// turn should not cost three full refresh passes.
+    ///
+    /// The streamed partial is dropped here, before the recorded bubble is added: a turn that streamed
+    /// its reasoning and then records it must not leave two reasoning bubbles in the log.
     /// </remarks>
     private void AppendTurnTraces(AgentTurnResult result)
     {
+        _liveThought.Reset();
+
         if (ShowsThinkingInChat() && !string.IsNullOrWhiteSpace(result.Reasoning))
         {
             AddHistoryCore("thought", Clip(result.Reasoning, ThoughtBubbleChars), notify: false);
@@ -88,7 +112,10 @@ internal sealed partial class AgentRuntime
         }
 
         var reason = Clip(result.Reasoning, ActionBubbleReasonChars);
-        AddHistoryCore("action", reason.Length == 0 ? result.Acted : result.Acted + " — " + reason, notify: false);
+        var action = reason.Length == 0 ? result.Acted : result.Acted + " — " + reason;
+        var outcome = DescribeActResult(result.ActResultJson);
+        if (outcome.Length > 0) action += " · " + outcome;
+        AddHistoryCore("action", action, notify: false);
     }
 
     /// <summary>
@@ -109,6 +136,7 @@ internal sealed partial class AgentRuntime
             }
 
             _sessionDirty = true;
+            _sessionRevision++;
         }
 
         if (notify)
@@ -126,8 +154,10 @@ internal sealed partial class AgentRuntime
         lock (_gate)
         {
             ResetHistoryLocked();
+            MarkSessionDirty();
         }
 
+        FlushSessionIfDirty();
         RaiseChanged();
     }
 
@@ -139,6 +169,9 @@ internal sealed partial class AgentRuntime
     {
         _history.Clear();
         _historyTrimmed = 0;
+        // A cleared conversation, or a run boundary swapping the whole context, takes the in-flight
+        // partial with it: nothing about the previous context is left to reappear under the next one.
+        _liveThought.Reset();
     }
 
     private bool ShowsThinkingInChat()
@@ -150,22 +183,57 @@ internal sealed partial class AgentRuntime
     }
 
     /// <summary>
-    /// Keeps the Jev panel's two lines current. Only a dual-layer turn carries a confidence, so the
-    /// panel never reports a reading for a decision the execution model did not make.
+    /// The reasoning of the request in flight, so the conversation can draw it while the model is still
+    /// thinking. Empty whenever nothing is streaming, which is the normal state outside a turn.
+    /// </summary>
+    public string LiveThought => _liveThought.Text;
+
+    /// <summary>
+    /// Takes one streamed reasoning partial from the model client. The player's own switch is the gate:
+    /// with reasoning display off (the default) nothing is stored at all, so a thinking model's
+    /// scratchpad neither reaches the overlay nor sits in memory for one.
+    /// </summary>
+    /// <remarks>
+    /// Called from the provider's read loop, which is not the game thread. Nothing here touches a Godot
+    /// node -- the overlay picks the text up on its own tick -- so the callback stays a plain field
+    /// write and a measured setting read.
+    /// </remarks>
+    private void ReportReasoningDelta(string accumulated)
+    {
+        _liveThought.Report(accumulated, ShowsThinkingInChat());
+    }
+
+    /// <summary>
+    /// Drops the streamed partial when a request ends without a recorded bubble to replace it (a pause,
+    /// a cancel, a provider failure). Without this the panel would keep a "thinking…" bubble for a turn
+    /// that is already over.
+    /// </summary>
+    private void ClearLiveThought()
+    {
+        _liveThought.Reset();
+    }
+
+    /// <summary>
+    /// Keeps the Jev panel's reading current. The elapsed field identifies an attempted Jev turn
+    /// even when a low-confidence choice handed the actual move to the regular model.
     /// </summary>
     private void RecordJevReading(AgentTurnResult result)
     {
-        if (result.Confidence == null)
+        if (result.JevElapsedMilliseconds == null && result.Confidence == null)
         {
             return;
         }
 
-        var choice = Clip(result.Reasoning ?? result.Acted, 90);
+        var choice = Clip(result.Acted ?? (result.JevElapsedMilliseconds == null ? result.Reasoning : null), 90);
         var probabilities = FormatJevReading(result);
         lock (_gate)
         {
             _lastJevChoice = choice.Length == 0 ? "-" : choice;
             _lastJevProbabilities = probabilities;
+            _lastJevDanger = result.DangerScore is { } danger && double.IsFinite(danger)
+                ? Loc.T("危险度 {0}", danger.ToString("0.##")) : "-";
+            _lastJevLatency = result.JevElapsedMilliseconds is { } elapsed
+                ? Loc.T("耗时 {0} 毫秒", elapsed) : "-";
         }
     }
 
@@ -186,6 +254,27 @@ internal sealed partial class AgentRuntime
         }
 
         return parts.Count == 0 ? "-" : string.Join(" · ", parts);
+    }
+
+    /// <summary>Summarize only safe action envelope fields, not the raw state or provider response.</summary>
+    private static string DescribeActResult(string? json)
+    {
+        if (string.IsNullOrWhiteSpace(json)) return string.Empty;
+        try
+        {
+            using var document = JsonDocument.Parse(json);
+            var root = document.RootElement;
+            if (root.ValueKind != JsonValueKind.Object) return string.Empty;
+            var status = root.TryGetProperty("status", out var phase) && phase.ValueKind == JsonValueKind.String
+                ? phase.GetString() : null;
+            if (status == null && root.TryGetProperty("data", out var data) && data.ValueKind == JsonValueKind.Object
+                && data.TryGetProperty("status", out var nested) && nested.ValueKind == JsonValueKind.String)
+                status = nested.GetString();
+            if (status is not ("completed" or "pending" or "failed" or "rejected" or "outcome_unknown"))
+                return string.Empty;
+            return Clip(status, 32);
+        }
+        catch (JsonException) { return string.Empty; }
     }
 
     /// <summary>One turn's text as a single display line, clipped on a character budget.</summary>

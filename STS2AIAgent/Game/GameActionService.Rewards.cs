@@ -155,7 +155,7 @@ internal static partial class GameActionService
             action = "resolve_rewards",
             status = stable ? "completed" : "pending",
             stable = stable,
-            message = stable ? "All rewards resolved." : "Reward flow still transitioning.",
+            message = stable ? "All rewards resolved." : RewardFlowPendingMessage("Reward flow still transitioning."),
             state = GameStateService.BuildStatePayload()
         };
     }
@@ -183,9 +183,21 @@ internal static partial class GameActionService
             action = "collect_rewards_and_proceed",
             status = stable ? "completed" : "pending",
             stable = stable,
-            message = stable ? "Action completed." : "Reward flow is still transitioning.",
+            message = stable ? "Action completed." : RewardFlowPendingMessage("Reward flow is still transitioning."),
             state = GameStateService.BuildStatePayload()
         };
+    }
+
+    /// <summary>
+    /// The pending message of a reward drain. A drain that stopped at an open card reward did so on
+    /// purpose (the card pick is the caller's decision), and "still transitioning" there read as
+    /// "retry the same call" -- which an agent did, in a loop. Say what the caller has to do instead.
+    /// </summary>
+    private static string RewardFlowPendingMessage(string transitioning)
+    {
+        return ActiveScreenContext.Instance.GetCurrentScreen() is NCardRewardSelectionScreen
+            ? "Stopped at a card reward: this is your decision. Pick with choose_reward_card (or pass option_index), or skip with skip_reward_cards (option_index -1)."
+            : transitioning;
     }
 
     private static async Task<ActionResponsePayload> ExecuteClaimRewardAsync(ActionRequest request)

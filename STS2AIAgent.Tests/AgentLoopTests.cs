@@ -1134,6 +1134,39 @@ internal static class AgentLoopTests
         Assert.Equal(2, result.RequestsSpent);
     }
 
+    /// <summary>
+    /// The turn's own request carries the live-reasoning callback, so a partial the client reports while
+    /// the reply is streaming reaches the caller that shows it. Without this line the whole streaming
+    /// path exists and nothing in game ever sees it.
+    /// </summary>
+    public static async Task ReasoningDeltaReachesTheTurnCallback()
+    {
+        var factory = new ScriptedClientFactory(new[]
+        {
+            new LlmCompletion { Content = "done", Reasoning = "final thought" }
+        });
+
+        var seen = new List<string>();
+        // The fake client reports a partial exactly where the real one does: mid-request.
+        factory.OnRequest = () => factory.LastRequest!.OnReasoningDelta?.Invoke("live partial");
+        var loop = new AgentLoop(
+            new FakeBridge(),
+            factory,
+            AgentSettings.CreateDefault,
+            onReasoningDelta: seen.Add);
+
+        await loop.PlayOnceAsync(CancellationToken.None);
+
+        // The default model supports tools and the fake answers with text only, so the turn demotes the
+        // stream once and asks again: every request it makes reports through the same callback.
+        Assert.True(seen.Count > 0, "the turn's reasoning callback never fired");
+        Assert.True(seen.All(partial => partial == "live partial"), "a request reported something else");
+        Assert.Equal(factory.Requests.Count, seen.Count);
+        Assert.True(
+            factory.Requests.All(request => request.OnReasoningDelta != null),
+            "a model request was dispatched without the live-reasoning callback");
+    }
+
     public static async Task ModelProbeStillReportsProviderFailure()
     {
         var factory = new ProbeClientFactory(_ => Task.FromException<string>(new OperationCanceledException("provider timeout")));

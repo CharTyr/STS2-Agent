@@ -1,4 +1,5 @@
 using System.Text.Json;
+using MegaCrit.Sts2.Core.Logging;
 using STS2AIAgent.Game;
 using STS2AIAgent.Server;
 using STS2AIAgent.Vision;
@@ -63,12 +64,15 @@ internal sealed class GameBridge : IGameBridge
     public Task<string> GetActionSnapshotJsonAsync(CancellationToken cancellationToken)
     {
         return GameThread.InvokeAsync(() =>
-            JsonSerializer.Serialize(GameStateService.BuildDecisionSnapshotPayload(), JsonOptions), cancellationToken);
+        {
+            var snapshot = GameStateService.BuildDecisionSnapshotPayload();
+            return JsonSerializer.Serialize(snapshot, JsonOptions);
+        }, cancellationToken);
     }
 
     public Task<string> GetScreenAsync(CancellationToken cancellationToken)
     {
-        return GameThread.InvokeAsync(() => GameStateService.BuildStatePayload().screen, cancellationToken);
+        return GameThread.InvokeAsync(() => GameStateService.CurrentScreenName(), cancellationToken);
     }
 
     public Task<string> ActAsync(
@@ -82,6 +86,8 @@ internal sealed class GameBridge : IGameBridge
         CancellationToken cancellationToken,
         bool rawState = false)
     {
+        // Abandonable only while queued: a game thread that stops pumping used to leave this await
+        // hanging with pause unable to break it. Once the action starts it runs under its own waits.
         return GameThread.InvokeAsync(async () =>
         {
             cancellationToken.ThrowIfCancellationRequested();
@@ -123,8 +129,17 @@ internal sealed class GameBridge : IGameBridge
                 // boundary would send; keep it observable in-process through the shared envelope.
                 return AgentErrorEnvelope.Serialize(ex, JsonOptions);
             }
-        });
+        }, GameThreadStartBudget, cancellationToken);
     }
+
+    /// <summary>
+    /// How long a posted act/screenshot may wait for the game thread to pick it up before the turn
+    /// fails visibly (a normal frame starts it within milliseconds).
+    /// </summary>
+    private static readonly TimeSpan GameThreadStartBudget = TimeSpan.FromSeconds(15);
+
+    /// <summary>Deadline for read-only game-data exports; a late run is discarded harmlessly.</summary>
+    private static readonly TimeSpan GameDataReadBudget = TimeSpan.FromSeconds(15);
 
     public Task<string> GetGameDataItemJsonAsync(string collection, string itemId, CancellationToken cancellationToken)
     {
@@ -137,7 +152,7 @@ internal sealed class GameBridge : IGameBridge
 
             var item = GameDataFilter.FindItem(element, itemId);
             return JsonSerializer.Serialize(item, JsonOptions);
-        });
+        }, GameDataReadBudget, cancellationToken);
     }
 
     public Task<string> GetGameDataItemsJsonAsync(string collection, IReadOnlyList<string> itemIds, CancellationToken cancellationToken)
@@ -150,7 +165,7 @@ internal sealed class GameBridge : IGameBridge
             }
 
             return JsonSerializer.Serialize(GameDataFilter.FindItems(element, itemIds), JsonOptions);
-        });
+        }, GameDataReadBudget, cancellationToken);
     }
 
     public Task<string> GetRelevantGameDataJsonAsync(string collection, IReadOnlyList<string> itemIds, CancellationToken cancellationToken)
@@ -174,7 +189,7 @@ internal sealed class GameBridge : IGameBridge
             }
 
             return JsonSerializer.Serialize(GameDataFilter.ProjectRelevant(state.screen, collection, element, ids), JsonOptions);
-        });
+        }, GameDataReadBudget, cancellationToken);
     }
 
     /// <summary>
@@ -248,23 +263,85 @@ internal sealed class GameBridge : IGameBridge
         return false;
     }
 
-    public Task<byte[]?> CaptureScreenshotJpegAsync(CancellationToken cancellationToken)
+    public async Task<byte[]?> CaptureScreenshotJpegAsync(CancellationToken cancellationToken)
     {
-        return GameThread.InvokeAsync(async () =>
+        // One gate for the whole process: hide/restore are a pair of global overlay states, so two
+        // overlapping captures would interleave them and the second JPEG would carry the panel the
+        // first capture had just hidden. The lease is taken HERE, on the calling thread, before the
+        // game-thread post: a capture that had to wait for another one must not wait inside the game
+        // thread, which would freeze the game for as long as that capture's frame wait lasts. The
+        // bridge owns the lease and releases it on every path out, after the policy restores the overlay.
+        using var gate = await ScreenshotGateLeaseAsync(cancellationToken);
+        if (gate == null)
         {
-            ScreenshotService.BeginCapture?.Invoke();
-            try
-            {
-                await GameThread.WaitForNextFrameAsync();
-                cancellationToken.ThrowIfCancellationRequested();
-                return ScreenshotService.CaptureJpeg();
-            }
-            finally
-            {
-                ScreenshotService.EndCapture?.Invoke();
-            }
-        });
+            Log.Warn($"{ScreenshotLogPrefix} Screenshot dropped: another capture held the capture gate for the whole wait.");
+            return null;
+        }
+
+        return await GameThread.InvokeAsync(
+            () => ScreenshotPolicy.CaptureAsync(
+                ScreenshotService.CreateCaptureHost(),
+                ScreenshotCaptureDeadline,
+                cancellationToken),
+            GameThreadStartBudget,
+            cancellationToken);
     }
+
+    /// <summary>
+    /// The process-wide capture lease, or null when another capture held it past this call's own
+    /// deadline. Bounded twice over: the capture deadline, and the caller's token.
+    /// </summary>
+    private static async Task<ScreenshotGateLease?> ScreenshotGateLeaseAsync(CancellationToken cancellationToken)
+    {
+        using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        try
+        {
+            var acquired = await ScreenshotGate.WaitAsync(ScreenshotCaptureDeadline, timeout.Token).ConfigureAwait(true);
+            return acquired ? new ScreenshotGateLease(ScreenshotGate) : null;
+        }
+        catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
+        {
+            // The gate wait's own deadline, not the caller giving up.
+            return null;
+        }
+    }
+
+    /// <summary>Holds the capture gate and releases it exactly once, on every path out.</summary>
+    private sealed class ScreenshotGateLease : IDisposable
+    {
+        private SemaphoreSlim? _gate;
+
+        public ScreenshotGateLease(SemaphoreSlim gate)
+        {
+            _gate = gate;
+        }
+
+        public void Dispose()
+        {
+            Interlocked.Exchange(ref _gate, null)?.Release();
+        }
+    }
+
+    /// <summary>
+    /// Shared by every capture in the process, so overlapping screenshots queue instead of
+    /// interleaving their hide/restore pairs.
+    /// </summary>
+    private static readonly SemaphoreSlim ScreenshotGate = new(1, 1);
+
+    private static readonly ScreenshotCapturePolicy ScreenshotPolicy = new(
+        ScreenshotGate,
+        message => Log.Info($"{ScreenshotLogPrefix} {message}"),
+        message => Log.Warn($"{ScreenshotLogPrefix} {message}"));
+
+    private const string ScreenshotLogPrefix = "[STS2AIAgent.Vision]";
+
+    /// <summary>
+    /// How long the capture may wait for the renderer to draw a frame after the overlay is hidden.
+    /// Bounded on purpose: a minimized or fully occluded window stops drawing frames, and the answer
+    /// there is a visible <c>screenshot_unavailable</c> from the route, not a request that never
+    /// returns and not a stale frame that still contains the overlay.
+    /// </summary>
+    private static readonly TimeSpan ScreenshotCaptureDeadline = TimeSpan.FromSeconds(3);
 
     private static bool TryExportCollection(string collection, out JsonElement element, out string errorJson)
     {

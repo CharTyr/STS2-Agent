@@ -1143,6 +1143,46 @@
         },
         "type": "object"
       },
+      "CompanionJevSnapshot": {
+        "additionalProperties": false,
+        "properties": {
+          "choice": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "danger": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "dual_layer_coop_enabled": {
+            "type": "boolean"
+          },
+          "latency": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "probabilities": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "choice",
+          "probabilities",
+          "danger",
+          "latency",
+          "dual_layer_coop_enabled"
+        ],
+        "type": "object"
+      },
       "CompanionMessageRequest": {
         "additionalProperties": true,
         "properties": {
@@ -1172,6 +1212,80 @@
         "properties": {
           "reply": {
             "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "CompanionSettingsPatch": {
+        "additionalProperties": false,
+        "description": "Token-protected settings-only allowlist; never returned in responses.",
+        "properties": {
+          "dual_layer_coop_enabled": {
+            "type": "boolean"
+          },
+          "jev_api_key": {
+            "maxLength": 4096,
+            "type": "string",
+            "writeOnly": true
+          },
+          "jev_base_url": {
+            "maxLength": 2048,
+            "type": "string"
+          },
+          "jev_confidence_threshold": {
+            "maximum": 1,
+            "minimum": 0,
+            "type": "number"
+          },
+          "jev_model": {
+            "maxLength": 256,
+            "type": "string"
+          },
+          "jev_request_timeout_seconds": {
+            "oneOf": [
+              {
+                "maximum": 3600,
+                "minimum": 1,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "dual_layer_coop_enabled",
+          "jev_base_url",
+          "jev_api_key",
+          "jev_model",
+          "jev_confidence_threshold"
+        ],
+        "type": "object"
+      },
+      "CompanionSettingsRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "settings": {
+            "$ref": "#/components/schemas/CompanionSettingsPatch"
+          }
+        },
+        "required": [
+          "settings"
+        ],
+        "type": "object"
+      },
+      "CompanionSettingsResponseData": {
+        "additionalProperties": true,
+        "properties": {
+          "dual_layer_coop_enabled": {
+            "type": "boolean"
+          },
+          "phase": {
+            "type": "string"
+          },
+          "settings_applied": {
+            "type": "boolean"
           }
         },
         "type": "object"
@@ -2243,6 +2357,10 @@
         "additionalProperties": true,
         "description": "The dual-layer play strategy the Jev execution model follows.",
         "properties": {
+          "goal": {
+            "maxLength": 400,
+            "type": "string"
+          },
           "instructions": {
             "type": "string"
           },
@@ -2251,6 +2369,18 @@
               "type": "string"
             },
             "type": "object"
+          },
+          "plan_round": {
+            "minimum": 0,
+            "readOnly": true,
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "plan_screen": {
+            "readOnly": true,
+            "type": "string"
           },
           "posture": {
             "type": "string"
@@ -2996,17 +3126,106 @@
       },
       "StrategyStatusData": {
         "additionalProperties": true,
+        "description": "Shared HTTP/native MCP run-scoped planner briefing.",
         "properties": {
+          "confidence_trend": {
+            "oneOf": [
+              {
+                "additionalProperties": false,
+                "properties": {
+                  "average": {
+                    "type": "number"
+                  },
+                  "count": {
+                    "type": "integer"
+                  },
+                  "direction": {
+                    "type": "string"
+                  },
+                  "latest": {
+                    "type": "number"
+                  }
+                },
+                "required": [
+                  "count",
+                  "average",
+                  "latest",
+                  "direction"
+                ],
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "dual_layer": {
             "type": "boolean"
           },
           "jev_configured": {
             "type": "boolean"
           },
+          "recent_jev_decisions": {
+            "items": {
+              "additionalProperties": false,
+              "properties": {
+                "action": {
+                  "type": "string"
+                },
+                "confidence": {
+                  "type": [
+                    "number",
+                    "null"
+                  ]
+                },
+                "id": {
+                  "type": "integer"
+                },
+                "timestamp": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "id",
+                "timestamp",
+                "action",
+                "confidence"
+              ],
+              "type": "object"
+            },
+            "maxItems": 5,
+            "type": "array"
+          },
+          "run_summary": {
+            "oneOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "screen": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
           "strategy": {
             "$ref": "#/components/schemas/PlayStrategy"
           }
         },
+        "required": [
+          "strategy",
+          "dual_layer",
+          "jev_configured",
+          "run_summary",
+          "screen",
+          "recent_jev_decisions",
+          "confidence_trend"
+        ],
         "type": "object"
       },
       "StrategyUpdateRequest": {
@@ -3178,7 +3397,7 @@
   "info": {
     "description": "Generated from Router routes and C# wire payload declarations. Human guidance remains in docs/api.md.",
     "title": "STS2 AI Agent Mod HTTP API",
-    "version": "0.15.0"
+    "version": "0.16.0"
   },
   "jsonSchemaDialect": "https://json-schema.org/draft/2020-12/schema",
   "openapi": "3.1.0",
@@ -3288,7 +3507,14 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/SessionControlRequest"
+                "oneOf": [
+                  {
+                    "$ref": "#/components/schemas/SessionControlRequest"
+                  },
+                  {
+                    "$ref": "#/components/schemas/CompanionSettingsRequest"
+                  }
+                ]
               }
             }
           },
@@ -3306,7 +3532,14 @@
                     {
                       "properties": {
                         "data": {
-                          "$ref": "#/components/schemas/CompanionControlResponseData"
+                          "oneOf": [
+                            {
+                              "$ref": "#/components/schemas/CompanionControlResponseData"
+                            },
+                            {
+                              "$ref": "#/components/schemas/CompanionSettingsResponseData"
+                            }
+                          ]
                         }
                       },
                       "type": "object"
@@ -3328,7 +3561,57 @@
             "description": "The normal HTTP error envelope."
           }
         },
-        "summary": "Control the companion instance itself."
+        "summary": "Pause/resume the companion, or atomically update its allowlisted Jev settings."
+      }
+    },
+    "/companion/jev": {
+      "get": {
+        "parameters": [
+          {
+            "description": "Required active local companion session token.",
+            "in": "header",
+            "name": "X-STS2-Companion-Session",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ApiSuccessEnvelope"
+                    },
+                    {
+                      "properties": {
+                        "data": {
+                          "$ref": "#/components/schemas/CompanionJevSnapshot"
+                        }
+                      },
+                      "type": "object"
+                    }
+                  ]
+                }
+              }
+            },
+            "description": "Successful response."
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorEnvelope"
+                }
+              }
+            },
+            "description": "The normal HTTP error envelope."
+          }
+        },
+        "summary": "Read a token-protected, non-secret Jev status from the active companion."
       }
     },
     "/companion/message": {

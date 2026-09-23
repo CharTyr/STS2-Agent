@@ -2,7 +2,97 @@
 
 > Release attribution is recorded against tags or release commits. Post-tag maintenance is listed separately; current validation limits are maintained in [PRODUCT_PLAN_CURRENT.md](https://github.com/CharTyr/STS2-Agent/blob/main/PRODUCT_PLAN_CURRENT.md).
 
-## Unreleased
+## v0.16.0 - 2026-09-24
+
+> Watch the model think, give the fast executor a goal, and get an overlay that fits. A thinking
+> model's reasoning now streams into the conversation while the turn is still running (only when
+> "show reasoning" is on; nothing is stored otherwise). In dual-layer mode the LLM planner's advice
+> finally reaches Jev: hints are mapped onto the options the frame actually offers, a one-sentence
+> macro goal leads every Jev choice, and an external planner can set that goal through MCP without
+> wiping the rest of the plan. The overlay's clipped right edge is fixed at its real cause, and
+> `/vision/screenshot` no longer returns the overlay in the image. Live-checked in an isolated game on
+> 2026-09-24 with no model calls: screenshots and layout (including deleting the first model) pass.
+> Streaming reasoning and dual-layer play quality need real model/Jev calls and were not re-run live;
+> see [the validation report](docs/live-validation-2026-09-23-results.md).
+
+- **The overlay's right edge is no longer clipped (found live).** The play page's minimum width was 457 px inside the 440 px panel before any model was deleted: the chat card put "reply language", its drop-down, "thinking intensity" and its drop-down in one row, and each label keeps a 120 px floor. That widened the whole page and cut off the right edge of every control on it — the truncation reported after deleting a model. Each label/drop-down pair now has its own row; the width diagnostic reports no offenders on either tab, including after deleting the first model. The Token reading, which has its own row now, shows the whole sentence instead of stopping at 24 characters. `/vision/screenshot` was re-checked in the game: the JPEG no longer contains the overlay, and the overlay reappears after each capture.
+
+- **Review fixes from three independent read-only reviews.** A plan's screen and combat round are now actually recorded: the planner reads a compact state cut at 4,000 characters, which is not valid JSON on nearly every combat frame, so the provenance was always empty and Jev was never told a plan came from an earlier fight; it is now read from the head of the cut summary. An external strategy update is merged inside the store's lock, so a plan the in-game planner lands at the same moment is no longer reverted. `plan_screen` / `plan_round` are marked read-only in the OpenAPI schema. A single step or a proactive chat that fails mid-stream no longer leaves its "thinking" bubble on screen. The settings page's save status wraps, because a rejected budget input puts a sentence wider than the panel into it. A theme or language change during a screenshot keeps the overlay hidden until that capture restores it, and a capture that somehow resumes off the game thread answers `screenshot_unavailable` instead of a 500. Hints past the 64-entry cap are reported as dropped instead of silently ending the scan.
+
+- **外部规划器可以设定宏观目标；局部更新不再清空策略。** MCP `update_play_strategy`（原生与 Python 两面）和 `POST /strategy` 新增 `goal` 字段，外部 Agent 当规划层时也能写一句 Jev 每次选择都先读的宏观目标。修复：`POST /strategy`（Python sidecar 走的就是它）原本把省略字段重置为默认值，只调 `posture` 会顺手清空 `instructions` 与 `option_hints`；原生 MCP 的合并则会丢掉宏观目标。两面现在共用同一合并，省略字段保留原值，空更新返回 400 而不是重置。游玩 skill 同步：guided 工具清单为 17 个，新增「给游戏内自动游玩当规划层」的用法，说明 `play_running` 时外部 `act` 会与自动游玩抢操作，并在地图剧本里写明行进动画期间不要重发选点。
+
+- **双层决策与窄屏布局。** LLM 的宏观目标现在作为独立、长度受限的策略字段传给 Jev；`option_hints` 从动作类型映射到当前帧实际可选的动作 ID，过期提示不再误导选择。策略记录编写时的屏幕/战斗回合，执行端标明跨战斗复用的局限；保留原有 `instructions` 和低置信度回退。设置页删除提示与首次引导句子可换行，游玩页将 Token 指标移到独立的整行，避免模型删除或消耗增长后挤出面板。此前实机观察和复验记录见 [2026-09-23 部分验收报告](docs/live-validation-2026-09-23-results.md)：布局已于 2026-09-24 在新 DLL 上实机复验通过；双层决策的改动需要真实 Jev / 模型调用，尚未实机验收。
+
+- **截图实际绘制帧。** 截图隐藏覆盖层后等待渲染器已绘制的帧，而不是在绘制前的 `ProcessFrame` 立即读出旧画面；并发截图串行、超时/取消后恢复原有可见性。先前返回 200 但 JPEG 里仍含覆盖层的实机失败已记录；2026-09-24 在游戏内复验：连续两次截图均不含覆盖层，截图后覆盖层恢复可见。
+
+- **Live reasoning during auto-play.** A thinking model's reasoning now reaches the in-game conversation
+  while the turn is still running instead of only after it lands. The LLM client reads a streamed body as
+  it arrives (the SSE/JSON decision is made on the first non-blank line, and complete lines go through the
+  same accumulator `ParseSsePayload` uses), reports each reasoning partial to the turn, and the play page
+  draws it as a muted "thinking" bubble under the recorded turns. The recorded bubble replaces it: the
+  streamed buffer is cleared before the completed turn appends its own reasoning, so one turn never draws
+  two reasoning bubbles, and a turn that pauses, cancels or fails clears it too. Unchanged by default:
+  the "show reasoning" switch gates storage, so with it off (the default) a thinking model's scratchpad is
+  never stored, never drawn, never persisted and never replayed to a provider. Reasoning is still echoed on
+  tool-call turns exactly as before.
+
+- **Severe-usability sweep (2026-09-23).** Pause now works even when the game window stops rendering
+  frames: every game-thread call the auto-play turn makes (turn snapshot, act, game-data lookups,
+  screenshots, companion follow-ups, session observation) carries the pause token and a deadline. An
+  act abandoned while still queued never runs later. The map no longer offers `choose_map_node` during
+  the travel animation, when the game silently ignores the click and the agent kept re-sending it. The
+  AI teammate no longer stops itself after 150 s while the human host is still choosing a map node,
+  and it quits by itself when the host window closes, crashes or is killed, instead of running
+  invisibly and spending budget. LLM compatibility: DeepSeek/Kimi thinking modes keep working past the
+  first tool round (`reasoning_content` is echoed); OpenRouter-style keep-alive comments no longer
+  break streamed replies; tool calls with numeric ids, object arguments or no id are no longer dropped
+  or fatal. A card-reward skip clicks the enabled Skip, not a disabled alternative. A reward flow
+  stopped at a card choice now says so instead of "still transitioning". A finished event's proceed
+  during an act transition returns a retryable 503 instead of a 500. In co-op, an `AnyPlayer` potion
+  aimed at a teammate who just died fails visibly instead of hitting the local player. In dual-layer
+  mode, Jev is no longer offered rest, reward, epoch or shop options the game would reject. The
+  per-model Test also verifies the model's roles, so a green badge no longer launches a teammate that
+  just stands still, and a failed test shows its reason on the card. `/vision/screenshot` attempted to hide
+  the overlay, but the 2026-09-23 live JPEG still contained it; see the screenshot correction above.
+  Monster `damage_values`/`block_values` (always null) are no longer projected to agents; live
+  damage stays in `combat.enemies[].intents`. The overlay no longer builds a full state payload each
+  refresh just for the screen name, and long co-op status lines wrap. Scripts: the network MCP
+  launchers honor `STS2_API_BASE_URL`; `start-game-session.ps1` fails when the old port isn't released;
+  `build-mod.sh --skip-install` no longer requires a mods directory. Offline build, C# and Python tests,
+  and gates pass; live-game validation of these paths is still pending.
+
+- **Audit remediation integrates solo/co-op lifecycle, run-scoped guidance, and Jev status.**
+  A mode switch pauses the active loop or companion before saving the new mode; external
+  start routes honor the selected mode and do not start a second loop during a switch.
+  Messages sent during solo auto-play become bounded, one-time guidance for the same run;
+  action receipts expose a short status without dumping raw tool results. A running local
+  companion accepts token-protected Jev setting changes and reports its own non-secret
+  choice, probability, danger, and latency readings. HTTP and both MCP planner briefing
+  surfaces share a run-scoped projection. HTTP actions bind decisions to the pre-action
+  game run; late decisions cannot resurrect an old active session. Offline tests and
+  static checks cover these paths; live dual-window play and the real Jev service remain
+  to be validated.
+
+- **Jev turns keep their full request, token, and action receipts.** Fallback, rejected actions,
+  cancellation, and run boundaries retain completed work. Both the execution request and any LLM
+  or vision fallback check the remaining budget. Low confidence still reaches the strategy planner
+  when the LLM performs the action. Nested snapshots select the correct screen guidance, and
+  missing required action parameters no longer become selectable placeholders. Play requests use
+  one bounded turn deadline; a Jev 429 can retry only once when time and request budget remain,
+  with each actual attempt counted separately. The Jev transport reuses its connection pool,
+  validates service URLs, and redacts echoed credentials before formatting errors.
+- **Continued-run memory includes subsequent decisions and stays isolated from other runs.**
+  All decision writers feed the active run's bounded memory. Chat, single-step, interrupted play,
+  strategy updates, and chat clearing participate in persistence. Failed writes retain their latest
+  snapshot for retry, and a concurrent update cannot be marked clean by an older save. Session files
+  validate run identity, tolerate null entries, redact strategy text, preserve load timestamps, and
+  avoid Windows filename collisions while retaining legacy loading and safe deletion.
+- **Background plans obey the play lifecycle and budget.** Requests reserve budget under the turn
+  gate before dispatch. Failed attempts count once, while a missing model makes no request.
+  Pause, run changes, settings changes, and newer external strategies invalidate stale responses.
+  Strategy hints use immutable snapshots, and low-confidence refresh streaks reset after triggering.
+  The September 23 audit adds 42 offline regressions for these paths; real-game validation remains
+  separate from the offline build and test suite.
 
 - **Dual-layer mode actually engages now, and reward card picks are real decisions.** Three
   live-pass fixes: the Jev execution decider was built once at mod startup, so a Jev API key

@@ -510,12 +510,27 @@ internal static partial class GameActionService
         // If resolve_rewards requested a skip, click the skip alternative
         if (resolution.Kind == RewardChoiceKind.Skip)
         {
-            var alternatives = GameStateService.GetCardRewardAlternativeButtons(cardRewardScreen);
-            if (alternatives.Count > 0)
+            // The first *enabled* alternative, like skip_reward_cards: with a reroll relic the list is
+            // [Skip, Reroll] and the unfiltered First() could press a disabled button. With nothing
+            // enabled, stop instead of spinning out the whole drain budget waiting for a skip that
+            // was never clicked.
+            NCardRewardAlternativeButton? skip = null;
+            foreach (var button in GameStateService.GetCardRewardAlternativeButtons(cardRewardScreen))
             {
-                alternatives.First().ForceClick();
-                CardRewardSkips.MarkSkipped(GameStateService.GetRewardSetId(cardRewardScreen));
+                if (button.IsEnabled)
+                {
+                    skip = button;
+                    break;
+                }
             }
+
+            if (skip == null)
+            {
+                return false;
+            }
+
+            skip.ForceClick();
+            CardRewardSkips.MarkSkipped(GameStateService.GetRewardSetId(cardRewardScreen));
             while (DateTime.UtcNow < deadline)
             {
                 await WaitForNextFrameAsync();

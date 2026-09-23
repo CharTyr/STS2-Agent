@@ -1,6 +1,7 @@
 using System.Net;
 using System.Text.Json;
 using System.Text.Json.Nodes;
+using STS2AIAgent.Agent;
 using STS2AIAgent.Llm;
 
 namespace STS2AIAgent.Tests;
@@ -43,7 +44,24 @@ internal static class JevClientTests
     }
     """;
 
-    /// <summary>A score answer, which carries a fractional score plus a legend and its own confidence.</summary>
+    /// <summary>
+    /// The answer shape the decider's own question ids use: <c>action</c> for the choice and
+    /// <c>danger</c> for the score.
+    /// </summary>
+    private const string DeciderResponseBody = """
+    {
+      "model": "jev-1.13.0",
+      "answers": {
+        "action": { "type": "choice", "choice": "end_turn", "confidence": 0.9 },
+        "danger": { "type": "score", "score": 1.5, "confidence": 0.5 }
+      },
+      "usage": { "input_tokens": 900, "output_tokens": 4 }
+    }
+    """;
+
+    /// <summary>
+    /// A score answer, which carries a fractional score plus a legend and its own confidence.
+    /// </summary>
     private const string ScoreResponseBody = """
     {
       "model": "jev-1.13.0",
@@ -68,6 +86,72 @@ internal static class JevClientTests
       ]
     }
     """;
+
+    /// <summary>
+    /// The wire shape the decider actually puts on the endpoint, captured through the real client over a
+    /// fake transport: the aligned <c>option_hints</c> must be closed over the same request's
+    /// <c>criteria</c>, the macro goal must lead the question, the frame's state must still travel
+    /// verbatim, and the danger score must still be asked.
+    /// </summary>
+    /// <remarks>
+    /// The decider's own tests assert the request object with a fake <see cref="IJevClient"/>; this one
+    /// exists because "the object was right" and "the JSON body was right" are different claims --
+    /// <see cref="JevClient"/> serializes with a null naming policy and
+    /// <c>JsonIgnoreCondition.WhenWritingNull</c>, so this is where a facet that is merely null in C#
+    /// is shown to leave the wire, and where a key that is merely present in C# is shown to be spelled
+    /// the way the service reads it.
+    /// </remarks>
+    public static async Task SystemOneAsync_PostsTheAlignedChoiceQuestionTheDeciderBuilds()
+    {
+        var handler = new RecordingHandler(DeciderResponseBody);
+        using var http = new HttpClient(handler);
+        var client = new JevClient(BaseUrl, ApiKey, "jev-latest", http);
+        var strategy = new PlayStrategy
+        {
+            Goal = "kill the weakest enemy first",
+            Instructions = "focus fire",
+            PlanScreen = "MAP",
+            OptionHints = new Dictionary<string, string>(StringComparer.Ordinal)
+            {
+                ["play_card"] = "prefer damage",
+                ["play_card:7->3"] = "an index from an earlier fight"
+            }
+        };
+
+        var decision = await new JevExecutionDecider(client, "jev-latest")
+            .DecideAsync(JevStrategyAlignmentTests.CombatFrame, strategy, CancellationToken.None);
+
+        Assert.Equal("end_turn", decision.Action);
+        Assert.Equal(SystemOneUrl, handler.LastUrl);
+        using var document = JsonDocument.Parse(handler.LastBody!);
+        var root = document.RootElement;
+        var question = root.GetProperty("questions").GetProperty("action");
+        Assert.Equal("choice", question.GetProperty("type").GetString());
+        Assert.Equal("score", root.GetProperty("questions").GetProperty("danger").GetProperty("type").GetString());
+        Assert.Equal("COMBAT", root.GetProperty("state").GetProperty("screen").GetString());
+
+        var criteria = question.GetProperty("criteria");
+        var ids = criteria.EnumerateObject().Select(property => property.Name).ToHashSet(StringComparer.Ordinal);
+        Assert.True(ids.Contains("end_turn"));
+        Assert.True(ids.Contains("play_card:0->0"));
+
+        var instructions = question.GetProperty("instructions");
+        var hints = instructions.GetProperty("strategy").GetProperty("option_hints");
+        var forwarded = hints.EnumerateObject().Select(property => property.Name).ToList();
+        Assert.NotEmpty(forwarded);
+        foreach (var key in forwarded)
+        {
+            Assert.True(ids.Contains(key), $"wire hint '{key}' must be a criteria id of the same request");
+        }
+
+        Assert.False(hints.TryGetProperty("play_card:7->3", out _), "the stale id must not reach the wire");
+        Assert.False(hints.TryGetProperty("play_card", out _), "the kind key must not reach the wire as an id");
+        Assert.Equal("prefer damage", hints.GetProperty("play_card:0->0").GetString());
+        Assert.Contains("kill the weakest enemy first", instructions.GetProperty("goal").GetString());
+        Assert.Equal("focus fire", instructions.GetProperty("strategy").GetProperty("instructions").GetString());
+        // A recorded scope reaches the wire; a plan with none leaves the key out entirely.
+        Assert.Equal("MAP", instructions.GetProperty("strategy").GetProperty("plan_scope").GetProperty("written_for_screen").GetString());
+    }
 
     public static async Task SystemOneAsync_PostsStateModelAndQuestionsToSystemOne()
     {
@@ -249,7 +333,7 @@ internal static class JevClientTests
         }
 
         Assert.NotNull(caught);
-        Assert.Equal(JevExceptionKind.Server, caught!.Kind);
+        Assert.Equal(JevExceptionKind.Network, caught!.Kind);
         Assert.Equal<int?>(500, caught.StatusCode);
         Assert.Equal(1, handler.RequestCount);
     }

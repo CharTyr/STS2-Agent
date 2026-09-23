@@ -49,6 +49,7 @@ internal sealed partial class AgentRuntime
             Fingerprint = fingerprint,
             TestedAt = DateTimeOffset.UtcNow.ToString("o")
         };
+        Exception? failure = null;
 
         try
         {
@@ -85,8 +86,10 @@ internal sealed partial class AgentRuntime
             record.Status = "failed";
             record.Tools = "unknown";
             record.Error = DiagnosticExport.Redact(ex.Message);
+            failure = ex;
         }
 
+        var playRoleVerified = false;
         lock (_gate)
         {
             var current = _settings;
@@ -99,6 +102,34 @@ internal sealed partial class AgentRuntime
             {
                 target.SupportsTools = record.Tools == "supported";
             }
+
+            // The card test is the one the first-run guide tells the player to run, so it must also
+            // settle the role records the invite gate, the teammate resume gate and the first-run
+            // verdict read. Without this a green badge still launched a teammate that never played.
+            foreach (var role in new[] { ModelRoleNames.Conversation, ModelRoleNames.Play, ModelRoleNames.Vision })
+            {
+                var roleModel = ModelRoleProbe.Resolve(current, role);
+                if (roleModel == null
+                    || !string.Equals(ModelRoleProbe.Fingerprint(roleModel), fingerprint, StringComparison.OrdinalIgnoreCase))
+                {
+                    continue;
+                }
+
+                if (record.Status == "verified")
+                {
+                    ModelRoleProbe.Upsert(current, ModelRoleProbe.FromSuccess(role, roleModel));
+                    playRoleVerified |= role == ModelRoleNames.Play;
+                }
+                else if (failure != null)
+                {
+                    ModelRoleProbe.Upsert(current, ModelRoleProbe.FromException(role, roleModel, failure));
+                }
+            }
+        }
+
+        if (playRoleVerified)
+        {
+            MarkFirstRunGuideSeen();
         }
 
         try

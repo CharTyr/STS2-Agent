@@ -18,11 +18,11 @@ internal static class Assert
         }
     }
 
-    public static void Equal<T>(T expected, T actual)
+    public static void Equal<T>(T expected, T actual, string? message = null)
     {
         if (!EqualityComparer<T>.Default.Equals(expected, actual))
         {
-            throw new Exception($"Expected {expected}, actual {actual}.");
+            throw new Exception(message ?? $"Expected {expected}, actual {actual}.");
         }
     }
 
@@ -110,6 +110,17 @@ internal static class TestRunner
 
     private static IEnumerable<(string Name, Func<Task> Body)> AllTests()
     {
+        foreach (var test in AuditRegressionTests.All()) yield return test;
+        foreach (var test in AuditRemediationJevTests.All()) yield return test;
+        foreach (var test in AuditRemediationSessionTests.All()) yield return test;
+        yield return ("ModeSwitch.ConfirmedPause", () => Task.Run(AuditRemediationUiTests.ModeSwitchRequiresConfirmedPause));
+        yield return ("Companion.JevPatchOnly", () => Task.Run(AuditRemediationUiTests.CompanionPatchOnlyChangesJevFields));
+        yield return ("Companion.InvalidPatch", () => Task.Run(AuditRemediationUiTests.CompanionPatchRejectsUnsafeValuesBeforeMutation));
+        yield return ("Companion.SafeStatus", () => Task.Run(AuditRemediationUiTests.CompanionStatusDoesNotReturnKey));
+        yield return ("Briefing.FiltrationAndRedaction", () => Task.Run(AuditRemediationBriefingTests.Build_FiltersOldRunsAndRedactsDecisionDetails));
+        yield return ("Briefing.UnknownRunDoesNotFallback", () => Task.Run(AuditRemediationBriefingTests.Build_UnknownRunNeverFallsBackToOldDecisions));
+        yield return ("Briefing.BoundedOrdering", () => Task.Run(AuditRemediationBriefingTests.Build_BoundsDecisionsAndKeepsTheirOrder));
+        yield return ("Briefing.UnscoredDoesNotInventTrend", () => Task.Run(AuditRemediationBriefingTests.Build_NoScoreDoesNotInventTrend));
         yield return ("FirstRun.DefaultUnverified", () => Task.Run(PlayerExperienceTests.DefaultSettingsAreUnverifiedAndNotInvitable));
         yield return ("FirstRun.VerifiedInvite", () => Task.Run(PlayerExperienceTests.VerifiedPlayFingerprintAllowsInvite));
         yield return ("FirstRun.KeyChangeInvalidates", () => Task.Run(PlayerExperienceTests.ChangingKeyInvalidatesVerification));
@@ -150,6 +161,19 @@ internal static class TestRunner
         yield return ("Recovery.HttpStatus", AutoPlayRecoveryTests.HttpFailuresKeepStatusWithoutStreamReplay);
         yield return ("Recovery.Waiting", AutoPlayRecoveryTests.WaitingDoesNotHideFailures);
         yield return ("Recovery.CompanionMapWait", AutoPlayRecoveryTests.CompanionMapWaitDoesNotStopAutoPlay);
+        yield return ("Recovery.PlayerWaitNoStuckClock", AutoPlayRecoveryTests.PlayerDrivenWaitNeverRunsTheStuckClock);
+        yield return ("Sweep.HostWatchPid", () => { SevereBugSweepTests.HostWatchReadsPidAndDetectsAbsence(); return Task.CompletedTask; });
+        yield return ("Sweep.HostWatchExitedHost", () => Task.Run(SevereBugSweepTests.HostWatchReportsAnExitedHostGone));
+        yield return ("Sweep.LauncherHandsHostPid", () => { SevereBugSweepTests.TheLauncherHandsTheHostPidToTheCompanion(); return Task.CompletedTask; });
+        yield return ("Sweep.SseLeadingComment", () => { SevereBugSweepTests.SseWithLeadingCommentIsStillSse(); return Task.CompletedTask; });
+        yield return ("Sweep.LooseToolCalls", () => { SevereBugSweepTests.LooseToolCallShapesStillParse(); return Task.CompletedTask; });
+        yield return ("Sweep.StreamedToolCallIds", () => { SevereBugSweepTests.StreamedToolCallKeepsItsIdAndSurvivesWithoutOne(); return Task.CompletedTask; });
+        yield return ("Sweep.ReasoningEcho", SevereBugSweepTests.ReasoningIsEchoedOnlyOnToolCallTurns);
+        yield return ("Sweep.LoopCarriesReasoning", () => { SevereBugSweepTests.TheLoopCarriesReasoningIntoTheToolRound(); return Task.CompletedTask; });
+        yield return ("Sweep.JevOptionAvailability", () => { SevereBugSweepTests.JevSkipsOptionsTheExecutorWouldReject(); return Task.CompletedTask; });
+        yield return ("ProjectMap.EverySourceMapped", () => { ProjectMapFreshnessTests.EverySourceFileIsMapped(); return Task.CompletedTask; });
+        yield return ("ProjectMap.NoDanglingPaths", () => { ProjectMapFreshnessTests.EveryMappedPathExists(); return Task.CompletedTask; });
+        yield return ("AgentTurn.GameThreadPostsCarryToken", () => { AgentTurnGameThreadPostTests.EveryAgentBridgePostCarriesTheToken(); return Task.CompletedTask; });
         yield return ("Recovery.SuccessResets", AutoPlayRecoveryTests.SuccessfulActionResetsFailures);
         yield return ("Recovery.CancelBackoff", AutoPlayRecoveryTests.CancelDuringBackoffPreventsNextTurn);
         yield return ("Recovery.TimeoutNotCancel", AutoPlayRecoveryTests.TimeoutFailureDoesNotLookLikeUserCancel);
@@ -256,6 +280,8 @@ internal static class TestRunner
         yield return ("OpenAI.ParseCompletionFinishReason", () => Task.Run(OpenAiCompatibleClientTests.ParseCompletion_ReadsFinishReason));
         yield return ("OpenAI.ParseSseFinishReason", () => Task.Run(OpenAiCompatibleClientTests.ParseSsePayload_ReadsFinishReasonFromMessageChoice));
         yield return ("OpenAI.ParseSseDeltaFinishReason", () => Task.Run(OpenAiCompatibleClientTests.ParseSsePayload_ReadsFinishReasonFromDeltaChoice));
+        yield return ("OpenAI.ReasoningStreamsBeforeCompletion", OpenAiCompatibleClientTests.CompleteAsync_StreamsReasoningBeforeCompletion);
+        yield return ("OpenAI.StreamFlagIgnoredStillParses", OpenAiCompatibleClientTests.CompleteAsync_StreamFlagIgnoredStillParsesJson);
         // The dual-layer engine: the Jev transport and the pure decision logic behind it.
         yield return ("Jev.PostsRequestShape", JevClientTests.SystemOneAsync_PostsStateModelAndQuestionsToSystemOne);
         yield return ("Jev.ParsesChoiceAnswer", JevClientTests.SystemOneAsync_ParsesChoiceAnswerWithProbabilitiesAndConfidence);
@@ -269,6 +295,7 @@ internal static class TestRunner
         yield return ("Jev.PingReportsModelCount", JevClientTests.PingAsync_ReportsTheModelCount);
         yield return ("Jev.PingReportsFailure", JevClientTests.PingAsync_ReportsTheFailureInsteadOfThrowing);
         yield return ("Jev.BlankConfigRejected", () => Task.Run(JevClientTests.BlankConfigurationIsRejectedAtConstruction));
+        yield return ("Jev.PostsAlignedChoiceQuestion", JevClientTests.SystemOneAsync_PostsTheAlignedChoiceQuestionTheDeciderBuilds);
         yield return ("JevLogic.StrategyRoundTrips", () => Task.Run(JevAgentLogicTests.PlayStrategy_RoundTripsEveryField));
         yield return ("JevLogic.StrategyParseTolerates", () => Task.Run(JevAgentLogicTests.PlayStrategy_TryParseToleratesMissingFields));
         yield return ("JevLogic.StrategyDefault", () => Task.Run(JevAgentLogicTests.PlayStrategy_DefaultIsBalancedAndMarksItsSource));
@@ -286,6 +313,15 @@ internal static class TestRunner
         yield return ("JevLogic.EnumerateRewardNoCards", () => Task.Run(JevAgentLogicTests.Enumerate_RewardWithoutCardsKeepsBareMacro));
         yield return ("JevLogic.EnumerateCapsAt255", () => Task.Run(JevAgentLogicTests.Enumerate_CapsAt255WithCardPlaysFirst));
         yield return ("JevLogic.EnumerateMalformedSafe", () => Task.Run(JevAgentLogicTests.Enumerate_MalformedInputDoesNotThrow));
+        foreach (var test in JevStrategyAlignmentTests.All()) yield return test;
+        yield return ("StrategyUpdate.OmittedFieldsKept", () => Task.Run(PlayStrategyUpdateTests.OmittedFieldsKeepTheirCurrentValues));
+        yield return ("StrategyUpdate.GoalWritable", () => Task.Run(PlayStrategyUpdateTests.AnExternalPlannerCanSetTheMacroGoal));
+        yield return ("StrategyUpdate.GoalClamped", () => Task.Run(PlayStrategyUpdateTests.AnOverlongGoalIsClamped));
+        yield return ("StrategyUpdate.EmptyRejected", () => Task.Run(PlayStrategyUpdateTests.AnUpdateWithNoRecognisedFieldIsRejected));
+        yield return ("StrategyUpdate.HintsReplaced", () => Task.Run(PlayStrategyUpdateTests.ExplicitHintsReplaceTheMap));
+        yield return ("StrategyUpdate.SharedMerge", () => Task.Run(PlayStrategyUpdateTests.BothWritersUseTheSharedMerge));
+        yield return ("StrategyUpdate.ScopeSurvivesTruncation", () => Task.Run(PlayStrategyUpdateTests.PlanScopeSurvivesTheTruncatedPlannerSummary));
+        yield return ("StrategyUpdate.AtomicMerge", () => Task.Run(PlayStrategyUpdateTests.AnExternalUpdateMergesAtomicallyInTheStore));
         // Per-run play-session persistence.
         yield return ("Session.RoundTrips", () => Task.Run(PlaySessionStoreTests.SaveThenLoadRoundTripsEveryField));
         yield return ("Session.LoadMissingIsNull", () => Task.Run(PlaySessionStoreTests.LoadReturnsNullWhenNoSessionExists));
@@ -295,6 +331,7 @@ internal static class TestRunner
         yield return ("Session.CorruptNoBackupIsNull", () => Task.Run(PlaySessionStoreTests.CorruptFileWithoutBackupYieldsNullNotThrow));
         yield return ("Session.ChatTrimmedToCap", () => Task.Run(PlaySessionStoreTests.ChatIsTrimmedToTheCapKeepingNewest));
         yield return ("Session.RedactsSecrets", () => Task.Run(PlaySessionStoreTests.SecretsInChatTextAreRedactedBeforeDisk));
+        yield return ("Session.RedactsStrategyGoalAndScope", () => Task.Run(PlaySessionStoreTests.NewStrategyFieldsAreRedactedBeforeDisk));
         yield return ("Session.Delete", () => Task.Run(PlaySessionStoreTests.DeleteRemovesTheSession));
         yield return ("Session.RunIdPathSafe", () => Task.Run(PlaySessionStoreTests.RunIdWithPathSeparatorsCannotEscapeTheDirectory));
         yield return ("Budget.NoLimit", () => Task.Run(SessionBudgetGuardTests.NoLimit_NeverStops));
@@ -521,6 +558,7 @@ internal static class TestRunner
         yield return ("AgentLoop.JsonFallbackStaysInTheStaticPrefix", AgentLoopTests.PlayOnce_JsonFallbackStaysInTheStaticPrefix);
         yield return ("AgentLoop.CancelPropagates", AgentLoopTests.PlayOnce_PropagatesCancellation);
         yield return ("AgentLoop.UnexpectedExceptionCountsRequest", AgentLoopTests.PlayOnce_UnexpectedExceptionAfterTheRequestStillCountsIt);
+        yield return ("AgentLoop.ReasoningDeltaForwarded", AgentLoopTests.ReasoningDeltaReachesTheTurnCallback);
         yield return ("AgentLoop.ChatErrorRecordsBudget", AgentLoopTests.Chat_ErrorPathRecordsTheSpentRequestOnTheBudgetGuard);
         yield return ("McpLauncher.DetectRoot", () => Task.Run(AgentLoopTests.McpRoot_DetectsValidLayout));
         yield return ("NativeMcp.Disabled", McpServiceTests.Disabled_Returns403);
@@ -828,6 +866,7 @@ internal static class TestRunner
         yield return ("OverlayLayout.SentenceFieldsReflow", () => Task.Run(OverlayLayoutContractTests.SentenceBearingFieldsReflow));
         yield return ("OverlayLayout.PlayControlsStack", () => Task.Run(OverlayLayoutContractTests.PlayControlsDoNotRequireOneWideRow));
         yield return ("OverlayLayout.UsageSentencesStack", () => Task.Run(OverlayLayoutContractTests.UsageSentencesDoNotShareARow));
+        yield return ("OverlayLayout.ModelDeleteAndMetricsStayNarrow", () => Task.Run(OverlayLayoutContractTests.ModelDeletionAndPlayMetricsCannotStretchThePanel));
         yield return ("OverlayLayout.MetricValuesReflow", () => Task.Run(OverlayLayoutContractTests.MetricValuesReflowInsideTheirTiles));
         yield return ("OverlayLayout.RichLogsReflow", () => Task.Run(OverlayLayoutContractTests.RichLogsReflowInsteadOfClippingHorizontally));
         yield return ("OverlayLayout.ThemeRepaintsSurfaces", () => Task.Run(OverlayLayoutContractTests.ThemeSwitchRepaintsSurfacesNotJustText));
@@ -840,6 +879,15 @@ internal static class TestRunner
         yield return ("OverlayChat.ThrowingBlockCannotFreeze", () => Task.Run(OverlayChatStreamContractTests.AThrowingBlockCannotFreezeTheConversation));
         yield return ("OverlayChat.NoActSwitch", () => Task.Run(OverlayChatStreamContractTests.TheConversationHasNoActSwitch));
         yield return ("OverlayChat.JevPanelReadings", () => Task.Run(OverlayChatStreamContractTests.TheJevPanelShowsWhatJevChose));
+        // The live reasoning stream: a thinking model's partial thought reaches the conversation while
+        // the turn is still in flight, and the recorded bubble replaces it rather than doubling it.
+        yield return ("LiveReasoning.SwitchGatesStorage", () => Task.Run(LiveThoughtBufferTests.NothingIsStoredWhileTheSwitchIsOff));
+        yield return ("LiveReasoning.BlankIsNotStored", () => Task.Run(LiveThoughtBufferTests.BlankReasoningIsNotStored));
+        yield return ("LiveReasoning.ClippedAndCleared", () => Task.Run(LiveThoughtBufferTests.StreamedTextIsClippedAndCleared));
+        yield return ("LiveReasoning.CallbackReachesTheRequest", () => Task.Run(LiveReasoningWiringTests.TheLiveCallbackTravelsFromTheRuntimeToTheRequest));
+        yield return ("LiveReasoning.NoDuplicateBubble", () => Task.Run(LiveReasoningWiringTests.TheStreamedBubbleIsClearedBeforeTheRecordedOne));
+        yield return ("LiveReasoning.OverlayGatedByTheSwitch", () => Task.Run(LiveReasoningWiringTests.TheOverlayDrawsThePartialOnlyWhenThinkingIsShown));
+        yield return ("LiveReasoning.NotPersisted", () => Task.Run(LiveReasoningWiringTests.ThePartialStaysOutOfEverythingPersisted));
         yield return ("ActionGate.FirstActionOwnsIt", () => Task.Run(ActionExecutionGateTests.AFreshGateAdmitsTheFirstAction));
         yield return ("ActionGate.ConcurrentRefused", () => Task.Run(ActionExecutionGateTests.AHeldGateRefusesTheSecondActionImmediately));
         yield return ("ActionGate.HeldAcrossAwait", ActionExecutionGateTests.TheLeaseIsHeldUntilTheAwaitedCoreTaskCompletes);
@@ -849,5 +897,20 @@ internal static class TestRunner
         yield return ("ActionGate.DisposeReleases", () => Task.Run(ActionExecutionGateTests.DisposingTheLeaseReleasesIt));
         yield return ("ActionGate.WiringHoldsTheLease", () => Task.Run(ActionExecutionGateWiringContractTests.ExecuteAsyncHoldsTheLeaseAcrossTheAwaitedCoreTask));
         yield return ("ActionGate.RefusalIsDocumented", () => Task.Run(ActionExecutionGateWiringContractTests.TheRefusalIsTheDocumentedActionInFlightError));
+        // The screenshot sequence: hide the overlay, wait for a frame the renderer actually drew, read
+        // the viewport, put the overlay back -- bounded, cancellable, serialized, and never reading a
+        // frame that still contains the panel.
+        yield return ("Screenshot.HideWaitCaptureRestore", () => Task.Run(ScreenshotCapturePolicyTests.CaptureHidesWaitsForDrawnFramesAndRestores));
+        yield return ("Screenshot.HiddenStaysHidden", () => Task.Run(ScreenshotCapturePolicyTests.AnOverlayThePlayerHadHiddenIsNotReopened));
+        yield return ("Screenshot.NoFrameNoCapture", () => Task.Run(ScreenshotCapturePolicyTests.NoDrawnFrameYieldsNoScreenshotAndStillRestores));
+        yield return ("Screenshot.FrozenRendererBounded", () => Task.Run(ScreenshotCapturePolicyTests.ACaptureThatNeverGetsAFrameDoesNotStall));
+        yield return ("Screenshot.CancellationRestores", () => Task.Run(ScreenshotCapturePolicyTests.CancellationRestoresTheOverlayAndCapturesNothing));
+        yield return ("Screenshot.EmptyViewportRestores", () => Task.Run(ScreenshotCapturePolicyTests.AnEmptyViewportReadIsNoScreenshotAndStillRestores));
+        yield return ("Screenshot.ExpiredDeadlineNoGate", () => Task.Run(ScreenshotCapturePolicyTests.AnExpiredDeadlineCapturesNothingAndHoldsNothing));
+        yield return ("Screenshot.ConcurrentSerialized", () => Task.Run(ScreenshotCapturePolicyTests.OverlappingCapturesAreSerialized));
+        yield return ("Screenshot.HeldGateTimesOut", () => Task.Run(ScreenshotCapturePolicyTests.AHeldGateTimesOutTheWaiterInsteadOfStallingIt));
+        // The Godot half of the seam cannot be linked offline, so its two load-bearing facts are read
+        // from source: the wait ends on a drawn frame, and the bridge runs the tested policy.
+        yield return ("Screenshot.DrawnFrameContract", () => Task.Run(SessionControlContractTests.ScreenshotWaitsForADrawnFrameAndRestoresTheOverlay));
     }
 }

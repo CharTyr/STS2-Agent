@@ -43,6 +43,8 @@ internal static partial class Loc
         map["测试失败：{0}"] = "Test failed: {0}";
         // The Jev panel's reading of the last dual-layer turn (Agent/AgentRuntime.Accounting.cs).
         map["置信度 {0}%"] = "Confidence {0}%";
+        map["危险度 {0}"] = "Danger score {0}";
+        map["耗时 {0} 毫秒"] = "Latency {0} ms";
 
         // Continue a saved co-op run (Multiplayer/DualInstanceCoordinator.cs, Game/GameActionService.cs).
         map["请先回到主菜单，再继续联机对局。"] = "Return to the main menu before continuing the co-op run.";
@@ -56,6 +58,7 @@ internal static partial class Loc
         // The two halves of the route switch (Agent/AgentRuntime.cs).
         map["等待外部接管：队友窗口已就绪，未自动开始游玩。"] =
             "Waiting for an external takeover: the teammate window is ready and has not started playing on its own.";
+        map["当前模式未开启，无法启动自动游玩。"] = "This mode is not selected, so auto-play cannot start.";
         map["上一次队友控制还没有完成，请稍后重试。"] =
             "The previous teammate control has not finished yet. Try again shortly.";
         map["找不到读档方法 StartLoad。"] = "Could not find the StartLoad method.";
@@ -78,6 +81,10 @@ internal static partial class Loc
         map["对话出错"] = "Chat error";
         map["对话失败"] = "Chat failed";
         map["对话已取消"] = "Chat cancelled";
+        map["游玩指令太长，请缩短后重试。"] = "Play guidance is too long; shorten it and retry.";
+        map["尚未确认当前对局，请稍后重试游玩指令。"] = "The current run is not confirmed yet; retry your guidance shortly.";
+        map["待处理游玩指令已满，请等待下一次决策。"] = "The guidance queue is full; wait for the next decision.";
+        map["已收到游玩指令，将在同一局的下一次决策中生效。"] = "Guidance received; it will apply to the next decision in this run.";
         map["请求失败：{0}"] = "Request failed: {0}";
         map["自动游玩进行中。请先暂停，再对话或代打。"] = "Auto-play is running. Pause it before you chat or have the AI play for you.";
         map["自动游玩进行中，不能清零本会话统计。请先暂停。暂停/继续不会清零累计。"] = "Auto-play is running, so session stats cannot be reset. Pause first. Pause and Resume do not clear the totals.";

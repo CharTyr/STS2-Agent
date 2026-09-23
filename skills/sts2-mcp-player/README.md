@@ -93,7 +93,15 @@ debug 模式：
 检查 state.available_actions 是否与当前 screen 一致。
 ```
 
-### 5. Debug 复现
+### 5. 给游戏内自动游玩当规划层
+
+```text
+使用 $sts2-mcp-player 给正在进行的双层自动游玩当规划层。
+先 get_planner_briefing 看当前策略和 Jev 的置信度趋势，
+需要调整时用 update_play_strategy 写一句宏观目标和按动作类别的提示；不要自己 act。
+```
+
+### 6. Debug 复现
 
 ```text
 使用 $sts2-mcp-player 复现一个 potion/card-selection 相关 bug。
@@ -123,7 +131,7 @@ debug 模式：
 
 ## 工具使用建议
 
-优先使用 guided profile（该档共 15 个工具，完整清单以 `scripts/test-mcp-tool-profile.ps1` 的
+优先使用 guided profile（该档共 17 个工具，完整清单以 `scripts/test-mcp-tool-profile.ps1` 的
 `ESSENTIAL_TOOLS` 为准）。游玩最常用的是：
 
 - `health_check`
@@ -137,6 +145,14 @@ debug 模式：
 
 复盘与排查另有 `get_decision_log`（读回被接受的决策及其理由）、`get_run_summary`（本轮概览）与
 `diff_state`（两份状态的逐路径差异）。
+
+双层决策模式（Jev 逐动作执行、LLM 只定策略）下，外部 Agent 可以不亲自出牌，而是当规划层：
+`get_planner_briefing` 读当前策略、Jev 最近的选择与置信度趋势，`update_play_strategy` 写一句宏观目标
+`goal` 以及 `posture` / `instructions` / 按**动作类别**写的 `option_hints`；省略的字段保留原值。
+规则见 SKILL.md 的 "Planning for the In-Game Loop"。
+
+`health_check` 的 `play_running` 为 `true` 时游戏内自动游玩正在出牌，mod 不会拦外部 `act`：
+这时要么先暂停自动游玩，要么只当规划层，不要两边同时操作。
 
 只有在这些情况下才建议用 full profile：
 
@@ -160,8 +176,12 @@ debug 模式：
   [SKILL.md](./SKILL.md)
 - 分 screen 剧本：
   [screen-playbooks.md](./references/screen-playbooks.md)
+- 选择策略（路线、休息、商店、药水、集火、联机分工）：
+  [strategy.md](./references/strategy.md)
 - 调试与验证说明：
   [debug-and-validation.md](./references/debug-and-validation.md)
+- 远程连接检查清单：
+  [remote-connection.md](./references/remote-connection.md)
 - UI metadata：
   [openai.yaml](./agents/openai.yaml)
 

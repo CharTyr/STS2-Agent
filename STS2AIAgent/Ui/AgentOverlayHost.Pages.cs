@@ -72,6 +72,8 @@ internal sealed partial class AgentOverlayHost
             coop ? 1 : 0,
             OnPlayModeSelected);
         page.AddChild(_playModeSwitch);
+        _modeSwitchStatus = UiFactory.Wrapped("", UiFactory.FontCaption);
+        page.AddChild(_modeSwitchStatus);
 
         _soloSection = BuildSoloSection();
         _coopSection = BuildCoopSection();
@@ -79,25 +81,14 @@ internal sealed partial class AgentOverlayHost
         _coopSection.Visible = coop;
         page.AddChild(_soloSection);
         page.AddChild(_coopSection);
+        page.AddChild(BuildJevPanel());
+        page.AddChild(BuildDecisionCard());
 
         return UiFactory.Scroll(page, 120);
     }
 
-    /// <summary>
-    /// Applies a mode-switch selection: swaps the visible section and persists the choice, so the
-    /// page reopens on the mode the player last used.
-    /// </summary>
-    private void OnPlayModeSelected(int index)
-    {
-        var coop = index == 1;
-        if (_soloSection != null) _soloSection.Visible = !coop;
-        if (_coopSection != null) _coopSection.Visible = coop;
-
-        var settings = CloneSettings(AgentRuntime.Instance.Settings);
-        settings.OverlayPlayMode = coop ? "coop" : "solo";
-        AgentRuntime.Instance.SaveSettings(settings);
-        RefreshDynamic();
-    }
+    /// <summary>Pause and confirm before persisting; the old view remains until confirmation.</summary>
+    private void OnPlayModeSelected(int index) => _ = ChangePlayModeAsync(index);
 
     /// <summary>
     /// The solo mode section: play controls and metrics, then the conversation the decisions are
@@ -128,10 +119,13 @@ internal sealed partial class AgentOverlayHost
         _playScreen = UiFactory.Label("-", UiFactory.FontHeading);
         _playAction = UiFactory.Label("-", UiFactory.FontHeading);
         _playUsage = UiFactory.Label("-", UiFactory.FontHeading);
+        // The three readings have a 96px floor each, but their live values (especially the Token
+        // sentence) grow well past that. Keep the short screen/action readings together and give
+        // the usage sentence its own full-width row rather than clipping the right-hand tile.
         section.AddChild(UiFactory.Row(
             UiFactory.MetricTile(Loc.T("屏幕"), _playScreen),
-            UiFactory.MetricTile(Loc.T("最近动作"), _playAction),
-            UiFactory.MetricTile(Loc.T("Token"), _playUsage)));
+            UiFactory.MetricTile(Loc.T("最近动作"), _playAction)));
+        section.AddChild(UiFactory.MetricTile(Loc.T("Token"), _playUsage));
 
         // The dual-layer toggle for solo play. When it is on, Jev picks each action and the LLM only
         // plans strategy; the panel below the conversation shows what Jev chose.
@@ -148,9 +142,7 @@ internal sealed partial class AgentOverlayHost
         section.AddChild(_dualLayerSoloCheck);
 
         section.AddChild(BuildChatCard());
-        section.AddChild(BuildJevPanel());
-        section.AddChild(BuildDecisionCard());
-        section.AddChild(UiFactory.Wrapped(Loc.T("自动游玩走 compact 状态和工具，与 MCP 相同，不需要视觉即可打完全部流程。对话默认只读：要动手就用「开始自动游玩」或「单步」，或者在消息里明确说「帮我打」。")));
+        section.AddChild(UiFactory.Wrapped(Loc.T("自动游玩走 compact 状态和工具；进行中发消息只影响后续决策。空闲聊天要代打一手须明确说「帮我打」。")));
         return section;
     }
 
@@ -165,10 +157,15 @@ internal sealed partial class AgentOverlayHost
         _jevStatus = UiFactory.Wrapped(Loc.T("Jev 未配置。到设置页填写 API Key 后即可用双层决策。"), UiFactory.FontCaption);
         _jevLastChoice = UiFactory.Wrapped("-", UiFactory.FontBody, muted: false);
         _jevProbabilities = UiFactory.Wrapped("-", UiFactory.FontCaption);
+        _jevDanger = UiFactory.Wrapped("-", UiFactory.FontCaption);
+        _jevLatency = UiFactory.Wrapped("-", UiFactory.FontCaption);
         column.AddChild(_jevStatus);
         column.AddChild(UiFactory.Row(
             UiFactory.MetricTile(Loc.T("Jev 最近选择"), _jevLastChoice),
             UiFactory.MetricTile(Loc.T("概率分布"), _jevProbabilities)));
+        column.AddChild(UiFactory.Row(
+            UiFactory.MetricTile(Loc.T("危险度"), _jevDanger),
+            UiFactory.MetricTile(Loc.T("耗时"), _jevLatency)));
         _jevPanel = UiFactory.Card(Loc.T("Jev 执行层"), column);
         return _jevPanel;
     }
@@ -273,7 +270,9 @@ internal sealed partial class AgentOverlayHost
         // column to 691 and clipped every card against a 440-pixel panel. Every dynamic label that can
         // hold a sentence goes through Wrapped for the same reason.
         _dualHint = UiFactory.Wrapped(DualHintText(), UiFactory.FontCaption);
-        _dualStatus = UiFactory.Label(Loc.T("队友尚未加入。"), UiFactory.FontBody, muted: true);
+        // Wrapped for the same reason: launch results ("AI 队友窗口已经在运行…", Steam-blocked errors
+        // with an exception message) are full sentences wider than the panel.
+        _dualStatus = UiFactory.Wrapped(Loc.T("队友尚未加入。"), UiFactory.FontBody, muted: true);
         // The companion's own live state, not the host's view of the shared run: the host already
         // knows the process is alive, and what a co-op player needs mid-fight is the other
         // character's health and whether it can act. Drawn as a tone chip rather than a sentence, so
@@ -289,7 +288,8 @@ internal sealed partial class AgentOverlayHost
         _dualContinueButton = UiFactory.Button(Loc.T("继续上次联机对局"), () => _ = ContinueDualAsync());
         _teamPause = UiFactory.Button(Loc.T("暂停队友"), () => _ = AgentRuntime.Instance.ControlTeammateAsync(false, CancellationToken.None));
         _teamResume = UiFactory.Button(Loc.T("继续游玩"), () => _ = AgentRuntime.Instance.ControlTeammateAsync(true, CancellationToken.None));
-        _teamControlStatus = UiFactory.Label(AgentRuntime.Instance.TeamControlStatus, UiFactory.FontCaption, muted: true);        page.AddChild(UiFactory.Card(
+        _teamControlStatus = UiFactory.Wrapped(AgentRuntime.Instance.TeamControlStatus, UiFactory.FontCaption, muted: true);
+        page.AddChild(UiFactory.Card(
             Loc.T("邀请与控制"),
             _companionChoiceToggle,
             _dualHint,
@@ -337,14 +337,10 @@ internal sealed partial class AgentOverlayHost
         _dualLayerCoopCheck = UiFactory.Check(
             Loc.T("双层决策模式（Jev 执行 + LLM 规划）"),
             AgentRuntime.Instance.Settings.DualLayerCoopEnabled);
-        _dualLayerCoopCheck.Toggled += on =>
-        {
-            var next = CloneSettings(AgentRuntime.Instance.Settings);
-            next.DualLayerCoopEnabled = on;
-            AgentRuntime.Instance.SaveSettings(next);
-            RefreshDynamic();
-        };
+        _dualLayerCoopCheck.Toggled += on => _ = SetCoopDualLayerAsync(on);
         page.AddChild(_dualLayerCoopCheck);
+        _companionSettingsStatus = UiFactory.Wrapped("", UiFactory.FontCaption);
+        page.AddChild(_companionSettingsStatus);
         // The play page's own scroll carries this section now; the section returns its plain column.
         return page;
     }
@@ -416,17 +412,16 @@ internal sealed partial class AgentOverlayHost
     private async Task SendChatAsync()
     {
         var text = _chatInput?.Text ?? string.Empty;
+        if (string.IsNullOrWhiteSpace(text)) return;
         if (_chatInput != null)
         {
             _chatInput.Text = string.Empty;
         }
 
         PersistChatFlags();
-        await AgentRuntime.Instance.SendChatAsync(
-            text,
-            _attachState?.ButtonPressed ?? true,
-            _attachShot?.ButtonPressed ?? false,
-            CancellationToken.None);
+        var attachState = _attachState?.ButtonPressed ?? true;
+        var attachShot = _attachShot?.ButtonPressed ?? false;
+        await AgentRuntime.Instance.SendChatAsync(text, attachState, attachShot, CancellationToken.None);
     }
 
     private async Task TestConnectionAsync()
@@ -548,11 +543,11 @@ internal sealed partial class AgentOverlayHost
             {
                 try
                 {
-                    _playScreen.Text = GameStateService.BuildStatePayload().screen;
+                    _playScreen.Text = Loc.T("屏幕：{0}", GameStateService.CurrentScreenName());
                 }
                 catch
                 {
-                    _playScreen.Text = "-";
+                    _playScreen.Text = Loc.T("屏幕：-");
                 }
             }
 
@@ -563,10 +558,11 @@ internal sealed partial class AgentOverlayHost
 
             if (_playUsage != null)
             {
-                _playUsage.Text = Trim(PlayerFacingSession.FormatUsage(
+                // Whole sentence: the tile has its own full-width row and wraps (see BuildSoloSection).
+                _playUsage.Text = PlayerFacingSession.FormatUsage(
                     AgentRuntime.Instance.SessionUsageKnown,
                     AgentRuntime.Instance.SessionUsage,
-                    AgentRuntime.Instance.SessionRequests), 24);
+                    AgentRuntime.Instance.SessionRequests);
             }
 
             var facing = AgentRuntime.Instance.PlayerFacing();
@@ -638,7 +634,7 @@ internal sealed partial class AgentOverlayHost
 
             if (_sendButton != null)
             {
-                _sendButton.Disabled = playing;
+                _sendButton.Disabled = false;
             }
 
             if (_dualStatus != null)
@@ -724,50 +720,10 @@ internal sealed partial class AgentOverlayHost
             // than trusting the last click to be the only writer.
             var mode = AgentRuntime.Instance.Settings;
             var coopMode = mode.OverlayPlayMode == "coop";
-            if (_playModeSwitch != null)
-            {
-                _playModeSwitch.SetSelected(coopMode ? 1 : 0);
-            }
-
-            if (_soloSection != null) _soloSection.Visible = !coopMode;
-            if (_coopSection != null) _coopSection.Visible = coopMode;
-
-            if (_dualLayerSoloCheck != null)
-            {
-                _dualLayerSoloCheck.SetPressedNoSignal(mode.DualLayerSoloEnabled);
-            }
-
-            if (_dualLayerCoopCheck != null)
-            {
-                _dualLayerCoopCheck.SetPressedNoSignal(mode.DualLayerCoopEnabled);
-            }
-
-            // The Jev panel is only meaningful while solo dual-layer mode is on; hide it otherwise so it
-            // does not read as a second, dead dashboard.
-            if (_jevPanel != null)
-            {
-                _jevPanel.Visible = mode.DualLayerSoloEnabled;
-            }
-
-            if (_jevStatus != null)
-            {
-                _jevStatus.Text = mode.HasJevConfigured()
-                    ? Loc.T("Jev 已配置（{0}）。双层决策开启后由 Jev 逐步操作，LLM 只调整策略。", mode.JevModel)
-                    : Loc.T("Jev 未配置。到设置页填写 API Key 后即可用双层决策。");
-            }
-
-            // What the execution layer actually decided. These are read from the runtime's own last
-            // reading rather than recomputed here, and they stay at "-" until a dual-layer turn happens:
-            // a panel that fills in for an LLM turn would claim Jev acted when it did not.
-            if (_jevLastChoice != null)
-            {
-                _jevLastChoice.Text = Trim(AgentRuntime.Instance.LastJevChoice, 90);
-            }
-
-            if (_jevProbabilities != null)
-            {
-                _jevProbabilities.Text = Trim(AgentRuntime.Instance.LastJevProbabilities, 90);
-            }
+            if (_dualLayerSoloCheck != null) _dualLayerSoloCheck.SetPressedNoSignal(mode.DualLayerSoloEnabled);
+            if (_dualLayerCoopCheck != null) _dualLayerCoopCheck.SetPressedNoSignal(mode.DualLayerCoopEnabled);
+            RefreshModeControls(coopMode, coopMode ? mode.DualLayerCoopEnabled : mode.DualLayerSoloEnabled);
+            RefreshJevReading(coopMode, mode);
         }
         catch (Exception ex)
         {
