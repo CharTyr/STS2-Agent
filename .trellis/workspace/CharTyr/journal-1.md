@@ -1531,3 +1531,27 @@ Isolated autoplay cleared Act 1 and ended naturally in Act 2. Thinking-model fai
 ### Next Steps
 
 - 09-22 四个任务仍在规划/进行中，其文档草稿改动保留未提交；真实双开与 Jev 服务实机验收待做。
+
+
+## Session 39: v0.16.0: live reasoning, dual-layer goal, overlay fit, clean screenshots; released to GitHub and Workshop
+
+**Date**: 2026-09-24
+**Task**: v0.16.0: live reasoning, dual-layer goal, overlay fit, clean screenshots; released to GitHub and Workshop
+**Branch**: `dev`
+
+### Summary
+
+Fixed user-reported issues after an in-overlay model test run: streamed reasoning now shows live in the overlay (gated by the show-reasoning switch, never persisted); the overlay's right-edge clipping was traced live to the chat options row (457px in a 440px panel) and fixed, plus wrapped warnings and a full Token reading; /vision/screenshot waits for a drawn frame (FramePostDraw) so it no longer contains the overlay. Audited the run's decision logs: Jev really executed (22 jev rows); repeated end_turn were distinct turns; found planner hints keyed by action kind never matched Jev's concrete option ids -> AlignHints, a bounded macro goal, plan provenance read from the truncated planner summary, and one atomic PlayStrategyUpdate merge shared by POST /strategy and both MCP surfaces (which also fixed POST /strategy resetting omitted fields). Three read-only reviews; confirmed findings fixed test-first. Updated the player skill (planner role, play_running conflict, 17 guided tools) and the user-level sts2-agent-dev skill. Live-checked in an isolated keyless game; released v0.16.0 via PR #199, GitHub Release and Workshop (proxy-off upload, Steam relogin lesson recorded). Not live-validated: streaming reasoning, dual-layer play quality, AI teammate.
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `746bfc3` | (see git log) |
+| `6a10414` | (see git log) |
+| `eaa0edc` | (see git log) |
+| `0bd5a76` | (see git log) |
+
+### Status
+
+[OK] **Completed**
