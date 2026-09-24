@@ -1,7 +1,7 @@
 {
   "title": "STS2 AI Agent",
   "visibility": "public",
-  "changeNote": "v0.16.0: watch the model think. With \"show reasoning\" on, a thinking model's reasoning now appears in the conversation while it is still deciding. The panel no longer cuts off its right edge (the chat options row was too wide), and the Token reading shows in full. Dual-layer mode: the planner's advice now actually reaches Jev, led by a one-sentence goal. Screenshots for vision no longer include the panel. Nothing changes for your runs: no cards, no numbers, no saves are touched.",
+  "changeNote": "v0.16.1: inviting an AI teammate now tells you why it failed. If you invite or continue a co-op run while in solo mode or while auto-play is running, the request used to sit at \"inviting...\" forever with no window, no message, and no log. It now returns a clear reason and the overlay says what to change first. Nothing changes for your runs: no cards, no numbers, no saves are touched.",
   "tags": [
     "Tools & APIs",
     "Utility",

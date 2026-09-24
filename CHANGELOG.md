@@ -2,7 +2,14 @@
 
 > Release attribution is recorded against tags or release commits. Post-tag maintenance is listed separately; current validation limits are maintained in [PRODUCT_PLAN_CURRENT.md](https://github.com/CharTyr/STS2-Agent/blob/main/PRODUCT_PLAN_CURRENT.md).
 
-## Unreleased
+## v0.16.1 - 2026-09-24
+
+> A focused fix for the silent invite: in solo mode or while autoplay is running,
+> `invite_ai_teammate` and `continue_ai_teammate` would sit at `pending` forever — no teammate
+> window, no log, `dual_launch_outcome` stuck at `Idle`. These refusals are now recorded as
+> `Rejected` with a readable reason and the call answers `409` pointing at the cause. Verified the
+> failing behavior and the fix in the same isolated game session (offline suite: 866 C# tests,
+> 423 Python tests, all gates).
 
 - **邀请队友失败现在有明确原因。** 在单人模式或自动游玩进行中调用 `invite_ai_teammate`/`continue_ai_teammate`，以前会一直挂在 `pending`：双开任务在第一道模式门就被无声拒绝，既不写状态也不写日志，`dual_launch_outcome` 永远停在 Idle。现在这类"玩家可修复"的前置失败会记录为 `Rejected` 并附可读的告知文本（切到多人模式 / 先暂停自动游玩），请求返回 409 指向原因；真正并发在途的尝试语义不变，仍是 `pending`。该缺陷在 `--force-steam off` 的隔离档实机中复现（邀请 8 分钟无任何反馈），已加离线回归。
 
