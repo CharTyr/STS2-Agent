@@ -13,7 +13,12 @@ internal sealed record DecisionLogEntry(
     int requests_spent,
     int? total_tokens,
     string? run_id,
-    double? confidence = null);
+    double? confidence = null,
+    string[]? option_ids = null,
+    Dictionary<string, double>? probabilities = null,
+    double? danger = null,
+    string? strategy_updated_at = null,
+    bool? jev_attempt = null);
 
 /// <summary>
 /// What one run has cost so far: how many decisions were recorded for it and what they spent.
@@ -37,6 +42,12 @@ internal sealed class DecisionLog
 {
     private const int DefaultCapacity = 200;
     private const long DefaultMaxFileBytes = 2 * 1024 * 1024;
+
+    /// <summary>
+    /// The most option ids one entry may carry. A combat frame can enumerate 255 options, and the log
+    /// line is meant to answer "was this choice offered", not to replay the whole frame.
+    /// </summary>
+    private const int MaxOfferedOptionIds = 48;
 
     private static readonly JsonSerializerOptions JsonOptions = new()
     {
@@ -74,7 +85,12 @@ internal sealed class DecisionLog
         int? totalTokens = null,
         DateTimeOffset? timestamp = null,
         string? runId = null,
-        double? confidence = null)
+        double? confidence = null,
+        IReadOnlyList<string>? optionIds = null,
+        IReadOnlyDictionary<string, double>? probabilities = null,
+        double? danger = null,
+        string? strategyUpdatedAt = null,
+        bool jevAttempt = false)
     {
         var safeSource = Clean(source, "unknown", 48);
         var safeAction = Clean(action, "unknown", 96);
@@ -101,7 +117,12 @@ internal sealed class DecisionLog
                 Math.Max(0, requestsSpent),
                 totalTokens is >= 0 ? totalTokens : null,
                 safeRunId,
-                confidence is >= 0.0 and <= 1.0 ? confidence : null);
+                confidence is >= 0.0 and <= 1.0 ? confidence : null,
+                optionIds is { Count: > 0 } ? optionIds.Take(MaxOfferedOptionIds).Select(id => Clean(id, "unknown", 96)).ToArray() : null,
+                probabilities is { Count: > 0 } ? new Dictionary<string, double>(probabilities, StringComparer.Ordinal) : null,
+                danger is >= 0.0 and <= 4.0 ? danger : null,
+                CleanOptional(strategyUpdatedAt, 64),
+                jevAttempt ? true : null);
 
             _entries.Add(entry);
             if (_entries.Count > _capacity)

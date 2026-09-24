@@ -1,0 +1,53 @@
+using System.Text.Json;
+using STS2AIAgent.Agent;
+
+namespace STS2AIAgent.Tests;
+
+/// <summary>
+/// The planner's state summary must stay a valid JSON document within a bounded size: the old
+/// character cut produced text that could not be parsed at all, which is why plan scope was always
+/// empty and the planner saw garbage. These tests pin the JSON-aware trimming.
+/// </summary>
+internal static class PlanningSummaryTests
+{
+    public static void UnderCapPassesThrough()
+    {
+        var summary = PlanningSummary.Trim("{\"screen\":\"COMBAT\",\"turn\":2}", 4000);
+        Assert.Equal("{\"screen\":\"COMBAT\",\"turn\":2}", summary);
+    }
+
+    public static void OverCapStaysValidJson()
+    {
+        var deck = Enumerable.Range(0, 500).Select(i => $"\"CARD_{i}\"");
+        var json = "{\"screen\":\"COMBAT\",\"turn\":3,\"run\":{\"deck\":[" + string.Join(",", deck) + "]}}";
+        var summary = PlanningSummary.Trim(json, 2000);
+
+        // The whole point: it parses, and the planner's own field names survive.
+        using var document = JsonDocument.Parse(summary);
+        Assert.Equal("COMBAT", document.RootElement.GetProperty("screen").GetString());
+        Assert.Equal(3, document.RootElement.GetProperty("turn").GetInt32());
+        Assert.True(summary.Length <= 2000, $"summary is {summary.Length} characters over a 2000 cap");
+    }
+
+    public static void CombatFieldsSurviveTrimming()
+    {
+        var enemies = Enumerable.Range(0, 40).Select(i =>
+            "{\"i\":" + i + ",\"name\":\"Slime " + i + "\",\"intents\":[{\"type\":\"attack\",\"damage\":9}]}");
+        var glossary = string.Join(",", Enumerable.Range(0, 200).Select(i => "\"TERM_" + i + "\":\"definition text\""));
+        var json = "{\"screen\":\"COMBAT\",\"turn\":1,\"combat\":{\"player\":{\"hp\":\"25/87\",\"energy\":2},\"enemies\":[" + string.Join(",", enemies) + "]},\"glossary\":{" + glossary + "}}";
+
+        var summary = PlanningSummary.Trim(json, 3000);
+        using var document = JsonDocument.Parse(summary);
+        Assert.Equal("COMBAT", document.RootElement.GetProperty("screen").GetString());
+        Assert.True(document.RootElement.GetProperty("combat").GetProperty("enemies").GetArrayLength() > 0);
+        Assert.False(document.RootElement.TryGetProperty("glossary", out _), "the glossary is the first thing trimmed");
+    }
+
+    public static void NonJsonInputPassesThrough()
+    {
+        // A bridge that returned text instead of JSON is the caller's problem; the summary must not
+        // fail it further. Truncate only when it is JSON.
+        var summary = PlanningSummary.Trim("not json", 100);
+        Assert.Equal("not json", summary);
+    }
+}

@@ -556,6 +556,16 @@ internal static class TestRunner
         yield return ("AgentLoop.StaticPrefixStableAcrossSteps", AgentLoopTests.PlayOnce_KeepsTheStaticPrefixStableAcrossSteps);
         yield return ("AgentLoop.StateLastWhenVisionIsAttached", AgentLoopTests.PlayOnce_KeepsTheStateLastWhenVisionIsAttached);
         yield return ("AgentLoop.JsonFallbackStaysInTheStaticPrefix", AgentLoopTests.PlayOnce_JsonFallbackStaysInTheStaticPrefix);
+        yield return ("AgentLoop.FallbackSeesPlannerGoal", AgentLoopTests.PlayOnce_FallbackSeesThePlannerGoal);
+        yield return ("AgentLoop.DefaultStrategyAddsNoMessage", AgentLoopTests.PlayOnce_DefaultStrategyAddsNoMessage);
+        yield return ("PlanningSummary.UnderCapPassThrough", () => Task.Run(PlanningSummaryTests.UnderCapPassesThrough));
+        yield return ("PlanningSummary.OverCapStaysValid", () => Task.Run(PlanningSummaryTests.OverCapStaysValidJson));
+        yield return ("PlanningSummary.CombatFieldsSurvive", () => Task.Run(PlanningSummaryTests.CombatFieldsSurviveTrimming));
+        yield return ("PlanningSummary.NonJsonPassThrough", () => Task.Run(PlanningSummaryTests.NonJsonInputPassesThrough));
+        yield return ("JevTrace.DeciderCarriesOfferedIds", JevTurnTraceTests.DeciderCarriesTheOfferedOptionIds);
+        yield return ("JevTrace.DecisionLogCarriesTrace", () => Task.Run(JevTurnTraceTests.DecisionLogCarriesTheTrace));
+        yield return ("JevTrace.FallbackMarked", () => Task.Run(JevTurnTraceTests.FallbackRowsAreMarkedAsJevAttempts));
+        yield return ("JevTrace.NoTraceStaysLean", () => Task.Run(JevTurnTraceTests.RowsWithoutATraceStayLean));
         yield return ("AgentLoop.CancelPropagates", AgentLoopTests.PlayOnce_PropagatesCancellation);
         yield return ("AgentLoop.UnexpectedExceptionCountsRequest", AgentLoopTests.PlayOnce_UnexpectedExceptionAfterTheRequestStillCountsIt);
         yield return ("AgentLoop.ReasoningDeltaForwarded", AgentLoopTests.ReasoningDeltaReachesTheTurnCallback);

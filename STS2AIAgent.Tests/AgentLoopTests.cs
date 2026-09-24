@@ -940,6 +940,105 @@ internal static class AgentLoopTests
         Assert.Contains("Choose the next legal action", messages[^1].Content);
     }
 
+    /// <summary>
+    /// Dual-layer fallback: Jev's low-confidence answer hands the turn to the LLM, and the LLM must
+    /// see the planner's standing strategy (goal/posture/instructions/hints) — not only Jev's screen
+    /// playbook. Before this fix the macro goal reached Jev but vanished on the fallback path.
+    /// </summary>
+    public static async Task PlayOnce_FallbackSeesThePlannerGoal()
+    {
+        var bridge = new FakeBridge();
+        var factory = new ScriptedClientFactory(new[]
+        {
+            new LlmCompletion
+            {
+                ToolCalls = new[]
+                {
+                    new LlmToolCall
+                    {
+                        Id = "call_act",
+                        Name = "act",
+                        ArgumentsJson = """{"action":"play_card","card_index":0}"""
+                    }
+                }
+            }
+        });
+        var settings = AgentSettings.CreateDefault();
+        settings.DualLayerSoloEnabled = true;
+        var store = new StrategyStore();
+        store.Update(new PlayStrategy
+        {
+            Goal = "kill the Shrinker Beetle before it buffs",
+            Posture = "aggressive",
+            Instructions = "open with Bash to apply Vulnerable",
+            OptionHints = new Dictionary<string, string>(StringComparer.Ordinal) { ["play_card"] = "prefer attacks" },
+            Source = "llm"
+        });
+        var decider = new StaticDecider(new ExecutionDecision { Confidence = 0.1, Reason = "unsure" });
+        var loop = new AgentLoop(bridge, factory, () => settings,
+            decider: decider, strategyStore: store, confidenceThreshold: () => 0.35);
+
+        var result = await loop.PlayOnceAsync(CancellationToken.None);
+
+        Assert.Equal("play_card", result.Acted);
+        var messages = factory.LastRequest!.Messages;
+        var text = string.Join("\n", messages.Select(m => m.Content));
+        Assert.Contains("kill the Shrinker Beetle before it buffs", text);
+        Assert.Contains("open with Bash to apply Vulnerable", text);
+        Assert.Contains("prefer attacks", text);
+        // It rides the static prefix, before the per-step state, so the prompt cache survives it.
+        var goalIndex = messages.ToList().FindIndex(m => m.Content.Contains("kill the Shrinker Beetle"));
+        var stateIndex = messages.ToList().FindIndex(m => m.Content.Contains("Latest compact game state"));
+        Assert.True(goalIndex >= 0 && stateIndex > goalIndex, "the strategy must precede the per-step state");
+    }
+
+    /// <summary>No strategy written yet (default store) adds nothing: the prompt stays byte-identical.</summary>
+    public static async Task PlayOnce_DefaultStrategyAddsNoMessage()
+    {
+        var bridge = new FakeBridge();
+        var factory = new ScriptedClientFactory(new[]
+        {
+            new LlmCompletion
+            {
+                ToolCalls = new[]
+                {
+                    new LlmToolCall
+                    {
+                        Id = "call_act",
+                        Name = "act",
+                        ArgumentsJson = """{"action":"end_turn"}"""
+                    }
+                }
+            }
+        });
+        var settings = AgentSettings.CreateDefault();
+        settings.DualLayerSoloEnabled = true;
+        var store = new StrategyStore();
+        var decider = new StaticDecider(new ExecutionDecision { Confidence = 0.1, Reason = "unsure" });
+        var loop = new AgentLoop(bridge, factory, () => settings,
+            decider: decider, strategyStore: store, confidenceThreshold: () => 0.35);
+
+        await loop.PlayOnceAsync(CancellationToken.None);
+
+        var text = string.Join("\n", factory.LastRequest!.Messages.Select(m => m.Content));
+        Assert.False(text.Contains("Standing strategy from the planner"), "a default strategy must not cost prompt tokens");
+    }
+
+    private sealed class StaticDecider : IActionDecider
+    {
+        private readonly ExecutionDecision _decision;
+
+        public StaticDecider(ExecutionDecision decision)
+        {
+            _decision = decision;
+        }
+
+        public Task<ExecutionDecision> DecideAsync(string snapshotJson, PlayStrategy strategy, CancellationToken cancellationToken)
+        {
+            return Task.FromResult(_decision);
+        }
+    }
+
     public static async Task PlayOnce_PropagatesCancellation()
     {
         var bridge = new FakeBridge { HonorCancelOnWait = false };

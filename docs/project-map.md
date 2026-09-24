@@ -167,6 +167,7 @@ one action runs at a time.
 - `STS2AIAgent/Agent/ContextCompaction.cs` — summary plus the last ≤6 decisions once 80% of the context window is used.
 - `STS2AIAgent/Agent/PlayPrompt.cs` — system prompts (play, chat, teammate), guidance slices, reply-language rule, JSON act fallback.
 - `STS2AIAgent/Agent/PlaybookSections.cs` — screen → embedded playbook slice (≤2400 chars; mirrors `mcp_server/src/sts2_mcp/scene_guidance.py`).
+- `STS2AIAgent/Agent/PlanningSummary.cs` — JSON-aware trim of the compact state for the planner's prompt: glossary/deck/piles go first, combat facts last, and the result is always parseable (a character cut used to produce invalid JSON, which left plan scope empty).
 - `STS2AIAgent/Agent/PlayPhases.cs` — the five status phases.
 - `STS2AIAgent/Agent/PlayIntent.cs` — the explicit phrases that let a chat message play one move.
 - `STS2AIAgent/Agent/ProactiveChatPolicy.cs` — opt-in teammate small talk (bounded count and interval).
@@ -183,7 +184,7 @@ one action runs at a time.
 - `STS2AIAgent/Agent/GameDataFilter.cs` — scene-aware field projections for game data (mirrors `mcp_server/src/sts2_mcp/game_data.py`).
 - `STS2AIAgent/Agent/GameDataExportSchema.cs` — field inventory of `/data/{collection}` (two-way test against the export code).
 - `STS2AIAgent/Agent/DecisionContext.cs` — reads `client_context.decision_reason` from `POST /action`.
-- `STS2AIAgent/Agent/DecisionLog.cs` — bounded, redacted accepted-decision log (`/decisions`).
+- `STS2AIAgent/Agent/DecisionLog.cs` — bounded, redacted accepted-decision log (`/decisions`). Dual-layer rows carry the per-turn Jev trace (`option_ids`, `probabilities`, `danger`, `strategy_updated_at`); an LLM fallback after a failed Jev attempt is marked `jev_attempt`.
 - `STS2AIAgent/Agent/PlayerFacingSession.cs` — the player-facing session summary the overlay renders (headline, next step, waiting-for-player).
 - `STS2AIAgent/Agent/DiagnosticExport.cs` — "export diagnostics" text and `Redact` (masks keys and bearer tokens).
 - `STS2AIAgent/Agent/McpProcessLauncher.cs` — optional launch of the Python MCP sidecar.

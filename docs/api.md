@@ -1932,6 +1932,11 @@ Invoke-RestMethod -Uri 'http://127.0.0.1:8080/data/cards' | ConvertTo-Json -Dept
 | `total_tokens` | number \| null | 这一步的 token 总量；模型未回报用量时为 `null` |
 | `run_id` | string \| null | 这一步属于哪一局；尚未识别到对局时为 `null`（Mod 内部的占位值 `run_unknown` 不会被写进来，否则它会把开局前的决策都混进同一个桶） |
 | `confidence` | number \| null | 仅 `jev` 行：Jev 对所选动作的置信度（0–1），低于阈值的选择不会执行、也就不会出现在日志里；其他来源没有该值（字段省略或为 `null`） |
+| `option_ids` | string[] \| null | 仅双层回合：该帧枚举给 Jev 的全部选项 ID（按帧顺序，封顶 48 个）。用于事后复盘"当时到底能不能出那张牌"——2026-09-23 的连续 `end_turn` 就是缺这份证据无法定性 |
+| `probabilities` | object \| null | 仅 `jev` 行：Jev 报告的逐选项概率分布（键为选项 ID） |
+| `danger` | number \| null | 仅 `jev` 行：Jev 对当前帧的危险度评分（0–4） |
+| `strategy_updated_at` | string \| null | 仅双层回合：决策所依据策略的 `updated_at` 时间戳，区分"这步用的是哪个版本的计划" |
+| `jev_attempt` | boolean \| null | 仅 `agent_loop` 行且为 `true` 时出现：该步是 Jev 未能提交后的 LLM 回退（Jev 已花掉一次请求）；普通 LLM 决策行省略 |
 
 只有**被接受**的动作才会进日志：动作名不在 `available_actions` 里、索引越界或执行失败时都不记录，所以日志里不会出现玩家界面上从未发生过的选择。
 

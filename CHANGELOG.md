@@ -2,6 +2,10 @@
 
 > Release attribution is recorded against tags or release commits. Post-tag maintenance is listed separately; current validation limits are maintained in [PRODUCT_PLAN_CURRENT.md](https://github.com/CharTyr/STS2-Agent/blob/main/PRODUCT_PLAN_CURRENT.md).
 
+## Unreleased
+
+- **双层模式的三处遗留缺陷补上。** LLM 回退路径现在能看到规划器的宏观目标：Jev 置信度不足交给慢模型时，提示词带上同一份 `goal` / `posture` / `instructions` / 按动作类别的提示（默认策略不耗 token，且挂在缓存前缀上）。规划器看到的状态不再是被字符截断的坏 JSON：`PlanningSummary` 按字段优先级裁剪（术语表/牌库/弃牌堆先让位，战斗事实最后），结果始终可解析——此前几乎每个战斗帧的规划器输入都无法解析，plan scope 恒为空。Jev 逐回合证据落地：决策日志的 `jev` 行现在带该帧枚举的全部选项 ID（封顶 48）、逐选项概率、危险度、所依据策略的 `updated_at`；Jev 未提交后由 LLM 接手的行标记 `jev_attempt=true`——2026-09-23 那串连续 `end_turn` 缺的就是这份证据，此后类似情况可以逐回合定性。
+
 ## v0.16.1 - 2026-09-24
 
 > A focused fix for the silent invite: in solo mode or while autoplay is running,

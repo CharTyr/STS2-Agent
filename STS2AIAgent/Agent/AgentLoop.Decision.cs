@@ -27,6 +27,7 @@ internal sealed partial class AgentLoop
         }
         string? accepted = null;
         string? response = null;
+        var strategyUpdatedAt = store.Current.UpdatedAt;
         AgentTurnResult Receipt(string? error = null) => new()
         {
             Error = error,
@@ -34,7 +35,8 @@ internal sealed partial class AgentLoop
             Reasoning = decision.Reason, Usage = decision.Usage, RequestsSpent = decision.RequestsSpent,
             Confidence = accepted != null ? decision.Confidence : null,
             Probabilities = accepted != null ? decision.Probabilities : null,
-            DangerScore = decision.DangerScore, JevElapsedMilliseconds = decision.JevElapsedMilliseconds
+            DangerScore = decision.DangerScore, JevElapsedMilliseconds = decision.JevElapsedMilliseconds,
+            OfferedOptionIds = decision.OfferedOptionIds, StrategyUpdatedAt = strategyUpdatedAt
         };
         try
         {
@@ -56,7 +58,8 @@ internal sealed partial class AgentLoop
                 StateFingerprint = outcome.Fingerprint, ExecutedUnsettled = outcome.Unsettled,
                 Reasoning = decision.Reason, Usage = decision.Usage, RequestsSpent = decision.RequestsSpent,
                 Confidence = decision.Confidence, Probabilities = decision.Probabilities,
-                DangerScore = decision.DangerScore, JevElapsedMilliseconds = decision.JevElapsedMilliseconds
+                DangerScore = decision.DangerScore, JevElapsedMilliseconds = decision.JevElapsedMilliseconds,
+                OfferedOptionIds = decision.OfferedOptionIds, StrategyUpdatedAt = strategyUpdatedAt
             };
         }
         catch (OperationCanceledException ex) when (cancellationToken.IsCancellationRequested)
@@ -74,6 +77,38 @@ internal sealed partial class AgentLoop
         }
     }
 
+    /// <summary>A strategy the planner never wrote carries no guidance and must not cost prompt tokens.</summary>
+    private static bool IsDefaultStrategy(PlayStrategy strategy)
+    {
+        return string.IsNullOrWhiteSpace(strategy.Goal)
+            && string.IsNullOrWhiteSpace(strategy.Instructions)
+            && (strategy.OptionHints == null || strategy.OptionHints.Count == 0)
+            && string.Equals(strategy.Source, PlayStrategy.DefaultSource, StringComparison.Ordinal);
+    }
+
+    /// <summary>The planner's goal, posture, instructions and kind-keyed hints, in LLM-readable lines.</summary>
+    private static string FormatStrategyForPrompt(PlayStrategy strategy)
+    {
+        var lines = new List<string>();
+        if (!string.IsNullOrWhiteSpace(strategy.Goal))
+        {
+            lines.Add("goal: " + strategy.Goal);
+        }
+
+        lines.Add("posture: " + strategy.Posture);
+        if (!string.IsNullOrWhiteSpace(strategy.Instructions))
+        {
+            lines.Add("instructions: " + strategy.Instructions);
+        }
+
+        if (strategy.OptionHints is { Count: > 0 } hints)
+        {
+            lines.Add("option hints by action kind: " + string.Join("; ", hints.Select(pair => pair.Key + " = " + pair.Value)));
+        }
+
+        return string.Join("\n", lines);
+    }
+
     private static AgentTurnResult WithJevReceipt(AgentTurnResult result, AgentTurnResult pending) => new()
     {
         AssistantText = result.AssistantText, Reasoning = result.Reasoning, Acted = result.Acted,
@@ -83,13 +118,14 @@ internal sealed partial class AgentLoop
         RequiresConfiguration = result.RequiresConfiguration, ToolRounds = result.ToolRounds,
         Usage = result.Usage, RequestsSpent = result.RequestsSpent,
         Confidence = result.Confidence, Probabilities = result.Probabilities,
-        DangerScore = pending.DangerScore, JevElapsedMilliseconds = pending.JevElapsedMilliseconds
+        DangerScore = pending.DangerScore, JevElapsedMilliseconds = pending.JevElapsedMilliseconds,
+        OfferedOptionIds = pending.OfferedOptionIds, StrategyUpdatedAt = pending.StrategyUpdatedAt
     };
 
     private async Task<AgentTurnResult> PlayWithModelAsync(
         AgentSettings settings, ResolvedModel resolved, string stateJson, AgentTurnResult pending,
         CancellationToken cancellationToken, Action<string>? checkState, Action<string>? reportPhase,
-        (string Id, string Text)? playInstruction = null)
+        (string Id, string Text)? playInstruction = null, PlayStrategy? strategy = null)
     {
         var usage = pending.Usage;
         var requests = pending.RequestsSpent;
@@ -137,6 +173,16 @@ internal sealed partial class AgentLoop
             {
                 messages.Add(LlmMessage.System(
                     "Strategy for the screen in the latest state (" + screenLabel + "):\n" + screenGuidance));
+            }
+
+            // The dual-layer planner's standing strategy, on the static prefix: it changes only when a
+            // plan refreshes, so it invalidates the per-step cache as rarely as the playbook does. A
+            // never-planned (default) strategy costs nothing.
+            if (strategy != null && !IsDefaultStrategy(strategy))
+            {
+                messages.Add(LlmMessage.System(
+                    "Standing strategy from the planner (historical guidance, not a fresh action):\n"
+                    + FormatStrategyForPrompt(strategy)));
             }
 
             var teamContext = _teamContext?.Invoke();

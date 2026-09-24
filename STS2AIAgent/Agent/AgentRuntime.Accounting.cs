@@ -79,7 +79,14 @@ internal sealed partial class AgentRuntime
                 result.StateFingerprint,
                 result.RequestsSpent,
                 result.Usage?.TotalTokens,
-                confidence: result.Confidence);
+                confidence: result.Confidence,
+                optionIds: result.OfferedOptionIds,
+                probabilities: result.Probabilities,
+                danger: result.DangerScore,
+                strategyUpdatedAt: result.StrategyUpdatedAt,
+                // The LLM finishing a turn Jev could not commit is itself a Jev attempt: the empty
+                // receipt already spent the request, and this row is where that attempt becomes visible.
+                jevAttempt: result.Confidence == null && result.JevElapsedMilliseconds != null);
         }
     }
 

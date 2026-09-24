@@ -193,8 +193,11 @@ internal sealed partial class AgentLoop
             }
         }
 
+        // The fallback half of the same dual-layer engine: when Jev could not commit, the slow model
+        // still works from the planner's standing strategy instead of re-deriving one from the frame.
+        var strategy = dualLayerOn && _strategyStore is { } strategyStore ? strategyStore.Current : null;
         return await PlayWithModelAsync(settings, resolved, stateJson, pending, cancellationToken, checkState, reportPhase,
-            playInstruction);
+            playInstruction, strategy);
     }
 
     public async Task<string> TestConnectionAsync(CancellationToken cancellationToken)

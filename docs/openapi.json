@@ -1400,9 +1400,41 @@
               "null"
             ]
           },
+          "danger": {
+            "format": "double",
+            "type": [
+              "number",
+              "null"
+            ]
+          },
           "id": {
             "format": "int64",
             "type": "integer"
+          },
+          "jev_attempt": {
+            "type": [
+              "boolean",
+              "null"
+            ]
+          },
+          "option_ids": {
+            "items": {
+              "type": "string"
+            },
+            "type": [
+              "array",
+              "null"
+            ]
+          },
+          "probabilities": {
+            "additionalProperties": {
+              "format": "double",
+              "type": "number"
+            },
+            "type": [
+              "object",
+              "null"
+            ]
           },
           "reason": {
             "type": [
@@ -1424,6 +1456,12 @@
             "type": "string"
           },
           "state_fingerprint": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "strategy_updated_at": {
             "type": [
               "string",
               "null"

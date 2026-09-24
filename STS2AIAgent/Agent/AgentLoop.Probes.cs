@@ -39,12 +39,14 @@ internal sealed partial class AgentLoop
 
     /// <summary>
     /// A compact state read for the strategy planner: the same view the play decision sees, trimmed
-    /// to a size a planning prompt can carry. Read-only; never acts.
+    /// to a size a planning prompt can carry. Read-only; never acts. The trim is JSON-aware, so the
+    /// planner always receives a parseable document (a character cut used to produce invalid JSON on
+    /// nearly every combat frame, which left plan scope empty and the planner reading garbage).
     /// </summary>
     public async Task<string> DescribeCurrentStateForPlanningAsync(CancellationToken cancellationToken)
     {
         var json = await _bridge.GetCompactStateJsonAsync(cancellationToken);
         const int max = 4000;
-        return json.Length <= max ? json : json[..max] + "…";
+        return PlanningSummary.Trim(json, max);
     }
 }
