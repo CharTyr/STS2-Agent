@@ -28,6 +28,25 @@ internal sealed class SseCompletionAccumulator
     /// </summary>
     public string ReasoningSoFar => _reasoning.ToString();
 
+    /// <summary>
+    /// The first <paramref name="maxChars"/> characters of the reasoning so far, with an ellipsis when
+    /// there is more. The display callback asks for this instead of <see cref="ReasoningSoFar"/>:
+    /// rebuilding the whole accumulation on every delta is O(n²) copying for a long thought, while the
+    /// preview costs only its own size. The final completion still reads <see cref="ReasoningSoFar"/>,
+    /// so the recorded bubble and the provider echo keep the full text.
+    /// </summary>
+    public string ReasoningPreview(int maxChars)
+    {
+        if (_reasoning.Length <= maxChars)
+        {
+            return _reasoning.ToString();
+        }
+
+        var chars = new char[maxChars];
+        _reasoning.CopyTo(0, chars, 0, maxChars);
+        return new string(chars) + "…";
+    }
+
     /// <summary>Feeds one raw line of the response body, with or without its trailing newline.</summary>
     /// <returns>
     /// True when this line added reasoning text -- the only partial a display callback cares about, so

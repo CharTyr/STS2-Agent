@@ -166,6 +166,10 @@ internal sealed partial class AgentOverlayHost
         column.AddChild(UiFactory.Row(
             UiFactory.MetricTile(Loc.T("危险度"), _jevDanger),
             UiFactory.MetricTile(Loc.T("耗时"), _jevLatency)));
+        // The dual-layer split for this session: how often Jev committed vs how often the LLM had
+        // to finish a turn Jev could not. "-" until the first dual-layer turn.
+        _jevFallbackRate = UiFactory.Wrapped("-", UiFactory.FontCaption);
+        column.AddChild(_jevFallbackRate);
         _jevPanel = UiFactory.Card(Loc.T("Jev 执行层"), column);
         return _jevPanel;
     }

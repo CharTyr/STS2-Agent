@@ -74,6 +74,11 @@ internal static class SessionControlContractTests
         // The wait is bounded so a minimized or occluded window fails the capture instead of hanging
         // the request or handing back a stale frame.
         Assert.Contains("Task.WhenAny", service, StringComparison.Ordinal);
+        // The frame connection is released on every path: a timed-out ToSignal awaiter would stay
+        // subscribed forever on a window that never renders (one leaked connection per failed capture).
+        Assert.Contains("Disconnect(RenderingServer.SignalName.FramePostDraw", service, StringComparison.Ordinal);
+        Assert.False(service.Contains("ToSignal(", StringComparison.Ordinal),
+            "do not bring back ToSignal for the frame wait: its losing awaiter leaks a connection");
         Assert.Contains("IsOverlayVisible", service, StringComparison.Ordinal);
         Assert.Contains("RestoreOverlay", service, StringComparison.Ordinal);
 
@@ -99,6 +104,19 @@ internal static class SessionControlContractTests
         var overlay = AgentSourceFixture.Read("STS2AIAgent/Ui/AgentOverlayHost.cs");
         var rebuild = AgentSourceFixture.MethodBody(overlay, "RebuildInPlace");
         Assert.Contains("_captureHidden", rebuild, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// The redacted diagnostics export is reachable over loopback HTTP, so a hang like "the planner
+    /// never ran" can be diagnosed with one curl instead of opening the overlay and clicking 导出诊断.
+    /// </summary>
+    public static void DiagnosticsRouteServesTheRedactedExport()
+    {
+        var router = AgentSourceFixture.Read("STS2AIAgent/Server/Router.cs");
+        Assert.Contains("\"/diagnostics\"", router, StringComparison.Ordinal);
+        Assert.Contains("AgentRuntime.Instance.ExportDiagnostics()", router, StringComparison.Ordinal);
+        Assert.Contains("text/plain; charset=utf-8", router, StringComparison.Ordinal);
+        Assert.Contains("local_only", router, StringComparison.Ordinal);
     }
 
     public static void WorkshopStagingKeepsLocalCandidate()

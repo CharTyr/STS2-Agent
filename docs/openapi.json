@@ -1400,9 +1400,41 @@
               "null"
             ]
           },
+          "danger": {
+            "format": "double",
+            "type": [
+              "number",
+              "null"
+            ]
+          },
           "id": {
             "format": "int64",
             "type": "integer"
+          },
+          "jev_attempt": {
+            "type": [
+              "boolean",
+              "null"
+            ]
+          },
+          "option_ids": {
+            "items": {
+              "type": "string"
+            },
+            "type": [
+              "array",
+              "null"
+            ]
+          },
+          "probabilities": {
+            "additionalProperties": {
+              "format": "double",
+              "type": "number"
+            },
+            "type": [
+              "object",
+              "null"
+            ]
           },
           "reason": {
             "type": [
@@ -1424,6 +1456,12 @@
             "type": "string"
           },
           "state_fingerprint": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "strategy_updated_at": {
             "type": [
               "string",
               "null"
@@ -3397,7 +3435,7 @@
   "info": {
     "description": "Generated from Router routes and C# wire payload declarations. Human guidance remains in docs/api.md.",
     "title": "STS2 AI Agent Mod HTTP API",
-    "version": "0.16.0"
+    "version": "0.16.2"
   },
   "jsonSchemaDialect": "https://json-schema.org/draft/2020-12/schema",
   "openapi": "3.1.0",
@@ -3829,6 +3867,33 @@
           }
         },
         "summary": "Read accepted decisions, oldest first."
+      }
+    },
+    "/diagnostics": {
+      "get": {
+        "responses": {
+          "200": {
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "description": "The redacted diagnostics text (no API keys, Authorization headers, session tokens, or chat bodies)."
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorEnvelope"
+                }
+              }
+            },
+            "description": "The normal HTTP error envelope."
+          }
+        },
+        "summary": "Read the redacted diagnostics export (same text as the overlay's export button)."
       }
     },
     "/events/stream": {

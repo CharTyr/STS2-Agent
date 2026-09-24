@@ -192,7 +192,9 @@ internal sealed class PlaySessionStore
                     action = DiagnosticExport.Redact(entry.action ?? "unknown"),
                     reason = DiagnosticExport.Redact(entry.reason),
                     state_fingerprint = DiagnosticExport.Redact(entry.state_fingerprint),
-                    confidence = entry.confidence is >= 0 and <= 1 ? entry.confidence : null
+                    confidence = entry.confidence is >= 0 and <= 1 ? entry.confidence : null,
+                    option_ids = entry.option_ids == null ? null : entry.option_ids.Select(id => DiagnosticExport.Redact(id ?? "")).ToArray(),
+                    strategy_updated_at = DiagnosticExport.Redact(entry.strategy_updated_at)
                 })
                 .TakeLast(MaxDecisions)
                 .ToList();

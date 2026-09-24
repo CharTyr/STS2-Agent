@@ -76,21 +76,45 @@ internal static class ScreenshotService
                 return false;
             }
 
+
             var budget = frameBudget < FrameWaitCap ? frameBudget : FrameWaitCap;
             using var budgetCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-            var signal = AwaitFramePostDraw(tree);
-            var timeout = Task.Delay(budget, budgetCts.Token);
-            var completed = await Task.WhenAny(signal, timeout).ConfigureAwait(true);
-            if (completed != signal)
-            {
-                return false;
-            }
 
-            // Consume the signal's own exception (an invalidated target, a shutting-down tree) and
-            // keep the continuation on the game thread, where the read-back below belongs.
-            await signal.ConfigureAwait(true);
-            budgetCts.Cancel();
-            return true;
+            // Explicit connect + disconnect instead of ToSignal: a one-shot signal awaiter that
+            // loses its timeout race stays subscribed (and keeps a GCHandle) until a frame is drawn
+            // -- which on a minimized or occluded window is never, so every failed capture leaked a
+            // connection. Disconnecting on every path keeps the renderer's connection list clean.
+            var frameDrawn = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+            // onFrame disconnects itself when the frame lands; the finally below covers the paths
+            // where no frame ever comes (timeout / cancellation).
+            Callable onFrame = default;
+            onFrame = Callable.From(() =>
+            {
+                frameDrawn.TrySetResult();
+                RenderingServer.Singleton.Disconnect(RenderingServer.SignalName.FramePostDraw, onFrame);
+            });
+            RenderingServer.Singleton.Connect(RenderingServer.SignalName.FramePostDraw, onFrame);
+            try
+            {
+                var timeout = Task.Delay(budget, budgetCts.Token);
+                var completed = await Task.WhenAny(frameDrawn.Task, timeout).ConfigureAwait(true);
+                if (completed != frameDrawn.Task)
+                {
+                    return false;
+                }
+
+                // The frame callback ran on the render thread; this continuation is on the game
+                // thread, where the read-back below belongs.
+                budgetCts.Cancel();
+                return true;
+            }
+            finally
+            {
+                if (RenderingServer.Singleton.IsConnected(RenderingServer.SignalName.FramePostDraw, onFrame))
+                {
+                    RenderingServer.Singleton.Disconnect(RenderingServer.SignalName.FramePostDraw, onFrame);
+                }
+            }
         }
 
         public byte[]? TryCaptureJpeg()
@@ -167,14 +191,4 @@ internal static class ScreenshotService
         }
     }
 
-    /// <summary>
-    /// Resolves on the signal the RenderingServer emits at the end of a frame, once every viewport has
-    /// been updated: awaiting this is what makes the read-back see the frame drawn without the overlay.
-    /// The SceneTree argument is only the signal target, so an invalid one fails fast instead of
-    /// waiting for a frame that will never come.
-    /// </summary>
-    private static async Task AwaitFramePostDraw(SceneTree sceneTree)
-    {
-        await sceneTree.ToSignal(RenderingServer.Singleton, RenderingServer.SignalName.FramePostDraw);
-    }
 }

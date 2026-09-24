@@ -113,6 +113,20 @@ internal sealed class AgentTurnResult
 
     /// <summary>Elapsed Jev milliseconds including retry wait; null for plain LLM turns.</summary>
     public long? JevElapsedMilliseconds { get; init; }
+
+    /// <summary>
+    /// The option ids the frame offered the execution model, when a dual-layer turn produced this
+    /// result. Present on both the accepted-Jev turn and the empty receipt that fell back to the LLM,
+    /// so the decision log can reconstruct what Jev was choosing between.
+    /// </summary>
+    public IReadOnlyList<string>? OfferedOptionIds { get; init; }
+
+    /// <summary>
+    /// The strategy the execution model decided under, as its <c>updated_at</c> timestamp. Null when
+    /// no dual-layer turn happened, so a plan that landed mid-run cannot be retro-dated onto earlier
+    /// decisions.
+    /// </summary>
+    public string? StrategyUpdatedAt { get; init; }
 }
 
 internal sealed class ChatTurn

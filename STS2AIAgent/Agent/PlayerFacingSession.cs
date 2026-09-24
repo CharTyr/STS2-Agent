@@ -326,6 +326,21 @@ internal static class PlayerFacingSession
         return spend;
     }
 
+    /// <summary>
+    /// The dual-layer split for the Jev panel: turns Jev actually executed versus turns the LLM
+    /// finished after a failed attempt. Zero/zero stays a dash -- the panel has nothing to say until
+    /// the first dual-layer turn, and "Jev 0 次 · 回退 0 次" would just be noise.
+    /// </summary>
+    public static string FormatJevRate(long jevAccepted, long fallbacks)
+    {
+        if (jevAccepted <= 0 && fallbacks <= 0)
+        {
+            return "-";
+        }
+
+        return Loc.T("Jev 执行 {0} 次 · 回退 LLM {1} 次", jevAccepted, fallbacks);
+    }
+
     private static PlayerFacingView ComposeCompanion(PlayerFacingSnapshot s)
     {
         if (s.PlayPhase == "stopping")

@@ -65,6 +65,13 @@ internal sealed record ExecutionDecision
     public string? Error { get; init; }
 
     /// <summary>
+    /// Every option id the frame offered, in the order the enumerator produced them. The decision log
+    /// stores this so a later review can answer "was that option actually offered" — the question the
+    /// 2026-09-23 run could not answer about a low-confidence end_turn.
+    /// </summary>
+    public IReadOnlyList<string>? OfferedOptionIds { get; init; }
+
+    /// <summary>
     /// The action+indices serialized to the exact JSON argument object <see cref="ActJsonParser"/> and
     /// the <c>act</c> handler read: <c>action</c>, <c>card_index</c>, <c>target_index</c>,
     /// <c>option_index</c>, <c>x</c>, <c>y</c>, <c>tool</c>, <c>reason</c>. Unused parameters are

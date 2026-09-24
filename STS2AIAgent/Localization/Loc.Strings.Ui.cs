@@ -182,6 +182,7 @@ internal static partial class Loc
             "Newest first: the action, its reason, the source, and the tokens that step spent.";
         map["理由：{0}"] = "Reason: {0}";
         map["来源：{0}"] = "Source: {0}";
+        map["Jev 未提交 → LLM 接手"] = "Jev could not commit → LLM took over";
         map["本次 Token：{0}"] = "Tokens this step: {0}";
         map["本次 Token：未知"] = "Tokens this step: unknown";
         map["还没有决策记录。自动游玩或外部客户端执行动作后会出现在这里。"] =

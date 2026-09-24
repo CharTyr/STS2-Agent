@@ -16,7 +16,7 @@ internal static class Router
 {
     private const string ServiceName = "sts2-ai-agent";
     private const string ProtocolVersion = "2026-03-11-v1";
-    internal const string ModVersion = "0.16.0";
+    internal const string ModVersion = "0.16.2";
     private const string LogPrefix = "[STS2AIAgent.Router]";
 
     private static long _requestCounter;
@@ -267,6 +267,27 @@ internal static class Router
                         companion_auto_play = AgentRuntime.Instance.CompanionAutoPlay
                     }
                 });
+                statusCode = 200;
+                return;
+            }
+
+            // The redacted diagnostics export, for debugging without opening the overlay: the same
+            // text the 导出诊断 button copies (no API keys, Authorization headers, session tokens,
+            // or chat bodies). Local-only, like the other control routes.
+            if (request.HttpMethod == "GET" && request.Url?.AbsolutePath == "/diagnostics")
+            {
+                if (!request.IsLocal)
+                {
+                    throw new ApiException(403, "local_only", "Diagnostics are only available on loopback.");
+                }
+
+                var text = AgentRuntime.Instance.ExportDiagnostics();
+                var bytes = Encoding.UTF8.GetBytes(text);
+                response.StatusCode = 200;
+                response.ContentType = "text/plain; charset=utf-8";
+                response.ContentEncoding = Encoding.UTF8;
+                response.ContentLength64 = bytes.LongLength;
+                await response.OutputStream.WriteAsync(bytes, cancellationToken);
                 statusCode = 200;
                 return;
             }

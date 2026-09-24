@@ -184,7 +184,8 @@ internal sealed class JevExecutionDecider : IActionDecider
             DangerScore = danger,
             JevElapsedMilliseconds = elapsed,
             Usage = usage,
-            RequestsSpent = attempts
+            RequestsSpent = attempts,
+            OfferedOptionIds = options.Select(option => option.Id).ToArray()
         };
     }
 

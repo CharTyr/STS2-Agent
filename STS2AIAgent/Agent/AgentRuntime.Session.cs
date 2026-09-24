@@ -54,14 +54,17 @@ internal sealed partial class AgentRuntime
 
     internal DecisionLogEntry RecordDecision(string source, string action, string? reason = null,
         string? stateFingerprint = null, int requestsSpent = 0, int? totalTokens = null,
-        string? runId = null, double? confidence = null, bool runIdObserved = false)
+        string? runId = null, double? confidence = null, bool runIdObserved = false,
+        IReadOnlyList<string>? optionIds = null, IReadOnlyDictionary<string, double>? probabilities = null,
+        double? danger = null, string? strategyUpdatedAt = null, bool jevAttempt = false)
     {
         string? activeRun;
         // An explicit pre-action snapshot may deliberately be unknown (menu action). Do not fill
         // its null from the last autoplay run; only a caller without an observed ID may fall back.
         lock (_gate) activeRun = runIdObserved ? runId : runId ?? _sessionRunId ?? _runBoundary.RunId;
         return _decisions.Record(source, action, reason, stateFingerprint, requestsSpent, totalTokens,
-            runId: activeRun, confidence: confidence);
+            runId: activeRun, confidence: confidence, optionIds: optionIds, probabilities: probabilities,
+            danger: danger, strategyUpdatedAt: strategyUpdatedAt, jevAttempt: jevAttempt);
     }
 
     // Writers are serialized without blocking history updates on IO. A failed save stays pending

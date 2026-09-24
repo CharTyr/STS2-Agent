@@ -133,6 +133,7 @@ internal static class TestRunner
         yield return ("Settings.ModelRemovalAllRoles", () => Task.Run(SettingsExperienceRegressionTests.ModelRemovalReportsEveryRoleReference));
         yield return ("Settings.ModelRemovalUnreferenced", () => Task.Run(SettingsExperienceRegressionTests.ModelRemovalAllowsUnreferencedModel));
         yield return ("Usage.MissingNotZero", () => Task.Run(PlayerExperienceTests.MissingUsageIsNotDisplayedAsZero));
+        yield return ("Usage.JevRateCounts", () => Task.Run(PlayerExperienceTests.JevRateShowsAcceptedAndFallbackCounts));
         yield return ("Usage.SummaryKeepsUnknownAndBudgetReason", () => Task.Run(PlayerExperienceTests.UsageSummaryKeepsUnknownUnknownAndCarriesTheBudgetReason));
         yield return ("Diagnostics.RedactsSecrets", () => Task.Run(PlayerExperienceTests.DiagnosticExportRedactsSecretsAndOmitsChat));
         yield return ("Diagnostics.RedactsAllCredentialShapes", () => Task.Run(RuntimeExperienceRegressionTests.DiagnosticExportRedactsAllCredentialShapes));
@@ -203,6 +204,7 @@ internal static class TestRunner
         yield return ("Session.LocalMcpControl", () => Task.Run(SessionControlContractTests.RouterExposesLocalMcpControl));
         yield return ("Session.LocalScreenshot", () => Task.Run(SessionControlContractTests.RouterExposesLocalScreenshot));
         yield return ("CoopStartup.KeepLocalCandidate", () => Task.Run(SessionControlContractTests.WorkshopStagingKeepsLocalCandidate));
+        yield return ("Diagnostics.RouteServesRedactedExport", () => Task.Run(SessionControlContractTests.DiagnosticsRouteServesTheRedactedExport));
         yield return ("TeamChat.ReadOnly", AgentLoopTests.TeamChat_CannotActEvenWithPlayIntent);
         yield return ("TeamChat.NextDecision", AgentLoopTests.TeamSuggestion_ReachesNextPlayDecision);
         yield return ("TeamChat.BoundedHistory", () => Task.Run(TeamConversationTests.HistoryIsBoundedAndCleared));
@@ -556,6 +558,17 @@ internal static class TestRunner
         yield return ("AgentLoop.StaticPrefixStableAcrossSteps", AgentLoopTests.PlayOnce_KeepsTheStaticPrefixStableAcrossSteps);
         yield return ("AgentLoop.StateLastWhenVisionIsAttached", AgentLoopTests.PlayOnce_KeepsTheStateLastWhenVisionIsAttached);
         yield return ("AgentLoop.JsonFallbackStaysInTheStaticPrefix", AgentLoopTests.PlayOnce_JsonFallbackStaysInTheStaticPrefix);
+        yield return ("AgentLoop.FallbackSeesPlannerGoal", AgentLoopTests.PlayOnce_FallbackSeesThePlannerGoal);
+        yield return ("AgentLoop.DefaultStrategyAddsNoMessage", AgentLoopTests.PlayOnce_DefaultStrategyAddsNoMessage);
+        yield return ("PlanningSummary.UnderCapPassThrough", () => Task.Run(PlanningSummaryTests.UnderCapPassesThrough));
+        yield return ("PlanningSummary.OverCapStaysValid", () => Task.Run(PlanningSummaryTests.OverCapStaysValidJson));
+        yield return ("PlanningSummary.CombatFieldsSurvive", () => Task.Run(PlanningSummaryTests.CombatFieldsSurviveTrimming));
+        yield return ("PlanningSummary.NonJsonPassThrough", () => Task.Run(PlanningSummaryTests.NonJsonInputPassesThrough));
+        yield return ("PlanningSummary.ExtremeSkeleton", () => Task.Run(PlanningSummaryTests.ExtremeFrameDegradesToASkeletonNotEmpty));
+        yield return ("JevTrace.DeciderCarriesOfferedIds", JevTurnTraceTests.DeciderCarriesTheOfferedOptionIds);
+        yield return ("JevTrace.DecisionLogCarriesTrace", () => Task.Run(JevTurnTraceTests.DecisionLogCarriesTheTrace));
+        yield return ("JevTrace.FallbackMarked", () => Task.Run(JevTurnTraceTests.FallbackRowsAreMarkedAsJevAttempts));
+        yield return ("JevTrace.NoTraceStaysLean", () => Task.Run(JevTurnTraceTests.RowsWithoutATraceStayLean));
         yield return ("AgentLoop.CancelPropagates", AgentLoopTests.PlayOnce_PropagatesCancellation);
         yield return ("AgentLoop.UnexpectedExceptionCountsRequest", AgentLoopTests.PlayOnce_UnexpectedExceptionAfterTheRequestStillCountsIt);
         yield return ("AgentLoop.ReasoningDeltaForwarded", AgentLoopTests.ReasoningDeltaReachesTheTurnCallback);
@@ -862,6 +875,7 @@ internal static class TestRunner
         yield return ("OverlayTabs.DecisionPageReusesRuntimeCounters", () => Task.Run(OverlayTabContractTests.DecisionPageReusesTheRuntimeCounters));
         yield return ("OverlayTabs.DecisionLinesNewestFirst", () => Task.Run(OverlayTabContractTests.DecisionLinesAreNewestFirstAndUnknownUsageStaysUnknown));
         yield return ("OverlayTabs.NoDecisionsNoLines", () => Task.Run(OverlayTabContractTests.NoDecisionsProducesNoLines));
+        yield return ("OverlayTabs.JevAttemptMarked", () => Task.Run(OverlayTabContractTests.JevAttemptRowsAreMarkedInTheLine));
         yield return ("OverlayTabs.DecisionLinesBounded", () => Task.Run(OverlayTabContractTests.DecisionLinesStayBounded));
         yield return ("OverlayLayout.SaveOutsideScroll", () => Task.Run(OverlayLayoutContractTests.SaveStaysOutsideTheScrollingForm));
         yield return ("OverlayLayout.JumpButtonsMatchSections", () => Task.Run(OverlayLayoutContractTests.EveryJumpButtonNamesARegisteredSection));
@@ -890,6 +904,8 @@ internal static class TestRunner
         yield return ("LiveReasoning.SwitchGatesStorage", () => Task.Run(LiveThoughtBufferTests.NothingIsStoredWhileTheSwitchIsOff));
         yield return ("LiveReasoning.BlankIsNotStored", () => Task.Run(LiveThoughtBufferTests.BlankReasoningIsNotStored));
         yield return ("LiveReasoning.ClippedAndCleared", () => Task.Run(LiveThoughtBufferTests.StreamedTextIsClippedAndCleared));
+        yield return ("LiveReasoning.PreviewBounded", () => Task.Run(LiveThoughtBufferTests.ThePreviewIsBoundedWhileTheCompletionKeepsEverything));
+        yield return ("LiveReasoning.PreviewShortWhole", () => Task.Run(LiveThoughtBufferTests.ShortReasoningPreviewsWhole));
         yield return ("LiveReasoning.CallbackReachesTheRequest", () => Task.Run(LiveReasoningWiringTests.TheLiveCallbackTravelsFromTheRuntimeToTheRequest));
         yield return ("LiveReasoning.NoDuplicateBubble", () => Task.Run(LiveReasoningWiringTests.TheStreamedBubbleIsClearedBeforeTheRecordedOne));
         yield return ("LiveReasoning.OverlayGatedByTheSwitch", () => Task.Run(LiveReasoningWiringTests.TheOverlayDrawsThePartialOnlyWhenThinkingIsShown));

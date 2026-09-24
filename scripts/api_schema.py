@@ -51,8 +51,10 @@ RECORD_DECLARATION = re.compile(
 )
 # A record parameter may carry a default (`double? confidence = null`); the default does not change
 # the wire type, so the regex captures type and name and permits an optional `= <value>` tail.
+# The type may be a simple identifier, an array of one, or one generic type argument list
+# (`Dictionary<string, double>`), because DecisionLogEntry declares exactly that dialect.
 RECORD_PARAMETER = re.compile(
-    r"^(?P<type>[A-Za-z_][A-Za-z0-9_]*(?:\[\])*(?:\?)?)\s+(?P<name>@?[a-z][a-z0-9_]*)(?:\s*=\s*[^\s].*)?$"
+    r"^(?P<type>[A-Za-z_][A-Za-z0-9_]*(?:<[^>]+>)?(?:\[\])*(?:\?)?)\s+(?P<name>@?[a-z][a-z0-9_]*)(?:\s*=\s*[^\s].*)?$"
 )
 ACTION_SWITCH = re.compile(r'^\s*"(?P<name>[a-z][a-z0-9_]*)"\s*=>', re.MULTILINE)
 ROUTE_LITERAL = re.compile(r'"(?P<path>/[a-z0-9/_.-]*)"')
@@ -196,7 +198,7 @@ def parse_record_properties(source: str, record_name: str, label: str) -> list[C
     if closing < 0:
         raise SchemaError(f"{label}:{record_name} has an unterminated parameter list")
     fields: list[CSharpProperty] = []
-    for raw in source[opening + 1 : closing].split(","):
+    for raw in split_record_parameters(source[opening + 1 : closing]):
         parameter = " ".join(raw.split())
         parsed = RECORD_PARAMETER.match(parameter)
         if parsed is None:
@@ -207,12 +209,40 @@ def parse_record_properties(source: str, record_name: str, label: str) -> list[C
     return fields
 
 
+def split_record_parameters(text: str) -> list[str]:
+    """Split on commas that are not inside a generic type argument list.
+
+    `Dictionary<string, double>` is the one generic the wire dialect carries, and a naive comma
+    split would cut its argument list in half.
+    """
+    parts: list[str] = []
+    depth = 0
+    start = 0
+    for index, char in enumerate(text):
+        if char == "<":
+            depth += 1
+        elif char == ">":
+            depth -= 1
+        elif char == "," and depth == 0:
+            parts.append(text[start:index])
+            start = index + 1
+    parts.append(text[start:])
+    return parts
+
+
 def schema_for_type(type_name: str, known_components: set[str]) -> dict[str, Any]:
     """Map the deliberately limited C# wire type dialect to OpenAPI 3.1 JSON Schema."""
     compact = type_name.replace(" ", "")
     nullable = compact.endswith("?")
     if nullable:
         compact = compact[:-1]
+
+    # One generic argument list: `Dictionary<string, double>` — a string-keyed JSON object whose
+    # values share the inner primitive type. It is the only generic the wire dialect carries.
+    generic = re.fullmatch(r"Dictionary<string,\s*(?P<inner>[A-Za-z_][A-Za-z0-9_]*)>", compact)
+    generic_inner: str | None = generic.group("inner") if generic else None
+    if generic_inner is not None:
+        compact = generic_inner
 
     dimensions = 0
     while compact.endswith("[]"):
@@ -244,6 +274,9 @@ def schema_for_type(type_name: str, known_components: set[str]) -> dict[str, Any
 
     for _ in range(dimensions):
         result = {"type": "array", "items": result}
+
+    if generic_inner is not None:
+        result = {"type": "object", "additionalProperties": result}
 
     if not nullable or compact == "object":
         return result
@@ -621,6 +654,18 @@ def build_paths(
                 ref("StrategyData"),
                 request_body=json_body(ref("StrategyUpdateRequest")),
             ),
+        },
+        "/diagnostics": {
+            "get": {
+                "summary": "Read the redacted diagnostics export (same text as the overlay's export button).",
+                "responses": {
+                    "200": {
+                        "description": "The redacted diagnostics text (no API keys, Authorization headers, session tokens, or chat bodies).",
+                        "content": {"text/plain": {"schema": {"type": "string"}}},
+                    },
+                    "default": error_response(),
+                },
+            },
         },
         "/companion/control": {
             "post": ordinary_operation(

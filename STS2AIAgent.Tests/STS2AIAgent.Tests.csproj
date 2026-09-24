@@ -22,6 +22,7 @@
     <Compile Include="..\STS2AIAgent\Agent\StopKindPolicy.cs" Link="Agent\StopKindPolicy.cs" />
     <Compile Include="..\STS2AIAgent\Agent\DualLaunchOutcome.cs" Link="Agent\DualLaunchOutcome.cs" />
     <Compile Include="..\STS2AIAgent\Agent\DualLaunchBlockReason.cs" Link="Agent\DualLaunchBlockReason.cs" />
+    <Compile Include="..\STS2AIAgent\Agent\PlanningSummary.cs" Link="Agent\PlanningSummary.cs" />
     <Compile Include="..\STS2AIAgent\Agent\AgentErrorEnvelope.cs" Link="Agent\AgentErrorEnvelope.cs" />
     <Compile Include="..\STS2AIAgent\Agent\NoProgressPolicy.cs" Link="Agent\NoProgressPolicy.cs" />
     <Compile Include="..\STS2AIAgent\Agent\SessionBudgetGuard.cs" Link="Agent\SessionBudgetGuard.cs" />
