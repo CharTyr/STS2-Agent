@@ -271,6 +271,27 @@ internal static class Router
                 return;
             }
 
+            // The redacted diagnostics export, for debugging without opening the overlay: the same
+            // text the 导出诊断 button copies (no API keys, Authorization headers, session tokens,
+            // or chat bodies). Local-only, like the other control routes.
+            if (request.HttpMethod == "GET" && request.Url?.AbsolutePath == "/diagnostics")
+            {
+                if (!request.IsLocal)
+                {
+                    throw new ApiException(403, "local_only", "Diagnostics are only available on loopback.");
+                }
+
+                var text = AgentRuntime.Instance.ExportDiagnostics();
+                var bytes = Encoding.UTF8.GetBytes(text);
+                response.StatusCode = 200;
+                response.ContentType = "text/plain; charset=utf-8";
+                response.ContentEncoding = Encoding.UTF8;
+                response.ContentLength64 = bytes.LongLength;
+                await response.OutputStream.WriteAsync(bytes, cancellationToken);
+                statusCode = 200;
+                return;
+            }
+
             // The dual-layer strategy surface. An external planner reads the current strategy and a
             // briefing here, and writes a new one back; the in-game planner uses the same store, so the
             // two paths steer the same Jev decider. Local-only, like the other control routes.

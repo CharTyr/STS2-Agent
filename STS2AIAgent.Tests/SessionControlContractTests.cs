@@ -101,6 +101,19 @@ internal static class SessionControlContractTests
         Assert.Contains("_captureHidden", rebuild, StringComparison.Ordinal);
     }
 
+    /// <summary>
+    /// The redacted diagnostics export is reachable over loopback HTTP, so a hang like "the planner
+    /// never ran" can be diagnosed with one curl instead of opening the overlay and clicking 导出诊断.
+    /// </summary>
+    public static void DiagnosticsRouteServesTheRedactedExport()
+    {
+        var router = AgentSourceFixture.Read("STS2AIAgent/Server/Router.cs");
+        Assert.Contains("\"/diagnostics\"", router, StringComparison.Ordinal);
+        Assert.Contains("AgentRuntime.Instance.ExportDiagnostics()", router, StringComparison.Ordinal);
+        Assert.Contains("text/plain; charset=utf-8", router, StringComparison.Ordinal);
+        Assert.Contains("local_only", router, StringComparison.Ordinal);
+    }
+
     public static void WorkshopStagingKeepsLocalCandidate()
     {
         var source = AgentSourceFixture.Read("STS2AIAgent/Multiplayer/LocalDualInstanceLauncher.cs");

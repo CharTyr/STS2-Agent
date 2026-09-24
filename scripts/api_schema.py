@@ -655,6 +655,18 @@ def build_paths(
                 request_body=json_body(ref("StrategyUpdateRequest")),
             ),
         },
+        "/diagnostics": {
+            "get": {
+                "summary": "Read the redacted diagnostics export (same text as the overlay's export button).",
+                "responses": {
+                    "200": {
+                        "description": "The redacted diagnostics text (no API keys, Authorization headers, session tokens, or chat bodies).",
+                        "content": {"text/plain": {"schema": {"type": "string"}}},
+                    },
+                    "default": error_response(),
+                },
+            },
+        },
         "/companion/control": {
             "post": ordinary_operation(
                 "Pause/resume the companion, or atomically update its allowlisted Jev settings.",

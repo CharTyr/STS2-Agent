@@ -107,7 +107,7 @@ one action runs at a time.
 - `STS2AIAgent/Ui/OverlayTabCatalog.cs` — tabs as data (`Play`, `Settings`).
 - `STS2AIAgent/Ui/SegmentedSwitch.cs` — exclusive segment control (`SetSelected` without a callback, `Select` with one).
 - `STS2AIAgent/Ui/PlayModeSwitchPolicy.cs` — pure gate `ShouldCommit(current, requested, pauseConfirmed)`.
-- `STS2AIAgent/Ui/DecisionLogView.cs` — Godot-free decision line text (`RecentLimit = 50`).
+- `STS2AIAgent/Ui/DecisionLogView.cs` — Godot-free decision line text (`RecentLimit = 50`); rows marked `jev_attempt` read "Jev 未提交 → LLM 接手" so fallback is visible at a glance.
 - `STS2AIAgent/Config/AgentSettings.cs` — the settings model: endpoints, models, bindings, Jev, budgets, co-op, `ModelTests`, `RoleTests`. `EnsureValidShape` repairs without replacing. `TryResolvePlayModel` (play = conversation model), `TryResolveRoleModel`, `HasJevConfigured`.
 - `STS2AIAgent/Config/SettingsStore.cs` — the only persistence path: atomic temp file + `File.Replace` with a `.bak`, corrupt-file recovery, `LastNotice`. `STS2_AGENT_SETTINGS_PATH` overrides the location.
 - `STS2AIAgent/Config/SettingsClone.cs` — deep copy of **every** persisted field. A new setting must be added here too.

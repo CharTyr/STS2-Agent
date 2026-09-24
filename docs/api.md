@@ -1802,6 +1802,10 @@ Invoke-RestMethod -Uri 'http://127.0.0.1:8080/teammate/control' -Method POST -Co
 
 ---
 
+## `GET /diagnostics`
+
+返回与覆盖层「导出诊断」按钮相同的脱敏诊断文本（`text/plain; charset=utf-8`）：mod 版本、实例角色、自动游玩状态、会话计数、最近事件、最近请求 ID 与掩码后的设置摘要。仅 loopback（非本机 403 `local_only`）。不含 API Key、Authorization 头、会话令牌，默认也不含对话或队伍聊天正文。用于不开窗口排查问题（一条 `curl http://127.0.0.1:8080/diagnostics` 即可）。
+
 ## `GET /strategy` 与 `POST /strategy`
 
 双层决策模式（dual-layer）的策略面。开启后由 TypeSafe Jev 模型逐动作执行，LLM 只做战略规划；这两条路由是外部规划器（planner）读取与调整 Jev 当前所遵循策略的入口。游戏内规划器与外部 MCP 客户端写的是同一个 `StrategyStore`，因此两条路径是同一种体验。

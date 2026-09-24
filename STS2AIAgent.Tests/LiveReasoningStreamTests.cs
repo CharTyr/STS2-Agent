@@ -1,4 +1,5 @@
 using STS2AIAgent.Agent;
+using STS2AIAgent.Llm;
 
 namespace STS2AIAgent.Tests;
 
@@ -59,6 +60,40 @@ internal static class LiveThoughtBufferTests
         buffer.Reset();
         Assert.Equal(string.Empty, buffer.Text);
         Assert.Equal(600, LiveThoughtBuffer.MaxChars);
+    }
+
+    /// <summary>
+    /// The display callback asks for a bounded preview, not the whole accumulation: a long reasoning
+    /// stream used to rebuild the entire string on every delta (O(n²) copying). The preview shows the
+    /// same first-N characters the buffer would clip to, with the same ellipsis, while the final
+    /// completion keeps the full reasoning for the recorded bubble and the provider echo.
+    /// </summary>
+    public static void ThePreviewIsBoundedWhileTheCompletionKeepsEverything()
+    {
+        var accumulator = new SseCompletionAccumulator();
+        var first = new string('a', 400);
+        var second = new string('b', 400);
+        accumulator.AppendLine("data: {\"choices\":[{\"delta\":{\"reasoning_content\":\"" + first + "\"}}]}");
+        accumulator.AppendLine("data: {\"choices\":[{\"delta\":{\"reasoning_content\":\"" + second + "\"}}]}");
+
+        var preview = accumulator.ReasoningPreview(600);
+        Assert.Equal(601, preview.Length);
+        Assert.EndsWith("…", preview);
+        Assert.True(preview.StartsWith(first, StringComparison.Ordinal), "the preview keeps the leading chunk");
+        Assert.True(preview.IndexOf('b') >= 0, "the preview still reaches into the second chunk");
+
+        // The completion itself is untouched: the recorded bubble and the tool-call echo read this.
+        var full = accumulator.ReasoningSoFar;
+        Assert.Equal(800, full.Length);
+        Assert.True(full.EndsWith(second, StringComparison.Ordinal));
+    }
+
+    /// <summary>Short reasoning previews whole, with no ellipsis and no copy of a longer string.</summary>
+    public static void ShortReasoningPreviewsWhole()
+    {
+        var accumulator = new SseCompletionAccumulator();
+        accumulator.AppendLine("data: {\"choices\":[{\"delta\":{\"reasoning_content\":\"think briefly\"}}]}");
+        Assert.Equal("think briefly", accumulator.ReasoningPreview(600));
     }
 }
 

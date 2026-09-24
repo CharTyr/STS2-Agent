@@ -203,6 +203,7 @@ internal static class TestRunner
         yield return ("Session.LocalMcpControl", () => Task.Run(SessionControlContractTests.RouterExposesLocalMcpControl));
         yield return ("Session.LocalScreenshot", () => Task.Run(SessionControlContractTests.RouterExposesLocalScreenshot));
         yield return ("CoopStartup.KeepLocalCandidate", () => Task.Run(SessionControlContractTests.WorkshopStagingKeepsLocalCandidate));
+        yield return ("Diagnostics.RouteServesRedactedExport", () => Task.Run(SessionControlContractTests.DiagnosticsRouteServesTheRedactedExport));
         yield return ("TeamChat.ReadOnly", AgentLoopTests.TeamChat_CannotActEvenWithPlayIntent);
         yield return ("TeamChat.NextDecision", AgentLoopTests.TeamSuggestion_ReachesNextPlayDecision);
         yield return ("TeamChat.BoundedHistory", () => Task.Run(TeamConversationTests.HistoryIsBoundedAndCleared));
@@ -872,6 +873,7 @@ internal static class TestRunner
         yield return ("OverlayTabs.DecisionPageReusesRuntimeCounters", () => Task.Run(OverlayTabContractTests.DecisionPageReusesTheRuntimeCounters));
         yield return ("OverlayTabs.DecisionLinesNewestFirst", () => Task.Run(OverlayTabContractTests.DecisionLinesAreNewestFirstAndUnknownUsageStaysUnknown));
         yield return ("OverlayTabs.NoDecisionsNoLines", () => Task.Run(OverlayTabContractTests.NoDecisionsProducesNoLines));
+        yield return ("OverlayTabs.JevAttemptMarked", () => Task.Run(OverlayTabContractTests.JevAttemptRowsAreMarkedInTheLine));
         yield return ("OverlayTabs.DecisionLinesBounded", () => Task.Run(OverlayTabContractTests.DecisionLinesStayBounded));
         yield return ("OverlayLayout.SaveOutsideScroll", () => Task.Run(OverlayLayoutContractTests.SaveStaysOutsideTheScrollingForm));
         yield return ("OverlayLayout.JumpButtonsMatchSections", () => Task.Run(OverlayLayoutContractTests.EveryJumpButtonNamesARegisteredSection));
@@ -900,6 +902,8 @@ internal static class TestRunner
         yield return ("LiveReasoning.SwitchGatesStorage", () => Task.Run(LiveThoughtBufferTests.NothingIsStoredWhileTheSwitchIsOff));
         yield return ("LiveReasoning.BlankIsNotStored", () => Task.Run(LiveThoughtBufferTests.BlankReasoningIsNotStored));
         yield return ("LiveReasoning.ClippedAndCleared", () => Task.Run(LiveThoughtBufferTests.StreamedTextIsClippedAndCleared));
+        yield return ("LiveReasoning.PreviewBounded", () => Task.Run(LiveThoughtBufferTests.ThePreviewIsBoundedWhileTheCompletionKeepsEverything));
+        yield return ("LiveReasoning.PreviewShortWhole", () => Task.Run(LiveThoughtBufferTests.ShortReasoningPreviewsWhole));
         yield return ("LiveReasoning.CallbackReachesTheRequest", () => Task.Run(LiveReasoningWiringTests.TheLiveCallbackTravelsFromTheRuntimeToTheRequest));
         yield return ("LiveReasoning.NoDuplicateBubble", () => Task.Run(LiveReasoningWiringTests.TheStreamedBubbleIsClearedBeforeTheRecordedOne));
         yield return ("LiveReasoning.OverlayGatedByTheSwitch", () => Task.Run(LiveReasoningWiringTests.TheOverlayDrawsThePartialOnlyWhenThinkingIsShown));

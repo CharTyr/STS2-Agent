@@ -200,6 +200,22 @@ internal static class OverlayTabContractTests
         Assert.Equal(0, DecisionLogView.Lines(Array.Empty<DecisionLogEntry>()).Count);
     }
 
+    /// <summary>
+    /// A turn the LLM finished after Jev could not commit is marked in the line, so the player can
+    /// tell dual-layer execution from fallback at a glance instead of reading raw JSONL.
+    /// </summary>
+    public static void JevAttemptRowsAreMarkedInTheLine()
+    {
+        var fallback = new DecisionLogEntry(5, "2026-09-24T00:00:00.0000000+00:00", "agent_loop", "play_card", "接手", "fp", 4, 30000, "R1", jev_attempt: true);
+        var plain = new DecisionLogEntry(6, "2026-09-24T00:00:05.0000000+00:00", "agent_loop", "end_turn", null, "fp", 1, 4000, "R1");
+
+        var fallbackLine = DecisionLogView.FormatLine(fallback);
+        Assert.Contains("Jev 未提交", fallbackLine);
+        Assert.Contains("LLM 接手", fallbackLine);
+        Assert.False(DecisionLogView.FormatLine(plain).Contains("Jev 未提交", StringComparison.Ordinal),
+            "a plain LLM decision must not carry the fallback marker");
+    }
+
     /// <summary>The page is bounded: a long session shows the newest decisions, not all of them.</summary>
     public static void DecisionLinesStayBounded()
     {

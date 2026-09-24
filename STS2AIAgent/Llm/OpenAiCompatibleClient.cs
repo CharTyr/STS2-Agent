@@ -262,6 +262,14 @@ internal sealed class OpenAiCompatibleClient : ILlmClient
     }
 
     /// <summary>
+    /// The display preview budget per delta, in characters. It matches the live bubble's clip
+    /// (<c>LiveThoughtBuffer.MaxChars</c> in the Agent layer, which this LLM layer must not reference);
+    /// the buffer's own clip then reduces the preview to the same visible text, so what the player
+    /// sees is unchanged while the callback stops rebuilding the whole accumulation on every delta.
+    /// </summary>
+    private const int ReasoningPreviewChars = 600;
+
+    /// <summary>
     /// Reads a successful response body incrementally, reporting reasoning as it arrives.
     /// </summary>
     /// <remarks>
@@ -317,7 +325,7 @@ internal sealed class OpenAiCompatibleClient : ILlmClient
             {
                 if (accumulator.AppendLine(raw))
                 {
-                    NotifyReasoningDelta(onReasoningDelta, accumulator.ReasoningSoFar);
+                    NotifyReasoningDelta(onReasoningDelta, accumulator.ReasoningPreview(ReasoningPreviewChars));
                 }
 
                 return;

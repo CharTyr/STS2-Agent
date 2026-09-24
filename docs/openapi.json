@@ -3869,6 +3869,33 @@
         "summary": "Read accepted decisions, oldest first."
       }
     },
+    "/diagnostics": {
+      "get": {
+        "responses": {
+          "200": {
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "description": "The redacted diagnostics text (no API keys, Authorization headers, session tokens, or chat bodies)."
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorEnvelope"
+                }
+              }
+            },
+            "description": "The normal HTTP error envelope."
+          }
+        },
+        "summary": "Read the redacted diagnostics export (same text as the overlay's export button)."
+      }
+    },
     "/events/stream": {
       "get": {
         "description": "The stream multiplexes event types. See docs/api.md for event payload meanings and reconnect rules.",

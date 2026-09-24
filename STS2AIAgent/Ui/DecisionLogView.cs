@@ -41,10 +41,17 @@ internal static class DecisionLogView
     /// </summary>
     public static string FormatLine(DecisionLogEntry entry)
     {
-        var parts = new List<string>(4)
+        var parts = new List<string>(5)
         {
             $"{entry.id}. {entry.action}"
         };
+
+        if (entry.jev_attempt == true)
+        {
+            // The LLM finished a turn Jev could not commit: the empty Jev receipt already spent its
+            // request, and this row is where that attempt becomes visible to the player.
+            parts.Add(Loc.T("Jev 未提交 → LLM 接手"));
+        }
 
         if (!string.IsNullOrWhiteSpace(entry.reason))
         {
