@@ -1613,7 +1613,7 @@ compact 不是 `/state` 的子集，**很多键换了名字**。MCP `get_game_st
 - `confirm_modal` — 确认阻塞弹窗
 - `dismiss_modal` — 关闭阻塞弹窗
 - `return_to_main_menu` — 返回主菜单
-- `invite_ai_teammate` — 邀请 AI 队友（拉起第二个游戏实例）。游玩模型已验证时队友自动打；未配置或未验证时队友照常拉起、照常进图，但停在原地等外部接管，见「两条组队路线」。首次调用若双开尚未完成，会立刻返回 200、`status: "pending"`、`stable: false`，不必等队友窗口连上；`message` 是「进行中」语义，不要把可能过期的 `dual_status` 当做成败。双开进行中不再出现在 `available_actions`。
+- `invite_ai_teammate` — 邀请 AI 队友（拉起第二个游戏实例）。游玩模型已验证时队友自动打；未配置或未验证时队友照常拉起、照常进图，但停在原地等外部接管，见「两条组队路线」。首次调用若双开尚未完成，会立刻返回 200、`status: "pending"`、`stable: false`，不必等队友窗口连上；`message` 是「进行中」语义，不要把可能过期的 `dual_status` 当做成败。双开进行中不再出现在 `available_actions`。若因玩家自身状态被拦（当前是单人模式，或本会话正在自动游玩），返回 409 `invalid_action`，且 `/health` 的 `dual_launch_outcome` 记为 `Rejected`、`dual_status` 写明原因——早期版本这类失败会无声地一直挂在 `pending`。
 - `continue_ai_teammate` — 继续上次的联机存档并重新拉起 AI 队友。出现在 `available_actions` 的条件：主机（非 companion）主菜单、当前角色没有自动游玩、没有正在进行的双开、且磁盘上有联机存档。读档流程已经启动后失败返回 `continue_failed`。读档前会只读比对存档 `players[].net_id` 与本机 NetId（离线／`-fastmp` 主机即启动参数 `--clientId`，未传为 1）和队友 NetId（主机 id + 1）：任一不匹配返回**不可重试**的 `invalid_action`，以免触发游戏把该存档改名成 `*.VAL.corrupt` 的破坏性读档。首次调用同样可能立刻返回 200 `pending`。
 <!-- END ACTION CONTRACT -->
 

@@ -93,7 +93,8 @@ internal static class DualLaunchOutcomeTests
     {
         var source = AgentSourceFixture.Read("STS2AIAgent/Agent/AgentRuntime.cs");
         var core = AgentSourceFixture.MethodBody(source, "LaunchDualInstanceCoreAsync");
-        var begin = AgentSourceFixture.MethodBody(source, "TryBeginDualLaunch");
+        var modeControl = AgentSourceFixture.Read("STS2AIAgent/Agent/AgentRuntime.ModeControl.cs");
+        var begin = AgentSourceFixture.MethodBody(ModeControlOrRuntime(modeControl, source), "TryBeginDualLaunch");
 
         var writes = core.Split("_dualLaunchOutcome =", StringSplitOptions.None).Length - 1;
         Assert.True(
@@ -129,16 +130,18 @@ internal static class DualLaunchOutcomeTests
         })
         {
             var body = AgentSourceFixture.DeclarationBody(source, declaration);
-            var begin = body.IndexOf("TryBeginDualLaunch()", StringComparison.Ordinal);
+            var begin = body.IndexOf("TryBeginDualLaunch(out var reason)", StringComparison.Ordinal);
             var taskRun = body.IndexOf("Task.Run", StringComparison.Ordinal);
             Assert.True(
                 begin >= 0 && taskRun >= 0 && begin < taskRun,
                 declaration + " must mark DualLaunching before returning the background Task.");
-            Assert.Contains("if (!TryBeginDualLaunch())", body);
+            Assert.Contains("if (!begin)", body);
             Assert.Contains("return null;", body);
+            Assert.Contains("Task.CompletedTask", body);
         }
 
-        var beginBody = AgentSourceFixture.MethodBody(source, "TryBeginDualLaunch");
+        var modeControl = AgentSourceFixture.Read("STS2AIAgent/Agent/AgentRuntime.ModeControl.cs");
+        var beginBody = AgentSourceFixture.MethodBody(ModeControlOrRuntime(modeControl, source), "TryBeginDualLaunch");
         var wait = beginBody.IndexOf("_dualLaunchGate.Wait(0)", StringComparison.Ordinal);
         var retFalse = beginBody.IndexOf("return false;", StringComparison.Ordinal);
         var launching = beginBody.IndexOf("_dualLaunching = true", StringComparison.Ordinal);
@@ -149,6 +152,12 @@ internal static class DualLaunchOutcomeTests
             "A failed gate claim must return before writing DualLaunching or InProgress.");
         Assert.Contains("正在检查组队条件", beginBody);
         Assert.Contains("RaiseChanged()", beginBody);
+    }
+
+    /// <summary>The gate lives in whichever AgentRuntime partial currently declares it.</summary>
+    private static string ModeControlOrRuntime(string modeControl, string runtime)
+    {
+        return modeControl.Contains("TryBeginDualLaunch(", StringComparison.Ordinal) ? modeControl : runtime;
     }
 
     /// <summary>

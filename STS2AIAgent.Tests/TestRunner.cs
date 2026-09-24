@@ -687,6 +687,12 @@ internal static class TestRunner
         yield return ("TimelineIndex.DescriptorFlags", () => Task.Run(TimelineIndexContractTests.CrystalDescriptorsCarryTheirRequirements));
         yield return ("DualLaunchOutcome.TruthTable", () => Task.Run(DualLaunchOutcomeTests.EveryOutcomeHasAPinnedClassification));
         yield return ("DualLaunchOutcome.OnlySuccessCompletes", () => Task.Run(DualLaunchOutcomeTests.OnlyAConfirmedLaunchIsNeitherFailureNorInProgress));
+        yield return ("DualLaunchBlock.SoloModeReasoned", () => Task.Run(DualLaunchBlockReasonPolicyTests.SoloModeIsANamedReasonNotBusy));
+        yield return ("DualLaunchBlock.AutoplayReasoned", () => Task.Run(DualLaunchBlockReasonPolicyTests.AutoplayRunningIsANamedReasonNotBusy));
+        yield return ("DualLaunchBlock.SoloBeatsAutoplay", () => Task.Run(DualLaunchBlockReasonPolicyTests.SoloModeBeatsAutoplayRunning));
+        yield return ("DualLaunchBlock.InFlightBusy", () => Task.Run(DualLaunchBlockReasonPolicyTests.InFlightWorkStaysBusy));
+        yield return ("DualLaunchBlock.CompanionPasses", () => Task.Run(DualLaunchBlockReasonPolicyTests.CompanionRolePassesTheModeGateAsBefore));
+        yield return ("DualLaunchBlock.RuntimeRecordsReason", () => Task.Run(DualLaunchBlockReasonPolicyTests.RuntimeRecordsAReasonForEveryNamedBlock));
         yield return ("DualLaunchOutcome.LanguageIndependent", () => Task.Run(DualLaunchOutcomeTests.HandlerClassifiesOnTheOutcomeNotOnDisplayText));
         yield return ("DualLaunchOutcome.EveryBranchRecords", () => Task.Run(DualLaunchOutcomeTests.EveryLaunchBranchRecordsAnOutcome));
         yield return ("DualLaunchOutcome.PublicEntryInProgressBeforeTaskRun", () => Task.Run(DualLaunchOutcomeTests.PublicEntryAdvertisesInProgressBeforeTaskRun));

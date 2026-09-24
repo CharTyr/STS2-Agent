@@ -188,6 +188,7 @@ one action runs at a time.
 - `STS2AIAgent/Agent/DiagnosticExport.cs` — "export diagnostics" text and `Redact` (masks keys and bearer tokens).
 - `STS2AIAgent/Agent/McpProcessLauncher.cs` — optional launch of the Python MCP sidecar.
 - `STS2AIAgent/Agent/DualLaunchOutcome.cs` — typed result of a co-op launch attempt.
+- `STS2AIAgent/Agent/DualLaunchBlockReason.cs` — why a launch may not start (solo mode, autoplay running, genuine concurrency) before the gate is claimed, so `TryLaunchDualInstanceAsync` can record `Rejected` with a readable reason instead of returning the silent "pending" a solo-mode invite used to hang on.
 
 ### Files — dual-layer (Jev) and per-run persistence
 - `STS2AIAgent/Agent/IActionDecider.cs` — the execution-decider seam.

@@ -582,9 +582,17 @@ internal sealed partial class AgentRuntime
     /// </summary>
     public Task? TryLaunchDualInstanceAsync(AgentSettings settings, bool companionAutoPlay, CancellationToken cancellationToken)
     {
-        if (!TryBeginDualLaunch())
+        var begin = TryBeginDualLaunch(out var reason);
+        if (!begin)
         {
-            return null;
+            // Busy still means "someone else's attempt is in flight": pending, not an error. A named
+            // refusal records the reason once, so invite/continue no longer hang at pending forever
+            // with an outcome stuck at Idle.
+            if (reason.IsBusy()) return null;
+            _dualStatus = DualLaunchBlockText(reason);
+            _dualLaunchOutcome = DualLaunchOutcome.Rejected;
+            RaiseChanged();
+            return Task.CompletedTask;
         }
 
         return Task.Run(
@@ -608,9 +616,14 @@ internal sealed partial class AgentRuntime
     /// </summary>
     public Task? TryContinueDualInstanceAsync(AgentSettings settings, bool companionAutoPlay, CancellationToken cancellationToken)
     {
-        if (!TryBeginDualLaunch())
+        var begin = TryBeginDualLaunch(out var reason);
+        if (!begin)
         {
-            return null;
+            if (reason.IsBusy()) return null;
+            _dualStatus = DualLaunchBlockText(reason);
+            _dualLaunchOutcome = DualLaunchOutcome.Rejected;
+            RaiseChanged();
+            return Task.CompletedTask;
         }
 
         return Task.Run(
@@ -813,35 +826,6 @@ internal sealed partial class AgentRuntime
         {
             SetStatus(Loc.T("单步失败：{0}", ex.Message));
         }
-    }
-
-    /// <summary>
-    /// Marks the launch in-progress on the calling thread so a pending observer does not still
-    /// read DualLaunching=false or the idle DualStatus. A concurrent caller that cannot take the
-    /// gate leaves a terminal outcome untouched: rewriting Succeeded/Failed/Rejected/Canceled as
-    /// InProgress would make a finished attempt look like it never completed.
-    /// </summary>
-    private bool TryBeginDualLaunch()
-    {
-        if (!_dualLaunchGate.Wait(0))
-        {
-            return false;
-        }
-
-        // The semaphore is ours, so a mode switch can no longer start underneath this claim.
-        // A rejected claim releases it before any status write: callers that receive null must
-        // keep observing the previous attempt's outcome.
-        if (!TryMarkTeammateLaunch())
-        {
-            _dualLaunchGate.Release();
-            return false;
-        }
-
-        _dualLaunching = true;
-        _dualStatus = Loc.T("正在检查组队条件…");
-        _dualLaunchOutcome = DualLaunchOutcome.InProgress;
-        RaiseChanged();
-        return true;
     }
 
     private async Task LaunchDualInstanceCoreAsync(
