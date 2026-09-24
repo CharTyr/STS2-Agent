@@ -2,14 +2,12 @@
 
 > Release attribution is recorded against tags or release commits. Post-tag maintenance is listed separately; current validation limits are maintained in [PRODUCT_PLAN_CURRENT.md](https://github.com/CharTyr/STS2-Agent/blob/main/PRODUCT_PLAN_CURRENT.md).
 
-## Unreleased
+## v0.16.2 - 2026-09-24
 
-- **四项小优化。** 游玩页决策记录里，Jev 未能提交后由 LLM 接手的回合标注「Jev 未提交 → LLM 接手」（配英文）；新增 `GET /diagnostics`（仅 loopback，`text/plain`），不开覆盖层就能取到与「导出诊断」相同的脱敏文本；思考流式回调改为取累积器的有界预览（前 600 字符 + 省略号），长思考时不再每个增量全量重拼；Jev 面板新增本局「Jev 执行 X 次 · 回退 LLM Y 次」计数；规划器输入在极端大帧下不再退化为 `{}`，保底保留屏幕/回合/战斗骨架；截图的绘制帧等待改为显式 Connect/Disconnect，永不渲染的窗口不再每次失败截图泄漏一个信号连接；`[STS2AIAgent.Wide]` 宽度诊断改为 offenders 数量变化时上报（不再只报一次），后续动作引入的溢出不会再漏报。
+> Dual-layer evidence, observability, and the small leaks. The decision log now records what each frame offered the executor and marks LLM fallbacks; the planner's input is always parseable and extreme frames degrade to a skeleton; the overlay marks fallback decisions, shows the session's Jev/fallback split, and serves the redacted diagnostics over HTTP; reasoning streaming and the screenshot path no longer leak work per frame or per failed capture; the width sentinel re-logs on change. Verified offline (882 C# tests, 423 Python tests, all gates), live on yesterday's dual-layer evidence, and smoke-checked today (invite reason, diagnostics route, invite failure feedback).
 
-- **双层模式的三个遗留缺陷补上，另有三项小优化。** LLM 回退路径现在能看到规划器的宏观目标：Jev 置信度不足交给慢模型时，提示词带上同一份 `goal` / `posture` / `instructions` / 按动作类别的提示（默认策略不耗 token，且挂在缓存前缀上）。规划器看到的状态不再是被字符截断的坏 JSON：`PlanningSummary` 按字段优先级裁剪（术语表/牌库/弃牌堆先让位，战斗事实最后），结果始终可解析——此前几乎每个战斗帧的规划器输入都无法解析，plan scope 恒为空。Jev 逐回合证据落地：决策日志的 `jev` 行现在带该帧枚举的全部选项 ID（封顶 48）、逐选项概率、危险度、所依据策略的 `updated_at`；Jev 未提交后由 LLM 接手的行标记 `jev_attempt=true`——2026-09-23 那串连续 `end_turn` 缺的就是这份证据，此后类似情况可以逐回合定性。
-- **决策记录标记回退、诊断可走 HTTP、思考流式去 O(n²)。** 游玩页的决策记录里，Jev 未能提交后由 LLM 接手的行显示「Jev 未提交 → LLM 接手」，不再和普通 LLM 决策混在一行。新增 `GET /diagnostics`（仅 loopback，`text/plain`）：与覆盖层「导出诊断」按钮相同的脱敏文本，不开窗口也能排查问题。思考流式回调改为取有界预览（前 600 字符 + 省略号），不再每个 SSE delta 全量重拼累积文本——长思考时从 O(n²) 拷贝降为固定开销，最终完成体的完整思考不受影响（记录气泡与服务商回显照旧）。
-
-- **双层模式的三处遗留缺陷补上。** LLM 回退路径现在能看到规划器的宏观目标：Jev 置信度不足交给慢模型时，提示词带上同一份 `goal` / `posture` / `instructions` / 按动作类别的提示（默认策略不耗 token，且挂在缓存前缀上）。规划器看到的状态不再是被字符截断的坏 JSON：`PlanningSummary` 按字段优先级裁剪（术语表/牌库/弃牌堆先让位，战斗事实最后），结果始终可解析——此前几乎每个战斗帧的规划器输入都无法解析，plan scope 恒为空。Jev 逐回合证据落地：决策日志的 `jev` 行现在带该帧枚举的全部选项 ID（封顶 48）、逐选项概率、危险度、所依据策略的 `updated_at`；Jev 未提交后由 LLM 接手的行标记 `jev_attempt=true`——2026-09-23 那串连续 `end_turn` 缺的就是这份证据，此后类似情况可以逐回合定性。
+- **双层决策的规划与证据。** Jev 无法提交而改由 LLM 决策时，回退提示词继承规划器的 `goal`、`posture`、`instructions` 和分类提示。规划器输入按字段优先级裁剪为可解析 JSON，极端大帧保留屏幕、回合及战斗骨架而非退化成 `{}`。决策日志记录 Jev 逐回合选项 ID（至多 48）、概率、危险度、策略更新时间；LLM 接手的行带 `jev_attempt=true`，覆盖层标注「Jev 未提交 → LLM 接手」，Jev 面板显示本局执行次数和回退次数。
+- **诊断与资源开销。** 新增仅 loopback 的 `GET /diagnostics`，返回与覆盖层导出按钮相同的脱敏文本。流式思考每次只生成前 600 字符的显示预览，最终完成体仍保留完整推理；截图等待绘制帧时显式断开信号，避免无法渲染时的连接积累；宽度诊断在超宽控件数量变化时再次报告。
 
 ## v0.16.1 - 2026-09-24
 
