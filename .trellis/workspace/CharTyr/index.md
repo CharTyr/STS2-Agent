@@ -8,7 +8,7 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-1.md`
-- **Total Sessions**: 39
+- **Total Sessions**: 40
 - **Last Active**: 2026-09-24
 <!-- @@@/auto:current-status -->
 
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-1.md` | ~1557 | Active |
+| `journal-1.md` | ~1582 | Active |
 <!-- @@@/auto:active-documents -->
 
 ---
@@ -29,6 +29,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 40 | 2026-09-24 | v0.16.2 dual-layer fixes and release | `a1a7981`, `eb3963c`, `abbdbf8`, `510115c`, `cbba3ed` | `dev` |
 | 39 | 2026-09-24 | v0.16.0: live reasoning, dual-layer goal, overlay fit, clean screenshots; released to GitHub and Workshop | `746bfc3`, `6a10414`, `eaa0edc`, `0bd5a76` | `dev` |
 | 38 | 2026-09-23 | 过时文档归档与状态页收口 | `a58f243` | `dev` |
 | 37 | 2026-09-23 | 审查修复集成与收尾 | `628ba75`, `455641f` | `dev` |
