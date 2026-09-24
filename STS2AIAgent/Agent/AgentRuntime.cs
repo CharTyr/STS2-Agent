@@ -310,6 +310,8 @@ internal sealed partial class AgentRuntime
             _sessionUsage = LlmUsage.Empty;
             _sessionRequests = 0;
             _sessionUsageKnown = false;
+            _jevAcceptedTurns = 0;
+            _jevFallbackTurns = 0;
             _budgetGuard = _settings.CreateBudgetGuard();
             _proactiveChat.Reset();
         }

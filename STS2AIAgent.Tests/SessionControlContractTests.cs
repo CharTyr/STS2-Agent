@@ -74,6 +74,11 @@ internal static class SessionControlContractTests
         // The wait is bounded so a minimized or occluded window fails the capture instead of hanging
         // the request or handing back a stale frame.
         Assert.Contains("Task.WhenAny", service, StringComparison.Ordinal);
+        // The frame connection is released on every path: a timed-out ToSignal awaiter would stay
+        // subscribed forever on a window that never renders (one leaked connection per failed capture).
+        Assert.Contains("Disconnect(RenderingServer.SignalName.FramePostDraw", service, StringComparison.Ordinal);
+        Assert.False(service.Contains("ToSignal(", StringComparison.Ordinal),
+            "do not bring back ToSignal for the frame wait: its losing awaiter leaks a connection");
         Assert.Contains("IsOverlayVisible", service, StringComparison.Ordinal);
         Assert.Contains("RestoreOverlay", service, StringComparison.Ordinal);
 

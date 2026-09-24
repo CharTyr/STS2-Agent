@@ -128,6 +128,7 @@ internal static partial class Loc
 
         // Session budget copy (Config/SessionBudgetLimits.cs).
         map["重置本会话统计"] = "Reset session stats";
+        map["Jev 执行 {0} 次 · 回退 LLM {1} 次"] = "Jev executed {0} time(s) · fell back to LLM {1} time(s)";
         map["会话预算必须是正整数；留空或 0 表示不限。已保留原来的安全上限。"] =
             "The session budget must be a positive whole number; leave it blank or 0 for unlimited. Your previous safe limit was kept.";
         map["打开「设置」→ 显示高级选项以提高上限，或点「重置本会话统计」后再点「继续游玩」。重置只清零本会话计数，不会改预算上限；普通暂停/继续不会清零。"] =

@@ -133,6 +133,7 @@ internal static class TestRunner
         yield return ("Settings.ModelRemovalAllRoles", () => Task.Run(SettingsExperienceRegressionTests.ModelRemovalReportsEveryRoleReference));
         yield return ("Settings.ModelRemovalUnreferenced", () => Task.Run(SettingsExperienceRegressionTests.ModelRemovalAllowsUnreferencedModel));
         yield return ("Usage.MissingNotZero", () => Task.Run(PlayerExperienceTests.MissingUsageIsNotDisplayedAsZero));
+        yield return ("Usage.JevRateCounts", () => Task.Run(PlayerExperienceTests.JevRateShowsAcceptedAndFallbackCounts));
         yield return ("Usage.SummaryKeepsUnknownAndBudgetReason", () => Task.Run(PlayerExperienceTests.UsageSummaryKeepsUnknownUnknownAndCarriesTheBudgetReason));
         yield return ("Diagnostics.RedactsSecrets", () => Task.Run(PlayerExperienceTests.DiagnosticExportRedactsSecretsAndOmitsChat));
         yield return ("Diagnostics.RedactsAllCredentialShapes", () => Task.Run(RuntimeExperienceRegressionTests.DiagnosticExportRedactsAllCredentialShapes));
@@ -563,6 +564,7 @@ internal static class TestRunner
         yield return ("PlanningSummary.OverCapStaysValid", () => Task.Run(PlanningSummaryTests.OverCapStaysValidJson));
         yield return ("PlanningSummary.CombatFieldsSurvive", () => Task.Run(PlanningSummaryTests.CombatFieldsSurviveTrimming));
         yield return ("PlanningSummary.NonJsonPassThrough", () => Task.Run(PlanningSummaryTests.NonJsonInputPassesThrough));
+        yield return ("PlanningSummary.ExtremeSkeleton", () => Task.Run(PlanningSummaryTests.ExtremeFrameDegradesToASkeletonNotEmpty));
         yield return ("JevTrace.DeciderCarriesOfferedIds", JevTurnTraceTests.DeciderCarriesTheOfferedOptionIds);
         yield return ("JevTrace.DecisionLogCarriesTrace", () => Task.Run(JevTurnTraceTests.DecisionLogCarriesTheTrace));
         yield return ("JevTrace.FallbackMarked", () => Task.Run(JevTurnTraceTests.FallbackRowsAreMarkedAsJevAttempts));

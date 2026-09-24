@@ -75,7 +75,7 @@ internal sealed partial class AgentOverlayHost
     private Control? _pageHost;
     /// <summary>Diagnostic state: the content column to measure, and the page already reported.</summary>
     private Control? _contentColumn;
-    private string? _overflowReportedFor;
+    private string? _overflowSignature;
     private VBoxContainer? _settingsBody;
     private int _buildAttempts;
     private bool _captureHidden;
@@ -119,6 +119,7 @@ internal sealed partial class AgentOverlayHost
     private CompanionConnection? _companionJevSource;
     private Label? _jevDanger;
     private Label? _jevLatency;
+    private Label? _jevFallbackRate;
     private readonly SemaphoreSlim _companionSettingsGate = new(1, 1);
 
     public static void Install()
@@ -713,8 +714,10 @@ internal sealed partial class AgentOverlayHost
     }
 
     /// <summary>
-    /// TEMPORARY: reports, once per page, which control's minimum width exceeds the panel. Removed
-    /// once the offending control is known -- the clipping has survived two earlier guesses.
+    /// Reports which controls' minimum width exceeds the panel. Kept permanently as a regression
+    /// sentinel: it logs again whenever the offender count on the current tab CHANGES (a new wide
+    /// control appeared, or a fix landed), so an overflow introduced later by an action -- like the
+    /// settings rebuild after deleting a model -- cannot hide behind a clean first report.
     /// </summary>
     private void ReportOverflowOnce()
     {
@@ -722,16 +725,18 @@ internal sealed partial class AgentOverlayHost
         {
             return;
         }
-
-        if (_overflowReportedFor == _tab)
+        var limit = _panel.Size.X;
+        var lines = new System.Collections.Generic.List<string>();
+        CollectWide(_contentColumn, limit, lines);
+        // Log on change only: tab + offender count is the signature. The first exposure logs too
+        // (signature starts empty), so the baseline "offenders=0" still appears in the log.
+        var signature = _tab + "|" + lines.Count;
+        if (_overflowSignature == signature)
         {
             return;
         }
 
-        _overflowReportedFor = _tab;
-        var limit = _panel.Size.X;
-        var lines = new System.Collections.Generic.List<string>();
-        CollectWide(_contentColumn, limit, lines);
+        _overflowSignature = signature;
         Godot.GD.Print($"[STS2AIAgent.Wide] tab={_tab} panel={limit:0} offenders={lines.Count}");
         foreach (var line in lines)
         {

@@ -90,6 +90,19 @@ internal static class PlayerExperienceTests
         Assert.Contains("游玩模型", impact.Message);
     }
 
+    /// <summary>
+    /// The Jev panel's per-session split: how many turns Jev actually took versus how many the LLM
+    /// finished after a failed attempt. Zero/zero stays a dash, not "Jev 0 次".
+    /// </summary>
+    public static void JevRateShowsAcceptedAndFallbackCounts()
+    {
+        Assert.Equal("-", PlayerFacingSession.FormatJevRate(0, 0));
+        var text = PlayerFacingSession.FormatJevRate(13, 10);
+        Assert.Contains("13", text);
+        Assert.Contains("10", text);
+        Assert.Contains("回退", text);
+    }
+
     public static void MissingUsageIsNotDisplayedAsZero()
     {
         var text = PlayerFacingSession.FormatUsage(false, LlmUsage.Empty, 3);

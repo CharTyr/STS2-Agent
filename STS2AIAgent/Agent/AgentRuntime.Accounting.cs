@@ -47,6 +47,9 @@ internal sealed partial class AgentRuntime
     private string? _lastJevProbabilities;
     private string? _lastJevDanger;
     private string? _lastJevLatency;
+    // Dual-layer split for the Jev panel's fallback rate, reset with the session stats.
+    private long _jevAcceptedTurns;
+    private long _jevFallbackTurns;
 
     /// <summary>How many earlier turns the cap has dropped; 0 means the log starts at the beginning.</summary>
     public int HistoryTrimmedCount
@@ -235,12 +238,29 @@ internal sealed partial class AgentRuntime
         var probabilities = FormatJevReading(result);
         lock (_gate)
         {
+            // Split the dual-layer turns: Jev committed (confidence carried through) vs the LLM
+            // finished after Jev could not. This is the panel's per-session fallback rate.
+            if (result.JevElapsedMilliseconds != null)
+            {
+                if (result.Confidence != null) _jevAcceptedTurns++;
+                else _jevFallbackTurns++;
+            }
+
             _lastJevChoice = choice.Length == 0 ? "-" : choice;
             _lastJevProbabilities = probabilities;
             _lastJevDanger = result.DangerScore is { } danger && double.IsFinite(danger)
                 ? Loc.T("危险度 {0}", danger.ToString("0.##")) : "-";
             _lastJevLatency = result.JevElapsedMilliseconds is { } elapsed
                 ? Loc.T("耗时 {0} 毫秒", elapsed) : "-";
+        }
+    }
+
+    /// <summary>The session's dual-layer split for the Jev panel ("Jev 执行 X 次 · 回退 LLM Y 次").</summary>
+    public string JevFallbackRate
+    {
+        get
+        {
+            lock (_gate) return PlayerFacingSession.FormatJevRate(_jevAcceptedTurns, _jevFallbackTurns);
         }
     }
 

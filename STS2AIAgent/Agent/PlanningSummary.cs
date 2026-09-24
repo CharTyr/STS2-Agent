@@ -95,7 +95,66 @@ internal static class PlanningSummary
         }
 
         var summary = Serialize(rootObject);
-        return summary.Length <= maxChars ? summary : "{}";
+        if (summary.Length <= maxChars)
+        {
+            return summary;
+        }
+
+        // Extreme frame: even after every trim the summary does not fit. Never answer "{}" -- the
+        // planner would then write a strategy with no context at all. Fall back to a minimal skeleton:
+        // screen/turn/session plus the combat numbers a plan is steered by, dropping verbose detail
+        // (enemy names, card text) rather than the frame's meaning.
+        return BuildSkeleton(rootObject, maxChars);
+    }
+
+    /// <summary>Minimal but meaningful summary for a frame that survives no trimming.</summary>
+    private static string BuildSkeleton(JsonObject root, int maxChars)
+    {
+        var skeleton = new JsonObject();
+        CopyIfPresent(root, skeleton, "screen");
+        CopyIfPresent(root, skeleton, "turn");
+        CopyIfPresent(root, skeleton, "session");
+        CopyIfPresent(root, skeleton, "run_id");
+
+        if (root["combat"] is JsonObject combat)
+        {
+            var slim = new JsonObject();
+            if (combat["player"] is JsonObject player)
+            {
+                var slimPlayer = new JsonObject();
+                CopyIfPresent(player, slimPlayer, "hp");
+                CopyIfPresent(player, slimPlayer, "block");
+                CopyIfPresent(player, slimPlayer, "energy");
+                if (slimPlayer.Count > 0) slim["player"] = slimPlayer;
+            }
+            if (combat["enemies"] is JsonArray enemies)
+            {
+                slim["enemy_count"] = enemies.Count;
+            }
+            if (combat["hand"] is JsonArray cards)
+            {
+                slim["hand_count"] = cards.Count;
+            }
+            if (combat["action_readiness"] is JsonObject ready
+                && ready.TryGetPropertyValue("reason", out var reason))
+            {
+                var slimReady = new JsonObject();
+                if (reason != null) slimReady["reason"] = reason.DeepClone();
+                slim["action_readiness"] = slimReady;
+            }
+            if (slim.Count > 0) skeleton["combat"] = slim;
+        }
+
+        var text = Serialize(skeleton);
+        return text.Length <= maxChars ? text : "{}";
+    }
+
+    private static void CopyIfPresent(JsonObject from, JsonObject to, string key)
+    {
+        if (from.TryGetPropertyValue(key, out var value) && value != null)
+        {
+            to[key] = value.DeepClone();
+        }
     }
 
     private static void TrimObject(JsonObject root, string[] order, int maxChars, string childName)

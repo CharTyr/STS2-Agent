@@ -250,5 +250,7 @@ internal sealed partial class AgentOverlayHost
             _jevDanger.Text = sourceAvailable ? Trim(coopMode ? companion?.Danger : AgentRuntime.Instance.LastJevDanger, 45) : "-";
         if (_jevLatency != null)
             _jevLatency.Text = sourceAvailable ? Trim(coopMode ? companion?.Latency : AgentRuntime.Instance.LastJevLatency, 45) : "-";
+        if (_jevFallbackRate != null)
+            _jevFallbackRate.Text = coopMode ? "-" : AgentRuntime.Instance.JevFallbackRate;
     }
 }
