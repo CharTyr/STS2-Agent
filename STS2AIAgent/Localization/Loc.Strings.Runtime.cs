@@ -122,6 +122,8 @@ internal static partial class Loc
         map["队友未返回文本回复；建议已记录供后续决策参考。"] = "Your teammate returned no text reply; your advice was recorded for future decisions.";
         map["组队后，可以在这里和 AI 队友商量打法。"] = "After teaming up, you can discuss tactics with your AI teammate here.";
         map["正在检查组队条件…"] = "Checking team-up requirements…";
+        map["当前是单人模式，暂时不能组队或继续联机局。请先在游玩页切换到多人模式，再邀请 AI 队友。"] = "Solo mode is on, so teaming up or continuing a co-op run is blocked. Switch to multiplayer on the play page, then invite the AI teammate again.";
+        map["自动游玩进行中，暂时不能组队或继续联机局。请先暂停自动游玩，再邀请 AI 队友。"] = "Autoplay is running, so teaming up or continuing a co-op run is blocked. Pause autoplay, then invite the AI teammate again.";
         map["请等待当前队伍消息完成，再重新组队。"] = "Wait for the current team message to finish, then team up again.";
         map["正在邀请 AI 队友，等待游戏窗口连接…"] = "Inviting your AI teammate; waiting for the game window to connect…";
         map["已取消等待队友连接；若队友窗口已打开，请在该窗口确认状态。"] = "Stopped waiting for the teammate to connect; if its window is open, confirm the status there.";
