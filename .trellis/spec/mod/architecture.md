@@ -69,14 +69,14 @@ For a change crossing state, action, agent, UI, or MCP, trace it in both directi
 
 ## Code shape and its known debts
 
-Measured from the current local `dev` tree across 164 mod source files totalling 45,050 lines (git-tracked only, which is what the gate counts -- a working tree also holds whatever the developer left in it). These numbers are here
+Measured from the current local `dev` tree across 173 mod source files totalling 47,521 lines (git-tracked only, which is what the gate counts -- a working tree also holds whatever the developer left in it). These numbers are here
 because nobody was counting, and that is how a codebase stops being navigable -- not through a bad
 commit, but through a thousand good ones. The `arch-facts` gate checks this table against the
 files, so it cannot quietly go stale the way it did between ADR 0001 and the splits below.
 
 | File | Lines |
 | --- | ---: |
-| [AgentRuntime.cs](../../../STS2AIAgent/Agent/AgentRuntime.cs) | 1,345 |
+| [AgentRuntime.cs](../../../STS2AIAgent/Agent/AgentRuntime.cs) | 1,260 |
 | [GameStateService.cs](../../../STS2AIAgent/Game/GameStateService.cs) | 1,379 |
 | [GameStateService.Payloads.cs](../../../STS2AIAgent/Game/GameStateService.Payloads.cs) | 1,293 |
 | [GameStateService.AgentView.cs](../../../STS2AIAgent/Game/GameStateService.AgentView.cs) | 1,238 |

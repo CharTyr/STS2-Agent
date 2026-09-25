@@ -140,11 +140,13 @@ one action runs at a time.
 ### Files — AgentLoop (one decision turn; owns no lifecycle)
 - `STS2AIAgent/Agent/AgentLoop.cs` — `ChatAsync`, `PlayOnceAsync` (check state → `WaitUntilActionableAsync(20 s)` → Jev or LLM), `CompleteWithToolsAsync` (bounded tool rounds, `MaxToolRounds = 8`), `ExecuteActAsync`, `ExecuteReadToolAsync`, `TestConfiguredRolesAsync`.
 - `STS2AIAgent/Agent/AgentLoop.Decision.cs` — `TryDecideWithJevAsync` (budget pre-check → snapshot → decide → execute) and `PlayWithModelAsync` (prompt assembly; **the prompt cache order is load-bearing**: stable prefix first, live state last).
+- `STS2AIAgent/Agent/NonCombatOnlyPolicy.cs` — parses compact state or a decision snapshot for the opt-in combat ownership boundary; malformed input fails closed before any action can reach combat.
 - `STS2AIAgent/Agent/AgentLoop.Arguments.cs` — pure tool-argument parsers.
 - `STS2AIAgent/Agent/AgentLoop.Probes.cs` — `CreateClient` (per-request timeout from live settings), run-id and planning-state probes.
 
 ### Files — AgentRuntime (singleton; one partial per concern)
-- `STS2AIAgent/Agent/AgentRuntime.cs` — `_gate` (state lock), `_turnGate` (semaphore: turn, chat, step and teammate reply are mutually exclusive), `StartAutoPlay`/`StopAutoPlay`, `AutoPlayLoopAsync` (the turn body), `TryCompanionImmediateAsync` (companion follows the host's map vote, confirms FTUE modals), chat entry, dual-launch core, `ClassifyStop`.
+- `STS2AIAgent/Agent/AgentRuntime.cs` — `_gate` (state lock), `_turnGate` (semaphore: turn, chat, step and teammate reply are mutually exclusive), `StartAutoPlay`/`StopAutoPlay`, `AutoPlayLoopAsync` (the turn body), `TryCompanionImmediateAsync` (companion follows the host's map vote, confirms FTUE modals), dual-launch core, `ClassifyStop`.
+- `STS2AIAgent/Agent/AgentRuntime.Chat.cs` — idle chat turns, including budget accounting and graceful non-combat-only yields when combat begins before dispatch.
 - `STS2AIAgent/Agent/AgentRuntime.PlayControl.cs` — `PauseForModeSwitchAsync` (bounded 30 s pause confirmation).
 - `STS2AIAgent/Agent/AgentRuntime.ModeControl.cs` — solo/co-op mutual exclusion: `TryBeginPlayModeSwitch`/`EndPlayModeSwitch`, start gates.
 - `STS2AIAgent/Agent/AgentRuntime.Accounting.cs` — `AccountTurn`, `RecordTurnReceipt`, `ApplyPlayResult`, the chat history buffer, Jev panel readings, `DescribeActResult`.
@@ -158,7 +160,7 @@ one action runs at a time.
 - `STS2AIAgent/Agent/AgentRuntime.CompanionSettings.cs` — token-authorized Jev settings patch applied to a running companion.
 
 ### Files — policies and pure logic (offline-tested; must stay free of Godot/game types)
-- `STS2AIAgent/Agent/AutoPlayRecovery.cs` — the turn driver (`RunAsync`: turn gate → turn → commit/receipt → `Observe` → backoff or stop) and the retry/no-progress policy. Waits on the **player** (companion map vote) never run the 150 s stuck clock.
+- `STS2AIAgent/Agent/AutoPlayRecovery.cs` — the turn driver (`RunAsync`: turn gate → turn → commit/receipt → `Observe` → backoff or stop) and the retry/no-progress policy. Waits on the **player** (companion map vote) or an intentionally disabled combat never run the 150 s stuck clock.
 - `STS2AIAgent/Agent/AutoPlaySession.cs` — one loop task: `TryStart`, `RequestPause`, `Phase` (`running`/`stopping`/`paused`).
 - `STS2AIAgent/Agent/NoProgressPolicy.cs` — limits (`WaitingForGameLimit = 150 s`, `UnsettledLimit`, repeat limit) and the state `Fingerprint`.
 - `STS2AIAgent/Agent/StopKindPolicy.cs` — stop message → `budget`/`run_end`/`config`/`network`/`failed`.

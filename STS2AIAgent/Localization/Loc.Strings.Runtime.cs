@@ -7,6 +7,10 @@ internal static partial class Loc
     // Runtime status, errors, chat and dual-instance messages (Agent/AgentRuntime.cs).
     private static void AddRuntimeEntries(Dictionary<string, string> map)
     {
+        map["非战斗模式已启用；Agent 保持只读并等待战斗结束。"] =
+            "Non-combat-only mode is enabled; the Agent stays read-only until combat ends.";
+        map["非战斗模式已启用；等待战斗结束"] =
+            "Non-combat-only mode is enabled; waiting for combat to end";
         // Status line.
         map["就绪"] = "Ready";
         map["自动游玩中"] = "Auto-playing";

@@ -287,6 +287,7 @@ internal static class SettingsStoreTests
         source.JevApiKey = "jev-clone";
         source.JevModel = "jev-clone-model";
         source.JevConfidenceThreshold = 0.62;
+        source.NonCombatOnlyEnabled = true;
 
         var clone = SettingsClone.Clone(source);
 
@@ -315,6 +316,7 @@ internal static class SettingsStoreTests
         Assert.Equal("jev-clone", clone.JevApiKey);
         Assert.Equal("jev-clone-model", clone.JevModel);
         Assert.Equal(0.62, clone.JevConfidenceThreshold);
+        Assert.True(clone.NonCombatOnlyEnabled);
     }
 
     public static void Clone_IsDeep()
