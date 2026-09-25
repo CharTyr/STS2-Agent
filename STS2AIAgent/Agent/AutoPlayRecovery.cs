@@ -30,7 +30,7 @@ internal sealed class AutoPlayRecovery
             // A wait on the human player (the companion waiting for the host's map pick) is not a
             // hang: the host may take minutes, and stopping the teammate with "the game may be stuck"
             // blamed the wrong party. Only game-driven waits run the wall clock.
-            if (result.WaitingForPlayer)
+            if (result.WaitingForPlayer || result.WaitingForCombat)
             {
                 _waitingForGameSince = default;
                 return (null, null, TimeSpan.FromSeconds(1));

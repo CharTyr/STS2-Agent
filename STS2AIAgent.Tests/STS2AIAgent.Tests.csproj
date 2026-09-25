@@ -12,6 +12,7 @@
     <Compile Include="..\STS2AIAgent\Game\ReflectedMemberResolver.cs" Link="Game\ReflectedMemberResolver.cs" />
     <Compile Include="..\STS2AIAgent\Game\StateBuildTiming.cs" Link="Game\StateBuildTiming.cs" />
     <Compile Include="..\STS2AIAgent\Agent\AutoPlayRecovery.cs" Link="Agent\AutoPlayRecovery.cs" />
+    <Compile Include="..\STS2AIAgent\Agent\NonCombatOnlyPolicy.cs" Link="Agent\NonCombatOnlyPolicy.cs" />
     <!--
       The streamed reasoning buffer. It is Godot-free on purpose: the two rules that matter for it
       (the player's switch gates what is stored, and a completed turn leaves nothing behind) cannot be

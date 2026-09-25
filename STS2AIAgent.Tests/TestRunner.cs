@@ -199,6 +199,9 @@ internal static class TestRunner
         yield return ("AgentLoop.RunBoundaryRethrown", AgentLoopTests.PlayOnce_RethrowsRunBoundaryAfterAct);
         yield return ("AgentLoop.CheckStateOnGetGameState", AgentLoopTests.PlayOnce_InvokesCheckStateOnGetGameState);
         yield return ("AgentLoop.RequestBudgetStopsNextRound", AgentLoopTests.PlayOnce_StopsFurtherLlmCallsWhenRequestBudgetIsSpent);
+        yield return ("AgentLoop.NonCombatYields", AgentLoopTests.NonCombatOnly_YieldsBeforeWaitModelOrAction);
+        yield return ("AgentLoop.NonCombatAllowsRewards", AgentLoopTests.NonCombatOnly_AllowsNonCombatActions);
+        yield return ("AgentLoop.NonCombatRaceGuard", AgentLoopTests.NonCombatOnly_RechecksBeforeDispatchAndKeepsWaiting);
         yield return ("TeamControl.TransportAck", TeamConversationTests.PauseControlHasExplicitAcknowledgement);
         yield return ("Session.LocalControlContract", () => Task.Run(SessionControlContractTests.RouterExposesLocalSessionControl));
         yield return ("Session.LocalMcpControl", () => Task.Run(SessionControlContractTests.RouterExposesLocalMcpControl));
@@ -297,6 +300,8 @@ internal static class TestRunner
         yield return ("Jev.PingReportsModelCount", JevClientTests.PingAsync_ReportsTheModelCount);
         yield return ("Jev.PingReportsFailure", JevClientTests.PingAsync_ReportsTheFailureInsteadOfThrowing);
         yield return ("Jev.BlankConfigRejected", () => Task.Run(JevClientTests.BlankConfigurationIsRejectedAtConstruction));
+        yield return ("NonCombat.DetectsSnapshots", () => Task.Run(NonCombatOnlyPolicyTests.DetectsCompactAndActionSnapshotCombat));
+        yield return ("NonCombat.UnknownFailsClosed", () => Task.Run(NonCombatOnlyPolicyTests.UnknownStateFailsClosed));
         yield return ("Jev.PostsAlignedChoiceQuestion", JevClientTests.SystemOneAsync_PostsTheAlignedChoiceQuestionTheDeciderBuilds);
         yield return ("JevLogic.StrategyRoundTrips", () => Task.Run(JevAgentLogicTests.PlayStrategy_RoundTripsEveryField));
         yield return ("JevLogic.StrategyParseTolerates", () => Task.Run(JevAgentLogicTests.PlayStrategy_TryParseToleratesMissingFields));
@@ -461,6 +466,7 @@ internal static class TestRunner
         yield return ("TurnIntegrity.MalformedArgumentsReturnStructuredErrorWithinBudget", AgentTurnIntegrityTests.MalformedArgumentsReturnStructuredErrorWithinBudget);
         yield return ("TurnIntegrity.PendingBudgetCheckDoesNotMutateCounters", () => Task.Run(AgentTurnIntegrityTests.PendingBudgetCheckDoesNotMutateCounters));
         yield return ("TurnIntegrity.RuntimeConsumersPreserveInterruptedReceipts", () => Task.Run(AgentTurnIntegrityTests.RuntimeConsumersPreserveInterruptedReceipts));
+        yield return ("TurnIntegrity.IdleChatHandlesNonCombatYield", () => Task.Run(AgentTurnIntegrityTests.IdleChatHandlesNonCombatYieldGracefully));
         yield return ("DevAudit.ModelProbeHonorsPreCancellation", AgentLoopTests.ModelProbeHonorsPreCancellation);
         yield return ("DevAudit.ModelProbePropagatesInFlightCancellation", AgentLoopTests.ModelProbePropagatesInFlightCancellation);
         yield return ("DevAudit.ModelProbeStillReportsProviderFailure", AgentLoopTests.ModelProbeStillReportsProviderFailure);

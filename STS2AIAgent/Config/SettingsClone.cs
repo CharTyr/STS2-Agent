@@ -60,6 +60,7 @@ internal static class SettingsClone
             ShowThinkingInChat = source.ShowThinkingInChat,
             ReplyLanguage = source.ReplyLanguage,
             DualLayerSoloEnabled = source.DualLayerSoloEnabled,
+            NonCombatOnlyEnabled = source.NonCombatOnlyEnabled,
             DualLayerCoopEnabled = source.DualLayerCoopEnabled,
             JevBaseUrl = source.JevBaseUrl,
             JevApiKey = source.JevApiKey,

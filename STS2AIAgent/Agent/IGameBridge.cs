@@ -86,6 +86,12 @@ internal sealed class AgentTurnResult
     /// </summary>
     public bool WaitingForPlayer { get; init; }
 
+    /// <summary>
+    /// The non-combat-only setting yielded this turn because combat is active. This is a healthy,
+    /// unbounded wait: combat may be controlled manually or by another mod.
+    /// </summary>
+    public bool WaitingForCombat { get; init; }
+
     public bool RequiresConfiguration { get; init; }
 
     public int ToolRounds { get; init; }
