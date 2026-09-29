@@ -1580,7 +1580,7 @@ internal static class GameActionService
             });
         }
 
-        var rewardsScreen = (NRewardsScreen)currentScreen;
+        var rewardsScreen = (NRewardsScreen)currentScreen!;
         var proceedButton = GameStateService.GetRewardProceedButton(rewardsScreen);
         proceedButton!.ForceClick();
         var stable = await WaitForRewardFlowExitAsync(rewardsScreen, DateTime.UtcNow + TimeSpan.FromSeconds(10));

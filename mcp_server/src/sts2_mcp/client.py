@@ -366,6 +366,15 @@ class Sts2Client:
             },
         )
 
+    def leave_rewards(self) -> dict[str, Any]:
+        return self.execute_action(
+            "leave_rewards",
+            client_context={
+                "source": "mcp",
+                "tool_name": "leave_rewards",
+            },
+        )
+
     def select_deck_card(self, option_index: int) -> dict[str, Any]:
         return self.execute_action(
             "select_deck_card",

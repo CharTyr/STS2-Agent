@@ -1,0 +1,50 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  csharp-tests:
+    name: C# core tests (no game dependency)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "9.0.x"
+
+      # STS2AIAgent.csproj itself cannot be built here: it references assemblies
+      # that ship with the game (sts2.dll, GodotSharp.dll, ...). The test project
+      # links the game-independent sources instead, so it runs on any machine.
+      # Build the mod itself locally with scripts/build-mod.ps1 / build-mod.sh.
+      - name: Run core tests
+        run: dotnet run --project STS2AIAgent.Tests/STS2AIAgent.Tests.csproj -c Release
+
+  mcp-server:
+    name: MCP server tests
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: mcp_server
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - uses: astral-sh/setup-uv@v5
+
+      - name: Sync dependencies
+        run: uv sync
+
+      - name: Syntax check
+        run: uv run python -m py_compile src/sts2_mcp/*.py tests/*.py
+
+      - name: Run tests
+        run: uv run python -m pytest tests -q
+
+      - name: Import check
+        run: uv run python -c "from sts2_mcp.server import create_server; create_server(); print('MCP_IMPORT_OK')"

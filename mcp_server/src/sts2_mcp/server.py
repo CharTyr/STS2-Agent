@@ -64,6 +64,7 @@ _LEGACY_ACTION_TOOLS: tuple[ActionToolSpec, ...] = (
     ActionToolSpec("claim_reward", "option_index", "Claim a single reward item."),
     ActionToolSpec("choose_reward_card", "option_index", "Pick a card from a reward screen."),
     ActionToolSpec("skip_reward_cards", "no_args", "Skip the current card reward."),
+    ActionToolSpec("leave_rewards", "no_args", "Leave the current reward screen by clicking its continue button, after claiming or skipping the rewards you want."),
     ActionToolSpec("select_deck_card", "option_index", "Select a card on a deck selection screen."),
     ActionToolSpec("confirm_selection", "no_args", "Confirm the current manual card-selection overlay."),
     ActionToolSpec("open_chest", "no_args", "Open the treasure chest in the current room."),

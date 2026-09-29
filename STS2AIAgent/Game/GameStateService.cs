@@ -853,6 +853,14 @@ internal static class GameStateService
             return false;
         }
 
+        // A pending card-selection UI must be resolved first. The underlying room
+        // (for example a rest site after choosing Smith) still exposes its own
+        // continue button, and offering proceed there could skip the selection.
+        if (GetDeckSelectionOptions(currentScreen).Count > 0)
+        {
+            return false;
+        }
+
         return GetProceedButton(currentScreen) != null;
     }
 
@@ -1520,14 +1528,43 @@ internal static class GameStateService
                 .ToArray();
         }
 
-        if (currentScreen is Node rootNode)
+        var searchRoot = GetDeckSelectionSearchRoot(currentScreen, excludeBundle: false);
+        if (searchRoot != null)
         {
-            return GetVisibleGridCardHolders(rootNode)
+            return GetVisibleGridCardHolders(searchRoot)
                 .Cast<NCardHolder>()
                 .ToArray();
         }
 
         return Array.Empty<NCardHolder>();
+    }
+
+    /// <summary>
+    /// Root node used when looking for a pending card-selection UI. It is normally
+    /// the active screen, but the campfire (rest site) smith flow opens its
+    /// upgrade selection in UI that is not a child of the rest-site screen, so for
+    /// rest sites the whole scene tree is searched instead.
+    /// </summary>
+    private static Node? GetDeckSelectionSearchRoot(IScreenContext? currentScreen, bool excludeBundle)
+    {
+        if (currentScreen is NCardsViewScreen)
+        {
+            return null;
+        }
+
+        if (excludeBundle && currentScreen is NChooseABundleSelectionScreen)
+        {
+            return null;
+        }
+
+        if (currentScreen is NRestSiteRoom &&
+            Engine.GetMainLoop() is SceneTree sceneTree &&
+            sceneTree.Root != null)
+        {
+            return sceneTree.Root;
+        }
+
+        return currentScreen as Node;
     }
 
     public static string? GetDeckSelectionPrompt(IScreenContext? currentScreen)
@@ -1552,11 +1589,12 @@ internal static class GameStateService
             return SafeReadString(() => hand!.GetNodeOrNull<MegaRichTextLabel>("%SelectionHeader")?.Text);
         }
 
-        if (currentScreen is Node rootNode)
+        var promptRoot = GetDeckSelectionSearchRoot(currentScreen, excludeBundle: false);
+        if (promptRoot != null)
         {
             return SafeReadString(() =>
-                rootNode.GetNodeOrNull<MegaRichTextLabel>("%BottomLabel")?.Text ??
-                FindDescendants<MegaRichTextLabel>(rootNode)
+                promptRoot.GetNodeOrNull<MegaRichTextLabel>("%BottomLabel")?.Text ??
+                FindDescendants<MegaRichTextLabel>(promptRoot)
                     .FirstOrDefault(label => label.IsVisibleInTree() && !string.IsNullOrWhiteSpace(label.Text))?.Text);
         }
 
@@ -2741,6 +2779,18 @@ internal static class GameStateService
                 energy = combat.player.energy,
                 stars = combat.player.stars,
                 focus = combat.player.focus,
+                powers = combat.player.powers.Select(power =>
+                {
+                    CollectGlossaryTerms(glossaryTerms, power.name);
+                    return new
+                    {
+                        i = power.index,
+                        id = power.power_id,
+                        name = power.name,
+                        amount = power.amount,
+                        debuff = power.is_debuff
+                    };
+                }).ToArray(),
                 orbs = combat.player.orbs.Select(orb => FormatOrbLine(orb)).ToArray(),
                 cards_played_this_turn = combat.player.cards_played_this_turn,
                 attacks_played_this_turn = combat.player.attacks_played_this_turn,
@@ -2778,6 +2828,18 @@ internal static class GameStateService
                 name = enemy.name,
                 hp = $"{enemy.current_hp}/{enemy.max_hp}",
                 block = enemy.block,
+                powers = enemy.powers.Select(power =>
+                {
+                    CollectGlossaryTerms(glossaryTerms, power.name);
+                    return new
+                    {
+                        i = power.index,
+                        id = power.power_id,
+                        name = power.name,
+                        amount = power.amount,
+                        debuff = power.is_debuff
+                    };
+                }).ToArray(),
                 intent = enemy.intent,
                 move_id = enemy.move_id,
                 alive = enemy.is_alive,
@@ -2873,7 +2935,25 @@ internal static class GameStateService
             max = selection.max_select,
             selected = selection.selected_count,
             confirm = selection.can_confirm,
-            cards = selection.cards.Select(card => BuildAgentChoiceCardPayload(card.index, card.name, card.upgraded, card.energy_cost, card.star_cost, card.costs_x, card.star_costs_x, GetPreferredCardRulesText(card.rules_text, card.resolved_rules_text), glossaryTerms)).ToArray()
+            cards = selection.cards.Select(card => BuildAgentSelectionCardPayload(card, glossaryTerms)).ToArray()
+        };
+    }
+
+    private static object BuildAgentSelectionCardPayload(SelectionCardPayload card, HashSet<string> glossaryTerms)
+    {
+        var rulesText = GetPreferredCardRulesText(card.rules_text, card.resolved_rules_text);
+        var keywords = GetGlossaryMatches(rulesText);
+        CollectGlossaryTerms(glossaryTerms, rulesText);
+        CollectGlossaryTerms(glossaryTerms, card.upgraded_rules_text);
+
+        return new
+        {
+            i = card.index,
+            line = FormatCardLine(card.name, card.upgraded, 1, card.energy_cost, card.star_cost, card.costs_x, card.star_costs_x, rulesText),
+            upgraded_rules_text = card.upgraded_rules_text,
+            upgraded_energy_cost = card.upgraded_energy_cost,
+            keywords,
+            mods = Array.Empty<string>()
         };
     }
 
@@ -3035,6 +3115,7 @@ internal static class GameStateService
 
         return new
         {
+            open = map.is_open,
             current = map.current_node == null ? null : $"{map.current_node.row},{map.current_node.col}",
             local_vote = map.local_vote == null ? null : $"{map.local_vote.row},{map.local_vote.col}",
             votes = map.player_votes
@@ -3764,28 +3845,42 @@ internal static class GameStateService
 
     private static MapPayload? BuildMapPayload(IScreenContext? currentScreen, RunState? runState)
     {
-        if (!TryGetMapScreen(currentScreen, runState, out var mapScreen))
+        if (runState == null)
         {
             return null;
         }
 
-        var visibleNodes = FindDescendants<NMapPoint>(mapScreen!)
-            .Where(node => GodotObject.IsInstanceValid(node))
-            .GroupBy(node => node.Point.coord)
-            .ToDictionary(
-                group => group.Key,
-                group => group
-                    .OrderBy(node => node.GlobalPosition.Y)
-                    .ThenBy(node => node.GlobalPosition.X)
-                    .First());
+        // The map graph comes from the run model, so it can be reported from any
+        // room (the player can open the map overlay from events, rest sites,
+        // shops and combat). Only the UI-derived parts (travelability, travel
+        // animation, node buttons, votes) require the map overlay to be open.
+        var mapScreen = currentScreen as NMapScreen ?? NMapScreen.Instance;
+        var isOpen = mapScreen != null &&
+            GodotObject.IsInstanceValid(mapScreen) &&
+            mapScreen.IsVisibleInTree() &&
+            mapScreen.IsOpen;
 
-        var availableNodes = visibleNodes.Values
-            .Where(node => node.IsEnabled)
-            .OrderBy(node => node.Point.coord.row)
-            .ThenBy(node => node.Point.coord.col)
-            .ToArray();
+        var visibleNodes = isOpen
+            ? FindDescendants<NMapPoint>(mapScreen!)
+                .Where(node => GodotObject.IsInstanceValid(node))
+                .GroupBy(node => node.Point.coord)
+                .ToDictionary(
+                    group => group.Key,
+                    group => group
+                        .OrderBy(node => node.GlobalPosition.Y)
+                        .ThenBy(node => node.GlobalPosition.X)
+                        .First())
+            : new Dictionary<MapCoord, NMapPoint>();
+
+        var availableNodes = isOpen
+            ? visibleNodes.Values
+                .Where(node => node.IsEnabled)
+                .OrderBy(node => node.Point.coord.row)
+                .ThenBy(node => node.Point.coord.col)
+                .ToArray()
+            : Array.Empty<NMapPoint>();
         var availableCoords = new HashSet<MapCoord>(availableNodes.Select(node => node.Point.coord));
-        var visitedCoords = new HashSet<MapCoord>(runState!.VisitedMapCoords);
+        var visitedCoords = new HashSet<MapCoord>(runState.VisitedMapCoords);
         var allMapPoints = GetAllMapPoints(runState.Map);
         var playerVotes = BuildMapPlayerVotePayloads(runState);
         var localVote = playerVotes.FirstOrDefault(vote => vote.is_local)?.coord;
@@ -3796,9 +3891,10 @@ internal static class GameStateService
 
         return new MapPayload
         {
-            current_node = BuildMapCoordPayload(runState!.CurrentMapCoord),
-            is_travel_enabled = mapScreen!.IsTravelEnabled,
-            is_traveling = mapScreen.IsTraveling,
+            is_open = isOpen,
+            current_node = BuildMapCoordPayload(runState.CurrentMapCoord),
+            is_travel_enabled = isOpen && mapScreen!.IsTravelEnabled,
+            is_traveling = isOpen && mapScreen!.IsTraveling,
             map_generation_count = RunManager.Instance.MapSelectionSynchronizer.MapGenerationCount,
             rows = runState.Map.GetRowCount(),
             cols = runState.Map.GetColumnCount(),
@@ -3834,26 +3930,31 @@ internal static class GameStateService
             ? metadata
             : default;
 
+        var kind = currentScreen switch
+        {
+            NDeckUpgradeSelectScreen => "deck_upgrade_select",
+            NDeckTransformSelectScreen => "deck_transform_select",
+            NDeckEnchantSelectScreen => "deck_enchant_select",
+            NChooseACardSelectionScreen => "choose_card_select",
+            NRestSiteRoom => "deck_upgrade_select",
+            _ when TryGetCombatHandSelection(currentScreen, out var hand) => hand!.CurrentMode == NPlayerHand.Mode.UpgradeSelect
+                ? "combat_hand_upgrade_select"
+                : "combat_hand_select",
+            _ => "deck_card_select"
+        };
+
+        var includeUpgradePreview = kind.Contains("upgrade", StringComparison.OrdinalIgnoreCase);
+
         return new SelectionPayload
         {
-            kind = currentScreen switch
-            {
-                NDeckUpgradeSelectScreen => "deck_upgrade_select",
-                NDeckTransformSelectScreen => "deck_transform_select",
-                NDeckEnchantSelectScreen => "deck_enchant_select",
-                NChooseACardSelectionScreen => "choose_card_select",
-                _ when TryGetCombatHandSelection(currentScreen, out var hand) => hand!.CurrentMode == NPlayerHand.Mode.UpgradeSelect
-                    ? "combat_hand_upgrade_select"
-                    : "combat_hand_select",
-                _ => "deck_card_select"
-            },
+            kind = kind,
             prompt = GetDeckSelectionPrompt(currentScreen) ?? string.Empty,
             min_select = combatHandSelection.MinSelect,
             max_select = combatHandSelection.MaxSelect,
             selected_count = combatHandSelection.SelectedCount,
             requires_confirmation = combatHandSelection.RequiresConfirmation,
             can_confirm = combatHandSelection.CanConfirm,
-            cards = cards.Select((holder, index) => BuildSelectionCardPayload(holder.CardModel!, index)).ToArray()
+            cards = cards.Select((holder, index) => BuildSelectionCardPayload(holder.CardModel!, index, includeUpgradePreview)).ToArray()
         };
     }
 
@@ -4796,7 +4897,7 @@ internal static class GameStateService
             index = index,
             potion_id = potion?.Id.Entry,
             name = potion?.Title.GetFormattedText(),
-            description = potion != null ? GetDynamicFormattedTextProperty(potion, "DynamicDescription", "Description") : null,
+            description = ResolvePotionEffectText(potion),
             rarity = potion != null ? GetReflectedStringProperty(potion, "Rarity") : null,
             occupied = potion != null,
             usage = potion?.Usage.ToString(),
@@ -4808,6 +4909,94 @@ internal static class GameStateService
             can_use = IsPotionUsable(currentScreen, combatState, player, potion),
             can_discard = CanDiscardPotionsInCurrentScreen(currentScreen) && IsPotionDiscardable(player, potion)
         };
+    }
+
+    /// <summary>
+    /// Produces a grounded, clean effect line for a potion. Strips rich-text
+    /// markup and, when the potion exposes dynamic variables (like cards do),
+    /// substitutes numeric values for template tokens such as {StrengthPower}.
+    /// Falls back to cleaned raw text if no dynamic values can be read.
+    /// </summary>
+    private static string? ResolvePotionEffectText(PotionModel? potion)
+    {
+        if (potion == null)
+        {
+            return null;
+        }
+
+        var text = GetDynamicFormattedTextProperty(potion, "DynamicDescription", "Description");
+        if (string.IsNullOrWhiteSpace(text))
+        {
+            return null;
+        }
+
+        var tokens = ReadPotionDynamicValueTokens(potion);
+        if (tokens.Count > 0)
+        {
+            text = Regex.Replace(text, @"\{([^{}]+)\}", match =>
+            {
+                var key = match.Groups[1].Value;
+                return tokens.TryGetValue(key, out var value) ? value : match.Value;
+            });
+        }
+
+        return NormalizeCardRulesText(text);
+    }
+
+    private static Dictionary<string, string> ReadPotionDynamicValueTokens(PotionModel potion)
+    {
+        var map = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        try
+        {
+            var dynamicVars = TryGetMemberValue(potion, "DynamicVars");
+            if (dynamicVars == null)
+            {
+                return map;
+            }
+
+            var rawValues = TryGetMemberValue(dynamicVars, "Values");
+            System.Collections.IEnumerable? items = rawValues as System.Collections.IEnumerable
+                ?? dynamicVars as System.Collections.IEnumerable;
+            if (items == null)
+            {
+                return map;
+            }
+
+            foreach (var item in items)
+            {
+                var name = TryGetMemberValue(item, "Name")?.ToString();
+                if (string.IsNullOrWhiteSpace(name))
+                {
+                    continue;
+                }
+
+                var number = TryGetMemberValue(item, "PreviewValue")
+                    ?? TryGetMemberValue(item, "BaseValue")
+                    ?? TryGetMemberValue(item, "Value")
+                    ?? TryGetMemberValue(item, "Amount");
+                if (number == null)
+                {
+                    continue;
+                }
+
+                string valueText;
+                try
+                {
+                    valueText = Convert.ToInt32(number).ToString(System.Globalization.CultureInfo.InvariantCulture);
+                }
+                catch
+                {
+                    valueText = number.ToString() ?? string.Empty;
+                }
+
+                map[name] = valueText;
+            }
+        }
+        catch
+        {
+        }
+
+        return map;
     }
 
     private static object? GetReflectedProperty(object target, string propertyName)
@@ -5121,10 +5310,14 @@ internal static class GameStateService
         };
     }
 
-    private static SelectionCardPayload BuildSelectionCardPayload(CardModel card, int index)
+    private static SelectionCardPayload BuildSelectionCardPayload(CardModel card, int index, bool includeUpgradePreview = false)
     {
         var resolvedRulesText = GetResolvedCardRulesText(card);
         var dynamicValues = BuildCardDynamicValuePayloads(card);
+        var upgradePreview = includeUpgradePreview
+            ? BuildUpgradedCardPreview(card)
+            : (Text: (string?)null, EnergyCost: (int?)null, Note: (string?)null);
+
         return new SelectionCardPayload
         {
             index = index,
@@ -5139,8 +5332,109 @@ internal static class GameStateService
             star_cost = Math.Max(0, card.GetStarCostWithModifiers()),
             rules_text = GetCardRulesText(card),
             resolved_rules_text = resolvedRulesText,
-            dynamic_values = dynamicValues
+            dynamic_values = dynamicValues,
+            upgraded_rules_text = upgradePreview.Text,
+            upgraded_energy_cost = upgradePreview.EnergyCost,
+            upgraded_preview_note = upgradePreview.Note
         };
+    }
+
+    /// <summary>
+    /// Renders what a card would look like after upgrading.
+    /// The game exposes UpgradeInternal / DowngradeInternal / FinalizeUpgradeInternal,
+    /// i.e. an upgrade can be applied as a preview and reverted again (which is what
+    /// the smith UI does). So this temporarily upgrades the real card, reads the
+    /// upgraded description and energy cost, then reverts it in a finally block.
+    /// A diagnostic note is returned so failures are visible in the payload.
+    /// </summary>
+    private static (string? Text, int? EnergyCost, string? Note) BuildUpgradedCardPreview(CardModel card)
+    {
+        if (card.IsUpgraded)
+        {
+            return (null, null, null);
+        }
+
+        if (!card.IsUpgradable)
+        {
+            return (null, null, "not_upgradable");
+        }
+
+        var notes = new List<string>();
+        string? text = null;
+        int? energyCost = null;
+        var plainText = GetResolvedCardRulesText(card);
+        var pileType = card.Pile?.Type ?? PileType.None;
+
+        try
+        {
+            card.UpgradeInternal();
+            if (!card.IsUpgraded)
+            {
+                notes.Add("upgrade_no_effect");
+            }
+
+            try
+            {
+                try
+                {
+                    card.UpdateDynamicVarPreview(CardPreviewMode.Normal, card.CurrentTarget, card.DynamicVars);
+                }
+                catch
+                {
+                }
+
+                var rendered = card.GetDescriptionForPile(pileType, card.CurrentTarget);
+                if (!string.IsNullOrWhiteSpace(rendered))
+                {
+                    text = NormalizeCardRulesText(rendered);
+                }
+
+                energyCost = card.EnergyCost.GetWithModifiers(CostModifiers.All);
+            }
+            finally
+            {
+                card.DowngradeInternal();
+                if (card.IsUpgraded)
+                {
+                    notes.Add("revert_failed");
+                }
+
+                try
+                {
+                    card.UpdateDynamicVarPreview(CardPreviewMode.Normal, card.CurrentTarget, card.DynamicVars);
+                }
+                catch
+                {
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            notes.Add("preview_error:" + ex.GetType().Name);
+            try
+            {
+                if (card.IsUpgraded)
+                {
+                    card.DowngradeInternal();
+                }
+            }
+            catch
+            {
+            }
+        }
+
+        if (text != null && string.Equals(text, plainText, StringComparison.Ordinal))
+        {
+            notes.Add("unchanged");
+        }
+
+        var note = notes.Count == 0 ? null : string.Join(";", notes);
+        if (note != null && note.Length > 160)
+        {
+            note = note.Substring(0, 160);
+        }
+
+        return (text, energyCost, note);
     }
 
     private static bool IsProceedButtonUsable(NProceedButton? button)
@@ -5833,9 +6127,8 @@ internal static class GameStateService
             return "CARDS_VIEW";
         }
 
-        if (currentScreen is Node rootNode &&
-            currentScreen is not NChooseABundleSelectionScreen &&
-            GetVisibleGridCardHolders(rootNode).Count > 0)
+        var selectionRoot = GetDeckSelectionSearchRoot(currentScreen, excludeBundle: true);
+        if (selectionRoot != null && GetVisibleGridCardHolders(selectionRoot).Count > 0)
         {
             return "CARD_SELECTION";
         }
@@ -6158,6 +6451,12 @@ internal sealed class MultiplayerLobbyPayload
 
 internal sealed class MapPayload
 {
+    /// <summary>
+    /// Whether the map overlay is currently open. The graph below is reported from
+    /// any room, but availability/travel flags are only meaningful while it is open.
+    /// </summary>
+    public bool is_open { get; init; }
+
     public MapCoordPayload? current_node { get; init; }
 
     public bool is_travel_enabled { get; init; }
@@ -6962,6 +7261,24 @@ internal sealed class SelectionCardPayload
     public string resolved_rules_text { get; init; } = string.Empty;
 
     public CardDynamicValuePayload[] dynamic_values { get; init; } = Array.Empty<CardDynamicValuePayload>();
+
+    /// <summary>
+    /// Upgrade preview, only populated on upgrade-selection screens. Null when
+    /// the card is already upgraded or the preview is not applicable.
+    /// </summary>
+    public string? upgraded_rules_text { get; init; }
+
+    /// <summary>
+    /// Energy cost the card would have after upgrading. Only populated on
+    /// upgrade-selection screens, and only when it can be read.
+    /// </summary>
+    public int? upgraded_energy_cost { get; init; }
+
+    /// <summary>
+    /// Diagnostic note describing how the upgrade preview was produced (which
+    /// step failed, if any). Only populated on upgrade-selection screens.
+    /// </summary>
+    public string? upgraded_preview_note { get; init; }
 }
 
 internal sealed class CardDynamicValuePayload

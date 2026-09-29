@@ -7,6 +7,18 @@
 - Added a `leave_rewards` action that clicks the reward screen's own "continue" button, so callers can exit after claiming rewards one-by-one with `claim_reward` + `choose_reward_card` / `skip_reward_cards`.
 - Reward-bulk cleanup (`collect_rewards_and_proceed` / `resolve_rewards`) now claims non-potion rewards before potion rewards, giving relics that add potion slots a chance to be taken first.
 - The built-in agent compact state now ships each potion's authoritative effect text (`run.potions[].effect`), and the glossary / play prompt ground card, potion, relic, and block rules in live payload text instead of the model's memory.
+- Upgrade-selection screens now expose `upgraded_rules_text` and `upgraded_energy_cost` for every candidate card (in both the raw payload and the built-in agent's compact state), so the agent can compare a card against its upgraded version instead of guessing.
+- Added `upgraded_preview_note` (upgrade screens only) to surface why an upgrade preview could not be produced.
+- The map is now reported whenever a run is active, not only while the map screen is open: the graph, current node, boss nodes and rows/columns come from the run model, so an agent can read the route from events, rest sites, shops and combat the same way a player can open the map overlay. A new `is_open` flag tells callers whether the overlay is actually open (travel flags and available nodes are only meaningful then).
+- Added a GitHub Actions CI workflow that runs the game-independent C# tests plus the MCP server's syntax check, unit tests and import check.
+- Declared `pytest` as a `dev` dependency group in `mcp_server/pyproject.toml` (with `[tool.pytest.ini_options]`) so `uv run pytest` works out of the box.
+
+### Fixed
+
+- Fixed `leave_rewards` missing from the MCP `Sts2Client`, which made `create_server(tool_profile="full")` raise `AttributeError` at startup (caught by the MCP test suite).
+- Fixed the campfire (rest site) smith flow: the upgrade selection UI is not always part of the active screen, so the state could report `screen = REST` with an empty `rest.options` and no selectable cards while the upgrade overlay was open. The selection search root now widens to the scene tree for rest sites, so the screen resolves to `CARD_SELECTION` (`selection.kind = deck_upgrade_select`) with `select_deck_card` available.
+- `proceed` is no longer offered while a card selection is pending, which previously let an agent skip the campfire upgrade (or another selection overlay) by clicking the underlying room's continue button.
+- Upgrade previews are produced by temporarily upgrading the card and reverting it with `DowngradeInternal()`; the earlier approach returned the un-upgraded text because the game only renders upgrade text while the card is actually in an upgraded state.
 
 ### Changed
 
