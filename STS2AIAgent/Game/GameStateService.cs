@@ -1541,9 +1541,11 @@ internal static class GameStateService
 
     /// <summary>
     /// Root node used when looking for a pending card-selection UI. It is normally
-    /// the active screen, but the campfire (rest site) smith flow opens its
-    /// upgrade selection in UI that is not a child of the rest-site screen, so for
-    /// rest sites the whole scene tree is searched instead.
+    /// the active screen, but the campfire (rest site) smith flow opens its upgrade
+    /// selection in UI that is not a child of the rest-site screen. For rest sites
+    /// the scene tree is searched for the upgrade selection screen itself (rather
+    /// than for any card grid), so unrelated card grids - a deck view open on top
+    /// of the rest site, for example - are not mistaken for a pending selection.
     /// </summary>
     private static Node? GetDeckSelectionSearchRoot(IScreenContext? currentScreen, bool excludeBundle)
     {
@@ -1561,7 +1563,11 @@ internal static class GameStateService
             Engine.GetMainLoop() is SceneTree sceneTree &&
             sceneTree.Root != null)
         {
-            return sceneTree.Root;
+            return FindDescendants<NDeckUpgradeSelectScreen>(sceneTree.Root)
+                .FirstOrDefault(screen =>
+                    GodotObject.IsInstanceValid(screen) &&
+                    screen.IsVisibleInTree() &&
+                    GetVisibleGridCardHolders(screen).Count > 0);
         }
 
         return currentScreen as Node;
@@ -5347,6 +5353,36 @@ internal static class GameStateService
     /// upgraded description and energy cost, then reverts it in a finally block.
     /// A diagnostic note is returned so failures are visible in the payload.
     /// </summary>
+    /// <summary>
+    /// Undoes a preview upgrade. Retries once because leaving a card upgraded would
+    /// silently change the player's deck, and records a diagnostic note when the
+    /// card could not be restored.
+    /// </summary>
+    private static void RevertPreviewUpgrade(CardModel card, List<string> notes)
+    {
+        for (var attempt = 0; attempt < 2; attempt++)
+        {
+            if (!card.IsUpgraded)
+            {
+                return;
+            }
+
+            try
+            {
+                card.DowngradeInternal();
+            }
+            catch (Exception ex)
+            {
+                notes.Add("revert_error:" + ex.GetType().Name);
+            }
+        }
+
+        if (card.IsUpgraded)
+        {
+            notes.Add("revert_failed");
+        }
+    }
+
     private static (string? Text, int? EnergyCost, string? Note) BuildUpgradedCardPreview(CardModel card)
     {
         if (card.IsUpgraded)
@@ -5393,11 +5429,9 @@ internal static class GameStateService
             }
             finally
             {
-                card.DowngradeInternal();
-                if (card.IsUpgraded)
-                {
-                    notes.Add("revert_failed");
-                }
+                // The upgrade is only a preview: always try to put the card back the
+                // way we found it, and retry once if the first attempt did not take.
+                RevertPreviewUpgrade(card, notes);
 
                 try
                 {
@@ -5411,16 +5445,7 @@ internal static class GameStateService
         catch (Exception ex)
         {
             notes.Add("preview_error:" + ex.GetType().Name);
-            try
-            {
-                if (card.IsUpgraded)
-                {
-                    card.DowngradeInternal();
-                }
-            }
-            catch
-            {
-            }
+            RevertPreviewUpgrade(card, notes);
         }
 
         if (text != null && string.Equals(text, plainText, StringComparison.Ordinal))

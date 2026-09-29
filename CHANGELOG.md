@@ -16,6 +16,8 @@
 ### Fixed
 
 - Fixed `leave_rewards` missing from the MCP `Sts2Client`, which made `create_server(tool_profile="full")` raise `AttributeError` at startup (caught by the MCP test suite).
+- Rest-site selection discovery now resolves the campfire upgrade selection screen itself instead of scanning the whole scene tree for any card grid, so an unrelated card grid (for example a deck view opened at a campfire) is no longer reported as a pending selection or able to suppress `proceed`.
+- Preview upgrades are reverted with a retry and report `revert_failed`, so a candidate card can no longer be left upgraded if restoring it fails.
 - Fixed the campfire (rest site) smith flow: the upgrade selection UI is not always part of the active screen, so the state could report `screen = REST` with an empty `rest.options` and no selectable cards while the upgrade overlay was open. The selection search root now widens to the scene tree for rest sites, so the screen resolves to `CARD_SELECTION` (`selection.kind = deck_upgrade_select`) with `select_deck_card` available.
 - `proceed` is no longer offered while a card selection is pending, which previously let an agent skip the campfire upgrade (or another selection overlay) by clicking the underlying room's continue button.
 - Upgrade previews are produced by temporarily upgrading the card and reverting it with `DowngradeInternal()`; the earlier approach returned the un-upgraded text because the game only renders upgrade text while the card is actually in an upgraded state.
