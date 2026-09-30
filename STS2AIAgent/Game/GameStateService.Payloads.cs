@@ -254,6 +254,10 @@ internal sealed class CombatActionReadinessPayload
 
 internal sealed class RunPayload
 {
+    public float card_rarity_odds_value { get; init; }
+
+    public int card_shop_removals_used { get; init; }
+
     public string character_id { get; init; } = string.Empty;
 
     public string character_name { get; init; } = string.Empty;

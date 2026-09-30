@@ -844,6 +844,7 @@ internal static class TestRunner
         yield return ("TypedReads.RelicStackIsTheDisplayedCounter", () => Task.Run(TypedStateReadsContractTests.RelicStackIsTheCounterThePlayerSees));
         yield return ("TypedReads.CardModsFromKeywordsAndEnchantment", () => Task.Run(TypedStateReadsContractTests.CardModsComeFromKeywordsAndTheEnchantment));
         yield return ("TypedReads.PilesByType", () => Task.Run(TypedStateReadsContractTests.CombatPilesAreReadByType));
+        yield return ("TypedReads.ShopOddsAndRemovalCount", () => Task.Run(TypedStateReadsContractTests.ShopStateUsesTheLiveOddsAndRemovalCount));
         yield return ("AbandonRun.StopsAtTheConfirmation", () => Task.Run(AbandonRunContractTests.AbandonRunStopsAtTheConfirmation));
         yield return ("AbandonRun.RefusesRatherThanClickingBlind", () => Task.Run(AbandonRunContractTests.AbandonRunRefusesRatherThanClickingBlind));
         yield return ("ReflectedMembers.DeclaredWinsOverBaseOverload", () => Task.Run(ReflectedMemberResolverTests.ADeclaredMethodIsFoundDespiteAPublicBaseMethodOfTheSameName));

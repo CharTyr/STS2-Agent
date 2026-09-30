@@ -2620,6 +2620,14 @@
               "null"
             ]
           },
+          "card_rarity_odds_value": {
+            "format": "float",
+            "type": "number"
+          },
+          "card_shop_removals_used": {
+            "format": "int32",
+            "type": "integer"
+          },
           "character_id": {
             "type": "string"
           },

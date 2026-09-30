@@ -606,6 +606,8 @@ curl -s http://127.0.0.1:8080/state | jq .
 
 | 字段 | 类型 | 说明 |
 | --- | --- | --- |
+| `card_rarity_odds_value` | number | 当前卡牌稀有度概率偏移（精确读取 `Player.PlayerOdds.CardRarity.CurrentValue`） |
+| `card_shop_removals_used` | number | 本局已使用的商店删牌次数（精确读取 `Player.ExtraFields.CardShopRemovalsUsed`） |
 | `floor` | number | 当前楼层 |
 | `current_hp` | number | 当前生命值 |
 | `max_hp` | number | 最大生命值 |
