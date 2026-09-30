@@ -39,8 +39,8 @@ namespace STS2AIAgent.Tests;
 /// travelability rule (<c>IsMapNodeClickable</c>): during the travel animation the cache kept
 /// <c>choose_map_node</c> advertised while the game ignored the click.
 ///
-/// <c>BuildRunPayload</c> was regenerated on 2026-10-04 to expose the live card-rarity offset and
-/// merchant card-removal count without changing the source of the other run fields.
+/// <c>BuildRunPayload</c> exposes the live card-rarity offset and merchant card-removal count
+/// without changing the source of the other run fields.
 /// </remarks>
 internal static class GameStateServiceRelocationContractTests
 {
