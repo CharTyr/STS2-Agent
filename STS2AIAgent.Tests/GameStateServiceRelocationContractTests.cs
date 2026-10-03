@@ -39,8 +39,12 @@ namespace STS2AIAgent.Tests;
 /// travelability rule (<c>IsMapNodeClickable</c>): during the travel animation the cache kept
 /// <c>choose_map_node</c> advertised while the game ignored the click.
 ///
-/// <c>BuildRunPayload</c> exposes the live card-rarity offset and merchant card-removal count
-/// without changing the source of the other run fields.
+/// <c>BuildRunPayload</c> exposes the live card-rarity offset (the run-wide rare-card pity
+/// counter) and merchant card-removal count without changing the source of the other run fields.
+///
+/// <c>TryGetCardGridSelectionMetadata</c> was regenerated on 2026-10-03 when deck enchantment
+/// selections began exposing the native confirmation's effective nonempty minimum. Native prefs
+/// may allow zero while <c>NDeckEnchantSelectScreen.ConfirmSelection</c> ignores that selection.
 /// </remarks>
 internal static class GameStateServiceRelocationContractTests
 {
@@ -88,7 +92,7 @@ internal static class GameStateServiceRelocationContractTests
         ["GetCardRewardAlternativeButtons"] = ("STS2AIAgent/Game/GameStateService.Rewards.cs", "1a29988fa6c7eb7a9569201f1580ab110681a2ae9ed5edd567fed165852f75ea"),
         ["GetRewardSetId"] = ("STS2AIAgent/Game/GameStateService.Rewards.cs", "d34df6df70766440e30595e35f22d45c648a5e3e08888816a6e0938944fbaafb"),
         ["GetDeckSelectionOptions"] = ("STS2AIAgent/Game/GameStateService.Rewards.cs", "d35a028e941efd43a66d263a4f18cc3c23624fd17e41c20c7fcb19b3cda1f33d"),
-        ["TryGetCardGridSelectionMetadata"] = ("STS2AIAgent/Game/GameStateService.Rewards.cs", "e421197e9e1e94c33360b451055ecae8649ed18ee8e0b2dad7cff06d0ed21640"),
+        ["TryGetCardGridSelectionMetadata"] = ("STS2AIAgent/Game/GameStateService.Rewards.cs", "14d3dc2051927ac7b6131d857e3d84276acb98dd59b8bd6fd597cb296d49920a"),
         ["GetDeckSelectionPrompt"] = ("STS2AIAgent/Game/GameStateService.Rewards.cs", "5a1bdce01a3088d1d059133d6db6385551b89bffe06c0b93f335b8093e239ea0"),
         ["TryGetCombatHandSelection"] = ("STS2AIAgent/Game/GameStateService.Combat.cs", "01bf3fe0bb9b32d9c85a7f28043fbd8e87c748f23e514e50ab105f1fe3c800a3"),
         ["TryGetCombatHandSelectionPrefs"] = ("STS2AIAgent/Game/GameStateService.Combat.cs", "cfab6598bf4a45c0f50afe83b2486e08561241a30e7bbb596402dd82788f1312"),

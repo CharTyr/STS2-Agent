@@ -407,13 +407,6 @@ internal readonly record struct CombatHandSelectionMetadata(
     bool RequiresConfirmation,
     bool CanConfirm);
 
-internal readonly record struct CardGridSelectionMetadata(
-    int MinSelect,
-    int MaxSelect,
-    int SelectedCount,
-    bool RequiresConfirmation,
-    bool CanConfirm);
-
 internal sealed class CharacterSelectPayload
 {
     public string? selected_character_id { get; init; }

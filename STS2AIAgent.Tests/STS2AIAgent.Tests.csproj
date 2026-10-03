@@ -94,6 +94,7 @@
     <Compile Include="..\STS2AIAgent\Game\UnlockConfirmResolutionPolicy.cs" Link="Game\UnlockConfirmResolutionPolicy.cs" />
     <Compile Include="..\STS2AIAgent\Game\FtueModalPolicy.cs" Link="Game\FtueModalPolicy.cs" />
     <Compile Include="..\STS2AIAgent\Game\CrystalSphereSettlePolicy.cs" Link="Game\CrystalSphereSettlePolicy.cs" />
+    <Compile Include="..\STS2AIAgent\Game\CardGridSelectionPolicy.cs" Link="Game\CardGridSelectionPolicy.cs" />
     <Compile Include="..\STS2AIAgent\Game\RewardChoicePolicy.cs" Link="Game\RewardChoicePolicy.cs" />
     <Compile Include="..\STS2AIAgent\Game\RewardSkipScope.cs" Link="Game\RewardSkipScope.cs" />
     <Compile Include="..\STS2AIAgent\Game\MenuTransitionPolicy.cs" Link="Game\MenuTransitionPolicy.cs" />
