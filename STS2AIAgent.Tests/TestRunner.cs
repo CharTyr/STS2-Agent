@@ -412,6 +412,11 @@ internal static class TestRunner
         yield return ("CardGridSelection.PayloadProgress", () => Task.Run(DeckSelectionContractTests.CardGridPayloadReportsNativeSelectionProgress));
         yield return ("CardGridSelection.ClickSettle", () => Task.Run(DeckSelectionContractTests.CardGridClickSettlesInEitherDirectionBeforeConfirming));
         yield return ("CardGridSelection.ConfirmDispatch", () => Task.Run(DeckSelectionContractTests.CardGridConfirmationUsesSharedExecutor));
+        yield return ("CardGridSelection.EmptyEnchantCannotConfirm", () => Task.Run(CardGridSelectionPolicyTests.EmptyEnchantCannotConfirmEvenWithOptionalNativePrefs));
+        yield return ("CardGridSelection.EnchantNonemptySubsets", () => Task.Run(CardGridSelectionPolicyTests.EnchantPermitsNonemptySubsetsWithoutRequiringMaximum));
+        yield return ("CardGridSelection.EnchantNativeMinimum", () => Task.Run(CardGridSelectionPolicyTests.EnchantKeepsStricterNativeMinimumAndImpossibleRange));
+        yield return ("CardGridSelection.OtherGridsRemainOptional", () => Task.Run(CardGridSelectionPolicyTests.OtherCardGridsKeepEmptyOptionalSelections));
+        yield return ("CardGridSelection.PolicyIntegration", () => Task.Run(CardGridSelectionPolicyTests.NativeMetadataProbeUsesTheSelectionPolicy));
         yield return ("CombatDiagnostics.CanPlay", () => Task.Run(CombatDiagnosticsContractTests.HandPayloadKeepsNativeCanPlayEvidence));
         yield return ("Map.NoVoteDuringCombat", () => Task.Run(MapCombatGatingTests.ChooseMapNodeHiddenWhileCombatInProgress));
         yield return ("CombatDiagnostics.Readiness", () => Task.Run(CombatDiagnosticsContractTests.CombatPayloadDistinguishesQueueModalAndSnapshotLocks));

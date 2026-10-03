@@ -295,6 +295,7 @@ one action runs at a time.
 - `STS2AIAgent/Game/CardPlayCounterPolicy.cs` — confirms that a card play actually happened (play counters).
 - `STS2AIAgent/Game/CombatTurnReadinessPolicy.cs` — when the player's combat turn is ready for input.
 - `STS2AIAgent/Game/CrystalSphereSettlePolicy.cs` — crystal sphere reveal settle rule.
+- `STS2AIAgent/Game/CardGridSelectionPolicy.cs` — card-grid selection counts and confirmation eligibility, including the nonempty deck-enchantment minimum.
 - `STS2AIAgent/Game/FtueModalPolicy.cs` — first-time-user modals that block actions and how to clear them.
 - `STS2AIAgent/Game/UnlockConfirmResolutionPolicy.cs` — unlock-confirm screen resolution.
 - `STS2AIAgent/Game/ReflectedGameMembers.cs` — every private game member the mod reads by reflection, probed and logged at startup.
