@@ -39,6 +39,9 @@ namespace STS2AIAgent.Tests;
 /// travelability rule (<c>IsMapNodeClickable</c>): during the travel animation the cache kept
 /// <c>choose_map_node</c> advertised while the game ignored the click.
 ///
+/// <c>BuildRunPayload</c> exposes the live card-rarity offset (the run-wide rare-card pity
+/// counter) and merchant card-removal count without changing the source of the other run fields.
+///
 /// <c>TryGetCardGridSelectionMetadata</c> was regenerated on 2026-10-03 when deck enchantment
 /// selections began exposing the native confirmation's effective nonempty minimum. Native prefs
 /// may allow zero while <c>NDeckEnchantSelectScreen.ConfirmSelection</c> ignores that selection.
@@ -127,7 +130,7 @@ internal static class GameStateServiceRelocationContractTests
         ["BuildCombatPayload"] = ("STS2AIAgent/Game/GameStateService.Combat.cs", "2b54101bd86e153369f9c157d59e4eaf62126e9a0a85caf146a0dd3a23918ead"),
         ["BuildCombatLethalRiskPayloads"] = ("STS2AIAgent/Game/GameStateService.CombatRisks.cs", "f8085db67fa7a5e0affb594b75fdfb232d34985b267badd28ea6024e346b10be"),
         ["IsSandpitPower"] = ("STS2AIAgent/Game/GameStateService.CombatRisks.cs", "c423a99fb0c84cd3e162998b8b4c44c59ded64397b1577867da1e608c3f82696"),
-        ["BuildRunPayload"] = ("STS2AIAgent/Game/GameStateService.Run.cs", "508e174d94ea305e2302be42f5db73510ebe2da5b4ac9c7008e972048d20cd11"),
+        ["BuildRunPayload"] = ("STS2AIAgent/Game/GameStateService.Run.cs", "962e03e89804b00e8de0e4632ed48b08e00a711b5f90e19690b1ec2cdbab12c0"),
         ["ResolveBossId"] = ("STS2AIAgent/Game/GameStateService.Run.cs", "70aecade3371139e3fdb777685e7b1648c90ad859bc9d90a8de5592e1283949d"),
         ["IsCardSelected"] = ("STS2AIAgent/Game/GameStateService.Rewards.cs", "205981806775d8b3741743ab0d2d9d07459ba3484dc5b3b9d3265bd08dd23ece"),
         ["TryGetMemberValue"] = ("STS2AIAgent/Game/GameStateService.cs", "e836d94766bdb94033d236744ba1614100023dc4fcfa20c663e207041f9022d9"),
