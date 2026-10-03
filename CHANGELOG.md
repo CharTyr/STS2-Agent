@@ -2,6 +2,11 @@
 
 > Release attribution is recorded against tags or release commits. Post-tag maintenance is listed separately; current validation limits are maintained in [PRODUCT_PLAN_CURRENT.md](https://github.com/CharTyr/STS2-Agent/blob/main/PRODUCT_PLAN_CURRENT.md).
 
+## Unreleased
+
+- **附魔界面不再空选确认后原地打转。** 附魔的原生偏好允许选 0 张，但游戏的确认按钮会忽略空选择，Agent 以前会反复确认却毫无进展。现在附魔界面的 `selection.min_select` 至少为 1，未选牌时不公开 `confirm_selection`（直接请求返回 409）；选 1 到 `max_select` 张都可提前确认，其它选牌界面不受影响。（#205）
+- **原始 `/state` 新增两个只读数值。** `run.card_rarity_odds_value` 是全局的稀有卡保底偏移（卡牌奖励没出稀有就上涨、出了稀有就重置为 -0.05，也叠加到商店卡牌的稀有率；游戏界面不显示它）；`run.card_shop_removals_used` 是本局已用的商店删牌次数。两者只出现在原始 `/state`，不进入 compact `agent_view`。（#204）
+
 ## v0.16.2 - 2026-09-24
 
 > Dual-layer evidence, observability, and the small leaks. The decision log now records what each frame offered the executor and marks LLM fallbacks; the planner's input is always parseable and extreme frames degrade to a skeleton; the overlay marks fallback decisions, shows the session's Jev/fallback split, and serves the redacted diagnostics over HTTP; reasoning streaming and the screenshot path no longer leak work per frame or per failed capture; the width sentinel re-logs on change. Verified offline (882 C# tests, 423 Python tests, all gates), live on yesterday's dual-layer evidence, and smoke-checked today (invite reason, diagnostics route, invite failure feedback).

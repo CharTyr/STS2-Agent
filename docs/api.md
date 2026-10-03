@@ -606,7 +606,7 @@ curl -s http://127.0.0.1:8080/state | jq .
 
 | 字段 | 类型 | 说明 |
 | --- | --- | --- |
-| `card_rarity_odds_value` | number | 当前卡牌稀有度概率偏移（精确读取 `Player.PlayerOdds.CardRarity.CurrentValue`） |
+| `card_rarity_odds_value` | number | 全局稀有卡保底偏移（精确读取 `Player.PlayerOdds.CardRarity.CurrentValue`）：开局 -0.05，每次卡牌奖励掷出非稀有就上涨（0.01，Scarcity 进阶下 0.005，上限 0.4），掷出稀有即重置；商店卡牌的稀有率也叠加它，但商店不改变它。游戏界面不显示该值，仅在原始 `/state` 提供 |
 | `card_shop_removals_used` | number | 本局已使用的商店删牌次数（精确读取 `Player.ExtraFields.CardShopRemovalsUsed`） |
 | `floor` | number | 当前楼层 |
 | `current_hp` | number | 当前生命值 |
