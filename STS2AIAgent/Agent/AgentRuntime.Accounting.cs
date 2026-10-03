@@ -360,7 +360,11 @@ internal sealed partial class AgentRuntime
         }
 
         SetStatus(result.Error == null
-            ? (result.Acted != null ? Loc.T("已执行 {0}", result.Acted) : result.WaitingForGame ? Loc.T("等待游戏可操作") : Loc.T("等待可操作状态"))
+            ? (result.Acted != null
+                ? Loc.T("已执行 {0}", result.Acted)
+                : result.WaitingForCombat
+                    ? Loc.T("非战斗模式已启用；等待战斗结束")
+                    : result.WaitingForGame ? Loc.T("等待游戏可操作") : Loc.T("等待可操作状态"))
             : DiagnosticExport.Redact(result.Error));
     }
 }

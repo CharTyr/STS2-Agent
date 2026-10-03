@@ -638,93 +638,6 @@ internal sealed partial class AgentRuntime
         return TryContinueDualInstanceAsync(settings, companionAutoPlay, cancellationToken) ?? Task.CompletedTask;
     }
 
-    private async Task SendChatCoreAsync(
-        string text,
-        bool attachState,
-        bool attachScreenshot,
-        CancellationToken cancellationToken)
-    {
-        text = text.Trim();
-        if (text.Length == 0)
-        {
-            return;
-        }
-
-        if (PlayRunning)
-        {
-            await QueuePlayInstructionAsync(text, cancellationToken);
-            return;
-        }
-
-        string? budgetBlocked = null;
-        lock (_gate)
-        {
-            budgetBlocked = _budgetGuard.CheckBudget();
-        }
-
-        if (budgetBlocked != null)
-        {
-            AddHistory("user", text);
-            AddHistory("assistant", budgetBlocked);
-            return;
-        }
-
-        SetRequestingModelStatus();
-        try
-        {
-            await _turnGate.WaitAsync(cancellationToken);
-            AgentTurnResult result;
-            try
-            {
-                await ObserveCurrentSessionAsync(cancellationToken);
-                var prior = History;
-                AddHistory("user", text);
-                result = await _loop.ChatAsync(
-                text,
-                prior,
-                new ChatOptions
-                {
-                    AttachState = attachState,
-                    AttachScreenshot = attachScreenshot
-                },
-                cancellationToken, ObserveSessionState);
-                RecordTurnReceipt(result, recordBudget: true);
-                var reply = result.Error != null
-                    ? result.Error
-                    : string.IsNullOrWhiteSpace(result.AssistantText) ? Loc.T("(无文本回复)") : result.AssistantText;
-                AppendTurnTraces(result);
-                AddHistory("assistant", reply);
-                _lastThought = result.Reasoning ?? reply;
-                if (!string.IsNullOrWhiteSpace(result.Acted))
-                {
-                    _lastAction = result.Acted;
-                }
-
-                SetStatus(result.Error == null ? Loc.T("对话完成") : Loc.T("对话出错"));
-            }
-            catch (AgentTurnCanceledException ex)
-            {
-                RecordTurnReceipt(ex.Receipt, recordBudget: true);
-                throw;
-            }
-            finally
-            {
-                FlushSessionIfDirty();
-                _turnGate.Release();
-            }
-        }
-        catch (OperationCanceledException)
-        {
-            SetStatus(Loc.T("对话已取消"));
-        }
-        catch (Exception ex)
-        {
-            AddHistory("assistant", Loc.T("请求失败：{0}", ex.Message));
-            SetStatus(Loc.T("对话失败"));
-        }
-        finally { ClearLiveThought(); } // No partial reasoning survives canceled or failed idle chat.
-    }
-
     private async Task<string> TestConnectionCoreAsync(bool force, CancellationToken cancellationToken)
     {
         SetStatus(Loc.T("正在测试模型…会向配置的服务发送测试请求。"));
@@ -999,6 +912,17 @@ internal sealed partial class AgentRuntime
                     // what may switch or clear the persisted session.
                     ObserveSessionStateSnapshot(snapshot.Item3, snapshot.Item1, snapshot.Item2);
                     moment = ObserveProactiveMoment(snapshot.Item1, snapshot.Item4);
+                    // This gate sits before companion immediates, the Jev/LLM turn, the strategy
+                    // planner observation and proactive chat. The lower AgentLoop gate still covers
+                    // one-shot play and the final dispatch race, but auto-play must not let another
+                    // automatic path act or start a model request while combat is intentionally owned
+                    // by the player or an external controller.
+                    if (Settings.NonCombatOnlyEnabled &&
+                        NonCombatOnlyPolicy.IsCombat(snapshot.Item1, snapshot.Item4))
+                    {
+                        moment = ProactiveChatMoment.None;
+                        return AgentLoop.WaitForCombat();
+                    }
                     var immediate = await TryCompanionImmediateAsync(token);
                     if (immediate != null)
                     {

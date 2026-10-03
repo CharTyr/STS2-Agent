@@ -174,6 +174,7 @@ curl -s http://127.0.0.1:8080/state | jq .
     "mcp_url": null,
     "play_running": false,
     "play_phase": "paused",
+    "non_combat_only": false,
     "stop_kind": null,
     "session_requests": 12,
     "companion_process_alive": false,
@@ -201,6 +202,7 @@ curl -s http://127.0.0.1:8080/state | jq .
 | `mcp_enabled` / `mcp_url` | boolean / string\|null | 进程内 MCP 是否开启，以及开启时的地址 |
 | `play_running` | boolean | 自动游玩是否正在运行 |
 | `play_phase` | string | 自动游玩阶段，常见值 `running` / `paused` / `stopping` |
+| `non_combat_only` | boolean | 是否启用“仅在战斗外自动游玩”。启用后，Agent 在战斗期间不请求模型、不执行动作，并在战斗结束后自动恢复；可用于手动战斗或外部战斗控制器 |
 | `stop_kind` | string\|null | 上次自动游玩停止的类别，未停止过为 `null` |
 | `session_requests` | integer | 本会话已消耗的模型请求次数（可由「重置本会话统计」清零） |
 | `companion_process_alive` / `companion_process_exited` | boolean\|null | **仅 host 有意义。** 主窗口返回 AI 队友进程是否在运行 / 是否已退出；`instance_role=companion` 时两项均为 `null`（not applicable），不会把 companion 自己描述成还应管理另一个队友进程 |

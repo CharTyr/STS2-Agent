@@ -62,6 +62,9 @@ internal static class SourceCoverageTests
         // The palette preview, split out of UiFactory.cs for the same budget. It needs Godot's ColorRect.
         "STS2AIAgent/Ui/OverlaySwatch.cs",
         "STS2AIAgent/Agent/AgentRuntime.cs",
+        // Idle chat remains on the game runtime and is split out so the base runtime stays below its
+        // source-size budget. The Roslyn pass and runtime source contracts still cover it.
+        "STS2AIAgent/Agent/AgentRuntime.Chat.cs",
         // The teammate partial stays unlinked with AgentRuntime.cs: both need the game runtime,
         // while this suite's Roslyn pass still parses them and the explicit list makes the choice
         // visible rather than letting a new source file evade every offline contract.

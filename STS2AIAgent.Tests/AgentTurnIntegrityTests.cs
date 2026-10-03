@@ -366,6 +366,17 @@ internal static partial class AgentTurnIntegrityTests
         Assert.False(autoplay.Contains("reportInterrupted: result => ApplyPlayResult", StringComparison.Ordinal));
     }
 
+    public static void IdleChatHandlesNonCombatYieldGracefully()
+    {
+        var chat = AgentSourceFixture.MethodBody(AgentSourceFixture.ReadAgentRuntime(), "SendChatCoreAsync");
+        Assert.Contains("catch (NonCombatOnlyYieldException ex)", chat);
+        Assert.Contains("RecordTurnReceipt(ex.Receipt, recordBudget: true)", chat);
+        Assert.Contains("Agent 保持只读并等待战斗结束", chat);
+        var yieldHandler = chat[chat.IndexOf("catch (NonCombatOnlyYieldException ex)", StringComparison.Ordinal)..];
+        yieldHandler = yieldHandler[..yieldHandler.IndexOf("finally", StringComparison.Ordinal)];
+        Assert.False(yieldHandler.Contains("throw;", StringComparison.Ordinal));
+    }
+
     public static async Task WaitingTurnSeesUsageBeforeGateRelease()
     {
         using var turnGate = new SemaphoreSlim(1, 1);

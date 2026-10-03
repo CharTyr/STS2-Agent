@@ -62,6 +62,10 @@ internal sealed partial class AgentLoop
                 OfferedOptionIds = decision.OfferedOptionIds, StrategyUpdatedAt = strategyUpdatedAt
             };
         }
+        catch (NonCombatOnlyYieldException)
+        {
+            return WaitForCombat(Receipt());
+        }
         catch (OperationCanceledException ex) when (cancellationToken.IsCancellationRequested)
         {
             throw new AgentTurnCanceledException(Receipt(), ex, cancellationToken);
@@ -115,6 +119,7 @@ internal sealed partial class AgentLoop
         ActResultJson = result.ActResultJson, Error = result.Error, WaitingForGame = result.WaitingForGame,
         ExecutedUnsettled = result.ExecutedUnsettled, ReasoningBudgetExhausted = result.ReasoningBudgetExhausted,
         StateFingerprint = result.StateFingerprint, WaitingForPlayer = result.WaitingForPlayer,
+        WaitingForCombat = result.WaitingForCombat,
         RequiresConfiguration = result.RequiresConfiguration, ToolRounds = result.ToolRounds,
         Usage = result.Usage, RequestsSpent = result.RequestsSpent,
         Confidence = result.Confidence, Probabilities = result.Probabilities,
@@ -244,6 +249,10 @@ internal sealed partial class AgentLoop
                     ? () => _acknowledgePlayInstruction?.Invoke(pendingInstruction.Id)
                     : null);
             return WithJevReceipt(result, pending);
+        }
+        catch (NonCombatOnlyYieldException ex)
+        {
+            return WithJevReceipt(WaitForCombat(ex.Receipt), pending);
         }
         catch (AgentTurnCanceledException ex) when (handedToCompletion)
         {

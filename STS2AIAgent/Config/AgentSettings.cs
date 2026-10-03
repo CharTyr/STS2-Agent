@@ -87,6 +87,12 @@ internal sealed class AgentSettings
     /// <summary>Dual-layer decision mode for solo play: Jev executes each action, the LLM only plans strategy.</summary>
     public bool DualLayerSoloEnabled { get; set; }
 
+    /// <summary>
+    /// Keep automatic play active outside combat, but yield every combat frame to the player or an
+    /// external controller. The default is false so existing installations keep their behaviour.
+    /// </summary>
+    public bool NonCombatOnlyEnabled { get; set; }
+
     /// <summary>Dual-layer decision mode for the multiplayer AI teammate.</summary>
     public bool DualLayerCoopEnabled { get; set; }
 

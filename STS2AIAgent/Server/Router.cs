@@ -603,6 +603,7 @@ internal static class Router
             mcp_url = mcp?.EndpointUrl,
             play_running = AgentRuntime.Instance.PlayRunning,
             play_phase = AgentRuntime.Instance.PlayPhase,
+            non_combat_only = AgentRuntime.Instance.Settings.NonCombatOnlyEnabled,
             stop_kind = AgentRuntime.Instance.StopKind,
             session_requests = AgentRuntime.Instance.SessionRequests,
             companion_process_alive = roleData.companion_process_alive,
