@@ -415,6 +415,10 @@ internal static class TestRunner
         yield return ("CombatDiagnostics.CanPlay", () => Task.Run(CombatDiagnosticsContractTests.HandPayloadKeepsNativeCanPlayEvidence));
         yield return ("Map.NoVoteDuringCombat", () => Task.Run(MapCombatGatingTests.ChooseMapNodeHiddenWhileCombatInProgress));
         yield return ("CombatDiagnostics.Readiness", () => Task.Run(CombatDiagnosticsContractTests.CombatPayloadDistinguishesQueueModalAndSnapshotLocks));
+        yield return ("CombatPower.NativeCounter", () => Task.Run(CombatPowerPayloadTests.SerializesNativeCounterSeparatelyFromAmount));
+        yield return ("CombatPower.ExhaustedCounter", () => Task.Run(CombatPowerPayloadTests.PreservesExhaustedNativeCounter));
+        yield return ("CombatPower.UnknownCounter", () => Task.Run(CombatPowerPayloadTests.KeepsUnavailableNativeCounterUnknown));
+        yield return ("CombatPower.NativeWiring", () => Task.Run(CombatPowerPayloadTests.StateReadsTheNativeCounterWithoutFallback));
         yield return ("CombatReadiness.RejectsPreTurn", () => Task.Run(CombatTurnReadinessPolicyTests.RejectsPreTurnEmptyHandEvenWhenButtonLooksReady));
         yield return ("CombatReadiness.KeepsOpeningGuard", () => Task.Run(CombatTurnReadinessPolicyTests.KeepsOpeningDrawGuardWhenNoNativeReadyEvidenceExists));
         yield return ("CombatReadiness.AcceptsTurnEvidence", () => Task.Run(CombatTurnReadinessPolicyTests.AcceptsCardsOrRecordedPlayAsTurnEvidence));

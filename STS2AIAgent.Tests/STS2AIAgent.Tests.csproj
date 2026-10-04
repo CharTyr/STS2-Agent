@@ -91,6 +91,7 @@
     -->
     <Compile Include="..\STS2AIAgent\Server\NativeMcpServer*.cs" Link="Server\%(Filename)%(Extension)" />
     <Compile Include="..\STS2AIAgent\Game\ReflectionMemberAccessor.cs" Link="Game\ReflectionMemberAccessor.cs" />
+    <Compile Include="..\STS2AIAgent\Game\CombatPowerPayload.cs" Link="Game\CombatPowerPayload.cs" />
     <Compile Include="..\STS2AIAgent\Game\UnlockConfirmResolutionPolicy.cs" Link="Game\UnlockConfirmResolutionPolicy.cs" />
     <Compile Include="..\STS2AIAgent\Game\FtueModalPolicy.cs" Link="Game\FtueModalPolicy.cs" />
     <Compile Include="..\STS2AIAgent\Game\CrystalSphereSettlePolicy.cs" Link="Game\CrystalSphereSettlePolicy.cs" />

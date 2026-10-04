@@ -1035,19 +1035,6 @@ internal sealed class CombatLethalRiskPayload
     public int? power_amount { get; init; }
 }
 
-internal sealed class CombatPowerPayload
-{
-    public int index { get; init; }
-
-    public string power_id { get; init; } = string.Empty;
-
-    public string name { get; init; } = string.Empty;
-
-    public int? amount { get; init; }
-
-    public bool is_debuff { get; init; }
-}
-
 internal sealed class RewardPayload
 {
     public bool pending_card_choice { get; init; }

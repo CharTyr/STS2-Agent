@@ -38,6 +38,10 @@ namespace STS2AIAgent.Tests;
 /// clickable-node filter moved from the stale <c>NMapPoint.IsEnabled</c> cache to the game's own
 /// travelability rule (<c>IsMapNodeClickable</c>): during the travel animation the cache kept
 /// <c>choose_map_node</c> advertised while the game ignored the click.
+///
+/// <c>BuildCreaturePowerPayloads</c> was regenerated on 2026-10-04 to expose native
+/// <c>DisplayAmount</c> separately from <c>Amount</c>; Hardened Shell's displayed counter
+/// reports its remaining damage budget this turn while Amount retains the original limit.
 /// </remarks>
 internal static class GameStateServiceRelocationContractTests
 {
@@ -148,7 +152,7 @@ internal static class GameStateServiceRelocationContractTests
         ["BuildHandCardPayload"] = ("STS2AIAgent/Game/GameStateService.Combat.cs", "a87ed5050ecad5b3090e532eb44314d1517664e6e260bde204b1e9810da61353"),
         ["GetModelIdEntry"] = ("STS2AIAgent/Game/GameStateService.cs", "a6bc7fd47caee58200cf2b4af006c24a62f11e89f3154de19bec4fb4abe8e745"),
         ["BuildEnemyPayload"] = ("STS2AIAgent/Game/GameStateService.Combat.cs", "61cf445651f34aa4415d3861c84c2fbf8aebb6de39f790eb3456cded6735b6f6"),
-        ["BuildCreaturePowerPayloads"] = ("STS2AIAgent/Game/GameStateService.Combat.cs", "7ea2af1581dd4849d763f28fc645165e99d43ad3f8374857a3cf7942e4409042"),
+        ["BuildCreaturePowerPayloads"] = ("STS2AIAgent/Game/GameStateService.Combat.cs", "dd3151da5bd87fa0ffdee3776378d5639e7f1d93cf9cc47fb17bd16b760a2f65"),
         ["PlayerSpawnsPets"] = ("STS2AIAgent/Game/GameStateService.Combat.cs", "5998f0868d8fcb58cfa48018370e63151a60e61477a5b0b22f05d128b02cd257"),
         ["BuildCombatPetPayload"] = ("STS2AIAgent/Game/GameStateService.Combat.cs", "a0b7fbc1030e1b4d2af45d2268459ea67a871937d4f9e62043fed644263d50f1"),
         ["BuildEnemyIntentPayloads"] = ("STS2AIAgent/Game/GameStateService.Combat.cs", "a3fd437bf64cd5e3f6fee92d0186cfeeb5cf313a8414a760365eb5e51ad669cb"),
