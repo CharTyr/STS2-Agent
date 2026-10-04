@@ -1118,6 +1118,13 @@
               "null"
             ]
           },
+          "display_amount": {
+            "format": "int32",
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
           "index": {
             "format": "int32",
             "type": "integer"
