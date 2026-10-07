@@ -240,6 +240,7 @@ one action runs at a time.
 - `STS2AIAgent/Game/GameStateService.Menus.cs` — session phase, main menu, character select, lobby and timeline payloads.
 - `STS2AIAgent/Game/GameStateService.AgentView.cs` — the compact `agent_view` rewrite (`AgentViewVersion`), one `BuildAgent<Screen>Payload` per screen. MCP `get_game_state` returns this view by default.
 - `STS2AIAgent/Game/GameStateService.Payloads.cs` — every payload record. A new state field goes here first, then into `docs/api.md`.
+- `STS2AIAgent/Game/CombatPowerPayload.cs` — combat power payload shared with offline serialization tests; `amount` is the native stack value, while nullable `display_amount` preserves the native UI counter without inferring a remaining value.
 - `STS2AIAgent/Game/StateBuildTiming.cs` — slow-build ring buffer (100 ms threshold), reported in `/health`.
 - `STS2AIAgent/Game/GameDataExportService.cs` — `/data/{cards,relics,monsters,potions,events,powers,characters}`. Monster `damage_values`/`block_values` are always null (there are no static numbers; live damage is in `combat.enemies[].intents`), so projections omit them.
 - `STS2AIAgent/Game/EventOptionLocalization.cs` — null-safe event option text formatting.

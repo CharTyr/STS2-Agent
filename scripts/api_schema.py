@@ -28,6 +28,7 @@ OPENAPI_VERSION = "3.1.0"
 ROUTER_PATH = Path("STS2AIAgent/Server/Router.cs")
 NATIVE_MCP_PATH = Path("STS2AIAgent/Server/NativeMcpServer.cs")
 PAYLOADS_PATH = Path("STS2AIAgent/Game/GameStateService.Payloads.cs")
+COMBAT_POWER_PATH = Path("STS2AIAgent/Game/CombatPowerPayload.cs")
 ACTION_SERVICE_PATH = Path("STS2AIAgent/Game/GameActionService.cs")
 TEAM_INTENT_PATH = Path("STS2AIAgent/Multiplayer/TeamIntent.cs")
 DECISION_LOG_PATH = Path("STS2AIAgent/Agent/DecisionLog.cs")
@@ -950,7 +951,9 @@ def build_components(
 def build_spec(repo_root: Path) -> dict[str, Any]:
     """Build a complete OpenAPI 3.1 document from the source-owned HTTP contract."""
     repo_root = repo_root.resolve()
-    payload_source = read_text(repo_root, PAYLOADS_PATH)
+    payload_source = "\n".join(
+        read_text(repo_root, path) for path in (PAYLOADS_PATH, COMBAT_POWER_PATH)
+    )
     action_source = read_text(repo_root, ACTION_SERVICE_PATH)
     router_source = read_text(repo_root, ROUTER_PATH)
     native_mcp_source = read_text(repo_root, NATIVE_MCP_PATH)

@@ -485,6 +485,7 @@ internal static partial class GameStateService
             var idEntry = SafeReadString(() => power.Id.Entry);
             var title = SafeReadString(() => power.Title.GetFormattedText());
             var amount = SafeReadNullableInt(() => power.Amount);
+            var displayAmount = SafeReadNullableInt(() => power.DisplayAmount);
             var isDebuff = SafeReadBool(() => power.TypeForCurrentAmount == MegaCrit.Sts2.Core.Entities.Powers.PowerType.Debuff);
 
             result.Add(new CombatPowerPayload
@@ -493,6 +494,7 @@ internal static partial class GameStateService
                 power_id = string.IsNullOrWhiteSpace(idEntry) ? "unknown_power" : idEntry,
                 name = string.IsNullOrWhiteSpace(title) ? idEntry : title,
                 amount = amount,
+                display_amount = displayAmount,
                 is_debuff = isDebuff
             });
             index += 1;

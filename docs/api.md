@@ -524,6 +524,7 @@ curl -s http://127.0.0.1:8080/state | jq .
 | `power_id` | string | Power 内部 ID |
 | `name` | string | Power 显示名称 |
 | `amount` | number \| null | Power 层数/数值（部分 Power 可能为空） |
+| `display_amount` | integer \| null | 直接读取原生 `Power.DisplayAmount` 的 UI 计数。`0` 是有效值；无法读取时为 `null`，不回落到 `amount`。Hardened Shell 中表示本回合剩余伤害预算，不是剩余命中次数；`amount` 仍保持原生层数/数值。 |
 | `is_debuff` | boolean | 是否为 Debuff |
 
 #### `combat.hand[]`
@@ -588,6 +589,7 @@ curl -s http://127.0.0.1:8080/state | jq .
 | `power_id` | string | Power 内部 ID |
 | `name` | string | Power 显示名称 |
 | `amount` | number \| null | Power 层数/数值（部分 Power 可能为空） |
+| `display_amount` | integer \| null | 直接读取原生 `Power.DisplayAmount` 的 UI 计数。`0` 是有效值；无法读取时为 `null`，不回落到 `amount`。Hardened Shell 中表示本回合剩余伤害预算，不是剩余命中次数；`amount` 仍保持原生层数/数值。 |
 | `is_debuff` | boolean | 是否为 Debuff |
 
 #### `combat.enemies[].intents[]`
