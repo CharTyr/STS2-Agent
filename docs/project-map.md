@@ -244,6 +244,7 @@ one action runs at a time.
 - `STS2AIAgent/Game/GameStateService.Payloads.cs` — every payload record. A new state field goes here first, then into `docs/api.md`.
 - `STS2AIAgent/Game/StateBuildTiming.cs` — slow-build ring buffer (100 ms threshold), reported in `/health`.
 - `STS2AIAgent/Game/GameDataExportService.cs` — `/data/{cards,relics,monsters,potions,events,powers,characters}`. Monster `damage_values`/`block_values` are always null (there are no static numbers; live damage is in `combat.enemies[].intents`), so projections omit them.
+- `STS2AIAgent/Game/CardUpgradePreviewPolicy.cs` — distinguishes a fully upgraded card (`null`) from a failed metadata preview (`status: unavailable`) without leaking exception details.
 - `STS2AIAgent/Game/EventOptionLocalization.cs` — null-safe event option text formatting.
 - `STS2AIAgent/Game/ProgressSaveVerification.cs` — compares the on-disk progress save for `game_over.save_verified`.
 

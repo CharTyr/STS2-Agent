@@ -1359,8 +1359,10 @@ internal static class AgentLoopTests
             int? y,
             string? tool,
             CancellationToken cancellationToken,
-            bool rawState = false)
+            bool rawState = false,
+            Action<string>? validateState = null)
         {
+            validateState?.Invoke(CompactStateJson);
             ActCalls++;
             LastAction = action;
             LastX = x;

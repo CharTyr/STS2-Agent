@@ -4,6 +4,7 @@
 
 ## Unreleased
 
+- Validate Sandpit risk and automatic escape identity inside the shared execution lease; cancel a stale escape when the hand or countdown changes. Localize Sandpit rules and stop messages. Distinguish unavailable upgrade previews from maxed cards and refresh the detached copy's own variables before formatting its description.
 - Detect enemy-owned Sandpit countdowns targeting the local player. Built-in autoplay prioritizes a playable Frantic Escape at the last countdown and stops before a lethal end turn if no escape is playable; the dispatch guard rechecks the latest snapshot.
 - Include power rules and structured live card values in combat context, and build card upgrade previews from an upgraded detached copy. Reward, rest and shop guidance now uses actual deck needs and upgrade data.
 - Disable thinking only for official DeepSeek connectivity and required-tool capability probes; ordinary play requests retain the configured thinking mode.

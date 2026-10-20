@@ -1,5 +1,6 @@
 using System.Text.Json;
 using STS2AIAgent.Localization;
+using STS2AIAgent.Server;
 
 namespace STS2AIAgent.Agent;
 
@@ -25,7 +26,7 @@ internal sealed partial class AgentLoop
         try
         {
             outcome = await ExecuteActAsync(args, token, checkState,
-                (action, result) => { accepted = action; response = result; });
+                (action, result) => { accepted = action; response = result; }, requireSandpitEscape: true);
         }
         catch (OperationCanceledException ex) when (token.IsCancellationRequested)
         {
@@ -43,5 +44,20 @@ internal sealed partial class AgentLoop
             StateFingerprint = outcome.Fingerprint, ExecutedUnsettled = outcome.Unsettled,
             RequestsSpent = 0
         };
+    }
+
+    private static void ValidateSandpitDispatch(string stateJson, string action, int? cardIndex, bool requireEscape)
+    {
+        var safety = SandpitSafetyPolicy.Read(stateJson);
+        // Read() establishes the card's identity and native playability, not just its index.
+        // Cancel the automatic escape even when the countdown itself changed to a safe value.
+        if (requireEscape && (!safety.Critical || !cardIndex.HasValue || safety.EscapeIndex != cardIndex))
+            throw new ApiException(409, "invalid_target",
+                Loc.T("沙坑状态或手牌已变化，已取消自动逃离，请重新读取状态。"),
+                new { card_index = cardIndex, expected_card_id = "FRANTIC_ESCAPE" });
+        var error = SandpitSafetyPolicy.Reject(safety, action, cardIndex);
+        if (error == null) return;
+        if (action == "end_turn") throw new AutoPlayStoppedException(error, StopKindPolicy.Failed);
+        throw new ApiException(409, "invalid_action", error, new { reason = "sandpit_emergency" });
     }
 }

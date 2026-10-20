@@ -117,6 +117,15 @@ internal static class TestRunner
         yield return ("Sandpit.StopLethalEndTurn", SandpitSafetyTests.NoEscapeStopsBeforeLethalEndTurn);
         yield return ("Sandpit.NativePlayability", () => Task.Run(SandpitSafetyTests.UnplayableCardsAreNeverForced));
         yield return ("Sandpit.RuntimeWiring", () => Task.Run(SandpitSafetyTests.EnemyPowerTargetAndUpgradeCopyAreWired));
+        yield return ("Sandpit.RiskChangesAtDispatch", SandpitSafetyTests.NewRiskAtDispatchCannotEndTheTurn);
+        yield return ("Sandpit.CardIdentityChangesAtDispatch", SandpitSafetyTests.ChangedHandCannotPlayTheOldEscapeIndex);
+        yield return ("Sandpit.ClearedRiskCancelsEscape", SandpitSafetyTests.ClearedRiskCancelsTheStaleAutomaticEscape);
+        yield return ("Sandpit.ValidationInsideLease", () => Task.Run(SandpitSafetyTests.ProductionValidationRunsUnderTheActionLease));
+        yield return ("Sandpit.LocalizedMessages", () => Task.Run(SandpitSafetyTests.SandpitMessagesFollowTheSelectedLanguage));
+        yield return ("UpgradePreview.MaxLevel", () => Task.Run(CardUpgradePreviewPolicyTests.MaxLevelSkipsGeneratingAnUpgrade));
+        yield return ("UpgradePreview.GenerationFailure", () => Task.Run(CardUpgradePreviewPolicyTests.GenerationFailureIsNotReportedAsMaxLevel));
+        yield return ("UpgradePreview.LevelLookupFailure", () => Task.Run(CardUpgradePreviewPolicyTests.LevelLookupFailureIsAlsoUnavailable));
+        yield return ("UpgradePreview.AvailableMetadata", () => Task.Run(CardUpgradePreviewPolicyTests.AvailableResultPreservesTheGeneratedMetadata));
         foreach (var test in AuditRegressionTests.All()) yield return test;
         foreach (var test in AuditRemediationJevTests.All()) yield return test;
         foreach (var test in AuditRemediationSessionTests.All()) yield return test;

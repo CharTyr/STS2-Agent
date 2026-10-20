@@ -495,7 +495,7 @@ internal static partial class GameStateService
                 amount = amount,
                 is_debuff = isDebuff,
                 description = power is SandpitPower
-                    ? $"沙坑倒计时 {amount}：敌方回合开始时减1，归零会被吞噬并直接死亡。狂乱逃离增加计数，可延后死亡；格挡和缓冲不能抵消吞噬。"
+                    ? SandpitSafetyPolicy.DescribeCountdown(amount)
                     : SafeReadString(() => power.Description.GetFormattedText())
             });
             index += 1;

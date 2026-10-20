@@ -344,29 +344,28 @@ internal static class GameDataExportService
 
     private static object? BuildCardUpgradePreview(CardModel card)
     {
-        try
+        return CardUpgradePreviewPolicy.Build(
+            () => card.CurrentUpgradeLevel >= card.MaxUpgradeLevel,
+            () =>
         {
-            if (card.CurrentUpgradeLevel >= card.MaxUpgradeLevel) return null;
             // A display-preview call on an unmodified canonical card can return the base numbers.
             // Upgrade a detached canonical copy: never mutate a card in the player's deck.
             var upgraded = ModelDb.GetById<CardModel>(card.Id).ToMutable();
             for (var level = 0; level <= card.CurrentUpgradeLevel; level++) upgraded.UpgradeInternal();
             upgraded.FinalizeUpgradeInternal();
-            var vars = BuildCardDynamicValuePayloads(upgraded);
+            // Refresh the same detached DynamicVars that GetDescriptionForPile will read.
+            // An error here must escape to the unavailable result, not become an empty vars array.
+            var vars = BuildCardDynamicValuePayloads(upgraded, detachedCopy: true);
             return new
             {
+                status = "available",
                 description = NormalizeCardRulesText(upgraded.GetDescriptionForPile(PileType.None)),
                 cost = upgraded.EnergyCost.GetWithModifiers(CostModifiers.All),
                 star_cost = Math.Max(0, upgraded.GetStarCostWithModifiers()),
                 upgrade_level = upgraded.CurrentUpgradeLevel,
                 vars = vars.Select(value => new { name = value.Name, base_value = value.BaseValue, current_value = value.CurrentValue }).ToArray()
             };
-        }
-        catch
-        {
-        }
-
-        return null;
+        });
     }
 
     private static int? FindDynamicValue(CardDynamicValueInfo[] values, string name)
@@ -382,7 +381,7 @@ internal static class GameDataExportService
         return null;
     }
 
-    private static CardDynamicValueInfo[] BuildCardDynamicValuePayloads(CardModel? card)
+    private static CardDynamicValueInfo[] BuildCardDynamicValuePayloads(CardModel? card, bool detachedCopy = false)
     {
         if (card == null)
         {
@@ -391,7 +390,7 @@ internal static class GameDataExportService
 
         try
         {
-            var previewSet = card.DynamicVars.Clone(card);
+            var previewSet = detachedCopy ? card.DynamicVars : card.DynamicVars.Clone(card);
             card.UpdateDynamicVarPreview(CardPreviewMode.Normal, card.CurrentTarget, previewSet);
 
             return previewSet.Values
@@ -406,7 +405,7 @@ internal static class GameDataExportService
                 .OrderBy(value => value.Name, StringComparer.Ordinal)
                 .ToArray();
         }
-        catch
+        catch when (!detachedCopy)
         {
             return Array.Empty<CardDynamicValueInfo>();
         }

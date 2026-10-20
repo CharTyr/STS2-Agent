@@ -1,4 +1,5 @@
 using System.Text.Json;
+using STS2AIAgent.Localization;
 
 namespace STS2AIAgent.Agent;
 
@@ -49,9 +50,12 @@ internal static class SandpitSafetyPolicy
         if (!decision.Critical) return null;
         if (action == "play_card" && cardIndex == decision.EscapeIndex && cardIndex.HasValue) return null;
         if (decision.EscapeIndex is int escape)
-            return $"Sandpit will kill the local player next enemy turn. Play FRANTIC_ESCAPE at card_index={escape} before spending energy on another action.";
+            return Loc.T("沙坑将在下个敌方回合杀死本地玩家。请先打出 card_index={0} 的 FRANTIC_ESCAPE，再执行其他动作。", escape);
         return action == "end_turn"
-            ? "沙坑即将归零，结束回合会被吞噬；当前没有可打出的狂乱逃离。已停止自动游玩，请检查抽牌、药水或其他保命手段。"
+            ? Loc.T("沙坑即将归零，结束回合会被吞噬；当前没有可打出的狂乱逃离。已停止自动游玩，请检查抽牌、药水或其他保命手段。")
             : null;
     }
+
+    public static string DescribeCountdown(int? amount) => Loc.T(
+        "沙坑倒计时 {0}：敌方回合开始时减1，归零会被吞噬并直接死亡。狂乱逃离增加计数，可延后死亡；格挡和缓冲不能抵消吞噬。", amount);
 }

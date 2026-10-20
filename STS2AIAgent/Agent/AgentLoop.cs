@@ -741,7 +741,8 @@ internal sealed partial class AgentLoop
         string argumentsJson,
         CancellationToken cancellationToken,
         Action<string>? checkState = null,
-        Action<string, string>? onAccepted = null)
+        Action<string, string>? onAccepted = null,
+        bool requireSandpitEscape = false)
     {
         string? acceptedAction = null;
         string? acceptedResponse = null;
@@ -811,19 +812,7 @@ internal sealed partial class AgentLoop
                 return (null, json, null, false, indexError.Message);
             }
 
-            // Revalidate the latest snapshot even if the model started from an older frame.
-            var sandpit = SandpitSafetyPolicy.Read(compactJson);
-            var safetyError = SandpitSafetyPolicy.Reject(sandpit, action, cardIndex);
-            if (safetyError != null)
-            {
-                if (action == "end_turn")
-                    throw new AutoPlayStoppedException(safetyError, StopKindPolicy.Failed);
-                var blocked = JsonSerializer.Serialize(new
-                {
-                    error = safetyError, code = "sandpit_emergency", state = state.Clone()
-                }, JsonOptions);
-                return (null, blocked, null, false, safetyError);
-            }
+            ValidateSandpitDispatch(compactJson, action, cardIndex, requireSandpitEscape);
 
             cancellationToken.ThrowIfCancellationRequested();
             var result = await _bridge.ActAsync(
@@ -835,7 +824,8 @@ internal sealed partial class AgentLoop
                 y,
                 tool,
                 cancellationToken,
-                rawState);
+                rawState,
+                latest => ValidateSandpitDispatch(latest, action, cardIndex, requireSandpitEscape));
             if (AgentErrorEnvelope.TryReadError(result, out var bridgeError))
             {
                 return (null, result, null, false, bridgeError ?? "act failed");
