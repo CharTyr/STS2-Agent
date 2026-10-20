@@ -107,20 +107,21 @@ if (-not (Test-Path $appIdFile)) {
 $health = $null
 
 try {
-    $startArgs = @(
-        "-ExecutionPolicy", "Bypass",
-        "-File", $startSessionScript,
-        "-ExePath", $ExePath,
-        "-Attempts", $Attempts,
-        "-DelaySeconds", $DelaySeconds,
-        "-ApiPort", $ApiPort
-    )
-
-    if ($EnableDebugActions) {
-        $startArgs += "-EnableDebugActions"
+    $startArgs = @{
+        ExePath = $ExePath
+        Attempts = $Attempts
+        DelaySeconds = $DelaySeconds
+        ApiPort = $ApiPort
     }
 
-    $sessionOutput = @(powershell @startArgs)
+    if ($EnableDebugActions) {
+        $startArgs.EnableDebugActions = $true
+    }
+
+    # Invoke in this session: a child powershell captured by a pipeline can leave its stdout
+    # handle in the game process, blocking this capture until the game exits. The cleanup below
+    # cannot stop that game until this call returns.
+    $sessionOutput = @(& $startSessionScript @startArgs)
     $sessionJson = $sessionOutput | Select-Object -Last 1
     $session = $sessionJson | ConvertFrom-Json
     $proc = Get-Process -Id $session.pid -ErrorAction Stop
