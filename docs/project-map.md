@@ -140,6 +140,8 @@ one action runs at a time.
 ### Files — AgentLoop (one decision turn; owns no lifecycle)
 - `STS2AIAgent/Agent/AgentLoop.cs` — `ChatAsync`, `PlayOnceAsync` (check state → `WaitUntilActionableAsync(20 s)` → Jev or LLM), `CompleteWithToolsAsync` (bounded tool rounds, `MaxToolRounds = 8`), `ExecuteActAsync`, `ExecuteReadToolAsync`, `TestConfiguredRolesAsync`.
 - `STS2AIAgent/Agent/AgentLoop.Decision.cs` — `TryDecideWithJevAsync` (budget pre-check → snapshot → decide → execute) and `PlayWithModelAsync` (prompt assembly; **the prompt cache order is load-bearing**: stable prefix first, live state last).
+- `STS2AIAgent/Agent/AgentLoop.Sandpit.cs` — execute one native-playable Frantic Escape before model dispatch at a lethal local Sandpit countdown.
+- `STS2AIAgent/Agent/SandpitSafetyPolicy.cs` — pure compact-state emergency policy and action rejection; the live snapshot is rechecked before dispatch.
 - `STS2AIAgent/Agent/AgentLoop.Arguments.cs` — pure tool-argument parsers.
 - `STS2AIAgent/Agent/AgentLoop.Probes.cs` — `CreateClient` (per-request timeout from live settings), run-id and planning-state probes.
 

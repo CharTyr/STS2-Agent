@@ -407,13 +407,13 @@ internal static class McpServiceTests
             Assert.Contains("Rest site: heal or upgrade", document.RootElement.GetProperty("guidance").GetString());
         }
 
-        // A screen with no strategic choice answers with an empty string, not an error and not null.
+        // Reward screens now explicitly compare taking a card with skipping it.
         bridge.CompactStateJson = """{"screen":"REWARD","available_actions":["collect_rewards_and_proceed"]}""";
         var reward = await Rpc(server, """{"jsonrpc":"2.0","id":28,"method":"tools/call","params":{"name":"get_scene_guidance"}}""");
         var rewardText = reward.GetProperty("result").GetProperty("content")[0].GetProperty("text").GetString();
         using (var document = JsonDocument.Parse(rewardText!))
         {
-            Assert.Equal(string.Empty, document.RootElement.GetProperty("guidance").GetString());
+            Assert.Contains("Card rewards: take or skip", document.RootElement.GetProperty("guidance").GetString());
         }
     }
 

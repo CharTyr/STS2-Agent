@@ -110,6 +110,13 @@ internal static class TestRunner
 
     private static IEnumerable<(string Name, Func<Task> Body)> AllTests()
     {
+        yield return ("Sandpit.EscapeBeforeModel", SandpitSafetyTests.CriticalTurnEscapesBeforeCallingTheModel);
+        yield return ("Sandpit.NoncriticalNormal", SandpitSafetyTests.NoncriticalTurnsRemainModelControlled);
+        yield return ("Sandpit.CancellationKeepsAcceptedEscape", SandpitSafetyTests.AcceptedEscapeSurvivesCancellation);
+        yield return ("Sandpit.RevalidateBeforeSpending", SandpitSafetyTests.FreshSnapshotPreventsSpendingEscapeEnergy);
+        yield return ("Sandpit.StopLethalEndTurn", SandpitSafetyTests.NoEscapeStopsBeforeLethalEndTurn);
+        yield return ("Sandpit.NativePlayability", () => Task.Run(SandpitSafetyTests.UnplayableCardsAreNeverForced));
+        yield return ("Sandpit.RuntimeWiring", () => Task.Run(SandpitSafetyTests.EnemyPowerTargetAndUpgradeCopyAreWired));
         foreach (var test in AuditRegressionTests.All()) yield return test;
         foreach (var test in AuditRemediationJevTests.All()) yield return test;
         foreach (var test in AuditRemediationSessionTests.All()) yield return test;
@@ -267,6 +274,8 @@ internal static class TestRunner
         yield return ("OpenAI.ParseCompletion", () => Task.Run(OpenAiCompatibleClientTests.ParseCompletion_ReadsToolCallsAndReasoning));
         yield return ("OpenAI.PostBody", OpenAiCompatibleClientTests.CompleteAsync_PostsOpenAiCompatibleBody);
         yield return ("OpenAI.DeepSeekExtraBody", OpenAiCompatibleClientTests.CompleteAsync_PostsDeepSeekThinkingInExtraBody);
+        yield return ("OpenAI.DeepSeekCapabilityProbes", OpenAiCompatibleClientTests.DeepSeekCapabilityProbesDisableThinking);
+        yield return ("OpenAI.OtherEndpointProbeDefaults", OpenAiCompatibleClientTests.OtherEndpointProbesKeepProviderDefaults);
         yield return ("OpenAI.VisionDataUrl", OpenAiCompatibleClientTests.CompleteAsync_AttachesImageAsDataUrlContentParts);
         yield return ("OpenAI.VisionPlainContent", OpenAiCompatibleClientTests.CompleteAsync_PlainContentStaysStringWithoutImage);
         yield return ("OpenAI.ParseSse", () => Task.Run(OpenAiCompatibleClientTests.ParseSse_AccumulatesContentAndToolCalls));

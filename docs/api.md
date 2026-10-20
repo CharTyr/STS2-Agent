@@ -525,6 +525,7 @@ curl -s http://127.0.0.1:8080/state | jq .
 | `name` | string | Power 显示名称 |
 | `amount` | number \| null | Power 层数/数值（部分 Power 可能为空） |
 | `is_debuff` | boolean | 是否为 Debuff |
+| `description` | string \| null | 原生规则文本；沙坑包含倒计时、目标死亡和逃离方式的说明 |
 
 #### `combat.hand[]`
 
@@ -589,6 +590,7 @@ curl -s http://127.0.0.1:8080/state | jq .
 | `name` | string | Power 显示名称 |
 | `amount` | number \| null | Power 层数/数值（部分 Power 可能为空） |
 | `is_debuff` | boolean | 是否为 Debuff |
+| `description` | string \| null | 原生规则文本；沙坑包含倒计时、目标死亡和逃离方式的说明 |
 
 #### `combat.enemies[].intents[]`
 
@@ -1054,6 +1056,16 @@ curl -s http://127.0.0.1:8080/state | jq .
 
 `continue_game_over` 会**等到原生结算真的写进 progress 存档**才返回，所以它比其它动作慢；
 不要因为一次超时就重复点。判断是否真的收尾完成看 `save_verified`，不要只看屏幕变化。
+
+### Sandpit safety and card-value context
+
+`sandpit_countdown` in `combat.lethal_risks[]` reads live enemy-owned `SandpitPower` instances targeting the local player, excluding dead enemies. A countdown at or below 1 can kill that player at the start of the enemy turn regardless of HP, block or Buffer; it is not damage to the enemy that owns the power.
+
+Built-in autoplay conservatively plays a natively playable `FRANTIC_ESCAPE` before asking the model when this risk is present. The agent rechecks the latest state at action dispatch. With no playable escape, it still permits attacks, draw and potions, but stops before a known-lethal `end_turn`. This guard applies to built-in `AgentLoop`; external clients and manual input still need to handle the exposed risk. It does not prove whether killing the boss would be a better alternative.
+
+Compact `combat.card_value_note` explains that hand text and `combat.hand[].values[].preview` already reflect live player modifiers. Each value includes `name`, `base_value` and `preview`; target-specific Vulnerable, damage caps and block still need evaluation. Compact power lines retain `description`, while raw `amount` keeps its existing native meaning.
+
+`/data/cards` metadata `upgrade` is computed by upgrading a detached canonical card copy to the next level; it exposes `description`, `cost`, `star_cost`, `upgrade_level` and `vars`. It is `null` for a fully upgraded card and never mutates a card in the player's deck. This is canonical card metadata, not a prediction of every in-run enchantment or modifier.
 
 ### compact `agent_view` 的增补字段
 

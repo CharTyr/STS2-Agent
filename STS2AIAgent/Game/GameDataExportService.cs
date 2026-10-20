@@ -346,14 +346,21 @@ internal static class GameDataExportService
     {
         try
         {
-            var preview = NormalizeCardRulesText(card.GetDescriptionForUpgradePreview());
-            if (!string.IsNullOrWhiteSpace(preview))
+            if (card.CurrentUpgradeLevel >= card.MaxUpgradeLevel) return null;
+            // A display-preview call on an unmodified canonical card can return the base numbers.
+            // Upgrade a detached canonical copy: never mutate a card in the player's deck.
+            var upgraded = ModelDb.GetById<CardModel>(card.Id).ToMutable();
+            for (var level = 0; level <= card.CurrentUpgradeLevel; level++) upgraded.UpgradeInternal();
+            upgraded.FinalizeUpgradeInternal();
+            var vars = BuildCardDynamicValuePayloads(upgraded);
+            return new
             {
-                return new
-                {
-                    description = preview
-                };
-            }
+                description = NormalizeCardRulesText(upgraded.GetDescriptionForPile(PileType.None)),
+                cost = upgraded.EnergyCost.GetWithModifiers(CostModifiers.All),
+                star_cost = Math.Max(0, upgraded.GetStarCostWithModifiers()),
+                upgrade_level = upgraded.CurrentUpgradeLevel,
+                vars = vars.Select(value => new { name = value.Name, base_value = value.BaseValue, current_value = value.CurrentValue }).ToArray()
+            };
         }
         catch
         {

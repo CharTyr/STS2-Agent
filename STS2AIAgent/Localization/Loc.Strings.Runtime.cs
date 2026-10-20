@@ -8,6 +8,7 @@ internal static partial class Loc
     private static void AddRuntimeEntries(Dictionary<string, string> map)
     {
         // Status line.
+        map["沙坑计数即将归零，优先打出狂乱逃离，避免下次敌方回合开始时被吞噬。"] = "Sandpit is about to reach zero. Play Frantic Escape first to avoid being devoured at the next enemy turn start.";
         map["就绪"] = "Ready";
         map["自动游玩中"] = "Auto-playing";
         map["已暂停自动游玩"] = "Auto-play paused";

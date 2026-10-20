@@ -45,6 +45,11 @@ namespace STS2AIAgent.Tests;
 /// <c>TryGetCardGridSelectionMetadata</c> was regenerated on 2026-10-03 when deck enchantment
 /// selections began exposing the native confirmation's effective nonempty minimum. Native prefs
 /// may allow zero while <c>NDeckEnchantSelectScreen.ConfirmSelection</c> ignores that selection.
+///
+/// The Sandpit safety fix deliberately regenerates BuildCombatLethalRiskPayloads to read
+/// enemy-owned powers targeting the local player, and BuildCreaturePowerPayloads to retain
+/// rules text. IsSandpitPower was removed in favor of the typed SandpitPower check.
+/// Unrelated relocation fingerprints remain unchanged.
 /// </remarks>
 internal static class GameStateServiceRelocationContractTests
 {
@@ -128,8 +133,7 @@ internal static class GameStateServiceRelocationContractTests
         ["GetEndTurnButton"] = ("STS2AIAgent/Game/GameStateService.Combat.cs", "8f76bfc88b7b47c46491119d5d891be8a53afda09d94b127e64a548c57c53b0f"),
         ["BuildAvailableActionNames"] = ("STS2AIAgent/Game/GameStateService.cs", "b95d51aabf1bee52abb8ee13f1c27e166135bd2a33ce927504160b6cff111863"),
         ["BuildCombatPayload"] = ("STS2AIAgent/Game/GameStateService.Combat.cs", "2b54101bd86e153369f9c157d59e4eaf62126e9a0a85caf146a0dd3a23918ead"),
-        ["BuildCombatLethalRiskPayloads"] = ("STS2AIAgent/Game/GameStateService.CombatRisks.cs", "f8085db67fa7a5e0affb594b75fdfb232d34985b267badd28ea6024e346b10be"),
-        ["IsSandpitPower"] = ("STS2AIAgent/Game/GameStateService.CombatRisks.cs", "c423a99fb0c84cd3e162998b8b4c44c59ded64397b1577867da1e608c3f82696"),
+        ["BuildCombatLethalRiskPayloads"] = ("STS2AIAgent/Game/GameStateService.CombatRisks.cs", "9ce53854ce7bf64fbe6a7f56633e728669dcf1ee48fe2e3e64140cee2cc3edad"),
         ["BuildRunPayload"] = ("STS2AIAgent/Game/GameStateService.Run.cs", "962e03e89804b00e8de0e4632ed48b08e00a711b5f90e19690b1ec2cdbab12c0"),
         ["ResolveBossId"] = ("STS2AIAgent/Game/GameStateService.Run.cs", "70aecade3371139e3fdb777685e7b1648c90ad859bc9d90a8de5592e1283949d"),
         ["IsCardSelected"] = ("STS2AIAgent/Game/GameStateService.Rewards.cs", "205981806775d8b3741743ab0d2d9d07459ba3484dc5b3b9d3265bd08dd23ece"),
@@ -155,7 +159,7 @@ internal static class GameStateServiceRelocationContractTests
         ["BuildHandCardPayload"] = ("STS2AIAgent/Game/GameStateService.Combat.cs", "a87ed5050ecad5b3090e532eb44314d1517664e6e260bde204b1e9810da61353"),
         ["GetModelIdEntry"] = ("STS2AIAgent/Game/GameStateService.cs", "a6bc7fd47caee58200cf2b4af006c24a62f11e89f3154de19bec4fb4abe8e745"),
         ["BuildEnemyPayload"] = ("STS2AIAgent/Game/GameStateService.Combat.cs", "61cf445651f34aa4415d3861c84c2fbf8aebb6de39f790eb3456cded6735b6f6"),
-        ["BuildCreaturePowerPayloads"] = ("STS2AIAgent/Game/GameStateService.Combat.cs", "7ea2af1581dd4849d763f28fc645165e99d43ad3f8374857a3cf7942e4409042"),
+        ["BuildCreaturePowerPayloads"] = ("STS2AIAgent/Game/GameStateService.Combat.cs", "bd86d370c60e4b218d3c04c63cc015522901b7906770ceb84050b65de236310a"),
         ["PlayerSpawnsPets"] = ("STS2AIAgent/Game/GameStateService.Combat.cs", "5998f0868d8fcb58cfa48018370e63151a60e61477a5b0b22f05d128b02cd257"),
         ["BuildCombatPetPayload"] = ("STS2AIAgent/Game/GameStateService.Combat.cs", "a0b7fbc1030e1b4d2af45d2268459ea67a871937d4f9e62043fed644263d50f1"),
         ["BuildEnemyIntentPayloads"] = ("STS2AIAgent/Game/GameStateService.Combat.cs", "a3fd437bf64cd5e3f6fee92d0186cfeeb5cf313a8414a760365eb5e51ad669cb"),

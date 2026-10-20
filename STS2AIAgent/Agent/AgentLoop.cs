@@ -170,6 +170,9 @@ internal sealed partial class AgentLoop
         var stateJson = await _bridge.GetCompactStateJsonAsync(cancellationToken);
         checkState?.Invoke(stateJson);
 
+        var escape = await TryEscapeSandpitAsync(stateJson, cancellationToken, checkState, reportPhase);
+        if (escape != null) return escape;
+
         // Dual-layer mode: when a decider is wired in, Jev picks the concrete action and the LLM only
         // plans. A confident-enough Jev answer is executed here and the LLM prompt below never runs;
         // a low-confidence or failed answer falls through to it, so an unsure fast model can never
@@ -806,6 +809,20 @@ internal sealed partial class AgentLoop
                     tool
                 }, JsonOptions);
                 return (null, json, null, false, indexError.Message);
+            }
+
+            // Revalidate the latest snapshot even if the model started from an older frame.
+            var sandpit = SandpitSafetyPolicy.Read(compactJson);
+            var safetyError = SandpitSafetyPolicy.Reject(sandpit, action, cardIndex);
+            if (safetyError != null)
+            {
+                if (action == "end_turn")
+                    throw new AutoPlayStoppedException(safetyError, StopKindPolicy.Failed);
+                var blocked = JsonSerializer.Serialize(new
+                {
+                    error = safetyError, code = "sandpit_emergency", state = state.Clone()
+                }, JsonOptions);
+                return (null, blocked, null, false, safetyError);
             }
 
             cancellationToken.ThrowIfCancellationRequested();
