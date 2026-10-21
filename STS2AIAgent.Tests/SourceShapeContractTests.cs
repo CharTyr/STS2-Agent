@@ -40,8 +40,10 @@ internal static class SourceShapeContractTests
         ["STS2AIAgent/Game/GameStateService.cs"] = 1400,
         // The 60 payload types of GET /state: the wire format, as declarations. They grow with the
         // API and are checked against docs/api.md by the api-facts gate, so the budget here is
-        // about noticing, not about stopping them.
-        ["STS2AIAgent/Game/GameStateService.Payloads.cs"] = 1300,
+        // about noticing, not about stopping them. Raised from 1300 for the three party-line types
+        // (deck, relics, potions per player): scripts/api_schema.py and the api-facts gate read wire
+        // types from this one file, so moving them out would hide them from the schema.
+        ["STS2AIAgent/Game/GameStateService.Payloads.cs"] = 1340,
         // The compact agent_view rewrite, split out of the file above. It is a projection of the
         // raw payloads, so it grows when they do -- which is the reason to watch it separately
         // rather than let it grow inside a file already too big to notice.
