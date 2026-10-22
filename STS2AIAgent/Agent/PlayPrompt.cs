@@ -148,6 +148,11 @@ Omit unused parameters; keep "reason" -- it is shown to the player. Do not wrap 
         var assembly = typeof(PlayPrompt).Assembly;
         using var stream = assembly.GetManifestResourceStream(name)
             ?? throw new InvalidOperationException("Missing embedded play skill resource: " + name);
+        return ReadPromptResource(stream);
+    }
+
+    internal static string ReadPromptResource(Stream stream)
+    {
         using var reader = new StreamReader(stream, Encoding.UTF8, detectEncodingFromByteOrderMarks: true);
         // Git can check these Markdown resources out as CRLF on Windows. Keep the same
         // prompt content and character budget regardless of the checkout's line endings.

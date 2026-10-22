@@ -1,5 +1,6 @@
 using STS2AIAgent.Agent;
 using System;
+using System.Text;
 namespace STS2AIAgent.Tests;
 
 internal static class McpPlayerSkillTests
@@ -57,12 +58,13 @@ internal static class McpPlayerSkillTests
 
     public static void SharedContractIsIndependentOfLineEndings()
     {
-        var skill = AgentSourceFixture.Read("skills/sts2-mcp-player/SKILL.md").ReplaceLineEndings("\n");
-        var expected = PlayPrompt.ExtractSharedContract(skill);
-        Assert.True(expected.Contains('\n'), "the fixture must exercise a multiline contract");
+        const string expected = "First paragraph.\n\n  Indented guidance.\nLast line.";
+        var skill = "# Outside the contract\n" + PlayPrompt.SharedContractBegin + "\n\n"
+            + expected + "\n\n" + PlayPrompt.SharedContractEnd + "\nNot part of the contract.\n";
 
         foreach (var variant in new[]
                  {
+                     skill,
                      skill.Replace("\n", "\r\n", StringComparison.Ordinal),
                      skill.Replace("\n", "\r", StringComparison.Ordinal),
                      skill.Replace("\n\n", "\r\n\n", StringComparison.Ordinal)
@@ -70,6 +72,28 @@ internal static class McpPlayerSkillTests
         {
             Assert.Equal(expected, PlayPrompt.ExtractSharedContract(variant),
                 "the shared contract must keep the same content for CRLF, CR, and mixed line endings");
+        }
+    }
+
+    public static void PromptResourceReaderNormalizesLineEndings()
+    {
+        // Exercise the production StreamReader boundary with CRLF bytes even on an LF checkout.
+        const string expected = "\nFirst line: 战斗.\n\n  Indented guidance.\nLast line.\n";
+        foreach (var variant in new[]
+                 {
+                     expected,
+                     expected.Replace("\n", "\r\n", StringComparison.Ordinal),
+                     expected.Replace("\n", "\r", StringComparison.Ordinal),
+                     expected.Replace("\n\n", "\r\n\n", StringComparison.Ordinal)
+                 })
+        {
+            foreach (var withBom in new[] { false, true })
+            {
+                var utf8 = new UTF8Encoding(encoderShouldEmitUTF8Identifier: withBom);
+                using var stream = new MemoryStream(utf8.GetPreamble().Concat(utf8.GetBytes(variant)).ToArray());
+                Assert.Equal(expected, PlayPrompt.ReadPromptResource(stream),
+                    "the production resource reader must preserve UTF-8 content and whitespace while normalizing newlines");
+            }
         }
     }
 
