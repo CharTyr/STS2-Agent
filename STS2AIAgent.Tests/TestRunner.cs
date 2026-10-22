@@ -414,6 +414,9 @@ internal static class TestRunner
         yield return ("GameOver.ContinueAction", () => Task.Run(GameOverContractTests.DedicatedContinueActionIsWiredEndToEnd));
         yield return ("Reward.EmptyScreenEscape", () => Task.Run(RewardFlowContractTests.EmptyRewardsScreenEscapesInsteadOfPending));
         yield return ("Skill.McpPlayerContract", () => Task.Run(McpPlayerSkillTests.SkillTracksLivePlayContract));
+        yield return ("Skill.ContractLineEndings", () => Task.Run(McpPlayerSkillTests.SharedContractIsIndependentOfLineEndings));
+        yield return ("Skill.PromptResourceReaderLineEndings", () => Task.Run(McpPlayerSkillTests.PromptResourceReaderNormalizesLineEndings));
+        yield return ("Skill.EmbeddedPromptLineEndings", () => Task.Run(McpPlayerSkillTests.EmbeddedPromptsUseCanonicalLineEndings));
         yield return ("GameOver.ReturnGate", () => Task.Run(GameOverContractTests.ReturnActionRequiresVisibleAndEnabledMainMenuButton));
         yield return ("GameOver.NativeButtons", () => Task.Run(GameOverContractTests.ContinueAndReturnUseNativeButtonsWithoutSkippingSummary));
         yield return ("GameOver.SummaryReady", () => Task.Run(GameOverContractTests.ContinueWaitsForNativeSummaryReadiness));
