@@ -55,6 +55,47 @@ internal static class McpPlayerSkillTests
         }
     }
 
+    public static void SharedContractIsIndependentOfLineEndings()
+    {
+        var skill = AgentSourceFixture.Read("skills/sts2-mcp-player/SKILL.md").ReplaceLineEndings("\n");
+        var expected = PlayPrompt.ExtractSharedContract(skill);
+        Assert.True(expected.Contains('\n'), "the fixture must exercise a multiline contract");
+
+        foreach (var variant in new[]
+                 {
+                     skill.Replace("\n", "\r\n", StringComparison.Ordinal),
+                     skill.Replace("\n", "\r", StringComparison.Ordinal),
+                     skill.Replace("\n\n", "\r\n\n", StringComparison.Ordinal)
+                 })
+        {
+            Assert.Equal(expected, PlayPrompt.ExtractSharedContract(variant),
+                "the shared contract must keep the same content for CRLF, CR, and mixed line endings");
+        }
+    }
+
+    public static void EmbeddedPromptsUseCanonicalLineEndings()
+    {
+        foreach (var (path, actual) in new[]
+                 {
+                     ("skills/sts2-mcp-player/references/screen-playbooks.md", PlayPrompt.ScreenPlaybooks),
+                     ("skills/sts2-mcp-player/references/strategy.md", PlayPrompt.StrategyReference)
+                 })
+        {
+            Assert.Equal(AgentSourceFixture.Read(path).ReplaceLineEndings("\n"), actual,
+                "embedded prompt content must be preserved apart from newline normalization: " + path);
+        }
+
+        foreach (var text in new[]
+                 {
+                     PlayPrompt.PlayContract, PlayPrompt.ScreenPlaybooks,
+                     PlayPrompt.StrategyReference, PlayPrompt.PlaySystem
+                 })
+        {
+            Assert.True(text.Contains('\n'), "the prompt fixture must contain multiple lines");
+            Assert.False(text.Contains('\r'), "embedded resources and the assembled prompt must use LF");
+        }
+    }
+
     /// <summary>
     /// Everything the in-game loop can put in front of the model: the system prompt plus the slice
     /// every screen is given, from both references. A token missing here reaches no in-game decision
