@@ -170,6 +170,9 @@ internal sealed partial class AgentLoop
         var stateJson = await _bridge.GetCompactStateJsonAsync(cancellationToken);
         checkState?.Invoke(stateJson);
 
+        var escape = await TryEscapeSandpitAsync(stateJson, cancellationToken, checkState, reportPhase);
+        if (escape != null) return escape;
+
         // Dual-layer mode: when a decider is wired in, Jev picks the concrete action and the LLM only
         // plans. A confident-enough Jev answer is executed here and the LLM prompt below never runs;
         // a low-confidence or failed answer falls through to it, so an unsure fast model can never
@@ -738,7 +741,8 @@ internal sealed partial class AgentLoop
         string argumentsJson,
         CancellationToken cancellationToken,
         Action<string>? checkState = null,
-        Action<string, string>? onAccepted = null)
+        Action<string, string>? onAccepted = null,
+        bool requireSandpitEscape = false)
     {
         string? acceptedAction = null;
         string? acceptedResponse = null;
@@ -808,6 +812,8 @@ internal sealed partial class AgentLoop
                 return (null, json, null, false, indexError.Message);
             }
 
+            ValidateSandpitDispatch(compactJson, action, cardIndex, requireSandpitEscape);
+
             cancellationToken.ThrowIfCancellationRequested();
             var result = await _bridge.ActAsync(
                 action,
@@ -818,7 +824,8 @@ internal sealed partial class AgentLoop
                 y,
                 tool,
                 cancellationToken,
-                rawState);
+                rawState,
+                latest => ValidateSandpitDispatch(latest, action, cardIndex, requireSandpitEscape));
             if (AgentErrorEnvelope.TryReadError(result, out var bridgeError))
             {
                 return (null, result, null, false, bridgeError ?? "act failed");

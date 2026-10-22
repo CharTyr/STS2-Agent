@@ -118,6 +118,7 @@ Omit unused parameters; keep "reason" -- it is shown to the player. Do not wrap 
         builder.AppendLine();
         builder.AppendLine("Tools: get_game_state, get_raw_game_state, get_available_actions, get_game_data_item, get_game_data_items, get_relevant_game_data, wait_until_actionable, act.");
         builder.AppendLine("Compact live state plus tools is complete. Vision/screenshots are optional supporting context and are never required.");
+        builder.AppendLine("Hand previews include Strength. Check upgrade.status before cost/vars; unavailable is not maxed. Use current metadata, never guess.");
         builder.AppendLine();
         builder.AppendLine(PlayContract.Trim());
         builder.AppendLine();

@@ -84,7 +84,8 @@ internal sealed class GameBridge : IGameBridge
         int? y,
         string? tool,
         CancellationToken cancellationToken,
-        bool rawState = false)
+        bool rawState = false,
+        Action<string>? validateState = null)
     {
         // Abandonable only while queued: a game thread that stops pumping used to leave this await
         // hanging with pause unable to break it. Once the action starts it runs under its own waits.
@@ -107,6 +108,11 @@ internal sealed class GameBridge : IGameBridge
                         source = "in_game_agent",
                         instance_role = Config.InstanceRole.Current
                     }
+                }, beforeDispatch: validateState == null ? null : () =>
+                {
+                    cancellationToken.ThrowIfCancellationRequested();
+                    var fresh = GameStateService.BuildStatePayload();
+                    validateState(JsonSerializer.Serialize(fresh.agent_view ?? (object)fresh, JsonOptions));
                 });
 
                 // The action's own post-action snapshot either way; only its shape changes. The

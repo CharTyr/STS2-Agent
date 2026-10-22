@@ -54,6 +54,8 @@
     <Compile Include="..\STS2AIAgent\Agent\AgentLoop.Arguments.cs" Link="Agent\AgentLoop.Arguments.cs" />
     <Compile Include="..\STS2AIAgent\Agent\AgentLoop.Probes.cs" Link="Agent\AgentLoop.Probes.cs" />
     <Compile Include="..\STS2AIAgent\Agent\AgentLoop.Decision.cs" Link="Agent\AgentLoop.Decision.cs" />
+    <Compile Include="..\STS2AIAgent\Agent\AgentLoop.Sandpit.cs" Link="Agent\AgentLoop.Sandpit.cs" />
+    <Compile Include="..\STS2AIAgent\Agent\SandpitSafetyPolicy.cs" Link="Agent\SandpitSafetyPolicy.cs" />
     <Compile Include="..\STS2AIAgent\Agent\PlayPhases.cs" Link="Agent\PlayPhases.cs" />
     <Compile Include="..\STS2AIAgent\Agent\AgentTurnCanceledException.cs" Link="Agent\AgentTurnCanceledException.cs" />
     <Compile Include="..\STS2AIAgent\Agent\CompletionErrors.cs" Link="Agent\CompletionErrors.cs" />
@@ -120,6 +122,7 @@
       is refused, no failure leaves it held) rather than a copy of them.
     -->
     <Compile Include="..\STS2AIAgent\Game\ActionExecutionGate.cs" Link="Game\ActionExecutionGate.cs" />
+    <Compile Include="..\STS2AIAgent\Game\CardUpgradePreviewPolicy.cs" Link="Game\CardUpgradePreviewPolicy.cs" />
     <Compile Include="..\STS2AIAgent\Server\JsonHelper.cs" Link="Server\JsonHelper.cs" />
     <Compile Include="..\STS2AIAgent\Server\HealthRoleData.cs" Link="Server\HealthRoleData.cs" />
     <Compile Include="..\STS2AIAgent\Server\EventPollingCoordinator.cs" Link="Server\EventPollingCoordinator.cs" />

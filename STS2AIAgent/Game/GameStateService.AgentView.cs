@@ -243,6 +243,7 @@ internal static partial class GameStateService
         return new
         {
             action_readiness = combat.action_readiness,
+            card_value_note = "Hand line and values.preview include live player modifiers such as Strength. Do not apply modifiers already reflected by preview again. Preview is not a guaranteed target hit: check target-specific Vulnerable, caps and block.",
             player = new
             {
                 hp = $"{combat.player.current_hp}/{combat.player.max_hp}",
@@ -741,6 +742,10 @@ internal static partial class GameStateService
             upgraded = card.upgraded,
             energy_cost = card.energy_cost,
             star_cost = card.star_cost,
+            values = card.dynamic_values.Select(value => new
+            {
+                name = value.name, base_value = value.base_value, preview = value.current_value
+            }).ToArray(),
             playable = card.playable,
             can_play_result = card.can_play_result,
             target = card.requires_target ? NormalizeTargetHint(card.target_index_space ?? card.target_type) : null,
@@ -960,7 +965,8 @@ internal static partial class GameStateService
     {
         var amount = power.amount is int value ? $" {value}" : string.Empty;
         var debuff = power.is_debuff ? " [debuff]" : string.Empty;
-        return $"{power.power_id}{amount}{debuff}";
+        var description = string.IsNullOrWhiteSpace(power.description) ? "" : $": {power.description}";
+        return $"{power.power_id}{amount}{debuff}{description}";
     }
 
     private static string FormatPotionLine(RunPotionPayload potion)

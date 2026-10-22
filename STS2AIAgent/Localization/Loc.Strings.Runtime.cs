@@ -8,6 +8,11 @@ internal static partial class Loc
     private static void AddRuntimeEntries(Dictionary<string, string> map)
     {
         // Status line.
+        map["沙坑计数即将归零，优先打出狂乱逃离，避免下次敌方回合开始时被吞噬。"] = "Sandpit is about to reach zero. Play Frantic Escape first to avoid being devoured at the next enemy turn start.";
+        map["沙坑状态或手牌已变化，已取消自动逃离，请重新读取状态。"] = "Sandpit or the hand changed. Automatic escape was canceled; read the state again.";
+        map["沙坑将在下个敌方回合杀死本地玩家。请先打出 card_index={0} 的 FRANTIC_ESCAPE，再执行其他动作。"] = "Sandpit will kill the local player next enemy turn. Play FRANTIC_ESCAPE at card_index={0} before another action.";
+        map["沙坑即将归零，结束回合会被吞噬；当前没有可打出的狂乱逃离。已停止自动游玩，请检查抽牌、药水或其他保命手段。"] = "Sandpit is about to reach zero; ending the turn will cause devouring, and no Frantic Escape is playable. Autoplay stopped. Check draw, potions or other ways to survive.";
+        map["沙坑倒计时 {0}：敌方回合开始时减1，归零会被吞噬并直接死亡。狂乱逃离增加计数，可延后死亡；格挡和缓冲不能抵消吞噬。"] = "Sandpit countdown {0}: decreases at the start of the enemy turn; reaching zero devours and instantly kills the affected player. Frantic Escape increases the count. Block and Buffer cannot prevent devouring.";
         map["就绪"] = "Ready";
         map["自动游玩中"] = "Auto-playing";
         map["已暂停自动游玩"] = "Auto-play paused";

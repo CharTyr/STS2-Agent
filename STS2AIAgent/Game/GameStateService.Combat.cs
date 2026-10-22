@@ -493,7 +493,10 @@ internal static partial class GameStateService
                 power_id = string.IsNullOrWhiteSpace(idEntry) ? "unknown_power" : idEntry,
                 name = string.IsNullOrWhiteSpace(title) ? idEntry : title,
                 amount = amount,
-                is_debuff = isDebuff
+                is_debuff = isDebuff,
+                description = power is SandpitPower
+                    ? SandpitSafetyPolicy.DescribeCountdown(amount)
+                    : SafeReadString(() => power.Description.GetFormattedText())
             });
             index += 1;
         }

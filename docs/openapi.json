@@ -1118,6 +1118,12 @@
               "null"
             ]
           },
+          "description": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
           "index": {
             "format": "int32",
             "type": "integer"
