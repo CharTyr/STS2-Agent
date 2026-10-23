@@ -887,13 +887,13 @@ internal sealed class RunPlayerSummaryPayload
 
     /// <summary>
     /// This player's master deck. Every client simulates the whole run (lockstep, checksummed), so a
-    /// partner's deck is as current here as the local one.
+    /// partner's deck is as current here as the local one. Null when it could not be read.
     /// </summary>
-    public PartyDeckCardPayload[] deck { get; init; } = Array.Empty<PartyDeckCardPayload>();
+    public PartyDeckCardPayload[]? deck { get; init; }
 
-    public PartyRelicPayload[] relics { get; init; } = Array.Empty<PartyRelicPayload>();
+    public PartyRelicPayload[]? relics { get; init; }
 
-    public PartyPotionPayload[] potions { get; init; } = Array.Empty<PartyPotionPayload>();
+    public PartyPotionPayload[]? potions { get; init; }
 }
 
 internal sealed class PartyDeckCardPayload
@@ -912,6 +912,8 @@ internal sealed class PartyRelicPayload
     public string relic_id { get; init; } = string.Empty;
 
     public string name { get; init; } = string.Empty;
+
+    public bool is_melted { get; init; }
 }
 
 internal sealed class PartyPotionPayload

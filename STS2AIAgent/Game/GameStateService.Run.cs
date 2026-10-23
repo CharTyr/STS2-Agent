@@ -220,62 +220,57 @@ internal static partial class GameStateService
     }
 
     // A partner's model objects are the same types as the local player's, but a read that throws on
-    // one of them must not take the whole party line (and with it /state) down: empty means unknown.
-    private static PartyDeckCardPayload[] BuildPartyDeckPayloads(Player player)
+    // one of them must not take the whole party line (and with it /state) down. Null means the part
+    // could not be read, an empty array that the player holds nothing; failures are logged, throttled.
+    private static PartyDeckCardPayload[]? BuildPartyDeckPayloads(Player player)
     {
-        try
-        {
-            return player.Deck.Cards
-                .Select(card => new PartyDeckCardPayload
-                {
-                    card_id = card.Id.Entry,
-                    name = card.Title,
-                    upgraded = card.IsUpgraded,
-                    card_type = card.Type.ToString()
-                })
-                .ToArray();
-        }
-        catch
-        {
-            return Array.Empty<PartyDeckCardPayload>();
-        }
+        return PartyInventoryReader.Instance.Read(
+            "deck",
+            () => player.Deck.Cards,
+            card => new PartyDeckCardPayload
+            {
+                card_id = card.Id.Entry,
+                name = card.Title,
+                upgraded = card.IsUpgraded,
+                card_type = card.Type.ToString()
+            },
+            DateTime.UtcNow,
+            WarnPartyInventory);
     }
 
-    private static PartyRelicPayload[] BuildPartyRelicPayloads(Player player)
+    private static PartyRelicPayload[]? BuildPartyRelicPayloads(Player player)
     {
-        try
-        {
-            return player.Relics
-                .Select(relic => new PartyRelicPayload
-                {
-                    relic_id = relic.Id.Entry,
-                    name = relic.Title.GetFormattedText()
-                })
-                .ToArray();
-        }
-        catch
-        {
-            return Array.Empty<PartyRelicPayload>();
-        }
+        return PartyInventoryReader.Instance.Read(
+            "relics",
+            () => player.Relics,
+            relic => new PartyRelicPayload
+            {
+                relic_id = relic.Id.Entry,
+                name = relic.Title.GetFormattedText(),
+                is_melted = relic.IsMelted
+            },
+            DateTime.UtcNow,
+            WarnPartyInventory);
     }
 
-    private static PartyPotionPayload[] BuildPartyPotionPayloads(Player player)
+    private static PartyPotionPayload[]? BuildPartyPotionPayloads(Player player)
     {
-        try
-        {
-            return player.PotionSlots
-                .Select(potion => new PartyPotionPayload
-                {
-                    potion_id = potion?.Id.Entry,
-                    name = potion?.Title.GetFormattedText(),
-                    occupied = potion != null
-                })
-                .ToArray();
-        }
-        catch
-        {
-            return Array.Empty<PartyPotionPayload>();
-        }
+        return PartyInventoryReader.Instance.Read(
+            "potions",
+            () => player.PotionSlots,
+            potion => new PartyPotionPayload
+            {
+                potion_id = potion?.Id.Entry,
+                name = potion?.Title.GetFormattedText(),
+                occupied = potion != null
+            },
+            DateTime.UtcNow,
+            WarnPartyInventory);
+    }
+
+    private static void WarnPartyInventory(string message)
+    {
+        Log.Warn($"[STS2AIAgent] {message}");
     }
 
     private static CardDynamicValuePayload[] BuildCardDynamicValuePayloads(CardModel? card)

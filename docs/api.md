@@ -627,13 +627,13 @@ curl -s http://127.0.0.1:8080/state | jq .
 #### `run.players[]` 的牌组、遗物与药水
 
 每个客户端都完整模拟整局（锁步同步并做校验和比对），所以队友的 `Player.Deck` / `Relics` / `PotionSlots`
-在本机与本地玩家的同样新鲜。外部 agent 用它规划整支队伍。读取某一项抛异常时该数组为空（表示未知），不会拖垮整个 `/state`。
+在本机与本地玩家的同样新鲜。外部 agent 用它规划整支队伍。读取某一项抛异常时该字段为 `null`（表示未知，区别于空数组），不会拖垮整个 `/state`；失败会写入日志，每 30 秒每类最多一条。
 
 | 字段 | 类型 | 说明 |
 | --- | --- | --- |
-| `deck[]` | object[] | 该玩家的牌库：`card_id`、`name`、`upgraded`、`card_type` |
-| `relics[]` | object[] | 该玩家的遗物：`relic_id`、`name` |
-| `potions[]` | object[] | 该玩家的药水槽：`potion_id`、`name`（空槽为 null）、`occupied` |
+| `deck[]` | object[] \| null | 该玩家的牌库：`card_id`、`name`、`upgraded`、`card_type`。读取失败时为 `null`（与空数组区分），并在日志中节流告警 |
+| `relics[]` | object[] \| null | 该玩家的遗物：`relic_id`、`name`、`is_melted`（已熔炼，效果不再生效）。读取失败时为 `null` |
+| `potions[]` | object[] \| null | 该玩家的药水槽：`potion_id`、`name`（空槽为 null）、`occupied`。读取失败时为 `null` |
 
 compact `agent_view` 的 `run.players[]` 原样携带这三个数组。
 

@@ -2439,6 +2439,9 @@
       "PartyRelicPayload": {
         "additionalProperties": true,
         "properties": {
+          "is_melted": {
+            "type": "boolean"
+          },
           "name": {
             "type": "string"
           },
@@ -2755,7 +2758,10 @@
             "items": {
               "$ref": "#/components/schemas/PartyDeckCardPayload"
             },
-            "type": "array"
+            "type": [
+              "array",
+              "null"
+            ]
           },
           "gold": {
             "format": "int32",
@@ -2781,13 +2787,19 @@
             "items": {
               "$ref": "#/components/schemas/PartyPotionPayload"
             },
-            "type": "array"
+            "type": [
+              "array",
+              "null"
+            ]
           },
           "relics": {
             "items": {
               "$ref": "#/components/schemas/PartyRelicPayload"
             },
-            "type": "array"
+            "type": [
+              "array",
+              "null"
+            ]
           },
           "slot_index": {
             "format": "int32",

@@ -188,14 +188,14 @@ internal static class CompactViewFidelityTests
         // Every party line carries that player's deck, relics and potions, raw and compact, so an
         // agent can plan around what its partners hold.
         var runPlayer = ClassBody(source, "internal sealed class RunPlayerSummaryPayload");
-        Assert.Contains("PartyDeckCardPayload[]deck", runPlayer, StringComparison.Ordinal);
-        Assert.Contains("PartyRelicPayload[]relics", runPlayer, StringComparison.Ordinal);
-        Assert.Contains("PartyPotionPayload[]potions", runPlayer, StringComparison.Ordinal);
+        Assert.Contains("PartyDeckCardPayload[]?deck", runPlayer, StringComparison.Ordinal);
+        Assert.Contains("PartyRelicPayload[]?relics", runPlayer, StringComparison.Ordinal);
+        Assert.Contains("PartyPotionPayload[]?potions", runPlayer, StringComparison.Ordinal);
         Assert.Contains("deck=other.deck,relics=other.relics,potions=other.potions", compactRun, StringComparison.Ordinal);
         foreach (var (type, keys) in new[]
         {
             ("PartyDeckCardPayload", new[] { "card_id", "name", "upgraded", "card_type" }),
-            ("PartyRelicPayload", new[] { "relic_id", "name" }),
+            ("PartyRelicPayload", new[] { "relic_id", "name", "is_melted" }),
             ("PartyPotionPayload", new[] { "potion_id", "name", "occupied" }),
         })
         {
