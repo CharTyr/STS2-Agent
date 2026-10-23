@@ -212,8 +212,65 @@ internal static partial class GameStateService
             current_hp = player.Creature.CurrentHp,
             max_hp = player.Creature.MaxHp,
             gold = player.Gold,
-            is_alive = player.Creature.IsAlive
+            is_alive = player.Creature.IsAlive,
+            deck = BuildPartyDeckPayloads(player),
+            relics = BuildPartyRelicPayloads(player),
+            potions = BuildPartyPotionPayloads(player)
         };
+    }
+
+    // A partner's model objects are the same types as the local player's, but a read that throws on
+    // one of them must not take the whole party line (and with it /state) down. Null means the part
+    // could not be read, an empty array that the player holds nothing; failures are logged, throttled.
+    private static PartyDeckCardPayload[]? BuildPartyDeckPayloads(Player player)
+    {
+        return PartyInventoryReader.Instance.Read(
+            "deck",
+            () => player.Deck.Cards,
+            card => new PartyDeckCardPayload
+            {
+                card_id = card.Id.Entry,
+                name = card.Title,
+                upgraded = card.IsUpgraded,
+                card_type = card.Type.ToString()
+            },
+            DateTime.UtcNow,
+            WarnPartyInventory);
+    }
+
+    private static PartyRelicPayload[]? BuildPartyRelicPayloads(Player player)
+    {
+        return PartyInventoryReader.Instance.Read(
+            "relics",
+            () => player.Relics,
+            relic => new PartyRelicPayload
+            {
+                relic_id = relic.Id.Entry,
+                name = relic.Title.GetFormattedText(),
+                is_melted = relic.IsMelted
+            },
+            DateTime.UtcNow,
+            WarnPartyInventory);
+    }
+
+    private static PartyPotionPayload[]? BuildPartyPotionPayloads(Player player)
+    {
+        return PartyInventoryReader.Instance.Read(
+            "potions",
+            () => player.PotionSlots,
+            potion => new PartyPotionPayload
+            {
+                potion_id = potion?.Id.Entry,
+                name = potion?.Title.GetFormattedText(),
+                occupied = potion != null
+            },
+            DateTime.UtcNow,
+            WarnPartyInventory);
+    }
+
+    private static void WarnPartyInventory(string message)
+    {
+        Log.Warn($"[STS2AIAgent] {message}");
     }
 
     private static CardDynamicValuePayload[] BuildCardDynamicValuePayloads(CardModel? card)

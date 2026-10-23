@@ -50,6 +50,11 @@ namespace STS2AIAgent.Tests;
 /// enemy-owned powers targeting the local player, and BuildCreaturePowerPayloads to retain
 /// localized rules text. IsSandpitPower was removed in favor of the typed SandpitPower check.
 /// Unrelated relocation fingerprints remain unchanged.
+///
+/// <c>BuildRunPlayerSummaryPayload</c> was regenerated when every party line gained the player's
+/// deck, relics and potions. Each client simulates the whole run, so a partner's
+/// <c>Player.Deck</c> is as current as the local one, and an external agent planning for the party
+/// needs it.
 /// </remarks>
 internal static class GameStateServiceRelocationContractTests
 {
@@ -181,7 +186,7 @@ internal static class GameStateServiceRelocationContractTests
         ["RawTextOrNull"] = ("STS2AIAgent/Game/GameStateService.cs", "18842f331110953fa0b4999e7efe9383feedc6b654f8a3f91c62670c1cb95579"),
         ["GetEventOptionWillKillPlayer"] = ("STS2AIAgent/Game/GameStateService.Rooms.cs", "14b90dc6f74d6704bba17aa3c1c627e498dafb0096c2ba73e80c1e77510dad6e"),
         ["BuildCharacterSelectPlayerPayload"] = ("STS2AIAgent/Game/GameStateService.Menus.cs", "3d8050b088e35e015cc63476fdf7a2ea5a75f1b9c144d5b616f1af9e6841ca00"),
-        ["BuildRunPlayerSummaryPayload"] = ("STS2AIAgent/Game/GameStateService.Run.cs", "cebd0b5eb78ee4f0028d3bbef2db3694be84694d190d7d8399897348ea50e003"),
+        ["BuildRunPlayerSummaryPayload"] = ("STS2AIAgent/Game/GameStateService.Run.cs", "896dec5e055fc6dcb06693f6114ca57954c0e49efcf532ae6d40ce3eb6b4814b"),
         ["BuildCombatPlayerSummaryPayload"] = ("STS2AIAgent/Game/GameStateService.Combat.cs", "f3a846917b3a8fe485a377a164a2e9bd3e649684150da7a42c6d3a46df3312e0"),
         ["GetCardTargetIndexSpace"] = ("STS2AIAgent/Game/GameStateService.Combat.cs", "df45d23fd058b00cec7086bba4173505b24d06bc266174689090914d58cb292a"),
         ["GetPotionTargetIndexSpace"] = ("STS2AIAgent/Game/GameStateService.Combat.cs", "86faccbf9996fcf2bf11576bd3855533efe2b3e13a92abe658e49b2cf3d06a06"),
