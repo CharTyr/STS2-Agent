@@ -208,7 +208,8 @@ internal static partial class GameActionService
         if (!GameStateService.CanClaimReward(currentScreen))
         {
             // Only potion rows left and no free slot: name the cause rather than a bare "not available".
-            if (GameStateService.GetRewardButtons(currentScreen).Any(button => button.IsEnabled && button.Reward is PotionReward))
+            if (request.option_index != null &&
+                GameStateService.GetRewardButtons(currentScreen).Any(button => button.IsEnabled && button.Reward is PotionReward))
             {
                 throw new ApiException(409, "invalid_action", RewardClaimPolicy.PotionSlotsFullMessage, new
                 {

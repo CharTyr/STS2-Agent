@@ -156,7 +156,7 @@ internal static partial class GameStateService
     /// <summary>
     /// A potion row is only claimable while the local player has a free potion slot; the game
     /// leaves the row enabled but ignores the click when the belt is full (#219). An unreadable
-    /// player does not block the claim -- the executor's own check still runs.
+    /// player counts as no free slot, the same way the bulk reward path reads it.
     /// </summary>
     public static bool IsRewardButtonClaimable(NRewardButton button)
     {
@@ -170,7 +170,7 @@ internal static partial class GameStateService
     public static bool LocalPlayerHasOpenPotionSlot()
     {
         var player = GetLocalPlayer(RunManager.Instance.DebugOnlyGetState());
-        return player == null || player.HasOpenPotionSlots;
+        return player?.HasOpenPotionSlots ?? false;
     }
 
     private static RewardCardOptionPayload BuildRewardCardOptionPayload(NCardHolder holder, int index)
