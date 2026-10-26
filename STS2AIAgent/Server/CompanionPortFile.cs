@@ -17,7 +17,7 @@ internal static class CompanionPortFile
             var text = File.ReadAllText(PathFor(pid)).Trim();
             return int.TryParse(text, out var port) && port is > 0 and <= 65535 ? port : null;
         }
-        catch (Exception ex) when (ex is FileNotFoundException or DirectoryNotFoundException or IOException)
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
             return null;
         }

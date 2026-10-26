@@ -658,6 +658,10 @@ internal static class TestRunner
         yield return ("CardPlayCounter.StillInHand", () => Task.Run(CardPlayCounterPolicyTests.APlayStillInHandRollsBack));
         yield return ("CardPlayCounter.Settled", () => Task.Run(CardPlayCounterPolicyTests.ASettledPlayKeepsTheCounters));
         yield return ("CardPlayCounter.LeftHand", () => Task.Run(CardPlayCounterPolicyTests.LeftHandOrEndedCombatKeepsTheCounters));
+        yield return ("CoopHardening.Staging", () => Task.Run(CoopHardeningTests.StagingUsesLoadedFilesAndPreservesConflicts));
+        yield return ("CoopHardening.Startup", () => Task.Run(CoopHardeningTests.StartupRejectsWrongProcessAndPartialWrites));
+        yield return ("CoopHardening.Deadline", CoopHardeningTests.DiscoveryHonorsTotalDeadlineAndCancellation);
+        yield return ("CoopHardening.ProbeClassification", () => Task.Run(CoopHardeningTests.ToolProbeDoesNotDowngradeAuthenticationOrUnrelatedErrors));
         yield return ("PartyInventory.Populated", () => Task.Run(PartyInventoryReaderTests.APopulatedInventoryKeepsEveryItemAndValue));
         yield return ("PartyInventory.Empty", () => Task.Run(PartyInventoryReaderTests.AnEmptyInventoryIsAnEmptyArrayNotNull));
         yield return ("PartyInventory.FailedRead", () => Task.Run(PartyInventoryReaderTests.AFailedReadIsNullAndWarnsOncePerInterval));

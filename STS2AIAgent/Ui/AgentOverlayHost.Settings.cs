@@ -598,8 +598,14 @@ internal sealed partial class AgentOverlayHost
         column.AddChild(UiFactory.Row(name, enabled, remove));
         column.AddChild(url);
         column.AddChild(key);
+        var protocol = UiFactory.Combo();
+        foreach (var value in new[] { "auto", "deepseek", "reasoning_effort", "prompt" }) protocol.AddItem(value);
+        var protocolIndex = Array.IndexOf(new[] { "auto", "deepseek", "reasoning_effort", "prompt" }, endpoint.ThinkingProtocol);
+        protocol.Select(Math.Max(0, protocolIndex));
+        WatchCombo(protocol);
+        column.AddChild(Labeled(Loc.T("思考协议（代理端点也适用）"), protocol));
         box.AddChild(column);
-        _endpointEditors.Add(new EndpointEditors(endpoint.Id, name, url, key, enabled));
+        _endpointEditors.Add(new EndpointEditors(endpoint.Id, name, url, key, enabled, protocol));
         return box;
     }
 
@@ -750,6 +756,7 @@ internal sealed partial class AgentOverlayHost
             endpoint.BaseUrl = editor.Url.Text.Trim();
             endpoint.ApiKey = editor.Key.Text;
             endpoint.Enabled = editor.Enabled.ButtonPressed;
+            endpoint.ThinkingProtocol = editor.Protocol.GetItemText(editor.Protocol.Selected);
         }
 
         for (var i = 0; i < Math.Min(current.Models.Count, _modelEditors.Count); i++)

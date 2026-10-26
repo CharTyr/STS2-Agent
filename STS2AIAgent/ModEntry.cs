@@ -20,6 +20,9 @@ public static class ModEntry
 
     public static void Initialize()
     {
+        CompanionStartupFile.Publish("initializing");
+        try
+        {
         Log.Info($"{LogPrefix} Initializing");
         RegisterShutdownHooks();
         // Reads the player's language before anything renders text. The game's own localization
@@ -43,6 +46,12 @@ public static class ModEntry
         }
 
         Log.Info($"{LogPrefix} Ready on {HttpServer.Instance.Prefix}");
+        }
+        catch (Exception ex)
+        {
+            CompanionStartupFile.Publish("failed", error: DiagnosticExport.Redact(ex.Message));
+            throw;
+        }
     }
 
     private static bool IsHeadlessDisplay()

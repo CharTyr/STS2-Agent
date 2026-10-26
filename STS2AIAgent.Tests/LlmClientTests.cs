@@ -64,6 +64,11 @@ internal static class OpenAiCompatibleClientTests
             Assert.Equal("required", probe.RootElement.GetProperty("tool_choice").GetString());
         }
 
+        var proxy = new OpenAiCompatibleClient(new LlmEndpoint { BaseUrl = "https://proxy.test/v1", ThinkingProtocol = "deepseek" }, handler);
+        await proxy.ProbeToolCallingAsync("custom-alias", Agent.AgentTools.Play[^1], "Call the tool.", CancellationToken.None);
+        using (var proxyProbe = JsonDocument.Parse(handler.LastBody!))
+            Assert.Equal("disabled", proxyProbe.RootElement.GetProperty("thinking").GetProperty("type").GetString());
+
         await client.CompleteAsync(new LlmRequest
         {
             Model = "deepseek-flash", Messages = new[] { LlmMessage.User("Play.") },

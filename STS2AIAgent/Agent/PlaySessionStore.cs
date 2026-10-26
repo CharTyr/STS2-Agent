@@ -84,6 +84,11 @@ internal sealed class PlaySessionStore
                 {
                     // Continue legacy seed-named files only after validating their identity.
                     var legacy = LegacyPathFor(runId!);
+                    // Legacy Windows filenames can differ only in case from the saved run id.
+                    if (!File.Exists(legacy) && System.IO.Directory.Exists(_directory))
+                        legacy = System.IO.Directory.EnumerateFiles(_directory, "*.json")
+                            .FirstOrDefault(candidate => string.Equals(System.IO.Path.GetFileName(candidate),
+                                System.IO.Path.GetFileName(legacy), StringComparison.OrdinalIgnoreCase)) ?? legacy;
                     if (File.Exists(path + ".bak")) return RecoverFromCorrupt(path, runId!);
                     if (!File.Exists(legacy)) return File.Exists(legacy + ".bak") ? RecoverFromCorrupt(legacy, runId!) : null;
                     path = legacy;

@@ -49,6 +49,7 @@ public sealed class HttpServer
             PortWasAutoIncremented = started.Port != preferredPort;
             Prefix = $"http://{DefaultHost}:{Port}/";
             PublishCompanionPort(Port);
+            CompanionStartupFile.Publish("listening", Port);
 
             _cts = new CancellationTokenSource();
             _listenLoopTask = Task.Run(() => ListenLoopAsync(_listener, _cts.Token));

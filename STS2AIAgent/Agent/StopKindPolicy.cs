@@ -54,11 +54,11 @@ internal static class StopKindPolicy
         // have to be recognised. Status codes need no translation.
         if (message.Contains("请检查模型", StringComparison.Ordinal) ||
             message.Contains("check the model", StringComparison.OrdinalIgnoreCase) ||
-            message.Contains("401", StringComparison.Ordinal) ||
-            message.Contains("402", StringComparison.Ordinal) ||
-            message.Contains("403", StringComparison.Ordinal) ||
-            message.Contains("404", StringComparison.Ordinal) ||
-            message.Contains("422", StringComparison.Ordinal) ||
+            System.Text.RegularExpressions.Regex.IsMatch(message, @"\bHTTP\s+401\b", System.Text.RegularExpressions.RegexOptions.IgnoreCase) ||
+            System.Text.RegularExpressions.Regex.IsMatch(message, @"\bHTTP\s+402\b", System.Text.RegularExpressions.RegexOptions.IgnoreCase) ||
+            System.Text.RegularExpressions.Regex.IsMatch(message, @"\bHTTP\s+403\b", System.Text.RegularExpressions.RegexOptions.IgnoreCase) ||
+            System.Text.RegularExpressions.Regex.IsMatch(message, @"\bHTTP\s+404\b", System.Text.RegularExpressions.RegexOptions.IgnoreCase) ||
+            System.Text.RegularExpressions.Regex.IsMatch(message, @"\bHTTP\s+422\b", System.Text.RegularExpressions.RegexOptions.IgnoreCase) ||
             message.Contains("认证失败", StringComparison.Ordinal) ||
             message.Contains("authentication failed", StringComparison.OrdinalIgnoreCase) ||
             message.Contains("配置错误", StringComparison.Ordinal) ||
@@ -67,8 +67,8 @@ internal static class StopKindPolicy
             return Configuration;
         }
 
-        if (message.Contains("408", StringComparison.Ordinal) ||
-            message.Contains("429", StringComparison.Ordinal) ||
+        if (System.Text.RegularExpressions.Regex.IsMatch(message, @"\bHTTP\s+408\b", System.Text.RegularExpressions.RegexOptions.IgnoreCase) ||
+            System.Text.RegularExpressions.Regex.IsMatch(message, @"\bHTTP\s+429\b", System.Text.RegularExpressions.RegexOptions.IgnoreCase) ||
             message.Contains("超时", StringComparison.Ordinal) ||
             message.Contains("timed out", StringComparison.OrdinalIgnoreCase) ||
             message.Contains("timeout", StringComparison.OrdinalIgnoreCase) ||

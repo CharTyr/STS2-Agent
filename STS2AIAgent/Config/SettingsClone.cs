@@ -19,6 +19,7 @@ internal static class SettingsClone
                 Id = endpoint.Id,
                 Name = endpoint.Name,
                 BaseUrl = endpoint.BaseUrl,
+                ThinkingProtocol = endpoint.ThinkingProtocol,
                 ApiKey = endpoint.ApiKey,
                 Enabled = endpoint.Enabled
             }).ToList(),

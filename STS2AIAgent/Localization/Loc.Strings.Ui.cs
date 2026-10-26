@@ -8,6 +8,7 @@ internal static partial class Loc
     private static void AddUiEntries(Dictionary<string, string> map)
     {
         // Header, tabs, chat page.
+        map["思考协议（代理端点也适用）"] = "Thinking protocol (also for proxy endpoints)";
         map["拖动移动"] = "Drag to move";
         map["隐藏"] = "Hide";
         map["● 自动游玩中"] = "● Auto-playing";

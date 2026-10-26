@@ -876,7 +876,7 @@ internal sealed partial class AgentOverlayHost
         return text.Replace("[", "［").Replace("]", "］");
     }
 
-    private sealed record EndpointEditors(string Id, LineEdit Name, LineEdit Url, LineEdit Key, CheckBox Enabled);
+    private sealed record EndpointEditors(string Id, LineEdit Name, LineEdit Url, LineEdit Key, CheckBox Enabled, OptionButton Protocol);
 
     private sealed record ModelEditors(
         string Id,

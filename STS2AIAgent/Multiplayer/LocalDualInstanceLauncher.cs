@@ -25,6 +25,8 @@ internal static class LocalDualInstanceLauncher
     private const string SteamAppId = "2868840";
     private static readonly SemaphoreSlim LaunchGate = new(1, 1);
     private static Process? _companionProcess;
+    private static string? _startupPath;
+    private static string? _sessionToken;
     public static CompanionConnection? Connection { get; private set; }
 
     public static bool CompanionProcessAlive => _companionProcess is { HasExited: false };
@@ -64,91 +66,18 @@ internal static class LocalDualInstanceLauncher
         {
         }
 
-        var steam = Path.Combine(
-            System.Environment.GetFolderPath(System.Environment.SpecialFolder.ProgramFilesX86),
-            "Steam",
-            "steamapps",
-            "common",
-            "Slay the Spire 2",
-            "SlayTheSpire2.exe");
-        return File.Exists(steam) ? steam : null;
+        var configured = Environment.GetEnvironmentVariable("STS2_GAME_EXE");
+        return !string.IsNullOrWhiteSpace(configured) && File.Exists(configured) ? configured : null;
     }
 
     internal static void StageWorkshopModForOfflineCompanion(string exePath)
     {
-        var gameDir = Path.GetDirectoryName(exePath);
-        if (string.IsNullOrWhiteSpace(gameDir))
-        {
-            return;
-        }
-
-        var destDir = Path.Combine(gameDir, "mods", "STS2AIAgent");
-        var destDll = Path.Combine(destDir, "STS2AIAgent.dll");
-        var flatDll = Path.Combine(gameDir, "mods", "STS2AIAgent.dll");
-        if (File.Exists(flatDll) || File.Exists(destDll))
-        {
-            Log.Info($"{LogPrefix} Keeping the already-installed local STS2AIAgent copy instead of staging Workshop files.");
-            return;
-        }
-
-        var sourceDir = FindSubscribedWorkshopModDir();
-        if (sourceDir == null)
-        {
-            Log.Warn($"{LogPrefix} No subscribed Workshop copy of STS2AIAgent found for the offline companion.");
-            return;
-        }
-
-        Directory.CreateDirectory(destDir);
-        foreach (var fileName in new[] { "STS2AIAgent.dll", "STS2AIAgent.pck", "STS2AIAgent.json" })
-        {
-            var from = Path.Combine(sourceDir, fileName);
-            if (File.Exists(from))
-            {
-                File.Copy(from, Path.Combine(destDir, fileName), overwrite: true);
-            }
-        }
-
-        Log.Info($"{LogPrefix} Staged Workshop mod into {destDir} so the offline companion can load it.");
-    }
-
-    private static string? FindSubscribedWorkshopModDir()
-    {
-        var roots = new[]
-        {
-            Path.Combine(
-                System.Environment.GetFolderPath(System.Environment.SpecialFolder.ProgramFilesX86),
-                "Steam",
-                "steamapps",
-                "workshop",
-                "content",
-                "2868840"),
-            Path.Combine(
-                System.Environment.GetFolderPath(System.Environment.SpecialFolder.ProgramFiles),
-                "Steam",
-                "steamapps",
-                "workshop",
-                "content",
-                "2868840")
-        };
-
-        foreach (var root in roots)
-        {
-            if (!Directory.Exists(root))
-            {
-                continue;
-            }
-
-            foreach (var dir in Directory.EnumerateDirectories(root))
-            {
-                if (File.Exists(Path.Combine(dir, "STS2AIAgent.json")) &&
-                    File.Exists(Path.Combine(dir, "STS2AIAgent.dll")))
-                {
-                    return dir;
-                }
-            }
-        }
-
-        return null;
+        var source = Path.GetDirectoryName(typeof(LocalDualInstanceLauncher).Assembly.Location)
+            ?? throw new IOException("Cannot locate the loaded STS2AIAgent assembly.");
+        var game = Path.GetDirectoryName(exePath)
+            ?? throw new IOException("Cannot locate the game directory.");
+        var staged = CompanionModStager.Prepare(source, game);
+        Log.Info($"{LogPrefix} Verified companion mod at {staged}");
     }
 
     public static void EnsureSteamAppIdFile(string exePath)
@@ -181,8 +110,19 @@ internal static class LocalDualInstanceLauncher
 
         try
         {
-            if (_companionProcess is { HasExited: false })
+            if (_companionProcess is { HasExited: false } existing)
             {
+                if (Connection == null && _sessionToken != null)
+                {
+                    var port = await WaitForHealthAsync(HttpServer.Instance.Port < 65535 ? HttpServer.Instance.Port + 1 : 8081,
+                        existing, TimeSpan.FromSeconds(10), cancellationToken);
+                    if (port != null)
+                    {
+                        Connection = new CompanionConnection(port.Value, existing.Id, _sessionToken);
+                        return new DualLaunchResult { Ok = true, CompanionPid = existing.Id, CompanionPort = port.Value,
+                            Message = Loc.T("第二实例已就绪：PID {0}，API {1}", existing.Id, port.Value) };
+                    }
+                }
                 return new DualLaunchResult
                 {
                     Ok = false,
@@ -193,6 +133,9 @@ internal static class LocalDualInstanceLauncher
 
             _companionProcess?.Dispose();
             _companionProcess = null;
+            if (_startupPath != null) { try { File.Delete(_startupPath); } catch (IOException) { } }
+            _startupPath = null;
+            _sessionToken = null;
             Connection = null;
             return await LaunchCoreAsync(cancellationToken, companionAutoPlay);
         }
@@ -217,7 +160,7 @@ internal static class LocalDualInstanceLauncher
         }
         catch (Exception ex)
         {
-            Log.Warn($"{LogPrefix} workshop staging for companion: {ex.Message}");
+            return new DualLaunchResult { Ok = false, Message = "Companion mod preparation failed: " + ex.Message };
         }
 
         var hostPort = HttpServer.Instance.Port;
@@ -297,6 +240,9 @@ internal static class LocalDualInstanceLauncher
             .ToString(System.Globalization.CultureInfo.InvariantCulture);
         var sessionToken = CompanionConnection.CreateToken();
         startInfo.Environment[CompanionConnection.TokenEnvironment] = sessionToken;
+        _sessionToken = sessionToken;
+        _startupPath = Path.Combine(Path.GetTempPath(), "sts2-companion-startup-" + Guid.NewGuid().ToString("N") + ".json");
+        startInfo.Environment[CompanionStartupFile.EnvironmentName] = _startupPath;
 
         Process process;
         try
@@ -349,37 +295,23 @@ internal static class LocalDualInstanceLauncher
     private static async Task<int?> WaitForHealthAsync(int preferredPort, Process process, TimeSpan timeout, CancellationToken cancellationToken)
     {
         using var http = new System.Net.Http.HttpClient { Timeout = TimeSpan.FromSeconds(2) };
-        var deadline = DateTime.UtcNow + timeout;
-        while (DateTime.UtcNow < deadline)
+        IEnumerable<int> Candidates()
         {
-            cancellationToken.ThrowIfCancellationRequested();
-            if (process.HasExited)
-            {
-                return null;
-            }
-
-            foreach (var port in CompanionPortFile.EnumerateCandidates(preferredPort, process.Id))
-            {
-                try
-                {
-                    var json = await http.GetStringAsync($"http://127.0.0.1:{port}/health", cancellationToken);
-                    if (CompanionHealth.IsExpectedProcess(json, port, process.Id))
-                    {
-                        return port;
-                    }
-                }
-                catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
-                {
-                    throw;
-                }
-                catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException)
-                {
-                }
-            }
-
-            await Task.Delay(1000, cancellationToken);
+            var startup = _startupPath == null ? null : CompanionStartupFile.Read(_startupPath, process.Id);
+            if (startup?.Phase == "failed")
+                throw new IOException("Companion initialization failed: " + startup.Error);
+            if (startup?.Port is > 0 and <= 65535) yield return startup.Port.Value;
+            foreach (var port in CompanionPortFile.EnumerateCandidates(preferredPort, process.Id)) yield return port;
         }
-
-        return null;
+        return await CompanionDiscovery.WaitAsync(Candidates, async (port, cancellationToken) =>
+        {
+            try
+            {
+                var json = await http.GetStringAsync($"http://127.0.0.1:{port}/health", cancellationToken);
+                return CompanionHealth.IsExpectedProcess(json, port, process.Id);
+            }
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) { throw; }
+            catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException) { return false; }
+        }, () => process.HasExited, timeout, cancellationToken);
     }
 }

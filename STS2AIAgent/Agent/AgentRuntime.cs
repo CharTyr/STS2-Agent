@@ -1294,7 +1294,9 @@ internal sealed partial class AgentRuntime
     {
         var kind = error is AutoPlayStoppedException stopped
             ? StopKindPolicy.Resolve(stopped.Kind, error.Message)
-            : StopKindPolicy.Classify(error.Message);
+            : error is STS2AIAgent.Llm.LlmException llm && llm.StatusCode is { } status
+                ? ModelRoleProbe.FailureKind(status, llm.Message) == "config" ? StopKindPolicy.Configuration : StopKindPolicy.Network
+                : StopKindPolicy.Classify(error.Message);
         SetStop(kind, error.Message, role);
     }
 
