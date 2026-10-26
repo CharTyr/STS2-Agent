@@ -1025,9 +1025,9 @@ Before release, run on an isolated Windows profile with game v0.111.0 and real g
 - [ ] Reserve nearby ports and force a dynamic port; verify PID/role/port in host health and direct companion health.
 - [ ] Differing TEMP variables and denied handshake writes; verify errors/fallback and the total deadline.
 - [ ] Slow child startup: retry from an active lobby/run and reconnect without creating another process or changing the original control mode.
-- [x] No-model external takeover: full combat on the Steam-on profile, cross-character actions refused (2026-10-27).
-- [ ] Verified model autoplay: Skipped on 2026-10-27 by Char's decision (provider HTTP 400 insufficient credits / 403 auth; not verified). Save continue kept `run_id` and seats with the no-model route.
-- [ ] Official DeepSeek and a proxy with custom model aliases: Skipped on 2026-10-27 by Char's decision (provider errors; not verified).
+- [x] No-model external takeover: zero model requests, direct teammate actions work, host actions retain actor restrictions (2026-10-27: full combat on the Steam-on profile, cross-character action refused with 403).
+- [ ] Verified model autoplay: companion begins decisions; pause/resume/continue restore the same route and seat. Skipped on 2026-10-27 by Char's decision (provider HTTP 400 insufficient credits / 403 auth; not verified). Save continue kept `run_id` and seats with the no-model route.
+- [ ] Official DeepSeek and a proxy with custom model aliases: test tools and ordinary play with thinking on/off; no paid probes were run by the offline suite. Skipped on 2026-10-27 by Char's decision (provider errors; not verified).
 - [ ] Non-combat-only: combat CARD_SELECTION/MODAL and entry races cause zero automatic actions; external combat actions remain usable.
 - [ ] Map graph readable in combat/rest/shop while travel options remain disabled; reward potion replacement and capacity-granting relic order work; upgrade previews do not mutate live cards. (2026-10-27: reward potion discard-then-claim passed; the rest was not reported.)
-- [ ] Three/four players: NOT_RUN on 2026-10-27 (no additional online players).
+- [ ] Three/four players: readable inventories and votes, no desync, no implicit claim that multiple AI companions are supported. NOT_RUN on 2026-10-27 (no additional online players).
