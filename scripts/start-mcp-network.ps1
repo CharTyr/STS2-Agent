@@ -6,7 +6,7 @@ param(
     [string]$Path = "/mcp",
     # Honor STS2_API_BASE_URL like the stdio launcher does: the mod moves off 8080 when the port is
     # busy, and a hard-coded default here silently pinned the server to the wrong instance.
-    [string]$ApiBaseUrl = $(if ($env:STS2_API_BASE_URL) { $env:STS2_API_BASE_URL } else { "http://127.0.0.1:8080" })
+    [string]$ApiBaseUrl = $(if ($env:STS2_API_BASE_URL) { $env:STS2_API_BASE_URL } else { "" })
 )
 
 $ErrorActionPreference = "Stop"
@@ -39,7 +39,9 @@ try {
     uv sync | Out-Host
 
     Write-Host "[start-mcp-network] Starting MCP server on http://$BindHost`:$Port$Path"
-    uv run sts2-network-mcp-server --host $BindHost --port $Port --path $Path --api-base-url $ApiBaseUrl
+    $networkArgs = @("run", "sts2-network-mcp-server", "--host", $BindHost, "--port", $Port, "--path", $Path)
+    if ($ApiBaseUrl) { $networkArgs += @("--api-base-url", $ApiBaseUrl) }
+    uv @networkArgs
 }
 finally {
     Pop-Location

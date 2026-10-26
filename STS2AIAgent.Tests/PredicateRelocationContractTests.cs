@@ -26,6 +26,7 @@ namespace STS2AIAgent.Tests;
 /// The hash table is the durable part: regenerating it is a deliberate act, and it only matches if
 /// the declaration text is byte-identical to what the split moved.
 /// </remarks>
+// CanInviteAiTeammate intentionally regenerated: reconnect a live, undiscovered child during a run.
 internal static class PredicateRelocationContractTests
 {
     private const string BaseFile = "STS2AIAgent/Game/GameStateService.cs";
@@ -149,7 +150,7 @@ internal static class PredicateRelocationContractTests
         ["CanOpenCharacterSelect"] = "92ffab8f2ffa78d5c19f87a0b33eef3c5f786bef42ebce3a37f2478241462485",
         ["CanOpenTimeline"] = "81883b112d5c97ec915bf4b1fca09a844e2288d32582d695e02cdf655b81c0c9",
         ["CanCloseMainMenuSubmenu"] = "631ab45013f334501d2dae2963a9f2cffa8fb7fb17df9d70e8c6c0116c336d0f",
-        ["CanInviteAiTeammate"] = "72932b5cf41771677470b99740abc2f07f19a731361310e21182d328f048acfc",
+        ["CanInviteAiTeammate"] = "fa089f3dd6928f59274722ff20f65b5c06f735f104777ea130d4023bcda2e01f",
         ["CanContinueAiTeammate"] = "7938e106f94baacf65fd4772a8aa0d1d937e8de6c5ae6c34e6f31b53c6d51a19",
         ["CanEmbark"] = "48a9f6b0e3470f0c486788ae25a944a257edb2973e4649fca6472889667458e9",
         ["CanUnready"] = "e15c655f98a0c783ca20bd92db047f4088af4c91261e9ca557210ab284132f27",

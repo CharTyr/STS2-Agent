@@ -76,10 +76,11 @@ internal sealed partial class AgentRuntime
         {
             throw;
         }
-        catch (LlmToolProbeUnsupportedException)
+        catch (LlmToolProbeUnsupportedException ex)
         {
             record.Status = "verified";
             record.Tools = "unsupported";
+            record.Error = DiagnosticExport.Redact(ex.Message);
         }
         catch (Exception ex)
         {

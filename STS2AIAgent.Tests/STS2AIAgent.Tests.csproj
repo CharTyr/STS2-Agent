@@ -8,10 +8,16 @@
     <AssemblyName>STS2AIAgent.Tests</AssemblyName>
   </PropertyGroup>
   <ItemGroup>
+    <Compile Include="../STS2AIAgent/Multiplayer/CompanionModStager.cs" Link="Multiplayer/CompanionModStager.cs" />
+    <Compile Include="../STS2AIAgent/Multiplayer/CompanionDiscovery.cs" Link="Multiplayer/CompanionDiscovery.cs" />
+    <Compile Include="../STS2AIAgent/Server/InstanceEndpointFile.cs" Link="Server/InstanceEndpointFile.cs" />
+    <Compile Include="../STS2AIAgent/Server/CompanionStartupFile.cs" Link="Server/CompanionStartupFile.cs" />
     <Compile Include="..\STS2AIAgent\Agent\AutoPlaySession.cs" Link="Agent\AutoPlaySession.cs" />
     <Compile Include="..\STS2AIAgent\Game\ReflectedMemberResolver.cs" Link="Game\ReflectedMemberResolver.cs" />
     <Compile Include="..\STS2AIAgent\Game\StateBuildTiming.cs" Link="Game\StateBuildTiming.cs" />
+    <Compile Include="..\STS2AIAgent\Game\PartyInventoryReader.cs" Link="Game\PartyInventoryReader.cs" />
     <Compile Include="..\STS2AIAgent\Agent\AutoPlayRecovery.cs" Link="Agent\AutoPlayRecovery.cs" />
+    <Compile Include="..\STS2AIAgent\Agent\NonCombatOnlyPolicy.cs" Link="Agent\NonCombatOnlyPolicy.cs" />
     <!--
       The streamed reasoning buffer. It is Godot-free on purpose: the two rules that matter for it
       (the player's switch gates what is stored, and a completed turn leaves nothing behind) cannot be
@@ -93,6 +99,7 @@
     -->
     <Compile Include="..\STS2AIAgent\Server\NativeMcpServer*.cs" Link="Server\%(Filename)%(Extension)" />
     <Compile Include="..\STS2AIAgent\Game\ReflectionMemberAccessor.cs" Link="Game\ReflectionMemberAccessor.cs" />
+    <Compile Include="..\STS2AIAgent\Game\CombatPowerPayload.cs" Link="Game\CombatPowerPayload.cs" />
     <Compile Include="..\STS2AIAgent\Game\UnlockConfirmResolutionPolicy.cs" Link="Game\UnlockConfirmResolutionPolicy.cs" />
     <Compile Include="..\STS2AIAgent\Game\FtueModalPolicy.cs" Link="Game\FtueModalPolicy.cs" />
     <Compile Include="..\STS2AIAgent\Game\CrystalSphereSettlePolicy.cs" Link="Game\CrystalSphereSettlePolicy.cs" />

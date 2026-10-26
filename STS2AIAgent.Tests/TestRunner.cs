@@ -215,6 +215,9 @@ internal static class TestRunner
         yield return ("AgentLoop.RunBoundaryRethrown", AgentLoopTests.PlayOnce_RethrowsRunBoundaryAfterAct);
         yield return ("AgentLoop.CheckStateOnGetGameState", AgentLoopTests.PlayOnce_InvokesCheckStateOnGetGameState);
         yield return ("AgentLoop.RequestBudgetStopsNextRound", AgentLoopTests.PlayOnce_StopsFurtherLlmCallsWhenRequestBudgetIsSpent);
+        yield return ("AgentLoop.NonCombatYields", AgentLoopTests.NonCombatOnly_YieldsBeforeWaitModelOrAction);
+        yield return ("AgentLoop.NonCombatAllowsRewards", AgentLoopTests.NonCombatOnly_AllowsNonCombatActions);
+        yield return ("AgentLoop.NonCombatRaceGuard", AgentLoopTests.NonCombatOnly_RechecksBeforeDispatchAndKeepsWaiting);
         yield return ("TeamControl.TransportAck", TeamConversationTests.PauseControlHasExplicitAcknowledgement);
         yield return ("Session.LocalControlContract", () => Task.Run(SessionControlContractTests.RouterExposesLocalSessionControl));
         yield return ("Session.LocalMcpControl", () => Task.Run(SessionControlContractTests.RouterExposesLocalMcpControl));
@@ -282,7 +285,7 @@ internal static class TestRunner
         yield return ("OpenAI.ResolveUrl", () => Task.Run(OpenAiCompatibleClientTests.ResolveCompletionsUrl_NormalizesBase));
         yield return ("OpenAI.ParseCompletion", () => Task.Run(OpenAiCompatibleClientTests.ParseCompletion_ReadsToolCallsAndReasoning));
         yield return ("OpenAI.PostBody", OpenAiCompatibleClientTests.CompleteAsync_PostsOpenAiCompatibleBody);
-        yield return ("OpenAI.DeepSeekExtraBody", OpenAiCompatibleClientTests.CompleteAsync_PostsDeepSeekThinkingInExtraBody);
+        yield return ("OpenAI.DeepSeekThinking", OpenAiCompatibleClientTests.CompleteAsync_PostsDeepSeekThinking);
         yield return ("OpenAI.DeepSeekCapabilityProbes", OpenAiCompatibleClientTests.DeepSeekCapabilityProbesDisableThinking);
         yield return ("OpenAI.OtherEndpointProbeDefaults", OpenAiCompatibleClientTests.OtherEndpointProbesKeepProviderDefaults);
         yield return ("OpenAI.VisionDataUrl", OpenAiCompatibleClientTests.CompleteAsync_AttachesImageAsDataUrlContentParts);
@@ -315,6 +318,8 @@ internal static class TestRunner
         yield return ("Jev.PingReportsModelCount", JevClientTests.PingAsync_ReportsTheModelCount);
         yield return ("Jev.PingReportsFailure", JevClientTests.PingAsync_ReportsTheFailureInsteadOfThrowing);
         yield return ("Jev.BlankConfigRejected", () => Task.Run(JevClientTests.BlankConfigurationIsRejectedAtConstruction));
+        yield return ("NonCombat.DetectsSnapshots", () => Task.Run(NonCombatOnlyPolicyTests.DetectsCompactAndActionSnapshotCombat));
+        yield return ("NonCombat.UnknownFailsClosed", () => Task.Run(NonCombatOnlyPolicyTests.UnknownStateFailsClosed));
         yield return ("Jev.PostsAlignedChoiceQuestion", JevClientTests.SystemOneAsync_PostsTheAlignedChoiceQuestionTheDeciderBuilds);
         yield return ("JevLogic.StrategyRoundTrips", () => Task.Run(JevAgentLogicTests.PlayStrategy_RoundTripsEveryField));
         yield return ("JevLogic.StrategyParseTolerates", () => Task.Run(JevAgentLogicTests.PlayStrategy_TryParseToleratesMissingFields));
@@ -441,6 +446,10 @@ internal static class TestRunner
         yield return ("CombatDiagnostics.CanPlay", () => Task.Run(CombatDiagnosticsContractTests.HandPayloadKeepsNativeCanPlayEvidence));
         yield return ("Map.NoVoteDuringCombat", () => Task.Run(MapCombatGatingTests.ChooseMapNodeHiddenWhileCombatInProgress));
         yield return ("CombatDiagnostics.Readiness", () => Task.Run(CombatDiagnosticsContractTests.CombatPayloadDistinguishesQueueModalAndSnapshotLocks));
+        yield return ("CombatPower.NativeCounter", () => Task.Run(CombatPowerPayloadTests.SerializesNativeCounterSeparatelyFromAmount));
+        yield return ("CombatPower.ExhaustedCounter", () => Task.Run(CombatPowerPayloadTests.PreservesExhaustedNativeCounter));
+        yield return ("CombatPower.UnknownCounter", () => Task.Run(CombatPowerPayloadTests.KeepsUnavailableNativeCounterUnknown));
+        yield return ("CombatPower.NativeWiring", () => Task.Run(CombatPowerPayloadTests.StateReadsTheNativeCounterWithoutFallback));
         yield return ("CombatReadiness.RejectsPreTurn", () => Task.Run(CombatTurnReadinessPolicyTests.RejectsPreTurnEmptyHandEvenWhenButtonLooksReady));
         yield return ("CombatReadiness.KeepsOpeningGuard", () => Task.Run(CombatTurnReadinessPolicyTests.KeepsOpeningDrawGuardWhenNoNativeReadyEvidenceExists));
         yield return ("CombatReadiness.AcceptsTurnEvidence", () => Task.Run(CombatTurnReadinessPolicyTests.AcceptsCardsOrRecordedPlayAsTurnEvidence));
@@ -487,6 +496,7 @@ internal static class TestRunner
         yield return ("TurnIntegrity.MalformedArgumentsReturnStructuredErrorWithinBudget", AgentTurnIntegrityTests.MalformedArgumentsReturnStructuredErrorWithinBudget);
         yield return ("TurnIntegrity.PendingBudgetCheckDoesNotMutateCounters", () => Task.Run(AgentTurnIntegrityTests.PendingBudgetCheckDoesNotMutateCounters));
         yield return ("TurnIntegrity.RuntimeConsumersPreserveInterruptedReceipts", () => Task.Run(AgentTurnIntegrityTests.RuntimeConsumersPreserveInterruptedReceipts));
+        yield return ("TurnIntegrity.IdleChatHandlesNonCombatYield", () => Task.Run(AgentTurnIntegrityTests.IdleChatHandlesNonCombatYieldGracefully));
         yield return ("DevAudit.ModelProbeHonorsPreCancellation", AgentLoopTests.ModelProbeHonorsPreCancellation);
         yield return ("DevAudit.ModelProbePropagatesInFlightCancellation", AgentLoopTests.ModelProbePropagatesInFlightCancellation);
         yield return ("DevAudit.ModelProbeStillReportsProviderFailure", AgentLoopTests.ModelProbeStillReportsProviderFailure);
@@ -654,6 +664,15 @@ internal static class TestRunner
         yield return ("CardPlayCounter.StillInHand", () => Task.Run(CardPlayCounterPolicyTests.APlayStillInHandRollsBack));
         yield return ("CardPlayCounter.Settled", () => Task.Run(CardPlayCounterPolicyTests.ASettledPlayKeepsTheCounters));
         yield return ("CardPlayCounter.LeftHand", () => Task.Run(CardPlayCounterPolicyTests.LeftHandOrEndedCombatKeepsTheCounters));
+        yield return ("NonCombat.OverlayAndFinalDispatch", AgentLoopTests.NonCombatOnly_OverlayAndFinalDispatchAreGuarded);
+        yield return ("CoopHardening.Staging", () => Task.Run(CoopHardeningTests.StagingUsesLoadedFilesAndPreservesConflicts));
+        yield return ("CoopHardening.Startup", () => Task.Run(CoopHardeningTests.StartupRejectsWrongProcessAndPartialWrites));
+        yield return ("CoopHardening.Deadline", CoopHardeningTests.DiscoveryHonorsTotalDeadlineAndCancellation);
+        yield return ("CoopHardening.ProbeClassification", () => Task.Run(CoopHardeningTests.ToolProbeDoesNotDowngradeAuthenticationOrUnrelatedErrors));
+        yield return ("PartyInventory.Populated", () => Task.Run(PartyInventoryReaderTests.APopulatedInventoryKeepsEveryItemAndValue));
+        yield return ("PartyInventory.Empty", () => Task.Run(PartyInventoryReaderTests.AnEmptyInventoryIsAnEmptyArrayNotNull));
+        yield return ("PartyInventory.FailedRead", () => Task.Run(PartyInventoryReaderTests.AFailedReadIsNullAndWarnsOncePerInterval));
+        yield return ("PartyInventory.BuildersUseReader", () => Task.Run(PartyInventoryReaderTests.TheBuildersGoThroughTheReader));
         yield return ("ActionTrust.NoRewardFallback", () => Task.Run(GameActionTrustContractTests.RewardConsumeNeverFallsBackToTheFirstOption));
         yield return ("ActionTrust.RewardRequestValidation", () => Task.Run(GameActionTrustContractTests.RewardRequestRejectsAnOutOfRangeIndexBeforeClicking));
         yield return ("ActionTrust.ShopRemovalFailure", () => Task.Run(GameActionTrustContractTests.ShopRemovalPurchaseFailureSurfaces));

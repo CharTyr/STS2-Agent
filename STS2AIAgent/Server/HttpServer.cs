@@ -48,7 +48,9 @@ public sealed class HttpServer
             Port = started.Port;
             PortWasAutoIncremented = started.Port != preferredPort;
             Prefix = $"http://{DefaultHost}:{Port}/";
+            InstanceEndpointFile.Publish(Port);
             PublishCompanionPort(Port);
+            CompanionStartupFile.Publish("listening", Port);
 
             _cts = new CancellationTokenSource();
             _listenLoopTask = Task.Run(() => ListenLoopAsync(_listener, _cts.Token));
@@ -128,6 +130,7 @@ public sealed class HttpServer
             cts?.Dispose();
         }
 
+        InstanceEndpointFile.Delete();
         ClearCompanionPort();
         Log.Info($"{LogPrefix} Stopped");
     }

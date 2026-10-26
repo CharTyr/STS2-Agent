@@ -89,6 +89,8 @@ internal sealed partial class AgentRuntime
                     try
                     {
                         requestToken.ThrowIfCancellationRequested();
+                        if (Settings.NonCombatOnlyEnabled && NonCombatOnlyPolicy.IsCombatSnapshot(
+                            await _loop.ReadCompactStateForOwnershipAsync(requestToken))) return false;
                         lock (_gate)
                         {
                             if (_sessionRunId != runId || _strategyStore.Revision != revision

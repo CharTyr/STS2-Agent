@@ -11,6 +11,7 @@ from typing import Any, Callable, Iterable, Iterator, TypeVar
 from urllib import error, request
 
 from .client_actions import Sts2ActionMethods
+from .discovery import discover_base_url
 from .action_results import (
     compact_action_result,
     with_index_details,
@@ -94,7 +95,7 @@ class Sts2Client(Sts2ActionMethods):
         action_timeout: float | None = None,
         max_retries: int | None = None,
     ) -> None:
-        self._base_url = (base_url or os.getenv("STS2_API_BASE_URL") or "http://127.0.0.1:8080").rstrip("/")
+        self._base_url = (base_url or os.getenv("STS2_API_BASE_URL") or discover_base_url()).rstrip("/")
         self._read_timeout = read_timeout or float(os.getenv("STS2_API_READ_TIMEOUT", str(_DEFAULT_READ_TIMEOUT)))
         self._action_timeout = action_timeout or float(os.getenv("STS2_API_ACTION_TIMEOUT", str(_DEFAULT_ACTION_TIMEOUT)))
         self._max_retries = max_retries if max_retries is not None else int(os.getenv("STS2_API_MAX_RETRIES", str(_DEFAULT_MAX_RETRIES)))

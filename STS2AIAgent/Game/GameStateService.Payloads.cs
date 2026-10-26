@@ -354,6 +354,8 @@ internal sealed class MultiplayerLobbyPayload
 
 internal sealed class MapPayload
 {
+    public bool is_open { get; init; }
+
     public MapCoordPayload? current_node { get; init; }
 
     public bool is_travel_enabled { get; init; }
@@ -884,6 +886,45 @@ internal sealed class RunPlayerSummaryPayload
     public int gold { get; init; }
 
     public bool is_alive { get; init; }
+
+    /// <summary>
+    /// This player's master deck. Every client simulates the whole run (lockstep, checksummed), so a
+    /// partner's deck is as current here as the local one. Null when it could not be read.
+    /// </summary>
+    public PartyDeckCardPayload[]? deck { get; init; }
+
+    public PartyRelicPayload[]? relics { get; init; }
+
+    public PartyPotionPayload[]? potions { get; init; }
+}
+
+internal sealed class PartyDeckCardPayload
+{
+    public string card_id { get; init; } = string.Empty;
+
+    public string name { get; init; } = string.Empty;
+
+    public bool upgraded { get; init; }
+
+    public string card_type { get; init; } = string.Empty;
+}
+
+internal sealed class PartyRelicPayload
+{
+    public string relic_id { get; init; } = string.Empty;
+
+    public string name { get; init; } = string.Empty;
+
+    public bool is_melted { get; init; }
+}
+
+internal sealed class PartyPotionPayload
+{
+    public string? potion_id { get; init; }
+
+    public string? name { get; init; }
+
+    public bool occupied { get; init; }
 }
 
 internal sealed class CombatPetPayload
@@ -1032,21 +1073,6 @@ internal sealed class CombatLethalRiskPayload
     public int? power_amount { get; init; }
 }
 
-internal sealed class CombatPowerPayload
-{
-    public int index { get; init; }
-
-    public string power_id { get; init; } = string.Empty;
-
-    public string name { get; init; } = string.Empty;
-
-    public int? amount { get; init; }
-
-    public bool is_debuff { get; init; }
-
-    public string? description { get; init; }
-}
-
 internal sealed class RewardPayload
 {
     public bool pending_card_choice { get; init; }
@@ -1188,6 +1214,8 @@ internal sealed class DeckCardPayload
 
 internal sealed class SelectionCardPayload
 {
+    public object? upgrade { get; init; }
+
     public int index { get; init; }
 
     public bool selected { get; init; }

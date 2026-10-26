@@ -50,7 +50,7 @@ internal static class ModelRoleProbe
 {
     public static string Fingerprint(ResolvedModel model)
     {
-        var raw = (model.Endpoint.BaseUrl ?? "") + "\n" + (model.Model.Model ?? "") + "\n" + (model.Endpoint.ApiKey ?? "");
+        var raw = (model.Endpoint.BaseUrl ?? "") + "\n" + (model.Model.Model ?? "") + "\n" + (model.Endpoint.ApiKey ?? "") + "\n" + model.Endpoint.ThinkingProtocol + "\n" + model.Model.ThinkingMode + "\n" + model.Model.ThinkingIntensity + "\nprobe-v2";
         var hash = SHA256.HashData(Encoding.UTF8.GetBytes(raw));
         return Convert.ToHexString(hash)[..16];
     }

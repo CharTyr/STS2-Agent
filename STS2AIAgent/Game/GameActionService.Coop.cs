@@ -419,7 +419,7 @@ internal static partial class GameActionService
         // route: without one the teammate still launches, it just waits for an external agent
         // instead of starting the loop. See the two routes in docs/api.md.
         var companionAutoPlay = FirstRunSetup.Evaluate(settings).ReadyToInvite;
-        var error = CoopLaunchPolicy.GetError(
+        var error = LocalDualInstanceLauncher.CanReconnect ? null : CoopLaunchPolicy.GetError(
             InstanceRole.IsCompanion,
             AgentRuntime.Instance.PlayRunning,
             payload.screen,

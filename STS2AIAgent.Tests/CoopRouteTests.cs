@@ -81,7 +81,7 @@ internal static class CoopRouteTests
         // before the attempt would let a rejected retry (the usual one: "the teammate window is
         // already running") relabel a teammate that the in-process loop is already playing.
         var core = AgentSourceFixture.MethodBody(runtime, "LaunchDualInstanceCoreAsync");
-        var recorded = core.IndexOf("_companionAutoPlay = companionAutoPlay;", StringComparison.Ordinal);
+        var recorded = core.IndexOf("_companionAutoPlay = LocalDualInstanceLauncher.CompanionAutoPlay;", StringComparison.Ordinal);
         var decided = core.IndexOf("_dualLaunchOutcome = launchResult.Ok", StringComparison.Ordinal);
         var boundToNewSession = core.IndexOf("ReferenceEquals(previousConnection", StringComparison.Ordinal);
         Assert.True(recorded > 0, "The launch route must be recorded somewhere.");

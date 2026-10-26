@@ -136,6 +136,7 @@ internal static partial class GameStateService
         var modal = BuildModalPayload(currentScreen);
         var gameOver = BuildGameOverPayload(currentScreen, runState);
 
+        var inCombat = CombatManager.Instance.IsInProgress;
         var payload = new GameStatePayload
         {
             state_version = StateVersion,
@@ -143,7 +144,7 @@ internal static partial class GameStateService
             run_id = runState?.Rng.StringSeed ?? "run_unknown",
             screen = screen,
             session = session,
-            in_combat = CombatManager.Instance.IsInProgress,
+            in_combat = inCombat,
             turn = combatState?.RoundNumber,
             available_actions = availableActions,
             combat = combat,
@@ -168,6 +169,7 @@ internal static partial class GameStateService
             AvailableActionDescriptors = availableActionDescriptors,
             agent_view = BuildAgentViewPayload(
                 screen,
+                inCombat,
                 session,
                 SaveManager.Instance.CurrentProfileId,
                 runState?.Rng.StringSeed ?? "run_unknown",

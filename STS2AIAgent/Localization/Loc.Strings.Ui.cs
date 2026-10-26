@@ -8,6 +8,7 @@ internal static partial class Loc
     private static void AddUiEntries(Dictionary<string, string> map)
     {
         // Header, tabs, chat page.
+        map["思考协议（代理端点也适用）"] = "Thinking protocol (also for proxy endpoints)";
         map["拖动移动"] = "Drag to move";
         map["隐藏"] = "Hide";
         map["● 自动游玩中"] = "● Auto-playing";
@@ -48,6 +49,10 @@ internal static partial class Loc
         map["和 AI 说这局怎么打；它会参考你的话做下一次决策。"] =
             "Tell the AI how to play this run; it weighs what you say on its next decision.";
         map["双层决策模式（Jev 执行 + LLM 规划）"] = "Dual-layer decisions (Jev acts, LLM plans)";
+        map["仅在战斗外自动游玩（战斗中只读）"] = "Non-combat only (read-only in combat)";
+        map["战斗控制"] = "Combat control";
+        map["开启后，Agent 在战斗期间不请求模型、不执行动作；战斗结束后自动恢复。适合手动战斗或交给外部战斗控制器。"] =
+            "While enabled, the Agent makes no model requests and takes no actions in combat, then resumes automatically when combat ends. Use it for manual combat or an external combat controller.";
         map["Jev 未配置。到设置页填写 API Key 后即可用双层决策。"] =
             "Jev is not configured. Add its API key on the settings page to use dual-layer decisions.";
         map["Jev 已配置（{0}）。双层决策开启后由 Jev 逐步操作，LLM 只调整策略。"] =

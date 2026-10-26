@@ -19,6 +19,7 @@ internal static class SettingsClone
                 Id = endpoint.Id,
                 Name = endpoint.Name,
                 BaseUrl = endpoint.BaseUrl,
+                ThinkingProtocol = endpoint.ThinkingProtocol,
                 ApiKey = endpoint.ApiKey,
                 Enabled = endpoint.Enabled
             }).ToList(),
@@ -60,6 +61,7 @@ internal static class SettingsClone
             ShowThinkingInChat = source.ShowThinkingInChat,
             ReplyLanguage = source.ReplyLanguage,
             DualLayerSoloEnabled = source.DualLayerSoloEnabled,
+            NonCombatOnlyEnabled = source.NonCombatOnlyEnabled,
             DualLayerCoopEnabled = source.DualLayerCoopEnabled,
             JevBaseUrl = source.JevBaseUrl,
             JevApiKey = source.JevApiKey,

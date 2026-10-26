@@ -120,7 +120,7 @@ class NetworkServerConfigTests(unittest.TestCase):
         self.assertEqual(config.transport, "streamable-http")
         self.assertEqual(config.path, "/mcp")
         self.assertEqual(config.tool_profile, "guided")
-        self.assertEqual(config.api_base_url, "http://127.0.0.1:8080")
+        self.assertIsNone(config.api_base_url)
         self.assertEqual(config.bearer_token, "")
         self.assertEqual(config.log_level, "info")
         self.assertFalse(config.json_response)
@@ -212,7 +212,7 @@ class ParseArgsTests(unittest.TestCase):
         self.assertEqual(config.transport, "streamable-http")
         self.assertEqual(config.path, "/mcp")
         self.assertEqual(config.tool_profile, "guided")
-        self.assertEqual(config.api_base_url, "http://127.0.0.1:8080")
+        self.assertIsNone(config.api_base_url)
         self.assertEqual(config.bearer_token, "")
         self.assertEqual(config.log_level, "info")
         self.assertFalse(config.json_response)
@@ -311,7 +311,7 @@ class NetworkAppTests(unittest.TestCase):
         self.assertEqual(created[1].read_timeout, 1.5)
         self.assertEqual(created[1].action_timeout, 1.5)
         self.assertEqual(created[1].max_retries, 0)
-        self.assertEqual(created[0].base_url, config.api_base_url)
+        self.assertEqual(created[0].base_url, "http://127.0.0.1:8080")
 
         paths = {getattr(route, "path", None) for route in app.routes}
         self.assertIn("/", paths)
@@ -357,7 +357,7 @@ class NetworkAppTests(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertTrue(payload["ok"])
         self.assertEqual(payload["sts2"], {"ok": True, "mod_loaded": True})
-        self.assertEqual(payload["api_base_url"], config.api_base_url)
+        self.assertEqual(payload["api_base_url"], "http://127.0.0.1:8080")
         self.assertEqual(health_client.calls, ["get_health"])
 
     def test_healthz_reports_sts2_api_error_with_503(self) -> None:

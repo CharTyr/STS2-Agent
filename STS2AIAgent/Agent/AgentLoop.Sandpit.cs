@@ -28,6 +28,7 @@ internal sealed partial class AgentLoop
             outcome = await ExecuteActAsync(args, token, checkState,
                 (action, result) => { accepted = action; response = result; }, requireSandpitEscape: true);
         }
+        catch (NonCombatOnlyYieldException) { return WaitForCombat(Receipt()); }
         catch (OperationCanceledException ex) when (token.IsCancellationRequested)
         {
             throw new AgentTurnCanceledException(Receipt(), ex, token);

@@ -101,7 +101,7 @@ internal static partial class GameStateService
 
     private static bool CanDiscardPotionsInCurrentScreen(IScreenContext? currentScreen)
     {
-        return currentScreen is not (NRewardsScreen or NCardRewardSelectionScreen);
+        return currentScreen is not NCardRewardSelectionScreen;
     }
 
     private static bool IsPotionDiscardable(Player player, PotionModel? potion)

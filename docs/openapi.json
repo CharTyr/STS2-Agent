@@ -1124,6 +1124,13 @@
               "null"
             ]
           },
+          "display_amount": {
+            "format": "int32",
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
           "index": {
             "format": "int32",
             "type": "integer"
@@ -1975,6 +1982,7 @@
           "mcp_enabled": {},
           "mcp_url": {},
           "mod_version": {},
+          "non_combat_only": {},
           "play_phase": {},
           "play_running": {},
           "process_id": {},
@@ -2000,6 +2008,7 @@
           "mcp_url",
           "play_running",
           "play_phase",
+          "non_combat_only",
           "stop_kind",
           "session_requests",
           "companion_process_alive",
@@ -2146,6 +2155,9 @@
                 "type": "null"
               }
             ]
+          },
+          "is_open": {
+            "type": "boolean"
           },
           "is_travel_enabled": {
             "type": "boolean"
@@ -2393,6 +2405,60 @@
           "player_count": {
             "format": "int32",
             "type": "integer"
+          }
+        },
+        "type": "object"
+      },
+      "PartyDeckCardPayload": {
+        "additionalProperties": true,
+        "properties": {
+          "card_id": {
+            "type": "string"
+          },
+          "card_type": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "upgraded": {
+            "type": "boolean"
+          }
+        },
+        "type": "object"
+      },
+      "PartyPotionPayload": {
+        "additionalProperties": true,
+        "properties": {
+          "name": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "occupied": {
+            "type": "boolean"
+          },
+          "potion_id": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "type": "object"
+      },
+      "PartyRelicPayload": {
+        "additionalProperties": true,
+        "properties": {
+          "is_melted": {
+            "type": "boolean"
+          },
+          "name": {
+            "type": "string"
+          },
+          "relic_id": {
+            "type": "string"
           }
         },
         "type": "object"
@@ -2700,6 +2766,15 @@
             "format": "int32",
             "type": "integer"
           },
+          "deck": {
+            "items": {
+              "$ref": "#/components/schemas/PartyDeckCardPayload"
+            },
+            "type": [
+              "array",
+              "null"
+            ]
+          },
           "gold": {
             "format": "int32",
             "type": "integer"
@@ -2719,6 +2794,24 @@
           },
           "player_id": {
             "type": "string"
+          },
+          "potions": {
+            "items": {
+              "$ref": "#/components/schemas/PartyPotionPayload"
+            },
+            "type": [
+              "array",
+              "null"
+            ]
+          },
+          "relics": {
+            "items": {
+              "$ref": "#/components/schemas/PartyRelicPayload"
+            },
+            "type": [
+              "array",
+              "null"
+            ]
           },
           "slot_index": {
             "format": "int32",
@@ -2880,6 +2973,9 @@
           },
           "star_costs_x": {
             "type": "boolean"
+          },
+          "upgrade": {
+            "description": "Free-form JSON value."
           },
           "upgraded": {
             "type": "boolean"

@@ -342,7 +342,7 @@ internal static class GameDataExportService
             : value;
     }
 
-    private static object? BuildCardUpgradePreview(CardModel card)
+    internal static object? BuildCardUpgradePreview(CardModel card)
     {
         return CardUpgradePreviewPolicy.Build(
             () => card.CurrentUpgradeLevel >= card.MaxUpgradeLevel,

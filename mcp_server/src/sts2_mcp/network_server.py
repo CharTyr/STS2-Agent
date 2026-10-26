@@ -25,7 +25,7 @@ class NetworkServerConfig:
     transport: str = "streamable-http"
     path: str = "/mcp"
     tool_profile: str = "guided"
-    api_base_url: str = "http://127.0.0.1:8080"
+    api_base_url: str | None = None
     bearer_token: str = ""
     log_level: str = "info"
     json_response: bool = False
@@ -69,7 +69,7 @@ def create_network_app(
 ) -> tuple[FastMCP, Sts2Client, object]:
     client = Sts2Client(base_url=config.api_base_url)
     health_client = Sts2Client(
-        base_url=config.api_base_url,
+        base_url=client.base_url,
         read_timeout=1.5,
         action_timeout=1.5,
         max_retries=0,
@@ -134,7 +134,7 @@ def create_network_app(
 
 
 async def run_network_server_async(config: NetworkServerConfig) -> None:
-    _, _, app = create_network_app(config)
+    _, client, app = create_network_app(config)
     logger.info(
         "Starting STS2 network MCP server on http://%s:%d%s transport=%s auth=%s api=%s",
         config.host,
@@ -142,7 +142,7 @@ async def run_network_server_async(config: NetworkServerConfig) -> None:
         config.path,
         config.transport,
         "enabled" if config.auth_enabled else "disabled",
-        config.api_base_url,
+        client.base_url,
     )
     uvicorn_config = uvicorn.Config(
         app,
@@ -182,7 +182,7 @@ def parse_args(argv: list[str] | None = None) -> NetworkServerConfig:
     )
     parser.add_argument(
         "--api-base-url",
-        default=os.getenv("STS2_API_BASE_URL", "http://127.0.0.1:8080"),
+        default=os.getenv("STS2_API_BASE_URL"),
     )
     parser.add_argument(
         "--bearer-token",
