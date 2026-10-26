@@ -2,7 +2,7 @@
 
 > **历史，不代表当前。** 本文是 2026-09-07 前后旧工作树的原始测试前方案。当前状态请看 [PRODUCT_PLAN_CURRENT.md](../PRODUCT_PLAN_CURRENT.md)。
 
-本文是本工作树唯一的测试前执行入口。它描述修复后的代码如何被分层验收，不把静态阅读、历史记录或分支上的旧输出写成当前通过。旧规划见 [PRODUCT_ROADMAP.md](../PRODUCT_ROADMAP.md)（历史）；交付证据记录见 [COOP_DELIVERY.md](../COOP_DELIVERY.md)。
+本文是本工作树唯一的测试前执行入口。它描述修复后的代码如何被分层验收，不把静态阅读、历史记录或分支上的旧输出写成当前通过。旧规划见 [PRODUCT_ROADMAP.md](PRODUCT_ROADMAP_2026-09-05.md)（历史）；交付证据记录见 [COOP_DELIVERY.md](COOP_DELIVERY_2026-09-07.md)。
 
 ## 当前边界与基线
 

@@ -247,11 +247,11 @@ try {
     Write-Utf8 $npmManifest $originalNpmManifest
 
     # 4. A date-stamped record without its historical marker.
-    $datedDoc = Join-Path $fixtureDocs "phase-8-validation-2026-03-11.md"
+    $datedDoc = Join-Path $fixtureDocs "validation-severe-usability-2026-09-23.md"
     $originalDated = Read-Utf8 $datedDoc
     $mutated = ($originalDated -split "\r?\n" | Where-Object { $_ -notmatch 'Historical snapshot|历史快照' }) -join "`n"
     Write-Utf8 $datedDoc $mutated
-    Assert-Case -Name "doc-marks gate rejects an unmarked snapshot" -Only "doc-marks" -Expect "phase-8-validation-2026-03-11.md"
+    Assert-Case -Name "doc-marks gate rejects an unmarked snapshot" -Only "doc-marks" -Expect "validation-severe-usability-2026-09-23.md"
     Write-Utf8 $datedDoc $originalDated
 
     $matrixDoc = Join-Path $fixtureDocs "mechanic-coverage-matrix.md"

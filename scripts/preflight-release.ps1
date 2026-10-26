@@ -62,8 +62,6 @@ $mcpLockPath = Join-Path $mcpRoot "uv.lock"
 $requiredDocs = @(
     $changelogPath,
     (Join-Path $ProjectRoot "docs/api.md"),
-    (Join-Path $ProjectRoot "docs/roadmap-current.md"),
-    (Join-Path $ProjectRoot "docs/phase-4c-shop.md"),
     (Join-Path $ProjectRoot "docs/phase-5-full-chain.md"),
     (Join-Path $ProjectRoot "docs/phase-6-validation-template.md"),
     (Join-Path $ProjectRoot "docs/release-readiness.md"),

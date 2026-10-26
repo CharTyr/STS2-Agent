@@ -13,7 +13,7 @@
 
 </details>
 
-旧路线图见 [PRODUCT_ROADMAP.md](PRODUCT_ROADMAP.md)（历史），旧交付原文见 [history/PRODUCT_PLAN_CURRENT_2026-09-07.md](history/PRODUCT_PLAN_CURRENT_2026-09-07.md) 和 [history/COOP_DELIVERY_2026-09-07.md](history/COOP_DELIVERY_2026-09-07.md)。[COOP_DELIVERY.md](COOP_DELIVERY.md) 现在只是历史证据索引。本页不继承历史文档中的审批、工作树或测试前执行约束。
+旧路线图见 [history/PRODUCT_ROADMAP_2026-09-05.md](history/PRODUCT_ROADMAP_2026-09-05.md)（历史），旧交付原文见 [history/PRODUCT_PLAN_CURRENT_2026-09-07.md](history/PRODUCT_PLAN_CURRENT_2026-09-07.md) 和 [history/COOP_DELIVERY_2026-09-07.md](history/COOP_DELIVERY_2026-09-07.md)。本页不继承历史文档中的审批、工作树或测试前执行约束。
 
 ## 1. 当前基线
 
@@ -437,5 +437,5 @@ SSE 刷新构建的是同一份载荷、跑在同一条游戏线程上，路由�
 2. 每项能力同时记录实现提交/版本、发布 tag、验收证据日期与来源、剩余缺口。已发布只能来自可核对的 tag/release 证据。
 3. 标签后提交必须单列为“主线未发布”，直到出现明确 release tag。
 4. 原计划与旧 COOP 原文放在 history/，醒目标注“历史，不代表当前”。
-5. README 入口持续指向本页和 COOP 历史索引；打包脚本依赖的 ./PRODUCT_PLAN_CURRENT.md 与 ./COOP_DELIVERY.md 相对目标字面保持不变。
+5. README 入口持续指向本页；打包脚本依赖的 ./PRODUCT_PLAN_CURRENT.md 相对目标字面保持不变。
 6. 归档目录见 [history/README.md](history/README.md)。旧文档只保留时间点证据，不能重新作为任务板；原路径跳转页用于兼容引用和预检。

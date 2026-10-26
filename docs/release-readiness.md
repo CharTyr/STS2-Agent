@@ -16,5 +16,5 @@
 
 要判断「某件事以前是怎么验的」时，先看这些定点记录。它们各自属于当时那个构建，不代表当前状态：
 
-- [原生 GAME_OVER 结算与解锁屏分类](evidence/native-game-over-progression/README.md)：2026-08-31 的真机回归（PR #53），含存档哈希与当时的屏幕分类结论。
-- [PR #56 原生档案切换实机测试](pr56-live-test/README.md)：2026-09-05 的档案切换验收。
+- [原生 GAME_OVER 结算与解锁屏分类](../history/evidence/native-game-over-progression/README.md)：2026-08-31 的真机回归（PR #53），含存档哈希与当时的屏幕分类结论。
+- [PR #56 原生档案切换实机测试](../history/evidence/pr56-live-test/README.md)：2026-09-05 的档案切换验收。
