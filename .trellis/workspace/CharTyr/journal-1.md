@@ -1555,3 +1555,28 @@ Fixed user-reported issues after an in-overlay model test run: streamed reasonin
 ### Status
 
 [OK] **Completed**
+
+
+## Session 40: v0.16.2 dual-layer fixes and release
+
+**Date**: 2026-09-24
+**Task**: v0.16.2 dual-layer fixes and release
+**Branch**: `dev`
+
+### Summary
+
+Improved planner fallback, parseable summaries and Jev decision evidence; added overlay fallback markers and rate, redacted diagnostics, bounded reasoning preview, screenshot cleanup, and overflow sentinel; passed release preflight and PR CI, published GitHub v0.16.2 and Workshop item 3796486050, and recorded validation limits.
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `a1a7981` | (see git log) |
+| `eb3963c` | (see git log) |
+| `abbdbf8` | (see git log) |
+| `510115c` | (see git log) |
+| `cbba3ed` | (see git log) |
+
+### Status
+
+[OK] **Completed**

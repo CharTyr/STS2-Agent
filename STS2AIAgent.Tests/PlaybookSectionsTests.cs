@@ -81,7 +81,8 @@ internal static class PlaybookSectionsTests
 
     public static void ScreensWithoutAStrategicChoiceGetNothing()
     {
-        foreach (var screen in new[] { "REWARD", "CARD_SELECTION", "MODAL", "GAME_OVER", "UNLOCK", "CHEST", "MAIN_MENU" })
+        Assert.Contains("Card rewards: take or skip", PlaybookSections.Strategy.Slice(Strategy, "REWARD"));
+        foreach (var screen in new[] { "CARD_SELECTION", "MODAL", "GAME_OVER", "UNLOCK", "CHEST", "MAIN_MENU" })
         {
             Assert.Equal(string.Empty, PlaybookSections.Strategy.Slice(Strategy, screen));
         }

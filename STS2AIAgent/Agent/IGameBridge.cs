@@ -22,6 +22,8 @@ internal interface IGameBridge
     /// <summary>
     /// Execute one action and return its response. The state in that response is the compact
     /// <c>agent_view</c> unless <paramref name="rawState"/> asks for the full payload instead.
+    /// When supplied, <paramref name="validateState"/> must receive a fresh compact state inside
+    /// the action execution lease, immediately before dispatch. It may throw to prevent mutation.
     /// </summary>
     Task<string> ActAsync(
         string action,
@@ -32,7 +34,8 @@ internal interface IGameBridge
         int? y,
         string? tool,
         CancellationToken cancellationToken,
-        bool rawState = false);
+        bool rawState = false,
+        Action<string>? validateState = null);
 
     Task<string> GetGameDataItemJsonAsync(string collection, string itemId, CancellationToken cancellationToken);
 

@@ -1,3 +1,5 @@
+using System.Text.Json;
+
 namespace STS2AIAgent.Tests;
 
 /// <summary>
@@ -39,6 +41,35 @@ internal static class TypedStateReadsContractTests
         Assert.False(
             body.Contains("TryGetMemberValue", StringComparison.Ordinal),
             "Card mods must not go back to guessing member names.");
+    }
+
+    public static void ShopStateUsesTheLiveOddsAndRemovalCount()
+    {
+        var payloads = AgentSourceFixture.Read("STS2AIAgent/Game/GameStateService.Payloads.cs");
+        var runPayload = AgentSourceFixture.WithoutWhitespace(
+            AgentSourceFixture.DeclarationBody(payloads, "internal sealed class RunPayload"));
+        Assert.True(runPayload.Contains("publicfloatcard_rarity_odds_value{get;init;}", StringComparison.Ordinal),
+            "The rarity offset must be a non-nullable float so the exact runtime value is emitted.");
+        Assert.True(runPayload.Contains("publicintcard_shop_removals_used{get;init;}", StringComparison.Ordinal),
+            "The removal count must be a non-nullable integer, including zero.");
+
+        var builder = AgentSourceFixture.WithoutWhitespace(
+            AgentSourceFixture.MethodBody(AgentSourceFixture.ReadStateService(), "BuildRunPayload"));
+        Assert.True(builder.Contains("card_rarity_odds_value=player.PlayerOdds.CardRarity.CurrentValue", StringComparison.Ordinal),
+            "The /state rarity offset must come directly from Player.PlayerOdds.CardRarity.CurrentValue.");
+        Assert.True(builder.Contains("card_shop_removals_used=player.ExtraFields.CardShopRemovalsUsed", StringComparison.Ordinal),
+            "The /state removal count must come directly from Player.ExtraFields.CardShopRemovalsUsed.");
+
+        var defaultValues = JsonSerializer.Serialize(new { card_rarity_odds_value = -0.05f, card_shop_removals_used = 0 });
+        using var defaultJson = JsonDocument.Parse(defaultValues);
+        Assert.Equal(-0.05f, defaultJson.RootElement.GetProperty("card_rarity_odds_value").GetSingle());
+        Assert.Equal(0, defaultJson.RootElement.GetProperty("card_shop_removals_used").GetInt32());
+
+        const float positiveOffset = 0.12345679f;
+        var positiveValues = JsonSerializer.Serialize(new { card_rarity_odds_value = positiveOffset, card_shop_removals_used = 3 });
+        using var positiveJson = JsonDocument.Parse(positiveValues);
+        Assert.Equal(positiveOffset, positiveJson.RootElement.GetProperty("card_rarity_odds_value").GetSingle());
+        Assert.Equal(3, positiveJson.RootElement.GetProperty("card_shop_removals_used").GetInt32());
     }
 
     public static void CombatPilesAreReadByType()

@@ -110,6 +110,22 @@ internal static class TestRunner
 
     private static IEnumerable<(string Name, Func<Task> Body)> AllTests()
     {
+        yield return ("Sandpit.EscapeBeforeModel", SandpitSafetyTests.CriticalTurnEscapesBeforeCallingTheModel);
+        yield return ("Sandpit.NoncriticalNormal", SandpitSafetyTests.NoncriticalTurnsRemainModelControlled);
+        yield return ("Sandpit.CancellationKeepsAcceptedEscape", SandpitSafetyTests.AcceptedEscapeSurvivesCancellation);
+        yield return ("Sandpit.RevalidateBeforeSpending", SandpitSafetyTests.FreshSnapshotPreventsSpendingEscapeEnergy);
+        yield return ("Sandpit.StopLethalEndTurn", SandpitSafetyTests.NoEscapeStopsBeforeLethalEndTurn);
+        yield return ("Sandpit.NativePlayability", () => Task.Run(SandpitSafetyTests.UnplayableCardsAreNeverForced));
+        yield return ("Sandpit.RuntimeWiring", () => Task.Run(SandpitSafetyTests.EnemyPowerTargetAndUpgradeCopyAreWired));
+        yield return ("Sandpit.RiskChangesAtDispatch", SandpitSafetyTests.NewRiskAtDispatchCannotEndTheTurn);
+        yield return ("Sandpit.CardIdentityChangesAtDispatch", SandpitSafetyTests.ChangedHandCannotPlayTheOldEscapeIndex);
+        yield return ("Sandpit.ClearedRiskCancelsEscape", SandpitSafetyTests.ClearedRiskCancelsTheStaleAutomaticEscape);
+        yield return ("Sandpit.ValidationInsideLease", () => Task.Run(SandpitSafetyTests.ProductionValidationRunsUnderTheActionLease));
+        yield return ("Sandpit.LocalizedMessages", () => Task.Run(SandpitSafetyTests.SandpitMessagesFollowTheSelectedLanguage));
+        yield return ("UpgradePreview.MaxLevel", () => Task.Run(CardUpgradePreviewPolicyTests.MaxLevelSkipsGeneratingAnUpgrade));
+        yield return ("UpgradePreview.GenerationFailure", () => Task.Run(CardUpgradePreviewPolicyTests.GenerationFailureIsNotReportedAsMaxLevel));
+        yield return ("UpgradePreview.LevelLookupFailure", () => Task.Run(CardUpgradePreviewPolicyTests.LevelLookupFailureIsAlsoUnavailable));
+        yield return ("UpgradePreview.AvailableMetadata", () => Task.Run(CardUpgradePreviewPolicyTests.AvailableResultPreservesTheGeneratedMetadata));
         foreach (var test in AuditRegressionTests.All()) yield return test;
         foreach (var test in AuditRemediationJevTests.All()) yield return test;
         foreach (var test in AuditRemediationSessionTests.All()) yield return test;
@@ -267,6 +283,8 @@ internal static class TestRunner
         yield return ("OpenAI.ParseCompletion", () => Task.Run(OpenAiCompatibleClientTests.ParseCompletion_ReadsToolCallsAndReasoning));
         yield return ("OpenAI.PostBody", OpenAiCompatibleClientTests.CompleteAsync_PostsOpenAiCompatibleBody);
         yield return ("OpenAI.DeepSeekExtraBody", OpenAiCompatibleClientTests.CompleteAsync_PostsDeepSeekThinkingInExtraBody);
+        yield return ("OpenAI.DeepSeekCapabilityProbes", OpenAiCompatibleClientTests.DeepSeekCapabilityProbesDisableThinking);
+        yield return ("OpenAI.OtherEndpointProbeDefaults", OpenAiCompatibleClientTests.OtherEndpointProbesKeepProviderDefaults);
         yield return ("OpenAI.VisionDataUrl", OpenAiCompatibleClientTests.CompleteAsync_AttachesImageAsDataUrlContentParts);
         yield return ("OpenAI.VisionPlainContent", OpenAiCompatibleClientTests.CompleteAsync_PlainContentStaysStringWithoutImage);
         yield return ("OpenAI.ParseSse", () => Task.Run(OpenAiCompatibleClientTests.ParseSse_AccumulatesContentAndToolCalls));
@@ -396,6 +414,9 @@ internal static class TestRunner
         yield return ("GameOver.ContinueAction", () => Task.Run(GameOverContractTests.DedicatedContinueActionIsWiredEndToEnd));
         yield return ("Reward.EmptyScreenEscape", () => Task.Run(RewardFlowContractTests.EmptyRewardsScreenEscapesInsteadOfPending));
         yield return ("Skill.McpPlayerContract", () => Task.Run(McpPlayerSkillTests.SkillTracksLivePlayContract));
+        yield return ("Skill.ContractLineEndings", () => Task.Run(McpPlayerSkillTests.SharedContractIsIndependentOfLineEndings));
+        yield return ("Skill.PromptResourceReaderLineEndings", () => Task.Run(McpPlayerSkillTests.PromptResourceReaderNormalizesLineEndings));
+        yield return ("Skill.EmbeddedPromptLineEndings", () => Task.Run(McpPlayerSkillTests.EmbeddedPromptsUseCanonicalLineEndings));
         yield return ("GameOver.ReturnGate", () => Task.Run(GameOverContractTests.ReturnActionRequiresVisibleAndEnabledMainMenuButton));
         yield return ("GameOver.NativeButtons", () => Task.Run(GameOverContractTests.ContinueAndReturnUseNativeButtonsWithoutSkippingSummary));
         yield return ("GameOver.SummaryReady", () => Task.Run(GameOverContractTests.ContinueWaitsForNativeSummaryReadiness));
@@ -412,6 +433,11 @@ internal static class TestRunner
         yield return ("CardGridSelection.PayloadProgress", () => Task.Run(DeckSelectionContractTests.CardGridPayloadReportsNativeSelectionProgress));
         yield return ("CardGridSelection.ClickSettle", () => Task.Run(DeckSelectionContractTests.CardGridClickSettlesInEitherDirectionBeforeConfirming));
         yield return ("CardGridSelection.ConfirmDispatch", () => Task.Run(DeckSelectionContractTests.CardGridConfirmationUsesSharedExecutor));
+        yield return ("CardGridSelection.EmptyEnchantCannotConfirm", () => Task.Run(CardGridSelectionPolicyTests.EmptyEnchantCannotConfirmEvenWithOptionalNativePrefs));
+        yield return ("CardGridSelection.EnchantNonemptySubsets", () => Task.Run(CardGridSelectionPolicyTests.EnchantPermitsNonemptySubsetsWithoutRequiringMaximum));
+        yield return ("CardGridSelection.EnchantNativeMinimum", () => Task.Run(CardGridSelectionPolicyTests.EnchantKeepsStricterNativeMinimumAndImpossibleRange));
+        yield return ("CardGridSelection.OtherGridsRemainOptional", () => Task.Run(CardGridSelectionPolicyTests.OtherCardGridsKeepEmptyOptionalSelections));
+        yield return ("CardGridSelection.PolicyIntegration", () => Task.Run(CardGridSelectionPolicyTests.NativeMetadataProbeUsesTheSelectionPolicy));
         yield return ("CombatDiagnostics.CanPlay", () => Task.Run(CombatDiagnosticsContractTests.HandPayloadKeepsNativeCanPlayEvidence));
         yield return ("Map.NoVoteDuringCombat", () => Task.Run(MapCombatGatingTests.ChooseMapNodeHiddenWhileCombatInProgress));
         yield return ("CombatDiagnostics.Readiness", () => Task.Run(CombatDiagnosticsContractTests.CombatPayloadDistinguishesQueueModalAndSnapshotLocks));
@@ -848,6 +874,7 @@ internal static class TestRunner
         yield return ("TypedReads.RelicStackIsTheDisplayedCounter", () => Task.Run(TypedStateReadsContractTests.RelicStackIsTheCounterThePlayerSees));
         yield return ("TypedReads.CardModsFromKeywordsAndEnchantment", () => Task.Run(TypedStateReadsContractTests.CardModsComeFromKeywordsAndTheEnchantment));
         yield return ("TypedReads.PilesByType", () => Task.Run(TypedStateReadsContractTests.CombatPilesAreReadByType));
+        yield return ("TypedReads.ShopOddsAndRemovalCount", () => Task.Run(TypedStateReadsContractTests.ShopStateUsesTheLiveOddsAndRemovalCount));
         yield return ("AbandonRun.StopsAtTheConfirmation", () => Task.Run(AbandonRunContractTests.AbandonRunStopsAtTheConfirmation));
         yield return ("AbandonRun.RefusesRatherThanClickingBlind", () => Task.Run(AbandonRunContractTests.AbandonRunRefusesRatherThanClickingBlind));
         yield return ("ReflectedMembers.DeclaredWinsOverBaseOverload", () => Task.Run(ReflectedMemberResolverTests.ADeclaredMethodIsFoundDespiteAPublicBaseMethodOfTheSameName));

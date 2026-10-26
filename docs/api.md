@@ -526,6 +526,7 @@ curl -s http://127.0.0.1:8080/state | jq .
 | `amount` | number \| null | Power 层数/数值（部分 Power 可能为空） |
 | `display_amount` | integer \| null | 直接读取原生 `Power.DisplayAmount` 的 UI 计数。`0` 是有效值；无法读取时为 `null`，不回落到 `amount`。Hardened Shell 中表示本回合剩余伤害预算，不是剩余命中次数；`amount` 仍保持原生层数/数值。 |
 | `is_debuff` | boolean | 是否为 Debuff |
+| `description` | string \| null | 原生规则文本；沙坑包含倒计时、目标死亡和逃离方式的说明 |
 
 #### `combat.hand[]`
 
@@ -591,6 +592,7 @@ curl -s http://127.0.0.1:8080/state | jq .
 | `amount` | number \| null | Power 层数/数值（部分 Power 可能为空） |
 | `display_amount` | integer \| null | 直接读取原生 `Power.DisplayAmount` 的 UI 计数。`0` 是有效值；无法读取时为 `null`，不回落到 `amount`。Hardened Shell 中表示本回合剩余伤害预算，不是剩余命中次数；`amount` 仍保持原生层数/数值。 |
 | `is_debuff` | boolean | 是否为 Debuff |
+| `description` | string \| null | 原生规则文本；沙坑包含倒计时、目标死亡和逃离方式的说明 |
 
 #### `combat.enemies[].intents[]`
 
@@ -608,6 +610,8 @@ curl -s http://127.0.0.1:8080/state | jq .
 
 | 字段 | 类型 | 说明 |
 | --- | --- | --- |
+| `card_rarity_odds_value` | number | 全局稀有卡保底偏移（精确读取 `Player.PlayerOdds.CardRarity.CurrentValue`）：开局 -0.05，每次卡牌奖励掷出非稀有就上涨（0.01，Scarcity 进阶下 0.005，上限 0.4），掷出稀有即重置；商店卡牌的稀有率也叠加它，但商店不改变它。游戏界面不显示该值，仅在原始 `/state` 提供 |
+| `card_shop_removals_used` | number | 本局已使用的商店删牌次数（精确读取 `Player.ExtraFields.CardShopRemovalsUsed`） |
 | `floor` | number | 当前楼层 |
 | `current_hp` | number | 当前生命值 |
 | `max_hp` | number | 最大生命值 |
@@ -1054,6 +1058,16 @@ curl -s http://127.0.0.1:8080/state | jq .
 
 `continue_game_over` 会**等到原生结算真的写进 progress 存档**才返回，所以它比其它动作慢；
 不要因为一次超时就重复点。判断是否真的收尾完成看 `save_verified`，不要只看屏幕变化。
+
+### Sandpit safety and card-value context
+
+`sandpit_countdown` in `combat.lethal_risks[]` reads live enemy-owned `SandpitPower` instances targeting the local player, excluding dead enemies. A countdown at or below 1 can kill that player at the start of the enemy turn regardless of HP, block or Buffer; it is not damage to the enemy that owns the power.
+
+Built-in autoplay conservatively plays a natively playable `FRANTIC_ESCAPE` before asking the model when this risk is present. Its final safety check reads fresh state on the game thread inside the shared action execution lease, immediately before dispatch. An automatic escape is canceled if the risk disappeared or the selected position no longer identifies a natively playable escape. With no playable escape, other actions remain possible, but a known-lethal `end_turn` stops autoplay. This guard applies to built-in `AgentLoop`; external clients and manual input still need to handle the exposed risk. It does not prove whether killing the boss would be a better alternative. Sandpit rules and rejection messages follow the selected mod language.
+
+Compact `combat.card_value_note` explains that hand text and `combat.hand[].values[].preview` already reflect live player modifiers. Each value includes `name`, `base_value` and `preview`; target-specific Vulnerable, damage caps and block still need evaluation. Compact power lines retain `description`, while raw `amount` keeps its existing native meaning.
+
+`/data/cards` metadata `upgrade` is computed by upgrading a detached canonical card copy to the next level. A successful preview has `status: "available"` plus `description`, `cost`, `star_cost`, `upgrade_level` and `vars`. Its dynamic values refresh the detached copy's own variables before the description reads them. Only a fully upgraded card returns `null`; a lookup, upgrade or preview failure returns `{ "status": "unavailable", "reason": "upgrade_preview_failed" }`, without pretending the card is maxed or exposing exception details. Check `status` before using costs or values; unavailable data must not be guessed. The export never mutates a card in the player's deck. This is canonical card metadata, not a prediction of every in-run enchantment or modifier.
 
 ### compact `agent_view` 的增补字段
 
@@ -2279,7 +2293,7 @@ Python sidecar 另加 `event_id`、`event_options` 与 `guidance_source`：它�
 - **行为**：按 `selection.kind` 分两种
   - 牌库网格（`deck_card_select`、`deck_upgrade_select`、`deck_transform_select`、`deck_enchant_select`、`choose_card_select`）：点击被原生界面确认后返回 `completed`。**这不代表界面已关闭**：`min_select < max_select` 时界面会保持打开继续收集，读 `selection.selected_count` / `max_select` 决定是否还要继续点；点满或想提前结束时用 `confirm_selection` 收尾（见下）
   - 战斗手牌多选（`combat_hand_select`、`combat_hand_upgrade_select`）：只计入这一步并返回 `pending`，界面保持打开。读 `selection.selected_count` / `max_select` / `requires_confirmation` 判断是否还需要继续选，选完用 `confirm_selection` 结束
-  - 已实机验证：删牌、升级（单选）、附魔（0/3，多选）、变化（0/6，多选）、事件多选（2/2）。附魔/变化这类 `min_select < max_select` 的界面每次点击在约 0.15 秒内返回，不再空转超时
+  - 已实机验证：删牌、升级（单选）、附魔（原生偏好为 0/3，API 有效最少选择 1 张）、变化（0/6，多选）、事件多选（2/2）。附魔/变化这类 `min_select < max_select` 的界面每次点击在约 0.15 秒内返回，不再空转超时
 - **稳定条件**：牌库网格的点击被原生界面接受（`selected_count` 变化）；战斗手牌多选在 `confirm_selection` 之后离开选牌界面
 - **超时**：10 秒
 
@@ -2297,6 +2311,7 @@ Python sidecar 另加 `event_id`、`event_options` 与 `guidance_source`：它�
 - **前提**：`selection.can_confirm = true`（原生确认按钮可用时才会出现在 available_actions）
 - **参数**：无
 - **行为**：牌库网格的 `min_select < max_select` 场景（附魔、变化，以及 `min_select` 为 0 的奖励选牌）与战斗手牌多选都用它收尾。选满 `max_select` 时 `select_deck_card` 通常会自行收尾，因此它主要用于**提前结束**
+  - 附魔界面的原生确认忽略空选择，因此 `selection.min_select` 至少为 1；未选牌时 `can_confirm=false`，也不公开 `confirm_selection`，直接请求该动作返回 409。选择 1 到 `max_select` 张都可以确认，无需为提前结束而选满。
 - **稳定条件**：离开选牌界面
 - **超时**：10 秒。实机验证：附魔（0/3）与变化（0/6）都在一次调用内完成（约 0.17–0.19 秒），不需要第二次调用
 

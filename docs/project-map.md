@@ -140,6 +140,8 @@ one action runs at a time.
 ### Files — AgentLoop (one decision turn; owns no lifecycle)
 - `STS2AIAgent/Agent/AgentLoop.cs` — `ChatAsync`, `PlayOnceAsync` (check state → `WaitUntilActionableAsync(20 s)` → Jev or LLM), `CompleteWithToolsAsync` (bounded tool rounds, `MaxToolRounds = 8`), `ExecuteActAsync`, `ExecuteReadToolAsync`, `TestConfiguredRolesAsync`.
 - `STS2AIAgent/Agent/AgentLoop.Decision.cs` — `TryDecideWithJevAsync` (budget pre-check → snapshot → decide → execute) and `PlayWithModelAsync` (prompt assembly; **the prompt cache order is load-bearing**: stable prefix first, live state last).
+- `STS2AIAgent/Agent/AgentLoop.Sandpit.cs` — execute one native-playable Frantic Escape before model dispatch at a lethal local Sandpit countdown.
+- `STS2AIAgent/Agent/SandpitSafetyPolicy.cs` — pure compact-state emergency policy and action rejection; the live snapshot is rechecked before dispatch.
 - `STS2AIAgent/Agent/AgentLoop.Arguments.cs` — pure tool-argument parsers.
 - `STS2AIAgent/Agent/AgentLoop.Probes.cs` — `CreateClient` (per-request timeout from live settings), run-id and planning-state probes.
 
@@ -243,6 +245,7 @@ one action runs at a time.
 - `STS2AIAgent/Game/CombatPowerPayload.cs` — combat power payload shared with offline serialization tests; `amount` is the native stack value, while nullable `display_amount` preserves the native UI counter without inferring a remaining value.
 - `STS2AIAgent/Game/StateBuildTiming.cs` — slow-build ring buffer (100 ms threshold), reported in `/health`.
 - `STS2AIAgent/Game/GameDataExportService.cs` — `/data/{cards,relics,monsters,potions,events,powers,characters}`. Monster `damage_values`/`block_values` are always null (there are no static numbers; live damage is in `combat.enemies[].intents`), so projections omit them.
+- `STS2AIAgent/Game/CardUpgradePreviewPolicy.cs` — distinguishes a fully upgraded card (`null`) from a failed metadata preview (`status: unavailable`) without leaking exception details.
 - `STS2AIAgent/Game/EventOptionLocalization.cs` — null-safe event option text formatting.
 - `STS2AIAgent/Game/ProgressSaveVerification.cs` — compares the on-disk progress save for `game_over.save_verified`.
 
@@ -296,6 +299,7 @@ one action runs at a time.
 - `STS2AIAgent/Game/CardPlayCounterPolicy.cs` — confirms that a card play actually happened (play counters).
 - `STS2AIAgent/Game/CombatTurnReadinessPolicy.cs` — when the player's combat turn is ready for input.
 - `STS2AIAgent/Game/CrystalSphereSettlePolicy.cs` — crystal sphere reveal settle rule.
+- `STS2AIAgent/Game/CardGridSelectionPolicy.cs` — card-grid selection counts and confirmation eligibility, including the nonempty deck-enchantment minimum.
 - `STS2AIAgent/Game/FtueModalPolicy.cs` — first-time-user modals that block actions and how to clear them.
 - `STS2AIAgent/Game/UnlockConfirmResolutionPolicy.cs` — unlock-confirm screen resolution.
 - `STS2AIAgent/Game/ReflectedGameMembers.cs` — every private game member the mod reads by reflection, probed and logged at startup.

@@ -114,9 +114,16 @@ internal static partial class GameStateService
             }
         }
 
-        foreach (var power in player.powers)
+        // In v0.111.0 the OWNER is The Insatiable; Target is the affected player.
+        // Checking player.powers missed every real Sandpit, and checking all enemy
+        // counters without Target would falsely stop a different co-op player.
+        var sandpits = playerCreature.CombatState?.Enemies
+            .Where(enemy => !enemy.IsDead)
+            .SelectMany(enemy => enemy.Powers.OfType<SandpitPower>())
+            .Where(power => power.Target == playerCreature) ?? Enumerable.Empty<SandpitPower>();
+        foreach (var power in sandpits)
         {
-            if (!IsSandpitPower(power) || power.amount is not int amount || amount > 1)
+            if (power.Amount > 1)
             {
                 continue;
             }
@@ -124,13 +131,13 @@ internal static partial class GameStateService
             risks.Add(new CombatLethalRiskPayload
             {
                 risk_id = "sandpit_countdown",
-                source = "player_power",
+                source = "enemy_power_targeting_local_player",
                 will_kill_player = true,
                 reason = "SANDPIT_POWER is at or below 1; ending turn is treated as lethal unless the boss dies first or Frantic Escape has already raised the counter.",
                 player_hp = player.current_hp,
                 player_block = player.block,
-                power_id = power.power_id,
-                power_amount = amount
+                power_id = power.Id.Entry,
+                power_amount = power.Amount
             });
         }
 
@@ -210,12 +217,5 @@ internal static partial class GameStateService
         }
 
         return risks.ToArray();
-    }
-
-    private static bool IsSandpitPower(CombatPowerPayload power)
-    {
-        return string.Equals(power.power_id, "SANDPIT_POWER", StringComparison.OrdinalIgnoreCase)
-            || string.Equals(power.name, "Sandpit", StringComparison.OrdinalIgnoreCase)
-            || string.Equals(power.name, "沙坑", StringComparison.OrdinalIgnoreCase);
     }
 }

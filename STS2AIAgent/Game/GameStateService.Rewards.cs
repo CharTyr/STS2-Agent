@@ -464,12 +464,12 @@ internal static partial class GameStateService
             selectedCount++;
         }
 
-        metadata = new CardGridSelectionMetadata(
+        metadata = CardGridSelectionPolicy.BuildMetadata(
+            currentScreen is NDeckEnchantSelectScreen,
             prefs.MinSelect,
             prefs.MaxSelect,
             selectedCount,
-            prefs.RequireManualConfirmation,
-            selectedCount >= prefs.MinSelect && selectedCount <= prefs.MaxSelect);
+            prefs.RequireManualConfirmation);
         return true;
     }
 

@@ -107,6 +107,8 @@ internal sealed class OpenAiCompatibleClient : ILlmClient
             ["max_tokens"] = 16
         };
 
+        DisableDeepSeekProbeThinking(body);
+
         var completion = await SendCompletionAsync(body, stream: false, cancellationToken, onReasoningDelta: null);
         return string.IsNullOrWhiteSpace(completion.Content) ? "ok" : completion.Content.Trim();
     }
@@ -136,6 +138,8 @@ internal sealed class OpenAiCompatibleClient : ILlmClient
             ["max_tokens"] = 256
         };
 
+        DisableDeepSeekProbeThinking(body);
+
         try
         {
             var completion = await SendCompletionAsync(body, stream: false, cancellationToken, onReasoningDelta: null);
@@ -147,6 +151,17 @@ internal sealed class OpenAiCompatibleClient : ILlmClient
             // not a failure. Anything transient (429, 5xx, timeout) keeps propagating so the caller
             // records an unknown capability instead of downgrading a working model on a bad day.
             throw new LlmToolProbeUnsupportedException(ex.Message, ex);
+        }
+    }
+
+    private void DisableDeepSeekProbeThinking(Dictionary<string, object?> body)
+    {
+        // DeepSeek enables thinking by default, which rejects tool_choice="required".
+        // Capability probes only need a short response; actual play retains its configured thinking.
+        if (Uri.TryCreate(_endpoint.BaseUrl, UriKind.Absolute, out var endpointUri)
+            && endpointUri.Host.Equals("api.deepseek.com", StringComparison.OrdinalIgnoreCase))
+        {
+            body["thinking"] = new Dictionary<string, object?> { ["type"] = "disabled" };
         }
     }
 

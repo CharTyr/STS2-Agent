@@ -42,6 +42,52 @@ internal static class ThinkingRequestBuilderTests
 
 internal static class OpenAiCompatibleClientTests
 {
+    public static async Task DeepSeekCapabilityProbesDisableThinking()
+    {
+        var handler = new RecordingHandler("""
+            {"choices":[{"message":{"role":"assistant","content":"pong","tool_calls":[{"id":"call_1","type":"function","function":{"name":"act","arguments":"{\"action\":\"wait\"}"}}]}}]}
+            """);
+        var client = new OpenAiCompatibleClient(
+            new LlmEndpoint { BaseUrl = "https://api.deepseek.com", ApiKey = "sk-test" }, handler);
+
+        Assert.Equal("pong", await client.PingAsync("deepseek-flash", CancellationToken.None));
+        using (var ping = JsonDocument.Parse(handler.LastBody!))
+        {
+            Assert.Equal("disabled", ping.RootElement.GetProperty("thinking").GetProperty("type").GetString());
+        }
+
+        Assert.True(await client.ProbeToolCallingAsync("deepseek-flash", Agent.AgentTools.Play[^1],
+            "Call the tool.", CancellationToken.None));
+        using (var probe = JsonDocument.Parse(handler.LastBody!))
+        {
+            Assert.Equal("disabled", probe.RootElement.GetProperty("thinking").GetProperty("type").GetString());
+            Assert.Equal("required", probe.RootElement.GetProperty("tool_choice").GetString());
+        }
+
+        await client.CompleteAsync(new LlmRequest
+        {
+            Model = "deepseek-flash", Messages = new[] { LlmMessage.User("Play.") },
+            Thinking = ThinkingIntensity.Medium, ThinkingMode = "deepseek", Stream = false
+        }, CancellationToken.None);
+        using var play = JsonDocument.Parse(handler.LastBody!);
+        Assert.Equal("enabled", play.RootElement.GetProperty("thinking").GetProperty("type").GetString());
+    }
+
+    public static async Task OtherEndpointProbesKeepProviderDefaults()
+    {
+        var handler = new RecordingHandler("""{"choices":[{"message":{"role":"assistant","content":"pong"}}]}""");
+        var client = new OpenAiCompatibleClient(new LlmEndpoint { BaseUrl = "https://example.test/v1" }, handler);
+        await client.PingAsync("gpt-5", CancellationToken.None);
+        using (var ping = JsonDocument.Parse(handler.LastBody!))
+        {
+            Assert.False(ping.RootElement.TryGetProperty("thinking", out _));
+        }
+        Assert.False(await client.ProbeToolCallingAsync("gpt-5", Agent.AgentTools.Play[^1],
+            "Call the tool.", CancellationToken.None));
+        using var probe = JsonDocument.Parse(handler.LastBody!);
+        Assert.False(probe.RootElement.TryGetProperty("thinking", out _));
+    }
+
     public static void ResolveCompletionsUrl_NormalizesBase()
     {
         Assert.Equal("https://api.openai.com/v1/chat/completions", OpenAiCompatibleClient.ResolveCompletionsUrl("https://api.openai.com/v1"));

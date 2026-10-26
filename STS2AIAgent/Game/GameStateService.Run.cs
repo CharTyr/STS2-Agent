@@ -95,6 +95,8 @@ internal static partial class GameStateService
 
         return new RunPayload
         {
+            card_rarity_odds_value = player.PlayerOdds.CardRarity.CurrentValue,
+            card_shop_removals_used = player.ExtraFields.CardShopRemovalsUsed,
             character_id = player.Character.Id.Entry,
             character_name = player.Character.Title.GetFormattedText(),
             ascension = runState.AscensionLevel,

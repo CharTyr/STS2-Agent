@@ -425,7 +425,7 @@ internal static class PlayerExperienceTests
         public Task<string> GetActionSnapshotJsonAsync(CancellationToken cancellationToken) =>
             Task.FromResult("""{"state":{"screen":"MAIN_MENU","available_actions":[]},"available_actions":[]}""");
         public Task<string> GetScreenAsync(CancellationToken cancellationToken) => Task.FromResult("MAIN_MENU");
-        public Task<string> ActAsync(string action, int? cardIndex, int? targetIndex, int? optionIndex, int? x, int? y, string? tool, CancellationToken cancellationToken, bool rawState = false) =>
+        public Task<string> ActAsync(string action, int? cardIndex, int? targetIndex, int? optionIndex, int? x, int? y, string? tool, CancellationToken cancellationToken, bool rawState = false, Action<string>? validateState = null) =>
             Task.FromResult("{}");
         public Task<string> GetGameDataItemJsonAsync(string collection, string itemId, CancellationToken cancellationToken) => Task.FromResult("{}");
         public Task<string> GetGameDataItemsJsonAsync(string collection, IReadOnlyList<string> itemIds, CancellationToken cancellationToken) => Task.FromResult("{}");

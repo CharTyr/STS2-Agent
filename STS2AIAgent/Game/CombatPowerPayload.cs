@@ -16,4 +16,6 @@ internal sealed class CombatPowerPayload
     public int? display_amount { get; init; }
 
     public bool is_debuff { get; init; }
+
+    public string? description { get; init; }
 }
