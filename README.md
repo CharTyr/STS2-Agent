@@ -6,7 +6,7 @@ https://github.com/user-attachments/assets/89353468-a299-4315-9516-e520bcbfbd4b
 
 **In-Game AI Companion & Autonomous Gameplay Mod for Slay the Spire 2**
 
-[中文说明 (README.zh-CN)](./README.zh-CN.md) • [Current Status](./PRODUCT_PLAN_CURRENT.md) • [Historical Co-op Evidence](./COOP_DELIVERY.md) • [API Docs](./docs/api.md) • [MCP Tools Guide](./mcp_server/README.md)
+[中文说明 (README.zh-CN)](./README.zh-CN.md) • [Current Status](./PRODUCT_PLAN_CURRENT.md) • [API Docs](./docs/api.md) • [MCP Tools Guide](./mcp_server/README.md)
 
 </div>
 
@@ -251,6 +251,12 @@ powershell -ExecutionPolicy Bypass -File ".\scripts\build-mod.ps1" -Configuratio
 2. The launcher sets `--force-steam off` and steps `clientId` automatically. Check if third-party antivirus software blocked launching the child process.
 3. If ports are in use, the mod automatically selects an available fallback port.
 
+### Updates and co-op recovery
+- The second window stages files from the mod actually loaded by the host, accepting GitHub `mod_id.json` and Workshop `STS2AIAgent.json`. Unmodified managed copies upgrade automatically. Manual or edited copies are preserved and report their conflict path. Keep one installation instead of both Workshop and a manual copy.
+- Model, key, budget and non-combat-only changes are pushed to an existing teammate and shown as applied only after acknowledgement. Its current action settles first; an unverified model leaves it paused.
+- Resume local AI co-op saves with **Play → Multiplayer → Continue last co-op run**. When the native load path would use the wrong player identity for an identified local save, the mod blocks it before the game can rename the save `.VAL.corrupt`. Ordinary Steam saves do not match this guard.
+- **Copy diagnostics** uses the clipboard. **Save diagnostics file** writes redacted text and opens its folder. The DLL build SHA256 distinguishes builds with the same version. Keys and chat bodies are excluded.
+
 ---
 
 ## 📁 Repository Layout
@@ -262,9 +268,9 @@ STS2-Agent/
 ├── mcp_server/           # FastMCP Server implementation
 ├── scripts/              # Build, packaging, startup, and preflight scripts
 ├── skills/               # State-first gameplay skill specifications
-├── docs/                 # Developer reference and API documentation
-├── PRODUCT_PLAN_CURRENT.md # Current product status and evidence boundary
-└── COOP_DELIVERY.md      # Historical co-op evidence index
+├── docs/                 # Developer reference and API documentation (start at docs/README.md)
+├── history/              # Archived snapshots, release records and live-test evidence
+└── PRODUCT_PLAN_CURRENT.md # Current product status and evidence boundary
 ```
 
 ---
@@ -272,9 +278,3 @@ STS2-Agent/
 ## License
 
 This project is licensed under the [GNU Affero General Public License v3.0 (AGPL-3.0)](./LICENSE).
-
-### Updates and co-op recovery
-- The second window stages files from the mod actually loaded by the host, accepting GitHub `mod_id.json` and Workshop `STS2AIAgent.json`. Unmodified managed copies upgrade automatically. Manual or edited copies are preserved and report their conflict path. Keep one installation instead of both Workshop and a manual copy.
-- Model, key, budget and non-combat-only changes are pushed to an existing teammate and shown as applied only after acknowledgement. Its current action settles first; an unverified model leaves it paused.
-- Resume local AI co-op saves with **Play → Multiplayer → Continue last co-op run**. When the native load path would use the wrong player identity for an identified local save, the mod blocks it before the game can rename the save `.VAL.corrupt`. Ordinary Steam saves do not match this guard.
-- **Copy diagnostics** uses the clipboard. **Save diagnostics file** writes redacted text and opens its folder. The DLL build SHA256 distinguishes builds with the same version. Keys and chat bodies are excluded.

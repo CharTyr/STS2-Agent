@@ -6,7 +6,7 @@ https://github.com/user-attachments/assets/89353468-a299-4315-9516-e520bcbfbd4b
 
 **《杀戮尖塔 2》（Slay the Spire 2）游戏内 AI 助手与自主队友 Mod**
 
-[English README](./README.md) • [当前状态页](./PRODUCT_PLAN_CURRENT.md) • [历史联机证据索引](./COOP_DELIVERY.md) • [API 文档](./docs/api.md) • [MCP 工具指南](./mcp_server/README.md)
+[English README](./README.md) • [当前状态页](./PRODUCT_PLAN_CURRENT.md) • [API 文档](./docs/api.md) • [MCP 工具指南](./mcp_server/README.md)
 
 </div>
 
@@ -250,6 +250,12 @@ powershell -ExecutionPolicy Bypass -File ".\scripts\build-mod.ps1" -Configuratio
 2. 启动器已自动配置 `--force-steam off` 与增量 `clientId`；部分杀毒软件可能会拦截子进程拉起，请加入信任列表。
 3. 若端口被占用，Mod 会自动寻找后续可用端口，请以悬浮窗显示的地址为准。
 
+### 更新与联机排障
+- 第二窗口会从主窗口实际加载的模组复制文件，兼容 GitHub 的 `mod_id.json` 和工坊的 `STS2AIAgent.json`。未被修改的自动副本可随主窗口更新；手动安装或修改过的副本会保留并显示冲突路径。不要同时保留工坊和手动安装的两份 Mod。
+- 模型、Key、预算及「仅战斗外」更改会同步到当前队友；只有收到队友确认才显示生效。当前动作会先停稳，配置不再满足工具验证时保持暂停。
+- 本地 AI 联机存档应从 **游玩 → 多人 → 继续上次联机对局** 恢复。模组识别到原生读档的玩家身份不匹配时会阻止它，避免存档被移成 `.VAL.corrupt`。普通 Steam 存档不受此识别规则影响。
+- **复制诊断** 写入剪贴板；**保存诊断文件** 保存脱敏文本并打开目录。诊断含 DLL 构建 SHA256，便于区分同版本的不同构建，不含 Key 或聊天正文。
+
 ---
 
 ## 📁 仓库结构
@@ -262,8 +268,8 @@ STS2-Agent/
 ├── scripts/              # 构建、部署、启动与全量预检脚本
 ├── skills/               # 面向 MCP 外部 Agent 的策略 Skill 规范
 ├── docs/                 # 开发设计文档与 API 接口参考
-├── PRODUCT_PLAN_CURRENT.md # 官方当前状态与证据边界
-└── COOP_DELIVERY.md      # 历史联机交付证据索引
+├── history/              # 归档快照、发布记录与实机证据
+└── PRODUCT_PLAN_CURRENT.md # 官方当前状态与证据边界
 ```
 
 ---
@@ -271,9 +277,3 @@ STS2-Agent/
 ## 开源协议
 
 本项目采用 [GNU Affero General Public License v3.0 (AGPL-3.0)](./LICENSE) 协议开源。
-
-### 更新与联机排障
-- 第二窗口会从主窗口实际加载的模组复制文件，兼容 GitHub 的 `mod_id.json` 和工坊的 `STS2AIAgent.json`。未被修改的自动副本可随主窗口更新；手动安装或修改过的副本会保留并显示冲突路径。不要同时保留工坊和手动安装的两份 Mod。
-- 模型、Key、预算及「仅战斗外」更改会同步到当前队友；只有收到队友确认才显示生效。当前动作会先停稳，配置不再满足工具验证时保持暂停。
-- 本地 AI 联机存档应从 **游玩 → 多人 → 继续上次联机对局** 恢复。模组识别到原生读档的玩家身份不匹配时会阻止它，避免存档被移成 `.VAL.corrupt`。普通 Steam 存档不受此识别规则影响。
-- **复制诊断** 写入剪贴板；**保存诊断文件** 保存脱敏文本并打开目录。诊断含 DLL 构建 SHA256，便于区分同版本的不同构建，不含 Key 或聊天正文。

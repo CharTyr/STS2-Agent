@@ -46,6 +46,17 @@ internal static class Router
         {
             Log.Info($"{LogPrefix} {requestId} {request.HttpMethod} {request.Url?.AbsolutePath}");
 
+            // Every route sits behind the same browser guard. The MCP route keeps its own stricter
+            // Origin check (it answers a same-origin browser client), so only Host is enforced there.
+            if (!LocalRequestGuard.IsTrusted(
+                    request.Headers["Host"], request.Headers["Origin"], HttpServer.Instance.Port,
+                    allowOrigin: IsMcpPath(request.Url?.AbsolutePath),
+                    fetchSite: request.Headers["Sec-Fetch-Site"]))
+            {
+                throw new ApiException(403, "untrusted_origin",
+                    "Requests from web pages or non-loopback hosts are refused.");
+            }
+
             if (request.HttpMethod == "GET" && request.Url?.AbsolutePath == "/companion/jev")
             {
                 if (!InstanceRole.IsCompanion || !request.IsLocal || !CompanionConnection.IsAuthorized(

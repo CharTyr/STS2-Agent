@@ -140,18 +140,8 @@ internal sealed partial class AgentLoop
 
     private static double ReadTimeoutSeconds(JsonDocument document)
     {
-        if (!document.RootElement.TryGetProperty("timeout_seconds", out var value))
-        {
-            return 20;
-        }
-
-        var seconds = value.ValueKind switch
-        {
-            JsonValueKind.Number when value.TryGetDouble(out var number) => number,
-            JsonValueKind.String when double.TryParse(value.GetString(), out var parsed) => parsed,
-            _ => 20
-        };
-
-        return Math.Clamp(seconds, 1, 120);
+        return document.RootElement.TryGetProperty("timeout_seconds", out var value)
+            ? ToolTimeout.FromValue(value)
+            : ToolTimeout.DefaultSeconds;
     }
 }

@@ -158,6 +158,7 @@ one action runs at a time.
 - `STS2AIAgent/Agent/SandpitSafetyPolicy.cs` — pure compact-state emergency policy and action rejection; the live snapshot is rechecked before dispatch.
 - `STS2AIAgent/Agent/NonCombatOnlyPolicy.cs` — parses compact state or a decision snapshot for the opt-in combat ownership boundary; malformed input fails closed before any action can reach combat.
 - `STS2AIAgent/Agent/AgentLoop.Arguments.cs` — pure tool-argument parsers.
+- `STS2AIAgent/Agent/ToolTimeout.cs` — the shared `timeout_seconds` argument reader (finite, invariant-culture, clamped 1–120).
 - `STS2AIAgent/Agent/AgentLoop.Probes.cs` — `CreateClient` (per-request timeout from live settings), run-id and planning-state probes.
 
 ### Files — AgentRuntime (singleton; one partial per concern)
@@ -378,6 +379,7 @@ but hasn't settled; the agent treats a run of these as a stall (`NoProgressPolic
 ### Files
 - `STS2AIAgent/Server/HttpServer.cs` — the loopback `HttpListener` host. The port increments when busy unless `STS2_API_PORT` pins it (`STS2_API_ALLOW_FALLBACK`).
 - `STS2AIAgent/Server/LoopbackListener.cs` — listener binding and port-fallback rules.
+- `STS2AIAgent/Server/LocalRequestGuard.cs` — Host/Origin rules that keep web pages (cross-site POST, DNS rebinding) away from the REST routes; `Router` applies it to every request.
 - `STS2AIAgent/Server/Router.cs` — every route (`/health`, `/state`, `/actions/available`, `/decision-snapshot`, `/action`, `/data/*`, `/decisions`, `/strategy`, `/planner-briefing`, `/session/control`, `/teammate/control`, `/companion/*`, `/screenshot`, `/mcp`), the error envelope, and `ModVersion` (one of the five version files).
 - `STS2AIAgent/Server/ApiException.cs` — typed API error (status, code, details, retryable).
 - `STS2AIAgent/Server/JsonHelper.cs` — shared JSON options and writing.
