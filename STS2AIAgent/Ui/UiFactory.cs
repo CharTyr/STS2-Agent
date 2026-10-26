@@ -67,6 +67,12 @@ internal static class UiFactory
     /// <see cref="ReapplyButtonTheme"/> and <see cref="ReapplyLabelTheme"/> can repaint it correctly.
     /// </summary>
     private const string MetaKind = "sts2_button_kind";
+
+    /// <summary>
+    /// Metadata key on a tab or segment button: whether it is the selected one. Its presence is what
+    /// tells <see cref="ReapplyButtonTheme"/> to repaint a tab rather than an ordinary button.
+    /// </summary>
+    private const string MetaTabActive = "sts2_tab_active";
     private const string MetaMuted = "sts2_label_muted";
     private const string MetaAccent = "sts2_label_accent";
 
@@ -302,8 +308,31 @@ internal static class UiFactory
     /// <summary>Repaints an existing button in the active palette, keeping the kind it was made with.</summary>
     public static void ReapplyButtonTheme(Button button)
     {
+        // A tab is a button too, and the walk reaches it through the Button arm. Repainting it as an
+        // ordinary button erased the selected-tab fill on every theme change, so after picking a
+        // theme the header and the solo/multiplayer switch no longer showed where the player was.
+        if (button.HasMeta(MetaTabActive))
+        {
+            ApplyTabTheme(button, button.GetMeta(MetaTabActive, false).AsBool());
+            return;
+        }
+
         var kind = (ButtonKind)button.GetMeta(MetaKind, (int)ButtonKind.Normal).AsInt32();
         ApplyButtonTheme(button, kind);
+    }
+
+    /// <summary>
+    /// A faint fill or border derived from the theme's text colour, for ghost buttons and idle tabs.
+    /// </summary>
+    /// <remarks>
+    /// These used to be white at a few percent opacity, which is a visible tint on the dark themes and
+    /// nothing at all on ivory: ghost buttons and idle tabs there read as loose text with no edge.
+    /// The text colour is light on dark themes and dark on light ones, so the same alpha works on both.
+    /// </remarks>
+    private static Color Veil(float alpha)
+    {
+        var text = ToGodot(_palette.Text);
+        return new Color(text.R, text.G, text.B, alpha);
     }
 
     private static void ApplyButtonTheme(Button button, ButtonKind kind)
@@ -327,11 +356,11 @@ internal static class UiFactory
                 shadow = 4;
                 break;
             case ButtonKind.Ghost:
-                background = new Color(1f, 1f, 1f, 0.04f);
+                background = Veil(0.04f);
                 text = ToGodot(_palette.Muted);
-                hover = new Color(1f, 1f, 1f, 0.10f);
-                pressed = new Color(1f, 1f, 1f, 0.02f);
-                borderColor = new Color(1f, 1f, 1f, 0.08f);
+                hover = Veil(0.10f);
+                pressed = Veil(0.02f);
+                borderColor = Veil(0.14f);
                 break;
             case ButtonKind.Danger:
                 background = ToGodot(_palette.SurfaceRaised);
@@ -375,7 +404,6 @@ internal static class UiFactory
     /// </remarks>
     public static Button TabButton(string text, bool active, Action? onPressed)
     {
-        var border = ToGodot(_palette.Border);
         var button = new Button
         {
             Text = text,
@@ -383,8 +411,21 @@ internal static class UiFactory
             FocusMode = Control.FocusModeEnum.None
         };
 
+        button.SetMeta(MetaTabActive, active);
+        ApplyTabTheme(button, active);
+        if (onPressed != null)
+        {
+            button.Pressed += onPressed;
+        }
+
+        return button;
+    }
+
+    private static void ApplyTabTheme(Button button, bool active)
+    {
+        var border = ToGodot(_palette.Border);
         var activeBackground = ToGodot(_palette.Accent);
-        var idleBackground = new Color(1f, 1f, 1f, 0.035f);
+        var idleBackground = Veil(0.035f);
         button.AddThemeFontSizeOverride("font_size", FontBody);
         button.AddThemeColorOverride("font_color", active ? ToGodot(_palette.AccentText) : ToGodot(_palette.Muted));
         button.AddThemeColorOverride("font_hover_color", active ? ToGodot(_palette.AccentText) : ToGodot(_palette.Text));
@@ -394,18 +435,11 @@ internal static class UiFactory
             Box(active ? activeBackground : idleBackground, active ? activeBackground.Lightened(0.20f) : new Color(0, 0, 0, 0), 6, padX: SpaceSm + 2, padY: 6, shadowSize: active ? 4 : 0));
         button.AddThemeStyleboxOverride(
             "hover",
-            Box(active ? activeBackground.Lightened(0.10f) : new Color(1f, 1f, 1f, 0.09f), active ? activeBackground.Lightened(0.30f) : border, 6, padX: SpaceSm + 2, padY: 6));
+            Box(active ? activeBackground.Lightened(0.10f) : Veil(0.09f), active ? activeBackground.Lightened(0.30f) : border, 6, padX: SpaceSm + 2, padY: 6));
         button.AddThemeStyleboxOverride(
             "pressed",
-            Box(active ? activeBackground.Darkened(0.12f) : new Color(1f, 1f, 1f, 0.05f), border, 6, padX: SpaceSm + 2, padY: 6));
+            Box(active ? activeBackground.Darkened(0.12f) : Veil(0.05f), border, 6, padX: SpaceSm + 2, padY: 6));
         button.AddThemeStyleboxOverride("focus", new StyleBoxEmpty());
-
-        if (onPressed != null)
-        {
-            button.Pressed += onPressed;
-        }
-
-        return button;
     }
 
     /// <summary>
@@ -507,7 +541,15 @@ internal static class UiFactory
     /// <summary>A section heading inside a page: larger, in the accent colour.</summary>
     public static Label Heading(string text)
     {
-        var label = Label(text, FontHeading);
+        return MarkAccent(Label(text, FontHeading));
+    }
+
+    /// <summary>
+    /// Draws a label in the accent colour and records that, so a theme change repaints it in the new
+    /// accent instead of resetting it to body text (which is what happened to the window title).
+    /// </summary>
+    public static Label MarkAccent(Label label)
+    {
         label.SetMeta(MetaAccent, true);
         label.AddThemeColorOverride("font_color", ToGodot(_palette.Accent));
         return label;
@@ -560,7 +602,7 @@ internal static class UiFactory
         {
             ButtonKind.Primary => (ToGodot(_palette.Positive).Darkened(0.70f), ToGodot(_palette.Positive)),
             ButtonKind.Danger => (ToGodot(_palette.Danger).Darkened(0.70f), ToGodot(_palette.Danger)),
-            ButtonKind.Ghost => (new Color(1f, 1f, 1f, 0.06f), ToGodot(_palette.Muted)),
+            ButtonKind.Ghost => (Veil(0.06f), ToGodot(_palette.Muted)),
             _ => (ToGodot(_palette.Warning).Darkened(0.70f), ToGodot(_palette.Warning))
         };
     }
@@ -935,23 +977,5 @@ internal static class UiFactory
         child.SizeFlagsVertical = Control.SizeFlags.ExpandFill;
         scroll.AddChild(child);
         return scroll;
-    }
-
-    public static bool TryParseHotkey(string? raw, out Key key)
-    {
-        var value = (raw ?? "F8").Trim().ToUpperInvariant();
-        if (value.Length >= 2 && value[0] == 'F' && int.TryParse(value[1..], out var number) && number is >= 1 and <= 12)
-        {
-            key = Key.F1 + (number - 1);
-            return true;
-        }
-
-        if (Enum.TryParse(value, ignoreCase: true, out key))
-        {
-            return true;
-        }
-
-        key = Key.F8;
-        return false;
     }
 }

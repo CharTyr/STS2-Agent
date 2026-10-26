@@ -134,7 +134,7 @@ internal static class OverlayTabContractTests
         var overlay = AgentSourceFixture.ReadOverlayHost();
 
         var refresh = AgentSourceFixture.MethodBody(overlay, "RefreshDynamic");
-        Assert.Contains("RefreshDecisionPage(facing);", refresh);
+        Assert.Contains("RefreshDecisionPage(view);", refresh);
 
         var tick = AgentSourceFixture.MethodBody(overlay, "OnProcessFrame");
         Assert.Contains("if (IsTabVisible(OverlayTabCatalog.Play))", tick);

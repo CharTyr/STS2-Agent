@@ -949,6 +949,17 @@ internal static class TestRunner
         yield return ("OverlayTheme.ContrastFloors", () => Task.Run(OverlayThemeTests.EveryPresetStaysReadableOnEverySurface));
         yield return ("OverlayTheme.ContrastMath", () => Task.Run(OverlayThemeTests.TheContrastHelperMatchesTheKnownEndpoints));
         yield return ("OverlayTheme.AppliedBeforeBuild", () => Task.Run(OverlayThemeTests.TheStoredThemeIsAppliedBeforeAnythingIsBuilt));
+        yield return ("OverlayRefresh.EscapeKeepsBrackets", () => Task.Run(OverlayRefreshTests.EscapeKeepsBracketsAsWritten));
+        yield return ("OverlayRefresh.ColoredEscapes", () => Task.Run(OverlayRefreshTests.ColoredEscapesItsText));
+        yield return ("OverlayRefresh.RichLogDiff", () => Task.Run(OverlayRefreshTests.RichLogTouchesOnlyWhatChanged));
+        yield return ("OverlayRefresh.ThresholdLocale", () => Task.Run(OverlayRefreshTests.ThresholdIgnoresTheSystemLocale));
+        yield return ("OverlayRefresh.LiveViewsUnchanged", () => Task.Run(OverlayRefreshTests.LiveViewsAreNotRedrawnWhenNothingChanged));
+        yield return ("OverlayRefresh.ThemeKeepsSelectedTab", () => Task.Run(OverlayRefreshTests.ThemeRepaintKeepsTheSelectedTab));
+        yield return ("OverlayRefresh.JumpBarPresentSections", () => Task.Run(OverlayRefreshTests.JumpBarOffersOnlyPresentSections));
+        yield return ("OverlayRefresh.HotkeyIgnoresTyping", () => Task.Run(OverlayRefreshTests.HotkeyIgnoresTypingIntoTextBoxes));
+        yield return ("OverlayRefresh.SettingsEditsKept", () => Task.Run(OverlayRefreshTests.SettingsEditsAreNotLostOrMisfiled));
+        yield return ("OverlayRefresh.RebuildKeepsDrafts", () => Task.Run(OverlayRefreshTests.RebuildKeepsMessageDrafts));
+        yield return ("OverlayRefresh.PanelFitsShortWindows", () => Task.Run(OverlayRefreshTests.PanelFitsShortWindows));
         yield return ("OverlayTabs.DecisionLogLiveRefresh", () => Task.Run(OverlayTabContractTests.DecisionLogFollowsTheLiveRefreshPath));
         yield return ("OverlayTabs.DecisionPageReusesRuntimeCounters", () => Task.Run(OverlayTabContractTests.DecisionPageReusesTheRuntimeCounters));
         yield return ("OverlayTabs.DecisionLinesNewestFirst", () => Task.Run(OverlayTabContractTests.DecisionLinesAreNewestFirstAndUnknownUsageStaysUnknown));

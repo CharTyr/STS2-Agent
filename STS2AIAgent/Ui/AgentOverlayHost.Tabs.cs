@@ -26,7 +26,7 @@ internal sealed partial class AgentOverlayHost
 {
     /// <summary>The built page per tab id, and the tab currently shown. Tab state stays with the tab code.</summary>
     private readonly Dictionary<string, Control> _pages = new(StringComparer.Ordinal);
-    private string _tab = "chat";
+    private string _tab = OverlayTabCatalog.Play;
     private HFlowContainer? _tabRow;
 
     /// <summary>

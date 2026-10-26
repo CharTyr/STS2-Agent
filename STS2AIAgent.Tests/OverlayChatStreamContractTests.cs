@@ -59,8 +59,12 @@ internal static class OverlayChatStreamContractTests
 
     /// <summary>
     /// The log draws the two stream roles distinctly, keeps the player and the assistant as they were,
-    /// and scrolls to the newest turn after a repaint.
+    /// and follows the newest turn only while the reader is already at the bottom.
     /// </summary>
+    /// <remarks>
+    /// It used to clear, redraw and force the scroll to the bottom on every refresh and every 800 ms
+    /// tick, so an earlier turn could not be read: the view was pulled back down within a second.
+    /// </remarks>
     public static void TheLogDrawsEachRoleAndFollowsTheNewest()
     {
         var card = AgentSourceFixture.Read(ChatCard);
@@ -73,11 +77,23 @@ internal static class OverlayChatStreamContractTests
         Assert.Contains("showThinking", log);
         Assert.Contains("FormatTurn(turn.Role == \"user\"", log);
 
-        var scroll = AgentSourceFixture.MethodBody(card, "ScrollChatToBottom");
-        Assert.Contains("GetVScrollBar()", scroll);
-        Assert.Contains("bar.Value = bar.MaxValue;", scroll);
+        // The entries go through RichLog, never straight into the label.
+        Assert.Contains("_chatLogView.Show(entries);", log);
+        Assert.False(log.Contains("_chatLog.Clear()", StringComparison.Ordinal),
+            "The conversation clears its label on every refresh again, which resets the reader's scroll.");
+        Assert.False(log.Contains("ScrollChatToBottom", StringComparison.Ordinal),
+            "The conversation forces its scroll to the bottom again.");
+
+        var richLog = AgentSourceFixture.Read("STS2AIAgent/Ui/RichLog.cs");
+        var show = AgentSourceFixture.MethodBody(richLog, "Show");
+        // An unchanged list touches nothing; the bottom is followed only by a reader who was there.
+        Assert.Contains("if (change == RichLogChange.None)", show);
+        Assert.Contains("var atEdge = _atEdge;", show);
+        Assert.Contains("bar.Value + bar.Page >= bar.MaxValue - EdgeSlack", richLog);
+        Assert.Contains("if (_anchor == LogAnchor.Bottom && atEdge)", show);
         // Deferred, because the BBCode appended this frame has not been laid out yet.
-        Assert.Contains("Callable.From(ScrollChatToBottom).CallDeferred();", log);
+        Assert.Contains(".CallDeferred();", show);
+        Assert.Contains("label.ScrollFollowing = false;", richLog);
     }
 
     /// <summary>
@@ -89,11 +105,16 @@ internal static class OverlayChatStreamContractTests
         var overlay = AgentSourceFixture.ReadOverlayHost();
         var refresh = AgentSourceFixture.MethodBody(overlay, "RefreshDynamic");
 
-        Assert.Contains("catch (Exception ex)", refresh);
-        Assert.Contains("Log.Warn(", refresh);
+        // Every section runs under its own guard, so one throwing section cannot stop the next.
+        var guard = AgentSourceFixture.MethodBody(overlay, "Guarded");
+        Assert.Contains("catch (Exception ex)", guard);
+        Assert.Contains("Log.Warn(", guard);
+        Assert.False(System.Text.RegularExpressions.Regex.IsMatch(refresh, @"\btry\b"),
+            "RefreshDynamic is one guarded block again; a throw in one section would freeze the rest.");
+
         // The conversation is reached before any block that reads game state.
-        var chat = refresh.IndexOf("RefreshChatLog();", StringComparison.Ordinal);
-        var decisions = refresh.IndexOf("RefreshDecisionPage(facing);", StringComparison.Ordinal);
+        var chat = refresh.IndexOf("Guarded(\"chat\", RefreshChatLog);", StringComparison.Ordinal);
+        var decisions = refresh.IndexOf("RefreshDecisionPage(view);", StringComparison.Ordinal);
         Assert.True(chat >= 0, "RefreshDynamic no longer redraws the conversation.");
         Assert.True(decisions > chat, "The conversation has to be drawn before the blocks that can throw.");
 

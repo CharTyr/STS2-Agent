@@ -31,7 +31,11 @@ internal sealed partial class AgentOverlayHost
     /// </remarks>
     private ScrollContainer? _settingsScroll;
     private readonly Dictionary<string, Control> _settingsAnchors = new(StringComparer.Ordinal);
+    private readonly Dictionary<string, Button> _settingsJumpButtons = new(StringComparer.Ordinal);
     private bool _settingsJumpPending;
+
+    /// <summary>Each model card's test badge, so a finished test can update it without a rebuild.</summary>
+    private readonly Dictionary<string, Label> _modelTestBadges = new(StringComparer.Ordinal);
 
     /// <summary>
     /// The theme the swatch grid shows as selected. The player's choice, not a cache of the file.
@@ -111,6 +115,7 @@ internal sealed partial class AgentOverlayHost
         };
         bar.AddThemeConstantOverride("h_separation", UiFactory.SpaceXs);
         bar.AddThemeConstantOverride("v_separation", UiFactory.SpaceXs);
+        _settingsJumpButtons.Clear();
         foreach (var (id, label) in SettingsSections())
         {
             var button = UiFactory.Button(label, () => JumpToSettingsSection(id), UiFactory.ButtonKind.Ghost);
@@ -118,9 +123,29 @@ internal sealed partial class AgentOverlayHost
             // The section is named in the tooltip so the label can stay short enough to fit the bar.
             button.TooltipText = Loc.T("跳到「{0}」", label);
             bar.AddChild(button);
+            _settingsJumpButtons[id] = button;
         }
 
         return bar;
+    }
+
+    /// <summary>
+    /// Shows a jump button only while its section is on the form.
+    /// </summary>
+    /// <remarks>
+    /// The endpoint, model and binding sections only exist with the advanced options shown. Their
+    /// buttons used to stay on the bar regardless, so in the default view three of the seven did
+    /// nothing when pressed.
+    /// </remarks>
+    private void RefreshSettingsJumpBar()
+    {
+        foreach (var (id, button) in _settingsJumpButtons)
+        {
+            if (GodotObject.IsInstanceValid(button))
+            {
+                button.Visible = _settingsAnchors.ContainsKey(id);
+            }
+        }
     }
 
     /// <summary>
@@ -136,7 +161,7 @@ internal sealed partial class AgentOverlayHost
         ("appearance", Loc.T("外观")),
         ("endpoints", Loc.T("端点")),
         ("models", Loc.T("模型")),
-        ("bindings", Loc.T("角色绑定")),
+        ("bindings", Loc.T("模型绑定")),
         ("jev", Loc.T("Jev 执行层")),
         ("connect", Loc.T("接入"))
     };
@@ -355,6 +380,7 @@ internal sealed partial class AgentOverlayHost
         _visionCombo = null;
         _maxTokensEdit = _maxRequestsEdit = _llmTimeoutEdit = _hotkeyEdit = null;
         _modelTestButtons.Clear();
+        _modelTestBadges.Clear();
         _endpointEditors.Clear();
         _modelEditors.Clear();
         _settingsAnchors.Clear();
@@ -506,6 +532,7 @@ internal sealed partial class AgentOverlayHost
             _rebuildingSettings = false;
         if (_addEndpointButton != null) _addEndpointButton.Visible = _showAdvancedValue;
         if (_addModelButton != null) _addModelButton.Visible = _showAdvancedValue;
+        RefreshSettingsJumpBar();
         RefreshModelTestControls();
         }
     }
@@ -522,7 +549,7 @@ internal sealed partial class AgentOverlayHost
         _jevBaseUrlEdit = UiFactory.Line(settings.JevBaseUrl, "https://api.typesafe.ai");
         _jevApiKeyEdit = UiFactory.Line(settings.JevApiKey, "API Key", secret: true);
         _jevModelEdit = UiFactory.Line(settings.JevModel, "jev-latest");
-        _jevThresholdEdit = UiFactory.Line(settings.JevConfidenceThreshold.ToString("0.00"), "0.35");
+        _jevThresholdEdit = UiFactory.Line(SettingsInput.FormatThreshold(settings.JevConfidenceThreshold), "0.35");
         _jevTimeoutEdit = UiFactory.Line(settings.JevRequestTimeoutSeconds?.ToString() ?? "", Loc.T("默认 90 秒"));
         WatchLine(_jevBaseUrlEdit);
         WatchLine(_jevApiKeyEdit);
@@ -693,6 +720,7 @@ internal sealed partial class AgentOverlayHost
         _modelTestButtons.Add(testButton);
         testButton.Disabled = _modelTestCancellation != null;
         var badge = UiFactory.Wrapped(ModelTestBadgeText(model.Id), UiFactory.FontCaption);
+        _modelTestBadges[model.Id] = badge;
         column.AddChild(UiFactory.Row(display, remove));
         column.AddChild(UiFactory.Row(modelName, endpointCombo));
         column.AddChild(UiFactory.Row(testButton));
@@ -709,48 +737,6 @@ internal sealed partial class AgentOverlayHost
         return box;
     }
 
-    /// <summary>The badge line under a model card: the recorded verdict, or the nudge to test.</summary>
-    private string ModelTestBadgeText(string modelId)
-    {
-        var record = AgentRuntime.Instance.ModelTestFor(modelId);
-        if (record == null)
-        {
-            return Loc.T("⚪ 未测试。点「测试」做一次真实调用（含工具调用检测）。");
-        }
-
-        if (!AgentRuntime.Instance.IsModelVerified(modelId))
-        {
-            return record.Status switch
-            {
-                "verified" => Loc.T("⚪ 配置已修改，需重新测试。"),
-                // A failed test must not look like "never tested": the player just pressed the
-                // button and needs the reason on the card, not in a line the rebuild erases.
-                "failed" => Loc.T("⚠️ 测试失败（{0}）：{1}", ShortTime(record.TestedAt), record.Error ?? ""),
-                _ => Loc.T("⚪ 未测试。点「测试」做一次真实调用（含工具调用检测）。")
-            };
-        }
-
-        return record.Tools == "supported"
-            ? Loc.T("✅ 已验证 · 工具调用可用（{0}）", ShortTime(record.TestedAt))
-            : Loc.T("⚠️ 已连通，但工具调用不可用——该模型无法自动游玩（{0}）", ShortTime(record.TestedAt));
-    }
-
-    private static string ShortTime(string? iso)
-    {
-        return DateTimeOffset.TryParse(iso, out var at) ? at.ToLocalTime().ToString("HH:mm") : "";
-    }
-
-    private Task TestModelFromUiAsync(string modelId) => RunModelTestFromUiAsync(modelId);
-
-    /// <summary>The settings page's state line: reused for the per-model test's progress.</summary>
-    private void SetSaveStatus(string text)
-    {
-        if (_saveStatus != null)
-        {
-            _saveStatus.Text = text;
-        }
-    }
-
     /// <summary>
     /// Reads every editor on the settings form into a fresh settings clone. Lives beside the form
     /// that builds those editors: a field added to the form without a harvest line here is a setting
@@ -759,10 +745,17 @@ internal sealed partial class AgentOverlayHost
     private AgentSettings HarvestSettings()
     {
         var current = HarvestQuickSetup(CloneSettings(AgentRuntime.Instance.Settings));
-        for (var i = 0; i < Math.Min(current.Endpoints.Count, _endpointEditors.Count); i++)
+        // Matched by id, not only by position: the settings can change underneath an open form, and a
+        // purely positional match would write one endpoint's editors into another if the list moved.
+        for (var i = 0; i < _endpointEditors.Count; i++)
         {
             var editor = _endpointEditors[i];
-            var endpoint = current.Endpoints[i];
+            var endpoint = MatchById(current.Endpoints, i, editor.Id, item => item.Id);
+            if (endpoint == null)
+            {
+                continue;
+            }
+
             endpoint.Name = editor.Name.Text.Trim();
             endpoint.BaseUrl = editor.Url.Text.Trim();
             endpoint.ApiKey = editor.Key.Text;
@@ -770,10 +763,15 @@ internal sealed partial class AgentOverlayHost
             endpoint.ThinkingProtocol = editor.Protocol.GetItemText(editor.Protocol.Selected);
         }
 
-        for (var i = 0; i < Math.Min(current.Models.Count, _modelEditors.Count); i++)
+        for (var i = 0; i < _modelEditors.Count; i++)
         {
             var editor = _modelEditors[i];
-            var model = current.Models[i];
+            var model = MatchById(current.Models, i, editor.Id, item => item.Id);
+            if (model == null)
+            {
+                continue;
+            }
+
             model.DisplayName = editor.Display.Text.Trim();
             model.Model = editor.ModelName.Text.Trim();
             model.SupportsVision = editor.Vision.ButtonPressed;
@@ -873,8 +871,9 @@ internal sealed partial class AgentOverlayHost
             current.JevModel = _jevModelEdit.Text.Trim();
         }
 
+        // Locale-independent and range-checked; see SettingsInput. An unreadable value keeps the old one.
         if (_jevThresholdEdit != null &&
-            double.TryParse(_jevThresholdEdit.Text.Trim(), out var threshold))
+            SettingsInput.TryParseThreshold(_jevThresholdEdit.Text, out var threshold))
         {
             current.JevConfidenceThreshold = threshold;
         }
@@ -896,60 +895,4 @@ internal sealed partial class AgentOverlayHost
         return SettingsClone.Clone(source);
     }
 
-    private static Control Labeled(string label, Control child)
-    {
-        var row = new HBoxContainer();
-        var text = UiFactory.Wrapped(label, 13);
-        text.CustomMinimumSize = new Vector2(160, 0);
-        text.SizeFlagsHorizontal = Control.SizeFlags.Fill;
-        child.SizeFlagsHorizontal = Control.SizeFlags.ExpandFill;
-        row.AddChild(text);
-        row.AddChild(child);
-        return row;
-    }
-
-    private static OptionButton FillModelCombo(AgentSettings settings, string? selectedId, bool includeEmpty)
-    {
-        var combo = UiFactory.Combo();
-        var selectedIndex = -1;
-        if (includeEmpty)
-        {
-            combo.AddItem(Loc.T("(默认/无)"));
-            combo.SetItemMetadata(0, "");
-            if (string.IsNullOrWhiteSpace(selectedId))
-            {
-                selectedIndex = 0;
-            }
-        }
-
-        var start = includeEmpty ? 1 : 0;
-        if (!includeEmpty && string.IsNullOrWhiteSpace(selectedId))
-        {
-            combo.AddItem(Loc.T("(未选择)"));
-            combo.SetItemMetadata(0, "");
-            selectedIndex = 0;
-            start = 1;
-        }
-
-        for (var i = 0; i < settings.Models.Count; i++)
-        {
-            var model = settings.Models[i];
-            combo.AddItem(model.Label);
-            combo.SetItemMetadata(start + i, model.Id);
-            if (string.Equals(model.Id, selectedId, StringComparison.OrdinalIgnoreCase))
-            {
-                selectedIndex = start + i;
-            }
-        }
-
-        if (selectedIndex < 0 && !string.IsNullOrWhiteSpace(selectedId))
-        {
-            combo.AddItem(Loc.T("(当前绑定不可用：{0})", selectedId));
-            combo.SetItemMetadata(combo.ItemCount - 1, selectedId);
-            selectedIndex = combo.ItemCount - 1;
-        }
-
-        combo.Selected = selectedIndex;
-        return combo;
-    }
 }

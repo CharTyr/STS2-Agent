@@ -34,6 +34,9 @@ internal sealed partial class AgentOverlayHost
     /// <summary>The reasoning switch: whether "thought" turns are shown and recorded at all.</summary>
     private CheckBox? _showThinking;
 
+    /// <summary>The conversation's redraw-only-on-change wrapper. See <see cref="RichLog"/>.</summary>
+    private RichLog? _chatLogView;
+
     /// <summary>
     /// The conversation card: the log, the empty state, and the compose row, as one card inside the
     /// play page's solo section.
@@ -62,6 +65,7 @@ internal sealed partial class AgentOverlayHost
         _chatLog.FitContent = false;
         _chatLog.SizeFlagsHorizontal = Control.SizeFlags.ExpandFill;
         _chatLog.CustomMinimumSize = new Vector2(0, 160);
+        _chatLogView = new RichLog(_chatLog, RichLog.LogAnchor.Bottom);
         column.AddChild(_chatLog);
 
         var settings = AgentRuntime.Instance.Settings;
@@ -156,32 +160,19 @@ internal sealed partial class AgentOverlayHost
         return rows;
     }
 
-    private static void SelectComboByMetadata(OptionButton combo, string? id)
-    {
-        for (var i = 0; i < combo.ItemCount; i++)
-        {
-            if (string.Equals(combo.GetItemMetadata(i).AsString(), id, StringComparison.OrdinalIgnoreCase))
-            {
-                combo.Selected = i;
-                return;
-            }
-        }
-
-        combo.Selected = 0;
-    }
-
     /// <summary>
-    /// Redraws the conversation from the runtime's snapshot and parks the scroll at the newest turn.
+    /// Draws the conversation from the runtime's snapshot.
     /// </summary>
     /// <remarks>
     /// Its own method rather than a block inside the refresh pass: the 800ms panel tick redraws the
-    /// conversation too, and the two callers would otherwise be two copies of this loop. The scroll
-    /// is deferred because the freshly appended BBCode has not been laid out yet, so the bar's maximum
-    /// still describes the previous frame -- assigning to it here would land short of the bottom.
+    /// conversation too, and the two callers would otherwise be two copies of this loop. The entries
+    /// go through <see cref="RichLog"/>, which leaves the label alone when nothing changed and follows
+    /// the newest turn only while the reader is already at the bottom -- the old version cleared,
+    /// redrew and forced the scroll down several times a second, so an earlier turn could not be read.
     /// </remarks>
     private void RefreshChatLog()
     {
-        if (_chatLog == null)
+        if (_chatLogView == null)
         {
             return;
         }
@@ -193,7 +184,7 @@ internal sealed partial class AgentOverlayHost
             _chatEmpty.Visible = history.Count == 0;
         }
 
-        _chatLog.Clear();
+        var entries = new List<string>(ChatTailLimit + 2);
 
         // Two windows hide earlier turns: the runtime's history cap, and this log's smaller drawn
         // tail. Saying so is the difference between a log that starts mid-sentence and one the
@@ -203,7 +194,7 @@ internal sealed partial class AgentOverlayHost
         var omitted = trimmed + start;
         if (omitted > 0)
         {
-            _chatLog.AppendText(Muted(Loc.T("已省略更早的 {0} 条消息", omitted)) + "\n\n");
+            entries.Add(Muted(Loc.T("已省略更早的 {0} 条消息", omitted)) + "\n\n");
         }
 
         for (var index = start; index < history.Count; index++)
@@ -213,7 +204,7 @@ internal sealed partial class AgentOverlayHost
             {
                 if (showThinking)
                 {
-                    _chatLog.AppendText(FormatChatBubble(Loc.T("思考"), UiFactory.Muted, turn.Text, mutedBody: true));
+                    entries.Add(FormatChatBubble(Loc.T("思考"), UiFactory.Muted, turn.Text, mutedBody: true));
                 }
 
                 continue;
@@ -221,11 +212,11 @@ internal sealed partial class AgentOverlayHost
 
             if (turn.Role == "action")
             {
-                _chatLog.AppendText(FormatChatBubble(Loc.T("动作"), UiFactory.Accent, turn.Text, mutedBody: false));
+                entries.Add(FormatChatBubble(Loc.T("动作"), UiFactory.Accent, turn.Text, mutedBody: false));
                 continue;
             }
 
-            _chatLog.AppendText(FormatTurn(turn.Role == "user" ? Loc.T("你") : Loc.T("助手"), turn.Text));
+            entries.Add(FormatTurn(turn.Role == "user" ? Loc.T("你") : Loc.T("助手"), turn.Text));
         }
 
         // The reasoning of the request in flight, drawn after the recorded turns so it reads as what the
@@ -236,27 +227,10 @@ internal sealed partial class AgentOverlayHost
         var liveThought = AgentRuntime.Instance.LiveThought;
         if (showThinking && liveThought.Length > 0)
         {
-            _chatLog.AppendText(FormatChatBubble(Loc.T("思考中"), UiFactory.Muted, liveThought, mutedBody: true));
+            entries.Add(FormatChatBubble(Loc.T("思考中"), UiFactory.Muted, liveThought, mutedBody: true));
         }
 
-        Callable.From(ScrollChatToBottom).CallDeferred();
-    }
-
-    /// <summary>
-    /// Pins the conversation to its newest line. Deferred from <see cref="RefreshChatLog"/>, so it
-    /// re-reads the control and checks it is still in the tree: a rebuild between the two frames frees
-    /// the label this closure captured.
-    /// </summary>
-    private void ScrollChatToBottom()
-    {
-        var log = _chatLog;
-        if (log == null || !log.IsInsideTree())
-        {
-            return;
-        }
-
-        var bar = log.GetVScrollBar();
-        bar.Value = bar.MaxValue;
+        _chatLogView.Show(entries);
     }
 
     /// <summary>
@@ -265,7 +239,7 @@ internal sealed partial class AgentOverlayHost
     /// </summary>
     private static string FormatChatBubble(string speaker, Color tone, string text, bool mutedBody)
     {
-        var body = mutedBody ? Muted(text) : Escape(text);
-        return "[color=#" + tone.ToHtml(false) + "][b]" + Escape(speaker) + "[/b][/color]\n" + body + "\n\n";
+        var body = mutedBody ? Muted(text) : BbText.Escape(text);
+        return BbText.Colored(tone.ToHtml(false), speaker, bold: true) + "\n" + body + "\n\n";
     }
 }
