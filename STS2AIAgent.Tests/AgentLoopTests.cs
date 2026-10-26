@@ -204,6 +204,122 @@ internal static class ActIndexValidatorTests
 
 internal static class AgentLoopTests
 {
+    public static async Task NonCombatOnly_YieldsBeforeWaitModelOrAction()
+    {
+        var settings = AgentSettings.CreateDefault();
+        settings.NonCombatOnlyEnabled = true;
+        var bridge = new FakeBridge();
+        var factory = new ScriptedClientFactory(Array.Empty<LlmCompletion>());
+
+        var result = await new AgentLoop(bridge, factory, () => settings)
+            .PlayOnceAsync(CancellationToken.None);
+
+        Assert.True(result.WaitingForCombat,
+            $"Expected combat wait, got acted={result.Acted ?? "<null>"}, error={result.Error ?? "<null>"}, requests={result.RequestsSpent}.");
+        Assert.True(result.WaitingForGame);
+        Assert.Equal(0, bridge.WaitCalls);
+        Assert.Equal(0, bridge.ActCalls);
+        Assert.Equal(0, factory.Requests.Count);
+    }
+
+    public static async Task NonCombatOnly_AllowsNonCombatActions()
+    {
+        var settings = AgentSettings.CreateDefault();
+        settings.NonCombatOnlyEnabled = true;
+        var bridge = RewardBridge();
+        var factory = new ScriptedClientFactory(new[]
+        {
+            new LlmCompletion
+            {
+                ToolCalls = new[]
+                {
+                    new LlmToolCall
+                    {
+                        Id = "choose-reward",
+                        Name = "act",
+                        ArgumentsJson = "{\"action\":\"choose_reward_card\",\"option_index\":0}"
+                    }
+                }
+            }
+        });
+        var loop = new AgentLoop(bridge, factory, () => settings);
+
+        var result = await loop.PlayOnceAsync(CancellationToken.None);
+
+        Assert.Equal("choose_reward_card", result.Acted);
+        Assert.Equal(1, bridge.ActCalls);
+        Assert.Equal(1, factory.Requests.Count);
+    }
+
+    public static async Task NonCombatOnly_RechecksBeforeDispatchAndKeepsWaiting()
+    {
+        var settings = AgentSettings.CreateDefault();
+        settings.NonCombatOnlyEnabled = true;
+        var bridge = RewardBridge();
+        bridge.ActionSnapshots.Enqueue(
+            """{"state":{"screen":"COMBAT","in_combat":true,"available_actions":["end_turn"]},"available_actions":[{"name":"end_turn","requires_index":false}]}""");
+        var factory = new ScriptedClientFactory(new[]
+        {
+            new LlmCompletion
+            {
+                Usage = new LlmUsage { PromptTokens = 10, CompletionTokens = 2, TotalTokens = 12 },
+                ToolCalls = new[]
+                {
+                    new LlmToolCall
+                    {
+                        Id = "stale-reward-choice",
+                        Name = "act",
+                        ArgumentsJson = "{\"action\":\"choose_reward_card\",\"option_index\":0}"
+                    }
+                }
+            }
+        });
+        var loop = new AgentLoop(bridge, factory, () => settings);
+
+        var result = await loop.PlayOnceAsync(CancellationToken.None);
+
+        Assert.True(result.WaitingForCombat,
+            $"Expected combat wait, got acted={result.Acted ?? "<null>"}, error={result.Error ?? "<null>"}, requests={result.RequestsSpent}.");
+        Assert.Equal(0, bridge.ActCalls);
+        Assert.Equal(1, factory.Requests.Count);
+        Assert.Equal(1, result.RequestsSpent);
+        Assert.Equal(12, result.Usage?.TotalTokens);
+    }
+
+    public static async Task NonCombatOnly_OverlayAndFinalDispatchAreGuarded()
+    {
+        foreach (var screen in new[] { "CARD_SELECTION", "MODAL", "UNKNOWN" })
+        {
+            var settings = AgentSettings.CreateDefault();
+            settings.NonCombatOnlyEnabled = true;
+            var bridge = new FakeBridge { CompactStateJson = "{\"screen\":\"" + screen + "\",\"in_combat\":true}" };
+            var factory = new ScriptedClientFactory(Array.Empty<LlmCompletion>());
+            var result = await new AgentLoop(bridge, factory, () => settings).PlayOnceAsync(CancellationToken.None);
+            Assert.True(result.WaitingForCombat);
+            Assert.Equal(0, factory.Requests.Count);
+        }
+        var config = AgentSettings.CreateDefault();
+        config.NonCombatOnlyEnabled = true;
+        var race = RewardBridge();
+        race.AtDispatchStateJson = """{"screen":"CARD_SELECTION","in_combat":true}""";
+        var client = new ScriptedClientFactory(new[] { new LlmCompletion { ToolCalls = new[] {
+            new LlmToolCall { Id = "race", Name = "act", ArgumentsJson = """{"action":"choose_reward_card","option_index":0}""" }
+        } } });
+        var waited = await new AgentLoop(race, client, () => config).PlayOnceAsync(CancellationToken.None);
+        Assert.True(waited.WaitingForCombat);
+        Assert.Equal(0, race.ActCalls);
+        Assert.Equal(1, waited.RequestsSpent);
+    }
+
+    private static FakeBridge RewardBridge() => new()
+    {
+        CompactStateJson =
+            """{"screen":"REWARD","in_combat":false,"available_actions":["choose_reward_card","skip_reward_cards"],"reward":{"cards":[{"i":0,"line":"Strike"}]}}""",
+        AvailableActionsJson =
+            """[{"name":"choose_reward_card","requires_index":true,"requires_target":false},{"name":"skip_reward_cards","requires_index":false,"requires_target":false}]""",
+        Screen = "REWARD"
+    };
+
     public static async Task PauseAfterModelResponseDoesNotDispatchAct()
     {
         using var cancellation = new CancellationTokenSource();
@@ -1291,6 +1407,8 @@ internal static class AgentLoopTests
 
     private sealed class FakeBridge : IGameBridge
     {
+        public Queue<string> ActionSnapshots { get; } = new();
+
         public int ActCalls { get; private set; }
 
         public int WaitCalls { get; private set; }
@@ -1315,6 +1433,7 @@ internal static class AgentLoopTests
             """{"screen":"COMBAT","available_actions":["play_card","end_turn"],"combat":{"hand":[{"i":0,"line":"Strike","targets":[]}],"enemies":[{"i":0}]}}""";
 
         public string? AfterActCompactStateJson { get; set; }
+        public string? AtDispatchStateJson { get; set; }
 
         public string AvailableActionsJson { get; set; } =
             """[{"name":"play_card","requires_index":true,"requires_target":false}]""";
@@ -1338,6 +1457,11 @@ internal static class AgentLoopTests
 
         public Task<string> GetActionSnapshotJsonAsync(CancellationToken cancellationToken)
         {
+            if (ActionSnapshots.Count > 0)
+            {
+                return Task.FromResult(ActionSnapshots.Dequeue());
+            }
+
             // The same two halves the real bridge reads in one game-thread turn.
             using var state = JsonDocument.Parse(CompactStateJson);
             using var actions = JsonDocument.Parse(AvailableActionsJson);
@@ -1359,8 +1483,10 @@ internal static class AgentLoopTests
             int? y,
             string? tool,
             CancellationToken cancellationToken,
-            bool rawState = false)
+            bool rawState = false,
+            Action<string>? validateState = null)
         {
+            validateState?.Invoke(AtDispatchStateJson ?? CompactStateJson);
             ActCalls++;
             LastAction = action;
             LastX = x;

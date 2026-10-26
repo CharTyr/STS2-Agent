@@ -27,8 +27,8 @@ Read `map.nodes[]` for the whole graph and `map.options[]` for what may be picke
 
 Read `rest.options[]`: `option_id` says what each entry does and `enabled` says whether it can be taken now — `SMITH` is disabled when nothing can be upgraded. Raw `/state` spells that flag with an `is_` prefix.
 
-1. **Heal when the current number in `run.hp` is below about 50% of the max**, or whenever the next node is an `Elite` or the boss. The exception is a smith that upgrades the one card the deck is built around.
-2. **Smith when healthy and the upgrade is real.** Upgrading a starter card is usually worth less than the health; upgrading a card played every combat is worth more.
+1. **Compare healing with a specific upgrade.** Low health (roughly below 45-50%) usually favors healing, but inspect the actual next reachable fights and expected damage. A nearby boss alone does not make HEAL mandatory; do not guess proximity from floor number.
+2. **When health covers the next fights, consider SMITH on a core card.** Read `get_game_data_item`; use `upgrade.description`, `upgrade.cost` and `upgrade.vars` only when `upgrade.status` is `available`. An unavailable preview is not a maxed card. Compare with current values without inventing cost reductions. Heal when the survival margin is inadequate.
 3. **`MEND`, `LIFT`, `COOK`, `DIG`, `HATCH` and `CLONE` are relic- or run-specific.** Take them when enabled and the heal is not urgent; their `description` states the effect, and an unused rest site is a wasted one.
 4. **A rest option that needs a target** (`requires_target` true) picks a player, not a card: use that option's `valid_target_indices` (also written into its `line`) to choose the teammate who needs it — the lowest `current_hp` relative to `max_hp` in `run.players[]` — and never pass an index from another array. `valid_target_player_ids` is not on the compact option.
 5. **Never leave a rest site unspent.** There is no benefit to `proceed` while an enabled option remains.
@@ -42,6 +42,11 @@ Read `shop.cards[]`, `shop.relics[]`, `shop.potions[]` and `shop.remove`. **`aff
 3. **Buy a potion only into an empty slot.** Compact `run.potions[].line` reads `N: 空` when the slot is empty. With every slot full, `buy_potion` will not stay available, and buying to discard wastes gold.
 4. **Keep a reserve.** Spending `run.gold` to zero means the next shop cannot sell the card removal wanted after a bad act. Leave roughly 75 gold behind unless the purchase wins the act outright.
 5. **`on_sale` is a discount, not a reason.** A discounted card you would not otherwise take is still a card you did not want.
+6. **Buy to fill a deck gap.** Compare energy, draw, defense and setup reliability before adding another attack. Count copies from the grouped deck lines; an X-cost duplicate does not solve an energy bottleneck.
+
+## Card rewards: take or skip
+
+Read the whole deck and count multiplicities, not the number of grouped lines. Compare every card with skipping: take it only when it improves the next fights, fills a missing role, or strengthens a coherent plan. More synergy is not automatically more value. A large deck can work, but redundant attacks can dilute setup and defense. Never force a fixed deck-size target. Use `collect_rewards_and_proceed` to skip when `reward.can_proceed` is true and the offered cards do not improve the deck.
 
 ## Event options: how to choose
 
@@ -73,10 +78,10 @@ Read `run.potions[]` for `usable`, `target` and `targets`. Usage is folded into 
 Stated as a check order rather than a heuristic, because this is the decision the loop makes most often.
 
 1. **Read `combat.action_readiness` first.** It is the same field the mod's own executor gates on, so it decides "act or wait" before any card choice does.
-2. **If `combat.end_turn_will_kill_player` is true, do not end the turn.** Play a block or remove the threat instead.
-3. **Then read `combat.lethal_risks[]`.** If a lethal line exists, take it — a fight that ends this turn costs no health.
+2. **Read `combat.lethal_risks[]` before spending energy.** For `sandpit_countdown`, the counter is on The Insatiable and targets you. Each enemy turn start decrements it; zero kills regardless of HP, block or Buffer. FRANTIC_ESCAPE raises the counter and buys time. At counter 1, play it before other actions consume its energy.
+3. **If `combat.end_turn_will_kill_player` is true, do not end the turn.** Address the stated cause: block helps damage, not Sandpit. Use escape, draw, potions or a confirmed kill; if no rescue is possible, stop for player input. The flag describes danger to YOU, not a lethal attack against an enemy.
 4. **Otherwise prefer the play that minimises `combat.enemies[].intents[].total_damage` reaching you**, weighing block against killing the attacker. Killing the enemy that deals the most damage is usually better than blocking it, because it also stops the turn after this one.
-5. **Spend energy down before ending the turn** unless holding it has a purpose (an X-cost card in hand, or a card that scales with energy). Unspent energy is a wasted turn.
+5. **Spend remaining energy only after reserving survival costs.** Hand lines and `values[].preview` already include live player modifiers such as Strength: never add them again. Check target multipliers separately. Complete needed draws before BATTLE_TRANCE blocks further drawing that turn.
 6. **Do not target an ally with an unsupported card.** If the payload marks it unplayable rather than guessing a target, that is the answer.
 
 ## Co-op: dividing the work

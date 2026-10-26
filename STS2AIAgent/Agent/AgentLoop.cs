@@ -1,6 +1,7 @@
 using System.Text.Json;
 using STS2AIAgent.Config;
 using STS2AIAgent.Llm;
+using STS2AIAgent.Localization;
 using STS2AIAgent.Server;
 
 namespace STS2AIAgent.Agent;
@@ -150,9 +151,21 @@ internal sealed partial class AgentLoop
     public async Task<AgentTurnResult> PlayOnceAsync(CancellationToken cancellationToken, Action<string>? checkState = null, Action<string>? reportPhase = null, Action<double?>? observeDecider = null)
     {
         reportPhase?.Invoke(PlayPhases.ReadingState);
-        if (checkState != null) checkState(await _bridge.GetCompactStateJsonAsync(cancellationToken));
         var settings = _settings();
-        var resolved = settings.ResolvePlayModel();
+        if (settings.NonCombatOnlyEnabled)
+        {
+            var initialStateJson = await _bridge.GetCompactStateJsonAsync(cancellationToken);
+            checkState?.Invoke(initialStateJson);
+            if (NonCombatOnlyPolicy.IsCombatSnapshot(initialStateJson))
+            {
+                return WaitForCombat();
+            }
+        }
+        else if (checkState != null)
+        {
+            checkState(await _bridge.GetCompactStateJsonAsync(cancellationToken));
+        }
+
         reportPhase?.Invoke(PlayPhases.WaitingForGame);
         var actionable = await _bridge.WaitUntilActionableAsync(TimeSpan.FromSeconds(20), cancellationToken);
         if (!actionable)
@@ -169,6 +182,14 @@ internal sealed partial class AgentLoop
 
         var stateJson = await _bridge.GetCompactStateJsonAsync(cancellationToken);
         checkState?.Invoke(stateJson);
+        settings = _settings();
+        if (settings.NonCombatOnlyEnabled && NonCombatOnlyPolicy.IsCombatSnapshot(stateJson))
+        {
+            return WaitForCombat();
+        }
+
+        var escape = await TryEscapeSandpitAsync(stateJson, cancellationToken, checkState, reportPhase);
+        if (escape != null) return escape;
 
         // Dual-layer mode: when a decider is wired in, Jev picks the concrete action and the LLM only
         // plans. A confident-enough Jev answer is executed here and the LLM prompt below never runs;
@@ -187,7 +208,7 @@ internal sealed partial class AgentLoop
         {
             reportPhase?.Invoke(PlayPhases.AskingJev);
             pending = await TryDecideWithJevAsync(decider, store, cancellationToken, checkState, reportPhase, observeDecider);
-            if (pending.Acted != null || pending.Error != null)
+            if (pending.Acted != null || pending.Error != null || pending.WaitingForCombat)
             {
                 return pending;
             }
@@ -196,9 +217,25 @@ internal sealed partial class AgentLoop
         // The fallback half of the same dual-layer engine: when Jev could not commit, the slow model
         // still works from the planner's standing strategy instead of re-deriving one from the frame.
         var strategy = dualLayerOn && _strategyStore is { } strategyStore ? strategyStore.Current : null;
+        var resolved = settings.ResolvePlayModel();
         return await PlayWithModelAsync(settings, resolved, stateJson, pending, cancellationToken, checkState, reportPhase,
             playInstruction, strategy);
     }
+
+    internal static AgentTurnResult WaitForCombat(AgentTurnResult? spent = null) => new()
+    {
+        Reasoning = Loc.T("非战斗模式已启用；Agent 保持只读并等待战斗结束。"),
+        WaitingForGame = true,
+        WaitingForPlayer = true,
+        WaitingForCombat = true,
+        ToolRounds = spent?.ToolRounds ?? 0,
+        Usage = spent?.Usage,
+        RequestsSpent = spent?.RequestsSpent ?? 0,
+        DangerScore = spent?.DangerScore,
+        JevElapsedMilliseconds = spent?.JevElapsedMilliseconds,
+        OfferedOptionIds = spent?.OfferedOptionIds,
+        StrategyUpdatedAt = spent?.StrategyUpdatedAt
+    };
 
     public async Task<string> TestConnectionAsync(CancellationToken cancellationToken)
     {
@@ -374,6 +411,9 @@ internal sealed partial class AgentLoop
                     // Acknowledge queued guidance only at the first primary provider dispatch.
                     // Vision/canceled preparation did not consume it; later rounds must not consume
                     // another instruction. The runtime callback is an in-memory, nonthrowing dequeue.
+                    if (allowAct && _settings().NonCombatOnlyEnabled
+                        && NonCombatOnlyPolicy.IsCombatSnapshot(await _bridge.GetCompactStateJsonAsync(cancellationToken)))
+                        throw new NonCombatOnlyYieldException();
                     if (round == 0) onFirstPrimaryRequest?.Invoke();
                     requestsSpent++;
                     completion = await client.CompleteAsync(request, cancellationToken);
@@ -566,6 +606,11 @@ internal sealed partial class AgentLoop
                 RequestsSpent = requestsSpent
             };
         }
+        catch (NonCombatOnlyYieldException ex)
+        {
+            ex.Receipt = Receipt();
+            throw;
+        }
         catch (OperationCanceledException ex) when (cancellationToken.IsCancellationRequested)
         {
             throw new AgentTurnCanceledException(Receipt(), ex, cancellationToken);
@@ -738,7 +783,8 @@ internal sealed partial class AgentLoop
         string argumentsJson,
         CancellationToken cancellationToken,
         Action<string>? checkState = null,
-        Action<string, string>? onAccepted = null)
+        Action<string, string>? onAccepted = null,
+        bool requireSandpitEscape = false)
     {
         string? acceptedAction = null;
         string? acceptedResponse = null;
@@ -756,6 +802,10 @@ internal sealed partial class AgentLoop
             // between two of them -- which is how the validator could judge an index against a
             // payload the legality check never saw.
             var snapshotJson = await _bridge.GetActionSnapshotJsonAsync(cancellationToken);
+            if (_settings().NonCombatOnlyEnabled && NonCombatOnlyPolicy.IsCombatSnapshot(snapshotJson))
+            {
+                throw new NonCombatOnlyYieldException();
+            }
             using var snapshot = ParseArgs(snapshotJson);
             var state = ReadSnapshotPart(snapshot, "state", JsonValueKind.Object);
             var descriptors = ReadSnapshotPart(snapshot, "available_actions", JsonValueKind.Array);
@@ -808,6 +858,8 @@ internal sealed partial class AgentLoop
                 return (null, json, null, false, indexError.Message);
             }
 
+            ValidateSandpitDispatch(compactJson, action, cardIndex, requireSandpitEscape);
+
             cancellationToken.ThrowIfCancellationRequested();
             var result = await _bridge.ActAsync(
                 action,
@@ -818,7 +870,13 @@ internal sealed partial class AgentLoop
                 y,
                 tool,
                 cancellationToken,
-                rawState);
+                rawState,
+                latest =>
+                {
+                    if (_settings().NonCombatOnlyEnabled && NonCombatOnlyPolicy.IsCombatSnapshot(latest))
+                        throw new NonCombatOnlyYieldException();
+                    ValidateSandpitDispatch(latest, action, cardIndex, requireSandpitEscape);
+                });
             if (AgentErrorEnvelope.TryReadError(result, out var bridgeError))
             {
                 return (null, result, null, false, bridgeError ?? "act failed");
@@ -851,6 +909,10 @@ internal sealed partial class AgentLoop
             var settledState = await _bridge.GetCompactStateJsonAsync(cancellationToken);
             checkState?.Invoke(settledState);
             return (action, result, NoProgressPolicy.Fingerprint(settledState), false, null);
+        }
+        catch (NonCombatOnlyYieldException)
+        {
+            throw;
         }
         catch (AutoPlayStoppedException)
         {

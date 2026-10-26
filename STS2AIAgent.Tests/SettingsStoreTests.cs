@@ -23,7 +23,7 @@ internal static class SettingsStoreTests
         settings.HasSeenFirstRunGuide = true;
         settings.ProactiveChatEnabled = true;
         settings.ProactiveChatTone = ProactiveChatTones.Terse;
-        ModelRoleProbe.Upsert(settings, ModelRoleProbe.FromSuccess(ModelRoleNames.Play, settings.TryResolvePlayModel()!));
+        ModelRoleProbe.Upsert(settings, ModelRoleProbe.FromSuccess(ModelRoleNames.Play, settings.TryResolvePlayModel()!, tools: true));
         store.Save(settings);
 
         var loaded = store.Load();
@@ -54,7 +54,7 @@ internal static class SettingsStoreTests
         settings.Endpoints[0].ApiKey = "sk-test";
         settings.PlayModelId = settings.Models[0].Id;
         var resolved = settings.TryResolvePlayModel()!;
-        var record = ModelRoleProbe.FromSuccess(ModelRoleNames.Play, resolved);
+        var record = ModelRoleProbe.FromSuccess(ModelRoleNames.Play, resolved, tools: true);
         record.Fingerprint = record.Fingerprint!.ToLowerInvariant();
         ModelRoleProbe.Upsert(settings, record);
         new SettingsStore(path).Save(settings);
@@ -287,6 +287,7 @@ internal static class SettingsStoreTests
         source.JevApiKey = "jev-clone";
         source.JevModel = "jev-clone-model";
         source.JevConfidenceThreshold = 0.62;
+        source.NonCombatOnlyEnabled = true;
 
         var clone = SettingsClone.Clone(source);
 
@@ -315,6 +316,7 @@ internal static class SettingsStoreTests
         Assert.Equal("jev-clone", clone.JevApiKey);
         Assert.Equal("jev-clone-model", clone.JevModel);
         Assert.Equal(0.62, clone.JevConfidenceThreshold);
+        Assert.True(clone.NonCombatOnlyEnabled);
     }
 
     public static void Clone_IsDeep()

@@ -82,7 +82,7 @@ ROUTE_RESPONSE_FIELDS = {
     "/session/control": ("phase", "play_running", "play_phase"),
     "/mcp/control": ("mcp_enabled",),
     "/teammate/control": ("phase", "play_running", "play_phase", "companion_auto_play"),
-    "/companion/control": ("phase", "settings_applied", "dual_layer_coop_enabled"),
+    "/companion/control": ("phase", "settings_applied", "play_settings_applied", "dual_layer_coop_enabled"),
     # The source parser checks the settings-only projection; the legacy control response
     # with only phase is still explicitly modeled as a separate oneOf branch.
     "/companion/message": ("reply",),
@@ -670,7 +670,7 @@ def build_paths(
         },
         "/companion/control": {
             "post": ordinary_operation(
-                "Pause/resume the companion, or atomically update its allowlisted Jev settings.",
+                "Pause/resume the companion, or apply its allowlisted play and Jev settings after pausing.",
                 {"oneOf": [ref("CompanionControlResponseData"), ref("CompanionSettingsResponseData")]},
                 parameters=[companion_header],
                 request_body=json_body({"oneOf": [ref("SessionControlRequest"), ref("CompanionSettingsRequest")]}),
@@ -836,10 +836,28 @@ def build_components(
                 component_names,
             ),
             "CompanionControlResponseData": object_schema([CSharpProperty("phase", "string")], component_names),
+            "CompanionPlaySettings": {
+                "type": "object", "writeOnly": True,
+                "description": "Host play configuration only; instance role, overlay and MCP remain local. Keys are never returned.",
+                "properties": {
+                    "Endpoints": {"type": "array", "maxItems": 16, "items": {"type": "object", "additionalProperties": True}},
+                    "Models": {"type": "array", "maxItems": 32, "items": {"type": "object", "additionalProperties": True}},
+                    **{name: {"type": ["string", "null"]} for name in ("ConversationModelId", "PlayModelId", "VisionModelId")},
+                    "RoleTests": {"type": "array", "maxItems": 3, "items": {"type": "object", "additionalProperties": True}},
+                    "ModelTests": {"type": "array", "maxItems": 32, "items": {"type": "object", "additionalProperties": True}},
+                    "NonCombatOnlyEnabled": {"type": "boolean"},
+                    **{name: {"type": ["integer", "null"], "minimum": 1} for name in ("MaxSessionRequests", "MaxSessionTokens")},
+                    "LlmRequestTimeoutSeconds": {"type": ["integer", "null"], "minimum": 1, "maximum": 3600},
+                    "ReplyLanguage": {"enum": ["auto", "zh", "en"]},
+                    "ProactiveChatEnabled": {"type": "boolean"}, "ProactiveChatTone": {"type": "string", "maxLength": 128},
+                },
+                "additionalProperties": True,
+            },
             "CompanionSettingsPatch": {
                 "type": "object", "description": "Token-protected settings-only allowlist; never returned in responses.",
                 "properties": {
                     "dual_layer_coop_enabled": {"type": "boolean"},
+                    "play_settings": {"oneOf": [ref("CompanionPlaySettings"), {"type": "null"}]},
                     "jev_base_url": {"type": "string", "maxLength": 2048},
                     "jev_api_key": {"type": "string", "maxLength": 4096, "writeOnly": True},
                     "jev_model": {"type": "string", "maxLength": 256},
@@ -854,7 +872,7 @@ def build_components(
                 "required": ["settings"], "additionalProperties": False,
             },
             "CompanionSettingsResponseData": object_schema(
-                [CSharpProperty("phase", "string"), CSharpProperty("settings_applied", "bool"), CSharpProperty("dual_layer_coop_enabled", "bool")],
+                [CSharpProperty("phase", "string"), CSharpProperty("settings_applied", "bool"), CSharpProperty("play_settings_applied", "bool"), CSharpProperty("dual_layer_coop_enabled", "bool")],
                 component_names,
             ),
             "CompanionJevSnapshot": {

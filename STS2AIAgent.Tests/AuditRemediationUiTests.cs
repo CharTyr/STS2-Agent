@@ -38,8 +38,9 @@ internal static class AuditRemediationUiTests
         Assert.Equal(original.McpEnabled, next.McpEnabled);
         Assert.Equal(original.MaxSessionRequests, next.MaxSessionRequests);
         Assert.Equal(original.ConversationModelId, next.ConversationModelId);
-        Assert.True(patch.HasSameValues(CompanionSettingsPatch.From(next)));
-        Assert.Equal(patch.Fingerprint(), CompanionSettingsPatch.From(next).Fingerprint());
+        var legacy = JsonSerializer.Deserialize<CompanionSettingsPatch>(JsonSerializer.Serialize(patch))!;
+        Assert.True(patch.HasSameValues(legacy));
+        Assert.Equal(patch.Fingerprint(), legacy.Fingerprint());
     }
 
     public static void CompanionPatchRejectsUnsafeValuesBeforeMutation()

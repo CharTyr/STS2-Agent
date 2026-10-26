@@ -1,6 +1,41 @@
 # Changelog
 
+## Unreleased
+
+### First-run and companion reliability
+
+- Race follow-up: explicit pause takes precedence over a pending settings auto-resume; stopping/cancelled updates cannot restart the loop. Align companion endpoint ID matching with the host's case-insensitive bindings.
+- Serialize and revalidate companion settings acknowledgements against the current connection and fingerprint. Discard old acknowledgements, coalesce queued saves to the latest desired snapshot, and push edits made during startup once the verified companion connection is available. Add 12 more runtime/transport regressions.
+
+- Debug follow-up: discard model tests that finish after the model/key/endpoint changes, preserve explicit thinking/protocol choices when rotating a key, and let an already-faulted play loop acknowledge pause so corrected settings can be applied. Keep the original loop failure observable for diagnostics.
+- Compile model verification and companion settings partials directly in an offline runtime harness. Controlled provider responses and submitted-action barriers cover cancellation, single-flight probes, stale results, authentication/tool failures, pause/apply/resume, failed persistence and fault recovery; this does not replace the game build or live co-op acceptance.
+
+- Add provider quick setup, a visible 30-request trial for new installations, and cancellable model testing (45-second deadline). Preserve existing unlimited choices. Require verified tool calling for auto-play.
+- Synchronize model, key, budgets and non-combat-only settings to the running companion with explicit acknowledgement and a pause before applying changes.
+- Accept both release manifest names; upgrade only unchanged managed companion copies. Preserve manual/edited installations.
+- Guard identified local co-op saves against native loading under a mismatched player identity. Add diagnostics file saving and a DLL build fingerprint. Update two-tab setup and usage instructions.
+- Game-dependent compilation and dual-window acceptance remain required before publishing this unreleased work.
+
 > Release attribution is recorded against tags or release commits. Post-tag maintenance is listed separately; current validation limits are maintained in [PRODUCT_PLAN_CURRENT.md](https://github.com/CharTyr/STS2-Agent/blob/main/PRODUCT_PLAN_CURRENT.md).
+
+### Integrated development work
+
+- Integrate main's native power display amounts with dev's Sandpit/upgrade/DeepSeek fixes and Windows prompt normalization; include party inventories from #210 with unavailable-vs-empty and melted-relic semantics.
+- Validate and atomically stage the actual loaded mod for the offline companion. Refuse partial or differing local copies without overwriting user files. Report initialization failures and the real API port through a host-selected startup handshake; bound discovery by one total deadline and reconnect a live child without spawning another.
+- Discover local HTTP instances for Python MCP by verified PID/role/port hints; support `STS2_API_INSTANCE` and reject ambiguous selection. Explicit base URLs retain priority.
+- Add an endpoint thinking-protocol selector for proxy/alias compatibility. Invalidate verification after protocol edits, remove the SDK-only extra_body wrapper from raw HTTP, and stop treating authentication or unrelated request errors as lack of tool support.
+- Complete #202's non-combat-only guards with authoritative compact combat ownership, model/strategy request checks and final dispatch checks for companion shortcuts; retain accepted-action accounting. Compact view version is 12.
+- Port #203's model-backed map, explicit reward-screen potion discard, non-potion-first bulk rewards and detached upgrade selection previews. Preserve current native selection handling and avoid the old live-card mutation implementation.
+- Stop interpreting incidental numbers in failure messages as HTTP status codes; keep legacy session loads case-compatible on case-sensitive filesystems.
+
+- Avoid a Windows mod-load test deadlock by invoking the game launcher in the same PowerShell session; keep reward-guidance assertions aligned with the new take-or-skip advice.
+- Validate Sandpit risk and automatic escape identity inside the shared execution lease; cancel a stale escape when the hand or countdown changes. Localize Sandpit rules and stop messages. Distinguish unavailable upgrade previews from maxed cards and refresh the detached copy's own variables before formatting its description.
+- Detect enemy-owned Sandpit countdowns targeting the local player. Built-in autoplay prioritizes a playable Frantic Escape at the last countdown and stops before a lethal end turn if no escape is playable; the dispatch guard rechecks the latest snapshot.
+- Include power rules and structured live card values in combat context, and build card upgrade previews from an upgraded detached copy. Reward, rest and shop guidance now uses actual deck needs and upgrade data.
+- Disable thinking only for official DeepSeek connectivity and required-tool capability probes; ordinary play requests retain the configured thinking mode.
+
+- **附魔界面不再空选确认后原地打转。** 附魔的原生偏好允许选 0 张，但游戏的确认按钮会忽略空选择，Agent 以前会反复确认却毫无进展。现在附魔界面的 `selection.min_select` 至少为 1，未选牌时不公开 `confirm_selection`（直接请求返回 409）；选 1 到 `max_select` 张都可提前确认，其它选牌界面不受影响。（#205）
+- **原始 `/state` 新增两个只读数值。** `run.card_rarity_odds_value` 是全局的稀有卡保底偏移（卡牌奖励没出稀有就上涨、出了稀有就重置为 -0.05，也叠加到商店卡牌的稀有率；游戏界面不显示它）；`run.card_shop_removals_used` 是本局已用的商店删牌次数。两者只出现在原始 `/state`，不进入 compact `agent_view`。（#204）
 
 ## v0.16.2 - 2026-09-24
 

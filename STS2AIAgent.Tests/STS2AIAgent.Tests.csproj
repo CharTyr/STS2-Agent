@@ -8,10 +8,20 @@
     <AssemblyName>STS2AIAgent.Tests</AssemblyName>
   </PropertyGroup>
   <ItemGroup>
+    <Compile Include="../STS2AIAgent/Multiplayer/CompanionSettingsSynchronizer.cs" Link="Multiplayer/CompanionSettingsSynchronizer.cs" />
+    <Compile Include="../STS2AIAgent/Agent/AgentRuntime.ModelTest.cs" Link="Agent/AgentRuntime.ModelTest.cs" />
+    <Compile Include="../STS2AIAgent/Agent/AgentRuntime.CompanionSettings.cs" Link="Agent/AgentRuntime.CompanionSettings.cs" />
+    <Compile Include="../STS2AIAgent/Multiplayer/CompanionPlaySettings.cs" Link="Multiplayer/CompanionPlaySettings.cs" />
+    <Compile Include="../STS2AIAgent/Multiplayer/CompanionModStager.cs" Link="Multiplayer/CompanionModStager.cs" />
+    <Compile Include="../STS2AIAgent/Multiplayer/CompanionDiscovery.cs" Link="Multiplayer/CompanionDiscovery.cs" />
+    <Compile Include="../STS2AIAgent/Server/InstanceEndpointFile.cs" Link="Server/InstanceEndpointFile.cs" />
+    <Compile Include="../STS2AIAgent/Server/CompanionStartupFile.cs" Link="Server/CompanionStartupFile.cs" />
     <Compile Include="..\STS2AIAgent\Agent\AutoPlaySession.cs" Link="Agent\AutoPlaySession.cs" />
     <Compile Include="..\STS2AIAgent\Game\ReflectedMemberResolver.cs" Link="Game\ReflectedMemberResolver.cs" />
     <Compile Include="..\STS2AIAgent\Game\StateBuildTiming.cs" Link="Game\StateBuildTiming.cs" />
+    <Compile Include="..\STS2AIAgent\Game\PartyInventoryReader.cs" Link="Game\PartyInventoryReader.cs" />
     <Compile Include="..\STS2AIAgent\Agent\AutoPlayRecovery.cs" Link="Agent\AutoPlayRecovery.cs" />
+    <Compile Include="..\STS2AIAgent\Agent\NonCombatOnlyPolicy.cs" Link="Agent\NonCombatOnlyPolicy.cs" />
     <!--
       The streamed reasoning buffer. It is Godot-free on purpose: the two rules that matter for it
       (the player's switch gates what is stored, and a completed turn leaves nothing behind) cannot be
@@ -54,6 +64,8 @@
     <Compile Include="..\STS2AIAgent\Agent\AgentLoop.Arguments.cs" Link="Agent\AgentLoop.Arguments.cs" />
     <Compile Include="..\STS2AIAgent\Agent\AgentLoop.Probes.cs" Link="Agent\AgentLoop.Probes.cs" />
     <Compile Include="..\STS2AIAgent\Agent\AgentLoop.Decision.cs" Link="Agent\AgentLoop.Decision.cs" />
+    <Compile Include="..\STS2AIAgent\Agent\AgentLoop.Sandpit.cs" Link="Agent\AgentLoop.Sandpit.cs" />
+    <Compile Include="..\STS2AIAgent\Agent\SandpitSafetyPolicy.cs" Link="Agent\SandpitSafetyPolicy.cs" />
     <Compile Include="..\STS2AIAgent\Agent\PlayPhases.cs" Link="Agent\PlayPhases.cs" />
     <Compile Include="..\STS2AIAgent\Agent\AgentTurnCanceledException.cs" Link="Agent\AgentTurnCanceledException.cs" />
     <Compile Include="..\STS2AIAgent\Agent\CompletionErrors.cs" Link="Agent\CompletionErrors.cs" />
@@ -95,6 +107,7 @@
     <Compile Include="..\STS2AIAgent\Game\UnlockConfirmResolutionPolicy.cs" Link="Game\UnlockConfirmResolutionPolicy.cs" />
     <Compile Include="..\STS2AIAgent\Game\FtueModalPolicy.cs" Link="Game\FtueModalPolicy.cs" />
     <Compile Include="..\STS2AIAgent\Game\CrystalSphereSettlePolicy.cs" Link="Game\CrystalSphereSettlePolicy.cs" />
+    <Compile Include="..\STS2AIAgent\Game\CardGridSelectionPolicy.cs" Link="Game\CardGridSelectionPolicy.cs" />
     <Compile Include="..\STS2AIAgent\Game\RewardChoicePolicy.cs" Link="Game\RewardChoicePolicy.cs" />
     <Compile Include="..\STS2AIAgent\Game\RewardSkipScope.cs" Link="Game\RewardSkipScope.cs" />
     <Compile Include="..\STS2AIAgent\Game\MenuTransitionPolicy.cs" Link="Game\MenuTransitionPolicy.cs" />
@@ -120,6 +133,7 @@
       is refused, no failure leaves it held) rather than a copy of them.
     -->
     <Compile Include="..\STS2AIAgent\Game\ActionExecutionGate.cs" Link="Game\ActionExecutionGate.cs" />
+    <Compile Include="..\STS2AIAgent\Game\CardUpgradePreviewPolicy.cs" Link="Game\CardUpgradePreviewPolicy.cs" />
     <Compile Include="..\STS2AIAgent\Server\JsonHelper.cs" Link="Server\JsonHelper.cs" />
     <Compile Include="..\STS2AIAgent\Server\HealthRoleData.cs" Link="Server\HealthRoleData.cs" />
     <Compile Include="..\STS2AIAgent\Server\EventPollingCoordinator.cs" Link="Server\EventPollingCoordinator.cs" />

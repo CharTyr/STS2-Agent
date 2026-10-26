@@ -81,9 +81,14 @@ internal sealed partial class AgentOverlayHost
         var addEndpoint = UiFactory.Button(Loc.T("添加端点"), AddEndpoint);
         var addModel = UiFactory.Button(Loc.T("添加模型"), AddModel);
         var save = UiFactory.Button(Loc.T("保存设置"), SaveSettingsFromUi, UiFactory.ButtonKind.Primary);
-        var test = UiFactory.Button(Loc.T("测试连接"), () => _ = TestConnectionAsync());
+        var test = UiFactory.Button(Loc.T("检测游玩模型"), () => _ = TestConnectionAsync());
+        _footerModelTest = test;
+        _cancelModelTest = UiFactory.Button(Loc.T("取消检测"), () => _modelTestCancellation?.Cancel());
+        _addEndpointButton = addEndpoint;
+        _addModelButton = addModel;
         page.AddChild(UiFactory.Row(addEndpoint, addModel));
-        page.AddChild(UiFactory.Row(save, test));
+        page.AddChild(save);
+        page.AddChild(UiFactory.Row(test, _cancelModelTest));
         RebuildSettingsForm();
         return page;
     }
@@ -344,6 +349,12 @@ internal sealed partial class AgentOverlayHost
             child.QueueFree();
         }
 
+        _quickProvider = null;
+        _quickDirty = false;
+        _conversationCombo = null;
+        _visionCombo = null;
+        _maxTokensEdit = _maxRequestsEdit = _llmTimeoutEdit = _hotkeyEdit = null;
+        _modelTestButtons.Clear();
         _endpointEditors.Clear();
         _modelEditors.Clear();
         _settingsAnchors.Clear();
@@ -359,7 +370,8 @@ internal sealed partial class AgentOverlayHost
         _settingsLoadNotice = UiFactory.Wrapped(FormatSettingsNotice(), 12);
         _settingsBody.AddChild(_settingsLoadNotice);
         AddSettingsSection("first-run", Loc.T("首次配置"));
-        _settingsBody.AddChild(UiFactory.Wrapped(Loc.T("四步上手：① 在「端点」填接口地址和 Key（本地 Ollama / LM Studio 可留空 Key）→ ② 在「模型」添加模型并绑定端点 → ③ 点模型卡片上的「测试」做一次真实调用（含工具调用检测），通过会显示 ✅ → ④ 在「模型绑定」选主模型并保存。然后切到「游玩」页点「开始自动游玩」。想玩双人：游玩页顶部切到「多人」，邀请 AI 队友。")));
+        if (!_showAdvancedValue) _settingsBody.AddChild(BuildQuickSetupCard(settings));
+        if (_showAdvancedValue) _settingsBody.AddChild(UiFactory.Wrapped(Loc.T("四步上手：① 在「端点」填接口地址和 Key（本地 Ollama / LM Studio 可留空 Key）→ ② 在「模型」添加模型并绑定端点 → ③ 点模型卡片上的「测试」做一次真实调用（含工具调用检测），通过会显示 ✅ → ④ 在「模型绑定」选主模型并保存。然后切到「游玩」页点「开始自动游玩」。想玩双人：游玩页顶部切到「多人」，邀请 AI 队友。")));
         _testNotice = UiFactory.Wrapped(Loc.T("「测试」是对该模型的真实调用：先连通，再验证它会不会调用工具——不会调用工具的模型无法自动游玩。页脚的「测试连接」测的是当前主模型。"), 12);
         _settingsBody.AddChild(_testNotice);
         _conversationTest = UiFactory.Wrapped(ModelRoleProbe.FormatLine(firstRun.Conversation), 12);
@@ -399,6 +411,8 @@ internal sealed partial class AgentOverlayHost
             UiFactory.Label(Loc.T("只改这个窗口的配色，保存后立即生效。"), UiFactory.FontCaption, muted: true));
         _settingsBody.AddChild(appearanceCard);
 
+        if (_showAdvancedValue)
+        {
         AddSettingsSection("endpoints", Loc.T("端点"));
         for (var i = 0; i < settings.Endpoints.Count; i++)
         {
@@ -415,11 +429,13 @@ internal sealed partial class AgentOverlayHost
         _conversationCombo = FillModelCombo(settings, settings.ConversationModelId, includeEmpty: false);
         _settingsBody.AddChild(Labeled(Loc.T("主模型（对话与游玩）"), _conversationCombo));
         WatchCombo(_conversationCombo);
+        }
         _showAdvanced = UiFactory.Check(Loc.T("显示高级选项"), _showAdvancedValue);
         _showAdvanced.Toggled += on =>
         {
-            _showAdvancedValue = on;
             FlushSettingsIfDirty();
+            if (_settingsDirty) { _showAdvanced.SetPressedNoSignal(_showAdvancedValue); return; }
+            _showAdvancedValue = on;
             RebuildSettingsForm();
         };
         _settingsBody.AddChild(_showAdvanced);
@@ -488,6 +504,9 @@ internal sealed partial class AgentOverlayHost
         finally
         {
             _rebuildingSettings = false;
+        if (_addEndpointButton != null) _addEndpointButton.Visible = _showAdvancedValue;
+        if (_addModelButton != null) _addModelButton.Visible = _showAdvancedValue;
+        RefreshModelTestControls();
         }
     }
 
@@ -598,8 +617,14 @@ internal sealed partial class AgentOverlayHost
         column.AddChild(UiFactory.Row(name, enabled, remove));
         column.AddChild(url);
         column.AddChild(key);
+        var protocol = UiFactory.Combo();
+        foreach (var value in new[] { "auto", "deepseek", "reasoning_effort", "prompt" }) protocol.AddItem(value);
+        var protocolIndex = Array.IndexOf(new[] { "auto", "deepseek", "reasoning_effort", "prompt" }, endpoint.ThinkingProtocol);
+        protocol.Select(Math.Max(0, protocolIndex));
+        WatchCombo(protocol);
+        if (_showAdvancedValue) column.AddChild(Labeled(Loc.T("思考协议（代理端点也适用）"), protocol));
         box.AddChild(column);
-        _endpointEditors.Add(new EndpointEditors(endpoint.Id, name, url, key, enabled));
+        _endpointEditors.Add(new EndpointEditors(endpoint.Id, name, url, key, enabled, protocol));
         return box;
     }
 
@@ -665,6 +690,8 @@ internal sealed partial class AgentOverlayHost
         // because "which model is proven" is the question the player asks while looking at the card,
         // not while reading a summary paragraph at the top of the page.
         var testButton = UiFactory.Button(Loc.T("测试"), () => _ = TestModelFromUiAsync(model.Id), UiFactory.ButtonKind.Ghost);
+        _modelTestButtons.Add(testButton);
+        testButton.Disabled = _modelTestCancellation != null;
         var badge = UiFactory.Wrapped(ModelTestBadgeText(model.Id), UiFactory.FontCaption);
         column.AddChild(UiFactory.Row(display, remove));
         column.AddChild(UiFactory.Row(modelName, endpointCombo));
@@ -713,17 +740,7 @@ internal sealed partial class AgentOverlayHost
         return DateTimeOffset.TryParse(iso, out var at) ? at.ToLocalTime().ToString("HH:mm") : "";
     }
 
-    private async Task TestModelFromUiAsync(string modelId)
-    {
-        // Harvest first so the test runs against what the player sees, not the last saved copy.
-        SaveSettingsFromUi();
-        SetSaveStatus(Loc.T("正在测试模型…"));
-        var result = await AgentRuntime.Instance.TestModelAsync(modelId, CancellationToken.None);
-        // Rebuild first: RebuildSettingsForm recreates _saveStatus, so a status written before it
-        // was discarded and the player never saw the test verdict.
-        RebuildSettingsForm();
-        SetSaveStatus(result);
-    }
+    private Task TestModelFromUiAsync(string modelId) => RunModelTestFromUiAsync(modelId);
 
     /// <summary>The settings page's state line: reused for the per-model test's progress.</summary>
     private void SetSaveStatus(string text)
@@ -741,7 +758,7 @@ internal sealed partial class AgentOverlayHost
     /// </summary>
     private AgentSettings HarvestSettings()
     {
-        var current = CloneSettings(AgentRuntime.Instance.Settings);
+        var current = HarvestQuickSetup(CloneSettings(AgentRuntime.Instance.Settings));
         for (var i = 0; i < Math.Min(current.Endpoints.Count, _endpointEditors.Count); i++)
         {
             var editor = _endpointEditors[i];
@@ -750,6 +767,7 @@ internal sealed partial class AgentOverlayHost
             endpoint.BaseUrl = editor.Url.Text.Trim();
             endpoint.ApiKey = editor.Key.Text;
             endpoint.Enabled = editor.Enabled.ButtonPressed;
+            endpoint.ThinkingProtocol = editor.Protocol.GetItemText(editor.Protocol.Selected);
         }
 
         for (var i = 0; i < Math.Min(current.Models.Count, _modelEditors.Count); i++)
@@ -780,7 +798,7 @@ internal sealed partial class AgentOverlayHost
 
         // One main model plays and chats: the play-role combo is gone from the page, and the stored
         // PlayModelId is cleared so the runtime's fallback (play = conversation) is the only rule.
-        current.PlayModelId = null;
+        if (_showAdvancedValue) current.PlayModelId = null;
 
         if (_visionCombo != null)
         {

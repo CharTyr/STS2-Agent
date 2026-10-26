@@ -506,6 +506,8 @@ internal static partial class GameStateService
 
     public static bool CanInviteAiTeammate(IScreenContext? currentScreen)
     {
+        if (LocalDualInstanceLauncher.CanReconnect)
+            return AgentRuntime.Instance?.DualLaunching != true && AgentRuntime.Instance?.PlayRunning != true;
         if (currentScreen is not NMainMenu mainMenu || !mainMenu.IsVisibleInTree())
         {
             return false;

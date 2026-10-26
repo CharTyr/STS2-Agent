@@ -122,10 +122,9 @@ internal static class SessionControlContractTests
     public static void WorkshopStagingKeepsLocalCandidate()
     {
         var source = AgentSourceFixture.Read("STS2AIAgent/Multiplayer/LocalDualInstanceLauncher.cs");
-        Assert.Contains("Keeping the already-installed local STS2AIAgent copy", source, StringComparison.Ordinal);
-        var localGuard = source.IndexOf("var flatDll = Path.Combine", StringComparison.Ordinal);
-        var workshopLookup = source.IndexOf("FindSubscribedWorkshopModDir()", StringComparison.Ordinal);
-        Assert.True(localGuard >= 0 && workshopLookup > localGuard, "local candidate guard must run before Workshop staging");
+        Assert.Contains("typeof(LocalDualInstanceLauncher).Assembly.Location", source, StringComparison.Ordinal);
+        Assert.Contains("CompanionModStager.Prepare(source, game)", source, StringComparison.Ordinal);
+        Assert.False(source.Contains("FindSubscribedWorkshopModDir", StringComparison.Ordinal));
     }
 
     /// <summary>

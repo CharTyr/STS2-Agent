@@ -77,6 +77,11 @@ class StrategySlicingTests(unittest.TestCase):
         self.assertIn("Shop: what to buy", strategy_for_screen(markdown, "SHOP"))
         self.assertIn("Event options: how to choose", strategy_for_screen(markdown, "EVENT"))
 
+        rewards = strategy_for_screen(markdown, "REWARD")
+        self.assertIn("Card rewards: take or skip", rewards)
+        self.assertIn("Compare every card with skipping", rewards)
+        self.assertNotIn("Combat: what to prioritise", rewards)
+
     def test_fake_merchant_gets_the_shop_guidance(self) -> None:
         markdown = strategy_markdown()
         self.assertEqual(
@@ -86,7 +91,7 @@ class StrategySlicingTests(unittest.TestCase):
 
     def test_screens_without_a_strategic_choice_get_nothing(self) -> None:
         markdown = strategy_markdown()
-        for screen in ("REWARD", "CARD_SELECTION", "MODAL", "GAME_OVER", "CHEST", "MAIN_MENU"):
+        for screen in ("CARD_SELECTION", "MODAL", "GAME_OVER", "CHEST", "MAIN_MENU"):
             with self.subTest(screen=screen):
                 self.assertEqual("", strategy_for_screen(markdown, screen))
 

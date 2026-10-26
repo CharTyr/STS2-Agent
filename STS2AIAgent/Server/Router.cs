@@ -64,7 +64,7 @@ internal static class Router
                 if (!InstanceRole.IsCompanion || !request.IsLocal || !CompanionConnection.IsAuthorized(
                     Environment.GetEnvironmentVariable(CompanionConnection.TokenEnvironment), request.Headers[CompanionConnection.TokenHeader]))
                     throw new ApiException(403, "companion_session_required", "This endpoint requires the active local companion session.");
-                if (request.ContentLength64 < 0 || request.ContentLength64 > 16000)
+                if (request.ContentLength64 < 0 || request.ContentLength64 > (request.Url.AbsolutePath == "/companion/control" ? 131072 : 16000))
                     throw new ApiException(400, "invalid_request", "A bounded JSON body is required.");
                 using var body = await ReadCompanionBodyAsync(request, cancellationToken);
                 if (request.Url.AbsolutePath == "/companion/control")
@@ -83,14 +83,15 @@ internal static class Router
                         if (patch == null || !patch.IsValid)
                             throw new ApiException(400, "invalid_request", "Invalid companion Jev settings.");
                         bool enabled;
-                        try { enabled = AgentRuntime.Instance.ApplyCompanionSettings(patch); }
+                        try { enabled = await AgentRuntime.Instance.ApplyCompanionSettingsAsync(patch, cancellationToken); }
                         catch (ArgumentException) { throw new ApiException(400, "invalid_request", "Invalid companion Jev settings."); }
                         catch (InvalidOperationException) { throw new ApiException(409, "companion_not_ready", "Companion settings update unavailable."); }
+                        catch (TimeoutException) { throw new ApiException(409, "pause_pending", "Pause must finish before applying settings."); }
                         await WriteJsonAsync(response, 200, new
                         {
                             ok = true, request_id = requestId,
                             data = new { phase = AgentRuntime.Instance.PlayPhase,
-                                settings_applied = true, dual_layer_coop_enabled = enabled }
+                                settings_applied = true, play_settings_applied = patch.PlaySettings != null, dual_layer_coop_enabled = enabled }
                         });
                         statusCode = 200;
                         return;
@@ -603,6 +604,7 @@ internal static class Router
             mcp_url = mcp?.EndpointUrl,
             play_running = AgentRuntime.Instance.PlayRunning,
             play_phase = AgentRuntime.Instance.PlayPhase,
+            non_combat_only = AgentRuntime.Instance.Settings.NonCombatOnlyEnabled,
             stop_kind = AgentRuntime.Instance.StopKind,
             session_requests = AgentRuntime.Instance.SessionRequests,
             companion_process_alive = roleData.companion_process_alive,

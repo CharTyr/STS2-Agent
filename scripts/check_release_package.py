@@ -192,7 +192,7 @@ def _check_player_document(document_path: str, text: str) -> None:
         raise PackageCheckError(
             f"{document_path} must mention the Steam Play with Mods entry"
         )
-    if "测试连接" not in text and "Test Connection" not in text:
+    if not any(label in text for label in ("测试连接", "Test Connection", "检测游玩模型", "Test play model")):
         raise PackageCheckError(
             f"{document_path} must mention testing the play model before inviting"
         )

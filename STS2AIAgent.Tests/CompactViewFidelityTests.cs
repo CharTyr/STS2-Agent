@@ -185,8 +185,28 @@ internal static class CompactViewFidelityTests
             Assert.Contains(key, ClassBody(source, "internal sealed class RunPlayerSummaryPayload"), StringComparison.Ordinal);
         }
 
+        // Every party line carries that player's deck, relics and potions, raw and compact, so an
+        // agent can plan around what its partners hold.
+        var runPlayer = ClassBody(source, "internal sealed class RunPlayerSummaryPayload");
+        Assert.Contains("PartyDeckCardPayload[]?deck", runPlayer, StringComparison.Ordinal);
+        Assert.Contains("PartyRelicPayload[]?relics", runPlayer, StringComparison.Ordinal);
+        Assert.Contains("PartyPotionPayload[]?potions", runPlayer, StringComparison.Ordinal);
+        Assert.Contains("deck=other.deck,relics=other.relics,potions=other.potions", compactRun, StringComparison.Ordinal);
+        foreach (var (type, keys) in new[]
+        {
+            ("PartyDeckCardPayload", new[] { "card_id", "name", "upgraded", "card_type" }),
+            ("PartyRelicPayload", new[] { "relic_id", "name", "is_melted" }),
+            ("PartyPotionPayload", new[] { "potion_id", "name", "occupied" }),
+        })
+        {
+            foreach (var key in keys)
+            {
+                Assert.Contains(key, ClassBody(source, "internal sealed class " + type), StringComparison.Ordinal);
+            }
+        }
+
         // Anti-dump: the compact top level still omits the raw envelope.
-        foreach (var rawOnly in new[] { "state_version", "in_combat" })
+        foreach (var rawOnly in new[] { "state_version" })
         {
             Assert.False(
                 compactView.Contains(rawOnly, StringComparison.Ordinal),

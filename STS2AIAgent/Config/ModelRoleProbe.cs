@@ -19,7 +19,7 @@ internal sealed class ModelRoleTestRecord
     /// <summary>unverified | verified | failed | unused</summary>
     public string Status { get; set; } = "unverified";
 
-    /// <summary>unverified | unused. Connectivity success never implies tools/vision.</summary>
+    /// <summary>unverified | supported | unsupported | unused. Connectivity alone never implies tools.</summary>
     public string CapabilityStatus { get; set; } = "unverified";
 
     public string? EndpointId { get; set; }
@@ -50,7 +50,7 @@ internal static class ModelRoleProbe
 {
     public static string Fingerprint(ResolvedModel model)
     {
-        var raw = (model.Endpoint.BaseUrl ?? "") + "\n" + (model.Model.Model ?? "") + "\n" + (model.Endpoint.ApiKey ?? "");
+        var raw = (model.Endpoint.BaseUrl ?? "") + "\n" + (model.Model.Model ?? "") + "\n" + (model.Endpoint.ApiKey ?? "") + "\n" + model.Endpoint.ThinkingProtocol + "\n" + model.Model.ThinkingMode + "\n" + model.Model.ThinkingIntensity + "\nprobe-v2";
         var hash = SHA256.HashData(Encoding.UTF8.GetBytes(raw));
         return Convert.ToHexString(hash)[..16];
     }
@@ -82,20 +82,24 @@ internal static class ModelRoleProbe
         };
     }
 
-    public static ModelRoleTestRecord FromSuccess(string role, ResolvedModel model)
+    public static ModelRoleTestRecord FromSuccess(string role, ResolvedModel model, bool? tools = null)
     {
         return new ModelRoleTestRecord
         {
             Role = role,
             Status = "verified",
-            CapabilityStatus = "unverified",
+            CapabilityStatus = role == ModelRoleNames.Vision || tools == null ? "unverified" : tools.Value ? "supported" : "unsupported",
             EndpointId = model.Endpoint.Id,
             EndpointName = model.Endpoint.Name,
             ModelId = model.Model.Id,
             ModelName = model.Model.Model,
             Fingerprint = Fingerprint(model),
             TestedAt = DateTimeOffset.UtcNow.ToString("o"),
-            NextStep = Loc.T("{0}连通成功。工具/视觉能力仍为未验证。", RoleLabel(role))
+            NextStep = tools == true && role != ModelRoleNames.Vision
+                ? Loc.T("工具调用已验证，可自动游玩。")
+                : tools == false && role != ModelRoleNames.Vision
+                    ? Loc.T("工具调用不可用，请更换模型后重新检测。")
+                    : Loc.T("{0}连通成功。工具/视觉能力仍为未验证。", RoleLabel(role))
         };
     }
 
@@ -201,7 +205,13 @@ internal static class ModelRoleProbe
             "unused" => Loc.T("未使用"),
             _ => Loc.T("尚未验证")
         };
-        var capability = record.CapabilityStatus == "unused" ? Loc.T("能力：未使用") : Loc.T("能力：未验证");
+        var capability = record.CapabilityStatus switch
+        {
+            "unused" => Loc.T("能力：未使用"),
+            "supported" => Loc.T("工具调用：可用"),
+            "unsupported" => Loc.T("工具调用：不可用"),
+            _ => Loc.T("能力：未验证")
+        };
         var target = string.IsNullOrWhiteSpace(record.ModelName)
             ? ""
             : $" · {record.EndpointName ?? record.EndpointId} / {record.ModelName}";

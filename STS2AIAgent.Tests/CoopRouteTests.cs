@@ -44,7 +44,7 @@ internal static class CoopRouteTests
         Assert.Contains("模型", CoopLaunchPolicy.GetError(false, false, "MAIN_MENU", empty));
 
         // A verified play model collapses the two routes: the same settings now auto-play.
-        ModelRoleProbe.Upsert(settings, ModelRoleProbe.FromSuccess(ModelRoleNames.Play, settings.TryResolvePlayModel()!));
+        ModelRoleProbe.Upsert(settings, ModelRoleProbe.FromSuccess(ModelRoleNames.Play, settings.TryResolvePlayModel()!, tools: true));
         Assert.True(CoopLaunchPolicy.GetError(false, false, "MAIN_MENU", settings) == null);
     }
 
@@ -70,7 +70,7 @@ internal static class CoopRouteTests
         Assert.Contains("LaunchDualInstanceAsync(settings, companionAutoPlay, CancellationToken.None)", actions);
         Assert.Contains("ContinueDualInstanceAsync(settings, companionAutoPlay, CancellationToken.None)", actions);
 
-        var runtime = AgentSourceFixture.Read("STS2AIAgent/Agent/AgentRuntime.cs");
+        var runtime = AgentSourceFixture.ReadAgentRuntime();
         Assert.Contains("requireVerifiedPlayModel: companionAutoPlay", runtime);
         Assert.Contains("public bool CompanionAutoPlay => _companionAutoPlay;", runtime);
         // An idle companion says why it is idle instead of looking stalled.
@@ -81,7 +81,7 @@ internal static class CoopRouteTests
         // before the attempt would let a rejected retry (the usual one: "the teammate window is
         // already running") relabel a teammate that the in-process loop is already playing.
         var core = AgentSourceFixture.MethodBody(runtime, "LaunchDualInstanceCoreAsync");
-        var recorded = core.IndexOf("_companionAutoPlay = companionAutoPlay;", StringComparison.Ordinal);
+        var recorded = core.IndexOf("_companionAutoPlay = LocalDualInstanceLauncher.CompanionAutoPlay;", StringComparison.Ordinal);
         var decided = core.IndexOf("_dualLaunchOutcome = launchResult.Ok", StringComparison.Ordinal);
         var boundToNewSession = core.IndexOf("ReferenceEquals(previousConnection", StringComparison.Ordinal);
         Assert.True(recorded > 0, "The launch route must be recorded somewhere.");
@@ -111,24 +111,15 @@ internal static class CoopRouteTests
     }
 
     /// <summary>
-    /// The route split reached POST /action but not the overlay: the Invite button kept calling the
-    /// auto-play overload, so with no verified play model the click was refused at the old model
-    /// gate while the same request over the API launched the teammate for external takeover. The
-    /// button has to choose the route the way the API does, and the description under it has to
-    /// describe that route instead of asking for a connection test.
+    /// The overlay offers an explicit auto-play/external choice. Its hint and continue action must
+    /// use that same choice, so a failed model test cannot silently launch an idle external teammate.
+    /// Existing API invite actions retain their legacy route selection.
     /// </summary>
-    /// <remarks>
-    /// The fifth label this used to pin, <c>FirstRunHintText</c>, was dropped during the 2026-09-20
-    /// overlay pass: with the teammate page split into cards it repeated, word for word, the status
-    /// line above it. What it asserted about the unverified route is still asserted below, against
-    /// the description that survived and against the status line the page shares with the same
-    /// <c>PlayerFacingSession</c> view the play tab reads.
-    /// </remarks>
-    public static void OverlayInviteFollowsTheApiRoute()
+    public static void OverlayInviteUsesExplicitControlMode()
     {
         var overlay = AgentSourceFixture.ReadOverlayHost();
         var launch = AgentSourceFixture.DeclarationBody(overlay, "private async Task LaunchDualAsync()");
-        Assert.Contains("var companionAutoPlay = FirstRunSetup.Evaluate(settings).ReadyToInvite;", launch);
+        Assert.Contains("var companionAutoPlay = settings.CompanionControlMode != \"external\";", launch);
         Assert.Contains("LaunchDualInstanceAsync(settings, companionAutoPlay, CancellationToken.None)", launch);
         Assert.True(
             !overlay.Contains("LaunchDualInstanceAsync(HarvestSettings(), CancellationToken.None)", StringComparison.Ordinal),
@@ -150,7 +141,7 @@ internal static class CoopRouteTests
     {
         var overlay = AgentSourceFixture.ReadOverlayHost();
 
-        // Continue chooses the route the same way the invite does (see OverlayInviteFollowsTheApiRoute).
+        // Continue uses the same explicit control mode as invite.
         Assert.Contains("ContinueDualInstanceAsync(settings, companionAutoPlay, CancellationToken.None)", overlay);
         Assert.Contains("GameStateService.CanContinueAiTeammate(ActiveScreenContext.Instance.GetCurrentScreen())", overlay);
         Assert.Contains("_dualContinueButton.Disabled = AgentRuntime.Instance.DualLaunching || !canContinue;", overlay);
@@ -178,7 +169,7 @@ internal static class CoopRouteTests
     /// </summary>
     public static void EveryStartEntryPointSharesTheModelGate()
     {
-        var runtime = AgentSourceFixture.Read("STS2AIAgent/Agent/AgentRuntime.cs");
+        var runtime = AgentSourceFixture.ReadAgentRuntime();
         var companion = AgentSourceFixture.MethodBody(runtime, "SetCompanionRunningAsync");
 
         var gate = companion.IndexOf("FirstRunSetup.Evaluate(Settings)", StringComparison.Ordinal);
@@ -187,10 +178,8 @@ internal static class CoopRouteTests
         Assert.True(gate > 0, "The companion control path must check the play model before it starts the loop.");
         Assert.True(start > gate, "The model gate must come before StartAutoPlay on the companion.");
         Assert.True(pause > 0, "Pausing must stay available on the companion.");
-        Assert.False(
-            companion.IndexOf("FirstRunSetup.Evaluate(Settings)", pause, StringComparison.Ordinal) > 0 &&
-                companion.LastIndexOf("FirstRunSetup.Evaluate(Settings)", StringComparison.Ordinal) > pause,
-            "The pause branch must not be behind the model gate.");
+        // Pause behavior with an unverified model executes the real runtime method in
+        // CompanionRaceTests.UnverifiedModelCanBePausedButCannotResume.
 
         // The two other starts keep their gates; a regression there is the same bug from the host side.
         var host = AgentSourceFixture.MethodBody(runtime, "ControlTeammateResultAsync");

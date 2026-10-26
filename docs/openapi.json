@@ -1118,6 +1118,12 @@
               "null"
             ]
           },
+          "description": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
           "display_amount": {
             "format": "int32",
             "type": [
@@ -1223,6 +1229,103 @@
         },
         "type": "object"
       },
+      "CompanionPlaySettings": {
+        "additionalProperties": true,
+        "description": "Host play configuration only; instance role, overlay and MCP remain local. Keys are never returned.",
+        "properties": {
+          "ConversationModelId": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "Endpoints": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "maxItems": 16,
+            "type": "array"
+          },
+          "LlmRequestTimeoutSeconds": {
+            "maximum": 3600,
+            "minimum": 1,
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "MaxSessionRequests": {
+            "minimum": 1,
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "MaxSessionTokens": {
+            "minimum": 1,
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "ModelTests": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "maxItems": 32,
+            "type": "array"
+          },
+          "Models": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "maxItems": 32,
+            "type": "array"
+          },
+          "NonCombatOnlyEnabled": {
+            "type": "boolean"
+          },
+          "PlayModelId": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "ProactiveChatEnabled": {
+            "type": "boolean"
+          },
+          "ProactiveChatTone": {
+            "maxLength": 128,
+            "type": "string"
+          },
+          "ReplyLanguage": {
+            "enum": [
+              "auto",
+              "zh",
+              "en"
+            ]
+          },
+          "RoleTests": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "maxItems": 3,
+            "type": "array"
+          },
+          "VisionModelId": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "type": "object",
+        "writeOnly": true
+      },
       "CompanionSettingsPatch": {
         "additionalProperties": false,
         "description": "Token-protected settings-only allowlist; never returned in responses.",
@@ -1259,6 +1362,16 @@
                 "type": "null"
               }
             ]
+          },
+          "play_settings": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/CompanionPlaySettings"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "required": [
@@ -1290,6 +1403,9 @@
           },
           "phase": {
             "type": "string"
+          },
+          "play_settings_applied": {
+            "type": "boolean"
           },
           "settings_applied": {
             "type": "boolean"
@@ -1976,6 +2092,7 @@
           "mcp_enabled": {},
           "mcp_url": {},
           "mod_version": {},
+          "non_combat_only": {},
           "play_phase": {},
           "play_running": {},
           "process_id": {},
@@ -2001,6 +2118,7 @@
           "mcp_url",
           "play_running",
           "play_phase",
+          "non_combat_only",
           "stop_kind",
           "session_requests",
           "companion_process_alive",
@@ -2147,6 +2265,9 @@
                 "type": "null"
               }
             ]
+          },
+          "is_open": {
+            "type": "boolean"
           },
           "is_travel_enabled": {
             "type": "boolean"
@@ -2398,6 +2519,60 @@
         },
         "type": "object"
       },
+      "PartyDeckCardPayload": {
+        "additionalProperties": true,
+        "properties": {
+          "card_id": {
+            "type": "string"
+          },
+          "card_type": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "upgraded": {
+            "type": "boolean"
+          }
+        },
+        "type": "object"
+      },
+      "PartyPotionPayload": {
+        "additionalProperties": true,
+        "properties": {
+          "name": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "occupied": {
+            "type": "boolean"
+          },
+          "potion_id": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "type": "object"
+      },
+      "PartyRelicPayload": {
+        "additionalProperties": true,
+        "properties": {
+          "is_melted": {
+            "type": "boolean"
+          },
+          "name": {
+            "type": "string"
+          },
+          "relic_id": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
       "PlayStrategy": {
         "additionalProperties": true,
         "description": "The dual-layer play strategy the Jev execution model follows.",
@@ -2627,6 +2802,14 @@
               "null"
             ]
           },
+          "card_rarity_odds_value": {
+            "format": "float",
+            "type": "number"
+          },
+          "card_shop_removals_used": {
+            "format": "int32",
+            "type": "integer"
+          },
           "character_id": {
             "type": "string"
           },
@@ -2693,6 +2876,15 @@
             "format": "int32",
             "type": "integer"
           },
+          "deck": {
+            "items": {
+              "$ref": "#/components/schemas/PartyDeckCardPayload"
+            },
+            "type": [
+              "array",
+              "null"
+            ]
+          },
           "gold": {
             "format": "int32",
             "type": "integer"
@@ -2712,6 +2904,24 @@
           },
           "player_id": {
             "type": "string"
+          },
+          "potions": {
+            "items": {
+              "$ref": "#/components/schemas/PartyPotionPayload"
+            },
+            "type": [
+              "array",
+              "null"
+            ]
+          },
+          "relics": {
+            "items": {
+              "$ref": "#/components/schemas/PartyRelicPayload"
+            },
+            "type": [
+              "array",
+              "null"
+            ]
           },
           "slot_index": {
             "format": "int32",
@@ -2873,6 +3083,9 @@
           },
           "star_costs_x": {
             "type": "boolean"
+          },
+          "upgrade": {
+            "description": "Free-form JSON value."
           },
           "upgraded": {
             "type": "boolean"
@@ -3606,7 +3819,7 @@
             "description": "The normal HTTP error envelope."
           }
         },
-        "summary": "Pause/resume the companion, or atomically update its allowlisted Jev settings."
+        "summary": "Pause/resume the companion, or apply its allowlisted play and Jev settings after pausing."
       }
     },
     "/companion/jev": {

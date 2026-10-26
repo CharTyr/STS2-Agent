@@ -90,7 +90,7 @@ internal static partial class GameActionService
     /// mod refusing every later request. <see cref="ActionExecutionGate"/> refuses a concurrent caller
     /// immediately instead of queueing it behind a snapshot the first action has already invalidated.
     /// </remarks>
-    public static async Task<ActionResponsePayload> ExecuteAsync(ActionRequest request)
+    public static async Task<ActionResponsePayload> ExecuteAsync(ActionRequest request, Action? beforeDispatch = null)
     {
         var actionName = request.action?.Trim().ToLowerInvariant();
         var localPlayerId = System.Environment.GetEnvironmentVariable("STS2_MULTIPLAYER_NET_ID");
@@ -116,6 +116,9 @@ internal static partial class GameActionService
         var lease = ActionExecutionGate.Shared.Acquire(actionName);
         try
         {
+            // The bridge's final state/identity checks must share the mutation's lease.
+            // No await separates this fresh check from the handler's synchronous dispatch.
+            beforeDispatch?.Invoke();
             return await DispatchAsync(actionName, request);
         }
         finally
@@ -434,11 +437,11 @@ internal static partial class GameActionService
         var hasPotionSlots = GameStateService.GetLocalPlayer(RunManager.Instance.DebugOnlyGetState())?.HasOpenPotionSlots ?? false;
         rewardButton = GameStateService
             .GetRewardButtons(rewardsScreen)
-            .FirstOrDefault(button =>
-                button.IsEnabled &&
-                !attemptedRewardButtons.Contains(button.GetInstanceId()) &&
+            .Where(button => button.IsEnabled && !attemptedRewardButtons.Contains(button.GetInstanceId()) &&
                 (button.Reward is not PotionReward || hasPotionSlots) &&
-                (!CardRewardSkips.AppliesTo(rewardsScreen.GetInstanceId()) || button.Reward is not CardReward));
+                (!CardRewardSkips.AppliesTo(rewardsScreen.GetInstanceId()) || button.Reward is not CardReward))
+            .OrderBy(button => button.Reward is PotionReward ? 1 : 0)
+            .FirstOrDefault();
 
         return rewardButton != null;
     }

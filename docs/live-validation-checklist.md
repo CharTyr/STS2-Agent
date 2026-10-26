@@ -1011,3 +1011,22 @@ mod 加载即崩：注册表连基类一起搜，`NMultiplayerTest` 的私有 `D
 
 未验证：`open_character_select` 拿不到界面时的 503（未能构造）、`crystal_set_tool` 的前置检查（未进水晶球事件）。
 玩家档案 `default/1`、`default/2`、`default/1001` 逐文件一致；`mods/` 还原到发布版哈希。
+
+## Companion/model integration acceptance (2026-10-26)
+
+Offline checks cover mod artifact staging/conflict preservation, PID handshake identity, cancellation and total probe deadline, proxy thinking profiles, tool-error classification, compact combat ownership and final dispatch races. These checks do not establish an in-game fix for #211.
+
+Before release, run on an isolated Windows profile with game v0.111.0 and real game assemblies:
+
+- [ ] Build the full mod and PCK; check host/companion artifact fingerprints.
+- [ ] Workshop installed in a second Steam library; no local copy; API ready in both windows.
+- [ ] Partial, old and duplicate flat/nested local copies: refuse before spawn, preserve files, show the conflicting path.
+- [ ] Reserve nearby ports and force a dynamic port; verify PID/role/port in host health and direct companion health.
+- [ ] Differing TEMP variables and denied handshake writes; verify errors/fallback and the total deadline.
+- [ ] Slow child startup: retry from an active lobby/run and reconnect without creating another process or changing the original control mode.
+- [ ] No-model external takeover: zero model requests, direct teammate actions work, host actions retain actor restrictions.
+- [ ] Verified model autoplay: companion begins decisions; pause/resume/continue restore the same route and seat.
+- [ ] Official DeepSeek and a proxy with custom model aliases: test tools and ordinary play with thinking on/off; no paid probes were run by the offline suite.
+- [ ] Non-combat-only: combat CARD_SELECTION/MODAL and entry races cause zero automatic actions; external combat actions remain usable.
+- [ ] Map graph readable in combat/rest/shop while travel options remain disabled; reward potion replacement and capacity-granting relic order work; upgrade previews do not mutate live cards.
+- [ ] Three/four players: readable inventories and votes, no desync, no implicit claim that multiple AI companions are supported.

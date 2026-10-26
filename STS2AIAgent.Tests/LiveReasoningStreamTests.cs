@@ -152,7 +152,7 @@ internal static class LiveReasoningWiringTests
         // turn's own finally sits before the receipt is committed, so the stream ends with the turn.
         var turn = AgentSourceFixture.MethodBody(AgentSourceFixture.Read(Runtime), "AutoPlayLoopAsync");
         Assert.Contains("ClearLiveThought();", turn);
-        Assert.Contains("ClearLiveThought();", AgentSourceFixture.MethodBody(AgentSourceFixture.Read(Runtime), "SendChatCoreAsync"));
+        Assert.Contains("ClearLiveThought();", AgentSourceFixture.MethodBody(AgentSourceFixture.ReadAgentRuntime(), "SendChatCoreAsync"));
         // Every other path that makes a model request through the loop streams into the same buffer:
         // single-step (which never reaches the auto-play turn's finally) and the proactive chat that
         // runs after a turn (whose error path appends nothing that could replace the partial).

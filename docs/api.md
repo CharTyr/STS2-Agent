@@ -174,6 +174,7 @@ curl -s http://127.0.0.1:8080/state | jq .
     "mcp_url": null,
     "play_running": false,
     "play_phase": "paused",
+    "non_combat_only": false,
     "stop_kind": null,
     "session_requests": 12,
     "companion_process_alive": false,
@@ -201,6 +202,7 @@ curl -s http://127.0.0.1:8080/state | jq .
 | `mcp_enabled` / `mcp_url` | boolean / string\|null | 进程内 MCP 是否开启，以及开启时的地址 |
 | `play_running` | boolean | 自动游玩是否正在运行 |
 | `play_phase` | string | 自动游玩阶段，常见值 `running` / `paused` / `stopping` |
+| `non_combat_only` | boolean | 是否启用“仅在战斗外自动游玩”。启用后，Agent 在战斗期间不请求模型、不执行动作，并在战斗结束后自动恢复；可用于手动战斗或外部战斗控制器 |
 | `stop_kind` | string\|null | 上次自动游玩停止的类别，未停止过为 `null` |
 | `session_requests` | integer | 本会话已消耗的模型请求次数（可由「重置本会话统计」清零） |
 | `companion_process_alive` / `companion_process_exited` | boolean\|null | **仅 host 有意义。** 主窗口返回 AI 队友进程是否在运行 / 是否已退出；`instance_role=companion` 时两项均为 `null`（not applicable），不会把 companion 自己描述成还应管理另一个队友进程 |
@@ -526,6 +528,7 @@ curl -s http://127.0.0.1:8080/state | jq .
 | `amount` | number \| null | Power 层数/数值（部分 Power 可能为空） |
 | `display_amount` | integer \| null | 直接读取原生 `Power.DisplayAmount` 的 UI 计数。`0` 是有效值；无法读取时为 `null`，不回落到 `amount`。Hardened Shell 中表示本回合剩余伤害预算，不是剩余命中次数；`amount` 仍保持原生层数/数值。 |
 | `is_debuff` | boolean | 是否为 Debuff |
+| `description` | string \| null | 原生规则文本；沙坑包含倒计时、目标死亡和逃离方式的说明 |
 
 #### `combat.hand[]`
 
@@ -591,6 +594,7 @@ curl -s http://127.0.0.1:8080/state | jq .
 | `amount` | number \| null | Power 层数/数值（部分 Power 可能为空） |
 | `display_amount` | integer \| null | 直接读取原生 `Power.DisplayAmount` 的 UI 计数。`0` 是有效值；无法读取时为 `null`，不回落到 `amount`。Hardened Shell 中表示本回合剩余伤害预算，不是剩余命中次数；`amount` 仍保持原生层数/数值。 |
 | `is_debuff` | boolean | 是否为 Debuff |
+| `description` | string \| null | 原生规则文本；沙坑包含倒计时、目标死亡和逃离方式的说明 |
 
 #### `combat.enemies[].intents[]`
 
@@ -608,6 +612,8 @@ curl -s http://127.0.0.1:8080/state | jq .
 
 | 字段 | 类型 | 说明 |
 | --- | --- | --- |
+| `card_rarity_odds_value` | number | 全局稀有卡保底偏移（精确读取 `Player.PlayerOdds.CardRarity.CurrentValue`）：开局 -0.05，每次卡牌奖励掷出非稀有就上涨（0.01，Scarcity 进阶下 0.005，上限 0.4），掷出稀有即重置；商店卡牌的稀有率也叠加它，但商店不改变它。游戏界面不显示该值，仅在原始 `/state` 提供 |
+| `card_shop_removals_used` | number | 本局已使用的商店删牌次数（精确读取 `Player.ExtraFields.CardShopRemovalsUsed`） |
 | `floor` | number | 当前楼层 |
 | `current_hp` | number | 当前生命值 |
 | `max_hp` | number | 最大生命值 |
@@ -620,7 +626,20 @@ curl -s http://127.0.0.1:8080/state | jq .
 | `potions[]` | object[] | 当前药水槽 |
 | `ascension` | number | 当前 run 的 Ascension 等级 |
 | `ascension_effects[]` | object[] | 当前 Ascension 等级已生效的累计效果列表 |
-| `players[]` | object[] | 队伍摘要（含本地玩家），字段同 `combat.players[]` 另加 `gold` |
+| `players[]` | object[] | 队伍摘要（含本地玩家），字段同 `combat.players[]` 另加 `gold`、`deck[]`、`relics[]`、`potions[]`，见下 |
+
+#### `run.players[]` 的牌组、遗物与药水
+
+每个客户端都完整模拟整局（锁步同步并做校验和比对），所以队友的 `Player.Deck` / `Relics` / `PotionSlots`
+在本机与本地玩家的同样新鲜。外部 agent 用它规划整支队伍。读取某一项抛异常时该字段为 `null`（表示未知，区别于空数组），不会拖垮整个 `/state`；失败会写入日志，每 30 秒每类最多一条。
+
+| 字段 | 类型 | 说明 |
+| --- | --- | --- |
+| `deck[]` | object[] \| null | 该玩家的牌库：`card_id`、`name`、`upgraded`、`card_type`。读取失败时为 `null`（与空数组区分），并在日志中节流告警 |
+| `relics[]` | object[] \| null | 该玩家的遗物：`relic_id`、`name`、`is_melted`（已熔炼，效果不再生效）。读取失败时为 `null` |
+| `potions[]` | object[] \| null | 该玩家的药水槽：`potion_id`、`name`（空槽为 null）、`occupied`。读取失败时为 `null` |
+
+compact `agent_view` 的 `run.players[]` 原样携带这三个数组。
 
 #### `run.ascension_effects[]`
 
@@ -1055,6 +1074,16 @@ curl -s http://127.0.0.1:8080/state | jq .
 `continue_game_over` 会**等到原生结算真的写进 progress 存档**才返回，所以它比其它动作慢；
 不要因为一次超时就重复点。判断是否真的收尾完成看 `save_verified`，不要只看屏幕变化。
 
+### Sandpit safety and card-value context
+
+`sandpit_countdown` in `combat.lethal_risks[]` reads live enemy-owned `SandpitPower` instances targeting the local player, excluding dead enemies. A countdown at or below 1 can kill that player at the start of the enemy turn regardless of HP, block or Buffer; it is not damage to the enemy that owns the power.
+
+Built-in autoplay conservatively plays a natively playable `FRANTIC_ESCAPE` before asking the model when this risk is present. Its final safety check reads fresh state on the game thread inside the shared action execution lease, immediately before dispatch. An automatic escape is canceled if the risk disappeared or the selected position no longer identifies a natively playable escape. With no playable escape, other actions remain possible, but a known-lethal `end_turn` stops autoplay. This guard applies to built-in `AgentLoop`; external clients and manual input still need to handle the exposed risk. It does not prove whether killing the boss would be a better alternative. Sandpit rules and rejection messages follow the selected mod language.
+
+Compact `combat.card_value_note` explains that hand text and `combat.hand[].values[].preview` already reflect live player modifiers. Each value includes `name`, `base_value` and `preview`; target-specific Vulnerable, damage caps and block still need evaluation. Compact power lines retain `description`, while raw `amount` keeps its existing native meaning.
+
+`/data/cards` metadata `upgrade` is computed by upgrading a detached canonical card copy to the next level. A successful preview has `status: "available"` plus `description`, `cost`, `star_cost`, `upgrade_level` and `vars`. Its dynamic values refresh the detached copy's own variables before the description reads them. Only a fully upgraded card returns `null`; a lookup, upgrade or preview failure returns `{ "status": "unavailable", "reason": "upgrade_preview_failed" }`, without pretending the card is maxed or exposing exception details. Check `status` before using costs or values; unavailable data must not be guessed. The export never mutates a card in the player's deck. This is canonical card metadata, not a prediction of every in-run enchantment or modifier.
+
 ### compact `agent_view` 的增补字段
 
 默认 MCP `get_game_state` 返回 compact `agent_view`。它不是 `/state` 的字段子集，而是同一份状态
@@ -1081,9 +1110,10 @@ compact 的 `combat` 原样携带 `/state` 的 `action_readiness`、`end_turn_wi
 | `shop.relics[]` / `shop.potions[]` | `relic_id` / `potion_id` | 商店在售遗物与药水的 ID。`line` 只有名字和价格，查 `get_game_data_item` 用这两列，不必为此回退到完整 `/state` |
 | `run` | `relic_ids` | 与 `run.relics` 同序、等长的遗物 ID 列表（`relics` 保持原有名字数组不变） |
 | `run` | `relic_stacks` / `relic_descriptions` | 与 `run.relics` 同序、等长的计数与效果原文。计数遗物（笔尖 `AttacksPlayed % 10`、念珠、五轮书等）的层数只在这里，`relics` 里只有名字——**不读这两列就看不到「笔尖 9/10」这类时机** |
+| `map` | `open` | 原始 `map.is_open`；关闭时图结构仍可读，不能据此发起移动 |
 | `map` | `nodes[]` | 全图节点：`coord`（`"row,col"`）、`node_type`、`visited`、`children[]`（同样 `"row,col"`）。`options[]` 只给当前可走的 1–3 个，**只有 `nodes[]` 能用来做跨楼层路线规划** |
 | `map` | `boss_node` / `second_boss_node` | 一 / 二 号 Boss 坐标（`"row,col"`）；`/state` 的 `boss_node` 对象在这里压成字符串 |
-| `run` | `players[]` | 队伍摘要，字段同 `combat.players[]`，另有 `gold` |
+| `run` | `players[]` | 队伍摘要，字段同 `combat.players[]`，另有 `gold` 以及每位玩家的 `deck[]` / `relics[]` / `potions[]`（与 `/state` 同形） |
 | `chest.relics[]` | `relic_id` | 宝箱遗物 ID，配合 `i` 供 `choose_treasure_relic` 使用 |
 | `modal` | `underlying_screen` | 覆盖层底下的逻辑界面名，用于「先解覆盖层再规划房间」 |
 | `rest.options[]` | `option_id` | 休息点选项的稳定标识（`HEAL` / `SMITH` …）。`line` 是给人读的本地化文本，**按 id 分支才不会随语言漂移** |
@@ -1869,7 +1899,7 @@ AI 队友实例上的受控端点，由宿主进程在本地调用，普通玩�
 - 仅在 `companion` 实例、loopback，且请求头 `X-STS2-Companion-Session` 与实例持有的会话令牌一致时可用；否则返回 403 `companion_session_required`
 - 令牌由宿主拉起队友进程时生成，通过环境变量传给队友，只存在于本机双开场景
 - `GET /companion/jev`：无需请求体；响应 `data` 为 `CompanionJevSnapshot`，包含 `choice`、`probabilities`、`danger`、`latency`（当前队友对应 Jev 面板的可空文本；尚无读数时为空态）和 `dual_layer_coop_enabled`（当前队友生效的多人双层开关，布尔值）。仅返回队友实例读数，不返回 API Key、会话令牌、设置全文或上一实例的伪读数；该端点不是通用公开健康检查，仅供持令牌宿主轮询
-- `POST /companion/control`：旧请求体 `{"running": true|false}` 仍然有效，响应 `data.phase`；队友被远程暂停后不会再自行启动。另可单独传 `{"settings": {"dual_layer_coop_enabled": true, "jev_base_url": "...", "jev_api_key": "...", "jev_model": "...", "jev_confidence_threshold": 0.6, "jev_request_timeout_seconds": 90}}`，仅将这些白名单字段同步给当前队友并在下一回合生效；不得与 `running` 同时传。响应仅含 `data.phase` / `data.settings_applied` / `data.dual_layer_coop_enabled`，**不会回显 key**
+- `POST /companion/control`：旧请求体 `{"running": true|false}` 仍然有效，响应 `data.phase`；队友被远程暂停后不会再自行启动。另可单独传 `{"settings": {"dual_layer_coop_enabled": true, "jev_base_url": "...", "jev_api_key": "...", "jev_model": "...", "jev_confidence_threshold": 0.6, "jev_request_timeout_seconds": 90}}`，兼容旧 Jev-only 请求。可选 `settings.play_settings` 同步模型、Key、检测记录、预算、`NonCombatOnlyEnabled`、语言与主动发言；子字段使用配置类的 PascalCase 名称。它不接受角色、路径、界面或 MCP 开关。完整配置先暂停并等待动作结束（最多 30 秒），持久化后仅在原本处于 running、没有新的显式暂停请求、调用未取消且仍满足工具验证时恢复。暂停请求在等待配置保存锁之前就阻止后续自动恢复；原本处于 stopping 的任务不会因为保存设置重启。取消若发生在持久化之后，配置可能已落盘，但不会自动恢复；暂停未完成返回 409 `pause_pending`。不得与 `running` 同时传。响应仅含 `data.phase` / `data.settings_applied` / `data.play_settings_applied` / `data.dual_layer_coop_enabled`，**不会回显 key**。完整同步客户端必须确认 `play_settings_applied=true`；旧队友不支持时显示未确认，不得假报成功。控制请求最大 128 KiB，消息请求仍为 16000 字节
 - `POST /companion/message`：请求体 `{"message": "..."}`（1–2000 字符），响应 `data.reply` 为队友的回复
 
 ### `POST /companion/message` 的带类型信号（可选）
@@ -2279,7 +2309,7 @@ Python sidecar 另加 `event_id`、`event_options` 与 `guidance_source`：它�
 - **行为**：按 `selection.kind` 分两种
   - 牌库网格（`deck_card_select`、`deck_upgrade_select`、`deck_transform_select`、`deck_enchant_select`、`choose_card_select`）：点击被原生界面确认后返回 `completed`。**这不代表界面已关闭**：`min_select < max_select` 时界面会保持打开继续收集，读 `selection.selected_count` / `max_select` 决定是否还要继续点；点满或想提前结束时用 `confirm_selection` 收尾（见下）
   - 战斗手牌多选（`combat_hand_select`、`combat_hand_upgrade_select`）：只计入这一步并返回 `pending`，界面保持打开。读 `selection.selected_count` / `max_select` / `requires_confirmation` 判断是否还需要继续选，选完用 `confirm_selection` 结束
-  - 已实机验证：删牌、升级（单选）、附魔（0/3，多选）、变化（0/6，多选）、事件多选（2/2）。附魔/变化这类 `min_select < max_select` 的界面每次点击在约 0.15 秒内返回，不再空转超时
+  - 已实机验证：删牌、升级（单选）、附魔（原生偏好为 0/3，API 有效最少选择 1 张）、变化（0/6，多选）、事件多选（2/2）。附魔/变化这类 `min_select < max_select` 的界面每次点击在约 0.15 秒内返回，不再空转超时
 - **稳定条件**：牌库网格的点击被原生界面接受（`selected_count` 变化）；战斗手牌多选在 `confirm_selection` 之后离开选牌界面
 - **超时**：10 秒
 
@@ -2297,6 +2327,7 @@ Python sidecar 另加 `event_id`、`event_options` 与 `guidance_source`：它�
 - **前提**：`selection.can_confirm = true`（原生确认按钮可用时才会出现在 available_actions）
 - **参数**：无
 - **行为**：牌库网格的 `min_select < max_select` 场景（附魔、变化，以及 `min_select` 为 0 的奖励选牌）与战斗手牌多选都用它收尾。选满 `max_select` 时 `select_deck_card` 通常会自行收尾，因此它主要用于**提前结束**
+  - 附魔界面的原生确认忽略空选择，因此 `selection.min_select` 至少为 1；未选牌时 `can_confirm=false`，也不公开 `confirm_selection`，直接请求该动作返回 409。选择 1 到 `max_select` 张都可以确认，无需为提前结束而选满。
 - **稳定条件**：离开选牌界面
 - **超时**：10 秒。实机验证：附魔（0/3）与变化（0/6）都在一次调用内完成（约 0.17–0.19 秒），不需要第二次调用
 
@@ -2673,3 +2704,23 @@ Python sidecar 另加 `event_id`、`event_options` 与 `guidance_source`：它�
 `Disconnected 1 slow event subscriber(s)`。在此之前该路径只有离线证据，因为实机无法自然产生
 256 次状态变化（轮询只在字段真正变化时发布）。`count` 上限 5000，低于 257 会被拒绝，理由写在
 `EventChurnPolicy` 里：填不满一个队列的请求证明不了任何事。
+
+## Companion startup and endpoint discovery
+
+The companion loads the same complete DLL/PCK/manifest set as the running host, located from the loaded assembly rather than a default Steam library. A partial or different local installation is refused before spawning; existing files are preserved and the launch message identifies the conflict. Initialization failures are reported through a session-specific file selected by the host (`STS2_COMPANION_STARTUP_PATH`), independent of the child's TEMP setting. A listener publishes its actual port. The legacy PID port file remains supported; the total discovery budget includes every probe. Retrying an invitation after a timeout may reconnect the existing process, preserving its original autoplay/external-takeover mode.
+
+HTTP startup does not require a verified model or `mcp_enabled`. Game lobby connectivity alone does not prove that the mod's HTTP API initialized. External-takeover companions intentionally wait with zero model requests. Model-driven companions require verified play configuration.
+
+The mod also publishes local `sts2-ai-agent-instance-<pid>.json` hints. Python MCP uses these when neither an explicit base URL nor `STS2_API_BASE_URL` is supplied. It checks service, status, role, PID and port against `/health`, ignoring stale hints. Default selection is `human`; set `STS2_API_INSTANCE=companion` or a numeric PID to select another instance. Multiple matching live instances produce an actionable error. Without hints, the legacy default remains port 8080; an explicit selector with no match fails instead of falling back to the human window. The hints contain no session tokens or API keys.
+
+## Endpoint thinking protocol
+
+Endpoint settings now include `thinkingProtocol`: `auto` (existing behavior), `deepseek`, `reasoning_effort`, or `prompt`. The endpoint dropdown applies equally to direct and proxy URLs. An explicit model `thinkingMode` takes precedence for normal play. Probes disable thinking for the DeepSeek endpoint profile regardless of model alias; official DeepSeek URLs retain that default in auto mode. Raw HTTP sends `thinking` at the top level, without the SDK-only `extra_body` wrapper. Changing the protocol or model thinking settings invalidates cached verification.
+
+A 401/403, invalid model, incompatible thinking configuration or unrelated 400 remains a failed/unknown probe. Only an explicit unsupported tools/function-calling response or a successful response without a tool call records tools as unsupported.
+
+## Compact ownership and additional planning metadata
+
+`agent_view.version` is now **12**. Top-level `in_combat` is copied from the same raw snapshot and remains true through combat selection screens and modals. Non-combat-only autoplay yields on combat, unknown screens or absent/malformed ownership, rechecks before model dispatch, and checks automatic actions inside the shared execution lease. Direct external actions remain available.
+
+Raw `map.is_open` (compact `map.open`) distinguishes a visible map overlay from model-backed graph availability. During a run, graph nodes and edges remain readable outside the overlay; travel flags and clickable options are inactive there. Upgrade selection cards carry optional `upgrade` metadata (also on compact `selection.cards[]`), using the detached canonical preview described above: available, unavailable, or null for maxed cards. Non-upgrade selections leave it null. Main reward screens permit explicit potion discard; card-reward sub-screens continue blocking it. Bulk reward cleanup takes non-potions first, so capacity-granting relics are collected before potions, and never discards a potion automatically.

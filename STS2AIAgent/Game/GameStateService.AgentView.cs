@@ -92,7 +92,7 @@ namespace STS2AIAgent.Game;
 /// </remarks>
 internal static partial class GameStateService
 {
-    private const int AgentViewVersion = 11;
+    private const int AgentViewVersion = 12;
 
     private static string GetPreferredCardRulesText(string rulesText, string? resolvedRulesText)
     {
@@ -101,6 +101,7 @@ internal static partial class GameStateService
 
     private static object BuildAgentViewPayload(
         string screen,
+        bool inCombat,
         SessionPayload session,
         int nativeProfileId,
         string runId,
@@ -134,6 +135,7 @@ internal static partial class GameStateService
         {
             version = AgentViewVersion,
             screen,
+            in_combat = inCombat,
             native_profile_id = nativeProfileId,
             run_id = runId,
             session,
@@ -243,6 +245,7 @@ internal static partial class GameStateService
         return new
         {
             action_readiness = combat.action_readiness,
+            card_value_note = "Hand line and values.preview include live player modifiers such as Strength. Do not apply modifiers already reflected by preview again. Preview is not a guaranteed target hit: check target-specific Vulnerable, caps and block.",
             player = new
             {
                 hp = $"{combat.player.current_hp}/{combat.player.max_hp}",
@@ -377,7 +380,10 @@ internal static partial class GameStateService
                 current_hp = other.current_hp,
                 max_hp = other.max_hp,
                 gold = other.gold,
-                is_alive = other.is_alive
+                is_alive = other.is_alive,
+                deck = other.deck,
+                relics = other.relics,
+                potions = other.potions
             }).ToArray(),
             potions = run.potions.Select(potion => new
             {
@@ -416,7 +422,7 @@ internal static partial class GameStateService
             max = selection.max_select,
             selected = selection.selected_count,
             confirm = selection.can_confirm,
-            cards = selection.cards.Select(card => BuildAgentChoiceCardPayload(card.index, card.card_id, card.name, card.upgraded, card.energy_cost, card.star_cost, card.costs_x, card.star_costs_x, GetPreferredCardRulesText(card.rules_text, card.resolved_rules_text), glossaryTerms, card.selected)).ToArray()
+            cards = selection.cards.Select(card => BuildAgentChoiceCardPayload(card.index, card.card_id, card.name, card.upgraded, card.energy_cost, card.star_cost, card.costs_x, card.star_costs_x, GetPreferredCardRulesText(card.rules_text, card.resolved_rules_text), glossaryTerms, card.selected, card.upgrade)).ToArray()
         };
     }
 
@@ -585,6 +591,7 @@ internal static partial class GameStateService
 
         return new
         {
+            open = map.is_open,
             current = map.current_node == null ? null : $"{map.current_node.row},{map.current_node.col}",
             local_vote = map.local_vote == null ? null : $"{map.local_vote.row},{map.local_vote.col}",
             boss_node = map.boss_node == null ? null : $"{map.boss_node.row},{map.boss_node.col}",
@@ -741,6 +748,10 @@ internal static partial class GameStateService
             upgraded = card.upgraded,
             energy_cost = card.energy_cost,
             star_cost = card.star_cost,
+            values = card.dynamic_values.Select(value => new
+            {
+                name = value.name, base_value = value.base_value, preview = value.current_value
+            }).ToArray(),
             playable = card.playable,
             can_play_result = card.can_play_result,
             target = card.requires_target ? NormalizeTargetHint(card.target_index_space ?? card.target_type) : null,
@@ -766,7 +777,8 @@ internal static partial class GameStateService
         bool starCostsX,
         string rulesText,
         HashSet<string> glossaryTerms,
-        bool selected = false)
+        bool selected = false,
+        object? upgrade = null)
     {
         var keywords = GetGlossaryMatches(rulesText);
         CollectGlossaryTerms(glossaryTerms, rulesText);
@@ -777,6 +789,7 @@ internal static partial class GameStateService
             card_id = cardId,
             line = FormatCardLine(name, upgraded, 1, energyCost, starCost, costsX, starCostsX, rulesText),
             selected,
+            upgrade,
             keywords = TranslateKeywords(keywords),
             mods = Array.Empty<string>()
         };
@@ -960,7 +973,8 @@ internal static partial class GameStateService
     {
         var amount = power.amount is int value ? $" {value}" : string.Empty;
         var debuff = power.is_debuff ? " [debuff]" : string.Empty;
-        return $"{power.power_id}{amount}{debuff}";
+        var description = string.IsNullOrWhiteSpace(power.description) ? "" : $": {power.description}";
+        return $"{power.power_id}{amount}{debuff}{description}";
     }
 
     private static string FormatPotionLine(RunPotionPayload potion)

@@ -43,17 +43,15 @@ internal static class ThinkingRequestBuilder
     public static string InferMode(string? modelName)
     {
         var name = modelName?.Trim().ToLowerInvariant() ?? string.Empty;
-        if (name.Contains("deepseek", StringComparison.Ordinal) ||
-            name.Contains("r1", StringComparison.Ordinal) && name.Contains("reason", StringComparison.Ordinal))
+        // Infer only recognized model families, not arbitrary substrings in a proxy alias.
+        // The endpoint protocol is the explicit authority for renamed/proxied models.
+        name = name[(name.LastIndexOf('/') + 1)..];
+        if (name == "deepseek" || name.StartsWith("deepseek-", StringComparison.Ordinal))
         {
             return "deepseek";
         }
 
-        if (name.Contains("gpt-5", StringComparison.Ordinal) ||
-            name.Contains("step-5", StringComparison.Ordinal) ||
-            name.Contains("o1", StringComparison.Ordinal) ||
-            name.Contains("o3", StringComparison.Ordinal) ||
-            name.Contains("o4", StringComparison.Ordinal))
+        if (System.Text.RegularExpressions.Regex.IsMatch(name, @"^(?:gpt-5|step-5|o1|o3|o4)(?:[-.:]|$)"))
         {
             return "reasoning_effort";
         }

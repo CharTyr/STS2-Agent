@@ -51,7 +51,7 @@ internal sealed class OpenAiCompatibleClient : ILlmClient
 
     public async Task<LlmCompletion> CompleteAsync(LlmRequest request, CancellationToken cancellationToken)
     {
-        var thinking = ThinkingRequestBuilder.Build(request.Model, request.ThinkingMode, request.Thinking);
+        var thinking = ThinkingRequestBuilder.Build(request.Model, request.ThinkingMode == "auto" ? _endpoint.ThinkingProtocol : request.ThinkingMode, request.Thinking);
         var messages = request.Messages.Select(message => ToMessageDto(message)).ToList();
         if (!string.IsNullOrWhiteSpace(thinking.PromptSuffix) && messages.Count > 0 && messages[0].Role == "system")
         {
@@ -77,10 +77,6 @@ internal sealed class OpenAiCompatibleClient : ILlmClient
         if (thinking.DeepSeekThinking != null)
         {
             body["thinking"] = thinking.DeepSeekThinking;
-            body["extra_body"] = new Dictionary<string, object?>
-            {
-                ["thinking"] = thinking.DeepSeekThinking
-            };
         }
 
         if (request.Stream)
@@ -106,6 +102,8 @@ internal sealed class OpenAiCompatibleClient : ILlmClient
             },
             ["max_tokens"] = 16
         };
+
+        DisableDeepSeekProbeThinking(body);
 
         var completion = await SendCompletionAsync(body, stream: false, cancellationToken, onReasoningDelta: null);
         return string.IsNullOrWhiteSpace(completion.Content) ? "ok" : completion.Content.Trim();
@@ -136,18 +134,43 @@ internal sealed class OpenAiCompatibleClient : ILlmClient
             ["max_tokens"] = 256
         };
 
+        DisableDeepSeekProbeThinking(body);
+
         try
         {
             var completion = await SendCompletionAsync(body, stream: false, cancellationToken, onReasoningDelta: null);
             return completion.ToolCalls.Count > 0;
         }
-        catch (LlmException ex) when (ex.StatusCode is >= 400 and < 500 and not 408 and not 429)
+        catch (LlmException ex) when (IsUnsupportedToolError(ex))
         {
             // A 4xx about tools/tool_choice is the endpoint saying it cannot do tools -- a verdict,
             // not a failure. Anything transient (429, 5xx, timeout) keeps propagating so the caller
             // records an unknown capability instead of downgrading a working model on a bad day.
             throw new LlmToolProbeUnsupportedException(ex.Message, ex);
         }
+    }
+
+    private void DisableDeepSeekProbeThinking(Dictionary<string, object?> body)
+    {
+        // DeepSeek enables thinking by default, which rejects tool_choice="required".
+        // Capability probes only need a short response; actual play retains its configured thinking.
+        if (string.Equals(_endpoint.ThinkingProtocol, "deepseek", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(_endpoint.ThinkingProtocol, "auto", StringComparison.OrdinalIgnoreCase)
+                && Uri.TryCreate(_endpoint.BaseUrl, UriKind.Absolute, out var endpointUri)
+                && endpointUri.Host.Equals("api.deepseek.com", StringComparison.OrdinalIgnoreCase))
+        {
+            body["thinking"] = new Dictionary<string, object?> { ["type"] = "disabled" };
+        }
+    }
+
+    internal static bool IsUnsupportedToolError(LlmException error)
+    {
+        if (error.StatusCode is not (400 or 422)) return false;
+        var text = error.Message;
+        return (text.Contains("tools", StringComparison.OrdinalIgnoreCase) || text.Contains("tool_choice", StringComparison.OrdinalIgnoreCase)
+                || text.Contains("function calling", StringComparison.OrdinalIgnoreCase))
+            && (text.Contains("not supported", StringComparison.OrdinalIgnoreCase) || text.Contains("unsupported", StringComparison.OrdinalIgnoreCase)
+                || text.Contains("unknown parameter", StringComparison.OrdinalIgnoreCase));
     }
 
     public static string ResolveCompletionsUrl(string baseUrl)

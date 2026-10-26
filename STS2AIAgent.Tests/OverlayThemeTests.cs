@@ -172,7 +172,7 @@ internal static class OverlayThemeTests
         Assert.Contains("_themeSelectedId ??= OverlayThemeCatalog.Normalize(settings.OverlayTheme);", form);
         Assert.True(
             form.IndexOf("_themeSelectedId ??=", StringComparison.Ordinal) <
-            form.IndexOf("if (_showAdvancedValue)", StringComparison.Ordinal),
+            System.Text.RegularExpressions.Regex.Match(form, @"if\s*\(_showAdvancedValue\)\s*\{").Index,
             "The theme selector must be selectable whether or not the advanced section is open.");
 
         // A swatch grid marks the stored id, so a selection cannot be lost by re-drawing the grid.

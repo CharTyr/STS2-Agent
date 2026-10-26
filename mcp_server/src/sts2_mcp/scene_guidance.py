@@ -52,6 +52,7 @@ SCREEN_HEADINGS: dict[str, list[str]] = {
     "COMBAT": ["Combat: what to prioritise", "Potions: when to drink"],
     "MAP": ["Route: which node to enter"],
     "REST": ["Rest site: heal or upgrade"],
+    "REWARD": ["Card rewards: take or skip"],
     "SHOP": ["Shop: what to buy"],
     "FAKE_MERCHANT": ["Shop: what to buy"],
     "EVENT": ["Event options: how to choose"],

@@ -43,6 +43,8 @@ internal sealed class AgentSettings
     public bool HasSeenFirstRunGuide { get; set; }
 
     /// <summary>Companion picks the preselected character and readies up by itself. Set false to choose for it via the companion API.</summary>
+    public string CompanionControlMode { get; set; } = "autoplay";
+
     public bool CompanionAutoSelectCharacter { get; set; } = true;
 
     public List<ModelRoleTestRecord> RoleTests { get; set; } = new();
@@ -86,6 +88,12 @@ internal sealed class AgentSettings
 
     /// <summary>Dual-layer decision mode for solo play: Jev executes each action, the LLM only plans strategy.</summary>
     public bool DualLayerSoloEnabled { get; set; }
+
+    /// <summary>
+    /// Keep automatic play active outside combat, but yield every combat frame to the player or an
+    /// external controller. The default is false so existing installations keep their behaviour.
+    /// </summary>
+    public bool NonCombatOnlyEnabled { get; set; }
 
     /// <summary>Dual-layer decision mode for the multiplayer AI teammate.</summary>
     public bool DualLayerCoopEnabled { get; set; }
@@ -191,6 +199,7 @@ internal sealed class AgentSettings
             Endpoints = { endpoint },
             Models = { model },
             ConversationModelId = model.Id,
+            MaxSessionRequests = 30,
             Hotkey = "F8",
             AttachStateInChat = true,
             OverlayVisibleOnStart = false,
@@ -200,6 +209,7 @@ internal sealed class AgentSettings
 
     public void EnsureValidShape()
     {
+        if (CompanionControlMode is not ("autoplay" or "external")) CompanionControlMode = "autoplay";
         Endpoints ??= new List<LlmEndpoint>();
         Models ??= new List<LlmModelConfig>();
         RoleTests ??= new List<ModelRoleTestRecord>();
@@ -214,6 +224,9 @@ internal sealed class AgentSettings
 
         foreach (var endpoint in Endpoints)
         {
+            endpoint.ThinkingProtocol = endpoint.ThinkingProtocol?.Trim().ToLowerInvariant() ?? "auto";
+            if (endpoint.ThinkingProtocol is not ("auto" or "deepseek" or "reasoning_effort" or "prompt"))
+                endpoint.ThinkingProtocol = "auto";
             if (string.IsNullOrWhiteSpace(endpoint.Id))
             {
                 endpoint.Id = Guid.NewGuid().ToString("N")[..8];
@@ -358,6 +371,9 @@ internal sealed class LlmEndpoint
     public string Name { get; set; } = "Endpoint";
 
     public string BaseUrl { get; set; } = "https://api.openai.com/v1";
+
+    /// <summary>auto | deepseek | reasoning_effort | prompt. Applies to probes and auto-mode play.</summary>
+    public string ThinkingProtocol { get; set; } = "auto";
 
     public string ApiKey { get; set; } = string.Empty;
 
