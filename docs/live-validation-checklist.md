@@ -1018,9 +1018,10 @@ Offline checks cover mod artifact staging/conflict preservation, PID handshake i
 
 Before release, run on an isolated Windows profile with game v0.111.0 and real game assemblies:
 
-- [x] Build the full mod and PCK (2026-10-27: Release, 0 warnings, 0 errors after the CS0173 fix; fingerprint comparison not separately reported).
+- [x] Build the full mod and PCK (2026-10-27: Release, 0 warnings, 0 errors after the CS0173 fix).
+- [ ] Check host/companion artifact fingerprints (not separately reported on 2026-10-27).
 - [ ] Workshop installed in a second Steam library; no local copy; API ready in both windows.
-- [x] Partial local copy: refused before spawn (2026-10-27). Old and duplicate flat/nested copies were not separately reported.
+- [ ] Partial, old and duplicate flat/nested local copies: refuse before spawn, preserve files, show the conflicting path. Only the partial-copy case was run (2026-10-27: refused before spawn, path shown, files unchanged); old and duplicate copies are not verified.
 - [ ] Reserve nearby ports and force a dynamic port; verify PID/role/port in host health and direct companion health.
 - [ ] Differing TEMP variables and denied handshake writes; verify errors/fallback and the total deadline.
 - [ ] Slow child startup: retry from an active lobby/run and reconnect without creating another process or changing the original control mode.
