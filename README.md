@@ -20,7 +20,7 @@ https://github.com/user-attachments/assets/89353468-a299-4315-9516-e520bcbfbd4b
 - 👥 **Local Co-op AI Teammate**: One-click launch from the main menu spins up an isolated second game instance. You play your character; the AI teammate plays its own character in co-op mode.
 - 💬 **Live Team Conversation**: Talk to your AI teammate in natural language from the human window (e.g., "focus the right cultist", "let's take the shop path"). The AI replies and uses recent context in subsequent decisions.
 - 🛡️ **Session Budget Guards & Fault Recovery**: Tracks reported token usage and request counts, stops new calls when session limits are reached, and bounds retries. Missing usage is shown as unknown; these guards are not a billing guarantee.
-- 🔌 **Developer-Ready**: Built-in local HTTP API (`:8080`). The Settings → Connect section can expose MCP at `/mcp` on the same port for Cursor, Claude, and Codex.
+- 🔌 **Developer-Ready**: Built-in local HTTP API (`:8080`). The Settings → MCP section can expose MCP at `/mcp` on the same port for Cursor, Claude, and Codex.
 
 ---
 
@@ -63,10 +63,10 @@ This mod is still in development. Some things may be unfinished or break. Please
 
 ### Step 3: Quick model setup
 1. First launch opens **Settings → Quick setup**. Select a provider, enter its API key and model name. Local Ollama / LM Studio may leave the key empty; Custom accepts your own Base URL.
-2. Click **Test play model**. This checks connectivity and tool calling, usually with 2 requests, with a 45-second deadline and a Cancel button. Auto-play requires verified tools; chat connectivity alone is insufficient.
+2. Click **Test main model**. This checks connectivity and tool calling, usually with 2 requests, with a 45-second deadline and a Cancel button. Auto-play requires verified tools; chat connectivity alone is insufficient.
 3. New installs stop auto-play after 30 requests by default. Adjust the visible limit, or leave it empty / enter 0 for unlimited. Existing unlimited settings are preserved. Tests also call your provider. Request and token counters are not a bill; consult your provider for charges.
 4. Quick setup shares one model for conversation and play. Multiple endpoints, vision, thinking protocols and advanced budgets are under **Show advanced options**. Proxy aliases do not need to be renamed `deepseek-chat`: set the endpoint protocol explicitly.
-5. In **Play → Multiplayer**, choose **AI auto-play** before inviting, or explicitly choose **External Agent control** to launch a teammate that waits for Cursor / Claude / Codex. A ChatGPT subscription does not include an OpenAI API key or API credits.
+5. In **Play → Multiplayer**, choose **AI auto-play** before inviting, or explicitly choose **External Agent** to launch a teammate that waits for Cursor / Claude / Codex. A ChatGPT subscription does not include an OpenAI API key or API credits.
 
 ### Step 4: Play!
 
@@ -82,10 +82,10 @@ This mod is still in development. Some things may be unfinished or break. Please
 - The main window shows whether the teammate is connected, waiting on you/the game/the model, or why it stopped and what to click next. **Pause teammate** gives immediate feedback; already submitted actions still finish.
 - Use team chat to coordinate in plain English or Chinese.
 - By default the teammate takes the preselected character and readies up by itself. To pick its character yourself (in the teammate window, or through the companion API with `select_character` then `embark`), tick **Disable automatic character pick** above the invite button (it sets `companionAutoSelectCharacter` to `false` in the mod's `settings.json`); the teammate then waits on the character screen, for the AI driving it or for you, without a timeout.
-- To pick up a saved co-op run, use **Continue the saved co-op run**, the button under the invite; it is enabled on the main menu while a co-op save exists. It hosts the saved run over the local connection and brings the teammate back. Do not use the game's own Load button for that save: it opens the run over Steam networking, rejects the local-connection player ids, and renames the save as corrupt.
+- To pick up a saved co-op run, use **Continue co-op save**, the button under the invite; it is enabled on the main menu while a co-op save exists. It hosts the saved run over the local connection and brings the teammate back. Do not use the game's own Load button for that save: it opens the run over Steam networking, rejects the local-connection player ids, and renames the save as corrupt.
 
 #### Option C: Hand The Teammate Window To An External Agent
-- Select **External Agent control** in **Play → Multiplayer** before inviting. Existing HTTP/MCP invite actions retain their verification-based route selection for compatibility.
+- Select **External Agent** in **Play → Multiplayer** before inviting. Existing HTTP/MCP invite actions retain their verification-based route selection for compatibility.
 - You do not need to configure or verify any model to invite a teammate on this route: it never calls a model, so a missing or broken model cannot make it fail. The teammate still launches, joins the lobby, and readies up on its own.
 - When the run starts, the teammate stops where it is and plays nothing by itself: its `/health` reports `play_phase: "paused"` with `session_requests: 0`, because this route never calls a model.
 - Drive that character from outside with the teammate instance's own `GET /state` and `POST /action`. Find its HTTP API through `data.companion.api_port` on the main window's `GET /health` (that port is usually not 8080). The teammate can only act for its own character; acting outside it returns 403 `forbidden_actor`. On this route `data.companion.auto_play` is `false`.
@@ -164,21 +164,21 @@ The mod runs an embedded HTTP server on `http://127.0.0.1:8080` (with dynamic fa
 - `POST /session/control`: Start or pause autoplay for this instance (`{"running": true|false}`).
 - `POST /teammate/control`: Start or pause the AI teammate from the **main window** (`{"running": true|false}`). Loopback only and main-window only; this is the supported entry point for an external agent (see **Option C** above).
 - `POST /companion/control` / `POST /companion/message`: Control or message the AI teammate instance (local dual-instance only). These are the teammate instance's own controlled endpoints, called by the main process with this session's token; external callers should use `POST /teammate/control` instead.
-- `POST /mcp`: Optional MCP (Streamable HTTP). Off by default; enable it on the Settings → Connect section.
+- `POST /mcp`: Optional MCP (Streamable HTTP). Off by default; enable it on the Settings → MCP section.
 
 ### Which MCP entry to use
 
 | If you want to… | Use | Needs | How to confirm |
 | --- | --- | --- | --- |
 | Play with an AI teammate | In-game overlay, MCP off | Mod only | F8 / AI tab opens **Play → Multiplayer** |
-| Drive the game from Cursor / Claude / Codex | **Native MCP** under Settings → Connect | Mod only | Copy the **actual** URL shown (port may not be 8080) |
+| Drive the game from Cursor / Claude / Codex | **Native MCP** under Settings → MCP | Mod only | Copy the **actual** URL shown (port may not be 8080) |
 | stdio, layered/full, or compatibility | Optional Python `mcp_server/` | Python + uv | From the release root, run `scripts/test-mcp-tool-profile.ps1` |
 
-External clients: F8 → **Settings → Connect** → enable **Open MCP service** → copy the URL or JSON. It shares the HTTP API port and listens on `127.0.0.1` only. Do not hard-code `8080` or `8765`.
+External clients: F8 → **Settings → MCP** → tick **Enable MCP** → copy the URL or JSON. It shares the HTTP API port and listens on `127.0.0.1` only. Do not hard-code `8080` or `8765`.
 
 The Python sidecar is not required for players and is not the recommended entry.
 
-Default shape (replace the port with the one under Settings → Connect):
+Default shape (replace the port with the one under Settings → MCP):
    ```json
    {
      "mcpServers": {
@@ -255,7 +255,7 @@ powershell -ExecutionPolicy Bypass -File ".\scripts\build-mod.ps1" -Configuratio
 - The second window stages files from the mod actually loaded by the host, accepting GitHub `mod_id.json` and Workshop `STS2AIAgent.json`. Unmodified managed copies upgrade automatically. Manual or edited copies are preserved and report their conflict path. Keep one installation instead of both Workshop and a manual copy.
 - Model, key, budget and non-combat-only changes are pushed to an existing teammate and shown as applied only after acknowledgement. Its current action settles first; an unverified model leaves it paused.
 - Resume local AI co-op saves with **Play → Multiplayer → Continue last co-op run**. When the native load path would use the wrong player identity for an identified local save, the mod blocks it before the game can rename the save `.VAL.corrupt`. Ordinary Steam saves do not match this guard.
-- **Copy diagnostics** uses the clipboard. **Save diagnostics file** writes redacted text and opens its folder. The DLL build SHA256 distinguishes builds with the same version. Keys and chat bodies are excluded.
+- **Copy diagnostics** uses the clipboard. **Save diagnostics** writes redacted text and opens its folder. The DLL build SHA256 distinguishes builds with the same version. Keys and chat bodies are excluded.
 
 ---
 

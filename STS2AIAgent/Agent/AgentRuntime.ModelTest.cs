@@ -26,7 +26,7 @@ internal sealed partial class AgentRuntime
     public async Task<string> TestModelAsync(string modelId, CancellationToken cancellationToken)
     {
         if (!await _modelVerificationGate.WaitAsync(0, cancellationToken))
-            return Loc.T("已有模型测试正在进行，请等待或取消后重试。");
+            return Loc.T("已有测试在进行，请稍候或取消。");
         using var deadline = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         deadline.CancelAfter(TimeSpan.FromSeconds(45));
         try { return await TestModelCoreAsync(modelId, deadline.Token); }
@@ -111,7 +111,7 @@ internal sealed partial class AgentRuntime
             if (target == null || currentEndpoint == null || !currentEndpoint.Enabled
                 || !string.Equals(ModelRoleProbe.Fingerprint(new ResolvedModel(currentEndpoint, target)), fingerprint,
                     StringComparison.OrdinalIgnoreCase))
-                return Loc.T("配置已变更，本次检测结果已忽略。请重新检测当前模型。");
+                return Loc.T("配置已变更，请重新测试。");
 
             current.ModelTests.RemoveAll(item => string.Equals(item.ModelId, model.Id, StringComparison.OrdinalIgnoreCase));
             current.ModelTests.Add(record);

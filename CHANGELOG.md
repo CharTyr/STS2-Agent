@@ -19,6 +19,7 @@ Game-dependent compilation and dual-window acceptance remain required before pub
 
 ### Changed
 
+- Rewrite the in-game overlay copy: short labels, one-line statuses, and every usage note moved behind a "?" button in its card's title bar (new `HelpCard`). The footer test button is now **Test main model** everywhere, the MCP section is named **MCP**, and the Chinese and English tables stay in sync.
 - Synchronize model, key, budgets and non-combat-only settings to the running companion with explicit acknowledgement and a pause before applying changes.
 - Accept both release manifest names; upgrade only unchanged managed companion copies. Preserve manual/edited installations.
 - Integrate main's native power display amounts with dev's Sandpit/upgrade/DeepSeek fixes and Windows prompt normalization; include party inventories from #210 with unavailable-vs-empty and melted-relic semantics.

@@ -720,6 +720,9 @@ internal static class UiFactory
         return panel;
     }
 
+    /// <summary>The name of a card's title row, so <see cref="HelpCard"/> can find it to add its "?" button.</summary>
+    public const string CardHeaderName = "CardHeader";
+
     /// <summary>
     /// A titled section: heading with left accent indicator bar, then the rows, on the raised surface.
     /// </summary>
@@ -745,7 +748,7 @@ internal static class UiFactory
         var column = Column();
         if (!string.IsNullOrEmpty(title))
         {
-            var headerRow = new HBoxContainer { MouseFilter = Control.MouseFilterEnum.Ignore };
+            var headerRow = new HBoxContainer { Name = CardHeaderName, MouseFilter = Control.MouseFilterEnum.Ignore };
             headerRow.AddThemeConstantOverride("separation", SpaceXs + 2);
 
             var tag = new Panel

@@ -85,9 +85,9 @@ internal sealed partial class AgentOverlayHost
         var addEndpoint = UiFactory.Button(Loc.T("添加端点"), AddEndpoint);
         var addModel = UiFactory.Button(Loc.T("添加模型"), AddModel);
         var save = UiFactory.Button(Loc.T("保存设置"), SaveSettingsFromUi, UiFactory.ButtonKind.Primary);
-        var test = UiFactory.Button(Loc.T("检测游玩模型"), () => _ = TestConnectionAsync());
+        var test = UiFactory.Button(Loc.T("测试主模型"), () => _ = TestConnectionAsync());
         _footerModelTest = test;
-        _cancelModelTest = UiFactory.Button(Loc.T("取消检测"), () => _modelTestCancellation?.Cancel());
+        _cancelModelTest = UiFactory.Button(Loc.T("取消"), () => _modelTestCancellation?.Cancel());
         _addEndpointButton = addEndpoint;
         _addModelButton = addModel;
         page.AddChild(UiFactory.Row(addEndpoint, addModel));
@@ -157,13 +157,13 @@ internal sealed partial class AgentOverlayHost
     /// </remarks>
     private static IReadOnlyList<(string Id, string Label)> SettingsSections() => new[]
     {
-        ("first-run", Loc.T("首次配置")),
+        ("first-run", Loc.T("快速开始")),
         ("appearance", Loc.T("外观")),
         ("endpoints", Loc.T("端点")),
         ("models", Loc.T("模型")),
         ("bindings", Loc.T("模型绑定")),
-        ("jev", Loc.T("Jev 执行层")),
-        ("connect", Loc.T("接入"))
+        ("jev", Loc.T("Jev")),
+        ("connect", Loc.T("MCP"))
     };
 
     /// <summary>
@@ -395,21 +395,23 @@ internal sealed partial class AgentOverlayHost
         _settingsBody.AddChild(_saveStatus);
         _settingsLoadNotice = UiFactory.Wrapped(FormatSettingsNotice(), 12);
         _settingsBody.AddChild(_settingsLoadNotice);
-        AddSettingsSection("first-run", Loc.T("首次配置"));
+        AddSettingsSection("first-run", Loc.T("快速开始"));
         if (!_showAdvancedValue) _settingsBody.AddChild(BuildQuickSetupCard(settings));
-        if (_showAdvancedValue) _settingsBody.AddChild(UiFactory.Wrapped(Loc.T("四步上手：① 在「端点」填接口地址和 Key（本地 Ollama / LM Studio 可留空 Key）→ ② 在「模型」添加模型并绑定端点 → ③ 点模型卡片上的「测试」做一次真实调用（含工具调用检测），通过会显示 ✅ → ④ 在「模型绑定」选主模型并保存。然后切到「游玩」页点「开始自动游玩」。想玩双人：游玩页顶部切到「多人」，邀请 AI 队友。")));
-        _testNotice = UiFactory.Wrapped(Loc.T("「测试」是对该模型的真实调用：先连通，再验证它会不会调用工具——不会调用工具的模型无法自动游玩。页脚的「测试连接」测的是当前主模型。"), 12);
-        _settingsBody.AddChild(_testNotice);
         _conversationTest = UiFactory.Wrapped(ModelRoleProbe.FormatLine(firstRun.Conversation), 12);
         _playTest = UiFactory.Wrapped(ModelRoleProbe.FormatLine(firstRun.Play), 12);
         _visionTest = UiFactory.Wrapped(ModelRoleProbe.FormatLine(firstRun.Vision), 12);
-        _settingsBody.AddChild(_conversationTest);
-        _settingsBody.AddChild(_playTest);
-        _settingsBody.AddChild(_visionTest);
+        var modelStatus = new List<Control> { _conversationTest, _playTest, _visionTest };
         if (firstRun.Play.Status == "failed" && !string.IsNullOrWhiteSpace(firstRun.Play.NextStep))
         {
-            _settingsBody.AddChild(UiFactory.Wrapped(Loc.T("下一步：{0}", firstRun.Play.NextStep), 12));
+            modelStatus.Add(UiFactory.Wrapped(Loc.T("下一步：{0}", firstRun.Play.NextStep), 12));
         }
+
+        // The four-step walkthrough only helps while the full form is open; the quick card is its own
+        // walkthrough.
+        var statusHelp = Loc.T("「测试」会真实调用该模型：先测连通，再测工具调用。不支持工具调用的模型无法自动游玩。\n「测试主模型」测的是当前主模型。");
+        statusHelp += _showAdvancedValue ? "\n" + Loc.T("四步：① 在「端点」填地址和 Key（本地服务可留空 Key）② 在「模型」添加模型并绑定端点 ③ 点模型卡片上的「测试」，通过会显示 ✅ ④ 在「模型绑定」选主模型并保存。\n然后到「游玩」页开始自动游玩。双人游玩：把游玩页顶部切到「多人」再邀请 AI 队友。") : "";
+
+        _settingsBody.AddChild(HelpCard.Build("settings.status", Loc.T("模型状态"), statusHelp, modelStatus.ToArray()));
 
         // Removing a bound model reports all affected roles. That sentence must reflow instead of
         // stretching the settings column and clipping the controls on every other page.
@@ -432,9 +434,8 @@ internal sealed partial class AgentOverlayHost
         AddSettingsSection("appearance", Loc.T("外观"));
         var appearanceCard = UiFactory.Card(
             Loc.T("外观"),
-            UiFactory.Label(Loc.T("界面主题"), 13),
-            BuildThemePicker(),
-            UiFactory.Label(Loc.T("只改这个窗口的配色，保存后立即生效。"), UiFactory.FontCaption, muted: true));
+            UiFactory.Label(Loc.T("主题"), 13),
+            BuildThemePicker());
         _settingsBody.AddChild(appearanceCard);
 
         if (_showAdvancedValue)
@@ -453,7 +454,7 @@ internal sealed partial class AgentOverlayHost
 
         AddSettingsSection("bindings", Loc.T("模型绑定"));
         _conversationCombo = FillModelCombo(settings, settings.ConversationModelId, includeEmpty: false);
-        _settingsBody.AddChild(Labeled(Loc.T("主模型（对话与游玩）"), _conversationCombo));
+        _settingsBody.AddChild(Labeled(Loc.T("主模型"), _conversationCombo));
         WatchCombo(_conversationCombo);
         }
         _showAdvanced = UiFactory.Check(Loc.T("显示高级选项"), _showAdvancedValue);
@@ -467,31 +468,30 @@ internal sealed partial class AgentOverlayHost
         _settingsBody.AddChild(_showAdvanced);
         if (_showAdvancedValue)
         {
+            var advanced = new List<Control>();
             _visionCombo = FillModelCombo(settings, settings.VisionModelId, includeEmpty: true);
-            _settingsBody.AddChild(Labeled(Loc.T("外挂视觉模型（可空）"), _visionCombo));
+            advanced.Add(Labeled(Loc.T("视觉模型（可选）"), _visionCombo));
             WatchCombo(_visionCombo);
-            _settingsBody.AddChild(UiFactory.Wrapped(Loc.T("视觉可选。不勾选「视觉」、不配外挂视觉时，仍用 compact 状态与工具打完全部内容。"), 11));
             _hotkeyEdit = UiFactory.Line(settings.Hotkey, "F8");
             WatchLine(_hotkeyEdit);
-            _settingsBody.AddChild(Labeled(Loc.T("开关热键"), _hotkeyEdit));
+            advanced.Add(Labeled(Loc.T("显示/隐藏热键"), _hotkeyEdit));
             _maxTokensEdit = UiFactory.Line(settings.MaxSessionTokens?.ToString() ?? "", Loc.T("不限（留空或0）"));
             _maxRequestsEdit = UiFactory.Line(settings.MaxSessionRequests?.ToString() ?? "", Loc.T("不限（留空或0）"));
             WatchLine(_maxTokensEdit);
             WatchLine(_maxRequestsEdit);
-            _settingsBody.AddChild(Labeled(Loc.T("会话 Token 上限"), _maxTokensEdit));
-            _settingsBody.AddChild(Labeled(Loc.T("会话请求上限"), _maxRequestsEdit));
+            advanced.Add(Labeled(Loc.T("Token 上限"), _maxTokensEdit));
+            advanced.Add(Labeled(Loc.T("请求上限"), _maxRequestsEdit));
             _llmTimeoutEdit = UiFactory.Line(settings.LlmRequestTimeoutSeconds?.ToString() ?? "", Loc.T("默认 600 秒"));
             WatchLine(_llmTimeoutEdit);
-            _settingsBody.AddChild(Labeled(Loc.T("单次请求超时（秒）"), _llmTimeoutEdit));
-            _settingsBody.AddChild(UiFactory.Wrapped(Loc.T("服务商长时间不应答时按此时长报错，而不是一直转圈。"), 11));
-            _budgetHint = UiFactory.Wrapped(_budgetInputError ?? Loc.T("非法预算输入会保留原来的安全上限，不会静默变成不限。"), 11);
-            _settingsBody.AddChild(_budgetHint);
-            _settingsBody.AddChild(UiFactory.Wrapped(Loc.T("预算护栏：达到上限时优雅停止自动游玩并提示，避免意外耗尽额度。"), 11));
+            advanced.Add(Labeled(Loc.T("请求超时（秒）"), _llmTimeoutEdit));
+            _budgetHint = UiFactory.Wrapped(_budgetInputError ?? "", 11);
+            _budgetHint.Visible = !string.IsNullOrWhiteSpace(_budgetInputError);
+            advanced.Add(_budgetHint);
             _settingsResetStatsButton = UiFactory.Button(Loc.T(SessionBudgetLimits.ResetStatsActionLabel), ResetSessionStatsFromUi);
-            _settingsBody.AddChild(_settingsResetStatsButton);
-            _proactiveChatToggle = UiFactory.Check(Loc.T("主动发言（AI 队友偶尔主动说一句）"), settings.ProactiveChatEnabled);
+            advanced.Add(_settingsResetStatsButton);
+            _proactiveChatToggle = UiFactory.Check(Loc.T("AI 主动发言"), settings.ProactiveChatEnabled);
             WatchCheck(_proactiveChatToggle);
-            _settingsBody.AddChild(_proactiveChatToggle);
+            advanced.Add(_proactiveChatToggle);
             _proactiveToneCombo = UiFactory.Combo();
             foreach (var option in ProactiveChatTones.Options)
             {
@@ -501,12 +501,15 @@ internal sealed partial class AgentOverlayHost
 
             SelectByText(_proactiveToneCombo, ProactiveChatTones.Label(settings.ProactiveChatTone));
             WatchCombo(_proactiveToneCombo);
-            _settingsBody.AddChild(Labeled(Loc.T("交流风格"), _proactiveToneCombo));
-            _settingsBody.AddChild(UiFactory.Wrapped(Loc.T("默认关闭。开启后仅在战斗开始与结束时各说一句，每次开始自动游玩最多 6 句，两句之间至少间隔 75 秒（暂停或继续自动游玩不会缩短这个间隔）；不会代打，也遵守预算上限。"), 11));
-            _settingsBody.AddChild(UiFactory.Button(Loc.T("重置窗口位置"), ResetPlacement));
-            _settingsBody.AddChild(UiFactory.Label(Loc.T("拖动标题栏可移动窗口，位置会保存。"), 11, muted: true));
+            advanced.Add(Labeled(Loc.T("发言风格"), _proactiveToneCombo));
+            advanced.Add(UiFactory.Button(Loc.T("重置窗口位置"), ResetPlacement));
             // Wrapped: a Windows profile path is one long word wider than the panel.
-            _settingsBody.AddChild(UiFactory.Wrapped(Loc.T("配置文件：{0}", AgentRuntime.Instance.SettingsPath), 11));
+            advanced.Add(UiFactory.Wrapped(Loc.T("配置文件：{0}", AgentRuntime.Instance.SettingsPath), 11));
+            _settingsBody.AddChild(HelpCard.Build(
+                "settings.advanced",
+                Loc.T("高级"),
+                Loc.T("视觉：不勾选模型的「视觉」、也不配视觉模型时，仍可用精简状态和工具打完全部流程。\n预算：达到上限会自动停止游玩并提示；填错会保留原上限，不会变成不限。\n请求超时：服务商长时间没有响应时，按此时长报错。\nAI 主动发言：默认关闭；开启后只在战斗开始和结束各说一句，每次自动游玩最多 6 句，间隔至少 75 秒，不会代打，也受预算限制。\n窗口位置：拖动标题栏移动，位置会保存。"),
+                advanced.ToArray()));
         }
         else
         {
@@ -521,10 +524,10 @@ internal sealed partial class AgentOverlayHost
             _proactiveToneCombo = null;
         }
 
-        AddSettingsSection("jev", Loc.T("Jev 执行层"));
+        AddSettingsSection("jev", Loc.T("Jev"));
         _settingsBody.AddChild(BuildJevSection(settings));
 
-        AddSettingsSection("connect", Loc.T("接入"));
+        AddSettingsSection("connect", Loc.T("MCP"));
         _settingsBody.AddChild(BuildConnectSection());
         }
         finally
@@ -544,7 +547,6 @@ internal sealed partial class AgentOverlayHost
     private Control BuildJevSection(AgentSettings settings)
     {
         var column = UiFactory.Column();
-        column.AddChild(UiFactory.Wrapped(Loc.T("双层决策模式由 Jev（TypeSafe System One 模型）逐步操作游戏，LLM 只做战略规划。在游玩页按模式开启。"), UiFactory.FontCaption));
 
         _jevBaseUrlEdit = UiFactory.Line(settings.JevBaseUrl, "https://api.typesafe.ai");
         _jevApiKeyEdit = UiFactory.Line(settings.JevApiKey, "API Key", secret: true);
@@ -559,14 +561,18 @@ internal sealed partial class AgentOverlayHost
         column.AddChild(Labeled(Loc.T("Base URL"), _jevBaseUrlEdit));
         column.AddChild(Labeled(Loc.T("API Key"), _jevApiKeyEdit));
         column.AddChild(Labeled(Loc.T("模型"), _jevModelEdit));
-        column.AddChild(Labeled(Loc.T("置信度阈值（0-1，低于则回退 LLM）"), _jevThresholdEdit));
-        column.AddChild(Labeled(Loc.T("单次请求超时（秒）"), _jevTimeoutEdit));
+        column.AddChild(Labeled(Loc.T("置信度阈值（0-1）"), _jevThresholdEdit));
+        column.AddChild(Labeled(Loc.T("请求超时（秒）"), _jevTimeoutEdit));
 
         _jevTestButton = UiFactory.Button(Loc.T("测试 Jev 连接"), () => _ = TestJevConnectionAsync(), UiFactory.ButtonKind.Ghost);
         _jevTestStatus = UiFactory.Wrapped("", UiFactory.FontCaption);
         column.AddChild(UiFactory.Row(_jevTestButton));
         column.AddChild(_jevTestStatus);
-        return UiFactory.Card(Loc.T("Jev 执行层"), column);
+        return HelpCard.Build(
+            "settings.jev",
+            Loc.T("Jev"),
+            Loc.T("双层决策下，由 Jev（TypeSafe System One 模型）逐步操作游戏，LLM 只做战略规划。\n在游玩页按模式开启。置信度低于阈值时，由 LLM 接手。"),
+            column);
     }
 
     private async Task TestJevConnectionAsync()
@@ -593,8 +599,7 @@ internal sealed partial class AgentOverlayHost
     private Control BuildConnectSection()
     {
         var page = UiFactory.Column();
-        page.AddChild(UiFactory.Wrapped(Loc.T("选择：一起玩只用游戏内窗口，不必打开 MCP。外部客户端用本页开关。Python sidecar 仅 stdio / layered / full。")));
-        _mcpToggle = UiFactory.Check(Loc.T("打开 MCP 服务"), AgentRuntime.Instance.McpRunning);
+        _mcpToggle = UiFactory.Check(Loc.T("启用 MCP"), AgentRuntime.Instance.McpRunning);
         _mcpToggle.Toggled += on => AgentRuntime.Instance.SetMcpEnabled(on);
         _mcpStatus = UiFactory.Wrapped(AgentRuntime.Instance.McpStatus, UiFactory.FontBody);
 
@@ -614,16 +619,15 @@ internal sealed partial class AgentOverlayHost
         _mcpConfigEdit = UiFactory.Multiline("", 120);
         _mcpConfigEdit.Editable = false;
         _mcpInfoBox.AddChild(_mcpConfigEdit);
-        _mcpInfoBox.AddChild(UiFactory.Wrapped(Loc.T("把配置贴进外部客户端的 MCP 设置。服务只监听本机 127.0.0.1。")));
         _mcpInfoBox.Visible = AgentRuntime.Instance.McpRunning;
 
-        page.AddChild(UiFactory.Card(
-            Loc.T("服务开关"),
-            UiFactory.Wrapped(Loc.T("游戏内自动打不需要打开。只有 Cursor / Claude / Codex 等外部客户端才需要。")),
+        page.AddChild(HelpCard.Build(
+            "settings.mcp",
+            Loc.T("MCP 服务"),
+            Loc.T("游戏内自动游玩和一起玩都不需要 MCP，只有 Cursor / Claude / Codex 等外部客户端才需要。\n把配置贴进客户端的 MCP 设置即可，服务只监听本机 127.0.0.1。\n本机 HTTP API 始终可用（GET /health /state，POST /action）；MCP 打开后才会在同一端口提供 /mcp。地址以本页复制为准。\nPython sidecar 仅支持 stdio / layered / full。"),
             _mcpToggle,
             _mcpStatus));
         page.AddChild(UiFactory.Card(Loc.T("客户端配置"), _mcpInfoBox));
-        page.AddChild(UiFactory.Wrapped(Loc.T("本机 HTTP API 始终可用：GET /health /state ，POST /action。MCP 打开后才会在同一端口暴露 /mcp。地址以本页复制为准，不要写死 8080 或 8765。")));
         return page;
     }
 
@@ -649,7 +653,7 @@ internal sealed partial class AgentOverlayHost
         var protocolIndex = Array.IndexOf(new[] { "auto", "deepseek", "reasoning_effort", "prompt" }, endpoint.ThinkingProtocol);
         protocol.Select(Math.Max(0, protocolIndex));
         WatchCombo(protocol);
-        if (_showAdvancedValue) column.AddChild(Labeled(Loc.T("思考协议（代理端点也适用）"), protocol));
+        if (_showAdvancedValue) column.AddChild(Labeled(Loc.T("思考协议"), protocol));
         box.AddChild(column);
         _endpointEditors.Add(new EndpointEditors(endpoint.Id, name, url, key, enabled, protocol));
         return box;
@@ -681,7 +685,7 @@ internal sealed partial class AgentOverlayHost
         {
             var missingEndpoint = string.IsNullOrWhiteSpace(model.EndpointId)
                 ? Loc.T("(未绑定端点)")
-                : Loc.T("(当前端点不可用：{0})", model.EndpointId);
+                : Loc.T("(端点不可用：{0})", model.EndpointId);
             endpointCombo.AddItem(missingEndpoint);
             endpointCombo.SetItemMetadata(endpointCombo.ItemCount - 1, model.EndpointId ?? "");
             selectedEndpointIndex = endpointCombo.ItemCount - 1;

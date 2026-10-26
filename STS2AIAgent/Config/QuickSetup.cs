@@ -28,8 +28,8 @@ internal static class QuickSetup
         var provider = Providers[Math.Clamp(providerIndex, 0, Providers.Length - 1)];
         var url = provider.Id == "custom" ? customUrl.Trim() : provider.BaseUrl;
         if (!Uri.TryCreate(url, UriKind.Absolute, out var uri) || uri.Scheme is not ("http" or "https"))
-            throw new ArgumentException(Loc.T("请填写完整的 HTTP 或 HTTPS 接口地址。"));
-        if (string.IsNullOrWhiteSpace(modelName)) throw new ArgumentException(Loc.T("请填写服务商提供或本地已安装的模型名称。"));
+            throw new ArgumentException(Loc.T("请填写完整的 HTTP(S) 接口地址。"));
+        if (string.IsNullOrWhiteSpace(modelName)) throw new ArgumentException(Loc.T("请填写模型名。"));
         var copy = SettingsClone.Clone(original);
         var model = copy.Models.Count == 1 ? copy.Models[0] : copy.FindModel("quick-start-model");
         if (model == null)

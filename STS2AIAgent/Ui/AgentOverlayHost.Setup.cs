@@ -29,10 +29,10 @@ internal sealed partial class AgentOverlayHost
         foreach (var p in QuickSetup.Providers) _quickProvider.AddItem(p.Name);
         _quickProvider.Select(providerIndex);
         _quickKey = UiFactory.Line(resolved?.Endpoint.ApiKey ?? "", "API Key", secret: true);
-        _quickModel = UiFactory.Line(resolved?.Model.Model ?? "", Loc.T("服务商或本地模型名称"));
+        _quickModel = UiFactory.Line(resolved?.Model.Model ?? "", Loc.T("模型名"));
         _quickUrl = UiFactory.Line(resolved?.Endpoint.BaseUrl ?? "", "https://example.com/v1");
         _quickUrl.Visible = QuickSetup.Providers[providerIndex].Id == "custom";
-        _quickBudget = UiFactory.Line(settings.MaxSessionRequests?.ToString() ?? "", Loc.T("留空或 0 表示不限"));
+        _quickBudget = UiFactory.Line(settings.MaxSessionRequests?.ToString() ?? "", Loc.T("不限（留空或0）"));
         void Dirty() { if (!_rebuildingSettings) { _quickDirty = true; MarkSettingsDirty(); } }
         _quickKey.TextChanged += _ => Dirty();
         _quickModel.TextChanged += _ => Dirty();
@@ -46,14 +46,13 @@ internal sealed partial class AgentOverlayHost
             Dirty();
         };
         _quickDirty = false;
-        return UiFactory.Card(Loc.T("快速配置"),
-            UiFactory.Wrapped(Loc.T("选择服务商，填写 API Key 和模型名称，然后检测。对话和自动游玩会共用这个模型；本地服务可留空 Key。")),
+        return HelpCard.Build(
+            "settings.quick",
+            Loc.T("快速配置"),
+            Loc.T("选择服务商，填 API Key 和模型名，然后点「测试主模型」。\n对话和自动游玩共用这个模型；本地服务（Ollama / LM Studio）可留空 Key。\n请求上限：新安装默认试用 30 次，可调整。测试也会调用你的服务；请求数和 Token 不等于账单金额。"),
             Labeled(Loc.T("服务商"), _quickProvider), _quickUrl,
             Labeled("API Key", _quickKey), Labeled(Loc.T("模型"), _quickModel),
-            Labeled(Loc.T("自动游玩请求上限"), _quickBudget),
-            UiFactory.Wrapped(settings.MaxSessionRequests.HasValue
-                ? Loc.T("新安装默认试用 30 次请求，可调整。检测也会调用你的服务；请求数和 Token 不等于账单金额。")
-                : Loc.T("当前自动游玩不限请求次数。可填写上限；请求数和 Token 不等于账单金额。"), UiFactory.FontCaption));
+            Labeled(Loc.T("请求上限"), _quickBudget));
     }
 
     private AgentSettings HarvestQuickSetup(AgentSettings settings)
@@ -86,7 +85,7 @@ internal sealed partial class AgentOverlayHost
         using var cancellation = new CancellationTokenSource(TimeSpan.FromSeconds(45));
         _modelTestCancellation = cancellation;
         RefreshModelTestControls();
-        SetSaveStatus(Loc.T("正在检测连通与工具能力，最多 45 秒，通常 2 个请求。可点取消。"));
+        SetSaveStatus(Loc.T("正在测试…（最多 45 秒）"));
         string result;
         try
         {
@@ -97,7 +96,7 @@ internal sealed partial class AgentOverlayHost
         }
         catch (OperationCanceledException)
         {
-            result = cancellation.IsCancellationRequested ? Loc.T("检测已取消或超时，配置已保留，可重试。") : Loc.T("检测已取消。");
+            result = cancellation.IsCancellationRequested ? Loc.T("已取消或超时，配置已保留。") : Loc.T("已取消。");
         }
         catch (Exception ex) { result = DiagnosticExport.Redact(ex.Message); }
         finally { _modelTestCancellation = null; }
@@ -124,24 +123,24 @@ internal sealed partial class AgentOverlayHost
         var record = AgentRuntime.Instance.ModelTestFor(modelId);
         if (record == null)
         {
-            return Loc.T("⚪ 未测试。点「测试」做一次真实调用（含工具调用检测）。");
+            return Loc.T("⚪ 未测试");
         }
 
         if (!AgentRuntime.Instance.IsModelVerified(modelId))
         {
             return record.Status switch
             {
-                "verified" => Loc.T("⚪ 配置已修改，需重新测试。"),
+                "verified" => Loc.T("⚪ 已修改，需重新测试"),
                 // A failed test must not look like "never tested": the player just pressed the
                 // button and needs the reason on the card, not in a line the rebuild erases.
                 "failed" => Loc.T("⚠️ 测试失败（{0}）：{1}", ShortTime(record.TestedAt), record.Error ?? ""),
-                _ => Loc.T("⚪ 未测试。点「测试」做一次真实调用（含工具调用检测）。")
+                _ => Loc.T("⚪ 未测试")
             };
         }
 
         return record.Tools == "supported"
-            ? Loc.T("✅ 已验证 · 工具调用可用（{0}）", ShortTime(record.TestedAt))
-            : Loc.T("⚠️ 已连通，但工具调用不可用——该模型无法自动游玩（{0}）", ShortTime(record.TestedAt));
+            ? Loc.T("✅ 已验证（{0}）", ShortTime(record.TestedAt))
+            : Loc.T("⚠️ 不支持工具调用，无法自动游玩（{0}）", ShortTime(record.TestedAt));
     }
 
     private static string ShortTime(string? iso)

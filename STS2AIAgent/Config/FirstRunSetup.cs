@@ -16,7 +16,7 @@ internal readonly record struct FirstRunStatus(
 internal static class FirstRunSetup
 {
     public static string SettingsHint =>
-        Loc.T("请先在设置中填写 OpenAI 兼容接口地址和模型名称。本地 Ollama / LM Studio 可以留空 API Key。");
+        Loc.T("请先在「设置」填写接口地址和模型名。");
 
     public static string UnverifiedHint =>
         Loc.T("配置已填写，但主模型尚未验证。在「设置」页点「检测游玩模型」做一次真实调用；连通与工具调用通过后，即可开始自动游玩或邀请队友。");
@@ -38,7 +38,7 @@ internal static class FirstRunSetup
         if (!Uri.TryCreate(model.Endpoint.BaseUrl, UriKind.Absolute, out var endpoint) ||
             endpoint.Scheme is not ("http" or "https"))
         {
-            return new FirstRunStatus(false, Loc.T("模型端点地址无效，请在设置中填写完整的 HTTP 或 HTTPS 地址。"), "missing", conversation, play, vision);
+            return new FirstRunStatus(false, Loc.T("接口地址无效，请填写完整的 HTTP(S) 地址。"), "missing", conversation, play, vision);
         }
 
         if (play.Status == "failed")
@@ -48,7 +48,7 @@ internal static class FirstRunSetup
         }
 
         if (play.Status == "verified" && (!model.Model.SupportsTools || play.CapabilityStatus == "unsupported"))
-            return new FirstRunStatus(false, Loc.T("该模型可以聊天，但工具调用不可用，不能自动游玩。请选择支持工具调用的模型并重新测试。"),
+            return new FirstRunStatus(false, Loc.T("该模型不支持工具调用，无法自动游玩。请换模型再测。"),
                 "tools_unavailable", conversation, play, vision);
         if (play.Status == "verified" && play.CapabilityStatus == "supported")
             return new FirstRunStatus(true, InviteHint, "verified", conversation, play, vision);
@@ -74,7 +74,7 @@ internal static class FirstRunSetup
         {
             return new FirstRunStatus(
                 false,
-                Loc.T("模型端点地址无效，请在设置中填写完整的 HTTP 或 HTTPS 地址。"),
+                Loc.T("接口地址无效，请填写完整的 HTTP(S) 地址。"),
                 "missing",
                 ModelRoleProbe.Unverified(ModelRoleNames.Conversation, model),
                 ModelRoleProbe.Unverified(ModelRoleNames.Play, model),

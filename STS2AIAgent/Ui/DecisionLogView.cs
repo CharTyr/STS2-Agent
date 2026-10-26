@@ -50,7 +50,7 @@ internal static class DecisionLogView
         {
             // The LLM finished a turn Jev could not commit: the empty Jev receipt already spent its
             // request, and this row is where that attempt becomes visible to the player.
-            parts.Add(Loc.T("Jev 未提交 → LLM 接手"));
+            parts.Add(Loc.T("Jev 未提交，LLM 接手"));
         }
 
         if (!string.IsNullOrWhiteSpace(entry.reason))
@@ -60,8 +60,8 @@ internal static class DecisionLogView
 
         parts.Add(Loc.T("来源：{0}", entry.source));
         parts.Add(entry.total_tokens is { } tokens
-            ? Loc.T("本次 Token：{0}", tokens.ToString("N0"))
-            : Loc.T("本次 Token：未知"));
+            ? Loc.T("Token {0}", tokens.ToString("N0"))
+            : Loc.T("Token 未知"));
         return string.Join(" · ", parts);
     }
 }

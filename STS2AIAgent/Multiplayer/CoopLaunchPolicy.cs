@@ -183,7 +183,7 @@ internal static class CoopLaunchPolicy
         if (!Uri.TryCreate(model.Endpoint.BaseUrl, UriKind.Absolute, out var endpoint) ||
             endpoint.Scheme is not ("http" or "https"))
         {
-            return Loc.T("模型端点地址无效，请在设置中填写完整的 HTTP 或 HTTPS 地址。");
+            return Loc.T("接口地址无效，请填写完整的 HTTP(S) 地址。");
         }
 
         return null;

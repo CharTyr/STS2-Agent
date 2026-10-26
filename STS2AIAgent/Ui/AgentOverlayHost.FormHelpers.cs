@@ -78,7 +78,7 @@ internal sealed partial class AgentOverlayHost
 
         if (selectedIndex < 0 && !string.IsNullOrWhiteSpace(selectedId))
         {
-            combo.AddItem(Loc.T("(当前绑定不可用：{0})", selectedId));
+            combo.AddItem(Loc.T("(绑定不可用：{0})", selectedId));
             combo.SetItemMetadata(combo.ItemCount - 1, selectedId);
             selectedIndex = combo.ItemCount - 1;
         }

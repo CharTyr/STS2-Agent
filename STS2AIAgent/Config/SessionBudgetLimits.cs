@@ -7,7 +7,7 @@ internal readonly record struct SessionBudgetParse(bool Accepted, int? Value, st
 
 internal static class SessionBudgetLimits
 {
-    public const string ResetStatsActionLabel = "重置本会话统计";
+    public const string ResetStatsActionLabel = "重置统计";
     public const string InvalidInputMessage = "会话预算必须是正整数；留空或 0 表示不限。已保留原来的安全上限。";
 
     public static SessionBudgetParse Parse(string? text)
@@ -62,8 +62,8 @@ internal static class SessionBudgetLimits
     public static string BudgetRecoveryNextAction(bool canReset)
     {
         return canReset
-            ? Loc.T("打开「设置」→ 显示高级选项以提高上限，或点「重置本会话统计」后再点「继续游玩」。重置只清零本会话计数，不会改预算上限；普通暂停/继续不会清零。")
-            : Loc.T("自动游玩进行中不能清零统计。请先点「暂停队友」，再在「设置」→ 显示高级选项提高上限，或暂停后点「重置本会话统计」。暂停/继续不会清零累计。");
+            ? Loc.T("到「设置」勾选「显示高级选项」调高上限，或点「重置统计」后再点「继续游玩」。重置只清零本会话计数，不改预算上限。")
+            : Loc.T("自动游玩进行中不能重置统计。请先暂停，再点「重置统计」，或到「设置」调高上限。");
     }
 
     public static bool TryHarvestBudget(AgentSettings target, string? tokensText, string? requestsText, out string? error)

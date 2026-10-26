@@ -97,7 +97,7 @@ internal static class PlayerFacingSession
                 "companion_lost",
                 Loc.T("队友窗口已退出"),
                 s.DualStatus,
-                Loc.T("关闭残留窗口后，回到主菜单再点「邀请 AI 队友」。"),
+                Loc.T("关闭残留窗口，回主菜单重新邀请。"),
                 s.StopDetail);
         }
 
@@ -107,7 +107,7 @@ internal static class PlayerFacingSession
                 "pairing",
                 Loc.T("正在组队"),
                 s.DualStatus,
-                Loc.T("等待第二窗口连接。请勿重复点击邀请。"),
+                Loc.T("等待队友窗口连接，请勿重复邀请。"),
                 null);
         }
 
@@ -128,7 +128,7 @@ internal static class PlayerFacingSession
                 "needs_error",
                 Loc.T("配置有误，已停止"),
                 s.StopDetail ?? s.Status,
-                Loc.T("打开「设置」修正端点、模型名或 Key，测试通过后再点「继续游玩」。不会自动重试。"),
+                Loc.T("到「设置」修正端点、模型或 Key，测试通过后点「继续游玩」。"),
                 s.StopDetail);
         }
 
@@ -137,8 +137,8 @@ internal static class PlayerFacingSession
             return new PlayerFacingView(
                 "run_ended",
                 Loc.T("对局已结束"),
-                s.StopDetail ?? Loc.T("已离开当前对局，不会自动开新局。"),
-                Loc.T("若要再打一局，先回到主菜单自行开局，再继续或重新邀请。"),
+                s.StopDetail ?? Loc.T("已离开当前对局。"),
+                Loc.T("新开一局后，再继续或重新邀请。"),
                 null);
         }
 
@@ -148,7 +148,7 @@ internal static class PlayerFacingSession
                 "needs_error",
                 Loc.T("暂时连不上模型"),
                 s.StopDetail ?? s.Status,
-                Loc.T("检查网络或服务后，点「继续游玩」恢复。配置类错误不会无限重试。"),
+                Loc.T("检查网络或服务后点「继续游玩」。"),
                 s.StopDetail);
         }
 
@@ -158,7 +158,7 @@ internal static class PlayerFacingSession
                 "needs_error",
                 Loc.T("自动游玩已停止"),
                 s.StopDetail ?? s.Status,
-                Loc.T("查看当前局面后点「继续游玩」。"),
+                Loc.T("看一眼局面，再点「继续游玩」。"),
                 s.StopDetail);
         }
 
@@ -168,7 +168,7 @@ internal static class PlayerFacingSession
                 "pausing",
                 Loc.T("正在暂停"),
                 s.TeamControlStatus,
-                Loc.T("已提交的动作会先完成，不会再派发新的游戏动作。"),
+                Loc.T("已提交的动作会先完成。"),
                 null);
         }
 
@@ -178,7 +178,7 @@ internal static class PlayerFacingSession
                 "finishing_action",
                 Loc.T("正在完成已提交的动作"),
                 s.Status,
-                Loc.T("请稍候。这不是已取消；完成后会显示已暂停。"),
+                Loc.T("请稍候，完成后显示已暂停。"),
                 null);
         }
 
@@ -188,7 +188,7 @@ internal static class PlayerFacingSession
                 "paused",
                 Loc.T("队友已暂停"),
                 s.TeamControlStatus,
-                Loc.T("仍可聊天。确认配置与队友仍在后，点「继续游玩」。"),
+                Loc.T("仍可聊天。准备好后点「继续游玩」。"),
                 null);
         }
 
@@ -196,8 +196,8 @@ internal static class PlayerFacingSession
         {
             var kind = s.FirstRun.Phase == "failed" ? "needs_error" : "unconfigured";
             var next = s.FirstRun.Phase == "failed"
-                ? Loc.T("打开「设置」，按失败用途修正后再测试。")
-                : Loc.T("打开「设置」：添加端点 → 添加模型并绑定 → 选择对话/游玩用途 → 测试 → 邀请队友。");
+                ? Loc.T("到「设置」修正后重新测试。")
+                : Loc.T("到「设置」配置并测试模型。");
             return new PlayerFacingView(kind, HeadlineForFirstRun(s.FirstRun), s.FirstRun.Hint, next, null);
         }
 
@@ -210,7 +210,7 @@ internal static class PlayerFacingSession
                 "ready_to_invite",
                 Loc.T("可以邀请 AI 队友"),
                 s.FirstRun.Hint,
-                Loc.T("回到主菜单，点「邀请 AI 队友」。"),
+                Loc.T("回主菜单邀请 AI 队友。"),
                 null);
         }
 
@@ -220,7 +220,7 @@ internal static class PlayerFacingSession
                 "waiting_player",
                 Loc.T("正在等你"),
                 s.Status,
-                Loc.T("在你的窗口完成选择。这是正常等待，不是故障。"),
+                Loc.T("请在你的窗口完成选择。"),
                 null);
         }
 
@@ -230,7 +230,7 @@ internal static class PlayerFacingSession
                 "waiting_game",
                 Loc.T("正在等游戏"),
                 s.Status,
-                Loc.T("动画或转场结束后会继续。这是正常等待。"),
+                Loc.T("动画结束后继续。"),
                 null);
         }
 
@@ -243,7 +243,7 @@ internal static class PlayerFacingSession
                 "requesting_model",
                 Loc.T("正在请求模型"),
                 s.Status,
-                Loc.T("可点「暂停队友」。暂停不会取消已经发出的模型请求，但不会再派发新动作。"),
+                Loc.T("可点「暂停队友」，已发出的请求不会被取消。"),
                 null);
         }
 
@@ -253,7 +253,7 @@ internal static class PlayerFacingSession
                 "running",
                 Loc.T("队友正在行动"),
                 s.Status,
-                Loc.T("可随时暂停。你只操作自己的角色。"),
+                Loc.T("可随时暂停。"),
                 null);
         }
 
@@ -261,21 +261,21 @@ internal static class PlayerFacingSession
             "ready",
             Loc.T("队友已连接"),
             s.DualStatus,
-            string.IsNullOrWhiteSpace(s.TeamControlStatus) ? Loc.T("需要时点「暂停队友」或继续聊天。") : s.TeamControlStatus,
+            string.IsNullOrWhiteSpace(s.TeamControlStatus) ? Loc.T("可点「暂停队友」或聊天。") : s.TeamControlStatus,
             null);
     }
 
     public static string FormatUsage(bool known, LlmUsage usage, int requests)
     {
-        var requestText = Loc.T("请求：{0} 次", requests);
+        var requestText = Loc.T("{0} 次请求", requests);
         if (!known)
         {
             return requests == 0
-                ? Loc.T("Token 消耗：尚无（未收到 usage） | {0}", requestText)
-                : Loc.T("Token 消耗：未知（服务未返回 usage） | {0}", requestText);
+                ? Loc.T("暂无 Token · {0}", requestText)
+                : Loc.T("Token 未知 · {0}", requestText);
         }
 
-        return Loc.T("Token 消耗：{0} (Prompt: {1}, Completion: {2}) | {3}",
+        return Loc.T("{0} Token · {3}",
             usage.TotalTokens.ToString("N0"),
             usage.PromptTokens.ToString("N0"),
             usage.CompletionTokens.ToString("N0"),
@@ -312,17 +312,17 @@ internal static class PlayerFacingSession
     {
         if (string.IsNullOrWhiteSpace(runId))
         {
-            return Loc.T("本局：尚未识别到对局。");
+            return Loc.T("尚未进入对局");
         }
 
         if (decisions == 0)
         {
-            return Loc.T("本局（{0}）：暂无决策记录。", runId);
+            return Loc.T("暂无决策", runId);
         }
 
         var spend = tokensKnown
-            ? Loc.T("本局（{0}）：{1} 次决策，{2} tokens。", runId, decisions, tokens.ToString("N0"))
-            : Loc.T("本局（{0}）：{1} 次决策，Token 未知。", runId, decisions);
+            ? Loc.T("{1} 次决策 · {2} Token", runId, decisions, tokens.ToString("N0"))
+            : Loc.T("{1} 次决策 · Token 未知", runId, decisions);
         return spend;
     }
 
@@ -338,27 +338,27 @@ internal static class PlayerFacingSession
             return "-";
         }
 
-        return Loc.T("Jev 执行 {0} 次 · 回退 LLM {1} 次", jevAccepted, fallbacks);
+        return Loc.T("Jev {0} 次 · LLM 接手 {1} 次", jevAccepted, fallbacks);
     }
 
     private static PlayerFacingView ComposeCompanion(PlayerFacingSnapshot s)
     {
         if (s.PlayPhase == "stopping")
         {
-            return new PlayerFacingView("pausing", Loc.T("正在暂停"), s.Status, Loc.T("等待当前任务结束。"), null);
+            return new PlayerFacingView("pausing", Loc.T("正在暂停"), s.Status, Loc.T("等待当前任务结束"), null);
         }
 
         if (s.PlayPhase == "paused")
         {
-            return new PlayerFacingView("paused", Loc.T("已暂停自动游玩"), s.Status, Loc.T("主窗口点「继续游玩」后才会再行动。"), null);
+            return new PlayerFacingView("paused", Loc.T("已暂停自动游玩"), s.Status, Loc.T("点「继续游玩」后继续。"), null);
         }
 
         if (s.WaitingForGame)
         {
-            return new PlayerFacingView("waiting_game", Loc.T("正在等游戏"), s.Status, Loc.T("正常等待。"), null);
+            return new PlayerFacingView("waiting_game", Loc.T("正在等游戏"), s.Status, Loc.T("正常等待"), null);
         }
 
-        return new PlayerFacingView("running", s.Status, s.Status, Loc.T("由主窗口控制暂停与继续。"), null);
+        return new PlayerFacingView("running", s.Status, s.Status, Loc.T("由主窗口控制"), null);
     }
 
     private static string HeadlineForFirstRun(FirstRunStatus first) => first.Phase switch

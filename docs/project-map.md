@@ -116,12 +116,13 @@ one action runs at a time.
 - `STS2AIAgent/Ui/AgentOverlayHost.Settings.cs` — settings form: `BuildSettingsPage`, jump bar (shows only sections on the form), `RebuildSettingsForm`, `HarvestSettings` (the only reader of form fields, matching editors by id), model cards and the per-model Test button, the Jev section, advanced options, theme picker and repaint.
 - `STS2AIAgent/Ui/AgentOverlayHost.PlayControl.cs` — solo/co-op mode switch (`ChangePlayModeAsync`: pause first, then commit), companion Jev settings sync, invite/continue launch and their availability (`RefreshContinueAvailability`), and the single writer of the play/teammate buttons' enabled state (`RefreshModeControls`).
 - `STS2AIAgent/Ui/UiFactory.cs` — every control and palette→StyleBox. `Label` does **not** wrap (reports its full text as min width); `Wrapped` does, with a 120 px floor. `Row` stretches its children, `TightRow` doesn't. Tabs carry their selected state as metadata so a theme repaint keeps it.
+- `STS2AIAgent/Ui/HelpCard.cs` — a card with a "?" button in its title bar that opens a help panel under the title; closed by default, open state kept by key across page rebuilds. All usage notes in the overlay go here instead of into the page body.
 - `STS2AIAgent/Ui/OverlayTheme.cs` — Godot-free palettes plus contrast math (test-enforced contrast floors).
 - `STS2AIAgent/Ui/OverlaySwatch.cs` — theme preview tile.
 - `STS2AIAgent/Ui/OverlayTabCatalog.cs` — tabs as data (`Play`, `Settings`).
 - `STS2AIAgent/Ui/SegmentedSwitch.cs` — exclusive segment control (`SetSelected` without a callback, `Select` with one).
 - `STS2AIAgent/Ui/PlayModeSwitchPolicy.cs` — pure gate `ShouldCommit(current, requested, pauseConfirmed)`.
-- `STS2AIAgent/Ui/DecisionLogView.cs` — Godot-free decision line text (`RecentLimit = 50`); rows marked `jev_attempt` read "Jev 未提交 → LLM 接手" so fallback is visible at a glance.
+- `STS2AIAgent/Ui/DecisionLogView.cs` — Godot-free decision line text (`RecentLimit = 50`); rows marked `jev_attempt` read "Jev 未提交，LLM 接手" so fallback is visible at a glance.
 - `STS2AIAgent/Agent/PlanningSummary.cs` — JSON-aware trim of the compact state for the planner's prompt: glossary/deck/piles go first, combat facts last, always parseable, and an extreme frame degrades to a minimal skeleton (screen/turn/session + combat numbers), never `{}`.
 - `STS2AIAgent/Config/AgentSettings.cs` — the settings model: endpoints, models, bindings, Jev, budgets, co-op, `ModelTests`, `RoleTests`. `EnsureValidShape` repairs without replacing. `TryResolvePlayModel` (play = conversation model), `TryResolveRoleModel`, `HasJevConfigured`.
 - `STS2AIAgent/Config/SettingsStore.cs` — the only persistence path: atomic temp file + `File.Replace` with a `.bak`, corrupt-file recovery, `LastNotice`. `STS2_AGENT_SETTINGS_PATH` overrides the location.

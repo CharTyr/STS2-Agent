@@ -30,7 +30,7 @@ internal sealed partial class AgentOverlayHost
             return;
         }
         _playModeSwitching = true;
-        _modeSwitchNotice = Loc.T("正在暂停当前模式；已提交的动作会先完成…");
+        _modeSwitchNotice = Loc.T("正在暂停…");
         try
         {
             await GameThread.InvokeAsync(RefreshDynamic);
@@ -58,21 +58,21 @@ internal sealed partial class AgentOverlayHost
             if (!PlayModeSwitchPolicy.ShouldCommit(original, requested, confirmed)
                 || runtime.Settings.OverlayPlayMode != original)
             {
-                _modeSwitchNotice = Loc.T("当前模式尚未确认暂停，仍保持原模式。");
+                _modeSwitchNotice = Loc.T("暂停未确认，模式未切换。");
                 return;
             }
 
             var settings = CloneSettings(runtime.Settings);
             settings.OverlayPlayMode = requested;
             runtime.SaveSettings(settings);
-            _modeSwitchNotice = Loc.T("已切换模式。另一模式不会自动开始。");
+            _modeSwitchNotice = Loc.T("已切换，另一模式不会自动开始。");
         }
         catch (Exception ex)
         {
             // Never show a transport failure that might contain a configured key or raw request.
             _modeSwitchNotice = ex is IOException or UnauthorizedAccessException
-                ? Loc.T("保存模式失败，仍保持原模式。")
-                : Loc.T("无法确认暂停，仍保持原模式。");
+                ? Loc.T("保存失败，模式未切换。")
+                : Loc.T("暂停未确认，模式未切换。");
         }
         finally
         {
@@ -114,8 +114,8 @@ internal sealed partial class AgentOverlayHost
         catch (Exception ex)
         {
             _companionSettingsNotice = ex is IOException or UnauthorizedAccessException
-                ? Loc.T("保存队友设置失败；队友配置未确认。")
-                : Loc.T("队友配置未确认，请检查连接后重试。");
+                ? Loc.T("保存失败，队友设置未确认。")
+                : Loc.T("队友设置未确认，请检查连接。");
         }
         finally
         {
@@ -138,10 +138,10 @@ internal sealed partial class AgentOverlayHost
             var outcome = await _companionSettingsSynchronizer.SynchronizeAsync(CurrentCompanionSettings, CancellationToken.None);
             _companionSettingsNotice = outcome switch
             {
-                CompanionSettingsSyncOutcome.Confirmed => Loc.T("队友设置已确认，模型、预算和战斗控制已生效。"),
-                CompanionSettingsSyncOutcome.Disconnected => Loc.T("队友未连接；设置已保存，下次邀请时生效。"),
-                CompanionSettingsSyncOutcome.Superseded => Loc.T("队友连接或配置已变更，正在等待最新配置确认。"),
-                _ => Loc.T("队友 Jev 开关与本机不一致，尚未确认生效。")
+                CompanionSettingsSyncOutcome.Confirmed => Loc.T("队友设置已同步。"),
+                CompanionSettingsSyncOutcome.Disconnected => Loc.T("队友未连接，下次邀请时生效。"),
+                CompanionSettingsSyncOutcome.Superseded => Loc.T("设置已变更，等待队友确认…"),
+                _ => Loc.T("队友 Jev 开关尚未同步。")
             };
             // The old request was acknowledged; a different desired snapshot now needs its own
             // confirmation. This does not replay an uncertain request or retry a failed control.
@@ -151,7 +151,7 @@ internal sealed partial class AgentOverlayHost
         {
             // A timeout is outcome-unknown. Never retry a control automatically or claim it succeeded.
             _companionSettingsSynchronizer.Reset();
-            _companionSettingsNotice = Loc.T("队友配置未确认，请检查连接后重试。");
+            _companionSettingsNotice = Loc.T("队友设置未确认，请检查连接。");
         }
         try { await GameThread.InvokeAsync(RefreshDynamic); }
         catch (InvalidOperationException) { } // Overlay may be shutting down.
@@ -237,10 +237,10 @@ internal sealed partial class AgentOverlayHost
         var sourceAvailable = !coopMode || (companion != null && _companionJevSource == LocalDualInstanceLauncher.Connection);
         var togglePending = coopMode && companion?.DualLayerCoopEnabled != settings.DualLayerCoopEnabled;
         _jevStatus.Text = !settings.HasJevConfigured()
-            ? Loc.T("Jev 未配置。到设置页填写 API Key 后即可用双层决策。")
-            : coopMode && !sourceAvailable ? Loc.T("队友 Jev 状态暂不可用，请检查连接与配置同步。")
-            : togglePending ? Loc.T("队友 Jev 开关与本机不一致，尚未确认生效。")
-            : Loc.T("Jev 已配置（{0}）。双层决策开启后由 Jev 逐步操作，LLM 只调整策略。", settings.JevModel);
+            ? Loc.T("未配置 Jev，请先在「设置」填写。")
+            : coopMode && !sourceAvailable ? Loc.T("队友 Jev 状态不可用，请检查连接。")
+            : togglePending ? Loc.T("队友 Jev 开关尚未同步。")
+            : Loc.T("Jev：{0}", settings.JevModel);
         if (_jevLastChoice != null)
             _jevLastChoice.Text = sourceAvailable ? Trim(coopMode ? companion?.Choice : AgentRuntime.Instance.LastJevChoice, 90) : "-";
         if (_jevProbabilities != null)
@@ -286,12 +286,12 @@ internal sealed partial class AgentOverlayHost
     {
         var settings = AgentRuntime.Instance.Settings;
         if (settings.CompanionControlMode == "external")
-            return Loc.T("外部控制：队友入队后等待外部 Agent，不会自动出牌。启动后可在「接入」中复制连接地址。");
+            return Loc.T("外部 Agent 模式：队友入队后等待接管，不会自己出牌。");
         var ready = FirstRunSetup.Evaluate(settings);
         if (!ready.ReadyToInvite) return ready.Hint;
         return settings.CompanionAutoSelectCharacter
-            ? Loc.T("请从主菜单邀请。队友会自动选角并游玩；你操作自己的角色。")
-            : Loc.T("请从主菜单邀请，在第二窗口为队友选好角色；准备后它会自动游玩。");
+            ? Loc.T("在主菜单邀请，队友会自动选角并游玩。")
+            : Loc.T("在主菜单邀请，到第二窗口为队友选角色。");
     }
 
     /// <summary>Continue is offered only where continue_ai_teammate would be accepted: host main menu with a co-op save on disk.</summary>
@@ -350,6 +350,6 @@ internal sealed partial class AgentOverlayHost
 
         var canContinue = CanOfferContinue();
         _dualContinueButton.Disabled = blocked || !canContinue;
-        _dualContinueButton.TooltipText = canContinue ? "" : Loc.T("主菜单上有联机存档时可用。");
+        _dualContinueButton.TooltipText = canContinue ? "" : Loc.T("主菜单有联机存档时可用");
     }
 }

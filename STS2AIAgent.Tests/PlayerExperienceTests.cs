@@ -100,7 +100,7 @@ internal static class PlayerExperienceTests
         var text = PlayerFacingSession.FormatJevRate(13, 10);
         Assert.Contains("13", text);
         Assert.Contains("10", text);
-        Assert.Contains("回退", text);
+        Assert.Contains("LLM 接手", text);
     }
 
     public static void MissingUsageIsNotDisplayedAsZero()
@@ -108,7 +108,7 @@ internal static class PlayerExperienceTests
         var text = PlayerFacingSession.FormatUsage(false, LlmUsage.Empty, 3);
         Assert.Contains("未知", text);
         Assert.False(text.Contains("Token 消耗：0"));
-        Assert.Contains("请求：3 次", text);
+        Assert.Contains("3 次请求", text);
     }
 
     /// <summary>
@@ -129,7 +129,7 @@ internal static class PlayerExperienceTests
 
         var unknown = PlayerFacingSession.FormatUsageSummary(false, LlmUsage.Empty, 5, running);
         Assert.Contains("未知", unknown);
-        Assert.Contains("请求：5 次", unknown);
+        Assert.Contains("5 次请求", unknown);
         Assert.False(unknown.Contains("Token 消耗：0"), "A session with no usage must not read as 0.");
 
         var counted = PlayerFacingSession.FormatUsageSummary(
@@ -138,7 +138,7 @@ internal static class PlayerExperienceTests
             5,
             running);
         Assert.Contains("1,234", counted);
-        Assert.Contains("请求：5 次", counted);
+        Assert.Contains("5 次请求", counted);
         Assert.False(counted.Contains("未知"), "A counted session must not read as unknown.");
 
         var capped = PlayerFacingSession.Compose(BaseSnapshot(verified) with
@@ -150,7 +150,7 @@ internal static class PlayerExperienceTests
         Assert.Equal(PlayerFacingSession.BudgetKind, capped.Kind);
         var cappedSummary = PlayerFacingSession.FormatUsageSummary(false, LlmUsage.Empty, 5, capped);
         Assert.Contains("1,234/1,234", cappedSummary);
-        Assert.Contains("请求：5 次", cappedSummary);
+        Assert.Contains("5 次请求", cappedSummary);
     }
 
     /// <summary>
@@ -160,11 +160,11 @@ internal static class PlayerExperienceTests
     /// </summary>
     public static void RunSpendLineStaysHonestAboutUnknowns()
     {
-        Assert.Contains("尚未识别到对局", PlayerFacingSession.FormatRunSpend(null, 0, 0, false));
-        Assert.Contains("尚未识别到对局", PlayerFacingSession.FormatRunSpend("  ", 3, 10, true));
+        Assert.Contains("尚未进入对局", PlayerFacingSession.FormatRunSpend(null, 0, 0, false));
+        Assert.Contains("尚未进入对局", PlayerFacingSession.FormatRunSpend("  ", 3, 10, true));
 
         var none = PlayerFacingSession.FormatRunSpend("ABCD1234", 0, 0, false);
-        Assert.Contains("暂无决策记录", none);
+        Assert.Contains("暂无决策", none);
         Assert.False(none.Contains("0 tokens", StringComparison.Ordinal));
 
         var unknown = PlayerFacingSession.FormatRunSpend("ABCD1234", 4, 0, false);
