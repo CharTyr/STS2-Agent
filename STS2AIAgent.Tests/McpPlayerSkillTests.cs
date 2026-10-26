@@ -1,5 +1,6 @@
 using STS2AIAgent.Agent;
 using System;
+using System.Text;
 namespace STS2AIAgent.Tests;
 
 internal static class McpPlayerSkillTests
@@ -52,6 +53,70 @@ internal static class McpPlayerSkillTests
                 reachableInGame.Contains(token, StringComparison.Ordinal),
                 "no in-game prompt text reaches " + token
                 + "; if it moved out of the shared contract it has to be in a screen's slice");
+        }
+    }
+
+    public static void SharedContractIsIndependentOfLineEndings()
+    {
+        const string expected = "First paragraph.\n\n  Indented guidance.\nLast line.";
+        var skill = "# Outside the contract\n" + PlayPrompt.SharedContractBegin + "\n\n"
+            + expected + "\n\n" + PlayPrompt.SharedContractEnd + "\nNot part of the contract.\n";
+
+        foreach (var variant in new[]
+                 {
+                     skill,
+                     skill.Replace("\n", "\r\n", StringComparison.Ordinal),
+                     skill.Replace("\n", "\r", StringComparison.Ordinal),
+                     skill.Replace("\n\n", "\r\n\n", StringComparison.Ordinal)
+                 })
+        {
+            Assert.Equal(expected, PlayPrompt.ExtractSharedContract(variant),
+                "the shared contract must keep the same content for CRLF, CR, and mixed line endings");
+        }
+    }
+
+    public static void PromptResourceReaderNormalizesLineEndings()
+    {
+        // Exercise the production StreamReader boundary with CRLF bytes even on an LF checkout.
+        const string expected = "\nFirst line: 战斗.\n\n  Indented guidance.\nLast line.\n";
+        foreach (var variant in new[]
+                 {
+                     expected,
+                     expected.Replace("\n", "\r\n", StringComparison.Ordinal),
+                     expected.Replace("\n", "\r", StringComparison.Ordinal),
+                     expected.Replace("\n\n", "\r\n\n", StringComparison.Ordinal)
+                 })
+        {
+            foreach (var withBom in new[] { false, true })
+            {
+                var utf8 = new UTF8Encoding(encoderShouldEmitUTF8Identifier: withBom);
+                using var stream = new MemoryStream(utf8.GetPreamble().Concat(utf8.GetBytes(variant)).ToArray());
+                Assert.Equal(expected, PlayPrompt.ReadPromptResource(stream),
+                    "the production resource reader must preserve UTF-8 content and whitespace while normalizing newlines");
+            }
+        }
+    }
+
+    public static void EmbeddedPromptsUseCanonicalLineEndings()
+    {
+        foreach (var (path, actual) in new[]
+                 {
+                     ("skills/sts2-mcp-player/references/screen-playbooks.md", PlayPrompt.ScreenPlaybooks),
+                     ("skills/sts2-mcp-player/references/strategy.md", PlayPrompt.StrategyReference)
+                 })
+        {
+            Assert.Equal(AgentSourceFixture.Read(path).ReplaceLineEndings("\n"), actual,
+                "embedded prompt content must be preserved apart from newline normalization: " + path);
+        }
+
+        foreach (var text in new[]
+                 {
+                     PlayPrompt.PlayContract, PlayPrompt.ScreenPlaybooks,
+                     PlayPrompt.StrategyReference, PlayPrompt.PlaySystem
+                 })
+        {
+            Assert.True(text.Contains('\n'), "the prompt fixture must contain multiple lines");
+            Assert.False(text.Contains('\r'), "embedded resources and the assembled prompt must use LF");
         }
     }
 

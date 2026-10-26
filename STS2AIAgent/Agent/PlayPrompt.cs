@@ -126,7 +126,8 @@ Omit unused parameters; keep "reason" -- it is shown to the player. Do not wrap 
         // caller injects the current screen's section (PlaybookGuidance) right behind this message.
         builder.AppendLine("The playbook section for the current screen is injected after this message. The other screens' sections stay out of the prompt: a decision can only use the screen it is on.");
         builder.Append("Each play step: inspect state (and metadata if needed), then call act exactly once, attaching a one-sentence reason the player can read. Vision is optional; legality still comes from live state.");
-        return builder.ToString();
+        // AppendLine uses the host newline; the prompt must not vary by build platform.
+        return builder.ToString().ReplaceLineEndings("\n");
     }
 
     internal static string ExtractSharedContract(string skillMarkdown)
@@ -139,7 +140,7 @@ Omit unused parameters; keep "reason" -- it is shown to the player. Do not wrap 
         }
 
         begin += SharedContractBegin.Length;
-        return skillMarkdown[begin..end].Trim();
+        return skillMarkdown[begin..end].Trim().ReplaceLineEndings("\n");
     }
 
     private static string ReadEmbedded(string name)
@@ -147,7 +148,14 @@ Omit unused parameters; keep "reason" -- it is shown to the player. Do not wrap 
         var assembly = typeof(PlayPrompt).Assembly;
         using var stream = assembly.GetManifestResourceStream(name)
             ?? throw new InvalidOperationException("Missing embedded play skill resource: " + name);
+        return ReadPromptResource(stream);
+    }
+
+    internal static string ReadPromptResource(Stream stream)
+    {
         using var reader = new StreamReader(stream, Encoding.UTF8, detectEncodingFromByteOrderMarks: true);
-        return reader.ReadToEnd();
+        // Git can check these Markdown resources out as CRLF on Windows. Keep the same
+        // prompt content and character budget regardless of the checkout's line endings.
+        return reader.ReadToEnd().ReplaceLineEndings("\n");
     }
 }
