@@ -102,8 +102,73 @@ internal sealed partial class AgentOverlayHost
         catch (Exception ex) { result = DiagnosticExport.Redact(ex.Message); }
         finally { _modelTestCancellation = null; }
         if (_panel == null || !_panel.IsInsideTree()) return;
-        RebuildSettingsForm();
+        // A rebuild redraws every badge and the first-run lines, but it also resets every editor to
+        // the saved settings. Edits typed while the test ran (it can take 45 seconds) would be lost,
+        // so a form with unsaved changes only has its badges updated in place.
+        if (_settingsDirty)
+        {
+            RefreshModelTestBadges();
+        }
+        else
+        {
+            RebuildSettingsForm();
+        }
+
         RefreshModelTestControls();
         SetSaveStatus(result);
+    }
+
+    /// <summary>The badge line under a model card: the recorded verdict, or the nudge to test.</summary>
+    private string ModelTestBadgeText(string modelId)
+    {
+        var record = AgentRuntime.Instance.ModelTestFor(modelId);
+        if (record == null)
+        {
+            return Loc.T("⚪ 未测试。点「测试」做一次真实调用（含工具调用检测）。");
+        }
+
+        if (!AgentRuntime.Instance.IsModelVerified(modelId))
+        {
+            return record.Status switch
+            {
+                "verified" => Loc.T("⚪ 配置已修改，需重新测试。"),
+                // A failed test must not look like "never tested": the player just pressed the
+                // button and needs the reason on the card, not in a line the rebuild erases.
+                "failed" => Loc.T("⚠️ 测试失败（{0}）：{1}", ShortTime(record.TestedAt), record.Error ?? ""),
+                _ => Loc.T("⚪ 未测试。点「测试」做一次真实调用（含工具调用检测）。")
+            };
+        }
+
+        return record.Tools == "supported"
+            ? Loc.T("✅ 已验证 · 工具调用可用（{0}）", ShortTime(record.TestedAt))
+            : Loc.T("⚠️ 已连通，但工具调用不可用——该模型无法自动游玩（{0}）", ShortTime(record.TestedAt));
+    }
+
+    private static string ShortTime(string? iso)
+    {
+        return DateTimeOffset.TryParse(iso, out var at) ? at.ToLocalTime().ToString("HH:mm") : "";
+    }
+
+    private Task TestModelFromUiAsync(string modelId) => RunModelTestFromUiAsync(modelId);
+
+    /// <summary>Re-reads every model card's test badge in place.</summary>
+    private void RefreshModelTestBadges()
+    {
+        foreach (var (modelId, badge) in _modelTestBadges)
+        {
+            if (GodotObject.IsInstanceValid(badge))
+            {
+                badge.Text = ModelTestBadgeText(modelId);
+            }
+        }
+    }
+
+    /// <summary>The settings page's state line: reused for the per-model test's progress.</summary>
+    private void SetSaveStatus(string text)
+    {
+        if (_saveStatus != null)
+        {
+            _saveStatus.Text = text;
+        }
     }
 }

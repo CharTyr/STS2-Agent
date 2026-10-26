@@ -32,11 +32,15 @@ internal sealed partial class AgentOverlayHost
     private OptionButton? _companionMode;
     /// <summary>The decision log's three live labels: usage, run spend, and the log itself.</summary>
     private RichTextLabel? _decisionLog;
+    private RichLog? _decisionLogView;
     private Label? _decisionUsage;
     private Label? _decisionRunSpend;
 
     /// <summary>The teammate line and the tone it is currently drawn in. See <see cref="ApplyTone"/>.</summary>
     private Control? _teammateLivePill;
+
+    /// <summary>The team chat's redraw-only-on-change wrapper. See <see cref="RichLog"/>.</summary>
+    private RichLog? _teamChatView;
     private UiFactory.ButtonKind? _teammateLiveTone;
 
     /// <summary>The play page's solo/multiplayer sections and the switch that swaps between them.</summary>
@@ -216,8 +220,8 @@ internal sealed partial class AgentOverlayHost
         column.AddChild(UiFactory.Wrapped(Loc.T("最新在前：动作、理由、来源，以及该步消耗的 Token。")));
         _decisionLog = UiFactory.Rich();
         _decisionLog.FitContent = false;
-        // Newest first, so follow-to-bottom would scroll away from the line that just arrived.
-        _decisionLog.ScrollFollowing = false;
+        // Newest first: the view sticks to the top, where the line that just arrived is drawn.
+        _decisionLogView = new RichLog(_decisionLog, RichLog.LogAnchor.Top);
         _decisionLog.CustomMinimumSize = new Vector2(0, 140);
         _decisionLog.SizeFlagsHorizontal = Control.SizeFlags.ExpandFill;
         column.AddChild(_decisionLog);
@@ -242,20 +246,6 @@ internal sealed partial class AgentOverlayHost
             : Loc.T("队友实况：读取中…");
     }
 
-    /// <summary>
-    /// The co-op page: the actions first, then what the teammate is doing, then the chat.
-    /// </summary>
-    /// <remarks>
-    /// The order used to be status, invite, control, chat -- which put the page's whole reason for
-    /// existing ("invite the teammate", "pause the teammate") below a card of text, and mid-fight the
-    /// pause button was a scroll away. Actions now come first because they are what the player came
-    /// here to press; the status card answers the question they ask next; the chat, which is the only
-    /// part that has to be scrolled to, is last.
-    ///
-    /// This is the longest page in the panel, so the chat's box is sized from the panel's own height
-    /// rather than pinned at 130 pixels: the point of the reorder is lost if a fixed chat box pushes
-    /// the actions off the bottom anyway.
-    /// </remarks>
     /// <summary>
     /// The multiplayer mode section: the actions first, then what the teammate is doing, then the
     /// chat. Moved into the play page from its own tab; the play page's scroll carries it now.
@@ -356,6 +346,7 @@ internal sealed partial class AgentOverlayHost
         _teamChat = UiFactory.Rich();
         _teamChat.FitContent = false;
         _teamChat.CustomMinimumSize = new Vector2(0, 120);
+        _teamChatView = new RichLog(_teamChat, RichLog.LogAnchor.Bottom);
         _teamInput = UiFactory.Multiline("", 56);
         _teamInput.PlaceholderText = Loc.T("一起集火哪个敌人？这条路线你怎么看？");
         // A text editor reports its placeholder as its minimum width, and the placeholder here is a full
@@ -413,16 +404,15 @@ internal sealed partial class AgentOverlayHost
                 spend.TokensKnown);
         }
 
-        if (_decisionLog == null)
+        if (_decisionLogView == null)
         {
             return;
         }
 
-        _decisionLog.Clear();
         var entries = AgentRuntime.Instance.RecentDecisions(DecisionLogView.RecentLimit);
         if (entries.Count == 0)
         {
-            _decisionLog.AppendText(Muted(Loc.T("还没有决策记录。自动游玩或外部客户端执行动作后会出现在这里。")) + "\n");
+            _decisionLogView.Show(new[] { Muted(Loc.T("还没有决策记录。自动游玩或外部客户端执行动作后会出现在这里。")) + "\n" });
             return;
         }
 
@@ -431,24 +421,27 @@ internal sealed partial class AgentOverlayHost
         // happened. Everything is escaped, so a model that writes BBCode in its reason cannot restyle
         // the page it is quoted on. The blank line between entries is what stops fifty of them
         // reading as one paragraph.
+        var lines = new List<string>(entries.Count);
         for (var offset = 0; offset < entries.Count; offset++)
         {
             var entry = entries[entries.Count - 1 - offset];
             var parts = new List<string>(3);
             if (!string.IsNullOrWhiteSpace(entry.reason))
             {
-                parts.Add(Loc.T("理由：{0}", Escape(entry.reason)));
+                parts.Add(Loc.T("理由：{0}", entry.reason));
             }
 
-            parts.Add(Loc.T("来源：{0}", Escape(entry.source)));
+            parts.Add(Loc.T("来源：{0}", entry.source));
             parts.Add(entry.total_tokens is { } tokens
                 ? Loc.T("本次 Token：{0}", tokens.ToString("N0"))
                 : Loc.T("本次 Token：未知"));
             // The action stays on its own line. A reason such as "Play Dismantle (14 dmg with STR 3)
             // on the 1st Inklet" plus source and token count is wider than the panel even after the
             // rich label wraps, and one joined line is what the 2026-09-22 screenshot clipped.
-            _decisionLog.AppendText(Accent($"{entry.id}. {entry.action}") + "\n" + Muted(string.Join("\n", parts)) + "\n\n");
+            lines.Add(Accent($"{entry.id}. {entry.action}") + "\n" + Muted(string.Join("\n", parts)) + "\n\n");
         }
+
+        _decisionLogView.Show(lines);
     }
 
     private async Task SendChatAsync()
@@ -504,241 +497,48 @@ internal sealed partial class AgentOverlayHost
     }
 
     /// <summary>
-    /// Repaints every live control on every page.
+    /// Repaints every live control on every page, one section at a time.
     /// </summary>
     /// <remarks>
     /// One pass rather than a per-page callback, because the values it writes arrive from paths with
     /// no event to subscribe to -- an action submitted over the HTTP API updates the decision log
-    /// without raising <c>Changed</c>. The guard at the top is what keeps it honest: this runs on the
-    /// game thread, and a page whose control is gone returns early instead of throwing into the tick.
+    /// without raising <c>Changed</c>. It runs on the game thread, and a section whose control is gone
+    /// returns early instead of throwing into the tick.
     ///
-    /// The conversation is drawn first and the whole pass is guarded. This used to be one straight
-    /// line of blocks, so the first one that threw -- <c>BuildStatePayload</c> against a screen that
-    /// had just gone away was enough -- left every block after it, the conversation among them, frozen
-    /// at the last snapshot. The caller swallows the exception, so the visible symptom was a chat that
-    /// simply stopped updating for the rest of the run.
+    /// The conversation is drawn first and every section is guarded on its own. This used to be one
+    /// straight line of blocks inside one try, so the first one that threw -- <c>BuildStatePayload</c>
+    /// against a screen that had just gone away was enough -- left every block after it, the
+    /// conversation among them, frozen at the last snapshot.
+    ///
+    /// The logs and labels are cheap to re-assign now: <see cref="RichLog"/> leaves an unchanged log
+    /// alone, so running this on every runtime change no longer resets the reader's scroll.
     /// </remarks>
     private void RefreshDynamic()
     {
-        try
+        // First, so no later section can keep it from being reached.
+        Guarded("chat", RefreshChatLog);
+
+        var playing = AgentRuntime.Instance.PlayRunning;
+        Guarded("header", () => RefreshHeader(playing));
+        Guarded("solo", () => RefreshSoloSection(playing));
+
+        PlayerFacingView? facing = null;
+        Guarded("session", () =>
         {
-            // First, so no later block can keep it from being reached.
-            RefreshChatLog();
+            var view = AgentRuntime.Instance.PlayerFacing();
+            facing = view;
+            RefreshDecisionPage(view);
+        });
+        Guarded("coop", () => RefreshCoopSection(facing));
+        Guarded("settings", RefreshSettingsLive);
+        Guarded("connect", RefreshConnectSection);
 
-            if (_apiLabel != null)
-            {
-                _apiLabel.Text = Loc.T("{0}  ·  {1}  ·  热键 {2}", HttpServer.Instance.Prefix, InstanceRole.Current, AgentRuntime.Instance.Settings.Hotkey);
-            }
-
-            var playing = AgentRuntime.Instance.PlayRunning;
-
-            if (_headerStatus != null)
-            {
-                _headerStatus.Text = playing ? Loc.T("● 自动游玩中") : Loc.T("○ 待机");
-                _headerStatus.AddThemeColorOverride(
-                    "font_color",
-                    playing ? UiFactory.ToGodot(UiFactory.Palette.Positive) : UiFactory.ToGodot(UiFactory.Palette.Muted));
-            }
-
-            if (_edgeTab != null)
-            {
-                _edgeTab.Text = playing ? "AI ▶" : "AI";
-            }
-
-            if (_playStatus != null)
-            {
-                // The elapsed-bearing variant: a turn that stalls now shows a growing counter
-                // beside the stage it is stuck in, instead of a frozen line.
-                _playStatus.Text = AgentRuntime.Instance.StatusWithElapsed;
-                _playStatus.AddThemeColorOverride(
-                    "font_color",
-                    playing ? UiFactory.ToGodot(UiFactory.Palette.Positive) : UiFactory.ToGodot(UiFactory.Palette.Text));
-            }
-
-            if (_playSummary != null)
-            {
-                _playSummary.Text = playing ? Loc.T("正在自动决策并执行动作。") : Loc.T("等待开始。");
-            }
-
-            if (_playScreen != null)
-            {
-                try
-                {
-                    _playScreen.Text = Loc.T("屏幕：{0}", GameStateService.CurrentScreenName());
-                }
-                catch
-                {
-                    _playScreen.Text = Loc.T("屏幕：-");
-                }
-            }
-
-            if (_playAction != null)
-            {
-                _playAction.Text = Trim(AgentRuntime.Instance.LastAction, 24);
-            }
-
-            if (_playUsage != null)
-            {
-                // Whole sentence: the tile has its own full-width row and wraps (see BuildSoloSection).
-                _playUsage.Text = PlayerFacingSession.FormatUsage(
-                    AgentRuntime.Instance.SessionUsageKnown,
-                    AgentRuntime.Instance.SessionUsage,
-                    AgentRuntime.Instance.SessionRequests);
-            }
-
-            var facing = AgentRuntime.Instance.PlayerFacing();
-            if (_sessionHeadline != null)
-            {
-                _sessionHeadline.Text = facing.Headline;
-            }
-
-            if (_sessionDetail != null)
-            {
-                _sessionDetail.Text = facing.Detail;
-            }
-
-            if (_sessionNext != null)
-            {
-                _sessionNext.Text = Loc.T("下一步：{0}", facing.NextAction);
-            }
-
-            RefreshDecisionPage(facing);
-
-            var canResetStats = SessionBudgetLimits.CanResetSessionStats(
-                AgentRuntime.Instance.PlayRunning,
-                AgentRuntime.Instance.PlayPhase);
-            if (_resetStatsButton != null)
-            {
-                _resetStatsButton.Disabled = !canResetStats;
-            }
-
-            if (_settingsResetStatsButton != null)
-            {
-                _settingsResetStatsButton.Disabled = !canResetStats;
-            }
-
-            if (_sessionConfigNotice != null)
-            {
-                _sessionConfigNotice.Text = FormatSettingsNotice();
-                _sessionConfigNotice.Visible = AgentRuntime.Instance.SettingsNotice.HasMessage;
-            }
-
-            if (_settingsLoadNotice != null)
-            {
-                _settingsLoadNotice.Text = FormatSettingsNotice();
-            }
-
-            if (_budgetHint != null && !string.IsNullOrWhiteSpace(_budgetInputError))
-            {
-                _budgetHint.Text = _budgetInputError;
-            }
-
-            if (_playTest != null)
-            {
-                var firstRun = FirstRunSetup.Evaluate(AgentRuntime.Instance.Settings);
-                if (_conversationTest != null) _conversationTest.Text = ModelRoleProbe.FormatLine(firstRun.Conversation);
-                _playTest.Text = ModelRoleProbe.FormatLine(firstRun.Play);
-                if (_visionTest != null) _visionTest.Text = ModelRoleProbe.FormatLine(firstRun.Vision);
-            }
-
-            if (_playToggle != null)
-            {
-                _playToggle.Disabled = AgentRuntime.Instance.DualLaunching;
-                _playToggle.Text = playing ? Loc.T("暂停自动游玩") : Loc.T("开始自动游玩");
-            }
-
-            if (_stepButton != null)
-            {
-                _stepButton.Disabled = playing;
-                _stepButton.Visible = !playing;
-            }
-
-            if (_sendButton != null)
-            {
-                _sendButton.Disabled = false;
-            }
-
-            if (_dualStatus != null)
-            {
-                _dualStatus.Text = AgentRuntime.Instance.DualStatus;
-            }
-
-            if (_teammateLive != null)
-            {
-                _teammateLive.Text = TeammateLiveText();
-            }
-
-            ApplyTone(_teammateLivePill, ref _teammateLiveTone, TeammateLiveTone());
-
-            if (_dualLaunchButton != null)
-            {
-                // Only the button that started the launch reads as busy; the other one just greys out.
-                _dualLaunchButton.Text = AgentRuntime.Instance.DualLaunching && !_continueLaunching ? Loc.T("正在邀请队友…") : Loc.T("邀请 AI 队友");
-            }
-
-            RefreshContinueAvailability();
-
-            if (_dualContinueButton != null)
-            {
-                _dualContinueButton.Text = AgentRuntime.Instance.DualLaunching && _continueLaunching ? Loc.T("正在读档接回队友…") : Loc.T("继续上次联机对局");
-            }
-
-            if (_companionChoiceToggle != null)
-            {
-                _companionChoiceToggle.Disabled = InstanceRole.IsCompanion || AgentRuntime.Instance.DualLaunching;
-                _companionChoiceToggle.SetPressedNoSignal(!AgentRuntime.Instance.Settings.CompanionAutoSelectCharacter);
-            }
-
-            if (_dualHint != null) _dualHint.Text = DualHintText();
-
-            if (_teamSend != null)
-            {
-                _teamSend.Disabled = AgentRuntime.Instance.TeamMessagePending || AgentRuntime.Instance.DualLaunching || InstanceRole.IsCompanion;
-                _teamSend.Text = AgentRuntime.Instance.TeamMessagePending ? Loc.T("等待队友回复…") : Loc.T("和队友说");
-            }
-            if (_teamStatus != null) _teamStatus.Text = AgentRuntime.Instance.TeamStatus;
-            if (_teamControlStatus != null) _teamControlStatus.Text = AgentRuntime.Instance.TeamControlStatus;
-            var controlDisabled = InstanceRole.IsCompanion || AgentRuntime.Instance.DualLaunching || AgentRuntime.Instance.TeamControlPending;
-            if (_teamPause != null) _teamPause.Disabled = controlDisabled;
-            if (_teamResume != null) _teamResume.Disabled = controlDisabled;
-            if (_teamChat != null)
-            {
-                _teamChat.Clear();
-                foreach (var turn in AgentRuntime.Instance.TeamHistory)
-                {
-                    _teamChat.AppendText(FormatTurn(turn.Role == "user" ? Loc.T("你") : Loc.T("AI 队友"), turn.Text));
-                }
-            }
-
-            if (_mcpStatus != null)
-            {
-                _mcpStatus.Text = AgentRuntime.Instance.McpStatus;
-            }
-
-            if (_mcpToggle != null)
-            {
-                _mcpToggle.SetPressedNoSignal(AgentRuntime.Instance.McpRunning);
-            }
-
-            if (_mcpInfoBox != null)
-            {
-                _mcpInfoBox.Visible = AgentRuntime.Instance.McpRunning;
-            }
-
-            if (_mcpUrlLabel != null)
-            {
-                var url = AgentRuntime.Instance.McpUrl;
-                _mcpUrlLabel.Text = string.IsNullOrWhiteSpace(url) ? "" : Loc.T("地址：{0}", url);
-            }
-
-            if (_mcpConfigEdit != null)
-            {
-                _mcpConfigEdit.Text = AgentRuntime.Instance.McpClientConfig;
-            }
-
-            // The mode switch and the dual-layer toggles mirror settings that can change off this page
-            // (a settings save, or the mode switch itself), so the refresh pass re-syncs them rather
-            // than trusting the last click to be the only writer.
+        // The mode switch and the dual-layer toggles mirror settings that can change off this page
+        // (a settings save, or the mode switch itself), so the refresh pass re-syncs them rather
+        // than trusting the last click to be the only writer. This is also the one place that decides
+        // which play and teammate buttons are enabled.
+        Guarded("mode", () =>
+        {
             var mode = AgentRuntime.Instance.Settings;
             var coopMode = mode.OverlayPlayMode == "coop";
             if (_dualLayerSoloCheck != null) _dualLayerSoloCheck.SetPressedNoSignal(mode.DualLayerSoloEnabled);
@@ -746,11 +546,242 @@ internal sealed partial class AgentOverlayHost
             if (_dualLayerCoopCheck != null) _dualLayerCoopCheck.SetPressedNoSignal(mode.DualLayerCoopEnabled);
             RefreshModeControls(coopMode, coopMode ? mode.DualLayerCoopEnabled : mode.DualLayerSoloEnabled);
             RefreshJevReading(coopMode, mode);
+        });
+    }
+
+    /// <summary>Runs one section of the refresh pass; a failure is logged and the next section still runs.</summary>
+    private static void Guarded(string section, Action refresh)
+    {
+        try
+        {
+            refresh();
         }
         catch (Exception ex)
         {
-            Log.Warn($"{LogPrefix} refresh pass failed: {ex.Message}");
+            Log.Warn($"{LogPrefix} refresh pass failed in {section}: {ex.Message}");
         }
+    }
+
+    /// <summary>The title bar's state tag, the connection line, and the edge tab.</summary>
+    private void RefreshHeader(bool playing)
+    {
+        if (_apiLabel != null)
+        {
+            _apiLabel.Text = Loc.T("{0}  ·  {1}  ·  热键 {2}", HttpServer.Instance.Prefix, InstanceRole.Current, AgentRuntime.Instance.Settings.Hotkey);
+        }
+
+        if (_headerStatus != null)
+        {
+            _headerStatus.Text = playing ? Loc.T("● 自动游玩中") : Loc.T("○ 待机");
+            _headerStatus.AddThemeColorOverride(
+                "font_color",
+                playing ? UiFactory.ToGodot(UiFactory.Palette.Positive) : UiFactory.ToGodot(UiFactory.Palette.Muted));
+        }
+
+        if (_edgeTab != null)
+        {
+            _edgeTab.Text = playing ? "AI ▶" : "AI";
+        }
+    }
+
+    /// <summary>The solo section's turn card and metric tiles.</summary>
+    private void RefreshSoloSection(bool playing)
+    {
+        if (_playStatus != null)
+        {
+            // The elapsed-bearing variant: a turn that stalls now shows a growing counter
+            // beside the stage it is stuck in, instead of a frozen line.
+            _playStatus.Text = AgentRuntime.Instance.StatusWithElapsed;
+            _playStatus.AddThemeColorOverride(
+                "font_color",
+                playing ? UiFactory.ToGodot(UiFactory.Palette.Positive) : UiFactory.ToGodot(UiFactory.Palette.Text));
+        }
+
+        if (_playSummary != null)
+        {
+            _playSummary.Text = playing ? Loc.T("正在自动决策并执行动作。") : Loc.T("等待开始。");
+        }
+
+        if (_playScreen != null)
+        {
+            try
+            {
+                _playScreen.Text = Loc.T("屏幕：{0}", GameStateService.CurrentScreenName());
+            }
+            catch (Exception ex)
+            {
+                WarnOnce("screen name read failed", ex);
+                _playScreen.Text = Loc.T("屏幕：-");
+            }
+        }
+
+        if (_playAction != null)
+        {
+            _playAction.Text = Trim(AgentRuntime.Instance.LastAction, 24);
+        }
+
+        if (_playUsage != null)
+        {
+            // Whole sentence: the tile has its own full-width row and wraps (see BuildSoloSection).
+            _playUsage.Text = PlayerFacingSession.FormatUsage(
+                AgentRuntime.Instance.SessionUsageKnown,
+                AgentRuntime.Instance.SessionUsage,
+                AgentRuntime.Instance.SessionRequests);
+        }
+
+        if (_playToggle != null)
+        {
+            _playToggle.Text = playing ? Loc.T("暂停自动游玩") : Loc.T("开始自动游玩");
+        }
+
+        if (_stepButton != null)
+        {
+            _stepButton.Disabled = playing;
+            _stepButton.Visible = !playing;
+        }
+    }
+
+    /// <summary>
+    /// The multiplayer section: session status, invite and continue, the teammate chip, and the team
+    /// chat. <paramref name="facing"/> is null when reading it failed; the status lines then keep
+    /// their last text.
+    /// </summary>
+    private void RefreshCoopSection(PlayerFacingView? facing)
+    {
+        if (facing is { } view)
+        {
+            if (_sessionHeadline != null) _sessionHeadline.Text = view.Headline;
+            if (_sessionDetail != null) _sessionDetail.Text = view.Detail;
+            if (_sessionNext != null) _sessionNext.Text = Loc.T("下一步：{0}", view.NextAction);
+        }
+
+        if (_resetStatsButton != null)
+        {
+            _resetStatsButton.Disabled = !CanResetSessionStats();
+        }
+
+        if (_sessionConfigNotice != null)
+        {
+            _sessionConfigNotice.Text = FormatSettingsNotice();
+            _sessionConfigNotice.Visible = AgentRuntime.Instance.SettingsNotice.HasMessage;
+        }
+
+        if (_dualStatus != null)
+        {
+            _dualStatus.Text = AgentRuntime.Instance.DualStatus;
+        }
+
+        if (_teammateLive != null)
+        {
+            _teammateLive.Text = TeammateLiveText();
+        }
+
+        ApplyTone(_teammateLivePill, ref _teammateLiveTone, TeammateLiveTone());
+
+        if (_dualLaunchButton != null)
+        {
+            // Only the button that started the launch reads as busy; the other one just greys out.
+            _dualLaunchButton.Text = AgentRuntime.Instance.DualLaunching && !_continueLaunching ? Loc.T("正在邀请队友…") : Loc.T("邀请 AI 队友");
+        }
+
+        if (_dualContinueButton != null)
+        {
+            _dualContinueButton.Text = AgentRuntime.Instance.DualLaunching && _continueLaunching ? Loc.T("正在读档接回队友…") : Loc.T("继续上次联机对局");
+        }
+
+        if (_companionChoiceToggle != null)
+        {
+            _companionChoiceToggle.Disabled = InstanceRole.IsCompanion || AgentRuntime.Instance.DualLaunching;
+            _companionChoiceToggle.SetPressedNoSignal(!AgentRuntime.Instance.Settings.CompanionAutoSelectCharacter);
+        }
+
+        if (_dualHint != null) _dualHint.Text = DualHintText();
+
+        if (_teamSend != null)
+        {
+            _teamSend.Disabled = AgentRuntime.Instance.TeamMessagePending || AgentRuntime.Instance.DualLaunching || InstanceRole.IsCompanion;
+            _teamSend.Text = AgentRuntime.Instance.TeamMessagePending ? Loc.T("等待队友回复…") : Loc.T("和队友说");
+        }
+
+        if (_teamStatus != null) _teamStatus.Text = AgentRuntime.Instance.TeamStatus;
+        if (_teamControlStatus != null) _teamControlStatus.Text = AgentRuntime.Instance.TeamControlStatus;
+        if (_teamChatView != null)
+        {
+            var team = new List<string>();
+            foreach (var turn in AgentRuntime.Instance.TeamHistory)
+            {
+                team.Add(FormatTurn(turn.Role == "user" ? Loc.T("你") : Loc.T("AI 队友"), turn.Text));
+            }
+
+            _teamChatView.Show(team);
+        }
+    }
+
+    /// <summary>The settings page's live lines: load notice, budget hint, model probes, stats reset.</summary>
+    private void RefreshSettingsLive()
+    {
+        if (_settingsResetStatsButton != null)
+        {
+            _settingsResetStatsButton.Disabled = !CanResetSessionStats();
+        }
+
+        if (_settingsLoadNotice != null)
+        {
+            _settingsLoadNotice.Text = FormatSettingsNotice();
+        }
+
+        if (_budgetHint != null && !string.IsNullOrWhiteSpace(_budgetInputError))
+        {
+            _budgetHint.Text = _budgetInputError;
+        }
+
+        if (_playTest != null)
+        {
+            var firstRun = FirstRunSetup.Evaluate(AgentRuntime.Instance.Settings);
+            if (_conversationTest != null) _conversationTest.Text = ModelRoleProbe.FormatLine(firstRun.Conversation);
+            _playTest.Text = ModelRoleProbe.FormatLine(firstRun.Play);
+            if (_visionTest != null) _visionTest.Text = ModelRoleProbe.FormatLine(firstRun.Vision);
+        }
+    }
+
+    /// <summary>The settings page's MCP section.</summary>
+    private void RefreshConnectSection()
+    {
+        if (_mcpStatus != null)
+        {
+            _mcpStatus.Text = AgentRuntime.Instance.McpStatus;
+        }
+
+        if (_mcpToggle != null)
+        {
+            _mcpToggle.SetPressedNoSignal(AgentRuntime.Instance.McpRunning);
+        }
+
+        if (_mcpInfoBox != null)
+        {
+            _mcpInfoBox.Visible = AgentRuntime.Instance.McpRunning;
+        }
+
+        if (_mcpUrlLabel != null)
+        {
+            var url = AgentRuntime.Instance.McpUrl;
+            _mcpUrlLabel.Text = string.IsNullOrWhiteSpace(url) ? "" : Loc.T("地址：{0}", url);
+        }
+
+        // Only on a real change: assigning a TextEdit's text resets its caret, selection and scroll,
+        // so a player selecting the config to copy it lost the selection on every refresh.
+        var mcpConfig = AgentRuntime.Instance.McpClientConfig;
+        if (_mcpConfigEdit != null && _mcpConfigEdit.Text != mcpConfig)
+        {
+            _mcpConfigEdit.Text = mcpConfig;
+        }
+    }
+
+    private static bool CanResetSessionStats()
+    {
+        return SessionBudgetLimits.CanResetSessionStats(
+            AgentRuntime.Instance.PlayRunning,
+            AgentRuntime.Instance.PlayPhase);
     }
 
     /// <summary>
@@ -760,7 +791,7 @@ internal sealed partial class AgentOverlayHost
     /// </summary>
     private static string FormatTurn(string speaker, string text)
     {
-        return Accent(speaker) + "\n" + Escape(text) + "\n\n";
+        return Accent(speaker) + "\n" + BbText.Escape(text) + "\n\n";
     }
 
     /// <summary>
@@ -821,88 +852,12 @@ internal sealed partial class AgentOverlayHost
     /// <summary>BBCode in the accent colour, for the parts of a line that carry the meaning.</summary>
     private static string Accent(string text)
     {
-        return "[color=#" + UiFactory.Accent.ToHtml(false) + "][b]" + Escape(text) + "[/b][/color]";
+        return BbText.Colored(UiFactory.Accent.ToHtml(false), text, bold: true);
     }
 
     /// <summary>BBCode in the muted colour, for hints and empty states.</summary>
     private static string Muted(string text)
     {
-        return "[color=#" + UiFactory.Muted.ToHtml(false) + "]" + Escape(text) + "[/color]";
+        return BbText.Colored(UiFactory.Muted.ToHtml(false), text);
     }
-
-    private static string SelectedText(OptionButton? combo)
-    {
-        if (combo == null || combo.Selected < 0)
-        {
-            return string.Empty;
-        }
-
-        return combo.GetItemText(combo.Selected);
-    }
-
-    private static string SelectedMetadata(OptionButton? combo)
-    {
-        if (combo == null || combo.Selected < 0)
-        {
-            return string.Empty;
-        }
-
-        return combo.GetItemMetadata(combo.Selected).AsString();
-    }
-
-    private static void SelectByText(OptionButton combo, string? value)
-    {
-        for (var i = 0; i < combo.ItemCount; i++)
-        {
-            if (string.Equals(combo.GetItemText(i), value, StringComparison.OrdinalIgnoreCase))
-            {
-                combo.Selected = i;
-                return;
-            }
-        }
-
-        if (!string.IsNullOrWhiteSpace(value))
-        {
-            // Preserve an unknown value visibly until the user chooses a supported option.
-            // Falling back to item 0 would silently rewrite the model configuration on save.
-            combo.AddItem(value);
-            combo.Selected = combo.ItemCount - 1;
-            return;
-        }
-
-        combo.Selected = combo.ItemCount > 0 ? 0 : -1;
-    }
-
-    private static string? EmptyToNull(string? value)
-    {
-        return string.IsNullOrWhiteSpace(value) ? null : value;
-    }
-
-    private static string Trim(string? text, int max)
-    {
-        if (string.IsNullOrWhiteSpace(text))
-        {
-            return "-";
-        }
-
-        text = text.Replace("\n", " ");
-        return text.Length <= max ? text : text[..max] + "…";
-    }
-
-    private static string Escape(string text)
-    {
-        return text.Replace("[", "［").Replace("]", "］");
-    }
-
-    private sealed record EndpointEditors(string Id, LineEdit Name, LineEdit Url, LineEdit Key, CheckBox Enabled, OptionButton Protocol);
-
-    private sealed record ModelEditors(
-        string Id,
-        LineEdit Display,
-        LineEdit ModelName,
-        OptionButton Endpoint,
-        CheckBox Vision,
-        OptionButton ThinkingMode,
-        OptionButton ThinkingIntensity,
-        LineEdit ContextWindow);
 }

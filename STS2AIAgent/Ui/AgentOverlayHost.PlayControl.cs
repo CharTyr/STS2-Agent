@@ -1,4 +1,5 @@
 using Godot;
+using MegaCrit.Sts2.Core.Nodes.Screens.ScreenContext;
 using STS2AIAgent.Agent;
 using STS2AIAgent.Config;
 using STS2AIAgent.Game;
@@ -221,14 +222,11 @@ internal sealed partial class AgentOverlayHost
         if (_jevPanel != null) _jevPanel.Visible = dualEnabled;
         if (_sendButton != null) _sendButton.Disabled = _playModeSwitching;
         if (_playToggle != null) _playToggle.Disabled = AgentRuntime.Instance.DualLaunching || _playModeSwitching || coopMode;
-        if (_teamResume != null) _teamResume.Disabled = AgentRuntime.Instance.TeamControlPending
+        var teamControlBlocked = InstanceRole.IsCompanion || AgentRuntime.Instance.TeamControlPending
             || AgentRuntime.Instance.DualLaunching || _playModeSwitching || !coopMode;
-        if (_teamPause != null) _teamPause.Disabled = AgentRuntime.Instance.TeamControlPending
-            || AgentRuntime.Instance.DualLaunching || _playModeSwitching || !coopMode;
-        if (_dualLaunchButton != null) _dualLaunchButton.Disabled = AgentRuntime.Instance.DualLaunching
-            || !CanOfferInvite() || _playModeSwitching || !coopMode;
-        if (_dualContinueButton != null) _dualContinueButton.Disabled = AgentRuntime.Instance.DualLaunching
-            || !CanOfferContinue() || _playModeSwitching || !coopMode;
+        if (_teamResume != null) _teamResume.Disabled = teamControlBlocked;
+        if (_teamPause != null) _teamPause.Disabled = teamControlBlocked;
+        RefreshContinueAvailability();
     }
 
     private void RefreshJevReading(bool coopMode, AgentSettings settings)
@@ -253,5 +251,105 @@ internal sealed partial class AgentOverlayHost
             _jevLatency.Text = sourceAvailable ? Trim(coopMode ? companion?.Latency : AgentRuntime.Instance.LastJevLatency, 45) : "-";
         if (_jevFallbackRate != null)
             _jevFallbackRate.Text = coopMode ? "-" : AgentRuntime.Instance.JevFallbackRate;
+    }
+
+    private async Task LaunchDualAsync()
+    {
+        FlushSettingsIfDirty();
+        if (_settingsDirty) return;
+        var settings = HarvestSettings();
+        var companionAutoPlay = settings.CompanionControlMode != "external";
+        await AgentRuntime.Instance.LaunchDualInstanceAsync(settings, companionAutoPlay, CancellationToken.None);
+        RefreshDynamic();
+    }
+
+    private async Task ContinueDualAsync()
+    {
+        FlushSettingsIfDirty();
+        if (_settingsDirty) return;
+        var settings = HarvestSettings();
+        var companionAutoPlay = settings.CompanionControlMode != "external";
+        _continueLaunching = true;
+        try
+        {
+            RefreshDynamic();
+            await AgentRuntime.Instance.ContinueDualInstanceAsync(settings, companionAutoPlay, CancellationToken.None);
+        }
+        finally
+        {
+            _continueLaunching = false;
+        }
+        RefreshDynamic();
+    }
+
+    private static string DualHintText()
+    {
+        var settings = AgentRuntime.Instance.Settings;
+        if (settings.CompanionControlMode == "external")
+            return Loc.T("外部控制：队友入队后等待外部 Agent，不会自动出牌。启动后可在「接入」中复制连接地址。");
+        var ready = FirstRunSetup.Evaluate(settings);
+        if (!ready.ReadyToInvite) return ready.Hint;
+        return settings.CompanionAutoSelectCharacter
+            ? Loc.T("请从主菜单邀请。队友会自动选角并游玩；你操作自己的角色。")
+            : Loc.T("请从主菜单邀请，在第二窗口为队友选好角色；准备后它会自动游玩。");
+    }
+
+    /// <summary>Continue is offered only where continue_ai_teammate would be accepted: host main menu with a co-op save on disk.</summary>
+    private static bool CanOfferContinue()
+    {
+        if (InstanceRole.IsCompanion) return false;
+        try
+        {
+            return GameStateService.CanContinueAiTeammate(ActiveScreenContext.Instance.GetCurrentScreen());
+        }
+        catch (Exception ex)
+        {
+            WarnOnce("continue availability check failed", ex);
+            return false;
+        }
+    }
+
+    /// <summary>Invite is offered only where invite_ai_teammate would be advertised, including DualLaunching and PlayRunning.</summary>
+    private static bool CanOfferInvite()
+    {
+        if (InstanceRole.IsCompanion) return false;
+        try
+        {
+            return GameStateService.CanInviteAiTeammate(ActiveScreenContext.Instance.GetCurrentScreen());
+        }
+        catch (Exception ex)
+        {
+            WarnOnce("invite availability check failed", ex);
+            return false;
+        }
+    }
+
+    /// <summary>
+    /// The screen behind the button changes with no runtime event the overlay could subscribe to, so
+    /// availability is re-read on the panel tick as well as whenever the tab comes into view. Without
+    /// the tick, a panel already sitting on this tab kept the button greyed out across the boot modal
+    /// clearing, and only a tab switch brought it back.
+    /// </summary>
+    private void RefreshContinueAvailability()
+    {
+        // The mode switch gates both buttons too. This runs on the tick between refresh passes, and
+        // the version that only re-read the screen re-enabled them in the middle of a mode switch.
+        var blocked = AgentRuntime.Instance.DualLaunching
+            || _playModeSwitching
+            || AgentRuntime.Instance.Settings.OverlayPlayMode != "coop";
+        if (_dualLaunchButton != null)
+        {
+            var canInvite = CanOfferInvite();
+            _dualLaunchButton.Disabled = blocked || !canInvite;
+        }
+
+        if (_dualContinueButton == null)
+        {
+            return;
+        }
+
+        var canContinue = CanOfferContinue();
+        _dualContinueButton.Disabled = blocked || !canContinue;
+        _dualContinueButton.TooltipText = canContinue ? "" : Loc.T("主菜单上有联机存档时可用。");
     }
 }
