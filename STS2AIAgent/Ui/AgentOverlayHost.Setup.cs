@@ -37,7 +37,7 @@ internal sealed partial class AgentOverlayHost
         _quickKey.TextChanged += _ => Dirty();
         _quickModel.TextChanged += _ => Dirty();
         _quickUrl.TextChanged += _ => Dirty();
-        _quickBudget.TextChanged += _ => Dirty();
+        _quickBudget.TextChanged += _ => MarkSettingsDirty();
         _quickProvider.ItemSelected += index =>
         {
             _quickUrl.Visible = QuickSetup.Providers[(int)index].Id == "custom";
@@ -58,8 +58,10 @@ internal sealed partial class AgentOverlayHost
 
     private AgentSettings HarvestQuickSetup(AgentSettings settings)
     {
-        if (_showAdvancedValue || !_quickDirty || _quickProvider == null) return settings;
-        var copy = QuickSetup.Apply(settings, _quickProvider.Selected, _quickKey?.Text ?? "", _quickModel?.Text ?? "", _quickUrl?.Text ?? "");
+        if (_showAdvancedValue || _quickProvider == null) return settings;
+        var copy = _quickDirty
+            ? QuickSetup.Apply(settings, _quickProvider.Selected, _quickKey?.Text ?? "", _quickModel?.Text ?? "", _quickUrl?.Text ?? "")
+            : settings;
         var budget = SessionBudgetLimits.Parse(_quickBudget?.Text);
         if (!budget.Accepted) throw new ArgumentException(budget.Error);
         copy.MaxSessionRequests = budget.Value;
