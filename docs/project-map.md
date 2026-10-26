@@ -301,6 +301,7 @@ one action runs at a time.
 ### Files
 - `STS2AIAgent/Game/GameActionService.cs` — **the dispatch table** (`ExecuteAsync` switch: the only thing kept in the base file), `ActionExecutionGate` lease, shared wait helpers.
 - `STS2AIAgent/Game/GameActionService.Combat.cs` — `play_card`, `end_turn`, `use_potion`/`discard_potion` (+ `ResolvePotionTarget`), in-combat card selection, `TryCancelRunningPlayerAction`.
+- `STS2AIAgent/Game/GameActionService.CardGrid.cs` — `select_deck_card` on a card the grid has not drawn: scrolls it into view (mouse wheel, then scroll controls), else a hidden holder or the screen's click handler, else 409 `card_not_reachable` (#218).
 - `STS2AIAgent/Game/GameActionService.Rewards.cs` — `claim_reward`, `resolve_rewards` / `collect_rewards_and_proceed` (stops at a card choice unless given an explicit `option_index`), `choose_reward_card`, `skip_reward_cards`, bundles, deck selection.
 - `STS2AIAgent/Game/GameActionService.Rooms.cs` — events, rest site, chest and treasure relics, crystal sphere, capstone screens, `proceed`.
 - `STS2AIAgent/Game/GameActionService.Shop.cs` — open/close the shop, buy card/relic/potion, card removal.
@@ -319,6 +320,7 @@ one action runs at a time.
 - `STS2AIAgent/Game/PartyInventoryReader.cs` — reads one part of a player's inventory for `run.players[]`: null on a failed read, throttled warning.
 - `STS2AIAgent/Game/CombatTurnReadinessPolicy.cs` — when the player's combat turn is ready for input.
 - `STS2AIAgent/Game/CrystalSphereSettlePolicy.cs` — crystal sphere reveal settle rule.
+- `STS2AIAgent/Game/CardGridCandidatePolicy.cs` — recovers a card grid's whole card list from its on-screen window and picks the scroll direction and click handler for an off-screen card (#218).
 - `STS2AIAgent/Game/CardGridSelectionPolicy.cs` — card-grid selection counts and confirmation eligibility, including the nonempty deck-enchantment minimum.
 - `STS2AIAgent/Game/FtueModalPolicy.cs` — first-time-user modals that block actions and how to clear them.
 - `STS2AIAgent/Game/UnlockConfirmResolutionPolicy.cs` — unlock-confirm screen resolution.

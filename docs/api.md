@@ -803,7 +803,7 @@ compact `agent_view` 的 `run.players[]` 原样携带这三个数组。
 | --- | --- | --- |
 | `kind` | string | 选牌类型（`"deck_card_select"`、`"deck_upgrade_select"`、`"deck_transform_select"`、`"deck_enchant_select"`） |
 | `prompt` | string | 提示文字（如"选择一张牌移除"） |
-| `cards[]` | object[] | 可选卡牌列表 |
+| `cards[]` | object[] | 可选卡牌列表。牌库网格给出完整列表，包括需要滚动才能看到的牌 |
 
 #### `selection.cards[]`
 
@@ -2312,8 +2312,9 @@ Python sidecar 另加 `event_id`、`event_options` 与 `guidance_source`：它�
   - 牌库网格（`deck_card_select`、`deck_upgrade_select`、`deck_transform_select`、`deck_enchant_select`、`choose_card_select`）：点击被原生界面确认后返回 `completed`。**这不代表界面已关闭**：`min_select < max_select` 时界面会保持打开继续收集，读 `selection.selected_count` / `max_select` 决定是否还要继续点；点满或想提前结束时用 `confirm_selection` 收尾（见下）
   - 战斗手牌多选（`combat_hand_select`、`combat_hand_upgrade_select`）：只计入这一步并返回 `pending`，界面保持打开。读 `selection.selected_count` / `max_select` / `requires_confirmation` 判断是否还需要继续选，选完用 `confirm_selection` 结束
   - 已实机验证：删牌、升级（单选）、附魔（原生偏好为 0/3，API 有效最少选择 1 张）、变化（0/6，多选）、事件多选（2/2）。附魔/变化这类 `min_select < max_select` 的界面每次点击在约 0.15 秒内返回，不再空转超时
+  - 牌库网格只在滚动位置附近生成卡牌。目标牌不在屏幕上时，先滚动网格把它带到屏幕上再点击；仍然够不到时返回 409 `invalid_target`，`details.reason = "card_not_reachable"`
 - **稳定条件**：牌库网格的点击被原生界面接受（`selected_count` 变化）；战斗手牌多选在 `confirm_selection` 之后离开选牌界面
-- **超时**：10 秒
+- **超时**：10 秒，滚动另计最多 6 秒
 
 ```json
 {

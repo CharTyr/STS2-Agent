@@ -388,7 +388,7 @@ internal static partial class GameActionService
             });
         }
 
-        var options = GameStateService.GetDeckSelectionOptions(currentScreen);
+        var options = GameStateService.GetDeckSelectionCards(currentScreen);
         if (request.option_index < 0 || request.option_index >= options.Count)
         {
             throw new ApiException(409, "invalid_target", "option_index is out of range.", new
@@ -421,7 +421,9 @@ internal static partial class GameActionService
             });
         }
 
-        var selected = options[request.option_index.Value];
+        var selectedCard = options[request.option_index.Value];
+        var selected = GameStateService.GetDeckSelectionOptions(currentScreen)
+            .FirstOrDefault(holder => ReferenceEquals(holder.CardModel, selectedCard));
         if (isCombatHandSelection)
         {
             if (selected is not NHandCardHolder handHolder)
@@ -440,9 +442,14 @@ internal static partial class GameActionService
                 handHolder);
             combatHand.Call(NPlayerHand.MethodName.CheckIfSelectionComplete);
         }
+        else if (currentScreen is NCardGridSelectionScreen gridScreen)
+        {
+            await PressCardGridCardAsync(gridScreen, selectedCard, options, request.option_index.Value);
+        }
         else
         {
-            selected.EmitSignal(NCardHolder.SignalName.Pressed, selected);
+            // Off the card grid the selection list is the visible holders, so the card always has one.
+            selected!.EmitSignal(NCardHolder.SignalName.Pressed, selected);
         }
 
         var stable = currentScreen switch

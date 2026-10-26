@@ -462,6 +462,118 @@ internal static partial class GameStateService
         return Array.Empty<NCardHolder>();
     }
 
+    /// <summary>
+    /// The cards a <c>select_deck_card</c> index refers to: the whole card list on a card-grid screen,
+    /// the visible holders' cards everywhere else.
+    /// </summary>
+    /// <remarks>
+    /// The grid only instantiates holders near its scroll position, so on a long deck the visible holders
+    /// are a window (#218: 25 of 27 upgradable cards). <see cref="GetDeckSelectionOptions"/> stays the
+    /// availability probe -- a screen with no holder up is not ready -- and this list is what
+    /// <c>selection.cards</c> and the executor index. The executor scrolls an off-screen card into view
+    /// before clicking it.
+    /// </remarks>
+    public static IReadOnlyList<CardModel> GetDeckSelectionCards(IScreenContext? currentScreen)
+    {
+        var holders = GetDeckSelectionOptions(currentScreen);
+        var visibleCards = holders.Select(holder => holder.CardModel!).ToArray();
+        if (currentScreen is not NCardGridSelectionScreen gridScreen || visibleCards.Length == 0)
+        {
+            return visibleCards;
+        }
+
+        return CardGridCandidatePolicy.ResolveCandidates(
+            visibleCards,
+            ReadCardGridCardLists(gridScreen, holders[0]));
+    }
+
+    /// <summary>The instantiated holder showing <paramref name="card"/>, visible ones first.</summary>
+    public static NGridCardHolder? FindCardGridHolder(NCardGridSelectionScreen screen, CardModel card, bool includeHidden)
+    {
+        var visible = GetVisibleGridCardHolders(screen)
+            .FirstOrDefault(holder => ReferenceEquals(holder.CardModel, card));
+        if (visible != null || !includeHidden)
+        {
+            return visible;
+        }
+
+        return FindDescendants<NGridCardHolder>(screen)
+            .FirstOrDefault(holder => GodotObject.IsInstanceValid(holder) && ReferenceEquals(holder.CardModel, card));
+    }
+
+    /// <summary>The card-grid holders currently on screen, in reading order.</summary>
+    public static IReadOnlyList<NGridCardHolder> GetCardGridVisibleHolders(NCardGridSelectionScreen screen) =>
+        GetVisibleGridCardHolders(screen);
+
+    /// <summary>
+    /// Every materialized card collection held by the holder's ancestors up to the screen, nearest first.
+    /// </summary>
+    /// <remarks>
+    /// Found by shape, not by name: the grid's backing list is private and its name is not something this
+    /// build can compile against, and no single field here is a member the mod depends on -- the policy
+    /// only accepts a collection that holds every visible card. Only materialized collections are read, so
+    /// a lazy query on a node is never enumerated, and Godot's own base types are skipped.
+    /// </remarks>
+    private static IEnumerable<CardGridCandidatePolicy.Candidate<CardModel>> ReadCardGridCardLists(
+        NCardGridSelectionScreen screen,
+        NCardHolder anchor)
+    {
+        var rank = 0;
+        for (Node? node = anchor.GetParent(); node != null; node = node.GetParent())
+        {
+            if (GodotObject.IsInstanceValid(node))
+            {
+                foreach (var field in CardCollectionFields(node.GetType()))
+                {
+                    object? value;
+                    try
+                    {
+                        value = field.GetValue(node);
+                    }
+                    catch
+                    {
+                        continue;
+                    }
+
+                    if (value is IReadOnlyCollection<CardModel> cards)
+                    {
+                        yield return new CardGridCandidatePolicy.Candidate<CardModel>(rank, cards.ToArray());
+                    }
+                }
+            }
+
+            if (ReferenceEquals(node, screen))
+            {
+                yield break;
+            }
+
+            rank++;
+        }
+    }
+
+    private static readonly System.Collections.Concurrent.ConcurrentDictionary<Type, FieldInfo[]> CardCollectionFieldCache = new();
+
+    private static FieldInfo[] CardCollectionFields(Type runtimeType) =>
+        CardCollectionFieldCache.GetOrAdd(runtimeType, static type =>
+        {
+            const BindingFlags flags = BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.DeclaredOnly;
+            var fields = new List<FieldInfo>();
+            for (var current = type; current != null && current.Namespace?.StartsWith("Godot", StringComparison.Ordinal) != true; current = current.BaseType)
+            {
+                try
+                {
+                    fields.AddRange(current.GetFields(flags)
+                        .Where(field => typeof(IEnumerable<CardModel>).IsAssignableFrom(field.FieldType)));
+                }
+                catch
+                {
+                    // A type whose metadata will not load has no fields to offer.
+                }
+            }
+
+            return fields.ToArray();
+        });
+
     public static bool TryGetCardGridSelectionMetadata(
         IScreenContext? currentScreen,
         out CardGridSelectionMetadata metadata)
@@ -528,7 +640,7 @@ internal static partial class GameStateService
 
     private static SelectionPayload? BuildSelectionPayload(IScreenContext? currentScreen)
     {
-        var cards = GetDeckSelectionOptions(currentScreen);
+        var cards = GetDeckSelectionCards(currentScreen);
         if (cards.Count == 0)
         {
             return null;
@@ -569,10 +681,10 @@ internal static partial class GameStateService
             // click must not advertise can_confirm, or the model would look for a confirmation the
             // executor rejects.
             can_confirm = CanConfirmSelection(currentScreen),
-            cards = cards.Select((holder, index) => BuildSelectionCardPayload(
-                holder.CardModel!,
+            cards = cards.Select((card, index) => BuildSelectionCardPayload(
+                card,
                 index,
-                IsCardSelected(currentScreen, holder.CardModel!),
+                IsCardSelected(currentScreen, card),
                 currentScreen is NDeckUpgradeSelectScreen ||
                     TryGetCombatHandSelection(currentScreen, out var upgradeHand) && upgradeHand!.CurrentMode == NPlayerHand.Mode.UpgradeSelect)).ToArray()
         };
