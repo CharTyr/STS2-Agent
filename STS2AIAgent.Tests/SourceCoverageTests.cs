@@ -43,6 +43,9 @@ internal static class SourceCoverageTests
         "STS2AIAgent/Game/GameStateService.CombatRisks.cs",
         "STS2AIAgent/Game/GameStateService.Payloads.cs",
         "STS2AIAgent/Game/GameActionService.cs",
+        // select_deck_card on a card the grid has not drawn (#218), split out of
+        // GameActionService.Rewards.cs for the size budget. It drives Godot input and nodes.
+        "STS2AIAgent/Game/GameActionService.CardGrid.cs",
         "STS2AIAgent/Game/GameActionService.Combat.cs",
         "STS2AIAgent/Game/GameActionService.Coop.cs",
         "STS2AIAgent/Game/GameActionService.Embark.cs",

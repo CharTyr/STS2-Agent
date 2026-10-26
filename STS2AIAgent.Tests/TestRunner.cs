@@ -467,6 +467,17 @@ internal static class TestRunner
         yield return ("CardGridSelection.EnchantNativeMinimum", () => Task.Run(CardGridSelectionPolicyTests.EnchantKeepsStricterNativeMinimumAndImpossibleRange));
         yield return ("CardGridSelection.OtherGridsRemainOptional", () => Task.Run(CardGridSelectionPolicyTests.OtherCardGridsKeepEmptyOptionalSelections));
         yield return ("CardGridSelection.PolicyIntegration", () => Task.Run(CardGridSelectionPolicyTests.NativeMetadataProbeUsesTheSelectionPolicy));
+        yield return ("CardGridCandidates.FullListReplacesTheVisibleWindow", () => Task.Run(CardGridCandidatePolicyTests.FullListReplacesTheVisibleWindow));
+        yield return ("CardGridCandidates.ListsMissingAVisibleCardAreIgnored", () => Task.Run(CardGridCandidatePolicyTests.ListsMissingAVisibleCardAreIgnored));
+        yield return ("CardGridCandidates.NearestOwnerWinsOverAWiderScreenList", () => Task.Run(CardGridCandidatePolicyTests.NearestOwnerWinsOverAWiderScreenList));
+        yield return ("CardGridCandidates.AWindowMirrorDoesNotHideTheFullList", () => Task.Run(CardGridCandidatePolicyTests.AWindowMirrorDoesNotHideTheFullList));
+        yield return ("CardGridCandidates.DuplicateReferencesAreCountedOnce", () => Task.Run(CardGridCandidatePolicyTests.DuplicateReferencesAreCountedOnce));
+        yield return ("CardGridCandidates.EqualButDistinctCardsStayDistinct", () => Task.Run(CardGridCandidatePolicyTests.EqualButDistinctCardsStayDistinct));
+        yield return ("CardGridCandidates.NoVisibleHolderMeansNoSelection", () => Task.Run(CardGridCandidatePolicyTests.NoVisibleHolderMeansNoSelection));
+        yield return ("CardGridCandidates.ScrollDirectionPointsAtTheTarget", () => Task.Run(CardGridCandidatePolicyTests.ScrollDirectionPointsAtTheTarget));
+        yield return ("CardGridCandidates.OnlyClickOrSelectHandlersAreInvoked", () => Task.Run(CardGridCandidatePolicyTests.OnlyClickOrSelectHandlersAreInvoked));
+        yield return ("CardGridCandidates.StateAndExecutorIndexTheSameFullList", () => Task.Run(CardGridCandidatePolicyTests.StateAndExecutorIndexTheSameFullList));
+        yield return ("CardGridCandidates.OffScreenCardsScrollBeforeAnyFallback", () => Task.Run(CardGridCandidatePolicyTests.OffScreenCardsScrollBeforeAnyFallback));
         yield return ("CombatDiagnostics.CanPlay", () => Task.Run(CombatDiagnosticsContractTests.HandPayloadKeepsNativeCanPlayEvidence));
         yield return ("Map.NoVoteDuringCombat", () => Task.Run(MapCombatGatingTests.ChooseMapNodeHiddenWhileCombatInProgress));
         yield return ("CombatDiagnostics.Readiness", () => Task.Run(CombatDiagnosticsContractTests.CombatPayloadDistinguishesQueueModalAndSnapshotLocks));

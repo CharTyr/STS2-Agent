@@ -67,6 +67,10 @@ namespace STS2AIAgent.Tests;
 /// <c>BuildRewardOptionPayload</c> was regenerated for #219: a potion reward row reports
 /// <c>claimable: false</c> while every potion slot is occupied, because the game ignores that click.
 ///
+/// <c>BuildSelectionPayload</c> was regenerated for #218: <c>selection.cards</c> now lists the card
+/// grid's whole card list (<c>GetDeckSelectionCards</c>) instead of the holders the grid has drawn,
+/// which on a long deck are only the rows near the scroll position.
+///
 /// <c>BuildRunPlayerSummaryPayload</c> was regenerated when every party line gained the player's
 /// deck, relics and potions. Each client simulates the whole run, so a partner's
 /// <c>Player.Deck</c> is as current as the local one, and an external agent planning for the party
@@ -162,7 +166,7 @@ internal static class GameStateServiceRelocationContractTests
         ["BuildMultiplayerPayload"] = ("STS2AIAgent/Game/GameStateService.Menus.cs", "fd638afff65048407a7b5a592a642176c7f8b8867ab0022c471b55ea25c158cd"),
         ["BuildMultiplayerLobbyPayload"] = ("STS2AIAgent/Game/GameStateService.Menus.cs", "0370cd7fb6abc690af47ac5b0f3cc7db1424d214f5efa840af620d5761add1aa"),
         ["BuildMapPayload"] = ("STS2AIAgent/Game/GameStateService.Map.cs", "6a6615b8d4cf3fcd04e122ee512c33bbcd9f55ff17cb61883109dc39ed3daef0"),
-        ["BuildSelectionPayload"] = ("STS2AIAgent/Game/GameStateService.Rewards.cs", "ea754080757d1b78e9eec7ece27a97676f66ae2e6c9752848f346eee1d7035c3"),
+        ["BuildSelectionPayload"] = ("STS2AIAgent/Game/GameStateService.Rewards.cs", "caafc3b4e19f49a932ed333491f95f2df1c36134d4d1c51a22a3be1a95c1c011"),
         ["BuildCharacterSelectPayload"] = ("STS2AIAgent/Game/GameStateService.Menus.cs", "c7e28df2cbbdb89eb640d940a41803dc11bf66babcaef667e55b6a8e2a3e1d96"),
         ["BuildEventPayload"] = ("STS2AIAgent/Game/GameStateService.Rooms.cs", "072fb8972e2738c52551e7c6e4902daa8d62747f826cfeb60060a58f5c6f5da6"),
         ["BuildCrystalSpherePayload"] = ("STS2AIAgent/Game/GameStateService.Rooms.cs", "c25d3e74c33cb001be8e1d6dbdceda1fc15c77f49149793c26f6b45eb1b66fcd"),
