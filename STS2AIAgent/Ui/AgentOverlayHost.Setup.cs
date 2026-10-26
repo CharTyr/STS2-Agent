@@ -89,7 +89,9 @@ internal sealed partial class AgentOverlayHost
         try
         {
             result = await AgentRuntime.Instance.TestModelAsync(modelId, cancellation.Token);
-            await SaveSettingsAndSyncJevAsync();
+            // Companion pause/ack has its own status and deadline. Do not extend the model test's
+            // 45-second cancellation UI while a teammate finishes an already-submitted action.
+            _ = SaveSettingsAndSyncJevAsync();
         }
         catch (OperationCanceledException)
         {
