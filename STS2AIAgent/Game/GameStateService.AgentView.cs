@@ -378,7 +378,10 @@ internal static partial class GameStateService
                 current_hp = other.current_hp,
                 max_hp = other.max_hp,
                 gold = other.gold,
-                is_alive = other.is_alive
+                is_alive = other.is_alive,
+                deck = other.deck,
+                relics = other.relics,
+                potions = other.potions
             }).ToArray(),
             potions = run.potions.Select(potion => new
             {

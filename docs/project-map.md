@@ -297,6 +297,7 @@ one action runs at a time.
 - `STS2AIAgent/Game/RewardChoicePolicy.cs` — which reward is auto-claimable versus a real decision (cards are never auto-picked).
 - `STS2AIAgent/Game/RewardSkipScope.cs` — scope of a reward skip.
 - `STS2AIAgent/Game/CardPlayCounterPolicy.cs` — confirms that a card play actually happened (play counters).
+- `STS2AIAgent/Game/PartyInventoryReader.cs` — reads one part of a player's inventory for `run.players[]`: null on a failed read, throttled warning.
 - `STS2AIAgent/Game/CombatTurnReadinessPolicy.cs` — when the player's combat turn is ready for input.
 - `STS2AIAgent/Game/CrystalSphereSettlePolicy.cs` — crystal sphere reveal settle rule.
 - `STS2AIAgent/Game/CardGridSelectionPolicy.cs` — card-grid selection counts and confirmation eligibility, including the nonempty deck-enchantment minimum.

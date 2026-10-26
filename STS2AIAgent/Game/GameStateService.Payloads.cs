@@ -884,6 +884,45 @@ internal sealed class RunPlayerSummaryPayload
     public int gold { get; init; }
 
     public bool is_alive { get; init; }
+
+    /// <summary>
+    /// This player's master deck. Every client simulates the whole run (lockstep, checksummed), so a
+    /// partner's deck is as current here as the local one. Null when it could not be read.
+    /// </summary>
+    public PartyDeckCardPayload[]? deck { get; init; }
+
+    public PartyRelicPayload[]? relics { get; init; }
+
+    public PartyPotionPayload[]? potions { get; init; }
+}
+
+internal sealed class PartyDeckCardPayload
+{
+    public string card_id { get; init; } = string.Empty;
+
+    public string name { get; init; } = string.Empty;
+
+    public bool upgraded { get; init; }
+
+    public string card_type { get; init; } = string.Empty;
+}
+
+internal sealed class PartyRelicPayload
+{
+    public string relic_id { get; init; } = string.Empty;
+
+    public string name { get; init; } = string.Empty;
+
+    public bool is_melted { get; init; }
+}
+
+internal sealed class PartyPotionPayload
+{
+    public string? potion_id { get; init; }
+
+    public string? name { get; init; }
+
+    public bool occupied { get; init; }
 }
 
 internal sealed class CombatPetPayload

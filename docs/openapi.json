@@ -2404,6 +2404,60 @@
         },
         "type": "object"
       },
+      "PartyDeckCardPayload": {
+        "additionalProperties": true,
+        "properties": {
+          "card_id": {
+            "type": "string"
+          },
+          "card_type": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "upgraded": {
+            "type": "boolean"
+          }
+        },
+        "type": "object"
+      },
+      "PartyPotionPayload": {
+        "additionalProperties": true,
+        "properties": {
+          "name": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "occupied": {
+            "type": "boolean"
+          },
+          "potion_id": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "type": "object"
+      },
+      "PartyRelicPayload": {
+        "additionalProperties": true,
+        "properties": {
+          "is_melted": {
+            "type": "boolean"
+          },
+          "name": {
+            "type": "string"
+          },
+          "relic_id": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
       "PlayStrategy": {
         "additionalProperties": true,
         "description": "The dual-layer play strategy the Jev execution model follows.",
@@ -2707,6 +2761,15 @@
             "format": "int32",
             "type": "integer"
           },
+          "deck": {
+            "items": {
+              "$ref": "#/components/schemas/PartyDeckCardPayload"
+            },
+            "type": [
+              "array",
+              "null"
+            ]
+          },
           "gold": {
             "format": "int32",
             "type": "integer"
@@ -2726,6 +2789,24 @@
           },
           "player_id": {
             "type": "string"
+          },
+          "potions": {
+            "items": {
+              "$ref": "#/components/schemas/PartyPotionPayload"
+            },
+            "type": [
+              "array",
+              "null"
+            ]
+          },
+          "relics": {
+            "items": {
+              "$ref": "#/components/schemas/PartyRelicPayload"
+            },
+            "type": [
+              "array",
+              "null"
+            ]
           },
           "slot_index": {
             "format": "int32",

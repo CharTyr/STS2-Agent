@@ -624,7 +624,20 @@ curl -s http://127.0.0.1:8080/state | jq .
 | `potions[]` | object[] | 当前药水槽 |
 | `ascension` | number | 当前 run 的 Ascension 等级 |
 | `ascension_effects[]` | object[] | 当前 Ascension 等级已生效的累计效果列表 |
-| `players[]` | object[] | 队伍摘要（含本地玩家），字段同 `combat.players[]` 另加 `gold` |
+| `players[]` | object[] | 队伍摘要（含本地玩家），字段同 `combat.players[]` 另加 `gold`、`deck[]`、`relics[]`、`potions[]`，见下 |
+
+#### `run.players[]` 的牌组、遗物与药水
+
+每个客户端都完整模拟整局（锁步同步并做校验和比对），所以队友的 `Player.Deck` / `Relics` / `PotionSlots`
+在本机与本地玩家的同样新鲜。外部 agent 用它规划整支队伍。读取某一项抛异常时该字段为 `null`（表示未知，区别于空数组），不会拖垮整个 `/state`；失败会写入日志，每 30 秒每类最多一条。
+
+| 字段 | 类型 | 说明 |
+| --- | --- | --- |
+| `deck[]` | object[] \| null | 该玩家的牌库：`card_id`、`name`、`upgraded`、`card_type`。读取失败时为 `null`（与空数组区分），并在日志中节流告警 |
+| `relics[]` | object[] \| null | 该玩家的遗物：`relic_id`、`name`、`is_melted`（已熔炼，效果不再生效）。读取失败时为 `null` |
+| `potions[]` | object[] \| null | 该玩家的药水槽：`potion_id`、`name`（空槽为 null）、`occupied`。读取失败时为 `null` |
+
+compact `agent_view` 的 `run.players[]` 原样携带这三个数组。
 
 #### `run.ascension_effects[]`
 
@@ -1097,7 +1110,7 @@ compact 的 `combat` 原样携带 `/state` 的 `action_readiness`、`end_turn_wi
 | `run` | `relic_stacks` / `relic_descriptions` | 与 `run.relics` 同序、等长的计数与效果原文。计数遗物（笔尖 `AttacksPlayed % 10`、念珠、五轮书等）的层数只在这里，`relics` 里只有名字——**不读这两列就看不到「笔尖 9/10」这类时机** |
 | `map` | `nodes[]` | 全图节点：`coord`（`"row,col"`）、`node_type`、`visited`、`children[]`（同样 `"row,col"`）。`options[]` 只给当前可走的 1–3 个，**只有 `nodes[]` 能用来做跨楼层路线规划** |
 | `map` | `boss_node` / `second_boss_node` | 一 / 二 号 Boss 坐标（`"row,col"`）；`/state` 的 `boss_node` 对象在这里压成字符串 |
-| `run` | `players[]` | 队伍摘要，字段同 `combat.players[]`，另有 `gold` |
+| `run` | `players[]` | 队伍摘要，字段同 `combat.players[]`，另有 `gold` 以及每位玩家的 `deck[]` / `relics[]` / `potions[]`（与 `/state` 同形） |
 | `chest.relics[]` | `relic_id` | 宝箱遗物 ID，配合 `i` 供 `choose_treasure_relic` 使用 |
 | `modal` | `underlying_screen` | 覆盖层底下的逻辑界面名，用于「先解覆盖层再规划房间」 |
 | `rest.options[]` | `option_id` | 休息点选项的稳定标识（`HEAL` / `SMITH` …）。`line` 是给人读的本地化文本，**按 id 分支才不会随语言漂移** |
