@@ -162,8 +162,9 @@ one action runs at a time.
 - `STS2AIAgent/Agent/LiveThoughtBuffer.cs` — the reasoning a model is still producing, streamed so the conversation can show it before the turn completes. Display-only (never persisted, never replayed); the player's "show reasoning" switch gates storage, and `Reset` is what stops a completed turn from drawing a second thought bubble.
 - `STS2AIAgent/Agent/AgentRuntime.Jev.cs` — `StrategyStore`, `StrategyPlanner` wiring, `BuildJevDecider` (re-resolved from live settings every turn), `TestJevConnectionAsync`.
 - `STS2AIAgent/Agent/AgentRuntime.Team.cs` — AI teammate chat and status (`SendTeamMessageAsync`, `ReplyToTeammateAsync`, live status throttle).
-- `STS2AIAgent/Agent/AgentRuntime.ModelTest.cs` — `TestModelAsync`, `ModelTestFor`, `IsModelVerified` (fingerprint match).
-- `STS2AIAgent/Agent/AgentRuntime.CompanionSettings.cs` — token-authorized Jev settings patch applied to a running companion.
+- `STS2AIAgent/Agent/AgentRuntime.ModelTest.cs` — `TestModelAsync`, `ModelTestFor`, `IsModelVerified` (fingerprint match); compiled directly in the offline runtime harness.
+- `STS2AIAgent/Agent/AgentRuntime.CompanionSettings.cs` — authenticated play/Jev settings pause/apply/resume; compiled directly in the offline runtime harness.
+- `STS2AIAgent/Agent/AgentRuntime.CompanionLifetime.cs` — game-dependent host-process watcher; stops and quits an orphan companion.
 
 ### Files — policies and pure logic (offline-tested; must stay free of Godot/game types)
 - `STS2AIAgent/Agent/AutoPlayRecovery.cs` — the turn driver (`RunAsync`: turn gate → turn → commit/receipt → `Observe` → backoff or stop) and the retry/no-progress policy. Waits on the **player** (companion map vote) or an intentionally disabled combat never run the 150 s stuck clock.

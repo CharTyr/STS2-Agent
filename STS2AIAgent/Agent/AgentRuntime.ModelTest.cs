@@ -106,14 +106,18 @@ internal sealed partial class AgentRuntime
         lock (_gate)
         {
             var current = _settings;
+            var target = current.FindModel(model.Id);
+            var currentEndpoint = target == null ? null : current.FindEndpoint(target.EndpointId);
+            if (target == null || currentEndpoint == null || !currentEndpoint.Enabled
+                || !string.Equals(ModelRoleProbe.Fingerprint(new ResolvedModel(currentEndpoint, target)), fingerprint,
+                    StringComparison.OrdinalIgnoreCase))
+                return Loc.T("配置已变更，本次检测结果已忽略。请重新检测当前模型。");
+
             current.ModelTests.RemoveAll(item => string.Equals(item.ModelId, model.Id, StringComparison.OrdinalIgnoreCase));
             current.ModelTests.Add(record);
-            var target = current.FindModel(model.Id);
             // The probe is the authority only when it actually answered: a transient failure leaves
             // SupportsTools where it was rather than downgrading a working model on a bad day.
-            if (target != null && record.Status == "verified"
-                && current.FindEndpoint(target.EndpointId) is { } targetEndpoint
-                && ModelRoleProbe.Fingerprint(new ResolvedModel(targetEndpoint, target)) == fingerprint)
+            if (record.Status == "verified")
             {
                 target.SupportsTools = record.Tools == "supported";
             }

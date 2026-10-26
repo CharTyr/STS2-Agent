@@ -50,6 +50,16 @@ internal sealed class AutoPlaySession
         // the lifecycle lock; a completed session may already be disposed.
         try { cancellation?.Cancel(); }
         catch (ObjectDisposedException) { }
-        return task;
+        return AwaitTerminationAsync(task);
+    }
+
+    private static async Task AwaitTerminationAsync(Task task)
+    {
+        try { await task.ConfigureAwait(false); }
+        catch (Exception)
+        {
+            // Pause acknowledges termination, including a loop that already failed. The original
+            // task remains faulted for AgentRuntime's completion observer to report its stop reason.
+        }
     }
 }

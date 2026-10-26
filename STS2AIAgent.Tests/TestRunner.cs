@@ -110,6 +110,18 @@ internal static class TestRunner
 
     private static IEnumerable<(string Name, Func<Task> Body)> AllTests()
     {
+        yield return ("RuntimeDebug.ConcurrentTestsSendOnlyOneProbeAndCancellationAllowsRetry", RuntimeDebugTests.ConcurrentTestsSendOnlyOneProbeAndCancellationAllowsRetry);
+        yield return ("RuntimeDebug.LateProbeCannotReportEditedConfigurationReady", RuntimeDebugTests.LateProbeCannotReportEditedConfigurationReady);
+        yield return ("RuntimeDebug.UnsupportedToolsStayUnreadyAfterRealRuntimeProbe", RuntimeDebugTests.UnsupportedToolsStayUnreadyAfterRealRuntimeProbe);
+        yield return ("RuntimeDebug.AuthenticationFailureDoesNotBecomeUnsupportedTools", RuntimeDebugTests.AuthenticationFailureDoesNotBecomeUnsupportedTools);
+        yield return ("RuntimeDebug.DisabledEndpointDiscardsOutstandingProbe", RuntimeDebugTests.DisabledEndpointDiscardsOutstandingProbe);
+        yield return ("RuntimeDebug.LateProbeCannotRecreateRemovedModelRecords", RuntimeDebugTests.LateProbeCannotRecreateRemovedModelRecords);
+        yield return ("RuntimeDebug.FaultedPausedLoopCanApplyCorrectedSettings", RuntimeDebugTests.FaultedPausedLoopCanApplyCorrectedSettings);
+        yield return ("RuntimeDebug.PauseRetainsFailure", RuntimeDebugTests.PauseWaitsForFailingActionAndRetainsItsOriginalFailure);
+        yield return ("RuntimeDebug.SettingsWaitForSubmittedActionBeforeSavingAndResuming", RuntimeDebugTests.SettingsWaitForSubmittedActionBeforeSavingAndResuming);
+        yield return ("RuntimeDebug.CancelledSettingsDoNotApplyOrResumeAfterActionEnds", RuntimeDebugTests.CancelledSettingsDoNotApplyOrResumeAfterActionEnds);
+        yield return ("RuntimeDebug.FailedPersistencePreservesOldSettingsAndLeavesLoopPaused", RuntimeDebugTests.FailedPersistencePreservesOldSettingsAndLeavesLoopPaused);
+        yield return ("RuntimeDebug.KeyRotationPreservesExplicitProtocolAndThinkingMode", () => Task.Run(RuntimeDebugTests.KeyRotationPreservesExplicitProtocolAndThinkingMode));
         yield return ("Sandpit.EscapeBeforeModel", SandpitSafetyTests.CriticalTurnEscapesBeforeCallingTheModel);
         yield return ("Sandpit.NoncriticalNormal", SandpitSafetyTests.NoncriticalTurnsRemainModelControlled);
         yield return ("Sandpit.CancellationKeepsAcceptedEscape", SandpitSafetyTests.AcceptedEscapeSurvivesCancellation);

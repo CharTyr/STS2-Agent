@@ -47,15 +47,15 @@ internal static class QuickSetup
             copy.Endpoints.Add(endpoint);
             model.EndpointId = endpoint.Id;
         }
-        var keepProtocol = provider.Id == "custom" && endpoint.BaseUrl.TrimEnd('/') == url.TrimEnd('/');
+        var sameEndpoint = endpoint.BaseUrl.TrimEnd('/') == url.TrimEnd('/');
         endpoint.Name = provider.Name;
         endpoint.BaseUrl = url;
         endpoint.ApiKey = key.Trim();
         endpoint.Enabled = true;
-        if (!keepProtocol) endpoint.ThinkingProtocol = provider.Protocol;
+        if (!sameEndpoint) endpoint.ThinkingProtocol = provider.Protocol;
         model.Model = modelName.Trim();
         model.DisplayName = model.Model;
-        model.ThinkingMode = "auto";
+        if (!sameEndpoint) model.ThinkingMode = "auto";
         copy.ConversationModelId = model.Id;
         copy.PlayModelId = model.Id;
         ModelRoleProbe.InvalidateMismatched(copy);
