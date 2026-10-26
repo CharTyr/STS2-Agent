@@ -1025,8 +1025,8 @@ Before release, run on an isolated Windows profile with game v0.111.0 and real g
 - [ ] Differing TEMP variables and denied handshake writes; verify errors/fallback and the total deadline.
 - [ ] Slow child startup: retry from an active lobby/run and reconnect without creating another process or changing the original control mode.
 - [x] No-model external takeover: full combat on the Steam-on profile, cross-character actions refused (2026-10-27).
-- [ ] Verified model autoplay: BLOCKED on 2026-10-27 (provider HTTP 400 insufficient credits / 403 auth). Save continue kept `run_id` and seats with the no-model route.
-- [ ] Official DeepSeek and a proxy with custom model aliases: BLOCKED on 2026-10-27 (provider errors), still unverified.
+- [ ] Verified model autoplay: Skipped on 2026-10-27 by Char's decision (provider HTTP 400 insufficient credits / 403 auth; not verified). Save continue kept `run_id` and seats with the no-model route.
+- [ ] Official DeepSeek and a proxy with custom model aliases: Skipped on 2026-10-27 by Char's decision (provider errors; not verified).
 - [ ] Non-combat-only: combat CARD_SELECTION/MODAL and entry races cause zero automatic actions; external combat actions remain usable.
 - [ ] Map graph readable in combat/rest/shop while travel options remain disabled; reward potion replacement and capacity-granting relic order work; upgrade previews do not mutate live cards. (2026-10-27: reward potion discard-then-claim passed; the rest was not reported.)
 - [ ] Three/four players: NOT_RUN on 2026-10-27 (no additional online players).

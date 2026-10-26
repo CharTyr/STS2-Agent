@@ -2,7 +2,7 @@
 
 ## Unreleased
 
-Game-dependent compilation succeeded on 2026-10-27 (Release, 0 warnings, 0 errors, after the CS0173 fix below) and the isolated and Steam-on dual-window acceptance passed; model-backed items (streaming chat, vision answers, teammate auto-play, DeepSeek variants) were blocked by provider errors and remain unverified. See [PRODUCT_PLAN_CURRENT.md](PRODUCT_PLAN_CURRENT.md).
+Game-dependent compilation succeeded on 2026-10-27 (Release, 0 warnings, 0 errors, after the CS0173 fix below) and the isolated and Steam-on dual-window acceptance passed; model-backed items (streaming chat, vision answers, teammate auto-play, DeepSeek variants) could not run because of provider errors and were skipped by the maintainer's decision; they have no live evidence. See [PRODUCT_PLAN_CURRENT.md](PRODUCT_PLAN_CURRENT.md).
 
 > Release attribution is recorded against tags or release commits. Post-tag maintenance is listed separately; current validation limits are maintained in [PRODUCT_PLAN_CURRENT.md](https://github.com/CharTyr/STS2-Agent/blob/main/PRODUCT_PLAN_CURRENT.md).
 
