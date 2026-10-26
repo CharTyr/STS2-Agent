@@ -7,107 +7,104 @@ internal static partial class Loc
     // Player-facing session views and model probe advice.
     private static void AddFacingEntries(Dictionary<string, string> map)
     {
-        map["队友连接或配置已变更，正在等待最新配置确认。"] = "The teammate connection or settings changed. Waiting for confirmation of the current configuration.";
-        map["配置已变更，本次检测结果已忽略。请重新检测当前模型。"] = "Configuration changed. This test result was ignored. Test the current model again.";
+        map["设置已变更，等待队友确认…"] = "Settings changed; waiting for the teammate…";
+        map["配置已变更，请重新测试。"] = "Settings changed; test again.";
         map["配置已填写，但主模型尚未验证。在「设置」页点「检测游玩模型」做一次真实调用；连通与工具调用通过后，即可开始自动游玩或邀请队友。"] = "Settings are filled in, but the main model is unverified. In Settings, click Test play model for a real request. Once connectivity and tool calling pass, you can start auto-play or invite a teammate.";
-        map["队友控制方式"] = "Teammate control mode";
-        map["已有模型测试正在进行，请等待或取消后重试。"] = "A model test is already running. Wait or cancel it before retrying.";
-        map["该模型可以聊天，但工具调用不可用，不能自动游玩。请选择支持工具调用的模型并重新测试。"] = "This model can chat but cannot call tools for auto-play. Choose a tool-capable model and test again.";
+        map["队友模式"] = "Teammate mode";
+        map["已有测试在进行，请稍候或取消。"] = "A test is running; wait or cancel it.";
+        map["该模型不支持工具调用，无法自动游玩。请换模型再测。"] = "This model has no tool calling and cannot auto-play. Pick another and test again.";
         map["工具调用：可用"] = "Tools: supported";
         map["工具调用：不可用"] = "Tools: unsupported";
-        map["工具调用已验证，可自动游玩。"] = "Tool calling verified. Ready for auto-play.";
-        map["工具调用不可用，请更换模型后重新检测。"] = "Tool calling is unavailable. Change the model and test again.";
+        map["工具调用可用。"] = "Tool calling works.";
+        map["工具调用不可用，请换模型。"] = "No tool calling; try another model.";
         map["发现两份本地模组，请只保留一份完整安装：{0}"] = "Two local mod copies were found. Keep one complete installation: {0}";
         map["本地模组与主窗口版本不同，文件已保留。请更新或移走这份手动安装：{0}"] = "The local mod differs from the host. Files were preserved. Update or move this manual installation: {0}";
         map["模组文件缺失或为空：{0}。请重新安装完整发布包。"] = "A mod file is missing or empty: {0}. Reinstall the complete package.";
         map["模组清单不属于 STS2 AI Agent 或已损坏：{0}"] = "The manifest is invalid or does not belong to STS2 AI Agent: {0}";
-        map["保存队友设置失败；队友配置未确认。"] = "Could not save teammate settings; the teammate configuration is unconfirmed.";
-        map["队友设置已确认，模型、预算和战斗控制已生效。"] = "Teammate settings confirmed: model, budget and combat controls applied.";
-        map["请填写完整的 HTTP 或 HTTPS 接口地址。"] = "Enter a complete HTTP or HTTPS API URL.";
-        map["请填写服务商提供或本地已安装的模型名称。"] = "Enter the provider model name or a locally installed model name.";
-        map["服务商或本地模型名称"] = "Provider or local model name";
-        map["留空或 0 表示不限"] = "Empty or 0 means unlimited";
+        map["保存失败，队友设置未确认。"] = "Save failed; teammate settings unconfirmed.";
+        map["队友设置已同步。"] = "Teammate settings synced.";
+        map["请填写完整的 HTTP(S) 接口地址。"] = "Enter a full HTTP(S) API URL.";
+        map["请填写模型名。"] = "Enter a model name.";
+        map["模型名"] = "Model name";
+        map["不限（留空或0）"] = "Unlimited (blank or 0)";
         map["快速配置"] = "Quick setup";
         map["服务商"] = "Provider";
-        map["自动游玩请求上限"] = "Auto-play request limit";
-        map["选择服务商，填写 API Key 和模型名称，然后检测。对话和自动游玩会共用这个模型；本地服务可留空 Key。"] = "Choose a provider, enter its API key and model name, then test. Conversation and auto-play share this model. Local services may leave the key empty.";
-        map["新安装默认试用 30 次请求，可调整。检测也会调用你的服务；请求数和 Token 不等于账单金额。"] = "New installs default to a trial of 30 requests; adjust as needed. Tests also call your service. Request and token counts are not a bill.";
-        map["当前自动游玩不限请求次数。可填写上限；请求数和 Token 不等于账单金额。"] = "Auto-play currently has no request limit. You can set one. Request and token counts are not a bill.";
-        map["正在检测连通与工具能力，最多 45 秒，通常 2 个请求。可点取消。"] = "Testing connectivity and tools: up to 45 seconds, usually 2 requests. You can cancel.";
-        map["检测已取消或超时，配置已保留，可重试。"] = "Test cancelled or timed out. Settings were kept; you can retry.";
-        map["检测已取消。"] = "Test cancelled.";
-        map["检测游玩模型"] = "Test play model";
-        map["取消检测"] = "Cancel test";
+        map["请求上限"] = "Request limit";
+        map["正在测试…（最多 45 秒）"] = "Testing… (up to 45 s)";
+        map["已取消或超时，配置已保留。"] = "Cancelled or timed out; settings kept.";
+        map["已取消。"] = "Cancelled.";
+        map["测试主模型"] = "Test main model";
+        map["取消"] = "Cancel";
         map["AI 自动游玩"] = "AI auto-play";
-        map["外部 Agent 控制"] = "External Agent control";
-        map["由我选择队友角色"] = "Choose the teammate character myself";
-        map["外部控制：队友入队后等待外部 Agent，不会自动出牌。启动后可在「接入」中复制连接地址。"] = "External control: the teammate waits for an external Agent and does not auto-play. After launch, copy the connection URL from Connect.";
-        map["请从主菜单邀请。队友会自动选角并游玩；你操作自己的角色。"] = "Invite from the main menu. The teammate selects its character and plays; you control your character.";
-        map["请从主菜单邀请，在第二窗口为队友选好角色；准备后它会自动游玩。"] = "Invite from the main menu, then choose the teammate character in the second window. It auto-plays after readying.";
+        map["外部 Agent"] = "External Agent";
+        map["手动选队友角色"] = "Pick teammate character";
+        map["外部 Agent 模式：队友入队后等待接管，不会自己出牌。"] = "External mode: the teammate waits to be taken over and will not play on its own.";
+        map["在主菜单邀请，队友会自动选角并游玩。"] = "Invite from the main menu; the teammate picks a character and plays.";
+        map["在主菜单邀请，到第二窗口为队友选角色。"] = "Invite from the main menu, then pick the teammate's character in the second window.";
         map["复制诊断"] = "Copy diagnostics";
-        map["保存诊断文件"] = "Save diagnostics file";
-        map["诊断文件已保存：{0}"] = "Diagnostics saved: {0}";
+        map["保存诊断"] = "Save diagnostics";
+        map["诊断已保存：{0}"] = "Diagnostics saved: {0}";
         map["这是本地队友存档。已阻止会损坏存档的原生读档，请在模组多人页点击「继续上次联机对局」。"] = "This is a local teammate save. The unsafe native load was blocked. Use Continue last co-op run on the mod multiplayer page.";
         // Session view headlines, details and next-step hints (Agent/PlayerFacingSession.cs).
         map["队友窗口已退出"] = "Teammate window closed";
-        map["关闭残留窗口后，回到主菜单再点「邀请 AI 队友」。"] =
-            "Close the leftover window, then go back to the main menu and click “Invite AI teammate” again.";
+        map["关闭残留窗口，回主菜单重新邀请。"] =
+            "Close the leftover window, then invite again from the main menu.";
         map["正在组队"] = "Teaming up";
-        map["等待第二窗口连接。请勿重复点击邀请。"] =
-            "Waiting for the second window to connect. Do not click Invite again.";
+        map["等待队友窗口连接，请勿重复邀请。"] =
+            "Waiting for the teammate window. Do not invite again.";
         map["已达到会话预算"] = "Session budget reached";
         map["配置有误，已停止"] = "Stopped: configuration error";
-        map["打开「设置」修正端点、模型名或 Key，测试通过后再点「继续游玩」。不会自动重试。"] =
-            "Open “Settings”, fix the endpoint, model name, or API key, and test again before clicking “Resume”. It will not retry on its own.";
+        map["到「设置」修正端点、模型或 Key，测试通过后点「继续游玩」。"] =
+            "Fix the endpoint, model or key in “Settings”, test, then press “Resume”.";
         map["对局已结束"] = "Run ended";
-        map["已离开当前对局，不会自动开新局。"] = "The run has ended; a new one will not start automatically.";
-        map["若要再打一局，先回到主菜单自行开局，再继续或重新邀请。"] =
-            "To play another run, go back to the main menu and start one yourself, then resume or invite again.";
+        map["已离开当前对局。"] = "You left the current run.";
+        map["新开一局后，再继续或重新邀请。"] =
+            "Start a new run first, then resume or invite again.";
         map["暂时连不上模型"] = "Cannot reach the model right now";
-        map["检查网络或服务后，点「继续游玩」恢复。配置类错误不会无限重试。"] =
-            "Check your network or the service, then click “Resume” to continue. Configuration errors will not be retried forever.";
+        map["检查网络或服务后点「继续游玩」。"] =
+            "Check the network or service, then press “Resume”.";
         map["自动游玩已停止"] = "Auto-play stopped";
-        map["查看当前局面后点「继续游玩」。"] = "Review the current situation, then click “Resume”.";
+        map["看一眼局面，再点「继续游玩」。"] = "Check the board, then press “Resume”.";
         map["正在暂停"] = "Pausing";
-        map["已提交的动作会先完成，不会再派发新的游戏动作。"] =
-            "The submitted action will finish first; no new game actions will be sent.";
+        map["已提交的动作会先完成。"] =
+            "The submitted action finishes first.";
         map["正在完成已提交的动作"] = "Finishing the submitted action";
-        map["请稍候。这不是已取消；完成后会显示已暂停。"] =
-            "Please wait. Nothing was cancelled; the status will show Paused once it finishes.";
+        map["请稍候，完成后显示已暂停。"] =
+            "Wait; it will show Paused when done.";
         map["队友已暂停"] = "Teammate paused";
-        map["仍可聊天。确认配置与队友仍在后，点「继续游玩」。"] =
-            "You can still chat. Check that the setup and the teammate are fine, then click “Resume”.";
-        map["打开「设置」，按失败用途修正后再测试。"] =
-            "Open “Settings”, fix the role that failed, then test again.";
-        map["打开「设置」：添加端点 → 添加模型并绑定 → 选择对话/游玩用途 → 测试 → 邀请队友。"] =
-            "Open “Settings”: add an endpoint → add and bind a model → assign the chat/play roles → test → invite your teammate.";
+        map["仍可聊天。准备好后点「继续游玩」。"] =
+            "You can still chat. Press “Resume” when ready.";
+        map["到「设置」修正后重新测试。"] =
+            "Fix it in “Settings” and test again.";
+        map["到「设置」配置并测试模型。"] =
+            "Set up and test a model in “Settings”.";
         map["可以邀请 AI 队友"] = "Ready to invite an AI teammate";
-        map["回到主菜单，点「邀请 AI 队友」。"] =
-            "Go back to the main menu and click “Invite AI teammate”.";
+        map["回主菜单邀请 AI 队友。"] =
+            "Invite from the main menu.";
         map["正在等你"] = "Waiting for you";
-        map["在你的窗口完成选择。这是正常等待，不是故障。"] =
-            "Make your choice in your window. This is a normal wait, not a problem.";
+        map["请在你的窗口完成选择。"] =
+            "Make your choice in your window.";
         map["正在等游戏"] = "Waiting for the game";
-        map["动画或转场结束后会继续。这是正常等待。"] =
-            "The AI continues once the animation or transition ends. This is a normal wait.";
+        map["动画结束后继续。"] =
+            "Continues after the animation.";
         map["正在请求模型"] = "Asking the model";
-        map["可点「暂停队友」。暂停不会取消已经发出的模型请求，但不会再派发新动作。"] =
-            "You can click “Pause teammate”. Pausing does not cancel a model request already in flight, but no new actions will be sent.";
+        map["可点「暂停队友」，已发出的请求不会被取消。"] =
+            "You can pause; a request already sent is not cancelled.";
         map["队友正在行动"] = "Teammate is playing";
-        map["可随时暂停。你只操作自己的角色。"] = "You can pause at any time. You only control your own character.";
+        map["可随时暂停。"] = "You can pause any time.";
         map["队友已连接"] = "Teammate connected";
-        map["需要时点「暂停队友」或继续聊天。"] = "Click “Pause teammate” when you need to, or keep chatting.";
-        map["请求：{0} 次"] = "Requests: {0}";
-        map["Token 消耗：尚无（未收到 usage） | {0}"] = "Token usage: none yet (no usage returned) | {0}";
-        map["Token 消耗：未知（服务未返回 usage） | {0}"] = "Token usage: unknown (service returned no usage) | {0}";
-        map["Token 消耗：{0} (Prompt: {1}, Completion: {2}) | {3}"] =
-            "Token usage: {0} (prompt: {1}, completion: {2}) | {3}";
-        map["等待当前任务结束。"] = "Waiting for the current task to finish.";
+        map["可点「暂停队友」或聊天。"] = "Pause the teammate or chat.";
+        map["{0} 次请求"] = "{0} requests";
+        map["暂无 Token · {0}"] = "No tokens yet · {0}";
+        map["Token 未知 · {0}"] = "Tokens unknown · {0}";
+        map["{0} Token · {3}"] =
+            "{0} tokens · {3}";
+        map["等待当前任务结束"] = "Waiting for the current task";
         map["已暂停自动游玩"] = "Auto-play paused";
-        map["主窗口点「继续游玩」后才会再行动。"] =
-            "It resumes only after you click “Resume” in the main window.";
-        map["正常等待。"] = "Normal wait.";
-        map["由主窗口控制暂停与继续。"] = "Pause and resume are controlled from the main window.";
+        map["点「继续游玩」后继续。"] =
+            "Press “Resume” to continue.";
+        map["正常等待"] = "Normal wait";
+        map["由主窗口控制"] = "Controlled from the main window";
         map["游玩配置验证失败"] = "Play setup check failed";
         map["配置尚未验证"] = "Setup not yet verified";
         map["可以邀请队友"] = "Ready to invite a teammate";
@@ -115,47 +112,47 @@ internal static partial class Loc
 
         // Model role connectivity probe: status labels, advice and classified errors
         // (Config/ModelRoleProbe.cs).
-        map["未配置视觉模型，可跳过。"] = "No vision model configured; you can skip this.";
-        map["在设置中测试该用途，确认服务可用后再邀请队友。"] =
-            "Test this role in Settings, then invite your teammate once it works.";
-        map["{0}连通成功。工具/视觉能力仍为未验证。"] =
-            "{0} connected. Tool and vision capabilities are still unverified.";
+        map["未配置视觉模型（可跳过）"] = "No vision model (optional)";
+        map["到「设置」测试后再邀请队友。"] =
+            "Test it in “Settings” before inviting a teammate.";
+        map["{0}已连通，能力未验证。"] =
+            "{0} connected; capabilities unverified.";
         map["连通成功"] = "Connected";
         map["连通失败"] = "Connection failed";
         map["未使用"] = "Not used";
         map["尚未验证"] = "Not verified yet";
         map["能力：未使用"] = "Capability: not used";
         map["能力：未验证"] = "Capability: unverified";
-        map["{0}：{1}{2}。{3}{4}"] = "{0}: {1}{2}. {3}{4}";
+        map["{0}：{1}{2} · {3}{4}"] = "{0}: {1}{2} · {3}{4}";
         map["游玩模型"] = "play model";
         map["视觉模型"] = "vision model";
         map["对话模型"] = "chat model";
         map["{0} 返回 {1}，认证失败。"] = "{0} returned {1}: authentication failed.";
-        map["检查该端点的 API Key。本地 Ollama / LM Studio 可以留空 Key；云端服务需要有效密钥。"] =
-            "Check this endpoint's API key. Local Ollama / LM Studio can leave the key blank; cloud services need a valid key.";
+        map["请检查该端点的 API Key。"] =
+            "Check this endpoint's API key.";
         map["{0} 返回 404，找不到模型 {1}。"] = "{0} returned 404: model {1} not found.";
-        map["核对模型名是否与服务商目录一致，以及 Base URL 是否指向 /v1。"] =
-            "Check that the model name matches the provider's catalog and that the base URL points to /v1.";
+        map["请核对模型名和 Base URL（通常以 /v1 结尾）。"] =
+            "Check the model name and base URL (usually ending in /v1).";
         map["{0} 返回 429，请求过于频繁或额度不足。"] =
             "{0} returned 429: too many requests, or your quota is exhausted.";
-        map["稍后再测，或检查服务商配额。不要连续重试。"] =
-            "Test again later or check your provider quota. Do not retry in a loop.";
+        map["稍后再试，或检查配额。"] =
+            "Try later or check your quota.";
         map["{0} 返回 {1}，服务暂时不可用。"] = "{0} returned {1}: the service is temporarily unavailable.";
-        map["确认服务已启动后重试。这是临时错误，不是模型名填错。"] =
-            "Make sure the service is running, then retry. This is a temporary error, not a mistyped model name.";
+        map["请确认服务已启动，稍后重试。"] =
+            "Make sure the service is running, then retry.";
         map["连接 {0} 超时。"] = "Connection to {0} timed out.";
-        map["检查网络、防火墙以及 Base URL 是否可从本机访问。"] =
-            "Check your network, your firewall, and whether the base URL is reachable from this machine.";
+        map["请检查网络、防火墙和 Base URL。"] =
+            "Check your network, firewall and base URL.";
         map["无法连接 {0}。"] = "Could not connect to {0}.";
-        map["检查 Base URL、本机网络，以及本地服务是否已启动。"] =
-            "Check the base URL, your network, and whether the local service has started.";
+        map["请检查 Base URL 和本地服务是否已启动。"] =
+            "Check the base URL and that the local service is running.";
         map["{0}请求 {1} / {2} 失败：{3}"] = "{0} request to {1} / {2} failed: {3}";
-        map["根据错误核对端点、模型名和网络后，再对该用途单独测试。"] =
-            "Check the endpoint, model name, and network against the error, then test this role again.";
+        map["请按错误信息核对后重测。"] =
+            "Check against the error, then test again.";
 
         // First-run setup hints (Config/FirstRunSetup.cs).
-        map["请先在设置中填写 OpenAI 兼容接口地址和模型名称。本地 Ollama / LM Studio 可以留空 API Key。"] =
-            "Start by entering an OpenAI-compatible endpoint URL and model name in Settings. For local Ollama / LM Studio you can leave the API key blank.";
+        map["请先在「设置」填写接口地址和模型名。"] =
+            "Enter an API URL and model name in “Settings” first.";
         map["配置已填写，但尚未验证游玩模型。点「测试连接」会向配置的服务发送测试请求；通过后再邀请队友。"] =
             "Your setup is filled in, but the play model is not verified yet. “Test connection” sends a test request to the configured service; invite your teammate after it passes.";
         map["配置已填写，但主模型尚未验证。在设置页点该模型卡片上的「测试」做一次真实调用（含工具调用检测）；通过后即可到「游玩」页开始自动游玩。"] =
@@ -164,17 +161,17 @@ internal static partial class Loc
             "The play model is verified. Go back to the main menu and open the “AI teammate” page to invite. Local play is 1 human + 1 AI in one run: you play your character while the AI plays the other. The lobby still holds 4.";
         map["主模型已验证。到「游玩」页点「开始自动游玩」即可单人游玩；想和 AI 队友双打，把游玩页顶部切到「多人」再邀请：本地 1 人 + 1 AI 同一局，大厅仍为 4 人位。"] =
             "The main model is verified. Press “Start auto-play” on the “Play” page for solo play; for co-op with the AI teammate, switch the top of the Play page to “Multiplayer” and invite: local play is 1 human + 1 AI in one run, and the lobby still holds 4.";
-        map["模型端点地址无效，请在设置中填写完整的 HTTP 或 HTTPS 地址。"] =
-            "The model endpoint address is invalid. Enter a full HTTP or HTTPS address in Settings.";
+        map["接口地址无效，请填写完整的 HTTP(S) 地址。"] =
+            "Invalid API URL; enter a full HTTP(S) address.";
 
         // Session budget copy (Config/SessionBudgetLimits.cs).
-        map["重置本会话统计"] = "Reset session stats";
-        map["Jev 执行 {0} 次 · 回退 LLM {1} 次"] = "Jev executed {0} time(s) · fell back to LLM {1} time(s)";
+        map["重置统计"] = "Reset stats";
+        map["Jev {0} 次 · LLM 接手 {1} 次"] = "Jev {0} · LLM took over {1}";
         map["会话预算必须是正整数；留空或 0 表示不限。已保留原来的安全上限。"] =
             "The session budget must be a positive whole number; leave it blank or 0 for unlimited. Your previous safe limit was kept.";
-        map["打开「设置」→ 显示高级选项以提高上限，或点「重置本会话统计」后再点「继续游玩」。重置只清零本会话计数，不会改预算上限；普通暂停/继续不会清零。"] =
-            "Open “Settings” → Show advanced options to raise the limit, or click “Reset session stats” and then “Resume”. Resetting only clears this session's counters; it does not change the budget cap. Normal pause/resume does not clear them.";
-        map["自动游玩进行中不能清零统计。请先点「暂停队友」，再在「设置」→ 显示高级选项提高上限，或暂停后点「重置本会话统计」。暂停/继续不会清零累计。"] =
-            "You cannot clear stats while auto-play is running. Click “Pause teammate” first, then raise the limit under “Settings” → Show advanced options, or click “Reset session stats” after pausing. Pause/resume does not clear the totals.";
+        map["到「设置」勾选「显示高级选项」调高上限，或点「重置统计」后再点「继续游玩」。重置只清零本会话计数，不改预算上限。"] =
+            "Tick “Show advanced options” under “Settings” to raise the limit, or press “Reset stats” and then “Resume”. Resetting only clears this session's counters; the limit stays.";
+        map["自动游玩进行中不能重置统计。请先暂停，再点「重置统计」，或到「设置」调高上限。"] =
+            "Stats cannot be reset while auto-play is running. Pause first, then press “Reset stats”, or raise the limit in “Settings”.";
     }
 }

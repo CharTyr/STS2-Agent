@@ -285,7 +285,7 @@ internal static partial class GameActionService
                 action = "continue_ai_teammate",
                 status = "pending",
                 stable = false,
-                message = Loc.T("正在读档接回队友…"),
+                message = Loc.T("正在读档…"),
                 state = GameStateService.BuildStatePayload()
             });
         }
@@ -370,7 +370,7 @@ internal static partial class GameActionService
                 action = "continue_ai_teammate",
                 status = "pending",
                 stable = false,
-                message = Loc.T("正在读档接回队友…"),
+                message = Loc.T("正在读档…"),
                 state = GameStateService.BuildStatePayload()
             });
         }
@@ -383,7 +383,7 @@ internal static partial class GameActionService
                 action = "continue_ai_teammate",
                 status = "pending",
                 stable = false,
-                message = Loc.T("正在读档接回队友…"),
+                message = Loc.T("正在读档…"),
                 state = GameStateService.BuildStatePayload()
             });
         }
@@ -449,7 +449,7 @@ internal static partial class GameActionService
                 action = "invite_ai_teammate",
                 status = "pending",
                 stable = false,
-                message = Loc.T("正在邀请队友…"),
+                message = Loc.T("邀请中…"),
                 state = GameStateService.BuildStatePayload()
             });
         }
@@ -463,7 +463,7 @@ internal static partial class GameActionService
                 action = "invite_ai_teammate",
                 status = "pending",
                 stable = false,
-                message = Loc.T("正在邀请队友…"),
+                message = Loc.T("邀请中…"),
                 state = GameStateService.BuildStatePayload()
             });
         }

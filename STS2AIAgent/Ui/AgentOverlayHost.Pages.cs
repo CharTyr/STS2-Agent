@@ -107,18 +107,20 @@ internal sealed partial class AgentOverlayHost
 
         // The hero names the state, and colours it: green while the loop runs, muted while it waits.
         _playStatus = UiFactory.Wrapped(Loc.T("状态：-"), UiFactory.FontTitle, muted: false);
-        _playSummary = UiFactory.Wrapped(Loc.T("等待开始。"), UiFactory.FontCaption);
+        _playSummary = UiFactory.Wrapped(Loc.T("未开始"), UiFactory.FontCaption);
         _playToggle = UiFactory.Button(Loc.T("开始自动游玩"), TogglePlay, UiFactory.ButtonKind.Primary);
         _stepButton = UiFactory.Button(Loc.T("单步"), () => _ = AgentRuntime.Instance.StepOnceAsync(CancellationToken.None));
-        // A horizontal row cannot hold "暂停自动游玩" and "单步" inside a 440px panel: the primary
+        // A horizontal row cannot hold "暂停" and "单步" inside a 440px panel: the primary
         // button's natural width plus padding pushes the second control past the card edge, which
         // is the clipped empty frame measured live on 2026-09-22. Stack them, and hide the step
         // button while autoplay owns the turn so the pause control gets the full card width.
         var playControls = UiFactory.Column();
         playControls.AddChild(_playToggle);
         playControls.AddChild(_stepButton);
-        section.AddChild(UiFactory.Card(
-            Loc.T("当前回合"),
+        section.AddChild(HelpCard.Build(
+            "play.auto",
+            Loc.T("自动游玩"),
+            Loc.T("「开始自动游玩」让 AI 持续决策并操作，「单步」只走一步。\n用的是与 MCP 相同的精简状态和工具，不需要视觉。"),
             _playStatus,
             _playSummary,
             playControls));
@@ -137,7 +139,7 @@ internal sealed partial class AgentOverlayHost
         // The dual-layer toggle for solo play. When it is on, Jev picks each action and the LLM only
         // plans strategy; the panel below the conversation shows what Jev chose.
         _dualLayerSoloCheck = UiFactory.Check(
-            Loc.T("双层决策模式（Jev 执行 + LLM 规划）"),
+            Loc.T("双层决策（Jev）"),
             AgentRuntime.Instance.Settings.DualLayerSoloEnabled);
         _dualLayerSoloCheck.Toggled += on =>
         {
@@ -149,14 +151,13 @@ internal sealed partial class AgentOverlayHost
         section.AddChild(_dualLayerSoloCheck);
 
         section.AddChild(BuildChatCard());
-        section.AddChild(UiFactory.Wrapped(Loc.T("自动游玩走 compact 状态和工具；进行中发消息只影响后续决策。空闲聊天要代打一手须明确说「帮我打」。")));
         return section;
     }
 
     private Control BuildNonCombatOnlyControl()
     {
         _nonCombatOnlyCheck = UiFactory.Check(
-            Loc.T("仅在战斗外自动游玩（战斗中只读）"),
+            Loc.T("战斗中不自动操作"),
             AgentRuntime.Instance.Settings.NonCombatOnlyEnabled);
         _nonCombatOnlyCheck.Toggled += on =>
         {
@@ -166,12 +167,11 @@ internal sealed partial class AgentOverlayHost
             _ = SaveSettingsAndSyncJevAsync();
             RefreshDynamic();
         };
-        return UiFactory.Card(
-            Loc.T("战斗控制"),
-            _nonCombatOnlyCheck,
-            UiFactory.Wrapped(
-                Loc.T("开启后，Agent 在战斗期间不请求模型、不执行动作；战斗结束后自动恢复。适合手动战斗或交给外部战斗控制器。"),
-                UiFactory.FontCaption));
+        return HelpCard.Build(
+            "play.combat",
+            Loc.T("战斗"),
+            Loc.T("开启后，战斗中 AI 不请求模型也不操作，战斗结束后自动恢复。\n适合手动打战斗，或交给外部战斗控制器。"),
+            _nonCombatOnlyCheck);
     }
 
     /// <summary>
@@ -182,15 +182,15 @@ internal sealed partial class AgentOverlayHost
     private Control BuildJevPanel()
     {
         var column = UiFactory.Column();
-        _jevStatus = UiFactory.Wrapped(Loc.T("Jev 未配置。到设置页填写 API Key 后即可用双层决策。"), UiFactory.FontCaption);
+        _jevStatus = UiFactory.Wrapped(Loc.T("未配置 Jev，请先在「设置」填写。"), UiFactory.FontCaption);
         _jevLastChoice = UiFactory.Wrapped("-", UiFactory.FontBody, muted: false);
         _jevProbabilities = UiFactory.Wrapped("-", UiFactory.FontCaption);
         _jevDanger = UiFactory.Wrapped("-", UiFactory.FontCaption);
         _jevLatency = UiFactory.Wrapped("-", UiFactory.FontCaption);
         column.AddChild(_jevStatus);
         column.AddChild(UiFactory.Row(
-            UiFactory.MetricTile(Loc.T("Jev 最近选择"), _jevLastChoice),
-            UiFactory.MetricTile(Loc.T("概率分布"), _jevProbabilities)));
+            UiFactory.MetricTile(Loc.T("最近选择"), _jevLastChoice),
+            UiFactory.MetricTile(Loc.T("概率"), _jevProbabilities)));
         column.AddChild(UiFactory.Row(
             UiFactory.MetricTile(Loc.T("危险度"), _jevDanger),
             UiFactory.MetricTile(Loc.T("耗时"), _jevLatency)));
@@ -198,7 +198,11 @@ internal sealed partial class AgentOverlayHost
         // to finish a turn Jev could not. "-" until the first dual-layer turn.
         _jevFallbackRate = UiFactory.Wrapped("-", UiFactory.FontCaption);
         column.AddChild(_jevFallbackRate);
-        _jevPanel = UiFactory.Card(Loc.T("Jev 执行层"), column);
+        _jevPanel = HelpCard.Build(
+            "play.jev",
+            Loc.T("Jev"),
+            Loc.T("开启「双层决策」后，由 Jev 逐步选择动作，LLM 只负责战略规划。\nJev 的地址和 Key 在「设置」里填写；置信度低于阈值时由 LLM 接手。"),
+            column);
         return _jevPanel;
     }
 
@@ -217,7 +221,6 @@ internal sealed partial class AgentOverlayHost
         // edge in the live pass.
         column.AddChild(UiFactory.MetricTile(Loc.T("本次会话"), _decisionUsage));
         column.AddChild(UiFactory.MetricTile(Loc.T("本局"), _decisionRunSpend));
-        column.AddChild(UiFactory.Wrapped(Loc.T("最新在前：动作、理由、来源，以及该步消耗的 Token。")));
         _decisionLog = UiFactory.Rich();
         _decisionLog.FitContent = false;
         // Newest first: the view sticks to the top, where the line that just arrived is drawn.
@@ -225,7 +228,11 @@ internal sealed partial class AgentOverlayHost
         _decisionLog.CustomMinimumSize = new Vector2(0, 140);
         _decisionLog.SizeFlagsHorizontal = Control.SizeFlags.ExpandFill;
         column.AddChild(_decisionLog);
-        return UiFactory.Card(Loc.T("决策记录"), column);
+        return HelpCard.Build(
+            "play.decisions",
+            Loc.T("决策记录"),
+            Loc.T("最新的在最前。每条包含动作、理由、来源和该步消耗的 Token。"),
+            column);
     }
 
     /// <summary>
@@ -238,12 +245,12 @@ internal sealed partial class AgentOverlayHost
         var status = AgentRuntime.Instance.TeammateLiveStatus;
         if (status != null)
         {
-            return Loc.T("队友实况：{0}", status);
+            return Loc.T("队友：{0}", status);
         }
 
         return LocalDualInstanceLauncher.Connection == null
-            ? Loc.T("队友实况：组队后显示。")
-            : Loc.T("队友实况：读取中…");
+            ? Loc.T("队友：未组队")
+            : Loc.T("队友：读取中…");
     }
 
     /// <summary>
@@ -260,11 +267,9 @@ internal sealed partial class AgentOverlayHost
     private Control BuildCoopSection()
     {
         var page = UiFactory.Column();
-        page.AddChild(UiFactory.Wrapped(Loc.T("可以一起玩：你打自己的角色，AI 打另一个角色，同一座塔往上爬。大厅仍是 4 人位，还可以再邀 2 名在线玩家。")));
-
         _companionMode = UiFactory.Combo();
         _companionMode.AddItem(Loc.T("AI 自动游玩"));
-        _companionMode.AddItem(Loc.T("外部 Agent 控制"));
+        _companionMode.AddItem(Loc.T("外部 Agent"));
         _companionMode.Select(AgentRuntime.Instance.Settings.CompanionControlMode == "external" ? 1 : 0);
         _companionMode.ItemSelected += index =>
         {
@@ -273,7 +278,7 @@ internal sealed partial class AgentOverlayHost
             AgentRuntime.Instance.SaveSettings(next);
             RefreshDynamic();
         };
-        page.AddChild(Labeled(Loc.T("队友控制方式"), _companionMode));
+        page.AddChild(Labeled(Loc.T("队友模式"), _companionMode));
         _sessionHeadline = UiFactory.Label(Loc.T("状态：-"), UiFactory.FontTitle);
         // Wrapped, not Label. Every one of these is short when the control is built and a full sentence
         // once the runtime fills it in -- `_sessionNext` is "-" at build time and measured 577 pixels
@@ -287,7 +292,7 @@ internal sealed partial class AgentOverlayHost
         // character; the AI driving it (or a human at that window) picks instead. It sits right above
         // the invite button so the choice is visible before the second window exists, and is saved on
         // toggle because the companion reads settings at launch and this tab has no separate Save.
-        _companionChoiceToggle = UiFactory.Check(Loc.T("由我选择队友角色"), !AgentRuntime.Instance.Settings.CompanionAutoSelectCharacter);
+        _companionChoiceToggle = UiFactory.Check(Loc.T("手动选队友角色"), !AgentRuntime.Instance.Settings.CompanionAutoSelectCharacter);
         _companionChoiceToggle.Toggled += on =>
         {
             var settings = CloneSettings(AgentRuntime.Instance.Settings);
@@ -302,7 +307,7 @@ internal sealed partial class AgentOverlayHost
         _dualHint = UiFactory.Wrapped(DualHintText(), UiFactory.FontCaption);
         // Wrapped for the same reason: launch results ("AI 队友窗口已经在运行…", Steam-blocked errors
         // with an exception message) are full sentences wider than the panel.
-        _dualStatus = UiFactory.Wrapped(Loc.T("队友尚未加入。"), UiFactory.FontBody, muted: true);
+        _dualStatus = UiFactory.Wrapped(Loc.T("队友未加入"), UiFactory.FontBody, muted: true);
         // The companion's own live state, not the host's view of the shared run: the host already
         // knows the process is alive, and what a co-op player needs mid-fight is the other
         // character's health and whether it can act. Drawn as a tone chip rather than a sentence, so
@@ -315,17 +320,19 @@ internal sealed partial class AgentOverlayHost
         // press -- and the control row that used to be a card of its own now sits under it, because
         // "pause the teammate" is the same job as "start the teammate" and was a scroll away from it.
         _dualLaunchButton = UiFactory.Button(Loc.T("邀请 AI 队友"), () => _ = LaunchDualAsync(), UiFactory.ButtonKind.Primary);
-        _dualContinueButton = UiFactory.Button(Loc.T("继续上次联机对局"), () => _ = ContinueDualAsync());
+        _dualContinueButton = UiFactory.Button(Loc.T("继续联机存档"), () => _ = ContinueDualAsync());
         _teamPause = UiFactory.Button(Loc.T("暂停队友"), () => _ = AgentRuntime.Instance.ControlTeammateAsync(false, CancellationToken.None));
         _teamResume = UiFactory.Button(Loc.T("继续游玩"), () => _ = AgentRuntime.Instance.ControlTeammateAsync(true, CancellationToken.None));
         _teamControlStatus = UiFactory.Wrapped(AgentRuntime.Instance.TeamControlStatus, UiFactory.FontCaption, muted: true);
-        page.AddChild(UiFactory.Card(
+        page.AddChild(HelpCard.Build(
+            "coop.invite",
             Loc.T("邀请与控制"),
+            Loc.T("你打自己的角色，AI 打另一个角色，同一座塔往上爬。\n在主菜单邀请；第二窗口打开后，AI 会自动选角、过开局事件并进图。\n大厅仍是 4 人位，还可再邀 2 名在线玩家。\n队友窗口连不上时，检查游戏日志和 Steam 双开限制。"),
             _companionChoiceToggle,
             _dualHint,
             _dualLaunchButton,
             UiFactory.Row(UiFactory.Button(Loc.T("复制诊断"), CopyDiagnostics, UiFactory.ButtonKind.Ghost),
-                UiFactory.Button(Loc.T("保存诊断文件"), SaveDiagnostics, UiFactory.ButtonKind.Ghost)),
+                UiFactory.Button(Loc.T("保存诊断"), SaveDiagnostics, UiFactory.ButtonKind.Ghost)),
             // In-game entry for continue_ai_teammate: the game's own Load button opens a saved co-op
             // run over Steam networking and rejects the local-connection NetIds, so the way back into
             // a saved run has to live here, one row under the invite.
@@ -348,27 +355,27 @@ internal sealed partial class AgentOverlayHost
         _teamChat.CustomMinimumSize = new Vector2(0, 120);
         _teamChatView = new RichLog(_teamChat, RichLog.LogAnchor.Bottom);
         _teamInput = UiFactory.Multiline("", 56);
-        _teamInput.PlaceholderText = Loc.T("一起集火哪个敌人？这条路线你怎么看？");
+        _teamInput.PlaceholderText = Loc.T("对队友说点什么…");
         // A text editor reports its placeholder as its minimum width, and the placeholder here is a full
         // question -- measured live on 2026-09-21 as the 525-pixel panel container that was still
         // pushing the co-op page past its 440-pixel panel after the labels were fixed. Set after the
         // placeholder, because the editor recomputes its minimum when the text it holds changes.
         _teamInput.CustomMinimumSize = new Vector2(UiFactory.MinReflowWidth, 56);
-        _teamSend = UiFactory.Button(Loc.T("和队友说"), () => _ = SendTeamMessageAsync(), UiFactory.ButtonKind.Primary);
+        _teamSend = UiFactory.Button(Loc.T("发送"), () => _ = SendTeamMessageAsync(), UiFactory.ButtonKind.Primary);
         _teamStatus = UiFactory.Wrapped(AgentRuntime.Instance.TeamStatus, UiFactory.FontCaption);
-        page.AddChild(UiFactory.Card(
+        page.AddChild(HelpCard.Build(
+            "coop.chat",
             Loc.T("队伍交流"),
+            Loc.T("聊天不会替你出牌，也不会恢复已暂停的队友。\n你的建议会作为队友下一次决策的参考。"),
             _teamChat,
             _teamInput,
             UiFactory.TightRow(_teamSend),
-            _teamStatus,
-            UiFactory.Wrapped(Loc.T("聊天不会替你出牌，也不会恢复已暂停的队友。建议会供队友下一次决策参考。")),
-            UiFactory.Wrapped(Loc.T("如果队友窗口未能连接，请检查游戏日志和 Steam 双开限制。"))));
+            _teamStatus));
 
         // The dual-layer toggle for the multiplayer teammate. The companion instance runs its own Jev
         // loop (it has no overlay), so this switch is the host-side control for it.
         _dualLayerCoopCheck = UiFactory.Check(
-            Loc.T("双层决策模式（Jev 执行 + LLM 规划）"),
+            Loc.T("双层决策（Jev）"),
             AgentRuntime.Instance.Settings.DualLayerCoopEnabled);
         _dualLayerCoopCheck.Toggled += on => _ = SetCoopDualLayerAsync(on);
         page.AddChild(_dualLayerCoopCheck);
@@ -412,7 +419,7 @@ internal sealed partial class AgentOverlayHost
         var entries = AgentRuntime.Instance.RecentDecisions(DecisionLogView.RecentLimit);
         if (entries.Count == 0)
         {
-            _decisionLogView.Show(new[] { Muted(Loc.T("还没有决策记录。自动游玩或外部客户端执行动作后会出现在这里。")) + "\n" });
+            _decisionLogView.Show(new[] { Muted(Loc.T("暂无决策记录。")) + "\n" });
             return;
         }
 
@@ -433,8 +440,8 @@ internal sealed partial class AgentOverlayHost
 
             parts.Add(Loc.T("来源：{0}", entry.source));
             parts.Add(entry.total_tokens is { } tokens
-                ? Loc.T("本次 Token：{0}", tokens.ToString("N0"))
-                : Loc.T("本次 Token：未知"));
+                ? Loc.T("Token {0}", tokens.ToString("N0"))
+                : Loc.T("Token 未知"));
             // The action stays on its own line. A reason such as "Play Dismantle (14 dmg with STR 3)
             // on the 1st Inklet" plus source and token count is wider than the panel even after the
             // rich label wraps, and one joined line is what the 2026-09-22 screenshot clipped.
@@ -572,7 +579,7 @@ internal sealed partial class AgentOverlayHost
 
         if (_headerStatus != null)
         {
-            _headerStatus.Text = playing ? Loc.T("● 自动游玩中") : Loc.T("○ 待机");
+            _headerStatus.Text = playing ? Loc.T("● 游玩中") : Loc.T("○ 待机");
             _headerStatus.AddThemeColorOverride(
                 "font_color",
                 playing ? UiFactory.ToGodot(UiFactory.Palette.Positive) : UiFactory.ToGodot(UiFactory.Palette.Muted));
@@ -599,19 +606,19 @@ internal sealed partial class AgentOverlayHost
 
         if (_playSummary != null)
         {
-            _playSummary.Text = playing ? Loc.T("正在自动决策并执行动作。") : Loc.T("等待开始。");
+            _playSummary.Text = playing ? Loc.T("AI 正在操作") : Loc.T("未开始");
         }
 
         if (_playScreen != null)
         {
             try
             {
-                _playScreen.Text = Loc.T("屏幕：{0}", GameStateService.CurrentScreenName());
+                _playScreen.Text = GameStateService.CurrentScreenName();
             }
             catch (Exception ex)
             {
                 WarnOnce("screen name read failed", ex);
-                _playScreen.Text = Loc.T("屏幕：-");
+                _playScreen.Text = "-";
             }
         }
 
@@ -631,7 +638,7 @@ internal sealed partial class AgentOverlayHost
 
         if (_playToggle != null)
         {
-            _playToggle.Text = playing ? Loc.T("暂停自动游玩") : Loc.T("开始自动游玩");
+            _playToggle.Text = playing ? Loc.T("暂停") : Loc.T("开始自动游玩");
         }
 
         if (_stepButton != null)
@@ -681,12 +688,12 @@ internal sealed partial class AgentOverlayHost
         if (_dualLaunchButton != null)
         {
             // Only the button that started the launch reads as busy; the other one just greys out.
-            _dualLaunchButton.Text = AgentRuntime.Instance.DualLaunching && !_continueLaunching ? Loc.T("正在邀请队友…") : Loc.T("邀请 AI 队友");
+            _dualLaunchButton.Text = AgentRuntime.Instance.DualLaunching && !_continueLaunching ? Loc.T("邀请中…") : Loc.T("邀请 AI 队友");
         }
 
         if (_dualContinueButton != null)
         {
-            _dualContinueButton.Text = AgentRuntime.Instance.DualLaunching && _continueLaunching ? Loc.T("正在读档接回队友…") : Loc.T("继续上次联机对局");
+            _dualContinueButton.Text = AgentRuntime.Instance.DualLaunching && _continueLaunching ? Loc.T("正在读档…") : Loc.T("继续联机存档");
         }
 
         if (_companionChoiceToggle != null)
@@ -700,7 +707,7 @@ internal sealed partial class AgentOverlayHost
         if (_teamSend != null)
         {
             _teamSend.Disabled = AgentRuntime.Instance.TeamMessagePending || AgentRuntime.Instance.DualLaunching || InstanceRole.IsCompanion;
-            _teamSend.Text = AgentRuntime.Instance.TeamMessagePending ? Loc.T("等待队友回复…") : Loc.T("和队友说");
+            _teamSend.Text = AgentRuntime.Instance.TeamMessagePending ? Loc.T("等待回复…") : Loc.T("发送");
         }
 
         if (_teamStatus != null) _teamStatus.Text = AgentRuntime.Instance.TeamStatus;
@@ -733,6 +740,7 @@ internal sealed partial class AgentOverlayHost
         if (_budgetHint != null && !string.IsNullOrWhiteSpace(_budgetInputError))
         {
             _budgetHint.Text = _budgetInputError;
+            _budgetHint.Visible = true;
         }
 
         if (_playTest != null)

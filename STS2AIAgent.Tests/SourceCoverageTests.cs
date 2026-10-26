@@ -106,6 +106,9 @@ internal static class SourceCoverageTests
         "STS2AIAgent/Ui/OverlayOverflowSentinel.cs",
         "STS2AIAgent/Ui/OverlayHotkey.cs",
         "STS2AIAgent/Ui/RichLog.cs",
+        // The card with a "?" help panel behind its title. A Godot control builder, unlinked like the
+        // factory whose card it wraps.
+        "STS2AIAgent/Ui/HelpCard.cs",
         "STS2AIAgent/Ui/AgentOverlayHost.FormHelpers.cs",
         "STS2AIAgent/Ui/AgentOverlayHost.SettingsSave.cs",
         "STS2AIAgent/Game/GameDataExportService.cs",

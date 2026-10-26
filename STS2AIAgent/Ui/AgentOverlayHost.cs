@@ -91,7 +91,6 @@ internal sealed partial class AgentOverlayHost
     private LineEdit? _hotkeyEdit;
     private LineEdit? _llmTimeoutEdit;
     private Label? _saveStatus;
-    private Label? _testNotice;
     private Label? _conversationTest;
     private Label? _playTest;
     private Label? _visionTest;
@@ -417,7 +416,7 @@ internal sealed partial class AgentOverlayHost
     private void CopyDiagnostics()
     {
         CopyText(AgentRuntime.Instance.ExportDiagnostics());
-        AgentRuntime.Instance.NotifyStatus(Loc.T("诊断已复制到剪贴板（不含 API Key 和对话正文）。"));
+        AgentRuntime.Instance.NotifyStatus(Loc.T("诊断已复制（不含 Key 和对话）。"));
     }
 
     private void SaveDiagnostics()
@@ -429,7 +428,7 @@ internal sealed partial class AgentOverlayHost
             var path = Path.Combine(directory, "sts2-agent-" + DateTime.UtcNow.ToString("yyyyMMdd-HHmmss-fff") + ".txt");
             File.WriteAllText(path, AgentRuntime.Instance.ExportDiagnostics());
             OS.ShellOpen(directory);
-            AgentRuntime.Instance.NotifyStatus(Loc.T("诊断文件已保存：{0}", path));
+            AgentRuntime.Instance.NotifyStatus(Loc.T("诊断已保存：{0}", path));
         }
         catch (Exception ex) { AgentRuntime.Instance.NotifyStatus(DiagnosticExport.Redact(ex.Message)); }
     }
@@ -506,12 +505,12 @@ internal sealed partial class AgentOverlayHost
                 {
                     try
                     {
-                        _playScreen.Text = Loc.T("屏幕：{0}", GameStateService.CurrentScreenName());
+                        _playScreen.Text = GameStateService.CurrentScreenName();
                     }
                     catch (Exception ex)
                     {
                         WarnOnce("screen name read failed", ex);
-                        _playScreen.Text = Loc.T("屏幕：-");
+                        _playScreen.Text = "-";
                     }
                 }
 

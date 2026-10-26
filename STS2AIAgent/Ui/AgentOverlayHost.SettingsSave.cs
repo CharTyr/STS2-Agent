@@ -113,6 +113,7 @@ internal sealed partial class AgentOverlayHost
         if (_budgetHint != null && !string.IsNullOrWhiteSpace(_budgetInputError))
         {
             _budgetHint.Text = _budgetInputError;
+            _budgetHint.Visible = true;
         }
     }
 
@@ -141,7 +142,7 @@ internal sealed partial class AgentOverlayHost
         {
             if (_saveStatus != null)
             {
-                _saveStatus.Text = FormatSettingsNotice(fallback: Loc.T("保存失败，原配置未被覆盖。"));
+                _saveStatus.Text = FormatSettingsNotice(fallback: Loc.T("保存失败，原配置未改动。"));
             }
 
             return false;

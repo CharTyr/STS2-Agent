@@ -297,6 +297,11 @@ The extractions that did happen kept that property, and the fourth one is what s
   section no longer stops the next, and put the three live logs behind `RichLog`, which redraws
   only on a real change -- the old pass cleared and redrew them on every tick, which is what made
   the conversation impossible to scroll back through.
+- **The overlay's copy rewrite** (2026-10-26) made labels short and moved every usage note behind a
+  "?" button. `HelpCard.cs` is that button: it wraps `UiFactory.Card`, finds the card's title row by
+  its `CardHeaderName`, and adds the toggle plus a closed-by-default panel. Nothing is stored in the
+  settings; open panels are remembered by a short key in a static set so a theme or form rebuild keeps
+  them open. A new explanation goes in a `HelpCard`, not in a grey `Wrapped` under the control.
 
 The base file went 1,829 -> 1,347 -> 1,059 -> 1,120 -> 1,025 lines without changing what any tab does,
 and it kept every field those pages read. The 1,120 step was up rather than down -- the live pass on

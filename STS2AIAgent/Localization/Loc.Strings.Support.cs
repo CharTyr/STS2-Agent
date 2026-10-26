@@ -41,8 +41,8 @@ internal static partial class Loc
         map["请先暂停当前角色的自动游玩，再邀请 AI 队友。"] =
             "Pause auto-play for the current character before inviting an AI teammate.";
         map["请先回到主菜单，再邀请 AI 队友组队。"] = "Return to the main menu before inviting an AI teammate.";
-        map["模型端点地址无效，请在设置中填写完整的 HTTP 或 HTTPS 地址。"] =
-            "The model endpoint address is invalid. Enter a full HTTP or HTTPS address in Settings.";
+        map["接口地址无效，请填写完整的 HTTP(S) 地址。"] =
+            "Invalid API URL; enter a full HTTP(S) address.";
 
         // Multiplayer/DualInstanceCoordinator.cs
         map["创建 4 人大厅失败：{0}"] = "Could not create the 4-player lobby: {0}";

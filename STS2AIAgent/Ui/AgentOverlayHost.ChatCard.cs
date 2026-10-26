@@ -55,10 +55,7 @@ internal sealed partial class AgentOverlayHost
     {
         var column = UiFactory.Column();
 
-        _chatEmpty = UiFactory.Card(
-            Loc.T("和 AI 聊聊这局"),
-            UiFactory.Wrapped(Loc.T("问它这手牌怎么打、这个遗物值不值得买、刚才那步为什么那么出。")),
-            UiFactory.Wrapped(Loc.T("闲聊默认只读；明确说「帮我打」才代打一手。自动游玩中发消息会影响后续决策，不会并发出牌。")));
+        _chatEmpty = UiFactory.Wrapped(Loc.T("可以问：这手牌怎么打、遗物值不值得拿。"));
         column.AddChild(_chatEmpty);
 
         _chatLog = UiFactory.Rich();
@@ -69,9 +66,9 @@ internal sealed partial class AgentOverlayHost
         column.AddChild(_chatLog);
 
         var settings = AgentRuntime.Instance.Settings;
-        _attachState = UiFactory.Check(Loc.T("附带当前状态"), settings.AttachStateInChat);
-        _attachShot = UiFactory.Check(Loc.T("附带截图（视觉）"), settings.AttachScreenshotInChat);
-        _showThinking = UiFactory.Check(Loc.T("显示思考内容"), settings.ShowThinkingInChat);
+        _attachState = UiFactory.Check(Loc.T("附带局面"), settings.AttachStateInChat);
+        _attachShot = UiFactory.Check(Loc.T("附带截图"), settings.AttachScreenshotInChat);
+        _showThinking = UiFactory.Check(Loc.T("显示思考"), settings.ShowThinkingInChat);
         _attachState.Toggled += _ => PersistChatFlags();
         _attachShot.Toggled += _ => PersistChatFlags();
         _showThinking.Toggled += on =>
@@ -92,14 +89,18 @@ internal sealed partial class AgentOverlayHost
         // settings immediately and take effect on the next turn.
         column.AddChild(BuildChatOptionsRow(settings));
         _chatInput = UiFactory.Multiline("", 52);
-        _chatInput.PlaceholderText = Loc.T("和 AI 说这局怎么打；它会参考你的话做下一次决策。");
+        _chatInput.PlaceholderText = Loc.T("输入消息…");
         _chatInput.CustomMinimumSize = new Vector2(UiFactory.MinReflowWidth, 52);
         column.AddChild(_chatInput);
         _sendButton = UiFactory.Button(Loc.T("发送"), () => _ = SendChatAsync(), UiFactory.ButtonKind.Primary);
         var clear = UiFactory.Button(Loc.T("清空"), () => AgentRuntime.Instance.ClearChat(), UiFactory.ButtonKind.Ghost);
         column.AddChild(UiFactory.Row(_sendButton, clear));
 
-        return UiFactory.Card(Loc.T("对话"), column);
+        return HelpCard.Build(
+            "play.chat",
+            Loc.T("对话"),
+            Loc.T("对话默认只读，提问不会出牌。想让 AI 代打一手，直接说「帮我打」。\n自动游玩时发的消息只影响之后的决策，不会同时出牌。"),
+            column);
     }
 
     /// <summary>
@@ -112,7 +113,7 @@ internal sealed partial class AgentOverlayHost
         var language = UiFactory.Combo();
         foreach (var (id, label) in new[]
         {
-            ("auto", Loc.T("跟随玩家")),
+            ("auto", Loc.T("自动")),
             ("zh", "中文"),
             ("en", "English")
         })
@@ -194,7 +195,7 @@ internal sealed partial class AgentOverlayHost
         var omitted = trimmed + start;
         if (omitted > 0)
         {
-            entries.Add(Muted(Loc.T("已省略更早的 {0} 条消息", omitted)) + "\n\n");
+            entries.Add(Muted(Loc.T("已折叠更早的 {0} 条", omitted)) + "\n\n");
         }
 
         for (var index = start; index < history.Count; index++)
