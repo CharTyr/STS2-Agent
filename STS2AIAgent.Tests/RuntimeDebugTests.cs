@@ -24,7 +24,7 @@ internal static class RuntimeDebugTests
         var first = runtime.TestModelAsync(id, cancellation.Token);
         await client.PingEntered.Task.WaitAsync(TimeSpan.FromSeconds(5));
         var busy = await runtime.TestModelAsync(id, CancellationToken.None);
-        Assert.Contains("已有模型测试", busy);
+        Assert.Contains("已有测试", busy);
         Assert.Equal(1, client.Pings);
         cancellation.Cancel();
         try { await first; throw new Exception("Expected cancellation"); }

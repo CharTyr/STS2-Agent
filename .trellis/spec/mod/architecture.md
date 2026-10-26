@@ -69,7 +69,7 @@ For a change crossing state, action, agent, UI, or MCP, trace it in both directi
 
 ## Code shape and its known debts
 
-Measured from the current local `dev` tree across 189 mod source files totalling 48,697 lines (git-tracked only, which is what the gate counts -- a working tree also holds whatever the developer left in it). These numbers are here
+Measured from the current local `dev` tree across 198 mod source files totalling 49,274 lines (git-tracked only, which is what the gate counts -- a working tree also holds whatever the developer left in it). These numbers are here
 because nobody was counting, and that is how a codebase stops being navigable -- not through a bad
 commit, but through a thousand good ones. The `arch-facts` gate checks this table against the
 files, so it cannot quietly go stale the way it did between ADR 0001 and the splits below.
@@ -82,17 +82,19 @@ files, so it cannot quietly go stale the way it did between ADR 0001 and the spl
 | [GameStateService.AgentView.cs](../../../STS2AIAgent/Game/GameStateService.AgentView.cs) | 1,252 |
 | [GameActionService.cs](../../../STS2AIAgent/Game/GameActionService.cs) | 1,237 |
 | [GameActionService.Rooms.cs](../../../STS2AIAgent/Game/GameActionService.Rooms.cs) | 1,148 |
-| [AgentOverlayHost.cs](../../../STS2AIAgent/Ui/AgentOverlayHost.cs) | 1,098 |
 
 The overlay used to be the second name on that list. It moved to the bottom of it on 2026-10-01, when
 the page bodies and the single refresh pass moved to `AgentOverlayHost.Pages.cs` and the settings form
 moved on again to `AgentOverlayHost.Settings.cs`; the swatch renderer became `OverlaySwatch.cs` when
-the theme preview pushed `UiFactory.cs` past its own budget. See the section below for why those were
-the right cuts and not just smaller ones.
+the theme preview pushed `UiFactory.cs` past its own budget. It left the list on 2026-10-26: window
+placement and drag became `OverlayPlacement.cs`, the overflow diagnostic `OverlayOverflowSentinel.cs`,
+the hotkey `OverlayHotkey.cs`, and the settings save path `AgentOverlayHost.SettingsSave.cs`, which
+took the host from 1,098 lines to 657. See the section below for why those were the right cuts and
+not just smaller ones.
 
 Until 2026-09-17 two files held 49% of the mod: `GameStateService.cs` at 8,559 lines and
 `GameActionService.cs` at 7,008. The largest file today is 4% of the mod, the second largest 4%,
-and seven files reach 1,000 lines.
+and six files reach 1,000 lines.
 
 `SourceShapeContractTests` caps every file -- 1,000 lines unless it has a named budget -- and budgets
 go down, never up. Needing more room than a budget allows is the signal to move something out, not
@@ -285,6 +287,21 @@ The extractions that did happen kept that property, and the fourth one is what s
   its own budget. That file had grown one style helper at a time and had no obvious seam left; the
   swatch was the one thing in it that paints an *inactive* palette rather than the active one, which
   made it the piece that could leave without dragging anything with it.
+- **Window placement, the overflow sentinel and the hotkey** became classes of their own on
+  2026-10-26 (`OverlayPlacement`, `OverlayOverflowSentinel`, `OverlayHotkey`). They pass the same
+  test: the two fields placement owned (`_dragging`, `_lastViewportSize`) were touched by placement
+  methods and nothing else, so they moved with their only readers and no shared state was split.
+  The settings save path followed the form into `AgentOverlayHost.SettingsSave.cs`, and the co-op
+  launch helpers joined the rest of play control. The host is 657 lines and off the table above.
+  The same pass split `RefreshDynamic` into one guarded method per section, so a throw in one
+  section no longer stops the next, and put the three live logs behind `RichLog`, which redraws
+  only on a real change -- the old pass cleared and redrew them on every tick, which is what made
+  the conversation impossible to scroll back through.
+- **The overlay's copy rewrite** (2026-10-26) made labels short and moved every usage note behind a
+  "?" button. `HelpCard.cs` is that button: it wraps `UiFactory.Card`, finds the card's title row by
+  its `CardHeaderName`, and adds the toggle plus a closed-by-default panel. Nothing is stored in the
+  settings; open panels are remembered by a short key in a static set so a theme or form rebuild keeps
+  them open. A new explanation goes in a `HelpCard`, not in a grey `Wrapped` under the control.
 
 The base file went 1,829 -> 1,347 -> 1,059 -> 1,120 -> 1,025 lines without changing what any tab does,
 and it kept every field those pages read. The 1,120 step was up rather than down -- the live pass on

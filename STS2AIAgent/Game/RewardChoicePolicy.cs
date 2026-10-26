@@ -55,6 +55,25 @@ internal static class RewardChoicePolicy
 }
 
 /// <summary>
+/// Whether a reward row can actually be claimed. The row's own enabled flag is not enough for a
+/// potion: with every potion slot occupied the game accepts the click and does nothing, so
+/// <c>claim_reward</c> reported <c>completed</c> while the reward stayed put (#219). The player has
+/// to free a slot first (<c>discard_potion</c> is offered on the main reward screen).
+/// </summary>
+internal static class RewardClaimPolicy
+{
+    public const string PotionSlotsFullReason = "potion_slots_full";
+
+    public const string PotionSlotsFullMessage =
+        "All potion slots are full. Free a slot with discard_potion first, then claim the potion reward.";
+
+    public static bool IsClaimable(bool rowEnabled, bool isPotionReward, bool hasOpenPotionSlot)
+    {
+        return rowEnabled && (!isPotionReward || hasOpenPotionSlot);
+    }
+}
+
+/// <summary>
 /// One reward-drain invocation's card-choice intent. Created per request and never
 /// stored statically, so a drain that finished, timed out, or never reached a card
 /// reward cannot influence a later call.

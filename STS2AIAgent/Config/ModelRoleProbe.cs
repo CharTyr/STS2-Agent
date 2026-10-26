@@ -62,7 +62,7 @@ internal static class ModelRoleProbe
             Role = role,
             Status = "unused",
             CapabilityStatus = "unused",
-            NextStep = role == ModelRoleNames.Vision ? Loc.T("未配置视觉模型，可跳过。") : null
+            NextStep = role == ModelRoleNames.Vision ? Loc.T("未配置视觉模型（可跳过）") : null
         };
     }
 
@@ -78,7 +78,7 @@ internal static class ModelRoleProbe
             ModelId = model?.Model.Id,
             ModelName = model?.Model.Model,
             Fingerprint = model == null ? null : Fingerprint(model),
-            NextStep = Loc.T("在设置中测试该用途，确认服务可用后再邀请队友。")
+            NextStep = Loc.T("到「设置」测试后再邀请队友。")
         };
     }
 
@@ -96,10 +96,10 @@ internal static class ModelRoleProbe
             Fingerprint = Fingerprint(model),
             TestedAt = DateTimeOffset.UtcNow.ToString("o"),
             NextStep = tools == true && role != ModelRoleNames.Vision
-                ? Loc.T("工具调用已验证，可自动游玩。")
+                ? Loc.T("工具调用可用。")
                 : tools == false && role != ModelRoleNames.Vision
-                    ? Loc.T("工具调用不可用，请更换模型后重新检测。")
-                    : Loc.T("{0}连通成功。工具/视觉能力仍为未验证。", RoleLabel(role))
+                    ? Loc.T("工具调用不可用，请换模型。")
+                    : Loc.T("{0}已连通，能力未验证。", RoleLabel(role))
         };
     }
 
@@ -216,7 +216,7 @@ internal static class ModelRoleProbe
             ? ""
             : $" · {record.EndpointName ?? record.EndpointId} / {record.ModelName}";
         var error = string.IsNullOrWhiteSpace(record.Error) ? "" : " — " + record.Error;
-        return Loc.T("{0}：{1}{2}。{3}{4}", role, connectivity, target, capability, error);
+        return Loc.T("{0}：{1}{2} · {3}{4}", role, connectivity, target, capability, error);
     }
 
     public static string FailureKind(int? statusCode, string? message)
@@ -312,28 +312,28 @@ internal static class ModelRoleProbe
         {
             return (
                 Loc.T("{0} 返回 {1}，认证失败。", endpoint, statusCode),
-                Loc.T("检查该端点的 API Key。本地 Ollama / LM Studio 可以留空 Key；云端服务需要有效密钥。"));
+                Loc.T("请检查该端点的 API Key。"));
         }
 
         if (statusCode == 404)
         {
             return (
                 Loc.T("{0} 返回 404，找不到模型 {1}。", endpoint, modelName),
-                Loc.T("核对模型名是否与服务商目录一致，以及 Base URL 是否指向 /v1。"));
+                Loc.T("请核对模型名和 Base URL（通常以 /v1 结尾）。"));
         }
 
         if (statusCode == 429)
         {
             return (
                 Loc.T("{0} 返回 429，请求过于频繁或额度不足。", endpoint),
-                Loc.T("稍后再测，或检查服务商配额。不要连续重试。"));
+                Loc.T("稍后再试，或检查配额。"));
         }
 
         if (statusCode >= 500)
         {
             return (
                 Loc.T("{0} 返回 {1}，服务暂时不可用。", endpoint, statusCode),
-                Loc.T("确认服务已启动后重试。这是临时错误，不是模型名填错。"));
+                Loc.T("请确认服务已启动，稍后重试。"));
         }
 
         if (message.Contains("timed out", StringComparison.OrdinalIgnoreCase) ||
@@ -342,7 +342,7 @@ internal static class ModelRoleProbe
         {
             return (
                 Loc.T("连接 {0} 超时。", endpoint),
-                Loc.T("检查网络、防火墙以及 Base URL 是否可从本机访问。"));
+                Loc.T("请检查网络、防火墙和 Base URL。"));
         }
 
         if (message.Contains("failed", StringComparison.OrdinalIgnoreCase) ||
@@ -351,12 +351,12 @@ internal static class ModelRoleProbe
         {
             return (
                 Loc.T("无法连接 {0}。", endpoint),
-                Loc.T("检查 Base URL、本机网络，以及本地服务是否已启动。"));
+                Loc.T("请检查 Base URL 和本地服务是否已启动。"));
         }
 
         return (
             Loc.T("{0}请求 {1} / {2} 失败：{3}", RoleLabel(role), endpoint, modelName, Trim(message, 180)),
-            Loc.T("根据错误核对端点、模型名和网络后，再对该用途单独测试。"));
+            Loc.T("请按错误信息核对后重测。"));
     }
 
     private static bool ContainsAny(string value, params string[] candidates)

@@ -23,7 +23,7 @@ After subscribing, you do not copy any files.
 [*]The first launch may warn that the code is untrusted. Accept it, then fully quit the game and start it again.
 [*]In Mods, turn on [b]STS2 AI Agent[/b] and restart once more.
 [*]In game, press [b]F8[/b] or click the [b]AI[/b] tab on the right edge of the screen.
-[*]Open Settings → Quick setup: select a provider, enter its API key and model name, then click [b]Test play model[/b]. It checks chat and tool calling; local Ollama / LM Studio may leave the key empty.
+[*]Open Settings → Quick setup: select a provider, enter its API key and model name, then click [b]Test main model[/b]. It checks chat and tool calling; local Ollama / LM Studio may leave the key empty.
 [*]To have the AI play for you, open the Play tab and start. For a teammate: once the play model test passes, go back to the [b]main menu[/b] and invite from the Play → Multiplayer page.
 [/olist]
 
@@ -31,16 +31,16 @@ If you used to copy this mod into the game folder by hand, delete those files an
 
 [h2]What you get[/h2]
 [list]
-[*]One in-game window for everything: two tabs: Play and Settings. Play contains solo/co-op, conversation and decision logs; Settings contains Connect, summoned with F8
+[*]One in-game window for everything: two tabs: Play and Settings. Play contains solo/co-op, conversation and decision logs; Settings contains MCP, summoned with F8
 [*]Every step says what it played and why: the decision log lists each accepted action with its reason, its source, and its token usage — per-run and session usage are tracked separately
 [*]See the teammate's live status: health, block, energy and hand size
 [*]You control the spend: session token and request caps stop play when hit, never silently overrun
 [*]8 interface themes (including a light one); window position and theme choice are remembered
 [*]The interface follows your game language: Chinese clients read Chinese, everyone else reads English
-[*]External agents (Cursor / Claude / Codex) can play too: F8 → Settings → Connect, enable MCP, copy the address — no Python install. For results close to in-game autoplay, also load the companion skill [url=https://github.com/CharTyr/STS2-Agent/tree/main/skills/sts2-mcp-player]sts2-mcp-player[/url]
+[*]External agents (Cursor / Claude / Codex) can play too: F8 → Settings → MCP, enable MCP, copy the address — no Python install. For results close to in-game autoplay, also load the companion skill [url=https://github.com/CharTyr/STS2-Agent/tree/main/skills/sts2-mcp-player]sts2-mcp-player[/url]
 [*]No new cards or balance tweaks; local co-op saves use the game save system
 [/list]
 
 Built against Slay the Spire 2 [b]v0.111.0[/b]; later versions require compatibility verification. License: AGPL-3.0-only.
 
-Quick setup needs a provider, API key and model name. Test play model verifies tools as well as chat, with cancellation and a 45-second deadline. New installations have an adjustable 30-request auto-play limit; zero or empty means unlimited. Tests also call your provider.
+Quick setup needs a provider, API key and model name. Test main model verifies tools as well as chat, with cancellation and a 45-second deadline. New installations have an adjustable 30-request auto-play limit; zero or empty means unlimited. Tests also call your provider.

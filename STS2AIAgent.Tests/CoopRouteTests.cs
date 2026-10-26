@@ -144,7 +144,12 @@ internal static class CoopRouteTests
         // Continue uses the same explicit control mode as invite.
         Assert.Contains("ContinueDualInstanceAsync(settings, companionAutoPlay, CancellationToken.None)", overlay);
         Assert.Contains("GameStateService.CanContinueAiTeammate(ActiveScreenContext.Instance.GetCurrentScreen())", overlay);
-        Assert.Contains("_dualContinueButton.Disabled = AgentRuntime.Instance.DualLaunching || !canContinue;", overlay);
+        Assert.Contains("_dualContinueButton.Disabled = blocked || !canContinue;", overlay);
+        // And the gate includes the launch in flight and the mode switch, so the tick that re-reads
+        // the screen cannot re-enable the button in the middle of either.
+        var availability = AgentSourceFixture.MethodBody(overlay, "RefreshContinueAvailability");
+        Assert.Contains("AgentRuntime.Instance.DualLaunching", availability);
+        Assert.Contains("_playModeSwitching", availability);
 
         Assert.Contains("settings.CompanionAutoSelectCharacter = !on;", overlay);
         Assert.Contains("current.CompanionAutoSelectCharacter = !_companionChoiceToggle.ButtonPressed;", overlay);

@@ -44,7 +44,7 @@ internal static class OverlayLayoutContractTests
 
         var scroll = body.IndexOf("UiFactory.Scroll(_settingsBody", StringComparison.Ordinal);
         var save = body.IndexOf("UiFactory.Button(Loc.T(\"保存设置\"), SaveSettingsFromUi", StringComparison.Ordinal);
-        var test = body.IndexOf("UiFactory.Button(Loc.T(\"检测游玩模型\")", StringComparison.Ordinal);
+        var test = body.IndexOf("UiFactory.Button(Loc.T(\"测试主模型\")", StringComparison.Ordinal);
 
         Assert.True(scroll >= 0, "The settings form no longer builds a scroll body.");
         Assert.True(save > scroll, "Save is back inside the scrolling form; it has to stay in the footer.");
@@ -236,7 +236,7 @@ internal static class OverlayLayoutContractTests
     {
         var source = AgentSourceFixture.Read(Pages);
         var page = AgentSourceFixture.MethodBody(source, "BuildSoloSection");
-        var refresh = AgentSourceFixture.MethodBody(source, "RefreshDynamic");
+        var refresh = AgentSourceFixture.MethodBody(source, "RefreshSoloSection");
 
         Assert.Contains("playControls.AddChild(_playToggle);", page);
         Assert.Contains("playControls.AddChild(_stepButton);", page);
@@ -306,7 +306,7 @@ internal static class OverlayLayoutContractTests
             StringComparison.Ordinal);
         // With its own full-width, word-wrapping row, the usage sentence is shown whole: the old
         // 24-character cut is what left players reading "Token 消耗：尚无（未收到 usage） |...".
-        var refresh = AgentSourceFixture.MethodBody(pages, "RefreshDynamic");
+        var refresh = AgentSourceFixture.MethodBody(pages, "RefreshSoloSection");
         Assert.False(refresh.Contains("_playUsage.Text = Trim(", StringComparison.Ordinal),
             "The Token reading is cut to 24 characters again even though it has its own wrapping row.");
 

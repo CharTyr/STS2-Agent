@@ -103,4 +103,4 @@ and left automation unable to complete the unlock queue:
 ![Pre-fix native unlock misclassified as CARD_SELECTION](01-pre-fix-stuck-unlock.png)
 
 An additional crop of the same stuck screen lives at
-[../../assets/unlock-screen-stuck.png](../../assets/unlock-screen-stuck.png).
+[docs/assets/unlock-screen-stuck.png](../../../docs/assets/unlock-screen-stuck.png).

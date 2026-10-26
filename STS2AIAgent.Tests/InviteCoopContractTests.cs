@@ -68,7 +68,7 @@ internal static class InviteCoopContractTests
             !body.Contains("message = AgentRuntime.Instance.DualStatus,", StringComparison.Ordinal),
             "Pending invite responses must not copy DualStatus, which can still say the idle dual-launch text.");
         Assert.Contains("var message = AgentRuntime.Instance.DualStatus", body, StringComparison.Ordinal);
-        Assert.Contains("正在邀请队友…", body, StringComparison.Ordinal);
+        Assert.Contains("邀请中…", body, StringComparison.Ordinal);
 
         var health = AgentSourceFixture.MethodBody(
             AgentSourceFixture.Read("STS2AIAgent/Server/Router.cs"),

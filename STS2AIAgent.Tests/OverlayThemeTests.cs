@@ -153,7 +153,8 @@ internal static class OverlayThemeTests
             firstControl > useTheme,
             "The palette has to be selected before the first control is built; a control keeps the colours it was created with.");
 
-        var persist = AgentSourceFixture.MethodBody(overlay, "PersistHarvested");
+        // The save path moved to AgentOverlayHost.SettingsSave.cs; read the whole class for it.
+        var persist = AgentSourceFixture.MethodBody(AgentSourceFixture.ReadOverlayHost(), "PersistHarvested");
         Assert.Contains("RebuildInPlace", persist);
 
         // The harvest moved to the settings partial with the form it reads; the contract follows it.

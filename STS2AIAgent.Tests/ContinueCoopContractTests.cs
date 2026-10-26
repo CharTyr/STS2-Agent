@@ -168,6 +168,6 @@ internal static class ContinueCoopContractTests
             !body.Contains("message = AgentRuntime.Instance.DualStatus,", StringComparison.Ordinal),
             "Pending continue responses must not copy DualStatus, which can still say the idle dual-launch text.");
         Assert.Contains("var message = AgentRuntime.Instance.DualStatus", body, StringComparison.Ordinal);
-        Assert.Contains("正在读档接回队友…", body, StringComparison.Ordinal);
+        Assert.Contains("正在读档…", body, StringComparison.Ordinal);
     }
 }

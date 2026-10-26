@@ -27,6 +27,7 @@ namespace STS2AIAgent.Tests;
 /// the declaration text is byte-identical to what the split moved.
 /// </remarks>
 // CanInviteAiTeammate intentionally regenerated: reconnect a live, undiscovered child during a run.
+// CanClaimReward intentionally regenerated: a potion row is not claimable while every potion slot is full (#219).
 internal static class PredicateRelocationContractTests
 {
     private const string BaseFile = "STS2AIAgent/Game/GameStateService.cs";
@@ -119,7 +120,7 @@ internal static class PredicateRelocationContractTests
         ["CanPlayAnyCard"] = "37f592d4a60daee27113d7ec269eb5319cd48decad23d9e4c52b7160691d8634",
         ["CanChooseMapNode"] = "2e3afc2310ac13a3cefec4d2583e2cbc3b5848ee290c6e8a823dda99fbe2f924",
         ["CanCollectRewardsAndProceed"] = "497bd2aba4a11deecc2751e196137e9b361e46a0c84edbdf66d3946001601a24",
-        ["CanClaimReward"] = "b8d35aaa52bb905c3227cb94d770f56930abe905f25cfa25d0659c0a05d7c860",
+        ["CanClaimReward"] = "a010855837b7e0f6321b79dccd739c1759396e079462346de0f0ed2179e0fe16",
         ["CanChooseRewardCard"] = "3f72e5d7a0235d7d1e5f460fd5d49c2141161001e6ff531c82bcd4790c23c787",
         ["CanSkipRewardCards"] = "8e1e009f6eb3f55acc84d57ac12f141edce3bb55b5855dd82703d366bc46ec6b",
         ["CanSelectDeckCard"] = "431892fd136e65182a29484538e54313f4be2988103607d90bf9cc87aec09824",

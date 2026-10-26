@@ -88,7 +88,6 @@ function Rewrite-PackagedReadmeLinks {
     $text = [System.IO.File]::ReadAllText($Path)
     $replacements = @{
         "(./PRODUCT_PLAN_CURRENT.md)" = "(https://github.com/CharTyr/STS2-Agent/blob/main/PRODUCT_PLAN_CURRENT.md)"
-        "(./COOP_DELIVERY.md)" = "(https://github.com/CharTyr/STS2-Agent/blob/main/COOP_DELIVERY.md)"
         "(./docs/api.md)" = "(https://github.com/CharTyr/STS2-Agent/blob/main/docs/api.md)"
         "(../skills/sts2-mcp-player/SKILL.md)" = "(https://github.com/CharTyr/STS2-Agent/blob/main/skills/sts2-mcp-player/SKILL.md)"
         "(./skills/sts2-mcp-player/SKILL.md)" = "(https://github.com/CharTyr/STS2-Agent/blob/main/skills/sts2-mcp-player/SKILL.md)"

@@ -82,7 +82,7 @@ internal static partial class GameStateService
         }
 
         var isOpen = TryGetMapScreen(currentScreen, runState, out var mapScreen);
-        var visibleNodes = (isOpen ? FindDescendants<NMapPoint>(mapScreen!) : Array.Empty<NMapPoint>())
+        var visibleNodes = (isOpen ? FindDescendants<NMapPoint>(mapScreen!) : Enumerable.Empty<NMapPoint>())
             .Where(node => GodotObject.IsInstanceValid(node))
             .GroupBy(node => node.Point.coord)
             .ToDictionary(

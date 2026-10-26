@@ -1,6 +1,6 @@
 # AI 队友交付跟踪
 
-> **历史，不代表当前。** 本文保留搬迁前的原始交付记录；当前状态请看 [PRODUCT_PLAN_CURRENT.md](../PRODUCT_PLAN_CURRENT.md)，历史索引请看 [COOP_DELIVERY.md](../COOP_DELIVERY.md)。
+> **历史，不代表当前。** 本文保留搬迁前的原始交付记录；当前状态请看 [PRODUCT_PLAN_CURRENT.md](../PRODUCT_PLAN_CURRENT.md)，历史索引请看 [history/README.md](README.md)。
 
 ## 2026-09-06 玩家首次成功与运行状态（代码实现，验证未跑）
 

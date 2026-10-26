@@ -1,7 +1,7 @@
 # Where Slay the Spire 2 lives on Windows, resolved from the caller instead of assumed.
 #
 # The POSIX scripts already read the same environment variables (scripts/lib-sts2.sh) and
-# build-and-env.md documents them; this is the Windows half of that contract. Every caller resolves
+# docs/build-and-env.md documents them; this is the Windows half of that contract. Every caller resolves
 # in the same order -- explicit argument, environment variable, detection, conventional default -- so
 # an install on another drive or in a second Steam library needs no script edits. Only this file
 # knows the conventional path, and it is the last resort rather than the only answer.

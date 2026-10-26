@@ -15,10 +15,10 @@ After you subscribe, you do not copy any files.
 3. Accept the untrusted-code warning, fully quit, and start again.
 4. Turn on **STS2 AI Agent** in Mods, then restart once more.
 5. Press **F8** or the **AI** tab on the right.
-6. In Settings → Quick setup, choose your provider, fill in the model name and key, then Test play model (connectivity + tools). Ollama / LM Studio on this PC can leave the key empty.
+6. In Settings → Quick setup, choose your provider, fill in the model name and key, then Test main model (connectivity + tools). Ollama / LM Studio on this PC can leave the key empty.
 7. Chat or Play for your own character.
 8. From the **main menu**, open **Play → Multiplayer** and invite. The room has 4 seats; you two take two of them. If you already have a saved co-op run, **Continue last co-op run** loads it and the teammate rejoins.
-9. Optional MCP for Cursor / Claude / Codex: F8 -> **Settings → Connect**, copy the address. For best results when an external agent plays over MCP, also load sts2-mcp-player from https://github.com/CharTyr/STS2-Agent/tree/main/skills/sts2-mcp-player . No Python.
+9. Optional MCP for Cursor / Claude / Codex: F8 -> **Settings → MCP**, copy the address. For best results when an external agent plays over MCP, also load sts2-mcp-player from https://github.com/CharTyr/STS2-Agent/tree/main/skills/sts2-mcp-player . No Python.
 
 If you used to copy this mod into the game folder by hand, delete those files and keep only the Workshop subscription.
 
@@ -43,7 +43,7 @@ Built against Slay the Spire 2 v0.111.0; later versions require compatibility ve
 - 你在主窗口操作自己的角色。
 - 邀请后会弹出第二窗口。AI 只打它自己那份：自己点开局、跟着你投地图、轮到它时自动出牌。
 - 房间仍是 4 人位。本地 1 人 + 1 AI，还留 2 个位置给线上朋友。
-- 上次没打完的联机局可以接着打：主菜单点「继续上次联机对局」，AI 会连回原来的角色。
+- 上次没打完的联机局可以接着打：主菜单点「继续联机存档」，AI 会连回原来的角色。
 - 主窗口的「游玩」页中的决策记录会列出 AI 每一步打了什么、为什么、来自哪条入口，以及这一步花了多少 Token。
 - 队友那个角色的实时状态（血量、格挡、能量、手牌数）显示在主窗口上。
 
@@ -56,10 +56,10 @@ Built against Slay the Spire 2 v0.111.0; later versions require compatibility ve
 3. 接受「代码不受信任」提示，把游戏完全关掉再开。
 4. 在 Mods 打开 **STS2 AI Agent**，再重启一次。
 5. 按 **F8**，或点屏幕右边的 **AI**。
-6. 在「设置 → 快速配置」选择服务商，填模型名称和 Key，再点「检测游玩模型」验证连通和工具能力。电脑上的 Ollama / LM Studio 可以不填 Key。
+6. 在「设置 → 快速配置」选择服务商，填模型名称和 Key，再点「测试主模型」验证连通和工具能力。电脑上的 Ollama / LM Studio 可以不填 Key。
 7. 用「对话」或「游玩」打你自己这号。
-8. 回到 **主菜单**，打开 **游玩 → 多人** 点邀请。两边选角、Ready 后开局。你打你的，AI 打它的。已经有联机存档的话，点「继续上次联机对局」就能接着打。
-9. 要用 Cursor / Claude / Codex 经 MCP 代打：F8 -> **设置 → 接入**，打开 MCP，复制地址，并加载配套 skill sts2-mcp-player（https://github.com/CharTyr/STS2-Agent/tree/main/skills/sts2-mcp-player）。只接工具也能点动作；要接近游戏内自动游玩，需要这份 skill。不用装 Python。
+8. 回到 **主菜单**，打开 **游玩 → 多人** 点邀请。两边选角、Ready 后开局。你打你的，AI 打它的。已经有联机存档的话，点「继续联机存档」就能接着打。
+9. 要用 Cursor / Claude / Codex 经 MCP 代打：F8 -> **设置 → MCP**，打开 MCP，复制地址，并加载配套 skill sts2-mcp-player（https://github.com/CharTyr/STS2-Agent/tree/main/skills/sts2-mcp-player）。只接工具也能点动作；要接近游戏内自动游玩，需要这份 skill。不用装 Python。
 
 如果以前手动放过这个 Mod，请删掉那些文件，只保留工坊订阅。
 

@@ -97,6 +97,20 @@ internal static class SourceCoverageTests
         // The play page's solo/multiplayer mode switch. A Godot control, so it stays unlinked like the
         // overlay host it serves.
         "STS2AIAgent/Ui/SegmentedSwitch.cs",
+        // The overlay cleanup of 2026-10-26 split these out of the host and the pages. Each builds or
+        // drives Godot controls (window placement and drag, the overflow sentinel, the hotkey's Key
+        // enum, the rich-log wrapper, form helpers, the settings save path), so they stay unlinked
+        // like the files they came from. Their Godot-free halves -- BbText, RichLogDiff and
+        // SettingsInput -- are compiled and tested directly.
+        "STS2AIAgent/Ui/OverlayPlacement.cs",
+        "STS2AIAgent/Ui/OverlayOverflowSentinel.cs",
+        "STS2AIAgent/Ui/OverlayHotkey.cs",
+        "STS2AIAgent/Ui/RichLog.cs",
+        // The card with a "?" help panel behind its title. A Godot control builder, unlinked like the
+        // factory whose card it wraps.
+        "STS2AIAgent/Ui/HelpCard.cs",
+        "STS2AIAgent/Ui/AgentOverlayHost.FormHelpers.cs",
+        "STS2AIAgent/Ui/AgentOverlayHost.SettingsSave.cs",
         "STS2AIAgent/Game/GameDataExportService.cs",
         "STS2AIAgent/Server/Router.cs",
         "STS2AIAgent/Server/GameEventService.cs",

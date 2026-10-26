@@ -34,6 +34,9 @@ internal sealed partial class AgentOverlayHost
     /// <summary>The reasoning switch: whether "thought" turns are shown and recorded at all.</summary>
     private CheckBox? _showThinking;
 
+    /// <summary>The conversation's redraw-only-on-change wrapper. See <see cref="RichLog"/>.</summary>
+    private RichLog? _chatLogView;
+
     /// <summary>
     /// The conversation card: the log, the empty state, and the compose row, as one card inside the
     /// play page's solo section.
@@ -52,22 +55,20 @@ internal sealed partial class AgentOverlayHost
     {
         var column = UiFactory.Column();
 
-        _chatEmpty = UiFactory.Card(
-            Loc.T("和 AI 聊聊这局"),
-            UiFactory.Wrapped(Loc.T("问它这手牌怎么打、这个遗物值不值得买、刚才那步为什么那么出。")),
-            UiFactory.Wrapped(Loc.T("闲聊默认只读；明确说「帮我打」才代打一手。自动游玩中发消息会影响后续决策，不会并发出牌。")));
+        _chatEmpty = UiFactory.Wrapped(Loc.T("可以问：这手牌怎么打、遗物值不值得拿。"));
         column.AddChild(_chatEmpty);
 
         _chatLog = UiFactory.Rich();
         _chatLog.FitContent = false;
         _chatLog.SizeFlagsHorizontal = Control.SizeFlags.ExpandFill;
         _chatLog.CustomMinimumSize = new Vector2(0, 160);
+        _chatLogView = new RichLog(_chatLog, RichLog.LogAnchor.Bottom);
         column.AddChild(_chatLog);
 
         var settings = AgentRuntime.Instance.Settings;
-        _attachState = UiFactory.Check(Loc.T("附带当前状态"), settings.AttachStateInChat);
-        _attachShot = UiFactory.Check(Loc.T("附带截图（视觉）"), settings.AttachScreenshotInChat);
-        _showThinking = UiFactory.Check(Loc.T("显示思考内容"), settings.ShowThinkingInChat);
+        _attachState = UiFactory.Check(Loc.T("附带局面"), settings.AttachStateInChat);
+        _attachShot = UiFactory.Check(Loc.T("附带截图"), settings.AttachScreenshotInChat);
+        _showThinking = UiFactory.Check(Loc.T("显示思考"), settings.ShowThinkingInChat);
         _attachState.Toggled += _ => PersistChatFlags();
         _attachShot.Toggled += _ => PersistChatFlags();
         _showThinking.Toggled += on =>
@@ -88,14 +89,18 @@ internal sealed partial class AgentOverlayHost
         // settings immediately and take effect on the next turn.
         column.AddChild(BuildChatOptionsRow(settings));
         _chatInput = UiFactory.Multiline("", 52);
-        _chatInput.PlaceholderText = Loc.T("和 AI 说这局怎么打；它会参考你的话做下一次决策。");
+        _chatInput.PlaceholderText = Loc.T("输入消息…");
         _chatInput.CustomMinimumSize = new Vector2(UiFactory.MinReflowWidth, 52);
         column.AddChild(_chatInput);
         _sendButton = UiFactory.Button(Loc.T("发送"), () => _ = SendChatAsync(), UiFactory.ButtonKind.Primary);
         var clear = UiFactory.Button(Loc.T("清空"), () => AgentRuntime.Instance.ClearChat(), UiFactory.ButtonKind.Ghost);
         column.AddChild(UiFactory.Row(_sendButton, clear));
 
-        return UiFactory.Card(Loc.T("对话"), column);
+        return HelpCard.Build(
+            "play.chat",
+            Loc.T("对话"),
+            Loc.T("对话默认只读，提问不会出牌。想让 AI 代打一手，直接说「帮我打」。\n自动游玩时发的消息只影响之后的决策，不会同时出牌。"),
+            column);
     }
 
     /// <summary>
@@ -108,7 +113,7 @@ internal sealed partial class AgentOverlayHost
         var language = UiFactory.Combo();
         foreach (var (id, label) in new[]
         {
-            ("auto", Loc.T("跟随玩家")),
+            ("auto", Loc.T("自动")),
             ("zh", "中文"),
             ("en", "English")
         })
@@ -156,32 +161,19 @@ internal sealed partial class AgentOverlayHost
         return rows;
     }
 
-    private static void SelectComboByMetadata(OptionButton combo, string? id)
-    {
-        for (var i = 0; i < combo.ItemCount; i++)
-        {
-            if (string.Equals(combo.GetItemMetadata(i).AsString(), id, StringComparison.OrdinalIgnoreCase))
-            {
-                combo.Selected = i;
-                return;
-            }
-        }
-
-        combo.Selected = 0;
-    }
-
     /// <summary>
-    /// Redraws the conversation from the runtime's snapshot and parks the scroll at the newest turn.
+    /// Draws the conversation from the runtime's snapshot.
     /// </summary>
     /// <remarks>
     /// Its own method rather than a block inside the refresh pass: the 800ms panel tick redraws the
-    /// conversation too, and the two callers would otherwise be two copies of this loop. The scroll
-    /// is deferred because the freshly appended BBCode has not been laid out yet, so the bar's maximum
-    /// still describes the previous frame -- assigning to it here would land short of the bottom.
+    /// conversation too, and the two callers would otherwise be two copies of this loop. The entries
+    /// go through <see cref="RichLog"/>, which leaves the label alone when nothing changed and follows
+    /// the newest turn only while the reader is already at the bottom -- the old version cleared,
+    /// redrew and forced the scroll down several times a second, so an earlier turn could not be read.
     /// </remarks>
     private void RefreshChatLog()
     {
-        if (_chatLog == null)
+        if (_chatLogView == null)
         {
             return;
         }
@@ -193,7 +185,7 @@ internal sealed partial class AgentOverlayHost
             _chatEmpty.Visible = history.Count == 0;
         }
 
-        _chatLog.Clear();
+        var entries = new List<string>(ChatTailLimit + 2);
 
         // Two windows hide earlier turns: the runtime's history cap, and this log's smaller drawn
         // tail. Saying so is the difference between a log that starts mid-sentence and one the
@@ -203,7 +195,7 @@ internal sealed partial class AgentOverlayHost
         var omitted = trimmed + start;
         if (omitted > 0)
         {
-            _chatLog.AppendText(Muted(Loc.T("已省略更早的 {0} 条消息", omitted)) + "\n\n");
+            entries.Add(Muted(Loc.T("已折叠更早的 {0} 条", omitted)) + "\n\n");
         }
 
         for (var index = start; index < history.Count; index++)
@@ -213,7 +205,7 @@ internal sealed partial class AgentOverlayHost
             {
                 if (showThinking)
                 {
-                    _chatLog.AppendText(FormatChatBubble(Loc.T("思考"), UiFactory.Muted, turn.Text, mutedBody: true));
+                    entries.Add(FormatChatBubble(Loc.T("思考"), UiFactory.Muted, turn.Text, mutedBody: true));
                 }
 
                 continue;
@@ -221,11 +213,11 @@ internal sealed partial class AgentOverlayHost
 
             if (turn.Role == "action")
             {
-                _chatLog.AppendText(FormatChatBubble(Loc.T("动作"), UiFactory.Accent, turn.Text, mutedBody: false));
+                entries.Add(FormatChatBubble(Loc.T("动作"), UiFactory.Accent, turn.Text, mutedBody: false));
                 continue;
             }
 
-            _chatLog.AppendText(FormatTurn(turn.Role == "user" ? Loc.T("你") : Loc.T("助手"), turn.Text));
+            entries.Add(FormatTurn(turn.Role == "user" ? Loc.T("你") : Loc.T("助手"), turn.Text));
         }
 
         // The reasoning of the request in flight, drawn after the recorded turns so it reads as what the
@@ -236,27 +228,10 @@ internal sealed partial class AgentOverlayHost
         var liveThought = AgentRuntime.Instance.LiveThought;
         if (showThinking && liveThought.Length > 0)
         {
-            _chatLog.AppendText(FormatChatBubble(Loc.T("思考中"), UiFactory.Muted, liveThought, mutedBody: true));
+            entries.Add(FormatChatBubble(Loc.T("思考中"), UiFactory.Muted, liveThought, mutedBody: true));
         }
 
-        Callable.From(ScrollChatToBottom).CallDeferred();
-    }
-
-    /// <summary>
-    /// Pins the conversation to its newest line. Deferred from <see cref="RefreshChatLog"/>, so it
-    /// re-reads the control and checks it is still in the tree: a rebuild between the two frames frees
-    /// the label this closure captured.
-    /// </summary>
-    private void ScrollChatToBottom()
-    {
-        var log = _chatLog;
-        if (log == null || !log.IsInsideTree())
-        {
-            return;
-        }
-
-        var bar = log.GetVScrollBar();
-        bar.Value = bar.MaxValue;
+        _chatLogView.Show(entries);
     }
 
     /// <summary>
@@ -265,7 +240,7 @@ internal sealed partial class AgentOverlayHost
     /// </summary>
     private static string FormatChatBubble(string speaker, Color tone, string text, bool mutedBody)
     {
-        var body = mutedBody ? Muted(text) : Escape(text);
-        return "[color=#" + tone.ToHtml(false) + "][b]" + Escape(speaker) + "[/b][/color]\n" + body + "\n\n";
+        var body = mutedBody ? Muted(text) : BbText.Escape(text);
+        return BbText.Colored(tone.ToHtml(false), speaker, bold: true) + "\n" + body + "\n\n";
     }
 }

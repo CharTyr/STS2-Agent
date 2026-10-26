@@ -1,7 +1,6 @@
 using Godot;
 using MegaCrit.Sts2.Core.Logging;
 using MegaCrit.Sts2.Core.Nodes;
-using MegaCrit.Sts2.Core.Nodes.Screens.ScreenContext;
 using STS2AIAgent.Agent;
 using STS2AIAgent.Config;
 using STS2AIAgent.Game;
@@ -15,7 +14,6 @@ namespace STS2AIAgent.Ui;
 internal sealed partial class AgentOverlayHost
 {
     private const string LogPrefix = "[STS2AIAgent.Overlay]";
-    private const int PanelWidth = 440;
 
     private static AgentOverlayHost? _instance;
 
@@ -26,8 +24,14 @@ internal sealed partial class AgentOverlayHost
     private Button? _edgeTab;
     private SceneTree? _tree;
     private bool _hotkeyWasDown;
-    private bool _dragging;
-    private Vector2 _lastViewportSize;
+    private string? _hotkeyName;
+    private Key _hotkey = Key.F8;
+    private int _tickCount;
+
+    /// <summary>Failure messages already logged, so a check that fails on every tick logs once.</summary>
+    private static readonly HashSet<string> WarnedOnce = new(StringComparer.Ordinal);
+    private OverlayPlacement? _placement;
+    private readonly OverlayOverflowSentinel _overflow = new();
     private ulong _lastRefreshMs;
 
     private RichTextLabel? _chatLog;
@@ -73,9 +77,8 @@ internal sealed partial class AgentOverlayHost
     private TextEdit? _mcpConfigEdit;
     private Control? _mcpInfoBox;
     private Control? _pageHost;
-    /// <summary>Diagnostic state: the content column to measure, and the page already reported.</summary>
+    /// <summary>The content column the overflow sentinel measures.</summary>
     private Control? _contentColumn;
-    private string? _overflowSignature;
     private VBoxContainer? _settingsBody;
     private int _buildAttempts;
     private bool _captureHidden;
@@ -88,7 +91,6 @@ internal sealed partial class AgentOverlayHost
     private LineEdit? _hotkeyEdit;
     private LineEdit? _llmTimeoutEdit;
     private Label? _saveStatus;
-    private Label? _testNotice;
     private Label? _conversationTest;
     private Label? _playTest;
     private Label? _visionTest;
@@ -267,7 +269,7 @@ internal sealed partial class AgentOverlayHost
             ClipContents = true
         };
         _panel.SetAnchorsPreset(Control.LayoutPreset.TopLeft);
-        _panel.CustomMinimumSize = new Vector2(PanelWidth, 360);
+        _panel.CustomMinimumSize = new Vector2(OverlayPlacement.PanelWidth, 360);
 
         var chrome = new PanelContainer
         {
@@ -294,6 +296,7 @@ internal sealed partial class AgentOverlayHost
         _panel.AddChild(chrome);
         _panel.Visible = startupSettings.OverlayVisibleOnStart || !startupSettings.HasSeenFirstRunGuide;
 
+        _placement = new OverlayPlacement(host, _panel, _edgeTab, _pageHost);
         host.AddChild(_edgeTab);
         host.AddChild(_panel);
         _layer.AddChild(host);
@@ -333,7 +336,7 @@ internal sealed partial class AgentOverlayHost
         }
 
         Log.Info($"{LogPrefix} Installed");
-        Callable.From(() => ApplyPlacement()).CallDeferred();
+        Callable.From(() => _placement?.Apply()).CallDeferred();
     }
 
     private Control BuildHeader()
@@ -349,9 +352,8 @@ internal sealed partial class AgentOverlayHost
         // No wrapping on either of these: the title is a fixed string and the status is a chip, and a
         // tight row is exactly where WordSmart would break them one character per line. Observed live
         // on 2026-09-21 -- the title rendered as a vertical column of single letters.
-        var title = UiFactory.Label("STS2 AI Agent", UiFactory.FontTitle, wrap: false);
+        var title = UiFactory.MarkAccent(UiFactory.Label("STS2 AI Agent", UiFactory.FontTitle, wrap: false));
         title.MouseFilter = Control.MouseFilterEnum.Ignore;
-        title.AddThemeColorOverride("font_color", UiFactory.Accent);
 
         // The live state tag: the answer to "is it playing" is in the title bar, where the player
         // already looks to find the window, instead of one tab away.
@@ -389,164 +391,6 @@ internal sealed partial class AgentOverlayHost
         return column;
     }
 
-    private void AddEndpoint()
-    {
-        var settings = HarvestSettings();
-        settings.Endpoints.Add(new LlmEndpoint { Name = Loc.T("新端点") });
-        PersistHarvested(settings);
-    }
-
-    private void AddModel()
-    {
-        var settings = HarvestSettings();
-        settings.Models.Add(new LlmModelConfig
-        {
-            EndpointId = settings.Endpoints.FirstOrDefault()?.Id ?? string.Empty,
-            Model = "gpt-4o",
-            DisplayName = Loc.T("新模型"),
-            ThinkingIntensity = "medium"
-        });
-        PersistHarvested(settings);
-    }
-
-    private void RemoveEndpoint(int index)
-    {
-        var settings = HarvestSettings();
-        if (index < 0 || index >= settings.Endpoints.Count)
-        {
-            return;
-        }
-
-        var impact = SettingsBinding.EndpointRemoval(settings, settings.Endpoints[index].Id);
-        if (impact.Blocked)
-        {
-            ShowDeleteWarning(impact.Message);
-            return;
-        }
-
-        settings.Endpoints.RemoveAt(index);
-        ModelRoleProbe.InvalidateMismatched(settings);
-        PersistHarvested(settings);
-    }
-
-    private void RemoveModel(int index)
-    {
-        var settings = HarvestSettings();
-        if (index < 0 || index >= settings.Models.Count)
-        {
-            return;
-        }
-
-        var impact = SettingsBinding.ModelRemoval(settings, settings.Models[index].Id);
-        if (impact.Blocked)
-        {
-            ShowDeleteWarning(impact.Message);
-            return;
-        }
-
-        settings.Models.RemoveAt(index);
-        ModelRoleProbe.InvalidateMismatched(settings);
-        PersistHarvested(settings);
-    }
-
-    private void ShowDeleteWarning(string message)
-    {
-        if (_deleteWarning != null)
-        {
-            _deleteWarning.Text = message;
-        }
-    }
-
-    private void SaveSettingsFromUi()
-    {
-        _lastSettingsSaveSucceeded = false;
-        AgentSettings settings;
-        try { settings = HarvestSettings(); }
-        catch (ArgumentException ex) { SetSaveStatus(ex.Message); return; }
-        ModelRoleProbe.InvalidateMismatched(settings);
-        var saveText = string.IsNullOrWhiteSpace(_budgetInputError)
-            ? Loc.T("已保存")
-            : Loc.T("已保存（预算未改：{0}）", _budgetInputError);
-        if (!PersistHarvested(settings))
-        {
-            return;
-        }
-
-        // The saved host settings are authoritative. Forward the whitelisted play and Jev fields
-        // to an already-running companion, then display its independent confirmation status.
-        _lastSettingsSaveSucceeded = true;
-        _ = SaveSettingsAndSyncJevAsync();
-
-        if (_saveStatus != null)
-        {
-            _saveStatus.Text = saveText;
-        }
-
-        if (_budgetHint != null && !string.IsNullOrWhiteSpace(_budgetInputError))
-        {
-            _budgetHint.Text = _budgetInputError;
-        }
-    }
-
-    private bool PersistHarvested(AgentSettings settings)
-    {
-        try
-        {
-            var themeChanged = !string.Equals(
-                OverlayThemeCatalog.Normalize(settings.OverlayTheme),
-                UiFactory.Palette.Id,
-                StringComparison.Ordinal);
-            AgentRuntime.Instance.SaveSettings(settings);
-            _settingsDirty = false;
-            RebuildSettingsForm();
-            if (themeChanged)
-            {
-                // The palette is baked into every stylebox at build time, so a saved theme needs a
-                // rebuild rather than a repaint. Same path a language change takes, so the window
-                // keeps its position, its visibility and the tab the player is on.
-                RebuildInPlace();
-            }
-
-            return true;
-        }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
-        {
-            if (_saveStatus != null)
-            {
-                _saveStatus.Text = FormatSettingsNotice(fallback: Loc.T("保存失败，原配置未被覆盖。"));
-            }
-
-            return false;
-        }
-    }
-
-    private void ResetSessionStatsFromUi()
-    {
-        AgentRuntime.Instance.TryResetSessionStats(out _);
-        RefreshDynamic();
-    }
-
-    private static string FormatSettingsNotice(string? fallback = null)
-    {
-        var notice = AgentRuntime.Instance.SettingsNotice;
-        if (notice.HasMessage)
-        {
-            var text = notice.Message;
-            if (!string.IsNullOrWhiteSpace(notice.BackupPath))
-            {
-                text += Loc.T(" 备份：{0}", notice.BackupPath);
-            }
-
-            return text;
-        }
-
-        return fallback ?? "";
-    }
-
-    // HarvestSettings and CloneSettings live in AgentOverlayHost.Settings.cs with the form they read:
-    // the host file is at its size budget, and the harvest grows with the settings form, not with
-    // the window chrome this file owns.
-
     private void ToggleVisible()
     {
         if (_panel == null)
@@ -572,7 +416,7 @@ internal sealed partial class AgentOverlayHost
     private void CopyDiagnostics()
     {
         CopyText(AgentRuntime.Instance.ExportDiagnostics());
-        AgentRuntime.Instance.NotifyStatus(Loc.T("诊断已复制到剪贴板（不含 API Key 和对话正文）。"));
+        AgentRuntime.Instance.NotifyStatus(Loc.T("诊断已复制（不含 Key 和对话）。"));
     }
 
     private void SaveDiagnostics()
@@ -584,7 +428,7 @@ internal sealed partial class AgentOverlayHost
             var path = Path.Combine(directory, "sts2-agent-" + DateTime.UtcNow.ToString("yyyyMMdd-HHmmss-fff") + ".txt");
             File.WriteAllText(path, AgentRuntime.Instance.ExportDiagnostics());
             OS.ShellOpen(directory);
-            AgentRuntime.Instance.NotifyStatus(Loc.T("诊断文件已保存：{0}", path));
+            AgentRuntime.Instance.NotifyStatus(Loc.T("诊断已保存：{0}", path));
         }
         catch (Exception ex) { AgentRuntime.Instance.NotifyStatus(DiagnosticExport.Redact(ex.Message)); }
     }
@@ -594,140 +438,22 @@ internal sealed partial class AgentOverlayHost
         var overlay = _instance;
         if (overlay?._panel == null) return;
         overlay._panel.Visible = true;
-        overlay.ShowTab("play");
+        overlay.ShowTab(OverlayTabCatalog.Play);
         _ = overlay.ChangePlayModeAsync(1);
     }
 
-    private void MarkSettingsDirty()
-    {
-        if (_rebuildingSettings)
-        {
-            return;
-        }
-
-        _settingsDirty = true;
-        if (_saveStatus != null)
-        {
-            _saveStatus.Text = Loc.T("未保存");
-        }
-    }
-
-    private void WatchLine(LineEdit edit)
-    {
-        edit.TextChanged += _ => MarkSettingsDirty();
-    }
-
-    private void WatchCheck(CheckBox check)
-    {
-        check.Toggled += _ => MarkSettingsDirty();
-    }
-
-    private void WatchCombo(OptionButton combo)
-    {
-        combo.ItemSelected += _ => MarkSettingsDirty();
-    }
-
-    private void FlushSettingsIfDirty()
-    {
-        if (!_settingsDirty || _settingsBody == null)
-        {
-            return;
-        }
-
-        SaveSettingsFromUi();
-    }
-
-    private async Task LaunchDualAsync()
-    {
-        FlushSettingsIfDirty();
-        if (_settingsDirty) return;
-        var settings = HarvestSettings();
-        var companionAutoPlay = settings.CompanionControlMode != "external";
-        await AgentRuntime.Instance.LaunchDualInstanceAsync(settings, companionAutoPlay, CancellationToken.None);
-        RefreshDynamic();
-    }
-
-    private async Task ContinueDualAsync()
-    {
-        FlushSettingsIfDirty();
-        if (_settingsDirty) return;
-        var settings = HarvestSettings();
-        var companionAutoPlay = settings.CompanionControlMode != "external";
-        _continueLaunching = true;
-        try
-        {
-            RefreshDynamic();
-            await AgentRuntime.Instance.ContinueDualInstanceAsync(settings, companionAutoPlay, CancellationToken.None);
-        }
-        finally
-        {
-            _continueLaunching = false;
-        }
-        RefreshDynamic();
-    }
-
-    private static string DualHintText()
-    {
-        var settings = AgentRuntime.Instance.Settings;
-        if (settings.CompanionControlMode == "external")
-            return Loc.T("外部控制：队友入队后等待外部 Agent，不会自动出牌。启动后可在「接入」中复制连接地址。");
-        var ready = FirstRunSetup.Evaluate(settings);
-        if (!ready.ReadyToInvite) return ready.Hint;
-        return settings.CompanionAutoSelectCharacter
-            ? Loc.T("请从主菜单邀请。队友会自动选角并游玩；你操作自己的角色。")
-            : Loc.T("请从主菜单邀请，在第二窗口为队友选好角色；准备后它会自动游玩。");
-    }
-
-    /// <summary>Continue is offered only where continue_ai_teammate would be accepted: host main menu with a co-op save on disk.</summary>
-    private static bool CanOfferContinue()
-    {
-        if (InstanceRole.IsCompanion) return false;
-        try
-        {
-            return GameStateService.CanContinueAiTeammate(ActiveScreenContext.Instance.GetCurrentScreen());
-        }
-        catch
-        {
-            return false;
-        }
-    }
-
-    /// <summary>Invite is offered only where invite_ai_teammate would be advertised, including DualLaunching and PlayRunning.</summary>
-    private static bool CanOfferInvite()
-    {
-        if (InstanceRole.IsCompanion) return false;
-        try
-        {
-            return GameStateService.CanInviteAiTeammate(ActiveScreenContext.Instance.GetCurrentScreen());
-        }
-        catch
-        {
-            return false;
-        }
-    }
-
     /// <summary>
-    /// The screen behind the button changes with no runtime event the overlay could subscribe to, so
-    /// availability is re-read on the panel tick as well as whenever the tab comes into view. Without
-    /// the tick, a panel already sitting on this tab kept the button greyed out across the boot modal
-    /// clearing, and only a tab switch brought it back.
+    /// Logs a failure the first time it is seen. The checks that call this run on the panel tick and
+    /// fall back to a safe answer, so a failure used to be swallowed silently; logging it on every tick
+    /// would bury the game log instead.
     /// </summary>
-    private void RefreshContinueAvailability()
+    private static void WarnOnce(string what, Exception ex)
     {
-        if (_dualLaunchButton != null)
+        var message = what + ": " + ex.GetType().Name + ": " + ex.Message;
+        if (WarnedOnce.Count < 64 && WarnedOnce.Add(message))
         {
-            var canInvite = CanOfferInvite();
-            _dualLaunchButton.Disabled = AgentRuntime.Instance.DualLaunching || !canInvite;
+            Log.Warn($"{LogPrefix} {message}");
         }
-
-        if (_dualContinueButton == null)
-        {
-            return;
-        }
-
-        var canContinue = CanOfferContinue();
-        _dualContinueButton.Disabled = AgentRuntime.Instance.DualLaunching || !canContinue;
-        _dualContinueButton.TooltipText = canContinue ? "" : Loc.T("主菜单上有联机存档时可用。");
     }
 
     /// <summary>
@@ -739,77 +465,35 @@ internal sealed partial class AgentOverlayHost
         _ = GameThread.InvokeAsync(RefreshDynamic);
     }
 
-    /// <summary>
-    /// Reports which controls' minimum width exceeds the panel. Kept permanently as a regression
-    /// sentinel: it logs again whenever the offender count on the current tab CHANGES (a new wide
-    /// control appeared, or a fix landed), so an overflow introduced later by an action -- like the
-    /// settings rebuild after deleting a model -- cannot hide behind a clean first report.
-    /// </summary>
-    private void ReportOverflowOnce()
-    {
-        if (_panel == null || _contentColumn == null || !_panel.Visible)
-        {
-            return;
-        }
-        var limit = _panel.Size.X;
-        var lines = new System.Collections.Generic.List<string>();
-        CollectWide(_contentColumn, limit, lines);
-        // Log on change only: tab + offender count is the signature. The first exposure logs too
-        // (signature starts empty), so the baseline "offenders=0" still appears in the log.
-        var signature = _tab + "|" + lines.Count;
-        if (_overflowSignature == signature)
-        {
-            return;
-        }
-
-        _overflowSignature = signature;
-        Godot.GD.Print($"[STS2AIAgent.Wide] tab={_tab} panel={limit:0} offenders={lines.Count}");
-        foreach (var line in lines)
-        {
-            Godot.GD.Print("  " + line);
-        }
-    }
-
-    private static void CollectWide(Node node, float limit, System.Collections.Generic.List<string> lines)
-    {
-        if (node is Control control && control.Visible)
-        {
-            var minimum = control.GetCombinedMinimumSize().X;
-            if (minimum > limit)
-            {
-                var text = control is Label label ? " text=" + label.Text : string.Empty;
-                lines.Add($"{control.GetType().Name} minW={minimum:0} sizeW={control.Size.X:0}{text}");
-            }
-        }
-
-        foreach (var child in node.GetChildren())
-        {
-            CollectWide(child, limit, lines);
-        }
-    }
-
     private void OnProcessFrame()
     {
         var hotkeyName = AgentRuntime.Instance.Settings.Hotkey;
-        UiFactory.TryParseHotkey(hotkeyName, out var key);
-        var down = Input.IsPhysicalKeyPressed(key);
-        if (down && !_hotkeyWasDown)
+        if (!string.Equals(hotkeyName, _hotkeyName, StringComparison.Ordinal))
+        {
+            _hotkeyName = hotkeyName;
+            OverlayHotkey.TryParse(hotkeyName, out _hotkey);
+        }
+
+        var down = Input.IsPhysicalKeyPressed(_hotkey);
+        if (down && !_hotkeyWasDown && !IsTypingIntoTextBox(_hotkey))
         {
             ToggleVisible();
         }
 
         _hotkeyWasDown = down;
 
-        if (_host != null && _host.Size != _lastViewportSize)
-        {
-            ApplyPlacement(keepCurrent: _lastViewportSize != Vector2.Zero);
-        }
+        _placement?.FollowViewport();
 
         var now = Time.GetTicksMsec();
         if (now - _lastRefreshMs > 800)
         {
             _lastRefreshMs = now;
-            ReportOverflowOnce();
+            // The overflow sentinel walks the whole visible tree; every few seconds is plenty for a
+            // diagnostic that only logs when the offender count changes.
+            if (_tickCount++ % 4 == 0 && _panel != null && _contentColumn != null)
+            {
+                _overflow.Report(_panel, _contentColumn, _tab);
+            }
             if (_panel?.Visible == true)
             {
                 if (_apiLabel != null)
@@ -821,11 +505,12 @@ internal sealed partial class AgentOverlayHost
                 {
                     try
                     {
-                        _playScreen.Text = Loc.T("屏幕：{0}", GameStateService.CurrentScreenName());
+                        _playScreen.Text = GameStateService.CurrentScreenName();
                     }
-                    catch
+                    catch (Exception ex)
                     {
-                        _playScreen.Text = Loc.T("屏幕：-");
+                        WarnOnce("screen name read failed", ex);
+                        _playScreen.Text = "-";
                     }
                 }
 
@@ -858,6 +543,20 @@ internal sealed partial class AgentOverlayHost
         }
     }
 
+    /// <summary>
+    /// True when a text box has focus and the hotkey is a key that types. A letter hotkey would
+    /// otherwise toggle the window every time the player typed that letter into the chat box.
+    /// </summary>
+    private bool IsTypingIntoTextBox(Key key)
+    {
+        if (!OverlayHotkey.IsTypingKey(key) || _host == null || !_host.IsInsideTree())
+        {
+            return false;
+        }
+
+        return _host.GetViewport()?.GuiGetFocusOwner() is LineEdit or TextEdit;
+    }
+
     private void TearDown()
     {
         FlushSettingsIfDirty();
@@ -887,6 +586,7 @@ internal sealed partial class AgentOverlayHost
         _layer = null;
         _host = null;
         _panel = null;
+        _placement = null;
         _dragHandle = null;
         _tree = null;
     }
@@ -925,6 +625,9 @@ internal sealed partial class AgentOverlayHost
         // until that capture's restore shows it, instead of flashing it into the frame being read.
         var wasVisible = (_panel?.Visible ?? false) || _captureHidden;
         var tab = _tab;
+        // Half-typed messages survive the rebuild; the controls holding them are about to be freed.
+        var chatDraft = _chatInput?.Text ?? string.Empty;
+        var teamDraft = _teamInput?.Text ?? string.Empty;
         TearDown();
         TryBuildOrRetry();
         if (hadPanel && _panel != null)
@@ -933,166 +636,21 @@ internal sealed partial class AgentOverlayHost
             if (_captureHidden && _edgeTab != null) _edgeTab.Visible = false;
         }
 
+        if (_chatInput != null) _chatInput.Text = chatDraft;
+        if (_teamInput != null) _teamInput.Text = teamDraft;
         ShowTab(tab);
     }
 
     private void OnDragHandleGuiInput(InputEvent evt)
     {
-        if (_panel == null || _dragHandle == null)
+        if (_dragHandle != null)
         {
-            return;
-        }
-
-        if (evt is InputEventMouseButton button && button.ButtonIndex == MouseButton.Left)
-        {
-            _dragging = button.Pressed;
-            _dragHandle.AcceptEvent();
-            if (!button.Pressed)
-            {
-                PersistCurrentPlacement();
-            }
-
-            return;
-        }
-
-        if (evt is InputEventMouseMotion motion && _dragging)
-        {
-            MovePanel(_panel.Position + motion.Relative);
-            _dragHandle.AcceptEvent();
+            _placement?.OnDragInput(_dragHandle, evt);
         }
     }
 
     private void ResetPlacement()
     {
-        AgentRuntime.Instance.PersistOverlayPlacement(null, null);
-        _lastViewportSize = Vector2.Zero;
-        ApplyPlacement();
-    }
-
-    private void ApplyPlacement(bool keepCurrent = false)
-    {
-        if (_panel == null || _host == null || !_panel.IsInsideTree())
-        {
-            return;
-        }
-
-        var viewport = ReadViewportSize();
-        if (viewport.X < 32 || viewport.Y < 32)
-        {
-            return;
-        }
-
-        var size = PanelSizeFor(viewport);
-        Vector2 position;
-        if (keepCurrent)
-        {
-            position = _panel.Position;
-        }
-        else
-        {
-            var settings = AgentRuntime.Instance.Settings;
-            var defaultX = viewport.X - size.X - 12;
-            var defaultY = 40f;
-            position = new Vector2(settings.OverlayLeft ?? defaultX, settings.OverlayTop ?? defaultY);
-        }
-
-        _panel.Size = size;
-        _panel.CustomMinimumSize = new Vector2(PanelWidth, Math.Min(size.Y, 360));
-        // A ceiling on the content column, not just a floor on the panel. A Godot container expands to
-        // fit its children's minimums, and one unwrapped sentence can report a minimum wider than the
-        // panel -- measured live on 2026-09-21 at 691 against a 440 panel, which clipped every card
-        // against the panel edge. Pinning the scroll body to the panel width makes over-wide content
-        // reflow instead of pushing the layout out.
-        if (_pageHost != null)
-        {
-            _pageHost.CustomMinimumSize = new Vector2(size.X - 2 * UiFactory.SpaceMd, 0);
-        }
-
-        MovePanel(position, persist: false);
-        _lastViewportSize = viewport;
-    }
-
-    private void MovePanel(Vector2 position, bool persist = false)
-    {
-        if (_panel == null || _host == null)
-        {
-            return;
-        }
-
-        var viewport = ReadViewportSize();
-        if (viewport.X < 32 || viewport.Y < 32)
-        {
-            return;
-        }
-
-        var size = _panel.Size;
-        if (size.X < 32 || size.Y < 32)
-        {
-            size = PanelSizeFor(viewport);
-            _panel.Size = size;
-        }
-
-        var maxX = Math.Max(8, viewport.X - size.X - 8);
-        var maxY = Math.Max(8, viewport.Y - size.Y - 8);
-        var clamped = new Vector2(
-            Math.Clamp(position.X, 8, maxX),
-            Math.Clamp(position.Y, 8, maxY));
-        _panel.Position = clamped;
-        PlaceEdgeTab(viewport);
-        if (persist)
-        {
-            PersistCurrentPlacement();
-        }
-    }
-
-    private void PlaceEdgeTab(Vector2 viewport)
-    {
-        if (_edgeTab == null || _panel == null)
-        {
-            return;
-        }
-
-        var tabSize = _edgeTab.CustomMinimumSize;
-        var onLeft = _panel.Position.X + _panel.Size.X * 0.5f < viewport.X * 0.5f;
-        var y = Math.Clamp(_panel.Position.Y + 16, 8, Math.Max(8, viewport.Y - tabSize.Y - 8));
-        _edgeTab.Position = onLeft
-            ? new Vector2(4, y)
-            : new Vector2(viewport.X - tabSize.X - 4, y);
-    }
-
-    private void PersistCurrentPlacement()
-    {
-        if (_panel == null)
-        {
-            return;
-        }
-
-        AgentRuntime.Instance.PersistOverlayPlacement(_panel.Position.X, _panel.Position.Y);
-    }
-
-    private Vector2 ReadViewportSize()
-    {
-        if (_host == null)
-        {
-            return Vector2.Zero;
-        }
-
-        if (_host.Size.X >= 32 && _host.Size.Y >= 32)
-        {
-            return _host.Size;
-        }
-
-        if (!_host.IsInsideTree())
-        {
-            return Vector2.Zero;
-        }
-
-        return _host.GetViewportRect().Size;
-    }
-
-    private static Vector2 PanelSizeFor(Vector2 viewport)
-    {
-        var height = Math.Clamp(viewport.Y * 0.72f, 520f, Math.Max(520f, viewport.Y - 80f));
-        return new Vector2(PanelWidth, height);
+        _placement?.Reset();
     }
 }

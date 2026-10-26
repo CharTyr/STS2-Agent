@@ -1018,15 +1018,16 @@ Offline checks cover mod artifact staging/conflict preservation, PID handshake i
 
 Before release, run on an isolated Windows profile with game v0.111.0 and real game assemblies:
 
-- [ ] Build the full mod and PCK; check host/companion artifact fingerprints.
+- [x] Build the full mod and PCK (2026-10-27: Release, 0 warnings, 0 errors after the CS0173 fix).
+- [ ] Check host/companion artifact fingerprints (not separately reported on 2026-10-27).
 - [ ] Workshop installed in a second Steam library; no local copy; API ready in both windows.
-- [ ] Partial, old and duplicate flat/nested local copies: refuse before spawn, preserve files, show the conflicting path.
+- [ ] Partial, old and duplicate flat/nested local copies: refuse before spawn, preserve files, show the conflicting path. Only the partial-copy case was run (2026-10-27: refused before spawn, path shown, files unchanged); old and duplicate copies are not verified.
 - [ ] Reserve nearby ports and force a dynamic port; verify PID/role/port in host health and direct companion health.
 - [ ] Differing TEMP variables and denied handshake writes; verify errors/fallback and the total deadline.
 - [ ] Slow child startup: retry from an active lobby/run and reconnect without creating another process or changing the original control mode.
-- [ ] No-model external takeover: zero model requests, direct teammate actions work, host actions retain actor restrictions.
-- [ ] Verified model autoplay: companion begins decisions; pause/resume/continue restore the same route and seat.
-- [ ] Official DeepSeek and a proxy with custom model aliases: test tools and ordinary play with thinking on/off; no paid probes were run by the offline suite.
+- [x] No-model external takeover: zero model requests, direct teammate actions work, host actions retain actor restrictions (2026-10-27: full combat on the Steam-on profile, cross-character action refused with 403).
+- [ ] Verified model autoplay: companion begins decisions; pause/resume/continue restore the same route and seat. Skipped on 2026-10-27 by Char's decision (provider HTTP 400 insufficient credits / 403 auth; not verified). Save continue kept `run_id` and seats with the no-model route.
+- [ ] Official DeepSeek and a proxy with custom model aliases: test tools and ordinary play with thinking on/off; no paid probes were run by the offline suite. Skipped on 2026-10-27 by Char's decision (provider errors; not verified).
 - [ ] Non-combat-only: combat CARD_SELECTION/MODAL and entry races cause zero automatic actions; external combat actions remain usable.
-- [ ] Map graph readable in combat/rest/shop while travel options remain disabled; reward potion replacement and capacity-granting relic order work; upgrade previews do not mutate live cards.
-- [ ] Three/four players: readable inventories and votes, no desync, no implicit claim that multiple AI companions are supported.
+- [ ] Map graph readable in combat/rest/shop while travel options remain disabled; reward potion replacement and capacity-granting relic order work; upgrade previews do not mutate live cards. (2026-10-27: reward potion discard-then-claim passed; the rest was not reported.)
+- [ ] Three/four players: readable inventories and votes, no desync, no implicit claim that multiple AI companions are supported. NOT_RUN on 2026-10-27 (no additional online players).
