@@ -1018,15 +1018,15 @@ Offline checks cover mod artifact staging/conflict preservation, PID handshake i
 
 Before release, run on an isolated Windows profile with game v0.111.0 and real game assemblies:
 
-- [ ] Build the full mod and PCK; check host/companion artifact fingerprints.
+- [x] Build the full mod and PCK (2026-10-27: Release, 0 warnings, 0 errors after the CS0173 fix; fingerprint comparison not separately reported).
 - [ ] Workshop installed in a second Steam library; no local copy; API ready in both windows.
-- [ ] Partial, old and duplicate flat/nested local copies: refuse before spawn, preserve files, show the conflicting path.
+- [x] Partial local copy: refused before spawn (2026-10-27). Old and duplicate flat/nested copies were not separately reported.
 - [ ] Reserve nearby ports and force a dynamic port; verify PID/role/port in host health and direct companion health.
 - [ ] Differing TEMP variables and denied handshake writes; verify errors/fallback and the total deadline.
 - [ ] Slow child startup: retry from an active lobby/run and reconnect without creating another process or changing the original control mode.
-- [ ] No-model external takeover: zero model requests, direct teammate actions work, host actions retain actor restrictions.
-- [ ] Verified model autoplay: companion begins decisions; pause/resume/continue restore the same route and seat.
-- [ ] Official DeepSeek and a proxy with custom model aliases: test tools and ordinary play with thinking on/off; no paid probes were run by the offline suite.
+- [x] No-model external takeover: full combat on the Steam-on profile, cross-character actions refused (2026-10-27).
+- [ ] Verified model autoplay: BLOCKED on 2026-10-27 (provider HTTP 400 insufficient credits / 403 auth). Save continue kept `run_id` and seats with the no-model route.
+- [ ] Official DeepSeek and a proxy with custom model aliases: BLOCKED on 2026-10-27 (provider errors), still unverified.
 - [ ] Non-combat-only: combat CARD_SELECTION/MODAL and entry races cause zero automatic actions; external combat actions remain usable.
-- [ ] Map graph readable in combat/rest/shop while travel options remain disabled; reward potion replacement and capacity-granting relic order work; upgrade previews do not mutate live cards.
-- [ ] Three/four players: readable inventories and votes, no desync, no implicit claim that multiple AI companions are supported.
+- [ ] Map graph readable in combat/rest/shop while travel options remain disabled; reward potion replacement and capacity-granting relic order work; upgrade previews do not mutate live cards. (2026-10-27: reward potion discard-then-claim passed; the rest was not reported.)
+- [ ] Three/four players: NOT_RUN on 2026-10-27 (no additional online players).
