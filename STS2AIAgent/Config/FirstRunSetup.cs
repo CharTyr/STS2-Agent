@@ -19,7 +19,7 @@ internal static class FirstRunSetup
         Loc.T("请先在设置中填写 OpenAI 兼容接口地址和模型名称。本地 Ollama / LM Studio 可以留空 API Key。");
 
     public static string UnverifiedHint =>
-        Loc.T("配置已填写，但主模型尚未验证。在设置页点该模型卡片上的「测试」做一次真实调用（含工具调用检测）；通过后即可到「游玩」页开始自动游玩。");
+        Loc.T("配置已填写，但主模型尚未验证。在「设置」页点「检测游玩模型」做一次真实调用；连通与工具调用通过后，即可开始自动游玩或邀请队友。");
 
     public static string InviteHint =>
         Loc.T("主模型已验证。到「游玩」页点「开始自动游玩」即可单人游玩；想和 AI 队友双打，把游玩页顶部切到「多人」再邀请：本地 1 人 + 1 AI 同一局，大厅仍为 4 人位。");

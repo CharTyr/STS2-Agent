@@ -7,6 +7,7 @@ internal static partial class Loc
     // Player-facing session views and model probe advice.
     private static void AddFacingEntries(Dictionary<string, string> map)
     {
+        map["配置已填写，但主模型尚未验证。在「设置」页点「检测游玩模型」做一次真实调用；连通与工具调用通过后，即可开始自动游玩或邀请队友。"] = "Settings are filled in, but the main model is unverified. In Settings, click Test play model for a real request. Once connectivity and tool calling pass, you can start auto-play or invite a teammate.";
         map["队友控制方式"] = "Teammate control mode";
         map["已有模型测试正在进行，请等待或取消后重试。"] = "A model test is already running. Wait or cancel it before retrying.";
         map["该模型可以聊天，但工具调用不可用，不能自动游玩。请选择支持工具调用的模型并重新测试。"] = "This model can chat but cannot call tools for auto-play. Choose a tool-capable model and test again.";
