@@ -47,10 +47,11 @@ internal static class FirstRunSetup
             return new FirstRunStatus(false, hint.Trim(), "failed", conversation, play, vision);
         }
 
-        if (play.Status == "verified")
-        {
+        if (play.Status == "verified" && (!model.Model.SupportsTools || play.CapabilityStatus == "unsupported"))
+            return new FirstRunStatus(false, Loc.T("该模型可以聊天，但工具调用不可用，不能自动游玩。请选择支持工具调用的模型并重新测试。"),
+                "tools_unavailable", conversation, play, vision);
+        if (play.Status == "verified" && play.CapabilityStatus == "supported")
             return new FirstRunStatus(true, InviteHint, "verified", conversation, play, vision);
-        }
 
         return new FirstRunStatus(false, UnverifiedHint, "filled_unverified", conversation, play, vision);
     }

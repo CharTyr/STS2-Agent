@@ -90,7 +90,7 @@ internal sealed class CompanionConnection
         ArgumentNullException.ThrowIfNull(patch);
         if (!patch.IsValid) throw new ArgumentException("Invalid companion Jev settings.", nameof(patch));
         using var deadline = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-        deadline.CancelAfter(TimeSpan.FromSeconds(8));
+        deadline.CancelAfter(TimeSpan.FromSeconds(45));
         var data = await SendAsync("control", new { settings = patch }, deadline.Token);
         if (!data.TryGetProperty("settings_applied", out var applied) || applied.ValueKind != JsonValueKind.True
             || !data.TryGetProperty("dual_layer_coop_enabled", out var enabled)
@@ -98,6 +98,9 @@ internal sealed class CompanionConnection
         {
             throw new InvalidOperationException("Companion settings confirmation is unavailable.");
         }
+        if (patch.PlaySettings != null && (!data.TryGetProperty("play_settings_applied", out var playApplied)
+            || playApplied.ValueKind != JsonValueKind.True))
+            throw new InvalidOperationException("Companion play settings were not confirmed. Update the teammate mod.");
         return enabled.GetBoolean();
     }
 

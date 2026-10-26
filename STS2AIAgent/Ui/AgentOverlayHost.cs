@@ -150,6 +150,7 @@ internal sealed partial class AgentOverlayHost
         ScreenshotService.EndCapture = null;
         ScreenshotService.OverlayVisibleProbe = null;
         AgentRuntime.Instance.Changed -= _instance.OnRuntimeChanged;
+        _instance._modelTestCancellation?.Cancel();
         _instance.TearDown();
         _instance = null;
     }
@@ -459,7 +460,10 @@ internal sealed partial class AgentOverlayHost
 
     private void SaveSettingsFromUi()
     {
-        var settings = HarvestSettings();
+        _lastSettingsSaveSucceeded = false;
+        AgentSettings settings;
+        try { settings = HarvestSettings(); }
+        catch (ArgumentException ex) { SetSaveStatus(ex.Message); return; }
         ModelRoleProbe.InvalidateMismatched(settings);
         var saveText = string.IsNullOrWhiteSpace(_budgetInputError)
             ? Loc.T("已保存")
@@ -469,8 +473,9 @@ internal sealed partial class AgentOverlayHost
             return;
         }
 
-        // The saved host settings are authoritative. Forward only the whitelisted Jev fields
+        // The saved host settings are authoritative. Forward the whitelisted play and Jev fields
         // to an already-running companion, then display its independent confirmation status.
+        _lastSettingsSaveSucceeded = true;
         _ = SaveSettingsAndSyncJevAsync();
 
         if (_saveStatus != null)
@@ -571,6 +576,29 @@ internal sealed partial class AgentOverlayHost
         AgentRuntime.Instance.NotifyStatus(Loc.T("诊断已复制到剪贴板（不含 API Key 和对话正文）。"));
     }
 
+    private void SaveDiagnostics()
+    {
+        try
+        {
+            var directory = Path.Combine(Path.GetDirectoryName(SettingsStore.DefaultPath())!, "diagnostics");
+            Directory.CreateDirectory(directory);
+            var path = Path.Combine(directory, "sts2-agent-" + DateTime.UtcNow.ToString("yyyyMMdd-HHmmss-fff") + ".txt");
+            File.WriteAllText(path, AgentRuntime.Instance.ExportDiagnostics());
+            OS.ShellOpen(directory);
+            AgentRuntime.Instance.NotifyStatus(Loc.T("诊断文件已保存：{0}", path));
+        }
+        catch (Exception ex) { AgentRuntime.Instance.NotifyStatus(DiagnosticExport.Redact(ex.Message)); }
+    }
+
+    public static void ShowLocalCoopContinue()
+    {
+        var overlay = _instance;
+        if (overlay?._panel == null) return;
+        overlay._panel.Visible = true;
+        overlay.ShowTab("play");
+        _ = overlay.ChangePlayModeAsync(1);
+    }
+
     private void MarkSettingsDirty()
     {
         if (_rebuildingSettings)
@@ -613,10 +641,9 @@ internal sealed partial class AgentOverlayHost
     private async Task LaunchDualAsync()
     {
         FlushSettingsIfDirty();
-        // Same route choice as POST /action invite_ai_teammate: a verified play model means the
-        // teammate plays by itself; otherwise it launches for external takeover and comes up paused.
+        if (_settingsDirty) return;
         var settings = HarvestSettings();
-        var companionAutoPlay = FirstRunSetup.Evaluate(settings).ReadyToInvite;
+        var companionAutoPlay = settings.CompanionControlMode != "external";
         await AgentRuntime.Instance.LaunchDualInstanceAsync(settings, companionAutoPlay, CancellationToken.None);
         RefreshDynamic();
     }
@@ -624,8 +651,9 @@ internal sealed partial class AgentOverlayHost
     private async Task ContinueDualAsync()
     {
         FlushSettingsIfDirty();
+        if (_settingsDirty) return;
         var settings = HarvestSettings();
-        var companionAutoPlay = FirstRunSetup.Evaluate(settings).ReadyToInvite;
+        var companionAutoPlay = settings.CompanionControlMode != "external";
         _continueLaunching = true;
         try
         {
@@ -642,14 +670,13 @@ internal sealed partial class AgentOverlayHost
     private static string DualHintText()
     {
         var settings = AgentRuntime.Instance.Settings;
-        if (!settings.CompanionAutoSelectCharacter)
-        {
-            return Loc.T("请从主菜单邀请。第二窗口打开后，会停在选角界面让 AI 自己决定选角，也可以你切过去给它选好、点出发；之后它自己点开局事件并进图。");
-        }
-
-        return FirstRunSetup.Evaluate(settings).ReadyToInvite
-            ? Loc.T("请从主菜单邀请。第二窗口打开后，AI 会自己选角、点开局事件并进图。你继续在这个窗口操作自己的角色；轮到它时，它会自动出牌。")
-            : Loc.T("请从主菜单邀请。第二窗口打开后，AI 会加入并进图，然后停在原地等待外部接管，不会自己出牌；你继续在这个窗口操作自己的角色。");
+        if (settings.CompanionControlMode == "external")
+            return Loc.T("外部控制：队友入队后等待外部 Agent，不会自动出牌。启动后可在「接入」中复制连接地址。");
+        var ready = FirstRunSetup.Evaluate(settings);
+        if (!ready.ReadyToInvite) return ready.Hint;
+        return settings.CompanionAutoSelectCharacter
+            ? Loc.T("请从主菜单邀请。队友会自动选角并游玩；你操作自己的角色。")
+            : Loc.T("请从主菜单邀请，在第二窗口为队友选好角色；准备后它会自动游玩。");
     }
 
     /// <summary>Continue is offered only where continue_ai_teammate would be accepted: host main menu with a co-op save on disk.</summary>

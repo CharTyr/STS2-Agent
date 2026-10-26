@@ -197,6 +197,7 @@ internal sealed partial class AgentRuntime
                 }
             }
 
+            if (running) await connection.ApplyJevSettingsAsync(CompanionSettingsPatch.From(Settings), cancellationToken);
             var phase = await connection.ControlAsync(running, cancellationToken);
             _teamControlStatus = phase switch
             {
@@ -497,6 +498,8 @@ internal sealed partial class AgentRuntime
 
     public void StartAutoPlay()
     {
+        var readiness = FirstRunSetup.Evaluate(Settings);
+        if (!readiness.ReadyToInvite) { SetStatus(readiness.Hint); RaiseChanged(); return; }
         Task task;
         PlaySessionIdentity identity;
         lock (_modeControlGate)
@@ -644,37 +647,15 @@ internal sealed partial class AgentRuntime
         NoteEvent(Status);
         try
         {
-            var results = await _loop.TestConfiguredRolesAsync(force, cancellationToken);
-            AgentSettings settings;
-            lock (_gate)
-            {
-                settings = _settings;
-            }
-
-            foreach (var item in results)
-            {
-                ModelRoleProbe.Upsert(settings, item.Record);
-            }
-
-            SaveSettings(settings);
-            var play = results.First(item => item.Role == ModelRoleNames.Play);
-            var summary = string.Join(" ", results.Select(item => ModelRoleProbe.FormatLine(item.Record)));
-            if (play.Record.Status == "failed")
-            {
-                SetModelTestFailure(play.Record);
-                SetStatus(Loc.T("游玩模型测试失败"));
-            }
-            else if (play.Record.Status == "verified")
-            {
-                ClearModelTestFailure();
-                SetStatus(Loc.T("游玩模型连通成功（不等于工具/视觉已验证）"));
-                MarkFirstRunGuideSeen();
-            }
-            else
-            {
-                SetStatus(Loc.T("模型尚未验证"));
-            }
-
+            var settings = Settings;
+            var models = new[] { settings.TryResolveConversationModel(), settings.TryResolvePlayModel(), settings.TryResolveVisionModel() }
+                .Where(model => model != null).Select(model => model!.Model.Id).Distinct().ToArray();
+            foreach (var id in models)
+                if (force || !IsModelVerified(id)) await TestModelAsync(id, cancellationToken);
+            var summary = string.Join(" ", new[] { ModelRoleNames.Conversation, ModelRoleNames.Play, ModelRoleNames.Vision }
+                .Select(role => ModelRoleProbe.FormatLine(ModelRoleProbe.Current(Settings, role))));
+            var ready = FirstRunSetup.Evaluate(Settings);
+            SetStatus(ready.Hint);
             NoteEvent(summary);
             return summary;
         }
@@ -698,6 +679,9 @@ internal sealed partial class AgentRuntime
             SetStatus(Loc.T("自动游玩中，请先暂停再单步"));
             return;
         }
+
+        var readiness = FirstRunSetup.Evaluate(Settings);
+        if (!readiness.ReadyToInvite) { SetStatus(readiness.Hint); RaiseChanged(); return; }
 
         SetStatus(Loc.T("单步决策中"));
         try

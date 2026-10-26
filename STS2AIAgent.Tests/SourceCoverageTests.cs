@@ -93,6 +93,8 @@ internal static class SourceCoverageTests
         // The play page's run/pause controls and Jev reading. A Godot control builder, unlinked like
         // the pages file it serves.
         "STS2AIAgent/Ui/AgentOverlayHost.PlayControl.cs",
+        "STS2AIAgent/Ui/AgentOverlayHost.Setup.cs",
+        "STS2AIAgent/Game/NativeCoopLoadGuard.cs",
         // The conversation card (chat log rendering, scroll-to-bottom, the chat-side option row). A
         // Godot control builder, unlinked like the pages file it was split out of.
         "STS2AIAgent/Ui/AgentOverlayHost.ChatCard.cs",

@@ -84,7 +84,8 @@ internal sealed partial class AgentOverlayHost
 
     private async Task SaveSettingsAndSyncJevAsync()
     {
-        if (!_companionSettingsGate.Wait(0)) return;
+        await _companionSettingsGate.WaitAsync();
+        _companionSettingsSyncing = true;
         try
         {
             var after = AgentRuntime.Instance.Settings;
@@ -93,7 +94,12 @@ internal sealed partial class AgentOverlayHost
                 _lastConfirmedCompanionSettings == newJev.Fingerprint()) return;
             await SyncCompanionJevSettingsAsync(after);
         }
-        finally { _companionSettingsGate.Release(); }
+        finally
+        {
+            _companionSettingsSyncing = false;
+            _companionSettingsGate.Release();
+            try { await GameThread.InvokeAsync(RefreshDynamic); } catch (InvalidOperationException) { }
+        }
     }
 
     /// <summary>Store the host choice first, then confirm that the already-running companion applied it.</summary>
@@ -111,7 +117,7 @@ internal sealed partial class AgentOverlayHost
         catch (Exception ex)
         {
             _companionSettingsNotice = ex is IOException or UnauthorizedAccessException
-                ? Loc.T("保存 Jev 配置失败；队友配置未确认。")
+                ? Loc.T("保存队友设置失败；队友配置未确认。")
                 : Loc.T("队友配置未确认，请检查连接后重试。");
         }
         finally
@@ -144,7 +150,7 @@ internal sealed partial class AgentOverlayHost
                 _lastConfirmedCompanionSettings = patch.Fingerprint();
             }
             _companionSettingsNotice = effective == settings.DualLayerCoopEnabled
-                ? Loc.T("队友 Jev 配置已确认，下次决策生效。")
+                ? Loc.T("队友设置已确认，模型、预算和战斗控制已生效。")
                 : Loc.T("队友 Jev 开关与本机不一致，尚未确认生效。");
             if (effective != settings.DualLayerCoopEnabled) _lastConfirmedCompanionSettings = null;
         }
@@ -216,6 +222,7 @@ internal sealed partial class AgentOverlayHost
             _companionSettingsStatus.Text = _companionSettingsNotice ?? string.Empty;
             _companionSettingsStatus.Visible = !string.IsNullOrWhiteSpace(_companionSettingsNotice);
         }
+        if (_companionMode != null) _companionMode.Disabled = LocalDualInstanceLauncher.CompanionProcessAlive || AgentRuntime.Instance.DualLaunching;
         if (_dualLayerCoopCheck != null) _dualLayerCoopCheck.Disabled = _companionSettingsSyncing;
         if (_jevPanel != null) _jevPanel.Visible = dualEnabled;
         if (_sendButton != null) _sendButton.Disabled = _playModeSwitching;

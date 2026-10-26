@@ -5,7 +5,7 @@ using STS2AIAgent.Config;
 
 namespace STS2AIAgent.Multiplayer;
 
-/// <summary>Only the Jev-related settings a running companion is allowed to accept from its host.</summary>
+/// <summary>Whitelisted play and Jev settings accepted from the authenticated host.</summary>
 /// <remarks>The API key is a transient input: never include this object in logs, responses or diagnostics.</remarks>
 internal sealed class CompanionSettingsPatch
 {
@@ -27,8 +27,12 @@ internal sealed class CompanionSettingsPatch
     [JsonPropertyName("jev_request_timeout_seconds")]
     public int? JevRequestTimeoutSeconds { get; init; }
 
+    [JsonPropertyName("play_settings")]
+    public CompanionPlaySettings? PlaySettings { get; init; }
+
     public static CompanionSettingsPatch From(AgentSettings settings) => new()
     {
+        PlaySettings = CompanionPlaySettings.From(settings),
         DualLayerCoopEnabled = settings.DualLayerCoopEnabled,
         JevBaseUrl = settings.JevBaseUrl,
         JevApiKey = settings.JevApiKey,
@@ -42,7 +46,7 @@ internal sealed class CompanionSettingsPatch
     {
         var content = System.Text.Json.JsonSerializer.Serialize(new
         {
-            DualLayerCoopEnabled, JevBaseUrl, JevApiKey, JevModel, JevConfidenceThreshold, JevRequestTimeoutSeconds
+            DualLayerCoopEnabled, JevBaseUrl, JevApiKey, JevModel, JevConfidenceThreshold, JevRequestTimeoutSeconds, PlaySettings
         });
         return Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(content)));
     }
@@ -51,16 +55,19 @@ internal sealed class CompanionSettingsPatch
         other != null && DualLayerCoopEnabled == other.DualLayerCoopEnabled
         && JevBaseUrl == other.JevBaseUrl && JevApiKey == other.JevApiKey && JevModel == other.JevModel
         && JevConfidenceThreshold == other.JevConfidenceThreshold
-        && JevRequestTimeoutSeconds == other.JevRequestTimeoutSeconds;
+        && JevRequestTimeoutSeconds == other.JevRequestTimeoutSeconds
+        && System.Text.Json.JsonSerializer.Serialize(PlaySettings) == System.Text.Json.JsonSerializer.Serialize(other.PlaySettings);
 
     public bool IsValid => JevBaseUrl is { Length: <= 2048 } && JevApiKey is { Length: <= 4096 }
         && JevModel is { Length: <= 256 } && double.IsFinite(JevConfidenceThreshold)
         && JevConfidenceThreshold is >= 0 and <= 1
-        && JevRequestTimeoutSeconds is null or (> 0 and <= 3600);
+        && (JevRequestTimeoutSeconds is null or (> 0 and <= 3600))
+        && (PlaySettings == null || PlaySettings.IsValid);
 
     public void ApplyTo(AgentSettings settings)
     {
         if (!IsValid) throw new ArgumentException("Invalid companion Jev settings.");
+        PlaySettings?.ApplyTo(settings);
         settings.DualLayerCoopEnabled = DualLayerCoopEnabled;
         settings.JevBaseUrl = JevBaseUrl;
         settings.JevApiKey = JevApiKey;

@@ -249,7 +249,7 @@ internal static class TestRunner
         yield return ("CoopRoute.ExternalTakeover", () => Task.Run(CoopRouteTests.UnverifiedPlayModelLaunchesForExternalTakeoverOnly));
         yield return ("CoopRoute.SupportedSurfaces", () => Task.Run(CoopRouteTests.CompanionRouteReachesTheSupportedSurfaces));
         yield return ("CoopRoute.SharedModelGate", () => Task.Run(CoopRouteTests.EveryStartEntryPointSharesTheModelGate));
-        yield return ("CoopRoute.OverlayInviteRoute", () => Task.Run(CoopRouteTests.OverlayInviteFollowsTheApiRoute));
+        yield return ("CoopRoute.OverlayExplicitControlMode", () => Task.Run(CoopRouteTests.OverlayInviteUsesExplicitControlMode));
         yield return ("CoopRoute.OverlayEntries", () => Task.Run(CoopRouteTests.OverlayOffersContinueAndCharacterChoice));
         yield return ("CoopSave.ReadNetIds", () => Task.Run(CoopSavePrecheckTests.ReadsPlayerNetIdsFromTheSave));
         yield return ("CoopSave.NumericStringNetIds", () => Task.Run(CoopSavePrecheckTests.ReadsNumericStringNetIds));
@@ -665,6 +665,14 @@ internal static class TestRunner
         yield return ("CardPlayCounter.Settled", () => Task.Run(CardPlayCounterPolicyTests.ASettledPlayKeepsTheCounters));
         yield return ("CardPlayCounter.LeftHand", () => Task.Run(CardPlayCounterPolicyTests.LeftHandOrEndedCombatKeepsTheCounters));
         yield return ("NonCombat.OverlayAndFinalDispatch", AgentLoopTests.NonCombatOnly_OverlayAndFinalDispatchAreGuarded);
+        yield return ("Usability.AliasProtocol", () => Task.Run(UsabilityRegressionTests.AliasesDoNotSelectProviderFieldsBySubstring));
+        yield return ("Usability.ChatOnlyAndLegacyVerificationCannotStartPlay", () => Task.Run(UsabilityRegressionTests.ChatOnlyAndLegacyVerificationCannotStartPlay));
+        yield return ("Usability.QuickSetupBindsOneModelAndInvalidatesOldProvider", () => Task.Run(UsabilityRegressionTests.QuickSetupBindsOneModelAndInvalidatesOldProvider));
+        yield return ("Usability.FullPatchUpdatesPlayWithoutChangingLocalInstanceSettings", () => Task.Run(UsabilityRegressionTests.FullPatchUpdatesPlayWithoutChangingLocalInstanceSettings));
+        yield return ("Usability.NewInstallTrialPreservesExistingUnlimitedChoice", () => Task.Run(UsabilityRegressionTests.NewInstallTrialPreservesExistingUnlimitedChoice));
+        yield return ("Usability.ReleaseLayoutsUpgradeOnlyUnmodifiedManagedCopies", () => Task.Run(UsabilityRegressionTests.ReleaseLayoutsUpgradeOnlyUnmodifiedManagedCopies));
+        yield return ("Usability.NativeLoadGuardLeavesSteamAndUnknownSavesAlone", () => Task.Run(UsabilityRegressionTests.NativeLoadGuardLeavesSteamAndUnknownSavesAlone));
+        yield return ("Usability.LiveSettingsRequireExplicitFullAcknowledgement", UsabilityRegressionTests.LiveSettingsRequireExplicitFullAcknowledgement);
         yield return ("CoopHardening.Staging", () => Task.Run(CoopHardeningTests.StagingUsesLoadedFilesAndPreservesConflicts));
         yield return ("CoopHardening.Startup", () => Task.Run(CoopHardeningTests.StartupRejectsWrongProcessAndPartialWrites));
         yield return ("CoopHardening.Deadline", CoopHardeningTests.DiscoveryHonorsTotalDeadlineAndCancellation);

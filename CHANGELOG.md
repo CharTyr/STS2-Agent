@@ -1,8 +1,18 @@
 # Changelog
 
+## Unreleased
+
+### First-run and companion reliability
+
+- Add provider quick setup, a visible 30-request trial for new installations, and cancellable model testing (45-second deadline). Preserve existing unlimited choices. Require verified tool calling for auto-play.
+- Synchronize model, key, budgets and non-combat-only settings to the running companion with explicit acknowledgement and a pause before applying changes.
+- Accept both release manifest names; upgrade only unchanged managed companion copies. Preserve manual/edited installations.
+- Guard identified local co-op saves against native loading under a mismatched player identity. Add diagnostics file saving and a DLL build fingerprint. Update two-tab setup and usage instructions.
+- Game-dependent compilation and dual-window acceptance remain required before publishing this unreleased work.
+
 > Release attribution is recorded against tags or release commits. Post-tag maintenance is listed separately; current validation limits are maintained in [PRODUCT_PLAN_CURRENT.md](https://github.com/CharTyr/STS2-Agent/blob/main/PRODUCT_PLAN_CURRENT.md).
 
-## Unreleased
+### Integrated development work
 
 - Integrate main's native power display amounts with dev's Sandpit/upgrade/DeepSeek fixes and Windows prompt normalization; include party inventories from #210 with unavailable-vs-empty and melted-relic semantics.
 - Validate and atomically stage the actual loaded mod for the offline companion. Refuse partial or differing local copies without overwriting user files. Report initialization failures and the real API port through a host-selected startup handshake; bound discovery by one total deadline and reconnect a live child without spawning another.

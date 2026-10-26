@@ -7,6 +7,44 @@ internal static partial class Loc
     // Player-facing session views and model probe advice.
     private static void AddFacingEntries(Dictionary<string, string> map)
     {
+        map["队友控制方式"] = "Teammate control mode";
+        map["已有模型测试正在进行，请等待或取消后重试。"] = "A model test is already running. Wait or cancel it before retrying.";
+        map["该模型可以聊天，但工具调用不可用，不能自动游玩。请选择支持工具调用的模型并重新测试。"] = "This model can chat but cannot call tools for auto-play. Choose a tool-capable model and test again.";
+        map["工具调用：可用"] = "Tools: supported";
+        map["工具调用：不可用"] = "Tools: unsupported";
+        map["工具调用已验证，可自动游玩。"] = "Tool calling verified. Ready for auto-play.";
+        map["工具调用不可用，请更换模型后重新检测。"] = "Tool calling is unavailable. Change the model and test again.";
+        map["发现两份本地模组，请只保留一份完整安装：{0}"] = "Two local mod copies were found. Keep one complete installation: {0}";
+        map["本地模组与主窗口版本不同，文件已保留。请更新或移走这份手动安装：{0}"] = "The local mod differs from the host. Files were preserved. Update or move this manual installation: {0}";
+        map["模组文件缺失或为空：{0}。请重新安装完整发布包。"] = "A mod file is missing or empty: {0}. Reinstall the complete package.";
+        map["模组清单不属于 STS2 AI Agent 或已损坏：{0}"] = "The manifest is invalid or does not belong to STS2 AI Agent: {0}";
+        map["保存队友设置失败；队友配置未确认。"] = "Could not save teammate settings; the teammate configuration is unconfirmed.";
+        map["队友设置已确认，模型、预算和战斗控制已生效。"] = "Teammate settings confirmed: model, budget and combat controls applied.";
+        map["请填写完整的 HTTP 或 HTTPS 接口地址。"] = "Enter a complete HTTP or HTTPS API URL.";
+        map["请填写服务商提供或本地已安装的模型名称。"] = "Enter the provider model name or a locally installed model name.";
+        map["服务商或本地模型名称"] = "Provider or local model name";
+        map["留空或 0 表示不限"] = "Empty or 0 means unlimited";
+        map["快速配置"] = "Quick setup";
+        map["服务商"] = "Provider";
+        map["自动游玩请求上限"] = "Auto-play request limit";
+        map["选择服务商，填写 API Key 和模型名称，然后检测。对话和自动游玩会共用这个模型；本地服务可留空 Key。"] = "Choose a provider, enter its API key and model name, then test. Conversation and auto-play share this model. Local services may leave the key empty.";
+        map["新安装默认试用 30 次请求，可调整。检测也会调用你的服务；请求数和 Token 不等于账单金额。"] = "New installs default to a trial of 30 requests; adjust as needed. Tests also call your service. Request and token counts are not a bill.";
+        map["当前自动游玩不限请求次数。可填写上限；请求数和 Token 不等于账单金额。"] = "Auto-play currently has no request limit. You can set one. Request and token counts are not a bill.";
+        map["正在检测连通与工具能力，最多 45 秒，通常 2 个请求。可点取消。"] = "Testing connectivity and tools: up to 45 seconds, usually 2 requests. You can cancel.";
+        map["检测已取消或超时，配置已保留，可重试。"] = "Test cancelled or timed out. Settings were kept; you can retry.";
+        map["检测已取消。"] = "Test cancelled.";
+        map["检测游玩模型"] = "Test play model";
+        map["取消检测"] = "Cancel test";
+        map["AI 自动游玩"] = "AI auto-play";
+        map["外部 Agent 控制"] = "External Agent control";
+        map["由我选择队友角色"] = "Choose the teammate character myself";
+        map["外部控制：队友入队后等待外部 Agent，不会自动出牌。启动后可在「接入」中复制连接地址。"] = "External control: the teammate waits for an external Agent and does not auto-play. After launch, copy the connection URL from Connect.";
+        map["请从主菜单邀请。队友会自动选角并游玩；你操作自己的角色。"] = "Invite from the main menu. The teammate selects its character and plays; you control your character.";
+        map["请从主菜单邀请，在第二窗口为队友选好角色；准备后它会自动游玩。"] = "Invite from the main menu, then choose the teammate character in the second window. It auto-plays after readying.";
+        map["复制诊断"] = "Copy diagnostics";
+        map["保存诊断文件"] = "Save diagnostics file";
+        map["诊断文件已保存：{0}"] = "Diagnostics saved: {0}";
+        map["这是本地队友存档。已阻止会损坏存档的原生读档，请在模组多人页点击「继续上次联机对局」。"] = "This is a local teammate save. The unsafe native load was blocked. Use Continue last co-op run on the mod multiplayer page.";
         // Session view headlines, details and next-step hints (Agent/PlayerFacingSession.cs).
         map["队友窗口已退出"] = "Teammate window closed";
         map["关闭残留窗口后，回到主菜单再点「邀请 AI 队友」。"] =

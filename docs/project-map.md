@@ -94,6 +94,10 @@ one action runs at a time.
 ## 3. Mod entry, overlay UI, configuration
 
 ### Files
+- `STS2AIAgent/Config/QuickSetup.cs` — provider presets and one-model quick setup, preserving advanced configuration.
+- `STS2AIAgent/Ui/AgentOverlayHost.Setup.cs` — quick setup card and bounded, cancellable model verification.
+- `STS2AIAgent/Multiplayer/CompanionPlaySettings.cs` — live play configuration allowlist; preserves instance-local settings.
+- `STS2AIAgent/Game/NativeCoopLoadGuard.cs` — intercepts unsafe native loading of identified local co-op saves.
 - `STS2AIAgent/ModEntry.cs` — `[ModInitializer]`. Order: LocSource → GameThread → GameEventService → HttpServer → AgentRuntime → `ReflectedGameMembers.ProbeAtStartup` → overlay (skipped on the companion or headless). Shutdown runs on ProcessExit/DomainUnload.
 - `STS2AIAgent/Ui/AgentOverlayHost.cs` — overlay chrome and lifecycle: CanvasLayer install and retry until `NGame.Instance`, placement/drag/edge-tab (clamped on-screen), hotkey poll, the 800 ms `OnProcessFrame` tick, `ToggleVisible`, `RebuildInPlace`.
 - `STS2AIAgent/Ui/AgentOverlayHost.Tabs.cs` — `_pages`, `BuildPages`, `ShowTab` (flushes dirty settings when leaving Settings), tab row.

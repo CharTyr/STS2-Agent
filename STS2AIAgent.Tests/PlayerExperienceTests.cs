@@ -22,7 +22,7 @@ internal static class PlayerExperienceTests
     {
         var settings = AgentSettings.CreateDefault();
         var play = settings.TryResolvePlayModel()!;
-        ModelRoleProbe.Upsert(settings, ModelRoleProbe.FromSuccess(ModelRoleNames.Play, play));
+        ModelRoleProbe.Upsert(settings, ModelRoleProbe.FromSuccess(ModelRoleNames.Play, play, tools: true));
         var status = FirstRunSetup.Evaluate(settings);
         Assert.True(status.ReadyToInvite);
         Assert.Equal("verified", status.Phase);
@@ -33,7 +33,7 @@ internal static class PlayerExperienceTests
     {
         var settings = AgentSettings.CreateDefault();
         var play = settings.TryResolvePlayModel()!;
-        ModelRoleProbe.Upsert(settings, ModelRoleProbe.FromSuccess(ModelRoleNames.Play, play));
+        ModelRoleProbe.Upsert(settings, ModelRoleProbe.FromSuccess(ModelRoleNames.Play, play, tools: true));
         settings.Endpoints[0].ApiKey = "sk-changed";
         var status = FirstRunSetup.Evaluate(settings);
         Assert.False(status.ReadyToInvite);
@@ -64,7 +64,7 @@ internal static class PlayerExperienceTests
     {
         var settings = AgentSettings.CreateDefault();
         var play = settings.TryResolvePlayModel()!;
-        ModelRoleProbe.Upsert(settings, ModelRoleProbe.FromSuccess(ModelRoleNames.Play, play));
+        ModelRoleProbe.Upsert(settings, ModelRoleProbe.FromSuccess(ModelRoleNames.Play, play, tools: true));
         ModelRoleProbe.Upsert(settings, ModelRoleProbe.FromSuccess(ModelRoleNames.Conversation, play));
         var factory = new RolePingFactory(_ => new PingClient("pong") { FailIfCalled = true });
         var loop = new AgentLoop(new UnusedBridge(), factory, () => settings);
@@ -119,7 +119,7 @@ internal static class PlayerExperienceTests
     public static void UsageSummaryKeepsUnknownUnknownAndCarriesTheBudgetReason()
     {
         var settings = AgentSettings.CreateDefault();
-        ModelRoleProbe.Upsert(settings, ModelRoleProbe.FromSuccess(ModelRoleNames.Play, settings.TryResolvePlayModel()!));
+        ModelRoleProbe.Upsert(settings, ModelRoleProbe.FromSuccess(ModelRoleNames.Play, settings.TryResolvePlayModel()!, tools: true));
         var verified = FirstRunSetup.Evaluate(settings);
         var running = PlayerFacingSession.Compose(BaseSnapshot(verified) with
         {
@@ -248,7 +248,7 @@ internal static class PlayerExperienceTests
     public static void BudgetCopyNamesReachableResetEntry()
     {
         var settings = AgentSettings.CreateDefault();
-        ModelRoleProbe.Upsert(settings, ModelRoleProbe.FromSuccess(ModelRoleNames.Play, settings.TryResolvePlayModel()!));
+        ModelRoleProbe.Upsert(settings, ModelRoleProbe.FromSuccess(ModelRoleNames.Play, settings.TryResolvePlayModel()!, tools: true));
         var verified = FirstRunSetup.Evaluate(settings);
         var paused = PlayerFacingSession.Compose(BaseSnapshot(verified) with
         {
@@ -268,7 +268,7 @@ internal static class PlayerExperienceTests
         Assert.False(SessionBudgetLimits.CanResetSessionStats(false, "stopping"));
         Assert.True(SessionBudgetLimits.CanResetSessionStats(false, "paused"));
         var settings = AgentSettings.CreateDefault();
-        ModelRoleProbe.Upsert(settings, ModelRoleProbe.FromSuccess(ModelRoleNames.Play, settings.TryResolvePlayModel()!));
+        ModelRoleProbe.Upsert(settings, ModelRoleProbe.FromSuccess(ModelRoleNames.Play, settings.TryResolvePlayModel()!, tools: true));
         var verified = FirstRunSetup.Evaluate(settings);
         var running = PlayerFacingSession.Compose(BaseSnapshot(verified) with
         {
@@ -308,7 +308,7 @@ internal static class PlayerExperienceTests
         Assert.Equal("unconfigured", unconfigured.Kind);
         Assert.Contains("设置", unconfigured.NextAction);
 
-        ModelRoleProbe.Upsert(settings, ModelRoleProbe.FromSuccess(ModelRoleNames.Play, settings.TryResolvePlayModel()!));
+        ModelRoleProbe.Upsert(settings, ModelRoleProbe.FromSuccess(ModelRoleNames.Play, settings.TryResolvePlayModel()!, tools: true));
         var verified = FirstRunSetup.Evaluate(settings);
         var pausing = PlayerFacingSession.Compose(BaseSnapshot(verified) with
         {
@@ -336,7 +336,7 @@ internal static class PlayerExperienceTests
     public static void RunningSessionReportsActionUnlessAModelRoundIsOpen()
     {
         var settings = AgentSettings.CreateDefault();
-        ModelRoleProbe.Upsert(settings, ModelRoleProbe.FromSuccess(ModelRoleNames.Play, settings.TryResolvePlayModel()!));
+        ModelRoleProbe.Upsert(settings, ModelRoleProbe.FromSuccess(ModelRoleNames.Play, settings.TryResolvePlayModel()!, tools: true));
         var verified = FirstRunSetup.Evaluate(settings);
 
         var betweenRounds = PlayerFacingSession.Compose(BaseSnapshot(verified) with

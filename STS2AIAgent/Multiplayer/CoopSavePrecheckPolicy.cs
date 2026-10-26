@@ -18,6 +18,9 @@ namespace STS2AIAgent.Multiplayer;
 /// </summary>
 internal static class CoopSavePrecheckPolicy
 {
+    public static bool NeedsLocalContinue(IReadOnlyList<ulong> ids, ulong nativeId, ulong hostId, ulong companionId)
+        => hostId != companionId && Contains(ids, hostId) && Contains(ids, companionId) && !Contains(ids, nativeId);
+
     /// <summary>
     /// Player ids from <c>players[].net_id</c>. An empty list means "no evidence" for every
     /// caller: null, blank, malformed JSON and a missing <c>players</c> array all return empty

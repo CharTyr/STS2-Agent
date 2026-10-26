@@ -21,7 +21,19 @@ internal sealed partial class AgentRuntime
     /// model's <c>SupportsTools</c> flag is corrected to the probe's answer), so the badge on the
     /// card is the truth about this model, not a role summary lines away.
     /// </summary>
+    private readonly SemaphoreSlim _modelVerificationGate = new(1, 1);
+
     public async Task<string> TestModelAsync(string modelId, CancellationToken cancellationToken)
+    {
+        if (!await _modelVerificationGate.WaitAsync(0, cancellationToken))
+            return Loc.T("已有模型测试正在进行，请等待或取消后重试。");
+        using var deadline = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        deadline.CancelAfter(TimeSpan.FromSeconds(45));
+        try { return await TestModelCoreAsync(modelId, deadline.Token); }
+        finally { _modelVerificationGate.Release(); }
+    }
+
+    private async Task<string> TestModelCoreAsync(string modelId, CancellationToken cancellationToken)
     {
         AgentSettings settings;
         lock (_gate)
@@ -99,7 +111,9 @@ internal sealed partial class AgentRuntime
             var target = current.FindModel(model.Id);
             // The probe is the authority only when it actually answered: a transient failure leaves
             // SupportsTools where it was rather than downgrading a working model on a bad day.
-            if (target != null && record.Status == "verified")
+            if (target != null && record.Status == "verified"
+                && current.FindEndpoint(target.EndpointId) is { } targetEndpoint
+                && ModelRoleProbe.Fingerprint(new ResolvedModel(targetEndpoint, target)) == fingerprint)
             {
                 target.SupportsTools = record.Tools == "supported";
             }
@@ -118,8 +132,8 @@ internal sealed partial class AgentRuntime
 
                 if (record.Status == "verified")
                 {
-                    ModelRoleProbe.Upsert(current, ModelRoleProbe.FromSuccess(role, roleModel));
-                    playRoleVerified |= role == ModelRoleNames.Play;
+                    ModelRoleProbe.Upsert(current, ModelRoleProbe.FromSuccess(role, roleModel, record.Tools == "supported"));
+                    playRoleVerified |= role == ModelRoleNames.Play && record.Tools == "supported";
                 }
                 else if (failure != null)
                 {
@@ -130,6 +144,7 @@ internal sealed partial class AgentRuntime
 
         if (playRoleVerified)
         {
+            ClearModelTestFailure();
             MarkFirstRunGuideSeen();
         }
 
