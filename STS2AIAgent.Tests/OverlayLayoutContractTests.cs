@@ -44,7 +44,7 @@ internal static class OverlayLayoutContractTests
 
         var scroll = body.IndexOf("UiFactory.Scroll(_settingsBody", StringComparison.Ordinal);
         var save = body.IndexOf("UiFactory.Button(Loc.T(\"保存设置\"), SaveSettingsFromUi", StringComparison.Ordinal);
-        var test = body.IndexOf("UiFactory.Button(Loc.T(\"测试连接\")", StringComparison.Ordinal);
+        var test = body.IndexOf("UiFactory.Button(Loc.T(\"检测游玩模型\")", StringComparison.Ordinal);
 
         Assert.True(scroll >= 0, "The settings form no longer builds a scroll body.");
         Assert.True(save > scroll, "Save is back inside the scrolling form; it has to stay in the footer.");

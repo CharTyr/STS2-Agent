@@ -77,6 +77,16 @@ internal static class DiagnosticExport
         @"\bsk-[A-Za-z0-9][A-Za-z0-9._~-]{7,}",
         RegexOptions.CultureInvariant);
 
+    private static readonly Lazy<string> BuildHash = new(() =>
+    {
+        try
+        {
+            using var assembly = File.OpenRead(typeof(DiagnosticExport).Assembly.Location);
+            return Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(assembly));
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or NotSupportedException) { return "unavailable"; }
+    });
+
     public const string IncludesChatNotice = "默认不包含对话或队伍聊天正文。";
 
     public static string Render(DiagnosticSnapshot snapshot)
@@ -86,6 +96,7 @@ internal static class DiagnosticExport
         builder.AppendLine(Loc.T(IncludesChatNotice));
         builder.AppendLine(Loc.T("已排除 API Key、Authorization 头和会话令牌。"));
         builder.AppendLine("mod_version=" + Redact(snapshot.ModVersion));
+        builder.AppendLine("build_sha256=" + BuildHash.Value);
         builder.AppendLine("instance_role=" + Redact(snapshot.Role));
         builder.AppendLine("play_phase=" + Redact(snapshot.PlayPhase));
         builder.AppendLine("status=" + Redact(snapshot.Status));

@@ -29,6 +29,7 @@ namespace STS2AIAgent.Ui;
 /// </remarks>
 internal sealed partial class AgentOverlayHost
 {
+    private OptionButton? _companionMode;
     /// <summary>The decision log's three live labels: usage, run spend, and the log itself.</summary>
     private RichTextLabel? _decisionLog;
     private Label? _decisionUsage;
@@ -158,6 +159,7 @@ internal sealed partial class AgentOverlayHost
             var next = CloneSettings(AgentRuntime.Instance.Settings);
             next.NonCombatOnlyEnabled = on;
             AgentRuntime.Instance.SaveSettings(next);
+            _ = SaveSettingsAndSyncJevAsync();
             RefreshDynamic();
         };
         return UiFactory.Card(
@@ -270,6 +272,18 @@ internal sealed partial class AgentOverlayHost
         var page = UiFactory.Column();
         page.AddChild(UiFactory.Wrapped(Loc.T("可以一起玩：你打自己的角色，AI 打另一个角色，同一座塔往上爬。大厅仍是 4 人位，还可以再邀 2 名在线玩家。")));
 
+        _companionMode = UiFactory.Combo();
+        _companionMode.AddItem(Loc.T("AI 自动游玩"));
+        _companionMode.AddItem(Loc.T("外部 Agent 控制"));
+        _companionMode.Select(AgentRuntime.Instance.Settings.CompanionControlMode == "external" ? 1 : 0);
+        _companionMode.ItemSelected += index =>
+        {
+            var next = CloneSettings(AgentRuntime.Instance.Settings);
+            next.CompanionControlMode = index == 1 ? "external" : "autoplay";
+            AgentRuntime.Instance.SaveSettings(next);
+            RefreshDynamic();
+        };
+        page.AddChild(Labeled(Loc.T("队友控制方式"), _companionMode));
         _sessionHeadline = UiFactory.Label(Loc.T("状态：-"), UiFactory.FontTitle);
         // Wrapped, not Label. Every one of these is short when the control is built and a full sentence
         // once the runtime fills it in -- `_sessionNext` is "-" at build time and measured 577 pixels
@@ -283,7 +297,7 @@ internal sealed partial class AgentOverlayHost
         // character; the AI driving it (or a human at that window) picks instead. It sits right above
         // the invite button so the choice is visible before the second window exists, and is saved on
         // toggle because the companion reads settings at launch and this tab has no separate Save.
-        _companionChoiceToggle = UiFactory.Check(Loc.T("禁用自动选角"), !AgentRuntime.Instance.Settings.CompanionAutoSelectCharacter);
+        _companionChoiceToggle = UiFactory.Check(Loc.T("由我选择队友角色"), !AgentRuntime.Instance.Settings.CompanionAutoSelectCharacter);
         _companionChoiceToggle.Toggled += on =>
         {
             var settings = CloneSettings(AgentRuntime.Instance.Settings);
@@ -319,7 +333,9 @@ internal sealed partial class AgentOverlayHost
             Loc.T("邀请与控制"),
             _companionChoiceToggle,
             _dualHint,
-            UiFactory.Row(_dualLaunchButton, UiFactory.Button(Loc.T("导出诊断"), CopyDiagnostics, UiFactory.ButtonKind.Ghost)),
+            _dualLaunchButton,
+            UiFactory.Row(UiFactory.Button(Loc.T("复制诊断"), CopyDiagnostics, UiFactory.ButtonKind.Ghost),
+                UiFactory.Button(Loc.T("保存诊断文件"), SaveDiagnostics, UiFactory.ButtonKind.Ghost)),
             // In-game entry for continue_ai_teammate: the game's own Load button opens a saved co-op
             // run over Steam networking and rejects the local-connection NetIds, so the way back into
             // a saved run has to live here, one row under the invite.
@@ -450,28 +466,7 @@ internal sealed partial class AgentOverlayHost
         await AgentRuntime.Instance.SendChatAsync(text, attachState, attachShot, CancellationToken.None);
     }
 
-    private async Task TestConnectionAsync()
-    {
-        SaveSettingsFromUi();
-        // The footer button tests the main model with the full probe (connectivity + tool calling);
-        // the per-card buttons cover every other model individually.
-        var mainId = AgentRuntime.Instance.Settings.ConversationModelId;
-        if (string.IsNullOrWhiteSpace(mainId))
-        {
-            SetSaveStatus(Loc.T("请先在「模型绑定」选择主模型。"));
-            return;
-        }
-
-        SetSaveStatus(Loc.T("正在测试模型…"));
-        var result = await AgentRuntime.Instance.TestModelAsync(mainId, CancellationToken.None);
-        SetSaveStatus(result);
-        // Keep the role-level records fresh too: the first-run guidance and the co-op gate still
-        // read them, and a verified main model is what they are asking about.
-        await AgentRuntime.Instance.TestConnectionAsync(CancellationToken.None);
-        _settingsDirty = false;
-        RebuildSettingsForm();
-        ShowTab("settings");
-    }
+    private Task TestConnectionAsync() => RunModelTestFromUiAsync(null);
 
     private void PersistChatFlags()
     {

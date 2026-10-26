@@ -94,6 +94,11 @@ one action runs at a time.
 ## 3. Mod entry, overlay UI, configuration
 
 ### Files
+- `STS2AIAgent/Multiplayer/CompanionSettingsSynchronizer.cs` — serialized settings acknowledgement with current connection/fingerprint validation, latest queued snapshots and duplicate suppression.
+- `STS2AIAgent/Config/QuickSetup.cs` — provider presets and one-model quick setup, preserving advanced configuration.
+- `STS2AIAgent/Ui/AgentOverlayHost.Setup.cs` — quick setup card and bounded, cancellable model verification.
+- `STS2AIAgent/Multiplayer/CompanionPlaySettings.cs` — live play configuration allowlist; preserves instance-local settings.
+- `STS2AIAgent/Game/NativeCoopLoadGuard.cs` — intercepts unsafe native loading of identified local co-op saves.
 - `STS2AIAgent/ModEntry.cs` — `[ModInitializer]`. Order: LocSource → GameThread → GameEventService → HttpServer → AgentRuntime → `ReflectedGameMembers.ProbeAtStartup` → overlay (skipped on the companion or headless). Shutdown runs on ProcessExit/DomainUnload.
 - `STS2AIAgent/Ui/AgentOverlayHost.cs` — overlay chrome and lifecycle: CanvasLayer install and retry until `NGame.Instance`, placement/drag/edge-tab (clamped on-screen), hotkey poll, the 800 ms `OnProcessFrame` tick, `ToggleVisible`, `RebuildInPlace`.
 - `STS2AIAgent/Ui/AgentOverlayHost.Tabs.cs` — `_pages`, `BuildPages`, `ShowTab` (flushes dirty settings when leaving Settings), tab row.
@@ -158,8 +163,9 @@ one action runs at a time.
 - `STS2AIAgent/Agent/LiveThoughtBuffer.cs` — the reasoning a model is still producing, streamed so the conversation can show it before the turn completes. Display-only (never persisted, never replayed); the player's "show reasoning" switch gates storage, and `Reset` is what stops a completed turn from drawing a second thought bubble.
 - `STS2AIAgent/Agent/AgentRuntime.Jev.cs` — `StrategyStore`, `StrategyPlanner` wiring, `BuildJevDecider` (re-resolved from live settings every turn), `TestJevConnectionAsync`.
 - `STS2AIAgent/Agent/AgentRuntime.Team.cs` — AI teammate chat and status (`SendTeamMessageAsync`, `ReplyToTeammateAsync`, live status throttle).
-- `STS2AIAgent/Agent/AgentRuntime.ModelTest.cs` — `TestModelAsync`, `ModelTestFor`, `IsModelVerified` (fingerprint match).
-- `STS2AIAgent/Agent/AgentRuntime.CompanionSettings.cs` — token-authorized Jev settings patch applied to a running companion.
+- `STS2AIAgent/Agent/AgentRuntime.ModelTest.cs` — `TestModelAsync`, `ModelTestFor`, `IsModelVerified` (fingerprint match); compiled directly in the offline runtime harness.
+- `STS2AIAgent/Agent/AgentRuntime.CompanionSettings.cs` — authenticated play/Jev settings pause/apply/resume and companion start/pause control; compiled directly in the offline runtime harness. Explicit pause intent wins over settings auto-resume.
+- `STS2AIAgent/Agent/AgentRuntime.CompanionLifetime.cs` — game-dependent host-process watcher; stops and quits an orphan companion.
 
 ### Files — policies and pure logic (offline-tested; must stay free of Godot/game types)
 - `STS2AIAgent/Agent/AutoPlayRecovery.cs` — the turn driver (`RunAsync`: turn gate → turn → commit/receipt → `Observe` → backoff or stop) and the retry/no-progress policy. Waits on the **player** (companion map vote) or an intentionally disabled combat never run the 150 s stuck clock.

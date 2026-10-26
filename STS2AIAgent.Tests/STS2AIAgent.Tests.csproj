@@ -8,6 +8,10 @@
     <AssemblyName>STS2AIAgent.Tests</AssemblyName>
   </PropertyGroup>
   <ItemGroup>
+    <Compile Include="../STS2AIAgent/Multiplayer/CompanionSettingsSynchronizer.cs" Link="Multiplayer/CompanionSettingsSynchronizer.cs" />
+    <Compile Include="../STS2AIAgent/Agent/AgentRuntime.ModelTest.cs" Link="Agent/AgentRuntime.ModelTest.cs" />
+    <Compile Include="../STS2AIAgent/Agent/AgentRuntime.CompanionSettings.cs" Link="Agent/AgentRuntime.CompanionSettings.cs" />
+    <Compile Include="../STS2AIAgent/Multiplayer/CompanionPlaySettings.cs" Link="Multiplayer/CompanionPlaySettings.cs" />
     <Compile Include="../STS2AIAgent/Multiplayer/CompanionModStager.cs" Link="Multiplayer/CompanionModStager.cs" />
     <Compile Include="../STS2AIAgent/Multiplayer/CompanionDiscovery.cs" Link="Multiplayer/CompanionDiscovery.cs" />
     <Compile Include="../STS2AIAgent/Server/InstanceEndpointFile.cs" Link="Server/InstanceEndpointFile.cs" />

@@ -43,6 +43,8 @@ internal sealed class AgentSettings
     public bool HasSeenFirstRunGuide { get; set; }
 
     /// <summary>Companion picks the preselected character and readies up by itself. Set false to choose for it via the companion API.</summary>
+    public string CompanionControlMode { get; set; } = "autoplay";
+
     public bool CompanionAutoSelectCharacter { get; set; } = true;
 
     public List<ModelRoleTestRecord> RoleTests { get; set; } = new();
@@ -197,6 +199,7 @@ internal sealed class AgentSettings
             Endpoints = { endpoint },
             Models = { model },
             ConversationModelId = model.Id,
+            MaxSessionRequests = 30,
             Hotkey = "F8",
             AttachStateInChat = true,
             OverlayVisibleOnStart = false,
@@ -206,6 +209,7 @@ internal sealed class AgentSettings
 
     public void EnsureValidShape()
     {
+        if (CompanionControlMode is not ("autoplay" or "external")) CompanionControlMode = "autoplay";
         Endpoints ??= new List<LlmEndpoint>();
         Models ??= new List<LlmModelConfig>();
         RoleTests ??= new List<ModelRoleTestRecord>();

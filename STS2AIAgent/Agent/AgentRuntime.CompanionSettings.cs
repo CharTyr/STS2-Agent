@@ -1,83 +1,110 @@
-using MegaCrit.Sts2.Core.Logging;
-using MegaCrit.Sts2.Core.Nodes;
 using STS2AIAgent.Config;
-using STS2AIAgent.Game;
 using STS2AIAgent.Multiplayer;
-using STS2AIAgent.Server;
+using STS2AIAgent.Localization;
 
 namespace STS2AIAgent.Agent;
 
 internal sealed partial class AgentRuntime
 {
     private readonly SemaphoreSlim _companionSettingsGate = new(1, 1);
+    // Protected by the mode gate: a settings response cannot undo an explicit pause request.
+    private bool _companionPauseRequested;
 
     /// <summary>Applies a bounded settings-only patch on the companion; the caller authenticates first.</summary>
     /// <remarks>SaveSettings persists a clone before publishing it to readers. Nothing logs the patch.</remarks>
-    public bool ApplyCompanionSettings(CompanionSettingsPatch patch)
+    public async Task<bool> ApplyCompanionSettingsAsync(CompanionSettingsPatch patch, CancellationToken cancellationToken)
     {
         if (!InstanceRole.IsCompanion) throw new InvalidOperationException("Only a companion accepts live settings.");
         ArgumentNullException.ThrowIfNull(patch);
         if (!patch.IsValid) throw new ArgumentException("Invalid companion Jev settings.", nameof(patch));
         if (!_companionSettingsGate.Wait(0)) throw new InvalidOperationException("Companion settings update already in progress.");
+        var controlHeld = false;
         try
         {
+            await _companionControlGate.WaitAsync(cancellationToken);
+            controlHeld = true;
+            var wasRunning = PlayPhase == "running";
+            if (patch.PlaySettings != null)
+            {
+                var stopping = _playSession.RequestPause();
+                try { await stopping.WaitAsync(TimeSpan.FromSeconds(30), cancellationToken); }
+                catch (AutoPlayStoppedException) { }
+            }
+            cancellationToken.ThrowIfCancellationRequested();
             // SaveSettings writes the clone before publishing it to concurrent readers. This gate
             // serializes incoming patches; it is not held across arbitrary cancellation callbacks.
             var copy = SettingsClone.Clone(Settings);
             patch.ApplyTo(copy);
             SaveSettings(copy);
+            cancellationToken.ThrowIfCancellationRequested();
+            if (wasRunning && patch.PlaySettings != null && FirstRunSetup.Evaluate(copy).ReadyToInvite)
+            {
+                lock (_modeControlGate)
+                {
+                    if (!_companionPauseRequested) StartAutoPlay();
+                }
+            }
             return copy.DualLayerCoopEnabled;
         }
-        finally { _companionSettingsGate.Release(); }
+        finally
+        {
+            if (controlHeld) _companionControlGate.Release();
+            _companionSettingsGate.Release();
+        }
     }
 
-    /// <summary>
-    /// Companion-only: quit this game once the host that launched it is gone (closed, crashed or
-    /// force-killed), so an invisible AI teammate never keeps running and spending the budget.
-    /// A companion started without a host PID (manual/dev launch) never self-quits.
-    /// </summary>
-    private async Task WatchHostAsync(CancellationToken cancellationToken)
+    public async Task<string> SetCompanionRunningAsync(bool running, CancellationToken cancellationToken)
     {
-        if (!CompanionHostWatch.TryReadHostPid(Environment.GetEnvironmentVariable(CompanionHostWatch.EnvironmentName), out var hostPid))
+        if (!InstanceRole.IsCompanion) throw new InvalidOperationException("Only a companion can receive control requests.");
+        cancellationToken.ThrowIfCancellationRequested();
+        if (!running)
         {
-            return;
+            lock (_modeControlGate)
+            {
+                _companionPauseRequested = true;
+                _companionAutoStartSuppressed = true;
+            }
+            // Cancel further dispatch before waiting behind a configuration save or submitted action.
+            _ = _playSession.RequestPause();
         }
-
-        var hostStart = CompanionHostWatch.TryReadStartTime(hostPid);
+        await _companionControlGate.WaitAsync(cancellationToken);
         try
         {
-            while (!cancellationToken.IsCancellationRequested)
+            _companionAutoStartSuppressed = true;
+            if (running)
             {
-                await Task.Delay(CompanionHostWatch.PollInterval, cancellationToken);
-                if (!CompanionHostWatch.IsHostGone(hostPid, hostStart))
+                if (!_companionReady) throw new InvalidOperationException(Loc.T("队友尚未完成组队，请稍后继续。"));
+                // Starting the in-process loop is one decision no matter who asks for it, so the
+                // companion answers to the same model gate as the host's Resume button and
+                // POST /teammate/control. Without this, the companion's own /session/control was a
+                // way to start a model loop that every other entry point refuses. Pausing is always
+                // allowed: no caller should be stuck unable to stop it.
+                var firstRun = FirstRunSetup.Evaluate(Settings);
+                if (!firstRun.ReadyToInvite) throw new InvalidOperationException(firstRun.Hint);
+                lock (_modeControlGate)
                 {
-                    continue;
+                    _companionPauseRequested = false;
+                    StartAutoPlay();
                 }
-
-                Log.Warn($"{LogPrefix} Host process {hostPid} is gone; stopping the AI teammate and quitting.");
-                StopAutoPlay();
-                FlushSessionIfDirty();
+            }
+            else
+            {
+                var stopping = _playSession.RequestPause();
+                SetStatus(stopping.IsCompleted ? Loc.T("已暂停自动游玩") : Loc.T("正在暂停，等待当前任务完成…"));
+                NoteEvent(Status);
                 try
                 {
-                    await GameThread.InvokeAsync(() =>
-                    {
-                        NGame.Instance?.GetTree()?.Quit();
-                        return true;
-                    }, TimeSpan.FromSeconds(5), CancellationToken.None);
+                    await stopping.WaitAsync(TimeSpan.FromSeconds(30), cancellationToken);
                 }
-                catch (Exception ex) when (ex is TimeoutException or InvalidOperationException)
+                catch (AutoPlayStoppedException)
                 {
+                    // The loop already ended; treat that as a completed pause.
                 }
-
-                // A game thread that no longer pumps cannot run Quit; do not leave the process behind.
-                await Task.Delay(TimeSpan.FromSeconds(15), CancellationToken.None);
-                Environment.Exit(0);
-                return;
+                if (PlayPhase == "paused") SetStatus(Loc.T("已暂停自动游玩"));
             }
+            return PlayPhase;
         }
-        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
-        {
-        }
+        finally { _companionControlGate.Release(); }
     }
 
     /// <summary>Settings sync status for the host. No secret is included in either property.</summary>

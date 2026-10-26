@@ -77,22 +77,20 @@ internal static class SourceCoverageTests
         // The play-session persistence wiring (dirty tracking, flush, restore around the run boundary).
         // An AgentRuntime partial touching the live history/decisions, so it stays unlinked too.
         "STS2AIAgent/Agent/AgentRuntime.Session.cs",
-        // The per-model verification surface (ping + tool-calling probe, recorded per model). An
-        // AgentRuntime partial, so it stays unlinked with the base file; the Roslyn pass still parses it.
-        "STS2AIAgent/Agent/AgentRuntime.ModelTest.cs",
         // The status line's writers (settled status, in-flight request flag, per-phase elapsed clock).
         // An AgentRuntime partial reading the status fields, so it stays unlinked with the base file.
         "STS2AIAgent/Agent/AgentRuntime.Status.cs",
-        // The audit-remediation partials (companion settings push, solo/co-op mode control, the
-        // external play-control route, run-scoped play instructions). AgentRuntime partials, so they
-        // stay unlinked with the base file; the Roslyn pass still parses them.
-        "STS2AIAgent/Agent/AgentRuntime.CompanionSettings.cs",
+        // Game-dependent runtime lifecycle/control partials. Model verification and companion
+        // settings now compile directly against RuntimeHarness; the game host watcher stays here.
+        "STS2AIAgent/Agent/AgentRuntime.CompanionLifetime.cs",
         "STS2AIAgent/Agent/AgentRuntime.ModeControl.cs",
         "STS2AIAgent/Agent/AgentRuntime.PlayControl.cs",
         "STS2AIAgent/Agent/AgentRuntime.PlayInstructions.cs",
         // The play page's run/pause controls and Jev reading. A Godot control builder, unlinked like
         // the pages file it serves.
         "STS2AIAgent/Ui/AgentOverlayHost.PlayControl.cs",
+        "STS2AIAgent/Ui/AgentOverlayHost.Setup.cs",
+        "STS2AIAgent/Game/NativeCoopLoadGuard.cs",
         // The conversation card (chat log rendering, scroll-to-bottom, the chat-side option row). A
         // Godot control builder, unlinked like the pages file it was split out of.
         "STS2AIAgent/Ui/AgentOverlayHost.ChatCard.cs",

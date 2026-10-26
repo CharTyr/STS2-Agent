@@ -1229,6 +1229,103 @@
         },
         "type": "object"
       },
+      "CompanionPlaySettings": {
+        "additionalProperties": true,
+        "description": "Host play configuration only; instance role, overlay and MCP remain local. Keys are never returned.",
+        "properties": {
+          "ConversationModelId": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "Endpoints": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "maxItems": 16,
+            "type": "array"
+          },
+          "LlmRequestTimeoutSeconds": {
+            "maximum": 3600,
+            "minimum": 1,
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "MaxSessionRequests": {
+            "minimum": 1,
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "MaxSessionTokens": {
+            "minimum": 1,
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "ModelTests": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "maxItems": 32,
+            "type": "array"
+          },
+          "Models": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "maxItems": 32,
+            "type": "array"
+          },
+          "NonCombatOnlyEnabled": {
+            "type": "boolean"
+          },
+          "PlayModelId": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "ProactiveChatEnabled": {
+            "type": "boolean"
+          },
+          "ProactiveChatTone": {
+            "maxLength": 128,
+            "type": "string"
+          },
+          "ReplyLanguage": {
+            "enum": [
+              "auto",
+              "zh",
+              "en"
+            ]
+          },
+          "RoleTests": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "maxItems": 3,
+            "type": "array"
+          },
+          "VisionModelId": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "type": "object",
+        "writeOnly": true
+      },
       "CompanionSettingsPatch": {
         "additionalProperties": false,
         "description": "Token-protected settings-only allowlist; never returned in responses.",
@@ -1265,6 +1362,16 @@
                 "type": "null"
               }
             ]
+          },
+          "play_settings": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/CompanionPlaySettings"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "required": [
@@ -1296,6 +1403,9 @@
           },
           "phase": {
             "type": "string"
+          },
+          "play_settings_applied": {
+            "type": "boolean"
           },
           "settings_applied": {
             "type": "boolean"
@@ -3709,7 +3819,7 @@
             "description": "The normal HTTP error envelope."
           }
         },
-        "summary": "Pause/resume the companion, or atomically update its allowlisted Jev settings."
+        "summary": "Pause/resume the companion, or apply its allowlisted play and Jev settings after pausing."
       }
     },
     "/companion/jev": {

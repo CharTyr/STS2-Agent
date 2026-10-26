@@ -268,7 +268,7 @@ internal static class CompanionStartupTests
         Assert.True(!filled.ReadyToInvite);
         Assert.Equal("filled_unverified", filled.Phase);
         Assert.True(filled.ProviderConfigReachable);
-        ModelRoleProbe.Upsert(defaults, ModelRoleProbe.FromSuccess(ModelRoleNames.Play, defaults.TryResolvePlayModel()!));
+        ModelRoleProbe.Upsert(defaults, ModelRoleProbe.FromSuccess(ModelRoleNames.Play, defaults.TryResolvePlayModel()!, tools: true));
         var ready = FirstRunSetup.Evaluate(defaults);
         Assert.True(ready.ReadyToInvite);
         Assert.Contains("1 人", ready.Hint);

@@ -45,6 +45,7 @@ internal static class SettingsClone
             OverlayVisibleOnStart = source.OverlayVisibleOnStart,
             HasSeenFirstRunGuide = source.HasSeenFirstRunGuide,
             CompanionAutoSelectCharacter = source.CompanionAutoSelectCharacter,
+            CompanionControlMode = source.CompanionControlMode,
             OverlayTheme = source.OverlayTheme,
             OverlayLeft = source.OverlayLeft,
             OverlayTop = source.OverlayTop,

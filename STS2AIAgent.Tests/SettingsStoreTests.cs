@@ -23,7 +23,7 @@ internal static class SettingsStoreTests
         settings.HasSeenFirstRunGuide = true;
         settings.ProactiveChatEnabled = true;
         settings.ProactiveChatTone = ProactiveChatTones.Terse;
-        ModelRoleProbe.Upsert(settings, ModelRoleProbe.FromSuccess(ModelRoleNames.Play, settings.TryResolvePlayModel()!));
+        ModelRoleProbe.Upsert(settings, ModelRoleProbe.FromSuccess(ModelRoleNames.Play, settings.TryResolvePlayModel()!, tools: true));
         store.Save(settings);
 
         var loaded = store.Load();
@@ -54,7 +54,7 @@ internal static class SettingsStoreTests
         settings.Endpoints[0].ApiKey = "sk-test";
         settings.PlayModelId = settings.Models[0].Id;
         var resolved = settings.TryResolvePlayModel()!;
-        var record = ModelRoleProbe.FromSuccess(ModelRoleNames.Play, resolved);
+        var record = ModelRoleProbe.FromSuccess(ModelRoleNames.Play, resolved, tools: true);
         record.Fingerprint = record.Fingerprint!.ToLowerInvariant();
         ModelRoleProbe.Upsert(settings, record);
         new SettingsStore(path).Save(settings);

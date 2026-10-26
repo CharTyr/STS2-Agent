@@ -21,7 +21,7 @@ internal static class CoopHardeningTests
             var source = Path.Combine(root, "another-steam-library", "workshop");
             var game = Path.Combine(root, "game");
             Directory.CreateDirectory(source);
-            foreach (var file in CompanionModStager.Files) File.WriteAllText(Path.Combine(source, file), "current-" + file);
+            foreach (var file in CompanionModStager.Files) File.WriteAllText(Path.Combine(source, file), file.EndsWith(".json") ? "{\"id\":\"STS2AIAgent\"}" : "current-" + file);
             var staged = CompanionModStager.Prepare(source, game);
             Assert.Equal(staged, CompanionModStager.Prepare(source, game));
             var dll = Path.Combine(staged, "STS2AIAgent.dll");
