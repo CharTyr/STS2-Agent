@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import argparse
 import asyncio
+import hmac
+import ipaddress
 import logging
 import os
 from dataclasses import dataclass
@@ -41,6 +43,17 @@ def _env_flag(name: str, default: bool = False) -> bool:
     if not value:
         return default
     return value.strip().lower() in {"1", "true", "yes", "on"}
+
+
+def _is_loopback_host(host: str) -> bool:
+    """True when binding `host` keeps the server reachable from this machine only."""
+    value = (host or "").strip().strip("[]").lower()
+    if value == "localhost":
+        return True
+    try:
+        return ipaddress.ip_address(value).is_loopback
+    except ValueError:
+        return False
 
 
 def _normalize_path(path: str) -> str:
@@ -96,36 +109,55 @@ def create_network_app(
             }
         )
 
-    async def healthz_endpoint(_: Request) -> JSONResponse:
-        payload = {
+    def request_is_authorized(request: Request | None) -> bool:
+        """Whether the caller may see internals: always when auth is off, else only with the token."""
+        if not config.auth_enabled:
+            return True
+        header = request.headers.get("authorization", "") if request is not None else ""
+        scheme, _, presented = header.partition(" ")
+        return scheme.lower() == "bearer" and hmac.compare_digest(
+            presented.strip().encode("utf-8"), config.bearer_token.encode("utf-8")
+        )
+
+    async def healthz_endpoint(request: Request) -> JSONResponse:
+        # The route sits outside the MCP auth layer so a load balancer can probe it. An anonymous
+        # caller therefore gets the reachability verdict only: no upstream address, error text or
+        # mod health body, which describe the player's machine.
+        detailed = request_is_authorized(request)
+        payload: dict[str, object] = {
             "ok": True,
             "service": "sts2-network-mcp",
             "transport": config.transport,
             "mcp_path": config.path,
             "auth_enabled": config.auth_enabled,
             "tool_profile": config.tool_profile,
-            "api_base_url": client.base_url,
         }
+        if detailed:
+            payload["api_base_url"] = client.base_url
         try:
-            payload["sts2"] = health_client.get_health()
+            health = health_client.get_health()
+            if detailed:
+                payload["sts2"] = health
             return JSONResponse(payload, status_code=200)
         except Sts2ApiError as exc:
             payload["ok"] = False
-            payload["error"] = {
-                "type": "sts2_api_error",
-                "status_code": exc.status_code,
-                "code": exc.code,
-                "message": exc.message,
-                "details": exc.details,
-                "retryable": exc.retryable,
-            }
+            if detailed:
+                payload["error"] = {
+                    "type": "sts2_api_error",
+                    "status_code": exc.status_code,
+                    "code": exc.code,
+                    "message": exc.message,
+                    "details": exc.details,
+                    "retryable": exc.retryable,
+                }
             return JSONResponse(payload, status_code=503)
         except Exception as exc:  # pragma: no cover - defensive wrapper
             payload["ok"] = False
-            payload["error"] = {
-                "type": exc.__class__.__name__,
-                "message": str(exc),
-            }
+            if detailed:
+                payload["error"] = {
+                    "type": exc.__class__.__name__,
+                    "message": str(exc),
+                }
             return JSONResponse(payload, status_code=500)
 
     app.add_route("/", root_endpoint, methods=["GET"])
@@ -189,6 +221,12 @@ def parse_args(argv: list[str] | None = None) -> NetworkServerConfig:
         default=os.getenv("STS2_NETWORK_BEARER_TOKEN", ""),
     )
     parser.add_argument(
+        "--allow-insecure",
+        action="store_true",
+        default=_env_flag("STS2_NETWORK_ALLOW_INSECURE", False),
+        help="Allow a non-loopback --host without a bearer token (anyone who can reach the port controls the game).",
+    )
+    parser.add_argument(
         "--log-level",
         default=os.getenv("STS2_NETWORK_LOG_LEVEL", "info"),
     )
@@ -208,6 +246,14 @@ def parse_args(argv: list[str] | None = None) -> NetworkServerConfig:
     if args.transport == "sse" and args.stateless_http:
         parser.error("SSE transport does not support --stateless-http")
 
+    bearer_token = args.bearer_token.strip()
+    if not bearer_token and not _is_loopback_host(args.host) and not args.allow_insecure:
+        parser.error(
+            f"refusing to listen on {args.host} without a bearer token: anyone who can reach the "
+            "port could play the game. Set --bearer-token (or STS2_NETWORK_BEARER_TOKEN), bind a "
+            "loopback host, or pass --allow-insecure to accept the risk."
+        )
+
     return NetworkServerConfig(
         host=args.host,
         port=args.port,
@@ -215,7 +261,7 @@ def parse_args(argv: list[str] | None = None) -> NetworkServerConfig:
         path=path,
         tool_profile=args.tool_profile,
         api_base_url=args.api_base_url,
-        bearer_token=args.bearer_token.strip(),
+        bearer_token=bearer_token,
         log_level=args.log_level,
         json_response=bool(args.json_response),
         stateless_http=bool(args.stateless_http),

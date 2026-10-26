@@ -51,7 +51,9 @@ Remote Tailscale host:
 Invoke-WebRequest -UseBasicParsing "http://WINDOWS_TAILSCALE_IP:8765/healthz"
 ```
 
-If the wrapper is up but the STS2 mod is not reachable, `/healthz` returns `503` with the inner error payload.
+If the wrapper is up but the STS2 mod is not reachable, `/healthz` returns `503`. With a bearer token configured, the body carries the inner error payload only for a caller that sends `Authorization: Bearer <token>`; an anonymous probe gets the status code and service name only.
+
+Binding a non-loopback `--host` (such as `0.0.0.0`) now requires a bearer token; without one the server refuses to start. Pass `--allow-insecure` (or set `STS2_NETWORK_ALLOW_INSECURE=1`) only on a network you fully trust.
 
 ## MCPBridge Example
 
