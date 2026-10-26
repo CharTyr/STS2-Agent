@@ -111,8 +111,7 @@ internal sealed partial class AgentOverlayHost
     private string? _companionSettingsNotice;
     private Label? _companionSettingsStatus;
     private bool _companionSettingsSyncing;
-    private string? _lastConfirmedCompanionSettings;
-    private CompanionConnection? _lastConfirmedCompanionConnection;
+    private readonly CompanionSettingsSynchronizer _companionSettingsSynchronizer = new();
     private bool _companionJevRefreshing;
     private long _companionJevAtMs;
     private CompanionJevSnapshot? _companionJev;

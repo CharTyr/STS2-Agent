@@ -26,7 +26,7 @@ internal sealed class CompanionPlaySettings
             && e.BaseUrl is { Length: > 0 and <= 2048 } && e.ApiKey is { Length: <= 4096 }
             && e.ThinkingProtocol is "auto" or "deepseek" or "reasoning_effort" or "prompt")
         && Models.All(m => m != null && m.Id is { Length: > 0 and <= 128 } && m.Model is { Length: <= 256 }
-            && Endpoints.Any(e => e.Id == m.EndpointId))
+            && Endpoints.Any(e => string.Equals(e.Id, m.EndpointId, StringComparison.OrdinalIgnoreCase)))
         && RoleTests.All(t => t != null) && ModelTests.All(t => t != null)
         && MaxSessionTokens is null or > 0 && MaxSessionRequests is null or > 0
         && LlmRequestTimeoutSeconds is null or (> 0 and <= 3600)

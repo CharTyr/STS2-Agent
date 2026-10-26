@@ -88,11 +88,7 @@ internal sealed partial class AgentOverlayHost
         _companionSettingsSyncing = true;
         try
         {
-            var after = AgentRuntime.Instance.Settings;
-            var newJev = CompanionSettingsPatch.From(after);
-            if (ReferenceEquals(_lastConfirmedCompanionConnection, LocalDualInstanceLauncher.Connection) &&
-                _lastConfirmedCompanionSettings == newJev.Fingerprint()) return;
-            await SyncCompanionJevSettingsAsync(after);
+            await SyncCompanionJevSettingsAsync();
         }
         finally
         {
@@ -112,7 +108,7 @@ internal sealed partial class AgentOverlayHost
             var next = CloneSettings(AgentRuntime.Instance.Settings);
             next.DualLayerCoopEnabled = enabled;
             AgentRuntime.Instance.SaveSettings(next);
-            await SyncCompanionJevSettingsAsync(next);
+            await SyncCompanionJevSettingsAsync();
         }
         catch (Exception ex)
         {
@@ -130,34 +126,30 @@ internal sealed partial class AgentOverlayHost
     }
 
     /// <summary>Call after settings save as well as the coop toggle; never logs secret values.</summary>
-    private async Task SyncCompanionJevSettingsAsync(AgentSettings settings)
+    private static CompanionSettingsSnapshot CurrentCompanionSettings() => new(
+        LocalDualInstanceLauncher.CompanionProcessExited ? null : LocalDualInstanceLauncher.Connection,
+        AgentRuntime.Instance.Settings);
+
+    private async Task SyncCompanionJevSettingsAsync()
     {
-        var connection = LocalDualInstanceLauncher.Connection;
-        if (connection == null || LocalDualInstanceLauncher.CompanionProcessExited)
-        {
-            _lastConfirmedCompanionConnection = null;
-            _lastConfirmedCompanionSettings = null;
-            _companionSettingsNotice = Loc.T("队友未连接；设置已保存，下次邀请时生效。");
-            return;
-        }
         try
         {
-            var patch = CompanionSettingsPatch.From(settings);
-            var effective = await connection.ApplyJevSettingsAsync(patch, CancellationToken.None);
-            if (effective == settings.DualLayerCoopEnabled && ReferenceEquals(LocalDualInstanceLauncher.Connection, connection))
+            var outcome = await _companionSettingsSynchronizer.SynchronizeAsync(CurrentCompanionSettings, CancellationToken.None);
+            _companionSettingsNotice = outcome switch
             {
-                _lastConfirmedCompanionConnection = connection;
-                _lastConfirmedCompanionSettings = patch.Fingerprint();
-            }
-            _companionSettingsNotice = effective == settings.DualLayerCoopEnabled
-                ? Loc.T("队友设置已确认，模型、预算和战斗控制已生效。")
-                : Loc.T("队友 Jev 开关与本机不一致，尚未确认生效。");
-            if (effective != settings.DualLayerCoopEnabled) _lastConfirmedCompanionSettings = null;
+                CompanionSettingsSyncOutcome.Confirmed => Loc.T("队友设置已确认，模型、预算和战斗控制已生效。"),
+                CompanionSettingsSyncOutcome.Disconnected => Loc.T("队友未连接；设置已保存，下次邀请时生效。"),
+                CompanionSettingsSyncOutcome.Superseded => Loc.T("队友连接或配置已变更，正在等待最新配置确认。"),
+                _ => Loc.T("队友 Jev 开关与本机不一致，尚未确认生效。")
+            };
+            // The old request was acknowledged; a different desired snapshot now needs its own
+            // confirmation. This does not replay an uncertain request or retry a failed control.
+            if (outcome == CompanionSettingsSyncOutcome.Superseded) _ = SaveSettingsAndSyncJevAsync();
         }
         catch (Exception)
         {
             // A timeout is outcome-unknown. Never retry a control automatically or claim it succeeded.
-            _lastConfirmedCompanionSettings = null;
+            _companionSettingsSynchronizer.Reset();
             _companionSettingsNotice = Loc.T("队友配置未确认，请检查连接后重试。");
         }
         try { await GameThread.InvokeAsync(RefreshDynamic); }
@@ -170,8 +162,7 @@ internal sealed partial class AgentOverlayHost
         var connection = LocalDualInstanceLauncher.Connection;
         if (connection == null || LocalDualInstanceLauncher.CompanionProcessExited)
         {
-            _lastConfirmedCompanionConnection = null;
-            _lastConfirmedCompanionSettings = null;
+            _companionSettingsSynchronizer.Reset();
             _companionJev = null;
             _companionJevSource = null;
             return;
@@ -182,6 +173,9 @@ internal sealed partial class AgentOverlayHost
             _companionJevSource = connection;
             _companionJev = null;
             _companionJevAtMs = 0;
+            // Edits made while the second window was booting had no connection to push to.
+            // Push the latest host settings once the verified connection becomes available.
+            _ = SaveSettingsAndSyncJevAsync();
         }
         if (_companionJevRefreshing || now - _companionJevAtMs < 2000) return;
         _companionJevRefreshing = true;

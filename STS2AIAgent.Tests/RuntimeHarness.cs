@@ -13,6 +13,12 @@ namespace STS2AIAgent.Agent;
 internal sealed partial class AgentRuntime : IAsyncDisposable
 {
     private readonly object _gate = new();
+    private readonly object _modeControlGate = new();
+    private bool _companionReady = true;
+    private bool _companionAutoStartSuppressed;
+    public bool AutoStartSuppressed => _companionAutoStartSuppressed;
+    public string Status { get; private set; } = "";
+    private void SetStatus(string status) => Status = status;
     private AgentSettings _settings;
     private readonly AgentLoop _loop;
     private readonly AutoPlaySession _playSession = new();
@@ -56,6 +62,7 @@ internal sealed partial class AgentRuntime : IAsyncDisposable
         Starts++;
         return task;
     }
+    public Task RequestPause() => _playSession.RequestPause();
     public void StartAutoPlay() => BeginLoop(token => Task.Delay(Timeout.InfiniteTimeSpan, token));
     private void ClearModelTestFailure() { }
     private void MarkFirstRunGuideSeen() => _settings.HasSeenFirstRunGuide = true;

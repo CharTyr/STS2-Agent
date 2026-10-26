@@ -221,45 +221,6 @@ internal sealed partial class AgentRuntime
         }
     }
 
-    public async Task<string> SetCompanionRunningAsync(bool running, CancellationToken cancellationToken)
-    {
-        if (!InstanceRole.IsCompanion) throw new InvalidOperationException("Only a companion can receive control requests.");
-        await _companionControlGate.WaitAsync(cancellationToken);
-        try
-        {
-            _companionAutoStartSuppressed = true;
-            if (running)
-            {
-                if (!_companionReady) throw new InvalidOperationException(Loc.T("队友尚未完成组队，请稍后继续。"));
-                // Starting the in-process loop is one decision no matter who asks for it, so the
-                // companion answers to the same model gate as the host's Resume button and
-                // POST /teammate/control. Without this, the companion's own /session/control was a
-                // way to start a model loop that every other entry point refuses. Pausing is always
-                // allowed: no caller should be stuck unable to stop it.
-                var firstRun = FirstRunSetup.Evaluate(Settings);
-                if (!firstRun.ReadyToInvite) throw new InvalidOperationException(firstRun.Hint);
-                StartAutoPlay();
-            }
-            else
-            {
-                var stopping = _playSession.RequestPause();
-                SetStatus(stopping.IsCompleted ? Loc.T("已暂停自动游玩") : Loc.T("正在暂停，等待当前任务完成…"));
-                NoteEvent(Status);
-                try
-                {
-                    await stopping.WaitAsync(TimeSpan.FromSeconds(30), cancellationToken);
-                }
-                catch (AutoPlayStoppedException)
-                {
-                    // The loop already ended; treat that as a completed pause.
-                }
-                if (PlayPhase == "paused") SetStatus(Loc.T("已暂停自动游玩"));
-            }
-            return PlayPhase;
-        }
-        finally { _companionControlGate.Release(); }
-    }
-
     public string Status => _status ?? Loc.T("就绪");
 
     public string LastAction => _lastAction;
@@ -504,6 +465,7 @@ internal sealed partial class AgentRuntime
         PlaySessionIdentity identity;
         lock (_modeControlGate)
         {
+            if (InstanceRole.IsCompanion && _companionPauseRequested) return;
             if (_dualLaunching || _teammateLaunchInFlight)
             {
                 SetStatus(Loc.T("正在组队，请等待 AI 队友连接完成。"));
@@ -544,7 +506,14 @@ internal sealed partial class AgentRuntime
 
     public void StopAutoPlay()
     {
-        if (InstanceRole.IsCompanion) _companionAutoStartSuppressed = true;
+        if (InstanceRole.IsCompanion)
+        {
+            lock (_modeControlGate)
+            {
+                _companionAutoStartSuppressed = true;
+                _companionPauseRequested = true;
+            }
+        }
         CancelStrategyRefresh();
         var task = _playSession.RequestPause();
         FlushSessionIfDirty();

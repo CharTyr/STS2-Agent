@@ -69,20 +69,20 @@ For a change crossing state, action, agent, UI, or MCP, trace it in both directi
 
 ## Code shape and its known debts
 
-Measured from the current local `dev` tree across 188 mod source files totalling 48,619 lines (git-tracked only, which is what the gate counts -- a working tree also holds whatever the developer left in it). These numbers are here
+Measured from the current local `dev` tree across 189 mod source files totalling 48,697 lines (git-tracked only, which is what the gate counts -- a working tree also holds whatever the developer left in it). These numbers are here
 because nobody was counting, and that is how a codebase stops being navigable -- not through a bad
 commit, but through a thousand good ones. The `arch-facts` gate checks this table against the
 files, so it cannot quietly go stale the way it did between ADR 0001 and the splits below.
 
 | File | Lines |
 | --- | ---: |
-| [AgentRuntime.cs](../../../STS2AIAgent/Agent/AgentRuntime.cs) | 1,264 |
+| [AgentRuntime.cs](../../../STS2AIAgent/Agent/AgentRuntime.cs) | 1,233 |
 | [GameStateService.cs](../../../STS2AIAgent/Game/GameStateService.cs) | 1,388 |
 | [GameStateService.Payloads.cs](../../../STS2AIAgent/Game/GameStateService.Payloads.cs) | 1,320 |
 | [GameStateService.AgentView.cs](../../../STS2AIAgent/Game/GameStateService.AgentView.cs) | 1,252 |
 | [GameActionService.cs](../../../STS2AIAgent/Game/GameActionService.cs) | 1,237 |
 | [GameActionService.Rooms.cs](../../../STS2AIAgent/Game/GameActionService.Rooms.cs) | 1,148 |
-| [AgentOverlayHost.cs](../../../STS2AIAgent/Ui/AgentOverlayHost.cs) | 1,099 |
+| [AgentOverlayHost.cs](../../../STS2AIAgent/Ui/AgentOverlayHost.cs) | 1,098 |
 
 The overlay used to be the second name on that list. It moved to the bottom of it on 2026-10-01, when
 the page bodies and the single refresh pass moved to `AgentOverlayHost.Pages.cs` and the settings form

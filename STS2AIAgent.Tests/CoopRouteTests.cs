@@ -70,7 +70,7 @@ internal static class CoopRouteTests
         Assert.Contains("LaunchDualInstanceAsync(settings, companionAutoPlay, CancellationToken.None)", actions);
         Assert.Contains("ContinueDualInstanceAsync(settings, companionAutoPlay, CancellationToken.None)", actions);
 
-        var runtime = AgentSourceFixture.Read("STS2AIAgent/Agent/AgentRuntime.cs");
+        var runtime = AgentSourceFixture.ReadAgentRuntime();
         Assert.Contains("requireVerifiedPlayModel: companionAutoPlay", runtime);
         Assert.Contains("public bool CompanionAutoPlay => _companionAutoPlay;", runtime);
         // An idle companion says why it is idle instead of looking stalled.
@@ -169,7 +169,7 @@ internal static class CoopRouteTests
     /// </summary>
     public static void EveryStartEntryPointSharesTheModelGate()
     {
-        var runtime = AgentSourceFixture.Read("STS2AIAgent/Agent/AgentRuntime.cs");
+        var runtime = AgentSourceFixture.ReadAgentRuntime();
         var companion = AgentSourceFixture.MethodBody(runtime, "SetCompanionRunningAsync");
 
         var gate = companion.IndexOf("FirstRunSetup.Evaluate(Settings)", StringComparison.Ordinal);
@@ -178,10 +178,8 @@ internal static class CoopRouteTests
         Assert.True(gate > 0, "The companion control path must check the play model before it starts the loop.");
         Assert.True(start > gate, "The model gate must come before StartAutoPlay on the companion.");
         Assert.True(pause > 0, "Pausing must stay available on the companion.");
-        Assert.False(
-            companion.IndexOf("FirstRunSetup.Evaluate(Settings)", pause, StringComparison.Ordinal) > 0 &&
-                companion.LastIndexOf("FirstRunSetup.Evaluate(Settings)", StringComparison.Ordinal) > pause,
-            "The pause branch must not be behind the model gate.");
+        // Pause behavior with an unverified model executes the real runtime method in
+        // CompanionRaceTests.UnverifiedModelCanBePausedButCannotResume.
 
         // The two other starts keep their gates; a regression there is the same bug from the host side.
         var host = AgentSourceFixture.MethodBody(runtime, "ControlTeammateResultAsync");

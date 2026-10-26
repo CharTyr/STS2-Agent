@@ -94,6 +94,7 @@ one action runs at a time.
 ## 3. Mod entry, overlay UI, configuration
 
 ### Files
+- `STS2AIAgent/Multiplayer/CompanionSettingsSynchronizer.cs` — serialized settings acknowledgement with current connection/fingerprint validation, latest queued snapshots and duplicate suppression.
 - `STS2AIAgent/Config/QuickSetup.cs` — provider presets and one-model quick setup, preserving advanced configuration.
 - `STS2AIAgent/Ui/AgentOverlayHost.Setup.cs` — quick setup card and bounded, cancellable model verification.
 - `STS2AIAgent/Multiplayer/CompanionPlaySettings.cs` — live play configuration allowlist; preserves instance-local settings.
@@ -163,7 +164,7 @@ one action runs at a time.
 - `STS2AIAgent/Agent/AgentRuntime.Jev.cs` — `StrategyStore`, `StrategyPlanner` wiring, `BuildJevDecider` (re-resolved from live settings every turn), `TestJevConnectionAsync`.
 - `STS2AIAgent/Agent/AgentRuntime.Team.cs` — AI teammate chat and status (`SendTeamMessageAsync`, `ReplyToTeammateAsync`, live status throttle).
 - `STS2AIAgent/Agent/AgentRuntime.ModelTest.cs` — `TestModelAsync`, `ModelTestFor`, `IsModelVerified` (fingerprint match); compiled directly in the offline runtime harness.
-- `STS2AIAgent/Agent/AgentRuntime.CompanionSettings.cs` — authenticated play/Jev settings pause/apply/resume; compiled directly in the offline runtime harness.
+- `STS2AIAgent/Agent/AgentRuntime.CompanionSettings.cs` — authenticated play/Jev settings pause/apply/resume and companion start/pause control; compiled directly in the offline runtime harness. Explicit pause intent wins over settings auto-resume.
 - `STS2AIAgent/Agent/AgentRuntime.CompanionLifetime.cs` — game-dependent host-process watcher; stops and quits an orphan companion.
 
 ### Files — policies and pure logic (offline-tested; must stay free of Godot/game types)

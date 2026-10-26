@@ -4,6 +4,9 @@
 
 ### First-run and companion reliability
 
+- Race follow-up: explicit pause takes precedence over a pending settings auto-resume; stopping/cancelled updates cannot restart the loop. Align companion endpoint ID matching with the host's case-insensitive bindings.
+- Serialize and revalidate companion settings acknowledgements against the current connection and fingerprint. Discard old acknowledgements, coalesce queued saves to the latest desired snapshot, and push edits made during startup once the verified companion connection is available. Add 12 more runtime/transport regressions.
+
 - Debug follow-up: discard model tests that finish after the model/key/endpoint changes, preserve explicit thinking/protocol choices when rotating a key, and let an already-faulted play loop acknowledge pause so corrected settings can be applied. Keep the original loop failure observable for diagnostics.
 - Compile model verification and companion settings partials directly in an offline runtime harness. Controlled provider responses and submitted-action barriers cover cancellation, single-flight probes, stale results, authentication/tool failures, pause/apply/resume, failed persistence and fault recovery; this does not replace the game build or live co-op acceptance.
 

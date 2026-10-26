@@ -110,6 +110,18 @@ internal static class TestRunner
 
     private static IEnumerable<(string Name, Func<Task> Body)> AllTests()
     {
+        yield return ("CompanionRace.PauseDuringSettingsUpdateDoesNotRestartTheLoop", CompanionRaceTests.PauseDuringSettingsUpdateDoesNotRestartTheLoop);
+        yield return ("CompanionRace.AStoppingSessionIsNotResumedBySavingSettings", CompanionRaceTests.AStoppingSessionIsNotResumedBySavingSettings);
+        yield return ("CompanionRace.CancellationDuringPersistenceDoesNotRestartTheLoop", CompanionRaceTests.CancellationDuringPersistenceDoesNotRestartTheLoop);
+        yield return ("CompanionRace.CaseInsensitiveBindingsWorkOnBothHostAndCompanion", CompanionRaceTests.CaseInsensitiveBindingsWorkOnBothHostAndCompanion);
+        yield return ("CompanionRace.UnverifiedModelCanBePausedButCannotResume", CompanionRaceTests.UnverifiedModelCanBePausedButCannotResume);
+        yield return ("CompanionRace.ExplicitResumeWorksAfterPauseAndSettingsUpdate", CompanionRaceTests.ExplicitResumeWorksAfterPauseAndSettingsUpdate);
+        yield return ("CompanionRace.AlreadyCancelledPauseDoesNotChangeRunningState", CompanionRaceTests.AlreadyCancelledPauseDoesNotChangeRunningState);
+        yield return ("CompanionSync.LateAcknowledgementCannotConfirmNewSettings", CompanionSettingsSyncTests.LateAcknowledgementCannotConfirmNewSettings);
+        yield return ("CompanionSync.LateAcknowledgementCannotConfirmAReplacementCompanion", CompanionSettingsSyncTests.LateAcknowledgementCannotConfirmAReplacementCompanion);
+        yield return ("CompanionSync.QueuedSavesSendLatestSettingsAndSkipDuplicateAcknowledgedWork", CompanionSettingsSyncTests.QueuedSavesSendLatestSettingsAndSkipDuplicateAcknowledgedWork);
+        yield return ("CompanionSync.DisconnectionAndCancellationDoNotCacheAConfirmation", CompanionSettingsSyncTests.DisconnectionAndCancellationDoNotCacheAConfirmation);
+        yield return ("CompanionSync.MismatchedAndMissingAcknowledgementsAreNeverCached", CompanionSettingsSyncTests.MismatchedAndMissingAcknowledgementsAreNeverCached);
         yield return ("RuntimeDebug.ConcurrentTestsSendOnlyOneProbeAndCancellationAllowsRetry", RuntimeDebugTests.ConcurrentTestsSendOnlyOneProbeAndCancellationAllowsRetry);
         yield return ("RuntimeDebug.LateProbeCannotReportEditedConfigurationReady", RuntimeDebugTests.LateProbeCannotReportEditedConfigurationReady);
         yield return ("RuntimeDebug.UnsupportedToolsStayUnreadyAfterRealRuntimeProbe", RuntimeDebugTests.UnsupportedToolsStayUnreadyAfterRealRuntimeProbe);

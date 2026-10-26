@@ -7,6 +7,7 @@ internal static partial class Loc
     // Player-facing session views and model probe advice.
     private static void AddFacingEntries(Dictionary<string, string> map)
     {
+        map["队友连接或配置已变更，正在等待最新配置确认。"] = "The teammate connection or settings changed. Waiting for confirmation of the current configuration.";
         map["配置已变更，本次检测结果已忽略。请重新检测当前模型。"] = "Configuration changed. This test result was ignored. Test the current model again.";
         map["配置已填写，但主模型尚未验证。在「设置」页点「检测游玩模型」做一次真实调用；连通与工具调用通过后，即可开始自动游玩或邀请队友。"] = "Settings are filled in, but the main model is unverified. In Settings, click Test play model for a real request. Once connectivity and tool calling pass, you can start auto-play or invite a teammate.";
         map["队友控制方式"] = "Teammate control mode";
