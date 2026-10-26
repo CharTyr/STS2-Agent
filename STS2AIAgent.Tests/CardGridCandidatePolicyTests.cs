@@ -176,23 +176,37 @@ internal static class CardGridCandidatePolicyTests
         var press = AgentSourceFixture.WithoutWhitespace(AgentSourceFixture.MethodBody(actions, "PressCardGridCardAsync"));
 
         // Visible holder, then scroll, then a hidden holder: a player's click path before any handler call.
+        // After the frames scrolling waited on, a screen that is no longer up gets nothing clicked.
         var visible = press.IndexOf("FindCardGridHolder(screen,card,includeHidden:false)", StringComparison.Ordinal);
         var scroll = press.IndexOf("awaitScrollCardGridToCardAsync(screen,card,cards)", StringComparison.Ordinal);
+        var current = press.IndexOf("if(!IsCurrentCardGridScreen(screen))", StringComparison.Ordinal);
         var hidden = press.IndexOf("FindCardGridHolder(screen,card,includeHidden:true)", StringComparison.Ordinal);
-        var handler = press.IndexOf("TryInvokeCardGridClickHandler(screen,card,", StringComparison.Ordinal);
-        Assert.True(visible >= 0 && visible < scroll && scroll < hidden && hidden < handler,
-            "PressCardGridCardAsync must try the visible holder, scrolling, a hidden holder, then the handler, in that order.");
+        var handler = press.IndexOf("awaitTryInvokeCardGridClickHandlerAsync(screen,card)", StringComparison.Ordinal);
+        Assert.True(visible >= 0 && visible < scroll && scroll < current && current < hidden && hidden < handler,
+            "PressCardGridCardAsync must try the visible holder, scrolling, then (on a screen still up) a hidden holder, then the handler, in that order.");
+        Assert.Contains("reason=\"screen_changed\"", press);
 
         // An unreachable card is an honest 409, never a click on whatever holder happens to be there.
         Assert.Contains("reason=\"card_not_reachable\"", press);
 
         var scrollBody = AgentSourceFixture.WithoutWhitespace(AgentSourceFixture.MethodBody(actions, "ScrollCardGridToCardAsync"));
         Assert.Contains("step<CardGridScrollStepLimit&&DateTime.UtcNow<deadline", scrollBody);
-        Assert.Contains("ReferenceEquals(ActiveScreenContext.Instance.GetCurrentScreen(),screen)", scrollBody);
+        Assert.Contains("if(!IsCurrentCardGridScreen(screen)){returnnull;}", scrollBody);
+        Assert.Contains(
+            "IsCurrentCardGridScreen(NCardGridSelectionScreenscreen)=>GodotObject.IsInstanceValid(screen)&&ReferenceEquals(ActiveScreenContext.Instance.GetCurrentScreen(),screen);",
+            AgentSourceFixture.WithoutWhitespace(actions));
 
-        var handlerBody = AgentSourceFixture.WithoutWhitespace(AgentSourceFixture.MethodBody(actions, "TryInvokeCardGridClickHandler"));
+        var handlerBody = AgentSourceFixture.WithoutWhitespace(AgentSourceFixture.MethodBody(actions, "TryInvokeCardGridClickHandlerAsync"));
         Assert.Contains("parameters[0].ParameterType!=typeof(CardModel)", handlerBody);
         Assert.Contains("CardGridCandidatePolicy.RankCardClickHandler(method.Name)", handlerBody);
+        // A Task-returning handler finishes before the click settle starts reading the selection.
+        Assert.Contains("varfinished=awaitWaitForGameTaskAsync(pending,CardGridHandlerTimeout);", handlerBody);
+        Assert.Contains("awaitfinished;", handlerBody);
+
+        // The fallback scroll only touches controls on the holders' own ancestor chain.
+        var controls = AgentSourceFixture.WithoutWhitespace(AgentSourceFixture.MethodBody(actions, "ScrollCardGridControls"));
+        Assert.Contains("nodeisScrollContainercontainer&&chain.Contains(container)", controls);
+        Assert.Contains("chain.Contains(parent)", controls);
     }
 
     private static Card[] Cards(int count) =>

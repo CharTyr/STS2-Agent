@@ -278,7 +278,7 @@ one action runs at a time.
 | `choose_map_node` | `map.available_nodes[]` | `GetAvailableMapNodes` |
 | `claim_reward` / `resolve_rewards` | `reward.rewards[]` | `GetRewardButtons` |
 | `choose_reward_card` / `skip_reward_cards` | `reward.card_options[]` / `reward.alternatives[]` | `GetCardRewardOptions` / `GetCardRewardAlternativeButtons` |
-| `select_deck_card` | `selection.cards[]` | `GetDeckSelectionOptions` |
+| `select_deck_card` | `selection.cards[]` (the card grid's whole list, off-screen cards included) | `GetDeckSelectionCards` (`GetDeckSelectionOptions` stays the availability probe) |
 | `choose_rest_option` (+MEND target) | `rest.options[]` (+ `run.players[]`) | `GetRestOptionTargetIndices` |
 | `choose_event_option` | `event.options[]` (locked options included; a finished event has PROCEED at 0) | `eventModel.CurrentOptions` |
 | `buy_card` / `buy_relic` / `buy_potion` | `shop.cards[]` / `relics[]` / `potions[]` | `GetMerchant*Entries` |

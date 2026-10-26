@@ -66,6 +66,7 @@ internal static partial class GameActionService
     private const int CardGridScrollSettleFrames = 12;
     private const int CardGridScrollStallLimit = 3;
     private static readonly TimeSpan CardGridScrollTimeout = TimeSpan.FromSeconds(6);
+    private static readonly TimeSpan CardGridHandlerTimeout = TimeSpan.FromSeconds(5);
 
     /// <summary>
     /// Clicks <paramref name="card"/> on a card grid, scrolling it into view first when the grid has no
@@ -88,15 +89,28 @@ internal static partial class GameActionService
         int optionIndex)
     {
         var holder = GameStateService.FindCardGridHolder(screen, card, includeHidden: false)
-            ?? await ScrollCardGridToCardAsync(screen, card, cards)
-            ?? GameStateService.FindCardGridHolder(screen, card, includeHidden: true);
+            ?? await ScrollCardGridToCardAsync(screen, card, cards);
+
+        // Scrolling waits on frames, and the screen can close or change meanwhile. A holder or handler
+        // of a screen that is no longer up must not be clicked.
+        if (!IsCurrentCardGridScreen(screen))
+        {
+            throw new ApiException(409, "invalid_action", "The card selection closed while scrolling to the card.", new
+            {
+                action = "select_deck_card",
+                reason = "screen_changed",
+                option_index = optionIndex
+            });
+        }
+
+        holder ??= GameStateService.FindCardGridHolder(screen, card, includeHidden: true);
         if (holder != null)
         {
             holder.EmitSignal(NCardHolder.SignalName.Pressed, holder);
             return;
         }
 
-        if (TryInvokeCardGridClickHandler(screen, card, out var handlerName))
+        if (await TryInvokeCardGridClickHandlerAsync(screen, card) is string handlerName)
         {
             Log.Info($"[STS2AIAgent] select_deck_card: option {optionIndex} has no holder after scrolling; called {screen.GetType().Name}.{handlerName}.");
             return;
@@ -131,8 +145,7 @@ internal static partial class GameActionService
         var sweep = 1;
         for (var step = 0; step < CardGridScrollStepLimit && DateTime.UtcNow < deadline; step++)
         {
-            if (!GodotObject.IsInstanceValid(screen) ||
-                !ReferenceEquals(ActiveScreenContext.Instance.GetCurrentScreen(), screen))
+            if (!IsCurrentCardGridScreen(screen))
             {
                 return null;
             }
@@ -155,11 +168,16 @@ internal static partial class GameActionService
             var before = VisibleCardSignature(visible);
             var scrolled = useWheel
                 ? PushCardGridWheel(screen, visible, direction)
-                : ScrollCardGridControls(screen, direction);
+                : ScrollCardGridControls(screen, visible[0], direction);
 
             for (var frame = 0; frame < CardGridScrollSettleFrames; frame++)
             {
                 await WaitForNextFrameAsync();
+                if (!IsCurrentCardGridScreen(screen))
+                {
+                    return null;
+                }
+
                 var found = GameStateService.FindCardGridHolder(screen, card, includeHidden: false);
                 if (found != null)
                 {
@@ -233,19 +251,33 @@ internal static partial class GameActionService
         return true;
     }
 
-    /// <summary>Moves any Godot scroll container or vertical scrollbar inside the screen by one page.</summary>
-    private static bool ScrollCardGridControls(NCardGridSelectionScreen screen, int direction)
+    /// <summary>
+    /// Moves the Godot scroll container that holds the grid, or a vertical scrollbar beside it, by half a
+    /// page. Only controls on the holders' own ancestor chain count, so another pane on the screen never
+    /// moves.
+    /// </summary>
+    private static bool ScrollCardGridControls(NCardGridSelectionScreen screen, NGridCardHolder anchor, int direction)
     {
+        var chain = new HashSet<Node>();
+        for (Node? node = anchor.GetParent(); node != null; node = node.GetParent())
+        {
+            chain.Add(node);
+            if (ReferenceEquals(node, screen))
+            {
+                break;
+            }
+        }
+
         var moved = false;
         foreach (var node in EnumerateDescendants(screen))
         {
-            if (node is ScrollContainer container && container.IsVisibleInTree())
+            if (node is ScrollContainer container && chain.Contains(container) && container.IsVisibleInTree())
             {
                 var page = Math.Max(1, (int)(container.Size.Y * 0.5f));
                 container.ScrollVertical += direction * page;
                 moved = true;
             }
-            else if (node is VScrollBar bar && bar.IsVisibleInTree())
+            else if (node is VScrollBar bar && bar.GetParent() is Node parent && chain.Contains(parent) && bar.IsVisibleInTree())
             {
                 bar.Value += direction * Math.Max(bar.Page * 0.5, bar.Step > 0 ? bar.Step : 1);
                 moved = true;
@@ -275,11 +307,11 @@ internal static partial class GameActionService
     /// <summary>
     /// Calls the screen's own one-card click handler, found by signature: an instance method declared on
     /// the screen's game types that takes exactly one <see cref="CardModel"/> and whose name reads as a
-    /// click or a selection (<see cref="CardGridCandidatePolicy.RankCardClickHandler"/>).
+    /// click or a selection (<see cref="CardGridCandidatePolicy.RankCardClickHandler"/>). Returns the
+    /// handler's name once it has finished -- a Task-returning handler is awaited -- or null.
     /// </summary>
-    private static bool TryInvokeCardGridClickHandler(NCardGridSelectionScreen screen, CardModel card, out string? handlerName)
+    private static async Task<string?> TryInvokeCardGridClickHandlerAsync(NCardGridSelectionScreen screen, CardModel card)
     {
-        handlerName = null;
         const BindingFlags flags = BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.DeclaredOnly;
         var candidates = new List<(int Rank, MethodInfo Method)>();
         for (var type = screen.GetType(); type != null && type.Namespace?.StartsWith("Godot", StringComparison.Ordinal) != true; type = type.BaseType)
@@ -316,21 +348,36 @@ internal static partial class GameActionService
         var chosen = candidates.OrderBy(candidate => candidate.Rank).Select(candidate => candidate.Method).FirstOrDefault();
         if (chosen == null)
         {
-            return false;
+            return null;
         }
 
         try
         {
-            chosen.Invoke(screen, new object[] { card });
-            handlerName = chosen.Name;
-            return true;
+            if (chosen.Invoke(screen, new object[] { card }) is Task pending)
+            {
+                var finished = await WaitForGameTaskAsync(pending, CardGridHandlerTimeout);
+                if (finished == null)
+                {
+                    // Still running: the click settle that follows keeps watching the selection count.
+                    Log.Warn($"[STS2AIAgent] select_deck_card: {screen.GetType().Name}.{chosen.Name} still running after {CardGridHandlerTimeout.TotalSeconds:0}s.");
+                    return chosen.Name;
+                }
+
+                await finished;
+            }
+
+            return chosen.Name;
         }
         catch (Exception ex)
         {
             Log.Warn($"[STS2AIAgent] select_deck_card: {screen.GetType().Name}.{chosen.Name} failed: {ex}");
-            return false;
+            return null;
         }
     }
+
+    private static bool IsCurrentCardGridScreen(NCardGridSelectionScreen screen) =>
+        GodotObject.IsInstanceValid(screen) &&
+        ReferenceEquals(ActiveScreenContext.Instance.GetCurrentScreen(), screen);
 
     private static int IndexOfReference(IReadOnlyList<CardModel> cards, CardModel? card)
     {
