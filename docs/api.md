@@ -776,7 +776,7 @@ compact `agent_view` 的 `run.players[]` 原样携带这三个数组。
 | `index` | number | 用于 `claim_reward` 的 `option_index` |
 | `reward_type` | string | 奖励类型（`Gold`, `Card`, `Potion`, `Relic`, `RemoveCard`, `SpecialCard`, `LinkedRewardSet`） |
 | `description` | string | 奖励描述文本 |
-| `claimable` | boolean | 是否可领取 |
+| `claimable` | boolean | 是否可领取。药水奖励在药水栏全满时为 `false`（游戏会吞掉这次点击） |
 
 #### `reward.card_options[]`
 
@@ -2242,6 +2242,7 @@ Python sidecar 另加 `event_id`、`event_options` 与 `guidance_source`：它�
 - **前提**：`screen = "REWARD"`，`reward.rewards[]` 中有 `claimable = true` 的项
 - **参数**：`option_index`（必填）：`reward.rewards[]` 中可领取项的索引
 - **行为**：点击奖励按钮。如果是卡牌奖励，界面会切换到卡牌选择子界面（`pending_card_choice = true`），此时应接着调用 `choose_reward_card` 或 `skip_reward_cards`
+- **药水栏已满**：药水奖励不会被点击，直接返回 409 `invalid_action`，`details.reason = "potion_slots_full"`（此前游戏吞掉点击、动作仍返回 `completed`，见 #219）。先用 `discard_potion`（奖励主界面允许；卡牌选择子界面不允许）腾出一格，再重新领取
 - **稳定条件**：奖励按钮数量变化 或 界面切换
 - **超时**：10 秒
 

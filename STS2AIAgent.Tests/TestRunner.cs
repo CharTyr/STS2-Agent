@@ -656,6 +656,11 @@ internal static class TestRunner
         yield return ("RewardChoice.AutoFirstCard", () => Task.Run(RewardChoicePolicyTests.MissingIndexResolvesToTheAutomaticKind));
         yield return ("RewardChoice.SkipAnyCount", () => Task.Run(RewardChoicePolicyTests.SkipIsValidWithoutOptions));
         yield return ("RewardChoice.AutoWithoutOptions", () => Task.Run(RewardChoicePolicyTests.AutoWithoutOptionsIsNotAPick));
+        yield return ("RewardClaim.FullBeltPotion", () => Task.Run(RewardChoicePolicyTests.PotionRewardIsNotClaimableWithAFullBelt));
+        yield return ("RewardClaim.OtherRowsUnaffected", () => Task.Run(RewardChoicePolicyTests.FullBeltDoesNotAffectOtherRewardsOrDisabledRows));
+        yield return ("RewardClaim.RejectsBeforeClick", () => Task.Run(RewardChoicePolicyTests.ClaimRewardRejectsAFullBeltBeforeClicking));
+        yield return ("RewardClaim.SharedCapacityRule", () => Task.Run(RewardChoicePolicyTests.ClaimableFlagAndActionGateShareTheCapacityRule));
+        yield return ("RewardClaim.ScreenPermitsDiscard", () => Task.Run(RewardChoicePolicyTests.RewardScreenPermitsPotionDiscard));
         yield return ("RewardFlowChoice.ExplicitChoiceSpentOnce", () => Task.Run(RewardFlowChoiceStateTests.ExplicitChoiceIsSpentOnce));
         yield return ("RewardFlowChoice.SkipSentinelSpentOnce", () => Task.Run(RewardFlowChoiceStateTests.SkipSentinelIsSpentOnce));
         yield return ("RewardFlowChoice.StatesDoNotShare", () => Task.Run(RewardFlowChoiceStateTests.StatesDoNotShareChoice));

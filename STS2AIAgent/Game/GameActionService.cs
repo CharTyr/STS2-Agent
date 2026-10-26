@@ -437,8 +437,8 @@ internal static partial class GameActionService
         var hasPotionSlots = GameStateService.GetLocalPlayer(RunManager.Instance.DebugOnlyGetState())?.HasOpenPotionSlots ?? false;
         rewardButton = GameStateService
             .GetRewardButtons(rewardsScreen)
-            .Where(button => button.IsEnabled && !attemptedRewardButtons.Contains(button.GetInstanceId()) &&
-                (button.Reward is not PotionReward || hasPotionSlots) &&
+            .Where(button => RewardClaimPolicy.IsClaimable(button.IsEnabled, button.Reward is PotionReward, hasPotionSlots) &&
+                !attemptedRewardButtons.Contains(button.GetInstanceId()) &&
                 (!CardRewardSkips.AppliesTo(rewardsScreen.GetInstanceId()) || button.Reward is not CardReward))
             .OrderBy(button => button.Reward is PotionReward ? 1 : 0)
             .FirstOrDefault();

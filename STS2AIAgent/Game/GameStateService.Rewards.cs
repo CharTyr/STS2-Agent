@@ -149,8 +149,28 @@ internal static partial class GameStateService
             index = index,
             reward_type = GetRewardTypeName(reward),
             description = reward?.Description.GetFormattedText() ?? string.Empty,
-            claimable = button.IsEnabled
+            claimable = IsRewardButtonClaimable(button)
         };
+    }
+
+    /// <summary>
+    /// A potion row is only claimable while the local player has a free potion slot; the game
+    /// leaves the row enabled but ignores the click when the belt is full (#219). An unreadable
+    /// player does not block the claim -- the executor's own check still runs.
+    /// </summary>
+    public static bool IsRewardButtonClaimable(NRewardButton button)
+    {
+        var isPotion = button.Reward is PotionReward;
+        return RewardClaimPolicy.IsClaimable(
+            button.IsEnabled,
+            isPotion,
+            !isPotion || LocalPlayerHasOpenPotionSlot());
+    }
+
+    public static bool LocalPlayerHasOpenPotionSlot()
+    {
+        var player = GetLocalPlayer(RunManager.Instance.DebugOnlyGetState());
+        return player == null || player.HasOpenPotionSlots;
     }
 
     private static RewardCardOptionPayload BuildRewardCardOptionPayload(NCardHolder holder, int index)

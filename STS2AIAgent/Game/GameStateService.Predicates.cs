@@ -121,7 +121,7 @@ internal static partial class GameStateService
 
     public static bool CanClaimReward(IScreenContext? currentScreen)
     {
-        return GetRewardButtons(currentScreen).Any(button => button.IsEnabled);
+        return GetRewardButtons(currentScreen).Any(button => IsRewardButtonClaimable(button));
     }
 
     public static bool CanChooseRewardCard(IScreenContext? currentScreen)
