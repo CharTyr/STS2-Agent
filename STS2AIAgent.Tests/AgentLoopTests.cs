@@ -286,6 +286,31 @@ internal static class AgentLoopTests
         Assert.Equal(12, result.Usage?.TotalTokens);
     }
 
+    public static async Task NonCombatOnly_OverlayAndFinalDispatchAreGuarded()
+    {
+        foreach (var screen in new[] { "CARD_SELECTION", "MODAL", "UNKNOWN" })
+        {
+            var settings = AgentSettings.CreateDefault();
+            settings.NonCombatOnlyEnabled = true;
+            var bridge = new FakeBridge { CompactStateJson = "{\"screen\":\"" + screen + "\",\"in_combat\":true}" };
+            var factory = new ScriptedClientFactory(Array.Empty<LlmCompletion>());
+            var result = await new AgentLoop(bridge, factory, () => settings).PlayOnceAsync(CancellationToken.None);
+            Assert.True(result.WaitingForCombat);
+            Assert.Equal(0, factory.Requests.Count);
+        }
+        var config = AgentSettings.CreateDefault();
+        config.NonCombatOnlyEnabled = true;
+        var race = RewardBridge();
+        race.AtDispatchStateJson = """{"screen":"CARD_SELECTION","in_combat":true}""";
+        var client = new ScriptedClientFactory(new[] { new LlmCompletion { ToolCalls = new[] {
+            new LlmToolCall { Id = "race", Name = "act", ArgumentsJson = """{"action":"choose_reward_card","option_index":0}""" }
+        } } });
+        var waited = await new AgentLoop(race, client, () => config).PlayOnceAsync(CancellationToken.None);
+        Assert.True(waited.WaitingForCombat);
+        Assert.Equal(0, race.ActCalls);
+        Assert.Equal(1, waited.RequestsSpent);
+    }
+
     private static FakeBridge RewardBridge() => new()
     {
         CompactStateJson =
@@ -1408,6 +1433,7 @@ internal static class AgentLoopTests
             """{"screen":"COMBAT","available_actions":["play_card","end_turn"],"combat":{"hand":[{"i":0,"line":"Strike","targets":[]}],"enemies":[{"i":0}]}}""";
 
         public string? AfterActCompactStateJson { get; set; }
+        public string? AtDispatchStateJson { get; set; }
 
         public string AvailableActionsJson { get; set; } =
             """[{"name":"play_card","requires_index":true,"requires_target":false}]""";
@@ -1460,7 +1486,7 @@ internal static class AgentLoopTests
             bool rawState = false,
             Action<string>? validateState = null)
         {
-            validateState?.Invoke(CompactStateJson);
+            validateState?.Invoke(AtDispatchStateJson ?? CompactStateJson);
             ActCalls++;
             LastAction = action;
             LastX = x;

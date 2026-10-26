@@ -76,12 +76,13 @@ internal static partial class GameStateService
 
     private static MapPayload? BuildMapPayload(IScreenContext? currentScreen, RunState? runState)
     {
-        if (!TryGetMapScreen(currentScreen, runState, out var mapScreen))
+        if (runState == null || runState.Map == null || runState.Map.StartingMapPoint == null || runState.Map.BossMapPoint == null)
         {
             return null;
         }
 
-        var visibleNodes = FindDescendants<NMapPoint>(mapScreen!)
+        var isOpen = TryGetMapScreen(currentScreen, runState, out var mapScreen);
+        var visibleNodes = (isOpen ? FindDescendants<NMapPoint>(mapScreen!) : Array.Empty<NMapPoint>())
             .Where(node => GodotObject.IsInstanceValid(node))
             .GroupBy(node => node.Point.coord)
             .ToDictionary(
@@ -108,9 +109,10 @@ internal static partial class GameStateService
 
         return new MapPayload
         {
-            current_node = BuildMapCoordPayload(runState!.CurrentMapCoord),
-            is_travel_enabled = mapScreen!.IsTravelEnabled,
-            is_traveling = mapScreen.IsTraveling,
+            is_open = isOpen,
+            current_node = BuildMapCoordPayload(runState.CurrentMapCoord),
+            is_travel_enabled = isOpen && mapScreen!.IsTravelEnabled,
+            is_traveling = isOpen && mapScreen!.IsTraveling,
             map_generation_count = RunManager.Instance.MapSelectionSynchronizer.MapGenerationCount,
             rows = runState.Map.GetRowCount(),
             cols = runState.Map.GetColumnCount(),

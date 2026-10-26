@@ -71,6 +71,8 @@ internal static class CoopHardeningTests
 
     public static void ToolProbeDoesNotDowngradeAuthenticationOrUnrelatedErrors()
     {
+        Assert.Equal(STS2AIAgent.Agent.StopKindPolicy.Failed, STS2AIAgent.Agent.StopKindPolicy.Classify("failed reading player 1404299"));
+        Assert.Equal(STS2AIAgent.Agent.StopKindPolicy.Configuration, STS2AIAgent.Agent.StopKindPolicy.Classify("HTTP 401 Unauthorized"));
         Assert.False(OpenAiCompatibleClient.IsUnsupportedToolError(new LlmException("HTTP 401 tools unauthorized", statusCode: 401)));
         Assert.False(OpenAiCompatibleClient.IsUnsupportedToolError(new LlmException("HTTP 400 invalid model", statusCode: 400)));
         Assert.False(OpenAiCompatibleClient.IsUnsupportedToolError(new LlmException("tool_choice required incompatible with thinking", statusCode: 400)));

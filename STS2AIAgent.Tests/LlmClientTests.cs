@@ -160,7 +160,7 @@ internal static class OpenAiCompatibleClientTests
         Assert.EndsWith("/chat/completions", handler.LastUrl);
     }
 
-    public static async Task CompleteAsync_PostsDeepSeekThinkingInExtraBody()
+    public static async Task CompleteAsync_PostsDeepSeekThinking()
     {
         var handler = new RecordingHandler("""
         {"choices":[{"message":{"role":"assistant","content":"ok"}}]}
@@ -181,8 +181,7 @@ internal static class OpenAiCompatibleClientTests
         Assert.NotNull(handler.LastBody);
         using var document = JsonDocument.Parse(handler.LastBody!);
         Assert.Equal("enabled", document.RootElement.GetProperty("thinking").GetProperty("type").GetString());
-        Assert.True(document.RootElement.TryGetProperty("extra_body", out var extraBody));
-        Assert.Equal("enabled", extraBody.GetProperty("thinking").GetProperty("type").GetString());
+        Assert.False(document.RootElement.TryGetProperty("extra_body", out _), "SDK-only extra_body must not be sent over raw HTTP");
     }
 
     public static async Task CompleteAsync_AttachesImageAsDataUrlContentParts()

@@ -758,6 +758,13 @@ internal sealed partial class AgentRuntime
                 _dualLaunchOutcome = DualLaunchOutcome.Rejected;
                 return;
             }
+            if (LocalDualInstanceLauncher.CanReconnect)
+            {
+                var recovered = await LocalDualInstanceLauncher.LaunchCompanionAsync(cancellationToken);
+                _dualStatus = recovered.Message;
+                _dualLaunchOutcome = recovered.Ok ? DualLaunchOutcome.Succeeded : DualLaunchOutcome.Failed;
+                return;
+            }
             var screen = await new GameBridge().GetScreenAsync(cancellationToken);
             var error = CoopLaunchPolicy.GetError(
                 InstanceRole.IsCompanion,
@@ -806,7 +813,7 @@ internal sealed partial class AgentRuntime
                 // often "the teammate window is already running" -- must not relabel a teammate that
                 // was launched the other way, or /health would tell an external agent to take over a
                 // seat that is already being played by the in-process loop.
-                _companionAutoPlay = companionAutoPlay;
+                _companionAutoPlay = LocalDualInstanceLauncher.CompanionAutoPlay;
                 _teamConversation.Clear();
                 _teamStatus = Loc.T("队伍对话已重置。确认队友连接后，可以商量这次冒险的打法。");
             }
@@ -1012,21 +1019,21 @@ internal sealed partial class AgentRuntime
         string json;
         try
         {
-        json = await GameThread.InvokeAsync(async () =>
-        {
-            cancellationToken.ThrowIfCancellationRequested();
-            var response = await GameActionService.ExecuteAsync(new ActionRequest
+            json = await GameThread.InvokeAsync(async () =>
             {
-                action = acted,
-                option_index = decision.OptionIndex,
-                client_context = new { source = "companion_follow", instance_role = InstanceRole.Current }
-            }, beforeDispatch: () =>
-            {
-                if (Settings.NonCombatOnlyEnabled && GameStateService.BuildStatePayload().in_combat)
-                    throw new NonCombatOnlyYieldException();
-            });
-            return response.message ?? response.action;
-        }, TurnGameThreadBudget, cancellationToken);
+                cancellationToken.ThrowIfCancellationRequested();
+                var response = await GameActionService.ExecuteAsync(new ActionRequest
+                {
+                    action = acted,
+                    option_index = decision.OptionIndex,
+                    client_context = new { source = "companion_follow", instance_role = InstanceRole.Current }
+                }, beforeDispatch: () =>
+                {
+                    if (Settings.NonCombatOnlyEnabled && GameStateService.BuildStatePayload().in_combat)
+                        throw new NonCombatOnlyYieldException();
+                });
+                return response.message ?? response.action;
+            }, TurnGameThreadBudget, cancellationToken);
 
         }
         catch (NonCombatOnlyYieldException) { return AgentLoop.WaitForCombat(); }

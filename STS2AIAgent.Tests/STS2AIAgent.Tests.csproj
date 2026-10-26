@@ -10,6 +10,7 @@
   <ItemGroup>
     <Compile Include="../STS2AIAgent/Multiplayer/CompanionModStager.cs" Link="Multiplayer/CompanionModStager.cs" />
     <Compile Include="../STS2AIAgent/Multiplayer/CompanionDiscovery.cs" Link="Multiplayer/CompanionDiscovery.cs" />
+    <Compile Include="../STS2AIAgent/Server/InstanceEndpointFile.cs" Link="Server/InstanceEndpointFile.cs" />
     <Compile Include="../STS2AIAgent/Server/CompanionStartupFile.cs" Link="Server/CompanionStartupFile.cs" />
     <Compile Include="..\STS2AIAgent\Agent\AutoPlaySession.cs" Link="Agent\AutoPlaySession.cs" />
     <Compile Include="..\STS2AIAgent\Game\ReflectedMemberResolver.cs" Link="Game\ReflectedMemberResolver.cs" />

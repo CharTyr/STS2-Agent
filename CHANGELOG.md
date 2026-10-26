@@ -4,6 +4,14 @@
 
 ## Unreleased
 
+- Integrate main's native power display amounts with dev's Sandpit/upgrade/DeepSeek fixes and Windows prompt normalization; include party inventories from #210 with unavailable-vs-empty and melted-relic semantics.
+- Validate and atomically stage the actual loaded mod for the offline companion. Refuse partial or differing local copies without overwriting user files. Report initialization failures and the real API port through a host-selected startup handshake; bound discovery by one total deadline and reconnect a live child without spawning another.
+- Discover local HTTP instances for Python MCP by verified PID/role/port hints; support `STS2_API_INSTANCE` and reject ambiguous selection. Explicit base URLs retain priority.
+- Add an endpoint thinking-protocol selector for proxy/alias compatibility. Invalidate verification after protocol edits, remove the SDK-only extra_body wrapper from raw HTTP, and stop treating authentication or unrelated request errors as lack of tool support.
+- Complete #202's non-combat-only guards with authoritative compact combat ownership, model/strategy request checks and final dispatch checks for companion shortcuts; retain accepted-action accounting. Compact view version is 12.
+- Port #203's model-backed map, explicit reward-screen potion discard, non-potion-first bulk rewards and detached upgrade selection previews. Preserve current native selection handling and avoid the old live-card mutation implementation.
+- Stop interpreting incidental numbers in failure messages as HTTP status codes; keep legacy session loads case-compatible on case-sensitive filesystems.
+
 - Avoid a Windows mod-load test deadlock by invoking the game launcher in the same PowerShell session; keep reward-guidance assertions aligned with the new take-or-skip advice.
 - Validate Sandpit risk and automatic escape identity inside the shared execution lease; cancel a stale escape when the hand or countdown changes. Localize Sandpit rules and stop messages. Distinguish unavailable upgrade previews from maxed cards and refresh the detached copy's own variables before formatting its description.
 - Detect enemy-owned Sandpit countdowns targeting the local player. Built-in autoplay prioritizes a playable Frantic Escape at the last countdown and stops before a lethal end turn if no escape is playable; the dispatch guard rechecks the latest snapshot.

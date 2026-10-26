@@ -285,7 +285,7 @@ internal static class TestRunner
         yield return ("OpenAI.ResolveUrl", () => Task.Run(OpenAiCompatibleClientTests.ResolveCompletionsUrl_NormalizesBase));
         yield return ("OpenAI.ParseCompletion", () => Task.Run(OpenAiCompatibleClientTests.ParseCompletion_ReadsToolCallsAndReasoning));
         yield return ("OpenAI.PostBody", OpenAiCompatibleClientTests.CompleteAsync_PostsOpenAiCompatibleBody);
-        yield return ("OpenAI.DeepSeekExtraBody", OpenAiCompatibleClientTests.CompleteAsync_PostsDeepSeekThinkingInExtraBody);
+        yield return ("OpenAI.DeepSeekThinking", OpenAiCompatibleClientTests.CompleteAsync_PostsDeepSeekThinking);
         yield return ("OpenAI.DeepSeekCapabilityProbes", OpenAiCompatibleClientTests.DeepSeekCapabilityProbesDisableThinking);
         yield return ("OpenAI.OtherEndpointProbeDefaults", OpenAiCompatibleClientTests.OtherEndpointProbesKeepProviderDefaults);
         yield return ("OpenAI.VisionDataUrl", OpenAiCompatibleClientTests.CompleteAsync_AttachesImageAsDataUrlContentParts);
@@ -664,6 +664,7 @@ internal static class TestRunner
         yield return ("CardPlayCounter.StillInHand", () => Task.Run(CardPlayCounterPolicyTests.APlayStillInHandRollsBack));
         yield return ("CardPlayCounter.Settled", () => Task.Run(CardPlayCounterPolicyTests.ASettledPlayKeepsTheCounters));
         yield return ("CardPlayCounter.LeftHand", () => Task.Run(CardPlayCounterPolicyTests.LeftHandOrEndedCombatKeepsTheCounters));
+        yield return ("NonCombat.OverlayAndFinalDispatch", AgentLoopTests.NonCombatOnly_OverlayAndFinalDispatchAreGuarded);
         yield return ("CoopHardening.Staging", () => Task.Run(CoopHardeningTests.StagingUsesLoadedFilesAndPreservesConflicts));
         yield return ("CoopHardening.Startup", () => Task.Run(CoopHardeningTests.StartupRejectsWrongProcessAndPartialWrites));
         yield return ("CoopHardening.Deadline", CoopHardeningTests.DiscoveryHonorsTotalDeadlineAndCancellation);

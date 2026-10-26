@@ -486,3 +486,11 @@ Tools are **synchronous**; don't make them async. Wire keys stay spelled the way
   once without streaming (one extra request on a permanent misconfiguration); non-action MCP reads keep
   raw transport exception types (pinned by `test_action_replay_safety.py`); `start-game-session.ps1
   -ExtraArguments` splits on whitespace (no quoted arguments).
+
+### Companion startup and instance discovery
+
+- `STS2AIAgent/Multiplayer/CompanionModStager.cs` — validate the loaded mod's complete artifact set and stage it atomically; preserve conflicting local installations.
+- `STS2AIAgent/Multiplayer/CompanionDiscovery.cs` — bound every companion HTTP probe by one cancellation-aware deadline.
+- `STS2AIAgent/Server/CompanionStartupFile.cs` — publish initialization, listener or failure state to the host-selected session path.
+- `STS2AIAgent/Server/InstanceEndpointFile.cs` — publish and remove PID/role/port hints for local MCP discovery.
+- `mcp_server/src/sts2_mcp/discovery.py` — validate local endpoint hints against /health and resolve a role or PID without guessing an ambiguous instance.

@@ -23,29 +23,29 @@ public static class ModEntry
         CompanionStartupFile.Publish("initializing");
         try
         {
-        Log.Info($"{LogPrefix} Initializing");
-        RegisterShutdownHooks();
-        // Reads the player's language before anything renders text. The game's own localization
-        // manager does not exist yet at this point, so this resolves through the settings file and
-        // the subscription is picked up once the overlay is built.
-        LocSource.Initialize();
-        GameThread.Initialize();
-        GameEventService.Instance.Start();
-        HttpServer.Instance.Start();
-        AgentRuntime.Instance.Initialize();
-        // Before anything asks for a private game member, so a renamed one is in the log a player
-        // attaches to a bug report rather than only on an endpoint they have never called.
-        ReflectedGameMembers.ProbeAtStartup();
-        if (InstanceRole.IsCompanion || IsHeadlessDisplay())
-        {
-            Log.Info($"{LogPrefix} Skipping overlay (companion={InstanceRole.IsCompanion}, headless={IsHeadlessDisplay()})");
-        }
-        else
-        {
-            AgentOverlayHost.Install();
-        }
+            Log.Info($"{LogPrefix} Initializing");
+            RegisterShutdownHooks();
+            // Reads the player's language before anything renders text. The game's own localization
+            // manager does not exist yet at this point, so this resolves through the settings file and
+            // the subscription is picked up once the overlay is built.
+            LocSource.Initialize();
+            GameThread.Initialize();
+            GameEventService.Instance.Start();
+            HttpServer.Instance.Start();
+            AgentRuntime.Instance.Initialize();
+            // Before anything asks for a private game member, so a renamed one is in the log a player
+            // attaches to a bug report rather than only on an endpoint they have never called.
+            ReflectedGameMembers.ProbeAtStartup();
+            if (InstanceRole.IsCompanion || IsHeadlessDisplay())
+            {
+                Log.Info($"{LogPrefix} Skipping overlay (companion={InstanceRole.IsCompanion}, headless={IsHeadlessDisplay()})");
+            }
+            else
+            {
+                AgentOverlayHost.Install();
+            }
 
-        Log.Info($"{LogPrefix} Ready on {HttpServer.Instance.Prefix}");
+            Log.Info($"{LogPrefix} Ready on {HttpServer.Instance.Prefix}");
         }
         catch (Exception ex)
         {

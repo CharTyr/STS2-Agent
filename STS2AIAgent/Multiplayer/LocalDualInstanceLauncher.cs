@@ -29,6 +29,10 @@ internal static class LocalDualInstanceLauncher
     private static string? _sessionToken;
     public static CompanionConnection? Connection { get; private set; }
 
+    public static bool CompanionAutoPlay { get; private set; } = true;
+
+    public static bool CanReconnect => !InstanceRole.IsCompanion && Connection == null && CompanionProcessAlive;
+
     public static bool CompanionProcessAlive => _companionProcess is { HasExited: false };
 
     public static bool CompanionProcessExited => _companionProcess is { HasExited: true };
@@ -66,7 +70,7 @@ internal static class LocalDualInstanceLauncher
         {
         }
 
-        var configured = Environment.GetEnvironmentVariable("STS2_GAME_EXE");
+        var configured = System.Environment.GetEnvironmentVariable("STS2_GAME_EXE");
         return !string.IsNullOrWhiteSpace(configured) && File.Exists(configured) ? configured : null;
     }
 
@@ -267,6 +271,7 @@ internal static class LocalDualInstanceLauncher
         // Retain the process handle after timeout/cancellation too. Retrying the
         // invite must not start a third game while this child is still alive.
         _companionProcess = process;
+        CompanionAutoPlay = companionAutoPlay;
         var readyPort = await WaitForHealthAsync(companionPort, process, TimeSpan.FromSeconds(90), cancellationToken);
         if (readyPort == null)
         {

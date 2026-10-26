@@ -2156,6 +2156,9 @@
               }
             ]
           },
+          "is_open": {
+            "type": "boolean"
+          },
           "is_travel_enabled": {
             "type": "boolean"
           },
@@ -2970,6 +2973,9 @@
           },
           "star_costs_x": {
             "type": "boolean"
+          },
+          "upgrade": {
+            "description": "Free-form JSON value."
           },
           "upgraded": {
             "type": "boolean"

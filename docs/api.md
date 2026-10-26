@@ -1110,6 +1110,7 @@ compact 的 `combat` 原样携带 `/state` 的 `action_readiness`、`end_turn_wi
 | `shop.relics[]` / `shop.potions[]` | `relic_id` / `potion_id` | 商店在售遗物与药水的 ID。`line` 只有名字和价格，查 `get_game_data_item` 用这两列，不必为此回退到完整 `/state` |
 | `run` | `relic_ids` | 与 `run.relics` 同序、等长的遗物 ID 列表（`relics` 保持原有名字数组不变） |
 | `run` | `relic_stacks` / `relic_descriptions` | 与 `run.relics` 同序、等长的计数与效果原文。计数遗物（笔尖 `AttacksPlayed % 10`、念珠、五轮书等）的层数只在这里，`relics` 里只有名字——**不读这两列就看不到「笔尖 9/10」这类时机** |
+| `map` | `open` | 原始 `map.is_open`；关闭时图结构仍可读，不能据此发起移动 |
 | `map` | `nodes[]` | 全图节点：`coord`（`"row,col"`）、`node_type`、`visited`、`children[]`（同样 `"row,col"`）。`options[]` 只给当前可走的 1–3 个，**只有 `nodes[]` 能用来做跨楼层路线规划** |
 | `map` | `boss_node` / `second_boss_node` | 一 / 二 号 Boss 坐标（`"row,col"`）；`/state` 的 `boss_node` 对象在这里压成字符串 |
 | `run` | `players[]` | 队伍摘要，字段同 `combat.players[]`，另有 `gold` 以及每位玩家的 `deck[]` / `relics[]` / `potions[]`（与 `/state` 同形） |
@@ -2703,3 +2704,23 @@ Python sidecar 另加 `event_id`、`event_options` 与 `guidance_source`：它�
 `Disconnected 1 slow event subscriber(s)`。在此之前该路径只有离线证据，因为实机无法自然产生
 256 次状态变化（轮询只在字段真正变化时发布）。`count` 上限 5000，低于 257 会被拒绝，理由写在
 `EventChurnPolicy` 里：填不满一个队列的请求证明不了任何事。
+
+## Companion startup and endpoint discovery
+
+The companion loads the same complete DLL/PCK/manifest set as the running host, located from the loaded assembly rather than a default Steam library. A partial or different local installation is refused before spawning; existing files are preserved and the launch message identifies the conflict. Initialization failures are reported through a session-specific file selected by the host (`STS2_COMPANION_STARTUP_PATH`), independent of the child's TEMP setting. A listener publishes its actual port. The legacy PID port file remains supported; the total discovery budget includes every probe. Retrying an invitation after a timeout may reconnect the existing process, preserving its original autoplay/external-takeover mode.
+
+HTTP startup does not require a verified model or `mcp_enabled`. Game lobby connectivity alone does not prove that the mod's HTTP API initialized. External-takeover companions intentionally wait with zero model requests. Model-driven companions require verified play configuration.
+
+The mod also publishes local `sts2-ai-agent-instance-<pid>.json` hints. Python MCP uses these when neither an explicit base URL nor `STS2_API_BASE_URL` is supplied. It checks service, status, role, PID and port against `/health`, ignoring stale hints. Default selection is `human`; set `STS2_API_INSTANCE=companion` or a numeric PID to select another instance. Multiple matching live instances produce an actionable error. Without hints, the legacy default remains port 8080; an explicit selector with no match fails instead of falling back to the human window. The hints contain no session tokens or API keys.
+
+## Endpoint thinking protocol
+
+Endpoint settings now include `thinkingProtocol`: `auto` (existing behavior), `deepseek`, `reasoning_effort`, or `prompt`. The endpoint dropdown applies equally to direct and proxy URLs. An explicit model `thinkingMode` takes precedence for normal play. Probes disable thinking for the DeepSeek endpoint profile regardless of model alias; official DeepSeek URLs retain that default in auto mode. Raw HTTP sends `thinking` at the top level, without the SDK-only `extra_body` wrapper. Changing the protocol or model thinking settings invalidates cached verification.
+
+A 401/403, invalid model, incompatible thinking configuration or unrelated 400 remains a failed/unknown probe. Only an explicit unsupported tools/function-calling response or a successful response without a tool call records tools as unsupported.
+
+## Compact ownership and additional planning metadata
+
+`agent_view.version` is now **12**. Top-level `in_combat` is copied from the same raw snapshot and remains true through combat selection screens and modals. Non-combat-only autoplay yields on combat, unknown screens or absent/malformed ownership, rechecks before model dispatch, and checks automatic actions inside the shared execution lease. Direct external actions remain available.
+
+Raw `map.is_open` (compact `map.open`) distinguishes a visible map overlay from model-backed graph availability. During a run, graph nodes and edges remain readable outside the overlay; travel flags and clickable options are inactive there. Upgrade selection cards carry optional `upgrade` metadata (also on compact `selection.cards[]`), using the detached canonical preview described above: available, unavailable, or null for maxed cards. Non-upgrade selections leave it null. Main reward screens permit explicit potion discard; card-reward sub-screens continue blocking it. Bulk reward cleanup takes non-potions first, so capacity-granting relics are collected before potions, and never discards a potion automatically.

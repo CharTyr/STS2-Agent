@@ -552,16 +552,19 @@ internal static partial class GameStateService
             cards = cards.Select((holder, index) => BuildSelectionCardPayload(
                 holder.CardModel!,
                 index,
-                IsCardSelected(currentScreen, holder.CardModel!))).ToArray()
+                IsCardSelected(currentScreen, holder.CardModel!),
+                currentScreen is NDeckUpgradeSelectScreen ||
+                    TryGetCombatHandSelection(currentScreen, out var upgradeHand) && upgradeHand!.CurrentMode == NPlayerHand.Mode.UpgradeSelect)).ToArray()
         };
     }
 
-    private static SelectionCardPayload BuildSelectionCardPayload(CardModel card, int index, bool selected)
+    private static SelectionCardPayload BuildSelectionCardPayload(CardModel card, int index, bool selected, bool includeUpgrade)
     {
         var resolvedRulesText = GetResolvedCardRulesText(card);
         var dynamicValues = BuildCardDynamicValuePayloads(card);
         return new SelectionCardPayload
         {
+            upgrade = includeUpgrade ? GameDataExportService.BuildCardUpgradePreview(card) : null,
             index = index,
             selected = selected,
             card_id = card.Id.Entry,

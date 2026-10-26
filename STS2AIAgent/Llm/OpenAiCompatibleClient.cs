@@ -77,10 +77,6 @@ internal sealed class OpenAiCompatibleClient : ILlmClient
         if (thinking.DeepSeekThinking != null)
         {
             body["thinking"] = thinking.DeepSeekThinking;
-            body["extra_body"] = new Dictionary<string, object?>
-            {
-                ["thinking"] = thinking.DeepSeekThinking
-            };
         }
 
         if (request.Stream)

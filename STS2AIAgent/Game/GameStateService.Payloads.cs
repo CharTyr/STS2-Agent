@@ -354,6 +354,8 @@ internal sealed class MultiplayerLobbyPayload
 
 internal sealed class MapPayload
 {
+    public bool is_open { get; init; }
+
     public MapCoordPayload? current_node { get; init; }
 
     public bool is_travel_enabled { get; init; }
@@ -1212,6 +1214,8 @@ internal sealed class DeckCardPayload
 
 internal sealed class SelectionCardPayload
 {
+    public object? upgrade { get; init; }
+
     public int index { get; init; }
 
     public bool selected { get; init; }
