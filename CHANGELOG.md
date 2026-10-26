@@ -29,6 +29,12 @@ Game-dependent compilation and dual-window acceptance remain required before pub
 
 ### Fixed
 
+- **游戏内 HTTP 接口拒绝来自网页的请求。** 监听器只绑定 127.0.0.1，`IsLocal` 对任何请求都为真，所以浏览器里的网页能跨站 POST（打牌、启停自动游玩、打开 MCP），DNS rebinding 还能读到状态和截图。现在带 `Origin` 头、`Sec-Fetch-Site` 为跨站，或 `Host` 不是本机回环地址加本端口的请求一律返回 403 `untrusted_origin`；本机脚本、curl 和 MCP 客户端不受影响，MCP 路由仍用自己的 Origin 规则。
+- **网络版 MCP 不再静默裸奔。** 绑定非回环地址且没有 bearer token 时启动即报错（`--allow-insecure` 或 `STS2_NETWORK_ALLOW_INSECURE=1` 可显式放行）；设了 token 后，匿名访问 `/healthz` 只返回 200/503 与服务名，不再回显上游地址、错误详情和 mod 健康数据。
+- **设置文件含 `null` 条目或形状不可用时不再让 mod 起不来。** 加载时丢弃列表里的 `null` 项；任何读取或校验异常都走「备份损坏文件并恢复上次良好配置」的流程，而不是抛出到 `AgentRuntime` 构造函数。
+- **诊断导出补全脱敏。** 现在会遮住 `Authorization: Basic/Token …` 的完整凭证、`OPENAI_API_KEY=…` / `secret_key=…` 这类环境变量式名称、URL 编码的 `access_token%3D…`，以及带空格的引号值。
+- **`timeout_seconds` 统一解析。** 字符串 `"NaN"`/`"Infinity"` 回退到默认 20 秒而不是抛 `ArgumentException`，字符串小数按不变区域解析（逗号小数点的系统区域下 `"1.5"` 不再变成 15）。游戏内智能体和原生 MCP 共用 `ToolTimeout`。
+
 - Race follow-up: explicit pause takes precedence over a pending settings auto-resume; stopping/cancelled updates cannot restart the loop. Align companion endpoint ID matching with the host's case-insensitive bindings.
 - Serialize and revalidate companion settings acknowledgements against the current connection and fingerprint. Discard old acknowledgements, coalesce queued saves to the latest desired snapshot, and push edits made during startup once the verified companion connection is available. Add 12 more runtime/transport regressions.
 - Debug follow-up: discard model tests that finish after the model/key/endpoint changes, preserve explicit thinking/protocol choices when rotating a key, and let an already-faulted play loop acknowledge pause so corrected settings can be applied. Keep the original loop failure observable for diagnostics.

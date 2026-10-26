@@ -198,6 +198,7 @@
               "internal_error",
               "listener_error",
               "local_only",
+              "untrusted_origin",
               "companion_session_required",
               "companion_not_ready",
               "not_host",

@@ -214,6 +214,12 @@ internal sealed class AgentSettings
         Models ??= new List<LlmModelConfig>();
         RoleTests ??= new List<ModelRoleTestRecord>();
         ModelTests ??= new List<ModelTestRecord>();
+        // A hand-edited or damaged file can hold `null` list entries; the serializer accepts them,
+        // and every loop below would then throw instead of reaching the recovery path.
+        Endpoints.RemoveAll(static endpoint => endpoint is null);
+        Models.RemoveAll(static model => model is null);
+        RoleTests.RemoveAll(static record => record is null);
+        ModelTests.RemoveAll(static record => record is null);
         if (Endpoints.Count == 0 && Models.Count == 0)
         {
             var defaults = CreateDefault();

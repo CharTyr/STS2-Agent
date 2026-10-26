@@ -20,7 +20,9 @@ from sts2_mcp.network_server import (
     _env_flag,
     _normalize_path,
     create_network_app,
+    exposure_error,
     parse_args,
+    run_network_server_async,
 )
 
 
@@ -34,6 +36,7 @@ NETWORK_ENV_KEYS = (
     "STS2_MCP_TOOL_PROFILE",
     "STS2_API_BASE_URL",
     "STS2_NETWORK_BEARER_TOKEN",
+    "STS2_NETWORK_ALLOW_INSECURE",
     "STS2_NETWORK_LOG_LEVEL",
     "STS2_NETWORK_JSON_RESPONSE",
     "STS2_NETWORK_STATELESS_HTTP",
@@ -105,6 +108,18 @@ def find_route(app: Any, path: str) -> Any:
 def call_route_endpoint(app: Any, path: str) -> Any:
     route = find_route(app, path)
     return asyncio.run(route.endpoint(None))
+
+
+class FakeRequest:
+    """The one thing the healthz endpoint reads from a Starlette request: its headers."""
+
+    def __init__(self, authorization: str | None = None) -> None:
+        self.headers = {"authorization": authorization} if authorization else {}
+
+
+def call_route_endpoint_with(app: Any, path: str, request: Any) -> Any:
+    route = find_route(app, path)
+    return asyncio.run(route.endpoint(request))
 
 
 def response_payload(response: Any) -> dict[str, Any]:
@@ -393,6 +408,98 @@ class NetworkAppTests(unittest.TestCase):
         self.assertFalse(payload["ok"])
         self.assertEqual(payload["error"]["type"], "RuntimeError")
         self.assertEqual(payload["error"]["message"], "boom")
+
+
+class ExposureGuardTests(unittest.TestCase):
+    def test_non_loopback_host_without_token_is_refused(self) -> None:
+        for host in ("0.0.0.0", "192.168.1.20", "::", "example.test"):
+            with self.subTest(host=host), network_env():
+                with contextlib.redirect_stderr(io.StringIO()) as stderr, self.assertRaises(SystemExit) as ctx:
+                    parse_args(["--host", host])
+                self.assertEqual(ctx.exception.code, 2)
+                self.assertIn("bearer token", stderr.getvalue())
+
+    def test_loopback_hosts_need_no_token(self) -> None:
+        for host in ("127.0.0.1", "localhost", "::1", "[::1]", "127.0.0.2"):
+            with self.subTest(host=host), network_env():
+                self.assertEqual(parse_args(["--host", host]).host, host.strip("[]"))
+
+    def test_non_loopback_host_with_token_is_accepted(self) -> None:
+        with network_env():
+            config = parse_args(["--host", "0.0.0.0", "--bearer-token", "s3cret"])
+        self.assertEqual(config.host, "0.0.0.0")
+        self.assertTrue(config.auth_enabled)
+
+    def test_environment_token_also_satisfies_the_guard(self) -> None:
+        with network_env(STS2_NETWORK_HOST="0.0.0.0", STS2_NETWORK_BEARER_TOKEN="s3cret"):
+            self.assertTrue(parse_args([]).auth_enabled)
+
+    def test_explicit_opt_out_allows_an_open_server(self) -> None:
+        with network_env():
+            config = parse_args(["--host", "0.0.0.0", "--allow-insecure"])
+        self.assertFalse(config.auth_enabled)
+        with network_env(STS2_NETWORK_HOST="0.0.0.0", STS2_NETWORK_ALLOW_INSECURE="1"):
+            self.assertEqual(parse_args([]).host, "0.0.0.0")
+
+
+class DirectLaunchTests(unittest.TestCase):
+    def test_runner_refuses_an_exposed_config_built_in_code(self) -> None:
+        for config in (NetworkServerConfig(host="0.0.0.0"), NetworkServerConfig(host="::")):
+            with self.subTest(host=config.host):
+                with self.assertRaises(ValueError) as caught:
+                    asyncio.run(run_network_server_async(config))
+                self.assertIn("bearer token", str(caught.exception))
+
+    def test_runner_accepts_loopback_token_or_explicit_opt_out(self) -> None:
+        for config in (
+            NetworkServerConfig(host="127.0.0.1"),
+            NetworkServerConfig(host="0.0.0.0", bearer_token="s3cret"),
+            NetworkServerConfig(host="0.0.0.0", allow_insecure=True),
+        ):
+            with self.subTest(host=config.host, auth=config.auth_enabled):
+                self.assertIsNone(exposure_error(config))
+
+    def test_allow_insecure_survives_parsing(self) -> None:
+        with network_env():
+            self.assertTrue(parse_args(["--host", "0.0.0.0", "--allow-insecure"]).allow_insecure)
+
+
+class HealthzDisclosureTests(unittest.TestCase):
+    def _app(self, **overrides: Any) -> tuple[Any, FakeSts2Client]:
+        _, _, app, created = build_network_app(NetworkServerConfig(bearer_token="s3cret", **overrides))
+        return app, created[1]
+
+    def test_anonymous_caller_gets_the_verdict_without_internals(self) -> None:
+        app, health_client = self._app()
+        health_client.health_response = Sts2ApiError(0, "connection_error", "Cannot reach http://10.0.0.5:8080", retryable=True)
+
+        response = call_route_endpoint_with(app, "/healthz", FakeRequest())
+        payload = response_payload(response)
+
+        self.assertEqual(response.status_code, 503)
+        self.assertFalse(payload["ok"])
+        self.assertEqual(set(payload), {"ok", "service"})
+        self.assertNotIn("10.0.0.5", json.dumps(payload))
+
+    def test_anonymous_success_hides_the_mod_health_body(self) -> None:
+        app, health_client = self._app()
+        health_client.health_response = {"ok": True, "mod_loaded": True}
+
+        for request in (FakeRequest(), FakeRequest("Bearer wrong"), FakeRequest("Basic s3cret"), None):
+            with self.subTest(request=request):
+                response = call_route_endpoint_with(app, "/healthz", request)
+                payload = response_payload(response)
+                self.assertEqual(response.status_code, 200)
+                self.assertEqual(set(payload), {"ok", "service"})
+
+    def test_authorized_caller_sees_the_full_body(self) -> None:
+        app, health_client = self._app()
+        health_client.health_response = {"ok": True, "mod_loaded": True}
+
+        payload = response_payload(call_route_endpoint_with(app, "/healthz", FakeRequest("Bearer s3cret")))
+
+        self.assertEqual(payload["sts2"], {"ok": True, "mod_loaded": True})
+        self.assertEqual(payload["api_base_url"], "http://127.0.0.1:8080")
 
 
 if __name__ == "__main__":

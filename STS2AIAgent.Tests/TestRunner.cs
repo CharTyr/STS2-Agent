@@ -795,6 +795,16 @@ internal static class TestRunner
         yield return ("GameDataExportSchema.SceneFields", () => Task.Run(GameDataExportSchemaTests.SceneFieldsExistInTheExportSchema));
         yield return ("GameDataExportSchema.ExportCode", () => Task.Run(GameDataExportSchemaTests.ExportSchemaFieldsAppearInTheExportCode));
         yield return ("GameDataExportSchema.KnownCollections", () => Task.Run(GameDataExportSchemaTests.KnownCollectionsMatchTheExportSchema));
+        yield return ("ReviewFix.GuardAllowsLocalClients", () => Task.Run(ReviewFixTests.GuardAllowsLocalClients));
+        yield return ("ReviewFix.GuardRefusesRebindingHosts", () => Task.Run(ReviewFixTests.GuardRefusesRebindingHosts));
+        yield return ("ReviewFix.GuardRefusesBrowserOrigins", () => Task.Run(ReviewFixTests.GuardRefusesBrowserOrigins));
+        yield return ("ReviewFix.RouterRunsTheGuardFirst", () => Task.Run(ReviewFixTests.RouterRunsTheGuardFirst));
+        yield return ("ReviewFix.SettingsWithNullEntriesAreRecovered", () => Task.Run(ReviewFixTests.SettingsWithNullEntriesAreRecovered));
+        yield return ("ReviewFix.UnusableFileFallsBackInsteadOfThrowing", () => Task.Run(ReviewFixTests.UnusableFileFallsBackInsteadOfThrowing));
+        yield return ("ReviewFix.RedactionCoversCredentialSchemesAndEnvNames", () => Task.Run(ReviewFixTests.RedactionCoversCredentialSchemesAndEnvNames));
+        yield return ("ReviewFix.RedactionLeavesOrdinaryTextAlone", () => Task.Run(ReviewFixTests.RedactionLeavesOrdinaryTextAlone));
+        yield return ("ReviewFix.TimeoutArgumentIsFiniteAndCultureInvariant", () => Task.Run(ReviewFixTests.TimeoutArgumentIsFiniteAndCultureInvariant));
+        yield return ("ReviewFix.BothToolSurfacesShareTheTimeoutReader", () => Task.Run(ReviewFixTests.BothToolSurfacesShareTheTimeoutReader));
         yield return ("ApiException.CarriesStatusAndCode", () => Task.Run(ApiExceptionTests.CarriesStatusAndCode));
         yield return ("ApiException.RetryableDefaultsToFalse", () => Task.Run(ApiExceptionTests.RetryableDefaultsToFalse));
         yield return ("ApiException.DetailsAreOptional", () => Task.Run(ApiExceptionTests.DetailsAreOptional));

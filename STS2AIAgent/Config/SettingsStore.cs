@@ -79,8 +79,11 @@ internal sealed class SettingsStore
                 LastNotice = SettingsPersistenceNotice.None;
                 return loaded;
             }
-            catch (Exception ex) when (ex is IOException or JsonException or UnauthorizedAccessException)
+            catch (Exception ex) when (ex is not OutOfMemoryException)
             {
+                // Any failure reading or shaping the file takes the backup-and-restore path: a file
+                // that parses but cannot be used (a null entry, a wrong shape) must not stop the mod
+                // from starting any more than one that does not parse.
                 return RecoverFromLoadFailure();
             }
         }

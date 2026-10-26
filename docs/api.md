@@ -74,6 +74,7 @@ curl -s http://127.0.0.1:8080/state | jq .
 | `internal_error` | 500 | 服务内部异常 | 否 |
 | `listener_error` | 500 | HTTP 监听循环本身抛异常（不是某个路由处理失败）。此时连接可能已经不健康，重试之前先用 `GET /health` 确认服务还在 | 是 |
 | `local_only` | 403 | 该端点只接受本机（loopback）请求 | 否 |
+| `untrusted_origin` | 403 | 请求带有 `Origin` 头（来自网页）、`Sec-Fetch-Site` 为跨站（如网页内嵌的 `<img>`），或 `Host` 不是本机回环地址加本服务端口（DNS rebinding）；本机脚本和 MCP 客户端不会触发 | 否 |
 | `companion_session_required` | 403 | 需要有效的 AI 队友会话令牌（见下） | 否 |
 | `companion_not_ready` | 409 | 队友实例尚未就绪，无法响应控制 | 是 |
 | `not_host` | 409 | 在 `companion` 实例上调用了只属于主窗口的 `POST /teammate/control` | 否 |

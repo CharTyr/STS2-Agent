@@ -1,4 +1,4 @@
-"""Scene-scoped guidance for the current screen: the strategy rules, the playbook, and event risk.
+r"""Scene-scoped guidance for the current screen: the strategy rules, the playbook, and event risk.
 
 Answers one question — "what does this screen need to know" — so an external agent does not have to
 read the whole strategy reference to find the one section that applies, and so the per-option event
