@@ -11,11 +11,23 @@ internal static class LocalRequestGuard
     /// <summary>
     /// True when the request may reach the REST routes. A present <c>Origin</c> is refused unless
     /// <paramref name="allowOrigin"/> is set (the MCP route validates it against its own endpoint).
+    /// A <c>Sec-Fetch-Site</c> other than <c>none</c>/<c>same-origin</c> is refused the same way.
     /// A <c>Host</c> must name a loopback host on the port this server listens on.
     /// </summary>
-    public static bool IsTrusted(string? host, string? origin, int listeningPort, bool allowOrigin = false)
+    public static bool IsTrusted(
+        string? host, string? origin, int listeningPort, bool allowOrigin = false, string? fetchSite = null)
     {
         if (!allowOrigin && !string.IsNullOrWhiteSpace(origin))
+        {
+            return false;
+        }
+
+        // Browsers omit Origin on a cross-site GET such as <img src=".../vision/screenshot">, but they
+        // always label it with Sec-Fetch-Site. A request that is not same-origin or user-typed
+        // ("none") came from some web page; local tools do not send the header at all.
+        if (!allowOrigin && !string.IsNullOrWhiteSpace(fetchSite) &&
+            !fetchSite.Trim().Equals("none", StringComparison.OrdinalIgnoreCase) &&
+            !fetchSite.Trim().Equals("same-origin", StringComparison.OrdinalIgnoreCase))
         {
             return false;
         }

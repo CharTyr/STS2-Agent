@@ -69,11 +69,11 @@ internal static class DiagnosticExport
     // separator may be percent-encoded (access_token%3Dvalue), so the name is anchored on "not
     // preceded by a letter or digit" rather than on a word boundary, and may carry a key/id suffix.
     private const string SensitiveName =
-        @"(?<![A-Za-z0-9])(?:api[\s_-]*key|session[\s_-]*token|companion[\s_-]*session|access[\s_-]*token|refresh[\s_-]*token|client[\s_-]*secret|password|secret|token|key)(?:[_-]?(?:key|id))?";
+        @"(?<![A-Za-z0-9])(?:api[\s_-]*key|session[\s_-]*token|companion[\s_-]*session|access[\s_-]*token|refresh[\s_-]*token|client[\s_-]*secret|secret[\s_-]*access[\s_-]*key|password|secret|token|key)(?:[_-]?(?:key|id))?";
 
     // A quoted value may contain spaces ("password": "my pass phrase"); mask it to its closing quote.
     private static readonly Regex QuotedSensitiveAssignment = new(
-        @"(" + SensitiveName + @"\s*[""']?\s*(?:[:=]|%3[AD])\s*)([""'])[^""'\r\n]*\2",
+        @"(" + SensitiveName + @"\s*[""']?\s*(?:[:=]|%3[AD])\s*)([""'])(?:\\.|(?!\2)[^\\\r\n])*\2",
         RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
 
     private static readonly Regex SensitiveAssignment = new(

@@ -32,6 +32,7 @@ class NetworkServerConfig:
     log_level: str = "info"
     json_response: bool = False
     stateless_http: bool = False
+    allow_insecure: bool = False
 
     @property
     def auth_enabled(self) -> bool:
@@ -43,6 +44,21 @@ def _env_flag(name: str, default: bool = False) -> bool:
     if not value:
         return default
     return value.strip().lower() in {"1", "true", "yes", "on"}
+
+
+def exposure_error(config: NetworkServerConfig) -> str | None:
+    """Why this host/token pair may not be served, or None when it may.
+
+    One definition for both entry points: the command line (`parse_args`) and a caller that builds a
+    `NetworkServerConfig` itself and runs it (`run_network_server_async`).
+    """
+    if config.auth_enabled or config.allow_insecure or _is_loopback_host(config.host):
+        return None
+    return (
+        f"refusing to listen on {config.host} without a bearer token: anyone who can reach the "
+        "port could play the game. Set --bearer-token (or STS2_NETWORK_BEARER_TOKEN), bind a "
+        "loopback host, or pass --allow-insecure to accept the risk."
+    )
 
 
 def _is_loopback_host(host: str) -> bool:
@@ -124,16 +140,17 @@ def create_network_app(
         # caller therefore gets the reachability verdict only: no upstream address, error text or
         # mod health body, which describe the player's machine.
         detailed = request_is_authorized(request)
-        payload: dict[str, object] = {
-            "ok": True,
-            "service": "sts2-network-mcp",
-            "transport": config.transport,
-            "mcp_path": config.path,
-            "auth_enabled": config.auth_enabled,
-            "tool_profile": config.tool_profile,
-        }
+        payload: dict[str, object] = {"ok": True, "service": "sts2-network-mcp"}
         if detailed:
-            payload["api_base_url"] = client.base_url
+            payload.update(
+                {
+                    "transport": config.transport,
+                    "mcp_path": config.path,
+                    "auth_enabled": config.auth_enabled,
+                    "tool_profile": config.tool_profile,
+                    "api_base_url": client.base_url,
+                }
+            )
         try:
             health = health_client.get_health()
             if detailed:
@@ -166,6 +183,9 @@ def create_network_app(
 
 
 async def run_network_server_async(config: NetworkServerConfig) -> None:
+    problem = exposure_error(config)
+    if problem is not None:
+        raise ValueError(problem)
     _, client, app = create_network_app(config)
     logger.info(
         "Starting STS2 network MCP server on http://%s:%d%s transport=%s auth=%s api=%s",
@@ -247,15 +267,18 @@ def parse_args(argv: list[str] | None = None) -> NetworkServerConfig:
         parser.error("SSE transport does not support --stateless-http")
 
     bearer_token = args.bearer_token.strip()
-    if not bearer_token and not _is_loopback_host(args.host) and not args.allow_insecure:
-        parser.error(
-            f"refusing to listen on {args.host} without a bearer token: anyone who can reach the "
-            "port could play the game. Set --bearer-token (or STS2_NETWORK_BEARER_TOKEN), bind a "
-            "loopback host, or pass --allow-insecure to accept the risk."
-        )
+    # Uvicorn wants the bare address; accept the bracketed URL spelling of an IPv6 host.
+    host = args.host.strip()
+    if host.startswith("[") and host.endswith("]"):
+        host = host[1:-1]
+    problem = exposure_error(
+        NetworkServerConfig(host=host, bearer_token=bearer_token, allow_insecure=bool(args.allow_insecure))
+    )
+    if problem is not None:
+        parser.error(problem)
 
     return NetworkServerConfig(
-        host=args.host,
+        host=host,
         port=args.port,
         transport=args.transport,
         path=path,
@@ -265,6 +288,7 @@ def parse_args(argv: list[str] | None = None) -> NetworkServerConfig:
         log_level=args.log_level,
         json_response=bool(args.json_response),
         stateless_http=bool(args.stateless_http),
+        allow_insecure=bool(args.allow_insecure),
     )
 
 

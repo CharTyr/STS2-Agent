@@ -50,7 +50,8 @@ internal static class Router
             // Origin check (it answers a same-origin browser client), so only Host is enforced there.
             if (!LocalRequestGuard.IsTrusted(
                     request.Headers["Host"], request.Headers["Origin"], HttpServer.Instance.Port,
-                    allowOrigin: IsMcpPath(request.Url?.AbsolutePath)))
+                    allowOrigin: IsMcpPath(request.Url?.AbsolutePath),
+                    fetchSite: request.Headers["Sec-Fetch-Site"]))
             {
                 throw new ApiException(403, "untrusted_origin",
                     "Requests from web pages or non-loopback hosts are refused.");

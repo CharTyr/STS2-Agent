@@ -38,6 +38,13 @@ internal static class ReviewFixTests
         Assert.False(LocalRequestGuard.IsTrusted("127.0.0.1:8080", "http://127.0.0.1:8080", 8080),
             "REST routes serve no page, so no browser origin is legitimate.");
         Assert.False(LocalRequestGuard.IsTrusted("127.0.0.1:8080", "null", 8080));
+        // A cross-site <img>/<script> GET carries no Origin but always a Sec-Fetch-Site label.
+        Assert.False(LocalRequestGuard.IsTrusted("127.0.0.1:8080", null, 8080, fetchSite: "cross-site"));
+        Assert.False(LocalRequestGuard.IsTrusted("127.0.0.1:8080", null, 8080, fetchSite: "same-site"));
+        Assert.True(LocalRequestGuard.IsTrusted("127.0.0.1:8080", null, 8080, fetchSite: "none"));
+        Assert.True(LocalRequestGuard.IsTrusted("127.0.0.1:8080", null, 8080, fetchSite: "same-origin"));
+        Assert.True(LocalRequestGuard.IsTrusted("127.0.0.1:8080", null, 8080, allowOrigin: true, fetchSite: "cross-site"),
+            "The MCP route applies its own browser policy.");
         // The MCP route applies its own Origin policy, so only Host is enforced for it.
         Assert.True(LocalRequestGuard.IsTrusted("127.0.0.1:8080", "http://127.0.0.1:8080", 8080, allowOrigin: true));
         Assert.False(LocalRequestGuard.IsTrusted("evil.example", "http://127.0.0.1:8080", 8080, allowOrigin: true));
@@ -46,10 +53,13 @@ internal static class ReviewFixTests
     public static void RouterRunsTheGuardFirst()
     {
         var source = AgentSourceFixture.Read("STS2AIAgent/Server/Router.cs");
-        var guard = source.IndexOf("LocalRequestGuard.IsTrusted", StringComparison.Ordinal);
-        Assert.True(guard > 0, "Router must call the guard.");
-        Assert.True(guard < source.IndexOf("\"/session/control\"", StringComparison.Ordinal),
-            "The guard must run before any route is matched.");
+        var guard = source.IndexOf("if (!LocalRequestGuard.IsTrusted(", StringComparison.Ordinal);
+        Assert.True(guard > 0, "Router must branch on the guard's result.");
+        var refusal = source.IndexOf("throw new ApiException(403, \"untrusted_origin\"", guard, StringComparison.Ordinal);
+        var firstRoute = source.IndexOf("\"/session/control\"", StringComparison.Ordinal);
+        Assert.True(refusal > guard && refusal < firstRoute,
+            "A refused request must be rejected with 403 before any route is matched.");
+        Assert.Contains("fetchSite: request.Headers[\"Sec-Fetch-Site\"]", source);
     }
 
     public static void SettingsWithNullEntriesAreRecovered()
@@ -65,6 +75,11 @@ internal static class ReviewFixTests
 
             var loaded = store.Load();
 
+            // Filtering the null entries is what makes the file usable; the backup-and-restore path
+            // would also yield non-null lists, so assert that path was not taken.
+            Assert.Equal("ok", store.LastNotice.Kind);
+            Assert.True(Directory.GetFiles(directory, "settings.json.corrupt-*").Length == 0,
+                "A file with only null entries is repaired in place, not treated as corrupt.");
             Assert.NotEmpty(loaded.Endpoints);
             Assert.True(loaded.Endpoints.All(endpoint => endpoint != null));
             Assert.True(loaded.Models.All(model => model != null));
@@ -104,6 +119,10 @@ internal static class ReviewFixTests
             ("callback?access_token%3Dabc987def", "abc987def"),
             ("password: \"my pass phrase\"", "pass phrase"),
             ("{\"apiKey\":\"abc def ghi\"}", "def ghi"),
+            ("AWS_SECRET_ACCESS_KEY=wJalrXUtnFEMI/K7MDENG", "wJalrXUtnFEMI/K7MDENG"),
+            ("password: \"it's a long phrase\"", "long phrase"),
+            ("password: 'say \"hi\" to all'", "to all"),
+            ("{\"token\":\"a \\\"quoted\\\" secret\"}", "secret"),
         })
         {
             var redacted = DiagnosticExport.Redact(input);

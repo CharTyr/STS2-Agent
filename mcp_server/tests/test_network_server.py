@@ -20,7 +20,9 @@ from sts2_mcp.network_server import (
     _env_flag,
     _normalize_path,
     create_network_app,
+    exposure_error,
     parse_args,
+    run_network_server_async,
 )
 
 
@@ -420,7 +422,7 @@ class ExposureGuardTests(unittest.TestCase):
     def test_loopback_hosts_need_no_token(self) -> None:
         for host in ("127.0.0.1", "localhost", "::1", "[::1]", "127.0.0.2"):
             with self.subTest(host=host), network_env():
-                self.assertEqual(parse_args(["--host", host]).host, host)
+                self.assertEqual(parse_args(["--host", host]).host, host.strip("[]"))
 
     def test_non_loopback_host_with_token_is_accepted(self) -> None:
         with network_env():
@@ -440,6 +442,28 @@ class ExposureGuardTests(unittest.TestCase):
             self.assertEqual(parse_args([]).host, "0.0.0.0")
 
 
+class DirectLaunchTests(unittest.TestCase):
+    def test_runner_refuses_an_exposed_config_built_in_code(self) -> None:
+        for config in (NetworkServerConfig(host="0.0.0.0"), NetworkServerConfig(host="::")):
+            with self.subTest(host=config.host):
+                with self.assertRaises(ValueError) as caught:
+                    asyncio.run(run_network_server_async(config))
+                self.assertIn("bearer token", str(caught.exception))
+
+    def test_runner_accepts_loopback_token_or_explicit_opt_out(self) -> None:
+        for config in (
+            NetworkServerConfig(host="127.0.0.1"),
+            NetworkServerConfig(host="0.0.0.0", bearer_token="s3cret"),
+            NetworkServerConfig(host="0.0.0.0", allow_insecure=True),
+        ):
+            with self.subTest(host=config.host, auth=config.auth_enabled):
+                self.assertIsNone(exposure_error(config))
+
+    def test_allow_insecure_survives_parsing(self) -> None:
+        with network_env():
+            self.assertTrue(parse_args(["--host", "0.0.0.0", "--allow-insecure"]).allow_insecure)
+
+
 class HealthzDisclosureTests(unittest.TestCase):
     def _app(self, **overrides: Any) -> tuple[Any, FakeSts2Client]:
         _, _, app, created = build_network_app(NetworkServerConfig(bearer_token="s3cret", **overrides))
@@ -454,8 +478,7 @@ class HealthzDisclosureTests(unittest.TestCase):
 
         self.assertEqual(response.status_code, 503)
         self.assertFalse(payload["ok"])
-        self.assertNotIn("api_base_url", payload)
-        self.assertNotIn("error", payload)
+        self.assertEqual(set(payload), {"ok", "service"})
         self.assertNotIn("10.0.0.5", json.dumps(payload))
 
     def test_anonymous_success_hides_the_mod_health_body(self) -> None:
@@ -467,8 +490,7 @@ class HealthzDisclosureTests(unittest.TestCase):
                 response = call_route_endpoint_with(app, "/healthz", request)
                 payload = response_payload(response)
                 self.assertEqual(response.status_code, 200)
-                self.assertNotIn("sts2", payload)
-                self.assertNotIn("api_base_url", payload)
+                self.assertEqual(set(payload), {"ok", "service"})
 
     def test_authorized_caller_sees_the_full_body(self) -> None:
         app, health_client = self._app()
