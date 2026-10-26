@@ -60,4 +60,61 @@ internal static class RewardChoicePolicyTests
         Assert.False(resolution.IsValid);
         Assert.Contains("no card reward options", resolution.Reason);
     }
+
+    // #219: with every potion slot occupied the game swallowed the click and claim_reward still
+    // answered "completed", so a client believed the potion was taken.
+    public static void PotionRewardIsNotClaimableWithAFullBelt()
+    {
+        Assert.False(RewardClaimPolicy.IsClaimable(rowEnabled: true, isPotionReward: true, hasOpenPotionSlot: false));
+        Assert.True(RewardClaimPolicy.IsClaimable(rowEnabled: true, isPotionReward: true, hasOpenPotionSlot: true));
+    }
+
+    public static void FullBeltDoesNotAffectOtherRewardsOrDisabledRows()
+    {
+        Assert.True(RewardClaimPolicy.IsClaimable(rowEnabled: true, isPotionReward: false, hasOpenPotionSlot: false));
+        Assert.False(RewardClaimPolicy.IsClaimable(rowEnabled: false, isPotionReward: true, hasOpenPotionSlot: true));
+        Assert.False(RewardClaimPolicy.IsClaimable(rowEnabled: false, isPotionReward: false, hasOpenPotionSlot: true));
+    }
+
+    public static void ClaimRewardRejectsAFullBeltBeforeClicking()
+    {
+        var source = AgentSourceFixture.ReadActionService();
+        var body = AgentSourceFixture.WithoutWhitespace(AgentSourceFixture.MethodBody(source, "ExecuteClaimRewardAsync"));
+
+        var guard = body.IndexOf("IsRewardButtonClaimable(selectedReward)", StringComparison.Ordinal);
+        var click = body.IndexOf("selectedReward.ForceClick()", StringComparison.Ordinal);
+
+        Assert.True(guard >= 0, "claim_reward must check potion capacity for the selected row.");
+        Assert.True(click > guard, "The capacity check must run before the reward row is clicked.");
+        Assert.Contains("reason=RewardClaimPolicy.PotionSlotsFullReason", body, StringComparison.Ordinal);
+        Assert.Contains("RewardClaimPolicy.PotionSlotsFullMessage", body, StringComparison.Ordinal);
+    }
+
+    public static void ClaimableFlagAndActionGateShareTheCapacityRule()
+    {
+        var rewards = AgentSourceFixture.Read("STS2AIAgent/Game/GameStateService.Rewards.cs");
+        var predicates = AgentSourceFixture.Read("STS2AIAgent/Game/GameStateService.Predicates.cs");
+
+        Assert.Contains(
+            "claimable=IsRewardButtonClaimable(button)",
+            AgentSourceFixture.WithoutWhitespace(AgentSourceFixture.MethodBody(rewards, "BuildRewardOptionPayload")),
+            StringComparison.Ordinal);
+        Assert.Contains(
+            "IsRewardButtonClaimable(",
+            AgentSourceFixture.WithoutWhitespace(AgentSourceFixture.MethodBody(predicates, "CanClaimReward")),
+            StringComparison.Ordinal);
+    }
+
+    // #219 asked for a way to replace a potion from the reward screen: only the card-choice
+    // sub-screen may keep blocking discard_potion.
+    public static void RewardScreenPermitsPotionDiscard()
+    {
+        var potions = AgentSourceFixture.Read("STS2AIAgent/Game/GameStateService.Potions.cs");
+        var body = AgentSourceFixture.WithoutWhitespace(AgentSourceFixture.MethodBody(potions, "CanDiscardPotionsInCurrentScreen"));
+
+        Assert.Contains("NCardRewardSelectionScreen", body, StringComparison.Ordinal);
+        Assert.False(
+            body.Contains("NRewardsScreen", StringComparison.Ordinal),
+            "The main reward screen must allow discard_potion so a full belt can be freed.");
+    }
 }

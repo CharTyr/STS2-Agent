@@ -60,6 +60,9 @@ namespace STS2AIAgent.Tests;
 /// CanDiscardPotionsInCurrentScreen for explicit replacement on the main reward screen.
 /// Unrelated relocation fingerprints remain unchanged.
 ///
+/// <c>BuildRewardOptionPayload</c> was regenerated for #219: a potion reward row reports
+/// <c>claimable: false</c> while every potion slot is occupied, because the game ignores that click.
+///
 /// <c>BuildRunPlayerSummaryPayload</c> was regenerated when every party line gained the player's
 /// deck, relics and potions. Each client simulates the whole run, so a partner's
 /// <c>Player.Deck</c> is as current as the local one, and an external agent planning for the party
@@ -186,7 +189,7 @@ internal static class GameStateServiceRelocationContractTests
         ["BuildMapPlayerVotePayloads"] = ("STS2AIAgent/Game/GameStateService.Map.cs", "f8a3bcd61468c4f32da3a1dfbb8f2df8ad8d2c792f5f9f7129252d33cc116517"),
         ["GetAllMapPoints"] = ("STS2AIAgent/Game/GameStateService.Map.cs", "d25fc058d5da8eb9a80cae810b50536cf03cdc58c7b9b632fe82d00773a1ee81"),
         ["ResolveMapPointState"] = ("STS2AIAgent/Game/GameStateService.Map.cs", "1d93a6fe13a72428558ea3467559ebaf49bbd0de2caf58b1fdaab62e6cc97fee"),
-        ["BuildRewardOptionPayload"] = ("STS2AIAgent/Game/GameStateService.Rewards.cs", "333389b86b09dc2bc66c65db06af5b92563b4e4e2d75169be5cbc8abe7355120"),
+        ["BuildRewardOptionPayload"] = ("STS2AIAgent/Game/GameStateService.Rewards.cs", "be2063e75cf10855a743fef1ebd9e5e5378df662ff4afa8959c12005308fe424"),
         ["BuildRewardCardOptionPayload"] = ("STS2AIAgent/Game/GameStateService.Rewards.cs", "81419a2b5f20245538f98f68f1f49935404f874fb567330c7f205f99cd8e5a4a"),
         ["BuildBundleCardPayload"] = ("STS2AIAgent/Game/GameStateService.Rewards.cs", "0e7bab63649d7b4cc9f7253a0467dcce4980bc27090df0fb812d82bac3d49d81"),
         ["BuildRewardAlternativePayload"] = ("STS2AIAgent/Game/GameStateService.Rewards.cs", "8d867e11fadb06fd2c15b4f52f5e15231fcdd96741d1c5d73ca620bbd8ff38a2"),

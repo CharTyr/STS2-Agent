@@ -69,6 +69,7 @@ This file is about **how to drive a screen**. For **what to choose** where the c
 - If `reward.pending_card_choice = true`, use `choose_reward_card` or `skip_reward_cards`.
 - If `skip_reward_cards` closes only the overlay, re-read state to see whether the parent reward remains claimable.
 - Do not use `proceed` on reward flows.
+- A potion reward with every potion slot full is `claimable: false`, and `claim_reward` answers 409 `invalid_action` with `details.reason = "potion_slots_full"`. To take it, `discard_potion` a slot first (offered on the main reward screen, not inside the card-choice sub-screen), then `claim_reward` again. Bulk cleanup never discards a potion for you.
 - `claim_reward` indexes refer to the reward payload's original entries, not a filtered list of claimable rewards.
 
 ## SHOP

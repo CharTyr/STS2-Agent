@@ -547,12 +547,6 @@ def evaluate_state_invariants(client: ApiClient) -> dict[str, Any]:
             "proceed",
             "reward flows should use reward-specific actions instead of proceed",
         )
-        add_forbidden_action_failure(
-            failures,
-            action_set,
-            "discard_potion",
-            "reward screens should not expose discard_potion",
-        )
 
         if reward.get("pending_card_choice"):
             if list(reward.get("card_options") or []):

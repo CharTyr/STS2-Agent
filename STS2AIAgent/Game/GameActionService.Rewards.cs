@@ -207,6 +207,18 @@ internal static partial class GameActionService
 
         if (!GameStateService.CanClaimReward(currentScreen))
         {
+            // Only potion rows left and no free slot: name the cause rather than a bare "not available".
+            if (request.option_index != null &&
+                GameStateService.GetRewardButtons(currentScreen).Any(button => button.IsEnabled && button.Reward is PotionReward))
+            {
+                throw new ApiException(409, "invalid_action", RewardClaimPolicy.PotionSlotsFullMessage, new
+                {
+                    action = "claim_reward",
+                    screen,
+                    reason = RewardClaimPolicy.PotionSlotsFullReason
+                });
+            }
+
             throw new ApiException(409, "invalid_action", "Action is not available in the current state.", new
             {
                 action = "claim_reward",
@@ -241,6 +253,19 @@ internal static partial class GameActionService
             {
                 action = "claim_reward",
                 option_index = request.option_index
+            });
+        }
+
+        // A full potion belt makes the game swallow the click, which used to come back as
+        // "completed" with nothing claimed (#219). Say why instead, before clicking anything.
+        if (!GameStateService.IsRewardButtonClaimable(selectedReward))
+        {
+            throw new ApiException(409, "invalid_action", RewardClaimPolicy.PotionSlotsFullMessage, new
+            {
+                action = "claim_reward",
+                screen,
+                option_index = request.option_index,
+                reason = RewardClaimPolicy.PotionSlotsFullReason
             });
         }
 

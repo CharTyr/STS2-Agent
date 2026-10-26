@@ -29,6 +29,7 @@ Game-dependent compilation and dual-window acceptance remain required before pub
 
 ### Fixed
 
+- **药水栏全满时，奖励界面的药水奖励不再假装领取成功。** 此前游戏吞掉点击，`claim_reward` 仍返回 `completed`，奖励列表和药水栏都没变，客户端会误判已领取（#219）。现在满栏时该药水行 `claimable` 为 `false`，`claim_reward` 直接返回 409 `invalid_action`（`details.reason = "potion_slots_full"`）并提示先 `discard_potion` 腾位；奖励主界面的 `discard_potion` 已在本版开放，所以整条「丢弃再领取」路径可走通。验证脚本里「奖励界面不应出现 discard_potion」的陈旧断言一并删除。
 - **游戏内 HTTP 接口拒绝来自网页的请求。** 监听器只绑定 127.0.0.1，`IsLocal` 对任何请求都为真，所以浏览器里的网页能跨站 POST（打牌、启停自动游玩、打开 MCP），DNS rebinding 还能读到状态和截图。现在带 `Origin` 头、`Sec-Fetch-Site` 为跨站，或 `Host` 不是本机回环地址加本端口的请求一律返回 403 `untrusted_origin`；本机脚本、curl 和 MCP 客户端不受影响，MCP 路由仍用自己的 Origin 规则。
 - **网络版 MCP 不再静默裸奔。** 绑定非回环地址且没有 bearer token 时启动即报错（`--allow-insecure` 或 `STS2_NETWORK_ALLOW_INSECURE=1` 可显式放行）；设了 token 后，匿名访问 `/healthz` 只返回 200/503 与服务名，不再回显上游地址、错误详情和 mod 健康数据。
 - **设置文件含 `null` 条目或形状不可用时不再让 mod 起不来。** 加载时丢弃列表里的 `null` 项；任何读取或校验异常都走「备份损坏文件并恢复上次良好配置」的流程，而不是抛出到 `AgentRuntime` 构造函数。
