@@ -92,7 +92,7 @@ namespace STS2AIAgent.Game;
 /// </remarks>
 internal static partial class GameStateService
 {
-    private const int AgentViewVersion = 11;
+    private const int AgentViewVersion = 12;
 
     private static string GetPreferredCardRulesText(string rulesText, string? resolvedRulesText)
     {
@@ -101,6 +101,7 @@ internal static partial class GameStateService
 
     private static object BuildAgentViewPayload(
         string screen,
+        bool inCombat,
         SessionPayload session,
         int nativeProfileId,
         string runId,
@@ -134,6 +135,7 @@ internal static partial class GameStateService
         {
             version = AgentViewVersion,
             screen,
+            in_combat = inCombat,
             native_profile_id = nativeProfileId,
             run_id = runId,
             session,

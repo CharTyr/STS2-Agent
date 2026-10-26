@@ -15,6 +15,9 @@ namespace STS2AIAgent.Agent;
 /// </remarks>
 internal sealed partial class AgentLoop
 {
+    internal Task<string> ReadCompactStateForOwnershipAsync(CancellationToken cancellationToken) =>
+        _bridge.GetCompactStateJsonAsync(cancellationToken);
+
     internal async Task<string?> GetCurrentRunIdAsync(CancellationToken token)
     {
         var json = await _bridge.GetCompactStateJsonAsync(token);

@@ -45,6 +45,7 @@ internal sealed partial class AgentOverlayHost
 
     /// <summary>The per-mode dual-layer toggles and the solo Jev panel's live labels.</summary>
     private CheckBox? _dualLayerSoloCheck;
+    private CheckBox? _nonCombatOnlyCheck;
     private CheckBox? _dualLayerCoopCheck;
     private Control? _jevPanel;
     private Label? _jevStatus;
@@ -81,6 +82,7 @@ internal sealed partial class AgentOverlayHost
         _coopSection.Visible = coop;
         page.AddChild(_soloSection);
         page.AddChild(_coopSection);
+        page.AddChild(BuildNonCombatOnlyControl());
         page.AddChild(BuildJevPanel());
         page.AddChild(BuildDecisionCard());
 
@@ -144,6 +146,26 @@ internal sealed partial class AgentOverlayHost
         section.AddChild(BuildChatCard());
         section.AddChild(UiFactory.Wrapped(Loc.T("自动游玩走 compact 状态和工具；进行中发消息只影响后续决策。空闲聊天要代打一手须明确说「帮我打」。")));
         return section;
+    }
+
+    private Control BuildNonCombatOnlyControl()
+    {
+        _nonCombatOnlyCheck = UiFactory.Check(
+            Loc.T("仅在战斗外自动游玩（战斗中只读）"),
+            AgentRuntime.Instance.Settings.NonCombatOnlyEnabled);
+        _nonCombatOnlyCheck.Toggled += on =>
+        {
+            var next = CloneSettings(AgentRuntime.Instance.Settings);
+            next.NonCombatOnlyEnabled = on;
+            AgentRuntime.Instance.SaveSettings(next);
+            RefreshDynamic();
+        };
+        return UiFactory.Card(
+            Loc.T("战斗控制"),
+            _nonCombatOnlyCheck,
+            UiFactory.Wrapped(
+                Loc.T("开启后，Agent 在战斗期间不请求模型、不执行动作；战斗结束后自动恢复。适合手动战斗或交给外部战斗控制器。"),
+                UiFactory.FontCaption));
     }
 
     /// <summary>
@@ -725,6 +747,7 @@ internal sealed partial class AgentOverlayHost
             var mode = AgentRuntime.Instance.Settings;
             var coopMode = mode.OverlayPlayMode == "coop";
             if (_dualLayerSoloCheck != null) _dualLayerSoloCheck.SetPressedNoSignal(mode.DualLayerSoloEnabled);
+            if (_nonCombatOnlyCheck != null) _nonCombatOnlyCheck.SetPressedNoSignal(mode.NonCombatOnlyEnabled);
             if (_dualLayerCoopCheck != null) _dualLayerCoopCheck.SetPressedNoSignal(mode.DualLayerCoopEnabled);
             RefreshModeControls(coopMode, coopMode ? mode.DualLayerCoopEnabled : mode.DualLayerSoloEnabled);
             RefreshJevReading(coopMode, mode);

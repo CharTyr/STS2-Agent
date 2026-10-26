@@ -14,6 +14,7 @@ internal sealed partial class AgentLoop
         if (budget != null) return new AgentTurnResult { Error = budget, RequestsSpent = 0 };
         var snapshot = await _bridge.GetActionSnapshotJsonAsync(cancellationToken);
         cancellationToken.ThrowIfCancellationRequested();
+        if (_settings().NonCombatOnlyEnabled && NonCombatOnlyPolicy.IsCombatSnapshot(snapshot)) return WaitForCombat();
         ExecutionDecision decision;
         try
         {
@@ -61,6 +62,10 @@ internal sealed partial class AgentLoop
                 DangerScore = decision.DangerScore, JevElapsedMilliseconds = decision.JevElapsedMilliseconds,
                 OfferedOptionIds = decision.OfferedOptionIds, StrategyUpdatedAt = strategyUpdatedAt
             };
+        }
+        catch (NonCombatOnlyYieldException)
+        {
+            return WaitForCombat(Receipt());
         }
         catch (OperationCanceledException ex) when (cancellationToken.IsCancellationRequested)
         {
@@ -115,6 +120,7 @@ internal sealed partial class AgentLoop
         ActResultJson = result.ActResultJson, Error = result.Error, WaitingForGame = result.WaitingForGame,
         ExecutedUnsettled = result.ExecutedUnsettled, ReasoningBudgetExhausted = result.ReasoningBudgetExhausted,
         StateFingerprint = result.StateFingerprint, WaitingForPlayer = result.WaitingForPlayer,
+        WaitingForCombat = result.WaitingForCombat,
         RequiresConfiguration = result.RequiresConfiguration, ToolRounds = result.ToolRounds,
         Usage = result.Usage, RequestsSpent = result.RequestsSpent,
         Confidence = result.Confidence, Probabilities = result.Probabilities,
@@ -244,6 +250,10 @@ internal sealed partial class AgentLoop
                     ? () => _acknowledgePlayInstruction?.Invoke(pendingInstruction.Id)
                     : null);
             return WithJevReceipt(result, pending);
+        }
+        catch (NonCombatOnlyYieldException ex)
+        {
+            return WithJevReceipt(WaitForCombat(ex.Receipt), pending);
         }
         catch (AgentTurnCanceledException ex) when (handedToCompletion)
         {

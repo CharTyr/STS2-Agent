@@ -206,7 +206,7 @@ internal static class CompactViewFidelityTests
         }
 
         // Anti-dump: the compact top level still omits the raw envelope.
-        foreach (var rawOnly in new[] { "state_version", "in_combat" })
+        foreach (var rawOnly in new[] { "state_version" })
         {
             Assert.False(
                 compactView.Contains(rawOnly, StringComparison.Ordinal),
