@@ -1,48 +1,77 @@
+using System.Text.RegularExpressions;
+
 namespace STS2AIAgent.Llm;
 
 /// <summary>
 /// Where a fast-judgment service lives. The configured address is either a service root
 /// (<c>https://api.typesafe.ai</c>, the original form) or the full request URL a provider documents
-/// (<c>https://openrouter.ai/api/v1/systemone</c>); the client resolves both to the same two calls.
+/// (<c>https://openrouter.ai/api/v1/systemone</c>); the client resolves both to the same call.
 /// </summary>
 /// <remarks>
 /// A root keeps getting <c>/v1/systemone</c> appended, so every configuration saved before presets
-/// existed behaves exactly as it did. Only an address that already ends in <c>/systemone</c> or
-/// <c>/decisions</c> is used as written. Pure functions and a constant table, so the offline suite
-/// exercises them without a game or a network.
+/// existed behaves exactly as it did. An address that already ends in <c>/systemone</c> or
+/// <c>/decisions</c>, or is a Cloudflare Workers AI <c>/ai/run/</c> model URL, is used as written.
+/// Pure functions and a constant table, so the offline suite exercises them without a game or a network.
 /// </remarks>
 internal static class JevEndpoint
 {
     private const string DefaultRequestPath = "/v1/systemone";
 
-    private const string DefaultModelsPath = "/v1/models";
-
-    /// <summary>A provider's documented request URL and default model, ready to drop into the settings form.</summary>
-    internal sealed record Preset(string Id, string Name, string Url, string Model, string Note);
+    /// <summary>
+    /// A provider's documented request URL, wire format and models, ready to drop into the settings form.
+    /// <see cref="Models"/>[0] is the default; <see cref="KeyUrl"/> and <see cref="DocsUrl"/> may be empty.
+    /// </summary>
+    internal sealed record Preset(
+        string Id, string Name, string Protocol, string Url, string[] Models, string DocsUrl, string KeyUrl)
+    {
+        public string Model => Models[0];
+    }
 
     /// <summary>
-    /// Providers that speak the System One request shape. URLs and model names are copied from each
-    /// provider's published documentation; every one stays editable in the form.
+    /// Every provider MaiWork ships a preset for. URLs, models and links are copied from each provider's
+    /// published documentation (2026-10); none has been exercised with a live key here, and every field
+    /// stays editable in the form.
     /// </summary>
     internal static readonly IReadOnlyList<Preset> Presets = new Preset[]
     {
-        new("typesafe", "TypeSafe", "https://api.typesafe.ai/v1/systemone", "jev-latest", ""),
-        new("openrouter", "OpenRouter", "https://openrouter.ai/api/v1/systemone", "typesafe/jev-1.13", ""),
-        new("opencode", "OpenCode Zen", "https://opencode.ai/zen/v1/systemone", "jev-1.13", ""),
-        new("commandcode", "Command Code", "https://api.commandcode.ai/provider/v1/systemone", "typesafe/jev", ""),
-        new("vercel", "Vercel AI Gateway", "https://ai-gateway.vercel.sh/typesafe/v1/systemone", "typesafe-ai/jev", ""),
-        new("upstage", "Upstage", "https://api.upstage.ai/v1/systemone", "solar-decide", ""),
-        new("inception", "Inception", "https://api.inceptionlabs.ai/v1/decisions", "mercury-decide", ""),
-        new("liquid", "Liquid AI", "https://api.liquid.ai/decisions/v1/systemone", "d1", ""),
+        new("typesafe", "TypeSafe", JevProtocol.SystemOne, "https://api.typesafe.ai/v1/systemone",
+            new[] { "jev-latest", "jev-1.13.0" }, "https://docs.typesafe.ai/api", ""),
+        new("openrouter", "OpenRouter", JevProtocol.SystemOne, "https://openrouter.ai/api/v1/systemone",
+            new[] { "typesafe/jev-1.13", "~typesafe/jev-latest" }, "https://openrouter.ai/docs/guides/community/jev", "https://openrouter.ai/keys"),
+        new("opencode", "OpenCode Zen", JevProtocol.SystemOne, "https://opencode.ai/zen/v1/systemone",
+            new[] { "jev-1.13", "jev-1.13-free" }, "https://opencode.ai/docs/zen", ""),
+        new("commandcode", "Command Code", JevProtocol.SystemOne, "https://api.commandcode.ai/provider/v1/systemone",
+            new[] { "typesafe/jev" }, "https://commandcode.ai/models/jev", ""),
+        new("vercel", "Vercel AI Gateway", JevProtocol.SystemOne, "https://ai-gateway.vercel.sh/typesafe/v1/systemone",
+            new[] { "typesafe-ai/jev" }, "https://vercel.com/docs/ai-gateway/sdks-and-apis/typesafe", ""),
+        new("upstage", "Upstage", JevProtocol.SystemOne, "https://api.upstage.ai/v1/systemone",
+            new[] { "solar-decide" }, "https://console.upstage.ai/api/systemone", ""),
+        new("inception", "Inception", JevProtocol.SystemOne, "https://api.inceptionlabs.ai/v1/decisions",
+            new[] { "mercury-decide" }, "https://docs.inceptionlabs.ai/capabilities/decisions", ""),
+        new("liquid", "Liquid AI", JevProtocol.SystemOne, "https://api.liquid.ai/decisions/v1/systemone",
+            new[] { "d1", "d1:free" }, "https://docs.liquid.ai/lfm/models/d1", ""),
+        new("cloudflare", "Cloudflare", JevProtocol.SystemOne,
+            "https://api.cloudflare.com/client/v4/accounts/{account_id}/ai/run/@cf/cloudflare/clef-flash",
+            new[] { "clef-flash", "clef" }, "https://developers.cloudflare.com/workers-ai/models/clef/", ""),
+        new("openai", "OpenAI Decisions", JevProtocol.OpenAiDecisions, "https://api.openai.com/v1/decisions",
+            new[] { "gpt-6-luna" }, "https://developers.openai.com/api/docs/guides/decisions", ""),
     };
 
-    /// <summary>The preset whose address matches the configured one, or null for a custom address.</summary>
+    /// <summary>
+    /// The preset whose address matches the configured one, or null for a custom address. A preset with a
+    /// placeholder (Cloudflare's account id) matches any value there and any model in the last segment.
+    /// </summary>
     internal static Preset? FindPreset(string? configuredUrl)
     {
         var normalized = Normalize(configuredUrl);
         foreach (var preset in Presets)
         {
             if (string.Equals(preset.Url, normalized, StringComparison.OrdinalIgnoreCase)) return preset;
+            if (preset.Url.IndexOf('{') < 0) continue;
+            // The placeholder segment matches any account id, and the last segment any model name.
+            var pattern = Regex.Replace(Regex.Escape(preset.Url), @"\\\{[^}]*}", "[^/]+");
+            pattern = "^" + pattern[..pattern.LastIndexOf('/')] + "/[^/]+$";
+            if (Regex.IsMatch(normalized, pattern, RegexOptions.IgnoreCase)) return preset;
         }
 
         return null;
@@ -52,23 +81,17 @@ internal static class JevEndpoint
     internal static string RequestUrl(string? configuredUrl)
     {
         var normalized = Normalize(configuredUrl);
-        return EndsInRequestSegment(normalized) ? normalized : normalized + DefaultRequestPath;
+        return IsFullRequestUrl(normalized) ? normalized : normalized + DefaultRequestPath;
     }
 
-    /// <summary>
-    /// The URL of the connection probe. A full request URL swaps its last segment for <c>models</c>
-    /// (<c>.../v1/systemone</c> becomes <c>.../v1/models</c>); a root gets <c>/v1/models</c>.
-    /// </summary>
-    internal static string ModelsUrl(string? configuredUrl)
-    {
-        var normalized = Normalize(configuredUrl);
-        if (!EndsInRequestSegment(normalized)) return normalized + DefaultModelsPath;
-        return normalized[..(normalized.LastIndexOf('/') + 1)] + "models";
-    }
+    /// <summary>True while the address still holds a preset's <c>{…}</c> placeholder, such as Cloudflare's account id.</summary>
+    internal static bool HasPlaceholder(string? configuredUrl) =>
+        Normalize(configuredUrl).IndexOf('{') >= 0;
 
     private static string Normalize(string? url) => (url ?? string.Empty).Trim().TrimEnd('/');
 
-    private static bool EndsInRequestSegment(string normalized) =>
+    private static bool IsFullRequestUrl(string normalized) =>
         normalized.EndsWith("/systemone", StringComparison.OrdinalIgnoreCase)
-        || normalized.EndsWith("/decisions", StringComparison.OrdinalIgnoreCase);
+        || normalized.EndsWith("/decisions", StringComparison.OrdinalIgnoreCase)
+        || normalized.Contains("/ai/run/", StringComparison.OrdinalIgnoreCase);
 }

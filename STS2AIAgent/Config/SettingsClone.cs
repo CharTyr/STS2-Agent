@@ -66,6 +66,9 @@ internal static class SettingsClone
             DualLayerCoopEnabled = source.DualLayerCoopEnabled,
             JevBaseUrl = source.JevBaseUrl,
             JevApiKey = source.JevApiKey,
+            JevProtocol = source.JevProtocol,
+            JevProviderKeys = new Dictionary<string, string>(
+                source.JevProviderKeys ?? new Dictionary<string, string>(), StringComparer.OrdinalIgnoreCase),
             JevModel = source.JevModel,
             JevConfidenceThreshold = source.JevConfidenceThreshold,
             RoleTests = source.RoleTests.Select(test => new ModelRoleTestRecord

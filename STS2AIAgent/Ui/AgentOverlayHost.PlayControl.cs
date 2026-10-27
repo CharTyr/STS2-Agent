@@ -240,6 +240,8 @@ internal sealed partial class AgentOverlayHost
             ? Loc.T("未配置快速判断，请先在「设置」填写。")
             : coopMode && !sourceAvailable ? Loc.T("队友快速判断状态不可用，请检查连接。")
             : togglePending ? Loc.T("队友快速判断开关尚未同步。")
+            : !coopMode && AgentRuntime.Instance.JevPausedUntil is { } resume
+                ? Loc.T("快速判断连续失败，{0} 前由 LLM 接手。", resume.ToLocalTime().ToString("HH:mm:ss"))
             : Loc.T("快速判断：{0}", settings.JevModel);
         if (_jevLastChoice != null)
             _jevLastChoice.Text = sourceAvailable ? Trim(coopMode ? companion?.Choice : AgentRuntime.Instance.LastJevChoice, 90) : "-";

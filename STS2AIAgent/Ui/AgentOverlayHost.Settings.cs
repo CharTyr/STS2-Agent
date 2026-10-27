@@ -52,15 +52,6 @@ internal sealed partial class AgentOverlayHost
     private string? _themeSelectedId;
     private Control? _themePicker;
 
-    /// <summary>The Jev section's editors and its connection-test feedback.</summary>
-    private OptionButton? _jevProviderCombo;
-    private LineEdit? _jevBaseUrlEdit;
-    private LineEdit? _jevApiKeyEdit;
-    private LineEdit? _jevModelEdit;
-    private LineEdit? _jevThresholdEdit;
-    private LineEdit? _jevTimeoutEdit;
-    private Button? _jevTestButton;
-    private Label? _jevTestStatus;
 
     /// <summary>The selection, seeded from settings the first time this page is built.</summary>
     private string SelectedTheme => _themeSelectedId ??= OverlayThemeCatalog.DefaultId;
@@ -543,101 +534,6 @@ internal sealed partial class AgentOverlayHost
     }
 
     /// <summary>
-    /// The Jev execution-model section: base URL, API key, model and the confidence threshold, plus a
-    /// connection test. These feed the dual-layer decision mode toggled from the play page.
-    /// </summary>
-    private Control BuildJevSection(AgentSettings settings)
-    {
-        var column = UiFactory.Column();
-
-        _jevBaseUrlEdit = UiFactory.Line(settings.JevBaseUrl, "https://api.typesafe.ai");
-        _jevApiKeyEdit = UiFactory.Line(settings.JevApiKey, "API Key", secret: true);
-        _jevModelEdit = UiFactory.Line(settings.JevModel, "jev-latest");
-        _jevThresholdEdit = UiFactory.Line(SettingsInput.FormatThreshold(settings.JevConfidenceThreshold), "0.35");
-        _jevTimeoutEdit = UiFactory.Line(settings.JevRequestTimeoutSeconds?.ToString() ?? "", Loc.T("默认 90 秒"));
-        WatchLine(_jevBaseUrlEdit);
-        WatchLine(_jevApiKeyEdit);
-        WatchLine(_jevModelEdit);
-        WatchLine(_jevThresholdEdit);
-        WatchLine(_jevTimeoutEdit);
-        column.AddChild(Labeled(Loc.T("服务商"), BuildJevProviderCombo(settings.JevBaseUrl)));
-        column.AddChild(Labeled(Loc.T("地址"), _jevBaseUrlEdit));
-        column.AddChild(Labeled(Loc.T("API Key"), _jevApiKeyEdit));
-        column.AddChild(Labeled(Loc.T("模型"), _jevModelEdit));
-        column.AddChild(Labeled(Loc.T("置信度阈值（0-1）"), _jevThresholdEdit));
-        column.AddChild(Labeled(Loc.T("请求超时（秒）"), _jevTimeoutEdit));
-
-        _jevTestButton = UiFactory.Button(Loc.T("测试快速判断"), () => _ = TestJevConnectionAsync(), UiFactory.ButtonKind.Ghost);
-        _jevTestStatus = UiFactory.Wrapped("", UiFactory.FontCaption);
-        column.AddChild(UiFactory.Row(_jevTestButton));
-        column.AddChild(_jevTestStatus);
-        return HelpCard.Build(
-            "settings.jev",
-            Loc.T("快速判断"),
-            Loc.T("双层决策下，由快速判断模型（Jev，TypeSafe System One）逐步操作游戏，LLM 只做战略规划。\n在游玩页按模式开启。置信度低于阈值时，由 LLM 接手。\n选服务商会自动填地址和模型，只需填 Key；地址可填完整请求地址，也可只填服务根地址。预设按各家文档整理，以实际可用为准。"),
-            column);
-    }
-
-    /// <summary>
-    /// Provider picker for the fast-judgment section. Choosing a preset fills the address and model
-    /// and leaves the key alone; editing the address by hand moves the picker to Custom (or to the
-    /// preset it now matches). Nothing but the two text fields is saved.
-    /// </summary>
-    private OptionButton BuildJevProviderCombo(string currentUrl)
-    {
-        var combo = UiFactory.Combo();
-        combo.AddItem("自定义 / Custom");
-        foreach (var preset in JevEndpoint.Presets)
-        {
-            var icon = JevProviderIcons.Get(preset.Id);
-            if (icon != null) combo.AddIconItem(icon, preset.Name);
-            else combo.AddItem(preset.Name);
-        }
-        _jevProviderCombo = combo;
-
-        int IndexFor(string url)
-        {
-            var match = JevEndpoint.FindPreset(url);
-            for (var i = 0; match != null && i < JevEndpoint.Presets.Count; i++)
-                if (ReferenceEquals(JevEndpoint.Presets[i], match)) return i + 1;
-            return 0;
-        }
-
-        combo.Select(IndexFor(currentUrl));
-        combo.ItemSelected += index =>
-        {
-            if (index <= 0 || _jevBaseUrlEdit == null || _jevModelEdit == null) return;
-            var preset = JevEndpoint.Presets[(int)index - 1];
-            _jevBaseUrlEdit.Text = preset.Url;
-            _jevModelEdit.Text = preset.Model;
-            MarkSettingsDirty();
-        };
-        _jevBaseUrlEdit!.TextChanged += text =>
-        {
-            if (_jevProviderCombo != null && GodotObject.IsInstanceValid(_jevProviderCombo))
-                _jevProviderCombo.Select(IndexFor(text));
-        };
-        return combo;
-    }
-
-    private async Task TestJevConnectionAsync()
-    {
-        var before = AgentRuntime.Instance.Settings;
-        SaveSettingsFromUi();
-        if (!ReferenceEquals(before, AgentRuntime.Instance.Settings))
-            await SaveSettingsAndSyncJevAsync();
-        await GameThread.InvokeAsync(() =>
-        {
-            if (_jevTestStatus != null && _jevTestStatus.IsInsideTree()) _jevTestStatus.Text = Loc.T("正在测试…");
-        });
-        var result = await AgentRuntime.Instance.TestJevConnectionAsync(CancellationToken.None);
-        await GameThread.InvokeAsync(() =>
-        {
-            if (_jevTestStatus != null && _jevTestStatus.IsInsideTree()) _jevTestStatus.Text = result;
-        });
-    }
-
-    /// <summary>
     /// The connect section: the MCP service switch and the client configuration to paste into an
     /// external client. Moved into settings from its own tab; the settings page's scroll carries it.
     /// </summary>
@@ -913,6 +809,13 @@ internal sealed partial class AgentOverlayHost
         if (_jevApiKeyEdit != null)
         {
             current.JevApiKey = _jevApiKeyEdit.Text.Trim();
+            RememberJevKey();
+            current.JevProviderKeys = new Dictionary<string, string>(_jevKeys, StringComparer.OrdinalIgnoreCase);
+        }
+
+        if (_jevProtocolCombo != null)
+        {
+            current.JevProtocol = _jevProtocolCombo.Selected == 1 ? JevProtocol.OpenAiDecisions : JevProtocol.SystemOne;
         }
 
         if (_jevModelEdit != null)

@@ -162,7 +162,8 @@ internal sealed partial class AgentRuntime
         // The play loop already owns recovery and accounting; do not hide extra attempts inside it.
         try
         {
-            var client = new JevClient(settings.JevBaseUrl, settings.JevApiKey, settings.JevModel, maxRetries: 0, requestTimeout: timeout);
+            var client = new JevClient(settings.JevBaseUrl, settings.JevApiKey, settings.JevModel, maxRetries: 0, requestTimeout: timeout,
+                protocol: settings.JevProtocol);
             // The recovery turn gate spans provider work and receipt accounting; the planner
             // reserves any concurrent request under the same gate. Check committed + pending
             // attempts before EACH Jev transport call, while the decider owns a single turn deadline.
@@ -176,6 +177,20 @@ internal sealed partial class AgentRuntime
         {
             NoteEvent(ex.Message);
             return null;
+        }
+    }
+
+    /// <summary>
+    /// When the fast-judgment breaker has paused the cached decider after repeated failures, the time
+    /// it tries the service again; null while it is being asked normally.
+    /// </summary>
+    internal DateTimeOffset? JevPausedUntil
+    {
+        get
+        {
+            IActionDecider? decider;
+            lock (_gate) decider = _jevDecider;
+            return (decider as JevExecutionDecider)?.PausedUntil;
         }
     }
 
@@ -195,7 +210,7 @@ internal sealed partial class AgentRuntime
         lock (_gate)
         {
             var fingerprint = _settings.HasJevConfigured()
-                ? string.Join('\n', _settings.JevBaseUrl, _settings.JevApiKey, _settings.JevModel, _settings.JevRequestTimeoutSeconds?.ToString() ?? "")
+                ? string.Join('\n', _settings.JevBaseUrl, _settings.JevApiKey, _settings.JevModel, _settings.JevProtocol, _settings.JevRequestTimeoutSeconds?.ToString() ?? "")
                 : string.Empty;
             if (fingerprint == _jevDeciderFingerprint)
             {
@@ -247,9 +262,8 @@ internal sealed partial class AgentRuntime
     }
 
     /// <summary>
-    /// Validates the Jev execution-model configuration with a real round trip: a configured client
-    /// pings <c>GET /v1/models</c> and the answer (or the classified failure) is what the settings
-    /// page shows.
+    /// Validates the fast-judgment configuration with a real round trip: one minimal question in the
+    /// configured format, and the answer (or the classified failure) is what the settings page shows.
     /// </summary>
     public async Task<string> TestJevConnectionAsync(CancellationToken cancellationToken)
     {
@@ -267,7 +281,8 @@ internal sealed partial class AgentRuntime
         try
         {
             var timeout = TimeSpan.FromSeconds(settings.JevRequestTimeoutSeconds is > 0 ? settings.JevRequestTimeoutSeconds.Value : 90);
-            var client = new JevClient(settings.JevBaseUrl, settings.JevApiKey, settings.JevModel, requestTimeout: timeout);
+            var client = new JevClient(settings.JevBaseUrl, settings.JevApiKey, settings.JevModel, requestTimeout: timeout,
+                protocol: settings.JevProtocol);
             return await client.PingAsync(cancellationToken);
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)

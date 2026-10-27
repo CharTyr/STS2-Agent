@@ -8,7 +8,7 @@ Game-dependent compilation succeeded on 2026-10-27 (Release, 0 warnings, 0 error
 
 ### Added
 
-- 快速判断（Jev）支持多家服务：设置里新增服务商选择，选中后自动填地址和模型；地址可填服务根地址（照旧补 `/v1/systemone`），也可填服务商文档里的完整请求地址（以 `/systemone` 或 `/decisions` 结尾时原样使用）。预设按各家文档整理，未用真实 Key 逐家实测；仅支持 System One 请求格式。
+- 快速判断（Jev）支持多家服务：设置里新增带图标的服务商选择（TypeSafe、OpenRouter、OpenCode Zen、Command Code、Vercel、Upstage、Inception、Liquid AI、Cloudflare、OpenAI Decisions），选中后自动填地址、接口格式和模型，每家的 Key 分开记住，预设有多个模型时可下拉选择，并提供「获取 Key」「文档」链接。地址可填服务根地址（照旧补 `/v1/systemone`）或完整请求地址。新增 OpenAI Decisions 接口格式，Cloudflare 的 `result` 包装自动解开。连接测试改为真实发一次最小请求。连续 3 次请求失败后暂停快速判断（60 秒起，翻倍，最长 10 分钟），期间由 LLM 直接接手，游玩页显示暂停到何时。预设按各家文档整理，未用真实 Key 逐家实测。
 - Compile model verification and companion settings partials directly in an offline runtime harness. Controlled provider responses and submitted-action barriers cover cancellation, single-flight probes, stale results, authentication/tool failures, pause/apply/resume, failed persistence and fault recovery; this does not replace the game build or live co-op acceptance.
 - Add provider quick setup, a visible 30-request trial for new installations, and cancellable model testing (45-second deadline). Preserve existing unlimited choices. Require verified tool calling for auto-play.
 - Guard identified local co-op saves against native loading under a mismatched player identity. Add diagnostics file saving and a DLL build fingerprint. Update two-tab setup and usage instructions.

@@ -98,8 +98,21 @@ internal sealed class AgentSettings
     /// <summary>Dual-layer decision mode for the multiplayer AI teammate.</summary>
     public bool DualLayerCoopEnabled { get; set; }
 
-    /// <summary>TypeSafe API base URL for the Jev execution model.</summary>
+    /// <summary>
+    /// Fast-judgment service address: a service root (<c>/v1/systemone</c> is appended) or a provider's
+    /// full request URL. See <c>Llm.JevEndpoint</c>.
+    /// </summary>
     public string JevBaseUrl { get; set; } = "https://api.typesafe.ai";
+
+    /// <summary>Wire format of the fast-judgment service: <c>systemone</c> (default) or <c>openai_decisions</c>.</summary>
+    public string JevProtocol { get; set; } = "systemone";
+
+    /// <summary>
+    /// Keys remembered per provider picked in settings (preset id, or <c>custom</c>), so switching
+    /// providers brings back each one's own key instead of sending one provider's key to another.
+    /// <see cref="JevApiKey"/> stays the key in use. Secret; never logged, exported or sent to a teammate.
+    /// </summary>
+    public Dictionary<string, string> JevProviderKeys { get; set; } = new(StringComparer.OrdinalIgnoreCase);
 
     /// <summary>TypeSafe API key for the Jev execution model. Secret; never logged or exported.</summary>
     public string JevApiKey { get; set; } = string.Empty;
@@ -323,6 +336,13 @@ internal sealed class AgentSettings
             ? "https://api.typesafe.ai"
             : JevBaseUrl.Trim().TrimEnd('/');
         JevApiKey = JevApiKey?.Trim() ?? string.Empty;
+        JevProtocol = STS2AIAgent.Llm.JevProtocol.Normalize(JevProtocol);
+        JevProviderKeys = new Dictionary<string, string>(
+            (JevProviderKeys ?? new Dictionary<string, string>())
+                .Where(pair => !string.IsNullOrWhiteSpace(pair.Key) && !string.IsNullOrWhiteSpace(pair.Value))
+                .Take(32)
+                .ToDictionary(pair => pair.Key.Trim(), pair => pair.Value.Trim(), StringComparer.OrdinalIgnoreCase),
+            StringComparer.OrdinalIgnoreCase);
         if (string.IsNullOrWhiteSpace(JevModel))
         {
             JevModel = "jev-latest";

@@ -114,6 +114,7 @@ internal static class SourceCoverageTests
         "STS2AIAgent/Ui/HelpCard.cs",
         // The embedded provider logos behind the fast-judgment picker; decodes through Godot's Image.
         "STS2AIAgent/Ui/JevProviderIcons.cs",
+        "STS2AIAgent/Ui/AgentOverlayHost.JevSettings.cs",
         "STS2AIAgent/Ui/AgentOverlayHost.FormHelpers.cs",
         "STS2AIAgent/Ui/AgentOverlayHost.SettingsSave.cs",
         "STS2AIAgent/Game/GameDataExportService.cs",

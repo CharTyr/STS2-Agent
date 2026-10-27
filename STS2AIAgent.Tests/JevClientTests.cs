@@ -358,17 +358,19 @@ internal static class JevClientTests
         Assert.Null(caught!.StatusCode);
     }
 
-    public static async Task PingAsync_ReportsTheModelCount()
+    public static async Task PingAsync_AsksOneRealQuestion()
     {
-        var handler = new RecordingHandler(ModelsBody);
+        var handler = new RecordingHandler("""{"model":"jev-1.13.0","answers":{"probe":{"type":"choice","choice":"a","confidence":0.9}}}""");
         var client = new JevClient(BaseUrl, ApiKey, "jev-latest", new HttpClient(handler));
 
         var reply = await client.PingAsync(CancellationToken.None);
 
-        Assert.Equal("OK, 2 models", reply);
-        Assert.Equal(ModelsUrl, handler.LastUrl);
-        Assert.Equal(HttpMethod.Get, handler.LastMethod);
+        Assert.True(reply.StartsWith("OK · jev-1.13.0 · ", StringComparison.Ordinal), reply);
+        Assert.Equal(SystemOneUrl, handler.LastUrl);
+        Assert.Equal(HttpMethod.Post, handler.LastMethod);
         Assert.Equal("Bearer", handler.AuthorizationScheme);
+        using var body = JsonDocument.Parse(handler.LastBody!);
+        Assert.Equal("choice", body.RootElement.GetProperty("questions").GetProperty("probe").GetProperty("type").GetString());
     }
 
     public static async Task PingAsync_ReportsTheFailureInsteadOfThrowing()
@@ -384,20 +386,22 @@ internal static class JevClientTests
         Assert.Equal(1, handler.RequestCount);
     }
 
-    public static void Endpoint_RootGetsTheDefaultPaths()
+    public static void Endpoint_RootGetsTheDefaultPath()
     {
         Assert.Equal(SystemOneUrl, JevEndpoint.RequestUrl(BaseUrl));
         Assert.Equal(SystemOneUrl, JevEndpoint.RequestUrl(BaseUrl + "/"));
-        Assert.Equal(ModelsUrl, JevEndpoint.ModelsUrl(BaseUrl));
     }
 
     public static void Endpoint_FullRequestUrlIsUsedAsWritten()
     {
         Assert.Equal("https://openrouter.ai/api/v1/systemone", JevEndpoint.RequestUrl("https://openrouter.ai/api/v1/systemone"));
         Assert.Equal("https://openrouter.ai/api/v1/systemone", JevEndpoint.RequestUrl(" https://openrouter.ai/api/v1/systemone/ "));
-        Assert.Equal("https://openrouter.ai/api/v1/models", JevEndpoint.ModelsUrl("https://openrouter.ai/api/v1/systemone"));
         Assert.Equal("https://api.inceptionlabs.ai/v1/decisions", JevEndpoint.RequestUrl("https://api.inceptionlabs.ai/v1/decisions"));
-        Assert.Equal("https://api.inceptionlabs.ai/v1/models", JevEndpoint.ModelsUrl("https://api.inceptionlabs.ai/v1/decisions"));
+        const string cloudflare = "https://api.cloudflare.com/client/v4/accounts/abc123/ai/run/@cf/cloudflare/clef";
+        Assert.Equal(cloudflare, JevEndpoint.RequestUrl(cloudflare));
+        Assert.Equal("cloudflare", JevEndpoint.FindPreset(cloudflare)!.Id);
+        Assert.True(JevEndpoint.HasPlaceholder(JevEndpoint.Presets.Single(p => p.Id == "cloudflare").Url));
+        Assert.False(JevEndpoint.HasPlaceholder(cloudflare));
     }
 
     public static void Endpoint_EveryPresetResolvesToItself()
@@ -405,10 +409,13 @@ internal static class JevClientTests
         foreach (var preset in JevEndpoint.Presets)
         {
             Assert.Equal(preset.Url, JevEndpoint.RequestUrl(preset.Url));
+            Assert.True(JevProtocol.All.Contains(preset.Protocol), $"preset {preset.Id} has an unknown format");
+            Assert.True(preset.DocsUrl.StartsWith("https://", StringComparison.Ordinal), $"preset {preset.Id} needs a docs link");
+            Assert.True(preset.KeyUrl.Length == 0 || preset.KeyUrl.StartsWith("https://", StringComparison.Ordinal), $"preset {preset.Id} key link");
             Assert.Equal(preset.Id, JevEndpoint.FindPreset(preset.Url)!.Id);
             Assert.True(Uri.TryCreate(preset.Url, UriKind.Absolute, out var uri) && uri.Scheme == "https",
                 $"preset {preset.Id} must be an https URL");
-            Assert.True(preset.Model.Length > 0, $"preset {preset.Id} needs a default model");
+            Assert.True(preset.Models.Length > 0 && preset.Models.All(m => m.Length > 0), $"preset {preset.Id} needs models");
         }
 
         Assert.Null(JevEndpoint.FindPreset(BaseUrl));
@@ -439,16 +446,107 @@ internal static class JevClientTests
         Assert.Equal("https://openrouter.ai/api/v1/systemone", handler.LastUrl);
     }
 
-    public static async Task PingAsync_ExplainsAProviderWithoutAModelList()
+    public static async Task Decisions_SendsNamedQuestionsAndReadsTheAnswerList()
     {
-        var handler = new ScriptedHandler((HttpStatusCode.NotFound, "{}", null));
-        var client = new JevClient("https://api.inceptionlabs.ai/v1/decisions", ApiKey, "mercury-decide", new HttpClient(handler));
+        var handler = new RecordingHandler("""
+        {
+          "model": "gpt-6-luna",
+          "answers": [
+            { "name": "risk", "type": "choice", "choice": "strike", "confidence": 0.8,
+              "probabilities": [ { "value": "strike", "probability": 0.8 }, { "value": "defend", "probability": 0.2 } ] },
+            { "name": "lethal", "type": "predicate", "probability": 0.1 }
+          ],
+          "usage": { "input_tokens": 50, "output_tokens": 3 }
+        }
+        """);
+        var client = new JevClient("https://api.openai.com/v1/decisions", ApiKey, "gpt-6-luna", new HttpClient(handler),
+            protocol: JevProtocol.OpenAiDecisions);
 
-        var reply = await client.PingAsync(CancellationToken.None);
+        var response = await client.SystemOneAsync(SampleRequest(), CancellationToken.None);
 
-        Assert.Equal("https://api.inceptionlabs.ai/v1/models", handler.Urls[0]);
-        Assert.Contains("Jev HTTP 404", reply);
-        Assert.Contains("key is unverified", reply);
+        Assert.Equal("https://api.openai.com/v1/decisions", handler.LastUrl);
+        using var body = JsonDocument.Parse(handler.LastBody!);
+        var root = body.RootElement;
+        Assert.Equal("jev-latest", root.GetProperty("model").GetString());
+        Assert.Contains("\"hp\":10", root.GetProperty("input").GetString()!);
+        var questions = root.GetProperty("questions").EnumerateArray().ToList();
+        Assert.Equal("choice", questions[0].GetProperty("type").GetString());
+        Assert.Equal("risk", questions[0].GetProperty("name").GetString());
+        Assert.Equal("strike", questions[0].GetProperty("choices")[0].GetProperty("value").GetString());
+        Assert.Equal("predicate", questions[1].GetProperty("type").GetString());
+
+        Assert.Equal("strike", response.Answers!["risk"].Choice);
+        Assert.Equal(0.8, response.Answers["risk"].Confidence!.Value);
+        Assert.Equal(0.2, response.Answers["risk"].Probabilities!["defend"]);
+        Assert.Equal("noul", response.Answers["lethal"].Type);
+        Assert.Equal(0.1, response.Answers["lethal"].Noul!.Value);
+        Assert.Equal(50, response.Usage!.InputTokens);
+    }
+
+    public static async Task Decisions_SendsTheDeciderScoreQuestionAsLevels()
+    {
+        var handler = new RecordingHandler("""{"answers":[{"name":"danger","type":"score","score":1.5,"confidence":0.4}]}""");
+        var client = new JevClient("https://api.openai.com/v1/decisions", ApiKey, "gpt-6-luna", new HttpClient(handler),
+            protocol: JevProtocol.OpenAiDecisions);
+        var request = new JevRequest
+        {
+            Model = "",
+            State = JsonNode.Parse("""{"hp":3}"""),
+            Questions = new Dictionary<string, JevQuestion>
+            {
+                ["danger"] = new JevQuestion { Type = "score", Instructions = new { goal = "rate" }, Criteria = new[] { "safe", "lethal" } }
+            }
+        };
+
+        var response = await client.SystemOneAsync(request, CancellationToken.None);
+
+        using var body = JsonDocument.Parse(handler.LastBody!);
+        var question = body.RootElement.GetProperty("questions")[0];
+        Assert.Equal("lethal", question.GetProperty("levels")[1].GetProperty("label").GetString());
+        Assert.Contains("\"goal\"", question.GetProperty("instructions").GetString()!);
+        Assert.Equal(1.5, response.Answers!["danger"].Score!.Value);
+    }
+
+    public static async Task Decisions_RefusalIsAServerError()
+    {
+        var handler = new RecordingHandler("""{"answers":[{"name":"risk","type":"refusal"}]}""");
+        var client = new JevClient("https://api.openai.com/v1/decisions", ApiKey, "gpt-6-luna", new HttpClient(handler),
+            protocol: JevProtocol.OpenAiDecisions);
+        JevException? caught = null;
+        try { await client.SystemOneAsync(SampleRequest(), CancellationToken.None); }
+        catch (JevException ex) { caught = ex; }
+        Assert.Equal(JevExceptionKind.Server, caught!.Kind);
+    }
+
+    public static async Task SystemOne_UnwrapsCloudflareResult()
+    {
+        var handler = new RecordingHandler("""{"result":{"answers":{"risk":{"type":"choice","choice":"defend","confidence":0.7}}},"success":true,"errors":[]}""");
+        var client = new JevClient("https://api.cloudflare.com/client/v4/accounts/abc/ai/run/@cf/cloudflare/clef-flash", ApiKey, "clef-flash", new HttpClient(handler));
+
+        var response = await client.SystemOneAsync(SampleRequest(), CancellationToken.None);
+
+        Assert.Equal("defend", response.Answers!["risk"].Choice);
+        Assert.Equal("https://api.cloudflare.com/client/v4/accounts/abc/ai/run/@cf/cloudflare/clef-flash", handler.LastUrl);
+    }
+
+    public static async Task SystemOne_CloudflareFailureCarriesItsMessage()
+    {
+        var handler = new RecordingHandler("""{"result":null,"success":false,"errors":[{"message":"bad model"}]}""");
+        var client = new JevClient("https://api.cloudflare.com/client/v4/accounts/abc/ai/run/@cf/cloudflare/clef-flash", ApiKey, "clef-flash", new HttpClient(handler));
+        JevException? caught = null;
+        try { await client.SystemOneAsync(SampleRequest(), CancellationToken.None); }
+        catch (JevException ex) { caught = ex; }
+        Assert.Equal(JevExceptionKind.Server, caught!.Kind);
+        Assert.Contains("bad model", caught.Message);
+    }
+
+    public static void UnfilledPlaceholderIsRejectedAtConstruction()
+    {
+        JevException? caught = null;
+        try { _ = new JevClient(JevEndpoint.Presets.Single(p => p.Id == "cloudflare").Url, ApiKey, "clef-flash"); }
+        catch (JevException ex) { caught = ex; }
+        Assert.Equal(JevExceptionKind.Config, caught!.Kind);
+        Assert.Contains("placeholder", caught.Message);
     }
 
     public static void BlankConfigurationIsRejectedAtConstruction()
