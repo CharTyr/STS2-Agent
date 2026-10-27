@@ -35,6 +35,9 @@ Game-dependent compilation succeeded on 2026-10-27 (Release, 0 warnings, 0 error
 
 ### Fixed
 
+- **「测试快速判断」的结果固定一行。** 服务商返回的长错误（如 TypeSafe 的 401）此前会在设置页折成好几行，排在页面末尾时被固定底栏挡住（第四轮实机复测 R4）。现在结果只占一行，过长部分显示省略号，鼠标悬停显示全文；失败结果也附上耗时（`… · 812 ms`），一次往返的耗时可以说明测试没有重试。
+- **游戏崩溃或被强制结束后留下的实例提示文件，不再拖垮 MCP 的实例发现。** 发现逻辑会逐个探测临时目录里的 `sts2-ai-agent-instance-*.json`，积累多了以后，没开游戏时会超过 3 秒的期限并报「Instance discovery timed out」，MCP 服务和不指定 `STS2_API_BASE_URL` 的客户端因此起不来（第四轮复测的 6 个 Python 离线错误就是这个原因）。现在会先确认提示文件里的进程还在，已退出的直接跳过，不发探测请求。4 个依赖本机状态的测试也改为显式指定地址。
+
 - **修复首次真实构建时的 CS0173 编译错误。** `BuildMapPayload` 里按「地图界面是否打开」在 `List<NMapPoint>` 与数组之间取值的条件表达式，编译器无法推断类型；该处只在带游戏程序集的构建中才会编译，离线套件看不到。现改用 `Enumerable.Empty<NMapPoint>()`，行为不变，`BuildMapPayload` 的契约哈希同步更新。
 - **药水栏全满时，奖励界面的药水奖励不再假装领取成功。** 此前游戏吞掉点击，`claim_reward` 仍返回 `completed`，奖励列表和药水栏都没变，客户端会误判已领取（#219）。现在满栏时该药水行 `claimable` 为 `false`，`claim_reward` 直接返回 409 `invalid_action`（`details.reason = "potion_slots_full"`）并提示先 `discard_potion` 腾位；奖励主界面的 `discard_potion` 已在本版开放，所以整条「丢弃再领取」路径可走通。验证脚本里「奖励界面不应出现 discard_potion」的陈旧断言一并删除。
 - **游戏内 HTTP 接口拒绝来自网页的请求。** 监听器只绑定 127.0.0.1，`IsLocal` 对任何请求都为真，所以浏览器里的网页能跨站 POST（打牌、启停自动游玩、打开 MCP），DNS rebinding 还能读到状态和截图。现在带 `Origin` 头、`Sec-Fetch-Site` 为跨站，或 `Host` 不是本机回环地址加本端口的请求一律返回 403 `untrusted_origin`；本机脚本、curl 和 MCP 客户端不受影响，MCP 路由仍用自己的 Origin 规则。

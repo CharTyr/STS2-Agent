@@ -91,7 +91,7 @@ internal sealed partial class AgentOverlayHost
         RefreshJevPresetExtras(preset);
 
         _jevTestButton = UiFactory.Button(Loc.T("测试快速判断"), () => _ = TestJevConnectionAsync(), UiFactory.ButtonKind.Ghost);
-        _jevTestStatus = UiFactory.Wrapped("", UiFactory.FontCaption);
+        _jevTestStatus = UiFactory.StatusLine();
         column.AddChild(UiFactory.Row(_jevTestButton));
         column.AddChild(_jevTestStatus);
         return HelpCard.Build(
@@ -206,12 +206,12 @@ internal sealed partial class AgentOverlayHost
             await SaveSettingsAndSyncJevAsync();
         await GameThread.InvokeAsync(() =>
         {
-            if (_jevTestStatus != null && _jevTestStatus.IsInsideTree()) _jevTestStatus.Text = Loc.T("正在测试…");
+            if (_jevTestStatus != null && _jevTestStatus.IsInsideTree()) UiFactory.SetStatusLine(_jevTestStatus, Loc.T("正在测试…"));
         });
         var result = await AgentRuntime.Instance.TestJevConnectionAsync(CancellationToken.None);
         await GameThread.InvokeAsync(() =>
         {
-            if (_jevTestStatus != null && _jevTestStatus.IsInsideTree()) _jevTestStatus.Text = result;
+            if (_jevTestStatus != null && _jevTestStatus.IsInsideTree()) UiFactory.SetStatusLine(_jevTestStatus, result);
         });
     }
 }

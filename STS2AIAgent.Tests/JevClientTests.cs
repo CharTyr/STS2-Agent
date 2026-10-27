@@ -395,6 +395,8 @@ internal static class JevClientTests
 
         Assert.Contains("Fast judgment HTTP 401", reply);
         Assert.False(reply.Contains('\n') || reply.Contains('\r') || reply.Contains('\t'), reply);
+        // The elapsed time is how a tester tells one attempt from a retried one.
+        Assert.True(System.Text.RegularExpressions.Regex.IsMatch(reply, @" · \d+ ms$"), reply);
     }
 
     public static void Endpoint_RootGetsTheDefaultPath()

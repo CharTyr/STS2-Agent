@@ -1019,6 +1019,7 @@ internal static class TestRunner
         yield return ("OverlayLayout.ChatFooterCompact", () => Task.Run(OverlayLayoutContractTests.ChatFooterKeepsItsHeightForMessages));
         yield return ("OverlayLayout.LongLabelsReflow", () => Task.Run(OverlayLayoutContractTests.LongLabelsGoThroughTheReflowingHelper));
         yield return ("OverlayLayout.SentenceFieldsReflow", () => Task.Run(OverlayLayoutContractTests.SentenceBearingFieldsReflow));
+        yield return ("OverlayLayout.FastJudgmentResultOneLine", () => Task.Run(OverlayLayoutContractTests.FastJudgmentTestResultIsOneLine));
         yield return ("OverlayLayout.PlayControlsStack", () => Task.Run(OverlayLayoutContractTests.PlayControlsDoNotRequireOneWideRow));
         yield return ("OverlayLayout.UsageSentencesStack", () => Task.Run(OverlayLayoutContractTests.UsageSentencesDoNotShareARow));
         yield return ("OverlayLayout.ModelDeleteAndMetricsStayNarrow", () => Task.Run(OverlayLayoutContractTests.ModelDeletionAndPlayMetricsCannotStretchThePanel));

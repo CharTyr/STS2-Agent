@@ -46,7 +46,8 @@ class LegacyActionCoverageTests(unittest.TestCase):
         self.assertEqual(set(), have - documented, "legacy tools without a mod action")
 
     def test_every_legacy_tool_has_a_client_method(self) -> None:
-        client = Sts2Client()
+        # An explicit URL, so the check never waits on instance discovery against this machine.
+        client = Sts2Client(base_url="http://127.0.0.1:8080")
         missing = [spec.name for spec in _LEGACY_ACTION_TOOLS if not hasattr(client, spec.name)]
         self.assertEqual([], missing, "client methods missing for: " + ", ".join(missing))
 

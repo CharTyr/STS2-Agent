@@ -176,8 +176,10 @@ internal sealed class JevClient : IJevClient
         {
             // A settings screen shows this string; it is a status line, not a stack trace. Only the
             // caller's own cancellation escapes, because that is not the probe failing. Line breaks from the
-            // server's error body would split the one-line status, so they collapse to spaces.
-            return System.Text.RegularExpressions.Regex.Replace(ex.Message, @"\s+", " ").Trim();
+            // server's error body would split the one-line status, so they collapse to spaces. The elapsed
+            // time is part of the answer: one attempt's worth shows the test did not retry.
+            var message = System.Text.RegularExpressions.Regex.Replace(ex.Message, @"\s+", " ").Trim();
+            return $"{message} · {started.ElapsedMilliseconds} ms";
         }
     }
 

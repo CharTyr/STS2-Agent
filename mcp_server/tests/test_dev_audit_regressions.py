@@ -19,7 +19,7 @@ class DevAuditRegressionTests(unittest.TestCase):
     def test_registered_diff_tool_executes_in_every_profile(self) -> None:
         for profile in ("guided", "layered", "full"):
             with self.subTest(profile=profile):
-                server = create_server(tool_profile=profile)
+                server = create_server(client=Sts2Client(base_url=BASE_URL), tool_profile=profile)
                 tool = asyncio.run(server.get_tool("diff_state"))
                 result = tool.fn(before={"hp": 5}, after={"hp": 4})
                 self.assertEqual(result["changes"], [{"path": "hp", "before": 5, "after": 4}])

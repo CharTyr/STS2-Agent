@@ -471,6 +471,27 @@ internal static class OverlayLayoutContractTests
     }
 
     /// <summary>
+    /// The fast-judgment test result is one line, however long the provider's error is.
+    /// </summary>
+    /// <remarks>
+    /// It used to be a wrapped label. A long 401 body grew the card by several lines, and at the end of
+    /// the settings page those lines went under the fixed footer (2026-10-27 live pass, r4). The result
+    /// now clips with an ellipsis and keeps the full text as the tooltip.
+    /// </remarks>
+    public static void FastJudgmentTestResultIsOneLine()
+    {
+        var host = AgentSourceFixture.ReadOverlayHost();
+        Assert.Contains("_jevTestStatus = UiFactory.StatusLine(", host);
+        Assert.False(host.Contains("_jevTestStatus.Text =", StringComparison.Ordinal),
+            "set the fast-judgment result through UiFactory.SetStatusLine so the tooltip keeps the full text");
+
+        var statusLine = AgentSourceFixture.MethodBody(AgentSourceFixture.ReadUiFactory(), "StatusLine");
+        Assert.Contains("ClipText = true", statusLine);
+        Assert.Contains("TextServer.OverrunBehavior.TrimEllipsis", statusLine);
+        Assert.Contains("MouseFilterEnum.Pass", statusLine);
+    }
+
+    /// <summary>
     /// A live theme switch has to repaint the panels, not only the text on them.
     /// </summary>
     /// <remarks>

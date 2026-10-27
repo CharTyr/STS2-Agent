@@ -682,6 +682,33 @@ internal static partial class UiFactory
     }
 
     /// <summary>
+    /// A one-line result whose text comes from outside, such as a server's error body: it never wraps
+    /// and never widens the column, cutting off with an ellipsis instead. Set its text through
+    /// <see cref="SetStatusLine"/> so the full text stays readable as the tooltip.
+    /// </summary>
+    /// <remarks>
+    /// A wrapped label let a long provider error grow the fast-judgment card by several lines, and at
+    /// the end of the settings page those lines went under the fixed footer (2026-10-27 live pass, r4).
+    /// </remarks>
+    public static Label StatusLine(int size = FontCaption)
+    {
+        var label = Label("", size, muted: true);
+        label.ClipText = true;
+        label.TextOverrunBehavior = TextServer.OverrunBehavior.TrimEllipsis;
+        label.SizeFlagsHorizontal = Control.SizeFlags.ExpandFill;
+        // Labels ignore the mouse by default, which would also hide the tooltip holding the full text.
+        label.MouseFilter = Control.MouseFilterEnum.Pass;
+        return label;
+    }
+
+    /// <summary>Shows <paramref name="text"/> on a <see cref="StatusLine"/>, with the whole text as its tooltip.</summary>
+    public static void SetStatusLine(Label label, string text)
+    {
+        label.Text = text;
+        label.TooltipText = text;
+    }
+
+    /// <summary>
     /// The width floor a reflowing label keeps: wide enough to be a paragraph, far under the panel.
     /// </summary>
     public const int MinReflowWidth = 120;
