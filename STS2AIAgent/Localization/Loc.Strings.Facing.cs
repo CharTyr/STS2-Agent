@@ -9,7 +9,7 @@ internal static partial class Loc
     {
         map["设置已变更，等待队友确认…"] = "Settings changed; waiting for the teammate…";
         map["配置已变更，请重新测试。"] = "Settings changed; test again.";
-        map["配置已填写，但主模型尚未验证。在「设置」页点「检测游玩模型」做一次真实调用；连通与工具调用通过后，即可开始自动游玩或邀请队友。"] = "Settings are filled in, but the main model is unverified. In Settings, click Test play model for a real request. Once connectivity and tool calling pass, you can start auto-play or invite a teammate.";
+        map["配置已填写，但主模型尚未验证。在「设置」页点「测试主模型」做一次真实调用；连通与工具调用通过后，即可开始自动游玩或邀请队友。"] = "Settings are filled in, but the main model is unverified. In Settings, click Test main model for a real request. Once connectivity and tool calling pass, you can start auto-play or invite a teammate.";
         map["队友模式"] = "Teammate mode";
         map["已有测试在进行，请稍候或取消。"] = "A test is running; wait or cancel it.";
         map["该模型不支持工具调用，无法自动游玩。请换模型再测。"] = "This model has no tool calling and cannot auto-play. Pick another and test again.";
