@@ -106,6 +106,54 @@ internal static class OverlayLayoutContractTests
     }
 
     /// <summary>
+    /// The title bar is one line: title, state tag and Hide. The API address and the drag hint were
+    /// a second line of developer text on every page.
+    /// </summary>
+    public static void HeaderIsOneLine()
+    {
+        var host = AgentSourceFixture.Read("STS2AIAgent/Ui/AgentOverlayHost.cs");
+        var header = AgentSourceFixture.MethodBody(host, "BuildHeader");
+        Assert.False(header.Contains("拖动移动", StringComparison.Ordinal), "The drag hint is back under the title.");
+        Assert.False(host.Contains("_apiLabel", StringComparison.Ordinal), "The API address is back in the title bar.");
+        Assert.Contains("hide.TooltipText = Loc.T(\"热键 {0}\"", header);
+
+        var settings = AgentSourceFixture.Read(Settings);
+        Assert.Contains("_apiAddressLabel = UiFactory.Wrapped(", AgentSourceFixture.MethodBody(settings, "BuildConnectSection"));
+    }
+
+    /// <summary>
+    /// The decision log is closed until the player opens it, and a closed log is not redrawn.
+    /// </summary>
+    public static void DecisionLogStartsClosed()
+    {
+        var source = AgentSourceFixture.Read(Pages);
+        Assert.Contains("private static bool _decisionLogOpen;", source);
+        Assert.Contains("_decisionLog.Visible = _decisionLogOpen;", AgentSourceFixture.MethodBody(source, "BuildDecisionCard"));
+        Assert.Contains("!_decisionLogOpen", AgentSourceFixture.MethodBody(source, "RefreshDecisionPage"));
+    }
+
+    /// <summary>
+    /// The co-op invite card shows the controls of one phase: setting a teammate up, or controlling
+    /// one. Diagnostics and the stats reset live at the bottom of the status card.
+    /// </summary>
+    public static void CoopCardShowsOnePhase()
+    {
+        var pages = AgentSourceFixture.Read(Pages);
+        var section = AgentSourceFixture.MethodBody(pages, "BuildCoopSection");
+        var statusCard = section.IndexOf("Loc.T(\"组队状态\")", StringComparison.Ordinal);
+        Assert.True(section.IndexOf("Loc.T(\"复制诊断\")", StringComparison.Ordinal) < statusCard
+            && section.IndexOf("tools.AddChild(_resetStatsButton);", StringComparison.Ordinal) < statusCard
+            && section.IndexOf("            tools));", StringComparison.Ordinal) > statusCard,
+            "Diagnostics and reset belong in the status card's bottom row, not between invite and pause.");
+
+        var control = AgentSourceFixture.Read("STS2AIAgent/Ui/AgentOverlayHost.PlayControl.cs");
+        var phase = AgentSourceFixture.MethodBody(control, "RefreshCoopPhase");
+        Assert.Contains("_teamControlRow.Visible = teamed;", phase);
+        Assert.Contains("_companionChoiceToggle.Visible = settingUp;", phase);
+        Assert.Contains("RefreshCoopPhase(canContinue);", AgentSourceFixture.MethodBody(control, "RefreshContinueAvailability"));
+    }
+
+    /// <summary>
     /// Every jump-bar entry has to be a section the form actually registers.
     /// </summary>
     /// <remarks>
@@ -345,12 +393,11 @@ internal static class OverlayLayoutContractTests
             StringComparison.Ordinal);
         Assert.False(settingsForm.Contains("_settingsBody.AddChild(UiFactory.Label(Loc.T(\"下一步：{0}\"", StringComparison.Ordinal),
             "The first-run next-step line must be wrapped instead of widening the settings page.");
-        // The Token tile closing a Row(...) call is the old three-tile row; the screen/action pair may
-        // share a row, the Token reading may not.
-        Assert.False(solo.Contains("UiFactory.MetricTile(Loc.T(\"Token\"), _playUsage)))", StringComparison.Ordinal),
-            "Three min-width metric tiles in one row truncate the Token field in the 440px panel.");
-        Assert.Contains("section.AddChild(UiFactory.MetricTile(Loc.T(\"Token\"), _playUsage));", solo,
-            StringComparison.Ordinal);
+        // The screen, last action and Token readings are wrapping caption lines in the auto-play card
+        // now. Three min-width metric tiles in one row truncated the Token field in the 440px panel.
+        Assert.Contains("_playUsage = UiFactory.Wrapped(", solo, StringComparison.Ordinal);
+        Assert.False(solo.Contains("UiFactory.MetricTile(", StringComparison.Ordinal),
+            "The solo section builds metric tiles again; the readings are one wrapping line each.");
         // With its own full-width, word-wrapping row, the usage sentence is shown whole: the old
         // 24-character cut is what left players reading "Token 消耗：尚无（未收到 usage） |...".
         var refresh = AgentSourceFixture.MethodBody(pages, "RefreshSoloSection");

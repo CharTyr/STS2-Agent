@@ -9,7 +9,6 @@ internal static partial class Loc
     {
         // Header, tabs, chat page.
         map["思考协议"] = "Thinking protocol";
-        map["拖动移动"] = "Drag to move";
         map["隐藏"] = "Hide";
         map["● 游玩中"] = "● Playing";
         map["○ 待机"] = "○ Idle";
@@ -17,10 +16,9 @@ internal static partial class Loc
             "Try: how to play this hand, is a relic worth taking.";
         map["对话默认只读；要它动手，用上方的「开始自动游玩」或「单步」，或者明确说「帮我打」。"] =
             "Chat is read-only; to make it act, use “Start auto-play” or “Single step” above, or say “play for me” in a message.";
-        map["AI 正在操作"] = "AI is playing";
-        map["未开始"] = "Not started";
-        map["屏幕"] = "Screen";
-        map["最近动作"] = "Last action";
+        map["屏幕 {0} · 动作 {1}"] = "Screen {0} · Action {1}";
+        map["展开记录"] = "Show log";
+        map["收起记录"] = "Hide log";
         map["思考"] = "Reasoning";
         map["思考中"] = "Thinking";
         map["动作"] = "Action";
@@ -134,7 +132,6 @@ internal static partial class Loc
             "Invite from the main menu. The second window waits on the character screen for the AI to decide its character; you can also switch over, pick for it, and press Embark. It then gets through the opening event and enters the map on its own.";
         map["继续联机存档"] = "Continue co-op save";
         map["正在读档…"] = "Loading save…";
-        map["主菜单有联机存档时可用"] = "Needs a co-op save on the main menu";
         map["请从主菜单邀请。第二窗口打开后，AI 会加入并进图，然后停在原地等待外部接管，不会自己出牌；你继续在这个窗口操作自己的角色。"] =
             "Invite from the main menu. Once the second window opens, the AI joins and enters the run, then stops and waits for an external client to take over — it will not play on its own; keep playing your character in this window.";
         map["游玩模型未配置或未验证：仍然可以邀请，队友会加入并进图，然后停在原地等待外部接管，不会自己出牌。想让它自己打，先在设置里配好模型并通过「测试连接」。"] =
@@ -278,7 +275,8 @@ internal static partial class Loc
         map["游戏内自动游玩和一起玩都不需要 MCP，只有 Cursor / Claude / Codex 等外部客户端才需要。\n把配置贴进客户端的 MCP 设置即可，服务只监听本机 127.0.0.1。\n本机 HTTP API 始终可用（GET /health /state，POST /action）；MCP 打开后才会在同一端口提供 /mcp。地址以本页复制为准。\nPython sidecar 仅支持 stdio / layered / full。"] =
             "In-game auto-play and playing together do not need MCP; only external clients such as Cursor / Claude / Codex do.\nPaste the config into the client's MCP settings; the service listens only on 127.0.0.1.\nThe local HTTP API is always available (GET /health /state, POST /action); /mcp appears on the same port only once MCP is on. Copy the address from this page.\nThe Python sidecar supports only stdio / layered / full.";
 
-        // Header status line: URL · role · hotkey.
-        map["{0}  ·  {1}  ·  热键 {2}"] = "{0}  ·  {1}  ·  Hotkey {2}";
+        // Hide-button tooltip and the local API line in Settings → MCP.
+        map["热键 {0}"] = "Hotkey {0}";
+        map["本机 API：{0}"] = "Local API: {0}";
     }
 }

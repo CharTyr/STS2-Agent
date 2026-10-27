@@ -996,6 +996,9 @@ internal static class TestRunner
         yield return ("OverlayLayout.SaveOutsideScroll", () => Task.Run(OverlayLayoutContractTests.SaveStaysOutsideTheScrollingForm));
         yield return ("OverlayLayout.SettingsFeedbackInFooter", () => Task.Run(OverlayLayoutContractTests.SettingsFeedbackStaysInTheFooter));
         yield return ("OverlayLayout.PlayPageNamesTheBlocker", () => Task.Run(OverlayLayoutContractTests.PlayPageNamesWhatBlocksPlay));
+        yield return ("OverlayLayout.HeaderIsOneLine", () => Task.Run(OverlayLayoutContractTests.HeaderIsOneLine));
+        yield return ("OverlayLayout.DecisionLogStartsClosed", () => Task.Run(OverlayLayoutContractTests.DecisionLogStartsClosed));
+        yield return ("OverlayLayout.CoopCardShowsOnePhase", () => Task.Run(OverlayLayoutContractTests.CoopCardShowsOnePhase));
         yield return ("OverlayLayout.JumpButtonsMatchSections", () => Task.Run(OverlayLayoutContractTests.EveryJumpButtonNamesARegisteredSection));
         yield return ("OverlayLayout.CoopActionsFirst", () => Task.Run(OverlayLayoutContractTests.CoopActionsComeBeforeCoopStatus));
         yield return ("OverlayLayout.CoopChatAdapts", () => Task.Run(OverlayLayoutContractTests.CoopChatBoxAdaptsToThePage));

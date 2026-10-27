@@ -244,7 +244,7 @@ powershell -ExecutionPolicy Bypass -File ".\scripts\build-mod.ps1" -Configuratio
 ### Q2: Autoplay stopped unexpectedly. How do I resume?
 1. Read the **AI Teammate** status line and the suggested next click. Config errors do not retry forever; fix settings, test, then **Resume play** without restarting the whole game.
 2. If tokens show **unknown**, the provider omitted usage; that is not a zero spend. Request caps still work.
-3. Use **Export diagnostics**. The copy excludes API keys, Authorization headers, and session tokens, and does not include chat bodies by default.
+3. Use **Copy diagnostics** or **Save diagnostics** at the bottom of the **Party** card in **Play → Multiplayer**. The export excludes API keys, Authorization headers, and session tokens, and does not include chat bodies by default.
 
 ### Q3: Dual-instance companion window fails to start.
 1. Local co-op runs through the internal multiplayer test lobby.
@@ -254,7 +254,7 @@ powershell -ExecutionPolicy Bypass -File ".\scripts\build-mod.ps1" -Configuratio
 ### Updates and co-op recovery
 - The second window stages files from the mod actually loaded by the host, accepting GitHub `mod_id.json` and Workshop `STS2AIAgent.json`. Unmodified managed copies upgrade automatically. Manual or edited copies are preserved and report their conflict path. Keep one installation instead of both Workshop and a manual copy.
 - Model, key, budget and non-combat-only changes are pushed to an existing teammate and shown as applied only after acknowledgement. Its current action settles first; an unverified model leaves it paused.
-- Resume local AI co-op saves with **Play → Multiplayer → Continue last co-op run**. When the native load path would use the wrong player identity for an identified local save, the mod blocks it before the game can rename the save `.VAL.corrupt`. Ordinary Steam saves do not match this guard.
+- Resume local AI co-op saves with **Play → Multiplayer → Continue co-op save**. When the native load path would use the wrong player identity for an identified local save, the mod blocks it before the game can rename the save `.VAL.corrupt`. Ordinary Steam saves do not match this guard.
 - **Copy diagnostics** uses the clipboard. **Save diagnostics** writes redacted text and opens its folder. The DLL build SHA256 distinguishes builds with the same version. Keys and chat bodies are excluded.
 
 ---

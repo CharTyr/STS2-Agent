@@ -40,17 +40,15 @@ internal sealed partial class AgentOverlayHost
     private CheckBox? _attachShot;
     private Label? _playStatus;
     private Label? _playSummary;
-    private Label? _playScreen;
-    private Label? _playAction;
     private Label? _playUsage;
     private LineEdit? _maxTokensEdit;
     private LineEdit? _maxRequestsEdit;
     private CheckBox? _proactiveChatToggle;
     private OptionButton? _proactiveToneCombo;
 
-    /// <summary>The header's live state tag and the connection line under it.</summary>
+    /// <summary>The header's live state tag, and the hide button whose tooltip names the hotkey.</summary>
     private Label? _headerStatus;
-    private Label? _apiLabel;
+    private Button? _hideButton;
     private Label? _dualStatus;
     private Label? _teammateLive;
     private Label? _sessionHeadline;
@@ -74,6 +72,8 @@ internal sealed partial class AgentOverlayHost
     private CheckBox? _mcpToggle;
     private Label? _mcpStatus;
     private Label? _mcpUrlLabel;
+    /// <summary>The local HTTP API address, moved here from the title bar.</summary>
+    private Label? _apiAddressLabel;
     private TextEdit? _mcpConfigEdit;
     private Control? _mcpInfoBox;
     private Control? _pageHost;
@@ -362,33 +362,21 @@ internal sealed partial class AgentOverlayHost
         _headerStatus.SizeFlagsVertical = Control.SizeFlags.ShrinkCenter;
         var titleRow = UiFactory.TightRow(title, _headerStatus);
         titleRow.MouseFilter = Control.MouseFilterEnum.Ignore;
-
-        var hint = UiFactory.Label(Loc.T("拖动移动"), UiFactory.FontCaption, muted: true, wrap: false);
-        hint.MouseFilter = Control.MouseFilterEnum.Ignore;
-        var handleColumn = UiFactory.Column();
-        handleColumn.MouseFilter = Control.MouseFilterEnum.Ignore;
-        handleColumn.SizeFlagsVertical = Control.SizeFlags.ShrinkBegin;
-        handleColumn.AddThemeConstantOverride("separation", 2);
-        handleColumn.AddChild(titleRow);
-        handleColumn.AddChild(hint);
-        _dragHandle.AddChild(handleColumn);
+        // One line: the title bar is the drag handle (its cursor says so), and the local API address
+        // that used to sit under it is developer information, now in Settings → MCP.
+        _dragHandle.AddChild(titleRow);
 
         var hide = UiFactory.Button(Loc.T("隐藏"), ToggleVisible, UiFactory.ButtonKind.Ghost);
         hide.CustomMinimumSize = new Vector2(56, 0);
         hide.SizeFlagsHorizontal = Control.SizeFlags.ShrinkEnd;
+        hide.TooltipText = Loc.T("热键 {0}", AgentRuntime.Instance.Settings.Hotkey);
+        _hideButton = hide;
 
-        // The connection line doubles as the header's status chip: the colour says whether the local
-        // API is reachable before the player has read a word of it.
-        _apiLabel = UiFactory.Label("", UiFactory.FontCaption, muted: true);
-        var column = UiFactory.Column();
-        column.SizeFlagsVertical = Control.SizeFlags.ShrinkBegin;
         var row = new HBoxContainer { MouseFilter = Control.MouseFilterEnum.Ignore };
         row.AddThemeConstantOverride("separation", UiFactory.SpaceSm);
         row.AddChild(_dragHandle);
         row.AddChild(hide);
-        column.AddChild(row);
-        column.AddChild(_apiLabel);
-        return column;
+        return row;
     }
 
     private void ToggleVisible()
@@ -472,6 +460,7 @@ internal sealed partial class AgentOverlayHost
         {
             _hotkeyName = hotkeyName;
             OverlayHotkey.TryParse(hotkeyName, out _hotkey);
+            if (_hideButton != null) _hideButton.TooltipText = Loc.T("热键 {0}", hotkeyName);
         }
 
         var down = Input.IsPhysicalKeyPressed(_hotkey);
@@ -496,22 +485,9 @@ internal sealed partial class AgentOverlayHost
             }
             if (_panel?.Visible == true)
             {
-                if (_apiLabel != null)
+                if (IsTabVisible(OverlayTabCatalog.Play) && _playSummary != null)
                 {
-                    _apiLabel.Text = Loc.T("{0}  ·  {1}  ·  热键 {2}", HttpServer.Instance.Prefix, InstanceRole.Current, hotkeyName);
-                }
-
-                if (IsTabVisible(OverlayTabCatalog.Play) && _playScreen != null)
-                {
-                    try
-                    {
-                        _playScreen.Text = GameStateService.CurrentScreenName();
-                    }
-                    catch (Exception ex)
-                    {
-                        WarnOnce("screen name read failed", ex);
-                        _playScreen.Text = "-";
-                    }
+                    _playSummary.Text = PlaySummaryText();
                 }
 
                 // The play page hosts the multiplayer section, the decision log and the Jev panel, all

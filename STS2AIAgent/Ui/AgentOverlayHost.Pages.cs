@@ -30,11 +30,21 @@ namespace STS2AIAgent.Ui;
 internal sealed partial class AgentOverlayHost
 {
     private OptionButton? _companionMode;
+    /// <summary>Pause and resume, shown only while a teammate exists.</summary>
+    private Control? _teamControlRow;
     /// <summary>The decision log's three live labels: usage, run spend, and the log itself.</summary>
     private RichTextLabel? _decisionLog;
     private RichLog? _decisionLogView;
     private Label? _decisionUsage;
     private Label? _decisionRunSpend;
+
+    /// <summary>
+    /// The session tile, shown in multiplayer only (solo draws the same reading in the auto-play
+    /// card), and the button that opens the log. Open state is static so a rebuild keeps it.
+    /// </summary>
+    private Control? _decisionUsageTile;
+    private Button? _decisionLogToggle;
+    private static bool _decisionLogOpen;
 
     /// <summary>The teammate line and the tone it is currently drawn in. See <see cref="ApplyTone"/>.</summary>
     private Control? _teammateLivePill;
@@ -137,7 +147,11 @@ internal sealed partial class AgentOverlayHost
 
         // The hero names the state, and colours it: green while the loop runs, muted while it waits.
         _playStatus = UiFactory.Wrapped(Loc.T("状态：-"), UiFactory.FontTitle, muted: false);
-        _playSummary = UiFactory.Wrapped(Loc.T("未开始"), UiFactory.FontCaption);
+        // Two caption lines instead of three metric tiles: what the AI sees and did last, and what the
+        // session has spent. The tiles took a quarter of the page for three short readings, and the
+        // spend was drawn a second time in the decision card below.
+        _playSummary = UiFactory.Wrapped("-", UiFactory.FontCaption);
+        _playUsage = UiFactory.Wrapped("-", UiFactory.FontCaption);
         _playToggle = UiFactory.Button(Loc.T("开始自动游玩"), TogglePlay, UiFactory.ButtonKind.Primary);
         _stepButton = UiFactory.Button(Loc.T("单步"), () => _ = AgentRuntime.Instance.StepOnceAsync(CancellationToken.None));
         // A horizontal row cannot hold "暂停" and "单步" inside a 440px panel: the primary
@@ -153,18 +167,8 @@ internal sealed partial class AgentOverlayHost
             Loc.T("「开始自动游玩」让 AI 持续决策并操作，「单步」只走一步。\n用的是与 MCP 相同的精简状态和工具，不需要视觉。"),
             _playStatus,
             _playSummary,
+            _playUsage,
             playControls));
-
-        _playScreen = UiFactory.Label("-", UiFactory.FontHeading);
-        _playAction = UiFactory.Label("-", UiFactory.FontHeading);
-        _playUsage = UiFactory.Label("-", UiFactory.FontHeading);
-        // The three readings have a 96px floor each, but their live values (especially the Token
-        // sentence) grow well past that. Keep the short screen/action readings together and give
-        // the usage sentence its own full-width row rather than clipping the right-hand tile.
-        section.AddChild(UiFactory.Row(
-            UiFactory.MetricTile(Loc.T("屏幕"), _playScreen),
-            UiFactory.MetricTile(Loc.T("最近动作"), _playAction)));
-        section.AddChild(UiFactory.MetricTile(Loc.T("Token"), _playUsage));
 
         // The dual-layer toggle for solo play. When it is on, Jev picks each action and the LLM only
         // plans strategy; the panel below the conversation shows what Jev chose.
@@ -249,7 +253,8 @@ internal sealed partial class AgentOverlayHost
         // Two counters stacked rather than side by side: these are full sentences ("Token 消耗：66,184
         // ..."), not metric numerals, and a side-by-side row clipped the request count off the right
         // edge in the live pass.
-        column.AddChild(UiFactory.MetricTile(Loc.T("本次会话"), _decisionUsage));
+        _decisionUsageTile = UiFactory.MetricTile(Loc.T("本次会话"), _decisionUsage);
+        column.AddChild(_decisionUsageTile);
         column.AddChild(UiFactory.MetricTile(Loc.T("本局"), _decisionRunSpend));
         _decisionLog = UiFactory.Rich();
         _decisionLog.FitContent = false;
@@ -257,12 +262,27 @@ internal sealed partial class AgentOverlayHost
         _decisionLogView = new RichLog(_decisionLog, RichLog.LogAnchor.Top);
         _decisionLog.CustomMinimumSize = new Vector2(0, 140);
         _decisionLog.SizeFlagsHorizontal = Control.SizeFlags.ExpandFill;
+        // Closed by default: the log is for reviewing a run, and open it pushed everything under it
+        // 140 px further down a page the player scrolls mid-fight.
+        _decisionLog.Visible = _decisionLogOpen;
+        _decisionLogToggle = UiFactory.Button(DecisionLogToggleText(), ToggleDecisionLog, UiFactory.ButtonKind.Ghost);
+        column.AddChild(_decisionLogToggle);
         column.AddChild(_decisionLog);
         return HelpCard.Build(
             "play.decisions",
             Loc.T("决策记录"),
             Loc.T("最新的在最前。每条包含动作、理由、来源和该步消耗的 Token。"),
             column);
+    }
+
+    private static string DecisionLogToggleText() => _decisionLogOpen ? Loc.T("收起记录") : Loc.T("展开记录");
+
+    private void ToggleDecisionLog()
+    {
+        _decisionLogOpen = !_decisionLogOpen;
+        if (_decisionLog != null) _decisionLog.Visible = _decisionLogOpen;
+        if (_decisionLogToggle != null) _decisionLogToggle.Text = DecisionLogToggleText();
+        if (_decisionLogOpen) RefreshDynamic();
     }
 
     /// <summary>
@@ -354,6 +374,10 @@ internal sealed partial class AgentOverlayHost
         _teamPause = UiFactory.Button(Loc.T("暂停队友"), () => _ = AgentRuntime.Instance.ControlTeammateAsync(false, CancellationToken.None));
         _teamResume = UiFactory.Button(Loc.T("继续游玩"), () => _ = AgentRuntime.Instance.ControlTeammateAsync(true, CancellationToken.None));
         _teamControlStatus = UiFactory.Wrapped(AgentRuntime.Instance.TeamControlStatus, UiFactory.FontCaption, muted: true);
+        _teamControlRow = UiFactory.Row(_teamPause, _teamResume);
+        // The card shows one phase at a time (see RefreshCoopPhase): before a teammate exists, the
+        // character switch, invite and -- when a save exists -- continue; once one exists, pause and
+        // resume. It used to show all nine controls at once, most of them disabled.
         page.AddChild(HelpCard.Build(
             "coop.invite",
             Loc.T("邀请与控制"),
@@ -361,16 +385,25 @@ internal sealed partial class AgentOverlayHost
             _companionChoiceToggle,
             _dualHint,
             _dualLaunchButton,
-            UiFactory.Row(UiFactory.Button(Loc.T("复制诊断"), CopyDiagnostics, UiFactory.ButtonKind.Ghost),
-                UiFactory.Button(Loc.T("保存诊断"), SaveDiagnostics, UiFactory.ButtonKind.Ghost)),
             // In-game entry for continue_ai_teammate: the game's own Load button opens a saved co-op
             // run over Steam networking and rejects the local-connection NetIds, so the way back into
-            // a saved run has to live here, one row under the invite.
-            UiFactory.Row(_dualContinueButton, _resetStatsButton),
-            UiFactory.Divider(),
-            UiFactory.Row(_teamPause, _teamResume),
+            // a saved run has to live here, under the invite.
+            _dualContinueButton,
+            _teamControlRow,
             _teamControlStatus));
 
+        // Diagnostics and the stats reset are for when something went wrong, so they sit as a
+        // secondary row at the bottom of the status card instead of between invite and pause.
+        var tools = new HFlowContainer
+        {
+            MouseFilter = Control.MouseFilterEnum.Ignore,
+            SizeFlagsHorizontal = Control.SizeFlags.ExpandFill
+        };
+        tools.AddThemeConstantOverride("h_separation", UiFactory.SpaceXs);
+        tools.AddThemeConstantOverride("v_separation", UiFactory.SpaceXs);
+        tools.AddChild(UiFactory.Button(Loc.T("复制诊断"), CopyDiagnostics, UiFactory.ButtonKind.Ghost));
+        tools.AddChild(UiFactory.Button(Loc.T("保存诊断"), SaveDiagnostics, UiFactory.ButtonKind.Ghost));
+        tools.AddChild(_resetStatsButton);
         page.AddChild(UiFactory.Card(
             Loc.T("组队状态"),
             _sessionHeadline,
@@ -378,7 +411,8 @@ internal sealed partial class AgentOverlayHost
             _sessionNext,
             _sessionConfigNotice,
             _teammateLivePill,
-            _dualStatus));
+            _dualStatus,
+            tools));
 
         _teamChat = UiFactory.Rich();
         _teamChat.FitContent = false;
@@ -441,7 +475,8 @@ internal sealed partial class AgentOverlayHost
                 spend.TokensKnown);
         }
 
-        if (_decisionLogView == null)
+        // A closed log is not redrawn; opening it runs a refresh pass.
+        if (_decisionLogView == null || !_decisionLogOpen)
         {
             return;
         }
@@ -617,14 +652,9 @@ internal sealed partial class AgentOverlayHost
         _readinessBanner.Visible = blocker != null && !external;
     }
 
-    /// <summary>The title bar's state tag, the connection line, and the edge tab.</summary>
+    /// <summary>The title bar's state tag and the edge tab.</summary>
     private void RefreshHeader(bool playing)
     {
-        if (_apiLabel != null)
-        {
-            _apiLabel.Text = Loc.T("{0}  ·  {1}  ·  热键 {2}", HttpServer.Instance.Prefix, InstanceRole.Current, AgentRuntime.Instance.Settings.Hotkey);
-        }
-
         if (_headerStatus != null)
         {
             _headerStatus.Text = playing ? Loc.T("● 游玩中") : Loc.T("○ 待机");
@@ -654,30 +684,12 @@ internal sealed partial class AgentOverlayHost
 
         if (_playSummary != null)
         {
-            _playSummary.Text = playing ? Loc.T("AI 正在操作") : Loc.T("未开始");
-        }
-
-        if (_playScreen != null)
-        {
-            try
-            {
-                _playScreen.Text = GameStateService.CurrentScreenName();
-            }
-            catch (Exception ex)
-            {
-                WarnOnce("screen name read failed", ex);
-                _playScreen.Text = "-";
-            }
-        }
-
-        if (_playAction != null)
-        {
-            _playAction.Text = Trim(AgentRuntime.Instance.LastAction, 24);
+            _playSummary.Text = PlaySummaryText();
         }
 
         if (_playUsage != null)
         {
-            // Whole sentence: the tile has its own full-width row and wraps (see BuildSoloSection).
+            // Whole sentence on its own wrapping line (see BuildSoloSection).
             _playUsage.Text = PlayerFacingSession.FormatUsage(
                 AgentRuntime.Instance.SessionUsageKnown,
                 AgentRuntime.Instance.SessionUsage,
@@ -694,6 +706,23 @@ internal sealed partial class AgentOverlayHost
             _stepButton.Disabled = playing || !_playReady;
             _stepButton.Visible = !playing;
         }
+    }
+
+    /// <summary>The auto-play card's facts line: the screen the AI is on and the last action it took.</summary>
+    private static string PlaySummaryText()
+    {
+        string screen;
+        try
+        {
+            screen = GameStateService.CurrentScreenName();
+        }
+        catch (Exception ex)
+        {
+            WarnOnce("screen name read failed", ex);
+            screen = "-";
+        }
+
+        return Loc.T("屏幕 {0} · 动作 {1}", screen, Trim(AgentRuntime.Instance.LastAction, 48));
     }
 
     /// <summary>
@@ -817,6 +846,11 @@ internal sealed partial class AgentOverlayHost
         if (_mcpToggle != null)
         {
             _mcpToggle.SetPressedNoSignal(AgentRuntime.Instance.McpRunning);
+        }
+
+        if (_apiAddressLabel != null)
+        {
+            _apiAddressLabel.Text = Loc.T("本机 API：{0}", HttpServer.Instance.Prefix);
         }
 
         if (_mcpInfoBox != null)

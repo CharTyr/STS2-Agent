@@ -3,6 +3,7 @@ using STS2AIAgent.Agent;
 using STS2AIAgent.Config;
 using STS2AIAgent.Game;
 using STS2AIAgent.Localization;
+using STS2AIAgent.Server;
 
 namespace STS2AIAgent.Ui;
 
@@ -611,6 +612,7 @@ internal sealed partial class AgentOverlayHost
         _mcpToggle = UiFactory.Check(Loc.T("启用 MCP"), AgentRuntime.Instance.McpRunning);
         _mcpToggle.Toggled += on => AgentRuntime.Instance.SetMcpEnabled(on);
         _mcpStatus = UiFactory.Wrapped(AgentRuntime.Instance.McpStatus, UiFactory.FontBody);
+        _apiAddressLabel = UiFactory.Wrapped(Loc.T("本机 API：{0}", HttpServer.Instance.Prefix), UiFactory.FontCaption);
 
         _mcpInfoBox = UiFactory.Column();
         _mcpUrlLabel = UiFactory.Label("", UiFactory.FontBody);
@@ -635,7 +637,8 @@ internal sealed partial class AgentOverlayHost
             Loc.T("MCP 服务"),
             Loc.T("游戏内自动游玩和一起玩都不需要 MCP，只有 Cursor / Claude / Codex 等外部客户端才需要。\n把配置贴进客户端的 MCP 设置即可，服务只监听本机 127.0.0.1。\n本机 HTTP API 始终可用（GET /health /state，POST /action）；MCP 打开后才会在同一端口提供 /mcp。地址以本页复制为准。\nPython sidecar 仅支持 stdio / layered / full。"),
             _mcpToggle,
-            _mcpStatus));
+            _mcpStatus,
+            _apiAddressLabel));
         page.AddChild(UiFactory.Card(Loc.T("客户端配置"), _mcpInfoBox));
         return page;
     }

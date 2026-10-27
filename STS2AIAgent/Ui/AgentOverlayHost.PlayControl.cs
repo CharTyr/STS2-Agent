@@ -220,6 +220,7 @@ internal sealed partial class AgentOverlayHost
         if (_companionMode != null) _companionMode.Disabled = LocalDualInstanceLauncher.CompanionProcessAlive || AgentRuntime.Instance.DualLaunching;
         if (_dualLayerCoopCheck != null) _dualLayerCoopCheck.Disabled = _companionSettingsSyncing;
         if (_jevPanel != null) _jevPanel.Visible = dualEnabled;
+        if (_decisionUsageTile != null) _decisionUsageTile.Visible = coopMode;
         if (_sendButton != null) _sendButton.Disabled = _playModeSwitching;
         if (_playToggle != null)
             _playToggle.Disabled = AgentRuntime.Instance.DualLaunching || _playModeSwitching || coopMode
@@ -290,7 +291,9 @@ internal sealed partial class AgentOverlayHost
         if (settings.CompanionControlMode == "external")
             return Loc.T("外部 Agent 模式：队友入队后等待接管，不会自己出牌。");
         var ready = FirstRunSetup.Evaluate(settings);
-        if (!ready.ReadyToInvite) return ready.Hint;
+        // The play page's setup line already names what is missing; repeating the long hint here
+        // said the same thing twice on one screen.
+        if (!ready.ReadyToInvite) return "";
         return settings.CompanionAutoSelectCharacter
             ? Loc.T("在主菜单邀请，队友会自动选角并游玩。")
             : Loc.T("在主菜单邀请，到第二窗口为队友选角色。");
@@ -352,6 +355,25 @@ internal sealed partial class AgentOverlayHost
 
         var canContinue = CanOfferContinue();
         _dualContinueButton.Disabled = blocked || !canContinue;
-        _dualContinueButton.TooltipText = canContinue ? "" : Loc.T("主菜单有联机存档时可用");
+        RefreshCoopPhase(canContinue);
+    }
+
+    /// <summary>
+    /// Shows the invite card's controls for the phase the team is in: setting up a teammate, or
+    /// controlling one that exists. A launch in flight keeps the button that started it on screen,
+    /// because that button is what reads "邀请中…" / "正在读档…".
+    /// </summary>
+    private void RefreshCoopPhase(bool canContinue)
+    {
+        var launching = AgentRuntime.Instance.DualLaunching;
+        var teamed = !launching
+            && (LocalDualInstanceLauncher.Connection != null || LocalDualInstanceLauncher.CompanionProcessAlive);
+        var settingUp = !teamed && !launching;
+        if (_companionChoiceToggle != null) _companionChoiceToggle.Visible = settingUp;
+        if (_dualHint != null) _dualHint.Visible = settingUp && _dualHint.Text.Length > 0;
+        if (_dualLaunchButton != null) _dualLaunchButton.Visible = settingUp || (launching && !_continueLaunching);
+        if (_dualContinueButton != null) _dualContinueButton.Visible = (settingUp && canContinue) || (launching && _continueLaunching);
+        if (_teamControlRow != null) _teamControlRow.Visible = teamed;
+        if (_teamControlStatus != null) _teamControlStatus.Visible = teamed && _teamControlStatus.Text.Length > 0;
     }
 }
