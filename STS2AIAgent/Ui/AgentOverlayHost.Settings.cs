@@ -2,6 +2,7 @@ using Godot;
 using STS2AIAgent.Agent;
 using STS2AIAgent.Config;
 using STS2AIAgent.Game;
+using STS2AIAgent.Llm;
 using STS2AIAgent.Localization;
 using STS2AIAgent.Server;
 
@@ -52,14 +53,6 @@ internal sealed partial class AgentOverlayHost
     private string? _themeSelectedId;
     private Control? _themePicker;
 
-    /// <summary>The Jev section's editors and its connection-test feedback.</summary>
-    private LineEdit? _jevBaseUrlEdit;
-    private LineEdit? _jevApiKeyEdit;
-    private LineEdit? _jevModelEdit;
-    private LineEdit? _jevThresholdEdit;
-    private LineEdit? _jevTimeoutEdit;
-    private Button? _jevTestButton;
-    private Label? _jevTestStatus;
 
     /// <summary>The selection, seeded from settings the first time this page is built.</summary>
     private string SelectedTheme => _themeSelectedId ??= OverlayThemeCatalog.DefaultId;
@@ -169,7 +162,7 @@ internal sealed partial class AgentOverlayHost
         ("endpoints", Loc.T("端点")),
         ("models", Loc.T("模型")),
         ("bindings", Loc.T("模型绑定")),
-        ("jev", Loc.T("Jev")),
+        ("jev", Loc.T("快速判断")),
         ("connect", Loc.T("MCP"))
     };
 
@@ -534,7 +527,7 @@ internal sealed partial class AgentOverlayHost
             _proactiveToneCombo = null;
         }
 
-        AddSettingsSection("jev", Loc.T("Jev"));
+        AddSettingsSection("jev", Loc.T("快速判断"));
         _settingsBody.AddChild(BuildJevSection(settings));
 
         AddSettingsSection("connect", Loc.T("MCP"));
@@ -548,58 +541,6 @@ internal sealed partial class AgentOverlayHost
         RefreshSettingsJumpBar();
         RefreshModelTestControls();
         }
-    }
-
-    /// <summary>
-    /// The Jev execution-model section: base URL, API key, model and the confidence threshold, plus a
-    /// connection test. These feed the dual-layer decision mode toggled from the play page.
-    /// </summary>
-    private Control BuildJevSection(AgentSettings settings)
-    {
-        var column = UiFactory.Column();
-
-        _jevBaseUrlEdit = UiFactory.Line(settings.JevBaseUrl, "https://api.typesafe.ai");
-        _jevApiKeyEdit = UiFactory.Line(settings.JevApiKey, "API Key", secret: true);
-        _jevModelEdit = UiFactory.Line(settings.JevModel, "jev-latest");
-        _jevThresholdEdit = UiFactory.Line(SettingsInput.FormatThreshold(settings.JevConfidenceThreshold), "0.35");
-        _jevTimeoutEdit = UiFactory.Line(settings.JevRequestTimeoutSeconds?.ToString() ?? "", Loc.T("默认 90 秒"));
-        WatchLine(_jevBaseUrlEdit);
-        WatchLine(_jevApiKeyEdit);
-        WatchLine(_jevModelEdit);
-        WatchLine(_jevThresholdEdit);
-        WatchLine(_jevTimeoutEdit);
-        column.AddChild(Labeled(Loc.T("Base URL"), _jevBaseUrlEdit));
-        column.AddChild(Labeled(Loc.T("API Key"), _jevApiKeyEdit));
-        column.AddChild(Labeled(Loc.T("模型"), _jevModelEdit));
-        column.AddChild(Labeled(Loc.T("置信度阈值（0-1）"), _jevThresholdEdit));
-        column.AddChild(Labeled(Loc.T("请求超时（秒）"), _jevTimeoutEdit));
-
-        _jevTestButton = UiFactory.Button(Loc.T("测试 Jev 连接"), () => _ = TestJevConnectionAsync(), UiFactory.ButtonKind.Ghost);
-        _jevTestStatus = UiFactory.Wrapped("", UiFactory.FontCaption);
-        column.AddChild(UiFactory.Row(_jevTestButton));
-        column.AddChild(_jevTestStatus);
-        return HelpCard.Build(
-            "settings.jev",
-            Loc.T("Jev"),
-            Loc.T("双层决策下，由 Jev（TypeSafe System One 模型）逐步操作游戏，LLM 只做战略规划。\n在游玩页按模式开启。置信度低于阈值时，由 LLM 接手。"),
-            column);
-    }
-
-    private async Task TestJevConnectionAsync()
-    {
-        var before = AgentRuntime.Instance.Settings;
-        SaveSettingsFromUi();
-        if (!ReferenceEquals(before, AgentRuntime.Instance.Settings))
-            await SaveSettingsAndSyncJevAsync();
-        await GameThread.InvokeAsync(() =>
-        {
-            if (_jevTestStatus != null && _jevTestStatus.IsInsideTree()) _jevTestStatus.Text = Loc.T("正在测试…");
-        });
-        var result = await AgentRuntime.Instance.TestJevConnectionAsync(CancellationToken.None);
-        await GameThread.InvokeAsync(() =>
-        {
-            if (_jevTestStatus != null && _jevTestStatus.IsInsideTree()) _jevTestStatus.Text = result;
-        });
     }
 
     /// <summary>
@@ -898,6 +839,13 @@ internal sealed partial class AgentOverlayHost
         if (_jevApiKeyEdit != null)
         {
             current.JevApiKey = _jevApiKeyEdit.Text.Trim();
+            RememberJevKey();
+            current.JevProviderKeys = new Dictionary<string, string>(_jevKeys, StringComparer.OrdinalIgnoreCase);
+        }
+
+        if (_jevProtocolCombo != null)
+        {
+            current.JevProtocol = _jevProtocolCombo.Selected == 1 ? JevProtocol.OpenAiDecisions : JevProtocol.SystemOne;
         }
 
         if (_jevModelEdit != null)

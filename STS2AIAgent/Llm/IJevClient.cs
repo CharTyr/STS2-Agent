@@ -21,7 +21,7 @@ internal interface IJevClient
     Task<JevResponse> SystemOneAsync(JevRequest request, CancellationToken cancellationToken);
 
     /// <summary>
-    /// Verifies the configured base URL and API key against <c>GET {BaseUrl}/v1/models</c> and returns
+    /// Verifies the configured address, key, model and format with one minimal real question and returns
     /// a short human sentence for display. Unlike <see cref="SystemOneAsync"/> it reports a failure in
     /// its return value rather than raising, because its caller is a settings screen showing a status
     /// line. Only a cancelled call throws.

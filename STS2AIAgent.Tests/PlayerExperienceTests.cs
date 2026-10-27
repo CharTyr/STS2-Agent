@@ -119,7 +119,7 @@ internal static class PlayerExperienceTests
 
     /// <summary>
     /// The Jev panel's per-session split: how many turns Jev actually took versus how many the LLM
-    /// finished after a failed attempt. Zero/zero stays a dash, not "Jev 0 次".
+    /// finished after a failed attempt. Zero/zero stays a dash, not "快速判断 0 次".
     /// </summary>
     public static void JevRateShowsAcceptedAndFallbackCounts()
     {

@@ -2,6 +2,7 @@ using System.Net;
 using System.Net.Http.Headers;
 using System.Text;
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using System.Text.Json.Serialization;
 using STS2AIAgent.Agent;
 
@@ -44,10 +45,6 @@ internal sealed class JevClient : IJevClient
     /// <summary>Assumed backoff when a 429 carries no readable <c>retry-after</c>.</summary>
     internal const int DefaultRetryAfterSeconds = 2;
 
-    private const string SystemOnePath = "/v1/systemone";
-
-    private const string ModelsPath = "/v1/models";
-
     private const int RateLimitedStatus = (int)HttpStatusCode.TooManyRequests;
 
     private static readonly JsonSerializerOptions JsonOptions = new()
@@ -66,11 +63,14 @@ internal sealed class JevClient : IJevClient
 
     private readonly string _model;
 
+    private readonly string _protocol;
+
     private readonly int _maxRetries;
 
     private readonly Func<int, TimeSpan> _retryDelay;
 
-    /// <param name="baseUrl">Base URL of the TypeSafe service. A trailing <c>/</c> is trimmed.</param>
+    /// <param name="baseUrl">Service root, or the provider's full request URL (see <see cref="JevEndpoint"/>). A trailing <c>/</c> is trimmed.</param>
+    /// <param name="protocol">Wire format, one of <see cref="JevProtocol.All"/>; blank means System One.</param>
     /// <param name="apiKey">Bearer token. Secret: never logged, never rendered in an exception.</param>
     /// <param name="model">Default Jev model id, used when a request leaves its own blank.</param>
     /// <param name="httpClient">
@@ -91,11 +91,13 @@ internal sealed class JevClient : IJevClient
         HttpClient? httpClient = null,
         int maxRetries = DefaultMaxRetries,
         Func<int, TimeSpan>? retryDelay = null,
-        TimeSpan? requestTimeout = null)
+        TimeSpan? requestTimeout = null,
+        string? protocol = null)
     {
         _baseUrl = (baseUrl ?? string.Empty).Trim().TrimEnd('/');
         _apiKey = (apiKey ?? string.Empty).Trim();
         _model = model ?? string.Empty;
+        _protocol = JevProtocol.Normalize(protocol);
         _maxRetries = maxRetries;
         _retryDelay = retryDelay ?? DefaultRetryDelay;
         _http = httpClient ?? SharedHttp;
@@ -115,6 +117,9 @@ internal sealed class JevClient : IJevClient
             || uri.Query.Length != 0 || uri.Fragment.Length != 0)
             throw new JevException("Jev base URL must be an HTTP(S) service URL without credentials, query, or fragment.", JevExceptionKind.Config);
 
+        if (JevEndpoint.HasPlaceholder(_baseUrl))
+            throw new JevException("Jev base URL still contains a {placeholder}; replace it with your own value (for Cloudflare, the account id).", JevExceptionKind.Config);
+
         if (_apiKey.Length == 0)
         {
             throw new JevException("Jev API key is empty.", JevExceptionKind.Config);
@@ -131,21 +136,41 @@ internal sealed class JevClient : IJevClient
     public Task<JevResponse> SystemOneAsync(JevRequest request, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(request);
-        var body = JsonSerializer.Serialize(ResolveRequest(request), JsonOptions);
+        var body = JevProtocol.BuildBody(_protocol, ResolveRequest(request), JsonOptions);
         return SendAsync(
-            () => CreateRequest(HttpMethod.Post, _baseUrl + SystemOnePath, body),
+            () => CreateRequest(HttpMethod.Post, JevEndpoint.RequestUrl(_baseUrl), body),
             ParseResponse,
             cancellationToken);
     }
 
+    /// <summary>
+    /// The connection test: one real, minimal question in the configured format, so the address, key,
+    /// model and format are all proven by the same call play will make. It costs one small request.
+    /// </summary>
     public async Task<string> PingAsync(CancellationToken cancellationToken)
     {
+        var probe = new JevRequest
+        {
+            Model = _model,
+            State = JsonNode.Parse("""{"probe":"connection test"}"""),
+            Questions = new Dictionary<string, JevQuestion>
+            {
+                [ProbeId] = new JevQuestion
+                {
+                    Type = "choice",
+                    Instructions = "Connection test. Choose option a.",
+                    Criteria = new Dictionary<string, object> { ["a"] = "Option a", ["b"] = "Option b" }
+                }
+            }
+        };
+        var started = System.Diagnostics.Stopwatch.StartNew();
         try
         {
-            return await SendAsync(
-                () => CreateRequest(HttpMethod.Get, _baseUrl + ModelsPath, body: null),
-                DescribeModels,
-                cancellationToken);
+            var response = await SystemOneAsync(probe, cancellationToken);
+            var model = string.IsNullOrWhiteSpace(response.Model) ? _model : response.Model;
+            return response.Answers!.TryGetValue(ProbeId, out var answer) && answer?.Choice is "a" or "b"
+                ? $"OK · {model} · {started.ElapsedMilliseconds} ms"
+                : $"Connected ({model}), but the answer did not match the question.";
         }
         catch (JevException ex)
         {
@@ -154,6 +179,8 @@ internal sealed class JevClient : IJevClient
             return ex.Message;
         }
     }
+
+    private const string ProbeId = "probe";
 
     /// <summary>
     /// Fills a blank request model from the configured default. A request that names its own model
@@ -294,46 +321,14 @@ internal sealed class JevClient : IJevClient
 
     private JevResponse ParseResponse(string payload)
     {
-        JevResponse? response;
         try
         {
-            response = JsonSerializer.Deserialize<JevResponse>(payload, JsonOptions);
+            return JevProtocol.ParseResponse(_protocol, payload, JsonOptions);
         }
-        catch (JsonException ex)
+        catch (JevException ex)
         {
-            throw new JevException($"Jev response was not valid JSON: {SafeText(ex.Message)}", JevExceptionKind.Server);
+            throw new JevException(SafeText(ex.Message), ex.Kind, ex.StatusCode);
         }
-
-        if (response?.Answers is null)
-        {
-            throw new JevException("Jev response did not contain an \"answers\" object.", JevExceptionKind.Server);
-        }
-
-        return response;
-    }
-
-    /// <summary>
-    /// Turns the body of <c>GET /v1/models</c> into a one-line status. <c>models</c> is the array the
-    /// service returns; a body that parses but holds no array still means the key was accepted, so it
-    /// reads "OK" rather than an error.
-    /// </summary>
-    private static string DescribeModels(string payload)
-    {
-        try
-        {
-            using var document = JsonDocument.Parse(payload);
-            if (document.RootElement.ValueKind == JsonValueKind.Object &&
-                document.RootElement.TryGetProperty("models", out var models) &&
-                models.ValueKind == JsonValueKind.Array)
-            {
-                return $"OK, {models.GetArrayLength()} models";
-            }
-        }
-        catch (JsonException)
-        {
-        }
-
-        return "OK";
     }
 
     /// <summary>

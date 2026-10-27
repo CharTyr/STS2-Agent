@@ -21,6 +21,10 @@ internal sealed class CompanionSettingsPatch
     [JsonPropertyName("jev_model")]
     public string JevModel { get; init; } = string.Empty;
 
+    /// <summary>Wire format; blank (a host from before formats existed) means System One.</summary>
+    [JsonPropertyName("jev_protocol")]
+    public string JevProtocol { get; init; } = string.Empty;
+
     [JsonPropertyName("jev_confidence_threshold")]
     public double JevConfidenceThreshold { get; init; }
 
@@ -37,6 +41,7 @@ internal sealed class CompanionSettingsPatch
         JevBaseUrl = settings.JevBaseUrl,
         JevApiKey = settings.JevApiKey,
         JevModel = settings.JevModel,
+        JevProtocol = settings.JevProtocol,
         JevConfidenceThreshold = settings.JevConfidenceThreshold,
         JevRequestTimeoutSeconds = settings.JevRequestTimeoutSeconds
     };
@@ -46,7 +51,7 @@ internal sealed class CompanionSettingsPatch
     {
         var content = System.Text.Json.JsonSerializer.Serialize(new
         {
-            DualLayerCoopEnabled, JevBaseUrl, JevApiKey, JevModel, JevConfidenceThreshold, JevRequestTimeoutSeconds, PlaySettings
+            DualLayerCoopEnabled, JevBaseUrl, JevApiKey, JevModel, JevProtocol = STS2AIAgent.Llm.JevProtocol.Normalize(JevProtocol), JevConfidenceThreshold, JevRequestTimeoutSeconds, PlaySettings
         });
         return Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(content)));
     }
@@ -54,12 +59,13 @@ internal sealed class CompanionSettingsPatch
     public bool HasSameValues(CompanionSettingsPatch other) =>
         other != null && DualLayerCoopEnabled == other.DualLayerCoopEnabled
         && JevBaseUrl == other.JevBaseUrl && JevApiKey == other.JevApiKey && JevModel == other.JevModel
+        && STS2AIAgent.Llm.JevProtocol.Normalize(JevProtocol) == STS2AIAgent.Llm.JevProtocol.Normalize(other.JevProtocol)
         && JevConfidenceThreshold == other.JevConfidenceThreshold
         && JevRequestTimeoutSeconds == other.JevRequestTimeoutSeconds
         && System.Text.Json.JsonSerializer.Serialize(PlaySettings) == System.Text.Json.JsonSerializer.Serialize(other.PlaySettings);
 
     public bool IsValid => JevBaseUrl is { Length: <= 2048 } && JevApiKey is { Length: <= 4096 }
-        && JevModel is { Length: <= 256 } && double.IsFinite(JevConfidenceThreshold)
+        && JevModel is { Length: <= 256 } && JevProtocol is { Length: <= 64 } && double.IsFinite(JevConfidenceThreshold)
         && JevConfidenceThreshold is >= 0 and <= 1
         && (JevRequestTimeoutSeconds is null or (> 0 and <= 3600))
         && (PlaySettings == null || PlaySettings.IsValid);
@@ -72,6 +78,7 @@ internal sealed class CompanionSettingsPatch
         settings.JevBaseUrl = JevBaseUrl;
         settings.JevApiKey = JevApiKey;
         settings.JevModel = JevModel;
+        settings.JevProtocol = STS2AIAgent.Llm.JevProtocol.Normalize(JevProtocol);
         settings.JevConfidenceThreshold = JevConfidenceThreshold;
         settings.JevRequestTimeoutSeconds = JevRequestTimeoutSeconds;
     }

@@ -210,9 +210,9 @@ internal static class OverlayTabContractTests
         var plain = new DecisionLogEntry(6, "2026-09-24T00:00:05.0000000+00:00", "agent_loop", "end_turn", null, "fp", 1, 4000, "R1");
 
         var fallbackLine = DecisionLogView.FormatLine(fallback);
-        Assert.Contains("Jev 未提交", fallbackLine);
+        Assert.Contains("快速判断未提交", fallbackLine);
         Assert.Contains("LLM 接手", fallbackLine);
-        Assert.False(DecisionLogView.FormatLine(plain).Contains("Jev 未提交", StringComparison.Ordinal),
+        Assert.False(DecisionLogView.FormatLine(plain).Contains("快速判断未提交", StringComparison.Ordinal),
             "a plain LLM decision must not carry the fallback marker");
     }
 

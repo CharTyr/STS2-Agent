@@ -50,7 +50,7 @@ internal static class DecisionLogView
         {
             // The LLM finished a turn Jev could not commit: the empty Jev receipt already spent its
             // request, and this row is where that attempt becomes visible to the player.
-            parts.Add(Loc.T("Jev 未提交，LLM 接手"));
+            parts.Add(Loc.T("快速判断未提交，LLM 接手"));
         }
 
         if (!string.IsNullOrWhiteSpace(entry.reason))

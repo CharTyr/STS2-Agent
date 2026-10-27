@@ -18,6 +18,8 @@ internal static class AuditRemediationJevTests
         yield return ("Remediation.Jev429SharedDeadline", SharedDeadline);
         yield return ("Remediation.Jev429RetryHintAndErrors", RetryHintAndErrors);
         yield return ("Remediation.PlannerPeriodicAndSameRunContext", PlannerPeriodicAndSameRunContext);
+        yield return ("Remediation.JevBreakerPausesAfterRepeatedFailures", BreakerPausesAfterRepeatedFailures);
+        yield return ("Remediation.JevBreakerIgnoresAnswerProblems", BreakerIgnoresAnswerProblems);
     }
 
     private sealed class ScriptedJev : IJevClient
@@ -42,6 +44,64 @@ internal static class AuditRemediationJevTests
         },
         Usage = new JevUsage { InputTokens = 3, OutputTokens = 2 }
     };
+
+    /// <summary>
+    /// A dead service must not cost every action the full turn deadline: after three provider failures
+    /// in a row the decider answers "paused" without calling, retries once the pause ends, doubles the
+    /// pause if the service is still down, and a success closes the breaker again.
+    /// </summary>
+    private static async Task BreakerPausesAfterRepeatedFailures()
+    {
+        var now = new DateTimeOffset(2026, 10, 27, 0, 0, 0, TimeSpan.Zero);
+        var failing = true;
+        var client = new ScriptedJev
+        {
+            Reply = (_, _) => failing
+                ? throw new JevException("down", JevExceptionKind.Network)
+                : Task.FromResult(Answer())
+        };
+        var decider = new JevExecutionDecider(client, "jev", now: () => now);
+        Task<ExecutionDecision> Decide() => decider.DecideAsync(Frame, PlayStrategy.Default, CancellationToken.None);
+
+        for (var i = 0; i < JevExecutionDecider.BreakerThreshold; i++) await Decide();
+        Assert.Equal(3, client.Calls);
+        var paused = await Decide();
+        Assert.Equal(3, client.Calls);
+        Assert.Equal(0, paused.RequestsSpent);
+        Assert.Contains("paused", paused.Error);
+        Assert.Equal(now + JevExecutionDecider.FirstBreakerCooldown, decider.PausedUntil);
+
+        now += JevExecutionDecider.FirstBreakerCooldown;
+        for (var i = 0; i < JevExecutionDecider.BreakerThreshold; i++) await Decide();
+        Assert.Equal(6, client.Calls);
+        Assert.Equal(now + JevExecutionDecider.FirstBreakerCooldown * 2, decider.PausedUntil);
+
+        now += JevExecutionDecider.FirstBreakerCooldown * 2;
+        failing = false;
+        var recovered = await Decide();
+        Assert.Equal("end_turn", recovered.Action);
+        Assert.Null(decider.PausedUntil);
+    }
+
+    /// <summary>An answer the decider cannot use is the service working, not failing.</summary>
+    private static async Task BreakerIgnoresAnswerProblems()
+    {
+        var client = new ScriptedJev
+        {
+            Reply = (_, _) => Task.FromResult(new JevResponse
+            {
+                Answers = new Dictionary<string, JevAnswer>
+                {
+                    ["action"] = new JevAnswer { Type = "choice", Choice = "not_an_option", Confidence = 0.9 }
+                }
+            })
+        };
+        var decider = new JevExecutionDecider(client, "jev");
+        for (var i = 0; i < JevExecutionDecider.BreakerThreshold + 2; i++)
+            await decider.DecideAsync(Frame, PlayStrategy.Default, CancellationToken.None);
+        Assert.Equal(JevExecutionDecider.BreakerThreshold + 2, client.Calls);
+        Assert.Null(decider.PausedUntil);
+    }
 
     private static async Task OneRetryAndScore()
     {

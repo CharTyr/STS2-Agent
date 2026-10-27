@@ -141,7 +141,7 @@ internal sealed partial class AgentOverlayHost
                 CompanionSettingsSyncOutcome.Confirmed => Loc.T("队友设置已同步。"),
                 CompanionSettingsSyncOutcome.Disconnected => Loc.T("队友未连接，下次邀请时生效。"),
                 CompanionSettingsSyncOutcome.Superseded => Loc.T("设置已变更，等待队友确认…"),
-                _ => Loc.T("队友 Jev 开关尚未同步。")
+                _ => Loc.T("队友快速判断开关尚未同步。")
             };
             // The old request was acknowledged; a different desired snapshot now needs its own
             // confirmation. This does not replay an uncertain request or retry a failed control.
@@ -240,10 +240,12 @@ internal sealed partial class AgentOverlayHost
         var sourceAvailable = !coopMode || (companion != null && _companionJevSource == LocalDualInstanceLauncher.Connection);
         var togglePending = coopMode && companion?.DualLayerCoopEnabled != settings.DualLayerCoopEnabled;
         _jevStatus.Text = !settings.HasJevConfigured()
-            ? Loc.T("未配置 Jev，请先在「设置」填写。")
-            : coopMode && !sourceAvailable ? Loc.T("队友 Jev 状态不可用，请检查连接。")
-            : togglePending ? Loc.T("队友 Jev 开关尚未同步。")
-            : Loc.T("Jev：{0}", settings.JevModel);
+            ? Loc.T("未配置快速判断，请先在「设置」填写。")
+            : coopMode && !sourceAvailable ? Loc.T("队友快速判断状态不可用，请检查连接。")
+            : togglePending ? Loc.T("队友快速判断开关尚未同步。")
+            : !coopMode && AgentRuntime.Instance.JevPausedUntil is { } resume
+                ? Loc.T("快速判断连续失败，{0} 前由 LLM 接手。", resume.ToLocalTime().ToString("HH:mm:ss"))
+            : Loc.T("快速判断：{0}", settings.JevModel);
         if (_jevLastChoice != null)
             _jevLastChoice.Text = sourceAvailable ? Trim(coopMode ? companion?.Choice : AgentRuntime.Instance.LastJevChoice, 90) : "-";
         if (_jevProbabilities != null)

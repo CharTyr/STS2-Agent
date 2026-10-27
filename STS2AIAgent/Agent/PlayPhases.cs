@@ -13,7 +13,7 @@ internal static class PlayPhases
 
     public static string WaitingForGame => Loc.T("正在等待游戏可操作…");
 
-    public static string AskingJev => Loc.T("正在请求 Jev 执行层…");
+    public static string AskingJev => Loc.T("正在请求快速判断…");
 
     public static string RequestingModel => Loc.T("正在请求模型…");
 
