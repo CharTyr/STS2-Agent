@@ -63,7 +63,7 @@ This mod is still in development. Some things may be unfinished or break. Please
 
 ### Step 3: Quick model setup
 1. First launch opens **Settings → Quick setup**. Select a provider, enter its API key and model name. Local Ollama / LM Studio may leave the key empty; Custom accepts your own Base URL.
-2. Click **Test main model**. This checks connectivity and tool calling, usually with 2 requests, with a 45-second deadline and a Cancel button. Auto-play requires verified tools; chat connectivity alone is insufficient.
+2. Click **Test main model**. This checks connectivity and tool calling, usually with 2 requests, with a 45-second deadline; press the button again to cancel. Auto-play requires verified tools; chat connectivity alone is insufficient.
 3. New installs stop auto-play after 30 requests by default. Adjust the visible limit, or leave it empty / enter 0 for unlimited. Existing unlimited settings are preserved. Tests also call your provider. Request and token counters are not a bill; consult your provider for charges.
 4. Quick setup shares one model for conversation and play. Multiple endpoints, vision, thinking protocols and advanced budgets are under **Show advanced options**. Proxy aliases do not need to be renamed `deepseek-chat`: set the endpoint protocol explicitly.
 5. In **Play → Multiplayer**, choose **AI auto-play** before inviting, or explicitly choose **External Agent** to launch a teammate that waits for Cursor / Claude / Codex. A ChatGPT subscription does not include an OpenAI API key or API credits.

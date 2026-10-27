@@ -82,17 +82,23 @@ internal sealed partial class AgentOverlayHost
         _settingsScroll = UiFactory.Scroll(_settingsBody, 80);
         page.AddChild(_settingsScroll);
 
+        // The footer is one status line and one row. The status line used to sit at the top of the
+        // scrolling form, so pressing Test at the bottom put its result off screen; save and test
+        // share a row, and the test button turns into its own cancel while a test runs.
+        _saveStatus = UiFactory.Wrapped(_settingsDirty ? Loc.T("未保存") : Loc.T("已保存"), 12);
         var addEndpoint = UiFactory.Button(Loc.T("添加端点"), AddEndpoint);
         var addModel = UiFactory.Button(Loc.T("添加模型"), AddModel);
         var save = UiFactory.Button(Loc.T("保存设置"), SaveSettingsFromUi, UiFactory.ButtonKind.Primary);
-        var test = UiFactory.Button(Loc.T("测试主模型"), () => _ = TestConnectionAsync());
+        var test = UiFactory.Button(Loc.T("测试主模型"), ToggleFooterModelTest);
         _footerModelTest = test;
-        _cancelModelTest = UiFactory.Button(Loc.T("取消"), () => _modelTestCancellation?.Cancel());
+        _goPlayButton = UiFactory.Button(Loc.T("去游玩"), () => ShowTab(OverlayTabCatalog.Play), UiFactory.ButtonKind.Primary);
+        _goPlayButton.Visible = false;
         _addEndpointButton = addEndpoint;
         _addModelButton = addModel;
+        page.AddChild(_saveStatus);
         page.AddChild(UiFactory.Row(addEndpoint, addModel));
-        page.AddChild(save);
-        page.AddChild(UiFactory.Row(test, _cancelModelTest));
+        page.AddChild(UiFactory.Row(save, test));
+        page.AddChild(_goPlayButton);
         RebuildSettingsForm();
         return page;
     }
@@ -387,31 +393,34 @@ internal sealed partial class AgentOverlayHost
         var settings = CloneSettings(AgentRuntime.Instance.Settings);
         var firstRun = FirstRunSetup.Evaluate(settings);
 
-        // Not an anchored section: it is the form's own state line, and a jump button that scrolls to
-        // "unsaved" would be a button whose only job is to tell the player the form is dirty.
-        // Wrapped: after a save this can carry the budget-input error sentence, which is wider than
-        // the settings column and would clip the panel exactly like the model-delete warning did.
-        _saveStatus = UiFactory.Wrapped(_settingsDirty ? Loc.T("未保存") : Loc.T("已保存"), 12);
-        _settingsBody.AddChild(_saveStatus);
+        // The save status lives in the footer (see BuildSettingsPage), so a rebuild only resets its text.
+        if (_saveStatus != null) _saveStatus.Text = _settingsDirty ? Loc.T("未保存") : Loc.T("已保存");
         _settingsLoadNotice = UiFactory.Wrapped(FormatSettingsNotice(), 12);
+        _settingsLoadNotice.Visible = _settingsLoadNotice.Text.Length > 0;
         _settingsBody.AddChild(_settingsLoadNotice);
         AddSettingsSection("first-run", Loc.T("快速开始"));
-        if (!_showAdvancedValue) _settingsBody.AddChild(BuildQuickSetupCard(settings));
-        _conversationTest = UiFactory.Wrapped(ModelRoleProbe.FormatLine(firstRun.Conversation), 12);
-        _playTest = UiFactory.Wrapped(ModelRoleProbe.FormatLine(firstRun.Play), 12);
-        _visionTest = UiFactory.Wrapped(ModelRoleProbe.FormatLine(firstRun.Vision), 12);
-        var modelStatus = new List<Control> { _conversationTest, _playTest, _visionTest };
-        if (firstRun.Play.Status == "failed" && !string.IsNullOrWhiteSpace(firstRun.Play.NextStep))
+        var nextStep = firstRun.Play.Status == "failed" && !string.IsNullOrWhiteSpace(firstRun.Play.NextStep)
+            ? UiFactory.Wrapped(Loc.T("下一步：{0}", firstRun.Play.NextStep), 12)
+            : null;
+        if (!_showAdvancedValue)
         {
-            modelStatus.Add(UiFactory.Wrapped(Loc.T("下一步：{0}", firstRun.Play.NextStep), 12));
+            // Quick setup binds one model to every role, so the card carries a single verdict line
+            // instead of a separate status card listing the same model three times.
+            _conversationTest = _playTest = _visionTest = null;
+            _settingsBody.AddChild(BuildQuickSetupCard(settings, nextStep));
         }
-
-        // The four-step walkthrough only helps while the full form is open; the quick card is its own
-        // walkthrough.
-        var statusHelp = Loc.T("「测试」会真实调用该模型：先测连通，再测工具调用。不支持工具调用的模型无法自动游玩。\n「测试主模型」测的是当前主模型。");
-        statusHelp += _showAdvancedValue ? "\n" + Loc.T("四步：① 在「端点」填地址和 Key（本地服务可留空 Key）② 在「模型」添加模型并绑定端点 ③ 点模型卡片上的「测试」，通过会显示 ✅ ④ 在「模型绑定」选主模型并保存。\n然后到「游玩」页开始自动游玩。双人游玩：把游玩页顶部切到「多人」再邀请 AI 队友。") : "";
-
-        _settingsBody.AddChild(HelpCard.Build("settings.status", Loc.T("模型状态"), statusHelp, modelStatus.ToArray()));
+        else
+        {
+            _quickTestBadge = null;
+            _conversationTest = UiFactory.Wrapped(ModelRoleProbe.FormatLine(firstRun.Conversation), 12);
+            _playTest = UiFactory.Wrapped(ModelRoleProbe.FormatLine(firstRun.Play), 12);
+            _visionTest = UiFactory.Wrapped(ModelRoleProbe.FormatLine(firstRun.Vision), 12);
+            var modelStatus = new List<Control> { _conversationTest, _playTest, _visionTest };
+            if (nextStep != null) modelStatus.Add(nextStep);
+            var statusHelp = Loc.T("「测试」会真实调用该模型：先测连通，再测工具调用。不支持工具调用的模型无法自动游玩。\n「测试主模型」测的是当前主模型。")
+                + "\n" + Loc.T("四步：① 在「端点」填地址和 Key（本地服务可留空 Key）② 在「模型」添加模型并绑定端点 ③ 点模型卡片上的「测试」，通过会显示 ✅ ④ 在「模型绑定」选主模型并保存。\n然后到「游玩」页开始自动游玩。双人游玩：把游玩页顶部切到「多人」再邀请 AI 队友。");
+            _settingsBody.AddChild(HelpCard.Build("settings.status", Loc.T("模型状态"), statusHelp, modelStatus.ToArray()));
+        }
 
         // Removing a bound model reports all affected roles. That sentence must reflow instead of
         // stretching the settings column and clipping the controls on every other page.

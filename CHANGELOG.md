@@ -19,6 +19,7 @@ Game-dependent compilation succeeded on 2026-10-27 (Release, 0 warnings, 0 error
 
 ### Changed
 
+- Overlay setup flow: the play page shows a one-line setup blocker (no model / not tested / test failed / no tool calling) with an **Open settings** button, and Start / Step stay disabled until the main model is verified. The settings footer is one status line plus one Save / Test row; the test button doubles as its cancel, and a **Go play** button appears after a passing test. Quick setup shows a single verdict line instead of a separate three-line model status card.
 - Rewrite the in-game overlay copy: short labels, one-line statuses, and every usage note moved behind a "?" button in its card's title bar (new `HelpCard`). The footer test button is now **Test main model** everywhere, the MCP section is named **MCP**, and the Chinese and English tables stay in sync.
 - Synchronize model, key, budgets and non-combat-only settings to the running companion with explicit acknowledgement and a pause before applying changes.
 - Accept both release manifest names; upgrade only unchanged managed companion copies. Preserve manual/edited installations.

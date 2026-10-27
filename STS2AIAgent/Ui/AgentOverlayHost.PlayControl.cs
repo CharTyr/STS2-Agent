@@ -221,7 +221,9 @@ internal sealed partial class AgentOverlayHost
         if (_dualLayerCoopCheck != null) _dualLayerCoopCheck.Disabled = _companionSettingsSyncing;
         if (_jevPanel != null) _jevPanel.Visible = dualEnabled;
         if (_sendButton != null) _sendButton.Disabled = _playModeSwitching;
-        if (_playToggle != null) _playToggle.Disabled = AgentRuntime.Instance.DualLaunching || _playModeSwitching || coopMode;
+        if (_playToggle != null)
+            _playToggle.Disabled = AgentRuntime.Instance.DualLaunching || _playModeSwitching || coopMode
+                || (!AgentRuntime.Instance.PlayRunning && !_playReady);
         var teamControlBlocked = InstanceRole.IsCompanion || AgentRuntime.Instance.TeamControlPending
             || AgentRuntime.Instance.DualLaunching || _playModeSwitching || !coopMode;
         if (_teamResume != null) _teamResume.Disabled = teamControlBlocked;

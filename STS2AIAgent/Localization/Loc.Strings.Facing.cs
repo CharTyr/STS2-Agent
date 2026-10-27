@@ -34,7 +34,13 @@ internal static partial class Loc
         map["已取消或超时，配置已保留。"] = "Cancelled or timed out; settings kept.";
         map["已取消。"] = "Cancelled.";
         map["测试主模型"] = "Test main model";
-        map["取消"] = "Cancel";
+        map["取消测试"] = "Cancel test";
+        map["去游玩"] = "Go play";
+        map["去设置"] = "Open settings";
+        map["还没配置模型"] = "No model set up yet";
+        map["模型测试没通过"] = "Model test failed";
+        map["模型不支持工具调用"] = "Model has no tool calling";
+        map["模型还没测试"] = "Model not tested yet";
         map["AI 自动游玩"] = "AI auto-play";
         map["外部 Agent"] = "External Agent";
         map["手动选队友角色"] = "Pick teammate character";

@@ -163,6 +163,7 @@ internal static class TestRunner
         yield return ("Briefing.UnscoredDoesNotInventTrend", () => Task.Run(AuditRemediationBriefingTests.Build_NoScoreDoesNotInventTrend));
         yield return ("FirstRun.DefaultUnverified", () => Task.Run(PlayerExperienceTests.DefaultSettingsAreUnverifiedAndNotInvitable));
         yield return ("FirstRun.VerifiedInvite", () => Task.Run(PlayerExperienceTests.VerifiedPlayFingerprintAllowsInvite));
+        yield return ("FirstRun.PlayBlockerFollowsGate", () => Task.Run(PlayerExperienceTests.PlayBlockerFollowsTheStartGate));
         yield return ("FirstRun.KeyChangeInvalidates", () => Task.Run(PlayerExperienceTests.ChangingKeyInvalidatesVerification));
         yield return ("Probe.Play401NotMaskedByChat", PlayerExperienceTests.ConversationSuccessDoesNotMarkPlayWhenPlayReturns401);
         yield return ("Probe.SkipFreshVerified", PlayerExperienceTests.FreshVerifiedFingerprintSkipsRetest);
@@ -993,6 +994,8 @@ internal static class TestRunner
         yield return ("OverlayTabs.JevAttemptMarked", () => Task.Run(OverlayTabContractTests.JevAttemptRowsAreMarkedInTheLine));
         yield return ("OverlayTabs.DecisionLinesBounded", () => Task.Run(OverlayTabContractTests.DecisionLinesStayBounded));
         yield return ("OverlayLayout.SaveOutsideScroll", () => Task.Run(OverlayLayoutContractTests.SaveStaysOutsideTheScrollingForm));
+        yield return ("OverlayLayout.SettingsFeedbackInFooter", () => Task.Run(OverlayLayoutContractTests.SettingsFeedbackStaysInTheFooter));
+        yield return ("OverlayLayout.PlayPageNamesTheBlocker", () => Task.Run(OverlayLayoutContractTests.PlayPageNamesWhatBlocksPlay));
         yield return ("OverlayLayout.JumpButtonsMatchSections", () => Task.Run(OverlayLayoutContractTests.EveryJumpButtonNamesARegisteredSection));
         yield return ("OverlayLayout.CoopActionsFirst", () => Task.Run(OverlayLayoutContractTests.CoopActionsComeBeforeCoopStatus));
         yield return ("OverlayLayout.CoopChatAdapts", () => Task.Run(OverlayLayoutContractTests.CoopChatBoxAdaptsToThePage));

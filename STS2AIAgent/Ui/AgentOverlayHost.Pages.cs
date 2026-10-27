@@ -58,6 +58,14 @@ internal sealed partial class AgentOverlayHost
     private Label? _jevProbabilities;
 
     /// <summary>
+    /// The play page's setup line and whether the main model is ready. Kept by the refresh pass, so
+    /// the start buttons and the line agree with the gate <c>StartAutoPlay</c> applies.
+    /// </summary>
+    private Control? _readinessBanner;
+    private Label? _readinessText;
+    private bool _playReady;
+
+    /// <summary>
     /// The play page: a solo/multiplayer mode switch on top, then the active mode's section.
     /// </summary>
     /// <remarks>
@@ -80,6 +88,7 @@ internal sealed partial class AgentOverlayHost
         page.AddChild(_playModeSwitch);
         _modeSwitchStatus = UiFactory.Wrapped("", UiFactory.FontCaption);
         page.AddChild(_modeSwitchStatus);
+        page.AddChild(BuildReadinessBanner());
 
         _soloSection = BuildSoloSection();
         _coopSection = BuildCoopSection();
@@ -92,6 +101,27 @@ internal sealed partial class AgentOverlayHost
         page.AddChild(BuildDecisionCard());
 
         return UiFactory.Scroll(page, 120);
+    }
+
+    /// <summary>
+    /// The line that says what is missing before the AI can play, with the button that goes and
+    /// fixes it. Hidden once the main model passes its test.
+    /// </summary>
+    /// <remarks>
+    /// Without it, a player who opened the play page first pressed Start and got one sentence in the
+    /// status line pointing at another tab. The details and the error stay on the settings page; this
+    /// line only has to say that something is missing and where.
+    /// </remarks>
+    private Control BuildReadinessBanner()
+    {
+        _readinessText = UiFactory.Wrapped("", UiFactory.FontBody, muted: false);
+        var row = UiFactory.Row(_readinessText);
+        var go = UiFactory.Button(Loc.T("去设置"), () => ShowTab(OverlayTabCatalog.Settings), UiFactory.ButtonKind.Primary);
+        go.SizeFlagsHorizontal = Control.SizeFlags.ShrinkEnd;
+        row.AddChild(go);
+        _readinessBanner = UiFactory.Card(null, row);
+        _readinessBanner.Visible = false;
+        return _readinessBanner;
     }
 
     /// <summary>Pause and confirm before persisting; the old view remains until confirmation.</summary>
@@ -526,6 +556,7 @@ internal sealed partial class AgentOverlayHost
         Guarded("chat", RefreshChatLog);
 
         var playing = AgentRuntime.Instance.PlayRunning;
+        Guarded("ready", RefreshReadiness);
         Guarded("header", () => RefreshHeader(playing));
         Guarded("solo", () => RefreshSoloSection(playing));
 
@@ -567,6 +598,23 @@ internal sealed partial class AgentOverlayHost
         {
             Log.Warn($"{LogPrefix} refresh pass failed in {section}: {ex.Message}");
         }
+    }
+
+    /// <summary>The play page's setup line, and the readiness the start buttons are gated on.</summary>
+    private void RefreshReadiness()
+    {
+        var settings = AgentRuntime.Instance.Settings;
+        var blocker = FirstRunSetup.PlayBlocker(FirstRunSetup.Evaluate(settings));
+        _playReady = blocker == null;
+        if (_readinessBanner == null || _readinessText == null)
+        {
+            return;
+        }
+
+        // The external-agent teammate never calls a model, so a missing model blocks nothing there.
+        var external = settings.OverlayPlayMode == "coop" && settings.CompanionControlMode == "external";
+        _readinessText.Text = blocker ?? "";
+        _readinessBanner.Visible = blocker != null && !external;
     }
 
     /// <summary>The title bar's state tag, the connection line, and the edge tab.</summary>
@@ -643,7 +691,7 @@ internal sealed partial class AgentOverlayHost
 
         if (_stepButton != null)
         {
-            _stepButton.Disabled = playing;
+            _stepButton.Disabled = playing || !_playReady;
             _stepButton.Visible = !playing;
         }
     }
@@ -735,12 +783,18 @@ internal sealed partial class AgentOverlayHost
         if (_settingsLoadNotice != null)
         {
             _settingsLoadNotice.Text = FormatSettingsNotice();
+            _settingsLoadNotice.Visible = _settingsLoadNotice.Text.Length > 0;
         }
 
         if (_budgetHint != null && !string.IsNullOrWhiteSpace(_budgetInputError))
         {
             _budgetHint.Text = _budgetInputError;
             _budgetHint.Visible = true;
+        }
+
+        if (_quickTestBadge != null)
+        {
+            _quickTestBadge.Text = QuickTestBadgeText();
         }
 
         if (_playTest != null)

@@ -16,12 +16,16 @@ internal sealed partial class AgentOverlayHost
     private bool _lastSettingsSaveSucceeded;
     private CancellationTokenSource? _modelTestCancellation;
     private readonly List<Button> _modelTestButtons = new();
-    private Button? _cancelModelTest;
     private Button? _footerModelTest;
+    /// <summary>Shown under the footer once a test leaves the main model ready, until the play tab is opened.</summary>
+    private Button? _goPlayButton;
+    private bool _offerGoPlay;
+    /// <summary>The quick card's verdict line for the model it edits; null while the full form is shown.</summary>
+    private Label? _quickTestBadge;
     private Button? _addEndpointButton;
     private Button? _addModelButton;
 
-    private Control BuildQuickSetupCard(AgentSettings settings)
+    private Control BuildQuickSetupCard(AgentSettings settings, Control? nextStep)
     {
         var resolved = settings.TryResolvePlayModel();
         var providerIndex = QuickSetup.FindProvider(resolved?.Endpoint.BaseUrl ?? "");
@@ -46,13 +50,27 @@ internal sealed partial class AgentOverlayHost
             Dirty();
         };
         _quickDirty = false;
+        _quickTestBadge = UiFactory.Wrapped(QuickTestBadgeText(), 12, muted: false);
+        var rows = new List<Control>
+        {
+            Labeled(Loc.T("服务商"), _quickProvider), _quickUrl,
+            Labeled("API Key", _quickKey), Labeled(Loc.T("模型"), _quickModel),
+            Labeled(Loc.T("请求上限"), _quickBudget),
+            _quickTestBadge
+        };
+        if (nextStep != null) rows.Add(nextStep);
         return HelpCard.Build(
             "settings.quick",
             Loc.T("快速配置"),
-            Loc.T("选择服务商，填 API Key 和模型名，然后点「测试主模型」。\n对话和自动游玩共用这个模型；本地服务（Ollama / LM Studio）可留空 Key。\n请求上限：新安装默认试用 30 次，可调整。测试也会调用你的服务；请求数和 Token 不等于账单金额。"),
-            Labeled(Loc.T("服务商"), _quickProvider), _quickUrl,
-            Labeled("API Key", _quickKey), Labeled(Loc.T("模型"), _quickModel),
-            Labeled(Loc.T("请求上限"), _quickBudget));
+            Loc.T("选择服务商，填 API Key 和模型名，然后点「测试主模型」。\n测试会真实调用模型：先测连通，再测工具调用；不支持工具调用的模型无法自动游玩。\n对话和自动游玩共用这个模型；本地服务（Ollama / LM Studio）可留空 Key。\n请求上限：新安装默认试用 30 次，可调整。测试也会调用你的服务；请求数和 Token 不等于账单金额。"),
+            rows.ToArray());
+    }
+
+    /// <summary>The quick card's verdict: the main model's test badge, or a nudge to fill the card in.</summary>
+    private static string QuickTestBadgeText()
+    {
+        var modelId = AgentRuntime.Instance.Settings.TryResolvePlayModel()?.Model.Id;
+        return modelId == null ? Loc.T("⚪ 未配置") : ModelTestBadgeText(modelId);
     }
 
     private AgentSettings HarvestQuickSetup(AgentSettings settings)
@@ -67,17 +85,31 @@ internal sealed partial class AgentOverlayHost
         return copy;
     }
 
+    /// <summary>The footer's test button: starts a main-model test, or cancels the one running.</summary>
+    private void ToggleFooterModelTest()
+    {
+        if (_modelTestCancellation != null)
+        {
+            _modelTestCancellation.Cancel();
+            return;
+        }
+
+        _ = TestConnectionAsync();
+    }
+
     private void RefreshModelTestControls()
     {
+        var testing = _modelTestCancellation != null;
         foreach (var button in _modelTestButtons)
-            if (GodotObject.IsInstanceValid(button)) button.Disabled = _modelTestCancellation != null;
-        if (_footerModelTest != null) _footerModelTest.Disabled = _modelTestCancellation != null;
-        if (_cancelModelTest != null) _cancelModelTest.Disabled = _modelTestCancellation == null;
+            if (GodotObject.IsInstanceValid(button)) button.Disabled = testing;
+        if (_footerModelTest != null) _footerModelTest.Text = testing ? Loc.T("取消测试") : Loc.T("测试主模型");
+        if (_goPlayButton != null) _goPlayButton.Visible = _offerGoPlay && !testing;
     }
 
     private async Task RunModelTestFromUiAsync(string? modelId)
     {
         if (_modelTestCancellation != null) return;
+        _offerGoPlay = false;
         SaveSettingsFromUi();
         if (!_lastSettingsSaveSucceeded) return;
         modelId ??= AgentRuntime.Instance.Settings.TryResolvePlayModel()?.Model.Id;
@@ -100,6 +132,7 @@ internal sealed partial class AgentOverlayHost
         }
         catch (Exception ex) { result = DiagnosticExport.Redact(ex.Message); }
         finally { _modelTestCancellation = null; }
+        _offerGoPlay = FirstRunSetup.Evaluate(AgentRuntime.Instance.Settings).ReadyToInvite;
         if (_panel == null || !_panel.IsInsideTree()) return;
         // A rebuild redraws every badge and the first-run lines, but it also resets every editor to
         // the saved settings. Edits typed while the test ran (it can take 45 seconds) would be lost,
@@ -118,7 +151,7 @@ internal sealed partial class AgentOverlayHost
     }
 
     /// <summary>The badge line under a model card: the recorded verdict, or the nudge to test.</summary>
-    private string ModelTestBadgeText(string modelId)
+    private static string ModelTestBadgeText(string modelId)
     {
         var record = AgentRuntime.Instance.ModelTestFor(modelId);
         if (record == null)
@@ -150,9 +183,14 @@ internal sealed partial class AgentOverlayHost
 
     private Task TestModelFromUiAsync(string modelId) => RunModelTestFromUiAsync(modelId);
 
-    /// <summary>Re-reads every model card's test badge in place.</summary>
+    /// <summary>Re-reads every model card's test badge, and the quick card's, in place.</summary>
     private void RefreshModelTestBadges()
     {
+        if (_quickTestBadge != null && GodotObject.IsInstanceValid(_quickTestBadge))
+        {
+            _quickTestBadge.Text = QuickTestBadgeText();
+        }
+
         foreach (var (modelId, badge) in _modelTestBadges)
         {
             if (GodotObject.IsInstanceValid(badge))

@@ -72,6 +72,13 @@ internal sealed partial class AgentOverlayHost
         }
 
         _tab = tab;
+        if (tab == OverlayTabCatalog.Play && _offerGoPlay)
+        {
+            // The offer has been taken; it does not need to wait on the footer for the next visit.
+            _offerGoPlay = false;
+            RefreshModelTestControls();
+        }
+
         foreach (var (id, page) in _pages)
         {
             page.Visible = string.Equals(id, tab, StringComparison.Ordinal);

@@ -59,6 +59,53 @@ internal static class OverlayLayoutContractTests
     }
 
     /// <summary>
+    /// The save/test result is drawn next to the buttons that produce it.
+    /// </summary>
+    /// <remarks>
+    /// It used to be the first line of the scrolling form, so a test started from the footer reported
+    /// its result above the fold of a page the player had scrolled down. The test button is also its
+    /// own cancel now; a second footer row for one Cancel button cost a line of a 440px panel.
+    /// </remarks>
+    public static void SettingsFeedbackStaysInTheFooter()
+    {
+        var source = AgentSourceFixture.Read(Settings);
+        var page = AgentSourceFixture.MethodBody(source, "BuildSettingsPage");
+        var form = AgentSourceFixture.MethodBody(source, "RebuildSettingsForm");
+
+        var scroll = page.IndexOf("UiFactory.Scroll(_settingsBody", StringComparison.Ordinal);
+        var status = page.IndexOf("page.AddChild(_saveStatus);", StringComparison.Ordinal);
+        Assert.True(scroll >= 0 && status > scroll, "The save status has to be added to the footer, after the scrolling form.");
+        Assert.False(form.Contains("_settingsBody.AddChild(_saveStatus)", StringComparison.Ordinal),
+            "The save status is back at the top of the scrolling form, out of sight of the footer buttons.");
+        Assert.Contains("UiFactory.Row(save, test)", page);
+
+        var setup = AgentSourceFixture.Read("STS2AIAgent/Ui/AgentOverlayHost.Setup.cs");
+        var toggle = AgentSourceFixture.MethodBody(setup, "ToggleFooterModelTest");
+        Assert.Contains("_modelTestCancellation.Cancel();", toggle);
+    }
+
+    /// <summary>
+    /// The play page says what blocks auto-play and links to the fix, using the same gate as Start.
+    /// </summary>
+    public static void PlayPageNamesWhatBlocksPlay()
+    {
+        var source = AgentSourceFixture.Read(Pages);
+        var page = AgentSourceFixture.MethodBody(source, "BuildPlayPage");
+        var refresh = AgentSourceFixture.MethodBody(source, "RefreshReadiness");
+        var banner = AgentSourceFixture.MethodBody(source, "BuildReadinessBanner");
+
+        var bannerAt = page.IndexOf("BuildReadinessBanner()", StringComparison.Ordinal);
+        var soloAt = page.IndexOf("BuildSoloSection()", StringComparison.Ordinal);
+        Assert.True(bannerAt >= 0 && bannerAt < soloAt, "The setup line has to sit above the play controls it explains.");
+        Assert.Contains("FirstRunSetup.PlayBlocker(FirstRunSetup.Evaluate(settings))", refresh);
+        Assert.Contains("ShowTab(OverlayTabCatalog.Settings)", banner);
+
+        var control = AgentSourceFixture.Read("STS2AIAgent/Ui/AgentOverlayHost.PlayControl.cs");
+        Assert.Contains("!_playReady", AgentSourceFixture.MethodBody(control, "RefreshModeControls"));
+        Assert.Contains("!_playReady", AgentSourceFixture.MethodBody(source, "RefreshSoloSection"));
+    }
+
+    /// <summary>
     /// Every jump-bar entry has to be a section the form actually registers.
     /// </summary>
     /// <remarks>

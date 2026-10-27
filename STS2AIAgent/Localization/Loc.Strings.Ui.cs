@@ -204,6 +204,7 @@ internal static partial class Loc
         map["视觉模型（可选）"] = "Vision model (optional)";
         map["测试"] = "Test";
         map["正在测试…"] = "Testing…";
+        map["⚪ 未配置"] = "⚪ Not set up";
         map["⚪ 未测试"] =
             "⚪ Not tested";
         map["⚪ 已修改，需重新测试"] = "⚪ Changed; test again";
@@ -268,8 +269,8 @@ internal static partial class Loc
             "“Test” makes real calls to the model: connectivity first, then tool calling. A model without tool calling cannot auto-play.\n“Test main model” tests the current main model.";
         map["四步：① 在「端点」填地址和 Key（本地服务可留空 Key）② 在「模型」添加模型并绑定端点 ③ 点模型卡片上的「测试」，通过会显示 ✅ ④ 在「模型绑定」选主模型并保存。\n然后到「游玩」页开始自动游玩。双人游玩：把游玩页顶部切到「多人」再邀请 AI 队友。"] =
             "Four steps: ① fill in the URL and key under “Endpoints” (local services can leave the key blank) ② add a model under “Models” and bind the endpoint ③ press “Test” on the model card; a pass shows ✅ ④ pick the main model under “Model binding” and save.\nThen start auto-play on the “Play” page. For co-op, switch the top of the Play page to “Multiplayer” and invite the AI teammate.";
-        map["选择服务商，填 API Key 和模型名，然后点「测试主模型」。\n对话和自动游玩共用这个模型；本地服务（Ollama / LM Studio）可留空 Key。\n请求上限：新安装默认试用 30 次，可调整。测试也会调用你的服务；请求数和 Token 不等于账单金额。"] =
-            "Choose a provider, enter the API key and model name, then press “Test main model”.\nChat and auto-play share this model; local services (Ollama / LM Studio) can leave the key blank.\nRequest limit: new installs default to a 30-request trial; adjust as needed. Tests also call your service, and request/token counts are not a bill.";
+        map["选择服务商，填 API Key 和模型名，然后点「测试主模型」。\n测试会真实调用模型：先测连通，再测工具调用；不支持工具调用的模型无法自动游玩。\n对话和自动游玩共用这个模型；本地服务（Ollama / LM Studio）可留空 Key。\n请求上限：新安装默认试用 30 次，可调整。测试也会调用你的服务；请求数和 Token 不等于账单金额。"] =
+            "Choose a provider, enter the API key and model name, then press “Test main model”.\nThe test makes real calls: connectivity first, then tool calling; a model without tool calling cannot auto-play.\nChat and auto-play share this model; local services (Ollama / LM Studio) can leave the key blank.\nRequest limit: new installs default to a 30-request trial; adjust as needed. Tests also call your service, and request/token counts are not a bill.";
         map["视觉：不勾选模型的「视觉」、也不配视觉模型时，仍可用精简状态和工具打完全部流程。\n预算：达到上限会自动停止游玩并提示；填错会保留原上限，不会变成不限。\n请求超时：服务商长时间没有响应时，按此时长报错。\nAI 主动发言：默认关闭；开启后只在战斗开始和结束各说一句，每次自动游玩最多 6 句，间隔至少 75 秒，不会代打，也受预算限制。\n窗口位置：拖动标题栏移动，位置会保存。"] =
             "Vision: without the model's “Vision” box or a vision model, auto-play still finishes the whole run on the compact state and tools.\nBudget: auto-play stops with a notice at the limit; a bad entry keeps the previous limit instead of becoming unlimited.\nRequest timeout: how long to wait before reporting a provider that stopped answering.\nAI speaks up: off by default; when on it speaks once at combat start and once at combat end, at most 6 lines per auto-play run, at least 75 seconds apart. It never plays for you and respects the budget.\nWindow position: drag the title bar to move it; the position is saved.";
         map["双层决策下，由 Jev（TypeSafe System One 模型）逐步操作游戏，LLM 只做战略规划。\n在游玩页按模式开启。置信度低于阈值时，由 LLM 接手。"] =
