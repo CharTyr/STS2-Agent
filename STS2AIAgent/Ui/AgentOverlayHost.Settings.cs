@@ -617,6 +617,21 @@ internal sealed partial class AgentOverlayHost
         _mcpInfoBox = UiFactory.Column();
         _mcpUrlLabel = UiFactory.Label("", UiFactory.FontBody);
         _mcpInfoBox.AddChild(_mcpUrlLabel);
+        // One switch per client: each wants the same address in its own format (a CLI command, a JSON
+        // block, a TOML table), and the generic JSON left Claude Code and Codex users to translate it.
+        var clientNames = new List<string>();
+        var selectedClient = 0;
+        for (var i = 0; i < NativeMcpServer.ConfigClients.Length; i++)
+        {
+            clientNames.Add(NativeMcpServer.ConfigClients[i].Name);
+            if (NativeMcpServer.ConfigClients[i].Id == _mcpClient) selectedClient = i;
+        }
+
+        _mcpInfoBox.AddChild(UiFactory.SegmentedSwitch(clientNames, selectedClient, index =>
+        {
+            _mcpClient = NativeMcpServer.ConfigClients[index].Id;
+            RefreshConnectSection();
+        }));
         var copyUrl = UiFactory.Button(Loc.T("复制地址"), () =>
         {
             var url = AgentRuntime.Instance.McpUrl;
@@ -624,22 +639,25 @@ internal sealed partial class AgentOverlayHost
             {
                 CopyText(url);
             }
-        }, UiFactory.ButtonKind.Primary);
-        var copyCfg = UiFactory.Button(Loc.T("复制配置"), () => CopyText(AgentRuntime.Instance.McpClientConfig));
-        _mcpInfoBox.AddChild(UiFactory.Row(copyUrl, copyCfg));
+        });
+        var copyCfg = UiFactory.Button(Loc.T("复制配置"), () => CopyText(AgentRuntime.Instance.McpClientConfigFor(_mcpClient)), UiFactory.ButtonKind.Primary);
         _mcpConfigEdit = UiFactory.Multiline("", 120);
         _mcpConfigEdit.Editable = false;
         _mcpInfoBox.AddChild(_mcpConfigEdit);
-        _mcpInfoBox.Visible = AgentRuntime.Instance.McpRunning;
+        _mcpInfoBox.AddChild(UiFactory.Row(copyCfg, copyUrl));
 
         page.AddChild(HelpCard.Build(
             "settings.mcp",
             Loc.T("MCP 服务"),
-            Loc.T("游戏内自动游玩和一起玩都不需要 MCP，只有 Cursor / Claude / Codex 等外部客户端才需要。\n把配置贴进客户端的 MCP 设置即可，服务只监听本机 127.0.0.1。\n本机 HTTP API 始终可用（GET /health /state，POST /action）；MCP 打开后才会在同一端口提供 /mcp。地址以本页复制为准。\nPython sidecar 仅支持 stdio / layered / full。"),
+            Loc.T("游戏内自动游玩和一起玩都不需要 MCP，只有 Claude Code / Cursor / Codex 等外部客户端才需要。\n打开后选你的客户端再复制配置：Claude Code 在终端运行这条命令，Cursor 贴进 mcp.json，Codex 贴进 ~/.codex/config.toml。服务只监听本机 127.0.0.1。\n本机 HTTP API 始终可用（GET /health /state，POST /action）；MCP 打开后才会在同一端口提供 /mcp。地址以本页复制为准。\nPython sidecar 仅支持 stdio / layered / full。"),
             _mcpToggle,
             _mcpStatus,
             _apiAddressLabel));
-        page.AddChild(UiFactory.Card(Loc.T("客户端配置"), _mcpInfoBox));
+        // The whole card follows the switch, not just its contents: with MCP off it used to stay on
+        // the page as an empty titled box.
+        _mcpClientCard = UiFactory.Card(Loc.T("客户端配置"), _mcpInfoBox);
+        _mcpClientCard.Visible = AgentRuntime.Instance.McpRunning;
+        page.AddChild(_mcpClientCard);
         return page;
     }
 

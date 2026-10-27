@@ -8,6 +8,32 @@ namespace STS2AIAgent.Tests;
 
 internal static class McpServiceTests
 {
+    /// <summary>
+    /// Each client the overlay offers gets the same address in its own format, and every offered
+    /// client has a format (an unknown id would silently fall back to JSON).
+    /// </summary>
+    public static void ClientConfigsUseEachClientsFormat()
+    {
+        const string url = "http://127.0.0.1:8123/mcp/";
+        Assert.Equal(
+            "claude mcp add --transport http sts2-ai-agent http://127.0.0.1:8123/mcp",
+            NativeMcpServer.FormatClientConfig("claude-code", url));
+        Assert.Equal(
+            "[mcp_servers.sts2-ai-agent]\nurl = \"http://127.0.0.1:8123/mcp\"",
+            NativeMcpServer.FormatClientConfig("codex", url));
+        Assert.Equal(NativeMcpServer.FormatClientConfigJson(url), NativeMcpServer.FormatClientConfig("cursor", url));
+        Assert.Contains("\"url\": \"http://127.0.0.1:8123/mcp\"", NativeMcpServer.FormatClientConfig("cursor", url));
+
+        var ids = new HashSet<string>();
+        foreach (var (id, name) in NativeMcpServer.ConfigClients)
+        {
+            Assert.True(ids.Add(id), $"Duplicate MCP client id {id}.");
+            Assert.False(string.IsNullOrWhiteSpace(name), $"MCP client {id} has no display name.");
+        }
+
+        Assert.True(ids.SetEquals(new[] { "claude-code", "cursor", "codex" }), "The offered clients changed; update the formats and this test together.");
+    }
+
     public static async Task Disabled_Returns403()
     {
         var server = CreateServer(enabled: false);

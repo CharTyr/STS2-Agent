@@ -62,17 +62,17 @@ This mod is still in development. Some things may be unfinished or break. Please
 2. Press **`F8`** (configurable) or click the grey **`AI`** tab on the right edge of the screen to open the Agent window.
 
 ### Step 3: Quick model setup
-1. First launch opens **Settings → Quick setup**. Select a provider, enter its API key and model name. Local Ollama / LM Studio may leave the key empty; Custom accepts your own Base URL.
-2. Click **Test main model**. This checks connectivity and tool calling, usually with 2 requests, with a 45-second deadline; press the button again to cancel. Auto-play requires verified tools; chat connectivity alone is insufficient.
-3. New installs stop auto-play after 30 requests by default. Adjust the visible limit, or leave it empty / enter 0 for unlimited. Existing unlimited settings are preserved. Tests also call your provider. Request and token counters are not a bill; consult your provider for charges.
-4. Quick setup shares one model for conversation and play. Multiple endpoints, vision, thinking protocols and advanced budgets are under **Show advanced options**. Proxy aliases do not need to be renamed `deepseek-chat`: set the endpoint protocol explicitly.
-5. In **Play → Multiplayer**, choose **AI auto-play** before inviting, or explicitly choose **External Agent** to launch a teammate that waits for Cursor / Claude / Codex. A ChatGPT subscription does not include an OpenAI API key or API credits.
+1. First launch opens **Settings → Quick setup**: pick a provider, enter the API key and model name (local Ollama / LM Studio can leave the key empty).
+2. Click **Test main model**. Auto-play needs connectivity and tool calling to pass; once they do, the setup line at the top of **Play** disappears.
+3. Click **Go play**: solo, press **Start auto-play**; co-op, switch the top of the page to **Multiplayer** and invite the AI teammate.
+
+Request limits, proxies, thinking protocols and the External Agent route: see [Model setup details](#model-setup-details).
 
 ### Step 4: Play!
 
 #### Option A: Auto-Play
 - Start a standard single-player run.
-- Switch to the **Play** tab and click **Start Auto-Play** (or **Step Once**).
+- Switch to the **Play** tab and click **Start auto-play** (or **Single step**).
 - The model evaluates live state and dispatches cards, rewards, and route decisions autonomously.
 
 #### Option B: Co-op With An AI Teammate (Recommended!)
@@ -81,7 +81,7 @@ This mod is still in development. Some things may be unfinished or break. Please
 - A second game window will launch automatically and join the co-op lobby. You play your character; the AI controls its character!
 - The main window shows whether the teammate is connected, waiting on you/the game/the model, or why it stopped and what to click next. **Pause teammate** gives immediate feedback; already submitted actions still finish.
 - Use team chat to coordinate in plain English or Chinese.
-- By default the teammate takes the preselected character and readies up by itself. To pick its character yourself (in the teammate window, or through the companion API with `select_character` then `embark`), tick **Disable automatic character pick** above the invite button (it sets `companionAutoSelectCharacter` to `false` in the mod's `settings.json`); the teammate then waits on the character screen, for the AI driving it or for you, without a timeout.
+- By default the teammate takes the preselected character and readies up by itself. To pick its character yourself (in the teammate window, or through the companion API with `select_character` then `embark`), tick **Pick teammate character** above the invite button (it sets `companionAutoSelectCharacter` to `false` in the mod's `settings.json`); the teammate then waits on the character screen, for the AI driving it or for you, without a timeout.
 - To pick up a saved co-op run, use **Continue co-op save**, the button under the invite; it is enabled on the main menu while a co-op save exists. It hosts the saved run over the local connection and brings the teammate back. Do not use the game's own Load button for that save: it opens the run over Steam networking, rejects the local-connection player ids, and renames the save as corrupt.
 
 #### Option C: Hand The Teammate Window To An External Agent
@@ -92,6 +92,13 @@ This mod is still in development. Some things may be unfinished or break. Please
 - Start and pause it with `POST /teammate/control` on the **main window**, body `{"running": true|false}`. This is the supported entry point and it needs no session token (the main window holds the teammate session token itself). `running: true` still requires a verified play model, exactly like the in-game **Continue Auto-Play** button; `running: false` works at any time.
 
 Both routes enforce the same structural conditions (you are on the main menu, this is not the teammate instance, and the character has no auto-play already running); only the model gate differs. Full contract: [docs/api.md](./docs/api.md).
+
+### Model setup details
+- **Test main model** usually sends 2 requests with a 45-second deadline; while it runs the button reads **Cancel test**, so press it again to cancel. Auto-play requires verified tool calling; chat connectivity alone is not enough.
+- New installs stop auto-play after 30 requests by default. Adjust the limit, or leave it empty / enter 0 for unlimited. Existing unlimited settings are preserved. Tests also call your provider. Request and token counters are not a bill; consult your provider for charges.
+- Quick setup shares one model for conversation and play. Multiple endpoints, vision, thinking protocols and advanced budgets are under **Show advanced options**. Proxy aliases do not need to be renamed `deepseek-chat`: set the endpoint protocol explicitly.
+- In **Play → Multiplayer**, choose **AI auto-play** before inviting, or explicitly choose **External Agent** to launch a teammate that waits for Claude Code / Cursor / Codex; that route needs no model.
+- A ChatGPT subscription does not include an OpenAI API key or API credits.
 
 ---
 
@@ -174,7 +181,7 @@ The mod runs an embedded HTTP server on `http://127.0.0.1:8080` (with dynamic fa
 | Drive the game from Cursor / Claude / Codex | **Native MCP** under Settings → MCP | Mod only | Copy the **actual** URL shown (port may not be 8080) |
 | stdio, layered/full, or compatibility | Optional Python `mcp_server/` | Python + uv | From the release root, run `scripts/test-mcp-tool-profile.ps1` |
 
-External clients: F8 → **Settings → MCP** → tick **Enable MCP** → copy the URL or JSON. It shares the HTTP API port and listens on `127.0.0.1` only. Do not hard-code `8080` or `8765`.
+External clients: F8 → **Settings → MCP** → tick **Enable MCP** → pick Claude Code / Cursor / Codex under **Client configuration** → **Copy config** (a terminal command for Claude Code, JSON for Cursor, a `~/.codex/config.toml` snippet for Codex). It shares the HTTP API port and listens on `127.0.0.1` only. Do not hard-code `8080` or `8765`.
 
 The Python sidecar is not required for players and is not the recommended entry.
 

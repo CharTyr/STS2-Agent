@@ -853,9 +853,9 @@ internal sealed partial class AgentOverlayHost
             _apiAddressLabel.Text = Loc.T("本机 API：{0}", HttpServer.Instance.Prefix);
         }
 
-        if (_mcpInfoBox != null)
+        if (_mcpClientCard != null)
         {
-            _mcpInfoBox.Visible = AgentRuntime.Instance.McpRunning;
+            _mcpClientCard.Visible = AgentRuntime.Instance.McpRunning;
         }
 
         if (_mcpUrlLabel != null)
@@ -866,7 +866,7 @@ internal sealed partial class AgentOverlayHost
 
         // Only on a real change: assigning a TextEdit's text resets its caret, selection and scroll,
         // so a player selecting the config to copy it lost the selection on every refresh.
-        var mcpConfig = AgentRuntime.Instance.McpClientConfig;
+        var mcpConfig = AgentRuntime.Instance.McpClientConfigFor(_mcpClient);
         if (_mcpConfigEdit != null && _mcpConfigEdit.Text != mcpConfig)
         {
             _mcpConfigEdit.Text = mcpConfig;

@@ -74,6 +74,9 @@ internal sealed partial class AgentOverlayHost
     private Label? _mcpUrlLabel;
     /// <summary>The local HTTP API address, moved here from the title bar.</summary>
     private Label? _apiAddressLabel;
+    /// <summary>The MCP client-config card, and which client's format it shows. Static so a rebuild keeps the choice.</summary>
+    private Control? _mcpClientCard;
+    private static string _mcpClient = "claude-code";
     private TextEdit? _mcpConfigEdit;
     private Control? _mcpInfoBox;
     private Control? _pageHost;

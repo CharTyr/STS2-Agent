@@ -646,6 +646,7 @@ internal static class TestRunner
         yield return ("AgentLoop.ReasoningDeltaForwarded", AgentLoopTests.ReasoningDeltaReachesTheTurnCallback);
         yield return ("AgentLoop.ChatErrorRecordsBudget", AgentLoopTests.Chat_ErrorPathRecordsTheSpentRequestOnTheBudgetGuard);
         yield return ("McpLauncher.DetectRoot", () => Task.Run(AgentLoopTests.McpRoot_DetectsValidLayout));
+        yield return ("NativeMcp.ClientConfigFormats", () => Task.Run(McpServiceTests.ClientConfigsUseEachClientsFormat));
         yield return ("NativeMcp.Disabled", McpServiceTests.Disabled_Returns403);
         yield return ("NativeMcp.Initialize", McpServiceTests.Initialize_ReturnsServerInfoAndSession);
         yield return ("NativeMcp.ToolsList", McpServiceTests.ToolsList_IncludesHealthAndAct);
