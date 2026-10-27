@@ -587,7 +587,12 @@ internal sealed partial class AgentOverlayHost
     {
         var combo = UiFactory.Combo();
         combo.AddItem("自定义 / Custom");
-        foreach (var preset in JevEndpoint.Presets) combo.AddItem(preset.Name);
+        foreach (var preset in JevEndpoint.Presets)
+        {
+            var icon = JevProviderIcons.Get(preset.Id);
+            if (icon != null) combo.AddIconItem(icon, preset.Name);
+            else combo.AddItem(preset.Name);
+        }
         _jevProviderCombo = combo;
 
         int IndexFor(string url)

@@ -117,6 +117,7 @@ one action runs at a time.
 - `STS2AIAgent/Ui/AgentOverlayHost.PlayControl.cs` — solo/co-op mode switch (`ChangePlayModeAsync`: pause first, then commit), companion Jev settings sync, invite/continue launch and their availability (`RefreshContinueAvailability`), and the single writer of the play/teammate buttons' enabled state (`RefreshModeControls`).
 - `STS2AIAgent/Ui/UiFactory.cs` — every control and palette→StyleBox. `Label` does **not** wrap (reports its full text as min width); `Wrapped` does, with a 120 px floor. `Row` stretches its children, `TightRow` doesn't. Tabs carry their selected state as metadata so a theme repaint keeps it.
 - `STS2AIAgent/Ui/HelpCard.cs` — a card with a "?" button in its title bar that opens a help panel under the title; closed by default, open state kept by key across page rebuilds. All usage notes in the overlay go here instead of into the page body.
+- `STS2AIAgent/Ui/JevProviderIcons.cs` — decodes the provider logos embedded from `STS2AIAgent/Assets/jev/<preset id>.png` (48×48; origins in `Assets/jev/SOURCES.md`) for the fast-judgment provider picker; a missing logo means no icon, never an error.
 - `STS2AIAgent/Ui/OverlayTheme.cs` — Godot-free palettes plus contrast math (test-enforced contrast floors).
 - `STS2AIAgent/Ui/OverlaySwatch.cs` — theme preview tile.
 - `STS2AIAgent/Ui/OverlayTabCatalog.cs` — tabs as data (`Play`, `Settings`).

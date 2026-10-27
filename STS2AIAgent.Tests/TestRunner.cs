@@ -344,6 +344,7 @@ internal static class TestRunner
         yield return ("Jev.EndpointRootDefaults", () => Task.Run(JevClientTests.Endpoint_RootGetsTheDefaultPaths));
         yield return ("Jev.EndpointFullUrlAsWritten", () => Task.Run(JevClientTests.Endpoint_FullRequestUrlIsUsedAsWritten));
         yield return ("Jev.EndpointPresetsResolve", () => Task.Run(JevClientTests.Endpoint_EveryPresetResolvesToItself));
+        yield return ("Jev.EndpointPresetLogos", () => Task.Run(JevClientTests.Endpoint_EveryPresetHasAnEmbeddedLogo));
         yield return ("Jev.PostsToFullProviderUrl", JevClientTests.SystemOneAsync_PostsToAFullProviderUrl);
         yield return ("Jev.PingExplainsMissingModelList", JevClientTests.PingAsync_ExplainsAProviderWithoutAModelList);
         yield return ("Jev.BlankConfigRejected", () => Task.Run(JevClientTests.BlankConfigurationIsRejectedAtConstruction));

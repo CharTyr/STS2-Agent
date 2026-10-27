@@ -414,6 +414,21 @@ internal static class JevClientTests
         Assert.Null(JevEndpoint.FindPreset(BaseUrl));
     }
 
+    public static void Endpoint_EveryPresetHasAnEmbeddedLogo()
+    {
+        var csproj = AgentSourceFixture.Read("STS2AIAgent/STS2AIAgent.csproj");
+        Assert.Contains("Assets/jev/*.png", csproj);
+        Assert.Contains("STS2AIAgent.JevLogo.", csproj);
+        foreach (var preset in JevEndpoint.Presets)
+        {
+            var path = Path.Combine(AgentSourceFixture.Root, "STS2AIAgent", "Assets", "jev", preset.Id + ".png");
+            Assert.True(File.Exists(path), $"preset {preset.Id} needs a logo at {path}");
+            var header = File.ReadAllBytes(path).Take(8).ToArray();
+            Assert.True(header.SequenceEqual(new byte[] { 0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A }),
+                $"{preset.Id}.png must be a PNG");
+        }
+    }
+
     public static async Task SystemOneAsync_PostsToAFullProviderUrl()
     {
         var handler = new RecordingHandler(ChoiceResponseBody);
