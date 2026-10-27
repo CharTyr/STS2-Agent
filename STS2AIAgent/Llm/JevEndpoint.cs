@@ -58,15 +58,19 @@ internal static class JevEndpoint
     };
 
     /// <summary>
-    /// The preset whose address matches the configured one, or null for a custom address. A preset with a
-    /// placeholder (Cloudflare's account id) matches any value there and any model in the last segment.
+    /// The preset whose address matches the configured one, or null for a custom address. A service root
+    /// matches the preset whose request URL it resolves to. A preset with a placeholder (Cloudflare's
+    /// account id) matches any value there and any model in the last segment.
     /// </summary>
     internal static Preset? FindPreset(string? configuredUrl)
     {
         var normalized = Normalize(configuredUrl);
+        // A service root (the form saved before presets existed) calls the same request URL as the preset it fronts.
+        var rootRequest = IsFullRequestUrl(normalized) ? null : normalized + DefaultRequestPath;
         foreach (var preset in Presets)
         {
             if (string.Equals(preset.Url, normalized, StringComparison.OrdinalIgnoreCase)) return preset;
+            if (rootRequest != null && string.Equals(preset.Url, rootRequest, StringComparison.OrdinalIgnoreCase)) return preset;
             if (preset.Url.IndexOf('{') < 0) continue;
             // The placeholder segment matches any account id, and the last segment any model name.
             var pattern = Regex.Replace(Regex.Escape(preset.Url), @"\\\{[^}]*}", "[^/]+");

@@ -61,7 +61,7 @@ internal sealed partial class AgentOverlayHost
         WatchLine(_jevTimeoutEdit);
 
         _jevProtocolCombo = UiFactory.Combo();
-        _jevProtocolCombo.AddItem(Loc.T("Jev 格式（System One）"));
+        _jevProtocolCombo.AddItem(Loc.T("System One 格式"));
         _jevProtocolCombo.AddItem("OpenAI Decisions");
         _jevProtocolCombo.Select(settings.JevProtocol == JevProtocol.OpenAiDecisions ? 1 : 0);
         WatchCombo(_jevProtocolCombo);

@@ -382,7 +382,7 @@ internal static class JevClientTests
 
         // The status line the settings screen shows. It reports the failure rather than throwing,
         // because its caller is a probe, not a decision path.
-        Assert.Contains("Jev HTTP 401", reply);
+        Assert.Contains("Fast judgment HTTP 401", reply);
         Assert.Equal(1, handler.RequestCount);
     }
 
@@ -419,6 +419,16 @@ internal static class JevClientTests
         }
 
         Assert.Null(JevEndpoint.FindPreset(BaseUrl));
+    }
+
+    public static void Endpoint_ServiceRootFindsThePresetItFronts()
+    {
+        // The pre-preset form: a root that gets /v1/systemone appended resolves to the preset's request URL.
+        Assert.Equal("typesafe", JevEndpoint.FindPreset("https://api.typesafe.ai")!.Id);
+        Assert.Equal("typesafe", JevEndpoint.FindPreset("https://api.typesafe.ai/")!.Id);
+        Assert.Equal("openrouter", JevEndpoint.FindPreset("https://openrouter.ai/api")!.Id);
+        Assert.Null(JevEndpoint.FindPreset("https://example.test/other"));
+        Assert.Null(JevEndpoint.FindPreset(""));
     }
 
     public static void Endpoint_EveryPresetHasAnEmbeddedLogo()

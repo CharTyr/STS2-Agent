@@ -78,7 +78,7 @@ internal static partial class Loc
         map["测试快速判断"] = "Test fast judgment";
         map["地址"] = "URL";
         map["接口格式"] = "Format";
-        map["Jev 格式（System One）"] = "Jev format (System One)";
+        map["System One 格式"] = "System One format";
         map["获取 Key"] = "Get key";
         map["文档"] = "Docs";
         map["正在测试…"] = "Testing…";

@@ -109,20 +109,20 @@ internal sealed class JevClient : IJevClient
         // configuration mistake and every call it makes would 401 anyway.
         if (_baseUrl.Length == 0)
         {
-            throw new JevException("Jev base URL is empty.", JevExceptionKind.Config);
+            throw new JevException("Fast judgment base URL is empty.", JevExceptionKind.Config);
         }
 
         if (!Uri.TryCreate(_baseUrl, UriKind.Absolute, out var uri)
             || uri.Scheme is not ("http" or "https") || uri.UserInfo.Length != 0
             || uri.Query.Length != 0 || uri.Fragment.Length != 0)
-            throw new JevException("Jev base URL must be an HTTP(S) service URL without credentials, query, or fragment.", JevExceptionKind.Config);
+            throw new JevException("Fast judgment base URL must be an HTTP(S) service URL without credentials, query, or fragment.", JevExceptionKind.Config);
 
         if (JevEndpoint.HasPlaceholder(_baseUrl))
-            throw new JevException("Jev base URL still contains a {placeholder}; replace it with your own value (for Cloudflare, the account id).", JevExceptionKind.Config);
+            throw new JevException("Fast judgment base URL still contains a {placeholder}; replace it with your own value (for Cloudflare, the account id).", JevExceptionKind.Config);
 
         if (_apiKey.Length == 0)
         {
-            throw new JevException("Jev API key is empty.", JevExceptionKind.Config);
+            throw new JevException("Fast judgment API key is empty.", JevExceptionKind.Config);
         }
     }
 
@@ -220,7 +220,7 @@ internal sealed class JevClient : IJevClient
                         }
 
                         throw new JevException(
-                            $"Jev rate limit persisted through {attempt - 1} retries.",
+                            $"Fast judgment rate limit persisted through {attempt - 1} retries.",
                             JevExceptionKind.RateLimited,
                             RateLimitedStatus,
                             retryAfterSeconds: Math.Clamp(seconds, 0, MaxRetryAfterSeconds));
@@ -268,11 +268,11 @@ internal sealed class JevClient : IJevClient
         }
         catch (OperationCanceledException ex)
         {
-            return new AttemptOutcome(null, new JevException("Jev request timed out.", timeout?.IsCancellationRequested == true ? JevExceptionKind.Network : ClassifyCancellation(ex)));
+            return new AttemptOutcome(null, new JevException("Fast judgment request timed out.", timeout?.IsCancellationRequested == true ? JevExceptionKind.Network : ClassifyCancellation(ex)));
         }
         catch (HttpRequestException ex)
         {
-            return new AttemptOutcome(null, new JevException($"Jev request failed: {SafeText(ex.Message)}", JevExceptionKind.Network));
+            return new AttemptOutcome(null, new JevException($"Fast judgment request failed: {SafeText(ex.Message)}", JevExceptionKind.Network));
         }
         finally
         {
@@ -316,7 +316,7 @@ internal sealed class JevClient : IJevClient
         var kind = status >= 400 && status < 500 && status is not (408 or 429)
             ? JevExceptionKind.Config
             : JevExceptionKind.Network;
-        return new JevException($"Jev HTTP {status}: {body}", kind, status);
+        return new JevException($"Fast judgment HTTP {status}: {body}", kind, status);
     }
 
     private JevResponse ParseResponse(string payload)
