@@ -166,6 +166,9 @@ internal static class OverlayLayoutContractTests
         var phase = AgentSourceFixture.MethodBody(control, "RefreshCoopPhase");
         Assert.Contains("_teamControlRow.Visible = teamed;", phase);
         Assert.Contains("_companionChoiceToggle.Visible = settingUp;", phase);
+        // An external-agent teammate shows where to reach it once it is up, inside the invite card.
+        Assert.Contains("_externalAgentBox.Visible = external && teamed && connection != null;", phase);
+        Assert.Contains("_externalAgentBox));", section);
         Assert.Contains("RefreshCoopPhase(canContinue);", AgentSourceFixture.MethodBody(control, "RefreshContinueAvailability"));
     }
 

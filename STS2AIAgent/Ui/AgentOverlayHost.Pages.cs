@@ -339,6 +339,11 @@ internal sealed partial class AgentOverlayHost
         _teamResume = UiFactory.Button(Loc.T("继续游玩"), () => _ = AgentRuntime.Instance.ControlTeammateAsync(true, CancellationToken.None));
         _teamControlStatus = UiFactory.Wrapped(AgentRuntime.Instance.TeamControlStatus, UiFactory.FontCaption, muted: true);
         _teamControlRow = UiFactory.Row(_teamPause, _teamResume);
+        _externalAgentInfo = UiFactory.Wrapped("", UiFactory.FontCaption, muted: false);
+        _externalAgentBox = UiFactory.Column();
+        _externalAgentBox.AddChild(_externalAgentInfo);
+        _externalAgentBox.AddChild(UiFactory.TightRow(UiFactory.Button(Loc.T("复制地址"), CopyExternalAgentUrl, UiFactory.ButtonKind.Ghost)));
+        _externalAgentBox.Visible = false;
         // The card shows one phase at a time (see RefreshCoopPhase): before a teammate exists, the
         // character switch, invite and -- when a save exists -- continue; once one exists, pause and
         // resume. It used to show all nine controls at once, most of them disabled.
@@ -354,7 +359,8 @@ internal sealed partial class AgentOverlayHost
             // a saved run has to live here, under the invite.
             _dualContinueButton,
             _teamControlRow,
-            _teamControlStatus));
+            _teamControlStatus,
+            _externalAgentBox));
 
         // The dual-layer toggle for the multiplayer teammate. The companion instance runs its own Jev
         // loop (it has no overlay), so this switch is the host-side control for it. It sits with the

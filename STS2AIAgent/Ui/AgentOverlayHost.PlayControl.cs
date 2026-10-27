@@ -10,6 +10,13 @@ namespace STS2AIAgent.Ui;
 
 internal sealed partial class AgentOverlayHost
 {
+    /// <summary>
+    /// Where an outside agent reaches the teammate, shown once an external-agent teammate is up. The
+    /// mode used to say only "waits for a takeover" and leave the port to be dug out of the main
+    /// window's /health, which is not something a player choosing this mode in the overlay knows to do.
+    /// </summary>
+    private Control? _externalAgentBox;
+    private Label? _externalAgentInfo;
     /// <summary>Serialize the entire pause/confirm/save transition, not merely button clicks.</summary>
     private async Task ChangePlayModeAsync(int requestedIndex)
     {
@@ -291,7 +298,7 @@ internal sealed partial class AgentOverlayHost
     {
         var settings = AgentRuntime.Instance.Settings;
         if (settings.CompanionControlMode == "external")
-            return Loc.T("外部 Agent 模式：队友入队后等待接管，不会自己出牌。");
+            return Loc.T("外部 Agent 模式：队友入队后等待接管，不会自己出牌；入队后这里会显示它的接口地址。");
         var ready = FirstRunSetup.Evaluate(settings);
         // The play page's setup line already names what is missing; repeating the long hint here
         // said the same thing twice on one screen.
@@ -377,5 +384,23 @@ internal sealed partial class AgentOverlayHost
         if (_dualContinueButton != null) _dualContinueButton.Visible = (settingUp && canContinue) || (launching && _continueLaunching);
         if (_teamControlRow != null) _teamControlRow.Visible = teamed;
         if (_teamControlStatus != null) _teamControlStatus.Visible = teamed && _teamControlStatus.Text.Length > 0;
+
+        var external = AgentRuntime.Instance.Settings.CompanionControlMode == "external";
+        var connection = LocalDualInstanceLauncher.Connection;
+        if (_externalAgentBox != null) _externalAgentBox.Visible = external && teamed && connection != null;
+        if (_externalAgentInfo != null && connection != null)
+        {
+            _externalAgentInfo.Text = Loc.T(
+                "队友接口：{0}\n用 GET /state 读局面、POST /action 出牌，只能操作队友自己的角色。完整说明见 docs/api.md。",
+                ExternalAgentUrl(connection));
+        }
+    }
+
+    private static string ExternalAgentUrl(CompanionConnection connection) => $"http://127.0.0.1:{connection.Port}";
+
+    private void CopyExternalAgentUrl()
+    {
+        var connection = LocalDualInstanceLauncher.Connection;
+        if (connection != null) CopyText(ExternalAgentUrl(connection));
     }
 }

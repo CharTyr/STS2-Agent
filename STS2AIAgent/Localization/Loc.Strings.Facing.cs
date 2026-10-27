@@ -45,7 +45,9 @@ internal static partial class Loc
         map["AI 自动游玩"] = "AI auto-play";
         map["外部 Agent"] = "External Agent";
         map["手动选队友角色"] = "Pick teammate character";
-        map["外部 Agent 模式：队友入队后等待接管，不会自己出牌。"] = "External mode: the teammate waits to be taken over and will not play on its own.";
+        map["队友接口：{0}\n用 GET /state 读局面、POST /action 出牌，只能操作队友自己的角色。完整说明见 docs/api.md。"] =
+            "Teammate API: {0}\nRead the game with GET /state and act with POST /action; only the teammate's own character can be controlled. See docs/api.md for the full contract.";
+        map["外部 Agent 模式：队友入队后等待接管，不会自己出牌；入队后这里会显示它的接口地址。"] = "External mode: the teammate waits to be taken over and will not play on its own; once it joins, its API address appears here.";
         map["在主菜单邀请，队友会自动选角并游玩。"] = "Invite from the main menu; the teammate picks a character and plays.";
         map["在主菜单邀请，到第二窗口为队友选角色。"] = "Invite from the main menu, then pick the teammate's character in the second window.";
         map["复制诊断"] = "Copy diagnostics";

@@ -88,7 +88,7 @@ https://github.com/user-attachments/assets/89353468-a299-4315-9516-e520bcbfbd4b
 - 在 **游玩 → 多人** 明确选择 **外部 Agent** 再邀请。HTTP/MCP 的已有邀请动作仍兼容按模型验证状态选择路线。
 - 这条路线不需要配置或验证任何模型就能拉起队友——它根本不调用模型，所以没有模型也不会失败。队友照常拉起、照常加入大厅、照常准备。
 - 进图后队友会停在原地，不会自己出牌：它的 `/health` 报 `play_phase: "paused"` 与 `session_requests: 0`，因为这条路线根本不调用模型。
-- 从外部用队友实例自己的 `GET /state` 与 `POST /action` 驱动那个角色。通过主窗口 `GET /health` 的 `data.companion.api_port` 找到它的 HTTP API（该端口通常不是 8080）。队友只能操作自己的角色，越界会返回 403 `forbidden_actor`；这条路线下 `data.companion.auto_play` 为 `false`。
+- 从外部用队友实例自己的 `GET /state` 与 `POST /action` 驱动那个角色。队友入队后，**游玩 → 多人** 会显示它的接口地址，并有 **复制地址** 按钮；也可以从主窗口 `GET /health` 的 `data.companion.api_port` 找到（该端口通常不是 8080）。队友只能操作自己的角色，越界会返回 403 `forbidden_actor`；这条路线下 `data.companion.auto_play` 为 `false`。
 - 用**主窗口**的 `POST /teammate/control`（请求体 `{"running": true|false}`）开始 / 暂停它。这是受支持入口，不需要会话令牌（主窗口自己持有队友会话令牌）。`running: true` 仍然需要已验证的游玩模型，与游戏内「继续游玩」按钮是同一道门禁；`running: false` 随时可用。
 
 两条路线共用同一组结构条件（必须在主菜单、这是人玩的窗口、当前角色没有正在跑的自动游玩），只有模型这一档不同。完整契约见 [docs/api.md](./docs/api.md)。
