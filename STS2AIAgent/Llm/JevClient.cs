@@ -175,8 +175,9 @@ internal sealed class JevClient : IJevClient
         catch (JevException ex)
         {
             // A settings screen shows this string; it is a status line, not a stack trace. Only the
-            // caller's own cancellation escapes, because that is not the probe failing.
-            return ex.Message;
+            // caller's own cancellation escapes, because that is not the probe failing. Line breaks from the
+            // server's error body would split the one-line status, so they collapse to spaces.
+            return System.Text.RegularExpressions.Regex.Replace(ex.Message, @"\s+", " ").Trim();
         }
     }
 

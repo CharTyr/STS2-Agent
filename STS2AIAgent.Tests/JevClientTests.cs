@@ -386,6 +386,17 @@ internal static class JevClientTests
         Assert.Equal(1, handler.RequestCount);
     }
 
+    public static async Task PingAsync_FailureStaysOnOneLine()
+    {
+        var handler = new ScriptedHandler((HttpStatusCode.Unauthorized, "Missing\r\nAuthentication\n\theader", null));
+        var client = new JevClient(BaseUrl, ApiKey, "jev-latest", new HttpClient(handler), maxRetries: 0);
+
+        var reply = await client.PingAsync(CancellationToken.None);
+
+        Assert.Contains("Fast judgment HTTP 401", reply);
+        Assert.False(reply.Contains('\n') || reply.Contains('\r') || reply.Contains('\t'), reply);
+    }
+
     public static void Endpoint_RootGetsTheDefaultPath()
     {
         Assert.Equal(SystemOneUrl, JevEndpoint.RequestUrl(BaseUrl));

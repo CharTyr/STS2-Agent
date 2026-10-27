@@ -341,6 +341,7 @@ internal static class TestRunner
         yield return ("Jev.AnswerlessIsServerError", JevClientTests.SystemOneAsync_AnswerlessBodyIsAServerError);
         yield return ("Jev.PingAsksOneRealQuestion", JevClientTests.PingAsync_AsksOneRealQuestion);
         yield return ("Jev.PingReportsFailure", JevClientTests.PingAsync_ReportsTheFailureInsteadOfThrowing);
+        yield return ("Jev.PingFailureOneLine", JevClientTests.PingAsync_FailureStaysOnOneLine);
         yield return ("Jev.EndpointRootDefault", () => Task.Run(JevClientTests.Endpoint_RootGetsTheDefaultPath));
         yield return ("Jev.EndpointFullUrlAsWritten", () => Task.Run(JevClientTests.Endpoint_FullRequestUrlIsUsedAsWritten));
         yield return ("Jev.EndpointPresetsResolve", () => Task.Run(JevClientTests.Endpoint_EveryPresetResolvesToItself));

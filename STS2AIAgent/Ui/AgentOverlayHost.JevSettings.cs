@@ -150,7 +150,15 @@ internal sealed partial class AgentOverlayHost
             if (_jevProviderCombo == null || !GodotObject.IsInstanceValid(_jevProviderCombo)) return;
             var match = JevEndpoint.FindPreset(text);
             _jevProviderCombo.Select(IndexFor(match));
-            _jevProviderId = match?.Id ?? CustomJevProvider;
+            var nextId = match?.Id ?? CustomJevProvider;
+            if (!string.Equals(nextId, _jevProviderId, StringComparison.OrdinalIgnoreCase) && _jevApiKeyEdit != null)
+            {
+                // The address now names another provider: file the key under the old one, show the new one's own.
+                RememberJevKey();
+                _jevProviderId = nextId;
+                _jevApiKeyEdit.Text = _jevKeys.TryGetValue(nextId, out var key) ? key : "";
+            }
+
             RefreshJevPresetExtras(match);
         };
         return combo;
