@@ -183,7 +183,7 @@ internal static class RuntimeDebugTests
         finally { release.TrySetResult(); }
         await loop;
         Assert.Equal(0, runtime.Saves);
-        Assert.Equal(30, runtime.Settings.MaxSessionRequests);
+        Assert.Equal(AgentSettings.DefaultSessionRequests, runtime.Settings.MaxSessionRequests);
         Assert.Equal(1, runtime.Starts);
     }
 
@@ -198,7 +198,7 @@ internal static class RuntimeDebugTests
             throw new Exception("Expected save failure");
         }
         catch (IOException) { }
-        Assert.Equal(30, runtime.Settings.MaxSessionRequests);
+        Assert.Equal(AgentSettings.DefaultSessionRequests, runtime.Settings.MaxSessionRequests);
         Assert.False(runtime.PlayRunning);
     }
 

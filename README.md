@@ -95,7 +95,7 @@ Both routes enforce the same structural conditions (you are on the main menu, th
 
 ### Model setup details
 - **Test main model** usually sends 2 requests with a 45-second deadline; while it runs the button reads **Cancel test**, so press it again to cancel. Auto-play requires verified tool calling; chat connectivity alone is not enough.
-- New installs stop auto-play after 30 requests by default. Adjust the limit, or leave it empty / enter 0 for unlimited. Existing unlimited settings are preserved. Tests also call your provider. Request and token counters are not a bill; consult your provider for charges.
+- New installs stop auto-play after 1,500 requests by default, which is about one full run. Adjust the limit, or leave it empty / enter 0 for unlimited. Existing unlimited settings are preserved. Tests also call your provider. Request and token counters are not a bill; consult your provider for charges.
 - Quick setup shares one model for conversation and play. Multiple endpoints, vision, thinking protocols and advanced budgets are under **Show advanced options**. Proxy aliases do not need to be renamed `deepseek-chat`: set the endpoint protocol explicitly.
 - In **Play → Multiplayer**, choose **AI auto-play** before inviting, or explicitly choose **External Agent** to launch a teammate that waits for Claude Code / Cursor / Codex; that route needs no model.
 - A ChatGPT subscription does not include an OpenAI API key or API credits.

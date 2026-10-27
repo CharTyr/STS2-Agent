@@ -87,7 +87,10 @@ internal static class UsabilityRegressionTests
 
     public static void NewInstallTrialPreservesExistingUnlimitedChoice()
     {
-        Assert.Equal(30, AgentSettings.CreateDefault().MaxSessionRequests);
+        // A new install is capped, and the cap covers a whole run: 30 stopped auto-play after the
+        // first fight (2026-10-27 live pass).
+        Assert.Equal(AgentSettings.DefaultSessionRequests, AgentSettings.CreateDefault().MaxSessionRequests);
+        Assert.True(AgentSettings.DefaultSessionRequests >= 1000, "the default cap must cover a full run");
         var legacy = JsonSerializer.Deserialize<AgentSettings>("{\"MaxSessionRequests\":null}")!;
         legacy.EnsureValidShape();
         Assert.Null(legacy.MaxSessionRequests);

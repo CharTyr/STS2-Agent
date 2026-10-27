@@ -72,6 +72,18 @@ internal static class PlayerFacingSession
     /// <summary><see cref="PlayerFacingView.Kind"/> for a session that stopped at a budget cap.</summary>
     public const string BudgetKind = "budget";
 
+    /// <summary>
+    /// True when play stopped, or cannot start, for a reason the player has to deal with: a budget
+    /// cap, a configuration or connection error, or a teammate window that went away.
+    /// </summary>
+    /// <remarks>
+    /// The title bar and the edge tab only knew "playing" and "idle", so a run that stopped on an
+    /// error looked exactly like one the player had paused -- and with the panel hidden, nothing on
+    /// screen said the AI had stopped at all.
+    /// </remarks>
+    public static bool NeedsAttention(PlayerFacingView view) =>
+        view.Kind is BudgetKind or "needs_error" or "companion_lost";
+
     internal static bool IsCurrentPlaySession(PlaySessionIdentity? current, PlaySessionIdentity observed)
     {
         return current is { } currentIdentity &&

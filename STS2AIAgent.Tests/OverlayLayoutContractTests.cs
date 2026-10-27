@@ -28,6 +28,12 @@ internal static class OverlayLayoutContractTests
     private const string ChatCard = "STS2AIAgent/Ui/AgentOverlayHost.ChatCard.cs";
 
     /// <summary>
+    /// The session card (spend, decision log, counter and diagnostics buttons), split out of the pages
+    /// file when those buttons moved onto it.
+    /// </summary>
+    private const string Session = "STS2AIAgent/Ui/AgentOverlayHost.Session.cs";
+
+    /// <summary>
     /// Save must not live inside the scrolling form.
     /// </summary>
     /// <remarks>
@@ -131,7 +137,7 @@ internal static class OverlayLayoutContractTests
     /// </summary>
     public static void DecisionLogStartsClosed()
     {
-        var source = AgentSourceFixture.Read(Pages);
+        var source = AgentSourceFixture.Read(Session);
         Assert.Contains("private static bool _decisionLogOpen;", source);
         Assert.Contains("_decisionLog.Visible = _decisionLogOpen;", AgentSourceFixture.MethodBody(source, "BuildDecisionCard"));
         Assert.Contains("!_decisionLogOpen", AgentSourceFixture.MethodBody(source, "RefreshDecisionPage"));
@@ -145,11 +151,16 @@ internal static class OverlayLayoutContractTests
     {
         var pages = AgentSourceFixture.Read(Pages);
         var section = AgentSourceFixture.MethodBody(pages, "BuildCoopSection");
-        var statusCard = section.IndexOf("Loc.T(\"组队状态\")", StringComparison.Ordinal);
-        Assert.True(section.IndexOf("Loc.T(\"复制诊断\")", StringComparison.Ordinal) < statusCard
-            && section.IndexOf("tools.AddChild(_resetStatsButton);", StringComparison.Ordinal) < statusCard
-            && section.IndexOf("            tools));", StringComparison.Ordinal) > statusCard,
-            "Diagnostics and reset belong in the status card's bottom row, not between invite and pause.");
+        // Diagnostics and the counter reset are not between invite and pause, and not in the
+        // multiplayer card at all: they sit on the session card both modes show, because a solo player
+        // had no way to reach them without switching modes (which pauses play).
+        Assert.False(section.Contains("Loc.T(\"复制诊断\")", StringComparison.Ordinal),
+            "Diagnostics moved to the session card; the multiplayer section must not carry its own copy.");
+        Assert.False(section.Contains("_resetStatsButton", StringComparison.Ordinal));
+        var card = AgentSourceFixture.MethodBody(AgentSourceFixture.Read(Session), "BuildDecisionCard");
+        Assert.Contains("tools.AddChild(_resetStatsButton);", card);
+        Assert.Contains("Loc.T(\"复制诊断\")", card);
+        Assert.Contains("Loc.T(\"保存诊断\")", card);
 
         var control = AgentSourceFixture.Read("STS2AIAgent/Ui/AgentOverlayHost.PlayControl.cs");
         var phase = AgentSourceFixture.MethodBody(control, "RefreshCoopPhase");
@@ -351,7 +362,7 @@ internal static class OverlayLayoutContractTests
     /// </summary>
     public static void UsageSentencesDoNotShareARow()
     {
-        var source = AgentSourceFixture.Read(Pages);
+        var source = AgentSourceFixture.Read(Session);
         var decisions = AgentSourceFixture.MethodBody(source, "BuildDecisionCard");
         var sessionTile = decisions.IndexOf("Loc.T(\"本次会话\")", StringComparison.Ordinal);
         var runTile = decisions.IndexOf("Loc.T(\"本局\")", StringComparison.Ordinal);
@@ -439,6 +450,7 @@ internal static class OverlayLayoutContractTests
     {
         var pages = AgentSourceFixture.Read(Pages);
         var settings = AgentSourceFixture.Read(Settings);
+        var session = AgentSourceFixture.Read(Session);
 
         foreach (var (source, field, file) in new[]
                  {
@@ -462,8 +474,8 @@ internal static class OverlayLayoutContractTests
                      // a usage sentence or a model reason and sets the row width if it cannot wrap.
                      (pages, "_playStatus = UiFactory.Wrapped(", Pages),
                      (pages, "_playSummary = UiFactory.Wrapped(", Pages),
-                     (pages, "_decisionUsage = UiFactory.Wrapped(", Pages),
-                     (pages, "_decisionRunSpend = UiFactory.Wrapped(", Pages)
+                     (session, "_decisionUsage = UiFactory.Wrapped(", Session),
+                     (session, "_decisionRunSpend = UiFactory.Wrapped(", Session)
                  })
         {
             Assert.Contains(field, source);

@@ -299,6 +299,7 @@ internal static class TestRunner
         yield return ("Settings.BudgetEmptyUnlimited", () => Task.Run(PlayerExperienceTests.EmptyOrZeroBudgetMeansUnlimited));
         yield return ("Settings.BudgetHarvestBeforeMutate", () => Task.Run(PlayerExperienceTests.HarvestBudgetRejectsBeforeMutatingSettings));
         yield return ("Session.BudgetCopyReachableReset", () => Task.Run(PlayerExperienceTests.BudgetCopyNamesReachableResetEntry));
+        yield return ("Session.AttentionOnlyForRealStops", () => Task.Run(PlayerExperienceTests.OnlyStopsThatNeedThePlayerAreFlagged));
         yield return ("Session.ResetStatsBlockedRunning", () => Task.Run(PlayerExperienceTests.ResetStatsBlockedWhileRunning));
         yield return ("Thinking.gpt-4o", () => Task.Run(() => ThinkingRequestBuilderTests.Infer("gpt-4o", "auto", "prompt")));
         yield return ("Thinking.gpt-5", () => Task.Run(() => ThinkingRequestBuilderTests.Infer("gpt-5", "auto", "reasoning_effort")));

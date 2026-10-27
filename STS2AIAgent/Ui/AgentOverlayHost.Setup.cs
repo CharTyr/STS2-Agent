@@ -63,7 +63,7 @@ internal sealed partial class AgentOverlayHost
         return HelpCard.Build(
             "settings.quick",
             Loc.T("快速配置"),
-            Loc.T("选择服务商，填 API Key 和模型名，然后点「测试主模型」。\n测试会真实调用模型：先测连通，再测工具调用；不支持工具调用的模型无法自动游玩。\n对话和自动游玩共用这个模型；本地服务（Ollama / LM Studio）可留空 Key。\n请求上限：新安装默认试用 30 次，可调整。测试也会调用你的服务；请求数和 Token 不等于账单金额。"),
+            Loc.T("选择服务商，填 API Key 和模型名，然后点「测试主模型」。\n测试会真实调用模型：先测连通，再测工具调用；不支持工具调用的模型无法自动游玩。\n对话和自动游玩共用这个模型；本地服务（Ollama / LM Studio）可留空 Key。\n请求上限：新安装默认 1500 次，大约够打完一整局；留空或 0 为不限。测试也会调用你的服务；请求数和 Token 不等于账单金额。"),
             rows.ToArray());
     }
 

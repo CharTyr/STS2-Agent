@@ -212,13 +212,27 @@ internal sealed class AgentSettings
             Endpoints = { endpoint },
             Models = { model },
             ConversationModelId = model.Id,
-            MaxSessionRequests = 30,
+            MaxSessionRequests = DefaultSessionRequests,
             Hotkey = "F8",
             AttachStateInChat = true,
             OverlayVisibleOnStart = false,
             HasSeenFirstRunGuide = false
         };
     }
+
+    /// <summary>
+    /// The request cap a new installation starts with: enough for one whole run, so the first run
+    /// does not stop after its first fight.
+    /// </summary>
+    /// <remarks>
+    /// Sized from the live samples, not guessed. The 2026-09-20 run spent 52 requests on floors 1 to 3
+    /// (about 17 a floor, with short early fights), and the 2026-10-27 r4 pass spent 30 on a single
+    /// fight. Three acts of roughly 15 to 17 floors, with longer elite and boss fights later, comes to
+    /// about 800 to 1,300 requests; 1,500 leaves room for retries and planner refreshes. It was 30,
+    /// which stopped a new player's auto-play at the end of the first fight. Released versions up to
+    /// 0.16.2 had no default cap at all, so no saved setting carries the old 30.
+    /// </remarks>
+    public const int DefaultSessionRequests = 1500;
 
     public void EnsureValidShape()
     {

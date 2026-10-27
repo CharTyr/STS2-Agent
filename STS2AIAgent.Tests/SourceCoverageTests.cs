@@ -97,6 +97,9 @@ internal static class SourceCoverageTests
         // The conversation card (chat log rendering, scroll-to-bottom, the chat-side option row). A
         // Godot control builder, unlinked like the pages file it was split out of.
         "STS2AIAgent/Ui/AgentOverlayHost.ChatCard.cs",
+        // The session card (spend, decision log, counter and diagnostics buttons). A Godot control
+        // builder split out of the pages file, so it stays unlinked like it.
+        "STS2AIAgent/Ui/AgentOverlayHost.Session.cs",
         // The play page's solo/multiplayer mode switch. A Godot control, so it stays unlinked like the
         // overlay host it serves.
         "STS2AIAgent/Ui/SegmentedSwitch.cs",

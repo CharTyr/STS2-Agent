@@ -285,8 +285,28 @@ internal static class PlayerExperienceTests
         });
         Assert.Equal("budget", paused.Kind);
         Assert.Contains(SessionBudgetLimits.ResetStatsActionLabel, paused.NextAction);
-        Assert.Contains("显示高级选项", paused.NextAction);
+        // The cap is on the quick card as well as under the advanced options, so the copy names the
+        // field rather than sending the player to the advanced toggle.
+        Assert.Contains("请求上限", paused.NextAction);
+        Assert.False(paused.NextAction.Contains("显示高级选项"), paused.NextAction);
         Assert.Contains("继续游玩", paused.NextAction);
+        Assert.True(PlayerFacingSession.NeedsAttention(paused));
+    }
+
+    public static void OnlyStopsThatNeedThePlayerAreFlagged()
+    {
+        var settings = AgentSettings.CreateDefault();
+        ModelRoleProbe.Upsert(settings, ModelRoleProbe.FromSuccess(ModelRoleNames.Play, settings.TryResolvePlayModel()!, tools: true));
+        var verified = FirstRunSetup.Evaluate(settings);
+        var configError = PlayerFacingSession.Compose(BaseSnapshot(verified) with { StopKind = "config", StopDetail = "401" });
+        var idle = PlayerFacingSession.Compose(BaseSnapshot(verified));
+        var runEnded = PlayerFacingSession.Compose(BaseSnapshot(verified) with { StopKind = "run_end" });
+
+        Assert.True(PlayerFacingSession.NeedsAttention(configError));
+        // Idle and a finished run are ordinary states; colouring them as a problem would make the
+        // warning meaningless.
+        Assert.False(PlayerFacingSession.NeedsAttention(idle));
+        Assert.False(PlayerFacingSession.NeedsAttention(runEnded));
     }
 
     public static void ResetStatsBlockedWhileRunning()

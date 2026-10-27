@@ -12,6 +12,7 @@ internal static partial class Loc
         map["隐藏"] = "Hide";
         map["游玩中"] = "Playing";
         map["待机"] = "Idle";
+        map["需处理"] = "Needs attention";
         map["可以问：这手牌怎么打、遗物值不值得拿。"] =
             "Try: how to play this hand, is a relic worth taking.";
         map["对话默认只读；要它动手，用上方的「开始自动游玩」或「单步」，或者明确说「帮我打」。"] =
@@ -263,8 +264,8 @@ internal static partial class Loc
             "While on, the AI makes no model requests and takes no actions in combat, and resumes when combat ends.\nUse it to fight by hand or to hand combat to an external controller.";
         map["开启后，由快速判断模型（Jev）逐步选择动作，LLM 只负责战略规划。\n地址和 Key 在「设置 → 快速判断」填写；置信度低于阈值时由 LLM 接手。"] =
             "With it on, the fast-judgment model (Jev) picks each action and the LLM only plans strategy.\nFill in the URL and key under “Settings → Fast judgment”; below the confidence threshold the LLM takes over.";
-        map["最新的在最前。每条包含动作、理由、来源和该步消耗的 Token。"] =
-            "Newest first. Each entry shows the action, reason, source and the tokens that step used.";
+        map["最新的在最前。每条包含动作、理由、来源和该步消耗的 Token。\n「清零计数」只清零本次会话的请求和 Token 计数，不改上限。诊断不含 Key 和对话，反馈问题时附上。"] =
+            "Newest first. Each entry shows the action, reason, source and the tokens that step used.\n“Clear counters” only zeroes this session's request and token counts; the limit stays. Diagnostics leave out keys and the conversation; attach them when reporting a problem.";
         map["你打自己的角色，AI 打另一个角色，同一座塔往上爬。\n在主菜单邀请；第二窗口打开后，AI 会自动选角、过开局事件并进图。\n大厅仍是 4 人位，还可再邀 2 名在线玩家。\n队友窗口连不上时，检查游戏日志和 Steam 双开限制。"] =
             "You play your character, the AI plays another, and you climb the same tower.\nInvite from the main menu; once the second window opens, the AI picks a character, clears the opening event and enters the map.\nThe lobby still holds 4, so you can invite 2 more online players.\nIf the teammate window will not connect, check the game log and Steam's multi-instance limits.";
         map["聊天不会替你出牌，也不会恢复已暂停的队友。\n你的建议会作为队友下一次决策的参考。"] =
@@ -273,8 +274,8 @@ internal static partial class Loc
             "“Test” makes real calls to the model: connectivity first, then tool calling. A model without tool calling cannot auto-play.\n“Test main model” tests the current main model.";
         map["四步：① 在「端点」填地址和 Key（本地服务可留空 Key）② 在「模型」添加模型并绑定端点 ③ 点模型卡片上的「测试」，通过会显示「已验证」④ 在「模型绑定」选主模型并保存。\n然后到「游玩」页开始自动游玩。双人游玩：把游玩页顶部切到「多人」再邀请 AI 队友。"] =
             "Four steps: ① fill in the URL and key under “Endpoints” (local services can leave the key blank) ② add a model under “Models” and bind the endpoint ③ press “Test” on the model card; a pass shows “Verified” ④ pick the main model under “Model binding” and save.\nThen start auto-play on the “Play” page. For co-op, switch the top of the Play page to “Multiplayer” and invite the AI teammate.";
-        map["选择服务商，填 API Key 和模型名，然后点「测试主模型」。\n测试会真实调用模型：先测连通，再测工具调用；不支持工具调用的模型无法自动游玩。\n对话和自动游玩共用这个模型；本地服务（Ollama / LM Studio）可留空 Key。\n请求上限：新安装默认试用 30 次，可调整。测试也会调用你的服务；请求数和 Token 不等于账单金额。"] =
-            "Choose a provider, enter the API key and model name, then press “Test main model”.\nThe test makes real calls: connectivity first, then tool calling; a model without tool calling cannot auto-play.\nChat and auto-play share this model; local services (Ollama / LM Studio) can leave the key blank.\nRequest limit: new installs default to a 30-request trial; adjust as needed. Tests also call your service, and request/token counts are not a bill.";
+        map["选择服务商，填 API Key 和模型名，然后点「测试主模型」。\n测试会真实调用模型：先测连通，再测工具调用；不支持工具调用的模型无法自动游玩。\n对话和自动游玩共用这个模型；本地服务（Ollama / LM Studio）可留空 Key。\n请求上限：新安装默认 1500 次，大约够打完一整局；留空或 0 为不限。测试也会调用你的服务；请求数和 Token 不等于账单金额。"] =
+            "Choose a provider, enter the API key and model name, then press “Test main model”.\nThe test makes real calls: connectivity first, then tool calling; a model without tool calling cannot auto-play.\nChat and auto-play share this model; local services (Ollama / LM Studio) can leave the key blank.\nRequest limit: new installs default to 1,500 requests, about one full run; leave it blank or 0 for unlimited. Tests also call your service, and request/token counts are not a bill.";
         map["视觉：不勾选模型的「视觉」、也不配视觉模型时，仍可用精简状态和工具打完全部流程。\n预算：达到上限会自动停止游玩并提示；填错会保留原上限，不会变成不限。\n请求超时：服务商长时间没有响应时，按此时长报错。\nAI 主动发言：默认关闭；开启后只在战斗开始和结束各说一句，每次自动游玩最多 6 句，间隔至少 75 秒，不会代打，也受预算限制。\n窗口位置：拖动标题栏移动，位置会保存。"] =
             "Vision: without the model's “Vision” box or a vision model, auto-play still finishes the whole run on the compact state and tools.\nBudget: auto-play stops with a notice at the limit; a bad entry keeps the previous limit instead of becoming unlimited.\nRequest timeout: how long to wait before reporting a provider that stopped answering.\nAI speaks up: off by default; when on it speaks once at combat start and once at combat end, at most 6 lines per auto-play run, at least 75 seconds apart. It never plays for you and respects the budget.\nWindow position: drag the title bar to move it; the position is saved.";
         map["双层决策下，由快速判断模型（Jev 等）逐步操作游戏，LLM 只做战略规划。在游玩页按模式开启；置信度低于阈值时由 LLM 接手。\n选服务商会填好地址、格式和模型，每家的 Key 分开记住。地址可填完整请求地址，也可只填服务根地址。\n「测试」会真实调用一次服务。连续失败 3 次会暂停快速判断一段时间，期间由 LLM 接手。\n预设按各家文档整理，以实际可用为准。"] =

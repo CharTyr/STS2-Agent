@@ -420,7 +420,20 @@ internal sealed partial class AgentOverlayHost
     private void CopyDiagnostics()
     {
         CopyText(AgentRuntime.Instance.ExportDiagnostics());
-        AgentRuntime.Instance.NotifyStatus(Loc.T("诊断已复制（不含 Key 和对话）。"));
+        ShowSessionToolResult(Loc.T("诊断已复制（不含 Key 和对话）。"));
+    }
+
+    /// <summary>
+    /// Reports a counter or diagnostics action next to its button. These used to go only to the solo
+    /// status line, which multiplayer hides, so pressing "复制诊断" there showed nothing at all.
+    /// </summary>
+    private void ShowSessionToolResult(string message)
+    {
+        AgentRuntime.Instance.NotifyStatus(message);
+        if (_sessionToolsStatus != null && GodotObject.IsInstanceValid(_sessionToolsStatus))
+        {
+            UiFactory.SetStatusLine(_sessionToolsStatus, message);
+        }
     }
 
     private void SaveDiagnostics()
@@ -432,9 +445,9 @@ internal sealed partial class AgentOverlayHost
             var path = Path.Combine(directory, "sts2-agent-" + DateTime.UtcNow.ToString("yyyyMMdd-HHmmss-fff") + ".txt");
             File.WriteAllText(path, AgentRuntime.Instance.ExportDiagnostics());
             OS.ShellOpen(directory);
-            AgentRuntime.Instance.NotifyStatus(Loc.T("诊断已保存：{0}", path));
+            ShowSessionToolResult(Loc.T("诊断已保存：{0}", path));
         }
-        catch (Exception ex) { AgentRuntime.Instance.NotifyStatus(DiagnosticExport.Redact(ex.Message)); }
+        catch (Exception ex) { ShowSessionToolResult(DiagnosticExport.Redact(ex.Message)); }
     }
 
     public static void ShowLocalCoopContinue()

@@ -172,13 +172,13 @@ internal static partial class Loc
             "Invalid API URL; enter a full HTTP(S) address.";
 
         // Session budget copy (Config/SessionBudgetLimits.cs).
-        map["重置统计"] = "Reset stats";
+        map["清零计数"] = "Clear counters";
         map["快速判断 {0} 次 · LLM 接手 {1} 次"] = "Fast judgment {0} · LLM took over {1}";
         map["会话预算必须是正整数；留空或 0 表示不限。已保留原来的安全上限。"] =
             "The session budget must be a positive whole number; leave it blank or 0 for unlimited. Your previous safe limit was kept.";
-        map["到「设置」勾选「显示高级选项」调高上限，或点「重置统计」后再点「继续游玩」。重置只清零本会话计数，不改预算上限。"] =
-            "Tick “Show advanced options” under “Settings” to raise the limit, or press “Reset stats” and then “Resume”. Resetting only clears this session's counters; the limit stays.";
-        map["自动游玩进行中不能重置统计。请先暂停，再点「重置统计」，或到「设置」调高上限。"] =
-            "Stats cannot be reset while auto-play is running. Pause first, then press “Reset stats”, or raise the limit in “Settings”.";
+        map["点「清零计数」后再继续游玩；想一次玩更久，到「设置」调高「请求上限」。清零只重置本次会话的计数，不改上限。"] =
+            "Press “Clear counters”, then resume play; to play longer at a time, raise “Request limit” in “Settings”. Clearing only resets this session's counters; the limit stays.";
+        map["自动游玩还在收尾，暂停后才能点「清零计数」；也可以到「设置」调高「请求上限」。"] =
+            "Auto-play is still finishing; pause before pressing “Clear counters”, or raise “Request limit” in “Settings”.";
     }
 }

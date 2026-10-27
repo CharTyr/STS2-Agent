@@ -81,6 +81,7 @@ internal static class OverlayVisualContractTests
                  {
                      "STS2AIAgent/Ui/AgentOverlayHost.Setup.cs",
                      "STS2AIAgent/Ui/AgentOverlayHost.Pages.cs",
+                     "STS2AIAgent/Ui/AgentOverlayHost.Session.cs",
                      Host,
                      "STS2AIAgent/Localization/Loc.Strings.Ui.cs"
                  })
