@@ -281,7 +281,8 @@ internal sealed partial class AgentRuntime
         try
         {
             var timeout = TimeSpan.FromSeconds(settings.JevRequestTimeoutSeconds is > 0 ? settings.JevRequestTimeoutSeconds.Value : 90);
-            var client = new JevClient(settings.JevBaseUrl, settings.JevApiKey, settings.JevModel, requestTimeout: timeout,
+            // A connection test reports the first answer; retrying a refused or rejected call would only make the screen wait.
+            var client = new JevClient(settings.JevBaseUrl, settings.JevApiKey, settings.JevModel, maxRetries: 0, requestTimeout: timeout,
                 protocol: settings.JevProtocol);
             return await client.PingAsync(cancellationToken);
         }

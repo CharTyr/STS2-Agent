@@ -84,11 +84,11 @@ internal static class JevProtocol
         }
         catch (JsonException ex)
         {
-            throw new JevException($"Jev response was not valid JSON: {ex.Message}", JevExceptionKind.Server);
+            throw new JevException($"Fast judgment response was not valid JSON: {ex.Message}", JevExceptionKind.Server);
         }
 
         if (root is not JsonObject body)
-            throw new JevException("Jev response was not a JSON object.", JevExceptionKind.Server);
+            throw new JevException("Fast judgment response was not a JSON object.", JevExceptionKind.Server);
 
         return Normalize(protocol) == SystemOne ? ParseSystemOne(body, options) : ParseDecisions(body, options);
     }
@@ -98,7 +98,7 @@ internal static class JevProtocol
         if (body["success"] is JsonValue success && success.TryGetValue<bool>(out var ok) && !ok)
         {
             var message = body["errors"] is JsonArray { Count: > 0 } errors ? NodeText(errors[0]?["message"]) : "";
-            throw new JevException("Jev request failed: " + (message.Length == 0 ? "success=false" : message), JevExceptionKind.Server);
+            throw new JevException("Fast judgment request failed: " + (message.Length == 0 ? "success=false" : message), JevExceptionKind.Server);
         }
 
         // Cloudflare Workers AI returns {result: {answers…}, success, errors}.
@@ -110,11 +110,11 @@ internal static class JevProtocol
         }
         catch (JsonException ex)
         {
-            throw new JevException($"Jev response was not valid JSON: {ex.Message}", JevExceptionKind.Server);
+            throw new JevException($"Fast judgment response was not valid JSON: {ex.Message}", JevExceptionKind.Server);
         }
 
         if (response?.Answers is null)
-            throw new JevException("Jev response did not contain an \"answers\" object.", JevExceptionKind.Server);
+            throw new JevException("Fast judgment response did not contain an \"answers\" object.", JevExceptionKind.Server);
         return response;
     }
 
