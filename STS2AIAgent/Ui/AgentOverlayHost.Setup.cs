@@ -66,9 +66,14 @@ internal sealed partial class AgentOverlayHost
             rows.ToArray());
     }
 
-    /// <summary>The quick card's verdict: the main model's test badge, or a nudge to fill the card in.</summary>
-    private static string QuickTestBadgeText()
+    /// <summary>
+    /// The quick card's verdict: the main model's test badge, or a nudge to fill the card in. While
+    /// the provider, key, URL or model has unsaved edits, the saved verdict belongs to the old values,
+    /// so the line asks for a retest instead of showing it.
+    /// </summary>
+    private string QuickTestBadgeText()
     {
+        if (_quickDirty) return Loc.T("⚪ 已修改，需重新测试");
         var modelId = AgentRuntime.Instance.Settings.TryResolvePlayModel()?.Model.Id;
         return modelId == null ? Loc.T("⚪ 未配置") : ModelTestBadgeText(modelId);
     }
@@ -103,7 +108,10 @@ internal sealed partial class AgentOverlayHost
         foreach (var button in _modelTestButtons)
             if (GodotObject.IsInstanceValid(button)) button.Disabled = testing;
         if (_footerModelTest != null) _footerModelTest.Text = testing ? Loc.T("取消测试") : Loc.T("测试主模型");
-        if (_goPlayButton != null) _goPlayButton.Visible = _offerGoPlay && !testing;
+        // Readiness is re-read rather than trusted from the test: a save after a passing test can
+        // invalidate the verification (a new key, a new model), and the offer must go with it.
+        if (_goPlayButton != null)
+            _goPlayButton.Visible = _offerGoPlay && !testing && FirstRunSetup.Evaluate(AgentRuntime.Instance.Settings).ReadyToInvite;
     }
 
     private async Task RunModelTestFromUiAsync(string? modelId)
@@ -119,9 +127,11 @@ internal sealed partial class AgentOverlayHost
         RefreshModelTestControls();
         SetSaveStatus(Loc.T("正在测试…（最多 45 秒）"));
         string result;
+        var completed = false;
         try
         {
             result = await AgentRuntime.Instance.TestModelAsync(modelId, cancellation.Token);
+            completed = true;
             // Companion pause/ack has its own status and deadline. Do not extend the model test's
             // 45-second cancellation UI while a teammate finishes an already-submitted action.
             _ = SaveSettingsAndSyncJevAsync();
@@ -132,7 +142,9 @@ internal sealed partial class AgentOverlayHost
         }
         catch (Exception ex) { result = DiagnosticExport.Redact(ex.Message); }
         finally { _modelTestCancellation = null; }
-        _offerGoPlay = FirstRunSetup.Evaluate(AgentRuntime.Instance.Settings).ReadyToInvite;
+        // Only a test that ran to the end offers the jump; a cancelled or crashed retest of a model that
+        // was already verified did not just pass anything.
+        _offerGoPlay = completed && FirstRunSetup.Evaluate(AgentRuntime.Instance.Settings).ReadyToInvite;
         if (_panel == null || !_panel.IsInsideTree()) return;
         // A rebuild redraws every badge and the first-run lines, but it also resets every editor to
         // the saved settings. Edits typed while the test ran (it can take 45 seconds) would be lost,

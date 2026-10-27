@@ -39,6 +39,10 @@ internal static class PlayerExperienceTests
         var untested = FirstRunSetup.PlayBlocker(FirstRunSetup.Evaluate(settings));
         Assert.Equal("模型还没测试", untested);
 
+        var badUrl = AgentSettings.CreateDefault();
+        badUrl.Endpoints[0].BaseUrl = "not a url";
+        Assert.Equal("接口地址无效", FirstRunSetup.PlayBlocker(FirstRunSetup.Evaluate(badUrl)));
+
         settings.Models.Clear();
         Assert.Equal("还没配置模型", FirstRunSetup.PlayBlocker(FirstRunSetup.Evaluate(settings)));
 

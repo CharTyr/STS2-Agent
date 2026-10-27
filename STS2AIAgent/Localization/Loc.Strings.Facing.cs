@@ -38,6 +38,7 @@ internal static partial class Loc
         map["去游玩"] = "Go play";
         map["去设置"] = "Open settings";
         map["还没配置模型"] = "No model set up yet";
+        map["接口地址无效"] = "Invalid API URL";
         map["模型测试没通过"] = "Model test failed";
         map["模型不支持工具调用"] = "Model has no tool calling";
         map["模型还没测试"] = "Model not tested yet";

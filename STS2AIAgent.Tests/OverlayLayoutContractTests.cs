@@ -77,11 +77,15 @@ internal static class OverlayLayoutContractTests
         Assert.True(scroll >= 0 && status > scroll, "The save status has to be added to the footer, after the scrolling form.");
         Assert.False(form.Contains("_settingsBody.AddChild(_saveStatus)", StringComparison.Ordinal),
             "The save status is back at the top of the scrolling form, out of sight of the footer buttons.");
-        Assert.Contains("UiFactory.Row(save, test)", page);
+        var row = page.IndexOf("page.AddChild(UiFactory.Row(save, test));", StringComparison.Ordinal);
+        Assert.True(row > status, "Save and Test have to share one footer row, under the status line.");
 
+        // One button, two jobs: it cancels a running test and starts one otherwise.
         var setup = AgentSourceFixture.Read("STS2AIAgent/Ui/AgentOverlayHost.Setup.cs");
         var toggle = AgentSourceFixture.MethodBody(setup, "ToggleFooterModelTest");
+        Assert.Contains("if (_modelTestCancellation != null)", toggle);
         Assert.Contains("_modelTestCancellation.Cancel();", toggle);
+        Assert.Contains("_ = TestConnectionAsync();", toggle);
     }
 
     /// <summary>
@@ -94,15 +98,16 @@ internal static class OverlayLayoutContractTests
         var refresh = AgentSourceFixture.MethodBody(source, "RefreshReadiness");
         var banner = AgentSourceFixture.MethodBody(source, "BuildReadinessBanner");
 
-        var bannerAt = page.IndexOf("BuildReadinessBanner()", StringComparison.Ordinal);
+        var bannerAt = page.IndexOf("page.AddChild(BuildReadinessBanner());", StringComparison.Ordinal);
         var soloAt = page.IndexOf("BuildSoloSection()", StringComparison.Ordinal);
         Assert.True(bannerAt >= 0 && bannerAt < soloAt, "The setup line has to sit above the play controls it explains.");
         Assert.Contains("FirstRunSetup.PlayBlocker(FirstRunSetup.Evaluate(settings))", refresh);
         Assert.Contains("ShowTab(OverlayTabCatalog.Settings)", banner);
 
         var control = AgentSourceFixture.Read("STS2AIAgent/Ui/AgentOverlayHost.PlayControl.cs");
-        Assert.Contains("!_playReady", AgentSourceFixture.MethodBody(control, "RefreshModeControls"));
-        Assert.Contains("!_playReady", AgentSourceFixture.MethodBody(source, "RefreshSoloSection"));
+        // The gate has to be part of each button's Disabled assignment, not just somewhere in the method.
+        Assert.Contains("|| (!AgentRuntime.Instance.PlayRunning && !_playReady);", AgentSourceFixture.MethodBody(control, "RefreshModeControls"));
+        Assert.Contains("_stepButton.Disabled = playing || !_playReady;", AgentSourceFixture.MethodBody(source, "RefreshSoloSection"));
     }
 
     /// <summary>

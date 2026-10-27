@@ -33,7 +33,8 @@ internal static class FirstRunSetup
         ? null
         : status.Phase switch
         {
-            "missing" => Loc.T("还没配置模型"),
+            // "missing" also covers a filled-in model whose endpoint URL does not parse.
+            "missing" => status.Hint == SettingsHint ? Loc.T("还没配置模型") : Loc.T("接口地址无效"),
             "failed" => Loc.T("模型测试没通过"),
             "tools_unavailable" => Loc.T("模型不支持工具调用"),
             _ => Loc.T("模型还没测试")
