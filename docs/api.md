@@ -205,7 +205,7 @@ curl -s http://127.0.0.1:8080/state | jq .
 | `play_phase` | string | 自动游玩阶段，常见值 `running` / `paused` / `stopping` |
 | `non_combat_only` | boolean | 是否启用“仅在战斗外自动游玩”。启用后，Agent 在战斗期间不请求模型、不执行动作，并在战斗结束后自动恢复；可用于手动战斗或外部战斗控制器 |
 | `stop_kind` | string\|null | 上次自动游玩停止的类别，未停止过为 `null` |
-| `session_requests` | integer | 本会话已消耗的模型请求次数（可由「重置本会话统计」清零） |
+| `session_requests` | integer | 本会话已消耗的模型请求次数（可由游玩页的「清零计数」清零） |
 | `companion_process_alive` / `companion_process_exited` | boolean\|null | **仅 host 有意义。** 主窗口返回 AI 队友进程是否在运行 / 是否已退出；`instance_role=companion` 时两项均为 `null`（not applicable），不会把 companion 自己描述成还应管理另一个队友进程 |
 | `companion` | object\|null | **仅 host 有意义。** 主窗口且本次组队的队友进程仍在运行时存在（队友退出后回到 `null`）。`api_host` / `api_port` / `process_id` 是队友实例的 HTTP API，用来直接对队友的 `GET /state` 与 `POST /action` 编程；`auto_play` 说明这次组队走的是 AI 自走（`true`）还是外部接管（`false`）。队友会话令牌**不会**出现在任何响应里；companion 自身固定为 `null` |
 | `dual_status` / `team_control_status` | string\|null | **仅 host 有意义。** 主窗口返回双开与队友控制的人类可读状态；companion 返回 `null`，不会伪造“尚未启动双开”或“尚未连接”的 host 默认状态 |
