@@ -341,6 +341,11 @@ internal static class TestRunner
         yield return ("Jev.AnswerlessIsServerError", JevClientTests.SystemOneAsync_AnswerlessBodyIsAServerError);
         yield return ("Jev.PingReportsModelCount", JevClientTests.PingAsync_ReportsTheModelCount);
         yield return ("Jev.PingReportsFailure", JevClientTests.PingAsync_ReportsTheFailureInsteadOfThrowing);
+        yield return ("Jev.EndpointRootDefaults", () => Task.Run(JevClientTests.Endpoint_RootGetsTheDefaultPaths));
+        yield return ("Jev.EndpointFullUrlAsWritten", () => Task.Run(JevClientTests.Endpoint_FullRequestUrlIsUsedAsWritten));
+        yield return ("Jev.EndpointPresetsResolve", () => Task.Run(JevClientTests.Endpoint_EveryPresetResolvesToItself));
+        yield return ("Jev.PostsToFullProviderUrl", JevClientTests.SystemOneAsync_PostsToAFullProviderUrl);
+        yield return ("Jev.PingExplainsMissingModelList", JevClientTests.PingAsync_ExplainsAProviderWithoutAModelList);
         yield return ("Jev.BlankConfigRejected", () => Task.Run(JevClientTests.BlankConfigurationIsRejectedAtConstruction));
         yield return ("NonCombat.DetectsSnapshots", () => Task.Run(NonCombatOnlyPolicyTests.DetectsCompactAndActionSnapshotCombat));
         yield return ("NonCombat.UnknownFailsClosed", () => Task.Run(NonCombatOnlyPolicyTests.UnknownStateFailsClosed));

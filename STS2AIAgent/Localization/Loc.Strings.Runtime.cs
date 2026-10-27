@@ -39,7 +39,7 @@ internal static partial class Loc
 
         // Jev execution-model configuration check (Agent/AgentRuntime.Jev.cs).
         map["未配置快速判断 API Key。"] = "No fast-judgment API key configured.";
-        map["未配置快速判断 Base URL。"] = "No fast-judgment base URL configured.";
+        map["未配置快速判断地址。"] = "No fast-judgment URL configured.";
         map["快速判断配置已就绪（{0}）。连接测试将随双层决策引擎一同提供。"] =
             "Fast judgment is configured ({0}). A live connection test ships with the dual-layer engine.";
         map["快速判断连接失败：{0}"] = "Fast-judgment connection failed: {0}";

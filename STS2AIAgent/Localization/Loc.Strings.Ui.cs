@@ -74,6 +74,7 @@ internal static partial class Loc
         // Settings page: the Jev execution-model section.
         map["置信度阈值（0-1）"] = "Confidence threshold (0-1)";
         map["测试快速判断"] = "Test fast judgment";
+        map["地址"] = "URL";
         map["正在测试…"] = "Testing…";
         map["你"] = "You";
         map["助手"] = "Assistant";
@@ -272,8 +273,8 @@ internal static partial class Loc
             "Choose a provider, enter the API key and model name, then press “Test main model”.\nChat and auto-play share this model; local services (Ollama / LM Studio) can leave the key blank.\nRequest limit: new installs default to a 30-request trial; adjust as needed. Tests also call your service, and request/token counts are not a bill.";
         map["视觉：不勾选模型的「视觉」、也不配视觉模型时，仍可用精简状态和工具打完全部流程。\n预算：达到上限会自动停止游玩并提示；填错会保留原上限，不会变成不限。\n请求超时：服务商长时间没有响应时，按此时长报错。\nAI 主动发言：默认关闭；开启后只在战斗开始和结束各说一句，每次自动游玩最多 6 句，间隔至少 75 秒，不会代打，也受预算限制。\n窗口位置：拖动标题栏移动，位置会保存。"] =
             "Vision: without the model's “Vision” box or a vision model, auto-play still finishes the whole run on the compact state and tools.\nBudget: auto-play stops with a notice at the limit; a bad entry keeps the previous limit instead of becoming unlimited.\nRequest timeout: how long to wait before reporting a provider that stopped answering.\nAI speaks up: off by default; when on it speaks once at combat start and once at combat end, at most 6 lines per auto-play run, at least 75 seconds apart. It never plays for you and respects the budget.\nWindow position: drag the title bar to move it; the position is saved.";
-        map["双层决策下，由快速判断模型（Jev，TypeSafe System One）逐步操作游戏，LLM 只做战略规划。\n在游玩页按模式开启。置信度低于阈值时，由 LLM 接手。"] =
-            "In dual-layer mode the fast-judgment model (Jev, TypeSafe System One) takes each action and the LLM only plans strategy.\nEnable it per mode on the Play page. Below the confidence threshold the LLM takes over.";
+        map["双层决策下，由快速判断模型（Jev，TypeSafe System One）逐步操作游戏，LLM 只做战略规划。\n在游玩页按模式开启。置信度低于阈值时，由 LLM 接手。\n选服务商会自动填地址和模型，只需填 Key；地址可填完整请求地址，也可只填服务根地址。预设按各家文档整理，以实际可用为准。"] =
+            "In dual-layer mode the fast-judgment model (Jev, TypeSafe System One) takes each action and the LLM only plans strategy.\nEnable it per mode on the Play page. Below the confidence threshold the LLM takes over.\nPicking a provider fills the URL and model; you only add the key. The URL can be a full request URL or just the service root. Presets follow each provider's docs; what actually works is up to the provider.";
         map["游戏内自动游玩和一起玩都不需要 MCP，只有 Cursor / Claude / Codex 等外部客户端才需要。\n把配置贴进客户端的 MCP 设置即可，服务只监听本机 127.0.0.1。\n本机 HTTP API 始终可用（GET /health /state，POST /action）；MCP 打开后才会在同一端口提供 /mcp。地址以本页复制为准。\nPython sidecar 仅支持 stdio / layered / full。"] =
             "In-game auto-play and playing together do not need MCP; only external clients such as Cursor / Claude / Codex do.\nPaste the config into the client's MCP settings; the service listens only on 127.0.0.1.\nThe local HTTP API is always available (GET /health /state, POST /action); /mcp appears on the same port only once MCP is on. Copy the address from this page.\nThe Python sidecar supports only stdio / layered / full.";
 

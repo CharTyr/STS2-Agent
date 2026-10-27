@@ -384,6 +384,58 @@ internal static class JevClientTests
         Assert.Equal(1, handler.RequestCount);
     }
 
+    public static void Endpoint_RootGetsTheDefaultPaths()
+    {
+        Assert.Equal(SystemOneUrl, JevEndpoint.RequestUrl(BaseUrl));
+        Assert.Equal(SystemOneUrl, JevEndpoint.RequestUrl(BaseUrl + "/"));
+        Assert.Equal(ModelsUrl, JevEndpoint.ModelsUrl(BaseUrl));
+    }
+
+    public static void Endpoint_FullRequestUrlIsUsedAsWritten()
+    {
+        Assert.Equal("https://openrouter.ai/api/v1/systemone", JevEndpoint.RequestUrl("https://openrouter.ai/api/v1/systemone"));
+        Assert.Equal("https://openrouter.ai/api/v1/systemone", JevEndpoint.RequestUrl(" https://openrouter.ai/api/v1/systemone/ "));
+        Assert.Equal("https://openrouter.ai/api/v1/models", JevEndpoint.ModelsUrl("https://openrouter.ai/api/v1/systemone"));
+        Assert.Equal("https://api.inceptionlabs.ai/v1/decisions", JevEndpoint.RequestUrl("https://api.inceptionlabs.ai/v1/decisions"));
+        Assert.Equal("https://api.inceptionlabs.ai/v1/models", JevEndpoint.ModelsUrl("https://api.inceptionlabs.ai/v1/decisions"));
+    }
+
+    public static void Endpoint_EveryPresetResolvesToItself()
+    {
+        foreach (var preset in JevEndpoint.Presets)
+        {
+            Assert.Equal(preset.Url, JevEndpoint.RequestUrl(preset.Url));
+            Assert.Equal(preset.Id, JevEndpoint.FindPreset(preset.Url)!.Id);
+            Assert.True(Uri.TryCreate(preset.Url, UriKind.Absolute, out var uri) && uri.Scheme == "https",
+                $"preset {preset.Id} must be an https URL");
+            Assert.True(preset.Model.Length > 0, $"preset {preset.Id} needs a default model");
+        }
+
+        Assert.Null(JevEndpoint.FindPreset(BaseUrl));
+    }
+
+    public static async Task SystemOneAsync_PostsToAFullProviderUrl()
+    {
+        var handler = new RecordingHandler(ChoiceResponseBody);
+        var client = new JevClient("https://openrouter.ai/api/v1/systemone", ApiKey, "typesafe/jev-1.13", new HttpClient(handler));
+
+        await client.SystemOneAsync(SampleRequest(), CancellationToken.None);
+
+        Assert.Equal("https://openrouter.ai/api/v1/systemone", handler.LastUrl);
+    }
+
+    public static async Task PingAsync_ExplainsAProviderWithoutAModelList()
+    {
+        var handler = new ScriptedHandler((HttpStatusCode.NotFound, "{}", null));
+        var client = new JevClient("https://api.inceptionlabs.ai/v1/decisions", ApiKey, "mercury-decide", new HttpClient(handler));
+
+        var reply = await client.PingAsync(CancellationToken.None);
+
+        Assert.Equal("https://api.inceptionlabs.ai/v1/models", handler.Urls[0]);
+        Assert.Contains("Jev HTTP 404", reply);
+        Assert.Contains("key is unverified", reply);
+    }
+
     public static void BlankConfigurationIsRejectedAtConstruction()
     {
         JevException? caught = null;

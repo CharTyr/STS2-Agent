@@ -2,6 +2,7 @@ using Godot;
 using STS2AIAgent.Agent;
 using STS2AIAgent.Config;
 using STS2AIAgent.Game;
+using STS2AIAgent.Llm;
 using STS2AIAgent.Localization;
 
 namespace STS2AIAgent.Ui;
@@ -52,6 +53,7 @@ internal sealed partial class AgentOverlayHost
     private Control? _themePicker;
 
     /// <summary>The Jev section's editors and its connection-test feedback.</summary>
+    private OptionButton? _jevProviderCombo;
     private LineEdit? _jevBaseUrlEdit;
     private LineEdit? _jevApiKeyEdit;
     private LineEdit? _jevModelEdit;
@@ -558,7 +560,8 @@ internal sealed partial class AgentOverlayHost
         WatchLine(_jevModelEdit);
         WatchLine(_jevThresholdEdit);
         WatchLine(_jevTimeoutEdit);
-        column.AddChild(Labeled(Loc.T("Base URL"), _jevBaseUrlEdit));
+        column.AddChild(Labeled(Loc.T("服务商"), BuildJevProviderCombo(settings.JevBaseUrl)));
+        column.AddChild(Labeled(Loc.T("地址"), _jevBaseUrlEdit));
         column.AddChild(Labeled(Loc.T("API Key"), _jevApiKeyEdit));
         column.AddChild(Labeled(Loc.T("模型"), _jevModelEdit));
         column.AddChild(Labeled(Loc.T("置信度阈值（0-1）"), _jevThresholdEdit));
@@ -571,8 +574,45 @@ internal sealed partial class AgentOverlayHost
         return HelpCard.Build(
             "settings.jev",
             Loc.T("快速判断"),
-            Loc.T("双层决策下，由快速判断模型（Jev，TypeSafe System One）逐步操作游戏，LLM 只做战略规划。\n在游玩页按模式开启。置信度低于阈值时，由 LLM 接手。"),
+            Loc.T("双层决策下，由快速判断模型（Jev，TypeSafe System One）逐步操作游戏，LLM 只做战略规划。\n在游玩页按模式开启。置信度低于阈值时，由 LLM 接手。\n选服务商会自动填地址和模型，只需填 Key；地址可填完整请求地址，也可只填服务根地址。预设按各家文档整理，以实际可用为准。"),
             column);
+    }
+
+    /// <summary>
+    /// Provider picker for the fast-judgment section. Choosing a preset fills the address and model
+    /// and leaves the key alone; editing the address by hand moves the picker to Custom (or to the
+    /// preset it now matches). Nothing but the two text fields is saved.
+    /// </summary>
+    private OptionButton BuildJevProviderCombo(string currentUrl)
+    {
+        var combo = UiFactory.Combo();
+        combo.AddItem("自定义 / Custom");
+        foreach (var preset in JevEndpoint.Presets) combo.AddItem(preset.Name);
+        _jevProviderCombo = combo;
+
+        int IndexFor(string url)
+        {
+            var match = JevEndpoint.FindPreset(url);
+            for (var i = 0; match != null && i < JevEndpoint.Presets.Count; i++)
+                if (ReferenceEquals(JevEndpoint.Presets[i], match)) return i + 1;
+            return 0;
+        }
+
+        combo.Select(IndexFor(currentUrl));
+        combo.ItemSelected += index =>
+        {
+            if (index <= 0 || _jevBaseUrlEdit == null || _jevModelEdit == null) return;
+            var preset = JevEndpoint.Presets[(int)index - 1];
+            _jevBaseUrlEdit.Text = preset.Url;
+            _jevModelEdit.Text = preset.Model;
+            MarkSettingsDirty();
+        };
+        _jevBaseUrlEdit!.TextChanged += text =>
+        {
+            if (_jevProviderCombo != null && GodotObject.IsInstanceValid(_jevProviderCombo))
+                _jevProviderCombo.Select(IndexFor(text));
+        };
+        return combo;
     }
 
     private async Task TestJevConnectionAsync()

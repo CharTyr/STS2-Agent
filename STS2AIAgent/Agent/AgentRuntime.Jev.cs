@@ -261,7 +261,7 @@ internal sealed partial class AgentRuntime
 
         if (string.IsNullOrWhiteSpace(settings.JevBaseUrl))
         {
-            return Loc.T("未配置快速判断 Base URL。");
+            return Loc.T("未配置快速判断地址。");
         }
 
         try

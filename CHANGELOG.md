@@ -8,6 +8,7 @@ Game-dependent compilation succeeded on 2026-10-27 (Release, 0 warnings, 0 error
 
 ### Added
 
+- 快速判断（Jev）支持多家服务：设置里新增服务商选择，选中后自动填地址和模型；地址可填服务根地址（照旧补 `/v1/systemone`），也可填服务商文档里的完整请求地址（以 `/systemone` 或 `/decisions` 结尾时原样使用）。预设按各家文档整理，未用真实 Key 逐家实测；仅支持 System One 请求格式。
 - Compile model verification and companion settings partials directly in an offline runtime harness. Controlled provider responses and submitted-action barriers cover cancellation, single-flight probes, stale results, authentication/tool failures, pause/apply/resume, failed persistence and fault recovery; this does not replace the game build or live co-op acceptance.
 - Add provider quick setup, a visible 30-request trial for new installations, and cancellable model testing (45-second deadline). Preserve existing unlimited choices. Require verified tool calling for auto-play.
 - Guard identified local co-op saves against native loading under a mismatched player identity. Add diagnostics file saving and a DLL build fingerprint. Update two-tab setup and usage instructions.

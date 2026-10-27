@@ -44,10 +44,6 @@ internal sealed class JevClient : IJevClient
     /// <summary>Assumed backoff when a 429 carries no readable <c>retry-after</c>.</summary>
     internal const int DefaultRetryAfterSeconds = 2;
 
-    private const string SystemOnePath = "/v1/systemone";
-
-    private const string ModelsPath = "/v1/models";
-
     private const int RateLimitedStatus = (int)HttpStatusCode.TooManyRequests;
 
     private static readonly JsonSerializerOptions JsonOptions = new()
@@ -70,7 +66,7 @@ internal sealed class JevClient : IJevClient
 
     private readonly Func<int, TimeSpan> _retryDelay;
 
-    /// <param name="baseUrl">Base URL of the TypeSafe service. A trailing <c>/</c> is trimmed.</param>
+    /// <param name="baseUrl">Service root, or the provider's full request URL (see <see cref="JevEndpoint"/>). A trailing <c>/</c> is trimmed.</param>
     /// <param name="apiKey">Bearer token. Secret: never logged, never rendered in an exception.</param>
     /// <param name="model">Default Jev model id, used when a request leaves its own blank.</param>
     /// <param name="httpClient">
@@ -133,7 +129,7 @@ internal sealed class JevClient : IJevClient
         ArgumentNullException.ThrowIfNull(request);
         var body = JsonSerializer.Serialize(ResolveRequest(request), JsonOptions);
         return SendAsync(
-            () => CreateRequest(HttpMethod.Post, _baseUrl + SystemOnePath, body),
+            () => CreateRequest(HttpMethod.Post, JevEndpoint.RequestUrl(_baseUrl), body),
             ParseResponse,
             cancellationToken);
     }
@@ -143,9 +139,15 @@ internal sealed class JevClient : IJevClient
         try
         {
             return await SendAsync(
-                () => CreateRequest(HttpMethod.Get, _baseUrl + ModelsPath, body: null),
+                () => CreateRequest(HttpMethod.Get, JevEndpoint.ModelsUrl(_baseUrl), body: null),
                 DescribeModels,
                 cancellationToken);
+        }
+        catch (JevException ex) when (ex.StatusCode is 404 or 405)
+        {
+            // Not every provider publishes a model list next to its question endpoint. The address
+            // answered, so say what is and is not known instead of presenting it as a broken setup.
+            return $"{ex.Message} (this provider may not offer a model list, so the key is unverified)";
         }
         catch (JevException ex)
         {
