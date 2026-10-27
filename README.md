@@ -62,8 +62,8 @@ This mod is still in development. Some things may be unfinished or break. Please
 2. Press **`F8`** (configurable) or click the grey **`AI`** tab on the right edge of the screen to open the Agent window.
 
 ### Step 3: Quick model setup
-1. First launch opens **Settings → Quick setup**: pick a provider, enter the API key and model name (local Ollama / LM Studio can leave the key empty).
-2. Click **Test main model**. Auto-play needs connectivity and tool calling to pass; once they do, the setup line at the top of **Play** disappears.
+1. First launch opens **Settings → Quick setup**: pick a provider (DeepSeek, Zhipu GLM, Kimi, Qwen, OpenRouter, OpenAI, SiliconFlow, Ollama, LM Studio or a custom URL) and enter the API key; **Get key** opens the provider's key page. A common model is filled in for you, and the list beside it offers others (local Ollama / LM Studio can leave the key empty and take the name of a model you have downloaded).
+2. Click **Save settings**: a changed provider, key or model is tested straight away (**Test main model** runs the same test on demand). Auto-play needs connectivity and tool calling to pass; once they do, the setup line at the top of **Play** disappears.
 3. Click **Go play**: solo, press **Start auto-play**; co-op, switch the top of the page to **Multiplayer** and invite the AI teammate.
 
 Request limits, proxies, thinking protocols and the External Agent route: see [Model setup details](#model-setup-details).

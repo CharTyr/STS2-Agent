@@ -724,6 +724,7 @@ internal static class TestRunner
         yield return ("Usability.AliasProtocol", () => Task.Run(UsabilityRegressionTests.AliasesDoNotSelectProviderFieldsBySubstring));
         yield return ("Usability.ChatOnlyAndLegacyVerificationCannotStartPlay", () => Task.Run(UsabilityRegressionTests.ChatOnlyAndLegacyVerificationCannotStartPlay));
         yield return ("Usability.QuickSetupBindsOneModelAndInvalidatesOldProvider", () => Task.Run(UsabilityRegressionTests.QuickSetupBindsOneModelAndInvalidatesOldProvider));
+        yield return ("Usability.QuickSetupPresetsAreCompleteAndRoundTrip", () => Task.Run(UsabilityRegressionTests.QuickSetupPresetsAreCompleteAndRoundTrip));
         yield return ("Usability.FullPatchUpdatesPlayWithoutChangingLocalInstanceSettings", () => Task.Run(UsabilityRegressionTests.FullPatchUpdatesPlayWithoutChangingLocalInstanceSettings));
         yield return ("Usability.NewInstallTrialPreservesExistingUnlimitedChoice", () => Task.Run(UsabilityRegressionTests.NewInstallTrialPreservesExistingUnlimitedChoice));
         yield return ("Usability.ReleaseLayoutsUpgradeOnlyUnmodifiedManagedCopies", () => Task.Run(UsabilityRegressionTests.ReleaseLayoutsUpgradeOnlyUnmodifiedManagedCopies));

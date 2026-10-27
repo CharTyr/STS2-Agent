@@ -30,6 +30,36 @@ internal static class UsabilityRegressionTests
         Assert.False(FirstRunSetup.Evaluate(settings).ReadyToInvite);
     }
 
+    /// <summary>
+    /// Every hosted provider on the quick card fills in a model and resolves back to itself, so picking
+    /// one is enough to get to a testable configuration.
+    /// </summary>
+    public static void QuickSetupPresetsAreCompleteAndRoundTrip()
+    {
+        var ids = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var preset in QuickSetup.Providers)
+        {
+            Assert.True(ids.Add(preset.Id), "duplicate provider id " + preset.Id);
+            Assert.Equal(QuickSetup.Providers.ToList().IndexOf(preset), QuickSetup.IndexOf(preset.Id));
+            if (preset.Id == "custom") continue;
+            Assert.True(Uri.TryCreate(preset.BaseUrl, UriKind.Absolute, out var uri) && uri.Scheme is "http" or "https", preset.Id);
+            Assert.Equal(QuickSetup.IndexOf(preset.Id), QuickSetup.FindProvider(preset.BaseUrl));
+            var local = preset.Id is "ollama" or "lmstudio";
+            // A hosted provider without a suggested model was the empty field players had to look up.
+            Assert.True(local || preset.DefaultModel.Length > 0, preset.Id + " suggests no model");
+            if (!local) Assert.Equal("https", uri!.Scheme);
+            if (preset.KeyUrl.Length > 0) Assert.True(preset.KeyUrl.StartsWith("https://", StringComparison.Ordinal), preset.Id);
+            var applied = QuickSetup.Apply(AgentSettings.CreateDefault(), QuickSetup.IndexOf(preset.Id), local ? "" : "k", local ? "m" : preset.DefaultModel, "");
+            Assert.Equal(preset.BaseUrl, applied.TryResolvePlayModel()!.Endpoint.BaseUrl);
+            Assert.Equal(preset.Protocol, applied.TryResolvePlayModel()!.Endpoint.ThinkingProtocol);
+        }
+
+        foreach (var id in new[] { "deepseek", "zhipu", "moonshot", "qwen", "openrouter" })
+        {
+            Assert.True(ids.Contains(id), "quick setup lost the " + id + " preset");
+        }
+    }
+
     public static void QuickSetupBindsOneModelAndInvalidatesOldProvider()
     {
         var settings = AgentSettings.CreateDefault();
@@ -41,10 +71,10 @@ internal static class UsabilityRegressionTests
         Assert.Equal("deepseek", next.TryResolvePlayModel()!.Endpoint.ThinkingProtocol);
         Assert.False(FirstRunSetup.Evaluate(next).ReadyToInvite);
         Assert.False(settings.TryResolvePlayModel()!.Endpoint.ApiKey == "new-key");
-        var local = QuickSetup.Apply(next, 3, "", "qwen3", "");
+        var local = QuickSetup.Apply(next, QuickSetup.IndexOf("ollama"), "", "qwen3", "");
         Assert.True(FirstRunSetup.Evaluate(local).ProviderConfigReachable);
         Assert.Equal("", local.TryResolvePlayModel()!.Endpoint.ApiKey);
-        Assert.Equal(5, QuickSetup.FindProvider("https://my-provider.test/v1"));
+        Assert.Equal(QuickSetup.IndexOf("custom"), QuickSetup.FindProvider("https://my-provider.test/v1"));
         settings.Endpoints.Add(new LlmEndpoint { Id = "quick-start", BaseUrl = "https://keep.example/v1", ApiKey = "preserve" });
         settings.Models.Add(new LlmModelConfig { Id = "vision", EndpointId = "quick-start", Model = "vision" });
         var advanced = QuickSetup.Apply(settings, 0, "new-key", "deepseek-chat", "");
@@ -52,7 +82,7 @@ internal static class UsabilityRegressionTests
         Assert.Equal("vision", advanced.FindModel("vision")!.Model);
         Assert.Equal("quick-start-2", advanced.TryResolvePlayModel()!.Endpoint.Id);
         var rejected = false;
-        try { QuickSetup.Apply(settings, 5, "", "model", "file:///tmp/model"); }
+        try { QuickSetup.Apply(settings, QuickSetup.IndexOf("custom"), "", "model", "file:///tmp/model"); }
         catch (ArgumentException) { rejected = true; }
         Assert.True(rejected);
     }

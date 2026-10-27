@@ -12,6 +12,17 @@ internal sealed partial class AgentOverlayHost
     private LineEdit? _quickModel;
     private LineEdit? _quickUrl;
     private LineEdit? _quickBudget;
+    /// <summary>Picks one of the provider's suggested models into the model field.</summary>
+    private OptionButton? _quickModelPicker;
+    private Button? _quickKeyLink;
+    private int _quickProviderIndex;
+
+    /// <summary>
+    /// What the player typed for each provider while this form is open, so trying another provider and
+    /// coming back does not lose the key. The card used to clear the key and model on every switch.
+    /// Not saved: only the provider that is saved keeps its key in the settings file.
+    /// </summary>
+    private readonly Dictionary<string, (string Key, string Model, string Url)> _quickDrafts = new(StringComparer.Ordinal);
     private bool _quickDirty;
     private bool _lastSettingsSaveSucceeded;
     private CancellationTokenSource? _modelTestCancellation;
@@ -32,30 +43,38 @@ internal sealed partial class AgentOverlayHost
         _quickProvider = UiFactory.Combo();
         foreach (var p in QuickSetup.Providers) _quickProvider.AddItem(p.Name);
         _quickProvider.Select(providerIndex);
+        _quickProviderIndex = providerIndex;
+        _quickDrafts.Clear();
         _quickKey = UiFactory.Line(resolved?.Endpoint.ApiKey ?? "", "API Key", secret: true);
         _quickModel = UiFactory.Line(resolved?.Model.Model ?? "", Loc.T("模型名"));
         _quickUrl = UiFactory.Line(resolved?.Endpoint.BaseUrl ?? "", "https://example.com/v1");
         _quickUrl.Visible = QuickSetup.Providers[providerIndex].Id == "custom";
         _quickBudget = UiFactory.Line(settings.MaxSessionRequests?.ToString() ?? "", Loc.T("不限（留空或0）"));
+        _quickModelPicker = UiFactory.Combo();
+        _quickModelPicker.SizeFlagsHorizontal = Control.SizeFlags.Fill;
+        _quickKeyLink = UiFactory.Button(Loc.T("获取 Key"), OpenQuickKeyLink, UiFactory.ButtonKind.Ghost);
         void Dirty() { if (!_rebuildingSettings) { _quickDirty = true; MarkSettingsDirty(); } }
+        // Assigning a LineEdit's text from code raises no TextChanged, so the pick marks the form itself.
+        _quickModelPicker.ItemSelected += index =>
+        {
+            if (_quickModel == null || _quickModelPicker == null || index < 0) return;
+            _quickModel.Text = _quickModelPicker.GetItemText((int)index);
+            Dirty();
+        };
         _quickKey.TextChanged += _ => Dirty();
         _quickModel.TextChanged += _ => Dirty();
         _quickUrl.TextChanged += _ => Dirty();
         _quickBudget.TextChanged += _ => MarkSettingsDirty();
-        _quickProvider.ItemSelected += index =>
-        {
-            _quickUrl.Visible = QuickSetup.Providers[(int)index].Id == "custom";
-            _quickKey.Text = "";
-            _quickModel.Text = "";
-            Dirty();
-        };
+        _quickProvider.ItemSelected += index => SwitchQuickProvider((int)index, Dirty);
+        RefreshQuickPresetExtras();
         _quickDirty = false;
         _quickTestBadge = UiFactory.Wrapped("", 12, muted: false);
         ShowBadge(_quickTestBadge, QuickTestBadge());
         var rows = new List<Control>
         {
             Labeled(Loc.T("服务商"), _quickProvider), _quickUrl,
-            Labeled("API Key", _quickKey), Labeled(Loc.T("模型"), _quickModel),
+            Labeled("API Key", _quickKey), UiFactory.Row(_quickKeyLink),
+            Labeled(Loc.T("模型"), UiFactory.Row(_quickModel, _quickModelPicker)),
             Labeled(Loc.T("请求上限"), _quickBudget),
             _quickTestBadge
         };
@@ -63,8 +82,68 @@ internal sealed partial class AgentOverlayHost
         return HelpCard.Build(
             "settings.quick",
             Loc.T("快速配置"),
-            Loc.T("选择服务商，填 API Key 和模型名，然后点「测试主模型」。\n测试会真实调用模型：先测连通，再测工具调用；不支持工具调用的模型无法自动游玩。\n对话和自动游玩共用这个模型；本地服务（Ollama / LM Studio）可留空 Key。\n请求上限：新安装默认 1500 次，大约够打完一整局；留空或 0 为不限。测试也会调用你的服务；请求数和 Token 不等于账单金额。"),
+            Loc.T("选择服务商，填 API Key，模型已按服务商填好常用的一个，可从右边下拉换。点「保存设置」会自动测试一次。\n测试会真实调用模型：先测连通，再测工具调用；不支持工具调用的模型无法自动游玩。\n对话和自动游玩共用这个模型；本地服务（Ollama / LM Studio）可留空 Key，模型名填你本地已下载的。\n模型列表按各家文档整理，以服务商实际提供的为准。\n请求上限：新安装默认 1500 次，大约够打完一整局；留空或 0 为不限。测试也会调用你的服务；请求数和 Token 不等于账单金额。"),
             rows.ToArray());
+    }
+
+    /// <summary>
+    /// Moves the quick card to another provider: files what was typed under the old one, then shows the
+    /// new one's own draft, or its default model and an empty key when it has none yet.
+    /// </summary>
+    private void SwitchQuickProvider(int index, Action markDirty)
+    {
+        if (_quickKey == null || _quickModel == null || _quickUrl == null) return;
+        index = Math.Clamp(index, 0, QuickSetup.Providers.Length - 1);
+        var previous = QuickSetup.Providers[Math.Clamp(_quickProviderIndex, 0, QuickSetup.Providers.Length - 1)];
+        _quickDrafts[previous.Id] = (_quickKey.Text, _quickModel.Text, _quickUrl.Text);
+        _quickProviderIndex = index;
+        var next = QuickSetup.Providers[index];
+        (string Key, string Model, string Url) draft = _quickDrafts.TryGetValue(next.Id, out var saved)
+            ? saved
+            : (string.Empty, next.DefaultModel, string.Empty);
+        _quickKey.Text = draft.Key;
+        _quickModel.Text = draft.Model;
+        _quickUrl.Text = draft.Url;
+        _quickUrl.Visible = next.Id == "custom";
+        RefreshQuickPresetExtras();
+        markDirty();
+    }
+
+    /// <summary>Shows the provider's suggested models and its key link, or hides them where it has none.</summary>
+    private void RefreshQuickPresetExtras()
+    {
+        var preset = QuickSetup.Providers[Math.Clamp(_quickProviderIndex, 0, QuickSetup.Providers.Length - 1)];
+        if (_quickModelPicker != null && GodotObject.IsInstanceValid(_quickModelPicker))
+        {
+            _quickModelPicker.Clear();
+            foreach (var model in preset.Models) _quickModelPicker.AddItem(model);
+            _quickModelPicker.Select(Array.FindIndex(preset.Models, m => string.Equals(m, _quickModel?.Text.Trim(), StringComparison.Ordinal)));
+            _quickModelPicker.Visible = preset.Models.Length > 1;
+        }
+
+        if (_quickKeyLink != null && GodotObject.IsInstanceValid(_quickKeyLink))
+            _quickKeyLink.Visible = preset.KeyUrl.Length > 0;
+    }
+
+    private void OpenQuickKeyLink()
+    {
+        var url = QuickSetup.Providers[Math.Clamp(_quickProviderIndex, 0, QuickSetup.Providers.Length - 1)].KeyUrl;
+        if (url.Length > 0) OS.ShellOpen(url);
+    }
+
+    /// <summary>
+    /// The footer's Save. A changed provider, key or model on the quick card is tested straight away:
+    /// the play page will not start until the model is verified, and a player who pressed Save and went
+    /// to play used to find "模型还没测试" waiting there.
+    /// </summary>
+    private void SaveSettingsFromFooter()
+    {
+        var retest = !_showAdvancedValue && _quickDirty;
+        SaveSettingsFromUi();
+        if (retest && _lastSettingsSaveSucceeded && _modelTestCancellation == null)
+        {
+            _ = TestConnectionAsync();
+        }
     }
 
     /// <summary>

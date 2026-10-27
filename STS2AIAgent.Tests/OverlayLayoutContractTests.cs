@@ -49,7 +49,7 @@ internal static class OverlayLayoutContractTests
         var body = AgentSourceFixture.MethodBody(source, "BuildSettingsPage");
 
         var scroll = body.IndexOf("UiFactory.Scroll(_settingsBody", StringComparison.Ordinal);
-        var save = body.IndexOf("UiFactory.Button(Loc.T(\"保存设置\"), SaveSettingsFromUi", StringComparison.Ordinal);
+        var save = body.IndexOf("UiFactory.Button(Loc.T(\"保存设置\"), SaveSettingsFromFooter", StringComparison.Ordinal);
         var test = body.IndexOf("UiFactory.Button(Loc.T(\"测试主模型\")", StringComparison.Ordinal);
 
         Assert.True(scroll >= 0, "The settings form no longer builds a scroll body.");

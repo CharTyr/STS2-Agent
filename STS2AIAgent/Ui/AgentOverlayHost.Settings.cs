@@ -84,7 +84,7 @@ internal sealed partial class AgentOverlayHost
         // filled buttons, and Save was one bright block among them.
         var addEndpoint = UiFactory.Button(Loc.T("添加端点"), AddEndpoint, UiFactory.ButtonKind.Ghost);
         var addModel = UiFactory.Button(Loc.T("添加模型"), AddModel, UiFactory.ButtonKind.Ghost);
-        var save = UiFactory.Button(Loc.T("保存设置"), SaveSettingsFromUi, UiFactory.ButtonKind.Primary);
+        var save = UiFactory.Button(Loc.T("保存设置"), SaveSettingsFromFooter, UiFactory.ButtonKind.Primary);
         var test = UiFactory.Button(Loc.T("测试主模型"), ToggleFooterModelTest);
         _footerModelTest = test;
         _goPlayButton = UiFactory.Button(Loc.T("去游玩"), () => ShowTab(OverlayTabCatalog.Play), UiFactory.ButtonKind.Primary);
