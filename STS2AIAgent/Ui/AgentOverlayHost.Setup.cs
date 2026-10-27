@@ -50,7 +50,8 @@ internal sealed partial class AgentOverlayHost
             Dirty();
         };
         _quickDirty = false;
-        _quickTestBadge = UiFactory.Wrapped(QuickTestBadgeText(), 12, muted: false);
+        _quickTestBadge = UiFactory.Wrapped("", 12, muted: false);
+        ShowBadge(_quickTestBadge, QuickTestBadge());
         var rows = new List<Control>
         {
             Labeled(Loc.T("服务商"), _quickProvider), _quickUrl,
@@ -71,11 +72,18 @@ internal sealed partial class AgentOverlayHost
     /// the provider, key, URL or model has unsaved edits, the saved verdict belongs to the old values,
     /// so the line asks for a retest instead of showing it.
     /// </summary>
-    private string QuickTestBadgeText()
+    private (string Text, UiFactory.ButtonKind Tone) QuickTestBadge()
     {
-        if (_quickDirty) return Loc.T("⚪ 已修改，需重新测试");
+        if (_quickDirty) return (Loc.T("已修改，需重新测试"), UiFactory.ButtonKind.Ghost);
         var modelId = AgentRuntime.Instance.Settings.TryResolvePlayModel()?.Model.Id;
-        return modelId == null ? Loc.T("⚪ 未配置") : ModelTestBadgeText(modelId);
+        return modelId == null ? (Loc.T("未配置"), UiFactory.ButtonKind.Ghost) : ModelTestBadge(modelId);
+    }
+
+    /// <summary>A verdict line: its text, in its tone's colour.</summary>
+    private static void ShowBadge(Label badge, (string Text, UiFactory.ButtonKind Tone) verdict)
+    {
+        badge.Text = verdict.Text;
+        UiFactory.SetTone(badge, verdict.Tone);
     }
 
     private AgentSettings HarvestQuickSetup(AgentSettings settings)
@@ -162,30 +170,34 @@ internal sealed partial class AgentOverlayHost
         SetSaveStatus(result);
     }
 
-    /// <summary>The badge line under a model card: the recorded verdict, or the nudge to test.</summary>
-    private static string ModelTestBadgeText(string modelId)
+    /// <summary>
+    /// The badge line under a model card: the recorded verdict, or the nudge to test. The tone is the
+    /// colour the line is drawn in -- it used to be an emoji at the front of the text, drawn from a
+    /// fallback font at its own size.
+    /// </summary>
+    private static (string Text, UiFactory.ButtonKind Tone) ModelTestBadge(string modelId)
     {
         var record = AgentRuntime.Instance.ModelTestFor(modelId);
         if (record == null)
         {
-            return Loc.T("⚪ 未测试");
+            return (Loc.T("未测试"), UiFactory.ButtonKind.Ghost);
         }
 
         if (!AgentRuntime.Instance.IsModelVerified(modelId))
         {
             return record.Status switch
             {
-                "verified" => Loc.T("⚪ 已修改，需重新测试"),
+                "verified" => (Loc.T("已修改，需重新测试"), UiFactory.ButtonKind.Ghost),
                 // A failed test must not look like "never tested": the player just pressed the
                 // button and needs the reason on the card, not in a line the rebuild erases.
-                "failed" => Loc.T("⚠️ 测试失败（{0}）：{1}", ShortTime(record.TestedAt), record.Error ?? ""),
-                _ => Loc.T("⚪ 未测试")
+                "failed" => (Loc.T("测试失败（{0}）：{1}", ShortTime(record.TestedAt), record.Error ?? ""), UiFactory.ButtonKind.Danger),
+                _ => (Loc.T("未测试"), UiFactory.ButtonKind.Ghost)
             };
         }
 
         return record.Tools == "supported"
-            ? Loc.T("✅ 已验证（{0}）", ShortTime(record.TestedAt))
-            : Loc.T("⚠️ 不支持工具调用，无法自动游玩（{0}）", ShortTime(record.TestedAt));
+            ? (Loc.T("已验证（{0}）", ShortTime(record.TestedAt)), UiFactory.ButtonKind.Primary)
+            : (Loc.T("不支持工具调用，无法自动游玩（{0}）", ShortTime(record.TestedAt)), UiFactory.ButtonKind.Normal);
     }
 
     private static string ShortTime(string? iso)
@@ -200,14 +212,14 @@ internal sealed partial class AgentOverlayHost
     {
         if (_quickTestBadge != null && GodotObject.IsInstanceValid(_quickTestBadge))
         {
-            _quickTestBadge.Text = QuickTestBadgeText();
+            ShowBadge(_quickTestBadge, QuickTestBadge());
         }
 
         foreach (var (modelId, badge) in _modelTestBadges)
         {
             if (GodotObject.IsInstanceValid(badge))
             {
-                badge.Text = ModelTestBadgeText(modelId);
+                ShowBadge(badge, ModelTestBadge(modelId));
             }
         }
     }

@@ -72,7 +72,7 @@ internal sealed partial class AgentOverlayHost
         var page = UiFactory.Column();
         page.AddChild(BuildSettingsJumpBar());
 
-        _settingsBody = UiFactory.Column();
+        _settingsBody = UiFactory.PageColumn();
         _settingsScroll = UiFactory.Scroll(_settingsBody, 80);
         page.AddChild(_settingsScroll);
 
@@ -80,8 +80,10 @@ internal sealed partial class AgentOverlayHost
         // scrolling form, so pressing Test at the bottom put its result off screen; save and test
         // share a row, and the test button turns into its own cancel while a test runs.
         _saveStatus = UiFactory.Wrapped(_settingsDirty ? Loc.T("未保存") : Loc.T("已保存"), 12);
-        var addEndpoint = UiFactory.Button(Loc.T("添加端点"), AddEndpoint);
-        var addModel = UiFactory.Button(Loc.T("添加模型"), AddModel);
+        // Adding is secondary to saving, so these are ghost buttons: the footer had three rows of
+        // filled buttons, and Save was one bright block among them.
+        var addEndpoint = UiFactory.Button(Loc.T("添加端点"), AddEndpoint, UiFactory.ButtonKind.Ghost);
+        var addModel = UiFactory.Button(Loc.T("添加模型"), AddModel, UiFactory.ButtonKind.Ghost);
         var save = UiFactory.Button(Loc.T("保存设置"), SaveSettingsFromUi, UiFactory.ButtonKind.Primary);
         var test = UiFactory.Button(Loc.T("测试主模型"), ToggleFooterModelTest);
         _footerModelTest = test;
@@ -89,6 +91,7 @@ internal sealed partial class AgentOverlayHost
         _goPlayButton.Visible = false;
         _addEndpointButton = addEndpoint;
         _addModelButton = addModel;
+        page.AddChild(UiFactory.Divider());
         page.AddChild(_saveStatus);
         page.AddChild(UiFactory.Row(addEndpoint, addModel));
         page.AddChild(UiFactory.Row(save, test));
@@ -171,7 +174,8 @@ internal sealed partial class AgentOverlayHost
     /// </summary>
     private void AddSettingsSection(string id, string label)
     {
-        var heading = UiFactory.Label(label, UiFactory.FontHeading);
+        // A small group label over the cards, not a second heading beside each card's own.
+        var heading = UiFactory.SectionLabel(label);
         _settingsAnchors[id] = heading;
         _settingsBody!.AddChild(heading);
     }
@@ -256,6 +260,9 @@ internal sealed partial class AgentOverlayHost
         if (!PersistThemeChoice(themeId)) return;
         _themeSelectedId = themeId;
         UiFactory.UseTheme(SelectedTheme);
+        // The host's Godot theme carries the scroll bars, popups, tooltips and switch icons; it is
+        // built from the palette, so it is rebuilt with it.
+        if (_host != null) _host.Theme = OverlayGodotTheme.Build();
         // From the host, not the panel: the chat footer is a sibling of the panel rather than a child
         // of it, so a walk rooted at the panel left its buttons painted in the previous palette --
         // observed live on 2026-09-21 as a grey-on-grey Hide button under the light theme.
@@ -412,13 +419,15 @@ internal sealed partial class AgentOverlayHost
             var modelStatus = new List<Control> { _conversationTest, _playTest, _visionTest };
             if (nextStep != null) modelStatus.Add(nextStep);
             var statusHelp = Loc.T("「测试」会真实调用该模型：先测连通，再测工具调用。不支持工具调用的模型无法自动游玩。\n「测试主模型」测的是当前主模型。")
-                + "\n" + Loc.T("四步：① 在「端点」填地址和 Key（本地服务可留空 Key）② 在「模型」添加模型并绑定端点 ③ 点模型卡片上的「测试」，通过会显示 ✅ ④ 在「模型绑定」选主模型并保存。\n然后到「游玩」页开始自动游玩。双人游玩：把游玩页顶部切到「多人」再邀请 AI 队友。");
+                + "\n" + Loc.T("四步：① 在「端点」填地址和 Key（本地服务可留空 Key）② 在「模型」添加模型并绑定端点 ③ 点模型卡片上的「测试」，通过会显示「已验证」④ 在「模型绑定」选主模型并保存。\n然后到「游玩」页开始自动游玩。双人游玩：把游玩页顶部切到「多人」再邀请 AI 队友。");
             _settingsBody.AddChild(HelpCard.Build("settings.status", Loc.T("模型状态"), statusHelp, modelStatus.ToArray()));
         }
 
         // Removing a bound model reports all affected roles. That sentence must reflow instead of
         // stretching the settings column and clipping the controls on every other page.
         _deleteWarning = UiFactory.Wrapped("", 12);
+        // Hidden while empty: an empty label still takes a line, plus the page's gap on each side.
+        _deleteWarning.Visible = false;
         _settingsBody.AddChild(_deleteWarning);
 
         // Appearance sits above the endpoint forms on purpose: it is the one setting on this page a
@@ -435,10 +444,8 @@ internal sealed partial class AgentOverlayHost
         // handled. See the field's remarks.
         _themeSelectedId ??= OverlayThemeCatalog.Normalize(settings.OverlayTheme);
         AddSettingsSection("appearance", Loc.T("外观"));
-        var appearanceCard = UiFactory.Card(
-            Loc.T("外观"),
-            UiFactory.Label(Loc.T("主题"), 13),
-            BuildThemePicker());
+        // The section label already says 外观; the card names what it holds.
+        var appearanceCard = UiFactory.Card(Loc.T("主题"), BuildThemePicker());
         _settingsBody.AddChild(appearanceCard);
 
         if (_showAdvancedValue)
@@ -549,7 +556,7 @@ internal sealed partial class AgentOverlayHost
     /// </summary>
     private Control BuildConnectSection()
     {
-        var page = UiFactory.Column();
+        var page = UiFactory.PageColumn();
         _mcpToggle = UiFactory.Check(Loc.T("启用 MCP"), AgentRuntime.Instance.McpRunning);
         _mcpToggle.Toggled += on => AgentRuntime.Instance.SetMcpEnabled(on);
         _mcpStatus = UiFactory.Wrapped(AgentRuntime.Instance.McpStatus, UiFactory.FontBody);
@@ -605,7 +612,7 @@ internal sealed partial class AgentOverlayHost
     private Control BuildEndpointCard(LlmEndpoint endpoint, int index)
     {
         var box = new PanelContainer();
-        UiFactory.TagSurface(box, UiFactory.SurfaceRole.ChromeRaised, 6);
+        UiFactory.TagSurface(box, UiFactory.SurfaceRole.ChromeRaised, UiFactory.RadiusCard);
         var column = UiFactory.Column();
         var name = UiFactory.Line(endpoint.Name, Loc.T("名称"));
         var url = UiFactory.Line(endpoint.BaseUrl, "https://api.openai.com/v1");
@@ -633,7 +640,7 @@ internal sealed partial class AgentOverlayHost
     private Control BuildModelCard(LlmModelConfig model, int index, AgentSettings settings)
     {
         var box = new PanelContainer();
-        UiFactory.TagSurface(box, UiFactory.SurfaceRole.ChromeRaised, 6);
+        UiFactory.TagSurface(box, UiFactory.SurfaceRole.ChromeRaised, UiFactory.RadiusCard);
         var column = UiFactory.Column();
         var display = UiFactory.Line(model.DisplayName, Loc.T("显示名"));
         var modelName = UiFactory.Line(model.Model, Loc.T("模型名"));
@@ -694,7 +701,8 @@ internal sealed partial class AgentOverlayHost
         var testButton = UiFactory.Button(Loc.T("测试"), () => _ = TestModelFromUiAsync(model.Id), UiFactory.ButtonKind.Ghost);
         _modelTestButtons.Add(testButton);
         testButton.Disabled = _modelTestCancellation != null;
-        var badge = UiFactory.Wrapped(ModelTestBadgeText(model.Id), UiFactory.FontCaption);
+        var badge = UiFactory.Wrapped("", UiFactory.FontCaption);
+        ShowBadge(badge, ModelTestBadge(model.Id));
         _modelTestBadges[model.Id] = badge;
         column.AddChild(UiFactory.Row(display, remove));
         column.AddChild(UiFactory.Row(modelName, endpointCombo));

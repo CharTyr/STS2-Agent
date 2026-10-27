@@ -482,7 +482,7 @@ internal static class OverlayLayoutContractTests
     /// </remarks>
     public static void ThemeSwitchRepaintsSurfacesNotJustText()
     {
-        var factory = AgentSourceFixture.Read("STS2AIAgent/Ui/UiFactory.cs");
+        var factory = AgentSourceFixture.ReadUiFactory();
         var settings = AgentSourceFixture.Read(Settings);
 
         // The factory records a role wherever it styles a surface, and can rebuild it.
@@ -521,7 +521,7 @@ internal static class OverlayLayoutContractTests
         var host = AgentSourceFixture.Read("STS2AIAgent/Ui/AgentOverlayHost.cs");
 
         Assert.Contains("UiFactory.TagSurface(chrome, UiFactory.SurfaceRole.Chrome", host);
-        Assert.Contains("UiFactory.TagSurface(_dragHandle, UiFactory.SurfaceRole.ChromeRaised", host);
+        Assert.Contains("UiFactory.TagSurface(_dragHandle, UiFactory.SurfaceRole.Bare", host);
         Assert.False(
             host.Contains("chrome.AddThemeStyleboxOverride(\"panel\", UiFactory.PanelStyle());", StringComparison.Ordinal),
             "The chrome styles itself directly again, which leaves it out of the repaint path.");
@@ -539,7 +539,7 @@ internal static class OverlayLayoutContractTests
     {
         const string swatch = "STS2AIAgent/Ui/OverlaySwatch.cs";
         var preview = AgentSourceFixture.Read(swatch);
-        var factory = AgentSourceFixture.Read("STS2AIAgent/Ui/UiFactory.cs");
+        var factory = AgentSourceFixture.ReadUiFactory();
 
         Assert.Contains("internal static class OverlaySwatch", preview);
         Assert.Contains("public static Control Build(OverlayPalette palette)", preview);

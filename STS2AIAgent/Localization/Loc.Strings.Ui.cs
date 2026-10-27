@@ -10,8 +10,8 @@ internal static partial class Loc
         // Header, tabs, chat page.
         map["思考协议"] = "Thinking protocol";
         map["隐藏"] = "Hide";
-        map["● 游玩中"] = "● Playing";
-        map["○ 待机"] = "○ Idle";
+        map["游玩中"] = "Playing";
+        map["待机"] = "Idle";
         map["可以问：这手牌怎么打、遗物值不值得拿。"] =
             "Try: how to play this hand, is a relic worth taking.";
         map["对话默认只读；要它动手，用上方的「开始自动游玩」或「单步」，或者明确说「帮我打」。"] =
@@ -208,14 +208,14 @@ internal static partial class Loc
         map["视觉模型（可选）"] = "Vision model (optional)";
         map["测试"] = "Test";
         map["正在测试…"] = "Testing…";
-        map["⚪ 未配置"] = "⚪ Not set up";
-        map["⚪ 未测试"] =
-            "⚪ Not tested";
-        map["⚪ 已修改，需重新测试"] = "⚪ Changed; test again";
-        map["⚠️ 测试失败（{0}）：{1}"] = "⚠️ Test failed ({0}): {1}";
-        map["✅ 已验证（{0}）"] = "✅ Verified ({0})";
-        map["⚠️ 不支持工具调用，无法自动游玩（{0}）"] =
-            "⚠️ No tool calling; cannot auto-play ({0})";
+        map["未配置"] = "Not set up";
+        map["未测试"] =
+            "Not tested";
+        map["已修改，需重新测试"] = "Changed; test again";
+        map["测试失败（{0}）：{1}"] = "Test failed ({0}): {1}";
+        map["已验证（{0}）"] = "Verified ({0})";
+        map["不支持工具调用，无法自动游玩（{0}）"] =
+            "No tool calling; cannot auto-play ({0})";
         map["默认 600 秒"] = "Default 600 seconds";
         map["默认 90 秒"] = "Default 90 seconds";
         map["请求超时（秒）"] = "Request timeout (s)";
@@ -271,8 +271,8 @@ internal static partial class Loc
             "Chat never plays cards for you or resumes a paused teammate.\nYour advice feeds the teammate's next decision.";
         map["「测试」会真实调用该模型：先测连通，再测工具调用。不支持工具调用的模型无法自动游玩。\n「测试主模型」测的是当前主模型。"] =
             "“Test” makes real calls to the model: connectivity first, then tool calling. A model without tool calling cannot auto-play.\n“Test main model” tests the current main model.";
-        map["四步：① 在「端点」填地址和 Key（本地服务可留空 Key）② 在「模型」添加模型并绑定端点 ③ 点模型卡片上的「测试」，通过会显示 ✅ ④ 在「模型绑定」选主模型并保存。\n然后到「游玩」页开始自动游玩。双人游玩：把游玩页顶部切到「多人」再邀请 AI 队友。"] =
-            "Four steps: ① fill in the URL and key under “Endpoints” (local services can leave the key blank) ② add a model under “Models” and bind the endpoint ③ press “Test” on the model card; a pass shows ✅ ④ pick the main model under “Model binding” and save.\nThen start auto-play on the “Play” page. For co-op, switch the top of the Play page to “Multiplayer” and invite the AI teammate.";
+        map["四步：① 在「端点」填地址和 Key（本地服务可留空 Key）② 在「模型」添加模型并绑定端点 ③ 点模型卡片上的「测试」，通过会显示「已验证」④ 在「模型绑定」选主模型并保存。\n然后到「游玩」页开始自动游玩。双人游玩：把游玩页顶部切到「多人」再邀请 AI 队友。"] =
+            "Four steps: ① fill in the URL and key under “Endpoints” (local services can leave the key blank) ② add a model under “Models” and bind the endpoint ③ press “Test” on the model card; a pass shows “Verified” ④ pick the main model under “Model binding” and save.\nThen start auto-play on the “Play” page. For co-op, switch the top of the Play page to “Multiplayer” and invite the AI teammate.";
         map["选择服务商，填 API Key 和模型名，然后点「测试主模型」。\n测试会真实调用模型：先测连通，再测工具调用；不支持工具调用的模型无法自动游玩。\n对话和自动游玩共用这个模型；本地服务（Ollama / LM Studio）可留空 Key。\n请求上限：新安装默认试用 30 次，可调整。测试也会调用你的服务；请求数和 Token 不等于账单金额。"] =
             "Choose a provider, enter the API key and model name, then press “Test main model”.\nThe test makes real calls: connectivity first, then tool calling; a model without tool calling cannot auto-play.\nChat and auto-play share this model; local services (Ollama / LM Studio) can leave the key blank.\nRequest limit: new installs default to a 30-request trial; adjust as needed. Tests also call your service, and request/token counts are not a bill.";
         map["视觉：不勾选模型的「视觉」、也不配视觉模型时，仍可用精简状态和工具打完全部流程。\n预算：达到上限会自动停止游玩并提示；填错会保留原上限，不会变成不限。\n请求超时：服务商长时间没有响应时，按此时长报错。\nAI 主动发言：默认关闭；开启后只在战斗开始和结束各说一句，每次自动游玩最多 6 句，间隔至少 75 秒，不会代打，也受预算限制。\n窗口位置：拖动标题栏移动，位置会保存。"] =

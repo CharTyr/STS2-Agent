@@ -49,6 +49,9 @@ internal sealed partial class AgentOverlayHost
     /// <summary>The teammate line and the tone it is currently drawn in. See <see cref="ApplyTone"/>.</summary>
     private Control? _teammateLivePill;
 
+    /// <summary>The tone the title bar's state pill is drawn in. See <see cref="ApplyTone"/>.</summary>
+    private UiFactory.ButtonKind? _headerStatusTone;
+
     /// <summary>The team chat's redraw-only-on-change wrapper. See <see cref="RichLog"/>.</summary>
     private RichLog? _teamChatView;
     private UiFactory.ButtonKind? _teammateLiveTone;
@@ -87,7 +90,7 @@ internal sealed partial class AgentOverlayHost
     /// </remarks>
     private Control BuildPlayPage()
     {
-        var page = UiFactory.Column();
+        var page = UiFactory.PageColumn();
 
         var settings = AgentRuntime.Instance.Settings;
         var coop = settings.OverlayPlayMode == "coop";
@@ -125,11 +128,14 @@ internal sealed partial class AgentOverlayHost
     private Control BuildReadinessBanner()
     {
         _readinessText = UiFactory.Wrapped("", UiFactory.FontBody, muted: false);
+        _readinessText.SizeFlagsVertical = Control.SizeFlags.ShrinkCenter;
         var row = UiFactory.Row(_readinessText);
         var go = UiFactory.Button(Loc.T("去设置"), () => ShowTab(OverlayTabCatalog.Settings), UiFactory.ButtonKind.Primary);
         go.SizeFlagsHorizontal = Control.SizeFlags.ShrinkEnd;
         row.AddChild(go);
-        _readinessBanner = UiFactory.Card(null, row);
+        // A tinted notice rather than another card: it is the one thing on the page that is wrong,
+        // and a card looked like every other section.
+        _readinessBanner = UiFactory.Callout(UiFactory.ButtonKind.Normal, row);
         _readinessBanner.Visible = false;
         return _readinessBanner;
     }
@@ -143,7 +149,7 @@ internal sealed partial class AgentOverlayHost
     /// </summary>
     private Control BuildSoloSection()
     {
-        var section = UiFactory.Column();
+        var section = UiFactory.PageColumn();
 
         // The hero names the state, and colours it: green while the loop runs, muted while it waits.
         _playStatus = UiFactory.Wrapped(Loc.T("状态：-"), UiFactory.FontTitle, muted: false);
@@ -316,7 +322,7 @@ internal sealed partial class AgentOverlayHost
     /// </remarks>
     private Control BuildCoopSection()
     {
-        var page = UiFactory.Column();
+        var page = UiFactory.PageColumn();
         _companionMode = UiFactory.Combo();
         _companionMode.AddItem(Loc.T("AI 自动游玩"));
         _companionMode.AddItem(Loc.T("外部 Agent"));
@@ -364,6 +370,7 @@ internal sealed partial class AgentOverlayHost
         // "the teammate is down" registers before the numbers do; RefreshDynamic recolours it.
         _teammateLive = UiFactory.Label(TeammateLiveText(), UiFactory.FontCaption);
         _teammateLivePill = UiFactory.PillBadge(string.Empty, UiFactory.ButtonKind.Ghost);
+        _teammateLiveTone = null;
         ((PanelContainer)_teammateLivePill).AddChild(_teammateLive);
 
         // Actions first. Invite is the tab's main action -- the one a player comes to this page to
@@ -657,15 +664,18 @@ internal sealed partial class AgentOverlayHost
     {
         if (_headerStatus != null)
         {
-            _headerStatus.Text = playing ? Loc.T("● 游玩中") : Loc.T("○ 待机");
-            _headerStatus.AddThemeColorOverride(
-                "font_color",
-                playing ? UiFactory.ToGodot(UiFactory.Palette.Positive) : UiFactory.ToGodot(UiFactory.Palette.Muted));
+            _headerStatus.Text = playing ? Loc.T("游玩中") : Loc.T("待机");
         }
+
+        ApplyTone(_headerStatusPill, ref _headerStatusTone, playing ? UiFactory.ButtonKind.Primary : UiFactory.ButtonKind.Ghost);
 
         if (_edgeTab != null)
         {
-            _edgeTab.Text = playing ? "AI ▶" : "AI";
+            // The tab keeps its label; while the AI plays it turns the positive colour instead of
+            // growing a play-arrow glyph from a fallback font.
+            var tone = playing ? UiFactory.Palette.Positive : UiFactory.Palette.Accent;
+            _edgeTab.AddThemeColorOverride("font_color", UiFactory.ToGodot(tone));
+            _edgeTab.AddThemeColorOverride("font_hover_color", UiFactory.ToGodot(tone));
         }
     }
 
@@ -823,7 +833,7 @@ internal sealed partial class AgentOverlayHost
 
         if (_quickTestBadge != null)
         {
-            _quickTestBadge.Text = QuickTestBadgeText();
+            ShowBadge(_quickTestBadge, QuickTestBadge());
         }
 
         if (_playTest != null)
@@ -934,15 +944,9 @@ internal sealed partial class AgentOverlayHost
         }
 
         applied = tone;
-        var (background, foreground) = UiFactory.ToneStyle(tone);
-        container.AddThemeStyleboxOverride("panel", UiFactory.ChipStyle(background, foreground.Darkened(0.40f)));
-        foreach (var child in container.GetChildren())
-        {
-            if (child is Label label)
-            {
-                label.AddThemeColorOverride("font_color", foreground);
-            }
-        }
+        // Through the factory, which records the tone: a theme switch used to repaint the pill in
+        // the tone it was built with and its label in plain text, whatever the teammate's state.
+        UiFactory.Retone(container, tone);
     }
 
     /// <summary>BBCode in the accent colour, for the parts of a line that carry the meaning.</summary>

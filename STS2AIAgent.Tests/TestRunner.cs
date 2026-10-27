@@ -1026,6 +1026,11 @@ internal static class TestRunner
         yield return ("OverlayLayout.ChromeIsTagged", () => Task.Run(OverlayLayoutContractTests.OverlayChromeIsTaggedForRepaint));
         yield return ("OverlayLayout.SwatchUsesChildNodes", () => Task.Run(OverlayLayoutContractTests.SwatchPreviewUsesChildNodes));
         yield return ("OverlayLayout.JumpLandsAtTop", () => Task.Run(OverlayLayoutContractTests.JumpingToASectionPutsItAtTheTop));
+        yield return ("OverlayVisual.HostCarriesTheme", () => Task.Run(OverlayVisualContractTests.HostCarriesAPaletteTheme));
+        yield return ("OverlayVisual.NoShadowInsideWindow", () => Task.Run(OverlayVisualContractTests.NothingInsideTheWindowCastsAShadow));
+        yield return ("OverlayVisual.NoStatusGlyphs", () => Task.Run(OverlayVisualContractTests.StatusTextCarriesNoGlyphs));
+        yield return ("OverlayVisual.TonesSurviveRepaint", () => Task.Run(OverlayVisualContractTests.TonesSurviveRepaintAndRebuild));
+        yield return ("OverlayVisual.ReadOnlyFieldStyle", () => Task.Run(OverlayVisualContractTests.ReadOnlyEditorsUseTheFieldStyle));
         yield return ("OverlayChat.TurnsCarryReasoningAndAction", () => Task.Run(OverlayChatStreamContractTests.ReasoningAndActionsBecomeConversationTurns));
         yield return ("OverlayChat.OneCapForMemoryDiskAndLog", () => Task.Run(OverlayChatStreamContractTests.OneCapForMemoryDiskAndTheLog));
         yield return ("OverlayChat.EachRoleDrawnAndFollowsNewest", () => Task.Run(OverlayChatStreamContractTests.TheLogDrawsEachRoleAndFollowsTheNewest));

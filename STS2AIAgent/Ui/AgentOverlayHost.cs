@@ -48,6 +48,7 @@ internal sealed partial class AgentOverlayHost
 
     /// <summary>The header's live state tag, and the hide button whose tooltip names the hotkey.</summary>
     private Label? _headerStatus;
+    private PanelContainer? _headerStatusPill;
     private Button? _hideButton;
     private Label? _dualStatus;
     private Label? _teammateLive;
@@ -257,11 +258,17 @@ internal sealed partial class AgentOverlayHost
             MouseFilter = Control.MouseFilterEnum.Ignore
         };
         host.SetAnchorsAndOffsetsPreset(Control.LayoutPreset.FullRect);
+        // Everything Godot draws by itself under the host -- scroll bars, drop-down lists, tooltips,
+        // switch icons, the font -- takes the palette from here. See OverlayGodotTheme.
+        host.Theme = OverlayGodotTheme.Build();
 
         _host = host;
 
-        _edgeTab = UiFactory.Button("AI", ToggleVisible);
-        _edgeTab.CustomMinimumSize = new Vector2(36, 72);
+        // Drawn like the window it opens -- its surface, hairline and shadow, with the name in the
+        // accent -- rather than as one of the panel's grey buttons left floating on the game.
+        _edgeTab = UiFactory.Button("AI", ToggleVisible, UiFactory.ButtonKind.Floating);
+        _edgeTab.CustomMinimumSize = new Vector2(34, 64);
+        _edgeTab.TooltipText = Loc.T("热键 {0}", startupSettings.Hotkey);
         _edgeTab.SetAnchorsPreset(Control.LayoutPreset.TopLeft);
         _edgeTab.Position = new Vector2(-80, 0);
 
@@ -279,9 +286,9 @@ internal sealed partial class AgentOverlayHost
             MouseFilter = Control.MouseFilterEnum.Stop
         };
         chrome.SetAnchorsAndOffsetsPreset(Control.LayoutPreset.FullRect);
-        UiFactory.TagSurface(chrome, UiFactory.SurfaceRole.Chrome, 10);
+        UiFactory.TagSurface(chrome, UiFactory.SurfaceRole.Chrome, UiFactory.RadiusWindow);
 
-        var layout = UiFactory.Column();
+        var layout = UiFactory.PageColumn();
         _contentColumn = layout;
         layout.AddChild(BuildHeader());
         layout.AddChild(BuildTabs());
@@ -350,28 +357,34 @@ internal sealed partial class AgentOverlayHost
             MouseDefaultCursorShape = Control.CursorShape.Move,
             SizeFlagsHorizontal = Control.SizeFlags.ExpandFill
         };
-        UiFactory.TagSurface(_dragHandle, UiFactory.SurfaceRole.ChromeRaised, 8);
+        // No box of its own: the title bar is part of the window. It used the window's raised style,
+        // which drew a second bordered, shadowed panel inside the first one.
+        UiFactory.TagSurface(_dragHandle, UiFactory.SurfaceRole.Bare);
         _dragHandle.GuiInput += OnDragHandleGuiInput;
         // No wrapping on either of these: the title is a fixed string and the status is a chip, and a
         // tight row is exactly where WordSmart would break them one character per line. Observed live
         // on 2026-09-21 -- the title rendered as a vertical column of single letters.
-        var title = UiFactory.MarkAccent(UiFactory.Label("STS2 AI Agent", UiFactory.FontTitle, wrap: false));
+        var title = UiFactory.Bold(UiFactory.MarkAccent(UiFactory.Label("STS2 AI Agent", UiFactory.FontTitle, wrap: false)));
         title.MouseFilter = Control.MouseFilterEnum.Ignore;
+        title.SizeFlagsVertical = Control.SizeFlags.ShrinkCenter;
 
         // The live state tag: the answer to "is it playing" is in the title bar, where the player
-        // already looks to find the window, instead of one tab away.
-        _headerStatus = UiFactory.Label(Loc.T("○ 待机"), UiFactory.FontCaption, muted: true, wrap: false);
+        // already looks to find the window, instead of one tab away. A pill with a drawn dot; the
+        // "●"/"○" glyphs it replaced came from a fallback font and sat off the text's baseline.
+        _headerStatus = UiFactory.Label(Loc.T("待机"), UiFactory.FontCaption, wrap: false);
         _headerStatus.MouseFilter = Control.MouseFilterEnum.Ignore;
-        _headerStatus.SizeFlagsVertical = Control.SizeFlags.ShrinkCenter;
-        var titleRow = UiFactory.TightRow(title, _headerStatus);
+        _headerStatusPill = UiFactory.StatusPill(_headerStatus, UiFactory.ButtonKind.Ghost);
+        // A rebuild (theme or language) makes a new pill; the next refresh has to paint it.
+        _headerStatusTone = null;
+        var titleRow = UiFactory.TightRow(title, _headerStatusPill);
         titleRow.MouseFilter = Control.MouseFilterEnum.Ignore;
         // One line: the title bar is the drag handle (its cursor says so), and the local API address
         // that used to sit under it is developer information, now in Settings → MCP.
         _dragHandle.AddChild(titleRow);
 
         var hide = UiFactory.Button(Loc.T("隐藏"), ToggleVisible, UiFactory.ButtonKind.Ghost);
-        hide.CustomMinimumSize = new Vector2(56, 0);
         hide.SizeFlagsHorizontal = Control.SizeFlags.ShrinkEnd;
+        hide.SizeFlagsVertical = Control.SizeFlags.ShrinkCenter;
         hide.TooltipText = Loc.T("热键 {0}", AgentRuntime.Instance.Settings.Hotkey);
         _hideButton = hide;
 
@@ -464,6 +477,7 @@ internal sealed partial class AgentOverlayHost
             _hotkeyName = hotkeyName;
             OverlayHotkey.TryParse(hotkeyName, out _hotkey);
             if (_hideButton != null) _hideButton.TooltipText = Loc.T("热键 {0}", hotkeyName);
+            if (_edgeTab != null) _edgeTab.TooltipText = Loc.T("热键 {0}", hotkeyName);
         }
 
         var down = Input.IsPhysicalKeyPressed(_hotkey);
