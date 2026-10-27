@@ -299,6 +299,9 @@ internal sealed partial class AgentRuntime
 
     public string McpClientConfig => NativeMcpServer.FormatClientConfigJson(McpUrl ?? McpEndpointUrl());
 
+    /// <summary>The config for one MCP client, in its own format. See <see cref="NativeMcpServer.FormatClientConfig"/>.</summary>
+    public string McpClientConfigFor(string client) => NativeMcpServer.FormatClientConfig(client, McpUrl ?? McpEndpointUrl());
+
     public string SettingsPath => _store.Path;
 
     public SettingsPersistenceNotice SettingsNotice => _store.LastNotice;

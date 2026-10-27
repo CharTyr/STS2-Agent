@@ -82,6 +82,7 @@ internal sealed partial class AgentOverlayHost
         if (_deleteWarning != null)
         {
             _deleteWarning.Text = message;
+            _deleteWarning.Visible = !string.IsNullOrEmpty(message);
         }
     }
 

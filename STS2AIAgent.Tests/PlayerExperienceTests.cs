@@ -29,6 +29,33 @@ internal static class PlayerExperienceTests
         Assert.True(CoopLaunchPolicy.GetError(false, false, "MAIN_MENU", settings) == null);
     }
 
+    /// <summary>
+    /// The play page's setup line follows the same gate as StartAutoPlay: gone once the main model is
+    /// verified, and a short reason (not the long settings hint) while it is not.
+    /// </summary>
+    public static void PlayBlockerFollowsTheStartGate()
+    {
+        var settings = AgentSettings.CreateDefault();
+        var untested = FirstRunSetup.PlayBlocker(FirstRunSetup.Evaluate(settings));
+        Assert.Equal("模型还没测试", untested);
+
+        var badUrl = AgentSettings.CreateDefault();
+        badUrl.Endpoints[0].BaseUrl = "not a url";
+        Assert.Equal("接口地址无效", FirstRunSetup.PlayBlocker(FirstRunSetup.Evaluate(badUrl)));
+
+        settings.Models.Clear();
+        Assert.Equal("还没配置模型", FirstRunSetup.PlayBlocker(FirstRunSetup.Evaluate(settings)));
+
+        var verified = AgentSettings.CreateDefault();
+        ModelRoleProbe.Upsert(verified, ModelRoleProbe.FromSuccess(ModelRoleNames.Play, verified.TryResolvePlayModel()!, tools: true));
+        Assert.True(FirstRunSetup.PlayBlocker(FirstRunSetup.Evaluate(verified)) == null,
+            "A verified main model must hide the play page's setup line.");
+
+        var noTools = AgentSettings.CreateDefault();
+        ModelRoleProbe.Upsert(noTools, ModelRoleProbe.FromSuccess(ModelRoleNames.Play, noTools.TryResolvePlayModel()!, tools: false));
+        Assert.Equal("模型不支持工具调用", FirstRunSetup.PlayBlocker(FirstRunSetup.Evaluate(noTools)));
+    }
+
     public static void ChangingKeyInvalidatesVerification()
     {
         var settings = AgentSettings.CreateDefault();

@@ -69,7 +69,7 @@ For a change crossing state, action, agent, UI, or MCP, trace it in both directi
 
 ## Code shape and its known debts
 
-Measured from the current local `dev` tree across 198 mod source files totalling 49,274 lines (git-tracked only, which is what the gate counts -- a working tree also holds whatever the developer left in it). These numbers are here
+Measured from the current local `dev` tree across 210 mod source files totalling 51,717 lines (git-tracked only, which is what the gate counts -- a working tree also holds whatever the developer left in it). These numbers are here
 because nobody was counting, and that is how a codebase stops being navigable -- not through a bad
 commit, but through a thousand good ones. The `arch-facts` gate checks this table against the
 files, so it cannot quietly go stale the way it did between ADR 0001 and the splits below.
@@ -89,8 +89,11 @@ moved on again to `AgentOverlayHost.Settings.cs`; the swatch renderer became `Ov
 the theme preview pushed `UiFactory.cs` past its own budget. It left the list on 2026-10-26: window
 placement and drag became `OverlayPlacement.cs`, the overflow diagnostic `OverlayOverflowSentinel.cs`,
 the hotkey `OverlayHotkey.cs`, and the settings save path `AgentOverlayHost.SettingsSave.cs`, which
-took the host from 1,098 lines to 657. See the section below for why those were the right cuts and
-not just smaller ones.
+took the host from 1,098 lines to 657. The 2026-10-27 visual pass split the factory the same way:
+the status vocabulary (tones, pills, dots, callouts) moved to `UiFactory.Status.cs`, the input
+controls and theme picker to `UiFactory.Inputs.cs`, and what Godot draws by itself to
+`OverlayGodotTheme.cs`. See the section below for why those were the right cuts and not just
+smaller ones.
 
 Until 2026-09-17 two files held 49% of the mod: `GameStateService.cs` at 8,559 lines and
 `GameActionService.cs` at 7,008. The largest file today is 4% of the mod, the second largest 4%,

@@ -24,6 +24,22 @@ internal static class FirstRunSetup
     public static string InviteHint =>
         Loc.T("主模型已验证。到「游玩」页点「开始自动游玩」即可单人游玩；想和 AI 队友双打，把游玩页顶部切到「多人」再邀请：本地 1 人 + 1 AI 同一局，大厅仍为 4 人位。");
 
+    /// <summary>
+    /// The play page's one-line blocker: what still stands between the player and auto-play, or null
+    /// once the main model is verified with tool calling. Short on purpose; the settings page carries
+    /// the details and the error.
+    /// </summary>
+    public static string? PlayBlocker(FirstRunStatus status) => status.ReadyToInvite
+        ? null
+        : status.Phase switch
+        {
+            // "missing" also covers a filled-in model whose endpoint URL does not parse.
+            "missing" => status.Hint == SettingsHint ? Loc.T("还没配置模型") : Loc.T("接口地址无效"),
+            "failed" => Loc.T("模型测试没通过"),
+            "tools_unavailable" => Loc.T("模型不支持工具调用"),
+            _ => Loc.T("模型还没测试")
+        };
+
     public static FirstRunStatus Evaluate(AgentSettings settings)
     {
         var conversation = ModelRoleProbe.Current(settings, ModelRoleNames.Conversation);

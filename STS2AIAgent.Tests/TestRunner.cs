@@ -163,6 +163,7 @@ internal static class TestRunner
         yield return ("Briefing.UnscoredDoesNotInventTrend", () => Task.Run(AuditRemediationBriefingTests.Build_NoScoreDoesNotInventTrend));
         yield return ("FirstRun.DefaultUnverified", () => Task.Run(PlayerExperienceTests.DefaultSettingsAreUnverifiedAndNotInvitable));
         yield return ("FirstRun.VerifiedInvite", () => Task.Run(PlayerExperienceTests.VerifiedPlayFingerprintAllowsInvite));
+        yield return ("FirstRun.PlayBlockerFollowsGate", () => Task.Run(PlayerExperienceTests.PlayBlockerFollowsTheStartGate));
         yield return ("FirstRun.KeyChangeInvalidates", () => Task.Run(PlayerExperienceTests.ChangingKeyInvalidatesVerification));
         yield return ("Probe.Play401NotMaskedByChat", PlayerExperienceTests.ConversationSuccessDoesNotMarkPlayWhenPlayReturns401);
         yield return ("Probe.SkipFreshVerified", PlayerExperienceTests.FreshVerifiedFingerprintSkipsRetest);
@@ -658,6 +659,7 @@ internal static class TestRunner
         yield return ("AgentLoop.ReasoningDeltaForwarded", AgentLoopTests.ReasoningDeltaReachesTheTurnCallback);
         yield return ("AgentLoop.ChatErrorRecordsBudget", AgentLoopTests.Chat_ErrorPathRecordsTheSpentRequestOnTheBudgetGuard);
         yield return ("McpLauncher.DetectRoot", () => Task.Run(AgentLoopTests.McpRoot_DetectsValidLayout));
+        yield return ("NativeMcp.ClientConfigFormats", () => Task.Run(McpServiceTests.ClientConfigsUseEachClientsFormat));
         yield return ("NativeMcp.Disabled", McpServiceTests.Disabled_Returns403);
         yield return ("NativeMcp.Initialize", McpServiceTests.Initialize_ReturnsServerInfoAndSession);
         yield return ("NativeMcp.ToolsList", McpServiceTests.ToolsList_IncludesHealthAndAct);
@@ -1006,6 +1008,11 @@ internal static class TestRunner
         yield return ("OverlayTabs.JevAttemptMarked", () => Task.Run(OverlayTabContractTests.JevAttemptRowsAreMarkedInTheLine));
         yield return ("OverlayTabs.DecisionLinesBounded", () => Task.Run(OverlayTabContractTests.DecisionLinesStayBounded));
         yield return ("OverlayLayout.SaveOutsideScroll", () => Task.Run(OverlayLayoutContractTests.SaveStaysOutsideTheScrollingForm));
+        yield return ("OverlayLayout.SettingsFeedbackInFooter", () => Task.Run(OverlayLayoutContractTests.SettingsFeedbackStaysInTheFooter));
+        yield return ("OverlayLayout.PlayPageNamesTheBlocker", () => Task.Run(OverlayLayoutContractTests.PlayPageNamesWhatBlocksPlay));
+        yield return ("OverlayLayout.HeaderIsOneLine", () => Task.Run(OverlayLayoutContractTests.HeaderIsOneLine));
+        yield return ("OverlayLayout.DecisionLogStartsClosed", () => Task.Run(OverlayLayoutContractTests.DecisionLogStartsClosed));
+        yield return ("OverlayLayout.CoopCardShowsOnePhase", () => Task.Run(OverlayLayoutContractTests.CoopCardShowsOnePhase));
         yield return ("OverlayLayout.JumpButtonsMatchSections", () => Task.Run(OverlayLayoutContractTests.EveryJumpButtonNamesARegisteredSection));
         yield return ("OverlayLayout.CoopActionsFirst", () => Task.Run(OverlayLayoutContractTests.CoopActionsComeBeforeCoopStatus));
         yield return ("OverlayLayout.CoopChatAdapts", () => Task.Run(OverlayLayoutContractTests.CoopChatBoxAdaptsToThePage));
@@ -1021,6 +1028,11 @@ internal static class TestRunner
         yield return ("OverlayLayout.ChromeIsTagged", () => Task.Run(OverlayLayoutContractTests.OverlayChromeIsTaggedForRepaint));
         yield return ("OverlayLayout.SwatchUsesChildNodes", () => Task.Run(OverlayLayoutContractTests.SwatchPreviewUsesChildNodes));
         yield return ("OverlayLayout.JumpLandsAtTop", () => Task.Run(OverlayLayoutContractTests.JumpingToASectionPutsItAtTheTop));
+        yield return ("OverlayVisual.HostCarriesTheme", () => Task.Run(OverlayVisualContractTests.HostCarriesAPaletteTheme));
+        yield return ("OverlayVisual.NoShadowInsideWindow", () => Task.Run(OverlayVisualContractTests.NothingInsideTheWindowCastsAShadow));
+        yield return ("OverlayVisual.NoStatusGlyphs", () => Task.Run(OverlayVisualContractTests.StatusTextCarriesNoGlyphs));
+        yield return ("OverlayVisual.TonesSurviveRepaint", () => Task.Run(OverlayVisualContractTests.TonesSurviveRepaintAndRebuild));
+        yield return ("OverlayVisual.ReadOnlyFieldStyle", () => Task.Run(OverlayVisualContractTests.ReadOnlyEditorsUseTheFieldStyle));
         yield return ("OverlayChat.TurnsCarryReasoningAndAction", () => Task.Run(OverlayChatStreamContractTests.ReasoningAndActionsBecomeConversationTurns));
         yield return ("OverlayChat.OneCapForMemoryDiskAndLog", () => Task.Run(OverlayChatStreamContractTests.OneCapForMemoryDiskAndTheLog));
         yield return ("OverlayChat.EachRoleDrawnAndFollowsNewest", () => Task.Run(OverlayChatStreamContractTests.TheLogDrawsEachRoleAndFollowsTheNewest));

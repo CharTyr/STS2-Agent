@@ -126,6 +126,11 @@ internal static class SourceCoverageTests
         "STS2AIAgent/Multiplayer/CoopSaveProbe.cs",
         "STS2AIAgent/Server/HttpServer.cs",
         "STS2AIAgent/Ui/UiFactory.cs",
+        // The factory's status helpers and input controls, split out in the 2026-10-27 visual pass,
+        // and the Godot Theme the overlay host carries. All three build Godot resources.
+        "STS2AIAgent/Ui/UiFactory.Status.cs",
+        "STS2AIAgent/Ui/UiFactory.Inputs.cs",
+        "STS2AIAgent/Ui/OverlayGodotTheme.cs",
         "STS2AIAgent/Game/GameThread.cs",
         "STS2AIAgent/Localization/LocSource.cs",
         "STS2AIAgent/ModEntry.cs",

@@ -36,6 +36,13 @@ The colour half of that system lives in [OverlayTheme.cs](../../../STS2AIAgent/U
 - A theme swatch calls `ApplyThemeChoice`, saves only the theme through a clone of the stored settings, repaints existing controls, and replaces only the swatch picker. It must not harvest or rebuild unfinished settings fields. `PersistHarvested` still rebuilds the overlay when a full settings save finds that the saved palette differs from the displayed palette.
 - Every preset clears WCAG contrast floors against every surface it draws on. `OverlayThemeTests` fails a theme whose body text, secondary text or accent label is unreadable, which is the check a screenshot cannot make.
 
+The visual rules (2026-10-27, after "the UI looks cheap"), each pinned in [OverlayVisualContractTests](../../../STS2AIAgent.Tests/OverlayVisualContractTests.cs):
+
+- Depth comes from fill. Cards are one step lighter than the window with a hairline edge; wells (fields, logs, read-out tiles, help panels) are one step darker with none. Nothing inside the window casts a shadow.
+- The accent marks what acts or is selected: the primary button, the selected tab's underline, focus rings and switches. Headings are bold in the text colour.
+- Status lines carry their tone in colour (`UiFactory.SetTone`, pills and dots in `UiFactory.Status.cs`), never in emoji or shape glyphs, which the game draws from a fallback font at another size and baseline.
+- Whatever Godot draws by itself (scroll bars, drop-down lists, tooltips, check box icons, the caret, the font) comes from [OverlayGodotTheme](../../../STS2AIAgent/Ui/OverlayGodotTheme.cs) on the overlay host, built from the palette and rebuilt on a theme switch. Without it those parts fall through to the engine's grey defaults inside a themed panel.
+
 `ClipText` stays off on buttons. Godot's clipped button reports a minimum width that excludes its label, so a tab row laid out by natural width collapsed to six empty slivers live on 2026-09-20; the label has to drive the size.
 
 Use `UiFactory` for controls that match an existing pattern; keep tab-specific composition and event handlers in `AgentOverlayHost`. UI callbacks may collect user input, call an `AgentRuntime` method, and request refresh. They should not serialize `AgentSettings` themselves, call `GameActionService` directly, or access native game objects from a background continuation. The existing overlay calls `GameThread.InvokeAsync(RefreshDynamic)` after asynchronous team operations and in `OnRuntimeChanged`.

@@ -59,6 +59,106 @@ internal static class OverlayLayoutContractTests
     }
 
     /// <summary>
+    /// The save/test result is drawn next to the buttons that produce it.
+    /// </summary>
+    /// <remarks>
+    /// It used to be the first line of the scrolling form, so a test started from the footer reported
+    /// its result above the fold of a page the player had scrolled down. The test button is also its
+    /// own cancel now; a second footer row for one Cancel button cost a line of a 440px panel.
+    /// </remarks>
+    public static void SettingsFeedbackStaysInTheFooter()
+    {
+        var source = AgentSourceFixture.Read(Settings);
+        var page = AgentSourceFixture.MethodBody(source, "BuildSettingsPage");
+        var form = AgentSourceFixture.MethodBody(source, "RebuildSettingsForm");
+
+        var scroll = page.IndexOf("UiFactory.Scroll(_settingsBody", StringComparison.Ordinal);
+        var status = page.IndexOf("page.AddChild(_saveStatus);", StringComparison.Ordinal);
+        Assert.True(scroll >= 0 && status > scroll, "The save status has to be added to the footer, after the scrolling form.");
+        Assert.False(form.Contains("_settingsBody.AddChild(_saveStatus)", StringComparison.Ordinal),
+            "The save status is back at the top of the scrolling form, out of sight of the footer buttons.");
+        var row = page.IndexOf("page.AddChild(UiFactory.Row(save, test));", StringComparison.Ordinal);
+        Assert.True(row > status, "Save and Test have to share one footer row, under the status line.");
+
+        // One button, two jobs: it cancels a running test and starts one otherwise.
+        var setup = AgentSourceFixture.Read("STS2AIAgent/Ui/AgentOverlayHost.Setup.cs");
+        var toggle = AgentSourceFixture.MethodBody(setup, "ToggleFooterModelTest");
+        Assert.Contains("if (_modelTestCancellation != null)", toggle);
+        Assert.Contains("_modelTestCancellation.Cancel();", toggle);
+        Assert.Contains("_ = TestConnectionAsync();", toggle);
+    }
+
+    /// <summary>
+    /// The play page says what blocks auto-play and links to the fix, using the same gate as Start.
+    /// </summary>
+    public static void PlayPageNamesWhatBlocksPlay()
+    {
+        var source = AgentSourceFixture.Read(Pages);
+        var page = AgentSourceFixture.MethodBody(source, "BuildPlayPage");
+        var refresh = AgentSourceFixture.MethodBody(source, "RefreshReadiness");
+        var banner = AgentSourceFixture.MethodBody(source, "BuildReadinessBanner");
+
+        var bannerAt = page.IndexOf("page.AddChild(BuildReadinessBanner());", StringComparison.Ordinal);
+        var soloAt = page.IndexOf("BuildSoloSection()", StringComparison.Ordinal);
+        Assert.True(bannerAt >= 0 && bannerAt < soloAt, "The setup line has to sit above the play controls it explains.");
+        Assert.Contains("FirstRunSetup.PlayBlocker(FirstRunSetup.Evaluate(settings))", refresh);
+        Assert.Contains("ShowTab(OverlayTabCatalog.Settings)", banner);
+
+        var control = AgentSourceFixture.Read("STS2AIAgent/Ui/AgentOverlayHost.PlayControl.cs");
+        // The gate has to be part of each button's Disabled assignment, not just somewhere in the method.
+        Assert.Contains("|| (!AgentRuntime.Instance.PlayRunning && !_playReady);", AgentSourceFixture.MethodBody(control, "RefreshModeControls"));
+        Assert.Contains("_stepButton.Disabled = playing || !_playReady;", AgentSourceFixture.MethodBody(source, "RefreshSoloSection"));
+    }
+
+    /// <summary>
+    /// The title bar is one line: title, state tag and Hide. The API address and the drag hint were
+    /// a second line of developer text on every page.
+    /// </summary>
+    public static void HeaderIsOneLine()
+    {
+        var host = AgentSourceFixture.Read("STS2AIAgent/Ui/AgentOverlayHost.cs");
+        var header = AgentSourceFixture.MethodBody(host, "BuildHeader");
+        Assert.False(header.Contains("拖动移动", StringComparison.Ordinal), "The drag hint is back under the title.");
+        Assert.False(host.Contains("_apiLabel", StringComparison.Ordinal), "The API address is back in the title bar.");
+        Assert.Contains("hide.TooltipText = Loc.T(\"热键 {0}\"", header);
+
+        var settings = AgentSourceFixture.Read(Settings);
+        Assert.Contains("_apiAddressLabel = UiFactory.Wrapped(", AgentSourceFixture.MethodBody(settings, "BuildConnectSection"));
+    }
+
+    /// <summary>
+    /// The decision log is closed until the player opens it, and a closed log is not redrawn.
+    /// </summary>
+    public static void DecisionLogStartsClosed()
+    {
+        var source = AgentSourceFixture.Read(Pages);
+        Assert.Contains("private static bool _decisionLogOpen;", source);
+        Assert.Contains("_decisionLog.Visible = _decisionLogOpen;", AgentSourceFixture.MethodBody(source, "BuildDecisionCard"));
+        Assert.Contains("!_decisionLogOpen", AgentSourceFixture.MethodBody(source, "RefreshDecisionPage"));
+    }
+
+    /// <summary>
+    /// The co-op invite card shows the controls of one phase: setting a teammate up, or controlling
+    /// one. Diagnostics and the stats reset live at the bottom of the status card.
+    /// </summary>
+    public static void CoopCardShowsOnePhase()
+    {
+        var pages = AgentSourceFixture.Read(Pages);
+        var section = AgentSourceFixture.MethodBody(pages, "BuildCoopSection");
+        var statusCard = section.IndexOf("Loc.T(\"组队状态\")", StringComparison.Ordinal);
+        Assert.True(section.IndexOf("Loc.T(\"复制诊断\")", StringComparison.Ordinal) < statusCard
+            && section.IndexOf("tools.AddChild(_resetStatsButton);", StringComparison.Ordinal) < statusCard
+            && section.IndexOf("            tools));", StringComparison.Ordinal) > statusCard,
+            "Diagnostics and reset belong in the status card's bottom row, not between invite and pause.");
+
+        var control = AgentSourceFixture.Read("STS2AIAgent/Ui/AgentOverlayHost.PlayControl.cs");
+        var phase = AgentSourceFixture.MethodBody(control, "RefreshCoopPhase");
+        Assert.Contains("_teamControlRow.Visible = teamed;", phase);
+        Assert.Contains("_companionChoiceToggle.Visible = settingUp;", phase);
+        Assert.Contains("RefreshCoopPhase(canContinue);", AgentSourceFixture.MethodBody(control, "RefreshContinueAvailability"));
+    }
+
+    /// <summary>
     /// Every jump-bar entry has to be a section the form actually registers.
     /// </summary>
     /// <remarks>
@@ -298,12 +398,11 @@ internal static class OverlayLayoutContractTests
             StringComparison.Ordinal);
         Assert.False(settingsForm.Contains("_settingsBody.AddChild(UiFactory.Label(Loc.T(\"下一步：{0}\"", StringComparison.Ordinal),
             "The first-run next-step line must be wrapped instead of widening the settings page.");
-        // The Token tile closing a Row(...) call is the old three-tile row; the screen/action pair may
-        // share a row, the Token reading may not.
-        Assert.False(solo.Contains("UiFactory.MetricTile(Loc.T(\"Token\"), _playUsage)))", StringComparison.Ordinal),
-            "Three min-width metric tiles in one row truncate the Token field in the 440px panel.");
-        Assert.Contains("section.AddChild(UiFactory.MetricTile(Loc.T(\"Token\"), _playUsage));", solo,
-            StringComparison.Ordinal);
+        // The screen, last action and Token readings are wrapping caption lines in the auto-play card
+        // now. Three min-width metric tiles in one row truncated the Token field in the 440px panel.
+        Assert.Contains("_playUsage = UiFactory.Wrapped(", solo, StringComparison.Ordinal);
+        Assert.False(solo.Contains("UiFactory.MetricTile(", StringComparison.Ordinal),
+            "The solo section builds metric tiles again; the readings are one wrapping line each.");
         // With its own full-width, word-wrapping row, the usage sentence is shown whole: the old
         // 24-character cut is what left players reading "Token 消耗：尚无（未收到 usage） |...".
         var refresh = AgentSourceFixture.MethodBody(pages, "RefreshSoloSection");
@@ -383,7 +482,7 @@ internal static class OverlayLayoutContractTests
     /// </remarks>
     public static void ThemeSwitchRepaintsSurfacesNotJustText()
     {
-        var factory = AgentSourceFixture.Read("STS2AIAgent/Ui/UiFactory.cs");
+        var factory = AgentSourceFixture.ReadUiFactory();
         var settings = AgentSourceFixture.Read(Settings);
 
         // The factory records a role wherever it styles a surface, and can rebuild it.
@@ -422,7 +521,7 @@ internal static class OverlayLayoutContractTests
         var host = AgentSourceFixture.Read("STS2AIAgent/Ui/AgentOverlayHost.cs");
 
         Assert.Contains("UiFactory.TagSurface(chrome, UiFactory.SurfaceRole.Chrome", host);
-        Assert.Contains("UiFactory.TagSurface(_dragHandle, UiFactory.SurfaceRole.ChromeRaised", host);
+        Assert.Contains("UiFactory.TagSurface(_dragHandle, UiFactory.SurfaceRole.Bare", host);
         Assert.False(
             host.Contains("chrome.AddThemeStyleboxOverride(\"panel\", UiFactory.PanelStyle());", StringComparison.Ordinal),
             "The chrome styles itself directly again, which leaves it out of the repaint path.");
@@ -440,7 +539,7 @@ internal static class OverlayLayoutContractTests
     {
         const string swatch = "STS2AIAgent/Ui/OverlaySwatch.cs";
         var preview = AgentSourceFixture.Read(swatch);
-        var factory = AgentSourceFixture.Read("STS2AIAgent/Ui/UiFactory.cs");
+        var factory = AgentSourceFixture.ReadUiFactory();
 
         Assert.Contains("internal static class OverlaySwatch", preview);
         Assert.Contains("public static Control Build(OverlayPalette palette)", preview);

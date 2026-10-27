@@ -4,6 +4,7 @@ using STS2AIAgent.Config;
 using STS2AIAgent.Game;
 using STS2AIAgent.Llm;
 using STS2AIAgent.Localization;
+using STS2AIAgent.Server;
 
 namespace STS2AIAgent.Ui;
 
@@ -71,21 +72,30 @@ internal sealed partial class AgentOverlayHost
         var page = UiFactory.Column();
         page.AddChild(BuildSettingsJumpBar());
 
-        _settingsBody = UiFactory.Column();
+        _settingsBody = UiFactory.PageColumn();
         _settingsScroll = UiFactory.Scroll(_settingsBody, 80);
         page.AddChild(_settingsScroll);
 
-        var addEndpoint = UiFactory.Button(Loc.T("添加端点"), AddEndpoint);
-        var addModel = UiFactory.Button(Loc.T("添加模型"), AddModel);
+        // The footer is one status line and one row. The status line used to sit at the top of the
+        // scrolling form, so pressing Test at the bottom put its result off screen; save and test
+        // share a row, and the test button turns into its own cancel while a test runs.
+        _saveStatus = UiFactory.Wrapped(_settingsDirty ? Loc.T("未保存") : Loc.T("已保存"), 12);
+        // Adding is secondary to saving, so these are ghost buttons: the footer had three rows of
+        // filled buttons, and Save was one bright block among them.
+        var addEndpoint = UiFactory.Button(Loc.T("添加端点"), AddEndpoint, UiFactory.ButtonKind.Ghost);
+        var addModel = UiFactory.Button(Loc.T("添加模型"), AddModel, UiFactory.ButtonKind.Ghost);
         var save = UiFactory.Button(Loc.T("保存设置"), SaveSettingsFromUi, UiFactory.ButtonKind.Primary);
-        var test = UiFactory.Button(Loc.T("测试主模型"), () => _ = TestConnectionAsync());
+        var test = UiFactory.Button(Loc.T("测试主模型"), ToggleFooterModelTest);
         _footerModelTest = test;
-        _cancelModelTest = UiFactory.Button(Loc.T("取消"), () => _modelTestCancellation?.Cancel());
+        _goPlayButton = UiFactory.Button(Loc.T("去游玩"), () => ShowTab(OverlayTabCatalog.Play), UiFactory.ButtonKind.Primary);
+        _goPlayButton.Visible = false;
         _addEndpointButton = addEndpoint;
         _addModelButton = addModel;
+        page.AddChild(UiFactory.Divider());
+        page.AddChild(_saveStatus);
         page.AddChild(UiFactory.Row(addEndpoint, addModel));
-        page.AddChild(save);
-        page.AddChild(UiFactory.Row(test, _cancelModelTest));
+        page.AddChild(UiFactory.Row(save, test));
+        page.AddChild(_goPlayButton);
         RebuildSettingsForm();
         return page;
     }
@@ -164,7 +174,8 @@ internal sealed partial class AgentOverlayHost
     /// </summary>
     private void AddSettingsSection(string id, string label)
     {
-        var heading = UiFactory.Label(label, UiFactory.FontHeading);
+        // A small group label over the cards, not a second heading beside each card's own.
+        var heading = UiFactory.SectionLabel(label);
         _settingsAnchors[id] = heading;
         _settingsBody!.AddChild(heading);
     }
@@ -249,6 +260,9 @@ internal sealed partial class AgentOverlayHost
         if (!PersistThemeChoice(themeId)) return;
         _themeSelectedId = themeId;
         UiFactory.UseTheme(SelectedTheme);
+        // The host's Godot theme carries the scroll bars, popups, tooltips and switch icons; it is
+        // built from the palette, so it is rebuilt with it.
+        if (_host != null) _host.Theme = OverlayGodotTheme.Build();
         // From the host, not the panel: the chat footer is a sibling of the panel rather than a child
         // of it, so a walk rooted at the panel left its buttons painted in the previous palette --
         // observed live on 2026-09-21 as a grey-on-grey Hide button under the light theme.
@@ -380,35 +394,40 @@ internal sealed partial class AgentOverlayHost
         var settings = CloneSettings(AgentRuntime.Instance.Settings);
         var firstRun = FirstRunSetup.Evaluate(settings);
 
-        // Not an anchored section: it is the form's own state line, and a jump button that scrolls to
-        // "unsaved" would be a button whose only job is to tell the player the form is dirty.
-        // Wrapped: after a save this can carry the budget-input error sentence, which is wider than
-        // the settings column and would clip the panel exactly like the model-delete warning did.
-        _saveStatus = UiFactory.Wrapped(_settingsDirty ? Loc.T("未保存") : Loc.T("已保存"), 12);
-        _settingsBody.AddChild(_saveStatus);
+        // The save status lives in the footer (see BuildSettingsPage), so a rebuild only resets its text.
+        if (_saveStatus != null) _saveStatus.Text = _settingsDirty ? Loc.T("未保存") : Loc.T("已保存");
         _settingsLoadNotice = UiFactory.Wrapped(FormatSettingsNotice(), 12);
+        _settingsLoadNotice.Visible = _settingsLoadNotice.Text.Length > 0;
         _settingsBody.AddChild(_settingsLoadNotice);
         AddSettingsSection("first-run", Loc.T("快速开始"));
-        if (!_showAdvancedValue) _settingsBody.AddChild(BuildQuickSetupCard(settings));
-        _conversationTest = UiFactory.Wrapped(ModelRoleProbe.FormatLine(firstRun.Conversation), 12);
-        _playTest = UiFactory.Wrapped(ModelRoleProbe.FormatLine(firstRun.Play), 12);
-        _visionTest = UiFactory.Wrapped(ModelRoleProbe.FormatLine(firstRun.Vision), 12);
-        var modelStatus = new List<Control> { _conversationTest, _playTest, _visionTest };
-        if (firstRun.Play.Status == "failed" && !string.IsNullOrWhiteSpace(firstRun.Play.NextStep))
+        var nextStep = firstRun.Play.Status == "failed" && !string.IsNullOrWhiteSpace(firstRun.Play.NextStep)
+            ? UiFactory.Wrapped(Loc.T("下一步：{0}", firstRun.Play.NextStep), 12)
+            : null;
+        if (!_showAdvancedValue)
         {
-            modelStatus.Add(UiFactory.Wrapped(Loc.T("下一步：{0}", firstRun.Play.NextStep), 12));
+            // Quick setup binds one model to every role, so the card carries a single verdict line
+            // instead of a separate status card listing the same model three times.
+            _conversationTest = _playTest = _visionTest = null;
+            _settingsBody.AddChild(BuildQuickSetupCard(settings, nextStep));
         }
-
-        // The four-step walkthrough only helps while the full form is open; the quick card is its own
-        // walkthrough.
-        var statusHelp = Loc.T("「测试」会真实调用该模型：先测连通，再测工具调用。不支持工具调用的模型无法自动游玩。\n「测试主模型」测的是当前主模型。");
-        statusHelp += _showAdvancedValue ? "\n" + Loc.T("四步：① 在「端点」填地址和 Key（本地服务可留空 Key）② 在「模型」添加模型并绑定端点 ③ 点模型卡片上的「测试」，通过会显示 ✅ ④ 在「模型绑定」选主模型并保存。\n然后到「游玩」页开始自动游玩。双人游玩：把游玩页顶部切到「多人」再邀请 AI 队友。") : "";
-
-        _settingsBody.AddChild(HelpCard.Build("settings.status", Loc.T("模型状态"), statusHelp, modelStatus.ToArray()));
+        else
+        {
+            _quickTestBadge = null;
+            _conversationTest = UiFactory.Wrapped(ModelRoleProbe.FormatLine(firstRun.Conversation), 12);
+            _playTest = UiFactory.Wrapped(ModelRoleProbe.FormatLine(firstRun.Play), 12);
+            _visionTest = UiFactory.Wrapped(ModelRoleProbe.FormatLine(firstRun.Vision), 12);
+            var modelStatus = new List<Control> { _conversationTest, _playTest, _visionTest };
+            if (nextStep != null) modelStatus.Add(nextStep);
+            var statusHelp = Loc.T("「测试」会真实调用该模型：先测连通，再测工具调用。不支持工具调用的模型无法自动游玩。\n「测试主模型」测的是当前主模型。")
+                + "\n" + Loc.T("四步：① 在「端点」填地址和 Key（本地服务可留空 Key）② 在「模型」添加模型并绑定端点 ③ 点模型卡片上的「测试」，通过会显示「已验证」④ 在「模型绑定」选主模型并保存。\n然后到「游玩」页开始自动游玩。双人游玩：把游玩页顶部切到「多人」再邀请 AI 队友。");
+            _settingsBody.AddChild(HelpCard.Build("settings.status", Loc.T("模型状态"), statusHelp, modelStatus.ToArray()));
+        }
 
         // Removing a bound model reports all affected roles. That sentence must reflow instead of
         // stretching the settings column and clipping the controls on every other page.
         _deleteWarning = UiFactory.Wrapped("", 12);
+        // Hidden while empty: an empty label still takes a line, plus the page's gap on each side.
+        _deleteWarning.Visible = false;
         _settingsBody.AddChild(_deleteWarning);
 
         // Appearance sits above the endpoint forms on purpose: it is the one setting on this page a
@@ -425,10 +444,8 @@ internal sealed partial class AgentOverlayHost
         // handled. See the field's remarks.
         _themeSelectedId ??= OverlayThemeCatalog.Normalize(settings.OverlayTheme);
         AddSettingsSection("appearance", Loc.T("外观"));
-        var appearanceCard = UiFactory.Card(
-            Loc.T("外观"),
-            UiFactory.Label(Loc.T("主题"), 13),
-            BuildThemePicker());
+        // The section label already says 外观; the card names what it holds.
+        var appearanceCard = UiFactory.Card(Loc.T("主题"), BuildThemePicker());
         _settingsBody.AddChild(appearanceCard);
 
         if (_showAdvancedValue)
@@ -539,14 +556,30 @@ internal sealed partial class AgentOverlayHost
     /// </summary>
     private Control BuildConnectSection()
     {
-        var page = UiFactory.Column();
+        var page = UiFactory.PageColumn();
         _mcpToggle = UiFactory.Check(Loc.T("启用 MCP"), AgentRuntime.Instance.McpRunning);
         _mcpToggle.Toggled += on => AgentRuntime.Instance.SetMcpEnabled(on);
         _mcpStatus = UiFactory.Wrapped(AgentRuntime.Instance.McpStatus, UiFactory.FontBody);
+        _apiAddressLabel = UiFactory.Wrapped(Loc.T("本机 API：{0}", HttpServer.Instance.Prefix), UiFactory.FontCaption);
 
         _mcpInfoBox = UiFactory.Column();
         _mcpUrlLabel = UiFactory.Label("", UiFactory.FontBody);
         _mcpInfoBox.AddChild(_mcpUrlLabel);
+        // One switch per client: each wants the same address in its own format (a CLI command, a JSON
+        // block, a TOML table), and the generic JSON left Claude Code and Codex users to translate it.
+        var clientNames = new List<string>();
+        var selectedClient = 0;
+        for (var i = 0; i < NativeMcpServer.ConfigClients.Length; i++)
+        {
+            clientNames.Add(NativeMcpServer.ConfigClients[i].Name);
+            if (NativeMcpServer.ConfigClients[i].Id == _mcpClient) selectedClient = i;
+        }
+
+        _mcpInfoBox.AddChild(UiFactory.SegmentedSwitch(clientNames, selectedClient, index =>
+        {
+            _mcpClient = NativeMcpServer.ConfigClients[index].Id;
+            RefreshConnectSection();
+        }));
         var copyUrl = UiFactory.Button(Loc.T("复制地址"), () =>
         {
             var url = AgentRuntime.Instance.McpUrl;
@@ -554,28 +587,32 @@ internal sealed partial class AgentOverlayHost
             {
                 CopyText(url);
             }
-        }, UiFactory.ButtonKind.Primary);
-        var copyCfg = UiFactory.Button(Loc.T("复制配置"), () => CopyText(AgentRuntime.Instance.McpClientConfig));
-        _mcpInfoBox.AddChild(UiFactory.Row(copyUrl, copyCfg));
+        });
+        var copyCfg = UiFactory.Button(Loc.T("复制配置"), () => CopyText(AgentRuntime.Instance.McpClientConfigFor(_mcpClient)), UiFactory.ButtonKind.Primary);
         _mcpConfigEdit = UiFactory.Multiline("", 120);
         _mcpConfigEdit.Editable = false;
         _mcpInfoBox.AddChild(_mcpConfigEdit);
-        _mcpInfoBox.Visible = AgentRuntime.Instance.McpRunning;
+        _mcpInfoBox.AddChild(UiFactory.Row(copyCfg, copyUrl));
 
         page.AddChild(HelpCard.Build(
             "settings.mcp",
             Loc.T("MCP 服务"),
-            Loc.T("游戏内自动游玩和一起玩都不需要 MCP，只有 Cursor / Claude / Codex 等外部客户端才需要。\n把配置贴进客户端的 MCP 设置即可，服务只监听本机 127.0.0.1。\n本机 HTTP API 始终可用（GET /health /state，POST /action）；MCP 打开后才会在同一端口提供 /mcp。地址以本页复制为准。\nPython sidecar 仅支持 stdio / layered / full。"),
+            Loc.T("游戏内自动游玩和一起玩都不需要 MCP，只有 Claude Code / Cursor / Codex 等外部客户端才需要。\n打开后选你的客户端再复制配置：Claude Code 在终端运行这条命令，Cursor 贴进 mcp.json，Codex 贴进 ~/.codex/config.toml。服务只监听本机 127.0.0.1。\n本机 HTTP API 始终可用（GET /health /state，POST /action）；MCP 打开后才会在同一端口提供 /mcp。地址以本页复制为准。\nPython sidecar 仅支持 stdio / layered / full。"),
             _mcpToggle,
-            _mcpStatus));
-        page.AddChild(UiFactory.Card(Loc.T("客户端配置"), _mcpInfoBox));
+            _mcpStatus,
+            _apiAddressLabel));
+        // The whole card follows the switch, not just its contents: with MCP off it used to stay on
+        // the page as an empty titled box.
+        _mcpClientCard = UiFactory.Card(Loc.T("客户端配置"), _mcpInfoBox);
+        _mcpClientCard.Visible = AgentRuntime.Instance.McpRunning;
+        page.AddChild(_mcpClientCard);
         return page;
     }
 
     private Control BuildEndpointCard(LlmEndpoint endpoint, int index)
     {
         var box = new PanelContainer();
-        UiFactory.TagSurface(box, UiFactory.SurfaceRole.ChromeRaised, 6);
+        UiFactory.TagSurface(box, UiFactory.SurfaceRole.ChromeRaised, UiFactory.RadiusCard);
         var column = UiFactory.Column();
         var name = UiFactory.Line(endpoint.Name, Loc.T("名称"));
         var url = UiFactory.Line(endpoint.BaseUrl, "https://api.openai.com/v1");
@@ -603,7 +640,7 @@ internal sealed partial class AgentOverlayHost
     private Control BuildModelCard(LlmModelConfig model, int index, AgentSettings settings)
     {
         var box = new PanelContainer();
-        UiFactory.TagSurface(box, UiFactory.SurfaceRole.ChromeRaised, 6);
+        UiFactory.TagSurface(box, UiFactory.SurfaceRole.ChromeRaised, UiFactory.RadiusCard);
         var column = UiFactory.Column();
         var display = UiFactory.Line(model.DisplayName, Loc.T("显示名"));
         var modelName = UiFactory.Line(model.Model, Loc.T("模型名"));
@@ -664,7 +701,8 @@ internal sealed partial class AgentOverlayHost
         var testButton = UiFactory.Button(Loc.T("测试"), () => _ = TestModelFromUiAsync(model.Id), UiFactory.ButtonKind.Ghost);
         _modelTestButtons.Add(testButton);
         testButton.Disabled = _modelTestCancellation != null;
-        var badge = UiFactory.Wrapped(ModelTestBadgeText(model.Id), UiFactory.FontCaption);
+        var badge = UiFactory.Wrapped("", UiFactory.FontCaption);
+        ShowBadge(badge, ModelTestBadge(model.Id));
         _modelTestBadges[model.Id] = badge;
         column.AddChild(UiFactory.Row(display, remove));
         column.AddChild(UiFactory.Row(modelName, endpointCombo));
