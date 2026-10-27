@@ -338,7 +338,7 @@ internal static class PlayerFacingSession
             return "-";
         }
 
-        return Loc.T("Jev {0} 次 · LLM 接手 {1} 次", jevAccepted, fallbacks);
+        return Loc.T("快速判断 {0} 次 · LLM 接手 {1} 次", jevAccepted, fallbacks);
     }
 
     private static PlayerFacingView ComposeCompanion(PlayerFacingSnapshot s)

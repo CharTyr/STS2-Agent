@@ -139,7 +139,7 @@ internal sealed partial class AgentOverlayHost
         // The dual-layer toggle for solo play. When it is on, Jev picks each action and the LLM only
         // plans strategy; the panel below the conversation shows what Jev chose.
         _dualLayerSoloCheck = UiFactory.Check(
-            Loc.T("双层决策（Jev）"),
+            Loc.T("双层决策（快速判断）"),
             AgentRuntime.Instance.Settings.DualLayerSoloEnabled);
         _dualLayerSoloCheck.Toggled += on =>
         {
@@ -182,7 +182,7 @@ internal sealed partial class AgentOverlayHost
     private Control BuildJevPanel()
     {
         var column = UiFactory.Column();
-        _jevStatus = UiFactory.Wrapped(Loc.T("未配置 Jev，请先在「设置」填写。"), UiFactory.FontCaption);
+        _jevStatus = UiFactory.Wrapped(Loc.T("未配置快速判断，请先在「设置」填写。"), UiFactory.FontCaption);
         _jevLastChoice = UiFactory.Wrapped("-", UiFactory.FontBody, muted: false);
         _jevProbabilities = UiFactory.Wrapped("-", UiFactory.FontCaption);
         _jevDanger = UiFactory.Wrapped("-", UiFactory.FontCaption);
@@ -200,8 +200,8 @@ internal sealed partial class AgentOverlayHost
         column.AddChild(_jevFallbackRate);
         _jevPanel = HelpCard.Build(
             "play.jev",
-            Loc.T("Jev"),
-            Loc.T("开启「双层决策」后，由 Jev 逐步选择动作，LLM 只负责战略规划。\nJev 的地址和 Key 在「设置」里填写；置信度低于阈值时由 LLM 接手。"),
+            Loc.T("快速判断"),
+            Loc.T("开启后，由快速判断模型（Jev）逐步选择动作，LLM 只负责战略规划。\n地址和 Key 在「设置 → 快速判断」填写；置信度低于阈值时由 LLM 接手。"),
             column);
         return _jevPanel;
     }
@@ -375,7 +375,7 @@ internal sealed partial class AgentOverlayHost
         // The dual-layer toggle for the multiplayer teammate. The companion instance runs its own Jev
         // loop (it has no overlay), so this switch is the host-side control for it.
         _dualLayerCoopCheck = UiFactory.Check(
-            Loc.T("双层决策（Jev）"),
+            Loc.T("双层决策（快速判断）"),
             AgentRuntime.Instance.Settings.DualLayerCoopEnabled);
         _dualLayerCoopCheck.Toggled += on => _ = SetCoopDualLayerAsync(on);
         page.AddChild(_dualLayerCoopCheck);

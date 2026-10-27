@@ -47,14 +47,16 @@ internal static partial class Loc
         map["自动"] = "Auto";
         map["输入消息…"] =
             "Type a message…";
-        map["双层决策（Jev）"] = "Dual-layer (Jev)";
+        map["双层决策（快速判断）"] = "Dual-layer (fast judgment)";
         map["战斗中不自动操作"] = "No auto-play in combat";
         map["战斗"] = "Combat";
-        map["未配置 Jev，请先在「设置」填写。"] =
-            "Jev is not set up. Fill it in under “Settings”.";
-        map["Jev：{0}"] =
-            "Jev: {0}";
-        map["Jev"] = "Jev";
+        map["未配置快速判断，请先在「设置」填写。"] =
+            "Fast judgment is not set up. Fill it in under “Settings”.";
+        map["快速判断：{0}"] =
+            "Fast judgment: {0}";
+        map["快速判断连续失败，{0} 前由 LLM 接手。"] =
+            "Fast judgment kept failing; the LLM takes over until {0}.";
+        map["快速判断"] = "Fast judgment";
         map["最近选择"] = "Last choice";
         map["概率"] = "Odds";
         map["危险度"] = "Danger score";
@@ -67,13 +69,18 @@ internal static partial class Loc
         map["保存失败，队友设置未确认。"] = "Save failed; teammate settings unconfirmed.";
         map["队友设置未确认，请检查连接。"] = "Teammate settings unconfirmed; check the connection.";
         map["队友未连接，下次邀请时生效。"] = "Teammate offline; applies on the next invite.";
-        map["队友 Jev 开关尚未同步。"] = "Teammate Jev switch not synced yet.";
-        map["队友 Jev 状态不可用，请检查连接。"] =
-            "Teammate Jev status unavailable; check the connection.";
+        map["队友快速判断开关尚未同步。"] = "Teammate fast-judgment switch not synced yet.";
+        map["队友快速判断状态不可用，请检查连接。"] =
+            "Teammate fast-judgment status unavailable; check the connection.";
 
         // Settings page: the Jev execution-model section.
         map["置信度阈值（0-1）"] = "Confidence threshold (0-1)";
-        map["测试 Jev 连接"] = "Test Jev connection";
+        map["测试快速判断"] = "Test fast judgment";
+        map["地址"] = "URL";
+        map["接口格式"] = "Format";
+        map["Jev 格式（System One）"] = "Jev format (System One)";
+        map["获取 Key"] = "Get key";
+        map["文档"] = "Docs";
         map["正在测试…"] = "Testing…";
         map["你"] = "You";
         map["助手"] = "Assistant";
@@ -165,7 +172,7 @@ internal static partial class Loc
         map["决策日志"] = "Decision log";
         map["理由：{0}"] = "Reason: {0}";
         map["来源：{0}"] = "Source: {0}";
-        map["Jev 未提交，LLM 接手"] = "Jev gave no action; LLM took over";
+        map["快速判断未提交，LLM 接手"] = "Fast judgment gave no action; LLM took over";
         map["Token {0}"] = "Tokens {0}";
         map["Token 未知"] = "Tokens unknown";
         map["暂无决策记录。"] =
@@ -256,8 +263,8 @@ internal static partial class Loc
             "Chat is read-only: asking a question never plays a card. To have the AI play one move, say “play for me”.\nMessages sent during auto-play only shape later decisions; they never play at the same time.";
         map["开启后，战斗中 AI 不请求模型也不操作，战斗结束后自动恢复。\n适合手动打战斗，或交给外部战斗控制器。"] =
             "While on, the AI makes no model requests and takes no actions in combat, and resumes when combat ends.\nUse it to fight by hand or to hand combat to an external controller.";
-        map["开启「双层决策」后，由 Jev 逐步选择动作，LLM 只负责战略规划。\nJev 的地址和 Key 在「设置」里填写；置信度低于阈值时由 LLM 接手。"] =
-            "With dual-layer on, Jev picks each action and the LLM only plans strategy.\nFill in Jev's URL and key under “Settings”; below the confidence threshold the LLM takes over.";
+        map["开启后，由快速判断模型（Jev）逐步选择动作，LLM 只负责战略规划。\n地址和 Key 在「设置 → 快速判断」填写；置信度低于阈值时由 LLM 接手。"] =
+            "With it on, the fast-judgment model (Jev) picks each action and the LLM only plans strategy.\nFill in the URL and key under “Settings → Fast judgment”; below the confidence threshold the LLM takes over.";
         map["最新的在最前。每条包含动作、理由、来源和该步消耗的 Token。"] =
             "Newest first. Each entry shows the action, reason, source and the tokens that step used.";
         map["你打自己的角色，AI 打另一个角色，同一座塔往上爬。\n在主菜单邀请；第二窗口打开后，AI 会自动选角、过开局事件并进图。\n大厅仍是 4 人位，还可再邀 2 名在线玩家。\n队友窗口连不上时，检查游戏日志和 Steam 双开限制。"] =
@@ -272,8 +279,8 @@ internal static partial class Loc
             "Choose a provider, enter the API key and model name, then press “Test main model”.\nChat and auto-play share this model; local services (Ollama / LM Studio) can leave the key blank.\nRequest limit: new installs default to a 30-request trial; adjust as needed. Tests also call your service, and request/token counts are not a bill.";
         map["视觉：不勾选模型的「视觉」、也不配视觉模型时，仍可用精简状态和工具打完全部流程。\n预算：达到上限会自动停止游玩并提示；填错会保留原上限，不会变成不限。\n请求超时：服务商长时间没有响应时，按此时长报错。\nAI 主动发言：默认关闭；开启后只在战斗开始和结束各说一句，每次自动游玩最多 6 句，间隔至少 75 秒，不会代打，也受预算限制。\n窗口位置：拖动标题栏移动，位置会保存。"] =
             "Vision: without the model's “Vision” box or a vision model, auto-play still finishes the whole run on the compact state and tools.\nBudget: auto-play stops with a notice at the limit; a bad entry keeps the previous limit instead of becoming unlimited.\nRequest timeout: how long to wait before reporting a provider that stopped answering.\nAI speaks up: off by default; when on it speaks once at combat start and once at combat end, at most 6 lines per auto-play run, at least 75 seconds apart. It never plays for you and respects the budget.\nWindow position: drag the title bar to move it; the position is saved.";
-        map["双层决策下，由 Jev（TypeSafe System One 模型）逐步操作游戏，LLM 只做战略规划。\n在游玩页按模式开启。置信度低于阈值时，由 LLM 接手。"] =
-            "In dual-layer mode Jev (the TypeSafe System One model) takes each action and the LLM only plans strategy.\nEnable it per mode on the Play page. Below the confidence threshold the LLM takes over.";
+        map["双层决策下，由快速判断模型（Jev 等）逐步操作游戏，LLM 只做战略规划。在游玩页按模式开启；置信度低于阈值时由 LLM 接手。\n选服务商会填好地址、格式和模型，每家的 Key 分开记住。地址可填完整请求地址，也可只填服务根地址。\n「测试」会真实调用一次服务。连续失败 3 次会暂停快速判断一段时间，期间由 LLM 接手。\n预设按各家文档整理，以实际可用为准。"] =
+            "In dual-layer mode the fast-judgment model (Jev or similar) takes each action and the LLM only plans strategy. Enable it per mode on the Play page; below the confidence threshold the LLM takes over.\nPicking a provider fills in the URL, format and model, and each provider's key is remembered separately. The URL can be a full request URL or just the service root.\n“Test” makes one real call to the service. After 3 failures in a row fast judgment pauses for a while and the LLM takes over.\nPresets follow each provider's docs; what actually works is up to the provider.";
         map["游戏内自动游玩和一起玩都不需要 MCP，只有 Cursor / Claude / Codex 等外部客户端才需要。\n把配置贴进客户端的 MCP 设置即可，服务只监听本机 127.0.0.1。\n本机 HTTP API 始终可用（GET /health /state，POST /action）；MCP 打开后才会在同一端口提供 /mcp。地址以本页复制为准。\nPython sidecar 仅支持 stdio / layered / full。"] =
             "In-game auto-play and playing together do not need MCP; only external clients such as Cursor / Claude / Codex do.\nPaste the config into the client's MCP settings; the service listens only on 127.0.0.1.\nThe local HTTP API is always available (GET /health /state, POST /action); /mcp appears on the same port only once MCP is on. Copy the address from this page.\nThe Python sidecar supports only stdio / layered / full.";
 

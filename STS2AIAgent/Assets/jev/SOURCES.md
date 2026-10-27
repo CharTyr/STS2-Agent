@@ -1,0 +1,1 @@
+各家快速判断服务的 logo，仅用于在设置里标识对应服务，商标归各公司所有。取自 CharTyr/MaiWork 的 `maiwork/console/static/assets/logos/jev/`（该目录的 SOURCES.md 记录了各图出处：各家官网的 apple-touch-icon，TypeSafe/OpenRouter/OpenCode/Command Code/Vercel/Upstage/Inception/Liquid AI；Cloudflare、OpenAI 为其 GitHub 组织头像），统一缩放为 48×48 PNG。文件名即预设 id。
