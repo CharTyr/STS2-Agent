@@ -162,7 +162,7 @@ internal sealed partial class AgentOverlayHost
         ("endpoints", Loc.T("端点")),
         ("models", Loc.T("模型")),
         ("bindings", Loc.T("模型绑定")),
-        ("jev", Loc.T("Jev")),
+        ("jev", Loc.T("快速判断")),
         ("connect", Loc.T("MCP"))
     };
 
@@ -524,7 +524,7 @@ internal sealed partial class AgentOverlayHost
             _proactiveToneCombo = null;
         }
 
-        AddSettingsSection("jev", Loc.T("Jev"));
+        AddSettingsSection("jev", Loc.T("快速判断"));
         _settingsBody.AddChild(BuildJevSection(settings));
 
         AddSettingsSection("connect", Loc.T("MCP"));
@@ -564,14 +564,14 @@ internal sealed partial class AgentOverlayHost
         column.AddChild(Labeled(Loc.T("置信度阈值（0-1）"), _jevThresholdEdit));
         column.AddChild(Labeled(Loc.T("请求超时（秒）"), _jevTimeoutEdit));
 
-        _jevTestButton = UiFactory.Button(Loc.T("测试 Jev 连接"), () => _ = TestJevConnectionAsync(), UiFactory.ButtonKind.Ghost);
+        _jevTestButton = UiFactory.Button(Loc.T("测试快速判断"), () => _ = TestJevConnectionAsync(), UiFactory.ButtonKind.Ghost);
         _jevTestStatus = UiFactory.Wrapped("", UiFactory.FontCaption);
         column.AddChild(UiFactory.Row(_jevTestButton));
         column.AddChild(_jevTestStatus);
         return HelpCard.Build(
             "settings.jev",
-            Loc.T("Jev"),
-            Loc.T("双层决策下，由 Jev（TypeSafe System One 模型）逐步操作游戏，LLM 只做战略规划。\n在游玩页按模式开启。置信度低于阈值时，由 LLM 接手。"),
+            Loc.T("快速判断"),
+            Loc.T("双层决策下，由快速判断模型（Jev，TypeSafe System One）逐步操作游戏，LLM 只做战略规划。\n在游玩页按模式开启。置信度低于阈值时，由 LLM 接手。"),
             column);
     }
 

@@ -256,12 +256,12 @@ internal sealed partial class AgentRuntime
         var settings = Settings;
         if (string.IsNullOrWhiteSpace(settings.JevApiKey))
         {
-            return Loc.T("未配置 Jev API Key。");
+            return Loc.T("未配置快速判断 API Key。");
         }
 
         if (string.IsNullOrWhiteSpace(settings.JevBaseUrl))
         {
-            return Loc.T("未配置 Jev Base URL。");
+            return Loc.T("未配置快速判断 Base URL。");
         }
 
         try
@@ -276,7 +276,7 @@ internal sealed partial class AgentRuntime
         }
         catch (Exception ex)
         {
-            return Loc.T("Jev 连接失败：{0}", ex.Message);
+            return Loc.T("快速判断连接失败：{0}", ex.Message);
         }
     }
 }

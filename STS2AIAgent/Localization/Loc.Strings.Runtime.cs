@@ -25,7 +25,7 @@ internal static partial class Loc
         // The per-stage turn phases (Agent/PlayPhases.cs).
         map["正在读取游戏状态…"] = "Reading the game state…";
         map["正在等待游戏可操作…"] = "Waiting for the game to become actionable…";
-        map["正在请求 Jev 执行层…"] = "Asking the Jev execution layer…";
+        map["正在请求快速判断…"] = "Asking fast judgment…";
         map["正在执行动作…"] = "Executing the action…";
         // The elapsed-time suffix the status line grows while a turn sits in one stage
         // (Agent/AgentRuntime.cs, StatusWithElapsed).
@@ -38,11 +38,11 @@ internal static partial class Loc
         map["确认阻挡操作的教学弹窗。"] = "Confirmed the tutorial popup that was blocking the action.";
 
         // Jev execution-model configuration check (Agent/AgentRuntime.Jev.cs).
-        map["未配置 Jev API Key。"] = "No Jev API key configured.";
-        map["未配置 Jev Base URL。"] = "No Jev base URL configured.";
-        map["Jev 配置已就绪（{0}）。连接测试将随双层决策引擎一同提供。"] =
-            "Jev is configured ({0}). A live connection test ships with the dual-layer engine.";
-        map["Jev 连接失败：{0}"] = "Jev connection failed: {0}";
+        map["未配置快速判断 API Key。"] = "No fast-judgment API key configured.";
+        map["未配置快速判断 Base URL。"] = "No fast-judgment base URL configured.";
+        map["快速判断配置已就绪（{0}）。连接测试将随双层决策引擎一同提供。"] =
+            "Fast judgment is configured ({0}). A live connection test ships with the dual-layer engine.";
+        map["快速判断连接失败：{0}"] = "Fast-judgment connection failed: {0}";
         // The per-model connection test (Agent/AgentRuntime.ModelTest.cs).
         map["找不到该模型。"] = "That model could not be found.";
         map["该模型绑定的端点不可用。"] = "The endpoint this model is bound to is unavailable.";
