@@ -53,7 +53,7 @@ internal static partial class Loc
         map["复制诊断"] = "Copy diagnostics";
         map["保存诊断"] = "Save diagnostics";
         map["诊断已保存：{0}"] = "Diagnostics saved: {0}";
-        map["这是本地队友存档。已阻止会损坏存档的原生读档，请在模组多人页点击「继续上次联机对局」。"] = "This is a local teammate save. The unsafe native load was blocked. Use Continue last co-op run on the mod multiplayer page.";
+        map["这是本地队友存档。已阻止会损坏存档的原生读档，请在模组「游玩 → 多人」页点「继续联机存档」。"] = "This is a local teammate save. The unsafe native load was blocked. Press “Continue co-op save” under the mod's Play → Multiplayer page.";
         // Session view headlines, details and next-step hints (Agent/PlayerFacingSession.cs).
         map["队友窗口已退出"] = "Teammate window closed";
         map["关闭残留窗口，回主菜单重新邀请。"] =

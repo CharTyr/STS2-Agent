@@ -985,6 +985,7 @@ internal static class TestRunner
         yield return ("CardViewer.SubmenuStackBase", () => Task.Run(CardViewerScreenContractTests.SubmenuStackLookupUsesTheBaseClass));
         yield return ("OverlayTabs.ExtractedFromTheHost", () => Task.Run(OverlayTabContractTests.TabConstructionLivesInItsOwnFile));
         yield return ("OverlayTabs.ExistingTabsKeepTheirOrder", () => Task.Run(OverlayTabContractTests.ExistingTabsKeepTheirOrder));
+        yield return ("OverlayTabs.FailedSaveKeepsTheSettingsPageOpen", () => Task.Run(OverlayTabContractTests.FailedSaveKeepsTheSettingsPageOpen));
         yield return ("OverlayTabs.EveryTabHasAPageBuilder", () => Task.Run(OverlayTabContractTests.EveryTabHasAPageBuilder));
         yield return ("OverlayTabs.RefreshOnShow", () => Task.Run(OverlayTabContractTests.TabsThatChangeWithoutAnEventRefreshOnShow));
         yield return ("OverlayTabs.LabelsResolveToEnglish", () => Task.Run(OverlayTabContractTests.CatalogLabelsResolveToEnglish));

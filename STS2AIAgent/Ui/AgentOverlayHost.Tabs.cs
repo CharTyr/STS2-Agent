@@ -69,6 +69,13 @@ internal sealed partial class AgentOverlayHost
         if (_tab == OverlayTabCatalog.Settings && tab != OverlayTabCatalog.Settings)
         {
             FlushSettingsIfDirty();
+            // A save that failed (a bad budget, an unparseable URL, a read-only file) leaves the form
+            // dirty with its reason in the footer. Leaving the page used to hide that reason and drop
+            // the edits without a word, so the player stays here until it is fixed or saved.
+            if (_settingsDirty)
+            {
+                return;
+            }
         }
 
         _tab = tab;

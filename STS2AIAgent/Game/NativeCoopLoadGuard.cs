@@ -46,7 +46,7 @@ internal static class NativeCoopLoadGuard
         }
         try
         {
-            AgentRuntime.Instance.NotifyStatus(Loc.T("这是本地队友存档。已阻止会损坏存档的原生读档，请在模组多人页点击「继续上次联机对局」。"));
+            AgentRuntime.Instance.NotifyStatus(Loc.T("这是本地队友存档。已阻止会损坏存档的原生读档，请在模组「游玩 → 多人」页点「继续联机存档」。"));
             AgentOverlayHost.ShowLocalCoopContinue();
         }
         catch (Exception ex) { Log.Warn("[STS2AIAgent] Local save preserved; overlay unavailable: " + ex.GetType().Name); }

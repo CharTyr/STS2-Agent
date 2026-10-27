@@ -268,7 +268,9 @@ internal sealed partial class AgentOverlayHost
     private async Task LaunchDualAsync()
     {
         FlushSettingsIfDirty();
-        if (_settingsDirty) return;
+        // The settings that failed to save are on the settings page, with the reason in its footer;
+        // the invite used to do nothing at all from the play page.
+        if (_settingsDirty) { ShowTab(OverlayTabCatalog.Settings); return; }
         var settings = HarvestSettings();
         var companionAutoPlay = settings.CompanionControlMode != "external";
         await AgentRuntime.Instance.LaunchDualInstanceAsync(settings, companionAutoPlay, CancellationToken.None);
@@ -278,7 +280,7 @@ internal sealed partial class AgentOverlayHost
     private async Task ContinueDualAsync()
     {
         FlushSettingsIfDirty();
-        if (_settingsDirty) return;
+        if (_settingsDirty) { ShowTab(OverlayTabCatalog.Settings); return; }
         var settings = HarvestSettings();
         var companionAutoPlay = settings.CompanionControlMode != "external";
         _continueLaunching = true;
