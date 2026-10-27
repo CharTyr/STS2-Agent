@@ -178,9 +178,11 @@ internal sealed partial class AgentOverlayHost
             playControls));
 
         // The dual-layer toggle for solo play. When it is on, Jev picks each action and the LLM only
-        // plans strategy; the panel below the conversation shows what Jev chose.
+        // plans strategy; the panel below the conversation shows what Jev chose. Named for what it does
+        // ("双层决策" meant nothing to a new player), and shown only once fast judgment is configured or
+        // while it is still on (see the mode section of RefreshDynamic).
         _dualLayerSoloCheck = UiFactory.Check(
-            Loc.T("双层决策（快速判断）"),
+            Loc.T("用快速判断出牌（LLM 只做规划）"),
             AgentRuntime.Instance.Settings.DualLayerSoloEnabled);
         _dualLayerSoloCheck.Toggled += on =>
         {
@@ -354,6 +356,17 @@ internal sealed partial class AgentOverlayHost
             _teamControlRow,
             _teamControlStatus));
 
+        // The dual-layer toggle for the multiplayer teammate. The companion instance runs its own Jev
+        // loop (it has no overlay), so this switch is the host-side control for it. It sits with the
+        // teammate's controls; it used to come after the chat, the one card a player has to scroll to.
+        _dualLayerCoopCheck = UiFactory.Check(
+            Loc.T("用快速判断出牌（LLM 只做规划）"),
+            AgentRuntime.Instance.Settings.DualLayerCoopEnabled);
+        _dualLayerCoopCheck.Toggled += on => _ = SetCoopDualLayerAsync(on);
+        page.AddChild(_dualLayerCoopCheck);
+        _companionSettingsStatus = UiFactory.Wrapped("", UiFactory.FontCaption);
+        page.AddChild(_companionSettingsStatus);
+
         // The counter reset and the diagnostics moved to the session card at the bottom of the play
         // page, which both modes show.
         page.AddChild(UiFactory.Card(
@@ -386,16 +399,6 @@ internal sealed partial class AgentOverlayHost
             _teamInput,
             UiFactory.TightRow(_teamSend),
             _teamStatus));
-
-        // The dual-layer toggle for the multiplayer teammate. The companion instance runs its own Jev
-        // loop (it has no overlay), so this switch is the host-side control for it.
-        _dualLayerCoopCheck = UiFactory.Check(
-            Loc.T("双层决策（快速判断）"),
-            AgentRuntime.Instance.Settings.DualLayerCoopEnabled);
-        _dualLayerCoopCheck.Toggled += on => _ = SetCoopDualLayerAsync(on);
-        page.AddChild(_dualLayerCoopCheck);
-        _companionSettingsStatus = UiFactory.Wrapped("", UiFactory.FontCaption);
-        page.AddChild(_companionSettingsStatus);
         // The play page's own scroll carries this section now; the section returns its plain column.
         return page;
     }
@@ -501,6 +504,11 @@ internal sealed partial class AgentOverlayHost
             var mode = AgentRuntime.Instance.Settings;
             var coopMode = mode.OverlayPlayMode == "coop";
             if (_dualLayerSoloCheck != null) _dualLayerSoloCheck.SetPressedNoSignal(mode.DualLayerSoloEnabled);
+            // A player without fast judgment has nothing to switch on; one who turned it on keeps the
+            // switch to turn it off again.
+            var jevConfigured = mode.HasJevConfigured();
+            if (_dualLayerSoloCheck != null) _dualLayerSoloCheck.Visible = jevConfigured || mode.DualLayerSoloEnabled;
+            if (_dualLayerCoopCheck != null) _dualLayerCoopCheck.Visible = jevConfigured || mode.DualLayerCoopEnabled;
             if (_nonCombatOnlyCheck != null) _nonCombatOnlyCheck.SetPressedNoSignal(mode.NonCombatOnlyEnabled);
             if (_dualLayerCoopCheck != null) _dualLayerCoopCheck.SetPressedNoSignal(mode.DualLayerCoopEnabled);
             RefreshModeControls(coopMode, coopMode ? mode.DualLayerCoopEnabled : mode.DualLayerSoloEnabled);
@@ -645,7 +653,7 @@ internal sealed partial class AgentOverlayHost
             screen = "-";
         }
 
-        return Loc.T("屏幕 {0} · 动作 {1}", screen, Trim(AgentRuntime.Instance.LastAction, 48));
+        return Loc.T("{0} · 最近动作：{1}", PlayerLabels.Screen(screen), Trim(PlayerLabels.Action(AgentRuntime.Instance.LastAction), 48));
     }
 
     /// <summary>

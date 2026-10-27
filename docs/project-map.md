@@ -95,6 +95,7 @@ one action runs at a time.
 
 ### Files
 - `STS2AIAgent/Multiplayer/CompanionSettingsSynchronizer.cs` — serialized settings acknowledgement with current connection/fingerprint validation, latest queued snapshots and duplicate suppression.
+- `STS2AIAgent/Config/ThinkingChoices.cs` — the thinking drop-downs' stored values with readable labels (endpoint format, the model's override, intensity).
 - `STS2AIAgent/Config/QuickSetup.cs` — provider presets and one-model quick setup, preserving advanced configuration.
 - `STS2AIAgent/Ui/AgentOverlayHost.Setup.cs` — quick setup card and bounded, cancellable model verification; the per-model test badges (updated in place when the form has unsaved edits).
 - `STS2AIAgent/Multiplayer/CompanionPlaySettings.cs` — live play configuration allowlist; preserves instance-local settings.
@@ -213,6 +214,7 @@ one action runs at a time.
 - `STS2AIAgent/Agent/GameDataExportSchema.cs` — field inventory of `/data/{collection}` (two-way test against the export code).
 - `STS2AIAgent/Agent/DecisionContext.cs` — reads `client_context.decision_reason` from `POST /action`.
 - `STS2AIAgent/Agent/DecisionLog.cs` — bounded, redacted accepted-decision log (`/decisions`). Dual-layer rows carry the per-turn Jev trace (`option_ids`, `probabilities`, `danger`, `strategy_updated_at`); an LLM fallback after a failed Jev attempt is marked `jev_attempt`.
+- `STS2AIAgent/Agent/PlayerLabels.cs` — the words the overlay shows for API screen, action and decision-source identifiers (display only; the API and the model keep the identifiers).
 - `STS2AIAgent/Agent/PlayerFacingSession.cs` — the player-facing session summary the overlay renders (headline, next step, waiting-for-player).
 - `STS2AIAgent/Agent/DiagnosticExport.cs` — "export diagnostics" text and `Redact` (masks keys and bearer tokens).
 - `STS2AIAgent/Agent/McpProcessLauncher.cs` — optional launch of the Python MCP sidecar.

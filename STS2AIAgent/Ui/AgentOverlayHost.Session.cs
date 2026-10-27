@@ -152,14 +152,14 @@ internal sealed partial class AgentOverlayHost
                 parts.Add(Loc.T("理由：{0}", entry.reason));
             }
 
-            parts.Add(Loc.T("来源：{0}", entry.source));
+            parts.Add(Loc.T("来源：{0}", PlayerLabels.Source(entry.source)));
             parts.Add(entry.total_tokens is { } tokens
                 ? Loc.T("Token {0}", tokens.ToString("N0"))
                 : Loc.T("Token 未知"));
             // The action stays on its own line. A reason such as "Play Dismantle (14 dmg with STR 3)
             // on the 1st Inklet" plus source and token count is wider than the panel even after the
             // rich label wraps, and one joined line is what the 2026-09-22 screenshot clipped.
-            lines.Add(Accent($"{entry.id}. {entry.action}") + "\n" + Muted(string.Join("\n", parts)) + "\n\n");
+            lines.Add(Accent($"{entry.id}. {PlayerLabels.Action(entry.action)}") + "\n" + Muted(string.Join("\n", parts)) + "\n\n");
         }
 
         _decisionLogView.Show(lines);

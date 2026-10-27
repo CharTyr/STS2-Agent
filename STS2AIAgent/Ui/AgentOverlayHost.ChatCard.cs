@@ -130,23 +130,17 @@ internal sealed partial class AgentOverlayHost
             AgentRuntime.Instance.SaveSettings(next);
         };
 
-        var intensity = UiFactory.Combo();
-        foreach (var item in new[] { "off", "low", "medium", "high" })
-        {
-            intensity.AddItem(item);
-        }
-
         // Thinking intensity belongs to the main model now that one model chats and plays; the combo
         // edits that model's own field, which is what the loop reads on the next request.
         var mainModel = settings.FindModel(settings.ConversationModelId);
-        SelectByText(intensity, mainModel?.ThinkingIntensity ?? settings.ThinkingIntensity);
+        var intensity = ChoiceCombo(ThinkingChoices.Intensities(), mainModel?.ThinkingIntensity ?? settings.ThinkingIntensity);
         intensity.ItemSelected += index =>
         {
             var next = CloneSettings(AgentRuntime.Instance.Settings);
             var target = next.FindModel(next.ConversationModelId);
             if (target != null)
             {
-                target.ThinkingIntensity = intensity.GetItemText((int)index);
+                target.ThinkingIntensity = intensity.GetItemMetadata((int)index).AsString();
                 AgentRuntime.Instance.SaveSettings(next);
             }
         };

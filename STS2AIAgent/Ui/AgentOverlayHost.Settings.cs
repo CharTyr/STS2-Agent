@@ -626,12 +626,9 @@ internal sealed partial class AgentOverlayHost
         column.AddChild(UiFactory.Row(name, enabled, remove));
         column.AddChild(url);
         column.AddChild(key);
-        var protocol = UiFactory.Combo();
-        foreach (var value in new[] { "auto", "deepseek", "reasoning_effort", "prompt" }) protocol.AddItem(value);
-        var protocolIndex = Array.IndexOf(new[] { "auto", "deepseek", "reasoning_effort", "prompt" }, endpoint.ThinkingProtocol);
-        protocol.Select(Math.Max(0, protocolIndex));
+        var protocol = ChoiceCombo(ThinkingChoices.EndpointProtocols(), endpoint.ThinkingProtocol);
         WatchCombo(protocol);
-        if (_showAdvancedValue) column.AddChild(Labeled(Loc.T("思考协议"), protocol));
+        if (_showAdvancedValue) column.AddChild(Labeled(Loc.T("思考参数格式"), protocol));
         box.AddChild(column);
         _endpointEditors.Add(new EndpointEditors(endpoint.Id, name, url, key, enabled, protocol));
         return box;
@@ -674,21 +671,9 @@ internal sealed partial class AgentOverlayHost
 
         var vision = UiFactory.Check(Loc.T("视觉"), model.SupportsVision);
         WatchCheck(vision);
-        var thinkingMode = UiFactory.Combo();
-        foreach (var item in new[] { "auto", "reasoning_effort", "deepseek", "prompt" })
-        {
-            thinkingMode.AddItem(item);
-        }
-
-        SelectByText(thinkingMode, model.ThinkingMode);
+        var thinkingMode = ChoiceCombo(ThinkingChoices.ModelModes(), model.ThinkingMode);
         WatchCombo(thinkingMode);
-        var thinkingIntensity = UiFactory.Combo();
-        foreach (var item in new[] { "off", "low", "medium", "high" })
-        {
-            thinkingIntensity.AddItem(item);
-        }
-
-        SelectByText(thinkingIntensity, model.ThinkingIntensity);
+        var thinkingIntensity = ChoiceCombo(ThinkingChoices.Intensities(), model.ThinkingIntensity);
         WatchCombo(thinkingIntensity);
         var contextWindow = UiFactory.Line(model.ContextWindow?.ToString() ?? "", Loc.T("默认 256000"));
         WatchLine(contextWindow);
@@ -711,7 +696,7 @@ internal sealed partial class AgentOverlayHost
         if (_showAdvancedValue)
         {
             column.AddChild(UiFactory.Row(vision));
-            column.AddChild(Labeled(Loc.T("思考方式"), thinkingMode));
+            column.AddChild(Labeled(Loc.T("思考参数格式（本模型）"), thinkingMode));
             column.AddChild(Labeled(Loc.T("思考强度"), thinkingIntensity));
             column.AddChild(Labeled(Loc.T("上下文窗口"), contextWindow));
         }
@@ -743,7 +728,7 @@ internal sealed partial class AgentOverlayHost
             endpoint.BaseUrl = editor.Url.Text.Trim();
             endpoint.ApiKey = editor.Key.Text;
             endpoint.Enabled = editor.Enabled.ButtonPressed;
-            endpoint.ThinkingProtocol = editor.Protocol.GetItemText(editor.Protocol.Selected);
+            endpoint.ThinkingProtocol = SelectedMetadata(editor.Protocol);
         }
 
         for (var i = 0; i < _modelEditors.Count; i++)
@@ -761,8 +746,8 @@ internal sealed partial class AgentOverlayHost
             // SupportsTools is not harvested from a checkbox anymore: the per-model test's
             // tool-calling probe is the authority, and a hand tick could claim a capability the
             // provider does not have.
-            model.ThinkingMode = SelectedText(editor.ThinkingMode);
-            model.ThinkingIntensity = SelectedText(editor.ThinkingIntensity);
+            model.ThinkingMode = SelectedMetadata(editor.ThinkingMode);
+            model.ThinkingIntensity = SelectedMetadata(editor.ThinkingIntensity);
             model.ContextWindow = int.TryParse(editor.ContextWindow.Text.Trim(), out var contextWindow) && contextWindow > 0
                 ? contextWindow
                 : null;

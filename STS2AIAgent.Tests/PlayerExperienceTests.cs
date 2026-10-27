@@ -1,6 +1,7 @@
 using STS2AIAgent.Agent;
 using STS2AIAgent.Config;
 using STS2AIAgent.Llm;
+using STS2AIAgent.Localization;
 using STS2AIAgent.Multiplayer;
 
 namespace STS2AIAgent.Tests;
@@ -291,6 +292,58 @@ internal static class PlayerExperienceTests
         Assert.False(paused.NextAction.Contains("显示高级选项"), paused.NextAction);
         Assert.Contains("继续游玩", paused.NextAction);
         Assert.True(PlayerFacingSession.NeedsAttention(paused));
+    }
+
+    /// <summary>
+    /// Every screen the API documents and every action the mod accepts has a readable label, in both
+    /// languages, so the solo card never shows a wire identifier such as MAIN_MENU or play_card.
+    /// </summary>
+    public static void EveryScreenAndActionHasAPlayerLabel()
+    {
+        var api = AgentSourceFixture.Read("docs/api.md");
+        var table = api[api.IndexOf("## Screen 枚举", StringComparison.Ordinal)..];
+        table = table[..table.IndexOf("\n## ", 5, StringComparison.Ordinal)];
+        var screens = System.Text.RegularExpressions.Regex.Matches(table, @"^\| `([A-Z_]+)` \|", System.Text.RegularExpressions.RegexOptions.Multiline)
+            .Select(m => m.Groups[1].Value).ToList();
+        Assert.True(screens.Count > 25, "screen table parse looks wrong");
+
+        var actionSource = AgentSourceFixture.Read("STS2AIAgent/Game/GameActionService.cs");
+        var switchStart = actionSource.IndexOf("switch", StringComparison.Ordinal);
+        var actions = System.Text.RegularExpressions.Regex.Matches(actionSource.Substring(switchStart, 16000), "\"([a-z_]+)\"\\s*=>")
+            .Select(m => m.Groups[1].Value).Distinct()
+            // Debug-only actions never reach a player's screen.
+            .Where(a => a is not ("run_console_command" or "inject_event_churn" or "switch_profile"))
+            .ToList();
+        Assert.True(actions.Count > 40, "action switch parse looks wrong");
+
+        try
+        {
+            foreach (var language in new[] { "zhs", "eng" })
+            {
+                Loc.SetLanguage(language);
+                foreach (var screen in screens)
+                    Assert.False(PlayerLabels.Screen(screen) == screen, $"screen {screen} has no label ({language})");
+                foreach (var action in actions)
+                    Assert.False(PlayerLabels.Action(action) == action, $"action {action} has no label ({language})");
+                if (language == "eng")
+                {
+                    foreach (var text in screens.Select(PlayerLabels.Screen).Concat(actions.Select(PlayerLabels.Action)))
+                        Assert.False(text.Any(c => c >= 0x4E00 && c <= 0x9FFF), $"\"{text}\" has no English entry");
+                }
+            }
+        }
+        finally
+        {
+            Loc.SetLanguage("zhs");
+        }
+
+        Assert.Equal("LLM", PlayerLabels.Source("agent_loop"));
+        Assert.Equal("快速判断", PlayerLabels.Source("jev"));
+        Assert.False(PlayerLabels.Source("http_api") == "http_api");
+
+        // An unknown identifier is shown as it is rather than as a blank.
+        Assert.Equal("NEW_SCREEN", PlayerLabels.Screen("NEW_SCREEN"));
+        Assert.Equal("-", PlayerLabels.Action("-"));
     }
 
     public static void OnlyStopsThatNeedThePlayerAreFlagged()

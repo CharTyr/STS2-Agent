@@ -7,8 +7,105 @@ internal static partial class Loc
     // Overlay text: headers, tabs, buttons, labels, hints (Ui/AgentOverlayHost.cs).
     private static void AddUiEntries(Dictionary<string, string> map)
     {
+        // Screen and action names the overlay shows instead of API identifiers (Agent/PlayerLabels.cs).
+        map["外部客户端（HTTP / MCP）"] = "Outside client (HTTP / MCP)";
+        map["查看卡牌"] = "Card inspect";
+        map["查看遗物"] = "Relic inspect";
+        map["反馈页"] = "Feedback";
+        map["主菜单"] = "Main menu";
+        map["选择角色"] = "Character select";
+        map["联机大厅"] = "Co-op lobby";
+        map["联机读档"] = "Co-op load";
+        map["选择开局卡包"] = "Starting bundle";
+        map["Capstone 选项"] = "Capstone options";
+        map["暂停菜单"] = "Pause menu";
+        map["游戏设置"] = "Game settings";
+        map["百科大全"] = "Compendium";
+        map["遗物收集"] = "Relic collection";
+        map["药水研究所"] = "Potion lab";
+        map["怪物图鉴"] = "Bestiary";
+        map["角色数据"] = "Character stats";
+        map["历史记录"] = "Run history";
+        map["地图"] = "Map";
+        map["事件"] = "Event";
+        map["水晶球"] = "Crystal sphere";
+        map["商店"] = "Shop";
+        map["休息点"] = "Rest site";
+        map["奖励"] = "Rewards";
+        map["宝箱"] = "Treasure chest";
+        map["选牌"] = "Card selection";
+        map["看牌"] = "Card view";
+        map["牌库"] = "Card library";
+        map["牌堆"] = "Card pile";
+        map["弹窗"] = "Dialog";
+        map["游戏结束"] = "Game over";
+        map["解锁"] = "Unlock";
+        map["时间线"] = "Timeline";
+        map["补丁说明"] = "Patch notes";
+        map["未知界面"] = "Unknown screen";
+        map["出牌"] = "Play a card";
+        map["结束回合"] = "End turn";
+        map["使用药水"] = "Use a potion";
+        map["丢弃药水"] = "Discard a potion";
+        map["选择路线"] = "Choose a path";
+        map["领取奖励"] = "Claim a reward";
+        map["选卡"] = "Pick a card";
+        map["跳过选卡"] = "Skip the card reward";
+        map["领取奖励并继续"] = "Collect rewards and go on";
+        map["处理奖励"] = "Resolve rewards";
+        map["继续"] = "Continue";
+        map["选择事件选项"] = "Choose an event option";
+        map["休息点选择"] = "Rest site choice";
+        map["打开商店"] = "Open the shop";
+        map["关闭商店"] = "Close the shop";
+        map["买卡"] = "Buy a card";
+        map["买遗物"] = "Buy a relic";
+        map["买药水"] = "Buy a potion";
+        map["商店删牌"] = "Remove a card at the shop";
+        map["开宝箱"] = "Open the chest";
+        map["选择宝箱遗物"] = "Pick a chest relic";
+        map["选择牌"] = "Select a card";
+        map["确认选择"] = "Confirm the selection";
+        map["关闭看牌"] = "Close the card view";
+        map["确认弹窗"] = "Confirm the dialog";
+        map["关闭弹窗"] = "Dismiss the dialog";
+        map["选择卡包"] = "Choose a bundle";
+        map["确认卡包"] = "Confirm the bundle";
+        map["选择 Capstone"] = "Choose a capstone";
+        map["水晶球：选工具"] = "Crystal sphere: pick a tool";
+        map["水晶球：清除格子"] = "Crystal sphere: clear a cell";
+        map["继续存档"] = "Continue the saved run";
+        map["进入选角"] = "Open character select";
+        map["提高进阶"] = "Raise ascension";
+        map["降低进阶"] = "Lower ascension";
+        map["出发"] = "Embark";
+        map["结算继续"] = "Continue after game over";
+        map["跳过结算等待"] = "Skip the game-over wait";
+        map["回到主菜单"] = "Return to the main menu";
+        map["确认解锁"] = "Confirm the unlock";
+        map["打开时间线"] = "Open the timeline";
+        map["选择时间线纪元"] = "Choose a timeline epoch";
+        map["确认时间线"] = "Confirm the timeline";
+        map["返回上一级菜单"] = "Back to the previous menu";
+        map["保存并退出"] = "Save and quit";
+        map["放弃本局"] = "Abandon the run";
+        map["创建联机房间"] = "Host a co-op lobby";
+        map["加入联机房间"] = "Join a co-op lobby";
+        map["联机准备"] = "Ready up";
+        map["取消准备"] = "Unready";
+        map["离开联机房间"] = "Leave the co-op lobby";
         // Header, tabs, chat page.
-        map["思考协议"] = "Thinking protocol";
+        map["思考参数格式"] = "Thinking request format";
+        map["思考参数格式（本模型）"] = "Thinking request format (this model)";
+        map["自动（按模型名判断）"] = "Automatic (from the model name)";
+        map["跟随端点"] = "Same as the endpoint";
+        map["DeepSeek 格式"] = "DeepSeek format";
+        map["OpenAI 格式（reasoning_effort）"] = "OpenAI format (reasoning_effort)";
+        map["不发思考参数"] = "Send no thinking parameter";
+        map["关闭"] = "Off";
+        map["低"] = "Low";
+        map["中"] = "Medium";
+        map["高"] = "High";
         map["隐藏"] = "Hide";
         map["游玩中"] = "Playing";
         map["待机"] = "Idle";
@@ -17,7 +114,7 @@ internal static partial class Loc
             "Try: how to play this hand, is a relic worth taking.";
         map["对话默认只读；要它动手，用上方的「开始自动游玩」或「单步」，或者明确说「帮我打」。"] =
             "Chat is read-only; to make it act, use “Start auto-play” or “Single step” above, or say “play for me” in a message.";
-        map["屏幕 {0} · 动作 {1}"] = "Screen {0} · Action {1}";
+        map["{0} · 最近动作：{1}"] = "{0} · Last action: {1}";
         map["展开记录"] = "Show log";
         map["收起记录"] = "Hide log";
         map["思考"] = "Reasoning";
@@ -46,7 +143,7 @@ internal static partial class Loc
         map["自动"] = "Auto";
         map["输入消息…"] =
             "Type a message…";
-        map["双层决策（快速判断）"] = "Dual-layer (fast judgment)";
+        map["用快速判断出牌（LLM 只做规划）"] = "Let fast judgment pick moves (the LLM only plans)";
         map["战斗中不自动操作"] = "No auto-play in combat";
         map["战斗"] = "Combat";
         map["未配置快速判断，请先在「设置」填写。"] =
@@ -238,7 +335,6 @@ internal static partial class Loc
         map["(端点不可用：{0})"] = "(Endpoint unavailable: {0})";
         map["视觉"] = "Vision";
         map["工具调用"] = "Tool calling";
-        map["思考方式"] = "Thinking mode";
         map["思考强度"] = "Thinking effort";
         map["上下文窗口"] = "Context window";
         map["默认 256000"] = "Default 256000";
@@ -278,8 +374,8 @@ internal static partial class Loc
             "Pick a provider and enter the API key; the model is filled in with a common one for that provider, and the list on the right offers others. Pressing “Save settings” runs one test.\nThe test makes real calls: connectivity first, then tool calling; a model without tool calling cannot auto-play.\nChat and auto-play share this model; local services (Ollama / LM Studio) can leave the key blank, and the model is one you have downloaded locally.\nThe model lists follow each provider's documentation; what the provider actually offers wins.\nRequest limit: new installs default to 1,500 requests, about one full run; leave it blank or 0 for unlimited. Tests also call your service, and request/token counts are not a bill.";
         map["视觉：不勾选模型的「视觉」、也不配视觉模型时，仍可用精简状态和工具打完全部流程。\n预算：达到上限会自动停止游玩并提示；填错会保留原上限，不会变成不限。\n请求超时：服务商长时间没有响应时，按此时长报错。\nAI 主动发言：默认关闭；开启后只在战斗开始和结束各说一句，每次自动游玩最多 6 句，间隔至少 75 秒，不会代打，也受预算限制。\n窗口位置：拖动标题栏移动，位置会保存。"] =
             "Vision: without the model's “Vision” box or a vision model, auto-play still finishes the whole run on the compact state and tools.\nBudget: auto-play stops with a notice at the limit; a bad entry keeps the previous limit instead of becoming unlimited.\nRequest timeout: how long to wait before reporting a provider that stopped answering.\nAI speaks up: off by default; when on it speaks once at combat start and once at combat end, at most 6 lines per auto-play run, at least 75 seconds apart. It never plays for you and respects the budget.\nWindow position: drag the title bar to move it; the position is saved.";
-        map["双层决策下，由快速判断模型（Jev 等）逐步操作游戏，LLM 只做战略规划。在游玩页按模式开启；置信度低于阈值时由 LLM 接手。\n选服务商会填好地址、格式和模型，每家的 Key 分开记住。地址可填完整请求地址，也可只填服务根地址。\n「测试」会真实调用一次服务。连续失败 3 次会暂停快速判断一段时间，期间由 LLM 接手。\n预设按各家文档整理，以实际可用为准。"] =
-            "In dual-layer mode the fast-judgment model (Jev or similar) takes each action and the LLM only plans strategy. Enable it per mode on the Play page; below the confidence threshold the LLM takes over.\nPicking a provider fills in the URL, format and model, and each provider's key is remembered separately. The URL can be a full request URL or just the service root.\n“Test” makes one real call to the service. After 3 failures in a row fast judgment pauses for a while and the LLM takes over.\nPresets follow each provider's docs; what actually works is up to the provider.";
+        map["在游玩页勾选「用快速判断出牌」后，由快速判断模型（Jev 等）逐步操作游戏，LLM 只做战略规划；单人、多人分别开启。置信度低于阈值时由 LLM 接手。\n选服务商会填好地址、格式和模型，每家的 Key 分开记住。地址可填完整请求地址，也可只填服务根地址。\n「测试」会真实调用一次服务。连续失败 3 次会暂停快速判断一段时间，期间由 LLM 接手。\n预设按各家文档整理，以实际可用为准。"] =
+            "With “Let fast judgment pick moves” ticked on the Play page, the fast-judgment model (Jev or similar) takes each action and the LLM only plans strategy; solo and multiplayer are switched on separately. Below the confidence threshold the LLM takes over.\nPicking a provider fills in the URL, format and model, and each provider's key is remembered separately. The URL can be a full request URL or just the service root.\n“Test” makes one real call to the service. After 3 failures in a row fast judgment pauses for a while and the LLM takes over.\nPresets follow each provider's docs; what actually works is up to the provider.";
         map["游戏内自动游玩和一起玩都不需要 MCP，只有 Claude Code / Cursor / Codex 等外部客户端才需要。\n打开后选你的客户端再复制配置：Claude Code 在终端运行这条命令，Cursor 贴进 mcp.json，Codex 贴进 ~/.codex/config.toml。服务只监听本机 127.0.0.1。\n本机 HTTP API 始终可用（GET /health /state，POST /action）；MCP 打开后才会在同一端口提供 /mcp。地址以本页复制为准。\nPython sidecar 仅支持 stdio / layered / full。"] =
             "In-game auto-play and playing together do not need MCP; only external clients such as Claude Code / Cursor / Codex do.\nOnce it is on, pick your client and copy its config: run the command in a terminal for Claude Code, paste into mcp.json for Cursor, or into ~/.codex/config.toml for Codex. The service listens only on 127.0.0.1.\nThe local HTTP API is always available (GET /health /state, POST /action); /mcp appears on the same port only once MCP is on. Copy the address from this page.\nThe Python sidecar supports only stdio / layered / full.";
 
