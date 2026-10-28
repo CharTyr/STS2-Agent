@@ -215,7 +215,9 @@ internal sealed partial class AgentSettings
             MaxSessionRequests = DefaultSessionRequests,
             Hotkey = "F8",
             AttachStateInChat = true,
-            OverlayVisibleOnStart = false,
+            // Shown on every start until the player hides it (W8.1, 2026-10-28). Hidden-by-default
+            // plus "any toggle marks the guide seen" left new players with only the edge tab.
+            OverlayVisibleOnStart = true,
             HasSeenFirstRunGuide = false
         };
     }

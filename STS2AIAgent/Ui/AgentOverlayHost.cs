@@ -500,6 +500,7 @@ internal sealed partial class AgentOverlayHost
         }
 
         _hotkeyWasDown = down;
+        PollPauseHotkey();
 
         _placement?.FollowViewport();
 

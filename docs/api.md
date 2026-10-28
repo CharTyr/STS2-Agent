@@ -214,6 +214,7 @@ curl -s http://127.0.0.1:8080/state | jq .
 | `dual_launch_outcome` | string\|null | **仅 host 有意义。** 双开结构化结果，给外部客户端做成败分类，**不要**用 `dual_status` 文本。host 尚未尝试或 companion 角色为 `null`；否则为 `InProgress` / `Succeeded` / `Failed` / `Rejected` / `Canceled`（`DualLaunchOutcome` 枚举名，不含 `Idle`） |
 | `compatibility` | object | 启动时对 Mod 依赖的游戏私有成员做的一次自检结果。`reflected_members_checked` 是被检查的成员总数，`reflected_members_missing` 是找不到的个数，`missing_members[]` 逐条给出 `member`（`类型.成员`）与 `feature`（失效的功能）。游戏更新后 Mod 最常见的坏法就是某个私有字段被改名，此时读取悄悄退回默认值——这个区块是唯一的信号 |
 | `state_build` | object | 构建状态载荷的耗时，只计构建本身、不含排队等游戏线程。`/state`、每个动作响应与 SSE 刷新都会构建一次，且都跑在游戏线程上——构建期间游戏不出帧。`slow_threshold_ms`（100，约等于 60 帧下 6 帧的卡顿）、`samples`、`slow_builds`、`last_ms`、`max_ms` 与其 `max_screen`、以及最近 `recent_samples`（至多 256）次的 `recent_p50_ms` / `recent_p95_ms`；尚无样本时耗时字段为 `null`。超过阈值的构建会在游戏日志里记 `WARN`，每 30 秒至多一条并注明期间压下的条数。另有三个累计计数（不计入 `samples`）：`actionable_probes`（游戏内 Agent 等待「可操作」时每帧做的轻量探针次数，不构建载荷）、`actionable_builds`（该等待真正构建状态的次数：只在判定可操作的那一帧或超时时各一次）、`event_poll_builds`（SSE 事件流轮询的构建次数，无订阅者时为 0） |
+| `turbo` | object | 自动游玩时的游戏加速（游戏自带的 Fast Mode）。`mode`（设置：`off` / `fast` / `instant`）、`applied`（此刻是否由 Mod 接管了游戏速度）、`original`（接管期间记下的玩家原档位 `Normal` / `Fast` / `Instant` / `None`，未接管时 `null`）、`current`（最近一次在游戏线程上看到的档位，尚未看到时 `null`）、`prefs_guard`（写盘守卫：`installed` / `unavailable` / `not_installed`；`unavailable` 时极速自动降为快速）、`reason`（最近一次决定：`engage` / `already_fast` / `multiplayer_cap` / `off` / `released` / `idle` / `error`）、`other_speed_mod`（检测到 SpeedX 等加速 Mod 时为 `true`，二者可同时使用）。暂停、停止、失败或离开对局时恢复玩家原档位；玩家中途自己改过就保留玩家的选择；加速档永远不会写进游戏的设置文件 |
 
 ### `stop_kind` 取值
 
@@ -538,6 +539,8 @@ curl -s http://127.0.0.1:8080/state | jq .
 | 字段 | 类型 | 说明 |
 | --- | --- | --- |
 | `index` | number | 手牌索引（用于 `play_card` 的 `card_index`） |
+| `combat_card_id` | number \| null | 这张牌在本场战斗中的稳定 ID（游戏联机同步用的 `NetCombatCardDb` 编号）：别的牌离手、手牌重排都不变，整回合规划用它指认牌（`act` 的 `card_cid`）；取不到时为 `null`。compact 里叫 `cid` |
+| `card_type` | string \| null | 卡牌类型：`attack` / `skill` / `power` / `status` / `curse` / `quest`；compact 里叫 `type` |
 | `card_id` | string | 卡牌内部 ID |
 | `name` | string | 卡牌显示名称 |
 | `upgraded` | boolean | 是否已升级 |
@@ -1107,6 +1110,9 @@ compact 的 `combat` 原样携带 `/state` 的 `action_readiness`、`end_turn_wi
 | `combat.players[]` | `player_id` / `slot_index` / `is_local` / `is_connected` / `character_id` / `character_name` / `current_hp` / `max_hp` / `block` / `energy` / `stars` / `focus` / `is_alive` | 队伍血线（含本地玩家），用于判断队友是否需要救援 |
 | `combat.hand[]` | `card_id` | 手牌内部 ID，用于 `get_game_data_item` 精确查询 |
 | `combat.hand[]` | `upgraded` / `energy_cost` / `star_cost` | 结构化数值，与 `line` 里文本化的费用同源；判断「这手还能打什么」不必解析本地化字符串 |
+| `combat.hand[]` | `cid` / `type` | v13 起：`/state` 的 `combat_card_id`（本场战斗内稳定的卡牌编号，整回合规划用 `card_cid` 指认）与 `card_type` |
+| `combat.hand[]` | `vs` | v13 起：这张牌对**每个能打到的敌人**的精确伤害，来自游戏自己的伤害预览（力量、虚弱、**目标的易伤**、上限都已计入，`values[].preview` 不含目标易伤）。每项 `{enemy, per_hit, hits, damage, after_block, kills}`：`damage = per_hit × hits`（含附魔重放），`after_block` = 扣掉该敌人当前格挡后的掉血，`kills` = 单靠这张牌能否打死。段数只在可确定时给出（`CalculatedHits` / `Repeat` 变量或游戏代码写死的两段）；段数在出牌时才计算的牌 `hits`/`damage`/`after_block`/`kills` 为 `null`，绝不猜数。没有伤害的牌、不可打出的牌、`combatMathEnabled` 关闭时为 `null` |
+| `combat` | `threat` | v13 起：本回合结束后的威胁汇总（`combatMathEnabled` 关闭时为 `null`）。`incoming`（存活敌人意图总伤）、`incoming_unblockable`（无法得知时为 `null`）、`block`（当前格挡）、`block_needed`（还需多少格挡才不掉血）、`unblocked`（现在结束回合会掉的血）、`hp_after`（结束回合后的 HP，可为负）、`lethal`（会死；与 `end_turn_will_kill_player` 取并集，二者永不矛盾）、`end_of_turn_self_damage`（自身中毒 / 缠绕 / 魔法炸弹的伤害合计）、`per_enemy[]`（`i`、`incoming`、`hits`）、`max_block`（`block`、`energy`、`cids`、`cards`：当前能量能叠出的最多格挡）、`kill_options[]`（每个可攻击敌人：`enemy`、`killable`、`cids`、`cards`、`energy`、`damage`、`overkill`——本回合用最省能量的哪几张牌能打死它；打不死时 `damage` 是能打出的最高伤害）、`estimate`（恒为 `true`：`max_block` 与 `kill_options` 忽略抽牌与出牌中途的增益，是估算）。意图伤害按本地玩家计算 |
 | `run.potions[]` | `description` | 药水效果原文；配合 `usable` / `discard` / `target` / `targets` 一起决定是否用掉 |
 | `combat.draw[]` / `combat.discard[]` / `combat.exhaust[]` / `run.deck[]` / `run.piles.*` | `card_ids` | 合并组代表的卡牌 ID（去重、升序）；组内若含不同 ID 会全部列出，`line` 仍带 `*N` 数量后缀 |
 | `selection.cards[]` / `reward.cards[]` / `shop.cards[]` / `bundles[].cards[]` | `card_id` | 选择屏 / 奖励 / 商店 / 卡包的卡牌 ID |
@@ -2732,6 +2738,6 @@ A 401/403, invalid model, incompatible thinking configuration or unrelated 400 r
 
 ## Compact ownership and additional planning metadata
 
-`agent_view.version` is now **12**. Top-level `in_combat` is copied from the same raw snapshot and remains true through combat selection screens and modals. Non-combat-only autoplay yields on combat, unknown screens or absent/malformed ownership, rechecks before model dispatch, and checks automatic actions inside the shared execution lease. Direct external actions remain available.
+`agent_view.version` is now **13** (v13 added `combat.hand[].cid` / `type` / `vs` and `combat.threat`, see the compact additions table; v12 introduced the ownership rules below). Top-level `in_combat` is copied from the same raw snapshot and remains true through combat selection screens and modals. Non-combat-only autoplay yields on combat, unknown screens or absent/malformed ownership, rechecks before model dispatch, and checks automatic actions inside the shared execution lease. Direct external actions remain available.
 
 Raw `map.is_open` (compact `map.open`) distinguishes a visible map overlay from model-backed graph availability. During a run, graph nodes and edges remain readable outside the overlay; travel flags and clickable options are inactive there. Upgrade selection cards carry optional `upgrade` metadata (also on compact `selection.cards[]`), using the detached canonical preview described above: available, unavailable, or null for maxed cards. Non-upgrade selections leave it null. Main reward screens permit explicit potion discard; card-reward sub-screens continue blocking it. Bulk reward cleanup takes non-potions first, so capacity-granting relics are collected before potions, and never discards a potion automatically.

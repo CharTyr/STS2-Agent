@@ -92,7 +92,8 @@ namespace STS2AIAgent.Game;
 /// </remarks>
 internal static partial class GameStateService
 {
-    private const int AgentViewVersion = 12;
+    // 13 (2026-10-28): combat.hand[].cid / type / vs and combat.threat, all additive.
+    private const int AgentViewVersion = 13;
 
     private static string GetPreferredCardRulesText(string rulesText, string? resolvedRulesText)
     {
@@ -241,10 +242,13 @@ internal static partial class GameStateService
         var liveHand = GetLocalPlayer(combatState)?.PlayerCombatState?.Hand.Cards.ToList()
             ?? new List<CardModel>();
         var playerCombatState = GetLocalPlayer(combatState)?.PlayerCombatState;
+        // Null when switched off (combatMathEnabled) or unavailable; the keys stay, as null.
+        var math = BuildCombatMath(combatState, combat, liveHand);
 
         return new
         {
             action_readiness = combat.action_readiness,
+            threat = math?.Threat,
             card_value_note = "Hand line and values.preview include live player modifiers such as Strength. Do not apply modifiers already reflected by preview again. Preview is not a guaranteed target hit: check target-specific Vulnerable, caps and block.",
             player = new
             {
@@ -295,7 +299,8 @@ internal static partial class GameStateService
                 BuildAgentHandCardPayload(
                     card,
                     card.index >= 0 && card.index < liveHand.Count ? liveHand[card.index] : null,
-                    glossaryTerms)).ToArray(),
+                    glossaryTerms,
+                    math != null && math.VsByHandIndex.TryGetValue(card.index, out var vs) ? vs : null)).ToArray(),
             draw = BuildAgentCardStacks(PileCards(playerCombatState?.DrawPile), glossaryTerms),
             discard = BuildAgentCardStacks(PileCards(playerCombatState?.DiscardPile), glossaryTerms),
             exhaust = BuildAgentCardStacks(PileCards(playerCombatState?.ExhaustPile), glossaryTerms),
@@ -733,7 +738,8 @@ internal static partial class GameStateService
     private static object BuildAgentHandCardPayload(
         CombatHandCardPayload card,
         CardModel? liveCard,
-        HashSet<string> glossaryTerms)
+        HashSet<string> glossaryTerms,
+        object[]? vs = null)
     {
         var displayRulesText = GetPreferredCardRulesText(card.rules_text, card.resolved_rules_text);
         var mods = GetCardModifierTags(liveCard);
@@ -743,6 +749,9 @@ internal static partial class GameStateService
         return new
         {
             i = card.index,
+            // Stable for the whole fight, unlike i: a whole-turn plan names cards by cid.
+            cid = card.combat_card_id,
+            type = card.card_type,
             card_id = card.card_id,
             line = FormatCardLine(card.name, card.upgraded, 1, card.energy_cost, card.star_cost, card.costs_x, card.star_costs_x, displayRulesText),
             upgraded = card.upgraded,
@@ -752,6 +761,8 @@ internal static partial class GameStateService
             {
                 name = value.name, base_value = value.base_value, preview = value.current_value
             }).ToArray(),
+            // Exact damage against each enemy it can hit (that enemy's Vulnerable included), or null.
+            vs,
             playable = card.playable,
             can_play_result = card.can_play_result,
             target = card.requires_target ? NormalizeTargetHint(card.target_index_space ?? card.target_type) : null,

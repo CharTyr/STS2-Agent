@@ -162,6 +162,7 @@ internal sealed partial class AgentOverlayHost
     {
         ("first-run", Loc.T("快速开始")),
         ("appearance", Loc.T("外观")),
+        ("experience", Loc.T("游玩体验")),
         ("endpoints", Loc.T("端点")),
         ("models", Loc.T("模型")),
         ("bindings", Loc.T("模型绑定")),
@@ -447,6 +448,8 @@ internal sealed partial class AgentOverlayHost
         // The section label already says 外观; the card names what it holds.
         var appearanceCard = UiFactory.Card(Loc.T("主题"), BuildThemePicker());
         _settingsBody.AddChild(appearanceCard);
+        AddSettingsSection("experience", Loc.T("游玩体验"));
+        _settingsBody.AddChild(BuildExperienceCard(settings));
 
         if (_showAdvancedValue)
         {

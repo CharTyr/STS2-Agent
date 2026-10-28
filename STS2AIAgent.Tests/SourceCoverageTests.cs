@@ -44,6 +44,13 @@ internal static class SourceCoverageTests
         // The cheap probes behind the actionable wait and the auto-play turn snapshot (2026-10-28).
         // They read the game's screen, combat and run managers; ActionabilityProbeContractTests pins them.
         "STS2AIAgent/Game/GameStateService.Probe.cs",
+        // Combat arithmetic for compact v13 (2026-10-28): runs the game's own damage previews against
+        // each enemy, so it reads the game assemblies; its arithmetic lives in CombatMathPolicy.
+        "STS2AIAgent/Game/GameStateService.CombatMath.cs",
+        // Game speed while the AI plays (2026-10-28): the controller writes the game's prefs and patches
+        // its prefs writer; the runtime partial posts to the game thread. TurboWiringContractTests pins them.
+        "STS2AIAgent/Game/TurboController.cs",
+        "STS2AIAgent/Agent/AgentRuntime.Turbo.cs",
         "STS2AIAgent/Game/GameStateService.Payloads.cs",
         "STS2AIAgent/Game/GameActionService.cs",
         // select_deck_card on a card the grid has not drawn (#218), split out of
@@ -65,6 +72,8 @@ internal static class SourceCoverageTests
         // in either one is still caught offline.
         "STS2AIAgent/Ui/AgentOverlayHost.Pages.cs",
         "STS2AIAgent/Ui/AgentOverlayHost.Settings.cs",
+        // The overhaul's experience switches (2026-10-28), saved on the spot like the theme picker.
+        "STS2AIAgent/Ui/AgentOverlayHost.Experience.cs",
         // The palette preview, split out of UiFactory.cs for the same budget. It needs Godot's ColorRect.
         "STS2AIAgent/Ui/OverlaySwatch.cs",
         "STS2AIAgent/Agent/AgentRuntime.cs",

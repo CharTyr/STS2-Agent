@@ -67,6 +67,11 @@
     <Compile Include="..\STS2AIAgent\Agent\AgentLoop.Decision.cs" Link="Agent\AgentLoop.Decision.cs" />
     <Compile Include="..\STS2AIAgent\Agent\AgentLoop.Sandpit.cs" Link="Agent\AgentLoop.Sandpit.cs" />
     <Compile Include="..\STS2AIAgent\Agent\AgentLoop.RoleProbes.cs" Link="Agent\AgentLoop.RoleProbes.cs" />
+    <Compile Include="..\STS2AIAgent\Agent\TurboPolicy.cs" Link="Agent\TurboPolicy.cs" />
+    <Compile Include="..\STS2AIAgent\Agent\VisionPolicy.cs" Link="Agent\VisionPolicy.cs" />
+    <Compile Include="..\STS2AIAgent\Agent\StallHintPolicy.cs" Link="Agent\StallHintPolicy.cs" />
+    <Compile Include="..\STS2AIAgent\Server\EventPollingCadence.cs" Link="Server\EventPollingCadence.cs" />
+    <Compile Include="..\STS2AIAgent\Game\CombatMathPolicy.cs" Link="Game\CombatMathPolicy.cs" />
     <Compile Include="..\STS2AIAgent\Agent\SandpitSafetyPolicy.cs" Link="Agent\SandpitSafetyPolicy.cs" />
     <Compile Include="..\STS2AIAgent\Agent\PlayPhases.cs" Link="Agent\PlayPhases.cs" />
     <Compile Include="..\STS2AIAgent\Agent\AgentTurnCanceledException.cs" Link="Agent\AgentTurnCanceledException.cs" />

@@ -14,5 +14,22 @@ internal static class ExperienceTestCatalog
         yield return ("Experience.Settings.CloneCarriesEveryNonDefault", () => Task.Run(ExperienceSettingsTests.CloneCarriesEveryNonDefault));
         yield return ("Experience.Settings.TeammateGetsPlaySwitchesButNotLocalOnes", () => Task.Run(ExperienceSettingsTests.TeammateGetsPlaySwitchesButNotLocalOnes));
         yield return ("Experience.Settings.TeammateRejectsAnUnknownSpeed", () => Task.Run(ExperienceSettingsTests.TeammateRejectsAnUnknownSpeed));
+        yield return ("Experience.Turbo.FollowsSettingNeverSlows", () => Task.Run(OverhaulSmallPolicyTests.TurboFollowsTheSettingAndNeverSlowsThePlayer));
+        yield return ("Experience.Turbo.MultiplayerCap", () => Task.Run(OverhaulSmallPolicyTests.TurboCapsMultiplayerAtFast));
+        yield return ("Experience.Turbo.RestoreOwnValueRoundTrip", () => Task.Run(OverhaulSmallPolicyTests.TurboRestoresOnlyItsOwnValueAndRoundTrips));
+        yield return ("Experience.Vision.OnDemand", () => Task.Run(OverhaulSmallPolicyTests.VisionAttachesOnlyWhenTheStateMayNotBeEnough));
+        yield return ("Experience.StallHint.Thresholds", () => Task.Run(OverhaulSmallPolicyTests.StallHintsWaitForTheirThresholds));
+        yield return ("Experience.PollCadence.BackOffSnapBack", () => Task.Run(OverhaulSmallPolicyTests.PollCadenceBacksOffAndSnapsBack));
+        yield return ("Experience.CombatMath.Threat", () => Task.Run(CombatMathPolicyTests.ThreatSumsLivingAttackersAndBlock));
+        yield return ("Experience.CombatMath.UnblockableAndSelfDamage", () => Task.Run(CombatMathPolicyTests.ThreatCountsUnblockableAndSelfDamage));
+        yield return ("Experience.CombatMath.Cells", () => Task.Run(CombatMathPolicyTests.CellsSoakBlockAndKillExactly));
+        yield return ("Experience.CombatMath.CheapestKill", () => Task.Run(CombatMathPolicyTests.KillOptionsPreferTheCheapestSet));
+        yield return ("Experience.CombatMath.BlockSoaksOnce", () => Task.Run(CombatMathPolicyTests.KillOptionsSoakEnemyBlockOnce));
+        yield return ("Experience.CombatMath.XCost", () => Task.Run(CombatMathPolicyTests.XCostCardsSpendEverything));
+        yield return ("Experience.CombatMath.MaxBlock", () => Task.Run(CombatMathPolicyTests.MaxBlockPicksTheBestAffordableSet));
+        yield return ("Experience.Turbo.EngageFirstReleaseInFinally", () => Task.Run(TurboWiringContractTests.TheLoopEngagesFirstAndReleasesInItsOuterFinally));
+        yield return ("Experience.Turbo.ReleaseNotTiedToEndedToken", () => Task.Run(TurboWiringContractTests.ReleaseIsNotTiedToTheEndedLoopsToken));
+        yield return ("Experience.Turbo.PrefsGuardAtModStart", () => Task.Run(TurboWiringContractTests.ThePrefsGuardIsInstalledAtModStart));
+        yield return ("Experience.Turbo.HealthNeverReadsGame", () => Task.Run(TurboWiringContractTests.TheHealthSnapshotNeverReadsTheGame));
     }
 }

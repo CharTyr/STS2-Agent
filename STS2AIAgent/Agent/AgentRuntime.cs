@@ -393,8 +393,9 @@ internal sealed partial class AgentRuntime
     {
         lock (_gate)
         {
+            // Only the visibility: whether the first-run guide was seen is a different fact, and
+            // tying it to a panel toggle is what hid the window from players who never configured.
             _settings.OverlayVisibleOnStart = visible;
-            _settings.HasSeenFirstRunGuide = true;
             SaveSettingsQuietly();
         }
     }
@@ -853,6 +854,7 @@ internal sealed partial class AgentRuntime
 
         try
         {
+            await EngageTurboAsync(cancellationToken);
             await AutoPlayRecovery.RunAsync(async token =>
             {
                 // Recovery owns the turn gate through receipt accounting.
@@ -866,6 +868,7 @@ internal sealed partial class AgentRuntime
                     // they come from the same sources in the same game-thread unit (see BuildTurnProbe).
                     var snapshot = await GameThread.InvokeAsync(() =>
                     {
+                        TurboController.CapForMultiplayer();
                         var probe = GameStateService.BuildTurnProbe();
                         return (probe.Screen, probe.Phase, probe.RunId, probe.InCombat, probe.ActId);
                     }, TurnGameThreadBudget, token);
@@ -926,7 +929,7 @@ internal sealed partial class AgentRuntime
             },
             reportInterrupted: result => RecordTurnReceipt(result), turnGate: _turnGate);
         }
-        finally { CancelStrategyRefresh(); FlushSessionIfDirty(); RaiseChanged(); }
+        finally { CancelStrategyRefresh(); await ReleaseTurboAsync(); FlushSessionIfDirty(); RaiseChanged(); }
     }
 
     /// <summary>

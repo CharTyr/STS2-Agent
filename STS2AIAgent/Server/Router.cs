@@ -627,7 +627,8 @@ internal static class Router
             dual_launch_outcome = roleData.dual_launch_outcome,
             team_control_status = roleData.team_control_status,
             compatibility = ReflectedGameMembers.BuildHealthSection(),
-            state_build = StateBuildTiming.Instance.Snapshot()
+            state_build = StateBuildTiming.Instance.Snapshot(),
+            turbo = TurboController.Snapshot(AgentRuntime.Instance.Settings.TurboMode)
         };
     }
 

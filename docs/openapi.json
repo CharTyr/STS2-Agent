@@ -740,6 +740,20 @@
           "card_id": {
             "type": "string"
           },
+          "card_type": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "combat_card_id": {
+            "format": "int64",
+            "minimum": 0,
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
           "costs_x": {
             "type": "boolean"
           },
@@ -2145,7 +2159,8 @@
           "state_build": {},
           "status": {},
           "stop_kind": {},
-          "team_control_status": {}
+          "team_control_status": {},
+          "turbo": {}
         },
         "required": [
           "service",
@@ -2173,7 +2188,8 @@
           "dual_launch_outcome",
           "team_control_status",
           "compatibility",
-          "state_build"
+          "state_build",
+          "turbo"
         ],
         "type": "object"
       },
