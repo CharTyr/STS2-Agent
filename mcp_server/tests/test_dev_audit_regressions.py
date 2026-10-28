@@ -10,12 +10,16 @@ from sts2_mcp.client import Sts2ApiError, Sts2Client
 from sts2_mcp.state_views import diff_state
 from sts2_mcp.server import create_server
 
+# Explicit, so no test depends on a game running on the machine: without one the client probes
+# local instances through the same patched urlopen these tests count calls on.
+BASE_URL = "http://127.0.0.1:8080"
+
 
 class DevAuditRegressionTests(unittest.TestCase):
     def test_registered_diff_tool_executes_in_every_profile(self) -> None:
         for profile in ("guided", "layered", "full"):
             with self.subTest(profile=profile):
-                server = create_server(tool_profile=profile)
+                server = create_server(client=Sts2Client(base_url=BASE_URL), tool_profile=profile)
                 tool = asyncio.run(server.get_tool("diff_state"))
                 result = tool.fn(before={"hp": 5}, after={"hp": 4})
                 self.assertEqual(result["changes"], [{"path": "hp", "before": 5, "after": 4}])
@@ -51,14 +55,14 @@ class DevAuditRegressionTests(unittest.TestCase):
                 response.readline.side_effect = error
                 with patch("sts2_mcp.client.request.urlopen", return_value=response):
                     with self.assertRaises(Sts2ApiError) as raised:
-                        list(Sts2Client().iter_events())
+                        list(Sts2Client(base_url=BASE_URL).iter_events())
                 self.assertEqual(raised.exception.code, "connection_error")
                 self.assertTrue(raised.exception.retryable)
 
     def test_connect_timeout_surfaces_for_polling_fallback(self) -> None:
         with patch("sts2_mcp.client.request.urlopen", side_effect=TimeoutError("connect timed out")) as opened:
             with self.assertRaises(Sts2ApiError) as raised:
-                Sts2Client().wait_for_event(timeout=1.0)
+                Sts2Client(base_url=BASE_URL).wait_for_event(timeout=1.0)
         self.assertEqual(opened.call_count, 1)
         self.assertEqual(raised.exception.details["kind"], "connect_timeout")
 
@@ -68,7 +72,7 @@ class DevAuditRegressionTests(unittest.TestCase):
         failure = HTTPError("http://127.0.0.1/events/stream", 503, "unavailable", {}, body)
         with patch("sts2_mcp.client.request.urlopen", side_effect=failure):
             with self.assertRaises(Sts2ApiError) as raised:
-                list(Sts2Client().iter_events())
+                list(Sts2Client(base_url=BASE_URL).iter_events())
         self.assertEqual(raised.exception.status_code, 503)
 
     def test_open_timeout_is_capped_by_overall_deadline(self) -> None:
@@ -77,7 +81,7 @@ class DevAuditRegressionTests(unittest.TestCase):
         response.readline.return_value = b""
         with patch("sts2_mcp.client.time.monotonic", return_value=10.0), \
              patch("sts2_mcp.client.request.urlopen", return_value=response) as opened:
-            self.assertEqual(list(Sts2Client().iter_events(read_timeout=90.0, deadline=10.25)), [])
+            self.assertEqual(list(Sts2Client(base_url=BASE_URL).iter_events(read_timeout=90.0, deadline=10.25)), [])
         self.assertEqual(opened.call_args.kwargs["timeout"], 0.25)
 
     def test_repeated_eof_reconnects_back_off(self) -> None:
@@ -96,7 +100,7 @@ class DevAuditRegressionTests(unittest.TestCase):
         with patch("sts2_mcp.client.request.urlopen", return_value=response) as opened, \
              patch("sts2_mcp.client.time.monotonic", side_effect=lambda: now[0]), \
              patch("sts2_mcp.client.time.sleep", side_effect=sleep):
-            self.assertIsNone(Sts2Client().wait_for_event(timeout=0.3))
+            self.assertIsNone(Sts2Client(base_url=BASE_URL).wait_for_event(timeout=0.3))
         self.assertGreater(len(sleeps), 0)
         self.assertLessEqual(opened.call_count, 4)
         self.assertLessEqual(now[0], 0.31)

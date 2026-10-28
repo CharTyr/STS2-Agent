@@ -16,6 +16,37 @@ def _modified(path: Path) -> float:
         return 0
 
 
+def _process_alive(pid: int) -> bool:
+    """False only when the process is known to be gone, so a crashed game's hint costs no network probe."""
+    if not 0 < pid <= 0xFFFFFFFF:
+        return False  # hints are untrusted; no process can hold this id
+    if os.name == "nt":
+        import ctypes
+        from ctypes import wintypes
+
+        kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+        kernel32.OpenProcess.argtypes = (wintypes.DWORD, wintypes.BOOL, wintypes.DWORD)
+        kernel32.OpenProcess.restype = wintypes.HANDLE
+        kernel32.GetExitCodeProcess.argtypes = (wintypes.HANDLE, ctypes.POINTER(wintypes.DWORD))
+        kernel32.GetExitCodeProcess.restype = wintypes.BOOL
+        kernel32.CloseHandle.argtypes = (wintypes.HANDLE,)
+        handle = kernel32.OpenProcess(0x1000, False, pid)  # PROCESS_QUERY_LIMITED_INFORMATION
+        if not handle:
+            return ctypes.get_last_error() == 5  # ERROR_ACCESS_DENIED: it exists, we just may not query it
+        try:
+            code = wintypes.DWORD()
+            return not kernel32.GetExitCodeProcess(handle, ctypes.byref(code)) or code.value == 259  # STILL_ACTIVE
+        finally:
+            kernel32.CloseHandle(handle)
+    try:
+        os.kill(pid, 0)
+    except ProcessLookupError:
+        return False
+    except OSError:
+        return True
+    return True
+
+
 def discover_base_url() -> str:
     selector = os.getenv("STS2_API_INSTANCE", "human").strip()
     if selector not in {"human", "companion"} and not selector.isdecimal():
@@ -34,6 +65,10 @@ def discover_base_url() -> str:
             if type(pid) is not int or pid <= 0 or type(port) is not int or not 0 < port <= 65535:
                 continue
             if (selector in {"human", "companion"} and role != selector) or (selector.isdecimal() and pid != int(selector)):
+                continue
+            # A game that crashed or was killed leaves its hint behind; probing each one used to run
+            # discovery past its deadline once enough had piled up in the temp directory.
+            if not _process_alive(pid):
                 continue
             url = f"http://127.0.0.1:{port}"
             with request.urlopen(url + "/health", timeout=0.3) as response:

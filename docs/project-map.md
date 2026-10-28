@@ -95,6 +95,7 @@ one action runs at a time.
 
 ### Files
 - `STS2AIAgent/Multiplayer/CompanionSettingsSynchronizer.cs` — serialized settings acknowledgement with current connection/fingerprint validation, latest queued snapshots and duplicate suppression.
+- `STS2AIAgent/Config/ThinkingChoices.cs` — the thinking drop-downs' stored values with readable labels (endpoint format, the model's override, intensity).
 - `STS2AIAgent/Config/QuickSetup.cs` — provider presets and one-model quick setup, preserving advanced configuration.
 - `STS2AIAgent/Ui/AgentOverlayHost.Setup.cs` — quick setup card and bounded, cancellable model verification; the per-model test badges (updated in place when the form has unsaved edits).
 - `STS2AIAgent/Multiplayer/CompanionPlaySettings.cs` — live play configuration allowlist; preserves instance-local settings.
@@ -102,6 +103,7 @@ one action runs at a time.
 - `STS2AIAgent/ModEntry.cs` — `[ModInitializer]`. Order: LocSource → GameThread → GameEventService → HttpServer → AgentRuntime → `ReflectedGameMembers.ProbeAtStartup` → overlay (skipped on the companion or headless). Shutdown runs on ProcessExit/DomainUnload.
 - `STS2AIAgent/Ui/AgentOverlayHost.cs` — overlay chrome and lifecycle: CanvasLayer install and retry until `NGame.Instance`, header, hotkey poll (ignored while a text box has focus), the 800 ms `OnProcessFrame` tick, `ToggleVisible`, `RebuildInPlace` (keeps tab, visibility, position and message drafts), `WarnOnce`.
 - `STS2AIAgent/Ui/AgentOverlayHost.SettingsSave.cs` — committing the settings form: save, add/remove endpoint and model, the dirty flag, the settings notice line.
+- `STS2AIAgent/Ui/AgentOverlayHost.JevSettings.cs` — the settings page's fast-judgment section: provider picker with logos, address, format, key remembered per provider, model with the preset's alternatives, get-key/docs links, threshold, timeout and the connection test.
 - `STS2AIAgent/Ui/AgentOverlayHost.FormHelpers.cs` — shared form helpers (`Labeled`, combo selection, `FillModelCombo`, `MatchById`) and the editor records.
 - `STS2AIAgent/Ui/OverlayPlacement.cs` — window size for the viewport, title-bar drag, on-screen clamp, edge tab, saved position.
 - `STS2AIAgent/Ui/OverlayOverflowSentinel.cs` — logs `[STS2AIAgent.Wide]` when a visible control asks for more width than the panel.
@@ -112,17 +114,22 @@ one action runs at a time.
 - `STS2AIAgent/Ui/SettingsInput.cs` — Godot-free, locale-independent parsing of the Jev threshold.
 - `STS2AIAgent/Ui/AgentOverlayHost.Tabs.cs` — `_pages`, `BuildPages`, `ShowTab` (flushes dirty settings when leaving Settings), tab row.
 - `STS2AIAgent/Ui/AgentOverlayHost.Pages.cs` — Play and co-op page bodies plus the `RefreshDynamic` pass, split into guarded sections (`RefreshHeader`, `RefreshSoloSection`, `RefreshCoopSection`, `RefreshSettingsLive`, `RefreshConnectSection`, then mode controls and the Jev reading).
+- `STS2AIAgent/Ui/AgentOverlayHost.Session.cs` — the session card both play modes show: session and run spend, the decision log (`RefreshDecisionPage`), and the counter reset and diagnostics buttons with their confirmation line.
 - `STS2AIAgent/Ui/AgentOverlayHost.ChatCard.cs` — conversation card, `RefreshChatLog` (draws the recorded turns, then the in-flight `AgentRuntime.LiveThought` partial when the reasoning switch is on), `ChatTailLimit = 80`.
 - `STS2AIAgent/Ui/AgentOverlayHost.Settings.cs` — settings form: `BuildSettingsPage`, jump bar (shows only sections on the form), `RebuildSettingsForm`, `HarvestSettings` (the only reader of form fields, matching editors by id), model cards and the per-model Test button, the Jev section, advanced options, theme picker and repaint.
 - `STS2AIAgent/Ui/AgentOverlayHost.PlayControl.cs` — solo/co-op mode switch (`ChangePlayModeAsync`: pause first, then commit), companion Jev settings sync, invite/continue launch and their availability (`RefreshContinueAvailability`), and the single writer of the play/teammate buttons' enabled state (`RefreshModeControls`).
-- `STS2AIAgent/Ui/UiFactory.cs` — every control and palette→StyleBox. `Label` does **not** wrap (reports its full text as min width); `Wrapped` does, with a 120 px floor. `Row` stretches its children, `TightRow` doesn't. Tabs carry their selected state as metadata so a theme repaint keeps it.
+- `STS2AIAgent/Ui/UiFactory.cs` — every control and palette→StyleBox. `Label` does **not** wrap (reports its full text as min width); `Wrapped` does, with a 120 px floor. `Row` stretches its children, `TightRow` doesn't. Tabs carry their selected state as metadata so a theme repaint keeps it. Depth comes from fill: cards one step lighter than the window with a hairline, wells (fields, logs, tiles, help) one step darker; the accent is for the primary action, the selected tab's underline, focus and switches.
+- `STS2AIAgent/Ui/UiFactory.Status.cs` — tones (`ToneStyle`, `SetTone`), pills, status dots, `Retone`, and the tinted `Callout`.
+- `STS2AIAgent/Ui/UiFactory.Inputs.cs` — fields, check boxes, drop-downs, multi-line editors (one shared well style), and the theme swatch picker.
+- `STS2AIAgent/Ui/OverlayGodotTheme.cs` — the Godot `Theme` on the overlay host: system UI font (regular and bold), scroll bars, drop-down lists, tooltips, caret and selection colours, and check boxes drawn as palette-coloured switches. Rebuilt on theme switch.
 - `STS2AIAgent/Ui/HelpCard.cs` — a card with a "?" button in its title bar that opens a help panel under the title; closed by default, open state kept by key across page rebuilds. All usage notes in the overlay go here instead of into the page body.
+- `STS2AIAgent/Ui/JevProviderIcons.cs` — decodes the provider logos embedded from `STS2AIAgent/Assets/jev/<preset id>.png` (48×48; origins in `Assets/jev/SOURCES.md`) for the fast-judgment provider picker; a missing logo means no icon, never an error.
 - `STS2AIAgent/Ui/OverlayTheme.cs` — Godot-free palettes plus contrast math (test-enforced contrast floors).
 - `STS2AIAgent/Ui/OverlaySwatch.cs` — theme preview tile.
 - `STS2AIAgent/Ui/OverlayTabCatalog.cs` — tabs as data (`Play`, `Settings`).
 - `STS2AIAgent/Ui/SegmentedSwitch.cs` — exclusive segment control (`SetSelected` without a callback, `Select` with one).
 - `STS2AIAgent/Ui/PlayModeSwitchPolicy.cs` — pure gate `ShouldCommit(current, requested, pauseConfirmed)`.
-- `STS2AIAgent/Ui/DecisionLogView.cs` — Godot-free decision line text (`RecentLimit = 50`); rows marked `jev_attempt` read "Jev 未提交，LLM 接手" so fallback is visible at a glance.
+- `STS2AIAgent/Ui/DecisionLogView.cs` — Godot-free decision line text (`RecentLimit = 50`); rows marked `jev_attempt` read "快速判断未提交，LLM 接手" so fallback is visible at a glance.
 - `STS2AIAgent/Agent/PlanningSummary.cs` — JSON-aware trim of the compact state for the planner's prompt: glossary/deck/piles go first, combat facts last, always parseable, and an extreme frame degrades to a minimal skeleton (screen/turn/session + combat numbers), never `{}`.
 - `STS2AIAgent/Config/AgentSettings.cs` — the settings model: endpoints, models, bindings, Jev, budgets, co-op, `ModelTests`, `RoleTests`. `EnsureValidShape` repairs without replacing. `TryResolvePlayModel` (play = conversation model), `TryResolveRoleModel`, `HasJevConfigured`.
 - `STS2AIAgent/Config/SettingsStore.cs` — the only persistence path: atomic temp file + `File.Replace` with a `.bak`, corrupt-file recovery, `LastNotice`. `STS2_AGENT_SETTINGS_PATH` overrides the location.
@@ -207,6 +214,7 @@ one action runs at a time.
 - `STS2AIAgent/Agent/GameDataExportSchema.cs` — field inventory of `/data/{collection}` (two-way test against the export code).
 - `STS2AIAgent/Agent/DecisionContext.cs` — reads `client_context.decision_reason` from `POST /action`.
 - `STS2AIAgent/Agent/DecisionLog.cs` — bounded, redacted accepted-decision log (`/decisions`). Dual-layer rows carry the per-turn Jev trace (`option_ids`, `probabilities`, `danger`, `strategy_updated_at`); an LLM fallback after a failed Jev attempt is marked `jev_attempt`.
+- `STS2AIAgent/Agent/PlayerLabels.cs` — the words the overlay shows for API screen, action and decision-source identifiers (display only; the API and the model keep the identifiers).
 - `STS2AIAgent/Agent/PlayerFacingSession.cs` — the player-facing session summary the overlay renders (headline, next step, waiting-for-player).
 - `STS2AIAgent/Agent/DiagnosticExport.cs` — "export diagnostics" text and `Redact` (masks keys and bearer tokens).
 - `STS2AIAgent/Agent/McpProcessLauncher.cs` — optional launch of the Python MCP sidecar.
@@ -226,6 +234,8 @@ one action runs at a time.
 - `STS2AIAgent/Agent/PlaySessionRecord.cs` — persisted shape (chat, decisions, strategy; redacted).
 - `STS2AIAgent/Agent/PlaySessionMemory.cs` — bounded recent-decision memory for the active run.
 - `STS2AIAgent/Llm/IJevClient.cs` / `STS2AIAgent/Llm/JevClient.cs` / `STS2AIAgent/Llm/JevTypes.cs` — TypeSafe Jev HTTP client (pooled connection, URL validation, a 429 retried at most once within the turn budget, each attempt billed separately, credentials redacted from errors).
+- `STS2AIAgent/Llm/JevEndpoint.cs` — Godot-free fast-judgment address rules and the provider preset table (URL, format, models, docs/key links): a service root still gets `/v1/systemone` appended; an address ending in `/systemone` or `/decisions`, or a Cloudflare `/ai/run/` URL, is used as written; an unfilled `{placeholder}` is a configuration error.
+- `STS2AIAgent/Llm/JevProtocol.cs` — the two fast-judgment wire formats: `systemone` (sent as is; Cloudflare's `{result, success, errors}` wrapper unwrapped) and `openai_decisions` (named question/answer lists, `predicate` ↔ `noul`), both read back into the System One `JevResponse`.
 
 ### Flows
 - **Turn:** `StartAutoPlay` → `AutoPlaySession.TryStart(AutoPlayLoopAsync)` → `AutoPlayRecovery.RunAsync` takes `_turnGate` → snapshot (bounded game-thread read) → `CurrentRunBoundary.Check` → session observe → `TryCompanionImmediateAsync` → `AgentLoop.PlayOnceAsync` → (dual-layer on and no pending instruction) `TryDecideWithJevAsync`, otherwise `PlayWithModelAsync` → `CompleteWithToolsAsync` → model calls `act` → `ExecuteActAsync` → `ActIndexValidator` against a fresh decision snapshot → `GameBridge.ActAsync` → `GameActionService.ExecuteAsync` → `AgentTurnResult` → commit (budget `Observe`, `ApplyPlayResult`, `RecordTurnReceipt`, decision log and session) → `Observe` (stop or backoff) → `afterTurn` (proactive chat, same gate). While the model request is in flight, `LlmRequest.OnReasoningDelta` → `AgentRuntime.ReportReasoningDelta` fills `LiveThoughtBuffer` (only when the player's switch is on), the overlay's 800 ms tick draws it, and the turn's own `finally` plus `AppendTurnTraces` clear it — so the streamed bubble yields to the recorded one and never outlives the turn.
@@ -278,7 +288,7 @@ one action runs at a time.
 | `choose_map_node` | `map.available_nodes[]` | `GetAvailableMapNodes` |
 | `claim_reward` / `resolve_rewards` | `reward.rewards[]` | `GetRewardButtons` |
 | `choose_reward_card` / `skip_reward_cards` | `reward.card_options[]` / `reward.alternatives[]` | `GetCardRewardOptions` / `GetCardRewardAlternativeButtons` |
-| `select_deck_card` | `selection.cards[]` | `GetDeckSelectionOptions` |
+| `select_deck_card` | `selection.cards[]` (the card grid's whole list, off-screen cards included) | `GetDeckSelectionCards` (`GetDeckSelectionOptions` stays the availability probe) |
 | `choose_rest_option` (+MEND target) | `rest.options[]` (+ `run.players[]`) | `GetRestOptionTargetIndices` |
 | `choose_event_option` | `event.options[]` (locked options included; a finished event has PROCEED at 0) | `eventModel.CurrentOptions` |
 | `buy_card` / `buy_relic` / `buy_potion` | `shop.cards[]` / `relics[]` / `potions[]` | `GetMerchant*Entries` |
@@ -301,6 +311,7 @@ one action runs at a time.
 ### Files
 - `STS2AIAgent/Game/GameActionService.cs` — **the dispatch table** (`ExecuteAsync` switch: the only thing kept in the base file), `ActionExecutionGate` lease, shared wait helpers.
 - `STS2AIAgent/Game/GameActionService.Combat.cs` — `play_card`, `end_turn`, `use_potion`/`discard_potion` (+ `ResolvePotionTarget`), in-combat card selection, `TryCancelRunningPlayerAction`.
+- `STS2AIAgent/Game/GameActionService.CardGrid.cs` — `select_deck_card` on a card the grid has not drawn: scrolls it into view (mouse wheel, then scroll controls), else a hidden holder or the screen's click handler, else 409 `card_not_reachable` (#218).
 - `STS2AIAgent/Game/GameActionService.Rewards.cs` — `claim_reward`, `resolve_rewards` / `collect_rewards_and_proceed` (stops at a card choice unless given an explicit `option_index`), `choose_reward_card`, `skip_reward_cards`, bundles, deck selection.
 - `STS2AIAgent/Game/GameActionService.Rooms.cs` — events, rest site, chest and treasure relics, crystal sphere, capstone screens, `proceed`.
 - `STS2AIAgent/Game/GameActionService.Shop.cs` — open/close the shop, buy card/relic/potion, card removal.
@@ -319,6 +330,7 @@ one action runs at a time.
 - `STS2AIAgent/Game/PartyInventoryReader.cs` — reads one part of a player's inventory for `run.players[]`: null on a failed read, throttled warning.
 - `STS2AIAgent/Game/CombatTurnReadinessPolicy.cs` — when the player's combat turn is ready for input.
 - `STS2AIAgent/Game/CrystalSphereSettlePolicy.cs` — crystal sphere reveal settle rule.
+- `STS2AIAgent/Game/CardGridCandidatePolicy.cs` — recovers a card grid's whole card list from its on-screen window and picks the scroll direction and click handler for an off-screen card (#218).
 - `STS2AIAgent/Game/CardGridSelectionPolicy.cs` — card-grid selection counts and confirmation eligibility, including the nonempty deck-enchantment minimum.
 - `STS2AIAgent/Game/FtueModalPolicy.cs` — first-time-user modals that block actions and how to clear them.
 - `STS2AIAgent/Game/UnlockConfirmResolutionPolicy.cs` — unlock-confirm screen resolution.

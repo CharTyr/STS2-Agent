@@ -36,18 +36,21 @@ internal static class HelpCard
 
         var text = UiFactory.Wrapped(help, UiFactory.FontCaption, muted: false);
         text.SizeFlagsHorizontal = Control.SizeFlags.ExpandFill;
+        // A well under the title, not a raised box: it used the window's style, which gave a
+        // paragraph of help the window's own border and drop shadow inside the card.
         var panel = new PanelContainer
         {
             MouseFilter = Control.MouseFilterEnum.Ignore,
             SizeFlagsHorizontal = Control.SizeFlags.ExpandFill,
             Visible = Open.Contains(key)
         };
-        UiFactory.TagSurface(panel, UiFactory.SurfaceRole.ChromeRaised, 6);
+        UiFactory.TagSurface(panel, UiFactory.SurfaceRole.Inset, UiFactory.RadiusControl);
         panel.AddChild(text);
 
         var button = UiFactory.Button("?", null, UiFactory.ButtonKind.Ghost);
-        button.CustomMinimumSize = new Vector2(28, 0);
+        button.CustomMinimumSize = new Vector2(26, 26);
         button.SizeFlagsHorizontal = Control.SizeFlags.ShrinkEnd;
+        button.SizeFlagsVertical = Control.SizeFlags.ShrinkCenter;
         button.TooltipText = Loc.T("说明");
         button.Pressed += () =>
         {

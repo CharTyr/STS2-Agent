@@ -82,6 +82,7 @@ internal sealed partial class AgentOverlayHost
         if (_deleteWarning != null)
         {
             _deleteWarning.Text = message;
+            _deleteWarning.Visible = !string.IsNullOrEmpty(message);
         }
     }
 
@@ -151,7 +152,12 @@ internal sealed partial class AgentOverlayHost
 
     private void ResetSessionStatsFromUi()
     {
-        AgentRuntime.Instance.TryResetSessionStats(out _);
+        AgentRuntime.Instance.TryResetSessionStats(out var message);
+        if (_sessionToolsStatus != null && GodotObject.IsInstanceValid(_sessionToolsStatus))
+        {
+            UiFactory.SetStatusLine(_sessionToolsStatus, message);
+        }
+
         RefreshDynamic();
     }
 

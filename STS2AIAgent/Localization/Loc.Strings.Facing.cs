@@ -9,7 +9,7 @@ internal static partial class Loc
     {
         map["设置已变更，等待队友确认…"] = "Settings changed; waiting for the teammate…";
         map["配置已变更，请重新测试。"] = "Settings changed; test again.";
-        map["配置已填写，但主模型尚未验证。在「设置」页点「检测游玩模型」做一次真实调用；连通与工具调用通过后，即可开始自动游玩或邀请队友。"] = "Settings are filled in, but the main model is unverified. In Settings, click Test play model for a real request. Once connectivity and tool calling pass, you can start auto-play or invite a teammate.";
+        map["配置已填写，但主模型尚未验证。在「设置」页点「测试主模型」做一次真实调用；连通与工具调用通过后，即可开始自动游玩或邀请队友。"] = "Settings are filled in, but the main model is unverified. In Settings, click Test main model for a real request. Once connectivity and tool calling pass, you can start auto-play or invite a teammate.";
         map["队友模式"] = "Teammate mode";
         map["已有测试在进行，请稍候或取消。"] = "A test is running; wait or cancel it.";
         map["该模型不支持工具调用，无法自动游玩。请换模型再测。"] = "This model has no tool calling and cannot auto-play. Pick another and test again.";
@@ -34,17 +34,26 @@ internal static partial class Loc
         map["已取消或超时，配置已保留。"] = "Cancelled or timed out; settings kept.";
         map["已取消。"] = "Cancelled.";
         map["测试主模型"] = "Test main model";
-        map["取消"] = "Cancel";
+        map["取消测试"] = "Cancel test";
+        map["去游玩"] = "Go play";
+        map["去设置"] = "Open settings";
+        map["还没配置模型"] = "No model set up yet";
+        map["接口地址无效"] = "Invalid API URL";
+        map["模型测试没通过"] = "Model test failed";
+        map["模型不支持工具调用"] = "Model has no tool calling";
+        map["模型还没测试"] = "Model not tested yet";
         map["AI 自动游玩"] = "AI auto-play";
         map["外部 Agent"] = "External Agent";
         map["手动选队友角色"] = "Pick teammate character";
-        map["外部 Agent 模式：队友入队后等待接管，不会自己出牌。"] = "External mode: the teammate waits to be taken over and will not play on its own.";
+        map["队友接口：{0}\n用 GET /state 读局面、POST /action 出牌，只能操作队友自己的角色。完整说明见 docs/api.md。"] =
+            "Teammate API: {0}\nRead the game with GET /state and act with POST /action; only the teammate's own character can be controlled. See docs/api.md for the full contract.";
+        map["外部 Agent 模式：队友入队后等待接管，不会自己出牌；入队后这里会显示它的接口地址。"] = "External mode: the teammate waits to be taken over and will not play on its own; once it joins, its API address appears here.";
         map["在主菜单邀请，队友会自动选角并游玩。"] = "Invite from the main menu; the teammate picks a character and plays.";
         map["在主菜单邀请，到第二窗口为队友选角色。"] = "Invite from the main menu, then pick the teammate's character in the second window.";
         map["复制诊断"] = "Copy diagnostics";
         map["保存诊断"] = "Save diagnostics";
         map["诊断已保存：{0}"] = "Diagnostics saved: {0}";
-        map["这是本地队友存档。已阻止会损坏存档的原生读档，请在模组多人页点击「继续上次联机对局」。"] = "This is a local teammate save. The unsafe native load was blocked. Use Continue last co-op run on the mod multiplayer page.";
+        map["这是本地队友存档。已阻止会损坏存档的原生读档，请在模组「游玩 → 多人」页点「继续联机存档」。"] = "This is a local teammate save. The unsafe native load was blocked. Press “Continue co-op save” under the mod's Play → Multiplayer page.";
         // Session view headlines, details and next-step hints (Agent/PlayerFacingSession.cs).
         map["队友窗口已退出"] = "Teammate window closed";
         map["关闭残留窗口，回主菜单重新邀请。"] =
@@ -165,13 +174,13 @@ internal static partial class Loc
             "Invalid API URL; enter a full HTTP(S) address.";
 
         // Session budget copy (Config/SessionBudgetLimits.cs).
-        map["重置统计"] = "Reset stats";
-        map["Jev {0} 次 · LLM 接手 {1} 次"] = "Jev {0} · LLM took over {1}";
+        map["清零计数"] = "Clear counters";
+        map["快速判断 {0} 次 · LLM 接手 {1} 次"] = "Fast judgment {0} · LLM took over {1}";
         map["会话预算必须是正整数；留空或 0 表示不限。已保留原来的安全上限。"] =
             "The session budget must be a positive whole number; leave it blank or 0 for unlimited. Your previous safe limit was kept.";
-        map["到「设置」勾选「显示高级选项」调高上限，或点「重置统计」后再点「继续游玩」。重置只清零本会话计数，不改预算上限。"] =
-            "Tick “Show advanced options” under “Settings” to raise the limit, or press “Reset stats” and then “Resume”. Resetting only clears this session's counters; the limit stays.";
-        map["自动游玩进行中不能重置统计。请先暂停，再点「重置统计」，或到「设置」调高上限。"] =
-            "Stats cannot be reset while auto-play is running. Pause first, then press “Reset stats”, or raise the limit in “Settings”.";
+        map["点「清零计数」后再继续游玩；想一次玩更久，到「设置」调高「请求上限」。清零只重置本次会话的计数，不改上限。"] =
+            "Press “Clear counters”, then resume play; to play longer at a time, raise “Request limit” in “Settings”. Clearing only resets this session's counters; the limit stays.";
+        map["自动游玩还在收尾，暂停后才能点「清零计数」；也可以到「设置」调高「请求上限」。"] =
+            "Auto-play is still finishing; pause before pressing “Clear counters”, or raise “Request limit” in “Settings”.";
     }
 }

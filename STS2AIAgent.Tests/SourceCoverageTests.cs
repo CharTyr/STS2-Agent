@@ -43,6 +43,9 @@ internal static class SourceCoverageTests
         "STS2AIAgent/Game/GameStateService.CombatRisks.cs",
         "STS2AIAgent/Game/GameStateService.Payloads.cs",
         "STS2AIAgent/Game/GameActionService.cs",
+        // select_deck_card on a card the grid has not drawn (#218), split out of
+        // GameActionService.Rewards.cs for the size budget. It drives Godot input and nodes.
+        "STS2AIAgent/Game/GameActionService.CardGrid.cs",
         "STS2AIAgent/Game/GameActionService.Combat.cs",
         "STS2AIAgent/Game/GameActionService.Coop.cs",
         "STS2AIAgent/Game/GameActionService.Embark.cs",
@@ -94,6 +97,9 @@ internal static class SourceCoverageTests
         // The conversation card (chat log rendering, scroll-to-bottom, the chat-side option row). A
         // Godot control builder, unlinked like the pages file it was split out of.
         "STS2AIAgent/Ui/AgentOverlayHost.ChatCard.cs",
+        // The session card (spend, decision log, counter and diagnostics buttons). A Godot control
+        // builder split out of the pages file, so it stays unlinked like it.
+        "STS2AIAgent/Ui/AgentOverlayHost.Session.cs",
         // The play page's solo/multiplayer mode switch. A Godot control, so it stays unlinked like the
         // overlay host it serves.
         "STS2AIAgent/Ui/SegmentedSwitch.cs",
@@ -109,6 +115,9 @@ internal static class SourceCoverageTests
         // The card with a "?" help panel behind its title. A Godot control builder, unlinked like the
         // factory whose card it wraps.
         "STS2AIAgent/Ui/HelpCard.cs",
+        // The embedded provider logos behind the fast-judgment picker; decodes through Godot's Image.
+        "STS2AIAgent/Ui/JevProviderIcons.cs",
+        "STS2AIAgent/Ui/AgentOverlayHost.JevSettings.cs",
         "STS2AIAgent/Ui/AgentOverlayHost.FormHelpers.cs",
         "STS2AIAgent/Ui/AgentOverlayHost.SettingsSave.cs",
         "STS2AIAgent/Game/GameDataExportService.cs",
@@ -120,6 +129,11 @@ internal static class SourceCoverageTests
         "STS2AIAgent/Multiplayer/CoopSaveProbe.cs",
         "STS2AIAgent/Server/HttpServer.cs",
         "STS2AIAgent/Ui/UiFactory.cs",
+        // The factory's status helpers and input controls, split out in the 2026-10-27 visual pass,
+        // and the Godot Theme the overlay host carries. All three build Godot resources.
+        "STS2AIAgent/Ui/UiFactory.Status.cs",
+        "STS2AIAgent/Ui/UiFactory.Inputs.cs",
+        "STS2AIAgent/Ui/OverlayGodotTheme.cs",
         "STS2AIAgent/Game/GameThread.cs",
         "STS2AIAgent/Localization/LocSource.cs",
         "STS2AIAgent/ModEntry.cs",

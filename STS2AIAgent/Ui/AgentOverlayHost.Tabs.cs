@@ -27,7 +27,7 @@ internal sealed partial class AgentOverlayHost
     /// <summary>The built page per tab id, and the tab currently shown. Tab state stays with the tab code.</summary>
     private readonly Dictionary<string, Control> _pages = new(StringComparer.Ordinal);
     private string _tab = OverlayTabCatalog.Play;
-    private HFlowContainer? _tabRow;
+    private HBoxContainer? _tabRow;
 
     /// <summary>
     /// Builds every tab in <see cref="OverlayTabCatalog"/> order. One loop rather than one line per
@@ -69,9 +69,23 @@ internal sealed partial class AgentOverlayHost
         if (_tab == OverlayTabCatalog.Settings && tab != OverlayTabCatalog.Settings)
         {
             FlushSettingsIfDirty();
+            // A save that failed (a bad budget, an unparseable URL, a read-only file) leaves the form
+            // dirty with its reason in the footer. Leaving the page used to hide that reason and drop
+            // the edits without a word, so the player stays here until it is fixed or saved.
+            if (_settingsDirty)
+            {
+                return;
+            }
         }
 
         _tab = tab;
+        if (tab == OverlayTabCatalog.Play && _offerGoPlay)
+        {
+            // The offer has been taken; it does not need to wait on the footer for the next visit.
+            _offerGoPlay = false;
+            RefreshModelTestControls();
+        }
+
         foreach (var (id, page) in _pages)
         {
             page.Visible = string.Equals(id, tab, StringComparison.Ordinal);
@@ -87,27 +101,26 @@ internal sealed partial class AgentOverlayHost
     }
 
     /// <summary>
-    /// The header row: one button per tab, the selected one drawn as a filled pill instead of the
-    /// same grey slab as its five neighbours.
+    /// The tab row: one underlined tab per page, sharing the panel's width.
     /// </summary>
     /// <remarks>
     /// The row is rebuilt rather than restyled when the tab changes, because a Godot
-    /// <c>StyleBox</c> is set per control and swapping six buttons is cheaper to read than mutating
-    /// six sets of overrides in place. It is six controls on a click, not a per-frame cost.
+    /// <c>StyleBox</c> is set per control and swapping the buttons is cheaper to read than mutating
+    /// their overrides in place. It is a couple of controls on a click, not a per-frame cost.
+    ///
+    /// A plain row with equal columns rather than the flow container six tabs needed: with two tabs
+    /// the flow left two small pills at the left edge and an empty bar beside them, and the
+    /// underline reads as one bar across the window only when the tabs fill it. If more tabs are
+    /// added and stop fitting, bring the flow container back.
     /// </remarks>
     private Control BuildTabs()
     {
-        // A flow container rather than a row: six labels fit on one line in Chinese and do not in
-        // English ("AI teammate" + "Decisions" are both wide), and the sixth tab was being clipped to
-        // "决策日" before this. Wrapping costs a second line on the languages that need it and
-        // nothing on the ones that do not.
-        _tabRow = new HFlowContainer
+        _tabRow = new HBoxContainer
         {
             MouseFilter = Control.MouseFilterEnum.Ignore,
             SizeFlagsHorizontal = Control.SizeFlags.ExpandFill
         };
-        _tabRow.AddThemeConstantOverride("h_separation", UiFactory.SpaceXs);
-        _tabRow.AddThemeConstantOverride("v_separation", UiFactory.SpaceXs);
+        _tabRow.AddThemeConstantOverride("separation", 0);
         RebuildTabButtons();
         return _tabRow;
     }
@@ -131,9 +144,8 @@ internal sealed partial class AgentOverlayHost
                 OverlayTabCatalog.Label(tab.Id),
                 string.Equals(tab.Id, _tab, StringComparison.Ordinal),
                 () => ShowTab(tab.Id));
-            // Natural width, so the flow container can decide where the line breaks. Stretching them
-            // into equal columns is what pushed the last label off the edge.
-            button.SizeFlagsHorizontal = Control.SizeFlags.ShrinkBegin;
+            // Equal columns: the underline runs the width of the window, split between the tabs.
+            button.SizeFlagsHorizontal = Control.SizeFlags.ExpandFill;
             _tabRow.AddChild(button);
         }
     }

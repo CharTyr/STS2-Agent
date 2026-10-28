@@ -65,6 +65,6 @@ Built against Slay the Spire 2 v0.111.0; later versions require compatibility ve
 
 基于《杀戮尖塔 2》v0.111.0 开发；后续版本需要兼容性验证。
 
-New installs have a visible 30-request auto-play limit; 0 or empty means unlimited. Tests also call your provider. Request/token counts are not a bill. Proactive chat is off by default.
+New installs have a visible 1,500-request auto-play limit (about one full run); 0 or empty means unlimited. Tests also call your provider. Request/token counts are not a bill. Proactive chat is off by default.
 
-新安装默认限制自动游玩 30 次请求，可调整；0 或留空表示不限。检测也会调用模型。请求/Token 统计不等于账单。主动发言默认关闭。
+新安装默认限制自动游玩 1500 次请求（大约一整局），可调整；0 或留空表示不限。检测也会调用模型。请求/Token 统计不等于账单。主动发言默认关闭。

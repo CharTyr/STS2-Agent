@@ -44,6 +44,10 @@ internal sealed class OverlayOverflowSentinel
 
     private static void CollectWide(Node node, float limit, List<string> lines)
     {
+        // Tooltip and dropdown windows float outside the panel: their contents do not participate
+        // in its layout, even when Godot attaches them below the control that opened them.
+        if (node is Window) return;
+
         if (node is Control control)
         {
             // A hidden subtree takes no width, so neither it nor its children can be an offender.

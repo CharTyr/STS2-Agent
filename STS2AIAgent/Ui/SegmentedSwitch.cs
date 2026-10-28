@@ -5,20 +5,23 @@ using Godot;
 namespace STS2AIAgent.Ui;
 
 /// <summary>
-/// A two-or-more-way exclusive switch drawn as a row of segment buttons, exactly one of them filled.
+/// A two-or-more-way exclusive switch drawn as segments in a groove, exactly one of them lifted.
 /// </summary>
 /// <remarks>
 /// The play page uses this for its solo/multiplayer mode switch. It is a small Godot control rather
 /// than a factory-local lambda because the selection has to be re-drawn when the underlying setting
 /// changes without a rebuild (the overlay's <c>RefreshDynamic</c> repaints live controls), and a
-/// dedicated type gives that re-draw somewhere to live. The segments reuse
-/// <see cref="UiFactory.TabButton"/>'s active/idle styling, so the selected segment reads the same
-/// way the selected tab does.
+/// dedicated type gives that re-draw somewhere to live.
+///
+/// The segments used to be the header tabs' filled accent pills, so the top of the play page was two
+/// rows of the same bright bar. A groove with one lifted segment reads as "pick one of these" and
+/// leaves the accent to the page's primary action.
 /// </remarks>
-internal sealed partial class SegmentedSwitch : HBoxContainer
+internal sealed partial class SegmentedSwitch : PanelContainer
 {
     private readonly IReadOnlyList<string> _options;
     private readonly Action<int>? _onSelected;
+    private readonly HBoxContainer _row;
     private int _selected;
 
     public SegmentedSwitch(IReadOnlyList<string> options, int selected, Action<int>? onSelected)
@@ -33,11 +36,14 @@ internal sealed partial class SegmentedSwitch : HBoxContainer
         _selected = Math.Clamp(selected, 0, options.Count - 1);
         MouseFilter = MouseFilterEnum.Ignore;
         SizeFlagsHorizontal = SizeFlags.ExpandFill;
-        AddThemeConstantOverride("separation", UiFactory.SpaceXs);
+        UiFactory.TagSurface(this, UiFactory.SurfaceRole.Track);
+        _row = new HBoxContainer { MouseFilter = MouseFilterEnum.Ignore };
+        _row.AddThemeConstantOverride("separation", 2);
+        AddChild(_row);
         Rebuild();
     }
 
-    /// <summary>The index of the filled segment.</summary>
+    /// <summary>The index of the lifted segment.</summary>
     public int Selected => _selected;
 
     /// <summary>Re-draws the selection without firing the callback. Used by the live refresh pass.</summary>
@@ -55,18 +61,18 @@ internal sealed partial class SegmentedSwitch : HBoxContainer
 
     private void Rebuild()
     {
-        foreach (var child in GetChildren())
+        foreach (var child in _row.GetChildren())
         {
-            RemoveChild(child);
+            _row.RemoveChild(child);
             child.QueueFree();
         }
 
         for (var i = 0; i < _options.Count; i++)
         {
             var index = i;
-            var button = UiFactory.TabButton(_options[index], index == _selected, () => Select(index));
+            var button = UiFactory.SegmentButton(_options[index], index == _selected, () => Select(index));
             button.SizeFlagsHorizontal = SizeFlags.ExpandFill;
-            AddChild(button);
+            _row.AddChild(button);
         }
     }
 

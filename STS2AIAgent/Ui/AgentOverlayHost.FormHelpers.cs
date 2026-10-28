@@ -36,10 +36,19 @@ internal sealed partial class AgentOverlayHost
         var text = UiFactory.Wrapped(label, 13);
         text.CustomMinimumSize = new Vector2(160, 0);
         text.SizeFlagsHorizontal = Control.SizeFlags.Fill;
+        if (child is OptionButton combo) BoundRowCombo(combo);
         child.SizeFlagsHorizontal = Control.SizeFlags.ExpandFill;
         row.AddChild(text);
         row.AddChild(child);
         return row;
+    }
+
+    /// <summary>Keep a dropdown in a shared row inside the panel; its popup still shows full names.</summary>
+    private static void BoundRowCombo(OptionButton combo)
+    {
+        combo.ClipText = true;
+        combo.FitToLongestItem = false;
+        combo.CustomMinimumSize = new Vector2(80, 0);
     }
 
     private static OptionButton FillModelCombo(AgentSettings settings, string? selectedId, bool includeEmpty)
@@ -119,6 +128,45 @@ internal sealed partial class AgentOverlayHost
         }
 
         combo.Selected = 0;
+    }
+
+    /// <summary>
+    /// A drop-down that shows readable labels and stores ids: each item carries its id as metadata, so
+    /// <see cref="SelectedMetadata"/> reads back the stored value whatever language the label is in.
+    /// </summary>
+    /// <remarks>
+    /// An id the list does not know stays visible as its own item, for the same reason
+    /// <see cref="SelectByText"/> keeps one: falling back to the first item would rewrite the setting
+    /// on the next save without the player having touched it.
+    /// </remarks>
+    private static OptionButton ChoiceCombo(IReadOnlyList<(string Id, string Label)> choices, string? selectedId)
+    {
+        var combo = UiFactory.Combo();
+        foreach (var (id, label) in choices)
+        {
+            combo.AddItem(label);
+            combo.SetItemMetadata(combo.ItemCount - 1, id);
+        }
+
+        for (var i = 0; i < choices.Count; i++)
+        {
+            if (string.Equals(choices[i].Id, selectedId, StringComparison.OrdinalIgnoreCase))
+            {
+                combo.Selected = i;
+                return combo;
+            }
+        }
+
+        if (!string.IsNullOrWhiteSpace(selectedId))
+        {
+            combo.AddItem(selectedId);
+            combo.SetItemMetadata(combo.ItemCount - 1, selectedId);
+            combo.Selected = combo.ItemCount - 1;
+            return combo;
+        }
+
+        combo.Selected = choices.Count > 0 ? 0 : -1;
+        return combo;
     }
 
     private static void SelectByText(OptionButton combo, string? value)

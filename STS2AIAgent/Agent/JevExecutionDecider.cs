@@ -42,13 +42,35 @@ internal sealed class JevExecutionDecider : IActionDecider
     private readonly TimeSpan _turnTimeout;
     private readonly Func<int, bool>? _allowAttempt;
     private readonly Func<TimeSpan, CancellationToken, Task> _delay;
+    private readonly Func<DateTimeOffset> _now;
+
+    /// <summary>Consecutive provider failures that pause the fast-judgment layer.</summary>
+    internal const int BreakerThreshold = 3;
+
+    /// <summary>First pause after <see cref="BreakerThreshold"/> failures; doubles per re-trip up to <see cref="MaxBreakerCooldown"/>.</summary>
+    internal static readonly TimeSpan FirstBreakerCooldown = TimeSpan.FromSeconds(60);
+
+    internal static readonly TimeSpan MaxBreakerCooldown = TimeSpan.FromMinutes(10);
+
+    private readonly object _breakerGate = new();
+    private int _consecutiveFailures;
+    private int _trips;
+    private DateTimeOffset _pausedUntil = DateTimeOffset.MinValue;
 
     /// <param name="turnTimeout">Total deadline covering both HTTP attempts and the intervening backoff.</param>
     /// <param name="allowAttempt">Called before each send with attempts already made (0 or 1).
     /// Check the budget against those pending attempts; a denied call sends nothing.</param>
+    /// <param name="now">Clock for the failure breaker; injectable so a test can step past a pause.</param>
+    /// <remarks>
+    /// The breaker exists because a dead service otherwise costs every single action the full turn
+    /// deadline (90 seconds by default) before the LLM takes over. After <see cref="BreakerThreshold"/>
+    /// provider failures in a row the decider answers "paused" at once, so the LLM plays without the
+    /// wait, and tries the service again when the pause ends. A changed configuration builds a new
+    /// decider, so fixing the key or address takes effect on the next action.
+    /// </remarks>
     public JevExecutionDecider(IJevClient client, string model,
         TimeSpan? turnTimeout = null, Func<int, bool>? allowAttempt = null,
-        Func<TimeSpan, CancellationToken, Task>? delay = null)
+        Func<TimeSpan, CancellationToken, Task>? delay = null, Func<DateTimeOffset>? now = null)
     {
         _client = client;
         _model = string.IsNullOrWhiteSpace(model) ? "jev-latest" : model;
@@ -56,6 +78,37 @@ internal sealed class JevExecutionDecider : IActionDecider
             ? timeout : TimeSpan.FromSeconds(90);
         _allowAttempt = allowAttempt;
         _delay = delay ?? Task.Delay;
+        _now = now ?? (() => DateTimeOffset.UtcNow);
+    }
+
+    /// <summary>When the breaker is open, the moment the service is tried again; otherwise null.</summary>
+    internal DateTimeOffset? PausedUntil
+    {
+        get { lock (_breakerGate) return _now() < _pausedUntil ? _pausedUntil : null; }
+    }
+
+    private void RecordProviderFailure()
+    {
+        lock (_breakerGate)
+        {
+            _consecutiveFailures++;
+            if (_consecutiveFailures < BreakerThreshold) return;
+            var cooldown = TimeSpan.FromTicks(Math.Min(MaxBreakerCooldown.Ticks,
+                FirstBreakerCooldown.Ticks << Math.Min(_trips, 8)));
+            _trips++;
+            _consecutiveFailures = 0;
+            _pausedUntil = _now() + cooldown;
+        }
+    }
+
+    private void RecordProviderSuccess()
+    {
+        lock (_breakerGate)
+        {
+            _consecutiveFailures = 0;
+            _trips = 0;
+            _pausedUntil = DateTimeOffset.MinValue;
+        }
     }
 
     public async Task<ExecutionDecision> DecideAsync(
@@ -67,6 +120,11 @@ internal sealed class JevExecutionDecider : IActionDecider
         if (options.Count == 0)
         {
             return new ExecutionDecision { Error = "no legal options on this frame" };
+        }
+
+        if (PausedUntil is { } resume)
+        {
+            return new ExecutionDecision { Error = $"jev paused after repeated failures until {resume:HH:mm:ss}Z" };
         }
 
         var request = BuildRequest(snapshotJson, options, strategy);
@@ -107,6 +165,7 @@ internal sealed class JevExecutionDecider : IActionDecider
                     var backoff = JevClient.DefaultRetryDelay(seconds);
                     if (backoff >= _turnTimeout - started.Elapsed)
                     {
+                        RecordProviderFailure();
                         return new ExecutionDecision
                         {
                             Error = "jev rate limit exceeded the turn deadline",
@@ -129,6 +188,7 @@ internal sealed class JevExecutionDecider : IActionDecider
         }
         catch (OperationCanceledException)
         {
+            RecordProviderFailure();
             return new ExecutionDecision
             {
                 Error = "jev provider request timed out",
@@ -138,6 +198,7 @@ internal sealed class JevExecutionDecider : IActionDecider
         }
         catch (JevException ex)
         {
+            RecordProviderFailure();
             return new ExecutionDecision
             {
                 Error = $"jev {ex.Kind}: {DiagnosticExport.Redact(ex.Message)}",
@@ -146,6 +207,7 @@ internal sealed class JevExecutionDecider : IActionDecider
             };
         }
 
+        RecordProviderSuccess();
         var elapsed = started.ElapsedMilliseconds;
         var usage = ToUsage(response.Usage);
         if (response.Answers == null

@@ -25,7 +25,7 @@ internal static partial class Loc
         // The per-stage turn phases (Agent/PlayPhases.cs).
         map["正在读取游戏状态…"] = "Reading the game state…";
         map["正在等待游戏可操作…"] = "Waiting for the game to become actionable…";
-        map["正在请求 Jev 执行层…"] = "Asking the Jev execution layer…";
+        map["正在请求快速判断…"] = "Asking fast judgment…";
         map["正在执行动作…"] = "Executing the action…";
         // The elapsed-time suffix the status line grows while a turn sits in one stage
         // (Agent/AgentRuntime.cs, StatusWithElapsed).
@@ -38,11 +38,11 @@ internal static partial class Loc
         map["确认阻挡操作的教学弹窗。"] = "Confirmed the tutorial popup that was blocking the action.";
 
         // Jev execution-model configuration check (Agent/AgentRuntime.Jev.cs).
-        map["未配置 Jev API Key。"] = "No Jev API key configured.";
-        map["未配置 Jev Base URL。"] = "No Jev base URL configured.";
-        map["Jev 配置已就绪（{0}）。连接测试将随双层决策引擎一同提供。"] =
-            "Jev is configured ({0}). A live connection test ships with the dual-layer engine.";
-        map["Jev 连接失败：{0}"] = "Jev connection failed: {0}";
+        map["未配置快速判断 API Key。"] = "No fast-judgment API key configured.";
+        map["未配置快速判断地址。"] = "No fast-judgment URL configured.";
+        map["快速判断配置已就绪（{0}）。连接测试将随双层决策引擎一同提供。"] =
+            "Fast judgment is configured ({0}). A live connection test ships with the dual-layer engine.";
+        map["快速判断连接失败：{0}"] = "Fast-judgment connection failed: {0}";
         // The per-model connection test (Agent/AgentRuntime.ModelTest.cs).
         map["找不到该模型。"] = "That model could not be found.";
         map["该模型绑定的端点不可用。"] = "The endpoint this model is bound to is unavailable.";
@@ -96,8 +96,8 @@ internal static partial class Loc
         map["已收到游玩指令，将在同一局的下一次决策中生效。"] = "Guidance received; it will apply to the next decision in this run.";
         map["请求失败：{0}"] = "Request failed: {0}";
         map["自动游玩进行中。请先暂停，再对话或代打。"] = "Auto-play is running. Pause it before you chat or have the AI play for you.";
-        map["自动游玩进行中，不能清零本会话统计。请先暂停。暂停/继续不会清零累计。"] = "Auto-play is running, so session stats cannot be reset. Pause first. Pause and Resume do not clear the totals.";
-        map["已清零本会话统计。预算上限未改；继续游玩将重新计数。"] = "Session stats cleared. The budget limit is unchanged; resuming counts from zero.";
+        map["自动游玩进行中，不能清零计数。请先暂停；暂停和继续不会清零。"] = "Auto-play is running, so the counters cannot be cleared. Pause first; pausing and resuming do not clear them.";
+        map["已清零本次会话的计数。上限未改，继续游玩会重新计数。"] = "This session's counters are cleared. The limit is unchanged; resuming counts from zero.";
 
         // Model test, connection and settings.
         map["正在测试模型…会向配置的服务发送测试请求。"] = "Testing the model… a test request will be sent to the configured service.";

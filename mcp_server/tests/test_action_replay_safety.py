@@ -234,7 +234,7 @@ class ActionReplaySafetyTests(unittest.TestCase):
         self.assertEqual(raised.exception.message, "action rejected")
 
     def test_action_timeout_covers_the_longest_server_wait(self) -> None:
-        self.assertGreaterEqual(Sts2Client()._action_timeout, 60.0)
+        self.assertGreaterEqual(Sts2Client(base_url="http://127.0.0.1:8080")._action_timeout, 60.0)
 
     def test_continue_game_over_lost_response_posts_once_and_reconciles(self) -> None:
         self._execute_uncertain_action(

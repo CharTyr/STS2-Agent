@@ -261,7 +261,7 @@ internal sealed partial class AgentRuntime
     {
         if (!SessionBudgetLimits.CanResetSessionStats(PlayRunning, PlayPhase) || Volatile.Read(ref _strategyRefreshInFlight) != 0)
         {
-            message = Loc.T("自动游玩进行中，不能清零本会话统计。请先暂停。暂停/继续不会清零累计。");
+            message = Loc.T("自动游玩进行中，不能清零计数。请先暂停；暂停和继续不会清零。");
             SetStatus(message);
             RaiseChanged();
             return false;
@@ -278,7 +278,7 @@ internal sealed partial class AgentRuntime
             _proactiveChat.Reset();
         }
 
-        message = Loc.T("已清零本会话统计。预算上限未改；继续游玩将重新计数。");
+        message = Loc.T("已清零本次会话的计数。上限未改，继续游玩会重新计数。");
         SetStatus(message);
         RaiseChanged();
         return true;
@@ -298,6 +298,9 @@ internal sealed partial class AgentRuntime
     public bool McpRunning => NativeMcpServer.Runtime?.Enabled == true;
 
     public string McpClientConfig => NativeMcpServer.FormatClientConfigJson(McpUrl ?? McpEndpointUrl());
+
+    /// <summary>The config for one MCP client, in its own format. See <see cref="NativeMcpServer.FormatClientConfig"/>.</summary>
+    public string McpClientConfigFor(string client) => NativeMcpServer.FormatClientConfig(client, McpUrl ?? McpEndpointUrl());
 
     public string SettingsPath => _store.Path;
 

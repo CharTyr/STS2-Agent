@@ -40,6 +40,45 @@ internal sealed partial class AgentLoop
         }
     }
 
+    /// <summary>
+    /// Whether a streamed <c>act</c> looks cut short by the provider rather than answered with a
+    /// deliberate omission.
+    /// </summary>
+    /// <remarks>
+    /// Measured live on 2026-10-28 against an OpenAI-compatible gateway: the streamed body carried
+    /// only the first fragment of the tool arguments (<c>{"action":"play_card"}</c>) and then ended
+    /// with <c>finish_reason=tool_calls</c>, while the non-streaming body of the same request carried
+    /// every field. The JSON is well formed, so nothing downstream can tell it apart from a model that
+    /// forgot an index, and three such turns stopped a run. Treat a missing index the action requires
+    /// as this truncation: the caller retries the turn once without streaming, exactly like the
+    /// existing toolless-stream demotion.
+    /// </remarks>
+    internal static bool LooksLikeTruncatedStreamedAct(string? argumentsJson)
+    {
+        try
+        {
+            using var args = ParseArgs(argumentsJson);
+            var action = ReadString(args, "action")?.Trim().ToLowerInvariant();
+            if (string.IsNullOrEmpty(action) || !ActIndexValidator.RequiresIndex(action))
+            {
+                return false;
+            }
+
+            return string.Equals(action, "play_card", StringComparison.OrdinalIgnoreCase)
+                ? ReadInt(args, "card_index") == null
+                : ReadInt(args, "option_index") == null;
+        }
+        catch (JsonException)
+        {
+            return false;
+        }
+    }
+
+    /// <summary>Whether an act rejection names an index the latest payload would have supplied.</summary>
+    internal static bool IsMissingIndexError(string? error) =>
+        !string.IsNullOrWhiteSpace(error) &&
+        error.Contains("must come from", StringComparison.OrdinalIgnoreCase);
+
     private static string? ReadString(JsonDocument document, string name)
     {
         if (!document.RootElement.TryGetProperty(name, out var value))

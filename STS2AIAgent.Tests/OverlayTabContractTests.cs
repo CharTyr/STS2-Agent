@@ -62,6 +62,27 @@ internal static class OverlayTabContractTests
     /// The overlay is organised around two modes of play rather than a tab per feature: the play page
     /// and the settings page. The catalog is the single place that order is decided.
     /// </summary>
+    /// <summary>
+    /// A settings save that fails keeps the player on the settings page, where the footer says why,
+    /// and an invite that needs the save sends them there instead of doing nothing.
+    /// </summary>
+    public static void FailedSaveKeepsTheSettingsPageOpen()
+    {
+        var overlay = AgentSourceFixture.ReadOverlayHost();
+        var show = AgentSourceFixture.MethodBody(overlay, "ShowTab");
+        var flush = show.IndexOf("FlushSettingsIfDirty();", StringComparison.Ordinal);
+        var stay = show.IndexOf("if (_settingsDirty)", StringComparison.Ordinal);
+        var switchTab = show.IndexOf("_tab = tab;", StringComparison.Ordinal);
+        Assert.True(flush >= 0 && stay > flush && switchTab > stay,
+            "Leaving settings must check the save result before switching tabs.");
+
+        foreach (var method in new[] { "LaunchDualAsync", "ContinueDualAsync" })
+        {
+            Assert.Contains("if (_settingsDirty) { ShowTab(OverlayTabCatalog.Settings); return; }",
+                AgentSourceFixture.MethodBody(overlay, method));
+        }
+    }
+
     public static void ExistingTabsKeepTheirOrder()
     {
         var ids = OverlayTabCatalog.Tabs.Select(tab => tab.Id).ToArray();
@@ -210,9 +231,9 @@ internal static class OverlayTabContractTests
         var plain = new DecisionLogEntry(6, "2026-09-24T00:00:05.0000000+00:00", "agent_loop", "end_turn", null, "fp", 1, 4000, "R1");
 
         var fallbackLine = DecisionLogView.FormatLine(fallback);
-        Assert.Contains("Jev 未提交", fallbackLine);
+        Assert.Contains("快速判断未提交", fallbackLine);
         Assert.Contains("LLM 接手", fallbackLine);
-        Assert.False(DecisionLogView.FormatLine(plain).Contains("Jev 未提交", StringComparison.Ordinal),
+        Assert.False(DecisionLogView.FormatLine(plain).Contains("快速判断未提交", StringComparison.Ordinal),
             "a plain LLM decision must not carry the fallback marker");
     }
 

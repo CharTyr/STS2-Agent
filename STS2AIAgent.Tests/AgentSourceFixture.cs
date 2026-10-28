@@ -79,6 +79,13 @@ internal static class AgentSourceFixture
     public static string ReadAgentRuntime() => ReadPartialClass("Agent", "AgentRuntime");
 
     /// <summary>
+    /// Every file that declares <c>UiFactory</c>, base file first. The status helpers and the input
+    /// controls moved to <c>UiFactory.Status.cs</c> and <c>UiFactory.Inputs.cs</c> in the 2026-10-27
+    /// visual pass.
+    /// </summary>
+    public static string ReadUiFactory() => ReadPartialClass("Ui", "UiFactory");
+
+    /// <summary>
     /// Reads every file declaring one partial class under <paramref name="directoryName"/>, base file
     /// first.
     /// </summary>

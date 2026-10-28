@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.17.0
 
 Game-dependent compilation succeeded on 2026-10-27 (Release, 0 warnings, 0 errors, after the CS0173 fix below). Only the tested subset passed live acceptance: access hardening, the overlay checks, the potion-slot reward flow, and the Steam-on dual-window no-model takeover and save-continue. Model-backed items (streaming chat, vision answers, teammate auto-play, DeepSeek variants, non-combat-only mode) could not run because of provider errors and were skipped by the maintainer's decision, so they have no live evidence; the Workshop zh-CN description was not verified, the 3-4 player and LAN checks were not run, and old/duplicate local mod copies, artifact fingerprints, the second-library Workshop install, dynamic-port discovery, handshake-failure paths and slow-child reconnection were not reported as checked. See [PRODUCT_PLAN_CURRENT.md](PRODUCT_PLAN_CURRENT.md).
 
@@ -8,6 +8,7 @@ Game-dependent compilation succeeded on 2026-10-27 (Release, 0 warnings, 0 error
 
 ### Added
 
+- 快速判断（Jev）支持多家服务：设置里新增带图标的服务商选择（TypeSafe、OpenRouter、OpenCode Zen、Command Code、Vercel、Upstage、Inception、Liquid AI、Cloudflare、OpenAI Decisions），选中后自动填地址、接口格式和模型，每家的 Key 分开记住，预设有多个模型时可下拉选择，并提供「获取 Key」「文档」链接。地址可填服务根地址（照旧补 `/v1/systemone`）或完整请求地址。新增 OpenAI Decisions 接口格式，Cloudflare 的 `result` 包装自动解开。连接测试改为真实发一次最小请求。连续 3 次请求失败后暂停快速判断（60 秒起，翻倍，最长 10 分钟），期间由 LLM 直接接手，游玩页显示暂停到何时。预设按各家文档整理，未用真实 Key 逐家实测。
 - Compile model verification and companion settings partials directly in an offline runtime harness. Controlled provider responses and submitted-action barriers cover cancellation, single-flight probes, stale results, authentication/tool failures, pause/apply/resume, failed persistence and fault recovery; this does not replace the game build or live co-op acceptance.
 - Add provider quick setup, a visible 30-request trial for new installations, and cancellable model testing (45-second deadline). Preserve existing unlimited choices. Require verified tool calling for auto-play.
 - Guard identified local co-op saves against native loading under a mismatched player identity. Add diagnostics file saving and a DLL build fingerprint. Update two-tab setup and usage instructions.
@@ -19,6 +20,18 @@ Game-dependent compilation succeeded on 2026-10-27 (Release, 0 warnings, 0 error
 
 ### Changed
 
+- **快速判断不再把「保存并退出」作为自动游玩的候选动作。** 实机战斗中快速模型曾选中该管理动作，使自动游玩提前停下；现在快速判断只考虑继续推进游戏的动作，手动和外部客户端的原有接口不受影响。
+- **新安装的默认请求上限从 30 次改为 1500 次，大约够打完一整局。** 30 次大约只够一场战斗（第四轮实机复测里一场战斗正好用完 30 次），新玩家打完第一场自动游玩就停了。1500 是按实测估算的：此前 1 到 3 层用了 52 次请求，三幕约 45 到 50 层、后期精英和 Boss 战更长，一整局约 800 到 1300 次，再留出重试和规划的余量。v0.16.2 及更早版本默认不限，所以已有配置不受影响。
+- **自动游玩因预算、配置错误或队友窗口退出而停下时，界面会明确说出来。** 标题栏多了「需处理」状态；悬浮窗隐藏时，边缘的 AI 按钮会变成警告色，鼠标悬停显示原因。单人页也会显示「下一步」（以前只有多人页有），按钮随之变为「继续游玩」；预算用完时，单人页直接出现「清零计数」按钮。
+- **快速配置更好上手。** 新增智谱 GLM、Kimi、通义千问、OpenRouter；每家选中后自动填一个常用模型，右边可下拉换其他常用模型，有「获取 Key」链接的会显示链接。切换服务商不再清空已填的 Key 和模型，切回来还在（只在本次打开设置页期间记住，保存的仍是当前服务商）。服务商、Key 或模型有改动时，点「保存设置」会自动测试一次，不用再单独点「测试主模型」；以前只保存不测试，游玩页会一直提示「模型还没测试」。模型列表按各家文档整理，没有逐家用真实 Key 实测。
+- **界面不再直接显示内部标识。** 单人卡片以前写「屏幕 MAIN_MENU · 动作 play_card」，现在显示「主菜单 · 最近动作：出牌」；决策记录的动作和来源也换成可读的名字（来源：快速判断 / LLM / 外部客户端）。API、模型和保存的日志仍用原来的标识。高级设置里的思考选项改成中文说明：端点上的「思考协议」改叫「思考参数格式」，选项为「自动（按模型名判断）」「DeepSeek 格式」「OpenAI 格式（reasoning_effort）」「不发思考参数」；模型上的同名设置改叫「思考参数格式（本模型）」，多了「跟随端点」，说明它会覆盖端点；思考强度显示为关闭 / 低 / 中 / 高。配置文件里已有的未知取值照常保留显示，不会被悄悄改掉。
+- **「双层决策（快速判断）」改名为「用快速判断出牌（LLM 只做规划）」**，没配快速判断时不再显示（已经勾上的仍然显示，方便关掉）。多人模式的这个开关从聊天框下面移到了队友控制旁边。
+- **外部 Agent 模式下，界面直接给出队友的接口地址。** 队友入队后，多人页的邀请卡片会显示 `http://127.0.0.1:<端口>`、该用哪两个接口，并有「复制地址」按钮；以前只能去主窗口的 `/health` 里找 `companion.api_port`。
+- **「重置统计」改名为「清零计数」，并和「复制诊断」「保存诊断」一起移到游玩页底部的会话卡片上**，单人、多人模式都能用，操作结果显示在按钮旁边。以前这三个按钮只在多人页，单人玩家要导出诊断只能切到多人，而切换模式会暂停游玩。预算停下后的提示不再说要「勾选显示高级选项」，因为快速配置卡里就有「请求上限」。
+- Overlay visual pass: the window draws its scroll bars, drop-down lists, tooltips and check boxes (now switches) in the selected theme instead of the engine's grey defaults, and uses one system UI font with bold headings. Cards are separated by fill with a hairline edge, and nothing inside the window casts a shadow (the title bar and help panels carried the window's own). The accent is kept for the primary button, the selected tab's underline and switches. Tabs are underlined, the solo/multiplayer and MCP client switches are grooved segments, and the setup blocker is a tinted notice. Status lines (model test verdicts, the title bar's playing/idle tag) carry their tone in colour and a drawn dot instead of emoji.
+- Settings → MCP: the client-config card picks Claude Code / Cursor / Codex and copies that client's own format (a `claude mcp add` command, the `mcpServers` JSON, or a `~/.codex/config.toml` table); the card is hidden while MCP is off. README quick start step 3 is three lines, with the details in a new "Model setup details" section, and stale button names in the READMEs were corrected.
+- Overlay layout: the title bar is one line (the local API address moved to **Settings → MCP**, the hotkey to the Hide button's tooltip). The solo auto-play card shows screen · last action and the Token line as two caption lines instead of three metric tiles; the decision log starts collapsed behind **Show log**, and its session tile only appears in multiplayer. The co-op invite card shows one phase at a time (character switch, invite and — when a save exists — continue; or pause / resume once a teammate exists), and diagnostics plus the stats reset moved to the bottom of the **Party** card.
+- Overlay setup flow: the play page shows a one-line setup blocker (no model / not tested / test failed / no tool calling) with an **Open settings** button, and Start / Step stay disabled until the main model is verified. The settings footer is one status line plus one Save / Test row; the test button doubles as its cancel, and a **Go play** button appears after a passing test. Quick setup shows a single verdict line instead of a separate three-line model status card.
 - Rewrite the in-game overlay copy: short labels, one-line statuses, and every usage note moved behind a "?" button in its card's title bar (new `HelpCard`). The footer test button is now **Test main model** everywhere, the MCP section is named **MCP**, and the Chinese and English tables stay in sync.
 - Synchronize model, key, budgets and non-combat-only settings to the running companion with explicit acknowledgement and a pause before applying changes.
 - Accept both release manifest names; upgrade only unchanged managed companion copies. Preserve manual/edited installations.
@@ -30,6 +43,12 @@ Game-dependent compilation succeeded on 2026-10-27 (Release, 0 warnings, 0 error
 
 ### Fixed
 
+- **网关把流式工具参数截断时，自动游玩不再因此停摆。** 实测某 OpenAI 兼容网关的流式响应只回传 `{"action":"play_card"}` 就结束，客户端把截断当成模型漏参，连续三次后按「连续 3 次决策未成功」停止。现在检测到动作缺少它需要的索引（`card_index` / `option_index`），或校验返回「must come from」类缺参错误时，该回合会改用非流式重发一次。注意：同一网关的非流式响应也会出现同样的截断，所以这一条只能减轻、不能根除；完整一局请换用能稳定回传完整工具参数的模型。
+- 修复游戏程序集的思考选项编译错误，以及窄窗口中长模型名和服务商错误信息撑宽、裁切设置页的问题。快速判断熔断到期后，游玩页会及时刷新状态。
+- **设置保存失败时不再静默切走页面。** 以前在设置页填错（比如请求上限填了非数字）后切到游玩页，改动没保存、原因也看不到；现在会留在设置页，底栏写明原因。从游玩页邀请队友或继续联机存档时，如果设置存不上，会直接跳到设置页，而不是点了没反应。
+- **读档拦截提示里的按钮名改对了。** 用游戏自己的读档按钮打开本地联机存档时，提示以前让你点「继续上次联机对局」，按钮实际叫「继续联机存档」。
+- **「测试快速判断」的结果固定一行。** 服务商返回的长错误（如 TypeSafe 的 401）此前会在设置页折成好几行，排在页面末尾时被固定底栏挡住（第四轮实机复测 R4）。现在结果只占一行，过长部分显示省略号，鼠标悬停显示全文；失败结果也附上耗时（`… · 812 ms`），一次往返的耗时可以说明测试没有重试。
+- **游戏崩溃或被强制结束后留下的实例提示文件，不再拖垮 MCP 的实例发现。** 发现逻辑会逐个探测临时目录里的 `sts2-ai-agent-instance-*.json`，积累多了以后，没开游戏时会超过 3 秒的期限并报「Instance discovery timed out」，MCP 服务和不指定 `STS2_API_BASE_URL` 的客户端因此起不来（第四轮复测的 6 个 Python 离线错误就是这个原因）。现在会先确认提示文件里的进程还在，已退出的直接跳过，不发探测请求。4 个依赖本机状态的测试也改为显式指定地址。
 - **修复首次真实构建时的 CS0173 编译错误。** `BuildMapPayload` 里按「地图界面是否打开」在 `List<NMapPoint>` 与数组之间取值的条件表达式，编译器无法推断类型；该处只在带游戏程序集的构建中才会编译，离线套件看不到。现改用 `Enumerable.Empty<NMapPoint>()`，行为不变，`BuildMapPayload` 的契约哈希同步更新。
 - **药水栏全满时，奖励界面的药水奖励不再假装领取成功。** 此前游戏吞掉点击，`claim_reward` 仍返回 `completed`，奖励列表和药水栏都没变，客户端会误判已领取（#219）。现在满栏时该药水行 `claimable` 为 `false`，`claim_reward` 直接返回 409 `invalid_action`（`details.reason = "potion_slots_full"`）并提示先 `discard_potion` 腾位；奖励主界面的 `discard_potion` 已在本版开放，所以整条「丢弃再领取」路径可走通。验证脚本里「奖励界面不应出现 discard_potion」的陈旧断言一并删除。
 - **游戏内 HTTP 接口拒绝来自网页的请求。** 监听器只绑定 127.0.0.1，`IsLocal` 对任何请求都为真，所以浏览器里的网页能跨站 POST（打牌、启停自动游玩、打开 MCP），DNS rebinding 还能读到状态和截图。现在带 `Origin` 头、`Sec-Fetch-Site` 为跨站，或 `Host` 不是本机回环地址加本端口的请求一律返回 403 `untrusted_origin`；本机脚本、curl 和 MCP 客户端不受影响，MCP 路由仍用自己的 Origin 规则。

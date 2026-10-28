@@ -1,6 +1,7 @@
 using STS2AIAgent.Agent;
 using STS2AIAgent.Config;
 using STS2AIAgent.Llm;
+using STS2AIAgent.Localization;
 using STS2AIAgent.Multiplayer;
 
 namespace STS2AIAgent.Tests;
@@ -27,6 +28,33 @@ internal static class PlayerExperienceTests
         Assert.True(status.ReadyToInvite);
         Assert.Equal("verified", status.Phase);
         Assert.True(CoopLaunchPolicy.GetError(false, false, "MAIN_MENU", settings) == null);
+    }
+
+    /// <summary>
+    /// The play page's setup line follows the same gate as StartAutoPlay: gone once the main model is
+    /// verified, and a short reason (not the long settings hint) while it is not.
+    /// </summary>
+    public static void PlayBlockerFollowsTheStartGate()
+    {
+        var settings = AgentSettings.CreateDefault();
+        var untested = FirstRunSetup.PlayBlocker(FirstRunSetup.Evaluate(settings));
+        Assert.Equal("模型还没测试", untested);
+
+        var badUrl = AgentSettings.CreateDefault();
+        badUrl.Endpoints[0].BaseUrl = "not a url";
+        Assert.Equal("接口地址无效", FirstRunSetup.PlayBlocker(FirstRunSetup.Evaluate(badUrl)));
+
+        settings.Models.Clear();
+        Assert.Equal("还没配置模型", FirstRunSetup.PlayBlocker(FirstRunSetup.Evaluate(settings)));
+
+        var verified = AgentSettings.CreateDefault();
+        ModelRoleProbe.Upsert(verified, ModelRoleProbe.FromSuccess(ModelRoleNames.Play, verified.TryResolvePlayModel()!, tools: true));
+        Assert.True(FirstRunSetup.PlayBlocker(FirstRunSetup.Evaluate(verified)) == null,
+            "A verified main model must hide the play page's setup line.");
+
+        var noTools = AgentSettings.CreateDefault();
+        ModelRoleProbe.Upsert(noTools, ModelRoleProbe.FromSuccess(ModelRoleNames.Play, noTools.TryResolvePlayModel()!, tools: false));
+        Assert.Equal("模型不支持工具调用", FirstRunSetup.PlayBlocker(FirstRunSetup.Evaluate(noTools)));
     }
 
     public static void ChangingKeyInvalidatesVerification()
@@ -92,7 +120,7 @@ internal static class PlayerExperienceTests
 
     /// <summary>
     /// The Jev panel's per-session split: how many turns Jev actually took versus how many the LLM
-    /// finished after a failed attempt. Zero/zero stays a dash, not "Jev 0 次".
+    /// finished after a failed attempt. Zero/zero stays a dash, not "快速判断 0 次".
     /// </summary>
     public static void JevRateShowsAcceptedAndFallbackCounts()
     {
@@ -258,8 +286,80 @@ internal static class PlayerExperienceTests
         });
         Assert.Equal("budget", paused.Kind);
         Assert.Contains(SessionBudgetLimits.ResetStatsActionLabel, paused.NextAction);
-        Assert.Contains("显示高级选项", paused.NextAction);
+        // The cap is on the quick card as well as under the advanced options, so the copy names the
+        // field rather than sending the player to the advanced toggle.
+        Assert.Contains("请求上限", paused.NextAction);
+        Assert.False(paused.NextAction.Contains("显示高级选项"), paused.NextAction);
         Assert.Contains("继续游玩", paused.NextAction);
+        Assert.True(PlayerFacingSession.NeedsAttention(paused));
+    }
+
+    /// <summary>
+    /// Every screen the API documents and every action the mod accepts has a readable label, in both
+    /// languages, so the solo card never shows a wire identifier such as MAIN_MENU or play_card.
+    /// </summary>
+    public static void EveryScreenAndActionHasAPlayerLabel()
+    {
+        var api = AgentSourceFixture.Read("docs/api.md");
+        var table = api[api.IndexOf("## Screen 枚举", StringComparison.Ordinal)..];
+        table = table[..table.IndexOf("\n## ", 5, StringComparison.Ordinal)];
+        var screens = System.Text.RegularExpressions.Regex.Matches(table, @"^\| `([A-Z_]+)` \|", System.Text.RegularExpressions.RegexOptions.Multiline)
+            .Select(m => m.Groups[1].Value).ToList();
+        Assert.True(screens.Count > 25, "screen table parse looks wrong");
+
+        var actionSource = AgentSourceFixture.Read("STS2AIAgent/Game/GameActionService.cs");
+        var switchStart = actionSource.IndexOf("switch", StringComparison.Ordinal);
+        var actions = System.Text.RegularExpressions.Regex.Matches(actionSource.Substring(switchStart, 16000), "\"([a-z_]+)\"\\s*=>")
+            .Select(m => m.Groups[1].Value).Distinct()
+            // Debug-only actions never reach a player's screen.
+            .Where(a => a is not ("run_console_command" or "inject_event_churn" or "switch_profile"))
+            .ToList();
+        Assert.True(actions.Count > 40, "action switch parse looks wrong");
+
+        try
+        {
+            foreach (var language in new[] { "zhs", "eng" })
+            {
+                Loc.SetLanguage(language);
+                foreach (var screen in screens)
+                    Assert.False(PlayerLabels.Screen(screen) == screen, $"screen {screen} has no label ({language})");
+                foreach (var action in actions)
+                    Assert.False(PlayerLabels.Action(action) == action, $"action {action} has no label ({language})");
+                if (language == "eng")
+                {
+                    foreach (var text in screens.Select(PlayerLabels.Screen).Concat(actions.Select(PlayerLabels.Action)))
+                        Assert.False(text.Any(c => c >= 0x4E00 && c <= 0x9FFF), $"\"{text}\" has no English entry");
+                }
+            }
+        }
+        finally
+        {
+            Loc.SetLanguage("zhs");
+        }
+
+        Assert.Equal("LLM", PlayerLabels.Source("agent_loop"));
+        Assert.Equal("快速判断", PlayerLabels.Source("jev"));
+        Assert.False(PlayerLabels.Source("http_api") == "http_api");
+
+        // An unknown identifier is shown as it is rather than as a blank.
+        Assert.Equal("NEW_SCREEN", PlayerLabels.Screen("NEW_SCREEN"));
+        Assert.Equal("-", PlayerLabels.Action("-"));
+    }
+
+    public static void OnlyStopsThatNeedThePlayerAreFlagged()
+    {
+        var settings = AgentSettings.CreateDefault();
+        ModelRoleProbe.Upsert(settings, ModelRoleProbe.FromSuccess(ModelRoleNames.Play, settings.TryResolvePlayModel()!, tools: true));
+        var verified = FirstRunSetup.Evaluate(settings);
+        var configError = PlayerFacingSession.Compose(BaseSnapshot(verified) with { StopKind = "config", StopDetail = "401" });
+        var idle = PlayerFacingSession.Compose(BaseSnapshot(verified));
+        var runEnded = PlayerFacingSession.Compose(BaseSnapshot(verified) with { StopKind = "run_end" });
+
+        Assert.True(PlayerFacingSession.NeedsAttention(configError));
+        // Idle and a finished run are ordinary states; colouring them as a problem would make the
+        // warning meaningless.
+        Assert.False(PlayerFacingSession.NeedsAttention(idle));
+        Assert.False(PlayerFacingSession.NeedsAttention(runEnded));
     }
 
     public static void ResetStatsBlockedWhileRunning()

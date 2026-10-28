@@ -10,6 +10,13 @@ namespace STS2AIAgent.Ui;
 
 internal sealed partial class AgentOverlayHost
 {
+    /// <summary>
+    /// Where an outside agent reaches the teammate, shown once an external-agent teammate is up. The
+    /// mode used to say only "waits for a takeover" and leave the port to be dug out of the main
+    /// window's /health, which is not something a player choosing this mode in the overlay knows to do.
+    /// </summary>
+    private Control? _externalAgentBox;
+    private Label? _externalAgentInfo;
     /// <summary>Serialize the entire pause/confirm/save transition, not merely button clicks.</summary>
     private async Task ChangePlayModeAsync(int requestedIndex)
     {
@@ -141,7 +148,7 @@ internal sealed partial class AgentOverlayHost
                 CompanionSettingsSyncOutcome.Confirmed => Loc.T("队友设置已同步。"),
                 CompanionSettingsSyncOutcome.Disconnected => Loc.T("队友未连接，下次邀请时生效。"),
                 CompanionSettingsSyncOutcome.Superseded => Loc.T("设置已变更，等待队友确认…"),
-                _ => Loc.T("队友 Jev 开关尚未同步。")
+                _ => Loc.T("队友快速判断开关尚未同步。")
             };
             // The old request was acknowledged; a different desired snapshot now needs its own
             // confirmation. This does not replay an uncertain request or retry a failed control.
@@ -220,8 +227,11 @@ internal sealed partial class AgentOverlayHost
         if (_companionMode != null) _companionMode.Disabled = LocalDualInstanceLauncher.CompanionProcessAlive || AgentRuntime.Instance.DualLaunching;
         if (_dualLayerCoopCheck != null) _dualLayerCoopCheck.Disabled = _companionSettingsSyncing;
         if (_jevPanel != null) _jevPanel.Visible = dualEnabled;
+        if (_decisionUsageTile != null) _decisionUsageTile.Visible = coopMode;
         if (_sendButton != null) _sendButton.Disabled = _playModeSwitching;
-        if (_playToggle != null) _playToggle.Disabled = AgentRuntime.Instance.DualLaunching || _playModeSwitching || coopMode;
+        if (_playToggle != null)
+            _playToggle.Disabled = AgentRuntime.Instance.DualLaunching || _playModeSwitching || coopMode
+                || (!AgentRuntime.Instance.PlayRunning && !_playReady);
         var teamControlBlocked = InstanceRole.IsCompanion || AgentRuntime.Instance.TeamControlPending
             || AgentRuntime.Instance.DualLaunching || _playModeSwitching || !coopMode;
         if (_teamResume != null) _teamResume.Disabled = teamControlBlocked;
@@ -237,10 +247,12 @@ internal sealed partial class AgentOverlayHost
         var sourceAvailable = !coopMode || (companion != null && _companionJevSource == LocalDualInstanceLauncher.Connection);
         var togglePending = coopMode && companion?.DualLayerCoopEnabled != settings.DualLayerCoopEnabled;
         _jevStatus.Text = !settings.HasJevConfigured()
-            ? Loc.T("未配置 Jev，请先在「设置」填写。")
-            : coopMode && !sourceAvailable ? Loc.T("队友 Jev 状态不可用，请检查连接。")
-            : togglePending ? Loc.T("队友 Jev 开关尚未同步。")
-            : Loc.T("Jev：{0}", settings.JevModel);
+            ? Loc.T("未配置快速判断，请先在「设置」填写。")
+            : coopMode && !sourceAvailable ? Loc.T("队友快速判断状态不可用，请检查连接。")
+            : togglePending ? Loc.T("队友快速判断开关尚未同步。")
+            : !coopMode && AgentRuntime.Instance.JevPausedUntil is { } resume
+                ? Loc.T("快速判断连续失败，{0} 前由 LLM 接手。", resume.ToLocalTime().ToString("HH:mm:ss"))
+            : Loc.T("快速判断：{0}", settings.JevModel);
         if (_jevLastChoice != null)
             _jevLastChoice.Text = sourceAvailable ? Trim(coopMode ? companion?.Choice : AgentRuntime.Instance.LastJevChoice, 90) : "-";
         if (_jevProbabilities != null)
@@ -256,7 +268,9 @@ internal sealed partial class AgentOverlayHost
     private async Task LaunchDualAsync()
     {
         FlushSettingsIfDirty();
-        if (_settingsDirty) return;
+        // The settings that failed to save are on the settings page, with the reason in its footer;
+        // the invite used to do nothing at all from the play page.
+        if (_settingsDirty) { ShowTab(OverlayTabCatalog.Settings); return; }
         var settings = HarvestSettings();
         var companionAutoPlay = settings.CompanionControlMode != "external";
         await AgentRuntime.Instance.LaunchDualInstanceAsync(settings, companionAutoPlay, CancellationToken.None);
@@ -266,7 +280,7 @@ internal sealed partial class AgentOverlayHost
     private async Task ContinueDualAsync()
     {
         FlushSettingsIfDirty();
-        if (_settingsDirty) return;
+        if (_settingsDirty) { ShowTab(OverlayTabCatalog.Settings); return; }
         var settings = HarvestSettings();
         var companionAutoPlay = settings.CompanionControlMode != "external";
         _continueLaunching = true;
@@ -286,9 +300,11 @@ internal sealed partial class AgentOverlayHost
     {
         var settings = AgentRuntime.Instance.Settings;
         if (settings.CompanionControlMode == "external")
-            return Loc.T("外部 Agent 模式：队友入队后等待接管，不会自己出牌。");
+            return Loc.T("外部 Agent 模式：队友入队后等待接管，不会自己出牌；入队后这里会显示它的接口地址。");
         var ready = FirstRunSetup.Evaluate(settings);
-        if (!ready.ReadyToInvite) return ready.Hint;
+        // The play page's setup line already names what is missing; repeating the long hint here
+        // said the same thing twice on one screen.
+        if (!ready.ReadyToInvite) return "";
         return settings.CompanionAutoSelectCharacter
             ? Loc.T("在主菜单邀请，队友会自动选角并游玩。")
             : Loc.T("在主菜单邀请，到第二窗口为队友选角色。");
@@ -350,6 +366,43 @@ internal sealed partial class AgentOverlayHost
 
         var canContinue = CanOfferContinue();
         _dualContinueButton.Disabled = blocked || !canContinue;
-        _dualContinueButton.TooltipText = canContinue ? "" : Loc.T("主菜单有联机存档时可用");
+        RefreshCoopPhase(canContinue);
+    }
+
+    /// <summary>
+    /// Shows the invite card's controls for the phase the team is in: setting up a teammate, or
+    /// controlling one that exists. A launch in flight keeps the button that started it on screen,
+    /// because that button is what reads "邀请中…" / "正在读档…".
+    /// </summary>
+    private void RefreshCoopPhase(bool canContinue)
+    {
+        var launching = AgentRuntime.Instance.DualLaunching;
+        var teamed = !launching
+            && (LocalDualInstanceLauncher.Connection != null || LocalDualInstanceLauncher.CompanionProcessAlive);
+        var settingUp = !teamed && !launching;
+        if (_companionChoiceToggle != null) _companionChoiceToggle.Visible = settingUp;
+        if (_dualHint != null) _dualHint.Visible = settingUp && _dualHint.Text.Length > 0;
+        if (_dualLaunchButton != null) _dualLaunchButton.Visible = settingUp || (launching && !_continueLaunching);
+        if (_dualContinueButton != null) _dualContinueButton.Visible = (settingUp && canContinue) || (launching && _continueLaunching);
+        if (_teamControlRow != null) _teamControlRow.Visible = teamed;
+        if (_teamControlStatus != null) _teamControlStatus.Visible = teamed && _teamControlStatus.Text.Length > 0;
+
+        var external = AgentRuntime.Instance.Settings.CompanionControlMode == "external";
+        var connection = LocalDualInstanceLauncher.Connection;
+        if (_externalAgentBox != null) _externalAgentBox.Visible = external && teamed && connection != null;
+        if (_externalAgentInfo != null && connection != null)
+        {
+            _externalAgentInfo.Text = Loc.T(
+                "队友接口：{0}\n用 GET /state 读局面、POST /action 出牌，只能操作队友自己的角色。完整说明见 docs/api.md。",
+                ExternalAgentUrl(connection));
+        }
+    }
+
+    private static string ExternalAgentUrl(CompanionConnection connection) => $"http://127.0.0.1:{connection.Port}";
+
+    private void CopyExternalAgentUrl()
+    {
+        var connection = LocalDualInstanceLauncher.Connection;
+        if (connection != null) CopyText(ExternalAgentUrl(connection));
     }
 }

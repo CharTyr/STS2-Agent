@@ -15,9 +15,18 @@ namespace STS2AIAgent.Ui;
 /// The shape of the module is deliberate: the palette comes from <see cref="OverlayThemeCatalog"/>
 /// (Godot-free and pinned offline), and everything in this file is the translation of that palette
 /// into Godot <c>StyleBox</c>es and font overrides. A new colour or spacing does not become a new
-/// branch in a page builder.
+/// branch in a page builder. What Godot draws by itself -- scroll bars, popups, tooltips, check box
+/// icons, the font -- comes from <see cref="OverlayGodotTheme"/> on the host.
+///
+/// The visual rules, revised on 2026-10-27 after "the UI looks cheap": depth comes from fill, not
+/// from outlines and shadows. The first version gave every card, button, tile and help panel a solid
+/// border and a drop shadow (the help panel and the title bar inherited the window's 18 px one), and
+/// drew every heading, accent bar, tab and switch in the accent colour, so nothing stood out because
+/// everything did. Now cards are one step lighter than the window with a hairline edge, wells
+/// (fields, logs, tiles, help) are one step darker, the accent is kept for the primary action, the
+/// selected tab's underline, focus and switches, and headings carry weight instead of colour.
 /// </remarks>
-internal static class UiFactory
+internal static partial class UiFactory
 {
     /// <summary>The active palette. Set once at build and again when the theme setting changes.</summary>
     private static OverlayPalette _palette = OverlayThemeCatalog.Resolve(OverlayThemeCatalog.DefaultId);
@@ -29,11 +38,25 @@ internal static class UiFactory
     public const int SpaceMd = 12;
     public const int SpaceLg = 18;
 
+    // Corner radii. Cards are rounder than the controls inside them, so a button nests in its card
+    // instead of echoing the same corner.
+    public const int RadiusControl = 8;
+    public const int RadiusCard = 10;
+    public const int RadiusWindow = 12;
+    private const int RadiusPill = 99;
+
+    /// <summary>
+    /// Vertical padding shared by buttons, fields and drop-downs, so a row mixing them lines up: the
+    /// old values were 8, 6 and 6, and a field beside its button sat four pixels short.
+    /// </summary>
+    private const int ControlPadY = 7;
+    private const int ControlPadX = 12;
+
     // Type scale.
-    public const int FontTitle = 17;
+    public const int FontTitle = 16;
     public const int FontHeading = 14;
     public const int FontBody = 13;
-    public const int FontCaption = 11;
+    public const int FontCaption = 12;
 
     public static OverlayPalette Palette => _palette;
 
@@ -53,13 +76,25 @@ internal static class UiFactory
     public static Color Text => ToGodot(_palette.Text);
     public static Color Muted => ToGodot(_palette.Muted);
 
+    /// <summary>The well colour: fields, logs, tiles and help panels sit one step below the card.</summary>
+    private static Color Inset => ToGodot(_palette.Backdrop) with { A = 1f };
+
+    /// <summary>
+    /// The colour that reads as "lifted" off a well: the raised surface on the dark themes, the
+    /// paper surface on the light one, where the raised tone is darker than the backdrop.
+    /// </summary>
+    private static Color Lifted => IsDark(Inset) ? ToGodot(_palette.SurfaceRaised) : ToGodot(_palette.Surface);
+
     /// <summary>How a button is meant to read: the page's main action, an ordinary one, or a caution.</summary>
     public enum ButtonKind
     {
         Normal,
         Primary,
         Ghost,
-        Danger
+        Danger,
+
+        /// <summary>The edge tab: drawn over the game rather than inside the panel.</summary>
+        Floating
     }
 
     /// <summary>
@@ -73,12 +108,19 @@ internal static class UiFactory
     /// tells <see cref="ReapplyButtonTheme"/> to repaint a tab rather than an ordinary button.
     /// </summary>
     private const string MetaTabActive = "sts2_tab_active";
+
+    /// <summary>Present on a segment of a <see cref="Ui.SegmentedSwitch"/>, which is drawn unlike a page tab.</summary>
+    private const string MetaSegment = "sts2_tab_segment";
     private const string MetaMuted = "sts2_label_muted";
     private const string MetaAccent = "sts2_label_accent";
 
+    /// <summary>A label drawn in a status tone; the repaint keeps the tone instead of resetting it.</summary>
+    private const string MetaTone = "sts2_label_tone";
+
     /// <summary>What a bare <see cref="Panel"/> draws, so a live theme switch can repaint it.</summary>
     private const string MetaPanel = "sts2_panel_role";
-    private const string PanelAccentBar = "accent-bar";
+    private const string PanelDot = "dot";
+    private const string PanelDivider = "divider";
 
     /// <summary>
     /// What a <see cref="PanelContainer"/> is styled as. A live theme switch repaints from this.
@@ -96,17 +138,36 @@ internal static class UiFactory
     private const string SurfaceCard = "card";
     private const string SurfaceMetric = "metric";
     private const string SurfaceTinted = "tinted";
+    private const string SurfaceBare = "bare";
+    private const string SurfaceInset = "inset";
+    private const string SurfaceTrack = "track";
+    private const string SurfaceCallout = "callout";
     private const string MetaTint = "sts2_surface_tint";
     private const string MetaRadius = "sts2_surface_radius";
 
     /// <summary>How a panel container is styled, recorded on it so a live theme switch can repaint it.</summary>
     public enum SurfaceRole
     {
+        /// <summary>The window itself.</summary>
         Chrome,
+
+        /// <summary>A card-like box built outside <see cref="Card"/> (the endpoint and model editors).</summary>
         ChromeRaised,
         Card,
         Metric,
-        Tinted
+        Tinted,
+
+        /// <summary>No fill and no edge: a container that only needs padding (the title bar).</summary>
+        Bare,
+
+        /// <summary>A well one step below the card: help panels, read-outs.</summary>
+        Inset,
+
+        /// <summary>The groove a segmented switch's segments sit in.</summary>
+        Track,
+
+        /// <summary>A tinted notice that spans the page, toned by <see cref="MetaTint"/>.</summary>
+        Callout
     }
 
     /// <summary>
@@ -125,6 +186,10 @@ internal static class UiFactory
             SurfaceRole.ChromeRaised => SurfaceChromeRaised,
             SurfaceRole.Card => SurfaceCard,
             SurfaceRole.Metric => SurfaceMetric,
+            SurfaceRole.Bare => SurfaceBare,
+            SurfaceRole.Inset => SurfaceInset,
+            SurfaceRole.Track => SurfaceTrack,
+            SurfaceRole.Callout => SurfaceCallout,
             _ => SurfaceTinted
         });
         panel.SetMeta(MetaRadius, radius);
@@ -142,27 +207,36 @@ internal static class UiFactory
     {
         var role = panel.GetMeta(MetaSurface, "").AsString();
         var radius = panel.GetMeta(MetaRadius, 0).AsInt32();
+        var tone = (ButtonKind)panel.GetMeta(MetaTint, (int)ButtonKind.Normal).AsInt32();
         switch (role)
         {
             case SurfaceChrome:
-                panel.AddThemeStyleboxOverride("panel", PanelStyle(radius: radius));
+                panel.AddThemeStyleboxOverride("panel", PanelStyle(radius: radius > 0 ? radius : RadiusWindow));
                 break;
             case SurfaceChromeRaised:
-                panel.AddThemeStyleboxOverride("panel", PanelStyle(ToGodot(_palette.SurfaceRaised), radius));
-                break;
             case SurfaceCard:
-                panel.AddThemeStyleboxOverride("panel", CardStyle());
+                panel.AddThemeStyleboxOverride("panel", CardStyle(radius > 0 ? radius : RadiusCard));
                 break;
             case SurfaceMetric:
-                panel.AddThemeStyleboxOverride(
-                    "panel",
-                    Box(ToGodot(_palette.SurfaceRaised), ToGodot(_palette.Border), 6, borderWidth: 1, padX: SpaceSm, padY: SpaceSm, shadowSize: 2));
+            case SurfaceInset:
+                panel.AddThemeStyleboxOverride("panel", InsetStyle(radius > 0 ? radius : RadiusControl));
                 break;
+            case SurfaceBare:
+                panel.AddThemeStyleboxOverride("panel", new StyleBoxEmpty());
+                break;
+            case SurfaceTrack:
+                panel.AddThemeStyleboxOverride("panel", Box(Inset, Veil(0.06f), RadiusControl + 1, padX: 3, padY: 3));
+                break;
+            case SurfaceCallout:
+                {
+                    var (background, _) = ToneStyle(tone);
+                    panel.AddThemeStyleboxOverride("panel", Box(background, new Color(0, 0, 0, 0), RadiusCard, borderWidth: 0, padX: SpaceMd, padY: SpaceSm + 2));
+                    break;
+                }
             case SurfaceTinted:
                 {
-                    var tone = (ButtonKind)panel.GetMeta(MetaTint, (int)ButtonKind.Normal).AsInt32();
-                    var (background, foreground) = ToneStyle(tone);
-                    panel.AddThemeStyleboxOverride("panel", ChipStyle(background, foreground.Darkened(0.40f)));
+                    var (background, _) = ToneStyle(tone);
+                    panel.AddThemeStyleboxOverride("panel", ChipStyle(background, new Color(0, 0, 0, 0)));
                     break;
                 }
         }
@@ -173,14 +247,20 @@ internal static class UiFactory
     /// </summary>
     /// <remarks>
     /// A bare <see cref="Panel"/> is invisible to a walk that only recognises typed controls, so the
-    /// role is recorded on it. Without this the card headings keep the old theme's accent bar after a
-    /// live switch -- a stale stripe next to freshly coloured text.
+    /// role is recorded on it. Without this a status dot keeps the old theme's colour after a live
+    /// switch, beside a label already redrawn in the new one.
     /// </remarks>
     public static void ReapplyPanelTheme(Panel panel)
     {
-        if (panel.GetMeta(MetaPanel, "").AsString() == PanelAccentBar)
+        switch (panel.GetMeta(MetaPanel, "").AsString())
         {
-            panel.AddThemeStyleboxOverride("panel", Box(ToGodot(_palette.Accent), new Color(0, 0, 0, 0), 2, 0, 0, 0));
+            case PanelDot:
+                var tone = (ButtonKind)panel.GetMeta(MetaTint, (int)ButtonKind.Ghost).AsInt32();
+                panel.AddThemeStyleboxOverride("panel", Box(ToneStyle(tone).Foreground, new Color(0, 0, 0, 0), RadiusPill, borderWidth: 0, padX: 0, padY: 0));
+                break;
+            case PanelDivider:
+                panel.AddThemeStyleboxOverride("panel", Box(Veil(0.08f), new Color(0, 0, 0, 0), 0, borderWidth: 0, padX: 0, padY: 0));
+                break;
         }
     }
 
@@ -210,7 +290,8 @@ internal static class UiFactory
             BorderWidthTop = borderWidth,
             BorderWidthRight = borderWidth,
             BorderWidthBottom = borderWidth,
-            BorderColor = border
+            BorderColor = border,
+            AntiAliasing = true
         };
 
         if (shadowSize > 0)
@@ -224,53 +305,54 @@ internal static class UiFactory
     }
 
     /// <summary>
-    /// The panel behind the whole overlay: one surface, one border, soft corner and depth shadow.
+    /// The panel behind the whole overlay: one surface, a hairline edge, soft corners and a depth shadow.
     /// </summary>
     /// <remarks>
     /// A light surface gets no drop shadow at all, only its border. A shadow tuned for a near-black
     /// panel is a smudge on an ivory one even after its opacity is scaled down -- reported live on
     /// 2026-09-21 as "the ivory theme's shadow is too harsh" -- and light interfaces separate layers
-    /// with borders and fills rather than with darkness. <see cref="HasDropShadow"/> is the test.
+    /// with borders and fills rather than with darkness. <see cref="IsDark"/> is the test.
+    ///
+    /// Only the window uses this. The title bar and the help panels used to as well, which gave each
+    /// of them the window's 18 px shadow inside the window.
     /// </remarks>
-    public static StyleBoxFlat PanelStyle(Color? color = null, int radius = 10)
+    public static StyleBoxFlat PanelStyle(Color? color = null, int radius = RadiusWindow)
     {
         var background = color ?? ToGodot(_palette.Backdrop);
         return Box(
             background,
-            ToGodot(_palette.Border),
+            Veil(0.14f),
             radius,
             borderWidth: 1,
-            padX: SpaceMd,
+            padX: SpaceMd + 2,
             padY: SpaceMd,
-            shadowSize: HasDropShadow(background) ? 18 : 0,
+            shadowSize: IsDark(background) ? 18 : 0,
             shadowColor: new Color(0f, 0f, 0f, 0.55f),
             shadowOffset: new Vector2(0, 6));
     }
 
-    /// <summary>A section card: the raised surface that separates one group of rows from the next.</summary>
-    public static StyleBoxFlat CardStyle()
+    /// <summary>
+    /// A section card: one step lighter than the window, with a hairline edge and no shadow.
+    /// </summary>
+    public static StyleBoxFlat CardStyle(int radius = RadiusCard)
     {
-        var background = ToGodot(_palette.Surface);
-        return Box(
-            background,
-            ToGodot(_palette.Border),
-            8,
-            borderWidth: 1,
-            padX: SpaceMd,
-            padY: SpaceMd,
-            shadowSize: HasDropShadow(background) ? 6 : 0,
-            shadowColor: new Color(0f, 0f, 0f, 0.25f),
-            shadowOffset: new Vector2(0, 2));
+        return Box(ToGodot(_palette.Surface), Veil(0.07f), radius, borderWidth: 1, padX: SpaceMd + 2, padY: SpaceMd);
+    }
+
+    /// <summary>A well: one step darker than the card, no edge. Fields, logs, tiles and help sit in one.</summary>
+    private static StyleBoxFlat InsetStyle(int radius = RadiusControl, int padX = SpaceSm + 2, int padY = SpaceSm)
+    {
+        return Box(Inset, new Color(0, 0, 0, 0), radius, borderWidth: 0, padX: padX, padY: padY);
     }
 
     /// <summary>
-    /// Whether a surface dark enough to carry a drop shadow. Light surfaces do not.
+    /// Whether a surface is dark enough to carry a drop shadow and a light knob. Light surfaces do not.
     /// </summary>
     /// <remarks>
     /// The threshold sits above every dark preset in the catalogue and below ivory, so the dark themes
     /// keep the depth they were designed with and the light one gets borders instead.
     /// </remarks>
-    private static bool HasDropShadow(Color background)
+    private static bool IsDark(Color background)
     {
         var luminance = (0.2126f * background.R) + (0.7152f * background.G) + (0.0722f * background.B);
         return luminance < 0.5f;
@@ -290,6 +372,7 @@ internal static class UiFactory
         {
             Text = text,
             MouseFilter = Control.MouseFilterEnum.Stop,
+            MouseDefaultCursorShape = Control.CursorShape.PointingHand,
             FocusMode = Control.FocusModeEnum.None
         };
 
@@ -313,7 +396,9 @@ internal static class UiFactory
         // theme the header and the solo/multiplayer switch no longer showed where the player was.
         if (button.HasMeta(MetaTabActive))
         {
-            ApplyTabTheme(button, button.GetMeta(MetaTabActive, false).AsBool());
+            var active = button.GetMeta(MetaTabActive, false).AsBool();
+            if (button.HasMeta(MetaSegment)) ApplySegmentTheme(button, active);
+            else ApplyTabTheme(button, active);
             return;
         }
 
@@ -322,85 +407,108 @@ internal static class UiFactory
     }
 
     /// <summary>
-    /// A faint fill or border derived from the theme's text colour, for ghost buttons and idle tabs.
+    /// A faint fill or edge derived from the theme's text colour: hairlines, hover washes, scroll thumbs.
     /// </summary>
     /// <remarks>
     /// These used to be white at a few percent opacity, which is a visible tint on the dark themes and
     /// nothing at all on ivory: ghost buttons and idle tabs there read as loose text with no edge.
     /// The text colour is light on dark themes and dark on light ones, so the same alpha works on both.
     /// </remarks>
-    private static Color Veil(float alpha)
+    internal static Color Veil(float alpha)
     {
         var text = ToGodot(_palette.Text);
         return new Color(text.R, text.G, text.B, alpha);
     }
 
+    /// <summary>A colour moved towards the text colour: lighter on the dark themes, darker on ivory.</summary>
+    private static Color Toward(Color color, float weight) => color.Lerp(ToGodot(_palette.Text) with { A = color.A }, weight);
+
     private static void ApplyButtonTheme(Button button, ButtonKind kind)
     {
-        var border = ToGodot(_palette.Border);
+        var clear = new Color(0, 0, 0, 0);
+        var text = ToGodot(_palette.Text);
         Color background;
-        Color text;
+        Color foreground;
         Color hover;
         Color pressed;
-        Color borderColor = border;
-        int shadow = 0;
+        Color edge = clear;
+        var radius = RadiusControl;
+        var padX = ControlPadX;
+        var shadow = 0;
 
         switch (kind)
         {
             case ButtonKind.Primary:
                 background = ToGodot(_palette.Accent);
-                text = ToGodot(_palette.AccentText);
-                hover = background.Lightened(0.12f);
-                pressed = background.Darkened(0.12f);
-                borderColor = background.Lightened(0.25f);
-                shadow = 4;
+                foreground = ToGodot(_palette.AccentText);
+                hover = background.Lightened(0.08f);
+                pressed = background.Darkened(0.10f);
                 break;
             case ButtonKind.Ghost:
-                background = Veil(0.04f);
-                text = ToGodot(_palette.Muted);
-                hover = Veil(0.10f);
-                pressed = Veil(0.02f);
-                borderColor = Veil(0.14f);
+                background = clear;
+                foreground = ToGodot(_palette.Muted);
+                hover = Veil(0.08f);
+                pressed = Veil(0.04f);
+                padX = SpaceSm + 2;
                 break;
             case ButtonKind.Danger:
-                background = ToGodot(_palette.SurfaceRaised);
-                text = ToGodot(_palette.Danger);
-                hover = ToGodot(_palette.SurfaceRaised).Lightened(0.10f);
-                pressed = ToGodot(_palette.SurfaceRaised).Darkened(0.10f);
-                borderColor = ToGodot(_palette.Danger).Darkened(0.35f);
+                var danger = ToGodot(_palette.Danger);
+                background = danger with { A = 0.12f };
+                foreground = danger;
+                hover = danger with { A = 0.20f };
+                pressed = danger with { A = 0.08f };
+                break;
+            case ButtonKind.Floating:
+                background = ToGodot(_palette.Backdrop);
+                foreground = ToGodot(_palette.Accent);
+                hover = Toward(background, 0.08f);
+                pressed = background;
+                edge = Veil(0.16f);
+                radius = RadiusCard;
+                padX = 0;
+                shadow = 8;
                 break;
             default:
                 background = ToGodot(_palette.SurfaceRaised);
-                text = ToGodot(_palette.Text);
-                hover = background.Lightened(0.10f);
-                pressed = background.Darkened(0.10f);
-                borderColor = border;
-                shadow = 2;
+                foreground = text;
+                hover = Toward(background, 0.07f);
+                pressed = Toward(background, 0.02f);
+                edge = Veil(0.08f);
                 break;
         }
 
         button.AddThemeFontSizeOverride("font_size", FontBody);
-        button.AddThemeColorOverride("font_color", text);
-        button.AddThemeColorOverride("font_hover_color", kind == ButtonKind.Primary ? text : text.Lightened(0.15f));
-        button.AddThemeColorOverride("font_pressed_color", text);
-        button.AddThemeColorOverride("font_disabled_color", ToGodot(_palette.Muted));
+        button.AddThemeFontOverride("font", kind is ButtonKind.Primary or ButtonKind.Floating ? OverlayGodotTheme.Bold : OverlayGodotTheme.Regular);
+        button.AddThemeColorOverride("font_color", foreground);
+        button.AddThemeColorOverride("font_hover_color", kind == ButtonKind.Ghost ? text : foreground);
+        button.AddThemeColorOverride("font_pressed_color", kind == ButtonKind.Ghost ? text : foreground);
+        button.AddThemeColorOverride("font_hover_pressed_color", kind == ButtonKind.Ghost ? text : foreground);
+        button.AddThemeColorOverride("font_disabled_color", ToGodot(_palette.Muted) with { A = 0.65f });
 
-        button.AddThemeStyleboxOverride("normal", Box(background, borderColor, 6, shadowSize: shadow));
-        button.AddThemeStyleboxOverride("hover", Box(hover, kind == ButtonKind.Primary ? borderColor.Lightened(0.15f) : border.Lightened(0.20f), 6, shadowSize: shadow + 2));
-        button.AddThemeStyleboxOverride("pressed", Box(pressed, borderColor, 6));
-        button.AddThemeStyleboxOverride("disabled", Box(background.Darkened(0.25f), border.Darkened(0.25f), 6));
+        var shadowColor = new Color(0f, 0f, 0f, 0.35f);
+        button.AddThemeStyleboxOverride("normal", Box(background, edge, radius, padX: padX, padY: ControlPadY, shadowSize: shadow, shadowColor: shadowColor));
+        button.AddThemeStyleboxOverride("hover", Box(hover, edge, radius, padX: padX, padY: ControlPadY, shadowSize: shadow, shadowColor: shadowColor));
+        button.AddThemeStyleboxOverride("pressed", Box(pressed, edge, radius, padX: padX, padY: ControlPadY, shadowSize: shadow, shadowColor: shadowColor));
+        button.AddThemeStyleboxOverride("hover_pressed", Box(pressed, edge, radius, padX: padX, padY: ControlPadY, shadowSize: shadow, shadowColor: shadowColor));
+        // Disabled is the same shape faded, for every kind. Darkening the fill turned a disabled
+        // primary button into a brown slab that read as a different, broken control.
+        button.AddThemeStyleboxOverride("disabled", Box(kind == ButtonKind.Ghost ? clear : Veil(0.05f), clear, radius, padX: padX, padY: ControlPadY));
         button.AddThemeStyleboxOverride("focus", new StyleBoxEmpty());
     }
 
     /// <summary>
-    /// One tab in the header row. The selected tab is drawn as a filled pill, which is the only thing
-    /// that tells the player where they are: six identical buttons in a row do not.
+    /// One tab in the header row, drawn as an underline: the selected tab in the text colour over an
+    /// accent bar, the others muted over a hairline that runs the width of the row.
     /// </summary>
     /// <remarks>
     /// <c>ClipText</c> stays off. Godot's clipped button reports a minimum width that does not include
     /// its label, so a tab row laid out by natural width collapsed to five empty slivers with the
     /// text cut off -- observed live on 2026-09-20 in the first pass of this redesign. The label has
     /// to drive the button's size for a wrapping row to work.
+    ///
+    /// The tabs were filled accent pills, and the solo/multiplayer switch right under them was too, so
+    /// the top of the play page was two stacked bars of the brightest colour on screen. An underline
+    /// says "you are here" without competing with the page's own primary action.
     /// </remarks>
     public static Button TabButton(string text, bool active, Action? onPressed)
     {
@@ -408,6 +516,7 @@ internal static class UiFactory
         {
             Text = text,
             MouseFilter = Control.MouseFilterEnum.Stop,
+            MouseDefaultCursorShape = Control.CursorShape.PointingHand,
             FocusMode = Control.FocusModeEnum.None
         };
 
@@ -423,32 +532,65 @@ internal static class UiFactory
 
     private static void ApplyTabTheme(Button button, bool active)
     {
-        var border = ToGodot(_palette.Border);
-        var activeBackground = ToGodot(_palette.Accent);
-        var idleBackground = Veil(0.035f);
+        StyleBoxFlat Underline(Color bar, int width)
+        {
+            var box = Box(new Color(0, 0, 0, 0), bar, 0, borderWidth: 0, padX: SpaceSm + 2, padY: SpaceSm);
+            box.BorderWidthBottom = width;
+            return box;
+        }
+
+        var text = ToGodot(_palette.Text);
+        var muted = ToGodot(_palette.Muted);
+        var accent = ToGodot(_palette.Accent);
         button.AddThemeFontSizeOverride("font_size", FontBody);
-        button.AddThemeColorOverride("font_color", active ? ToGodot(_palette.AccentText) : ToGodot(_palette.Muted));
-        button.AddThemeColorOverride("font_hover_color", active ? ToGodot(_palette.AccentText) : ToGodot(_palette.Text));
-        button.AddThemeColorOverride("font_pressed_color", ToGodot(_palette.AccentText));
-        button.AddThemeStyleboxOverride(
-            "normal",
-            Box(active ? activeBackground : idleBackground, active ? activeBackground.Lightened(0.20f) : new Color(0, 0, 0, 0), 6, padX: SpaceSm + 2, padY: 6, shadowSize: active ? 4 : 0));
-        button.AddThemeStyleboxOverride(
-            "hover",
-            Box(active ? activeBackground.Lightened(0.10f) : Veil(0.09f), active ? activeBackground.Lightened(0.30f) : border, 6, padX: SpaceSm + 2, padY: 6));
-        button.AddThemeStyleboxOverride(
-            "pressed",
-            Box(active ? activeBackground.Darkened(0.12f) : Veil(0.05f), border, 6, padX: SpaceSm + 2, padY: 6));
+        button.AddThemeFontOverride("font", active ? OverlayGodotTheme.Bold : OverlayGodotTheme.Regular);
+        button.AddThemeColorOverride("font_color", active ? text : muted);
+        button.AddThemeColorOverride("font_hover_color", text);
+        button.AddThemeColorOverride("font_pressed_color", text);
+        button.AddThemeColorOverride("font_hover_pressed_color", text);
+        button.AddThemeStyleboxOverride("normal", Underline(active ? accent : Veil(0.10f), active ? 2 : 1));
+        button.AddThemeStyleboxOverride("hover", Underline(active ? accent : Veil(0.28f), active ? 2 : 1));
+        button.AddThemeStyleboxOverride("pressed", Underline(accent, 2));
+        button.AddThemeStyleboxOverride("hover_pressed", Underline(accent, 2));
         button.AddThemeStyleboxOverride("focus", new StyleBoxEmpty());
     }
 
     /// <summary>
-    /// A two-or-more-way exclusive switch drawn as a row of segments, exactly one of them filled.
+    /// One segment of a <see cref="Ui.SegmentedSwitch"/>: the selected segment lifted off the groove,
+    /// the others flat and muted.
+    /// </summary>
+    public static Button SegmentButton(string text, bool active, Action? onPressed)
+    {
+        var button = TabButton(text, active, onPressed);
+        button.SetMeta(MetaSegment, true);
+        ApplySegmentTheme(button, active);
+        return button;
+    }
+
+    private static void ApplySegmentTheme(Button button, bool active)
+    {
+        var clear = new Color(0, 0, 0, 0);
+        var text = ToGodot(_palette.Text);
+        var lifted = Box(Lifted, Veil(0.08f), RadiusControl - 1, padX: SpaceSm + 2, padY: 5);
+        button.AddThemeFontSizeOverride("font_size", FontBody);
+        button.AddThemeFontOverride("font", active ? OverlayGodotTheme.Bold : OverlayGodotTheme.Regular);
+        button.AddThemeColorOverride("font_color", active ? text : ToGodot(_palette.Muted));
+        button.AddThemeColorOverride("font_hover_color", text);
+        button.AddThemeColorOverride("font_pressed_color", text);
+        button.AddThemeColorOverride("font_hover_pressed_color", text);
+        button.AddThemeStyleboxOverride("normal", active ? lifted : Box(clear, clear, RadiusControl - 1, borderWidth: 0, padX: SpaceSm + 2, padY: 5));
+        button.AddThemeStyleboxOverride("hover", active ? lifted : Box(Veil(0.05f), clear, RadiusControl - 1, borderWidth: 0, padX: SpaceSm + 2, padY: 5));
+        button.AddThemeStyleboxOverride("pressed", lifted);
+        button.AddThemeStyleboxOverride("hover_pressed", lifted);
+        button.AddThemeStyleboxOverride("focus", new StyleBoxEmpty());
+    }
+
+    /// <summary>
+    /// A two-or-more-way exclusive switch drawn as segments in a groove, exactly one of them lifted.
     /// </summary>
     /// <remarks>
-    /// This is the play page's solo/multiplayer mode switch. It reuses the tab button's active/idle
-    /// styling so the selected segment reads the same way the selected tab does, and it rebuilds its
-    /// buttons on each select rather than restyling in place -- the same trade the tab row makes,
+    /// This is the play page's solo/multiplayer mode switch and the MCP client picker. It rebuilds
+    /// its buttons on each select rather than restyling in place -- the same trade the tab row makes,
     /// because a Godot <c>StyleBox</c> is set per control and swapping two buttons is cheaper to read
     /// than mutating two sets of overrides.
     /// </remarks>
@@ -494,6 +636,12 @@ internal static class UiFactory
 
     private static void ApplyLabelColor(Label label)
     {
+        if (label.HasMeta(MetaTone))
+        {
+            label.AddThemeColorOverride("font_color", ToneText((ButtonKind)label.GetMeta(MetaTone, (int)ButtonKind.Ghost).AsInt32()));
+            return;
+        }
+
         if (label.HasMeta(MetaAccent))
         {
             label.AddThemeColorOverride("font_color", ToGodot(_palette.Accent));
@@ -534,14 +682,65 @@ internal static class UiFactory
     }
 
     /// <summary>
+    /// A one-line result whose text comes from outside, such as a server's error body: it never wraps
+    /// and never widens the column, cutting off with an ellipsis instead. Set its text through
+    /// <see cref="SetStatusLine"/> so the full text stays readable as the tooltip.
+    /// </summary>
+    /// <remarks>
+    /// A wrapped label let a long provider error grow the fast-judgment card by several lines, and at
+    /// the end of the settings page those lines went under the fixed footer (2026-10-27 live pass, r4).
+    /// </remarks>
+    public static Label StatusLine(int size = FontCaption)
+    {
+        var label = Label("", size, muted: true);
+        // ClipText alone does not bound the minimum width of a Godot Label. Reflow keeps the
+        // column narrow, while MaxLinesVisible holds the result to a single line.
+        label.AutowrapMode = TextServer.AutowrapMode.WordSmart;
+        label.MaxLinesVisible = 1;
+        label.CustomMinimumSize = new Vector2(0, size + 6);
+        label.ClipText = true;
+        label.TextOverrunBehavior = TextServer.OverrunBehavior.TrimEllipsis;
+        label.SizeFlagsHorizontal = Control.SizeFlags.ExpandFill;
+        // Labels ignore the mouse by default, which would also hide the tooltip holding the full text.
+        label.MouseFilter = Control.MouseFilterEnum.Pass;
+        return label;
+    }
+
+    /// <summary>Shows <paramref name="text"/> on a <see cref="StatusLine"/>, with the whole text as its tooltip.</summary>
+    public static void SetStatusLine(Label label, string text)
+    {
+        label.Text = text;
+        label.TooltipText = text;
+    }
+
+    /// <summary>
     /// The width floor a reflowing label keeps: wide enough to be a paragraph, far under the panel.
     /// </summary>
     public const int MinReflowWidth = 120;
 
-    /// <summary>A section heading inside a page: larger, in the accent colour.</summary>
+    /// <summary>A card heading: bold, in the text colour. The accent is kept for things that act.</summary>
     public static Label Heading(string text)
     {
-        return MarkAccent(Label(text, FontHeading));
+        return Bold(Label(text, FontHeading));
+    }
+
+    /// <summary>
+    /// A settings group label: small, bold and muted, with room above it. It names the cards under it
+    /// rather than competing with their own headings.
+    /// </summary>
+    public static Label SectionLabel(string text)
+    {
+        var label = Bold(Label(text, FontCaption, muted: true));
+        label.CustomMinimumSize = new Vector2(0, 26);
+        label.VerticalAlignment = VerticalAlignment.Bottom;
+        return label;
+    }
+
+    /// <summary>Sets a label in the bold face.</summary>
+    public static Label Bold(Label label)
+    {
+        label.AddThemeFontOverride("font", OverlayGodotTheme.Bold);
+        return label;
     }
 
     /// <summary>
@@ -555,140 +754,8 @@ internal static class UiFactory
         return label;
     }
 
-    /// <summary>A short status chip, used for the header's live state.</summary>
-    public static Label Badge(string text, ButtonKind tone = ButtonKind.Normal)
-    {
-        var color = tone switch
-        {
-            ButtonKind.Primary => ToGodot(_palette.Positive),
-            ButtonKind.Danger => ToGodot(_palette.Danger),
-            ButtonKind.Ghost => ToGodot(_palette.Muted),
-            _ => ToGodot(_palette.Warning)
-        };
-        var label = Label(text, FontCaption);
-        label.AddThemeColorOverride("font_color", color);
-        return label;
-    }
-
     /// <summary>
-    /// A structured badge pill with background tint and contrast text, e.g. for status indicators.
-    /// </summary>
-    /// <remarks>
-    /// Used where a status has to be readable as a status rather than as a sentence: a tinted chip at
-    /// the top of a card lands before any of the words do. The tone carries the meaning -- positive,
-    /// caution, danger, or neutral -- and <see cref="ToneStyle"/> is the one place that mapping lives,
-    /// so a control that restyles itself in place agrees with the pill it replaced.
-    /// </remarks>
-    public static Control PillBadge(string text, ButtonKind tone = ButtonKind.Normal)
-    {
-        var pill = new PanelContainer { MouseFilter = Control.MouseFilterEnum.Ignore };
-        var (bg, fg) = ToneStyle(tone);
-        pill.SetMeta(MetaSurface, SurfaceTinted);
-        pill.SetMeta(MetaTint, (int)tone);
-        pill.AddThemeStyleboxOverride("panel", Box(bg, fg.Darkened(0.40f), 10, borderWidth: 1, padX: SpaceSm, padY: 2));
-        var label = Label(text, FontCaption);
-        label.AddThemeColorOverride("font_color", fg);
-        pill.AddChild(label);
-        return pill;
-    }
-
-    /// <summary>
-    /// The background and foreground a tone is drawn with, so a control that changes tone at runtime
-    /// repaints with exactly the pair a fresh <see cref="PillBadge"/> of that tone would use.
-    /// </summary>
-    public static (Color Background, Color Foreground) ToneStyle(ButtonKind tone)
-    {
-        return tone switch
-        {
-            ButtonKind.Primary => (ToGodot(_palette.Positive).Darkened(0.70f), ToGodot(_palette.Positive)),
-            ButtonKind.Danger => (ToGodot(_palette.Danger).Darkened(0.70f), ToGodot(_palette.Danger)),
-            ButtonKind.Ghost => (Veil(0.06f), ToGodot(_palette.Muted)),
-            _ => (ToGodot(_palette.Warning).Darkened(0.70f), ToGodot(_palette.Warning))
-        };
-    }
-
-    /// <summary>
-    /// The pill shape itself: the same rounded chip <see cref="PillBadge"/> draws, exposed so a
-    /// control whose tone changes can rebuild just the box and keep the label it already has.
-    /// </summary>
-    public static StyleBoxFlat ChipStyle(Color background, Color border)
-    {
-        return Box(background, border, 10, borderWidth: 1, padX: SpaceSm, padY: 2);
-    }
-
-    /// <summary>
-    /// The theme picker: one tile per preset, each drawn as the palette it selects.
-    /// </summary>
-    /// <remarks>
-    /// Rebuilt whole when the selection moves, for the same reason the overlay's tab row is: a Godot
-    /// stylebox is set per control, and restyling seven tiles in place is more code than building
-    /// them. It is seven controls on a click, not a per-frame cost. The selected tile is drawn with
-    /// the accent border and the others are not, because "which one is mine" is the one thing a grid
-    /// of swatches has to answer at a glance.
-    /// </remarks>
-    public static Control ThemeSwatchPicker(
-        IReadOnlyList<OverlayPalette> presets,
-        string selectedId,
-        Action<string> onSelected)
-    {
-        // Pass, not Ignore. Ignore makes the container and its whole subtree invisible to the mouse --
-        // the tiles inside a picker built that way never receive a click at all, which is exactly how
-        // this shipped and was reported broken on 2026-09-21. Pass lets the tiles handle their own
-        // input while the grid itself stays out of the way.
-        var grid = new GridContainer { Columns = 2, MouseFilter = Control.MouseFilterEnum.Pass };
-        grid.AddThemeConstantOverride("h_separation", SpaceSm);
-        grid.AddThemeConstantOverride("v_separation", SpaceSm);
-
-        foreach (var preset in presets)
-        {
-            grid.AddChild(ThemeSwatch(preset, preset.Id == selectedId, onSelected));
-        }
-
-        return grid;
-    }
-
-    private static Control ThemeSwatch(OverlayPalette preset, bool selected, Action<string> onSelected)
-    {
-        // A panel rather than a Button: a button draws its own label, and this tile's label has to sit
-        // under its swatch rather than beside it, so the tile positions its own children and handles
-        // its own click.
-        var tile = new PanelContainer
-        {
-            MouseFilter = Control.MouseFilterEnum.Stop,
-            MouseDefaultCursorShape = Control.CursorShape.PointingHand,
-            SizeFlagsHorizontal = Control.SizeFlags.ExpandFill
-        };
-
-        var idle = Box(
-            ToGodot(_palette.Surface),
-            selected ? ToGodot(_palette.Accent) : ToGodot(_palette.Border),
-            8,
-            borderWidth: selected ? 2 : 1,
-            padX: 4,
-            padY: 4);
-        var hover = Box(ToGodot(_palette.SurfaceRaised), ToGodot(_palette.Accent), 8, borderWidth: selected ? 2 : 1, padX: 4, padY: 4);
-        tile.AddThemeStyleboxOverride("panel", idle);
-
-        var contents = Column();
-        contents.AddThemeConstantOverride("separation", 2);
-        contents.AddChild(OverlaySwatch.Build(preset));
-        contents.AddChild(Label(Loc.T(preset.Label), FontCaption, muted: !selected));
-        tile.AddChild(contents);
-
-        tile.MouseEntered += () => tile.AddThemeStyleboxOverride("panel", hover);
-        tile.MouseExited += () => tile.AddThemeStyleboxOverride("panel", idle);
-        tile.GuiInput += evt =>
-        {
-            if (evt is InputEventMouseButton { Pressed: true, ButtonIndex: MouseButton.Left })
-            {
-                onSelected(preset.Id);
-            }
-        };
-        return tile;
-    }
-
-    /// <summary>
-    /// A modern metric tile showing a label and prominent value, suitable for dashboards.
+    /// A read-out tile: a muted caption over its value, in a well.
     /// </summary>
     public static Control MetricTile(string title, Label valueLabel, string? hint = null)
     {
@@ -701,7 +768,7 @@ internal static class UiFactory
             CustomMinimumSize = new Vector2(96, 0)
         };
         panel.SetMeta(MetaSurface, SurfaceMetric);
-        panel.AddThemeStyleboxOverride("panel", Box(ToGodot(_palette.SurfaceRaised), ToGodot(_palette.Border), 6, borderWidth: 1, padX: SpaceSm, padY: SpaceSm, shadowSize: 2));
+        panel.AddThemeStyleboxOverride("panel", InsetStyle());
         var col = Column();
         col.AddThemeConstantOverride("separation", 2);
         var caption = Label(title, FontCaption, muted: true);
@@ -724,11 +791,14 @@ internal static class UiFactory
     public const string CardHeaderName = "CardHeader";
 
     /// <summary>
-    /// A titled section: heading with left accent indicator bar, then the rows, on the raised surface.
+    /// A titled section: a bold heading, then the rows, on the card surface.
     /// </summary>
     /// <remarks>
     /// The pages are long, and a flat column of twenty rows gives the eye nowhere to land. A card per
     /// topic costs one container and makes the panel scannable while a combat turn is running.
+    ///
+    /// The heading had an accent bar beside it and was itself drawn in the accent; with a card per
+    /// topic that was a dozen accent marks per page. Weight separates the heading from its rows.
     /// </remarks>
     public static Control Card(string? title, params Control[] children)
     {
@@ -746,21 +816,14 @@ internal static class UiFactory
         card.SetMeta(MetaSurface, SurfaceCard);
         card.AddThemeStyleboxOverride("panel", CardStyle());
         var column = Column();
+        column.AddThemeConstantOverride("separation", SpaceSm + 2);
         if (!string.IsNullOrEmpty(title))
         {
             var headerRow = new HBoxContainer { Name = CardHeaderName, MouseFilter = Control.MouseFilterEnum.Ignore };
             headerRow.AddThemeConstantOverride("separation", SpaceXs + 2);
-
-            var tag = new Panel
-            {
-                CustomMinimumSize = new Vector2(3, 14),
-                MouseFilter = Control.MouseFilterEnum.Ignore,
-                SizeFlagsVertical = Control.SizeFlags.ShrinkCenter
-            };
-            tag.SetMeta(MetaPanel, PanelAccentBar);
-            tag.AddThemeStyleboxOverride("panel", Box(ToGodot(_palette.Accent), new Color(0, 0, 0, 0), 2, 0, 0, 0));
-            headerRow.AddChild(tag);
-            headerRow.AddChild(Heading(title));
+            var heading = Heading(title);
+            heading.SizeFlagsVertical = Control.SizeFlags.ShrinkCenter;
+            headerRow.AddChild(heading);
             column.AddChild(headerRow);
         }
 
@@ -783,115 +846,18 @@ internal static class UiFactory
         };
     }
 
+    /// <summary>A one-pixel hairline across the column.</summary>
     public static Control Divider()
     {
-        var divider = new Panel { CustomMinimumSize = new Vector2(0, 1), MouseFilter = Control.MouseFilterEnum.Ignore };
-        divider.AddThemeStyleboxOverride("panel", Box(ToGodot(_palette.Border), new Color(0, 0, 0, 0), 0, padX: 0, padY: 0));
+        var divider = new Panel
+        {
+            CustomMinimumSize = new Vector2(0, 1),
+            MouseFilter = Control.MouseFilterEnum.Ignore,
+            SizeFlagsHorizontal = Control.SizeFlags.ExpandFill
+        };
+        divider.SetMeta(MetaPanel, PanelDivider);
+        ReapplyPanelTheme(divider);
         return divider;
-    }
-
-    public static LineEdit Line(string text = "", string placeholder = "", bool secret = false)
-    {
-        var edit = new LineEdit
-        {
-            Text = text,
-            PlaceholderText = placeholder,
-            Secret = secret,
-            MouseFilter = Control.MouseFilterEnum.Stop
-        };
-        edit.AddThemeFontSizeOverride("font_size", FontBody);
-        ApplyLineTheme(edit);
-        return edit;
-    }
-
-    /// <summary>Repaints an existing single-line editor in the active palette.</summary>
-    public static void ReapplyLineTheme(LineEdit edit)
-    {
-        ApplyLineTheme(edit);
-    }
-
-    private static void ApplyLineTheme(LineEdit edit)
-    {
-        edit.AddThemeColorOverride("font_color", ToGodot(_palette.Text));
-        edit.AddThemeColorOverride("font_placeholder_color", ToGodot(_palette.Muted));
-        edit.AddThemeStyleboxOverride("normal", Box(ToGodot(_palette.Surface), ToGodot(_palette.Border), 6, padX: SpaceSm, padY: 6));
-        edit.AddThemeStyleboxOverride("focus", Box(ToGodot(_palette.Surface), ToGodot(_palette.Accent), 6, padX: SpaceSm, padY: 6));
-    }
-
-    public static CheckBox Check(string text, bool on)
-    {
-        var box = new CheckBox
-        {
-            Text = text,
-            ButtonPressed = on,
-            MouseFilter = Control.MouseFilterEnum.Stop
-        };
-        box.AddThemeFontSizeOverride("font_size", FontBody);
-        ApplyCheckTheme(box);
-        return box;
-    }
-
-    /// <summary>Repaints an existing checkbox in the active palette.</summary>
-    public static void ReapplyCheckTheme(CheckBox box)
-    {
-        ApplyCheckTheme(box);
-    }
-
-    private static void ApplyCheckTheme(CheckBox box)
-    {
-        box.AddThemeColorOverride("font_color", ToGodot(_palette.Text));
-        box.AddThemeColorOverride("font_hover_color", ToGodot(_palette.Accent));
-        box.AddThemeStyleboxOverride("focus", new StyleBoxEmpty());
-    }
-
-    public static OptionButton Combo()
-    {
-        var combo = new OptionButton { MouseFilter = Control.MouseFilterEnum.Stop };
-        combo.AddThemeFontSizeOverride("font_size", FontBody);
-        ApplyComboTheme(combo);
-        return combo;
-    }
-
-    /// <summary>Repaints an existing drop-down in the active palette.</summary>
-    public static void ReapplyComboTheme(OptionButton combo)
-    {
-        ApplyComboTheme(combo);
-    }
-
-    private static void ApplyComboTheme(OptionButton combo)
-    {
-        combo.AddThemeColorOverride("font_color", ToGodot(_palette.Text));
-        combo.AddThemeStyleboxOverride("normal", Box(ToGodot(_palette.SurfaceRaised), ToGodot(_palette.Border), 6, padX: SpaceSm, padY: 6));
-        combo.AddThemeStyleboxOverride("hover", Box(ToGodot(_palette.SurfaceRaised).Lightened(0.08f), ToGodot(_palette.Border), 6, padX: SpaceSm, padY: 6));
-        combo.AddThemeStyleboxOverride("focus", new StyleBoxEmpty());
-    }
-
-    public static TextEdit Multiline(string text = "", int minHeight = 72)
-    {
-        var edit = new TextEdit
-        {
-            Text = text,
-            WrapMode = TextEdit.LineWrappingMode.Boundary,
-            CustomMinimumSize = new Vector2(0, minHeight),
-            MouseFilter = Control.MouseFilterEnum.Stop
-        };
-        edit.AddThemeFontSizeOverride("font_size", FontBody);
-        ApplyMultilineTheme(edit);
-        return edit;
-    }
-
-    /// <summary>Repaints an existing multi-line editor in the active palette.</summary>
-    public static void ReapplyMultilineTheme(TextEdit edit)
-    {
-        ApplyMultilineTheme(edit);
-    }
-
-    private static void ApplyMultilineTheme(TextEdit edit)
-    {
-        edit.AddThemeColorOverride("font_color", ToGodot(_palette.Text));
-        edit.AddThemeColorOverride("font_placeholder_color", ToGodot(_palette.Muted));
-        edit.AddThemeStyleboxOverride("normal", Box(ToGodot(_palette.Surface), ToGodot(_palette.Border), 6, padX: SpaceSm, padY: 6));
-        edit.AddThemeStyleboxOverride("focus", Box(ToGodot(_palette.Surface), ToGodot(_palette.Accent), 6, padX: SpaceSm, padY: 6));
     }
 
     public static RichTextLabel Rich(bool follow = true)
@@ -912,15 +878,27 @@ internal static class UiFactory
             MouseFilter = Control.MouseFilterEnum.Stop
         };
         label.AddThemeFontSizeOverride("normal_font_size", FontBody);
-        label.AddThemeColorOverride("default_color", ToGodot(_palette.Text));
-        label.AddThemeStyleboxOverride("normal", new StyleBoxEmpty());
+        label.AddThemeFontSizeOverride("bold_font_size", FontBody);
+        label.AddThemeFontOverride("bold_font", OverlayGodotTheme.Bold);
+        ApplyRichTheme(label);
         return label;
     }
 
-    /// <summary>Repaints an existing rich-text view's base colour in the active palette.</summary>
+    /// <summary>Repaints an existing rich-text view's base colour and well in the active palette.</summary>
     public static void ReapplyRichTheme(RichTextLabel label)
     {
+        ApplyRichTheme(label);
+    }
+
+    /// <summary>
+    /// Logs sit in a well, so the conversation and the decision record read as a read-out area of the
+    /// card rather than loose text running into the controls below it.
+    /// </summary>
+    private static void ApplyRichTheme(RichTextLabel label)
+    {
         label.AddThemeColorOverride("default_color", ToGodot(_palette.Text));
+        label.AddThemeStyleboxOverride("normal", InsetStyle(padX: SpaceSm + 2, padY: SpaceSm));
+        label.AddThemeStyleboxOverride("focus", new StyleBoxEmpty());
     }
 
     public static HBoxContainer Row(params Control[] children)
@@ -959,6 +937,14 @@ internal static class UiFactory
             SizeFlagsVertical = Control.SizeFlags.ExpandFill
         };
         column.AddThemeConstantOverride("separation", SpaceSm);
+        return column;
+    }
+
+    /// <summary>A page's column of cards: the same column with a wider gap between its cards.</summary>
+    public static VBoxContainer PageColumn()
+    {
+        var column = Column();
+        column.AddThemeConstantOverride("separation", SpaceMd);
         return column;
     }
 

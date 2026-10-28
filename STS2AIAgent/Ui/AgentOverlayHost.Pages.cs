@@ -30,14 +30,14 @@ namespace STS2AIAgent.Ui;
 internal sealed partial class AgentOverlayHost
 {
     private OptionButton? _companionMode;
-    /// <summary>The decision log's three live labels: usage, run spend, and the log itself.</summary>
-    private RichTextLabel? _decisionLog;
-    private RichLog? _decisionLogView;
-    private Label? _decisionUsage;
-    private Label? _decisionRunSpend;
+    /// <summary>Pause and resume, shown only while a teammate exists.</summary>
+    private Control? _teamControlRow;
 
     /// <summary>The teammate line and the tone it is currently drawn in. See <see cref="ApplyTone"/>.</summary>
     private Control? _teammateLivePill;
+
+    /// <summary>The tone the title bar's state pill is drawn in. See <see cref="ApplyTone"/>.</summary>
+    private UiFactory.ButtonKind? _headerStatusTone;
 
     /// <summary>The team chat's redraw-only-on-change wrapper. See <see cref="RichLog"/>.</summary>
     private RichLog? _teamChatView;
@@ -58,6 +58,22 @@ internal sealed partial class AgentOverlayHost
     private Label? _jevProbabilities;
 
     /// <summary>
+    /// The solo card's "what to do now" line and the one-click way past a budget stop. Multiplayer had
+    /// both in its status card; solo showed only the raw loop status, so a solo player who hit the cap
+    /// or a bad key saw why it stopped but not what to press.
+    /// </summary>
+    private Label? _soloNext;
+    private Button? _soloResetButton;
+
+    /// <summary>
+    /// The play page's setup line and whether the main model is ready. Kept by the refresh pass, so
+    /// the start buttons and the line agree with the gate <c>StartAutoPlay</c> applies.
+    /// </summary>
+    private Control? _readinessBanner;
+    private Label? _readinessText;
+    private bool _playReady;
+
+    /// <summary>
     /// The play page: a solo/multiplayer mode switch on top, then the active mode's section.
     /// </summary>
     /// <remarks>
@@ -69,7 +85,7 @@ internal sealed partial class AgentOverlayHost
     /// </remarks>
     private Control BuildPlayPage()
     {
-        var page = UiFactory.Column();
+        var page = UiFactory.PageColumn();
 
         var settings = AgentRuntime.Instance.Settings;
         var coop = settings.OverlayPlayMode == "coop";
@@ -80,6 +96,7 @@ internal sealed partial class AgentOverlayHost
         page.AddChild(_playModeSwitch);
         _modeSwitchStatus = UiFactory.Wrapped("", UiFactory.FontCaption);
         page.AddChild(_modeSwitchStatus);
+        page.AddChild(BuildReadinessBanner());
 
         _soloSection = BuildSoloSection();
         _coopSection = BuildCoopSection();
@@ -94,6 +111,30 @@ internal sealed partial class AgentOverlayHost
         return UiFactory.Scroll(page, 120);
     }
 
+    /// <summary>
+    /// The line that says what is missing before the AI can play, with the button that goes and
+    /// fixes it. Hidden once the main model passes its test.
+    /// </summary>
+    /// <remarks>
+    /// Without it, a player who opened the play page first pressed Start and got one sentence in the
+    /// status line pointing at another tab. The details and the error stay on the settings page; this
+    /// line only has to say that something is missing and where.
+    /// </remarks>
+    private Control BuildReadinessBanner()
+    {
+        _readinessText = UiFactory.Wrapped("", UiFactory.FontBody, muted: false);
+        _readinessText.SizeFlagsVertical = Control.SizeFlags.ShrinkCenter;
+        var row = UiFactory.Row(_readinessText);
+        var go = UiFactory.Button(Loc.T("去设置"), () => ShowTab(OverlayTabCatalog.Settings), UiFactory.ButtonKind.Primary);
+        go.SizeFlagsHorizontal = Control.SizeFlags.ShrinkEnd;
+        row.AddChild(go);
+        // A tinted notice rather than another card: it is the one thing on the page that is wrong,
+        // and a card looked like every other section.
+        _readinessBanner = UiFactory.Callout(UiFactory.ButtonKind.Normal, row);
+        _readinessBanner.Visible = false;
+        return _readinessBanner;
+    }
+
     /// <summary>Pause and confirm before persisting; the old view remains until confirmation.</summary>
     private void OnPlayModeSelected(int index) => _ = ChangePlayModeAsync(index);
 
@@ -103,18 +144,27 @@ internal sealed partial class AgentOverlayHost
     /// </summary>
     private Control BuildSoloSection()
     {
-        var section = UiFactory.Column();
+        var section = UiFactory.PageColumn();
 
         // The hero names the state, and colours it: green while the loop runs, muted while it waits.
         _playStatus = UiFactory.Wrapped(Loc.T("状态：-"), UiFactory.FontTitle, muted: false);
-        _playSummary = UiFactory.Wrapped(Loc.T("未开始"), UiFactory.FontCaption);
+        // Two caption lines instead of three metric tiles: what the AI sees and did last, and what the
+        // session has spent. The tiles took a quarter of the page for three short readings, and the
+        // spend was drawn a second time in the decision card below.
+        _playSummary = UiFactory.Wrapped("-", UiFactory.FontCaption);
+        _playUsage = UiFactory.Wrapped("-", UiFactory.FontCaption);
+        _soloNext = UiFactory.Wrapped("", UiFactory.FontCaption, muted: false);
+        _soloNext.Visible = false;
         _playToggle = UiFactory.Button(Loc.T("开始自动游玩"), TogglePlay, UiFactory.ButtonKind.Primary);
         _stepButton = UiFactory.Button(Loc.T("单步"), () => _ = AgentRuntime.Instance.StepOnceAsync(CancellationToken.None));
+        _soloResetButton = UiFactory.Button(Loc.T(SessionBudgetLimits.ResetStatsActionLabel), ResetSessionStatsFromUi);
+        _soloResetButton.Visible = false;
         // A horizontal row cannot hold "暂停" and "单步" inside a 440px panel: the primary
         // button's natural width plus padding pushes the second control past the card edge, which
         // is the clipped empty frame measured live on 2026-09-22. Stack them, and hide the step
         // button while autoplay owns the turn so the pause control gets the full card width.
         var playControls = UiFactory.Column();
+        playControls.AddChild(_soloResetButton);
         playControls.AddChild(_playToggle);
         playControls.AddChild(_stepButton);
         section.AddChild(HelpCard.Build(
@@ -122,24 +172,17 @@ internal sealed partial class AgentOverlayHost
             Loc.T("自动游玩"),
             Loc.T("「开始自动游玩」让 AI 持续决策并操作，「单步」只走一步。\n用的是与 MCP 相同的精简状态和工具，不需要视觉。"),
             _playStatus,
+            _soloNext,
             _playSummary,
+            _playUsage,
             playControls));
 
-        _playScreen = UiFactory.Label("-", UiFactory.FontHeading);
-        _playAction = UiFactory.Label("-", UiFactory.FontHeading);
-        _playUsage = UiFactory.Label("-", UiFactory.FontHeading);
-        // The three readings have a 96px floor each, but their live values (especially the Token
-        // sentence) grow well past that. Keep the short screen/action readings together and give
-        // the usage sentence its own full-width row rather than clipping the right-hand tile.
-        section.AddChild(UiFactory.Row(
-            UiFactory.MetricTile(Loc.T("屏幕"), _playScreen),
-            UiFactory.MetricTile(Loc.T("最近动作"), _playAction)));
-        section.AddChild(UiFactory.MetricTile(Loc.T("Token"), _playUsage));
-
         // The dual-layer toggle for solo play. When it is on, Jev picks each action and the LLM only
-        // plans strategy; the panel below the conversation shows what Jev chose.
+        // plans strategy; the panel below the conversation shows what Jev chose. Named for what it does
+        // ("双层决策" meant nothing to a new player), and shown only once fast judgment is configured or
+        // while it is still on (see the mode section of RefreshDynamic).
         _dualLayerSoloCheck = UiFactory.Check(
-            Loc.T("双层决策（Jev）"),
+            Loc.T("用快速判断出牌（LLM 只做规划）"),
             AgentRuntime.Instance.Settings.DualLayerSoloEnabled);
         _dualLayerSoloCheck.Toggled += on =>
         {
@@ -182,7 +225,7 @@ internal sealed partial class AgentOverlayHost
     private Control BuildJevPanel()
     {
         var column = UiFactory.Column();
-        _jevStatus = UiFactory.Wrapped(Loc.T("未配置 Jev，请先在「设置」填写。"), UiFactory.FontCaption);
+        _jevStatus = UiFactory.Wrapped(Loc.T("未配置快速判断，请先在「设置」填写。"), UiFactory.FontCaption);
         _jevLastChoice = UiFactory.Wrapped("-", UiFactory.FontBody, muted: false);
         _jevProbabilities = UiFactory.Wrapped("-", UiFactory.FontCaption);
         _jevDanger = UiFactory.Wrapped("-", UiFactory.FontCaption);
@@ -200,39 +243,10 @@ internal sealed partial class AgentOverlayHost
         column.AddChild(_jevFallbackRate);
         _jevPanel = HelpCard.Build(
             "play.jev",
-            Loc.T("Jev"),
-            Loc.T("开启「双层决策」后，由 Jev 逐步选择动作，LLM 只负责战略规划。\nJev 的地址和 Key 在「设置」里填写；置信度低于阈值时由 LLM 接手。"),
+            Loc.T("快速判断"),
+            Loc.T("开启后，由快速判断模型（Jev）逐步选择动作，LLM 只负责战略规划。\n地址和 Key 在「设置 → 快速判断」填写；置信度低于阈值时由 LLM 接手。"),
             column);
         return _jevPanel;
-    }
-
-    /// <summary>
-    /// The decision log card: this session's usage on top, then the recorded decisions newest first.
-    /// Moved into the play page from its own tab.
-    /// </summary>
-    private Control BuildDecisionCard()
-    {
-        var column = UiFactory.Column();
-        _decisionUsage = UiFactory.Wrapped("-", UiFactory.FontHeading, muted: false);
-        _decisionRunSpend = UiFactory.Wrapped("-", UiFactory.FontHeading, muted: false);
-
-        // Two counters stacked rather than side by side: these are full sentences ("Token 消耗：66,184
-        // ..."), not metric numerals, and a side-by-side row clipped the request count off the right
-        // edge in the live pass.
-        column.AddChild(UiFactory.MetricTile(Loc.T("本次会话"), _decisionUsage));
-        column.AddChild(UiFactory.MetricTile(Loc.T("本局"), _decisionRunSpend));
-        _decisionLog = UiFactory.Rich();
-        _decisionLog.FitContent = false;
-        // Newest first: the view sticks to the top, where the line that just arrived is drawn.
-        _decisionLogView = new RichLog(_decisionLog, RichLog.LogAnchor.Top);
-        _decisionLog.CustomMinimumSize = new Vector2(0, 140);
-        _decisionLog.SizeFlagsHorizontal = Control.SizeFlags.ExpandFill;
-        column.AddChild(_decisionLog);
-        return HelpCard.Build(
-            "play.decisions",
-            Loc.T("决策记录"),
-            Loc.T("最新的在最前。每条包含动作、理由、来源和该步消耗的 Token。"),
-            column);
     }
 
     /// <summary>
@@ -266,7 +280,7 @@ internal sealed partial class AgentOverlayHost
     /// </remarks>
     private Control BuildCoopSection()
     {
-        var page = UiFactory.Column();
+        var page = UiFactory.PageColumn();
         _companionMode = UiFactory.Combo();
         _companionMode.AddItem(Loc.T("AI 自动游玩"));
         _companionMode.AddItem(Loc.T("外部 Agent"));
@@ -287,7 +301,6 @@ internal sealed partial class AgentOverlayHost
         _sessionDetail = UiFactory.Wrapped("-");
         _sessionNext = UiFactory.Wrapped(Loc.T("下一步：-"));
         _sessionConfigNotice = UiFactory.Wrapped("");
-        _resetStatsButton = UiFactory.Button(Loc.T(SessionBudgetLimits.ResetStatsActionLabel), ResetSessionStatsFromUi, UiFactory.ButtonKind.Ghost);
         // The switch names the new behaviour: ticked = the companion no longer takes the preselected
         // character; the AI driving it (or a human at that window) picks instead. It sits right above
         // the invite button so the choice is visible before the second window exists, and is saved on
@@ -314,6 +327,7 @@ internal sealed partial class AgentOverlayHost
         // "the teammate is down" registers before the numbers do; RefreshDynamic recolours it.
         _teammateLive = UiFactory.Label(TeammateLiveText(), UiFactory.FontCaption);
         _teammateLivePill = UiFactory.PillBadge(string.Empty, UiFactory.ButtonKind.Ghost);
+        _teammateLiveTone = null;
         ((PanelContainer)_teammateLivePill).AddChild(_teammateLive);
 
         // Actions first. Invite is the tab's main action -- the one a player comes to this page to
@@ -324,6 +338,15 @@ internal sealed partial class AgentOverlayHost
         _teamPause = UiFactory.Button(Loc.T("暂停队友"), () => _ = AgentRuntime.Instance.ControlTeammateAsync(false, CancellationToken.None));
         _teamResume = UiFactory.Button(Loc.T("继续游玩"), () => _ = AgentRuntime.Instance.ControlTeammateAsync(true, CancellationToken.None));
         _teamControlStatus = UiFactory.Wrapped(AgentRuntime.Instance.TeamControlStatus, UiFactory.FontCaption, muted: true);
+        _teamControlRow = UiFactory.Row(_teamPause, _teamResume);
+        _externalAgentInfo = UiFactory.Wrapped("", UiFactory.FontCaption, muted: false);
+        _externalAgentBox = UiFactory.Column();
+        _externalAgentBox.AddChild(_externalAgentInfo);
+        _externalAgentBox.AddChild(UiFactory.TightRow(UiFactory.Button(Loc.T("复制地址"), CopyExternalAgentUrl, UiFactory.ButtonKind.Ghost)));
+        _externalAgentBox.Visible = false;
+        // The card shows one phase at a time (see RefreshCoopPhase): before a teammate exists, the
+        // character switch, invite and -- when a save exists -- continue; once one exists, pause and
+        // resume. It used to show all nine controls at once, most of them disabled.
         page.AddChild(HelpCard.Build(
             "coop.invite",
             Loc.T("邀请与控制"),
@@ -331,16 +354,27 @@ internal sealed partial class AgentOverlayHost
             _companionChoiceToggle,
             _dualHint,
             _dualLaunchButton,
-            UiFactory.Row(UiFactory.Button(Loc.T("复制诊断"), CopyDiagnostics, UiFactory.ButtonKind.Ghost),
-                UiFactory.Button(Loc.T("保存诊断"), SaveDiagnostics, UiFactory.ButtonKind.Ghost)),
             // In-game entry for continue_ai_teammate: the game's own Load button opens a saved co-op
             // run over Steam networking and rejects the local-connection NetIds, so the way back into
-            // a saved run has to live here, one row under the invite.
-            UiFactory.Row(_dualContinueButton, _resetStatsButton),
-            UiFactory.Divider(),
-            UiFactory.Row(_teamPause, _teamResume),
-            _teamControlStatus));
+            // a saved run has to live here, under the invite.
+            _dualContinueButton,
+            _teamControlRow,
+            _teamControlStatus,
+            _externalAgentBox));
 
+        // The dual-layer toggle for the multiplayer teammate. The companion instance runs its own Jev
+        // loop (it has no overlay), so this switch is the host-side control for it. It sits with the
+        // teammate's controls; it used to come after the chat, the one card a player has to scroll to.
+        _dualLayerCoopCheck = UiFactory.Check(
+            Loc.T("用快速判断出牌（LLM 只做规划）"),
+            AgentRuntime.Instance.Settings.DualLayerCoopEnabled);
+        _dualLayerCoopCheck.Toggled += on => _ = SetCoopDualLayerAsync(on);
+        page.AddChild(_dualLayerCoopCheck);
+        _companionSettingsStatus = UiFactory.Wrapped("", UiFactory.FontCaption);
+        page.AddChild(_companionSettingsStatus);
+
+        // The counter reset and the diagnostics moved to the session card at the bottom of the play
+        // page, which both modes show.
         page.AddChild(UiFactory.Card(
             Loc.T("组队状态"),
             _sessionHeadline,
@@ -371,84 +405,8 @@ internal sealed partial class AgentOverlayHost
             _teamInput,
             UiFactory.TightRow(_teamSend),
             _teamStatus));
-
-        // The dual-layer toggle for the multiplayer teammate. The companion instance runs its own Jev
-        // loop (it has no overlay), so this switch is the host-side control for it.
-        _dualLayerCoopCheck = UiFactory.Check(
-            Loc.T("双层决策（Jev）"),
-            AgentRuntime.Instance.Settings.DualLayerCoopEnabled);
-        _dualLayerCoopCheck.Toggled += on => _ = SetCoopDualLayerAsync(on);
-        page.AddChild(_dualLayerCoopCheck);
-        _companionSettingsStatus = UiFactory.Wrapped("", UiFactory.FontCaption);
-        page.AddChild(_companionSettingsStatus);
         // The play page's own scroll carries this section now; the section returns its plain column.
         return page;
-    }
-
-    /// <summary>
-    /// Re-reads the usage summary and the log from <c>AgentRuntime</c>. The caller passes the
-    /// player-facing view it already asked for, so the budget reason is the same text the AI teammate
-    /// tab shows rather than a second reading of the budget guard.
-    /// </summary>
-    private void RefreshDecisionPage(PlayerFacingView facing)
-    {
-        if (_decisionUsage != null)
-        {
-            _decisionUsage.Text = PlayerFacingSession.FormatUsageSummary(
-                AgentRuntime.Instance.SessionUsageKnown,
-                AgentRuntime.Instance.SessionUsage,
-                AgentRuntime.Instance.SessionRequests,
-                facing);
-        }
-
-        if (_decisionRunSpend != null)
-        {
-            var spend = AgentRuntime.Instance.CurrentRunSpend();
-            _decisionRunSpend.Text = PlayerFacingSession.FormatRunSpend(
-                AgentRuntime.Instance.CurrentRunId ?? spend.RunId,
-                spend.Decisions,
-                spend.Tokens,
-                spend.TokensKnown);
-        }
-
-        if (_decisionLogView == null)
-        {
-            return;
-        }
-
-        var entries = AgentRuntime.Instance.RecentDecisions(DecisionLogView.RecentLimit);
-        if (entries.Count == 0)
-        {
-            _decisionLogView.Show(new[] { Muted(Loc.T("暂无决策记录。")) + "\n" });
-            return;
-        }
-
-        // Newest first, and rendered directly rather than through the pre-joined lines: the parts of
-        // a line that carry meaning get their own colour, the action in the accent because it is what
-        // happened. Everything is escaped, so a model that writes BBCode in its reason cannot restyle
-        // the page it is quoted on. The blank line between entries is what stops fifty of them
-        // reading as one paragraph.
-        var lines = new List<string>(entries.Count);
-        for (var offset = 0; offset < entries.Count; offset++)
-        {
-            var entry = entries[entries.Count - 1 - offset];
-            var parts = new List<string>(3);
-            if (!string.IsNullOrWhiteSpace(entry.reason))
-            {
-                parts.Add(Loc.T("理由：{0}", entry.reason));
-            }
-
-            parts.Add(Loc.T("来源：{0}", entry.source));
-            parts.Add(entry.total_tokens is { } tokens
-                ? Loc.T("Token {0}", tokens.ToString("N0"))
-                : Loc.T("Token 未知"));
-            // The action stays on its own line. A reason such as "Play Dismantle (14 dmg with STR 3)
-            // on the 1st Inklet" plus source and token count is wider than the panel even after the
-            // rich label wraps, and one joined line is what the 2026-09-22 screenshot clipped.
-            lines.Add(Accent($"{entry.id}. {entry.action}") + "\n" + Muted(string.Join("\n", parts)) + "\n\n");
-        }
-
-        _decisionLogView.Show(lines);
     }
 
     private async Task SendChatAsync()
@@ -526,15 +484,18 @@ internal sealed partial class AgentOverlayHost
         Guarded("chat", RefreshChatLog);
 
         var playing = AgentRuntime.Instance.PlayRunning;
-        Guarded("header", () => RefreshHeader(playing));
-        Guarded("solo", () => RefreshSoloSection(playing));
 
+        // Read once, before the sections that draw it: the title bar, the edge tab and the solo card
+        // all say whether play stopped for a reason the player has to deal with.
         PlayerFacingView? facing = null;
+        Guarded("facing", () => facing = AgentRuntime.Instance.PlayerFacing());
+
+        Guarded("ready", RefreshReadiness);
+        Guarded("header", () => RefreshHeader(playing, facing));
+        Guarded("solo", () => RefreshSoloSection(playing, facing));
         Guarded("session", () =>
         {
-            var view = AgentRuntime.Instance.PlayerFacing();
-            facing = view;
-            RefreshDecisionPage(view);
+            if (facing is { } view) RefreshDecisionPage(view);
         });
         Guarded("coop", () => RefreshCoopSection(facing));
         Guarded("settings", RefreshSettingsLive);
@@ -549,6 +510,11 @@ internal sealed partial class AgentOverlayHost
             var mode = AgentRuntime.Instance.Settings;
             var coopMode = mode.OverlayPlayMode == "coop";
             if (_dualLayerSoloCheck != null) _dualLayerSoloCheck.SetPressedNoSignal(mode.DualLayerSoloEnabled);
+            // A player without fast judgment has nothing to switch on; one who turned it on keeps the
+            // switch to turn it off again.
+            var jevConfigured = mode.HasJevConfigured();
+            if (_dualLayerSoloCheck != null) _dualLayerSoloCheck.Visible = jevConfigured || mode.DualLayerSoloEnabled;
+            if (_dualLayerCoopCheck != null) _dualLayerCoopCheck.Visible = jevConfigured || mode.DualLayerCoopEnabled;
             if (_nonCombatOnlyCheck != null) _nonCombatOnlyCheck.SetPressedNoSignal(mode.NonCombatOnlyEnabled);
             if (_dualLayerCoopCheck != null) _dualLayerCoopCheck.SetPressedNoSignal(mode.DualLayerCoopEnabled);
             RefreshModeControls(coopMode, coopMode ? mode.DualLayerCoopEnabled : mode.DualLayerSoloEnabled);
@@ -569,31 +535,79 @@ internal sealed partial class AgentOverlayHost
         }
     }
 
-    /// <summary>The title bar's state tag, the connection line, and the edge tab.</summary>
-    private void RefreshHeader(bool playing)
+    /// <summary>The play page's setup line, and the readiness the start buttons are gated on.</summary>
+    private void RefreshReadiness()
     {
-        if (_apiLabel != null)
+        var settings = AgentRuntime.Instance.Settings;
+        var blocker = FirstRunSetup.PlayBlocker(FirstRunSetup.Evaluate(settings));
+        _playReady = blocker == null;
+        if (_readinessBanner == null || _readinessText == null)
         {
-            _apiLabel.Text = Loc.T("{0}  ·  {1}  ·  热键 {2}", HttpServer.Instance.Prefix, InstanceRole.Current, AgentRuntime.Instance.Settings.Hotkey);
+            return;
         }
 
+        // The external-agent teammate never calls a model, so a missing model blocks nothing there.
+        var external = settings.OverlayPlayMode == "coop" && settings.CompanionControlMode == "external";
+        _readinessText.Text = blocker ?? "";
+        _readinessBanner.Visible = blocker != null && !external;
+    }
+
+    /// <summary>The title bar's state tag and the edge tab.</summary>
+    /// <remarks>
+    /// Three states, not two. With only "playing" and "idle", auto-play that stopped on a budget cap or
+    /// a bad key looked exactly like a paused one, and with the panel hidden nothing on screen said the
+    /// AI had stopped. The edge tab is what a player sees with the panel closed, so it takes the
+    /// warning colour and its tooltip names the reason.
+    /// </remarks>
+    private void RefreshHeader(bool playing, PlayerFacingView? facing)
+    {
+        var attention = !playing && facing is { } view && PlayerFacingSession.NeedsAttention(view);
         if (_headerStatus != null)
         {
-            _headerStatus.Text = playing ? Loc.T("● 游玩中") : Loc.T("○ 待机");
-            _headerStatus.AddThemeColorOverride(
-                "font_color",
-                playing ? UiFactory.ToGodot(UiFactory.Palette.Positive) : UiFactory.ToGodot(UiFactory.Palette.Muted));
+            _headerStatus.Text = playing ? Loc.T("游玩中") : attention ? Loc.T("需处理") : Loc.T("待机");
         }
+
+        ApplyTone(
+            _headerStatusPill,
+            ref _headerStatusTone,
+            playing ? UiFactory.ButtonKind.Primary : attention ? UiFactory.ButtonKind.Normal : UiFactory.ButtonKind.Ghost);
 
         if (_edgeTab != null)
         {
-            _edgeTab.Text = playing ? "AI ▶" : "AI";
+            // The tab keeps its label; while the AI plays it turns the positive colour instead of
+            // growing a play-arrow glyph from a fallback font.
+            var tone = playing ? UiFactory.Palette.Positive : attention ? UiFactory.Palette.Warning : UiFactory.Palette.Accent;
+            _edgeTab.AddThemeColorOverride("font_color", UiFactory.ToGodot(tone));
+            _edgeTab.AddThemeColorOverride("font_hover_color", UiFactory.ToGodot(tone));
+            var hotkey = Loc.T("热键 {0}", AgentRuntime.Instance.Settings.Hotkey);
+            _edgeTab.TooltipText = attention ? facing!.Value.Headline + " · " + hotkey : hotkey;
         }
     }
 
     /// <summary>The solo section's turn card and metric tiles.</summary>
-    private void RefreshSoloSection(bool playing)
+    private void RefreshSoloSection(bool playing, PlayerFacingView? facing)
     {
+        var settings = AgentRuntime.Instance.Settings;
+        // The player-facing reading is written for both modes, but its "next step" only means
+        // something in solo when play stopped for a reason; the multiplayer card shows it always.
+        // A model that is not ready yet is the readiness banner's job (RefreshReadiness runs first),
+        // and a run that never started has nothing to "continue".
+        var solo = settings.OverlayPlayMode != "coop";
+        var attention = solo && !playing && _playReady && facing is { } view && PlayerFacingSession.NeedsAttention(view);
+        if (_soloNext != null)
+        {
+            _soloNext.Text = attention ? Loc.T("下一步：{0}", facing!.Value.NextAction) : "";
+            _soloNext.Visible = attention;
+            if (attention) UiFactory.SetTone(_soloNext, UiFactory.ButtonKind.Normal);
+        }
+
+        var budgetStop = attention && facing!.Value.Kind == PlayerFacingSession.BudgetKind;
+        if (_soloResetButton != null)
+        {
+            _soloResetButton.Visible = budgetStop;
+            _soloResetButton.Disabled = !CanResetSessionStats();
+        }
+
         if (_playStatus != null)
         {
             // The elapsed-bearing variant: a turn that stalls now shows a growing counter
@@ -606,30 +620,12 @@ internal sealed partial class AgentOverlayHost
 
         if (_playSummary != null)
         {
-            _playSummary.Text = playing ? Loc.T("AI 正在操作") : Loc.T("未开始");
-        }
-
-        if (_playScreen != null)
-        {
-            try
-            {
-                _playScreen.Text = GameStateService.CurrentScreenName();
-            }
-            catch (Exception ex)
-            {
-                WarnOnce("screen name read failed", ex);
-                _playScreen.Text = "-";
-            }
-        }
-
-        if (_playAction != null)
-        {
-            _playAction.Text = Trim(AgentRuntime.Instance.LastAction, 24);
+            _playSummary.Text = PlaySummaryText();
         }
 
         if (_playUsage != null)
         {
-            // Whole sentence: the tile has its own full-width row and wraps (see BuildSoloSection).
+            // Whole sentence on its own wrapping line (see BuildSoloSection).
             _playUsage.Text = PlayerFacingSession.FormatUsage(
                 AgentRuntime.Instance.SessionUsageKnown,
                 AgentRuntime.Instance.SessionUsage,
@@ -638,14 +634,32 @@ internal sealed partial class AgentOverlayHost
 
         if (_playToggle != null)
         {
-            _playToggle.Text = playing ? Loc.T("暂停") : Loc.T("开始自动游玩");
+            // After a stop the next-step line says "继续游玩", so the button it points at says it too.
+            _playToggle.Text = playing ? Loc.T("暂停") : attention ? Loc.T("继续游玩") : Loc.T("开始自动游玩");
         }
 
         if (_stepButton != null)
         {
-            _stepButton.Disabled = playing;
+            _stepButton.Disabled = playing || !_playReady;
             _stepButton.Visible = !playing;
         }
+    }
+
+    /// <summary>The auto-play card's facts line: the screen the AI is on and the last action it took.</summary>
+    private static string PlaySummaryText()
+    {
+        string screen;
+        try
+        {
+            screen = GameStateService.CurrentScreenName();
+        }
+        catch (Exception ex)
+        {
+            WarnOnce("screen name read failed", ex);
+            screen = "-";
+        }
+
+        return Loc.T("{0} · 最近动作：{1}", PlayerLabels.Screen(screen), Trim(PlayerLabels.Action(AgentRuntime.Instance.LastAction), 48));
     }
 
     /// <summary>
@@ -735,12 +749,18 @@ internal sealed partial class AgentOverlayHost
         if (_settingsLoadNotice != null)
         {
             _settingsLoadNotice.Text = FormatSettingsNotice();
+            _settingsLoadNotice.Visible = _settingsLoadNotice.Text.Length > 0;
         }
 
         if (_budgetHint != null && !string.IsNullOrWhiteSpace(_budgetInputError))
         {
             _budgetHint.Text = _budgetInputError;
             _budgetHint.Visible = true;
+        }
+
+        if (_quickTestBadge != null)
+        {
+            ShowBadge(_quickTestBadge, QuickTestBadge());
         }
 
         if (_playTest != null)
@@ -765,9 +785,14 @@ internal sealed partial class AgentOverlayHost
             _mcpToggle.SetPressedNoSignal(AgentRuntime.Instance.McpRunning);
         }
 
-        if (_mcpInfoBox != null)
+        if (_apiAddressLabel != null)
         {
-            _mcpInfoBox.Visible = AgentRuntime.Instance.McpRunning;
+            _apiAddressLabel.Text = Loc.T("本机 API：{0}", HttpServer.Instance.Prefix);
+        }
+
+        if (_mcpClientCard != null)
+        {
+            _mcpClientCard.Visible = AgentRuntime.Instance.McpRunning;
         }
 
         if (_mcpUrlLabel != null)
@@ -778,7 +803,7 @@ internal sealed partial class AgentOverlayHost
 
         // Only on a real change: assigning a TextEdit's text resets its caret, selection and scroll,
         // so a player selecting the config to copy it lost the selection on every refresh.
-        var mcpConfig = AgentRuntime.Instance.McpClientConfig;
+        var mcpConfig = AgentRuntime.Instance.McpClientConfigFor(_mcpClient);
         if (_mcpConfigEdit != null && _mcpConfigEdit.Text != mcpConfig)
         {
             _mcpConfigEdit.Text = mcpConfig;
@@ -846,15 +871,9 @@ internal sealed partial class AgentOverlayHost
         }
 
         applied = tone;
-        var (background, foreground) = UiFactory.ToneStyle(tone);
-        container.AddThemeStyleboxOverride("panel", UiFactory.ChipStyle(background, foreground.Darkened(0.40f)));
-        foreach (var child in container.GetChildren())
-        {
-            if (child is Label label)
-            {
-                label.AddThemeColorOverride("font_color", foreground);
-            }
-        }
+        // Through the factory, which records the tone: a theme switch used to repaint the pill in
+        // the tone it was built with and its label in plain text, whatever the teammate's state.
+        UiFactory.Retone(container, tone);
     }
 
     /// <summary>BBCode in the accent colour, for the parts of a line that carry the meaning.</summary>

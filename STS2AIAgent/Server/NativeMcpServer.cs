@@ -144,6 +144,30 @@ internal sealed partial class NativeMcpServer
         return FormatClientConfigJson(EndpointUrl);
     }
 
+    /// <summary>The MCP clients the overlay offers a ready-made config for, as (id, display name).</summary>
+    public static readonly (string Id, string Name)[] ConfigClients =
+    {
+        ("claude-code", "Claude Code"),
+        ("cursor", "Cursor"),
+        ("codex", "Codex")
+    };
+
+    /// <summary>
+    /// The config one client needs, in that client's own format: a CLI command for Claude Code, the
+    /// <c>mcpServers</c> JSON for Cursor (and other JSON-configured clients), a TOML table for Codex's
+    /// <c>~/.codex/config.toml</c>. An unknown id falls back to the JSON.
+    /// </summary>
+    public static string FormatClientConfig(string client, string? url)
+    {
+        var endpoint = NormalizeEndpoint(url) ?? "http://127.0.0.1:8080/mcp";
+        return client switch
+        {
+            "claude-code" => "claude mcp add --transport http sts2-ai-agent " + endpoint,
+            "codex" => "[mcp_servers.sts2-ai-agent]\nurl = \"" + endpoint + "\"",
+            _ => FormatClientConfigJson(endpoint)
+        };
+    }
+
     public static string FormatClientConfigJson(string? url)
     {
         var endpoint = NormalizeEndpoint(url) ?? "http://127.0.0.1:8080/mcp";

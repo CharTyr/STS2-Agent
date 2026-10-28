@@ -260,7 +260,7 @@ def _guided_tool_schemas() -> dict[str, set[str]]:
 
 def _legacy_tool_schemas() -> dict[str, set[str]]:
     """Registered full-profile legacy tool -> inputSchema property names."""
-    server = create_server(client=Sts2Client(), tool_profile="full")
+    server = create_server(client=Sts2Client(base_url="http://127.0.0.1:8080"), tool_profile="full")
 
     async def collect() -> dict[str, set[str]]:
         schemas: dict[str, set[str]] = {}

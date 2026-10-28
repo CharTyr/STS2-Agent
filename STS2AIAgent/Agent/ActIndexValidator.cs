@@ -48,6 +48,9 @@ internal sealed record ActIndexError(
 
 internal static class ActIndexValidator
 {
+    /// <summary>Whether the action cannot be dispatched without one of the indices it reads.</summary>
+    internal static bool RequiresIndex(string action) => OptionPaths.ContainsKey(action);
+
     /// <summary>Where an action's option index lives in the compact state, primary path first.</summary>
     private static readonly Dictionary<string, string[][]> OptionPaths = new(StringComparer.OrdinalIgnoreCase)
     {

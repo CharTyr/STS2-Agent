@@ -38,7 +38,7 @@ internal static class DeckSelectionContractTests
             payloadBody,
             StringComparison.Ordinal);
         Assert.Contains(
-            "IsCardSelected(currentScreen,holder.CardModel!)",
+            "IsCardSelected(currentScreen,card)",
             stateSource,
             StringComparison.Ordinal);
     }
@@ -82,7 +82,7 @@ internal static class DeckSelectionContractTests
             settleBody,
             StringComparison.Ordinal);
         var stateSource = WithoutWhitespace(AgentSourceFixture.ReadStateService());
-        Assert.Contains("IsCardSelected(currentScreen,holder.CardModel!)", stateSource, StringComparison.Ordinal);
+        Assert.Contains("IsCardSelected(currentScreen,card)", stateSource, StringComparison.Ordinal);
         Assert.Contains("selected=selected", stateSource, StringComparison.Ordinal);
     }
 

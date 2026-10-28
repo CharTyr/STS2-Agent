@@ -40,17 +40,16 @@ internal sealed partial class AgentOverlayHost
     private CheckBox? _attachShot;
     private Label? _playStatus;
     private Label? _playSummary;
-    private Label? _playScreen;
-    private Label? _playAction;
     private Label? _playUsage;
     private LineEdit? _maxTokensEdit;
     private LineEdit? _maxRequestsEdit;
     private CheckBox? _proactiveChatToggle;
     private OptionButton? _proactiveToneCombo;
 
-    /// <summary>The header's live state tag and the connection line under it.</summary>
+    /// <summary>The header's live state tag, and the hide button whose tooltip names the hotkey.</summary>
     private Label? _headerStatus;
-    private Label? _apiLabel;
+    private PanelContainer? _headerStatusPill;
+    private Button? _hideButton;
     private Label? _dualStatus;
     private Label? _teammateLive;
     private Label? _sessionHeadline;
@@ -74,6 +73,11 @@ internal sealed partial class AgentOverlayHost
     private CheckBox? _mcpToggle;
     private Label? _mcpStatus;
     private Label? _mcpUrlLabel;
+    /// <summary>The local HTTP API address, moved here from the title bar.</summary>
+    private Label? _apiAddressLabel;
+    /// <summary>The MCP client-config card, and which client's format it shows. Static so a rebuild keeps the choice.</summary>
+    private Control? _mcpClientCard;
+    private static string _mcpClient = "claude-code";
     private TextEdit? _mcpConfigEdit;
     private Control? _mcpInfoBox;
     private Control? _pageHost;
@@ -254,11 +258,17 @@ internal sealed partial class AgentOverlayHost
             MouseFilter = Control.MouseFilterEnum.Ignore
         };
         host.SetAnchorsAndOffsetsPreset(Control.LayoutPreset.FullRect);
+        // Everything Godot draws by itself under the host -- scroll bars, drop-down lists, tooltips,
+        // switch icons, the font -- takes the palette from here. See OverlayGodotTheme.
+        host.Theme = OverlayGodotTheme.Build();
 
         _host = host;
 
-        _edgeTab = UiFactory.Button("AI", ToggleVisible);
-        _edgeTab.CustomMinimumSize = new Vector2(36, 72);
+        // Drawn like the window it opens -- its surface, hairline and shadow, with the name in the
+        // accent -- rather than as one of the panel's grey buttons left floating on the game.
+        _edgeTab = UiFactory.Button("AI", ToggleVisible, UiFactory.ButtonKind.Floating);
+        _edgeTab.CustomMinimumSize = new Vector2(34, 64);
+        _edgeTab.TooltipText = Loc.T("热键 {0}", startupSettings.Hotkey);
         _edgeTab.SetAnchorsPreset(Control.LayoutPreset.TopLeft);
         _edgeTab.Position = new Vector2(-80, 0);
 
@@ -276,9 +286,9 @@ internal sealed partial class AgentOverlayHost
             MouseFilter = Control.MouseFilterEnum.Stop
         };
         chrome.SetAnchorsAndOffsetsPreset(Control.LayoutPreset.FullRect);
-        UiFactory.TagSurface(chrome, UiFactory.SurfaceRole.Chrome, 10);
+        UiFactory.TagSurface(chrome, UiFactory.SurfaceRole.Chrome, UiFactory.RadiusWindow);
 
-        var layout = UiFactory.Column();
+        var layout = UiFactory.PageColumn();
         _contentColumn = layout;
         layout.AddChild(BuildHeader());
         layout.AddChild(BuildTabs());
@@ -347,48 +357,42 @@ internal sealed partial class AgentOverlayHost
             MouseDefaultCursorShape = Control.CursorShape.Move,
             SizeFlagsHorizontal = Control.SizeFlags.ExpandFill
         };
-        UiFactory.TagSurface(_dragHandle, UiFactory.SurfaceRole.ChromeRaised, 8);
+        // No box of its own: the title bar is part of the window. It used the window's raised style,
+        // which drew a second bordered, shadowed panel inside the first one.
+        UiFactory.TagSurface(_dragHandle, UiFactory.SurfaceRole.Bare);
         _dragHandle.GuiInput += OnDragHandleGuiInput;
         // No wrapping on either of these: the title is a fixed string and the status is a chip, and a
         // tight row is exactly where WordSmart would break them one character per line. Observed live
         // on 2026-09-21 -- the title rendered as a vertical column of single letters.
-        var title = UiFactory.MarkAccent(UiFactory.Label("STS2 AI Agent", UiFactory.FontTitle, wrap: false));
+        var title = UiFactory.Bold(UiFactory.MarkAccent(UiFactory.Label("STS2 AI Agent", UiFactory.FontTitle, wrap: false)));
         title.MouseFilter = Control.MouseFilterEnum.Ignore;
+        title.SizeFlagsVertical = Control.SizeFlags.ShrinkCenter;
 
         // The live state tag: the answer to "is it playing" is in the title bar, where the player
-        // already looks to find the window, instead of one tab away.
-        _headerStatus = UiFactory.Label(Loc.T("○ 待机"), UiFactory.FontCaption, muted: true, wrap: false);
+        // already looks to find the window, instead of one tab away. A pill with a drawn dot; the
+        // "●"/"○" glyphs it replaced came from a fallback font and sat off the text's baseline.
+        _headerStatus = UiFactory.Label(Loc.T("待机"), UiFactory.FontCaption, wrap: false);
         _headerStatus.MouseFilter = Control.MouseFilterEnum.Ignore;
-        _headerStatus.SizeFlagsVertical = Control.SizeFlags.ShrinkCenter;
-        var titleRow = UiFactory.TightRow(title, _headerStatus);
+        _headerStatusPill = UiFactory.StatusPill(_headerStatus, UiFactory.ButtonKind.Ghost);
+        // A rebuild (theme or language) makes a new pill; the next refresh has to paint it.
+        _headerStatusTone = null;
+        var titleRow = UiFactory.TightRow(title, _headerStatusPill);
         titleRow.MouseFilter = Control.MouseFilterEnum.Ignore;
-
-        var hint = UiFactory.Label(Loc.T("拖动移动"), UiFactory.FontCaption, muted: true, wrap: false);
-        hint.MouseFilter = Control.MouseFilterEnum.Ignore;
-        var handleColumn = UiFactory.Column();
-        handleColumn.MouseFilter = Control.MouseFilterEnum.Ignore;
-        handleColumn.SizeFlagsVertical = Control.SizeFlags.ShrinkBegin;
-        handleColumn.AddThemeConstantOverride("separation", 2);
-        handleColumn.AddChild(titleRow);
-        handleColumn.AddChild(hint);
-        _dragHandle.AddChild(handleColumn);
+        // One line: the title bar is the drag handle (its cursor says so), and the local API address
+        // that used to sit under it is developer information, now in Settings → MCP.
+        _dragHandle.AddChild(titleRow);
 
         var hide = UiFactory.Button(Loc.T("隐藏"), ToggleVisible, UiFactory.ButtonKind.Ghost);
-        hide.CustomMinimumSize = new Vector2(56, 0);
         hide.SizeFlagsHorizontal = Control.SizeFlags.ShrinkEnd;
+        hide.SizeFlagsVertical = Control.SizeFlags.ShrinkCenter;
+        hide.TooltipText = Loc.T("热键 {0}", AgentRuntime.Instance.Settings.Hotkey);
+        _hideButton = hide;
 
-        // The connection line doubles as the header's status chip: the colour says whether the local
-        // API is reachable before the player has read a word of it.
-        _apiLabel = UiFactory.Label("", UiFactory.FontCaption, muted: true);
-        var column = UiFactory.Column();
-        column.SizeFlagsVertical = Control.SizeFlags.ShrinkBegin;
         var row = new HBoxContainer { MouseFilter = Control.MouseFilterEnum.Ignore };
         row.AddThemeConstantOverride("separation", UiFactory.SpaceSm);
         row.AddChild(_dragHandle);
         row.AddChild(hide);
-        column.AddChild(row);
-        column.AddChild(_apiLabel);
-        return column;
+        return row;
     }
 
     private void ToggleVisible()
@@ -416,7 +420,20 @@ internal sealed partial class AgentOverlayHost
     private void CopyDiagnostics()
     {
         CopyText(AgentRuntime.Instance.ExportDiagnostics());
-        AgentRuntime.Instance.NotifyStatus(Loc.T("诊断已复制（不含 Key 和对话）。"));
+        ShowSessionToolResult(Loc.T("诊断已复制（不含 Key 和对话）。"));
+    }
+
+    /// <summary>
+    /// Reports a counter or diagnostics action next to its button. These used to go only to the solo
+    /// status line, which multiplayer hides, so pressing "复制诊断" there showed nothing at all.
+    /// </summary>
+    private void ShowSessionToolResult(string message)
+    {
+        AgentRuntime.Instance.NotifyStatus(message);
+        if (_sessionToolsStatus != null && GodotObject.IsInstanceValid(_sessionToolsStatus))
+        {
+            UiFactory.SetStatusLine(_sessionToolsStatus, message);
+        }
     }
 
     private void SaveDiagnostics()
@@ -428,9 +445,9 @@ internal sealed partial class AgentOverlayHost
             var path = Path.Combine(directory, "sts2-agent-" + DateTime.UtcNow.ToString("yyyyMMdd-HHmmss-fff") + ".txt");
             File.WriteAllText(path, AgentRuntime.Instance.ExportDiagnostics());
             OS.ShellOpen(directory);
-            AgentRuntime.Instance.NotifyStatus(Loc.T("诊断已保存：{0}", path));
+            ShowSessionToolResult(Loc.T("诊断已保存：{0}", path));
         }
-        catch (Exception ex) { AgentRuntime.Instance.NotifyStatus(DiagnosticExport.Redact(ex.Message)); }
+        catch (Exception ex) { ShowSessionToolResult(DiagnosticExport.Redact(ex.Message)); }
     }
 
     public static void ShowLocalCoopContinue()
@@ -472,6 +489,8 @@ internal sealed partial class AgentOverlayHost
         {
             _hotkeyName = hotkeyName;
             OverlayHotkey.TryParse(hotkeyName, out _hotkey);
+            if (_hideButton != null) _hideButton.TooltipText = Loc.T("热键 {0}", hotkeyName);
+            if (_edgeTab != null) _edgeTab.TooltipText = Loc.T("热键 {0}", hotkeyName);
         }
 
         var down = Input.IsPhysicalKeyPressed(_hotkey);
@@ -496,22 +515,9 @@ internal sealed partial class AgentOverlayHost
             }
             if (_panel?.Visible == true)
             {
-                if (_apiLabel != null)
+                if (IsTabVisible(OverlayTabCatalog.Play) && _playSummary != null)
                 {
-                    _apiLabel.Text = Loc.T("{0}  ·  {1}  ·  热键 {2}", HttpServer.Instance.Prefix, InstanceRole.Current, hotkeyName);
-                }
-
-                if (IsTabVisible(OverlayTabCatalog.Play) && _playScreen != null)
-                {
-                    try
-                    {
-                        _playScreen.Text = GameStateService.CurrentScreenName();
-                    }
-                    catch (Exception ex)
-                    {
-                        WarnOnce("screen name read failed", ex);
-                        _playScreen.Text = "-";
-                    }
+                    _playSummary.Text = PlaySummaryText();
                 }
 
                 // The play page hosts the multiplayer section, the decision log and the Jev panel, all
@@ -529,6 +535,10 @@ internal sealed partial class AgentOverlayHost
 
                     RefreshChatLog();
                     RefreshContinueAvailability();
+                    // A circuit-breaker cooldown can expire without raising a runtime event.
+                    // Refresh its reading on the play-page tick so the warning clears on time.
+                    var settings = AgentRuntime.Instance.Settings;
+                    RefreshJevReading(settings.OverlayPlayMode == "coop", settings);
                     // Cached inside the runtime and throttled there: this runs on the game thread, so
                     // it asks for a refresh and renders whatever the last one produced.
                     AgentRuntime.Instance.RequestTeammateStatusRefresh();
