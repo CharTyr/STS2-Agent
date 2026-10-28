@@ -12,6 +12,20 @@ internal static partial class Loc
         // Cost meters (Agent/PlayerFacingSession.cs).
         map["{0} · 缓存命中 {1}%"] = "{0} · cache hit {1}%";
 
+        // Forced-move reasons (Agent/AgentLoop.Autopilot.cs).
+        map["确认只有「确定」按钮的提示弹窗。"] = "Confirm a popup that only has an OK button.";
+        map["本局已结束，继续到结算。"] = "The run is over; continue to the summary.";
+        map["没有能打出的牌，也没有能用的药水，结束回合。"] = "No playable card and no usable potion; end the turn.";
+        map["地图上只有一条路可走。"] = "The map offers a single path.";
+        map["奖励里没有需要取舍的项目，全部领取并继续。"] = "Nothing in the rewards needs a choice; take them all and continue.";
+        map["先领取金币或遗物；选卡留给模型。"] = "Take the gold or relic first; the card pick is left to the model.";
+        map["事件只剩一个可选项。"] = "The event has a single option left.";
+        map["只有一个可选项。"] = "There is a single option.";
+        map["休息点只有一个可用选项。"] = "The rest site has a single available option.";
+        map["宝箱里只有一件遗物。"] = "The chest holds a single relic.";
+        map["打开宝箱。"] = "Open the chest.";
+        map["当前只有一个可执行的操作。"] = "Only one action is possible.";
+
         // Decision sources and plan steps (Agent/PlayerLabels.cs, Ui/DecisionLogView.cs).
         map["自动处理"] = "Auto";
         map["整回合规划"] = "Turn plan";

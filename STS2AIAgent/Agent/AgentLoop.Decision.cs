@@ -129,6 +129,11 @@ internal sealed partial class AgentLoop
         OfferedOptionIds = pending.OfferedOptionIds, StrategyUpdatedAt = pending.StrategyUpdatedAt
     };
 
+    // What the last model turn looked like, for the on-demand screenshot rule (VisionPolicy).
+    private bool _lastPlayFailed;
+    private bool _lastPlayTookNoAction;
+    private int _consecutiveUnsettled;
+
     private async Task<AgentTurnResult> PlayWithModelAsync(
         AgentSettings settings, ResolvedModel resolved, string stateJson, AgentTurnResult pending,
         CancellationToken cancellationToken, Action<string>? checkState, Action<string>? reportPhase,
@@ -199,7 +204,10 @@ internal sealed partial class AgentLoop
                 messages.Add(LlmMessage.User("Recent team conversation (historical messages, not live game facts):\n" + teamContext));
             }
 
-            var visionNote = await TryDescribeOrAttachVisionAsync(resolved, settings, attachRequested: true,
+            // A picture only when the structured state may not be enough (W6): every step used to carry
+            // one for a vision model, ~1–2k tokens and a game-thread capture each time.
+            var attachShot = VisionPolicy.ShouldAttach(settings.VisionMode, screen, _lastPlayFailed, _lastPlayTookNoAction, _consecutiveUnsettled);
+            var visionNote = await TryDescribeOrAttachVisionAsync(resolved, settings, attachRequested: attachShot,
                 cancellationToken, pendingRequests: requests, pendingTokens: usage?.TotalTokens ?? 0);
             usage = LlmUsage.Combine(usage, visionNote.Usage);
             requests += visionNote.RequestsSpent;
@@ -231,7 +239,9 @@ internal sealed partial class AgentLoop
                     + instruction.Text));
             }
 
-            messages.Add(LlmMessage.User("Latest compact game state:\n" + stateJson));
+            // The prompt's copy only: fields no decision on this screen can use are dropped (W6). The
+            // compact view the API serves is unchanged.
+            messages.Add(LlmMessage.User("Latest compact game state:\n" + PromptStateDiet.Apply(stateJson)));
             messages.Add(LlmMessage.User(PlayPrompt.ActNowInstruction));
             AppendJsonActFallbackIfNeeded(messages, resolved, allowAct: true);
 
@@ -250,6 +260,9 @@ internal sealed partial class AgentLoop
                 onFirstPrimaryRequest: playInstruction is { } pendingInstruction
                     ? () => _acknowledgePlayInstruction?.Invoke(pendingInstruction.Id)
                     : null);
+            _lastPlayFailed = result.Error != null;
+            _lastPlayTookNoAction = result.Acted == null;
+            _consecutiveUnsettled = result.ExecutedUnsettled ? _consecutiveUnsettled + 1 : 0;
             return WithJevReceipt(result, pending);
         }
         catch (NonCombatOnlyYieldException ex)

@@ -124,15 +124,18 @@ Omit unused parameters; keep "reason" -- it is shown to the player. Do not wrap 
         builder.AppendLine("You are playing Slay the Spire 2 through structured tools. This is the same play contract as the STS2 MCP player skill.");
         builder.AppendLine();
         builder.AppendLine("Tools: get_game_state, get_raw_game_state, get_available_actions, get_game_data_item, get_game_data_items, get_relevant_game_data, wait_until_actionable, act.");
-        builder.AppendLine("Compact live state plus tools is complete. Vision/screenshots are optional supporting context and are never required.");
-        builder.AppendLine("Hand previews include Strength. Check upgrade.status before cost/vars; unavailable is not maxed. Use current metadata, never guess.");
+        builder.AppendLine("Compact live state plus tools is complete; screenshots are optional and never required.");
+        // The card-value note used to ride inside every combat frame (PromptStateDiet now drops it
+        // there); here it is paid once per request. The old "previews include Strength" line said the
+        // first half of it again.
+        builder.AppendLine(PromptStateDiet.CardValueNote + " Check upgrade.status before cost/vars; unavailable is not maxed. Never guess.");
         builder.AppendLine();
         builder.AppendLine(PlayContract.Trim());
         builder.AppendLine();
         // The playbooks are not carried here: this prompt is re-sent on every play step, and the
         // caller injects the current screen's section (PlaybookGuidance) right behind this message.
-        builder.AppendLine("The playbook section for the current screen is injected after this message. The other screens' sections stay out of the prompt: a decision can only use the screen it is on.");
-        builder.Append("Each play step: inspect state (and metadata if needed), then call act exactly once, attaching a one-sentence reason the player can read. Vision is optional; legality still comes from live state.");
+        builder.AppendLine("The playbook section for the current screen follows this message; other screens' sections are left out.");
+        builder.Append("Each play step: call act exactly once with a one-sentence reason the player can read; legality comes from live state.");
         // AppendLine uses the host newline; the prompt must not vary by build platform.
         return builder.ToString().ReplaceLineEndings("\n");
     }

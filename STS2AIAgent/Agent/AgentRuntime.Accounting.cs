@@ -76,7 +76,8 @@ internal sealed partial class AgentRuntime
             RecordDecision(
                 // Only a dual-layer turn carries a confidence; that is how the log tells "Jev clicked
                 // this" from "the LLM did", which is the whole observability contract for the mode.
-                result.Confidence != null ? "jev" : "agent_loop",
+                // A forced move made without any model names itself (Source = "autopilot").
+                result.Source ?? (result.Confidence != null ? "jev" : "agent_loop"),
                 result.Acted,
                 result.Reasoning,
                 result.StateFingerprint,

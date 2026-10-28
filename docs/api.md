@@ -1969,7 +1969,7 @@ Invoke-RestMethod -Uri 'http://127.0.0.1:8080/data/cards' | ConvertTo-Json -Dept
 | --- | --- | --- |
 | `id` | number | 进程内单调递增序号，从 1 开始 |
 | `timestamp` | string | ISO 8601 UTC 时间戳 |
-| `source` | string | 写入者：`agent_loop`（游戏内自动游玩的 LLM 决策）、`jev`（双层模式下 Jev 执行模型的决策，带 `confidence`）、`http_api`（`POST /action`）、`native_mcp`（原生 MCP `act`） |
+| `source` | string | 写入者：`agent_loop`（游戏内自动游玩的 LLM 决策）、`jev`（双层模式下 Jev 执行模型的决策，带 `confidence`）、`autopilot`（只有一个合理答案的「小事」——无牌可出时结束回合、单一路线、无取舍的奖励、只有「确定」的提示弹窗等——不问模型直接完成，`requests_spent` 为 0；选牌、商店、药水、多选项永远不会是这个来源；设置 `autopilotEnabled` 可关）、`http_api`（`POST /action`）、`native_mcp`（原生 MCP `act`） |
 | `action` | string | 被接受的动作名 |
 | `reason` | string \| null | 该动作携带的一句话理由；调用方没给时为 `null` |
 | `state_fingerprint` | string \| null | 动作执行后的紧凑状态指纹（无进展守卫用）；不可得时为 `null` |

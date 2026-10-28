@@ -193,6 +193,10 @@ internal sealed partial class AgentLoop
 
         var escape = await TryEscapeSandpitAsync(stateJson, cancellationToken, checkState, reportPhase);
         if (escape != null) return escape;
+        // Read before the forced-move check: queued player guidance must reach a model, not be skipped.
+        var playInstruction = _peekPlayInstruction?.Invoke(stateJson);
+        var forced = await TryAutopilotAsync(stateJson, playInstruction != null, cancellationToken, checkState, reportPhase);
+        if (forced != null) return forced;
 
         // Dual-layer mode: when a decider is wired in, Jev picks the concrete action and the LLM only
         // plans. A confident-enough Jev answer is executed here and the LLM prompt below never runs;
@@ -205,7 +209,6 @@ internal sealed partial class AgentLoop
             : settings.DualLayerSoloEnabled;
         // A player's one-shot instruction must reach the very next decision, not be skipped by a
         // confident Jev action. This turn uses the regular model when guidance is queued.
-        var playInstruction = _peekPlayInstruction?.Invoke(stateJson);
         var pending = new AgentTurnResult { RequestsSpent = 0 };
         if (playInstruction == null && dualLayerOn && ResolveDecider() is { } decider && _strategyStore is { } store)
         {

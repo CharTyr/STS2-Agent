@@ -130,6 +130,13 @@ internal sealed class AgentTurnResult
     /// </summary>
     public bool StreamDemoted { get; init; }
 
+    /// <summary>
+    /// Who decided when it was neither the LLM loop nor Jev: <c>"autopilot"</c> for a forced move made
+    /// without a model request. Null keeps the old attribution (Jev when it carries a confidence,
+    /// otherwise the LLM loop). The decision log's <c>source</c> reads it.
+    /// </summary>
+    public string? Source { get; init; }
+
     public LlmUsage? Usage { get; init; }
 
     public int RequestsSpent { get; init; }

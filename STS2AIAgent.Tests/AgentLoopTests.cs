@@ -503,6 +503,63 @@ internal static class AgentLoopTests
         Assert.Equal(1, bridge.ActCalls);
     }
 
+    private const string ForcedEndTurnState =
+        """{"screen":"COMBAT","in_combat":true,"available_actions":["end_turn"],"combat":{"action_readiness":{"can_use_combat_actions":true},"end_turn_will_kill_player":false,"hand":[{"i":0,"line":"Wound","playable":false}],"enemies":[{"i":0}]}}""";
+
+    /// <summary>A forced move is made with no model request and is recorded as "autopilot" (W2).</summary>
+    public static async Task PlayOnce_ForcedMoveSpendsNoRequest()
+    {
+        var bridge = new FakeBridge
+        {
+            CompactStateJson = ForcedEndTurnState,
+            AvailableActionsJson = """[{"name":"end_turn","requires_index":false,"requires_target":false}]""",
+            ActResultJson = """{"action":"end_turn","status":"completed","stable":true}"""
+        };
+        var factory = new ScriptedClientFactory(Array.Empty<LlmCompletion>());
+        var result = await new AgentLoop(bridge, factory, AgentSettings.CreateDefault).PlayOnceAsync(CancellationToken.None);
+
+        Assert.Equal("end_turn", result.Acted);
+        Assert.Equal("autopilot", result.Source);
+        Assert.Equal(0, result.RequestsSpent);
+        Assert.Equal(0, factory.Requests.Count, "No model request for a forced move.");
+        Assert.Equal(1, bridge.ActCalls);
+        Assert.Contains(AgentLoop.ReasonFor(new AutopilotDecision("end_turn", null, "combat_no_moves", null)), result.Reasoning);
+    }
+
+    public static async Task PlayOnce_ForcedMoveYieldsToSwitchAndPlayerGuidance()
+    {
+        var settings = AgentSettings.CreateDefault();
+        settings.AutopilotEnabled = false;
+        var bridge = new FakeBridge
+        {
+            CompactStateJson = ForcedEndTurnState,
+            AvailableActionsJson = """[{"name":"end_turn","requires_index":false,"requires_target":false}]"""
+        };
+        var factory = new ScriptedClientFactory(new[]
+        {
+            new LlmCompletion { ToolCalls = new[] { new LlmToolCall { Id = "a", Name = "act", ArgumentsJson = """{"action":"end_turn"}""" } } }
+        });
+        var off = await new AgentLoop(bridge, factory, () => settings).PlayOnceAsync(CancellationToken.None);
+        Assert.Equal(1, factory.Requests.Count, "With the switch off the model decides, as in v0.17.0.");
+        Assert.Null(off.Source);
+
+        var guided = new ScriptedClientFactory(new[]
+        {
+            new LlmCompletion { ToolCalls = new[] { new LlmToolCall { Id = "b", Name = "act", ArgumentsJson = """{"action":"end_turn"}""" } } }
+        });
+        var loop = new AgentLoop(new FakeBridge
+            {
+                CompactStateJson = ForcedEndTurnState,
+                AvailableActionsJson = """[{"name":"end_turn","requires_index":false,"requires_target":false}]"""
+            },
+            guided,
+            AgentSettings.CreateDefault,
+            peekPlayInstruction: _ => ("g1", "play defensively"));
+        var withGuidance = await loop.PlayOnceAsync(CancellationToken.None);
+        Assert.Equal(1, guided.Requests.Count, "Queued player guidance goes to the model even on a forced frame.");
+        Assert.Null(withGuidance.Source);
+    }
+
     public static async Task PlayOnce_TimedOutWaitStillChecksTheBoundaryOnce()
     {
         var checks = 0;
@@ -1063,6 +1120,8 @@ internal static class AgentLoopTests
         var factory = new ScriptedClientFactory(new[] { new LlmCompletion { Content = "end the turn" } });
         var settings = AgentSettings.CreateDefault();
         settings.Models[0].SupportsVision = true;
+        // Since 2026-10-28 a screenshot is on demand by default; this test is about where one goes.
+        settings.VisionMode = AgentSettings.VisionEveryStep;
         var loop = new AgentLoop(bridge, factory, () => settings);
 
         await loop.PlayOnceAsync(CancellationToken.None);
