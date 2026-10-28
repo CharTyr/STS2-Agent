@@ -82,30 +82,30 @@ ilspycmd -t <类型全名> "c:\program files (x86)\steam\steamapps\common\Slay t
 - [x] 1.5 验证（C# 1037/9 环境性、闸门全绿、Release 0 警告）+ 提交 `perf(agent): probe actionability instead of building /state every frame [W9]`。
 
 ### M2 省钱核心（W6）
-- [ ] 2.1 计量：决策记录 + `AgentTurnResult` 增加 `tool_rounds`、`read_tool_rounds`、`stream_demoted`（additive，`docs/api.md`、`DecisionLogTests`）。
-- [ ] 2.2 `CompleteWithToolsAsync`：流式无工具调用 → 仅回复全空时降级；有正文先 `ActJsonParser`，解析不出追加「You must call act now」再来一轮（`AgentLoopTests` 覆盖三种情况与请求计数）。
-- [ ] 2.3 `AgentTools.PlayInGame`（act + 元数据查询 + wait_until_actionable）；`PlayWithModelAsync` 用它；`AgentTools.Mcp` 不变；处理 `McpPlayerSkillTests.SkillTracksLivePlayContract`（读测试，必要时有意更新并写原因）；末句改为「状态已最新，不要 get_game_state，现在 act（战斗用 then）」。
-- [ ] 2.4 `PromptStateDiet.cs` + 测试（每条规则、合法 JSON、关键键保留）；`PlayWithModelAsync` 与 Jev 请求使用；`card_value_note` 原文移入静态前缀。
-- [ ] 2.5 `VisionPolicy.cs` + 测试；`PlayWithModelAsync` 按策略截图；设置页「截图」三选一 + Loc。
-- [ ] 2.6 `LlmUsage.CachedPromptTokens`（流式/非流式解析）+ 会话统计显示 + `/health.session` 字段 + 文档。
-- [ ] 2.7 验证 + 提交（可拆）：`feat(agent): one model request per decision [W6]`、`feat(agent): leaner prompts and screenshots on demand [W6]`。
+- [x] 2.1 计量：决策记录 + `AgentTurnResult` 增加 `tool_rounds`、`read_tool_rounds`、`stream_demoted`（additive，`docs/api.md`、`DecisionLogTests`）。
+- [x] 2.2 `CompleteWithToolsAsync`：流式无工具调用 → 仅回复全空时降级；有正文先 `ActJsonParser`，解析不出追加「You must call act now」再来一轮（`AgentLoopTests` 覆盖三种情况与请求计数）。
+- [x] 2.3 `AgentTools.PlayInGame`（act + 元数据查询 + wait_until_actionable）；`PlayWithModelAsync` 用它；`AgentTools.Mcp` 不变；处理 `McpPlayerSkillTests.SkillTracksLivePlayContract`（读测试，必要时有意更新并写原因）；末句改为「状态已最新，不要 get_game_state，现在 act（战斗用 then）」。
+- [x] 2.4 `PromptStateDiet.cs` + 测试（每条规则、合法 JSON、关键键保留）；`PlayWithModelAsync` 与 Jev 请求使用；`card_value_note` 原文移入静态前缀。
+- [x] 2.5 `VisionPolicy.cs` + 测试；`PlayWithModelAsync` 按策略截图；设置页「截图」三选一 + Loc。
+- [x] 2.6 `LlmUsage.CachedPromptTokens`（流式/非流式解析）+ 会话统计显示 + `/health.session` 字段 + 文档。
+- [x] 2.7 验证 + 提交（可拆）：`feat(agent): one model request per decision [W6]`、`feat(agent): leaner prompts and screenshots on demand [W6]`。
 
 ### M3 加速（W1）
-- [ ] 3.1 `TurboPolicy.cs` + `TurboPolicyTests`。
-- [ ] 3.2 `TurboController.cs`（Engage/Release/RecoverAtStartup/InstallPrefsGuard，Harmony 守卫挂 `PrefsSaveManager.SavePrefs`；先 ilspycmd 核对 `PrefsSaveManager` 与 `NetService.Type`、`IsMultiplayer` 成员名）。
-- [ ] 3.3 接线：`AutoPlayLoopAsync` 开头 Engage、外层 finally Release；`ModEntry` 启动恢复/关停尽力恢复/安装守卫；`/health.turbo`；源码契约测试。
-- [ ] 3.4 UI：设置页「游戏速度」分段开关 + HelpCard；播放页档位药丸；SpeedX 提示；布局契约；Loc。
-- [ ] 3.5 验证 + 提交 `feat(turbo): the game's own fast mode while the AI plays, restored after [W1]`。
+- [x] 3.1 `TurboPolicy.cs` + `TurboPolicyTests`。
+- [x] 3.2 `TurboController.cs`（Engage/Release/RecoverAtStartup/InstallPrefsGuard，Harmony 守卫挂 `PrefsSaveManager.SavePrefs`；先 ilspycmd 核对 `PrefsSaveManager` 与 `NetService.Type`、`IsMultiplayer` 成员名）。
+- [x] 3.3 接线：`AutoPlayLoopAsync` 开头 Engage、外层 finally Release；`ModEntry` 启动恢复/关停尽力恢复/安装守卫；`/health.turbo`；源码契约测试。
+- [x] 3.4 UI：设置页「游戏速度」分段开关 + HelpCard；播放页档位药丸；SpeedX 提示；布局契约；Loc。
+- [x] 3.5 验证 + 提交 `feat(turbo): the game's own fast mode while the AI plays, restored after [W1]`。
 
 ### M4 强制动作（W2）
-- [ ] 4.1 `AutopilotPolicy.cs` + `AutopilotPolicyTests`（design §5.1 每条正反例 + 永不自动清单）。
-- [ ] 4.2 `AgentTurnResult.Source`；`AgentLoop.Autopilot.cs`；`PlayOnceAsync` 接入（Sandpit 后、Jev 前）；门（开关/非战斗/排队指令）。
-- [ ] 4.3 `RecordTurnReceipt` 用 Source；`PlayerLabels.Source("autopilot")`；`DecisionLogView`；`docs/api.md`；`AgentLoopTests`（零请求、来源、让位、开关、重复仍会停）；设置页开关。
-- [ ] 4.4 验证 + 提交 `feat(agent): forced moves without asking the model [W2]`。
+- [x] 4.1 `AutopilotPolicy.cs` + `AutopilotPolicyTests`（design §5.1 每条正反例 + 永不自动清单）。
+- [x] 4.2 `AgentTurnResult.Source`；`AgentLoop.Autopilot.cs`；`PlayOnceAsync` 接入（Sandpit 后、Jev 前）；门（开关/非战斗/排队指令）。
+- [x] 4.3 `RecordTurnReceipt` 用 Source；`PlayerLabels.Source("autopilot")`；`DecisionLogView`；`docs/api.md`；`AgentLoopTests`（零请求、来源、让位、开关、重复仍会停）；设置页开关。
+- [x] 4.4 验证 + 提交 `feat(agent): forced moves without asking the model [W2]`。
 
 ### M5 整回合规划 + 战斗算术（W3 + W4.1/4.2）
-- [ ] 5.1 核对 `NetCombatCardDb`（已核）与卡牌类型枚举成员；原始 `combat.hand[].combat_card_id/card_type`，compact `cid/type`；`AgentViewVersion` 13；`docs/api.md` + 重命名表。
-- [ ] 5.2 `CombatThreatPolicy.cs`（纯，`CombatRisks` 改为读它）+ `CombatMathPolicy.cs`（纯：threat 汇总、kill_options、max_block）+ 测试；`GameStateService.CombatMath.cs`（按目标预览矩阵 + 缓存）；compact `combat.threat`、`hand[].vs`；`combatMathEnabled` 门；载荷声明（先量 `Payloads.cs` 余量，design §7.2）；文档。
+- [x] 5.1 核对 `NetCombatCardDb`（已核）与卡牌类型枚举成员；原始 `combat.hand[].combat_card_id/card_type`，compact `cid/type`；`AgentViewVersion` 13；`docs/api.md` + 重命名表。
+- [~] 5.2 `CombatThreatPolicy.cs`（纯，`CombatRisks` 改为读它）+ `CombatMathPolicy.cs`（纯：threat 汇总、kill_options、max_block）+ 测试；`GameStateService.CombatMath.cs`（按目标预览矩阵 + 缓存）；compact `combat.threat`、`hand[].vs`；`combatMathEnabled` 门；载荷声明（先量 `Payloads.cs` 余量，design §7.2）；文档。
 - [ ] 5.3 `TurnPlanPolicy.cs` + `TurnPlanPolicyTests`；共享向量 `mcp_server/tests/fixtures/turn_plan_vectors.json` + `TurnPlanVectorTests`。
 - [ ] 5.4 `AgentTools.ActParameters` 增 `card_cid`/`then`；`AgentLoop.TurnPlan.cs`；`CompleteWithToolsAsync` 接入；`ExecuteActAsync` 支持 `card_cid`；回执 `PlanSteps/PlanStopReason`；决策记录 `turn_id/plan_index/plan_size`（只第一行带费用）；`turnPlansEnabled` 门（关时 `then` 被忽略并在结果说明）。
 - [ ] 5.5 提示词：`SKILL.md` 共享契约 + `screen-playbooks.md` 战斗段 + `PlayPrompt` 静态前缀（算术与计划说明）+ `scene_guidance.py` 镜像；`PlaybookSectionsTests`/`McpPlayerSkillTests`。
@@ -214,3 +214,9 @@ ilspycmd -t <类型全名> "c:\program files (x86)\steam\steamapps\common\Slay t
 | 10-28 | 基线：C# 1023 PASS / 9 环境性 FAIL（沙箱），Python 439 OK | design §1.1 |
 | 10-28 23:40 | （会话中断后恢复）M1：不抽 `AdvanceCombatActionGate`；不做「探针不可用时每 4 帧构建」；`run_id` 变化不补整份构建 | `EvaluateCombatActionGate` 本就是构建与探针共用的唯一推进点；探针抛异常时与旧构建一样向上抛，回退路径无收益；`BuildTurnProbe` 与整份构建读同一来源、同一游戏线程单元，已是会话规则要求的「新鲜帧」 |
 | 10-28 23:40 | 用户：子智能体可用 magpie `clinepass/cline-pass/deepseek-v4.1-flash-1017` 做具体实现，「合理使用，但不要依赖」 | 主线关键改动自己写，子智能体只做边界清楚的独立块并由我复核 |
+| 10-29 00:30 | 进度（commit 8fc8ac9 / 6302c2b / 623ad9a）：M2、M3、M4 全部；M5.1 完成；M5.2 用 `CombatMathPolicy` + `GameStateService.CombatMath.cs` 完成 threat/vs/kill_options/max_block，**未**把 `CombatRisks` 抽成 `CombatThreatPolicy`（改为 `lethal = threat.Lethal ‖ end_turn_will_kill_player`，二者不会矛盾；自身伤害三项与 CombatRisks 同源）。播放页档位药丸未做（HUD 横幅时补） | 少动有哈希契约的 `BuildCombatLethalRiskPayloads` |
+| 10-29 00:30 | `vs` 段数只在可确定时给出：`CalculatedHits`/`Repeat`/反编译确认写死两段的 8 张牌（按类名）；出牌时才计算段数的牌 hits=null | `TwinStrike` 等把段数写在代码里；错数比没数更糟 |
+| 10-29 00:30 | 自动处理在 `end_turn_will_kill_player` 时不结束回合（偏离 design §5.1 规则 3） | 已知致命的结束回合交给模型与护栏 |
+| 10-29 00:30 | 计划/算术说明放战斗 playbook 切片而非 PlaySystem | PlaySystem 12,000 字符预算已用 ~11.9k |
+| 10-29 00:30 | 暂停热键 F7：反编译确认 F6/F7 只在 `NGame.IsTrailerMode` 下是游戏调试键 | design §8.6 前置核对 |
+| 10-29 00:30 | magpie 子智能体 5 个并行约 90 分钟均未落盘（PromptStateDiet 被停时留下文件，审阅后采用并补测试）；其余模块自写 | 「不要依赖」的实际情况；之后只派小而短的任务 |

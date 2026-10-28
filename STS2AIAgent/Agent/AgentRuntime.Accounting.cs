@@ -71,6 +71,33 @@ internal sealed partial class AgentRuntime
     {
         AccountTurn(result, recordBudget);
         RecordJevReading(result);
+        if (result.PlanSteps is { Count: > 1 } steps)
+        {
+            // One row per executed step of a whole-turn plan. AccountTurn above is still the only
+            // place the request is counted; in the log only the first row carries its cost, so a
+            // per-row sum stays the real spend.
+            for (var index = 0; index < steps.Count; index++)
+            {
+                var step = steps[index];
+                RecordDecision(
+                    result.Source ?? "agent_loop",
+                    step.Action,
+                    index == 0 ? (step.Reason ?? result.Reasoning) : step.Reason,
+                    step.Fingerprint,
+                    index == 0 ? result.RequestsSpent : 0,
+                    index == 0 ? result.Usage?.TotalTokens : 0,
+                    metrics: new DecisionMetrics(
+                        index == 0 ? result.ToolRounds : null,
+                        index == 0 ? result.ReadToolRounds : null,
+                        index == 0 && result.StreamDemoted,
+                        result.TurnId,
+                        index,
+                        result.PlanSize));
+            }
+
+            return;
+        }
+
         if (!string.IsNullOrWhiteSpace(result.Acted))
         {
             RecordDecision(

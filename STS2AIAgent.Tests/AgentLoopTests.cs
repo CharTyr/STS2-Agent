@@ -560,6 +560,117 @@ internal static class AgentLoopTests
         Assert.Null(withGuidance.Source);
     }
 
+    private static string PlanState(int turn, string hp, string hand, bool enemyAlive = true)
+    {
+        var alive = enemyAlive ? "true" : "false";
+        return "{\"screen\":\"COMBAT\",\"in_combat\":true,\"turn\":" + turn
+            + ",\"available_actions\":[\"play_card\",\"end_turn\"],\"combat\":{\"action_readiness\":{\"can_use_combat_actions\":true},\"player\":{\"hp\":\""
+            + hp + "\"},\"hand\":[" + hand + "],\"enemies\":[{\"i\":0,\"alive\":" + alive + ",\"hittable\":" + alive + "}]}}";
+    }
+
+    private const string StrikeA = """{"i":0,"cid":11,"line":"Strike","playable":true,"targets":[0]}""";
+    private const string DefendB = """{"i":1,"cid":12,"line":"Defend","playable":true,"targets":[]}""";
+    private const string BashC = """{"i":2,"cid":13,"line":"Bash","playable":true,"targets":[0]}""";
+
+    private static FakeBridge PlanBridge(params string[] after)
+    {
+        var bridge = new FakeBridge
+        {
+            CompactStateJson = PlanState(1, "40/80", string.Join(",", StrikeA, DefendB, BashC)),
+            AvailableActionsJson = """[{"name":"play_card","requires_index":true,"requires_target":false},{"name":"end_turn","requires_index":false,"requires_target":false}]"""
+        };
+        foreach (var state in after) bridge.AfterActStates.Enqueue(state);
+        return bridge;
+    }
+
+    private static ScriptedClientFactory PlanModel(string arguments) => new(new[]
+    {
+        new LlmCompletion { ToolCalls = new[] { new LlmToolCall { Id = "plan", Name = "act", ArgumentsJson = arguments } } }
+    });
+
+    private const string ThreeStepPlan =
+        """{"action":"play_card","card_cid":11,"target_index":0,"reason":"hit","then":[{"action":"play_card","card_cid":12,"reason":"block"},{"action":"end_turn"}]}""";
+
+    /// <summary>
+    /// One request plays a whole turn (W3): each step re-resolves its card by cid against the hand as
+    /// it is then, and the receipt lists every step.
+    /// </summary>
+    public static async Task Plan_ThreeStepsOneRequest()
+    {
+        var bridge = PlanBridge(
+            PlanState(1, "40/80", """{"i":0,"cid":12,"line":"Defend","playable":true,"targets":[]},{"i":1,"cid":13,"line":"Bash","playable":true,"targets":[0]}"""),
+            PlanState(1, "40/80", """{"i":0,"cid":13,"line":"Bash","playable":true,"targets":[0]}"""),
+            PlanState(2, "40/80", ""));
+        var factory = PlanModel(ThreeStepPlan);
+        var result = await new AgentLoop(bridge, factory, AgentSettings.CreateDefault).PlayOnceAsync(CancellationToken.None);
+
+        Assert.Equal(1, factory.Requests.Count,
+            $"The whole turn costs one request (acts={bridge.ActCalls}, error={result.Error}, stop={result.PlanStopReason}).");
+        Assert.Equal(3, bridge.ActCalls);
+        Assert.Equal(("play_card", (int?)0, (int?)0), bridge.ActLog[0]);
+        Assert.Equal(("play_card", (int?)0, (int?)null), bridge.ActLog[1], "cid 12 moved from position 1 to 0.");
+        Assert.Equal("end_turn", bridge.ActLog[2].Action);
+        Assert.Equal(TurnPlanStopReasons.Completed, result.PlanStopReason);
+        Assert.Equal(3, result.PlanSteps!.Count);
+        Assert.Equal(3, result.PlanSize);
+        Assert.Equal("end_turn", result.Acted, "The receipt describes the last executed step.");
+        Assert.Equal(1, result.RequestsSpent);
+        Assert.True(factory.Requests[0].Tools!.Single(tool => tool.Name == "act").Parameters.ToString()!.Length > 0);
+    }
+
+    public static async Task Plan_StopsOnANewCardOrADeadTarget()
+    {
+        var drew = PlanBridge(PlanState(1, "40/80", DefendB.Replace("\"i\":1", "\"i\":0") + """,{"i":1,"cid":99,"line":"Drawn","playable":true,"targets":[]}"""));
+        var drewResult = await new AgentLoop(drew, PlanModel(ThreeStepPlan), AgentSettings.CreateDefault).PlayOnceAsync(CancellationToken.None);
+        Assert.Equal(1, drew.ActCalls, "A drawn card is new information: stop and ask again.");
+        Assert.Equal(TurnPlanStopReasons.NewCards, drewResult.PlanStopReason);
+        Assert.Equal(1, drewResult.PlanSteps!.Count);
+
+        var deadTargetPlan = """{"action":"play_card","card_cid":12,"then":[{"action":"play_card","card_cid":11,"target_index":0}]}""";
+        var dead = PlanBridge(PlanState(1, "40/80", StrikeA, enemyAlive: false));
+        var deadResult = await new AgentLoop(dead, PlanModel(deadTargetPlan), AgentSettings.CreateDefault).PlayOnceAsync(CancellationToken.None);
+        Assert.Equal(1, dead.ActCalls);
+        Assert.Equal(TurnPlanStopReasons.TargetGone, deadResult.PlanStopReason);
+
+        var hurt = PlanBridge(PlanState(1, "33/80", DefendB.Replace("\"i\":1", "\"i\":0")));
+        var hurtResult = await new AgentLoop(hurt, PlanModel(ThreeStepPlan), AgentSettings.CreateDefault).PlayOnceAsync(CancellationToken.None);
+        Assert.Equal(TurnPlanStopReasons.TookDamage, hurtResult.PlanStopReason);
+        Assert.Equal(1, hurt.ActCalls);
+    }
+
+    public static async Task Plan_RejectedFirstActRunsNothingAndSwitchOffIgnoresThen()
+    {
+        var rejected = PlanBridge();
+        var rejectedResult = await new AgentLoop(rejected, PlanModel("""{"action":"play_card","card_cid":77,"then":[{"action":"end_turn"}]}"""), AgentSettings.CreateDefault)
+            .PlayOnceAsync(CancellationToken.None);
+        Assert.Equal(0, rejected.ActCalls, "A first act the game never took runs none of its plan.");
+        Assert.Null(rejectedResult.PlanSteps);
+
+        var settings = AgentSettings.CreateDefault();
+        settings.TurnPlansEnabled = false;
+        var off = PlanBridge(PlanState(1, "40/80", DefendB.Replace("\"i\":1", "\"i\":0")));
+        var offFactory = PlanModel(ThreeStepPlan);
+        var offResult = await new AgentLoop(off, offFactory, () => settings).PlayOnceAsync(CancellationToken.None);
+        Assert.Equal(1, off.ActCalls, "With plans off only the first act runs.");
+        Assert.Equal(TurnPlanStopReasons.Disabled, offResult.PlanStopReason);
+        Assert.False(offFactory.Requests[0].Tools!.Single(tool => tool.Name == "act").Description.Contains("then", StringComparison.Ordinal),
+            "With plans off the model is not offered `then` at all.");
+    }
+
+    public static async Task Plan_PlayerGuidanceStopsTheRest()
+    {
+        var bridge = PlanBridge(PlanState(1, "40/80", DefendB.Replace("\"i\":1", "\"i\":0")));
+        // The player types guidance while the model is answering: the first act still runs (the
+        // model chose it), the rest of the plan yields so the guidance reaches the next decision.
+        var guidanceQueued = false;
+        var factory = PlanModel(ThreeStepPlan);
+        factory.OnRequest = () => guidanceQueued = true;
+        var result = await new AgentLoop(bridge, factory, AgentSettings.CreateDefault,
+            peekPlayInstruction: _ => guidanceQueued ? ("g", "stop and defend") : null).PlayOnceAsync(CancellationToken.None);
+        Assert.Equal(TurnPlanStopReasons.PlayerInstruction, result.PlanStopReason);
+        Assert.Equal(1, bridge.ActCalls);
+    }
+
     public static async Task PlayOnce_TimedOutWaitStillChecksTheBoundaryOnce()
     {
         var checks = 0;
@@ -1071,7 +1182,7 @@ internal static class AgentLoopTests
 
         Assert.Equal(messages.Count - 2, firstUser);
         Assert.Contains("Latest compact game state", messages[^2].Content);
-        Assert.Equal(PlayPrompt.ActNowInstruction, messages[^1].Content);
+        Assert.Contains(PlayPrompt.ActNowInstruction, messages[^1].Content);
 
         // The state carries the only copy of the screen playbook: one section, not the document.
         Assert.Contains("## COMBAT", string.Join("\n", messages.Select(message => message.Content)));
@@ -1132,7 +1243,7 @@ internal static class AgentLoopTests
         Assert.True(screenshot > 0, "the attached screenshot must be in the request");
         Assert.True(screenshot < messages.Count - 2, "the screenshot must precede the state and the instruction");
         Assert.Contains("Latest compact game state", messages[^2].Content);
-        Assert.Equal(PlayPrompt.ActNowInstruction, messages[^1].Content);
+        Assert.Contains(PlayPrompt.ActNowInstruction, messages[^1].Content);
     }
 
     /// <summary>
@@ -1157,7 +1268,7 @@ internal static class AgentLoopTests
         var messages = factory.Requests[0].Messages;
         Assert.Contains(PlayPrompt.JsonActFallback, messages[0].Content);
         Assert.Contains("Latest compact game state", messages[^2].Content);
-        Assert.Equal(PlayPrompt.ActNowInstruction, messages[^1].Content);
+        Assert.Contains(PlayPrompt.ActNowInstruction, messages[^1].Content);
     }
 
     /// <summary>
@@ -1542,7 +1653,7 @@ internal static class AgentLoopTests
         Assert.Equal("play_card", result.Acted, "A state reader the model names anyway is still answered.");
         Assert.Equal(2, result.ToolRounds);
         Assert.Equal(1, result.ReadToolRounds);
-        Assert.Equal(PlayPrompt.ActNowInstruction, factory.Requests[0].Messages[^1].Content);
+        Assert.Contains(PlayPrompt.ActNowInstruction, factory.Requests[0].Messages[^1].Content);
     }
 
     public static async Task PlayOnce_DemotesTruncatedActStreamToNonStreamingOnce()
@@ -1576,6 +1687,8 @@ internal static class AgentLoopTests
         Assert.False(AgentLoop.LooksLikeTruncatedStreamedAct("{\"action\":\"play_card\",\"card_index\":2}"));
         Assert.False(AgentLoop.LooksLikeTruncatedStreamedAct("{\"action\":\"choose_map_node\",\"option_index\":1}"));
         Assert.False(AgentLoop.LooksLikeTruncatedStreamedAct("{\"action\":\"end_turn\"}"));
+        Assert.False(AgentLoop.LooksLikeTruncatedStreamedAct("{\"action\":\"play_card\",\"card_cid\":17}"),
+            "A card named by card_cid is complete (W3).");
         Assert.False(AgentLoop.LooksLikeTruncatedStreamedAct("{\"action\":"));
         Assert.True(AgentLoop.IsMissingIndexError("target_index must come from the latest payload for this card."));
         Assert.True(AgentLoop.IsMissingIndexError("card_index must come from the latest combat.hand."));
@@ -1670,6 +1783,12 @@ internal static class AgentLoopTests
         public string? AfterActCompactStateJson { get; set; }
         public string? AtDispatchStateJson { get; set; }
 
+        /// <summary>States the game moves through, one per act (wins over AfterActCompactStateJson).</summary>
+        public Queue<string> AfterActStates { get; } = new();
+
+        /// <summary>Every dispatched act as (action, card_index, target_index).</summary>
+        public List<(string Action, int? Card, int? Target)> ActLog { get; } = new();
+
         public string AvailableActionsJson { get; set; } =
             """[{"name":"play_card","requires_index":true,"requires_target":false}]""";
 
@@ -1730,7 +1849,12 @@ internal static class AgentLoopTests
             LastX = x;
             LastY = y;
             LastTool = tool;
-            if (AfterActCompactStateJson != null)
+            ActLog.Add((action, cardIndex, targetIndex));
+            if (AfterActStates.Count > 0)
+            {
+                CompactStateJson = AfterActStates.Dequeue();
+            }
+            else if (AfterActCompactStateJson != null)
             {
                 CompactStateJson = AfterActCompactStateJson;
             }

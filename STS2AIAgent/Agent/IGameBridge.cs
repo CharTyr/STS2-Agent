@@ -137,6 +137,21 @@ internal sealed class AgentTurnResult
     /// </summary>
     public string? Source { get; init; }
 
+    /// <summary>
+    /// Every step a whole-turn plan executed, the model's own first act included; null for a single
+    /// act. <see cref="Acted"/> and <see cref="StateFingerprint"/> describe the last of them.
+    /// </summary>
+    public IReadOnlyList<PlanStepReceipt>? PlanSteps { get; init; }
+
+    /// <summary>Why the plan ended (<see cref="TurnPlanStopReasons"/>); null for a single act.</summary>
+    public string? PlanStopReason { get; init; }
+
+    /// <summary>Shared by every logged step of one plan.</summary>
+    public string? TurnId { get; init; }
+
+    /// <summary>Steps the model planned, its first act included.</summary>
+    public int PlanSize { get; init; }
+
     public LlmUsage? Usage { get; init; }
 
     public int RequestsSpent { get; init; }

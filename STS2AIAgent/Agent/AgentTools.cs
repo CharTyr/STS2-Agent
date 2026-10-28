@@ -35,6 +35,47 @@ internal static class AgentTools
         required = new[] { "action" }
     };
 
+    /// <summary>One later step of a whole-turn plan: the act fields without nesting.</summary>
+    private static readonly object PlanStepParameters = new
+    {
+        type = "object",
+        properties = new
+        {
+            action = new { type = "string", description = "Action name from available_actions." },
+            card_cid = new { type = "integer", description = "combat.hand[].cid of the card to play (required for play_card in then)." },
+            target_index = new { type = "integer", description = "Target index when the card or potion requires one." },
+            option_index = new { type = "integer", description = "Option index, e.g. the potion slot for use_potion." },
+            reason = new { type = "string", description = "One short sentence: why this step." }
+        },
+        required = new[] { "action" }
+    };
+
+    /// <summary>The in-game act: the shared fields plus <c>card_cid</c> and <c>then</c> (W3).</summary>
+    private static readonly object PlanActParameters = new
+    {
+        type = "object",
+        properties = new
+        {
+            action = new { type = "string", description = "Action name from available_actions." },
+            card_cid = new { type = "integer", description = "combat.hand[].cid of the card for play_card; stable while other cards leave the hand. Wins over card_index." },
+            card_index = new { type = "integer", description = "Hand card index for play_card (use card_cid when you can)." },
+            target_index = new { type = "integer", description = "Target index when the card or potion requires a target." },
+            option_index = new { type = "integer", description = "Option index for map/reward/shop/event/rest/lobby choices." },
+            x = new { type = "integer", description = "Crystal Sphere grid x-coordinate for crystal_clear_cell." },
+            y = new { type = "integer", description = "Crystal Sphere grid y-coordinate for crystal_clear_cell." },
+            tool = new { type = "string", @enum = new[] { "big", "small" }, description = "Crystal Sphere tool." },
+            reason = new { type = "string", description = "One short sentence saying why you chose this action. Shown to the player as the decision's rationale." },
+            then = new
+            {
+                type = "array",
+                maxItems = TurnPlanPolicy.MaxThenSteps,
+                description = "Combat only: the rest of this turn, in order (at most 9 steps, usually ending with end_turn). Name cards by card_cid. Leave it out when the next step depends on something you cannot see yet (a draw, a choice).",
+                items = PlanStepParameters
+            }
+        },
+        required = new[] { "action" }
+    };
+
     private static readonly object CollectionItemParameters = new
     {
         type = "object",
@@ -139,8 +180,19 @@ internal static class AgentTools
     /// what the first request already held. They stay dispatchable (a model that names one anyway is
     /// answered) and stay on <see cref="Play"/> and <see cref="Mcp"/>, which external clients use.
     /// </remarks>
-    public static readonly IReadOnlyList<LlmTool> PlayInGame = Play
+    /// <summary><see cref="PlayInGame"/> with the plain single-step act, for <c>turnPlansEnabled = false</c>.</summary>
+    public static readonly IReadOnlyList<LlmTool> PlayInGameSingle = Play
         .Where(tool => tool.Name is not ("get_game_state" or "get_raw_game_state" or "get_available_actions"))
+        .ToArray();
+
+    public static readonly IReadOnlyList<LlmTool> PlayInGame = Play
+        .Where(tool => tool.Name is not ("get_game_state" or "get_raw_game_state" or "get_available_actions" or "act"))
+        .Append(new LlmTool
+        {
+            Name = "act",
+            Description = "Execute one legal game action with a short reason the player can read. In combat, plan the whole turn: put the first action here and the rest of the turn (ending with end_turn when you are done) in `then`. Refer to hand cards by `card_cid`. Each step is re-checked against fresh state; the plan stops early when something changes and you will be asked again.",
+            Parameters = PlanActParameters
+        })
         .ToArray();
 
     public static readonly IReadOnlyList<LlmTool> Mcp = new[]

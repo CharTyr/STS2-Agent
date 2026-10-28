@@ -123,6 +123,7 @@ internal sealed partial class AgentLoop
         WaitingForCombat = result.WaitingForCombat,
         RequiresConfiguration = result.RequiresConfiguration, ToolRounds = result.ToolRounds,
         ReadToolRounds = result.ReadToolRounds, StreamDemoted = result.StreamDemoted,
+        PlanSteps = result.PlanSteps, PlanStopReason = result.PlanStopReason, TurnId = result.TurnId, PlanSize = result.PlanSize,
         Usage = result.Usage, RequestsSpent = result.RequestsSpent,
         Confidence = result.Confidence, Probabilities = result.Probabilities,
         DangerScore = pending.DangerScore, JevElapsedMilliseconds = pending.JevElapsedMilliseconds,
@@ -242,14 +243,17 @@ internal sealed partial class AgentLoop
             // The prompt's copy only: fields no decision on this screen can use are dropped (W6). The
             // compact view the API serves is unchanged.
             messages.Add(LlmMessage.User("Latest compact game state:\n" + PromptStateDiet.Apply(stateJson)));
-            messages.Add(LlmMessage.User(PlayPrompt.ActNowInstruction));
+            var plans = settings.TurnPlansEnabled;
+            messages.Add(LlmMessage.User(plans && NonCombatOnlyPolicy.IsCombatSnapshot(stateJson)
+                ? PlayPrompt.ActNowInstruction + " " + PlayPrompt.PlanTurnInstruction
+                : PlayPrompt.ActNowInstruction));
             AppendJsonActFallbackIfNeeded(messages, resolved, allowAct: true);
 
             handedToCompletion = true;
             var result = await CompleteWithToolsAsync(
                 resolved,
                 messages,
-                AgentTools.PlayInGame,
+                plans ? AgentTools.PlayInGame : AgentTools.PlayInGameSingle,
                 allowAct: true,
                 stopAfterAct: true,
                 cancellationToken,
@@ -259,7 +263,9 @@ internal sealed partial class AgentLoop
                 reportPhase: reportPhase,
                 onFirstPrimaryRequest: playInstruction is { } pendingInstruction
                     ? () => _acknowledgePlayInstruction?.Invoke(pendingInstruction.Id)
-                    : null);
+                    : null,
+                // The frame the model plans against: a whole-turn plan stops when the game leaves it.
+                planStateJson: stateJson);
             _lastPlayFailed = result.Error != null;
             _lastPlayTookNoAction = result.Acted == null;
             _consecutiveUnsettled = result.ExecutedUnsettled ? _consecutiveUnsettled + 1 : 0;

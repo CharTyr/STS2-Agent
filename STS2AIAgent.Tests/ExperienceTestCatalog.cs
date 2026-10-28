@@ -42,6 +42,13 @@ internal static class ExperienceTestCatalog
         yield return ("Experience.PromptDiet.EachRuleAlone", () => Task.Run(PromptStateDietTests.EachRuleDoesItsOneThing));
         yield return ("Experience.PromptDiet.CoopAndOutOfCombat", () => Task.Run(PromptStateDietTests.MultiplayerAndOutOfCombatKeepTheirData));
         yield return ("Experience.PromptDiet.BadInput", () => Task.Run(PromptStateDietTests.BadInputPassesThrough));
+        yield return ("Experience.TurnPlan.ParseVectors", () => Task.Run(TurnPlanVectorTests.ParseVectors));
+        yield return ("Experience.TurnPlan.ResolveVectors", () => Task.Run(TurnPlanVectorTests.ResolveVectors));
+        yield return ("Experience.TurnPlan.DivergedVectors", () => Task.Run(TurnPlanVectorTests.DivergedVectors));
+        yield return ("Experience.TurnPlan.ThreeStepsOneRequest", AgentLoopTests.Plan_ThreeStepsOneRequest);
+        yield return ("Experience.TurnPlan.StopsOnSurprises", AgentLoopTests.Plan_StopsOnANewCardOrADeadTarget);
+        yield return ("Experience.TurnPlan.RejectedFirstAndSwitchOff", AgentLoopTests.Plan_RejectedFirstActRunsNothingAndSwitchOffIgnoresThen);
+        yield return ("Experience.TurnPlan.PlayerGuidanceStops", AgentLoopTests.Plan_PlayerGuidanceStopsTheRest);
         yield return ("Experience.Turbo.EngageFirstReleaseInFinally", () => Task.Run(TurboWiringContractTests.TheLoopEngagesFirstAndReleasesInItsOuterFinally));
         yield return ("Experience.Turbo.ReleaseNotTiedToEndedToken", () => Task.Run(TurboWiringContractTests.ReleaseIsNotTiedToTheEndedLoopsToken));
         yield return ("Experience.Turbo.PrefsGuardAtModStart", () => Task.Run(TurboWiringContractTests.ThePrefsGuardIsInstalledAtModStart));

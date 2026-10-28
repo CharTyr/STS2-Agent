@@ -41,6 +41,13 @@ If the screen is UNKNOWN, say so and ask the player to wait or retry rather than
     public const string ActNowInstruction =
         "The compact state above is fresh and includes available_actions. Do not call get_game_state; call act now with the next legal action and a one-sentence reason. Vision is optional and never required.";
 
+    /// <summary>
+    /// Appended to <see cref="ActNowInstruction"/> on a combat frame while whole-turn plans are on:
+    /// one request can carry the whole turn instead of one request per card.
+    /// </summary>
+    public const string PlanTurnInstruction =
+        "In combat, plan the whole turn in this one call: the first action in act's own fields, the rest in `then` (cards by card_cid, usually ending with end_turn). Use combat.threat and hand[].vs for the numbers.";
+
     public const string JsonActFallback = """
 If you cannot call tools, reply with a single JSON object and nothing else:
 {"action":"<name from available_actions>","card_index":0,"target_index":0,"option_index":0,"x":0,"y":0,"tool":"big","reason":"<one short sentence saying why>"}

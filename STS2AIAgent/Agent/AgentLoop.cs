@@ -254,7 +254,8 @@ internal sealed partial class AgentLoop
         LlmUsage? initialUsage = null,
         int initialRequests = 0,
         Action<string>? reportPhase = null,
-        Action? onFirstPrimaryRequest = null)
+        Action? onFirstPrimaryRequest = null,
+        string? planStateJson = null)
     {
         string? lastText = null;
         string? lastReasoning = null;
@@ -382,7 +383,8 @@ internal sealed partial class AgentLoop
                         var parsed = await RunActAsync(actJson);
                         if (parsed.Error == null && stopAfterAct)
                         {
-                            return Receipt();
+                            return planStateJson == null ? Receipt()
+                                : await ContinuePlanAsync(Receipt(), actJson, planStateJson, cancellationToken, checkState, reportPhase);
                         }
 
                         messages.Add(LlmMessage.Assistant(completion.Content));
@@ -470,7 +472,9 @@ internal sealed partial class AgentLoop
                         {
                             if (stopAfterAct)
                             {
-                                return Receipt();
+                                // The rest of a combat turn the model planned in `then` (W3).
+                                return planStateJson == null ? Receipt()
+                                    : await ContinuePlanAsync(Receipt(), call.ArgumentsJson, planStateJson, cancellationToken, checkState, reportPhase);
                             }
                         }
                         else if (request.Stream &&
@@ -515,13 +519,14 @@ internal sealed partial class AgentLoop
             ex.Receipt = Receipt();
             throw;
         }
-        catch (OperationCanceledException ex) when (cancellationToken.IsCancellationRequested)
+        catch (OperationCanceledException ex) when (cancellationToken.IsCancellationRequested && ex is not AgentTurnCanceledException)
         {
             throw new AgentTurnCanceledException(Receipt(), ex, cancellationToken);
         }
         catch (AutoPlayStoppedException ex)
         {
-            ex.Receipt = Receipt();
+            // A plan step that stopped the session already wrote the fuller receipt.
+            ex.Receipt ??= Receipt();
             throw;
         }
     }
@@ -729,6 +734,12 @@ internal sealed partial class AgentLoop
             }
 
             var cardIndex = ReadInt(args, "card_index");
+            // A card named by its per-combat id wins over a position (W3): positions shift as cards leave.
+            if (ReadInt(args, "card_cid") is >= 0 and var cid)
+            {
+                cardIndex = TurnPlanPolicy.FindCardIndex(compactJson, (uint)cid) ?? -1;
+            }
+
             var targetIndex = ReadInt(args, "target_index");
             var optionIndex = ReadInt(args, "option_index");
             var x = ReadInt(args, "x");
