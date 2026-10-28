@@ -371,6 +371,7 @@ internal static class TestRunner
         yield return ("JevLogic.OptionIndexCarried", () => Task.Run(JevAgentLogicTests.ExecutionDecision_OptionIndexDecisionCarriesItsIndex));
         yield return ("JevLogic.EmptyDecisionSerializes", () => Task.Run(JevAgentLogicTests.ExecutionDecision_EmptyDecisionSerializesToEmptyObject));
         yield return ("JevLogic.EnumerateCombat", () => Task.Run(JevAgentLogicTests.Enumerate_CombatCardsTimesTargetsAndEndTurn));
+        yield return ("JevLogic.DoesNotOfferSaveAndQuit", () => Task.Run(JevAgentLogicTests.Enumerate_DoesNotOfferSaveAndQuit));
         yield return ("JevLogic.EnumerateMapNodes", () => Task.Run(JevAgentLogicTests.Enumerate_MapNodeOptions));
         yield return ("JevLogic.EnumerateSkipsLocks", () => Task.Run(JevAgentLogicTests.Enumerate_IndexedOptionsExpandTargetsAndSkipLocks));
         yield return ("JevLogic.EnumerateNoArgFallback", () => Task.Run(JevAgentLogicTests.Enumerate_NoArgFallbackScreenYieldsSingleOptions));
@@ -632,6 +633,8 @@ internal static class TestRunner
         yield return ("Context.ShortHistoryStaysWhole", () => Task.Run(ContextCompactionTests.ShortHistoryIsNotSummarized));
         yield return ("AgentLoop.ReasoningBudget", AgentLoopTests.PlayOnce_MarksReasoningBudgetExhaustionForRecovery);
         yield return ("AgentLoop.ToolStreamDemotion", AgentLoopTests.PlayOnce_DemotesToollessStreamToNonStreamingOnce);
+        yield return ("AgentLoop.TruncatedActStreamDemotion", AgentLoopTests.PlayOnce_DemotesTruncatedActStreamToNonStreamingOnce);
+        yield return ("AgentLoop.TruncatedActDetection", AgentLoopTests.TruncatedStreamedActDetection);
         yield return ("AgentLoop.JsonActNoTools", AgentLoopTests.PlayOnce_TextOnlyJsonActWithoutTools);
         yield return ("AgentLoop.CrystalJsonNoTools", AgentLoopTests.PlayOnce_TextOnlyCrystalJsonForwardsCoordinatesAndNullTool);
         yield return ("AgentLoop.WaitTool", AgentLoopTests.PlayOnce_WaitUntilActionableTool);

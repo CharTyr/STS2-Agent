@@ -693,6 +693,11 @@ internal static partial class UiFactory
     public static Label StatusLine(int size = FontCaption)
     {
         var label = Label("", size, muted: true);
+        // ClipText alone does not bound the minimum width of a Godot Label. Reflow keeps the
+        // column narrow, while MaxLinesVisible holds the result to a single line.
+        label.AutowrapMode = TextServer.AutowrapMode.WordSmart;
+        label.MaxLinesVisible = 1;
+        label.CustomMinimumSize = new Vector2(0, size + 6);
         label.ClipText = true;
         label.TextOverrunBehavior = TextServer.OverrunBehavior.TrimEllipsis;
         label.SizeFlagsHorizontal = Control.SizeFlags.ExpandFill;

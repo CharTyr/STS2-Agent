@@ -242,6 +242,17 @@ internal static class JevAgentLogicTests
 
     // ---- JevOptionEnumerator: MAP ------------------------------------------
 
+    public static void Enumerate_DoesNotOfferSaveAndQuit()
+    {
+        const string frame = """{"state":{"screen":"COMBAT"},"available_actions":[{"name":"save_and_quit"},{"name":"end_turn"}]}""";
+        var options = JevOptionEnumerator.Enumerate(frame);
+        Assert.Single(options);
+        Assert.Equal("end_turn", options[0].Action);
+
+        const string onlyQuit = """{"state":{"screen":"COMBAT"},"available_actions":[{"name":"save_and_quit"}]}""";
+        Assert.Equal(0, JevOptionEnumerator.Enumerate(onlyQuit).Count);
+    }
+
     public static void Enumerate_MapNodeOptions()
     {
         var options = JevOptionEnumerator.Enumerate(MapSnapshot);

@@ -278,6 +278,7 @@ internal sealed partial class AgentRuntime
             return Loc.T("未配置快速判断地址。");
         }
 
+        var stopwatch = System.Diagnostics.Stopwatch.StartNew();
         try
         {
             var timeout = TimeSpan.FromSeconds(settings.JevRequestTimeoutSeconds is > 0 ? settings.JevRequestTimeoutSeconds.Value : 90);
@@ -292,7 +293,7 @@ internal sealed partial class AgentRuntime
         }
         catch (Exception ex)
         {
-            return Loc.T("快速判断连接失败：{0}", ex.Message);
+            return Loc.T("快速判断连接失败：{0}", ex.Message) + $" · {stopwatch.ElapsedMilliseconds} ms";
         }
     }
 }

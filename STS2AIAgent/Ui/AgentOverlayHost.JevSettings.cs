@@ -68,6 +68,9 @@ internal sealed partial class AgentOverlayHost
 
         // Picks one of the preset's documented models into the free-text field; hidden for a single model.
         _jevModelPicker = UiFactory.Combo();
+        _jevModelPicker.ClipText = true;
+        _jevModelPicker.FitToLongestItem = false;
+        _jevModelPicker.CustomMinimumSize = new Vector2(80, 0);
         _jevModelPicker.ItemSelected += index =>
         {
             if (_jevModelEdit == null || _jevModelPicker == null || index < 0) return;
@@ -75,7 +78,7 @@ internal sealed partial class AgentOverlayHost
             MarkSettingsDirty();
         };
         var modelRow = UiFactory.Row(_jevModelEdit, _jevModelPicker);
-        _jevModelPicker.SizeFlagsHorizontal = Control.SizeFlags.Fill;
+        _jevModelPicker.SizeFlagsHorizontal = Control.SizeFlags.ExpandFill;
 
         _jevKeyLink = UiFactory.Button(Loc.T("获取 Key"), () => OpenJevLink(key: true), UiFactory.ButtonKind.Ghost);
         _jevDocsLink = UiFactory.Button(Loc.T("文档"), () => OpenJevLink(key: false), UiFactory.ButtonKind.Ghost);

@@ -1349,6 +1349,45 @@ internal static class AgentLoopTests
         Assert.Equal(2, result.RequestsSpent);
     }
 
+    public static async Task PlayOnce_DemotesTruncatedActStreamToNonStreamingOnce()
+    {
+        var bridge = new FakeBridge();
+        var factory = new ScriptedClientFactory(new[]
+        {
+            // What the gateway actually streamed live: a closed JSON object holding only the action.
+            new LlmCompletion
+            {
+                ToolCalls = new[] { new LlmToolCall { Id = "truncated", Name = "act", ArgumentsJson = "{\"action\":\"play_card\"}" } }
+            },
+            new LlmCompletion
+            {
+                ToolCalls = new[] { new LlmToolCall { Id = "complete", Name = "act", ArgumentsJson = "{\"action\":\"play_card\",\"card_index\":0}" } }
+            }
+        });
+
+        var result = await new AgentLoop(bridge, factory, AgentSettings.CreateDefault).PlayOnceAsync(CancellationToken.None);
+        Assert.Equal("play_card", result.Acted);
+        Assert.Equal(1, bridge.ActCalls);
+        Assert.Equal(2, factory.Requests.Count);
+        Assert.True(factory.Requests[0].Stream);
+        Assert.False(factory.Requests[1].Stream);
+    }
+
+    public static Task TruncatedStreamedActDetection()
+    {
+        Assert.True(AgentLoop.LooksLikeTruncatedStreamedAct("{\"action\":\"play_card\"}"));
+        Assert.True(AgentLoop.LooksLikeTruncatedStreamedAct("{\"action\":\"choose_map_node\"}"));
+        Assert.False(AgentLoop.LooksLikeTruncatedStreamedAct("{\"action\":\"play_card\",\"card_index\":2}"));
+        Assert.False(AgentLoop.LooksLikeTruncatedStreamedAct("{\"action\":\"choose_map_node\",\"option_index\":1}"));
+        Assert.False(AgentLoop.LooksLikeTruncatedStreamedAct("{\"action\":\"end_turn\"}"));
+        Assert.False(AgentLoop.LooksLikeTruncatedStreamedAct("{\"action\":"));
+        Assert.True(AgentLoop.IsMissingIndexError("target_index must come from the latest payload for this card."));
+        Assert.True(AgentLoop.IsMissingIndexError("card_index must come from the latest combat.hand."));
+        Assert.False(AgentLoop.IsMissingIndexError("Action is not in available_actions."));
+        Assert.False(AgentLoop.IsMissingIndexError(null));
+        return Task.CompletedTask;
+    }
+
     /// <summary>
     /// The turn's own request carries the live-reasoning callback, so a partial the client reports while
     /// the reply is streaming reaches the caller that shows it. Without this line the whole streaming

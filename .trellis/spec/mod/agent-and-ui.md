@@ -43,7 +43,9 @@ The visual rules (2026-10-27, after "the UI looks cheap"), each pinned in [Overl
 - Status lines carry their tone in colour (`UiFactory.SetTone`, pills and dots in `UiFactory.Status.cs`), never in emoji or shape glyphs, which the game draws from a fallback font at another size and baseline.
 - Whatever Godot draws by itself (scroll bars, drop-down lists, tooltips, check box icons, the caret, the font) comes from [OverlayGodotTheme](../../../STS2AIAgent/Ui/OverlayGodotTheme.cs) on the overlay host, built from the palette and rebuilt on a theme switch. Without it those parts fall through to the engine's grey defaults inside a themed panel.
 
-`ClipText` stays off on buttons. Godot's clipped button reports a minimum width that excludes its label, so a tab row laid out by natural width collapsed to six empty slivers live on 2026-09-20; the label has to drive the size.
+`ClipText` stays off on buttons sized by their natural label width. Godot's clipped button reports a minimum width that excludes its label, so a tab row laid out by natural width collapsed to six empty slivers live on 2026-09-20. Model pickers sharing a fixed-width row are an exception: give them an explicit minimum width, disable fitting to the longest item and clip the selected text; their menus still show the complete model names. Check long model names at the narrow overlay width in the game.
+
+One-line status verdicts must wrap internally, cap the visible lines at one and reserve a line of height; clipping and ellipsis alone do not prevent a long HTTP error from inflating the minimum width. Preserve the full verdict in the tooltip and check both its visibility and width with an actual long provider error.
 
 Use `UiFactory` for controls that match an existing pattern; keep tab-specific composition and event handlers in `AgentOverlayHost`. UI callbacks may collect user input, call an `AgentRuntime` method, and request refresh. They should not serialize `AgentSettings` themselves, call `GameActionService` directly, or access native game objects from a background continuation. The existing overlay calls `GameThread.InvokeAsync(RefreshDynamic)` after asynchronous team operations and in `OnRuntimeChanged`.
 
@@ -94,6 +96,8 @@ Caller cancellation must propagate through role probes, vision calls and read to
 `EventStreamSubscribers` retains snapshots only while at least one subscriber exists. Apply the rule to ordinary disconnects, queue overflow, snapshot overflow and a sample that arrives after the final disconnect. Both publish paths must update polling demand after dropping subscribers. The first sample of a new subscriber lifecycle resets duplicate suppression.
 
 ## Turn receipts and budget ordering
+
+`JevOptionEnumerator` must not offer `save_and_quit` to the fast decision model: it is an administrative escape hatch rather than a game-progress action. Keep the underlying action available to manual and external callers. `JevAgentLogicTests.Enumerate_DoesNotOfferSaveAndQuit` covers both a mixed action list and a list containing only that action; a live run observed the fast model select it during combat before this guard was added.
 
 `AgentLoop.ExecuteActAsync` must remember a successful bridge response before any follow-up state read, wait or boundary check. Its caller receives the acceptance callback immediately. A later observation failure returns an accepted but unsettled result; it must never clear the fact that this decision already acted. An explicit bridge error still allows a corrected action. Tool arguments are parsed as an object before reading either the action or its reason.
 

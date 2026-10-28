@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.17.0
 
 Game-dependent compilation succeeded on 2026-10-27 (Release, 0 warnings, 0 errors, after the CS0173 fix below). Only the tested subset passed live acceptance: access hardening, the overlay checks, the potion-slot reward flow, and the Steam-on dual-window no-model takeover and save-continue. Model-backed items (streaming chat, vision answers, teammate auto-play, DeepSeek variants, non-combat-only mode) could not run because of provider errors and were skipped by the maintainer's decision, so they have no live evidence; the Workshop zh-CN description was not verified, the 3-4 player and LAN checks were not run, and old/duplicate local mod copies, artifact fingerprints, the second-library Workshop install, dynamic-port discovery, handshake-failure paths and slow-child reconnection were not reported as checked. See [PRODUCT_PLAN_CURRENT.md](PRODUCT_PLAN_CURRENT.md).
 
@@ -20,6 +20,7 @@ Game-dependent compilation succeeded on 2026-10-27 (Release, 0 warnings, 0 error
 
 ### Changed
 
+- **快速判断不再把「保存并退出」作为自动游玩的候选动作。** 实机战斗中快速模型曾选中该管理动作，使自动游玩提前停下；现在快速判断只考虑继续推进游戏的动作，手动和外部客户端的原有接口不受影响。
 - **新安装的默认请求上限从 30 次改为 1500 次，大约够打完一整局。** 30 次大约只够一场战斗（第四轮实机复测里一场战斗正好用完 30 次），新玩家打完第一场自动游玩就停了。1500 是按实测估算的：此前 1 到 3 层用了 52 次请求，三幕约 45 到 50 层、后期精英和 Boss 战更长，一整局约 800 到 1300 次，再留出重试和规划的余量。v0.16.2 及更早版本默认不限，所以已有配置不受影响。
 - **自动游玩因预算、配置错误或队友窗口退出而停下时，界面会明确说出来。** 标题栏多了「需处理」状态；悬浮窗隐藏时，边缘的 AI 按钮会变成警告色，鼠标悬停显示原因。单人页也会显示「下一步」（以前只有多人页有），按钮随之变为「继续游玩」；预算用完时，单人页直接出现「清零计数」按钮。
 - **快速配置更好上手。** 新增智谱 GLM、Kimi、通义千问、OpenRouter；每家选中后自动填一个常用模型，右边可下拉换其他常用模型，有「获取 Key」链接的会显示链接。切换服务商不再清空已填的 Key 和模型，切回来还在（只在本次打开设置页期间记住，保存的仍是当前服务商）。服务商、Key 或模型有改动时，点「保存设置」会自动测试一次，不用再单独点「测试主模型」；以前只保存不测试，游玩页会一直提示「模型还没测试」。模型列表按各家文档整理，没有逐家用真实 Key 实测。
@@ -42,6 +43,8 @@ Game-dependent compilation succeeded on 2026-10-27 (Release, 0 warnings, 0 error
 
 ### Fixed
 
+- **网关把流式工具参数截断时，自动游玩不再因此停摆。** 实测某 OpenAI 兼容网关的流式响应只回传 `{"action":"play_card"}` 就结束，客户端把截断当成模型漏参，连续三次后按「连续 3 次决策未成功」停止。现在检测到动作缺少它需要的索引（`card_index` / `option_index`），或校验返回「must come from」类缺参错误时，该回合会改用非流式重发一次。注意：同一网关的非流式响应也会出现同样的截断，所以这一条只能减轻、不能根除；完整一局请换用能稳定回传完整工具参数的模型。
+- 修复游戏程序集的思考选项编译错误，以及窄窗口中长模型名和服务商错误信息撑宽、裁切设置页的问题。快速判断熔断到期后，游玩页会及时刷新状态。
 - **设置保存失败时不再静默切走页面。** 以前在设置页填错（比如请求上限填了非数字）后切到游玩页，改动没保存、原因也看不到；现在会留在设置页，底栏写明原因。从游玩页邀请队友或继续联机存档时，如果设置存不上，会直接跳到设置页，而不是点了没反应。
 - **读档拦截提示里的按钮名改对了。** 用游戏自己的读档按钮打开本地联机存档时，提示以前让你点「继续上次联机对局」，按钮实际叫「继续联机存档」。
 - **「测试快速判断」的结果固定一行。** 服务商返回的长错误（如 TypeSafe 的 401）此前会在设置页折成好几行，排在页面末尾时被固定底栏挡住（第四轮实机复测 R4）。现在结果只占一行，过长部分显示省略号，鼠标悬停显示全文；失败结果也附上耗时（`… · 812 ms`），一次往返的耗时可以说明测试没有重试。

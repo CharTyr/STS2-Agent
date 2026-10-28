@@ -331,6 +331,13 @@ internal static class JevOptionEnumerator
             foreach (var descriptor in descriptors)
             {
                 var name = descriptor.Name;
+                // This is an administrative escape hatch, not a move toward finishing the run.
+                // Offering it alongside combat actions let the fast model quit a live run.
+                if (string.Equals(name, "save_and_quit", StringComparison.OrdinalIgnoreCase))
+                {
+                    continue;
+                }
+
                 if (string.Equals(name, "play_card", StringComparison.OrdinalIgnoreCase))
                 {
                     continue;

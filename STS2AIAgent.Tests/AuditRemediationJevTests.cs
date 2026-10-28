@@ -72,6 +72,8 @@ internal static class AuditRemediationJevTests
         Assert.Equal(now + JevExecutionDecider.FirstBreakerCooldown, decider.PausedUntil);
 
         now += JevExecutionDecider.FirstBreakerCooldown;
+        // The overlay can clear its warning as soon as the cooldown expires, before another request.
+        Assert.Null(decider.PausedUntil);
         for (var i = 0; i < JevExecutionDecider.BreakerThreshold; i++) await Decide();
         Assert.Equal(6, client.Calls);
         Assert.Equal(now + JevExecutionDecider.FirstBreakerCooldown * 2, decider.PausedUntil);

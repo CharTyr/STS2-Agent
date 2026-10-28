@@ -51,9 +51,21 @@ internal sealed partial class AgentOverlayHost
         _quickUrl.Visible = QuickSetup.Providers[providerIndex].Id == "custom";
         _quickBudget = UiFactory.Line(settings.MaxSessionRequests?.ToString() ?? "", Loc.T("不限（留空或0）"));
         _quickModelPicker = UiFactory.Combo();
-        _quickModelPicker.SizeFlagsHorizontal = Control.SizeFlags.Fill;
+        // Model names can be much wider than the space beside the editable field. Keep the picker
+        // bounded and let its popup show the complete names instead of widening the settings page.
+        _quickModelPicker.ClipText = true;
+        _quickModelPicker.FitToLongestItem = false;
+        _quickModelPicker.CustomMinimumSize = new Vector2(80, 0);
         _quickKeyLink = UiFactory.Button(Loc.T("获取 Key"), OpenQuickKeyLink, UiFactory.ButtonKind.Ghost);
-        void Dirty() { if (!_rebuildingSettings) { _quickDirty = true; MarkSettingsDirty(); } }
+        void Dirty()
+        {
+            if (_rebuildingSettings) return;
+            _quickDirty = true;
+            MarkSettingsDirty();
+            // The saved model's successful test does not apply to the unsaved draft.
+            if (_quickTestBadge != null && GodotObject.IsInstanceValid(_quickTestBadge))
+                ShowBadge(_quickTestBadge, QuickTestBadge());
+        }
         // Assigning a LineEdit's text from code raises no TextChanged, so the pick marks the form itself.
         _quickModelPicker.ItemSelected += index =>
         {

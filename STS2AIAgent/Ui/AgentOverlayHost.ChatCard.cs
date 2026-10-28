@@ -1,5 +1,6 @@
 using Godot;
 using STS2AIAgent.Agent;
+using STS2AIAgent.Config;
 using STS2AIAgent.Localization;
 
 namespace STS2AIAgent.Ui;

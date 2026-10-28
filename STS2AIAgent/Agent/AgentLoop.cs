@@ -527,8 +527,27 @@ internal sealed partial class AgentLoop
                     };
                 }
 
+                // Some gateways stream only the first fragment of a tool call's arguments and then
+                // finish the stream: the JSON closes after the action name, so the call is
+                // syntactically valid but unusable. The non-streaming body of the same request carries
+                // every field (measured live 2026-10-28), so retry once without streaming instead of
+                // spending the three-failure budget on a request the provider never delivered.
+                if (allowAct &&
+                    acted == null &&
+                    request.Stream &&
+                    !toolStreamFallbackTried &&
+                    completion.ToolCalls.Any(call =>
+                        string.Equals(call.Name, "act", StringComparison.OrdinalIgnoreCase) &&
+                        LooksLikeTruncatedStreamedAct(call.ArgumentsJson)))
+                {
+                    toolStreamFallbackTried = true;
+                    continue;
+                }
+
                 // Carry the provider's reasoning back with the tool-call turn: DeepSeek/Kimi thinking
                 // modes reject the next tool round with HTTP 400 when it is missing.
+                var messagesBeforeToolCalls = messages.Count;
+                var retryStreamedAct = false;
                 messages.Add(LlmMessage.Assistant(completion.Content, completion.ToolCalls, completion.Reasoning));
                 foreach (var call in completion.ToolCalls)
                 {
@@ -580,6 +599,16 @@ internal sealed partial class AgentLoop
                         else
                         {
                             lastActError = actOutcome.Error;
+                            // A stream can also stop right after card_index, leaving the target out.
+                            // That only surfaces at validation, so use the rejection itself as the
+                            // truncation signal and replay the turn once without streaming.
+                            if (request.Stream &&
+                                !toolStreamFallbackTried &&
+                                IsMissingIndexError(actOutcome.Error))
+                            {
+                                retryStreamedAct = true;
+                                break;
+                            }
                         }
 
                         continue;
@@ -587,6 +616,13 @@ internal sealed partial class AgentLoop
 
                     var toolJson = await ExecuteReadToolAsync(call.Name, call.ArgumentsJson, cancellationToken, checkState);
                     messages.Add(LlmMessage.Tool(call.Id, toolJson));
+                }
+
+                if (retryStreamedAct)
+                {
+                    messages.RemoveRange(messagesBeforeToolCalls, messages.Count - messagesBeforeToolCalls);
+                    toolStreamFallbackTried = true;
+                    continue;
                 }
             }
 

@@ -36,10 +36,19 @@ internal sealed partial class AgentOverlayHost
         var text = UiFactory.Wrapped(label, 13);
         text.CustomMinimumSize = new Vector2(160, 0);
         text.SizeFlagsHorizontal = Control.SizeFlags.Fill;
+        if (child is OptionButton combo) BoundRowCombo(combo);
         child.SizeFlagsHorizontal = Control.SizeFlags.ExpandFill;
         row.AddChild(text);
         row.AddChild(child);
         return row;
+    }
+
+    /// <summary>Keep a dropdown in a shared row inside the panel; its popup still shows full names.</summary>
+    private static void BoundRowCombo(OptionButton combo)
+    {
+        combo.ClipText = true;
+        combo.FitToLongestItem = false;
+        combo.CustomMinimumSize = new Vector2(80, 0);
     }
 
     private static OptionButton FillModelCombo(AgentSettings settings, string? selectedId, bool includeEmpty)

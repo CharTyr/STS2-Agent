@@ -535,6 +535,10 @@ internal sealed partial class AgentOverlayHost
 
                     RefreshChatLog();
                     RefreshContinueAvailability();
+                    // A circuit-breaker cooldown can expire without raising a runtime event.
+                    // Refresh its reading on the play-page tick so the warning clears on time.
+                    var settings = AgentRuntime.Instance.Settings;
+                    RefreshJevReading(settings.OverlayPlayMode == "coop", settings);
                     // Cached inside the runtime and throttled there: this runs on the game thread, so
                     // it asks for a refresh and renders whatever the last one produced.
                     AgentRuntime.Instance.RequestTeammateStatusRefresh();

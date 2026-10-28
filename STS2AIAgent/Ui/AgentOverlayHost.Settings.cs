@@ -644,6 +644,7 @@ internal sealed partial class AgentOverlayHost
         WatchLine(display);
         WatchLine(modelName);
         var endpointCombo = UiFactory.Combo();
+        BoundRowCombo(endpointCombo);
         var selectedEndpointIndex = -1;
         for (var i = 0; i < settings.Endpoints.Count; i++)
         {
