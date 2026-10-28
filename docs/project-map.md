@@ -160,7 +160,7 @@ one action runs at a time.
 ## 4. In-game agent: loop, runtime, dual-layer, persistence
 
 ### Files — AgentLoop (one decision turn; owns no lifecycle)
-- `STS2AIAgent/Agent/AgentLoop.cs` — `ChatAsync`, `PlayOnceAsync` (check state → `WaitUntilActionableAsync(20 s)` → Jev or LLM), `CompleteWithToolsAsync` (bounded tool rounds, `MaxToolRounds = 8`), `ExecuteActAsync`, `ExecuteReadToolAsync`, `TestConfiguredRolesAsync`.
+- `STS2AIAgent/Agent/AgentLoop.cs` — `ChatAsync`, `PlayOnceAsync` (check state → `WaitUntilActionableAsync(20 s)` → Jev or LLM), `CompleteWithToolsAsync` (bounded tool rounds, `MaxToolRounds = 8`), `ExecuteActAsync`, `ExecuteReadToolAsync`. At its 1,000-line budget: new turn seams go into their own partials.
 - `STS2AIAgent/Agent/AgentLoop.Decision.cs` — `TryDecideWithJevAsync` (budget pre-check → snapshot → decide → execute) and `PlayWithModelAsync` (prompt assembly; **the prompt cache order is load-bearing**: stable prefix first, live state last).
 - `STS2AIAgent/Agent/AgentLoop.Sandpit.cs` — execute one native-playable Frantic Escape before model dispatch at a lethal local Sandpit countdown.
 - `STS2AIAgent/Agent/SandpitSafetyPolicy.cs` — pure compact-state emergency policy and action rejection; the live snapshot is rechecked before dispatch.
@@ -168,6 +168,7 @@ one action runs at a time.
 - `STS2AIAgent/Agent/AgentLoop.Arguments.cs` — pure tool-argument parsers.
 - `STS2AIAgent/Agent/ToolTimeout.cs` — the shared `timeout_seconds` argument reader (finite, invariant-culture, clamped 1–120).
 - `STS2AIAgent/Agent/AgentLoop.Probes.cs` — `CreateClient` (per-request timeout from live settings), run-id and planning-state probes.
+- `STS2AIAgent/Agent/AgentLoop.RoleProbes.cs` — the footer "test connection": `TestConnectionAsync`, `TestConfiguredRolesAsync` (one ping per configured role → role test records), `CopyForRole`. Not part of a play turn.
 
 ### Files — AgentRuntime (singleton; one partial per concern)
 - `STS2AIAgent/Agent/AgentRuntime.cs` — `_gate` (state lock), `_turnGate` (semaphore: turn, chat, step and teammate reply are mutually exclusive), `StartAutoPlay`/`StopAutoPlay`, `AutoPlayLoopAsync` (the turn body), `TryCompanionImmediateAsync` (companion follows the host's map vote, confirms FTUE modals), dual-launch core, `ClassifyStop`.
