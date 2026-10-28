@@ -1000,7 +1000,7 @@ internal static class AgentLoopTests
 
         await loop.PlayOnceAsync(CancellationToken.None);
 
-        var messages = factory.LastRequest!.Messages;
+        var messages = factory.Requests[0].Messages;
         Assert.Contains(PlayPrompt.PlayContract, messages[0].Content);
         Assert.Equal("system", messages[0].Role);
 
@@ -1014,7 +1014,7 @@ internal static class AgentLoopTests
 
         Assert.Equal(messages.Count - 2, firstUser);
         Assert.Contains("Latest compact game state", messages[^2].Content);
-        Assert.Contains("Choose the next legal action", messages[^1].Content);
+        Assert.Equal(PlayPrompt.ActNowInstruction, messages[^1].Content);
 
         // The state carries the only copy of the screen playbook: one section, not the document.
         Assert.Contains("## COMBAT", string.Join("\n", messages.Select(message => message.Content)));
@@ -1031,14 +1031,15 @@ internal static class AgentLoopTests
         var loop = new AgentLoop(bridge, factory, AgentSettings.CreateDefault);
 
         await loop.PlayOnceAsync(CancellationToken.None);
-        var first = factory.LastRequest!.Messages;
+        var first = factory.Requests[0].Messages;
 
         // Same screen, different turn: everything before the state has to be byte-identical, which is
         // what lets a provider reuse the prefix it cached for the previous step.
         bridge.CompactStateJson =
             """{"screen":"COMBAT","available_actions":["end_turn"],"combat":{"hand":[{"i":1,"line":"Defend","targets":[]}],"enemies":[{"i":0}]}}""";
+        var secondStart = factory.Requests.Count;
         await loop.PlayOnceAsync(CancellationToken.None);
-        var second = factory.LastRequest!.Messages;
+        var second = factory.Requests[secondStart].Messages;
 
         Assert.Equal(first.Count, second.Count);
         for (var index = 0; index < first.Count - 2; index++)
@@ -1066,13 +1067,13 @@ internal static class AgentLoopTests
 
         await loop.PlayOnceAsync(CancellationToken.None);
 
-        var messages = factory.LastRequest!.Messages;
+        var messages = factory.Requests[0].Messages;
         Assert.Equal(1, bridge.CaptureCalls);
         var screenshot = messages.ToList().FindIndex(message => message.ImageJpeg != null);
         Assert.True(screenshot > 0, "the attached screenshot must be in the request");
         Assert.True(screenshot < messages.Count - 2, "the screenshot must precede the state and the instruction");
         Assert.Contains("Latest compact game state", messages[^2].Content);
-        Assert.Contains("Choose the next legal action", messages[^1].Content);
+        Assert.Equal(PlayPrompt.ActNowInstruction, messages[^1].Content);
     }
 
     /// <summary>
@@ -1094,10 +1095,10 @@ internal static class AgentLoopTests
         var result = await loop.PlayOnceAsync(CancellationToken.None);
 
         Assert.Equal("end_turn", result.Acted);
-        var messages = factory.LastRequest!.Messages;
+        var messages = factory.Requests[0].Messages;
         Assert.Contains(PlayPrompt.JsonActFallback, messages[0].Content);
         Assert.Contains("Latest compact game state", messages[^2].Content);
-        Assert.Contains("Choose the next legal action", messages[^1].Content);
+        Assert.Equal(PlayPrompt.ActNowInstruction, messages[^1].Content);
     }
 
     /// <summary>
@@ -1369,9 +1370,16 @@ internal static class AgentLoopTests
         var result = await new AgentLoop(new FakeBridge(), factory, AgentSettings.CreateDefault).PlayOnceAsync(CancellationToken.None);
         Assert.True(result.ReasoningBudgetExhausted);
         Assert.NotNull(result.Error);
-        Assert.Equal(2, result.RequestsSpent);
+        // Changed 2026-10-28 (W6): a reply that spent its whole output on reasoning is not a stream
+        // fault, so it is no longer re-sent here; the recovery policy retries it with backoff.
+        Assert.Equal(1, result.RequestsSpent);
     }
 
+    /// <summary>
+    /// Prose instead of a tool call is answered with a one-line nudge on the same (streamed)
+    /// conversation, not a whole non-streaming re-send. Changed 2026-10-28 (W6): the old demotion
+    /// fired on any tool-less reply and doubled the cost of 63% of decisions.
+    /// </summary>
     public static async Task PlayOnce_DemotesToollessStreamToNonStreamingOnce()
     {
         var bridge = new FakeBridge();
@@ -1380,7 +1388,7 @@ internal static class AgentLoopTests
             new LlmCompletion { Content = "I will act next." },
             new LlmCompletion
             {
-                ToolCalls = new[] { new LlmToolCall { Id = "act-after-demotion", Name = "act", ArgumentsJson = "{\"action\":\"play_card\",\"card_index\":0}" } }
+                ToolCalls = new[] { new LlmToolCall { Id = "act-after-nudge", Name = "act", ArgumentsJson = "{\"action\":\"play_card\",\"card_index\":0}" } }
             }
         });
 
@@ -1389,8 +1397,93 @@ internal static class AgentLoopTests
         Assert.Equal(1, bridge.ActCalls);
         Assert.Equal(2, factory.Requests.Count);
         Assert.True(factory.Requests[0].Stream);
-        Assert.False(factory.Requests[1].Stream);
+        Assert.True(factory.Requests[1].Stream, "A nudge keeps the stream; only an empty reply demotes it.");
+        Assert.Equal(AgentLoop.ActNowNudge, factory.Requests[1].Messages[^1].Content);
+        Assert.False(result.StreamDemoted);
         Assert.Equal(2, result.RequestsSpent);
+    }
+
+    public static async Task PlayOnce_SilentStreamDemotesOnce()
+    {
+        var bridge = new FakeBridge();
+        var factory = new ScriptedClientFactory(new[]
+        {
+            new LlmCompletion { Content = "" },
+            new LlmCompletion
+            {
+                ToolCalls = new[] { new LlmToolCall { Id = "act-after-demotion", Name = "act", ArgumentsJson = "{\"action\":\"play_card\",\"card_index\":0}" } }
+            }
+        });
+
+        var result = await new AgentLoop(bridge, factory, AgentSettings.CreateDefault).PlayOnceAsync(CancellationToken.None);
+        Assert.Equal("play_card", result.Acted);
+        Assert.Equal(2, factory.Requests.Count);
+        Assert.True(factory.Requests[0].Stream);
+        Assert.False(factory.Requests[1].Stream, "An empty streamed reply is the provider failing to stream tools.");
+        Assert.True(result.StreamDemoted);
+    }
+
+    public static async Task PlayOnce_NudgeThatFailsThenDemotesAndStops()
+    {
+        var bridge = new FakeBridge();
+        var factory = new ScriptedClientFactory(new[]
+        {
+            new LlmCompletion { Content = "Thinking about it." },
+            new LlmCompletion { Content = "Still thinking." },
+            new LlmCompletion { Content = "No idea." }
+        });
+
+        var result = await new AgentLoop(bridge, factory, AgentSettings.CreateDefault).PlayOnceAsync(CancellationToken.None);
+        Assert.Null(result.Acted);
+        Assert.NotNull(result.Error);
+        Assert.Equal(3, factory.Requests.Count, "prose → nudge → one non-streaming re-send, then give up");
+        Assert.False(factory.Requests[2].Stream);
+        Assert.Equal(0, bridge.ActCalls);
+    }
+
+    /// <summary>
+    /// A tool-capable model that writes its act as JSON in the reply is taken at its word (W7.4):
+    /// asking again cost a full request for an answer already given.
+    /// </summary>
+    public static async Task PlayOnce_JsonActInTextRunsEvenWithNativeTools()
+    {
+        var bridge = new FakeBridge();
+        var factory = new ScriptedClientFactory(new[]
+        {
+            new LlmCompletion { Content = "{\"action\":\"play_card\",\"card_index\":0,\"reason\":\"only attack\"}" }
+        });
+
+        var result = await new AgentLoop(bridge, factory, AgentSettings.CreateDefault).PlayOnceAsync(CancellationToken.None);
+        Assert.Equal("play_card", result.Acted);
+        Assert.Equal(1, factory.Requests.Count);
+        Assert.Equal(1, result.RequestsSpent);
+        Assert.Equal(1, bridge.ActCalls);
+    }
+
+    /// <summary>
+    /// The in-game loop already carries the fresh state, so it does not advertise the state readers;
+    /// the MCP surfaces keep them (ADR 0002).
+    /// </summary>
+    public static async Task PlayOnce_AdvertisesNoStateReadersAndCountsReadRounds()
+    {
+        var bridge = new FakeBridge();
+        var factory = new ScriptedClientFactory(new[]
+        {
+            new LlmCompletion { ToolCalls = new[] { new LlmToolCall { Id = "read", Name = "get_game_state", ArgumentsJson = "{}" } } },
+            new LlmCompletion { ToolCalls = new[] { new LlmToolCall { Id = "act", Name = "act", ArgumentsJson = "{\"action\":\"play_card\",\"card_index\":0}" } } }
+        });
+
+        var result = await new AgentLoop(bridge, factory, AgentSettings.CreateDefault).PlayOnceAsync(CancellationToken.None);
+        var advertised = factory.Requests[0].Tools!.Select(tool => tool.Name).ToArray();
+        Assert.False(advertised.Contains("get_game_state"));
+        Assert.False(advertised.Contains("get_raw_game_state"));
+        Assert.False(advertised.Contains("get_available_actions"));
+        Assert.True(advertised.Contains("act") && advertised.Contains("get_relevant_game_data"));
+        Assert.True(AgentTools.Mcp.Any(tool => tool.Name == "get_game_state"), "The MCP surface keeps the state reader.");
+        Assert.Equal("play_card", result.Acted, "A state reader the model names anyway is still answered.");
+        Assert.Equal(2, result.ToolRounds);
+        Assert.Equal(1, result.ReadToolRounds);
+        Assert.Equal(PlayPrompt.ActNowInstruction, factory.Requests[0].Messages[^1].Content);
     }
 
     public static async Task PlayOnce_DemotesTruncatedActStreamToNonStreamingOnce()

@@ -117,6 +117,19 @@ internal sealed class AgentTurnResult
 
     public int ToolRounds { get; init; }
 
+    /// <summary>
+    /// Model rounds that called a read tool (state, actions, metadata, wait) instead of acting. Each
+    /// is a full request re-sending the whole prompt, so this is what separates "the model looked
+    /// something up" from the other reasons a decision cost more than one request.
+    /// </summary>
+    public int ReadToolRounds { get; init; }
+
+    /// <summary>
+    /// The turn re-sent its request without streaming because the streamed reply was unusable (empty,
+    /// or a truncated act). The other half of the per-decision request count.
+    /// </summary>
+    public bool StreamDemoted { get; init; }
+
     public LlmUsage? Usage { get; init; }
 
     public int RequestsSpent { get; init; }

@@ -143,7 +143,7 @@ one action runs at a time.
 - `STS2AIAgent/Config/ThinkingIntensity.cs` — thinking-level parsing and mapping.
 - `STS2AIAgent/Localization/Loc.cs` — `Loc.T`, the language switch, the `LanguageChanged` event.
 - `STS2AIAgent/Localization/LocSource.cs` — resolves the player's language (settings file first, then the game's manager).
-- `STS2AIAgent/Localization/Loc.Strings.Ui.cs` / `STS2AIAgent/Localization/Loc.Strings.Runtime.cs` / `STS2AIAgent/Localization/Loc.Strings.Facing.cs` / `STS2AIAgent/Localization/Loc.Strings.Game.cs` / `STS2AIAgent/Localization/Loc.Strings.Support.cs` — the zh→en tables, split by area.
+- `STS2AIAgent/Localization/Loc.Strings.Ui.cs` / `STS2AIAgent/Localization/Loc.Strings.Runtime.cs` / `STS2AIAgent/Localization/Loc.Strings.Facing.cs` / `STS2AIAgent/Localization/Loc.Strings.Game.cs` / `STS2AIAgent/Localization/Loc.Strings.Support.cs` / `STS2AIAgent/Localization/Loc.Strings.Overhaul.cs` — the zh→en tables, split by area (`Overhaul` holds the 2026-10 experience overhaul's copy: turbo, autopilot, plans, combat math, cost meters, HUD, run report).
 - `STS2AIAgent/Vision/ScreenshotService.cs` — JPEG readback of the game viewport; the Godot capture host hides/restores the overlay and waits for `RenderingServer.FramePostDraw`, not `SceneTree.ProcessFrame` (which still shows the old frame). The capture gate and deadline policy are in `ScreenshotCapturePolicy`.
 
 ### Flows

@@ -129,6 +129,20 @@ internal static class AgentTools
         }
     }).ToArray();
 
+    /// <summary>
+    /// What the in-game play loop advertises: <c>act</c> plus the lookups the state does not carry.
+    /// </summary>
+    /// <remarks>
+    /// The loop already puts the fresh compact state (with <c>available_actions</c>) in the prompt, so
+    /// advertising <c>get_game_state</c> / <c>get_raw_game_state</c> / <c>get_available_actions</c>
+    /// only invited a read round -- a whole second request re-sending the ~11k-token prompt to fetch
+    /// what the first request already held. They stay dispatchable (a model that names one anyway is
+    /// answered) and stay on <see cref="Play"/> and <see cref="Mcp"/>, which external clients use.
+    /// </remarks>
+    public static readonly IReadOnlyList<LlmTool> PlayInGame = Play
+        .Where(tool => tool.Name is not ("get_game_state" or "get_raw_game_state" or "get_available_actions"))
+        .ToArray();
+
     public static readonly IReadOnlyList<LlmTool> Mcp = new[]
     {
         Tool("health_check", "Check whether the STS2 AI Agent mod is loaded and this MCP endpoint is open."),

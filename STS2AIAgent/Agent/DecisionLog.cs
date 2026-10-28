@@ -18,7 +18,30 @@ internal sealed record DecisionLogEntry(
     Dictionary<string, double>? probabilities = null,
     double? danger = null,
     string? strategy_updated_at = null,
-    bool? jev_attempt = null);
+    bool? jev_attempt = null,
+    int? tool_rounds = null,
+    int? read_tool_rounds = null,
+    bool? stream_demoted = null,
+    string? turn_id = null,
+    int? plan_index = null,
+    int? plan_size = null);
+
+/// <summary>
+/// How a decision was reached, beyond what it cost: the model rounds it took, how many of those only
+/// read state, whether the stream had to be re-sent, and -- for a step of a whole-turn plan -- which
+/// plan it belongs to. All optional; an entry without them reads exactly as before.
+/// </summary>
+/// <remarks>
+/// These exist to make the per-decision request count explainable: "2 requests" used to hide
+/// whether the model looked something up, re-sent a broken stream, or was nudged to act.
+/// </remarks>
+internal sealed record DecisionMetrics(
+    int? ToolRounds = null,
+    int? ReadToolRounds = null,
+    bool StreamDemoted = false,
+    string? TurnId = null,
+    int? PlanIndex = null,
+    int? PlanSize = null);
 
 /// <summary>
 /// What one run has cost so far: how many decisions were recorded for it and what they spent.
@@ -90,7 +113,8 @@ internal sealed class DecisionLog
         IReadOnlyDictionary<string, double>? probabilities = null,
         double? danger = null,
         string? strategyUpdatedAt = null,
-        bool jevAttempt = false)
+        bool jevAttempt = false,
+        DecisionMetrics? metrics = null)
     {
         var safeSource = Clean(source, "unknown", 48);
         var safeAction = Clean(action, "unknown", 96);
@@ -122,7 +146,13 @@ internal sealed class DecisionLog
                 probabilities is { Count: > 0 } ? new Dictionary<string, double>(probabilities, StringComparer.Ordinal) : null,
                 danger is >= 0.0 and <= 4.0 ? danger : null,
                 CleanOptional(strategyUpdatedAt, 64),
-                jevAttempt ? true : null);
+                jevAttempt ? true : null,
+                metrics?.ToolRounds is >= 0 ? metrics.ToolRounds : null,
+                metrics?.ReadToolRounds is >= 0 ? metrics.ReadToolRounds : null,
+                metrics?.StreamDemoted == true ? true : null,
+                CleanOptional(metrics?.TurnId, 64),
+                metrics?.PlanIndex is >= 0 ? metrics.PlanIndex : null,
+                metrics?.PlanSize is >= 1 ? metrics.PlanSize : null);
 
             _entries.Add(entry);
             if (_entries.Count > _capacity)

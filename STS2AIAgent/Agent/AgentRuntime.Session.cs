@@ -56,7 +56,8 @@ internal sealed partial class AgentRuntime
         string? stateFingerprint = null, int requestsSpent = 0, int? totalTokens = null,
         string? runId = null, double? confidence = null, bool runIdObserved = false,
         IReadOnlyList<string>? optionIds = null, IReadOnlyDictionary<string, double>? probabilities = null,
-        double? danger = null, string? strategyUpdatedAt = null, bool jevAttempt = false)
+        double? danger = null, string? strategyUpdatedAt = null, bool jevAttempt = false,
+        DecisionMetrics? metrics = null)
     {
         string? activeRun;
         // An explicit pre-action snapshot may deliberately be unknown (menu action). Do not fill
@@ -64,7 +65,7 @@ internal sealed partial class AgentRuntime
         lock (_gate) activeRun = runIdObserved ? runId : runId ?? _sessionRunId ?? _runBoundary.RunId;
         return _decisions.Record(source, action, reason, stateFingerprint, requestsSpent, totalTokens,
             runId: activeRun, confidence: confidence, optionIds: optionIds, probabilities: probabilities,
-            danger: danger, strategyUpdatedAt: strategyUpdatedAt, jevAttempt: jevAttempt);
+            danger: danger, strategyUpdatedAt: strategyUpdatedAt, jevAttempt: jevAttempt, metrics: metrics);
     }
 
     // Writers are serialized without blocking history updates on IO. A failed save stays pending

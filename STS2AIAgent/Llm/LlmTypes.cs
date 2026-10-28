@@ -115,6 +115,13 @@ internal sealed class LlmUsage
 
     public int TotalTokens { get; init; }
 
+    /// <summary>
+    /// Prompt tokens the provider served from its prefix cache (OpenAI
+    /// <c>prompt_tokens_details.cached_tokens</c>, DeepSeek <c>prompt_cache_hit_tokens</c>); 0 when
+    /// the provider does not report it. The prompt is ordered static-first precisely so this grows.
+    /// </summary>
+    public int CachedPromptTokens { get; init; }
+
     public static LlmUsage Empty => new();
 
     public static LlmUsage operator +(LlmUsage left, LlmUsage right)
@@ -123,6 +130,7 @@ internal sealed class LlmUsage
         {
             PromptTokens = left.PromptTokens + right.PromptTokens,
             CompletionTokens = left.CompletionTokens + right.CompletionTokens,
+            CachedPromptTokens = left.CachedPromptTokens + right.CachedPromptTokens,
             TotalTokens = (left.TotalTokens > 0 || right.TotalTokens > 0)
                 ? (left.TotalTokens + right.TotalTokens)
                 : (left.PromptTokens + right.PromptTokens + left.CompletionTokens + right.CompletionTokens)

@@ -206,6 +206,8 @@ curl -s http://127.0.0.1:8080/state | jq .
 | `non_combat_only` | boolean | 是否启用“仅在战斗外自动游玩”。启用后，Agent 在战斗期间不请求模型、不执行动作，并在战斗结束后自动恢复；可用于手动战斗或外部战斗控制器 |
 | `stop_kind` | string\|null | 上次自动游玩停止的类别，未停止过为 `null` |
 | `session_requests` | integer | 本会话已消耗的模型请求次数（可由游玩页的「清零计数」清零） |
+| `session_prompt_tokens` | integer \| null | 本会话所有模型请求的输入 token 合计；服务商从未回报用量时为 `null`（不是 0） |
+| `session_cached_prompt_tokens` | integer \| null | 其中由服务商前缀缓存命中的输入 token（OpenAI `prompt_tokens_details.cached_tokens` / DeepSeek `prompt_cache_hit_tokens`）；服务商不回报缓存时为 0。命中率 = 本字段 ÷ `session_prompt_tokens` |
 | `companion_process_alive` / `companion_process_exited` | boolean\|null | **仅 host 有意义。** 主窗口返回 AI 队友进程是否在运行 / 是否已退出；`instance_role=companion` 时两项均为 `null`（not applicable），不会把 companion 自己描述成还应管理另一个队友进程 |
 | `companion` | object\|null | **仅 host 有意义。** 主窗口且本次组队的队友进程仍在运行时存在（队友退出后回到 `null`）。`api_host` / `api_port` / `process_id` 是队友实例的 HTTP API，用来直接对队友的 `GET /state` 与 `POST /action` 编程；`auto_play` 说明这次组队走的是 AI 自走（`true`）还是外部接管（`false`）。队友会话令牌**不会**出现在任何响应里；companion 自身固定为 `null` |
 | `dual_status` / `team_control_status` | string\|null | **仅 host 有意义。** 主窗口返回双开与队友控制的人类可读状态；companion 返回 `null`，不会伪造“尚未启动双开”或“尚未连接”的 host 默认状态 |
@@ -1974,6 +1976,12 @@ Invoke-RestMethod -Uri 'http://127.0.0.1:8080/data/cards' | ConvertTo-Json -Dept
 | `danger` | number \| null | 仅 `jev` 行：Jev 对当前帧的危险度评分（0–4） |
 | `strategy_updated_at` | string \| null | 仅双层回合：决策所依据策略的 `updated_at` 时间戳，区分"这步用的是哪个版本的计划" |
 | `jev_attempt` | boolean \| null | 仅 `agent_loop` 行且为 `true` 时出现：该步是 Jev 未能提交后的 LLM 回退（Jev 已花掉一次请求）；普通 LLM 决策行省略 |
+| `tool_rounds` | number \| null | 仅经过 LLM 工具循环的行：这一步一共跑了几轮模型请求（含读工具轮、重发与催促）；Jev / 自动处理等不问 LLM 的行省略 |
+| `read_tool_rounds` | number \| null | 同上：其中有几轮只调用了读工具（读状态、查元数据、等待），没有出手 |
+| `stream_demoted` | boolean \| null | 仅为 `true` 时出现：这一步的流式回复不可用（全空或动作参数被截断），整轮以非流式重发过一次 |
+| `turn_id` | string \| null | 仅整回合规划的步骤行：同一次模型请求产生的各步共享同一个值 |
+| `plan_index` | number \| null | 同上：该步在计划里的序号（0 = 模型直接给出的第一步） |
+| `plan_size` | number \| null | 同上：这次计划一共几步（含第一步）；请求数与 token 只记在 `plan_index` 为 0 的那一行，后续行为 0，所以按行求和仍是真实花费 |
 
 只有**被接受**的动作才会进日志：动作名不在 `available_actions` 里、索引越界或执行失败时都不记录，所以日志里不会出现玩家界面上从未发生过的选择。
 

@@ -618,6 +618,8 @@ internal static class Router
             non_combat_only = AgentRuntime.Instance.Settings.NonCombatOnlyEnabled,
             stop_kind = AgentRuntime.Instance.StopKind,
             session_requests = AgentRuntime.Instance.SessionRequests,
+            session_prompt_tokens = AgentRuntime.Instance.SessionUsageKnown ? AgentRuntime.Instance.SessionUsage.PromptTokens : (int?)null,
+            session_cached_prompt_tokens = AgentRuntime.Instance.SessionUsageKnown ? AgentRuntime.Instance.SessionUsage.CachedPromptTokens : (int?)null,
             companion_process_alive = roleData.companion_process_alive,
             companion_process_exited = roleData.companion_process_exited,
             companion = roleData.companion,

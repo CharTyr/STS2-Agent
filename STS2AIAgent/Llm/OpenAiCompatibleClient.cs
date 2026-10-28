@@ -627,11 +627,21 @@ internal sealed class OpenAiCompatibleClient : ILlmClient
             return null;
         }
 
+        // Two spellings of the same fact: OpenAI nests it, DeepSeek reports it flat.
+        var cached = usageElement.TryGetProperty("prompt_tokens_details", out var details) && details.ValueKind == JsonValueKind.Object
+            ? ReadIntProperty(details, "cached_tokens")
+            : 0;
+        if (cached == 0)
+        {
+            cached = ReadIntProperty(usageElement, "prompt_cache_hit_tokens");
+        }
+
         return new LlmUsage
         {
             PromptTokens = prompt,
             CompletionTokens = completion,
-            TotalTokens = total > 0 ? total : (prompt + completion)
+            TotalTokens = total > 0 ? total : (prompt + completion),
+            CachedPromptTokens = Math.Clamp(cached, 0, Math.Max(0, prompt))
         };
     }
 

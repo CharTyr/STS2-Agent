@@ -1550,6 +1550,20 @@
               "null"
             ]
           },
+          "plan_index": {
+            "format": "int32",
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "plan_size": {
+            "format": "int32",
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
           "probabilities": {
             "additionalProperties": {
               "format": "double",
@@ -1557,6 +1571,13 @@
             },
             "type": [
               "object",
+              "null"
+            ]
+          },
+          "read_tool_rounds": {
+            "format": "int32",
+            "type": [
+              "integer",
               "null"
             ]
           },
@@ -1591,13 +1612,32 @@
               "null"
             ]
           },
+          "stream_demoted": {
+            "type": [
+              "boolean",
+              "null"
+            ]
+          },
           "timestamp": {
             "type": "string"
+          },
+          "tool_rounds": {
+            "format": "int32",
+            "type": [
+              "integer",
+              "null"
+            ]
           },
           "total_tokens": {
             "format": "int32",
             "type": [
               "integer",
+              "null"
+            ]
+          },
+          "turn_id": {
+            "type": [
+              "string",
               "null"
             ]
           }
@@ -2099,6 +2139,8 @@
           "process_id": {},
           "protocol_version": {},
           "service": {},
+          "session_cached_prompt_tokens": {},
+          "session_prompt_tokens": {},
           "session_requests": {},
           "state_build": {},
           "status": {},
@@ -2122,6 +2164,8 @@
           "non_combat_only",
           "stop_kind",
           "session_requests",
+          "session_prompt_tokens",
+          "session_cached_prompt_tokens",
           "companion_process_alive",
           "companion_process_exited",
           "companion",

@@ -89,7 +89,10 @@ internal sealed partial class AgentRuntime
                 strategyUpdatedAt: result.StrategyUpdatedAt,
                 // The LLM finishing a turn Jev could not commit is itself a Jev attempt: the empty
                 // receipt already spent the request, and this row is where that attempt becomes visible.
-                jevAttempt: result.Confidence == null && result.JevElapsedMilliseconds != null);
+                jevAttempt: result.Confidence == null && result.JevElapsedMilliseconds != null,
+                metrics: result.ToolRounds > 0
+                    ? new DecisionMetrics(result.ToolRounds, result.ReadToolRounds, result.StreamDemoted)
+                    : null);
         }
     }
 

@@ -34,6 +34,13 @@ Never invent indexes, teammates' actions, or actions missing from available_acti
 If the screen is UNKNOWN, say so and ask the player to wait or retry rather than guessing.
 """;
 
+    /// <summary>
+    /// The last message of a play request. It used to invite "call get_game_state if needed", and
+    /// models did: a read round is a whole second request for a state the prompt already carried.
+    /// </summary>
+    public const string ActNowInstruction =
+        "The compact state above is fresh and includes available_actions. Do not call get_game_state; call act now with the next legal action and a one-sentence reason. Vision is optional and never required.";
+
     public const string JsonActFallback = """
 If you cannot call tools, reply with a single JSON object and nothing else:
 {"action":"<name from available_actions>","card_index":0,"target_index":0,"option_index":0,"x":0,"y":0,"tool":"big","reason":"<one short sentence saying why>"}

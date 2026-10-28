@@ -122,6 +122,7 @@ internal sealed partial class AgentLoop
         StateFingerprint = result.StateFingerprint, WaitingForPlayer = result.WaitingForPlayer,
         WaitingForCombat = result.WaitingForCombat,
         RequiresConfiguration = result.RequiresConfiguration, ToolRounds = result.ToolRounds,
+        ReadToolRounds = result.ReadToolRounds, StreamDemoted = result.StreamDemoted,
         Usage = result.Usage, RequestsSpent = result.RequestsSpent,
         Confidence = result.Confidence, Probabilities = result.Probabilities,
         DangerScore = pending.DangerScore, JevElapsedMilliseconds = pending.JevElapsedMilliseconds,
@@ -231,14 +232,14 @@ internal sealed partial class AgentLoop
             }
 
             messages.Add(LlmMessage.User("Latest compact game state:\n" + stateJson));
-            messages.Add(LlmMessage.User("Choose the next legal action from compact state. Vision is optional and not required. Call get_game_state if needed, then act exactly once."));
+            messages.Add(LlmMessage.User(PlayPrompt.ActNowInstruction));
             AppendJsonActFallbackIfNeeded(messages, resolved, allowAct: true);
 
             handedToCompletion = true;
             var result = await CompleteWithToolsAsync(
                 resolved,
                 messages,
-                AgentTools.Play,
+                AgentTools.PlayInGame,
                 allowAct: true,
                 stopAfterAct: true,
                 cancellationToken,

@@ -513,6 +513,9 @@ internal static class TestRunner
         yield return ("CombatDiagnostics.DamageOverTimeRisks", () => Task.Run(CombatDiagnosticsContractTests.LethalRisksIncludeDamageOverTime));
         yield return ("ProfileSelection.NativeSwitch", () => Task.Run(ProfileSelectionContractTests.NativeProfileIdentityAndSwitchAreWiredEndToEnd));
         yield return ("DecisionLog.BoundsAndRedacts", () => Task.Run(DecisionLogTests.Record_RedactsBoundsAndKeepsNewest));
+        yield return ("DecisionLog.OptionalMetrics", () => Task.Run(DecisionLogTests.Record_CarriesOptionalMetricsWithoutChangingPlainEntries));
+        yield return ("UsageCache.BothSpellings", () => Task.Run(LlmUsageCacheTests.BothCacheSpellingsAreRead));
+        yield return ("UsageCache.AccumulateAndShow", () => Task.Run(LlmUsageCacheTests.CachedTokensAccumulateAndShowOnlyWhenReported));
         yield return ("DecisionLog.PersistsAndRotates", () => Task.Run(DecisionLogTests.Record_PersistsJsonlAndRotates));
         yield return ("DecisionLog.PersistenceFailureIsSafe", () => Task.Run(DecisionLogTests.Record_UnwritablePathNeverThrows));
         yield return ("DecisionLog.NotifiesMirrorsSafely", () => Task.Run(DecisionLogTests.Record_NotifiesMirrorsAfterCommitting));
@@ -636,6 +639,10 @@ internal static class TestRunner
         yield return ("AgentLoop.ReasoningBudget", AgentLoopTests.PlayOnce_MarksReasoningBudgetExhaustionForRecovery);
         yield return ("AgentLoop.ToolStreamDemotion", AgentLoopTests.PlayOnce_DemotesToollessStreamToNonStreamingOnce);
         yield return ("AgentLoop.TruncatedActStreamDemotion", AgentLoopTests.PlayOnce_DemotesTruncatedActStreamToNonStreamingOnce);
+        yield return ("AgentLoop.SilentStreamDemotesOnce", AgentLoopTests.PlayOnce_SilentStreamDemotesOnce);
+        yield return ("AgentLoop.NudgeThenDemoteThenStop", AgentLoopTests.PlayOnce_NudgeThatFailsThenDemotesAndStops);
+        yield return ("AgentLoop.JsonActInTextWithTools", AgentLoopTests.PlayOnce_JsonActInTextRunsEvenWithNativeTools);
+        yield return ("AgentLoop.NoStateReadersAdvertised", AgentLoopTests.PlayOnce_AdvertisesNoStateReadersAndCountsReadRounds);
         yield return ("AgentLoop.TruncatedActDetection", AgentLoopTests.TruncatedStreamedActDetection);
         yield return ("AgentLoop.JsonActNoTools", AgentLoopTests.PlayOnce_TextOnlyJsonActWithoutTools);
         yield return ("AgentLoop.CrystalJsonNoTools", AgentLoopTests.PlayOnce_TextOnlyCrystalJsonForwardsCoordinatesAndNullTool);
