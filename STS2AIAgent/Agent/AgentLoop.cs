@@ -152,6 +152,9 @@ internal sealed partial class AgentLoop
     {
         reportPhase?.Invoke(PlayPhases.ReadingState);
         var settings = _settings();
+        // Only the non-combat mode reads before waiting: it must yield to combat at once rather than
+        // wait out an enemy turn first. Otherwise the read that used to sit here only re-checked the
+        // run boundary the caller had just checked, and cost a full state build per decision.
         if (settings.NonCombatOnlyEnabled)
         {
             var initialStateJson = await _bridge.GetCompactStateJsonAsync(cancellationToken);
@@ -161,16 +164,13 @@ internal sealed partial class AgentLoop
                 return WaitForCombat();
             }
         }
-        else if (checkState != null)
-        {
-            checkState(await _bridge.GetCompactStateJsonAsync(cancellationToken));
-        }
 
         reportPhase?.Invoke(PlayPhases.WaitingForGame);
-        var actionable = await _bridge.WaitUntilActionableAsync(TimeSpan.FromSeconds(20), cancellationToken);
-        if (!actionable)
+        // One call: the frame that proved actionable is the frame whose state comes back.
+        var ready = await _bridge.WaitUntilActionableWithStateAsync(TimeSpan.FromSeconds(20), cancellationToken);
+        checkState?.Invoke(ready.CompactJson);
+        if (!ready.Actionable)
         {
-            checkState?.Invoke(await _bridge.GetCompactStateJsonAsync(cancellationToken));
             return new AgentTurnResult
             {
                 Error = "Timed out waiting for an actionable state.",
@@ -180,8 +180,7 @@ internal sealed partial class AgentLoop
             };
         }
 
-        var stateJson = await _bridge.GetCompactStateJsonAsync(cancellationToken);
-        checkState?.Invoke(stateJson);
+        var stateJson = ready.CompactJson;
         settings = _settings();
         if (settings.NonCombatOnlyEnabled && NonCombatOnlyPolicy.IsCombatSnapshot(stateJson))
         {

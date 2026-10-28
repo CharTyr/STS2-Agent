@@ -75,11 +75,11 @@ ilspycmd -t <类型全名> "c:\program files (x86)\steam\steamapps\common\Slay t
 - [x] 0.4 设置项（design §3.4 全表 + `OverlayVisibleOnStart` 新安装默认 true）：`AgentSettings`、`SettingsClone`、`EnsureValidShape`、`CompanionPlaySettings`/`CompanionSettingsPatch`（同步项）；测试：往返、非默认克隆、非法修复。UI 控件随各工作流加。提交 `feat(config): switches for the overhaul, on by default [W0]`。
 
 ### M1 性能地基（W9.0–9.2、§9.4）
-- [ ] 1.1 `GameStateService.Probe.cs`：抽出 `AdvanceCombatActionGate()`（构建与探针共用），`ProbeActionable()`，`BuildTurnProbe()`；有哈希契约的方法体重算哈希并写 remarks；KnownUncompiledSources、project-map。
-- [ ] 1.2 `GameBridge.WaitUntilActionableAsync`：每帧探针、进出各构建一次、不可用屏每 4 帧构建；`StateBuildTiming` 加 `actionable_probes/actionable_builds/event_poll_builds`（纯逻辑测试）；`/health.state_build` 文档行。
-- [ ] 1.3 `IGameBridge.WaitUntilActionableWithStateAsync`；`GameBridge` 实现（读取带期限）；所有测试假桥实现；`PlayOnceAsync` 合并「读→等→读」；`AgentLoopTests` 用假桥计数断言状态读取次数。
-- [ ] 1.4 `AutoPlayLoopAsync` 改用 `BuildTurnProbe()`；`run_id` 变化时补整份构建再 `ObserveSessionStateSnapshot`；源码契约/测试同步。
-- [ ] 1.5 验证 + 提交 `perf(agent): probe actionability instead of building /state every frame [W9]`。
+- [x] 1.1 `GameStateService.Probe.cs`：`ProbeActionable()`（直接复用已是共享函数的 `EvaluateCombatActionGate`，无需另抽 `AdvanceCombatActionGate`），`BuildTurnProbe()`；KnownUncompiledSources、project-map。
+- [x] 1.2 `GameBridge.WaitUntilActionableAsync`：每帧探针、只在判定可操作的那一帧（或超时）构建一次；`StateBuildTiming` 加 `actionable_probes/actionable_builds/event_poll_builds`（纯逻辑测试）；`/health.state_build` 文档行。
+- [x] 1.3 `IGameBridge.WaitUntilActionableWithStateAsync`（接口默认实现＝旧的「等→读」，测试假桥无需改）；`GameBridge` 覆盖实现（同一游戏线程单元内探针+构建；所有状态读取带 `StateReadBudget` 期限）；`PlayOnceAsync` 合并「读→等→读」；`AgentLoopTests` 断言读取次数。
+- [x] 1.4 `AutoPlayLoopAsync` 改用 `BuildTurnProbe()`（同源同帧字段，不补整份构建，见 §7）；`ActionabilityProbeContractTests` 钉住。
+- [x] 1.5 验证（C# 1037/9 环境性、闸门全绿、Release 0 警告）+ 提交 `perf(agent): probe actionability instead of building /state every frame [W9]`。
 
 ### M2 省钱核心（W6）
 - [ ] 2.1 计量：决策记录 + `AgentTurnResult` 增加 `tool_rounds`、`read_tool_rounds`、`stream_demoted`（additive，`docs/api.md`、`DecisionLogTests`）。
@@ -212,3 +212,5 @@ ilspycmd -t <类型全名> "c:\program files (x86)\steam\steamapps\common\Slay t
 | 10-28 19:05 | 跨局记录只给事实摘要，不让模型写「教训」 | SpireBench：模型自写记忆 17% 错误且过度保守 |
 | 10-28 19:05 | F8 是开关面板不是暂停；新增可配置暂停热键（默认 F7，需先确认未被占用） | UX 报告指出原设想文案错误 |
 | 10-28 | 基线：C# 1023 PASS / 9 环境性 FAIL（沙箱），Python 439 OK | design §1.1 |
+| 10-28 23:40 | （会话中断后恢复）M1：不抽 `AdvanceCombatActionGate`；不做「探针不可用时每 4 帧构建」；`run_id` 变化不补整份构建 | `EvaluateCombatActionGate` 本就是构建与探针共用的唯一推进点；探针抛异常时与旧构建一样向上抛，回退路径无收益；`BuildTurnProbe` 与整份构建读同一来源、同一游戏线程单元，已是会话规则要求的「新鲜帧」 |
+| 10-28 23:40 | 用户：子智能体可用 magpie `clinepass/cline-pass/deepseek-v4.1-flash-1017` 做具体实现，「合理使用，但不要依赖」 | 主线关键改动自己写，子智能体只做边界清楚的独立块并由我复核 |

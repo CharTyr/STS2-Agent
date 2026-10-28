@@ -239,6 +239,8 @@ internal static class TestRunner
         yield return ("TeamControl.NoLateAct", AgentLoopTests.PauseAfterModelResponseDoesNotDispatchAct);
         yield return ("AgentLoop.RunBoundaryRethrown", AgentLoopTests.PlayOnce_RethrowsRunBoundaryAfterAct);
         yield return ("AgentLoop.CheckStateOnGetGameState", AgentLoopTests.PlayOnce_InvokesCheckStateOnGetGameState);
+        yield return ("AgentLoop.ReadsStateOnceBeforeDeciding", AgentLoopTests.PlayOnce_ReadsTheStateOnceBeforeDeciding);
+        yield return ("AgentLoop.TimedOutWaitChecksBoundaryOnce", AgentLoopTests.PlayOnce_TimedOutWaitStillChecksTheBoundaryOnce);
         yield return ("AgentLoop.RequestBudgetStopsNextRound", AgentLoopTests.PlayOnce_StopsFurtherLlmCallsWhenRequestBudgetIsSpent);
         yield return ("AgentLoop.NonCombatYields", AgentLoopTests.NonCombatOnly_YieldsBeforeWaitModelOrAction);
         yield return ("AgentLoop.NonCombatAllowsRewards", AgentLoopTests.NonCombatOnly_AllowsNonCombatActions);
@@ -965,6 +967,12 @@ internal static class TestRunner
         yield return ("StateBuild.SlowBuildsWarnRateLimited", () => Task.Run(StateBuildTimingTests.ASlowBuildWarnsOnceAndThenSaysHowManyItHeldBack));
         yield return ("StateBuild.RecentPercentiles", () => Task.Run(StateBuildTimingTests.TheSummaryReportsRecentPercentilesOverABoundedWindow));
         yield return ("StateBuild.EveryBuildIsTimed", () => Task.Run(StateBuildTimingTests.EveryStateBuildIsTimedAndReported));
+        yield return ("StateBuild.ProbesCountedApart", () => Task.Run(StateBuildTimingTests.ProbesAndTheBuildsTheyReplaceAreCountedApart));
+        yield return ("ActionabilityProbe.GateOrder", () => Task.Run(ActionabilityProbeContractTests.TheProbeEvaluatesTheGateOnceInTheBuildersOrder));
+        yield return ("ActionabilityProbe.WaitBuildsOnlyReturnedFrame", () => Task.Run(ActionabilityProbeContractTests.TheWaitProbesEveryFrameAndBuildsOnlyTheFrameItReturns));
+        yield return ("ActionabilityProbe.StateReadsHaveDeadline", () => Task.Run(ActionabilityProbeContractTests.StateReadsCarryADeadline));
+        yield return ("ActionabilityProbe.TurnProbeNotFullBuild", () => Task.Run(ActionabilityProbeContractTests.TheAutoPlayTurnReadsAProbeNotAFullBuild));
+        yield return ("ActionabilityProbe.EventPollCounted", () => Task.Run(ActionabilityProbeContractTests.TheEventPollCountsItsBuilds));
         yield return ("TypedReads.RelicStackIsTheDisplayedCounter", () => Task.Run(TypedStateReadsContractTests.RelicStackIsTheCounterThePlayerSees));
         yield return ("TypedReads.CardModsFromKeywordsAndEnchantment", () => Task.Run(TypedStateReadsContractTests.CardModsComeFromKeywordsAndTheEnchantment));
         yield return ("TypedReads.PilesByType", () => Task.Run(TypedStateReadsContractTests.CombatPilesAreReadByType));

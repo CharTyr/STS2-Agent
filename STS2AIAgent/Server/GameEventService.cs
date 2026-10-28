@@ -141,7 +141,11 @@ internal sealed class GameEventService
         try
         {
             var generation = _polling.CurrentGeneration;
-            var state = await GameThread.InvokeAsync(GameStateService.BuildStatePayload);
+            var state = await GameThread.InvokeAsync(() =>
+            {
+                StateBuildTiming.Instance.CountEventPollBuild();
+                return GameStateService.BuildStatePayload();
+            });
             cancellationToken.ThrowIfCancellationRequested();
             if (!_polling.IsGenerationCurrent(generation))
             {

@@ -263,6 +263,7 @@ one action runs at a time.
 - `STS2AIAgent/Game/GameStateService.cs` — base partial: `BuildStatePayload` (about 19 builders in a fixed order), `ResolveScreen`/`ResolveNonModalScreen`, `CurrentScreenName` (cheap), `EnumerateAvailableActions` (**the** action surface), `BuildAvailableActionNames(out descriptors)`, `BuildDecisionSnapshotPayload`, `GetLocalPlayer`, `FindDescendants<T>`, shared helpers.
 - `STS2AIAgent/Game/GameStateService.Predicates.cs` — every `Can*` gate and action-level `Is*` helper.
 - `STS2AIAgent/Game/GameStateService.Combat.cs` — the `CombatActionGate` (evaluated once per build; 200 ms stability sampler), hand cards (`playable`, `valid_target_indices`), target index helpers, intents.
+- `STS2AIAgent/Game/GameStateService.Probe.cs` — cheap reads for the auto-play hot paths: `ProbeActionable()` (combat gate + action names + readiness, no payload; what `GameBridge`'s actionable wait calls every frame) and `BuildTurnProbe()` (screen / phase / run id / in-combat / act for `AutoPlayLoopAsync`). Same sources and order as `BuildStatePayload`; pinned by `ActionabilityProbeContractTests`.
 - `STS2AIAgent/Game/GameStateService.CombatRisks.cs` — `end_turn_will_kill_player` and related flags from Doom, Poison, Constrict, Magic Bomb and Sandpit.
 - `STS2AIAgent/Game/GameStateService.Rooms.cs` — event, rest, crystal sphere, game over, chest and capstone payloads.
 - `STS2AIAgent/Game/GameStateService.Rewards.cs` — reward, card reward, bundle and deck-selection payloads, plus the `GetRewardButtons`/`GetProceedButton` helpers.

@@ -861,11 +861,13 @@ internal sealed partial class AgentRuntime
                     _requestingModel = true;
                     RaiseChanged();
                     // Bounded and token-aware: a game thread that stops pumping must fail this turn
-                    // visibly and let pause through, not wedge the loop in "stopping" forever.
+                    // visibly and let pause through, not wedge the loop in "stopping" forever. A probe,
+                    // not a full build: these five fields were all the turn ever read from it, and
+                    // they come from the same sources in the same game-thread unit (see BuildTurnProbe).
                     var snapshot = await GameThread.InvokeAsync(() =>
                     {
-                        var payload = GameStateService.BuildStatePayload();
-                        return (payload.screen, payload.session.phase, payload.run_id, payload.in_combat, payload.run?.act_id);
+                        var probe = GameStateService.BuildTurnProbe();
+                        return (probe.Screen, probe.Phase, probe.RunId, probe.InCombat, probe.ActId);
                     }, TurnGameThreadBudget, token);
                     // Do not re-arm the boundary here: replacing it before checking would clear the
                     // "entered a run" flag that makes a return to the menu a stop. Starting auto-play

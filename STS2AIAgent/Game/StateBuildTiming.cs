@@ -38,6 +38,22 @@ internal sealed class StateBuildTiming
     private string? _maxScreen;
     private DateTime? _lastWarningAt;
     private long _heldBackWarnings;
+    private long _actionableProbes;
+    private long _actionableBuilds;
+    private long _eventPollBuilds;
+
+    /// <summary>
+    /// One cheap actionability probe (no payload built). The wait for an actionable frame used to
+    /// build the whole payload on every rendered frame; these counters are how a live pass proves the
+    /// probe took that work away.
+    /// </summary>
+    public void CountActionableProbe() => Interlocked.Increment(ref _actionableProbes);
+
+    /// <summary>One full build made by the actionable wait (its fallback, or the frame it returns).</summary>
+    public void CountActionableBuild() => Interlocked.Increment(ref _actionableBuilds);
+
+    /// <summary>One full build made by the event stream's poll.</summary>
+    public void CountEventPollBuild() => Interlocked.Increment(ref _eventPollBuilds);
 
     /// <summary>Records one build.</summary>
     /// <returns>A warning to log, or null when the build was fast or a warning went out recently.</returns>
@@ -95,6 +111,9 @@ internal sealed class StateBuildTiming
                 recent_samples = recent.Length,
                 recent_p50_ms = Percentile(recent, 0.50),
                 recent_p95_ms = Percentile(recent, 0.95),
+                actionable_probes = Interlocked.Read(ref _actionableProbes),
+                actionable_builds = Interlocked.Read(ref _actionableBuilds),
+                event_poll_builds = Interlocked.Read(ref _eventPollBuilds),
             };
         }
     }

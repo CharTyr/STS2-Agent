@@ -472,6 +472,50 @@ internal static class AgentLoopTests
         Assert.Equal(1, bridge.ActCalls);
     }
 
+    /// <summary>
+    /// A decision used to read the whole state three times before asking the model: once to check
+    /// the run boundary, once inside the wait, once after it. The wait now hands back the frame it
+    /// judged actionable, so a turn reads the state once before deciding (W9, 2026-10-28).
+    /// </summary>
+    public static async Task PlayOnce_ReadsTheStateOnceBeforeDeciding()
+    {
+        var checks = new List<string>();
+        var bridge = new FakeBridge();
+        var factory = new ScriptedClientFactory(new[]
+        {
+            new LlmCompletion
+            {
+                ToolCalls = new[]
+                {
+                    new LlmToolCall { Id = "call_act", Name = "act", ArgumentsJson = """{"action":"play_card","card_index":0}""" }
+                }
+            }
+        });
+        var loop = new AgentLoop(bridge, factory, AgentSettings.CreateDefault);
+        await loop.PlayOnceAsync(CancellationToken.None, json => checks.Add(json));
+
+        Assert.Equal(1, bridge.WaitCalls);
+        // One read is the wait's own frame (the one the model decides from), the other is the settled
+        // state after the act, which the no-progress guard fingerprints. There used to be four.
+        Assert.Equal(2, bridge.StateReads, "One read before deciding and one after the act settles.");
+        Assert.Equal(3, checks.Count,
+            "The boundary is checked on the decided frame, on the act's own decision snapshot, and on the settled frame.");
+        Assert.Equal(1, bridge.ActCalls);
+    }
+
+    public static async Task PlayOnce_TimedOutWaitStillChecksTheBoundaryOnce()
+    {
+        var checks = 0;
+        var bridge = new FakeBridge { Actionable = false };
+        var loop = new AgentLoop(bridge, new ScriptedClientFactory(Array.Empty<LlmCompletion>()), AgentSettings.CreateDefault);
+        var result = await loop.PlayOnceAsync(CancellationToken.None, _ => checks++);
+
+        Assert.True(result.WaitingForGame);
+        Assert.Equal(1, checks);
+        Assert.Equal(1, bridge.StateReads);
+        Assert.Equal(0, result.RequestsSpent);
+    }
+
     public static async Task PlayOnce_StopsFurtherLlmCallsWhenRequestBudgetIsSpent()
     {
         var calls = 0;
@@ -1479,8 +1523,11 @@ internal static class AgentLoopTests
 
         public string Screen { get; set; } = "COMBAT";
 
+        public int StateReads { get; private set; }
+
         public Task<string> GetCompactStateJsonAsync(CancellationToken cancellationToken)
         {
+            StateReads++;
             return Task.FromResult(CompactStateJson);
         }
 

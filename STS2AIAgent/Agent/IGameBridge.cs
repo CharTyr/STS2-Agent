@@ -45,8 +45,26 @@ internal interface IGameBridge
 
     Task<bool> WaitUntilActionableAsync(TimeSpan timeout, CancellationToken cancellationToken);
 
+    /// <summary>
+    /// Wait for an actionable frame and return that frame's compact state in one call. The state is
+    /// returned whether or not the wait succeeded, so a timed-out turn can still check run boundaries.
+    /// </summary>
+    /// <remarks>
+    /// The default composes the two older calls (wait, then read) so test bridges keep working; the
+    /// game bridge overrides it to build the state once, inside the game-thread unit whose probe
+    /// judged the frame actionable.
+    /// </remarks>
+    async Task<ActionableState> WaitUntilActionableWithStateAsync(TimeSpan timeout, CancellationToken cancellationToken)
+    {
+        var actionable = await WaitUntilActionableAsync(timeout, cancellationToken);
+        return new ActionableState(actionable, await GetCompactStateJsonAsync(cancellationToken));
+    }
+
     Task<byte[]?> CaptureScreenshotJpegAsync(CancellationToken cancellationToken);
 }
+
+/// <summary>The outcome of <see cref="IGameBridge.WaitUntilActionableWithStateAsync"/>.</summary>
+internal sealed record ActionableState(bool Actionable, string CompactJson);
 
 internal sealed class AgentTurnResult
 {

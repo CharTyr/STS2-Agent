@@ -41,6 +41,9 @@ internal static class SourceCoverageTests
         // GameStateService.Combat.cs on 2026-10-02 for the size budget. It reads the game's power
         // models, so it stays out of the offline compilation like the rest of the partial.
         "STS2AIAgent/Game/GameStateService.CombatRisks.cs",
+        // The cheap probes behind the actionable wait and the auto-play turn snapshot (2026-10-28).
+        // They read the game's screen, combat and run managers; ActionabilityProbeContractTests pins them.
+        "STS2AIAgent/Game/GameStateService.Probe.cs",
         "STS2AIAgent/Game/GameStateService.Payloads.cs",
         "STS2AIAgent/Game/GameActionService.cs",
         // select_deck_card on a card the grid has not drawn (#218), split out of

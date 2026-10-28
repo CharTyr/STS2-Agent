@@ -211,7 +211,7 @@ curl -s http://127.0.0.1:8080/state | jq .
 | `dual_status` / `team_control_status` | string\|null | **仅 host 有意义。** 主窗口返回双开与队友控制的人类可读状态；companion 返回 `null`，不会伪造“尚未启动双开”或“尚未连接”的 host 默认状态 |
 | `dual_launch_outcome` | string\|null | **仅 host 有意义。** 双开结构化结果，给外部客户端做成败分类，**不要**用 `dual_status` 文本。host 尚未尝试或 companion 角色为 `null`；否则为 `InProgress` / `Succeeded` / `Failed` / `Rejected` / `Canceled`（`DualLaunchOutcome` 枚举名，不含 `Idle`） |
 | `compatibility` | object | 启动时对 Mod 依赖的游戏私有成员做的一次自检结果。`reflected_members_checked` 是被检查的成员总数，`reflected_members_missing` 是找不到的个数，`missing_members[]` 逐条给出 `member`（`类型.成员`）与 `feature`（失效的功能）。游戏更新后 Mod 最常见的坏法就是某个私有字段被改名，此时读取悄悄退回默认值——这个区块是唯一的信号 |
-| `state_build` | object | 构建状态载荷的耗时，只计构建本身、不含排队等游戏线程。`/state`、每个动作响应与 SSE 刷新都会构建一次，且都跑在游戏线程上——构建期间游戏不出帧。`slow_threshold_ms`（100，约等于 60 帧下 6 帧的卡顿）、`samples`、`slow_builds`、`last_ms`、`max_ms` 与其 `max_screen`、以及最近 `recent_samples`（至多 256）次的 `recent_p50_ms` / `recent_p95_ms`；尚无样本时耗时字段为 `null`。超过阈值的构建会在游戏日志里记 `WARN`，每 30 秒至多一条并注明期间压下的条数 |
+| `state_build` | object | 构建状态载荷的耗时，只计构建本身、不含排队等游戏线程。`/state`、每个动作响应与 SSE 刷新都会构建一次，且都跑在游戏线程上——构建期间游戏不出帧。`slow_threshold_ms`（100，约等于 60 帧下 6 帧的卡顿）、`samples`、`slow_builds`、`last_ms`、`max_ms` 与其 `max_screen`、以及最近 `recent_samples`（至多 256）次的 `recent_p50_ms` / `recent_p95_ms`；尚无样本时耗时字段为 `null`。超过阈值的构建会在游戏日志里记 `WARN`，每 30 秒至多一条并注明期间压下的条数。另有三个累计计数（不计入 `samples`）：`actionable_probes`（游戏内 Agent 等待「可操作」时每帧做的轻量探针次数，不构建载荷）、`actionable_builds`（该等待真正构建状态的次数：只在判定可操作的那一帧或超时时各一次）、`event_poll_builds`（SSE 事件流轮询的构建次数，无订阅者时为 0） |
 
 ### `stop_kind` 取值
 
