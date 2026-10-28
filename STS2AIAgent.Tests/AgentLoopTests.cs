@@ -1658,7 +1658,12 @@ internal static class AgentLoopTests
 
     public static async Task PlayOnce_DemotesTruncatedActStreamToNonStreamingOnce()
     {
-        var bridge = new FakeBridge();
+        // Two playable cards: the missing index cannot be inferred, so the stream really is broken.
+        // (A single-card hand is completed instead; see PlayOnce_FillsTheOnlyPossibleIndex.)
+        var bridge = new FakeBridge
+        {
+            CompactStateJson = """{"screen":"COMBAT","available_actions":["play_card","end_turn"],"combat":{"hand":[{"i":0,"line":"Strike","targets":[]},{"i":1,"line":"Defend","targets":[]}],"enemies":[{"i":0}]}}"""
+        };
         var factory = new ScriptedClientFactory(new[]
         {
             // What the gateway actually streamed live: a closed JSON object holding only the action.
@@ -1678,6 +1683,43 @@ internal static class AgentLoopTests
         Assert.Equal(2, factory.Requests.Count);
         Assert.True(factory.Requests[0].Stream);
         Assert.False(factory.Requests[1].Stream);
+    }
+
+    /// <summary>
+    /// W7: an act whose index was cut off is completed from the frame when only one choice exists,
+    /// instead of re-sending the whole request; and a provider that truncates twice stops being
+    /// streamed for act turns.
+    /// </summary>
+    public static async Task PlayOnce_FillsTheOnlyPossibleIndex()
+    {
+        var bridge = new FakeBridge
+        {
+            CompactStateJson = """{"screen":"COMBAT","available_actions":["play_card","end_turn"],"combat":{"hand":[{"i":0,"line":"Strike","playable":true,"targets":[0]},{"i":1,"line":"Wound","playable":false,"targets":[]}],"enemies":[{"i":0,"alive":true,"hittable":true}]}}"""
+        };
+        var factory = new ScriptedClientFactory(new[]
+        {
+            new LlmCompletion { ToolCalls = new[] { new LlmToolCall { Id = "cut", Name = "act", ArgumentsJson = "{\"action\":\"play_card\"}" } } }
+        });
+        var result = await new AgentLoop(bridge, factory, AgentSettings.CreateDefault).PlayOnceAsync(CancellationToken.None);
+        Assert.Equal("play_card", result.Acted);
+        Assert.Equal(1, factory.Requests.Count, "The only playable card and its only target need no second request.");
+        Assert.Equal(((string, int?, int?))("play_card", 0, 0), bridge.ActLog[0]);
+    }
+
+    public static async Task PlayOnce_LearnsThatStreamedArgumentsAreTruncated()
+    {
+        var twoCards = """{"screen":"COMBAT","available_actions":["play_card","end_turn"],"combat":{"hand":[{"i":0,"line":"Strike","targets":[]},{"i":1,"line":"Defend","targets":[]}],"enemies":[{"i":0}]}}""";
+        LlmCompletion Truncated() => new() { ToolCalls = new[] { new LlmToolCall { Id = "t", Name = "act", ArgumentsJson = "{\"action\":\"play_card\"}" } } };
+        LlmCompletion Complete() => new() { ToolCalls = new[] { new LlmToolCall { Id = "c", Name = "act", ArgumentsJson = "{\"action\":\"play_card\",\"card_index\":0}" } } };
+        var factory = new ScriptedClientFactory(new[] { Truncated(), Complete(), Truncated(), Complete(), Complete() });
+        var loop = new AgentLoop(new FakeBridge { CompactStateJson = twoCards }, factory, AgentSettings.CreateDefault);
+        await loop.PlayOnceAsync(CancellationToken.None);
+        await loop.PlayOnceAsync(CancellationToken.None);
+        await loop.PlayOnceAsync(CancellationToken.None);
+
+        Assert.Equal(5, factory.Requests.Count);
+        Assert.True(factory.Requests[0].Stream && factory.Requests[2].Stream, "The first two turns still try streaming.");
+        Assert.False(factory.Requests[4].Stream, "After two truncations the act turn goes out without streaming from the start.");
     }
 
     public static Task TruncatedStreamedActDetection()

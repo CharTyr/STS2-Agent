@@ -26,6 +26,10 @@ internal static partial class Loc
         map["打开宝箱。"] = "Open the chest.";
         map["当前只有一个可执行的操作。"] = "Only one action is possible.";
 
+        // Recovery (Agent/AutoPlayRecovery.cs).
+        map["连续 {0} 次连不上模型服务，已停止自动游玩：{1}。你可以：检查网络或服务商状态，稍后点「继续游玩」。"] =
+            "Could not reach the model service {0} times in a row; auto-play stopped: {1}. You can check your network or the provider's status, then press “Continue” later.";
+
         // Decision sources and plan steps (Agent/PlayerLabels.cs, Ui/DecisionLogView.cs).
         map["自动处理"] = "Auto";
         map["整回合规划"] = "Turn plan";

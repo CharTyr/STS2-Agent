@@ -49,6 +49,10 @@ internal static class ExperienceTestCatalog
         yield return ("Experience.TurnPlan.StopsOnSurprises", AgentLoopTests.Plan_StopsOnANewCardOrADeadTarget);
         yield return ("Experience.TurnPlan.RejectedFirstAndSwitchOff", AgentLoopTests.Plan_RejectedFirstActRunsNothingAndSwitchOffIgnoresThen);
         yield return ("Experience.TurnPlan.PlayerGuidanceStops", AgentLoopTests.Plan_PlayerGuidanceStopsTheRest);
+        yield return ("Experience.Recovery.TransportLadder", AutoPlayRecoveryTests.TransportFailuresGetTheirOwnLadder);
+        yield return ("Experience.Recovery.StalledGameIsAWait", AutoPlayRecoveryTests.AStalledGameThreadIsAWaitNotAFailure);
+        yield return ("Experience.Recovery.FillsOnlyPossibleIndex", AgentLoopTests.PlayOnce_FillsTheOnlyPossibleIndex);
+        yield return ("Experience.Recovery.LearnsStreamTruncation", AgentLoopTests.PlayOnce_LearnsThatStreamedArgumentsAreTruncated);
         yield return ("Experience.Turbo.EngageFirstReleaseInFinally", () => Task.Run(TurboWiringContractTests.TheLoopEngagesFirstAndReleasesInItsOuterFinally));
         yield return ("Experience.Turbo.ReleaseNotTiedToEndedToken", () => Task.Run(TurboWiringContractTests.ReleaseIsNotTiedToTheEndedLoopsToken));
         yield return ("Experience.Turbo.PrefsGuardAtModStart", () => Task.Run(TurboWiringContractTests.ThePrefsGuardIsInstalledAtModStart));

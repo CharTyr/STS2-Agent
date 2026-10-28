@@ -124,6 +124,7 @@ internal sealed partial class AgentLoop
         RequiresConfiguration = result.RequiresConfiguration, ToolRounds = result.ToolRounds,
         ReadToolRounds = result.ReadToolRounds, StreamDemoted = result.StreamDemoted,
         PlanSteps = result.PlanSteps, PlanStopReason = result.PlanStopReason, TurnId = result.TurnId, PlanSize = result.PlanSize,
+        FailureKind = result.FailureKind,
         Usage = result.Usage, RequestsSpent = result.RequestsSpent,
         Confidence = result.Confidence, Probabilities = result.Probabilities,
         DangerScore = pending.DangerScore, JevElapsedMilliseconds = pending.JevElapsedMilliseconds,

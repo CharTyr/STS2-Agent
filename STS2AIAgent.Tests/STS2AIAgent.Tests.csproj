@@ -68,6 +68,7 @@
     <Compile Include="..\STS2AIAgent\Agent\AgentLoop.Sandpit.cs" Link="Agent\AgentLoop.Sandpit.cs" />
     <Compile Include="..\STS2AIAgent\Agent\AgentLoop.RoleProbes.cs" Link="Agent\AgentLoop.RoleProbes.cs" />
     <Compile Include="..\STS2AIAgent\Agent\AgentLoop.Autopilot.cs" Link="Agent\AgentLoop.Autopilot.cs" />
+    <Compile Include="..\STS2AIAgent\Agent\AgentLoop.Capabilities.cs" Link="Agent\AgentLoop.Capabilities.cs" />
     <Compile Include="..\STS2AIAgent\Agent\AutopilotPolicy.cs" Link="Agent\AutopilotPolicy.cs" />
     <Compile Include="..\STS2AIAgent\Agent\PromptStateDiet.cs" Link="Agent\PromptStateDiet.cs" />
     <Compile Include="..\STS2AIAgent\Agent\TurnPlanPolicy.cs" Link="Agent\TurnPlanPolicy.cs" />

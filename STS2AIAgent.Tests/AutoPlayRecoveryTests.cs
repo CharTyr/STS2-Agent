@@ -172,6 +172,58 @@ internal static class AutoPlayRecoveryTests
         Assert.True(calls >= 2, "timeout LlmException must be retryable, not treated as user cancel");
     }
 
+    /// <summary>
+    /// W7: a network blip is retried on a 2/4/8/16/30 s ladder five times and stops as a network stop;
+    /// it does not spend the three strikes a model failure has.
+    /// </summary>
+    public static Task TransportFailuresGetTheirOwnLadder()
+    {
+        var policy = new AutoPlayRecovery();
+        var blip = new AgentTurnResult { Error = "LLM HTTP 503: busy", FailureKind = FailureKinds.Transport };
+        var delays = new List<double>();
+        for (var i = 1; i < AutoPlayRecovery.TransportLimit; i++)
+        {
+            var next = policy.Observe(blip);
+            Assert.True(next.StopReason == null, "attempt " + i);
+            delays.Add(next.Delay.TotalSeconds);
+        }
+
+        Assert.Equal("2,4,8,16", string.Join(",", delays));
+        var stop = policy.Observe(blip);
+        Assert.NotNull(stop.StopReason);
+        Assert.Equal(StopKindPolicy.Network, stop.StopKind);
+
+        var mixed = new AutoPlayRecovery();
+        mixed.Observe(blip);
+        mixed.Observe(blip);
+        Assert.True(mixed.Observe(new AgentTurnResult { Error = "bad act", FailureKind = FailureKinds.Illegal }).StopReason == null,
+            "Network blips do not count toward the three model strikes.");
+        return Task.CompletedTask;
+    }
+
+    public static Task AStalledGameThreadIsAWaitNotAFailure()
+    {
+        var policy = new AutoPlayRecovery();
+        var stalled = new AgentTurnResult
+        {
+            Error = "TimeoutException: The game thread did not run the posted action in time.",
+            FailureKind = FailureKinds.GameStalled
+        };
+        for (var i = 0; i < 10; i++)
+        {
+            var next = policy.Observe(stalled);
+            Assert.True(next.StopReason == null, "A minimized window must not stop the run on the third turn.");
+            Assert.Equal(1.0, next.Delay.TotalSeconds);
+        }
+
+        Assert.Equal(FailureKinds.GameStalled, FailureKinds.Of(new TimeoutException("The game thread did not run the posted action in time.")));
+        Assert.Equal(FailureKinds.Transport, FailureKinds.Of(new LlmException("LLM request timed out.", 408)));
+        Assert.Equal(FailureKinds.Config, FailureKinds.Of(new LlmException("LLM HTTP 401: bad key", 401)));
+        Assert.Equal(FailureKinds.Transport, FailureKinds.Of(new HttpRequestException("refused")));
+        Assert.Null(FailureKinds.Of(new InvalidOperationException("bug")));
+        return Task.CompletedTask;
+    }
+
     public static Task ThinkingBudgetExhaustionDoesNotSpendGenericFailureBudget()
     {
         var policy = new AutoPlayRecovery();

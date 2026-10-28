@@ -284,10 +284,12 @@ internal sealed partial class AgentLoop
         }
 
         // One receipt shape for every exit, so a new field cannot be forgotten on one of them.
-        AgentTurnResult Receipt(string? error = null, bool reasoningExhausted = false, bool requiresConfiguration = false) => new()
+        AgentTurnResult Receipt(string? error = null, bool reasoningExhausted = false, bool requiresConfiguration = false, string? failureKind = null) => new()
         {
             AssistantText = lastText, Reasoning = lastReasoning,
             Acted = acted, ActResultJson = actResult, Error = error, StateFingerprint = actFingerprint,
+            FailureKind = error == null ? null : failureKind ?? (lastActError == null ? FailureKinds.Empty
+                : IsMissingIndexError(lastActError) ? FailureKinds.Arguments : FailureKinds.Illegal),
             ExecutedUnsettled = actUnsettled, ReasoningBudgetExhausted = reasoningExhausted,
             RequiresConfiguration = requiresConfiguration, ToolRounds = rounds, ReadToolRounds = readToolRounds,
             StreamDemoted = streamDemoted, Usage = accumulatedUsage, RequestsSpent = requestsSpent
@@ -330,7 +332,7 @@ internal sealed partial class AgentLoop
                     Tools = resolved.Model.SupportsTools ? tools : null,
                     Thinking = resolved.Model.GetThinkingIntensity(),
                     ThinkingMode = resolved.Model.ThinkingMode,
-                    Stream = !(allowAct && resolved.Model.SupportsTools && toolStreamFallbackTried),
+                    Stream = !(allowAct && resolved.Model.SupportsTools && (toolStreamFallbackTried || StreamToolArgsUnreliable(resolved))),
                     // The only request a player watches think: the turn's own completion. Vision
                     // captions and role probes run without a callback, so their reasoning is not shown.
                     OnReasoningDelta = _onReasoningDelta
@@ -339,7 +341,7 @@ internal sealed partial class AgentLoop
                 var budgetReason = _budgetGuard?.Invoke()?.CheckBudget(requestsSpent, accumulatedUsage?.TotalTokens ?? 0);
                 if (budgetReason != null)
                 {
-                    return Receipt(budgetReason);
+                    return Receipt(budgetReason, failureKind: "budget");
                 }
 
                 LlmCompletion completion;
@@ -367,7 +369,8 @@ internal sealed partial class AgentLoop
                 catch (Exception ex)
                 {
                     return Receipt(ex.Message,
-                        requiresConfiguration: ex is LlmException { StatusCode: >= 400 and < 500 and not 408 and not 429 });
+                        requiresConfiguration: ex is LlmException { StatusCode: >= 400 and < 500 and not 408 and not 429 },
+                        failureKind: FailureKinds.Of(ex) ?? FailureKinds.Transport);
                 }
 
                 lastText = completion.Content;
@@ -406,6 +409,7 @@ internal sealed partial class AgentLoop
                         {
                             toolStreamFallbackTried = true;
                             streamDemoted = true;
+                            NoteStreamTruncation(resolved);
                             continue;
                         }
 
@@ -436,10 +440,12 @@ internal sealed partial class AgentLoop
                     !toolStreamFallbackTried &&
                     completion.ToolCalls.Any(call =>
                         string.Equals(call.Name, "act", StringComparison.OrdinalIgnoreCase) &&
-                        LooksLikeTruncatedStreamedAct(call.ArgumentsJson)))
+                        LooksLikeTruncatedStreamedAct(call.ArgumentsJson) &&
+                        !CanFillMissingIndex(call.ArgumentsJson, planStateJson)))
                 {
                     toolStreamFallbackTried = true;
                     streamDemoted = true;
+                    NoteStreamTruncation(resolved);
                     continue;
                 }
 
@@ -506,6 +512,7 @@ internal sealed partial class AgentLoop
                     messages.RemoveRange(messagesBeforeToolCalls, messages.Count - messagesBeforeToolCalls);
                     toolStreamFallbackTried = true;
                     streamDemoted = true;
+                    NoteStreamTruncation(resolved);
                     continue;
                 }
             }
@@ -742,6 +749,16 @@ internal sealed partial class AgentLoop
 
             var targetIndex = ReadInt(args, "target_index");
             var optionIndex = ReadInt(args, "option_index");
+            // An index left out when only one choice exists is filled in, not re-asked (W7).
+            if (action == "play_card")
+            {
+                cardIndex ??= ActIndexValidator.ResolveUniqueIndex(action, compactJson);
+                if (cardIndex is int chosenCard) targetIndex ??= ActIndexValidator.ResolveUniqueTarget(chosenCard, compactJson);
+            }
+            else if (ActIndexValidator.RequiresIndex(action))
+            {
+                optionIndex ??= ActIndexValidator.ResolveUniqueIndex(action, compactJson);
+            }
             var x = ReadInt(args, "x");
             var y = ReadInt(args, "y");
             var tool = ReadString(args, "tool");
