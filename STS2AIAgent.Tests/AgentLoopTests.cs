@@ -638,6 +638,14 @@ internal static class AgentLoopTests
         Assert.Equal(1, hurt.ActCalls);
     }
 
+    public static async Task Plan_CardIdentityIsRecheckedAtDispatch()
+    {
+        var bridge = PlanBridge();
+        bridge.AtDispatchStateJson = PlanState(1, "40/80", """{"i":0,"cid":99,"playable":true,"targets":[0]}""");
+        await new AgentLoop(bridge, PlanModel(ThreeStepPlan), AgentSettings.CreateDefault).PlayOnceAsync(CancellationToken.None);
+        Assert.Equal(0, bridge.ActCalls, "A different card now occupies position zero: dispatch must refuse it.");
+    }
+
     public static async Task Plan_RejectedFirstActRunsNothingAndSwitchOffIgnoresThen()
     {
         var rejected = PlanBridge();
@@ -1318,8 +1326,8 @@ internal static class AgentLoopTests
         Assert.Contains("open with Bash to apply Vulnerable", text);
         Assert.Contains("prefer attacks", text);
         // It rides the static prefix, before the per-step state, so the prompt cache survives it.
-        var goalIndex = messages.ToList().FindIndex(m => m.Content.Contains("kill the Shrinker Beetle"));
-        var stateIndex = messages.ToList().FindIndex(m => m.Content.Contains("Latest compact game state"));
+        var goalIndex = messages.ToList().FindIndex(m => m.Content?.Contains("kill the Shrinker Beetle") == true);
+        var stateIndex = messages.ToList().FindIndex(m => m.Content?.Contains("Latest compact game state") == true);
         Assert.True(goalIndex >= 0 && stateIndex > goalIndex, "the strategy must precede the per-step state");
     }
 

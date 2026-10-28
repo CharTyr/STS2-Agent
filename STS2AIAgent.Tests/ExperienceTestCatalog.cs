@@ -8,6 +8,9 @@ internal static class ExperienceTestCatalog
 {
     public static IEnumerable<(string Name, Func<Task> Body)> All()
     {
+        yield return ("Experience.CombatMath.SafeCacheAndTargets", () => Task.Run(CombatMathSafetyContractTests.CacheAndTargetingAreConservative));
+        yield return ("Experience.TurnPlan.DispatchChecksIdentity", AgentLoopTests.Plan_CardIdentityIsRecheckedAtDispatch);
+        yield return ("Experience.NativeMcp.CombatPlanStopsSafely", McpServiceTests.CombatPlansExecuteAndStopWithoutReplay);
         yield return ("Experience.Settings.DefaultsAreOn", () => Task.Run(ExperienceSettingsTests.DefaultsAreOn));
         yield return ("Experience.Settings.LegacyFileGetsTheNewDefaults", () => Task.Run(ExperienceSettingsTests.LegacyFileGetsTheNewDefaults));
         yield return ("Experience.Settings.JunkIsNormalised", () => Task.Run(ExperienceSettingsTests.JunkIsNormalised));

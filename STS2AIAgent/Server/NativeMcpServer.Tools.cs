@@ -262,29 +262,8 @@ internal sealed partial class NativeMcpServer
             }, JsonOptions);
         }
 
-        // One state read for the legality check and for the validator: the descriptors and the
-        // state's own available_actions come from the same walk, and now from the same frame, so a
-        // screen that changes mid-request cannot make the two disagree.
-        var snapshotJson = await _bridge.GetActionSnapshotJsonAsync(cancellationToken);
-        using var snapshot = JsonDocument.Parse(string.IsNullOrWhiteSpace(snapshotJson) ? "{}" : snapshotJson);
-        var state = ReadObjectOrEmpty(snapshot.RootElement, "state");
-        var descriptors = ReadArrayOrEmpty(snapshot.RootElement, "available_actions");
-        var legal = ReadActionNames(state);
-        if (!legal.Contains(action, StringComparer.OrdinalIgnoreCase))
-        {
-            return JsonSerializer.Serialize(new
-            {
-                error = AgentErrorEnvelope.ToPayload(new ApiException(
-                    409,
-                    "invalid_action",
-                    "Action is not in available_actions.",
-                    new { action, available_actions = legal })),
-                action,
-                available_actions = legal
-            }, JsonOptions);
-        }
-
         var cardIndex = ReadInt(arguments, "card_index");
+        var cardCid = ReadInt(arguments, "card_cid");
         var targetIndex = ReadInt(arguments, "target_index");
         var optionIndex = ReadInt(arguments, "option_index");
         var x = ReadInt(arguments, "x");
@@ -295,6 +274,49 @@ internal sealed partial class NativeMcpServer
         var rawState = ReadBool(arguments, "raw_state");
         // Metadata never enters the game action itself; it is recorded only after acceptance.
         var reason = ReadString(arguments, "reason")?.Trim();
+        var (result, planState) = await ActOnceAsync(action, cardIndex, cardCid, targetIndex, optionIndex, x, y, tool, reason, rawState, cancellationToken,
+            settle: !arguments.TryGetProperty("then", out _));
+        // The rest of a whole-turn plan (W3/W10): same rules as the in-game loop, step results
+        // appended under `plan`; nothing is retried and a non-completed step ends it.
+        return planState == null ? result : await AppendPlanAsync(arguments, result, planState, cancellationToken);
+    }
+
+    /// <summary>
+    /// One act through the legality check, index validation, dispatch and decision record. Returns
+    /// the tool answer and the compact state the act was judged against (null when it was refused).
+    /// </summary>
+    private async Task<(string Result, string? PlanState)> ActOnceAsync(
+        string action, int? cardIndex, int? cardCid, int? targetIndex, int? optionIndex, int? x, int? y,
+        string? tool, string? reason, bool rawState, CancellationToken cancellationToken, bool settle = false)
+    {
+        // One state read for the legality check and for the validator: the descriptors and the
+        // state's own available_actions come from the same walk, and now from the same frame, so a
+        // screen that changes mid-request cannot make the two disagree.
+        var snapshotJson = await _bridge.GetActionSnapshotJsonAsync(cancellationToken);
+        using var snapshot = JsonDocument.Parse(string.IsNullOrWhiteSpace(snapshotJson) ? "{}" : snapshotJson);
+        var state = ReadObjectOrEmpty(snapshot.RootElement, "state");
+        var descriptors = ReadArrayOrEmpty(snapshot.RootElement, "available_actions");
+        var legal = ReadActionNames(state);
+        if (!legal.Contains(action, StringComparer.OrdinalIgnoreCase))
+        {
+            return (JsonSerializer.Serialize(new
+            {
+                error = AgentErrorEnvelope.ToPayload(new ApiException(
+                    409,
+                    "invalid_action",
+                    "Action is not in available_actions.",
+                    new { action, available_actions = legal })),
+                action,
+                available_actions = legal
+            }, JsonOptions), null);
+        }
+
+        // A card named by its per-combat id wins over a position: positions shift as cards leave.
+        if (cardCid is >= 0 and var cid)
+        {
+            cardIndex = TurnPlanPolicy.FindCardIndex(state.GetRawText(), (uint)cid) ?? -1;
+        }
+
         var indexError = ActIndexValidator.Validate(
             action,
             cardIndex,
@@ -306,7 +328,7 @@ internal sealed partial class NativeMcpServer
         {
             // The same error object the HTTP boundary sends, plus the echo this surface has always
             // returned: code, message, details (field / submitted / valid_indices / ...), retryable.
-            return JsonSerializer.Serialize(new
+            return (JsonSerializer.Serialize(new
             {
                 error = AgentErrorEnvelope.ToPayload(indexError.ToApiException(action, legal)),
                 action,
@@ -316,8 +338,10 @@ internal sealed partial class NativeMcpServer
                 x,
                 y,
                 tool
-            }, JsonOptions);
+            }, JsonOptions), null);
         }
+
+        var planState = state.GetRawText();
 
         var result = await _bridge.ActAsync(
             action,
@@ -328,7 +352,14 @@ internal sealed partial class NativeMcpServer
             y,
             tool,
             cancellationToken,
-            rawState);
+            rawState,
+            validateState: latest =>
+            {
+                if (action == "play_card" && cardCid is >= 0 and var expectedCid
+                    && TurnPlanPolicy.FindCardIndex(latest, (uint)expectedCid) != cardIndex)
+                    throw new ApiException(409, "invalid_target", "The card moved before dispatch; read state again.");
+            });
+        if (AgentErrorEnvelope.TryReadError(result, out _)) return (result, null);
         _decisions?.Record(
             "native_mcp",
             action,
@@ -336,21 +367,21 @@ internal sealed partial class NativeMcpServer
             // The act's own pre-action snapshot names the run, so this surface needs no runtime
             // singleton to attribute the decision to it.
             runId: RunIdOf(state.GetRawText()));
-        if (!ActIndexValidator.IsUnsettled(result))
+        if (!settle || !ActIndexValidator.IsUnsettled(result))
         {
-            return result;
+            return (result, planState);
         }
 
         var settled = await _bridge.WaitUntilActionableAsync(TimeSpan.FromSeconds(20), cancellationToken);
         var latest = await _bridge.GetCompactStateJsonAsync(cancellationToken);
-        return JsonSerializer.Serialize(new
+        return (JsonSerializer.Serialize(new
         {
             action,
             status = settled ? "completed" : "pending",
             stable = settled,
             previous = DeserializeOrEmpty(result),
             state = DeserializeOrEmpty(latest)
-        }, JsonOptions);
+        }, JsonOptions), planState);
     }
 
     /// <summary>

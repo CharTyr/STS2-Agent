@@ -93,6 +93,11 @@ internal static class ActionabilityProbeContractTests
         var events = AgentSourceFixture.WithoutWhitespace(AgentSourceFixture.Read("STS2AIAgent/Server/GameEventService.cs"));
         Assert.True(events.Contains("StateBuildTiming.Instance.CountEventPollBuild();returnGameStateService.BuildStatePayload();", StringComparison.Ordinal),
             "The SSE poll's builds are counted so /health separates them from the agent's own.");
+        Assert.Contains("TimeSpan.FromSeconds(5),cancellationToken", events);
+        Assert.Contains("_cadence.Observe(", events);
+        Assert.Contains("TimeSpan.FromMilliseconds(_cadence.CurrentMs)", events);
+        Assert.Contains("_cadence.Reset()", AgentSourceFixture.MethodBody(
+            AgentSourceFixture.Read("STS2AIAgent/Server/GameEventService.cs"), "Subscribe"));
     }
 
     private static int Occurrences(string haystack, string needle)

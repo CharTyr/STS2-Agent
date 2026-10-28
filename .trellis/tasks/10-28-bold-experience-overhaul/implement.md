@@ -112,6 +112,16 @@ ilspycmd -t <类型全名> "c:\program files (x86)\steam\steamapps\common\Slay t
 - [ ] 5.6 `AgentLoopTests`：三步计划 1 次请求；抽新牌停；目标死停；主动作被拒不执行 then；暂停中途取消；cid 解析；开关关闭。
 - [ ] 5.7 验证 + 提交 `feat(state): stable card ids, card types and combat math [W3][W4]`、`feat(agent): plan a whole combat turn in one request [W3]`。
 
+### 接续检查点（2026-10-29，后续恢复先读）
+
+- 分支仍是 `feature/bold-overhaul`，没有改 main、没有发版、没有实机模型调用；预算仍只记录此前 4 次探测。
+- M5 的游戏内规划、共享向量、Python policy 已提交；本轮补全两面 MCP `card_cid/then`，新增原生与 Python 的 completed/pending/outcome_unknown 回归，工具长度预算保持不变。`POST /action` 不新增批量动作。
+- 对游戏内与原生 MCP 的 cid 再加执行租约内校验，防止排队期间手牌位置换成另一张牌；后续规划只允许四种战斗动作。Python 经现有 HTTP 单动作面执行，HTTP 端还没有 cid 原子验证，仍存在读/执行间竞态，需后续解决，不应声称彻底消除过期索引。
+- 独立审阅发现战斗算术缓存缺 HP/意图等输入与随机目标伤害过度承诺；已限定同帧+战斗身份+完整载荷缓存，随机/自身目标不出确定对敌总伤，未核实段数不默认一段；防御预览优先 CalculatedBlock 并考虑附魔重放。剩余：未分类的不可格挡意图、复杂分段/动态护甲仍只能算估计，实机需逐项核对。
+- `EventPollingCadence` 已接入事件服务（digest 比较、订阅/决策复位），game-thread 轮询 5 秒期限。
+- **尚未完成**：W7 持久化能力探测/证据时钟；W8 stall hint 接线、HUD、局末卡；W5 策略统计/路线/战绩；外部 MCP Python dispatch 原子身份校验；README/skill 最终同步；提升权限全绿、实机对照、PR/CI/dev 合并。
+- 现有已勾选 M2/M3/M4 不表示实机通过；M3 播放页速度药丸还没做；M5/M6 后半均以源码和测试为准。不要因本检查点而跳过未勾选项。
+
 ### M6 自愈（W7）
 - [ ] 6.1 `FailureKind`（产生处赋值）+ `AutoPlayRecovery.Observe` 按类处理 + 证据时钟 + 游戏线程超时进等待；`StopKindPolicy` 优先用 kind；`AutoPlayRecoveryTests`。
 - [ ] 6.2 能力探测（`AgentRuntime.ModelTest.cs` 加流式探针，测试时 ≤1 次额外请求）+ `providerCapabilities` 记录 + 按能力选流式 + 运行时学习写回；模型卡片显示；测试用注入 handler。

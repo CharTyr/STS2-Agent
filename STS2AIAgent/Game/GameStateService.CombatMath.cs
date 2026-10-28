@@ -102,6 +102,8 @@ internal static partial class GameStateService
     {
         if (combatState == null || !CombatMathEnabled())
         {
+            _combatMathKey = null;
+            _combatMathFrame = null;
             return null;
         }
 
@@ -109,7 +111,11 @@ internal static partial class GameStateService
         {
             var enemies = combatState.Enemies.ToList();
             var me = GetLocalPlayer(combatState);
-            var key = CombatMathKey(combatState, combat, liveHand, enemies, me?.Creature);
+            // The full combat payload covers HP, intents, hittability, targeting, costs and dynamic
+            // values. Frame + combat identity also prevent reuse across fights or hidden hook changes.
+            var key = Godot.Engine.GetProcessFrames() + "|"
+                + System.Runtime.CompilerServices.RuntimeHelpers.GetHashCode(combatState) + "|"
+                + System.Text.Json.JsonSerializer.Serialize(combat);
             if (key == _combatMathKey && _combatMathFrame != null)
             {
                 return _combatMathFrame;
@@ -188,7 +194,7 @@ internal static partial class GameStateService
                 card.costs_x ? null : card.energy_cost,
                 card.costs_x,
                 card.playable,
-                ReadPreviewBlock(card),
+                ReadPreviewBlock(card) * (1 + Math.Max(0, live?.GetEnchantedReplayCount() ?? 0)),
                 known));
         }
 
@@ -245,8 +251,9 @@ internal static partial class GameStateService
             return cells;
         }
 
-        // A targeted card can only hit the targets it offers; an untargeted one (AoE) hits every
-        // living, hittable enemy, each with its own modifiers.
+        // Untargeted does NOT mean AoE: random-target and self-damage cards have no guaranteed
+        // per-enemy total. Omit them rather than advertising phantom lethal damage.
+        if (card.TargetType is not (TargetType.AnyEnemy or TargetType.AllEnemies)) return cells;
         IEnumerable<int> candidates = payload.requires_target
             ? payload.valid_target_indices
             : Enumerable.Range(0, enemies.Count);
@@ -318,8 +325,11 @@ internal static partial class GameStateService
             return 2;
         }
 
-        // Cards that compute their hits at play time from energy or counters cannot be stated here.
-        return card.EnergyCost.CostsX || ComputedHitCards.Contains(card.GetType().Name) ? null : 1;
+        // No generic one-hit assumption: card play code may compute repetitions without exposing
+        // a variable. Only the inspected basic Strike implementations and Bash are known single hits.
+        if (card.EnergyCost.CostsX || ComputedHitCards.Contains(card.GetType().Name)) return null;
+        return card.GetType().Name is "StrikeIronclad" or "StrikeSilent" or "StrikeDefect"
+            or "StrikeRegent" or "StrikeNecrobinder" or "Bash" ? 1 : null;
     }
 
     /// <summary>Cards whose hit count is computed in their play code from live counters.</summary>
@@ -330,7 +340,8 @@ internal static partial class GameStateService
 
     private static int ReadPreviewBlock(CombatHandCardPayload card)
     {
-        var value = card.dynamic_values.FirstOrDefault(entry => entry.name is "Block" or "CalculatedBlock");
+        var value = card.dynamic_values.FirstOrDefault(entry => entry.name == "CalculatedBlock")
+            ?? card.dynamic_values.FirstOrDefault(entry => entry.name == "Block");
         return value == null ? 0 : Math.Max(0, value.current_value);
     }
 
@@ -358,44 +369,4 @@ internal static partial class GameStateService
         return total;
     }
 
-    private static string CombatMathKey(
-        CombatState combatState,
-        CombatPayload combat,
-        IReadOnlyList<CardModel> liveHand,
-        IReadOnlyList<Creature> enemies,
-        Creature? playerCreature)
-    {
-        var builder = new System.Text.StringBuilder(256);
-        builder.Append(combatState.RoundNumber).Append('|').Append(combat.player.energy).Append('|').Append(combat.player.block).Append('|');
-        foreach (var card in combat.hand)
-        {
-            builder.Append(card.combat_card_id?.ToString() ?? card.card_id).Append(card.upgraded ? "+" : "")
-                .Append(card.playable ? "p" : "u").Append(card.energy_cost).Append(',');
-        }
-
-        builder.Append('|');
-        foreach (var enemy in enemies)
-        {
-            builder.Append(enemy.CurrentHp).Append('/').Append(enemy.Block).Append(enemy.IsAlive ? "a" : "d");
-            AppendPowers(builder, enemy);
-            builder.Append(';');
-        }
-
-        builder.Append('|');
-        if (playerCreature != null)
-        {
-            AppendPowers(builder, playerCreature);
-        }
-
-        builder.Append('|').Append(liveHand.Count);
-        return builder.ToString();
-    }
-
-    private static void AppendPowers(System.Text.StringBuilder builder, Creature creature)
-    {
-        foreach (var power in creature.Powers)
-        {
-            builder.Append(power.Id.Entry).Append(':').Append(SafeReadNullableInt(() => power.Amount)).Append(' ');
-        }
-    }
 }

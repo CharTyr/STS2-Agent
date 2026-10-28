@@ -62,6 +62,9 @@ internal sealed partial class AgentLoop
             return Receipt(TurnPlanStopReasons.Unsettled);
         }
 
+        using var baseline = JsonDocument.Parse(planStateJson);
+        if (!baseline.RootElement.TryGetProperty("screen", out var screen) || screen.GetString() != "COMBAT")
+            return Receipt(TurnPlanStopReasons.IllegalAction);
         var stop = TurnPlanStopReasons.Completed;
         try
         {
@@ -82,6 +85,11 @@ internal sealed partial class AgentLoop
                     break;
                 }
 
+                if (step.Action is not ("play_card" or "end_turn" or "use_potion" or "discard_potion"))
+                {
+                    stop = TurnPlanStopReasons.IllegalAction;
+                    break;
+                }
                 var resolved = TurnPlanPolicy.Resolve(step, current, requireCid: true);
                 if (!resolved.Ok)
                 {
@@ -92,6 +100,7 @@ internal sealed partial class AgentLoop
                 var args = JsonSerializer.Serialize(new
                 {
                     action = resolved.Action,
+                    card_cid = step.CardCid,
                     card_index = resolved.CardIndex,
                     target_index = resolved.TargetIndex,
                     option_index = resolved.OptionIndex,

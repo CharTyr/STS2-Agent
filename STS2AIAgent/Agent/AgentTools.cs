@@ -26,6 +26,17 @@ internal static class AgentTools
                 type = "string",
                 description = "One short sentence saying why you chose this action. Shown to the player as the decision's rationale."
             },
+            card_cid = new { type = "integer", description = "Stable combat.hand[].cid; wins over card_index." },
+            then = new
+            {
+                type = "array", maxItems = 9,
+                description = "Remaining combat steps; play_card uses card_cid. Stops on changed state or a non-completed result. Never retries.",
+                items = new { type = "object", properties = new
+                {
+                    action = new { type = "string" }, card_cid = new { type = "integer" },
+                    target_index = new { type = "integer" }, option_index = new { type = "integer" }, reason = new { type = "string" }
+                }, required = new[] { "action" } }
+            },
             raw_state = new
             {
                 type = "boolean",
@@ -183,6 +194,7 @@ internal static class AgentTools
     /// <summary><see cref="PlayInGame"/> with the plain single-step act, for <c>turnPlansEnabled = false</c>.</summary>
     public static readonly IReadOnlyList<LlmTool> PlayInGameSingle = Play
         .Where(tool => tool.Name is not ("get_game_state" or "get_raw_game_state" or "get_available_actions"))
+        .Select(tool => tool.Name == "act" ? Tool("act", "Execute one legal action with a short reason.", SingleStepSchema()) : tool)
         .ToArray();
 
     public static readonly IReadOnlyList<LlmTool> PlayInGame = Play
@@ -219,6 +231,13 @@ internal static class AgentTools
             option_hints = new { type = "object", description = "Nudges keyed by action kind (play_card, end_turn...), never an index." }
         }
     };
+
+    private static object SingleStepSchema()
+    {
+        var schema = System.Text.Json.Nodes.JsonNode.Parse(System.Text.Json.JsonSerializer.Serialize(ActParameters))!;
+        schema["properties"]!.AsObject().Remove("then");
+        return schema;
+    }
 
     private static LlmTool Tool(string name, string description, object? parameters = null)
     {

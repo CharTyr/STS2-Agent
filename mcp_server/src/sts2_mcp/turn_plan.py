@@ -1,11 +1,9 @@
 """Whole-turn plan rules, ported from ``STS2AIAgent/Agent/TurnPlanPolicy.cs``.
 
-Same rules as the C# class: parse one model request into a whole combat turn (a
-first action plus up to ``MAX_THEN_STEPS`` follow-ups), re-resolve each step
-against fresh state, and report when the frame moved away from the plan.
-Unreadable state counts as changed. Cards are named by ``card_cid`` because hand
-positions shift. Both copies are pinned by the shared vectors in
-``mcp_server/tests/fixtures/turn_plan_vectors.json``.
+Same rules as the C# class: parse a turn into a first action plus up to
+``MAX_THEN_STEPS`` follow-ups, re-resolve each against fresh state, and report
+the first divergence (unreadable state counts as changed). Pinned by the shared
+vectors in ``mcp_server/tests/fixtures/turn_plan_vectors.json``.
 """
 
 import json
@@ -29,7 +27,6 @@ STOP_PLAYER_INSTRUCTION = "player_instruction"
 STOP_DISABLED = "disabled"
 
 MAX_THEN_STEPS = 9
-
 _UINT32_MASK, _UINT32_LIMIT = (1 << 32) - 1, 1 << 32
 _INT32_MIN, _INT32_MAX = -(1 << 31), (1 << 31) - 1
 _INT64_MIN, _INT64_MAX = -(1 << 63), (1 << 63) - 1
@@ -37,11 +34,9 @@ _STEP_KEYS = frozenset(
     ("action", "card_cid", "card_index", "target_index", "option_index", "reason")
 )
 
-
 @dataclass(frozen=True)
 class PlanStep:
     """One action of a turn, its card named by its per-combat id."""
-
     action: str
     card_cid: int | None
     card_index: int | None
@@ -49,20 +44,16 @@ class PlanStep:
     option_index: int | None
     reason: str | None
 
-
 @dataclass(frozen=True)
 class TurnPlan:
     """The first action from the act's own fields plus the ``then`` follow-ups."""
-
     first: PlanStep | None
     then: list[PlanStep]
     warnings: list[str]
 
-
 @dataclass(frozen=True)
 class StepResolution:
     """Concrete act arguments for one step, or the reason it cannot run."""
-
     action: str
     card_index: int | None
     target_index: int | None
@@ -74,7 +65,6 @@ class StepResolution:
         """True when the step can be executed as resolved."""
         return self.stop_reason is None
 
-
 def parse(arguments: str | dict | None) -> TurnPlan:
     """Parse a whole-turn request; unreadable arguments are an empty plan plus a warning."""
     warnings: list[str] = []
@@ -84,7 +74,6 @@ def parse(arguments: str | dict | None) -> TurnPlan:
         root = None
     if not isinstance(root, dict):
         return TurnPlan(None, [], ["arguments: not a JSON object"])
-
     first = _read_step(root, "", warnings, allow_nested=True)
     then: list[PlanStep] = []
     if "then" in root:
@@ -106,10 +95,8 @@ def parse(arguments: str | dict | None) -> TurnPlan:
                 warnings.append(f"then: truncated to {MAX_THEN_STEPS} steps")
     return TurnPlan(first, then, warnings)
 
-
-def resolve(
-    step: PlanStep, state: dict | str | None, require_cid: bool = False
-) -> StepResolution:
+def resolve(step: PlanStep, state: dict | str | None,
+            require_cid: bool = False) -> StepResolution:
     """Resolve one step against fresh compact state.
 
     ``require_cid`` refuses a ``play_card`` that names its card only by position.
@@ -121,12 +108,10 @@ def resolve(
         root = None
     if not isinstance(root, dict):
         return _stop(action, STOP_ILLEGAL_ACTION)
-
     names = root.get("available_actions")
-    listed = isinstance(names, list) and any(
+    if not (isinstance(names, list) and any(
         isinstance(name, str) and name.casefold() == action.casefold() for name in names
-    )
-    if not listed:
+    )):
         return _stop(action, STOP_ILLEGAL_ACTION)
     if action.casefold() != "play_card":
         return StepResolution(action, step.card_index, step.target_index, step.option_index, None)
@@ -134,7 +119,6 @@ def resolve(
         return _play_card(step, root, require_cid)
     except (TypeError, KeyError, AttributeError):
         return _stop(action, STOP_ILLEGAL_ACTION)
-
 
 def _play_card(step: PlanStep, root: dict, require_cid: bool) -> StepResolution:
     action = step.action
@@ -147,20 +131,15 @@ def _play_card(step: PlanStep, root: dict, require_cid: bool) -> StepResolution:
         card = next((c for c in hand if _read_int(c, "i") == step.card_index), None)
     else:
         return _stop(action, STOP_ILLEGAL_ACTION)
-
     index = None if card is None else _read_int(card, "i")
     if index is None:
         return _stop(action, STOP_CARD_GONE)
     if _read_bool(card, "playable") is not True:
         return _stop(action, STOP_CARD_UNPLAYABLE)
-
     raw_targets = card.get("targets")
     targets = [
-        target
-        for target in raw_targets
-        if not isinstance(target, bool)
-        and isinstance(target, int)
-        and _INT32_MIN <= target <= _INT32_MAX
+        target for target in raw_targets if not isinstance(target, bool)
+        and isinstance(target, int) and _INT32_MIN <= target <= _INT32_MAX
     ] if isinstance(raw_targets, list) else []
     if not targets:
         return StepResolution(action, index, None, None, None)
@@ -173,7 +152,6 @@ def _play_card(step: PlanStep, root: dict, require_cid: bool) -> StepResolution:
         return StepResolution(action, index, standing[0], None, None)
     return _stop(action, STOP_TARGET_GONE)
 
-
 def diverged(plan_time: dict | str | None, current: dict | str | None) -> str | None:
     """The first way the current frame left the plan's situation, or None."""
     try:
@@ -182,34 +160,28 @@ def diverged(plan_time: dict | str | None, current: dict | str | None) -> str | 
         return STOP_SCREEN_CHANGED
     if not isinstance(plan, dict) or not isinstance(now, dict):
         return STOP_SCREEN_CHANGED
-
     screen = _read_string(now, "screen")
     combat = now.get("combat")
     readiness = combat.get("action_readiness") if isinstance(combat, dict) else None
-    choosing = isinstance(readiness, dict) and (
-        _read_bool(readiness, "hand_in_card_selection") is True
-    )
+    choosing = isinstance(readiness, dict) and _read_bool(
+        readiness, "hand_in_card_selection") is True
     if (isinstance(now.get("selection"), dict) or isinstance(now.get("modal"), dict)
             or choosing or screen in ("CARD_SELECTION", "MODAL")):
         return STOP_PENDING_CHOICE
     if screen != _read_string(plan, "screen"):
         return STOP_SCREEN_CHANGED
-
     plan_turn, current_turn = _read_int(plan, "turn"), _read_int(now, "turn")
     if plan_turn is not None and current_turn is not None and plan_turn != current_turn:
         return STOP_TURN_CHANGED
-
     plan_cids = {c for c in (_read_uint(card, "cid") for card in _hand(plan)) if c is not None}
     if plan_cids and any(
         (c := _read_uint(card, "cid")) is not None and c not in plan_cids for card in _hand(now)
     ):
         return STOP_NEW_CARDS
-
     before, after = _player_hp(plan), _player_hp(now)
     if before is not None and after is not None and after < before:
         return STOP_TOOK_DAMAGE
     return None
-
 
 def find_card_index(state: dict | str | None, cid: int) -> int | None:
     """The hand position of the card with this per-combat id, or None."""
@@ -217,8 +189,7 @@ def find_card_index(state: dict | str | None, cid: int) -> int | None:
         root = _load(state)
     except (ValueError, TypeError):
         return None
-    if isinstance(root, dict) and isinstance(root.get("state"), dict):
-        root = root["state"]
+    root = root["state"] if isinstance(root, dict) and isinstance(root.get("state"), dict) else root
     if not isinstance(root, dict):
         return None
     for card in _hand(root):
@@ -226,10 +197,8 @@ def find_card_index(state: dict | str | None, cid: int) -> int | None:
             return _read_int(card, "i")
     return None
 
-
-def _read_step(
-    element: dict, prefix: str, warnings: list[str], allow_nested: bool
-) -> PlanStep | None:
+def _read_step(element: dict, prefix: str, warnings: list[str],
+               allow_nested: bool) -> PlanStep | None:
     """One parsed step, or None when the object names no action."""
     raw_action = _read_string(element, "action")
     action = raw_action.strip().lower() if raw_action is not None else None
@@ -243,7 +212,6 @@ def _read_step(
                 warnings.append(prefix + "unknown key " + name + " ignored")
     if not action:
         return None
-
     card_cid: int | None = None
     raw_cid = _read_lenient_int(element, "card_cid")
     if raw_cid is not None:
@@ -255,17 +223,14 @@ def _read_step(
                     _int_field(element, "target_index"), _int_field(element, "option_index"),
                     _read_string(element, "reason"))
 
-
 def _stop(action: str, reason: str) -> StepResolution:
     return StepResolution(action, None, None, None, reason)
-
 
 def _load(value: dict | str | None) -> object:
     """Dicts pass through; strings are parsed, blank meaning JSON null."""
     if isinstance(value, str):
         return json.loads(value) if value.strip() else None
     return value
-
 
 def _int_field(element: dict, name: str) -> int | None:
     raw = _read_lenient_int(element, name)
@@ -274,12 +239,10 @@ def _int_field(element: dict, name: str) -> int | None:
     low = raw & _UINT32_MASK  # C# unchecked (int)long
     return low - _UINT32_LIMIT if low > _INT32_MAX else low
 
-
 def _hand(root: dict) -> list[dict]:
     combat = root.get("combat")
     hand = combat.get("hand") if isinstance(combat, dict) else None
     return [card for card in hand if isinstance(card, dict)] if isinstance(hand, list) else []
-
 
 def _enemy_standing(root: dict, index: int) -> bool:
     combat = root.get("combat")
@@ -291,7 +254,6 @@ def _enemy_standing(root: dict, index: int) -> bool:
             return _read_bool(enemy, "alive") is True and _read_bool(enemy, "hittable") is True
     return False
 
-
 def _player_hp(root: dict) -> int | None:
     combat = root.get("combat")
     player = combat.get("player") if isinstance(combat, dict) else None
@@ -299,30 +261,24 @@ def _player_hp(root: dict) -> int | None:
     slash = -1 if hp is None else hp.find("/")
     return _parse_int_text(hp[:slash], _INT32_MIN, _INT32_MAX) if slash > 0 else None
 
-
 def _read_string(parent: dict, name: str) -> str | None:
     value = parent.get(name)
     return value if isinstance(value, str) else None
 
-
 def _read_bool(parent: dict, name: str) -> bool | None:
     value = parent.get(name)
     return value if isinstance(value, bool) else None
-
 
 def _int(value: object, low: int, high: int) -> int | None:
     if isinstance(value, bool) or not isinstance(value, int):
         return None
     return value if low <= value <= high else None
 
-
 def _read_int(parent: dict, name: str) -> int | None:
     return _int(parent.get(name), _INT32_MIN, _INT32_MAX)
 
-
 def _read_uint(parent: dict, name: str) -> int | None:
     return _int(parent.get(name), 0, _UINT32_LIMIT - 1)
-
 
 def _parse_int_text(text: str, low: int, high: int) -> int | None:
     """``long.TryParse`` for an integer literal: optional sign, ASCII digits only."""
@@ -332,7 +288,6 @@ def _parse_int_text(text: str, low: int, high: int) -> int | None:
         return None
     value = int(stripped)
     return value if low <= value <= high else None
-
 
 def _read_lenient_int(parent: dict, name: str) -> int | None:
     """A number, or a numeric string -- models write ``"3"`` as often as ``3``."""

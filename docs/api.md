@@ -1111,7 +1111,7 @@ compact 的 `combat` 原样携带 `/state` 的 `action_readiness`、`end_turn_wi
 | `combat.hand[]` | `card_id` | 手牌内部 ID，用于 `get_game_data_item` 精确查询 |
 | `combat.hand[]` | `upgraded` / `energy_cost` / `star_cost` | 结构化数值，与 `line` 里文本化的费用同源；判断「这手还能打什么」不必解析本地化字符串 |
 | `combat.hand[]` | `cid` / `type` | v13 起：`/state` 的 `combat_card_id`（本场战斗内稳定的卡牌编号，整回合规划用 `card_cid` 指认）与 `card_type` |
-| `combat.hand[]` | `vs` | v13 起：这张牌对**每个能打到的敌人**的精确伤害，来自游戏自己的伤害预览（力量、虚弱、**目标的易伤**、上限都已计入，`values[].preview` 不含目标易伤）。每项 `{enemy, per_hit, hits, damage, after_block, kills}`：`damage = per_hit × hits`（含附魔重放），`after_block` = 扣掉该敌人当前格挡后的掉血，`kills` = 单靠这张牌能否打死。段数只在可确定时给出（`CalculatedHits` / `Repeat` 变量或游戏代码写死的两段）；段数在出牌时才计算的牌 `hits`/`damage`/`after_block`/`kills` 为 `null`，绝不猜数。没有伤害的牌、不可打出的牌、`combatMathEnabled` 关闭时为 `null` |
+| `combat.hand[]` | `vs` | v13 起：这张牌对**每个能打到的敌人**的精确伤害，来自游戏自己的伤害预览（力量、虚弱、**目标的易伤**、上限都已计入，`values[].preview` 不含目标易伤）。每项 `{enemy, per_hit, hits, damage, after_block, kills}`：`damage = per_hit × hits`（含附魔重放），`after_block` = 扣掉该敌人当前格挡后的掉血，`kills` = 单靠这张牌能否打死。段数只在可确定时给出（`CalculatedHits` / `Repeat` 变量或游戏代码写死的两段）；段数在出牌时才计算的牌 `hits`/`damage`/`after_block`/`kills` 为 `null`，绝不猜数。随机目标/自身目标的牌不声称对每个敌人有确定总伤，`vs` 为 `null`；未确认段数的普通攻击也保留未知，不默认一段。没有伤害的牌、不可打出的牌、`combatMathEnabled` 关闭时为 `null` |
 | `combat` | `threat` | v13 起：本回合结束后的威胁汇总（`combatMathEnabled` 关闭时为 `null`）。`incoming`（存活敌人意图总伤）、`incoming_unblockable`（无法得知时为 `null`）、`block`（当前格挡）、`block_needed`（还需多少格挡才不掉血）、`unblocked`（现在结束回合会掉的血）、`hp_after`（结束回合后的 HP，可为负）、`lethal`（会死；与 `end_turn_will_kill_player` 取并集，二者永不矛盾）、`end_of_turn_self_damage`（自身中毒 / 缠绕 / 魔法炸弹的伤害合计）、`per_enemy[]`（`i`、`incoming`、`hits`）、`max_block`（`block`、`energy`、`cids`、`cards`：当前能量能叠出的最多格挡）、`kill_options[]`（每个可攻击敌人：`enemy`、`killable`、`cids`、`cards`、`energy`、`damage`、`overkill`——本回合用最省能量的哪几张牌能打死它；打不死时 `damage` 是能打出的最高伤害）、`estimate`（恒为 `true`：`max_block` 与 `kill_options` 忽略抽牌与出牌中途的增益，是估算）。意图伤害按本地玩家计算 |
 | `run.potions[]` | `description` | 药水效果原文；配合 `usable` / `discard` / `target` / `targets` 一起决定是否用掉 |
 | `combat.draw[]` / `combat.discard[]` / `combat.exhaust[]` / `run.deck[]` / `run.piles.*` | `card_ids` | 合并组代表的卡牌 ID（去重、升序）；组内若含不同 ID 会全部列出，`line` 仍带 `*N` 数量后缀 |
@@ -2095,6 +2095,19 @@ Python sidecar 另有 `wait_for_event`（事件流便捷工具），原生面不
   客户端只做**一次** `/state` 对齐，把读到的状态放在 `reconciliation.state`（compact，带标记）；
   `reconciliation` 用 `state_read` / `action_effect_compared` / `action_outcome` 说明「读了状态、但从未把动作效果与它比对、结果仍是未知」，
   顶层的 `succeeded` / `status` 描述的是那次读取而不是动作本身。**绝不要自动重放该动作。**
+
+### MCP `act` 的整回合规划（原生与 Python 两面）
+
+以下是 MCP 编排参数，不是新增游戏动作，也不改变 `POST /action` 的单动作契约。
+
+| 参数/返回字段 | 类型 | 契约 |
+| --- | --- | --- |
+| `card_cid` | integer \| null | 用 `combat.hand[].cid` 指认卡牌；优先于 `card_index`，卡牌已不在手中则拒绝，不猜索引 |
+| `then` | object[] \| null | 可选剩余战斗步骤，最多 9 个；每步 `action`、`card_cid`、`target_index`、`option_index`、`reason`。后续出牌必须使用稳定的 `card_cid`。只允许出牌、结束回合、用药、弃药；禁止菜单或调试操作 |
+| `plan` | object | 仅传入非空 `then` 时新增：`steps`（含第一步的逐步结果）、`executed`、`stop_reason`、`warnings`。原先第一步的 `status`/`state` 等字段不覆盖 |
+| `final_state` | object | 最后一个已执行步骤携带的状态；该步骤未返回状态时省略，不为补字段再执行动作 |
+
+每步前重新读状态；出现选择、换屏、换回合、新牌、掉血或目标失效即停止。任何 `pending`、`stable:false`、拒绝、`outcome_unknown` 都停止剩余步骤，绝不自动重放。编排有 30 秒预算；Python 在每次操作前检查预算，单次 HTTP 调用另受客户端传输超时约束。不传新参数的调用维持原响应形状。
 
 ### 工具错误的统一形状
 

@@ -19,6 +19,8 @@ internal sealed class GameEventService
     private readonly ConsecutiveRepeatSuppressor _repeatGuard = new();
 
     private readonly EventPollingCoordinator _polling;
+    private readonly EventPollingCadence _cadence;
+    private string? _lastDigestSignature;
     private long _nextEventId;
     private readonly TimeSpan _pollInterval;
 
@@ -41,7 +43,9 @@ internal sealed class GameEventService
         }
 
         _pollInterval = TimeSpan.FromMilliseconds(pollMs);
-        _polling = new EventPollingCoordinator(PollOnceAsync, _pollInterval);
+        _cadence = new EventPollingCadence(pollMs);
+        _polling = new EventPollingCoordinator(PollOnceAsync, _pollInterval,
+            () => TimeSpan.FromMilliseconds(_cadence.CurrentMs));
     }
 
     public void Start()
@@ -70,6 +74,7 @@ internal sealed class GameEventService
     {
         lock (_gate)
         {
+            _cadence.Reset();
             var lease = _subscribers.Subscribe(
                 _subscribers.Snapshot,
                 digest => BuildSnapshotEnvelope(digest, "stream_ready"));
@@ -85,6 +90,7 @@ internal sealed class GameEventService
     /// </summary>
     public void PublishDecision(DecisionLogEntry entry)
     {
+        _cadence.Reset();
         lock (_gate)
         {
             Publish("decision_made", new
@@ -145,7 +151,7 @@ internal sealed class GameEventService
             {
                 StateBuildTiming.Instance.CountEventPollBuild();
                 return GameStateService.BuildStatePayload();
-            });
+            }, TimeSpan.FromSeconds(5), cancellationToken);
             cancellationToken.ThrowIfCancellationRequested();
             if (!_polling.IsGenerationCurrent(generation))
             {
@@ -175,6 +181,9 @@ internal sealed class GameEventService
         // The last subscriber can leave while the game-thread sample is in flight.
         if (_subscribers.Count == 0) return;
         var current = StateDigest.FromState(state);
+        var signature = JsonSerializer.Serialize(current, JsonOptions);
+        _cadence.Observe(!string.Equals(signature, _lastDigestSignature, StringComparison.Ordinal));
+        _lastDigestSignature = signature;
         var previous = _subscribers.Snapshot;
 
         if (previous == null)

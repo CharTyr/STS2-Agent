@@ -1,5 +1,24 @@
 # Changelog
 
+## Unreleased
+
+### Added
+
+- 自动处理无需取舍的小步骤，不花模型请求；整回合规划可在一次请求中给出多步出牌，每步重新检查局面，变化时停止。原生与 Python MCP 的 `act` 新增可选 `card_cid` / `then`，旧单动作调用保持兼容。
+- 战斗算术缓存限定在同一帧、同一战斗和完整战斗状态，避免复用旧 HP/意图；随机目标攻击不再声称对每个敌人都有确定斩杀伤害。
+- Compact v13 增加稳定战斗卡牌编号、卡牌类型、按目标的伤害预览和来袭/格挡/斩杀估算。段数不可确定时返回未知，不猜数；组合估算不包含抽牌与中途增益。
+- 「游玩体验」设置集中管理游戏速度、自动处理、整回合规划、战斗算术、按需截图、画面提示与暂停热键。新安装默认显示悬浮窗；F7 可暂停/继续。
+
+### Changed
+
+- 自动游玩使用游戏原生 Fast Mode 加速，暂停/停止后恢复；联机最多快速档，写盘守卫避免把临时加速写入玩家设置。
+- SSE 有订阅但状态不变时按 120/250/500/1000 ms 自适应退避，订阅或动作后复位；无人订阅时不构建状态。
+- 等待可操作时改用轻量探针，不再每帧构建完整状态；回合边界使用轻量快照，状态读取带期限。提示词移除重复数据，截图默认按需，显示服务商缓存命中率。
+- 流式空回复/截断有界降级，正文中的完整动作 JSON 可执行；唯一候选可补索引，重复截断的模型在本会话中自动改为非流式。网络故障与模型错误分别退避，游戏线程超时按等待处理。
+- 决策日志使用玩家易懂的动作/来源名称，并新增请求轮数、读工具轮数、流式降级和规划步骤计量。
+
+> 开发中：以上已有离线覆盖，不代表已经完成实机验收、性能/胜率目标或全部计划；尚未发布，版本号仍为 0.17.0。
+
 ## 0.17.0
 
 Game-dependent compilation succeeded on 2026-10-27 (Release, 0 warnings, 0 errors, after the CS0173 fix below). Only the tested subset passed live acceptance: access hardening, the overlay checks, the potion-slot reward flow, and the Steam-on dual-window no-model takeover and save-continue. Model-backed items (streaming chat, vision answers, teammate auto-play, DeepSeek variants, non-combat-only mode) could not run because of provider errors and were skipped by the maintainer's decision, so they have no live evidence; the Workshop zh-CN description was not verified, the 3-4 player and LAN checks were not run, and old/duplicate local mod copies, artifact fingerprints, the second-library Workshop install, dynamic-port discovery, handshake-failure paths and slow-child reconnection were not reported as checked. See [PRODUCT_PLAN_CURRENT.md](PRODUCT_PLAN_CURRENT.md).

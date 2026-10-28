@@ -807,6 +807,9 @@ internal sealed partial class AgentLoop
                 {
                     if (_settings().NonCombatOnlyEnabled && NonCombatOnlyPolicy.IsCombatSnapshot(latest))
                         throw new NonCombatOnlyYieldException();
+                    if (action == "play_card" && ReadInt(args, "card_cid") is >= 0 and var expectedCid
+                        && TurnPlanPolicy.FindCardIndex(latest, (uint)expectedCid) != cardIndex)
+                        throw new ApiException(409, "invalid_target", "The card moved before dispatch; read state again.");
                     ValidateSandpitDispatch(latest, action, cardIndex, requireSandpitEscape);
                 });
             if (AgentErrorEnvelope.TryReadError(result, out var bridgeError))

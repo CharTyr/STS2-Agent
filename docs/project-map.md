@@ -276,7 +276,7 @@ one action runs at a time.
 - `STS2AIAgent/Game/GameStateService.Predicates.cs` — every `Can*` gate and action-level `Is*` helper.
 - `STS2AIAgent/Game/GameStateService.Combat.cs` — the `CombatActionGate` (evaluated once per build; 200 ms stability sampler), hand cards (`playable`, `valid_target_indices`), target index helpers, intents.
 - `STS2AIAgent/Game/GameStateService.Probe.cs` — cheap reads for the auto-play hot paths: `ProbeActionable()` (combat gate + action names + readiness, no payload; what `GameBridge`'s actionable wait calls every frame) and `BuildTurnProbe()` (screen / phase / run id / in-combat / act for `AutoPlayLoopAsync`). Same sources and order as `BuildStatePayload`; pinned by `ActionabilityProbeContractTests`.
-- `STS2AIAgent/Game/GameStateService.CombatMath.cs` — combat arithmetic for compact view v13: `TryGetCombatCardId` (`NetCombatCardDb`, stable per combat → `hand[].cid`), `FormatCardType` (→ `type`), per-target damage previews (`UpdateDynamicVarPreview` against each enemy on a cloned var set; hits from `CalculatedHits`/`Repeat`/a literal two-hit list, unknown → null), `combat.threat` (incoming / block needed / hp after / lethal, `kill_options`, `max_block`) via `CombatMathPolicy`; cached per frame-state key; off with `combatMathEnabled`.
+- `STS2AIAgent/Game/GameStateService.CombatMath.cs` — combat arithmetic for compact view v13: `TryGetCombatCardId` (`NetCombatCardDb`, stable per combat → `hand[].cid`), `FormatCardType` (→ `type`), per-target damage previews (`UpdateDynamicVarPreview` against each enemy on a cloned var set; hits from `CalculatedHits`/`Repeat`/a literal two-hit list, unknown → null), `combat.threat` (incoming / block needed / hp after / lethal, `kill_options`, `max_block`) via `CombatMathPolicy`; cached only within one process frame + combat identity + complete combat payload (HP, intent, targets, values included); unknown hit counts and random/self-target totals are omitted rather than guessed; off with `combatMathEnabled`.
 - `STS2AIAgent/Game/CombatMathPolicy.cs` — pure threat summary, per-cell after-block/kill, knapsack kill options and max block (estimates: ignore draw and mid-turn buffs).
 - `STS2AIAgent/Game/GameStateService.CombatRisks.cs` — `end_turn_will_kill_player` and related flags from Doom, Poison, Constrict, Magic Bomb and Sandpit.
 - `STS2AIAgent/Game/GameStateService.Rooms.cs` — event, rest, crystal sphere, game over, chest and capstone payloads.
@@ -416,10 +416,11 @@ but hasn't settled; the agent treats a run of these as a stall (`NoProgressPolic
 - `STS2AIAgent/Server/HealthRoleData.cs` — role, play and companion fields reported by `/health`.
 - `STS2AIAgent/Server/CompanionPortFile.cs` — the companion writes its port so the host can find it.
 - `STS2AIAgent/Server/NativeMcpServer.cs` — Streamable-HTTP MCP endpoint (JSON-RPC, sessions, off by default).
+- `STS2AIAgent/Server/NativeMcpServer.TurnPlan.cs` — native MCP opt-in `then` orchestration: shared `TurnPlanPolicy`, 9-step cap, 30 s cancellation budget, combat-only follow-ups through `ActOnceAsync`; preserves original result and appends per-step `plan`/`final_state`; pending and unknown are terminal.
 - `STS2AIAgent/Server/NativeMcpServer.Tools.cs` — `ExecuteToolAsync`: native tool implementations, kept in parity with Python `server.py`.
 - `STS2AIAgent/Server/GameEventService.cs` — SSE event production (polls state on the game thread, diffs, emits typed events).
 - `STS2AIAgent/Server/EventPollingCoordinator.cs` — polling cadence and fallback.
-- `STS2AIAgent/Server/EventPollingCadence.cs` — pure adaptive SSE poll delay: 120 ms, one step slower (250/500/1000) after every 8 unchanged polls, back to the first step on any change or action.
+- `STS2AIAgent/Server/EventPollingCadence.cs` — adaptive SSE poll delay, wired through `GameEventService`'s digest signature and the coordinator's optional interval callback: 120 ms, one step slower (250/500/1000) after every 8 unchanged polls, reset on new subscriber or accepted decision; polling reads have a 5 s game-thread deadline.
 - `STS2AIAgent/Server/EventStreamSubscribers.cs` / `STS2AIAgent/Server/GameEventSubscriberHub.cs` — SSE subscriber registry and fan-out.
 - `STS2AIAgent/Server/EventChurnPolicy.cs` / `STS2AIAgent/Server/ConsecutiveRepeatSuppressor.cs` — suppress event churn and repeated events.
 - `STS2AIAgent/Llm/OpenAiCompatibleClient.cs` — chat completions with tools, reasoning content, ping, and the tool-calling probe (`ProbeToolCallingAsync`). A successful streamed body is read incrementally: the SSE/JSON decision is made on the first non-blank line, complete lines go to `SseCompletionAccumulator`, and each reasoning delta is reported through `LlmRequest.OnReasoningDelta` while the reply is still arriving.
@@ -476,6 +477,7 @@ but hasn't settled; the agent treats a run of these as a stall (`NoProgressPolic
 - `mcp_server/src/sts2_mcp/state_views.py` — `run_summary`, `diff_state` (mirrors `StateViews.cs`).
 - `mcp_server/src/sts2_mcp/game_data.py` — `/data` cache, scene detection, field projection (mirrors `GameDataFilter.cs`).
 - `mcp_server/src/sts2_mcp/scene_guidance.py` — strategy and playbook slices (mirrors `PlaybookSections.cs`).
+- `mcp_server/src/sts2_mcp/play_tools.py` — Python MCP `act` orchestration over the existing HTTP action seam; resolves optional `card_cid`, checks fresh state before combat-only `then` steps using `turn_plan.py`, stops on pending/unknown/refusal without replay; plain calls retain their old path.
 - `mcp_server/src/sts2_mcp/turn_plan.py` — Python port of `TurnPlanPolicy.cs` (`parse`/`resolve`/`diverged`/`find_card_index`, `STOP_*`); pinned to the C# copy by the shared `tests/fixtures/turn_plan_vectors.json` (`tests/test_turn_plan_vectors.py`).
 - `mcp_server/src/sts2_mcp/legacy_tools.py` — per-action tools for the `full` profile.
 - `mcp_server/src/sts2_mcp/handoff.py` — planner, combat and event handoff packets (`layered`+).
