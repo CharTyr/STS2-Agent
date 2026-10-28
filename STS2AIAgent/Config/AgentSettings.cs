@@ -1,6 +1,6 @@
 namespace STS2AIAgent.Config;
 
-internal sealed class AgentSettings
+internal sealed partial class AgentSettings
 {
     public List<LlmEndpoint> Endpoints { get; set; } = new();
 
@@ -368,6 +368,7 @@ internal sealed class AgentSettings
         }
 
         JevConfidenceThreshold = Math.Clamp(JevConfidenceThreshold, 0.0, 1.0);
+        NormalizeExperienceSettings();
     }
 
     private ResolvedModel ResolveRoleModel(string? modelId, bool required, string roleName)

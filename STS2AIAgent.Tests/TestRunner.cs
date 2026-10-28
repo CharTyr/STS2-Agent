@@ -1082,5 +1082,10 @@ internal static class TestRunner
         // The Godot half of the seam cannot be linked offline, so its two load-bearing facts are read
         // from source: the wait ends on a drawn frame, and the bridge runs the tested policy.
         yield return ("Screenshot.DrawnFrameContract", () => Task.Run(SessionControlContractTests.ScreenshotWaitsForADrawnFrameAndRestoresTheOverlay));
+        // The 2026-10-28 experience overhaul registers its tests in one catalog.
+        foreach (var test in ExperienceTestCatalog.All())
+        {
+            yield return test;
+        }
     }
 }

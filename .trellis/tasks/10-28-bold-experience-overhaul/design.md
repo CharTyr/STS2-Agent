@@ -135,7 +135,7 @@ AgentRuntime.AutoPlayLoopAsync
 | `pauseHotkey` | string `"F7"`（空=无） | 暂停/继续 AI 的热键（W8.6；实施时先确认游戏不占用） | 否 |
 | `runJournalEnabled` | bool true | 跨局战绩摘要注入提示词 | 是 |
 | `maxOutputTokens` | int? 8192（null/0=不发送） | 游玩请求输出上限（W7） | 是 |
-| `providerCapabilities` | 字典（模型 id → 记录）null | W7 能力记录（带指纹） | 否 |
+| （能力记录） | 不新增顶层键：扩展现有 `ModelTestRecord`（已按模型 id + 指纹）加 `StreamToolArgs`/`MaxTokensField`/`ProbeVersion` | W7 能力记录 | 否 |
 另：`OverlayVisibleOnStart` 新安装默认改 `true`（W8.1，修 P1）。
 迁移：旧文件缺键 → 上表默认；`EnsureValidShape` 把非法字符串修成默认。测试：往返、非默认值克隆（`SettingsClone` 漏字段是历史坑）、非法值修复。
 

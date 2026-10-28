@@ -69,10 +69,10 @@ ilspycmd -t <类型全名> "c:\program files (x86)\steam\steamapps\common\Slay t
 ## 3. 执行清单
 
 ### M0 地基（W0）
-- [ ] 0.1 `git switch -c feature/bold-overhaul`（基于 dev@89d5fd3）；提交本任务目录：`docs(trellis): plan the bold experience overhaul [W0]`。
-- [ ] 0.2 跑 §1 全部命令，结果记到 §7（已知基线：C# 1023/9 环境性失败，Python 439 OK）。
-- [ ] 0.3 AgentLoop 腾位（design §3.2）→ `AgentLoop.RoleProbes.cs`；测试工程 Compile Include；核对 5 个源码契约；project-map。提交 `refactor(agent): move role probes out of AgentLoop.cs [W0]`。
-- [ ] 0.4 设置项（design §3.4 全表 + `OverlayVisibleOnStart` 新安装默认 true）：`AgentSettings`、`SettingsClone`、`EnsureValidShape`、`CompanionPlaySettings`/`CompanionSettingsPatch`（同步项）；测试：往返、非默认克隆、非法修复。UI 控件随各工作流加。提交 `feat(config): switches for the overhaul, on by default [W0]`。
+- [x] 0.1 `git switch -c feature/bold-overhaul`（基于 dev@89d5fd3）；提交本任务目录：`docs(trellis): plan the bold experience overhaul [W0]`。
+- [x] 0.2 跑 §1 全部命令，结果记到 §7（已知基线：C# 1023/9 环境性失败，Python 439 OK）。
+- [x] 0.3 AgentLoop 腾位（design §3.2）→ `AgentLoop.RoleProbes.cs`；测试工程 Compile Include；核对 5 个源码契约；project-map。提交 `refactor(agent): move role probes out of AgentLoop.cs [W0]`。
+- [x] 0.4 设置项（design §3.4 全表 + `OverlayVisibleOnStart` 新安装默认 true）：`AgentSettings`、`SettingsClone`、`EnsureValidShape`、`CompanionPlaySettings`/`CompanionSettingsPatch`（同步项）；测试：往返、非默认克隆、非法修复。UI 控件随各工作流加。提交 `feat(config): switches for the overhaul, on by default [W0]`。
 
 ### M1 性能地基（W9.0–9.2、§9.4）
 - [ ] 1.1 `GameStateService.Probe.cs`：抽出 `AdvanceCombatActionGate()`（构建与探针共用），`ProbeActionable()`，`BuildTurnProbe()`；有哈希契约的方法体重算哈希并写 remarks；KnownUncompiledSources、project-map。

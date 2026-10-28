@@ -71,6 +71,15 @@ internal static class SettingsClone
                 source.JevProviderKeys ?? new Dictionary<string, string>(), StringComparer.OrdinalIgnoreCase),
             JevModel = source.JevModel,
             JevConfidenceThreshold = source.JevConfidenceThreshold,
+            TurboMode = source.TurboMode,
+            TurboRestoreFastMode = source.TurboRestoreFastMode,
+            AutopilotEnabled = source.AutopilotEnabled,
+            TurnPlansEnabled = source.TurnPlansEnabled,
+            CombatMathEnabled = source.CombatMathEnabled,
+            VisionMode = source.VisionMode,
+            HudMode = source.HudMode,
+            PauseHotkey = source.PauseHotkey,
+            RunJournalEnabled = source.RunJournalEnabled,
             RoleTests = source.RoleTests.Select(test => new ModelRoleTestRecord
             {
                 Role = test.Role,
