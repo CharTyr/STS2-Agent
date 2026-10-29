@@ -51,14 +51,56 @@ internal static class ExperienceTestCatalog
         yield return ("Experience.TurnPlan.ThreeStepsOneRequest", AgentLoopTests.Plan_ThreeStepsOneRequest);
         yield return ("Experience.TurnPlan.StopsOnSurprises", AgentLoopTests.Plan_StopsOnANewCardOrADeadTarget);
         yield return ("Experience.TurnPlan.RejectedFirstAndSwitchOff", AgentLoopTests.Plan_RejectedFirstActRunsNothingAndSwitchOffIgnoresThen);
+        yield return ("Experience.TurnPlan.FollowUpWaitsForSettle", AgentLoopTests.Plan_FollowUpWaitsForTheCardToResolve);
+        yield return ("Experience.TurnPlan.PendingTerminal", AgentLoopTests.Plan_PendingStopsWithoutWaitingOrReplay);
         yield return ("Experience.TurnPlan.PlayerGuidanceStops", AgentLoopTests.Plan_PlayerGuidanceStopsTheRest);
         yield return ("Experience.Recovery.TransportLadder", AutoPlayRecoveryTests.TransportFailuresGetTheirOwnLadder);
         yield return ("Experience.Recovery.StalledGameIsAWait", AutoPlayRecoveryTests.AStalledGameThreadIsAWaitNotAFailure);
         yield return ("Experience.Recovery.FillsOnlyPossibleIndex", AgentLoopTests.PlayOnce_FillsTheOnlyPossibleIndex);
         yield return ("Experience.Recovery.LearnsStreamTruncation", AgentLoopTests.PlayOnce_LearnsThatStreamedArgumentsAreTruncated);
+        yield return ("Experience.Capability.PersistsPerRoute", () => Task.Run(ProviderCapabilityTests.CapabilityPersistsPerRouteAndInvalidatesOnEdit));
+        yield return ("Experience.Capability.CloneAndTeammate", () => Task.Run(ProviderCapabilityTests.CloneAndCompanionPayloadCarryTheCapabilityAndOutputCap));
+        yield return ("Experience.Capability.SettingsFileRoundTrip", () => Task.Run(ProviderCapabilityTests.CapabilitySurvivesTheSettingsFile));
+        yield return ("Experience.Capability.ProbeArguments", () => Task.Run(ProviderCapabilityTests.ProbeArgumentsCompleteOnlyWithEveryIndex));
+        yield return ("Experience.Capability.StreamingProbeWire", ProviderCapabilityTests.StreamingProbeReadsTruncationOffTheWire);
+        yield return ("Experience.Capability.StreamingProbeStaysStreamed", ProviderCapabilityTests.StreamingProbeKeepsTheRequestOnTheStreamPath);
+        yield return ("Experience.Capability.OutputCapField", ProviderCapabilityTests.OutputCapUsesTheCapabilityFieldName);
+        yield return ("Experience.Capability.ModelTestRecordsVerdict", ProviderCapabilityTests.ModelTestPersistsTheStreamVerdict);
+        yield return ("Experience.Capability.ModelTestUnknown", ProviderCapabilityTests.ModelTestLeavesTheCapabilityUnknownWhenTheProbeCannotRun);
+        yield return ("Experience.Capability.ModelTestCompletionTokens", ProviderCapabilityTests.ModelTestRecordsTheCompletionTokensField);
+        yield return ("Experience.Capability.LoopReadsVerdict", () => Task.Run(ProviderCapabilityTests.LoopReadsThePersistedVerdict));
+        yield return ("Experience.Recovery.EvidenceClock", () => Task.Run(ProviderCapabilityTests.WaitingClockRestartsOnNewEvidence));
         yield return ("Experience.Turbo.EngageFirstReleaseInFinally", () => Task.Run(TurboWiringContractTests.TheLoopEngagesFirstAndReleasesInItsOuterFinally));
         yield return ("Experience.Turbo.ReleaseNotTiedToEndedToken", () => Task.Run(TurboWiringContractTests.ReleaseIsNotTiedToTheEndedLoopsToken));
         yield return ("Experience.Turbo.PrefsGuardAtModStart", () => Task.Run(TurboWiringContractTests.ThePrefsGuardIsInstalledAtModStart));
         yield return ("Experience.Turbo.HealthNeverReadsGame", () => Task.Run(TurboWiringContractTests.TheHealthSnapshotNeverReadsTheGame));
+        yield return ("Experience.Benchmark.SharedArithmetic", () => Task.Run(DecisionBenchmarkMathTests.ReproducesEveryArithmeticFixture));
+        yield return ("Experience.Hud.IdentityAndExpiry", () => Task.Run(HudIntentTests.UsesStableCardAndEnemySpace));
+        yield return ("Experience.Hud.AllySpace", () => Task.Run(HudIntentTests.AllyTargetDoesNotPointAtEnemy));
+        yield return ("Experience.Hud.CaptureVisibility", () => Task.Run(HudIntentTests.CaptureHidesHudEvenWithPanelHidden));
+        yield return ("ActionTrust.PlayCardIdentity", () => Task.Run(GameActionTrustContractTests.PlayCardIdentityIsVerifiedBeforeTheCardIsPlayed));
+        // W5 strategy state and W4.3 numbers in the fast-judgment options.
+        yield return ("Experience.DeckStats.SummarizesTheDeck", () => Task.Run(DeckStatsPolicyTests.RunAll));
+        yield return ("Experience.Route.AdvisesOnEveryDoor", () => Task.Run(MapRoutePolicyTests.RunAll));
+        yield return ("Experience.Jev.NumericOptions", () => Task.Run(JevAgentLogicTests.RunNumericDescriptions));
+
+        // W8.5 run report and W5 bounded run journal.
+        yield return ("Experience.RunSummary.GameOverOnly", () => Task.Run(RunSummaryTests.OnlyAGameOverFrameBecomesASummary));
+        yield return ("Experience.RunSummary.FactsTravel", () => Task.Run(RunSummaryTests.FactsTravelIntoTheStoredRow));
+        yield return ("Experience.RunSummary.DecisionSplit", () => Task.Run(RunSummaryTests.DecisionsAreSplitBySourceAndRun));
+        yield return ("Experience.RunSummary.HighlightRules", () => Task.Run(RunSummaryTests.HighlightsArePickedByRuleFromRecordedDecisions));
+        yield return ("Experience.RunSummary.CardAndCopy", () => Task.Run(RunSummaryTests.CardAndCopyTextCarryTheSameFacts));
+        yield return ("Experience.RunSummary.DigestBound", () => Task.Run(RunSummaryTests.DigestIsBoundedFactsForOneCharacter));
+        yield return ("Experience.RunSummary.DiedToIsAnInference", () => Task.Run(RunSummaryTests.DiedToIsOnlyRecordedWhenTheFrameMakesItUnambiguous));
+        yield return ("Experience.RunSummary.JournalBounded", () => Task.Run(RunSummaryTests.JournalKeepsOneBoundedRowPerRun));
+        yield return ("Experience.RunSummary.JournalRedacted", () => Task.Run(RunSummaryTests.JournalRowsAreRedactedAndRepairedOnRead));
+        yield return ("Experience.RunSummary.JournalDigest", () => Task.Run(RunSummaryTests.StoreDigestReadsTheJournal));
+        yield return ("Experience.RunSummary.GameOverSourceContract", () => Task.Run(RunSummaryTests.RuntimeOnlyRecordsAConfirmedGameOver));
+
+        // Co-op message progress: the pending line shows the wait and, when known, the teammate's
+        // own combat state instead of freezing on the text that was true at send time.
+        yield return ("Experience.Coop.MessageElapsed", () => Task.Run(TeamMessageProgressTests.ElapsedSecondsAreWholeClampedAndClockSafe));
+        yield return ("Experience.Coop.MessageWaitingLine", () => Task.Run(TeamMessageProgressTests.WaitingLineNamesTheWaitAndTheCombatReason));
+        yield return ("Experience.Coop.MessageClockSafety", () => Task.Run(TeamMessageProgressTests.WaitingLineStaysSaneForImpossibleElapsedValues));
     }
 }

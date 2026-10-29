@@ -101,6 +101,57 @@ internal static class GameActionTrustContractTests
             StringComparison.Ordinal);
     }
 
+    public static void PlayCardIdentityIsVerifiedBeforeTheCardIsPlayed()
+    {
+        var source = AgentSourceFixture.ReadActionService();
+
+        // The request carries the identity as a wire field. Router deserializes ActionRequest through
+        // the shared helper, so the property is the whole binding -- there is no hand-copied field
+        // list to update for a new optional argument.
+        var requestType = AgentSourceFixture.WithoutWhitespace(
+            AgentSourceFixture.DeclarationBody(source, "internal sealed class ActionRequest"));
+        Assert.Contains("publiclong?card_cid{get;init;}", requestType, StringComparison.Ordinal);
+        Assert.Contains(
+            "ReadJsonBodyAsync<ActionRequest>(request,cancellationToken)",
+            AgentSourceFixture.WithoutWhitespace(
+                AgentSourceFixture.Read("STS2AIAgent/Server/Router.cs")),
+            StringComparison.Ordinal);
+
+        var body = Body(source, "ExecutePlayCardAsync");
+        var validate = body.IndexOf(
+            "ValidateCardIdentity(request,hand,request.card_index.Value,screen);",
+            StringComparison.Ordinal);
+        var play = body.IndexOf("card.TryManualPlay(", StringComparison.Ordinal);
+        var rangeCheck = body.IndexOf("card_indexisoutofrange.", StringComparison.Ordinal);
+        Assert.True(validate >= 0, "play_card must verify card_cid against the live hand.");
+        Assert.True(
+            rangeCheck >= 0 && validate > rangeCheck,
+            "The identity check belongs after the position bounds check, so an out-of-range index stays "
+            + "an index error rather than being reported as a stale card.");
+        Assert.True(
+            play > validate,
+            "The identity must be verified before TryManualPlay: once the native call runs the card is "
+            + "played, and no later check can undo it.");
+
+        var helper = Body(source, "ValidateCardIdentity");
+        Assert.Contains("GameStateService.TryGetCombatCardId(hand[cardIndex])", helper, StringComparison.Ordinal);
+        Assert.Contains("ApiException(409,\"invalid_target\"", helper, StringComparison.Ordinal);
+        Assert.Contains("stale=true", helper, StringComparison.Ordinal);
+        // Reject, never retarget: no fallback play, no search for the cid elsewhere in the hand.
+        Assert.False(
+            helper.Contains("TryManualPlay", StringComparison.Ordinal),
+            "The identity check must not play the card it was asked to verify.");
+        Assert.False(
+            helper.Contains("FirstOrDefault", StringComparison.Ordinal) ||
+            helper.Contains("FindCardIndex", StringComparison.Ordinal),
+            "A stale identity must be refused; searching the hand for the cid would play a card the "
+            + "caller never validated against the state it read.");
+        Assert.False(
+            helper.Contains("await", StringComparison.Ordinal),
+            "The check reads the hand the handler is about to index in one synchronous step, so no "
+            + "other action can interleave between the check and the play.");
+    }
+
     public static void BundleHandlersNeverFabricateAnEmptyState()
     {
         var source = AgentSourceFixture.ReadActionService();

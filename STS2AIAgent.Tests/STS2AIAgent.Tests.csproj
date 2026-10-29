@@ -69,6 +69,10 @@
     <Compile Include="..\STS2AIAgent\Agent\AgentLoop.RoleProbes.cs" Link="Agent\AgentLoop.RoleProbes.cs" />
     <Compile Include="..\STS2AIAgent\Agent\AgentLoop.Autopilot.cs" Link="Agent\AgentLoop.Autopilot.cs" />
     <Compile Include="..\STS2AIAgent\Agent\AgentLoop.Capabilities.cs" Link="Agent\AgentLoop.Capabilities.cs" />
+    <!-- The live-intent snapshot AgentLoop reports before it acts (W8). Godot-free, so it compiles here. -->
+    <Compile Include="..\STS2AIAgent\Agent\RunSummary.cs" Link="Agent\RunSummary.cs" />
+    <Compile Include="..\STS2AIAgent\Agent\RunJournalStore.cs" Link="Agent\RunJournalStore.cs" />
+    <Compile Include="..\STS2AIAgent\Agent\LiveIntent.cs" Link="Agent\LiveIntent.cs" />
     <Compile Include="..\STS2AIAgent\Agent\AutopilotPolicy.cs" Link="Agent\AutopilotPolicy.cs" />
     <Compile Include="..\STS2AIAgent\Agent\PromptStateDiet.cs" Link="Agent\PromptStateDiet.cs" />
     <Compile Include="..\STS2AIAgent\Agent\TurnPlanPolicy.cs" Link="Agent\TurnPlanPolicy.cs" />
@@ -78,6 +82,13 @@
     <Compile Include="..\STS2AIAgent\Agent\StallHintPolicy.cs" Link="Agent\StallHintPolicy.cs" />
     <Compile Include="..\STS2AIAgent\Server\EventPollingCadence.cs" Link="Server\EventPollingCadence.cs" />
     <Compile Include="..\STS2AIAgent\Game\CombatMathPolicy.cs" Link="Game\CombatMathPolicy.cs" />
+    <!--
+      The W5 strategy arithmetic: deck shape and map route advice. Both are pure (no game types, no
+      Godot), so the real classes are compiled here rather than copied, and their game-side
+      projection lives in GameStateService.Strategy.cs.
+    -->
+    <Compile Include="..\STS2AIAgent\Game\DeckStatsPolicy.cs" Link="Game\DeckStatsPolicy.cs" />
+    <Compile Include="..\STS2AIAgent\Game\MapRoutePolicy.cs" Link="Game\MapRoutePolicy.cs" />
     <Compile Include="..\STS2AIAgent\Agent\SandpitSafetyPolicy.cs" Link="Agent\SandpitSafetyPolicy.cs" />
     <Compile Include="..\STS2AIAgent\Agent\PlayPhases.cs" Link="Agent\PlayPhases.cs" />
     <Compile Include="..\STS2AIAgent\Agent\AgentTurnCanceledException.cs" Link="Agent\AgentTurnCanceledException.cs" />
@@ -105,6 +116,8 @@
     <Compile Include="..\STS2AIAgent\Agent\PlayStrategy.cs" Link="Agent\PlayStrategy.cs" />
     <Compile Include="..\STS2AIAgent\Agent\StrategyStore.cs" Link="Agent\StrategyStore.cs" />
     <Compile Include="..\STS2AIAgent\Agent\JevOptionEnumerator.cs" Link="Agent\JevOptionEnumerator.cs" />
+    <!-- The option descriptions' arithmetic, split out for the file budget. Same partial class. -->
+    <Compile Include="..\STS2AIAgent\Agent\JevOptionEnumerator.Numbers.cs" Link="Agent\JevOptionEnumerator.Numbers.cs" />
     <Compile Include="..\STS2AIAgent\Agent\StrategyPlanner.cs" Link="Agent\StrategyPlanner.cs" />
     <Compile Include="..\STS2AIAgent\Agent\JevExecutionDecider.cs" Link="Agent\JevExecutionDecider.cs" />
     <Compile Include="..\STS2AIAgent\Agent\PlaySessionRecord.cs" Link="Agent\PlaySessionRecord.cs" />

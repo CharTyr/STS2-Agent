@@ -22,6 +22,9 @@ internal sealed record PlanStepReceipt(string Action, string? Reason, string? Fi
 /// </remarks>
 internal sealed partial class AgentLoop
 {
+    /// <summary>How long a follow-up step waits for the previous card to resolve.</summary>
+    internal static readonly TimeSpan PlanStepSettleBudget = TimeSpan.FromSeconds(8);
+
     private async Task<AgentTurnResult> ContinuePlanAsync(
         AgentTurnResult first,
         string argumentsJson,
@@ -71,7 +74,11 @@ internal sealed partial class AgentLoop
             foreach (var step in plan.Then)
             {
                 token.ThrowIfCancellationRequested();
-                var current = await _bridge.GetCompactStateJsonAsync(token);
+                // Wait (bounded) for the previous card to finish resolving. Reading at once caught the
+                // frame mid-animation, whose available_actions briefly lacks play_card, and every live
+                // plan stopped after its first step as an illegal action (observed 2026-10-29).
+                var ready = await _bridge.WaitUntilActionableWithStateAsync(PlanStepSettleBudget, token);
+                var current = ready.CompactJson;
                 checkState?.Invoke(current);
                 if (_peekPlayInstruction?.Invoke(current) != null)
                 {
@@ -82,6 +89,12 @@ internal sealed partial class AgentLoop
                 if (TurnPlanPolicy.Diverged(planStateJson, current) is { } diverged)
                 {
                     stop = diverged;
+                    break;
+                }
+
+                if (!ready.Actionable)
+                {
+                    stop = TurnPlanStopReasons.Unsettled;
                     break;
                 }
 
@@ -115,7 +128,7 @@ internal sealed partial class AgentLoop
                     lastAction = action;
                     lastResult = response;
                     lastUnsettled = true;
-                });
+                }, stopPlanOnPending: true);
                 if (outcome.Error != null)
                 {
                     if (accepted != null)

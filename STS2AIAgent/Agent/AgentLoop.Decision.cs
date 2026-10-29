@@ -174,6 +174,9 @@ internal sealed partial class AgentLoop
                     "Playbook for the screen in the latest state (" + screenLabel + "):\n" + PlayPrompt.PlaybookGuidance(screen))
             };
 
+            var journalDigest = _runJournalDigest?.Invoke(stateJson);
+            if (!string.IsNullOrEmpty(journalDigest)) messages.Add(LlmMessage.System(journalDigest));
+
             // The reply-language choice rides the static prefix: it changes only when the player changes
             // the setting, so it never invalidates the per-step cache the way a state-bearing line would.
             var playLanguage = PlayPrompt.ReplyLanguageInstruction(settings.ReplyLanguage);

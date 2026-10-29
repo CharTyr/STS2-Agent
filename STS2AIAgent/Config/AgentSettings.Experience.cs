@@ -61,6 +61,15 @@ internal sealed partial class AgentSettings
     /// <summary>Finished runs are recorded as facts and a short digest is given to the model.</summary>
     public bool RunJournalEnabled { get; set; } = true;
 
+    /// <summary>
+    /// Output-token cap sent with every play request (W7). Null or 0 sends no cap and leaves the
+    /// provider's own default. It is a per-response limit, not the session spend cap
+    /// (<see cref="MaxSessionTokens"/>).
+    /// </summary>
+    public int? MaxOutputTokens { get; set; } = DefaultMaxOutputTokens;
+
+    public const int DefaultMaxOutputTokens = 8192;
+
     private void NormalizeExperienceSettings()
     {
         TurboMode = NormalizeChoice(TurboMode, TurboInstant, TurboOff, TurboFast, TurboInstant);
@@ -72,6 +81,10 @@ internal sealed partial class AgentSettings
             "Normal" or "Fast" or "Instant" or "None" => TurboRestoreFastMode.Trim(),
             _ => null
         };
+        if (MaxOutputTokens is <= 0)
+        {
+            MaxOutputTokens = null;
+        }
     }
 
     private static string NormalizeChoice(string? value, string fallback, params string[] allowed)

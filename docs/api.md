@@ -214,7 +214,23 @@ curl -s http://127.0.0.1:8080/state | jq .
 | `dual_launch_outcome` | string\|null | **仅 host 有意义。** 双开结构化结果，给外部客户端做成败分类，**不要**用 `dual_status` 文本。host 尚未尝试或 companion 角色为 `null`；否则为 `InProgress` / `Succeeded` / `Failed` / `Rejected` / `Canceled`（`DualLaunchOutcome` 枚举名，不含 `Idle`） |
 | `compatibility` | object | 启动时对 Mod 依赖的游戏私有成员做的一次自检结果。`reflected_members_checked` 是被检查的成员总数，`reflected_members_missing` 是找不到的个数，`missing_members[]` 逐条给出 `member`（`类型.成员`）与 `feature`（失效的功能）。游戏更新后 Mod 最常见的坏法就是某个私有字段被改名，此时读取悄悄退回默认值——这个区块是唯一的信号 |
 | `state_build` | object | 构建状态载荷的耗时，只计构建本身、不含排队等游戏线程。`/state`、每个动作响应与 SSE 刷新都会构建一次，且都跑在游戏线程上——构建期间游戏不出帧。`slow_threshold_ms`（100，约等于 60 帧下 6 帧的卡顿）、`samples`、`slow_builds`、`last_ms`、`max_ms` 与其 `max_screen`、以及最近 `recent_samples`（至多 256）次的 `recent_p50_ms` / `recent_p95_ms`；尚无样本时耗时字段为 `null`。超过阈值的构建会在游戏日志里记 `WARN`，每 30 秒至多一条并注明期间压下的条数。另有三个累计计数（不计入 `samples`）：`actionable_probes`（游戏内 Agent 等待「可操作」时每帧做的轻量探针次数，不构建载荷）、`actionable_builds`（该等待真正构建状态的次数：只在判定可操作的那一帧或超时时各一次）、`event_poll_builds`（SSE 事件流轮询的构建次数，无订阅者时为 0） |
+| `last_run_summary` | object \| null | 观察到真实 GAME_OVER 后的成绩单；此前为 null。字段见下表；返回菜单或暂停不产生结算记录 |
 | `turbo` | object | 自动游玩时的游戏加速（游戏自带的 Fast Mode）。`mode`（设置：`off` / `fast` / `instant`）、`applied`（此刻是否由 Mod 接管了游戏速度）、`original`（接管期间记下的玩家原档位 `Normal` / `Fast` / `Instant` / `None`，未接管时 `null`）、`current`（最近一次在游戏线程上看到的档位，尚未看到时 `null`）、`prefs_guard`（写盘守卫：`installed` / `unavailable` / `not_installed`；`unavailable` 时极速自动降为快速）、`reason`（最近一次决定：`engage` / `already_fast` / `multiplayer_cap` / `off` / `released` / `idle` / `error`）、`other_speed_mod`（检测到 SpeedX 等加速 Mod 时为 `true`，二者可同时使用）。暂停、停止、失败或离开对局时恢复玩家原档位；玩家中途自己改过就保留玩家的选择；加速档永远不会写进游戏的设置文件 |
+
+#### `last_run_summary` 字段
+
+| 字段 | 类型 | 说明 |
+| --- | --- | --- |
+| `run_id` / `result` | string | 对局身份；结果为 victory / defeat / unknown |
+| `character` / `character_name` / `ascension` | string / number / null | 结算时角色与难度，缺失不猜 |
+| `floor` / `act` / `boss_id` | number / string / null | 结算楼层、幕与 Boss |
+| `died_to` | object \| null | 仅失败且结算帧只有一个存活敌人时推断，含 enemy_id / enemy_name / inferred（true） |
+| `hp_at_end` / `deck_size` | number \| null | 结算时血量与牌组数 |
+| `key_relics` | string[] | 结算帧所列最近取得的至多五件遗物 |
+| `requests` / `tokens` | number / null | 本局保留决策行中的请求/token 合计，未知 token 为 null；不是全会话账单 |
+| `counts_are_lower_bounds` | boolean | 决策窗口已满时为 true，计数应理解为至少这些 |
+| `finished_at` | string | UTC 观察结算时间 |
+| `decisions` / `requests_per_floor` | number / null | 本局保留的决策数与每层请求；层数未知时后者为 null |
 
 ### `stop_kind` 取值
 
@@ -1103,6 +1119,11 @@ compact 的 `combat` 原样携带 `/state` 的 `action_readiness`、`end_turn_wi
 
 | compact 位置 | 字段 | 说明 |
 | --- | --- | --- |
+| `run` | `deck_stats` | 仅奖励/商店/休息/牌组选择屏：count、attacks、skills、powers、curses、statuses、upgraded、avg_cost、zero_cost、starter_strikes、starter_defends；数字费用平均保留两位，X 费不计。其余屏为 null |
+| `map` | `route_advice` | 仅 MAP 且可走节点至少两个：options[] 含 i、elites/rests/shops/unknowns/combats/treasures 的 [min,max]、score、why；recommended_i 并列时为 null，note=advisory。遍历有路径/深度上限，建议不保证结果 |
+| `reward.cards[]` / `selection.cards[]` / `bundles[].cards[]` | `type` / `rarity` | 当前卡牌类型与稀有度 |
+| `shop.cards[]` | `type` / `rarity` / `price` | 卡牌类型、稀有度与数字价格 |
+| `shop.relics[]` / `shop.potions[]` | `rarity` / `price` | 稀有度与数字价格 |
 | `combat.player` | `powers` | 己方 Power 短行：`power_id` + 层数，Debuff 追加 `[debuff]` |
 | `combat.enemies[]` | `powers` | 敌方 Power 短行，同上 |
 | `combat.enemies[]` | `intents[]` | 怪物下一招的数值拆解：`i`（意图序号）、`intent_type`、`label`、`damage`、`hits`、`total_damage`、`status_card_count` |
@@ -1666,6 +1687,7 @@ compact 不是 `/state` 的子集，**很多键换了名字**。MCP `get_game_st
 | --- | --- | --- |
 | `action` | string | **必填**。动作名称 |
 | `card_index` | number \| null | 手牌索引（`play_card` 时使用） |
+| `card_cid` | number \| null | play_card 的可选稳定身份（compact hand[].cid），HTTP 必须同时给 card_index。在动作租约内核对同一手牌位置：不符返回 409 invalid_target，详情 stale=true / actual_card_cid；不改打其他牌、不自动重放。只给 cid 返回 400 invalid_request；不传兼容旧行为 |
 | `target_index` | number \| null | 目标索引（需要指定目标的卡牌使用） |
 | `option_index` | number \| null | 选项索引（地图/奖励/选牌等使用） |
 | `x` | number \| null | 水晶球格子的 X 坐标（`crystal_clear_cell`） |

@@ -16,6 +16,12 @@ This skill is transport-agnostic. It only assumes that your host agent exposes o
 - Runtime rule: always try `local_server_name` first, then `remote_server_name`.
 - If your host already exposes STS2 tools directly, call tools directly and skip MCP config troubleshooting.
 
+## Two ways to play
+
+Mode A: you act. Read `decide` or `get_game_state`, then call `act`; in combat name cards by `card_cid` and put up to nine follow-up combat steps in `then`. Every step is checked against fresh state. Stop on a refusal, pending result or unknown outcome; never replay an uncertain action. Use a bounded number of decisions and report progress when the host limits autonomous loops.
+
+Mode B: the mod acts, you plan. Start/pause the mod through the local `POST /session/control` endpoint and use `get_planner_briefing` / `update_play_strategy` for strategic guidance. Do not issue competing direct actions while mod auto-play owns the character.
+
 ## Recommended SubAgent Config
 
 Use a conservative SubAgent profile for STS2. The goal is to keep the tool surface small, keep one MCP action per iteration, and avoid polluting the main chat prompt with long-running game state.
@@ -64,7 +70,7 @@ The in-game overlay agent loads the shared play contract below plus the screen-p
    `selection.cards[].card_id`, `reward.cards[].card_id`, `shop.cards[].card_id`,
     `shop.relics[].relic_id`, `shop.potions[].potion_id`,
    `bundles[].cards[].card_id`, and `chest.relics[].relic_id`.
-4. Before every decision, call `get_game_state`.
+4. Use fresh state; call `get_game_state` only when it is stale.
 5. Route by `state.session` first:
    `session.mode` distinguishes `singleplayer` vs `multiplayer`, and
    `session.phase` distinguishes `menu`, `character_select`,

@@ -92,7 +92,10 @@ namespace STS2AIAgent.Game;
 /// </remarks>
 internal static partial class GameStateService
 {
-    // 13 (2026-10-28): combat.hand[].cid / type / vs and combat.threat, all additive.
+    // 13 (2026-10-28): combat.hand[].cid / type / vs and combat.threat, all additive. The same
+    // unreleased overhaul also carries W5's strategy state here (reward/shop type/rarity/price,
+    // run.deck_stats, map.route_advice); they are additive keys, not a shape change, so the version
+    // stays at 13 until the overhaul ships and one bump documents the whole set.
     private const int AgentViewVersion = 13;
 
     private static string GetPreferredCardRulesText(string rulesText, string? resolvedRulesText)
@@ -143,10 +146,10 @@ internal static partial class GameStateService
             turn,
             available_actions = availableActions,
             combat = BuildAgentCombatPayload(combatState, combat, glossaryTerms),
-            run = BuildAgentRunPayload(combatState, runState, run, glossaryTerms),
+            run = BuildAgentRunPayload(combatState, runState, run, screen, glossaryTerms),
             multiplayer = BuildAgentMultiplayerPayload(multiplayer),
             multiplayer_lobby = BuildAgentMultiplayerLobbyPayload(multiplayerLobby),
-            map = BuildAgentMapPayload(map),
+            map = BuildAgentMapPayload(map, run),
             selection = BuildAgentSelectionPayload(selection, glossaryTerms),
             character_select = BuildAgentCharacterSelectPayload(characterSelect),
             timeline = BuildAgentTimelinePayload(timeline),
@@ -336,6 +339,7 @@ internal static partial class GameStateService
         CombatState? combatState,
         RunState? runState,
         RunPayload? run,
+        string screen,
         HashSet<string> glossaryTerms)
     {
         if (run == null)
@@ -368,6 +372,8 @@ internal static partial class GameStateService
             deck = deckCards.Length > 0
                 ? BuildAgentCardStacks(deckCards, glossaryTerms)
                 : BuildAgentCardStacks(run.deck, glossaryTerms),
+            // The deck's shape, only where a card is being chosen (see GameStateService.Strategy.cs).
+            deck_stats = BuildAgentDeckStats(screen, deckCards, run.deck),
             relics = run.relics
                 .Select(relic => relic.is_melted ? Loc.T("{0} (熔毁)", relic.name) : relic.name)
                 .ToArray(),
@@ -427,7 +433,7 @@ internal static partial class GameStateService
             max = selection.max_select,
             selected = selection.selected_count,
             confirm = selection.can_confirm,
-            cards = selection.cards.Select(card => BuildAgentChoiceCardPayload(card.index, card.card_id, card.name, card.upgraded, card.energy_cost, card.star_cost, card.costs_x, card.star_costs_x, GetPreferredCardRulesText(card.rules_text, card.resolved_rules_text), glossaryTerms, card.selected, card.upgrade)).ToArray()
+            cards = selection.cards.Select(card => BuildAgentChoiceCardPayload(card.index, card.card_id, card.name, card.upgraded, card.energy_cost, card.star_cost, card.costs_x, card.star_costs_x, GetPreferredCardRulesText(card.rules_text, card.resolved_rules_text), glossaryTerms, card.selected, card.upgrade, card.card_type, card.rarity)).ToArray()
         };
     }
 
@@ -453,7 +459,7 @@ internal static partial class GameStateService
                 line = $"{option.reward_type}: {option.description}",
                 claimable = option.claimable
             }).ToArray(),
-            cards = reward.card_options.Select(card => BuildAgentChoiceCardPayload(card.index, card.card_id, card.name, card.upgraded, card.energy_cost, null, false, false, GetPreferredCardRulesText(card.rules_text, card.resolved_rules_text), glossaryTerms)).ToArray(),
+            cards = reward.card_options.Select(card => BuildAgentChoiceCardPayload(card.index, card.card_id, card.name, card.upgraded, card.energy_cost, null, false, false, GetPreferredCardRulesText(card.rules_text, card.resolved_rules_text), glossaryTerms, type: card.card_type, rarity: card.rarity)).ToArray(),
             alternatives = reward.alternatives.Select(option => new
             {
                 i = option.index,
@@ -477,7 +483,9 @@ internal static partial class GameStateService
                     card.index, card.card_id, card.name, card.upgraded,
                     card.energy_cost, null, false, false,
                     GetPreferredCardRulesText(card.rules_text, card.resolved_rules_text),
-                    glossaryTerms)).ToArray()
+                    glossaryTerms,
+                    type: card.card_type,
+                    rarity: card.rarity)).ToArray()
         }).ToArray();
     }
 
@@ -531,12 +539,16 @@ internal static partial class GameStateService
                     card.price,
                     card.enough_gold,
                     card.on_sale,
-                    glossaryTerms)).ToArray(),
+                    glossaryTerms,
+                    card.card_type,
+                    card.rarity)).ToArray(),
             relics = shop.relics.Select(relic => new
             {
                 i = relic.index,
                 relic_id = relic.relic_id,
+                rarity = relic.rarity,
                 line = $"{relic.name} [{relic.rarity}] | {relic.price}g",
+                price = relic.price,
                 affordable = relic.enough_gold,
                 stocked = relic.is_stocked
             }).ToArray(),
@@ -544,7 +556,9 @@ internal static partial class GameStateService
             {
                 i = potion.index,
                 potion_id = potion.potion_id,
+                rarity = potion.rarity,
                 line = FormatShopPotionLine(potion),
+                price = potion.price,
                 affordable = potion.enough_gold,
                 stocked = potion.is_stocked
             }).ToArray(),
@@ -587,7 +601,7 @@ internal static partial class GameStateService
         };
     }
 
-    private static object? BuildAgentMapPayload(MapPayload? map)
+    private static object? BuildAgentMapPayload(MapPayload? map, RunPayload? run)
     {
         if (map == null)
         {
@@ -628,7 +642,9 @@ internal static partial class GameStateService
                         : node.vote_count > 0
                             ? $" [votes:{node.vote_count}]"
                             : string.Empty)
-            }).ToArray()
+            }).ToArray(),
+            // What is behind each option, with a score and a reason; null when there is no choice.
+            route_advice = BuildAgentRouteAdvice(map, run)
         };
     }
 
@@ -789,7 +805,9 @@ internal static partial class GameStateService
         string rulesText,
         HashSet<string> glossaryTerms,
         bool selected = false,
-        object? upgrade = null)
+        object? upgrade = null,
+        string? type = null,
+        string? rarity = null)
     {
         var keywords = GetGlossaryMatches(rulesText);
         CollectGlossaryTerms(glossaryTerms, rulesText);
@@ -798,6 +816,9 @@ internal static partial class GameStateService
         {
             i = index,
             card_id = cardId,
+            // Card type and rarity are what a reward pick is actually chosen on; null when unknown.
+            type,
+            rarity,
             line = FormatCardLine(name, upgraded, 1, energyCost, starCost, costsX, starCostsX, rulesText),
             selected,
             upgrade,
@@ -819,7 +840,9 @@ internal static partial class GameStateService
         int price,
         bool enoughGold,
         bool onSale,
-        HashSet<string> glossaryTerms)
+        HashSet<string> glossaryTerms,
+        string? type = null,
+        string? rarity = null)
     {
         var keywords = GetGlossaryMatches(rulesText);
         CollectGlossaryTerms(glossaryTerms, rulesText);
@@ -828,7 +851,11 @@ internal static partial class GameStateService
         {
             i = index,
             card_id = cardId,
+            type,
+            rarity,
             line = $"{FormatCardLine(name, upgraded, 1, energyCost, starCost, costsX, starCostsX, rulesText)} | {price}g",
+            // The numeric price the line used to bury in text, so a budget check needs no parsing.
+            price,
             affordable = enoughGold,
             on_sale = onSale,
             keywords = TranslateKeywords(keywords),

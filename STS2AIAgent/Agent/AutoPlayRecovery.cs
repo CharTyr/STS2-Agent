@@ -24,6 +24,13 @@ internal sealed class AutoPlayRecovery
     private int _reasoningBudgetExhausted;
     private DateTimeOffset _waitingForGameSince;
 
+    /// <summary>
+    /// The last state fingerprint a game-driven wait reported. A new fingerprint is evidence that the
+    /// game is still doing something, so it restarts the stuck clock instead of letting a long but
+    /// active phase (a slow enemy turn, a long load) end the session at the wall-clock limit.
+    /// </summary>
+    private string? _lastWaitEvidence;
+
     public (string? StopReason, string? StopKind, TimeSpan Delay) Observe(AgentTurnResult result)
     {
         if (result.RequiresConfiguration)
@@ -45,10 +52,23 @@ internal sealed class AutoPlayRecovery
             if (result.WaitingForPlayer || result.WaitingForCombat)
             {
                 _waitingForGameSince = default;
+                _lastWaitEvidence = null;
                 return (null, null, TimeSpan.FromSeconds(1));
             }
 
-            if (_waitingForGameSince == default)
+            // The stuck clock is an evidence clock: a screen, phase or fingerprint change is progress
+            // even though no action has been executed yet, so it restarts the 150 s window. Without
+            // this, a boss phase or a long map travel animation that keeps the game busy past the
+            // limit stopped a session that was never stuck.
+            var evidence = result.StateFingerprint;
+            var moved = !string.IsNullOrEmpty(evidence)
+                && !string.Equals(evidence, _lastWaitEvidence, StringComparison.Ordinal);
+            if (moved)
+            {
+                _lastWaitEvidence = evidence;
+                _waitingForGameSince = DateTimeOffset.UtcNow;
+            }
+            else if (_waitingForGameSince == default)
             {
                 _waitingForGameSince = DateTimeOffset.UtcNow;
             }
@@ -68,6 +88,7 @@ internal sealed class AutoPlayRecovery
 
         // Any non-waiting turn ends the wait streak.
         _waitingForGameSince = default;
+        _lastWaitEvidence = null;
 
         // The action executed and the response is still "pending": the game accepted what the model
         // asked for, so this must not spend the retry budget -- but an unbounded run of them is a

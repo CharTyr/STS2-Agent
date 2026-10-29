@@ -16,6 +16,61 @@ internal interface ILlmClient
     Task<bool> ProbeToolCallingAsync(string model, LlmTool tool, string prompt, CancellationToken cancellationToken);
 }
 
+/// <summary>
+/// Capability probes a non-streaming tools ping cannot answer (W7). Implemented by the production
+/// client and kept as a separate interface so a test fake that only implements <see cref="ILlmClient"/>
+/// is never forced to fake a stream.
+/// </summary>
+internal interface IStreamingToolProbe
+{
+    /// <summary>
+    /// Sends the same miniature play decision over the provider's streaming path and reports whether
+    /// the tool arguments arrived complete. A gateway that truncates the JSON after the action name
+    /// passes <see cref="ILlmClient.ProbeToolCallingAsync"/> and fails here.
+    /// </summary>
+    Task<StreamingToolArgsProbeResult> ProbeStreamingToolCallAsync(
+        string model,
+        LlmTool tool,
+        string prompt,
+        IReadOnlyList<string> requiredFields,
+        CancellationToken cancellationToken);
+}
+
+/// <summary>How a streaming tool-argument probe ended.</summary>
+internal enum StreamingToolArgsVerdict
+{
+    /// <summary>Not attempted (an older fake, a canceled deadline, or a transient failure).</summary>
+    NotRun,
+
+    /// <summary>The tool call arrived with every required argument.</summary>
+    Complete,
+
+    /// <summary>The tool call arrived, but required arguments were missing or malformed.</summary>
+    Incomplete,
+
+    /// <summary>The streamed reply carried no tool call at all.</summary>
+    NoToolCall,
+
+    /// <summary>The provider rejected the tools schema over the streaming path.</summary>
+    Unsupported,
+
+    /// <summary>The provider rejected the output-cap field name; the client learnt the other spelling.</summary>
+    MaxTokensRejected
+}
+
+/// <summary>
+/// The outcome of one streaming tool-argument probe. The raw arguments are kept for diagnostics only;
+/// nothing else sends them anywhere.
+/// </summary>
+internal sealed record StreamingToolArgsProbeResult(
+    StreamingToolArgsVerdict Verdict,
+    string? ArgumentsJson = null,
+    string? MaxTokensParameter = null,
+    string? Error = null)
+{
+    public static readonly StreamingToolArgsProbeResult NotRun = new(StreamingToolArgsVerdict.NotRun);
+}
+
 internal interface ILlmClientFactory
 {
     ILlmClient Create(LlmEndpoint endpoint, TimeSpan? requestTimeout = null);
@@ -47,6 +102,18 @@ internal sealed class LlmRequest
     public string ThinkingMode { get; init; } = "auto";
 
     public bool Stream { get; init; } = true;
+
+    /// <summary>
+    /// Output-token cap for this request; null sends no cap and leaves the provider's default. A play
+    /// turn sets it from the settings so a runaway answer cannot spend the whole session budget (W7).
+    /// </summary>
+    public int? MaxTokens { get; init; }
+
+    /// <summary>
+    /// The wire field carrying <see cref="MaxTokens"/>: <c>max_tokens</c> (default) or
+    /// <c>max_completion_tokens</c> when the capability record learnt that this route wants it.
+    /// </summary>
+    public string MaxTokensParameter { get; init; } = MaxTokensField.Standard;
 
     /// <summary>
     /// Called with the reasoning accumulated so far each time a streamed reply adds to it, so a

@@ -665,6 +665,40 @@ internal static class AgentLoopTests
             "With plans off the model is not offered `then` at all.");
     }
 
+    /// <summary>
+    /// Live regression (2026-10-29): right after a card is played the frame is mid-animation and its
+    /// available_actions lacks play_card. Every follow-up step used to read that frame and stop as an
+    /// illegal action; the plan must wait for the game to settle first.
+    /// </summary>
+    public static async Task Plan_FollowUpWaitsForTheCardToResolve()
+    {
+        static string Animating(string state) => state.Replace("[\"play_card\",\"end_turn\"]", "[]");
+        var settled1 = PlanState(1, "40/80", """{"i":0,"cid":12,"line":"Defend","playable":true,"targets":[]},{"i":1,"cid":13,"line":"Bash","playable":true,"targets":[0]}""");
+        var settled2 = PlanState(1, "40/80", """{"i":0,"cid":13,"line":"Bash","playable":true,"targets":[0]}""");
+        var bridge = PlanBridge(Animating(settled1), Animating(settled2), Animating(PlanState(2, "40/80", "")));
+        bridge.SettledAfterWait.Enqueue(settled1);
+        bridge.SettledAfterWait.Enqueue(settled2);
+        var factory = PlanModel(ThreeStepPlan);
+        var result = await new AgentLoop(bridge, factory, AgentSettings.CreateDefault).PlayOnceAsync(CancellationToken.None);
+
+        Assert.Equal(TurnPlanStopReasons.Completed, result.PlanStopReason, $"acts={bridge.ActCalls}");
+        Assert.Equal(3, bridge.ActCalls);
+        Assert.Equal(1, factory.Requests.Count);
+    }
+
+    public static async Task Plan_PendingStopsWithoutWaitingOrReplay()
+    {
+        var bridge = PlanBridge();
+        bridge.ActResultJson = """{"action":"play_card","status":"pending","stable":false}""";
+        var factory = PlanModel(ThreeStepPlan);
+        var result = await new AgentLoop(bridge, factory, AgentSettings.CreateDefault).PlayOnceAsync(CancellationToken.None);
+        Assert.Equal(1, bridge.ActCalls);
+        Assert.Equal(1, factory.Requests.Count);
+        Assert.Equal(TurnPlanStopReasons.Unsettled, result.PlanStopReason);
+        Assert.True(result.ExecutedUnsettled);
+        Assert.Equal(1, result.PlanSteps!.Count);
+    }
+
     public static async Task Plan_PlayerGuidanceStopsTheRest()
     {
         var bridge = PlanBridge(PlanState(1, "40/80", DefendB.Replace("\"i\":1", "\"i\":0")));
@@ -1935,8 +1969,20 @@ internal static class AgentLoopTests
             }
 
             WaitCalls++;
+            // An act leaves the game mid-animation; only the wait that follows sees it settle.
+            if (ActCalls > _settledActs && SettledAfterWait.Count > 0)
+            {
+                CompactStateJson = SettledAfterWait.Dequeue();
+                _settledActs = ActCalls;
+            }
+
             return Task.FromResult(Actionable);
         }
+
+        /// <summary>The frame each act settles into, revealed only by the next actionable wait.</summary>
+        public Queue<string> SettledAfterWait { get; } = new();
+
+        private int _settledActs;
 
         public Task<byte[]?> CaptureScreenshotJpegAsync(CancellationToken cancellationToken)
         {

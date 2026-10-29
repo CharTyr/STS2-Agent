@@ -628,7 +628,9 @@ internal static class Router
             team_control_status = roleData.team_control_status,
             compatibility = ReflectedGameMembers.BuildHealthSection(),
             state_build = StateBuildTiming.Instance.Snapshot(),
-            turbo = TurboController.Snapshot(AgentRuntime.Instance.Settings.TurboMode)
+            turbo = TurboController.Snapshot(AgentRuntime.Instance.Settings.TurboMode),
+            // Additive: the last finished run's facts, or null until a GAME_OVER frame is observed.
+            last_run_summary = AgentRuntime.Instance.BuildLastRunSummaryForHealth()
         };
     }
 

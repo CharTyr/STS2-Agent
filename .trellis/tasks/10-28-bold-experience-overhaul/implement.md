@@ -207,6 +207,7 @@ ilspycmd -t <类型全名> "c:\program files (x86)\steam\steamapps\common\Slay t
 | 时间 | 用途 | 请求数 | 累计 |
 | --- | --- | --- | --- |
 | 2026-10-28 18:40 | 本地网关工具调用探测（2 模型 × 流式/非流式） | 4 | 4 |
+| 2026-10-29 09:21–11:20 | 实机（预算代理 `build/live-2026-10-29-overhaul/model-ledger.json` 硬上限 296）：模型测试 ×2（修正前 2 次、修正后 3 次）、基线段、改造段、计划段 ×2、最终段 | 见台账 | 见 `recovery-2026-10-29.md` 末尾 |
 
 ## 7. 决策日志
 | 时间 | 决定 | 原因 |
@@ -230,3 +231,9 @@ ilspycmd -t <类型全名> "c:\program files (x86)\steam\steamapps\common\Slay t
 | 10-29 00:30 | 计划/算术说明放战斗 playbook 切片而非 PlaySystem | PlaySystem 12,000 字符预算已用 ~11.9k |
 | 10-29 00:30 | 暂停热键 F7：反编译确认 F6/F7 只在 `NGame.IsTrailerMode` 下是游戏调试键 | design §8.6 前置核对 |
 | 10-29 00:30 | magpie 子智能体 5 个并行约 90 分钟均未落盘（PromptStateDiet 被停时留下文件，审阅后采用并补测试）；其余模块自写 | 「不要依赖」的实际情况；之后只派小而短的任务 |
+| 10-29 09:30 | 实机发现：真实 `OpenAiCompatibleClient` 未声明 `IStreamingToolProbe`，模型测试跳过流式探测（离线假客户端掩盖）。补接口后实机 `streamToolArgs=supported, probeVersion=1` | 离线测试改为经接口调用 |
+| 10-29 10:45 | 实机发现：模型不用 `then`（游戏内末句「call act now with the next legal action」压过计划提示）。在 `PlanTurnInstruction` 加具体 JSON 示例后模型开始发 2–6 步计划 | design §16.4 预案 |
+| 10-29 10:55 | 实机发现：计划第 2 步起**全部** `illegal_action`——上一张牌动画未结算时读到的帧缺 `play_card`。三处执行器（游戏内、原生 MCP、Python）都改为每步前有界等待可操作（8 s），等不到记 `unsettled`。回归测试先红后绿（C# `Experience.TurnPlan.FollowUpWaitsForSettle`、Python `test_followup_waits_for_the_previous_card_to_resolve`）。修复后实机 6 步计划 1 次请求跑完 | 离线夹具恒有 `play_card`，只有实机能暴露 |
+| 10-29 10:55 | 决策记录：计划在第 1 步就停时也写 `turn_id/plan_size`，并记诊断事件「turn plan stopped after step 1/N: 原因」 | 否则「没规划」与「规划被截断」在日志里一样，上一条 bug 就是靠它定位的 |
+| 10-29 11:15 | HUD 横幅 y 从 14 改为 `max(110, 16% 高度)` | 实机横幅压在游戏顶栏（楼层/药水）上 |
+| 10-29 11:15 | STS2「放弃当前游戏」直接回主菜单、无 GAME_OVER 画面；成绩单按设计不记录（实机确认）。成绩单实机用调试 `die` 命令制造真实 GAME_OVER | 前置条件手动，非自动游玩证据 |

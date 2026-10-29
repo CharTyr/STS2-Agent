@@ -28,8 +28,12 @@ internal sealed partial class NativeMcpServer
             {
                 if (stop != null) break;
                 deadline.Token.ThrowIfCancellationRequested();
-                var current = await _bridge.GetCompactStateJsonAsync(deadline.Token);
+                // Let the previous card resolve first: a frame read mid-animation lacks play_card and
+                // would stop every plan after one step (the in-game loop hit this live on 2026-10-29).
+                var ready = await _bridge.WaitUntilActionableWithStateAsync(AgentLoop.PlanStepSettleBudget, deadline.Token);
+                var current = ready.CompactJson;
                 stop = TurnPlanPolicy.Diverged(planState, current);
+                if (stop == null && !ready.Actionable) stop = TurnPlanStopReasons.Unsettled;
                 if (stop != null) break;
                 // Follow-ups are deliberately combat actions only, never menu/debug operations.
                 if (step.Action is not ("play_card" or "end_turn" or "use_potion" or "discard_potion"))

@@ -545,3 +545,34 @@ Tools are **synchronous**; don't make them async. Wire keys stay spelled the way
 - `STS2AIAgent/Server/CompanionStartupFile.cs` — publish initialization, listener or failure state to the host-selected session path.
 - `STS2AIAgent/Server/InstanceEndpointFile.cs` — publish and remove PID/role/port hints for local MCP discovery.
 - `mcp_server/src/sts2_mcp/discovery.py` — validate local endpoint hints against /health and resolve a role or PID without guessing an ambiguous instance.
+
+## 12. Experience overhaul (compact v13, unreleased)
+
+The turn first uses the cheap actionable probe, then a fresh compact frame. Sandpit safety runs before Autopilot; queued player guidance yields to the model. The model can name a first `act` plus nine `then` steps. Each step checks fresh state, stable card identity, divergence and cancellation through the existing single-action lease. Only the first decision row carries the request cost. Unknown outcomes are terminal and never replayed. Live intent is display-only and does not enter saved prompts or logs.
+
+- `STS2AIAgent/Config/ProviderCapability.cs` — fingerprint-scoped streaming-tool verdict and output-token field selection; cloned and invalidated with model verification.
+- `STS2AIAgent/Llm/ToolProbeArgs.cs` — pure completeness validation for the one additional streamed card-action probe.
+- `STS2AIAgent/Agent/LiveIntent.cs` — immutable fresh-frame action/card/target/reason snapshot and pure `HudModel` expiry/visibility rules.
+- `STS2AIAgent/Agent/AgentRuntime.Intent.cs` — current display intent, plan preview and actionable long-stage hints.
+- `STS2AIAgent/Game/HudAnchors.cs` — game-thread card/creature anchors, using verified public nodes; missing nodes produce no decoration.
+- `STS2AIAgent/Ui/AgentHud.cs` — mouse-ignoring game-screen banner, card outline, target line and bounded reason.
+- `STS2AIAgent/Ui/AgentOverlayHost.Hud.cs` — HUD CanvasLayer 120 lifecycle; the main overlay remains at 128. Capture hides both plus the edge tab and restores their prior visibility.
+- `STS2AIAgent/Agent/RunSummary.cs` — pure GAME_OVER facts, source counts, bounded highlights and factual per-character digest (600 characters).
+- `STS2AIAgent/Agent/RunJournalStore.cs` — atomic, redacted journal beside the settings file; at most 50 runs, deduplicated by run id.
+- `STS2AIAgent/Agent/AgentRuntime.RunSummary.cs` — fresh GAME_OVER capture, run report, journal switch/clear and prompt digest cache; menu exits do not create a result.
+- `STS2AIAgent/Ui/AgentOverlayHost.RunSummary.cs` — live report card, copy and journal-clear controls on the play page.
+- `STS2AIAgent/Game/DeckStatsPolicy.cs` — pure deck type/cost/starter counts for card choices; unknown and X costs are not guessed.
+- `STS2AIAgent/Game/MapRoutePolicy.cs` — bounded graph traversal for per-option room-count ranges and advisory score.
+- `STS2AIAgent/Game/GameStateService.Strategy.cs` — screen-scoped compact deck statistics and route-advice projection.
+- `STS2AIAgent/Agent/JevOptionEnumerator.Numbers.cs` — numeric option descriptions from the same frame's threat and damage previews.
+
+Provider learning persists per `ModelRoleProbe.Fingerprint`, including after two live stream truncations. Model verification sends one additional streaming probe. `maxOutputTokens` defaults to 8192 (null/0 disables the cap) and is synchronized to the companion. HTTP `play_card` optionally carries `card_cid` together with `card_index`; the handler checks the live hand under the lease and refuses a stale identity without retargeting. Python forwards both fields. Co-op message progress uses the pure `TeamMessageProgress` in `Multiplayer/TeamConversation.cs`.
+
+The report's request/token values describe the retained rows of that run; `counts_are_lower_bounds` marks a full decision window. Cache hit and observed time are explicitly labelled as session cache and time watched here. A completed run -> fresh GAME_OVER verification -> in-memory report -> optional journal write -> cached factual digest in the next play prompt.
+
+| Change | Start here |
+| --- | --- |
+| Turbo / forced moves / whole-turn planning | `STS2AIAgent/Game/TurboController.cs`, `STS2AIAgent/Agent/AutopilotPolicy.cs`, `STS2AIAgent/Agent/TurnPlanPolicy.cs` |
+| HUD and capture | `STS2AIAgent/Ui/AgentHud.cs`, `STS2AIAgent/Ui/AgentOverlayHost.Hud.cs`, `STS2AIAgent/Game/HudAnchors.cs` |
+| Run report and factual journal | `STS2AIAgent/Agent/AgentRuntime.RunSummary.cs`, `STS2AIAgent/Agent/RunJournalStore.cs` |
+| Prompt projection / capabilities | `STS2AIAgent/Agent/PromptStateDiet.cs`, `STS2AIAgent/Config/ProviderCapability.cs` |

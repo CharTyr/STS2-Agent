@@ -107,6 +107,14 @@ internal sealed partial class AgentRuntime
     // ended. `run_unknown` alone occurs transiently in run/unlock screens and must not clear it.
     internal void ObserveSessionStateSnapshot(string? runId, string? screen, string? phase)
     {
+        // A GAME_OVER frame is the only evidence a run actually finished. It is noted here because this
+        // method is the one place a fresh raw game-thread state is confirmed; leaving the run for the
+        // menu, or a changed run id, is deliberately not treated as a finish.
+        if (string.Equals(screen, RunSummary.GameOverScreen, StringComparison.Ordinal))
+        {
+            NoteGameOverObserved(runId);
+        }
+
         if (PlaySessionStore.IsPersistable(runId))
         {
             ObserveSessionRunBoundary(runId, confirmed: true);
@@ -178,6 +186,10 @@ internal sealed partial class AgentRuntime
                 _sessionDirty = false;
             }
         }
+
+        // Only reached when the active run actually changed: the same run confirmed again returns
+        // above. The scorecard's clock starts here and the previous run's card retires.
+        NoteRunObserved(boundaryRunId);
     }
 
     private async Task ObserveCurrentSessionAsync(CancellationToken token)

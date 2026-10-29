@@ -46,7 +46,9 @@ If the screen is UNKNOWN, say so and ask the player to wait or retry rather than
     /// one request can carry the whole turn instead of one request per card.
     /// </summary>
     public const string PlanTurnInstruction =
-        "In combat, plan the whole turn in this one call: the first action in act's own fields, the rest in `then` (cards by card_cid, usually ending with end_turn). Use combat.threat and hand[].vs for the numbers.";
+        "In combat, plan the whole turn in this one call: the first action in act's own fields, the rest in `then` (cards by card_cid, usually ending with end_turn). Use combat.threat and hand[].vs for the numbers. "
+        + "Example shape: {\"action\":\"play_card\",\"card_cid\":12,\"target_index\":0,\"reason\":\"...\",\"then\":[{\"action\":\"play_card\",\"card_cid\":7},{\"action\":\"end_turn\"}]}. "
+        + "Only leave `then` out when the next card depends on something you cannot see yet (a draw or a choice).";
 
     public const string JsonActFallback = """
 If you cannot call tools, reply with a single JSON object and nothing else:

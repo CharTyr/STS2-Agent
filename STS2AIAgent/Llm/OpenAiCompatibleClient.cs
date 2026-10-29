@@ -6,7 +6,7 @@ using STS2AIAgent.Config;
 
 namespace STS2AIAgent.Llm;
 
-internal sealed class OpenAiCompatibleClient : ILlmClient
+internal sealed class OpenAiCompatibleClient : ILlmClient, IStreamingToolProbe
 {
     internal static readonly TimeSpan DefaultRequestTimeout = TimeSpan.FromMinutes(10);
 
@@ -79,6 +79,14 @@ internal sealed class OpenAiCompatibleClient : ILlmClient
             body["thinking"] = thinking.DeepSeekThinking;
         }
 
+        // The output cap a play turn carries (W7). The field name comes from the capability record
+        // when the probe learnt the provider rejects max_tokens; the send loop below still renames it
+        // once for a route that has not been probed yet.
+        if (request.MaxTokens is > 0)
+        {
+            body[MaxTokensField.Normalize(request.MaxTokensParameter)] = request.MaxTokens.Value;
+        }
+
         if (request.Stream)
         {
             body["stream"] = true;
@@ -147,6 +155,63 @@ internal sealed class OpenAiCompatibleClient : ILlmClient
             // not a failure. Anything transient (429, 5xx, timeout) keeps propagating so the caller
             // records an unknown capability instead of downgrading a working model on a bad day.
             throw new LlmToolProbeUnsupportedException(ex.Message, ex);
+        }
+    }
+
+    /// <summary>
+    /// Sends the same miniature play decision down the streaming path and reports whether the tool
+    /// arguments arrived complete. The request is issued through <see cref="SendOnceAsync"/> on
+    /// purpose: the normal send loop demotes a streamed 400 to a non-streamed retry, which would make
+    /// a provider that cannot stream look like one that streams complete arguments.
+    /// </summary>
+    public async Task<StreamingToolArgsProbeResult> ProbeStreamingToolCallAsync(
+        string model,
+        LlmTool tool,
+        string prompt,
+        IReadOnlyList<string> requiredFields,
+        CancellationToken cancellationToken)
+    {
+        var body = new Dictionary<string, object?>
+        {
+            ["model"] = model,
+            ["messages"] = new[]
+            {
+                new ChatMessageDto { Role = "user", Content = prompt }
+            },
+            ["tools"] = new[] { ToToolDto(tool) },
+            ["tool_choice"] = "required",
+            ["max_tokens"] = 300,
+            ["stream"] = true,
+            ["stream_options"] = new Dictionary<string, object?>
+            {
+                ["include_usage"] = true
+            }
+        };
+
+        DisableDeepSeekProbeThinking(body);
+
+        try
+        {
+            var completion = await SendOnceAsync(body, stream: true, cancellationToken, onReasoningDelta: null);
+            var verdict = ToolProbeArgs.Evaluate(completion, tool.Name, requiredFields ?? Array.Empty<string>());
+            // The response came back through the path that carries max_tokens, so this route accepted
+            // the standard field name.
+            return verdict with { MaxTokensParameter = MaxTokensField.Standard };
+        }
+        catch (LlmException ex) when (MaxTokensField.IsUnsupportedParameterError(ex))
+        {
+            // The 400 names the field it wants; record it instead of paying for the rename on every
+            // later request. The streaming capability itself stays unknown.
+            return new StreamingToolArgsProbeResult(
+                StreamingToolArgsVerdict.MaxTokensRejected,
+                MaxTokensParameter: MaxTokensField.CompletionTokens,
+                Error: ex.Message);
+        }
+        catch (LlmException ex) when (IsUnsupportedToolError(ex))
+        {
+            return new StreamingToolArgsProbeResult(
+                StreamingToolArgsVerdict.Unsupported,
+                Error: ex.Message);
         }
     }
 

@@ -80,6 +80,7 @@ internal static class SettingsClone
             HudMode = source.HudMode,
             PauseHotkey = source.PauseHotkey,
             RunJournalEnabled = source.RunJournalEnabled,
+            MaxOutputTokens = source.MaxOutputTokens,
             RoleTests = source.RoleTests.Select(test => new ModelRoleTestRecord
             {
                 Role = test.Role,
@@ -100,6 +101,9 @@ internal static class SettingsClone
                 ModelId = test.ModelId,
                 Status = test.Status,
                 Tools = test.Tools,
+                StreamToolArgs = test.StreamToolArgs,
+                MaxTokensField = test.MaxTokensField,
+                ProbeVersion = test.ProbeVersion,
                 Fingerprint = test.Fingerprint,
                 Error = test.Error,
                 TestedAt = test.TestedAt

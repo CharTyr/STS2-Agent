@@ -28,6 +28,7 @@ internal sealed class CompanionPlaySettings
     public bool CombatMathEnabled { get; init; } = true;
     public string VisionMode { get; init; } = AgentSettings.VisionOnDemand;
     public bool RunJournalEnabled { get; init; } = true;
+    public int? MaxOutputTokens { get; init; } = AgentSettings.DefaultMaxOutputTokens;
 
     public bool IsValid => Endpoints is { Count: <= 16 } && Models is { Count: <= 32 }
         && RoleTests is { Count: <= 3 } && ModelTests is { Count: <= 32 }
@@ -40,6 +41,7 @@ internal sealed class CompanionPlaySettings
         && MaxSessionTokens is null or > 0 && MaxSessionRequests is null or > 0
         && LlmRequestTimeoutSeconds is null or (> 0 and <= 3600)
         && ReplyLanguage is "auto" or "zh" or "en" && ProactiveChatTone is { Length: <= 128 }
+        && MaxOutputTokens is null or (> 0 and <= 1_000_000)
         && TurboMode is AgentSettings.TurboOff or AgentSettings.TurboFast or AgentSettings.TurboInstant
         && VisionMode is AgentSettings.VisionOff or AgentSettings.VisionOnDemand or AgentSettings.VisionEveryStep;
 
@@ -56,7 +58,8 @@ internal sealed class CompanionPlaySettings
             ProactiveChatEnabled = copy.ProactiveChatEnabled, ProactiveChatTone = copy.ProactiveChatTone,
             TurboMode = copy.TurboMode, AutopilotEnabled = copy.AutopilotEnabled,
             TurnPlansEnabled = copy.TurnPlansEnabled, CombatMathEnabled = copy.CombatMathEnabled,
-            VisionMode = copy.VisionMode, RunJournalEnabled = copy.RunJournalEnabled
+            VisionMode = copy.VisionMode, RunJournalEnabled = copy.RunJournalEnabled,
+            MaxOutputTokens = copy.MaxOutputTokens
         };
     }
 
@@ -89,5 +92,6 @@ internal sealed class CompanionPlaySettings
         settings.CombatMathEnabled = CombatMathEnabled;
         settings.VisionMode = VisionMode;
         settings.RunJournalEnabled = RunJournalEnabled;
+        settings.MaxOutputTokens = MaxOutputTokens;
     }
 }

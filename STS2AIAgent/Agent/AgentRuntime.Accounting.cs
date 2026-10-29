@@ -118,9 +118,16 @@ internal sealed partial class AgentRuntime
                 // The LLM finishing a turn Jev could not commit is itself a Jev attempt: the empty
                 // receipt already spent the request, and this row is where that attempt becomes visible.
                 jevAttempt: result.Confidence == null && result.JevElapsedMilliseconds != null,
-                metrics: result.ToolRounds > 0
-                    ? new DecisionMetrics(result.ToolRounds, result.ReadToolRounds, result.StreamDemoted)
+                // A plan the model asked for but that stopped after its first step still says so:
+                // otherwise "never planned" and "plan cut short" read the same in the log.
+                metrics: result.ToolRounds > 0 || result.PlanSize > 1
+                    ? new DecisionMetrics(result.ToolRounds > 0 ? result.ToolRounds : null,
+                        result.ToolRounds > 0 ? result.ReadToolRounds : null, result.StreamDemoted,
+                        result.PlanSize > 1 ? result.TurnId : null, result.PlanSize > 1 ? 0 : null,
+                        result.PlanSize > 1 ? result.PlanSize : null)
                     : null);
+            if (result.PlanSize > 1 && !string.IsNullOrWhiteSpace(result.PlanStopReason))
+                NoteEvent("turn plan stopped after step 1/" + result.PlanSize + ": " + result.PlanStopReason);
         }
     }
 

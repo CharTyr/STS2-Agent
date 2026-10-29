@@ -22,6 +22,13 @@ internal static class SourceCoverageTests
     /// </summary>
     private static readonly string[] KnownUncompiledSources =
     {
+        "STS2AIAgent/Game/GameStateService.Strategy.cs",
+        "STS2AIAgent/Game/HudAnchors.cs",
+        "STS2AIAgent/Ui/AgentHud.cs",
+        "STS2AIAgent/Ui/AgentOverlayHost.Hud.cs",
+        "STS2AIAgent/Ui/AgentOverlayHost.RunSummary.cs",
+        "STS2AIAgent/Agent/AgentRuntime.Intent.cs",
+        "STS2AIAgent/Agent/AgentRuntime.RunSummary.cs",
         "STS2AIAgent/Game/GameStateService.cs",
         "STS2AIAgent/Game/GameStateService.Predicates.cs",
         // The raw /state builders, split by screen on 2026-09-20. They stay unlinked for the same

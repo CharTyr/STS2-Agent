@@ -90,6 +90,13 @@
               "null"
             ]
           },
+          "card_cid": {
+            "format": "int64",
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
           "card_index": {
             "format": "int32",
             "type": [
@@ -2144,6 +2151,7 @@
           "dual_status": {},
           "game_version": {},
           "instance_role": {},
+          "last_run_summary": {},
           "mcp_enabled": {},
           "mcp_url": {},
           "mod_version": {},
@@ -2189,7 +2197,8 @@
           "team_control_status",
           "compatibility",
           "state_build",
-          "turbo"
+          "turbo",
+          "last_run_summary"
         ],
         "type": "object"
       },

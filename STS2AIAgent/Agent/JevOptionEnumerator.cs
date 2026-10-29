@@ -58,7 +58,7 @@ internal readonly record struct FrameScope(string? Screen, int? Round);
 /// will accept. Everything is defensive: a field that is missing or the wrong type skips that option
 /// rather than throwing, because a malformed frame is the wrong moment to crash the decision loop.
 /// </remarks>
-internal static class JevOptionEnumerator
+internal static partial class JevOptionEnumerator
 {
     /// <summary>Hard cap on options; combat card plays are added first so they survive truncation.</summary>
     private const int MaxOptions = 255;
@@ -365,7 +365,15 @@ internal static class JevOptionEnumerator
                     || AlwaysIndexed.Contains(name);
                 if (!needsSomething)
                 {
-                    AddOption(options, name, name, description: name);
+                    // end_turn is the one no-argument action the frame's arithmetic prices: what the
+                    // rest of this turn costs in HP. Every other action keeps its bare name.
+                    AddOption(
+                        options,
+                        name,
+                        name,
+                        description: string.Equals(name, "end_turn", StringComparison.OrdinalIgnoreCase)
+                            ? DescribeEndTurn(state, name)
+                            : name);
                     continue;
                 }
 
@@ -416,6 +424,7 @@ internal static class JevOptionEnumerator
         }
 
         var enemyNames = ReadEnemyNames(combat);
+        var enemyHp = ReadEnemyHp(combat);
         foreach (var card in hand.EnumerateArray())
         {
             if (card.ValueKind != JsonValueKind.Object
@@ -433,7 +442,9 @@ internal static class JevOptionEnumerator
                     options,
                     id: $"play_card:{cardIndex}",
                     action: "play_card",
-                    description: string.IsNullOrEmpty(line) ? $"Play card {cardIndex}" : $"Play {line}",
+                    description: WithNumbers(
+                        string.IsNullOrEmpty(line) ? $"Play card {cardIndex}" : $"Play {line}",
+                        CardNumbers(card, null, combat, enemyHp)),
                     cardIndex: cardIndex);
                 continue;
             }
@@ -444,7 +455,9 @@ internal static class JevOptionEnumerator
                     options,
                     id: $"play_card:{cardIndex}->{target}",
                     action: "play_card",
-                    description: $"Play {TargetLabel(line, target, enemyNames)}",
+                    description: WithNumbers(
+                        $"Play {TargetLabel(line, target, enemyNames)}",
+                        CardNumbers(card, target, combat, enemyHp)),
                     cardIndex: cardIndex,
                     targetIndex: target);
             }

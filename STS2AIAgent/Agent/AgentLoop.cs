@@ -33,6 +33,8 @@ internal sealed partial class AgentLoop
     private readonly Func<string, (string Id, string Text)?>? _peekPlayInstruction;
     private readonly Action<string>? _acknowledgePlayInstruction;
     private readonly Action<string>? _onReasoningDelta;
+    private readonly Action<LiveIntent>? _reportIntent;
+    private readonly Func<string, string?>? _runJournalDigest;
 
     public AgentLoop(
         IGameBridge bridge,
@@ -48,7 +50,10 @@ internal sealed partial class AgentLoop
         Func<IActionDecider?>? deciderProvider = null,
         Func<string, (string Id, string Text)?>? peekPlayInstruction = null,
         Action<string>? acknowledgePlayInstruction = null,
-        Action<string>? onReasoningDelta = null)
+        Action<string>? onReasoningDelta = null,
+        Action<LiveIntent>? reportIntent = null,
+        Action<ResolvedModel>? onStreamToolArgsUnreliable = null,
+        Func<string, string?>? runJournalDigest = null)
     {
         _bridge = bridge;
         _factory = factory;
@@ -65,6 +70,9 @@ internal sealed partial class AgentLoop
         // The streaming partial the caller wants to show while a reply is still arriving. It stays a
         // callback rather than a field on the result because a partial is only meaningful in flight.
         _onReasoningDelta = onReasoningDelta;
+        _reportIntent = reportIntent;
+        _runJournalDigest = runJournalDigest;
+        _onStreamToolArgsUnreliable = onStreamToolArgsUnreliable;
         // A live provider wins over the captured instance: the runtime constructs once, but the
         // Jev configuration can appear after that, and a decider frozen at construction is the
         // dual-layer toggle that never turns on.
@@ -178,6 +186,7 @@ internal sealed partial class AgentLoop
             return new AgentTurnResult
             {
                 Error = "Timed out waiting for an actionable state.",
+                StateFingerprint = NoProgressPolicy.Fingerprint(ready.CompactJson),
                 WaitingForGame = true,
                 ToolRounds = 0,
                 RequestsSpent = 0
@@ -328,6 +337,8 @@ internal sealed partial class AgentLoop
                 var request = new LlmRequest
                 {
                     Model = resolved.Model.Model,
+                    MaxTokens = _settings().MaxOutputTokens,
+                    MaxTokensParameter = MaxTokensParameter(resolved),
                     Messages = messages.ToArray(),
                     Tools = resolved.Model.SupportsTools ? tools : null,
                     Thinking = resolved.Model.GetThinkingIntensity(),
@@ -700,7 +711,8 @@ internal sealed partial class AgentLoop
         CancellationToken cancellationToken,
         Action<string>? checkState = null,
         Action<string, string>? onAccepted = null,
-        bool requireSandpitEscape = false)
+        bool requireSandpitEscape = false,
+        bool stopPlanOnPending = false)
     {
         string? acceptedAction = null;
         string? acceptedResponse = null;
@@ -793,6 +805,9 @@ internal sealed partial class AgentLoop
             ValidateSandpitDispatch(compactJson, action, cardIndex, requireSandpitEscape);
 
             cancellationToken.ThrowIfCancellationRequested();
+            // Display failure must never prevent a validated game action.
+            try { _reportIntent?.Invoke(LiveIntent.Create(argumentsJson, compactJson, DateTimeOffset.UtcNow)); }
+            catch (Exception) { }
             var result = await _bridge.ActAsync(
                 action,
                 cardIndex,
@@ -823,6 +838,9 @@ internal sealed partial class AgentLoop
 
             if (ActIndexValidator.IsUnsettled(result))
             {
+                if (stopPlanOnPending || (args.RootElement.TryGetProperty("then", out var then)
+                    && then.ValueKind == JsonValueKind.Array && then.GetArrayLength() > 0))
+                    return (action, result, null, true, null);
                 var settled = await _bridge.WaitUntilActionableAsync(TimeSpan.FromSeconds(20), cancellationToken);
                 var latest = await _bridge.GetCompactStateJsonAsync(cancellationToken);
                 checkState?.Invoke(latest);
