@@ -618,6 +618,8 @@ internal static class Router
             non_combat_only = AgentRuntime.Instance.Settings.NonCombatOnlyEnabled,
             stop_kind = AgentRuntime.Instance.StopKind,
             session_requests = AgentRuntime.Instance.SessionRequests,
+            session_prompt_tokens = AgentRuntime.Instance.SessionUsageKnown ? AgentRuntime.Instance.SessionUsage.PromptTokens : (int?)null,
+            session_cached_prompt_tokens = AgentRuntime.Instance.SessionUsageKnown ? AgentRuntime.Instance.SessionUsage.CachedPromptTokens : (int?)null,
             companion_process_alive = roleData.companion_process_alive,
             companion_process_exited = roleData.companion_process_exited,
             companion = roleData.companion,
@@ -625,7 +627,10 @@ internal static class Router
             dual_launch_outcome = roleData.dual_launch_outcome,
             team_control_status = roleData.team_control_status,
             compatibility = ReflectedGameMembers.BuildHealthSection(),
-            state_build = StateBuildTiming.Instance.Snapshot()
+            state_build = StateBuildTiming.Instance.Snapshot(),
+            turbo = TurboController.Snapshot(AgentRuntime.Instance.Settings.TurboMode),
+            // Additive: the last finished run's facts, or null until a GAME_OVER frame is observed.
+            last_run_summary = AgentRuntime.Instance.BuildLastRunSummaryForHealth()
         };
     }
 

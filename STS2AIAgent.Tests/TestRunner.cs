@@ -239,6 +239,8 @@ internal static class TestRunner
         yield return ("TeamControl.NoLateAct", AgentLoopTests.PauseAfterModelResponseDoesNotDispatchAct);
         yield return ("AgentLoop.RunBoundaryRethrown", AgentLoopTests.PlayOnce_RethrowsRunBoundaryAfterAct);
         yield return ("AgentLoop.CheckStateOnGetGameState", AgentLoopTests.PlayOnce_InvokesCheckStateOnGetGameState);
+        yield return ("AgentLoop.ReadsStateOnceBeforeDeciding", AgentLoopTests.PlayOnce_ReadsTheStateOnceBeforeDeciding);
+        yield return ("AgentLoop.TimedOutWaitChecksBoundaryOnce", AgentLoopTests.PlayOnce_TimedOutWaitStillChecksTheBoundaryOnce);
         yield return ("AgentLoop.RequestBudgetStopsNextRound", AgentLoopTests.PlayOnce_StopsFurtherLlmCallsWhenRequestBudgetIsSpent);
         yield return ("AgentLoop.NonCombatYields", AgentLoopTests.NonCombatOnly_YieldsBeforeWaitModelOrAction);
         yield return ("AgentLoop.NonCombatAllowsRewards", AgentLoopTests.NonCombatOnly_AllowsNonCombatActions);
@@ -511,6 +513,9 @@ internal static class TestRunner
         yield return ("CombatDiagnostics.DamageOverTimeRisks", () => Task.Run(CombatDiagnosticsContractTests.LethalRisksIncludeDamageOverTime));
         yield return ("ProfileSelection.NativeSwitch", () => Task.Run(ProfileSelectionContractTests.NativeProfileIdentityAndSwitchAreWiredEndToEnd));
         yield return ("DecisionLog.BoundsAndRedacts", () => Task.Run(DecisionLogTests.Record_RedactsBoundsAndKeepsNewest));
+        yield return ("DecisionLog.OptionalMetrics", () => Task.Run(DecisionLogTests.Record_CarriesOptionalMetricsWithoutChangingPlainEntries));
+        yield return ("UsageCache.BothSpellings", () => Task.Run(LlmUsageCacheTests.BothCacheSpellingsAreRead));
+        yield return ("UsageCache.AccumulateAndShow", () => Task.Run(LlmUsageCacheTests.CachedTokensAccumulateAndShowOnlyWhenReported));
         yield return ("DecisionLog.PersistsAndRotates", () => Task.Run(DecisionLogTests.Record_PersistsJsonlAndRotates));
         yield return ("DecisionLog.PersistenceFailureIsSafe", () => Task.Run(DecisionLogTests.Record_UnwritablePathNeverThrows));
         yield return ("DecisionLog.NotifiesMirrorsSafely", () => Task.Run(DecisionLogTests.Record_NotifiesMirrorsAfterCommitting));
@@ -634,6 +639,10 @@ internal static class TestRunner
         yield return ("AgentLoop.ReasoningBudget", AgentLoopTests.PlayOnce_MarksReasoningBudgetExhaustionForRecovery);
         yield return ("AgentLoop.ToolStreamDemotion", AgentLoopTests.PlayOnce_DemotesToollessStreamToNonStreamingOnce);
         yield return ("AgentLoop.TruncatedActStreamDemotion", AgentLoopTests.PlayOnce_DemotesTruncatedActStreamToNonStreamingOnce);
+        yield return ("AgentLoop.SilentStreamDemotesOnce", AgentLoopTests.PlayOnce_SilentStreamDemotesOnce);
+        yield return ("AgentLoop.NudgeThenDemoteThenStop", AgentLoopTests.PlayOnce_NudgeThatFailsThenDemotesAndStops);
+        yield return ("AgentLoop.JsonActInTextWithTools", AgentLoopTests.PlayOnce_JsonActInTextRunsEvenWithNativeTools);
+        yield return ("AgentLoop.NoStateReadersAdvertised", AgentLoopTests.PlayOnce_AdvertisesNoStateReadersAndCountsReadRounds);
         yield return ("AgentLoop.TruncatedActDetection", AgentLoopTests.TruncatedStreamedActDetection);
         yield return ("AgentLoop.JsonActNoTools", AgentLoopTests.PlayOnce_TextOnlyJsonActWithoutTools);
         yield return ("AgentLoop.CrystalJsonNoTools", AgentLoopTests.PlayOnce_TextOnlyCrystalJsonForwardsCoordinatesAndNullTool);
@@ -965,6 +974,12 @@ internal static class TestRunner
         yield return ("StateBuild.SlowBuildsWarnRateLimited", () => Task.Run(StateBuildTimingTests.ASlowBuildWarnsOnceAndThenSaysHowManyItHeldBack));
         yield return ("StateBuild.RecentPercentiles", () => Task.Run(StateBuildTimingTests.TheSummaryReportsRecentPercentilesOverABoundedWindow));
         yield return ("StateBuild.EveryBuildIsTimed", () => Task.Run(StateBuildTimingTests.EveryStateBuildIsTimedAndReported));
+        yield return ("StateBuild.ProbesCountedApart", () => Task.Run(StateBuildTimingTests.ProbesAndTheBuildsTheyReplaceAreCountedApart));
+        yield return ("ActionabilityProbe.GateOrder", () => Task.Run(ActionabilityProbeContractTests.TheProbeEvaluatesTheGateOnceInTheBuildersOrder));
+        yield return ("ActionabilityProbe.WaitBuildsOnlyReturnedFrame", () => Task.Run(ActionabilityProbeContractTests.TheWaitProbesEveryFrameAndBuildsOnlyTheFrameItReturns));
+        yield return ("ActionabilityProbe.StateReadsHaveDeadline", () => Task.Run(ActionabilityProbeContractTests.StateReadsCarryADeadline));
+        yield return ("ActionabilityProbe.TurnProbeNotFullBuild", () => Task.Run(ActionabilityProbeContractTests.TheAutoPlayTurnReadsAProbeNotAFullBuild));
+        yield return ("ActionabilityProbe.EventPollCounted", () => Task.Run(ActionabilityProbeContractTests.TheEventPollCountsItsBuilds));
         yield return ("TypedReads.RelicStackIsTheDisplayedCounter", () => Task.Run(TypedStateReadsContractTests.RelicStackIsTheCounterThePlayerSees));
         yield return ("TypedReads.CardModsFromKeywordsAndEnchantment", () => Task.Run(TypedStateReadsContractTests.CardModsComeFromKeywordsAndTheEnchantment));
         yield return ("TypedReads.PilesByType", () => Task.Run(TypedStateReadsContractTests.CombatPilesAreReadByType));
@@ -1082,5 +1097,10 @@ internal static class TestRunner
         // The Godot half of the seam cannot be linked offline, so its two load-bearing facts are read
         // from source: the wait ends on a drawn frame, and the bridge runs the tested policy.
         yield return ("Screenshot.DrawnFrameContract", () => Task.Run(SessionControlContractTests.ScreenshotWaitsForADrawnFrameAndRestoresTheOverlay));
+        // The 2026-10-28 experience overhaul registers its tests in one catalog.
+        foreach (var test in ExperienceTestCatalog.All())
+        {
+            yield return test;
+        }
     }
 }

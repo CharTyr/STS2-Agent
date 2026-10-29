@@ -64,8 +64,9 @@ internal sealed partial class AgentLoop
                 return false;
             }
 
+            // A card named by its per-combat id (card_cid, W3) is as complete as one named by position.
             return string.Equals(action, "play_card", StringComparison.OrdinalIgnoreCase)
-                ? ReadInt(args, "card_index") == null
+                ? ReadInt(args, "card_index") == null && ReadInt(args, "card_cid") == null
                 : ReadInt(args, "option_index") == null;
         }
         catch (JsonException)

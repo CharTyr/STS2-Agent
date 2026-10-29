@@ -1206,6 +1206,16 @@ internal sealed class ActionRequest
 
     public int? card_index { get; init; }
 
+    /// <summary>
+    /// Optional stable per-combat card identity (<c>combat.hand[].cid</c>) for <c>play_card</c>.
+    /// </summary>
+    /// <remarks>
+    /// A hand position is only true for the frame it was read on; the identity is true for the whole
+    /// fight. The handler checks it against the live hand under the one-action lease, so a caller that
+    /// read <c>card_index</c> a moment ago cannot play whatever has since moved into that position.
+    /// </remarks>
+    public long? card_cid { get; init; }
+
     public int? target_index { get; init; }
 
     public int? option_index { get; init; }

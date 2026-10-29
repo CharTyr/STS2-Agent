@@ -66,6 +66,26 @@ internal static class McpServiceTests
         Assert.Contains("same play contract as the STS2 MCP player skill", instructions);
     }
 
+    public static async Task CombatPlansExecuteAndStopWithoutReplay()
+    {
+        foreach (var status in new[] { "completed", "pending", "outcome_unknown" })
+        {
+            var bridge = new FakeMcpBridge
+            {
+                CompactStateJson = """{"screen":"COMBAT","turn":1,"available_actions":["play_card","end_turn"],"combat":{"player":{"hp":"40/80"},"hand":[{"i":0,"cid":17,"playable":true,"targets":[]}],"enemies":[]}}""",
+                ActResponse = "{\"status\":\"" + status + "\",\"stable\":" + (status == "completed" ? "true" : "false") + "}"
+            };
+            var rpc = await Rpc(CreateServer(bridge: bridge),
+                """{"jsonrpc":"2.0","id":9,"method":"tools/call","params":{"name":"act","arguments":{"action":"play_card","card_cid":17,"then":[{"action":"end_turn"}]}}}""");
+            using var answer = JsonDocument.Parse(rpc.GetProperty("result").GetProperty("content")[0].GetProperty("text").GetString()!);
+            var plan = answer.RootElement.GetProperty("plan");
+            Assert.Equal(status == "completed" ? 2 : 1, bridge.ActCalls, "Pending/unknown must not run the next step or replay.");
+            Assert.Equal(status == "completed" ? "completed" : status == "pending" ? "unsettled" : "outcome_unknown",
+                plan.GetProperty("stop_reason").GetString());
+            Assert.Equal(status, answer.RootElement.GetProperty("status").GetString(), "Original response fields remain unchanged.");
+        }
+    }
+
     public static async Task ToolsList_IncludesHealthAndAct()
     {
         var server = CreateServer();
@@ -710,6 +730,7 @@ internal static class McpServiceTests
     private sealed class FakeMcpBridge : IGameBridge
     {
         public int ActCalls { get; private set; }
+        public string ActResponse { get; init; } = """{"action":"play_card","status":"completed","stable":true}""";
 
         public int RawStateCalls { get; private set; }
 
@@ -779,7 +800,7 @@ internal static class McpServiceTests
                 throw ActFailure;
             }
 
-            return Task.FromResult("""{"action":"play_card","status":"completed","stable":true}""");
+            return Task.FromResult(ActResponse);
         }
 
         public Task<string> GetGameDataItemJsonAsync(string collection, string itemId, CancellationToken cancellationToken)

@@ -42,7 +42,9 @@ SENTINELS: dict[str, Any] = {
     "command": "cmd",
 }
 
-_PAYLOAD_KEYS = ("card_index", "target_index", "option_index", "x", "y", "tool", "command")
+# `card_cid` is a whole-`act` field: the per-action methods do not take it, but `execute_action`
+# always sends the key so the mod can re-check a stable card identity under the action lease.
+_PAYLOAD_KEYS = ("card_index", "card_cid", "target_index", "option_index", "x", "y", "tool", "command")
 
 # The parameter shapes the per-action methods are allowed to use. Every signature
 # parameter is also a wire key, so a client method and its payload cannot drift apart.
@@ -239,6 +241,35 @@ class ClientActionAstGuardTests(unittest.TestCase):
                     {"source": "mcp", "tool_name": name},
                     _client_context_literal(call),
                 )
+
+
+class CardIdentityWireTests(unittest.TestCase):
+    """`execute_action` carries the optional stable card identity to `POST /action` unchanged."""
+
+    def test_execute_action_forwards_card_cid(self) -> None:
+        client = Sts2Client(base_url="http://127.0.0.1:8080")
+        with patch.object(
+            client, "_request",
+            return_value={"action": "play_card", "status": "completed", "stable": True},
+        ) as request_mock:
+            client.execute_action("play_card", card_index=3, card_cid=4_294_967_295)
+
+        self.assertEqual("POST", request_mock.call_args.args[0])
+        self.assertEqual("/action", request_mock.call_args.args[1])
+        payload = request_mock.call_args.kwargs["payload"]
+        self.assertEqual(3, payload["card_index"])
+        # A uint32 cid must survive the JSON round trip; resolving it to a position is the mod's job.
+        self.assertEqual(4_294_967_295, payload["card_cid"])
+
+    def test_absent_card_cid_is_sent_as_null(self) -> None:
+        client = Sts2Client(base_url="http://127.0.0.1:8080")
+        with patch.object(
+            client, "_request",
+            return_value={"action": "end_turn", "status": "completed", "stable": True},
+        ) as request_mock:
+            client.execute_action("end_turn")
+
+        self.assertIsNone(request_mock.call_args.kwargs["payload"]["card_cid"])
 
 
 if __name__ == "__main__":

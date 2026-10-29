@@ -100,3 +100,7 @@ The C# and Python state diff implementations share the same output contract. Cla
 Event-stream connect timeouts and broken reads must surface as structured `Sts2ApiError` values so `wait_until_actionable` can fall back to state polling. Only an idle read timeout on an opened stream stays within `wait_for_event`. Cap both connection and read timeouts by the remaining overall deadline. Back off an immediate EOF reconnect without extending that deadline. Read failures in an HTTP error body must not replace the HTTP error with a bare exception.
 
 Use a fake clock that advances during simulated I/O or sleep. Advancing time every time `monotonic` is read makes a harmless extra deadline check change test behavior.
+
+## Whole-turn plans
+
+Both MCP act surfaces accept optional card_cid and then. The sidecar forwards stable card identity along with its resolved card_index to POST /action; the mod validates under its lease. Every follow-up reads fresh state. A 4xx refusal is rejected; a lost response is outcome_unknown. Both stop the plan without replay, and earlier completed steps remain visible. Shared vectors keep the C# and Python policies aligned.

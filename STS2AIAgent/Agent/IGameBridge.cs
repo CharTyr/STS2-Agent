@@ -45,8 +45,57 @@ internal interface IGameBridge
 
     Task<bool> WaitUntilActionableAsync(TimeSpan timeout, CancellationToken cancellationToken);
 
+    /// <summary>
+    /// Wait for an actionable frame and return that frame's compact state in one call. The state is
+    /// returned whether or not the wait succeeded, so a timed-out turn can still check run boundaries.
+    /// </summary>
+    /// <remarks>
+    /// The default composes the two older calls (wait, then read) so test bridges keep working; the
+    /// game bridge overrides it to build the state once, inside the game-thread unit whose probe
+    /// judged the frame actionable.
+    /// </remarks>
+    async Task<ActionableState> WaitUntilActionableWithStateAsync(TimeSpan timeout, CancellationToken cancellationToken)
+    {
+        var actionable = await WaitUntilActionableAsync(timeout, cancellationToken);
+        return new ActionableState(actionable, await GetCompactStateJsonAsync(cancellationToken));
+    }
+
     Task<byte[]?> CaptureScreenshotJpegAsync(CancellationToken cancellationToken);
 }
+
+/// <summary>The failure classes the recovery policy distinguishes (W7).</summary>
+internal static class FailureKinds
+{
+    /// <summary>Timeout, 5xx, 408/429, refused connection: retried with a longer backoff, 5 tries.</summary>
+    public const string Transport = "transport";
+
+    /// <summary>A 4xx the player must fix (key, model name, endpoint): stops at once.</summary>
+    public const string Config = "config";
+
+    /// <summary>The model's act was unusable (truncated or missing an index).</summary>
+    public const string Arguments = "arguments";
+
+    /// <summary>The model returned nothing actionable.</summary>
+    public const string Empty = "empty";
+
+    /// <summary>The act was not legal on the current frame.</summary>
+    public const string Illegal = "illegal";
+
+    /// <summary>The game thread did not run a post in time (window minimized or occluded): a wait.</summary>
+    public const string GameStalled = "game_stalled";
+
+    /// <summary>Classifies an exception escaping a turn.</summary>
+    public static string? Of(Exception exception) => exception switch
+    {
+        TimeoutException timeout when timeout.Message.Contains("game thread", StringComparison.OrdinalIgnoreCase) => GameStalled,
+        Llm.LlmException { StatusCode: >= 400 and < 500 and not 408 and not 429 } => Config,
+        Llm.LlmException or HttpRequestException or TimeoutException or TaskCanceledException or IOException => Transport,
+        _ => null
+    };
+}
+
+/// <summary>The outcome of <see cref="IGameBridge.WaitUntilActionableWithStateAsync"/>.</summary>
+internal sealed record ActionableState(bool Actionable, string CompactJson);
 
 internal sealed class AgentTurnResult
 {
@@ -98,6 +147,48 @@ internal sealed class AgentTurnResult
     public bool RequiresConfiguration { get; init; }
 
     public int ToolRounds { get; init; }
+
+    /// <summary>
+    /// Model rounds that called a read tool (state, actions, metadata, wait) instead of acting. Each
+    /// is a full request re-sending the whole prompt, so this is what separates "the model looked
+    /// something up" from the other reasons a decision cost more than one request.
+    /// </summary>
+    public int ReadToolRounds { get; init; }
+
+    /// <summary>
+    /// The turn re-sent its request without streaming because the streamed reply was unusable (empty,
+    /// or a truncated act). The other half of the per-decision request count.
+    /// </summary>
+    public bool StreamDemoted { get; init; }
+
+    /// <summary>
+    /// Who decided when it was neither the LLM loop nor Jev: <c>"autopilot"</c> for a forced move made
+    /// without a model request. Null keeps the old attribution (Jev when it carries a confidence,
+    /// otherwise the LLM loop). The decision log's <c>source</c> reads it.
+    /// </summary>
+    public string? Source { get; init; }
+
+    /// <summary>
+    /// What kind of failure <see cref="Error"/> is (<see cref="FailureKinds"/>), set where the error
+    /// arises so the recovery policy can treat a network blip, a bad configuration and a stalled game
+    /// thread differently instead of counting them all against the same three strikes.
+    /// </summary>
+    public string? FailureKind { get; init; }
+
+    /// <summary>
+    /// Every step a whole-turn plan executed, the model's own first act included; null for a single
+    /// act. <see cref="Acted"/> and <see cref="StateFingerprint"/> describe the last of them.
+    /// </summary>
+    public IReadOnlyList<PlanStepReceipt>? PlanSteps { get; init; }
+
+    /// <summary>Why the plan ended (<see cref="TurnPlanStopReasons"/>); null for a single act.</summary>
+    public string? PlanStopReason { get; init; }
+
+    /// <summary>Shared by every logged step of one plan.</summary>
+    public string? TurnId { get; init; }
+
+    /// <summary>Steps the model planned, its first act included.</summary>
+    public int PlanSize { get; init; }
 
     public LlmUsage? Usage { get; init; }
 

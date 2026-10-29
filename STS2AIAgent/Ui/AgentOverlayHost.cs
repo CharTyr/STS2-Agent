@@ -166,18 +166,17 @@ internal sealed partial class AgentOverlayHost
     /// </summary>
     private static bool IsPanelVisible()
     {
-        return _instance?._panel?.Visible == true;
+        return _instance?._panel?.Visible == true || _instance?._hud?.Visible == true || _instance?._edgeTab?.Visible == true;
     }
 
     private static void HideForCapture()
     {
-        if (_instance?._panel == null || !_instance._panel.Visible)
-        {
-            return;
-        }
-
+        if (_instance == null || _instance._captureHidden) return;
+        _instance._capturePanelWasVisible = _instance._panel?.Visible == true;
+        _instance._captureEdgeWasVisible = _instance._edgeTab?.Visible == true;
         _instance._captureHidden = true;
-        _instance._panel.Visible = false;
+        if (_instance._panel != null) _instance._panel.Visible = false;
+        if (_instance._hud != null) _instance._hud.Visible = false;
         if (_instance._edgeTab != null)
         {
             _instance._edgeTab.Visible = false;
@@ -197,13 +196,14 @@ internal sealed partial class AgentOverlayHost
         // is no longer in the tree would only put the panel back on a detached subtree.
         if (_instance._panel is { } panel && panel.IsInsideTree())
         {
-            panel.Visible = true;
+            panel.Visible = _instance._capturePanelWasVisible;
         }
 
         if (_instance._edgeTab is { } edgeTab && edgeTab.IsInsideTree())
         {
-            edgeTab.Visible = true;
+            edgeTab.Visible = _instance._captureEdgeWasVisible;
         }
+        _instance.RefreshHud();
     }
 
     private void TryBuildOrRetry()
@@ -312,6 +312,7 @@ internal sealed partial class AgentOverlayHost
         _layer.AddChild(host);
         _layer.TreeEntered += OnOverlayEnteredTree;
         root.CallDeferred(Node.MethodName.AddChild, _layer);
+        InstallHud(root);
         _tree.ProcessFrame += OnProcessFrame;
         // Land on the tab that gets the player playing: settings when nothing is configured yet,
         // otherwise the play page (which hosts both the solo and the multiplayer modes). The
@@ -479,7 +480,11 @@ internal sealed partial class AgentOverlayHost
     /// </summary>
     private void OnRuntimeChanged()
     {
-        _ = GameThread.InvokeAsync(RefreshDynamic);
+        _ = GameThread.InvokeAsync(() =>
+        {
+            RefreshHud();
+            if (_panel?.Visible == true) RefreshDynamic();
+        });
     }
 
     private void OnProcessFrame()
@@ -500,6 +505,8 @@ internal sealed partial class AgentOverlayHost
         }
 
         _hotkeyWasDown = down;
+        PollPauseHotkey();
+        RefreshHud();
 
         _placement?.FollowViewport();
 
@@ -531,6 +538,14 @@ internal sealed partial class AgentOverlayHost
                     if (_playStatus != null)
                     {
                         _playStatus.Text = AgentRuntime.Instance.StatusWithElapsed;
+                    }
+
+                    // Same reason, for the team-message line: it reports the wait while the
+                    // companion is still answering, so it has to be re-read on the tick rather than
+                    // only when the runtime raises Changed (which happens once per message).
+                    if (_teamStatus != null)
+                    {
+                        _teamStatus.Text = AgentRuntime.Instance.TeamStatus;
                     }
 
                     RefreshChatLog();
@@ -592,6 +607,7 @@ internal sealed partial class AgentOverlayHost
             _tree.ProcessFrame -= OnProcessFrame;
         }
 
+        RemoveHud();
         _layer?.QueueFree();
         _layer = null;
         _host = null;
@@ -633,7 +649,7 @@ internal sealed partial class AgentOverlayHost
         var hadPanel = _panel != null;
         // A capture in flight hid the panel; the player still had it open. Keep the new panel hidden
         // until that capture's restore shows it, instead of flashing it into the frame being read.
-        var wasVisible = (_panel?.Visible ?? false) || _captureHidden;
+        var wasVisible = (_panel?.Visible ?? false) || (_captureHidden && _capturePanelWasVisible);
         var tab = _tab;
         // Half-typed messages survive the rebuild; the controls holding them are about to be freed.
         var chatDraft = _chatInput?.Text ?? string.Empty;

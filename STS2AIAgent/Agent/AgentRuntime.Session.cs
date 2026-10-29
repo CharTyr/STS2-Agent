@@ -56,7 +56,8 @@ internal sealed partial class AgentRuntime
         string? stateFingerprint = null, int requestsSpent = 0, int? totalTokens = null,
         string? runId = null, double? confidence = null, bool runIdObserved = false,
         IReadOnlyList<string>? optionIds = null, IReadOnlyDictionary<string, double>? probabilities = null,
-        double? danger = null, string? strategyUpdatedAt = null, bool jevAttempt = false)
+        double? danger = null, string? strategyUpdatedAt = null, bool jevAttempt = false,
+        DecisionMetrics? metrics = null)
     {
         string? activeRun;
         // An explicit pre-action snapshot may deliberately be unknown (menu action). Do not fill
@@ -64,7 +65,7 @@ internal sealed partial class AgentRuntime
         lock (_gate) activeRun = runIdObserved ? runId : runId ?? _sessionRunId ?? _runBoundary.RunId;
         return _decisions.Record(source, action, reason, stateFingerprint, requestsSpent, totalTokens,
             runId: activeRun, confidence: confidence, optionIds: optionIds, probabilities: probabilities,
-            danger: danger, strategyUpdatedAt: strategyUpdatedAt, jevAttempt: jevAttempt);
+            danger: danger, strategyUpdatedAt: strategyUpdatedAt, jevAttempt: jevAttempt, metrics: metrics);
     }
 
     // Writers are serialized without blocking history updates on IO. A failed save stays pending
@@ -106,6 +107,14 @@ internal sealed partial class AgentRuntime
     // ended. `run_unknown` alone occurs transiently in run/unlock screens and must not clear it.
     internal void ObserveSessionStateSnapshot(string? runId, string? screen, string? phase)
     {
+        // A GAME_OVER frame is the only evidence a run actually finished. It is noted here because this
+        // method is the one place a fresh raw game-thread state is confirmed; leaving the run for the
+        // menu, or a changed run id, is deliberately not treated as a finish.
+        if (string.Equals(screen, RunSummary.GameOverScreen, StringComparison.Ordinal))
+        {
+            NoteGameOverObserved(runId);
+        }
+
         if (PlaySessionStore.IsPersistable(runId))
         {
             ObserveSessionRunBoundary(runId, confirmed: true);
@@ -177,6 +186,10 @@ internal sealed partial class AgentRuntime
                 _sessionDirty = false;
             }
         }
+
+        // Only reached when the active run actually changed: the same run confirmed again returns
+        // above. The scorecard's clock starts here and the previous run's card retires.
+        NoteRunObserved(boundaryRunId);
     }
 
     private async Task ObserveCurrentSessionAsync(CancellationToken token)

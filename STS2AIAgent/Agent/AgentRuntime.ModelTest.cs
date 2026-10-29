@@ -16,6 +16,19 @@ namespace STS2AIAgent.Agent;
 internal sealed partial class AgentRuntime
 {
     /// <summary>
+    /// The miniature play decision the streaming probe sends. It asks for a <c>play_card</c> with both
+    /// index fields: a gateway that truncates the streamed arguments after the action name produces a
+    /// valid JSON object with neither field, which is exactly the failure players hit.
+    /// </summary>
+    private const string StreamProbePrompt =
+        "You are playing Slay the Spire 2. Current state: COMBAT, 3 energy. Hand: card_index 0 is "
+        + "Strike and playable; there is one enemy at target_index 0 with 12 HP. Available actions: "
+        + "[\"play_card\"]. Call the act tool with action \"play_card\", card_index 0, target_index 0 "
+        + "and a one-sentence reason. Do not answer with plain text.";
+
+    private static readonly string[] StreamProbeRequiredFields = { "action", "card_index", "target_index" };
+
+    /// <summary>
     /// Tests one configured model end to end: first a chat ping, then a tool-calling probe whose
     /// only correct answer is a tool call. The result is recorded against the model (and the
     /// model's <c>SupportsTools</c> flag is corrected to the probe's answer), so the badge on the
@@ -83,6 +96,24 @@ internal sealed partial class AgentRuntime
             // request and chose not to call. A thrown 4xx means the schema itself was rejected. Both
             // differ from a transient failure, which must not downgrade a working model.
             record.Tools = tools ? "supported" : "unsupported";
+            if (record.Tools == "supported")
+            {
+                // One extra request, and only for a model that can call tools: the same decision sent
+                // down the streaming path, because a gateway can truncate the streamed arguments while
+                // its non-streaming body is complete (measured live 2026-10-28).
+                var streamed = await ProbeStreamToolArgsAsync(client, model.Model, cancellationToken);
+                if (streamed?.Verdict is { } verdict && verdict != StreamingToolArgsVerdict.NotRun)
+                {
+                    record.StreamToolArgs = ProviderCapability.FromStreamVerdict(verdict);
+                    record.MaxTokensField = MaxTokensFieldForProbe(streamed);
+                    record.ProbeVersion = ProviderCapability.ProbeVersion;
+                }
+
+                if (!string.IsNullOrWhiteSpace(streamed?.Error))
+                {
+                    NoteEvent("stream capability probe: " + DiagnosticExport.Redact(streamed.Error));
+                }
+            }
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
@@ -164,11 +195,112 @@ internal sealed partial class AgentRuntime
         }
 
         RaiseChanged();
-        return record.Status == "verified"
-            ? record.Tools == "supported"
-                ? Loc.T("连通成功，工具调用可用。")
-                : Loc.T("连通成功，但该模型未通过工具调用检测，无法用于自动游玩。")
-            : Loc.T("测试失败：{0}", record.Error);
+        if (record.Status != "verified")
+        {
+            return Loc.T("测试失败：{0}", record.Error);
+        }
+
+        if (record.Tools != "supported")
+        {
+            return Loc.T("连通成功，但该模型未通过工具调用检测，无法用于自动游玩。");
+        }
+
+        // Telling the player about the slower-but-working path is the difference between "the test
+        // said this is broken" and "the test fixed how it is asked".
+        return record.StreamToolArgs == ProviderCapability.Unsupported
+            ? Loc.T("连通成功，工具调用可用。此服务商的流式工具参数不完整，已改用非流式请求。")
+            : Loc.T("连通成功，工具调用可用。");
+    }
+
+    /// <summary>
+    /// Runs the streaming half of the capability probe. A test fake that does not implement
+    /// <see cref="IStreamingToolProbe"/> returns null, which records nothing rather than claiming a
+    /// verdict it never measured.
+    /// </summary>
+    private static async Task<StreamingToolArgsProbeResult?> ProbeStreamToolArgsAsync(
+        ILlmClient client,
+        string model,
+        CancellationToken cancellationToken)
+    {
+        if (client is not IStreamingToolProbe probe)
+        {
+            return null;
+        }
+
+        try
+        {
+            return await probe.ProbeStreamingToolCallAsync(
+                model,
+                AgentTools.Play[^1],
+                StreamProbePrompt,
+                StreamProbeRequiredFields,
+                cancellationToken);
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch (Exception ex)
+        {
+            // A transient provider failure says nothing about streaming: keep the capability unknown
+            // instead of downgrading a working model on a bad day.
+            return new StreamingToolArgsProbeResult(StreamingToolArgsVerdict.NotRun, Error: ex.Message);
+        }
+    }
+
+    /// <summary>
+    /// Which output-cap field the probe proved for this route. A verdict that got as far as a tool call
+    /// means <c>max_tokens</c> was accepted; a 400 naming the other field records that instead.
+    /// </summary>
+    private static string? MaxTokensFieldForProbe(StreamingToolArgsProbeResult result) => result.Verdict switch
+    {
+        StreamingToolArgsVerdict.Complete or StreamingToolArgsVerdict.Incomplete
+            or StreamingToolArgsVerdict.NoToolCall => MaxTokensField.Standard,
+        StreamingToolArgsVerdict.MaxTokensRejected =>
+            result.MaxTokensParameter ?? MaxTokensField.CompletionTokens,
+        _ => result.MaxTokensParameter
+    };
+
+    /// <summary>
+    /// Persists the verdict a live truncation proved for this route (W7.3), so the next session starts
+    /// non-streaming instead of paying for one broken stream per turn. Called once per route and
+    /// session by <see cref="AgentLoop"/>; a provider that fixes its gateway gets re-probed by the
+    /// model test, which replaces the same record.
+    /// </summary>
+    private void RecordStreamToolArgsUnsupported(ResolvedModel resolved)
+    {
+        var changed = false;
+        lock (_gate)
+        {
+            var current = _settings;
+            var model = current.FindModel(resolved.Model.Id);
+            var endpoint = model == null ? null : current.FindEndpoint(model.EndpointId);
+            if (model == null || endpoint == null)
+            {
+                return;
+            }
+
+            changed = ProviderCapability.MarkStreamToolArgsUnsupported(
+                current, new ResolvedModel(endpoint, model));
+        }
+
+        if (!changed)
+        {
+            return;
+        }
+
+        try
+        {
+            // Written straight through instead of SaveSettings: this learning happens mid-turn and
+            // must not cancel the strategy refresh or replace the settings object under the turn.
+            _store.Save(Settings);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            NoteEvent("stream capability could not be saved: " + ex.Message);
+        }
+
+        RaiseChanged();
     }
 
     /// <summary>The stored test record for a model, or null when it was never tested.</summary>

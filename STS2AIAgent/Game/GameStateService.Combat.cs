@@ -418,6 +418,8 @@ internal static partial class GameStateService
         return new CombatHandCardPayload
         {
             index = index,
+            combat_card_id = TryGetCombatCardId(card),
+            card_type = FormatCardType(card),
             card_id = card.Id.Entry,
             name = card.Title,
             upgraded = card.IsUpgraded,

@@ -1,6 +1,6 @@
 namespace STS2AIAgent.Config;
 
-internal sealed class AgentSettings
+internal sealed partial class AgentSettings
 {
     public List<LlmEndpoint> Endpoints { get; set; } = new();
 
@@ -215,7 +215,9 @@ internal sealed class AgentSettings
             MaxSessionRequests = DefaultSessionRequests,
             Hotkey = "F8",
             AttachStateInChat = true,
-            OverlayVisibleOnStart = false,
+            // Shown on every start until the player hides it (W8.1, 2026-10-28). Hidden-by-default
+            // plus "any toggle marks the guide seen" left new players with only the edge tab.
+            OverlayVisibleOnStart = true,
             HasSeenFirstRunGuide = false
         };
     }
@@ -247,6 +249,10 @@ internal sealed class AgentSettings
         Models.RemoveAll(static model => model is null);
         RoleTests.RemoveAll(static record => record is null);
         ModelTests.RemoveAll(static record => record is null);
+        foreach (var modelTest in ModelTests)
+        {
+            ProviderCapability.NormalizeRecord(modelTest);
+        }
         if (Endpoints.Count == 0 && Models.Count == 0)
         {
             var defaults = CreateDefault();
@@ -368,6 +374,7 @@ internal sealed class AgentSettings
         }
 
         JevConfidenceThreshold = Math.Clamp(JevConfidenceThreshold, 0.0, 1.0);
+        NormalizeExperienceSettings();
     }
 
     private ResolvedModel ResolveRoleModel(string? modelId, bool required, string roleName)
@@ -467,6 +474,23 @@ internal sealed class ModelTestRecord
 
     /// <summary>unknown | supported | unsupported — the tool-calling probe's answer.</summary>
     public string Tools { get; set; } = "unknown";
+
+    /// <summary>
+    /// unknown | supported | unsupported — whether a <em>streamed</em> act arrives with complete
+    /// arguments. A gateway that truncates the tool-call JSON only on its stream path passes the
+    /// non-streaming tools probe; this verdict is what lets the play loop skip streaming from the first
+    /// request instead of paying for one broken stream every turn.
+    /// </summary>
+    public string StreamToolArgs { get; set; } = ProviderCapability.Unknown;
+
+    /// <summary>
+    /// The output-cap field the route accepted in the probe: <c>max_tokens</c> or
+    /// <c>max_completion_tokens</c>. Null means it was never established.
+    /// </summary>
+    public string? MaxTokensField { get; set; }
+
+    /// <summary>Version of the capability probe that produced <see cref="StreamToolArgs"/> (0 = never probed).</summary>
+    public int ProbeVersion { get; set; }
 
     public string? Fingerprint { get; set; }
 

@@ -78,6 +78,31 @@ internal static class StateBuildTimingTests
         Assert.Equal(5000.0, later.GetProperty("max_ms").GetDouble());
     }
 
+    public static void ProbesAndTheBuildsTheyReplaceAreCountedApart()
+    {
+        var timing = new StateBuildTiming();
+        var empty = Snapshot(timing);
+        Assert.Equal(0L, empty.GetProperty("actionable_probes").GetInt64());
+        Assert.Equal(0L, empty.GetProperty("actionable_builds").GetInt64());
+        Assert.Equal(0L, empty.GetProperty("event_poll_builds").GetInt64());
+
+        for (var i = 0; i < 30; i++)
+        {
+            timing.CountActionableProbe();
+        }
+
+        timing.CountActionableBuild();
+        timing.CountEventPollBuild();
+        timing.CountEventPollBuild();
+
+        var snapshot = Snapshot(timing);
+        Assert.Equal(30L, snapshot.GetProperty("actionable_probes").GetInt64());
+        Assert.Equal(1L, snapshot.GetProperty("actionable_builds").GetInt64());
+        Assert.Equal(2L, snapshot.GetProperty("event_poll_builds").GetInt64());
+        Assert.Equal(0L, snapshot.GetProperty("samples").GetInt64(),
+            "Counting a probe is not a timed build; the build samples stay the builder's own.");
+    }
+
     public static void EveryStateBuildIsTimedAndReported()
     {
         var build = AgentSourceFixture.WithoutWhitespace(

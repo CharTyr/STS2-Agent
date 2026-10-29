@@ -22,11 +22,13 @@ internal sealed class GameBridge : IGameBridge
 
     public Task<string> GetCompactStateJsonAsync(CancellationToken cancellationToken)
     {
-        return GameThread.InvokeAsync(() =>
-        {
-            var state = GameStateService.BuildStatePayload();
-            return JsonSerializer.Serialize(state.agent_view ?? state, JsonOptions);
-        }, cancellationToken);
+        return GameThread.InvokeAsync(SerializeCompactState, StateReadBudget, cancellationToken);
+    }
+
+    private static string SerializeCompactState()
+    {
+        var state = GameStateService.BuildStatePayload();
+        return JsonSerializer.Serialize(state.agent_view ?? (object)state, JsonOptions);
     }
 
     public Task<string> GetRawStateJsonAsync(CancellationToken cancellationToken)
@@ -35,7 +37,7 @@ internal sealed class GameBridge : IGameBridge
         {
             var state = GameStateService.BuildStatePayload();
             return JsonSerializer.Serialize(state, JsonOptions);
-        }, cancellationToken);
+        }, StateReadBudget, cancellationToken);
     }
 
     public Task<string> GetAvailableActionsJsonAsync(CancellationToken cancellationToken)
@@ -44,7 +46,7 @@ internal sealed class GameBridge : IGameBridge
         {
             var payload = GameStateService.BuildAvailableActionsPayload();
             return JsonSerializer.Serialize(payload.actions, JsonOptions);
-        }, cancellationToken);
+        }, StateReadBudget, cancellationToken);
     }
 
     /// <summary>
@@ -67,12 +69,12 @@ internal sealed class GameBridge : IGameBridge
         {
             var snapshot = GameStateService.BuildDecisionSnapshotPayload();
             return JsonSerializer.Serialize(snapshot, JsonOptions);
-        }, cancellationToken);
+        }, StateReadBudget, cancellationToken);
     }
 
     public Task<string> GetScreenAsync(CancellationToken cancellationToken)
     {
-        return GameThread.InvokeAsync(() => GameStateService.CurrentScreenName(), cancellationToken);
+        return GameThread.InvokeAsync(() => GameStateService.CurrentScreenName(), StateReadBudget, cancellationToken);
     }
 
     public Task<string> ActAsync(
@@ -144,6 +146,12 @@ internal sealed class GameBridge : IGameBridge
     /// </summary>
     private static readonly TimeSpan GameThreadStartBudget = TimeSpan.FromSeconds(15);
 
+    /// <summary>
+    /// Deadline for a state read. These used to pass only the token, so a game thread that stopped
+    /// pumping (window occluded or minimized) held the read -- and the turn -- until pause.
+    /// </summary>
+    private static readonly TimeSpan StateReadBudget = TimeSpan.FromSeconds(15);
+
     /// <summary>Deadline for read-only game-data exports; a late run is discarded harmlessly.</summary>
     private static readonly TimeSpan GameDataReadBudget = TimeSpan.FromSeconds(15);
 
@@ -205,7 +213,40 @@ internal sealed class GameBridge : IGameBridge
     /// </summary>
     private static readonly TimeSpan ActionableProbeBudget = TimeSpan.FromSeconds(5);
 
+    /// <summary>
+    /// Probe the shared action surface without building the full state on every waiting frame.
+    /// Combat readiness and the existing stuck-action recovery remain authoritative.
+    /// </summary>
     public async Task<bool> WaitUntilActionableAsync(TimeSpan timeout, CancellationToken cancellationToken)
+    {
+        var (actionable, _) = await WaitActionableCoreAsync(timeout, withState: false, cancellationToken);
+        return actionable;
+    }
+
+    /// <summary>
+    /// The wait and the read that follows it, merged: the frame that proves the game actionable is
+    /// the frame whose compact state comes back, built once inside the same game-thread unit. A wait
+    /// that times out still returns one bounded read so the caller can check run boundaries.
+    /// </summary>
+    public async Task<ActionableState> WaitUntilActionableWithStateAsync(TimeSpan timeout, CancellationToken cancellationToken)
+    {
+        var (actionable, stateJson) = await WaitActionableCoreAsync(timeout, withState: true, cancellationToken);
+        if (stateJson == null)
+        {
+            stateJson = await GameThread.InvokeAsync(() =>
+            {
+                StateBuildTiming.Instance.CountActionableBuild();
+                return SerializeCompactState();
+            }, StateReadBudget, cancellationToken);
+        }
+
+        return new ActionableState(actionable, stateJson);
+    }
+
+    private async Task<(bool Actionable, string? StateJson)> WaitActionableCoreAsync(
+        TimeSpan timeout,
+        bool withState,
+        CancellationToken cancellationToken)
     {
         var deadline = DateTime.UtcNow + timeout;
         string? stuckActionType = null;
@@ -220,15 +261,15 @@ internal sealed class GameBridge : IGameBridge
                 probeBudget = remaining;
             }
 
-            var actionable = await GameThread.InvokeAsync(() =>
+            var outcome = await GameThread.InvokeAsync<(bool, string?)>(() =>
             {
-                var state = GameStateService.BuildStatePayload();
-                var readiness = state.combat?.action_readiness;
+                var probe = GameStateService.ProbeActionable();
+                var readiness = probe.Readiness;
                 var selecting = readiness?.modal_open == true
                     || readiness?.hand_in_card_selection == true
                     || readiness?.hand_in_card_play == true;
                 var runningType = readiness?.running_action_type;
-                if (state.screen == "COMBAT"
+                if (probe.Screen == "COMBAT"
                     && readiness?.reason == "game_action_running"
                     && !selecting
                     && !string.IsNullOrEmpty(runningType))
@@ -249,24 +290,28 @@ internal sealed class GameBridge : IGameBridge
                     stuckActionType = null;
                 }
 
-                if (state.screen == "COMBAT" && state.combat?.action_readiness?.can_use_combat_actions != true)
+                var ready = !(probe.Screen == "COMBAT" && readiness?.can_use_combat_actions != true)
+                    && probe.AvailableActions.Any(name => !PassiveActions.Contains(name));
+                if (!ready || !withState)
                 {
-                    return false;
+                    return (ready, null);
                 }
 
-                return (state.available_actions ?? Array.Empty<string>())
-                    .Any(name => !PassiveActions.Contains(name));
+                // Same game-thread unit as the probe, so the state the decision reads is the frame
+                // that was judged actionable -- not one a frame later.
+                StateBuildTiming.Instance.CountActionableBuild();
+                return (true, SerializeCompactState());
             }, probeBudget, cancellationToken);
 
-            if (actionable)
+            if (outcome.Item1)
             {
-                return true;
+                return outcome;
             }
 
             await GameThread.WaitForNextFrameAsync();
         }
 
-        return false;
+        return (false, null);
     }
 
     public async Task<byte[]?> CaptureScreenshotJpegAsync(CancellationToken cancellationToken)

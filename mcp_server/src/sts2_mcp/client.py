@@ -372,6 +372,7 @@ class Sts2Client(Sts2ActionMethods):
         command: str | None = None,
         raw_state: bool = False,
         client_context: dict[str, Any] | None = None,
+        card_cid: int | None = None,
     ) -> dict[str, Any]:
         """`POST /action`, answering with the compact state unless `raw_state` asks for the raw one.
 
@@ -380,7 +381,8 @@ class Sts2Client(Sts2ActionMethods):
         The raw payload is ~4,000-9,500 tokens and the compact view carries the fields a decision
         reads, so the escape hatch is opt-in rather than the default. A rejected index comes back as
         an `Sts2ApiError` whose details name the offending field and the indices that would have
-        worked; see `sts2_mcp.action_results`.
+        worked; see `sts2_mcp.action_results`. `card_cid` is forwarded, not resolved: the mod
+        re-checks it under the action lease, where a position resolved here could still go stale.
         """
         try:
             result = self._request(
@@ -389,6 +391,7 @@ class Sts2Client(Sts2ActionMethods):
                 payload={
                     "action": action,
                     "card_index": card_index,
+                    "card_cid": card_cid,
                     "target_index": target_index,
                     "option_index": option_index,
                     "x": x,

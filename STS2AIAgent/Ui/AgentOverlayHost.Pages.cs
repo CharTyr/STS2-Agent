@@ -97,6 +97,9 @@ internal sealed partial class AgentOverlayHost
         _modeSwitchStatus = UiFactory.Wrapped("", UiFactory.FontCaption);
         page.AddChild(_modeSwitchStatus);
         page.AddChild(BuildReadinessBanner());
+        // Hidden until a run actually finishes (a GAME_OVER frame was observed): the card is the run
+        // report, and an empty one above the play controls would be one more thing to scroll past.
+        page.AddChild(BuildRunSummaryCard());
 
         _soloSection = BuildSoloSection();
         _coopSection = BuildCoopSection();
@@ -596,8 +599,11 @@ internal sealed partial class AgentOverlayHost
         var attention = solo && !playing && _playReady && facing is { } view && PlayerFacingSession.NeedsAttention(view);
         if (_soloNext != null)
         {
-            _soloNext.Text = attention ? Loc.T("下一步：{0}", facing!.Value.NextAction) : "";
-            _soloNext.Visible = attention;
+            string? screen = null;
+            try { screen = GameStateService.CurrentScreenName(); } catch (Exception) { }
+            var hint = AgentRuntime.Instance.StallHintText(screen);
+            _soloNext.Text = attention ? Loc.T("下一步：{0}", facing!.Value.NextAction) : hint;
+            _soloNext.Visible = attention || hint.Length > 0;
             if (attention) UiFactory.SetTone(_soloNext, UiFactory.ButtonKind.Normal);
         }
 

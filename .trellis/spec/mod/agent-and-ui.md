@@ -108,3 +108,9 @@ Caller cancellation must propagate through role probes, vision calls and read to
 Recovery's optional `turnGate` spans model/game work and receipt commit; the gate is released in a `finally` block. A queued caller must not see the old budget after the previous call has already spent it. Recovery's optional `afterTurn` runs only after play accounting and budget/recovery checks. The runtime puts proactive chat there, acquires the same gate for that chat, and rechecks the budget afterward.
 
 `AgentTurnIntegrityTests` covers accepted-action observation faults, JSON fallback, explicit rejection, token/vision budgets, malformed arguments, cancellation at multiple boundaries, proactive accounting and a queued caller blocked until commit. Source-wiring contracts verify the game-dependent runtime connects those tested components. These tests do not establish live Godot rendering or full-game behavior.
+
+## Experience overhaul contracts
+
+Autopilot handles forced moves only and yields to player guidance; no card picks, shopping or potion trade-offs. Turn plans validate each step with fresh state and stable card ids, stop on divergence or unknown results, and count request spend once (first decision row only). Provider capabilities are keyed by ModelRoleProbe.Fingerprint; verification adds one streaming probe and repeated live truncation persists the same verdict once. PromptStateDiet changes model input only, never the public API.
+
+The HUD ignores mouse input; screenshot capture hides the HUD, panel and edge tab and restores only their prior visibility. Turbo uses native Fast Mode, guards preference writes and restores on every auto-play exit. Run reports require fresh GAME_OVER evidence, label bounded decision counts and session cache honestly, and retain at most 50 factual journal rows. Disabling the journal prevents writing and prompt injection.

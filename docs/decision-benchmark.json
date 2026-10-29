@@ -1,6 +1,6 @@
 {
-  "schema_version": 1,
-  "title": "STS2 decision-quality offline benchmark v1",
+  "schema_version": 2,
+  "title": "STS2 decision-quality offline benchmark v2",
   "cases": [
     {
       "id": "combat-lethal-before-end-turn",
@@ -8,27 +8,82 @@
       "title": "Take an exposed lethal instead of ending a live combat turn",
       "state": {
         "screen": "COMBAT",
-        "available_actions": ["play_card", "end_turn"],
+        "available_actions": [
+          "play_card",
+          "end_turn"
+        ],
         "combat": {
-          "action_readiness": {"can_use_combat_actions": true},
+          "action_readiness": {
+            "can_use_combat_actions": true
+          },
           "end_turn_will_kill_player": true,
           "lethal_risks": [
-            {"enemy_index": 1, "damage_needed": 6, "source": "hand"}
+            {
+              "enemy_index": 1,
+              "damage_needed": 6,
+              "source": "hand"
+            }
           ],
           "enemies": [
-            {"index": 0, "current_hp": 24, "intents": [{"total_damage": 12}]},
-            {"index": 1, "current_hp": 6, "intents": [{"total_damage": 18}]}
+            {
+              "index": 0,
+              "current_hp": 24,
+              "intents": [
+                {
+                  "total_damage": 12
+                }
+              ]
+            },
+            {
+              "index": 1,
+              "current_hp": 6,
+              "intents": [
+                {
+                  "total_damage": 18
+                }
+              ]
+            }
           ],
           "hand": [
-            {"index": 2, "card_id": "STRIKE", "requires_target": true, "valid_target_indices": [0, 1]}
+            {
+              "index": 2,
+              "card_id": "STRIKE",
+              "requires_target": true,
+              "valid_target_indices": [
+                0,
+                1
+              ]
+            }
           ]
         }
       },
       "expectations": [
-        {"id": "fixture-is-actionable", "kind": "state_path", "path": "combat.action_readiness.can_use_combat_actions", "equals": true, "points": 0.25},
-        {"id": "fixture-has-lethal", "kind": "state_path", "path": "combat.end_turn_will_kill_player", "equals": true, "points": 0.25},
-        {"id": "do-not-end-turn-into-lethal", "kind": "forbid_action", "action": "end_turn", "points": 2},
-        {"id": "use-a-combat-action", "kind": "action", "action": "play_card", "points": 2}
+        {
+          "id": "fixture-is-actionable",
+          "kind": "state_path",
+          "path": "combat.action_readiness.can_use_combat_actions",
+          "equals": true,
+          "points": 0.25
+        },
+        {
+          "id": "fixture-has-lethal",
+          "kind": "state_path",
+          "path": "combat.end_turn_will_kill_player",
+          "equals": true,
+          "points": 0.25
+        },
+        {
+          "id": "do-not-end-turn-into-lethal",
+          "kind": "forbid_action",
+          "action": "end_turn",
+          "points": 2
+        },
+        {
+          "id": "use-a-combat-action",
+          "kind": "action",
+          "action": "play_card",
+          "points": 2
+        }
       ],
       "evidence": [
         "Strategy Rules §Combat: end_turn_will_kill_player forbids ending the turn when a defensive or lethal line exists.",
@@ -41,16 +96,42 @@
       "title": "Do not issue a card action while the combat gate is closed",
       "state": {
         "screen": "COMBAT",
-        "available_actions": ["discard_potion"],
+        "available_actions": [
+          "discard_potion"
+        ],
         "combat": {
-          "action_readiness": {"can_use_combat_actions": false, "reason": "player_actions_disabled"},
-          "hand": [{"index": 0, "card_id": "STRIKE"}]
+          "action_readiness": {
+            "can_use_combat_actions": false,
+            "reason": "player_actions_disabled"
+          },
+          "hand": [
+            {
+              "index": 0,
+              "card_id": "STRIKE"
+            }
+          ]
         }
       },
       "expectations": [
-        {"id": "fixture-is-gated", "kind": "state_path", "path": "combat.action_readiness.can_use_combat_actions", "equals": false, "points": 0.5},
-        {"id": "do-not-play-during-gate", "kind": "forbid_action", "action": "play_card", "points": 2},
-        {"id": "do-not-end-turn-during-gate", "kind": "forbid_action", "action": "end_turn", "points": 2}
+        {
+          "id": "fixture-is-gated",
+          "kind": "state_path",
+          "path": "combat.action_readiness.can_use_combat_actions",
+          "equals": false,
+          "points": 0.5
+        },
+        {
+          "id": "do-not-play-during-gate",
+          "kind": "forbid_action",
+          "action": "play_card",
+          "points": 2
+        },
+        {
+          "id": "do-not-end-turn-during-gate",
+          "kind": "forbid_action",
+          "action": "end_turn",
+          "points": 2
+        }
       ],
       "evidence": [
         "SKILL.md: action_readiness decides act versus wait before any card choice.",
@@ -63,18 +144,43 @@
       "title": "Avoid an event option whose payload says it will kill the player",
       "state": {
         "screen": "EVENT",
-        "available_actions": ["choose_event_option"],
+        "available_actions": [
+          "choose_event_option"
+        ],
         "event": {
           "event_id": "BENCHMARK_EVENT",
           "options": [
-            {"index": 0, "label": "Proceed", "is_locked": false, "is_proceed": true, "will_kill_player": false},
-            {"index": 1, "label": "Fatal bargain", "is_locked": false, "is_proceed": false, "will_kill_player": true}
+            {
+              "index": 0,
+              "label": "Proceed",
+              "is_locked": false,
+              "is_proceed": true,
+              "will_kill_player": false
+            },
+            {
+              "index": 1,
+              "label": "Fatal bargain",
+              "is_locked": false,
+              "is_proceed": false,
+              "will_kill_player": true
+            }
           ]
         }
       },
       "expectations": [
-        {"id": "choose-an-event-option", "kind": "action", "action": "choose_event_option", "points": 1},
-        {"id": "choose-safe-proceed", "kind": "option_action", "action": "choose_event_option", "option_index": 0, "points": 3}
+        {
+          "id": "choose-an-event-option",
+          "kind": "action",
+          "action": "choose_event_option",
+          "points": 1
+        },
+        {
+          "id": "choose-safe-proceed",
+          "kind": "option_action",
+          "action": "choose_event_option",
+          "option_index": 0,
+          "points": 3
+        }
       ],
       "evidence": [
         "Strategy Rules §Event: will_kill_player overrides all reward heuristics.",
@@ -87,18 +193,43 @@
       "title": "Do not send a known locked event option",
       "state": {
         "screen": "EVENT",
-        "available_actions": ["choose_event_option"],
+        "available_actions": [
+          "choose_event_option"
+        ],
         "event": {
           "event_id": "BENCHMARK_LOCKED_EVENT",
           "options": [
-            {"index": 0, "label": "Locked", "is_locked": true, "is_proceed": false, "will_kill_player": false},
-            {"index": 2, "label": "Safe option", "is_locked": false, "is_proceed": false, "will_kill_player": false}
+            {
+              "index": 0,
+              "label": "Locked",
+              "is_locked": true,
+              "is_proceed": false,
+              "will_kill_player": false
+            },
+            {
+              "index": 2,
+              "label": "Safe option",
+              "is_locked": false,
+              "is_proceed": false,
+              "will_kill_player": false
+            }
           ]
         }
       },
       "expectations": [
-        {"id": "choose-event-action", "kind": "action", "action": "choose_event_option", "points": 1},
-        {"id": "choose-unlocked-index", "kind": "option_action", "action": "choose_event_option", "option_index": 2, "points": 3}
+        {
+          "id": "choose-event-action",
+          "kind": "action",
+          "action": "choose_event_option",
+          "points": 1
+        },
+        {
+          "id": "choose-unlocked-index",
+          "kind": "option_action",
+          "action": "choose_event_option",
+          "option_index": 2,
+          "points": 3
+        }
       ],
       "evidence": [
         "Screen Playbooks §Event: index 0 is often locked, so available_actions is not permission to pick it.",
@@ -111,18 +242,48 @@
       "title": "Low health should not select the exposed Elite branch",
       "state": {
         "screen": "MAP",
-        "available_actions": ["choose_map_node"],
-        "run": {"current_hp": 24, "max_hp": 80, "gold": 95},
+        "available_actions": [
+          "choose_map_node"
+        ],
+        "run": {
+          "current_hp": 24,
+          "max_hp": 80,
+          "gold": 95
+        },
         "map": {
           "available_nodes": [
-            {"index": 0, "room_type": "Elite", "children": [4]},
-            {"index": 1, "room_type": "Rest", "children": [3, 4]}
+            {
+              "index": 0,
+              "room_type": "Elite",
+              "children": [
+                4
+              ]
+            },
+            {
+              "index": 1,
+              "room_type": "Rest",
+              "children": [
+                3,
+                4
+              ]
+            }
           ]
         }
       },
       "expectations": [
-        {"id": "choose-map-action", "kind": "action", "action": "choose_map_node", "points": 1},
-        {"id": "take-rest-branch", "kind": "option_action", "action": "choose_map_node", "option_index": 1, "points": 3}
+        {
+          "id": "choose-map-action",
+          "kind": "action",
+          "action": "choose_map_node",
+          "points": 1
+        },
+        {
+          "id": "take-rest-branch",
+          "kind": "option_action",
+          "action": "choose_map_node",
+          "option_index": 1,
+          "points": 3
+        }
       ],
       "evidence": [
         "Strategy Rules §Route: below roughly 45% health prefer Rest over Elite.",
@@ -135,18 +296,48 @@
       "title": "Healthy run may take an Elite when alternatives are otherwise comparable",
       "state": {
         "screen": "MAP",
-        "available_actions": ["choose_map_node"],
-        "run": {"current_hp": 62, "max_hp": 80, "gold": 140},
+        "available_actions": [
+          "choose_map_node"
+        ],
+        "run": {
+          "current_hp": 62,
+          "max_hp": 80,
+          "gold": 140
+        },
         "map": {
           "available_nodes": [
-            {"index": 0, "room_type": "Elite", "children": [3, 4]},
-            {"index": 1, "room_type": "Monster", "children": [3]}
+            {
+              "index": 0,
+              "room_type": "Elite",
+              "children": [
+                3,
+                4
+              ]
+            },
+            {
+              "index": 1,
+              "room_type": "Monster",
+              "children": [
+                3
+              ]
+            }
           ]
         }
       },
       "expectations": [
-        {"id": "choose-map-action", "kind": "action", "action": "choose_map_node", "points": 1},
-        {"id": "take-elite-when-healthy", "kind": "option_action", "action": "choose_map_node", "option_index": 0, "points": 3}
+        {
+          "id": "choose-map-action",
+          "kind": "action",
+          "action": "choose_map_node",
+          "points": 1
+        },
+        {
+          "id": "take-elite-when-healthy",
+          "kind": "option_action",
+          "action": "choose_map_node",
+          "option_index": 0,
+          "points": 3
+        }
       ],
       "evidence": [
         "Strategy Rules §Route: above roughly 65% health Elites are the best map value; this fixture is 77.5%.",
@@ -159,18 +350,42 @@
       "title": "Heal rather than smith at low health before an unknown next node",
       "state": {
         "screen": "REST",
-        "available_actions": ["choose_rest_option"],
-        "run": {"current_hp": 28, "max_hp": 80},
+        "available_actions": [
+          "choose_rest_option"
+        ],
+        "run": {
+          "current_hp": 28,
+          "max_hp": 80
+        },
         "rest": {
           "options": [
-            {"index": 0, "option_id": "REST", "is_enabled": true},
-            {"index": 1, "option_id": "SMITH", "is_enabled": true}
+            {
+              "index": 0,
+              "option_id": "REST",
+              "is_enabled": true
+            },
+            {
+              "index": 1,
+              "option_id": "SMITH",
+              "is_enabled": true
+            }
           ]
         }
       },
       "expectations": [
-        {"id": "choose-rest-action", "kind": "action", "action": "choose_rest_option", "points": 1},
-        {"id": "heal-low-health", "kind": "option_action", "action": "choose_rest_option", "option_index": 0, "points": 3}
+        {
+          "id": "choose-rest-action",
+          "kind": "action",
+          "action": "choose_rest_option",
+          "points": 1
+        },
+        {
+          "id": "heal-low-health",
+          "kind": "option_action",
+          "action": "choose_rest_option",
+          "option_index": 0,
+          "points": 3
+        }
       ],
       "evidence": [
         "Strategy Rules §Rest: heal below about 50% current_hp/max_hp unless an exceptional smith line is evidenced.",
@@ -183,19 +398,49 @@
       "title": "Choose the explicitly affordable discounted card rather than an unaffordable card",
       "state": {
         "screen": "SHOP",
-        "available_actions": ["buy_card", "close_shop_inventory"],
-        "run": {"gold": 40},
+        "available_actions": [
+          "buy_card",
+          "close_shop_inventory"
+        ],
+        "run": {
+          "gold": 40
+        },
         "shop": {
           "is_open": true,
           "cards": [
-            {"index": 0, "card_id": "BENCHMARK_EXPENSIVE", "price": 75, "is_stocked": true, "enough_gold": false, "on_sale": false},
-            {"index": 1, "card_id": "BENCHMARK_SALE", "price": 36, "is_stocked": true, "enough_gold": true, "on_sale": true}
+            {
+              "index": 0,
+              "card_id": "BENCHMARK_EXPENSIVE",
+              "price": 75,
+              "is_stocked": true,
+              "enough_gold": false,
+              "on_sale": false
+            },
+            {
+              "index": 1,
+              "card_id": "BENCHMARK_SALE",
+              "price": 36,
+              "is_stocked": true,
+              "enough_gold": true,
+              "on_sale": true
+            }
           ]
         }
       },
       "expectations": [
-        {"id": "buy-card-action", "kind": "action", "action": "buy_card", "points": 1},
-        {"id": "buy-affordable-sale", "kind": "option_action", "action": "buy_card", "option_index": 1, "points": 3}
+        {
+          "id": "buy-card-action",
+          "kind": "action",
+          "action": "buy_card",
+          "points": 1
+        },
+        {
+          "id": "buy-affordable-sale",
+          "kind": "option_action",
+          "action": "buy_card",
+          "option_index": 1,
+          "points": 3
+        }
       ],
       "evidence": [
         "The shop payload exposes price, is_stocked, enough_gold, and on_sale; the fixture evaluates only those observable facts.",
@@ -208,18 +453,37 @@
       "title": "Permit the explicit skip branch when the fixture says no card is accepted",
       "state": {
         "screen": "REWARD",
-        "available_actions": ["choose_reward_card", "skip_reward_cards"],
+        "available_actions": [
+          "choose_reward_card",
+          "skip_reward_cards"
+        ],
         "reward": {
           "pending_card_choice": true,
           "card_options": [
-            {"index": 0, "card_id": "BENCHMARK_LOW_VALUE_A"},
-            {"index": 1, "card_id": "BENCHMARK_LOW_VALUE_B"}
+            {
+              "index": 0,
+              "card_id": "BENCHMARK_LOW_VALUE_A"
+            },
+            {
+              "index": 1,
+              "card_id": "BENCHMARK_LOW_VALUE_B"
+            }
           ]
         }
       },
       "expectations": [
-        {"id": "take-skip-action", "kind": "action", "action": "skip_reward_cards", "points": 3},
-        {"id": "do-not-pick-first-by-default", "kind": "forbid_action", "action": "choose_reward_card", "points": 1}
+        {
+          "id": "take-skip-action",
+          "kind": "action",
+          "action": "skip_reward_cards",
+          "points": 3
+        },
+        {
+          "id": "do-not-pick-first-by-default",
+          "kind": "forbid_action",
+          "action": "choose_reward_card",
+          "points": 1
+        }
       ],
       "evidence": [
         "Screen Playbooks §Reward: choose_reward_card and skip_reward_cards are the legal manual branches while pending_card_choice is true.",
@@ -232,22 +496,780 @@
       "title": "Choose the explicitly supported reward-card option rather than an invented index",
       "state": {
         "screen": "REWARD",
-        "available_actions": ["choose_reward_card", "skip_reward_cards"],
+        "available_actions": [
+          "choose_reward_card",
+          "skip_reward_cards"
+        ],
         "reward": {
           "pending_card_choice": true,
           "card_options": [
-            {"index": 0, "card_id": "BENCHMARK_REWARD_A"},
-            {"index": 3, "card_id": "BENCHMARK_REWARD_B"}
+            {
+              "index": 0,
+              "card_id": "BENCHMARK_REWARD_A"
+            },
+            {
+              "index": 3,
+              "card_id": "BENCHMARK_REWARD_B"
+            }
           ]
         }
       },
       "expectations": [
-        {"id": "choose-reward-card-action", "kind": "action", "action": "choose_reward_card", "points": 1},
-        {"id": "choose-supported-reward-index", "kind": "option_action", "action": "choose_reward_card", "option_index": 3, "points": 3}
+        {
+          "id": "choose-reward-card-action",
+          "kind": "action",
+          "action": "choose_reward_card",
+          "points": 1
+        },
+        {
+          "id": "choose-supported-reward-index",
+          "kind": "option_action",
+          "action": "choose_reward_card",
+          "option_index": 3,
+          "points": 3
+        }
       ],
       "evidence": [
         "Screen Playbooks §Reward: choose_reward_card takes an index from reward.card_options[].",
         "The fixture isolates selection-shape correctness and intentionally does not claim a card tier list."
+      ]
+    },
+    {
+      "id": "math-exact-lethal",
+      "kind": "combat",
+      "title": "Exact lethal",
+      "calculator": "combat_math",
+      "state": {
+        "screen": "COMBAT",
+        "available_actions": [
+          "play_card",
+          "end_turn"
+        ],
+        "combat": {
+          "player": {
+            "hp": "50/80",
+            "block": 0,
+            "energy": 1
+          },
+          "hand": [
+            {
+              "i": 0,
+              "cid": 1,
+              "card_id": "BENCHMARK_PREVIEW",
+              "playable": true,
+              "energy_cost": 1,
+              "target": "enemy",
+              "targets": [
+                0
+              ],
+              "values": [
+                {
+                  "name": "Block",
+                  "preview": 0
+                }
+              ],
+              "vs": [
+                {
+                  "enemy": 0,
+                  "per_hit": 6,
+                  "hits": 1,
+                  "damage": 6,
+                  "after_block": 6,
+                  "kills": true,
+                  "ignores_block": false
+                }
+              ]
+            }
+          ],
+          "enemies": [
+            {
+              "i": 0,
+              "hp": 6,
+              "block": 0,
+              "alive": true,
+              "hittable": true,
+              "intents": [
+                {
+                  "total_damage": 12,
+                  "hits": 1
+                }
+              ]
+            }
+          ],
+          "threat": {
+            "incoming": 12,
+            "incoming_unblockable": 0,
+            "block": 0,
+            "block_needed": 12,
+            "unblocked": 12,
+            "hp_after": 38,
+            "lethal": false,
+            "end_of_turn_self_damage": 0,
+            "per_enemy": [
+              {
+                "i": 0,
+                "incoming": 12,
+                "hits": 1
+              }
+            ]
+          }
+        }
+      },
+      "expectations": [
+        {
+          "id": "take-exact-kill",
+          "kind": "plan",
+          "must_kill_enemy": 0,
+          "points": 2
+        },
+        {
+          "id": "reduce-incoming",
+          "kind": "plan",
+          "max_damage_taken": 0,
+          "points": 2
+        }
+      ],
+      "evidence": [
+        "CombatMathPolicy.Threat and Cell re-derive the recorded numeric preview offline; this fixture makes no full combat simulation claim."
+      ]
+    },
+    {
+      "id": "math-vulnerable-preview",
+      "kind": "combat",
+      "title": "Vulnerable preview",
+      "calculator": "combat_math",
+      "state": {
+        "screen": "COMBAT",
+        "available_actions": [
+          "play_card",
+          "end_turn"
+        ],
+        "combat": {
+          "player": {
+            "hp": "50/80",
+            "block": 0,
+            "energy": 1
+          },
+          "hand": [
+            {
+              "i": 0,
+              "cid": 1,
+              "card_id": "BENCHMARK_PREVIEW",
+              "playable": true,
+              "energy_cost": 1,
+              "target": "enemy",
+              "targets": [
+                0
+              ],
+              "values": [
+                {
+                  "name": "Block",
+                  "preview": 0
+                }
+              ],
+              "vs": [
+                {
+                  "enemy": 0,
+                  "per_hit": 9,
+                  "hits": 1,
+                  "damage": 9,
+                  "after_block": 9,
+                  "kills": true,
+                  "ignores_block": false
+                }
+              ]
+            }
+          ],
+          "enemies": [
+            {
+              "i": 0,
+              "hp": 9,
+              "block": 0,
+              "alive": true,
+              "hittable": true,
+              "intents": [
+                {
+                  "total_damage": 10,
+                  "hits": 1
+                }
+              ]
+            }
+          ],
+          "threat": {
+            "incoming": 10,
+            "incoming_unblockable": 0,
+            "block": 0,
+            "block_needed": 10,
+            "unblocked": 10,
+            "hp_after": 40,
+            "lethal": false,
+            "end_of_turn_self_damage": 0,
+            "per_enemy": [
+              {
+                "i": 0,
+                "incoming": 10,
+                "hits": 1
+              }
+            ]
+          }
+        }
+      },
+      "expectations": [
+        {
+          "id": "take-exact-kill",
+          "kind": "plan",
+          "must_kill_enemy": 0,
+          "points": 2
+        },
+        {
+          "id": "reduce-incoming",
+          "kind": "plan",
+          "max_damage_taken": 0,
+          "points": 2
+        }
+      ],
+      "evidence": [
+        "CombatMathPolicy.Threat and Cell re-derive the recorded numeric preview offline; this fixture makes no full combat simulation claim."
+      ]
+    },
+    {
+      "id": "math-two-hit-block",
+      "kind": "combat",
+      "title": "Two hit block",
+      "calculator": "combat_math",
+      "state": {
+        "screen": "COMBAT",
+        "available_actions": [
+          "play_card",
+          "end_turn"
+        ],
+        "combat": {
+          "player": {
+            "hp": "50/80",
+            "block": 0,
+            "energy": 1
+          },
+          "hand": [
+            {
+              "i": 0,
+              "cid": 1,
+              "card_id": "BENCHMARK_PREVIEW",
+              "playable": true,
+              "energy_cost": 1,
+              "target": "enemy",
+              "targets": [
+                0
+              ],
+              "values": [
+                {
+                  "name": "Block",
+                  "preview": 0
+                }
+              ],
+              "vs": [
+                {
+                  "enemy": 0,
+                  "per_hit": 6,
+                  "hits": 2,
+                  "damage": 12,
+                  "after_block": 10,
+                  "kills": true,
+                  "ignores_block": false
+                }
+              ]
+            }
+          ],
+          "enemies": [
+            {
+              "i": 0,
+              "hp": 10,
+              "block": 2,
+              "alive": true,
+              "hittable": true,
+              "intents": [
+                {
+                  "total_damage": 16,
+                  "hits": 1
+                }
+              ]
+            }
+          ],
+          "threat": {
+            "incoming": 16,
+            "incoming_unblockable": 0,
+            "block": 0,
+            "block_needed": 16,
+            "unblocked": 16,
+            "hp_after": 34,
+            "lethal": false,
+            "end_of_turn_self_damage": 0,
+            "per_enemy": [
+              {
+                "i": 0,
+                "incoming": 16,
+                "hits": 1
+              }
+            ]
+          }
+        }
+      },
+      "expectations": [
+        {
+          "id": "take-exact-kill",
+          "kind": "plan",
+          "must_kill_enemy": 0,
+          "points": 2
+        },
+        {
+          "id": "reduce-incoming",
+          "kind": "plan",
+          "max_damage_taken": 0,
+          "points": 2
+        }
+      ],
+      "evidence": [
+        "CombatMathPolicy.Threat and Cell re-derive the recorded numeric preview offline; this fixture makes no full combat simulation claim."
+      ]
+    },
+    {
+      "id": "math-ignores-enemy-block",
+      "kind": "combat",
+      "title": "Ignores enemy block",
+      "calculator": "combat_math",
+      "state": {
+        "screen": "COMBAT",
+        "available_actions": [
+          "play_card",
+          "end_turn"
+        ],
+        "combat": {
+          "player": {
+            "hp": "50/80",
+            "block": 0,
+            "energy": 1
+          },
+          "hand": [
+            {
+              "i": 0,
+              "cid": 1,
+              "card_id": "BENCHMARK_PREVIEW",
+              "playable": true,
+              "energy_cost": 1,
+              "target": "enemy",
+              "targets": [
+                0
+              ],
+              "values": [
+                {
+                  "name": "Block",
+                  "preview": 0
+                }
+              ],
+              "vs": [
+                {
+                  "enemy": 0,
+                  "per_hit": 7,
+                  "hits": 1,
+                  "damage": 7,
+                  "after_block": 7,
+                  "kills": true,
+                  "ignores_block": true
+                }
+              ]
+            }
+          ],
+          "enemies": [
+            {
+              "i": 0,
+              "hp": 7,
+              "block": 9,
+              "alive": true,
+              "hittable": true,
+              "intents": [
+                {
+                  "total_damage": 14,
+                  "hits": 1
+                }
+              ]
+            }
+          ],
+          "threat": {
+            "incoming": 14,
+            "incoming_unblockable": 0,
+            "block": 0,
+            "block_needed": 14,
+            "unblocked": 14,
+            "hp_after": 36,
+            "lethal": false,
+            "end_of_turn_self_damage": 0,
+            "per_enemy": [
+              {
+                "i": 0,
+                "incoming": 14,
+                "hits": 1
+              }
+            ]
+          }
+        }
+      },
+      "expectations": [
+        {
+          "id": "take-exact-kill",
+          "kind": "plan",
+          "must_kill_enemy": 0,
+          "points": 2
+        },
+        {
+          "id": "reduce-incoming",
+          "kind": "plan",
+          "max_damage_taken": 0,
+          "points": 2
+        }
+      ],
+      "evidence": [
+        "CombatMathPolicy.Threat and Cell re-derive the recorded numeric preview offline; this fixture makes no full combat simulation claim."
+      ]
+    },
+    {
+      "id": "math-block-exact",
+      "kind": "combat",
+      "title": "Block exact",
+      "calculator": "combat_math",
+      "state": {
+        "screen": "COMBAT",
+        "available_actions": [
+          "play_card",
+          "end_turn"
+        ],
+        "combat": {
+          "player": {
+            "hp": "50/80",
+            "block": 2,
+            "energy": 1
+          },
+          "hand": [
+            {
+              "i": 0,
+              "cid": 1,
+              "card_id": "BENCHMARK_PREVIEW",
+              "playable": true,
+              "energy_cost": 1,
+              "target": null,
+              "targets": [],
+              "values": [
+                {
+                  "name": "Block",
+                  "preview": 10
+                }
+              ],
+              "vs": null
+            }
+          ],
+          "enemies": [
+            {
+              "i": 0,
+              "hp": 40,
+              "block": 0,
+              "alive": true,
+              "hittable": true,
+              "intents": [
+                {
+                  "total_damage": 12,
+                  "hits": 1
+                }
+              ]
+            }
+          ],
+          "threat": {
+            "incoming": 12,
+            "incoming_unblockable": 0,
+            "block": 2,
+            "block_needed": 10,
+            "unblocked": 10,
+            "hp_after": 40,
+            "lethal": false,
+            "end_of_turn_self_damage": 0,
+            "per_enemy": [
+              {
+                "i": 0,
+                "incoming": 12,
+                "hits": 1
+              }
+            ]
+          }
+        }
+      },
+      "expectations": [
+        {
+          "id": "reduce-incoming",
+          "kind": "plan",
+          "max_damage_taken": 0,
+          "points": 2
+        }
+      ],
+      "evidence": [
+        "CombatMathPolicy.Threat and Cell re-derive the recorded numeric preview offline; this fixture makes no full combat simulation claim."
+      ]
+    },
+    {
+      "id": "math-block-partial",
+      "kind": "combat",
+      "title": "Block partial",
+      "calculator": "combat_math",
+      "state": {
+        "screen": "COMBAT",
+        "available_actions": [
+          "play_card",
+          "end_turn"
+        ],
+        "combat": {
+          "player": {
+            "hp": "50/80",
+            "block": 3,
+            "energy": 1
+          },
+          "hand": [
+            {
+              "i": 0,
+              "cid": 1,
+              "card_id": "BENCHMARK_PREVIEW",
+              "playable": true,
+              "energy_cost": 1,
+              "target": null,
+              "targets": [],
+              "values": [
+                {
+                  "name": "Block",
+                  "preview": 7
+                }
+              ],
+              "vs": null
+            }
+          ],
+          "enemies": [
+            {
+              "i": 0,
+              "hp": 40,
+              "block": 0,
+              "alive": true,
+              "hittable": true,
+              "intents": [
+                {
+                  "total_damage": 18,
+                  "hits": 1
+                }
+              ]
+            }
+          ],
+          "threat": {
+            "incoming": 18,
+            "incoming_unblockable": 0,
+            "block": 3,
+            "block_needed": 15,
+            "unblocked": 15,
+            "hp_after": 35,
+            "lethal": false,
+            "end_of_turn_self_damage": 0,
+            "per_enemy": [
+              {
+                "i": 0,
+                "incoming": 18,
+                "hits": 1
+              }
+            ]
+          }
+        }
+      },
+      "expectations": [
+        {
+          "id": "reduce-incoming",
+          "kind": "plan",
+          "max_damage_taken": 8,
+          "points": 2
+        }
+      ],
+      "evidence": [
+        "CombatMathPolicy.Threat and Cell re-derive the recorded numeric preview offline; this fixture makes no full combat simulation claim."
+      ]
+    },
+    {
+      "id": "math-self-damage-remains",
+      "kind": "combat",
+      "title": "Self damage remains",
+      "calculator": "combat_math",
+      "state": {
+        "screen": "COMBAT",
+        "available_actions": [
+          "play_card",
+          "end_turn"
+        ],
+        "combat": {
+          "player": {
+            "hp": "50/80",
+            "block": 2,
+            "energy": 1
+          },
+          "hand": [
+            {
+              "i": 0,
+              "cid": 1,
+              "card_id": "BENCHMARK_PREVIEW",
+              "playable": true,
+              "energy_cost": 1,
+              "target": null,
+              "targets": [],
+              "values": [
+                {
+                  "name": "Block",
+                  "preview": 6
+                }
+              ],
+              "vs": null
+            }
+          ],
+          "enemies": [
+            {
+              "i": 0,
+              "hp": 40,
+              "block": 0,
+              "alive": true,
+              "hittable": true,
+              "intents": [
+                {
+                  "total_damage": 8,
+                  "hits": 1
+                }
+              ]
+            }
+          ],
+          "threat": {
+            "incoming": 8,
+            "incoming_unblockable": 0,
+            "block": 2,
+            "block_needed": 6,
+            "unblocked": 6,
+            "hp_after": 41,
+            "lethal": false,
+            "end_of_turn_self_damage": 3,
+            "per_enemy": [
+              {
+                "i": 0,
+                "incoming": 8,
+                "hits": 1
+              }
+            ]
+          }
+        }
+      },
+      "expectations": [
+        {
+          "id": "reduce-incoming",
+          "kind": "plan",
+          "max_damage_taken": 3,
+          "points": 2
+        }
+      ],
+      "evidence": [
+        "CombatMathPolicy.Threat and Cell re-derive the recorded numeric preview offline; this fixture makes no full combat simulation claim."
+      ]
+    },
+    {
+      "id": "math-remove-big-intent",
+      "kind": "combat",
+      "title": "Remove big intent",
+      "calculator": "combat_math",
+      "state": {
+        "screen": "COMBAT",
+        "available_actions": [
+          "play_card",
+          "end_turn"
+        ],
+        "combat": {
+          "player": {
+            "hp": "50/80",
+            "block": 4,
+            "energy": 1
+          },
+          "hand": [
+            {
+              "i": 0,
+              "cid": 1,
+              "card_id": "BENCHMARK_PREVIEW",
+              "playable": true,
+              "energy_cost": 1,
+              "target": "enemy",
+              "targets": [
+                0
+              ],
+              "values": [
+                {
+                  "name": "Block",
+                  "preview": 0
+                }
+              ],
+              "vs": [
+                {
+                  "enemy": 0,
+                  "per_hit": 9,
+                  "hits": 1,
+                  "damage": 9,
+                  "after_block": 8,
+                  "kills": true,
+                  "ignores_block": false
+                }
+              ]
+            }
+          ],
+          "enemies": [
+            {
+              "i": 0,
+              "hp": 8,
+              "block": 1,
+              "alive": true,
+              "hittable": true,
+              "intents": [
+                {
+                  "total_damage": 21,
+                  "hits": 1
+                }
+              ]
+            }
+          ],
+          "threat": {
+            "incoming": 21,
+            "incoming_unblockable": 0,
+            "block": 4,
+            "block_needed": 17,
+            "unblocked": 17,
+            "hp_after": 33,
+            "lethal": false,
+            "end_of_turn_self_damage": 0,
+            "per_enemy": [
+              {
+                "i": 0,
+                "incoming": 21,
+                "hits": 1
+              }
+            ]
+          }
+        }
+      },
+      "expectations": [
+        {
+          "id": "take-exact-kill",
+          "kind": "plan",
+          "must_kill_enemy": 0,
+          "points": 2
+        },
+        {
+          "id": "reduce-incoming",
+          "kind": "plan",
+          "max_damage_taken": 0,
+          "points": 2
+        }
+      ],
+      "evidence": [
+        "CombatMathPolicy.Threat and Cell re-derive the recorded numeric preview offline; this fixture makes no full combat simulation claim."
       ]
     },
     {
@@ -256,23 +1278,66 @@
       "title": "Use a declared legal enemy index for a target-required card",
       "state": {
         "screen": "COMBAT",
-        "available_actions": ["play_card", "end_turn"],
+        "available_actions": [
+          "play_card",
+          "end_turn"
+        ],
         "combat": {
-          "action_readiness": {"can_use_combat_actions": true},
+          "action_readiness": {
+            "can_use_combat_actions": true
+          },
           "hand": [
-            {"index": 0, "card_id": "BENCHMARK_TARGET_CARD", "requires_target": true, "valid_target_indices": [1]}
+            {
+              "index": 0,
+              "card_id": "BENCHMARK_TARGET_CARD",
+              "requires_target": true,
+              "valid_target_indices": [
+                1
+              ]
+            }
           ],
           "enemies": [
-            {"index": 0, "current_hp": 9, "is_alive": true},
-            {"index": 1, "current_hp": 9, "is_alive": true}
+            {
+              "index": 0,
+              "current_hp": 9,
+              "is_alive": true
+            },
+            {
+              "index": 1,
+              "current_hp": 9,
+              "is_alive": true
+            }
           ]
         }
       },
       "expectations": [
-        {"id": "play-a-card", "kind": "action", "action": "play_card", "points": 1},
-        {"id": "select-targeted-card", "kind": "option_action", "action": "play_card", "option_index": 0, "points": 1},
-        {"id": "select-only-legal-enemy", "kind": "target_action", "action": "play_card", "target_index": 1, "points": 1},
-        {"id": "fixture-hand-is-actionable", "kind": "state_path", "path": "combat.action_readiness.can_use_combat_actions", "equals": true, "points": 0.5}
+        {
+          "id": "play-a-card",
+          "kind": "action",
+          "action": "play_card",
+          "points": 1
+        },
+        {
+          "id": "select-targeted-card",
+          "kind": "option_action",
+          "action": "play_card",
+          "option_index": 0,
+          "points": 1
+        },
+        {
+          "id": "select-only-legal-enemy",
+          "kind": "target_action",
+          "action": "play_card",
+          "target_index": 1,
+          "points": 1
+        },
+        {
+          "id": "fixture-hand-is-actionable",
+          "kind": "state_path",
+          "path": "combat.action_readiness.can_use_combat_actions",
+          "equals": true,
+          "points": 0.5
+        }
       ],
       "evidence": [
         "The target_action constraint scores target_index separately from the benchmark's neutral option_index field.",

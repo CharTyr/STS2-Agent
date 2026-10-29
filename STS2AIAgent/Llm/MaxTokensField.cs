@@ -22,6 +22,12 @@ internal static class MaxTokensField
     public const string Standard = "max_tokens";
     public const string CompletionTokens = "max_completion_tokens";
 
+    /// <summary>Maps a persisted or requested field name onto one of the two known spellings.</summary>
+    public static string Normalize(string? field) =>
+        string.Equals(field?.Trim(), CompletionTokens, StringComparison.OrdinalIgnoreCase)
+            ? CompletionTokens
+            : Standard;
+
     /// <summary>
     /// Whether this failure is the endpoint refusing <c>max_tokens</c> as a parameter name.
     /// </summary>

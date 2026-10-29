@@ -71,12 +71,40 @@ internal sealed partial class AgentRuntime
     {
         AccountTurn(result, recordBudget);
         RecordJevReading(result);
+        if (result.PlanSteps is { Count: > 1 } steps)
+        {
+            // One row per executed step of a whole-turn plan. AccountTurn above is still the only
+            // place the request is counted; in the log only the first row carries its cost, so a
+            // per-row sum stays the real spend.
+            for (var index = 0; index < steps.Count; index++)
+            {
+                var step = steps[index];
+                RecordDecision(
+                    result.Source ?? "agent_loop",
+                    step.Action,
+                    index == 0 ? (step.Reason ?? result.Reasoning) : step.Reason,
+                    step.Fingerprint,
+                    index == 0 ? result.RequestsSpent : 0,
+                    index == 0 ? result.Usage?.TotalTokens : 0,
+                    metrics: new DecisionMetrics(
+                        index == 0 ? result.ToolRounds : null,
+                        index == 0 ? result.ReadToolRounds : null,
+                        index == 0 && result.StreamDemoted,
+                        result.TurnId,
+                        index,
+                        result.PlanSize));
+            }
+
+            return;
+        }
+
         if (!string.IsNullOrWhiteSpace(result.Acted))
         {
             RecordDecision(
                 // Only a dual-layer turn carries a confidence; that is how the log tells "Jev clicked
                 // this" from "the LLM did", which is the whole observability contract for the mode.
-                result.Confidence != null ? "jev" : "agent_loop",
+                // A forced move made without any model names itself (Source = "autopilot").
+                result.Source ?? (result.Confidence != null ? "jev" : "agent_loop"),
                 result.Acted,
                 result.Reasoning,
                 result.StateFingerprint,
@@ -89,7 +117,17 @@ internal sealed partial class AgentRuntime
                 strategyUpdatedAt: result.StrategyUpdatedAt,
                 // The LLM finishing a turn Jev could not commit is itself a Jev attempt: the empty
                 // receipt already spent the request, and this row is where that attempt becomes visible.
-                jevAttempt: result.Confidence == null && result.JevElapsedMilliseconds != null);
+                jevAttempt: result.Confidence == null && result.JevElapsedMilliseconds != null,
+                // A plan the model asked for but that stopped after its first step still says so:
+                // otherwise "never planned" and "plan cut short" read the same in the log.
+                metrics: result.ToolRounds > 0 || result.PlanSize > 1
+                    ? new DecisionMetrics(result.ToolRounds > 0 ? result.ToolRounds : null,
+                        result.ToolRounds > 0 ? result.ReadToolRounds : null, result.StreamDemoted,
+                        result.PlanSize > 1 ? result.TurnId : null, result.PlanSize > 1 ? 0 : null,
+                        result.PlanSize > 1 ? result.PlanSize : null)
+                    : null);
+            if (result.PlanSize > 1 && !string.IsNullOrWhiteSpace(result.PlanStopReason))
+                NoteEvent("turn plan stopped after step 1/" + result.PlanSize + ": " + result.PlanStopReason);
         }
     }
 
@@ -361,7 +399,7 @@ internal sealed partial class AgentRuntime
 
         SetStatus(result.Error == null
             ? (result.Acted != null
-                ? Loc.T("已执行 {0}", result.Acted)
+                ? Loc.T("已执行：{0}", PlayerLabels.Action(result.Acted))
                 : result.WaitingForCombat
                     ? Loc.T("非战斗模式已启用；等待战斗结束")
                     : result.WaitingForGame ? Loc.T("等待游戏可操作") : Loc.T("等待可操作状态"))

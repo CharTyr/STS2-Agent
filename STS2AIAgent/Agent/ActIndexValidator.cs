@@ -265,6 +265,76 @@ internal static class ActIndexValidator
         return false;
     }
 
+    /// <summary>
+    /// The index an act left out when the payload leaves exactly one usable choice for it, else null
+    /// (W7). A gateway that truncates streamed tool arguments drops the index after the action name;
+    /// when there is only one card that can be played or one option that can be taken, the act is
+    /// complete without it and asking the model again would only spend a request.
+    /// </summary>
+    public static int? ResolveUniqueIndex(string action, string? compactStateJson)
+    {
+        if (!OptionPaths.TryGetValue(action, out var paths))
+        {
+            return null;
+        }
+
+        using var document = TryParse(compactStateJson ?? string.Empty);
+        if (document == null || document.RootElement.ValueKind != JsonValueKind.Object)
+        {
+            return null;
+        }
+
+        var usable = new SortedSet<int>();
+        foreach (var path in paths)
+        {
+            if (!TryGetArray(document.RootElement, path, out var array))
+            {
+                continue;
+            }
+
+            foreach (var item in array.EnumerateArray())
+            {
+                if (item.ValueKind == JsonValueKind.Object && TryReadIndex(item, out var index) && IsUsable(item))
+                {
+                    usable.Add(index);
+                }
+            }
+
+            // The primary list only: a fallback path is another shape of the same list.
+            break;
+        }
+
+        return usable.Count == 1 ? usable.Min : null;
+    }
+
+    /// <summary>The only valid target of this card, when it has exactly one.</summary>
+    public static int? ResolveUniqueTarget(int cardIndex, string? compactStateJson)
+    {
+        using var document = TryParse(compactStateJson ?? string.Empty);
+        if (document == null || document.RootElement.ValueKind != JsonValueKind.Object)
+        {
+            return null;
+        }
+
+        var targets = ReadCardTargets(document.RootElement, cardIndex);
+        return targets is { Count: 1 } ? targets[0] : null;
+    }
+
+    /// <summary>Whether a list entry can be chosen: not unplayable, locked, disabled, empty or unclaimable.</summary>
+    private static bool IsUsable(JsonElement item)
+    {
+        static bool IsFalse(JsonElement item, string name) =>
+            item.TryGetProperty(name, out var value) && value.ValueKind == JsonValueKind.False;
+
+        if (IsFalse(item, "playable") || IsFalse(item, "enabled") || IsFalse(item, "usable") || IsFalse(item, "claimable")
+            || IsFalse(item, "affordable") || IsFalse(item, "stocked") || ReadLockedFlag(item))
+        {
+            return false;
+        }
+
+        return !item.TryGetProperty("potion_id", out var potion) || potion.ValueKind == JsonValueKind.String;
+    }
+
     private static JsonDocument? TryParse(string json)
     {
         try

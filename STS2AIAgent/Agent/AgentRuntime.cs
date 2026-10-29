@@ -129,7 +129,10 @@ internal sealed partial class AgentRuntime
             acknowledgePlayInstruction: AcknowledgePlayInstruction,
             // Streamed partials go straight back to the runtime; the overlay reads the accumulated
             // text on its own tick, and the buffer decides whether the player asked to see any of it.
-            onReasoningDelta: ReportReasoningDelta);
+            onReasoningDelta: ReportReasoningDelta,
+            reportIntent: ReportIntent,
+            onStreamToolArgsUnreliable: RecordStreamToolArgsUnsupported,
+            runJournalDigest: stateJson => RunJournalDigestForState(stateJson));
     }
 
     public AgentSettings Settings
@@ -288,7 +291,17 @@ internal sealed partial class AgentRuntime
     public DualLaunchOutcome DualLaunchOutcome => _dualLaunchOutcome;
     public bool DualLaunching => _dualLaunching;
     public bool TeamMessagePending => _teamMessagePending;
-    public string TeamStatus => _teamStatus ?? Loc.T("组队后，可以在这里和 AI 队友商量打法。");
+
+    /// <summary>
+    /// What the co-op page says under the message box. While a message is pending this is computed
+    /// from the wait and the teammate's own screen, so the elapsed seconds tick instead of freezing
+    /// on the text that was true at send time. Otherwise it is the last outcome (replied, failed).
+    /// </summary>
+    public string TeamStatus => _teamMessagePending
+        ? TeamMessageProgress.DescribeWaiting(
+            _teammateInCombat,
+            TeamMessageProgress.ElapsedSeconds(Volatile.Read(ref _teamMessageStartedAtMs), Environment.TickCount64))
+        : _teamStatus ?? Loc.T("组队后，可以在这里和 AI 队友商量打法。");
     public IReadOnlyList<ChatTurn> TeamHistory => _teamConversation.Snapshot();
 
     public string McpStatus => _mcpStatus ?? Loc.T("MCP 已关闭，未对外暴露。");
@@ -393,8 +406,9 @@ internal sealed partial class AgentRuntime
     {
         lock (_gate)
         {
+            // Only the visibility: whether the first-run guide was seen is a different fact, and
+            // tying it to a panel toggle is what hid the window from players who never configured.
             _settings.OverlayVisibleOnStart = visible;
-            _settings.HasSeenFirstRunGuide = true;
             SaveSettingsQuietly();
         }
     }
@@ -853,6 +867,7 @@ internal sealed partial class AgentRuntime
 
         try
         {
+            await EngageTurboAsync(cancellationToken);
             await AutoPlayRecovery.RunAsync(async token =>
             {
                 // Recovery owns the turn gate through receipt accounting.
@@ -861,11 +876,14 @@ internal sealed partial class AgentRuntime
                     _requestingModel = true;
                     RaiseChanged();
                     // Bounded and token-aware: a game thread that stops pumping must fail this turn
-                    // visibly and let pause through, not wedge the loop in "stopping" forever.
+                    // visibly and let pause through, not wedge the loop in "stopping" forever. A probe,
+                    // not a full build: these five fields were all the turn ever read from it, and
+                    // they come from the same sources in the same game-thread unit (see BuildTurnProbe).
                     var snapshot = await GameThread.InvokeAsync(() =>
                     {
-                        var payload = GameStateService.BuildStatePayload();
-                        return (payload.screen, payload.session.phase, payload.run_id, payload.in_combat, payload.run?.act_id);
+                        TurboController.CapForMultiplayer();
+                        var probe = GameStateService.BuildTurnProbe();
+                        return (probe.Screen, probe.Phase, probe.RunId, probe.InCombat, probe.ActId);
                     }, TurnGameThreadBudget, token);
                     // Do not re-arm the boundary here: replacing it before checking would clear the
                     // "entered a run" flag that makes a return to the menu a stop. Starting auto-play
@@ -924,7 +942,7 @@ internal sealed partial class AgentRuntime
             },
             reportInterrupted: result => RecordTurnReceipt(result), turnGate: _turnGate);
         }
-        finally { CancelStrategyRefresh(); FlushSessionIfDirty(); RaiseChanged(); }
+        finally { CancelStrategyRefresh(); await ReleaseTurboAsync(); ClearIntent(); FlushSessionIfDirty(); RaiseChanged(); }
     }
 
     /// <summary>

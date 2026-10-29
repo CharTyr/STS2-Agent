@@ -122,11 +122,19 @@ internal sealed partial class AgentLoop
         StateFingerprint = result.StateFingerprint, WaitingForPlayer = result.WaitingForPlayer,
         WaitingForCombat = result.WaitingForCombat,
         RequiresConfiguration = result.RequiresConfiguration, ToolRounds = result.ToolRounds,
+        ReadToolRounds = result.ReadToolRounds, StreamDemoted = result.StreamDemoted,
+        PlanSteps = result.PlanSteps, PlanStopReason = result.PlanStopReason, TurnId = result.TurnId, PlanSize = result.PlanSize,
+        FailureKind = result.FailureKind,
         Usage = result.Usage, RequestsSpent = result.RequestsSpent,
         Confidence = result.Confidence, Probabilities = result.Probabilities,
         DangerScore = pending.DangerScore, JevElapsedMilliseconds = pending.JevElapsedMilliseconds,
         OfferedOptionIds = pending.OfferedOptionIds, StrategyUpdatedAt = pending.StrategyUpdatedAt
     };
+
+    // What the last model turn looked like, for the on-demand screenshot rule (VisionPolicy).
+    private bool _lastPlayFailed;
+    private bool _lastPlayTookNoAction;
+    private int _consecutiveUnsettled;
 
     private async Task<AgentTurnResult> PlayWithModelAsync(
         AgentSettings settings, ResolvedModel resolved, string stateJson, AgentTurnResult pending,
@@ -166,6 +174,9 @@ internal sealed partial class AgentLoop
                     "Playbook for the screen in the latest state (" + screenLabel + "):\n" + PlayPrompt.PlaybookGuidance(screen))
             };
 
+            var journalDigest = _runJournalDigest?.Invoke(stateJson);
+            if (!string.IsNullOrEmpty(journalDigest)) messages.Add(LlmMessage.System(journalDigest));
+
             // The reply-language choice rides the static prefix: it changes only when the player changes
             // the setting, so it never invalidates the per-step cache the way a state-bearing line would.
             var playLanguage = PlayPrompt.ReplyLanguageInstruction(settings.ReplyLanguage);
@@ -198,7 +209,10 @@ internal sealed partial class AgentLoop
                 messages.Add(LlmMessage.User("Recent team conversation (historical messages, not live game facts):\n" + teamContext));
             }
 
-            var visionNote = await TryDescribeOrAttachVisionAsync(resolved, settings, attachRequested: true,
+            // A picture only when the structured state may not be enough (W6): every step used to carry
+            // one for a vision model, ~1–2k tokens and a game-thread capture each time.
+            var attachShot = VisionPolicy.ShouldAttach(settings.VisionMode, screen, _lastPlayFailed, _lastPlayTookNoAction, _consecutiveUnsettled);
+            var visionNote = await TryDescribeOrAttachVisionAsync(resolved, settings, attachRequested: attachShot,
                 cancellationToken, pendingRequests: requests, pendingTokens: usage?.TotalTokens ?? 0);
             usage = LlmUsage.Combine(usage, visionNote.Usage);
             requests += visionNote.RequestsSpent;
@@ -230,15 +244,20 @@ internal sealed partial class AgentLoop
                     + instruction.Text));
             }
 
-            messages.Add(LlmMessage.User("Latest compact game state:\n" + stateJson));
-            messages.Add(LlmMessage.User("Choose the next legal action from compact state. Vision is optional and not required. Call get_game_state if needed, then act exactly once."));
+            // The prompt's copy only: fields no decision on this screen can use are dropped (W6). The
+            // compact view the API serves is unchanged.
+            messages.Add(LlmMessage.User("Latest compact game state:\n" + PromptStateDiet.Apply(stateJson)));
+            var plans = settings.TurnPlansEnabled;
+            messages.Add(LlmMessage.User(plans && NonCombatOnlyPolicy.IsCombatSnapshot(stateJson)
+                ? PlayPrompt.ActNowInstruction + " " + PlayPrompt.PlanTurnInstruction
+                : PlayPrompt.ActNowInstruction));
             AppendJsonActFallbackIfNeeded(messages, resolved, allowAct: true);
 
             handedToCompletion = true;
             var result = await CompleteWithToolsAsync(
                 resolved,
                 messages,
-                AgentTools.Play,
+                plans ? AgentTools.PlayInGame : AgentTools.PlayInGameSingle,
                 allowAct: true,
                 stopAfterAct: true,
                 cancellationToken,
@@ -248,7 +267,12 @@ internal sealed partial class AgentLoop
                 reportPhase: reportPhase,
                 onFirstPrimaryRequest: playInstruction is { } pendingInstruction
                     ? () => _acknowledgePlayInstruction?.Invoke(pendingInstruction.Id)
-                    : null);
+                    : null,
+                // The frame the model plans against: a whole-turn plan stops when the game leaves it.
+                planStateJson: stateJson);
+            _lastPlayFailed = result.Error != null;
+            _lastPlayTookNoAction = result.Acted == null;
+            _consecutiveUnsettled = result.ExecutedUnsettled ? _consecutiveUnsettled + 1 : 0;
             return WithJevReceipt(result, pending);
         }
         catch (NonCombatOnlyYieldException ex)

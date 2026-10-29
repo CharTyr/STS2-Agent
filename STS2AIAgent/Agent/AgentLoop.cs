@@ -9,6 +9,10 @@ namespace STS2AIAgent.Agent;
 internal sealed partial class AgentLoop
 {
     private const int MaxToolRounds = 8;
+
+    /// <summary>The one-line nudge after a reply that explained instead of acting.</summary>
+    internal const string ActNowNudge =
+        "You replied without calling a tool. Call the act tool now with one action from available_actions in the latest state and the index fields it needs. Do not explain first.";
     private static readonly JsonSerializerOptions JsonOptions = new()
     {
         PropertyNamingPolicy = null,
@@ -29,6 +33,8 @@ internal sealed partial class AgentLoop
     private readonly Func<string, (string Id, string Text)?>? _peekPlayInstruction;
     private readonly Action<string>? _acknowledgePlayInstruction;
     private readonly Action<string>? _onReasoningDelta;
+    private readonly Action<LiveIntent>? _reportIntent;
+    private readonly Func<string, string?>? _runJournalDigest;
 
     public AgentLoop(
         IGameBridge bridge,
@@ -44,7 +50,10 @@ internal sealed partial class AgentLoop
         Func<IActionDecider?>? deciderProvider = null,
         Func<string, (string Id, string Text)?>? peekPlayInstruction = null,
         Action<string>? acknowledgePlayInstruction = null,
-        Action<string>? onReasoningDelta = null)
+        Action<string>? onReasoningDelta = null,
+        Action<LiveIntent>? reportIntent = null,
+        Action<ResolvedModel>? onStreamToolArgsUnreliable = null,
+        Func<string, string?>? runJournalDigest = null)
     {
         _bridge = bridge;
         _factory = factory;
@@ -61,6 +70,9 @@ internal sealed partial class AgentLoop
         // The streaming partial the caller wants to show while a reply is still arriving. It stays a
         // callback rather than a field on the result because a partial is only meaningful in flight.
         _onReasoningDelta = onReasoningDelta;
+        _reportIntent = reportIntent;
+        _runJournalDigest = runJournalDigest;
+        _onStreamToolArgsUnreliable = onStreamToolArgsUnreliable;
         // A live provider wins over the captured instance: the runtime constructs once, but the
         // Jev configuration can appear after that, and a decider frozen at construction is the
         // dual-layer toggle that never turns on.
@@ -152,6 +164,9 @@ internal sealed partial class AgentLoop
     {
         reportPhase?.Invoke(PlayPhases.ReadingState);
         var settings = _settings();
+        // Only the non-combat mode reads before waiting: it must yield to combat at once rather than
+        // wait out an enemy turn first. Otherwise the read that used to sit here only re-checked the
+        // run boundary the caller had just checked, and cost a full state build per decision.
         if (settings.NonCombatOnlyEnabled)
         {
             var initialStateJson = await _bridge.GetCompactStateJsonAsync(cancellationToken);
@@ -161,27 +176,24 @@ internal sealed partial class AgentLoop
                 return WaitForCombat();
             }
         }
-        else if (checkState != null)
-        {
-            checkState(await _bridge.GetCompactStateJsonAsync(cancellationToken));
-        }
 
         reportPhase?.Invoke(PlayPhases.WaitingForGame);
-        var actionable = await _bridge.WaitUntilActionableAsync(TimeSpan.FromSeconds(20), cancellationToken);
-        if (!actionable)
+        // One call: the frame that proved actionable is the frame whose state comes back.
+        var ready = await _bridge.WaitUntilActionableWithStateAsync(TimeSpan.FromSeconds(20), cancellationToken);
+        checkState?.Invoke(ready.CompactJson);
+        if (!ready.Actionable)
         {
-            checkState?.Invoke(await _bridge.GetCompactStateJsonAsync(cancellationToken));
             return new AgentTurnResult
             {
                 Error = "Timed out waiting for an actionable state.",
+                StateFingerprint = NoProgressPolicy.Fingerprint(ready.CompactJson),
                 WaitingForGame = true,
                 ToolRounds = 0,
                 RequestsSpent = 0
             };
         }
 
-        var stateJson = await _bridge.GetCompactStateJsonAsync(cancellationToken);
-        checkState?.Invoke(stateJson);
+        var stateJson = ready.CompactJson;
         settings = _settings();
         if (settings.NonCombatOnlyEnabled && NonCombatOnlyPolicy.IsCombatSnapshot(stateJson))
         {
@@ -190,6 +202,10 @@ internal sealed partial class AgentLoop
 
         var escape = await TryEscapeSandpitAsync(stateJson, cancellationToken, checkState, reportPhase);
         if (escape != null) return escape;
+        // Read before the forced-move check: queued player guidance must reach a model, not be skipped.
+        var playInstruction = _peekPlayInstruction?.Invoke(stateJson);
+        var forced = await TryAutopilotAsync(stateJson, playInstruction != null, cancellationToken, checkState, reportPhase);
+        if (forced != null) return forced;
 
         // Dual-layer mode: when a decider is wired in, Jev picks the concrete action and the LLM only
         // plans. A confident-enough Jev answer is executed here and the LLM prompt below never runs;
@@ -202,7 +218,6 @@ internal sealed partial class AgentLoop
             : settings.DualLayerSoloEnabled;
         // A player's one-shot instruction must reach the very next decision, not be skipped by a
         // confident Jev action. This turn uses the regular model when guidance is queued.
-        var playInstruction = _peekPlayInstruction?.Invoke(stateJson);
         var pending = new AgentTurnResult { RequestsSpent = 0 };
         if (playInstruction == null && dualLayerOn && ResolveDecider() is { } decider && _strategyStore is { } store)
         {
@@ -237,91 +252,6 @@ internal sealed partial class AgentLoop
         StrategyUpdatedAt = spent?.StrategyUpdatedAt
     };
 
-    public async Task<string> TestConnectionAsync(CancellationToken cancellationToken)
-    {
-        var results = await TestConfiguredRolesAsync(force: true, cancellationToken);
-        var play = results.FirstOrDefault(item => item.Role == ModelRoleNames.Play);
-        return play.Record.Status == "verified" ? "ok" : play.Record.Error ?? "failed";
-    }
-
-    public async Task<IReadOnlyList<ModelRoleProbeResult>> TestConfiguredRolesAsync(bool force, CancellationToken cancellationToken)
-    {
-        var settings = _settings();
-        var results = new List<ModelRoleProbeResult>();
-        var cache = new Dictionary<string, ModelRoleTestRecord>(StringComparer.Ordinal);
-        foreach (var role in new[] { ModelRoleNames.Conversation, ModelRoleNames.Play, ModelRoleNames.Vision })
-        {
-            cancellationToken.ThrowIfCancellationRequested();
-            var resolved = ModelRoleProbe.Resolve(settings, role);
-            if (role == ModelRoleNames.Vision && resolved == null)
-            {
-                results.Add(new ModelRoleProbeResult(role, ModelRoleProbe.Unused(role), false));
-                continue;
-            }
-
-            if (resolved == null)
-            {
-                results.Add(new ModelRoleProbeResult(role, ModelRoleProbe.Unverified(role, null), false));
-                continue;
-            }
-
-            var current = ModelRoleProbe.Current(settings, role);
-            var fingerprint = ModelRoleProbe.Fingerprint(resolved);
-            if (!force && current.Status == "verified" && current.Fingerprint == fingerprint)
-            {
-                results.Add(new ModelRoleProbeResult(role, current, true));
-                continue;
-            }
-
-            if (cache.TryGetValue(fingerprint, out var cached))
-            {
-                results.Add(new ModelRoleProbeResult(role, CopyForRole(cached, role), false));
-                continue;
-            }
-
-            try
-            {
-                var client = CreateClient(resolved.Endpoint);
-                await client.PingAsync(resolved.Model.Model, cancellationToken);
-                cancellationToken.ThrowIfCancellationRequested();
-                var record = ModelRoleProbe.FromSuccess(role, resolved);
-                cache[fingerprint] = record;
-                results.Add(new ModelRoleProbeResult(role, record, false));
-            }
-            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
-            {
-                throw;
-            }
-            catch (Exception ex)
-            {
-                var record = ModelRoleProbe.FromException(role, resolved, ex);
-                cache[fingerprint] = record;
-                results.Add(new ModelRoleProbeResult(role, record, false));
-            }
-        }
-
-        return results;
-    }
-
-    private static ModelRoleTestRecord CopyForRole(ModelRoleTestRecord source, string role)
-    {
-        return new ModelRoleTestRecord
-        {
-            Role = role,
-            Status = source.Status,
-            CapabilityStatus = source.CapabilityStatus,
-            EndpointId = source.EndpointId,
-            EndpointName = source.EndpointName,
-            ModelId = source.ModelId,
-            ModelName = source.ModelName,
-            Fingerprint = source.Fingerprint,
-            StatusCode = source.StatusCode,
-            Error = source.Error,
-            NextStep = source.NextStep,
-            TestedAt = source.TestedAt
-        };
-    }
-
     private async Task<AgentTurnResult> CompleteWithToolsAsync(
         ResolvedModel resolved,
         List<LlmMessage> messages,
@@ -333,7 +263,8 @@ internal sealed partial class AgentLoop
         LlmUsage? initialUsage = null,
         int initialRequests = 0,
         Action<string>? reportPhase = null,
-        Action? onFirstPrimaryRequest = null)
+        Action? onFirstPrimaryRequest = null,
+        string? planStateJson = null)
     {
         string? lastText = null;
         string? lastReasoning = null;
@@ -343,6 +274,9 @@ internal sealed partial class AgentLoop
         string? actFingerprint = null;
         var actUnsettled = false;
         var rounds = 0;
+        var readToolRounds = 0;
+        var streamDemoted = false;
+        var nudged = false;
         var accumulatedUsage = initialUsage;
         var requestsSpent = initialRequests;
         var toolStreamFallbackTried = false;
@@ -358,13 +292,40 @@ internal sealed partial class AgentLoop
             lastReasoning ??= reason;
         }
 
-        AgentTurnResult Receipt() => new()
+        // One receipt shape for every exit, so a new field cannot be forgotten on one of them.
+        AgentTurnResult Receipt(string? error = null, bool reasoningExhausted = false, bool requiresConfiguration = false, string? failureKind = null) => new()
         {
             AssistantText = lastText, Reasoning = lastReasoning,
-            Acted = acted, ActResultJson = actResult, StateFingerprint = actFingerprint,
-            ExecutedUnsettled = actUnsettled, ToolRounds = rounds,
-            Usage = accumulatedUsage, RequestsSpent = requestsSpent
+            Acted = acted, ActResultJson = actResult, Error = error, StateFingerprint = actFingerprint,
+            FailureKind = error == null ? null : failureKind ?? (lastActError == null ? FailureKinds.Empty
+                : IsMissingIndexError(lastActError) ? FailureKinds.Arguments : FailureKinds.Illegal),
+            ExecutedUnsettled = actUnsettled, ReasoningBudgetExhausted = reasoningExhausted,
+            RequiresConfiguration = requiresConfiguration, ToolRounds = rounds, ReadToolRounds = readToolRounds,
+            StreamDemoted = streamDemoted, Usage = accumulatedUsage, RequestsSpent = requestsSpent
         };
+
+        // The one place an act from the model -- a tool call or JSON in the reply text -- is executed.
+        async Task<(string ResultJson, string? Error)> RunActAsync(string argumentsJson)
+        {
+            var reason = TryReadActReason(argumentsJson);
+            reportPhase?.Invoke(PlayPhases.ExecutingAction);
+            var outcome = await ExecuteActAsync(argumentsJson, cancellationToken, checkState,
+                (action, response) => RememberAccepted(action, response, reason));
+            if (outcome.Error != null)
+            {
+                lastActError = outcome.Error;
+                return (outcome.ResultJson, outcome.Error);
+            }
+
+            // Real reasoning_content wins; the act-args reason is the fallback.
+            lastReasoning ??= reason;
+            acted = outcome.Action;
+            actResult = outcome.ResultJson;
+            actFingerprint = outcome.Fingerprint;
+            actUnsettled = outcome.Unsettled;
+            lastActError = null;
+            return (outcome.ResultJson, null);
+        }
 
         try
         {
@@ -376,11 +337,13 @@ internal sealed partial class AgentLoop
                 var request = new LlmRequest
                 {
                     Model = resolved.Model.Model,
+                    MaxTokens = _settings().MaxOutputTokens,
+                    MaxTokensParameter = MaxTokensParameter(resolved),
                     Messages = messages.ToArray(),
                     Tools = resolved.Model.SupportsTools ? tools : null,
                     Thinking = resolved.Model.GetThinkingIntensity(),
                     ThinkingMode = resolved.Model.ThinkingMode,
-                    Stream = !(allowAct && resolved.Model.SupportsTools && toolStreamFallbackTried),
+                    Stream = !(allowAct && resolved.Model.SupportsTools && (toolStreamFallbackTried || StreamToolArgsUnreliable(resolved))),
                     // The only request a player watches think: the turn's own completion. Vision
                     // captions and role probes run without a callback, so their reasoning is not shown.
                     OnReasoningDelta = _onReasoningDelta
@@ -389,19 +352,7 @@ internal sealed partial class AgentLoop
                 var budgetReason = _budgetGuard?.Invoke()?.CheckBudget(requestsSpent, accumulatedUsage?.TotalTokens ?? 0);
                 if (budgetReason != null)
                 {
-                    return new AgentTurnResult
-                    {
-                        AssistantText = lastText,
-                        Reasoning = lastReasoning,
-                        Acted = acted,
-                        ActResultJson = actResult,
-                        Error = budgetReason,
-                        StateFingerprint = actFingerprint,
-                        ExecutedUnsettled = actUnsettled,
-                        ToolRounds = rounds,
-                        Usage = accumulatedUsage,
-                        RequestsSpent = requestsSpent
-                    };
+                    return Receipt(budgetReason, failureKind: "budget");
                 }
 
                 LlmCompletion completion;
@@ -428,103 +379,65 @@ internal sealed partial class AgentLoop
                 }
                 catch (Exception ex)
                 {
-                    return new AgentTurnResult
-                    {
-                        AssistantText = lastText,
-                        Reasoning = lastReasoning,
-                        Acted = acted,
-                        ActResultJson = actResult,
-                        StateFingerprint = actFingerprint,
-                        ExecutedUnsettled = actUnsettled,
-                        Error = ex.Message,
-                        RequiresConfiguration = ex is LlmException { StatusCode: >= 400 and < 500 and not 408 and not 429 },
-                        ToolRounds = rounds,
-                        Usage = accumulatedUsage,
-                        RequestsSpent = requestsSpent
-                    };
+                    return Receipt(ex.Message,
+                        requiresConfiguration: ex is LlmException { StatusCode: >= 400 and < 500 and not 408 and not 429 },
+                        failureKind: FailureKinds.Of(ex) ?? FailureKinds.Transport);
                 }
 
                 lastText = completion.Content;
                 lastReasoning = completion.Reasoning ?? lastReasoning;
                 if (completion.ToolCalls.Count == 0)
                 {
-                    // A few OpenAI-compatible providers serialize tools correctly only for their
-                    // non-streaming response path. No action has been accepted at this point, so
-                    // one request demotion is safe; do not loop forever if the provider is simply
-                    // refusing to call a tool.
-                    if (allowAct &&
-                        acted == null &&
-                        stopAfterAct &&
-                        resolved.Model.SupportsTools &&
-                        request.Stream &&
-                        !toolStreamFallbackTried)
+                    var mayAct = allowAct && acted == null;
+                    // An act written as JSON in the reply text is an act, whether or not the model has
+                    // native tools: re-asking a tool-capable model that answered in text cost a whole
+                    // second request for an answer it had already given.
+                    if (mayAct && ActJsonParser.TryParse(completion.Content, wholeReplyOnly: resolved.Model.SupportsTools, out var actJson))
                     {
-                        toolStreamFallbackTried = true;
-                        continue;
-                    }
-
-                    if (allowAct &&
-                        acted == null &&
-                        !resolved.Model.SupportsTools &&
-                        ActJsonParser.TryParse(completion.Content, out var actJson))
-                    {
-                        var fallbackReason = TryReadActReason(actJson);
-                        reportPhase?.Invoke(PlayPhases.ExecutingAction);
-                        var parsedAct = await ExecuteActAsync(actJson, cancellationToken, checkState,
-                            (action, response) => RememberAccepted(action, response, fallbackReason));
-                        if (parsedAct.Error == null)
+                        var parsed = await RunActAsync(actJson);
+                        if (parsed.Error == null && stopAfterAct)
                         {
-                            // The provider's reasoning_content (already in lastReasoning from this
-                            // completion) is the thinking; the act-args reason only fills the gap
-                            // when the provider sent none.
-                            lastReasoning ??= fallbackReason;
-                            acted = parsedAct.Action;
-                            actResult = parsedAct.ResultJson;
-                            actFingerprint = parsedAct.Fingerprint;
-                            actUnsettled = parsedAct.Unsettled;
-                            lastActError = null;
-                            if (stopAfterAct)
-                            {
-                                return new AgentTurnResult
-                                {
-                                    AssistantText = completion.Content,
-                                    Reasoning = lastReasoning,
-                                    Acted = acted,
-                                    ActResultJson = actResult,
-                                    StateFingerprint = actFingerprint,
-                                    ExecutedUnsettled = actUnsettled,
-                                    ToolRounds = rounds,
-                                    Usage = accumulatedUsage,
-                                    RequestsSpent = requestsSpent
-                                };
-                            }
-                        }
-                        else
-                        {
-                            lastActError = parsedAct.Error;
+                            return planStateJson == null ? Receipt()
+                                : await ContinuePlanAsync(Receipt(), actJson, planStateJson, cancellationToken, checkState, reportPhase);
                         }
 
                         messages.Add(LlmMessage.Assistant(completion.Content));
-                        messages.Add(LlmMessage.User("Act result:\n" + parsedAct.ResultJson));
+                        messages.Add(LlmMessage.User("Act result:\n" + parsed.ResultJson));
                         continue;
                     }
 
-                    return new AgentTurnResult
+                    // A thinking model that spent its whole output on reasoning will do it again;
+                    // the recovery policy owns that retry (with backoff), not this loop.
+                    if (mayAct && stopAfterAct && resolved.Model.SupportsTools
+                        && !CompletionErrors.IsReasoningBudgetExhausted(completion))
                     {
-                        AssistantText = completion.Content,
-                        Reasoning = lastReasoning,
-                        Acted = acted,
-                        ActResultJson = actResult,
-                        Error = acted == null
-                            ? (lastActError ?? CompletionErrors.Empty(completion, completion.Reasoning, rounds))
-                            : null,
-                        ReasoningBudgetExhausted = acted == null && CompletionErrors.IsReasoningBudgetExhausted(completion),
-                        StateFingerprint = actFingerprint,
-                        ExecutedUnsettled = actUnsettled,
-                        ToolRounds = rounds,
-                        Usage = accumulatedUsage,
-                        RequestsSpent = requestsSpent
-                    };
+                        // Only a reply with nothing in it is the signature of a provider that cannot
+                        // serialize tools on its stream path (or a stream that already failed a nudge):
+                        // re-send once without streaming. Demoting on any tool-less reply re-sent the
+                        // whole ~11k-token prompt on 63% of decisions (ledger of 2026-10-28).
+                        var silent = string.IsNullOrWhiteSpace(completion.Content) && string.IsNullOrWhiteSpace(completion.Reasoning);
+                        if (request.Stream && !toolStreamFallbackTried && (silent || nudged))
+                        {
+                            toolStreamFallbackTried = true;
+                            streamDemoted = true;
+                            NoteStreamTruncation(resolved);
+                            continue;
+                        }
+
+                        // Prose instead of a tool call: one short nudge on the same conversation keeps
+                        // the provider's prefix cache, unlike a fresh re-send.
+                        if (!silent && !nudged)
+                        {
+                            nudged = true;
+                            messages.Add(LlmMessage.Assistant(completion.Content, null, completion.Reasoning));
+                            messages.Add(LlmMessage.User(ActNowNudge));
+                            continue;
+                        }
+                    }
+
+                    return Receipt(
+                        acted == null ? (lastActError ?? CompletionErrors.Empty(completion, completion.Reasoning, rounds)) : null,
+                        reasoningExhausted: acted == null && CompletionErrors.IsReasoningBudgetExhausted(completion));
                 }
 
                 // Some gateways stream only the first fragment of a tool call's arguments and then
@@ -538,9 +451,12 @@ internal sealed partial class AgentLoop
                     !toolStreamFallbackTried &&
                     completion.ToolCalls.Any(call =>
                         string.Equals(call.Name, "act", StringComparison.OrdinalIgnoreCase) &&
-                        LooksLikeTruncatedStreamedAct(call.ArgumentsJson)))
+                        LooksLikeTruncatedStreamedAct(call.ArgumentsJson) &&
+                        !CanFillMissingIndex(call.ArgumentsJson, planStateJson)))
                 {
                     toolStreamFallbackTried = true;
+                    streamDemoted = true;
+                    NoteStreamTruncation(resolved);
                     continue;
                 }
 
@@ -548,6 +464,7 @@ internal sealed partial class AgentLoop
                 // modes reject the next tool round with HTTP 400 when it is missing.
                 var messagesBeforeToolCalls = messages.Count;
                 var retryStreamedAct = false;
+                var readThisRound = false;
                 messages.Add(LlmMessage.Assistant(completion.Content, completion.ToolCalls, completion.Reasoning));
                 foreach (var call in completion.ToolCalls)
                 {
@@ -566,94 +483,68 @@ internal sealed partial class AgentLoop
                             continue;
                         }
 
-                        var actReason = TryReadActReason(call.ArgumentsJson);
-                        reportPhase?.Invoke(PlayPhases.ExecutingAction);
-                        var actOutcome = await ExecuteActAsync(call.ArgumentsJson, cancellationToken, checkState,
-                            (action, response) => RememberAccepted(action, response, actReason));
+                        var actOutcome = await RunActAsync(call.ArgumentsJson);
                         messages.Add(LlmMessage.Tool(call.Id, actOutcome.ResultJson));
                         if (actOutcome.Error == null)
                         {
-                            // Real reasoning_content wins; the act-args reason is the fallback.
-                            lastReasoning ??= actReason;
-                            acted = actOutcome.Action;
-                            actResult = actOutcome.ResultJson;
-                            actFingerprint = actOutcome.Fingerprint;
-                            actUnsettled = actOutcome.Unsettled;
-                            lastActError = null;
                             if (stopAfterAct)
                             {
-                                return new AgentTurnResult
-                                {
-                                    AssistantText = completion.Content,
-                                    Reasoning = lastReasoning,
-                                    Acted = acted,
-                                    ActResultJson = actResult,
-                                    StateFingerprint = actFingerprint,
-                                    ExecutedUnsettled = actUnsettled,
-                                    ToolRounds = rounds,
-                                    Usage = accumulatedUsage,
-                                    RequestsSpent = requestsSpent
-                                };
+                                // The rest of a combat turn the model planned in `then` (W3).
+                                return planStateJson == null ? Receipt()
+                                    : await ContinuePlanAsync(Receipt(), call.ArgumentsJson, planStateJson, cancellationToken, checkState, reportPhase);
                             }
                         }
-                        else
+                        else if (request.Stream &&
+                            !toolStreamFallbackTried &&
+                            IsMissingIndexError(actOutcome.Error))
                         {
-                            lastActError = actOutcome.Error;
                             // A stream can also stop right after card_index, leaving the target out.
                             // That only surfaces at validation, so use the rejection itself as the
                             // truncation signal and replay the turn once without streaming.
-                            if (request.Stream &&
-                                !toolStreamFallbackTried &&
-                                IsMissingIndexError(actOutcome.Error))
-                            {
-                                retryStreamedAct = true;
-                                break;
-                            }
+                            retryStreamedAct = true;
+                            break;
                         }
 
                         continue;
                     }
 
+                    readThisRound = true;
                     var toolJson = await ExecuteReadToolAsync(call.Name, call.ArgumentsJson, cancellationToken, checkState);
                     messages.Add(LlmMessage.Tool(call.Id, toolJson));
+                }
+
+                if (readThisRound)
+                {
+                    readToolRounds++;
                 }
 
                 if (retryStreamedAct)
                 {
                     messages.RemoveRange(messagesBeforeToolCalls, messages.Count - messagesBeforeToolCalls);
                     toolStreamFallbackTried = true;
+                    streamDemoted = true;
+                    NoteStreamTruncation(resolved);
                     continue;
                 }
             }
 
-            return new AgentTurnResult
-            {
-                AssistantText = lastText,
-                Reasoning = lastReasoning,
-                Acted = acted,
-                ActResultJson = actResult,
-                Error = acted == null && lastActError != null
-                    ? lastActError
-                    : "Reached the tool-call round limit without a final answer.",
-                StateFingerprint = actFingerprint,
-                ExecutedUnsettled = actUnsettled,
-                ToolRounds = rounds,
-                Usage = accumulatedUsage,
-                RequestsSpent = requestsSpent
-            };
+            return Receipt(acted == null && lastActError != null
+                ? lastActError
+                : "Reached the tool-call round limit without a final answer.");
         }
         catch (NonCombatOnlyYieldException ex)
         {
             ex.Receipt = Receipt();
             throw;
         }
-        catch (OperationCanceledException ex) when (cancellationToken.IsCancellationRequested)
+        catch (OperationCanceledException ex) when (cancellationToken.IsCancellationRequested && ex is not AgentTurnCanceledException)
         {
             throw new AgentTurnCanceledException(Receipt(), ex, cancellationToken);
         }
         catch (AutoPlayStoppedException ex)
         {
-            ex.Receipt = Receipt();
+            // A plan step that stopped the session already wrote the fuller receipt.
+            ex.Receipt ??= Receipt();
             throw;
         }
     }
@@ -820,7 +711,8 @@ internal sealed partial class AgentLoop
         CancellationToken cancellationToken,
         Action<string>? checkState = null,
         Action<string, string>? onAccepted = null,
-        bool requireSandpitEscape = false)
+        bool requireSandpitEscape = false,
+        bool stopPlanOnPending = false)
     {
         string? acceptedAction = null;
         string? acceptedResponse = null;
@@ -861,8 +753,24 @@ internal sealed partial class AgentLoop
             }
 
             var cardIndex = ReadInt(args, "card_index");
+            // A card named by its per-combat id wins over a position (W3): positions shift as cards leave.
+            if (ReadInt(args, "card_cid") is >= 0 and var cid)
+            {
+                cardIndex = TurnPlanPolicy.FindCardIndex(compactJson, (uint)cid) ?? -1;
+            }
+
             var targetIndex = ReadInt(args, "target_index");
             var optionIndex = ReadInt(args, "option_index");
+            // An index left out when only one choice exists is filled in, not re-asked (W7).
+            if (action == "play_card")
+            {
+                cardIndex ??= ActIndexValidator.ResolveUniqueIndex(action, compactJson);
+                if (cardIndex is int chosenCard) targetIndex ??= ActIndexValidator.ResolveUniqueTarget(chosenCard, compactJson);
+            }
+            else if (ActIndexValidator.RequiresIndex(action))
+            {
+                optionIndex ??= ActIndexValidator.ResolveUniqueIndex(action, compactJson);
+            }
             var x = ReadInt(args, "x");
             var y = ReadInt(args, "y");
             var tool = ReadString(args, "tool");
@@ -897,6 +805,9 @@ internal sealed partial class AgentLoop
             ValidateSandpitDispatch(compactJson, action, cardIndex, requireSandpitEscape);
 
             cancellationToken.ThrowIfCancellationRequested();
+            // Display failure must never prevent a validated game action.
+            try { _reportIntent?.Invoke(LiveIntent.Create(argumentsJson, compactJson, DateTimeOffset.UtcNow)); }
+            catch (Exception) { }
             var result = await _bridge.ActAsync(
                 action,
                 cardIndex,
@@ -911,6 +822,9 @@ internal sealed partial class AgentLoop
                 {
                     if (_settings().NonCombatOnlyEnabled && NonCombatOnlyPolicy.IsCombatSnapshot(latest))
                         throw new NonCombatOnlyYieldException();
+                    if (action == "play_card" && ReadInt(args, "card_cid") is >= 0 and var expectedCid
+                        && TurnPlanPolicy.FindCardIndex(latest, (uint)expectedCid) != cardIndex)
+                        throw new ApiException(409, "invalid_target", "The card moved before dispatch; read state again.");
                     ValidateSandpitDispatch(latest, action, cardIndex, requireSandpitEscape);
                 });
             if (AgentErrorEnvelope.TryReadError(result, out var bridgeError))
@@ -924,6 +838,9 @@ internal sealed partial class AgentLoop
 
             if (ActIndexValidator.IsUnsettled(result))
             {
+                if (stopPlanOnPending || (args.RootElement.TryGetProperty("then", out var then)
+                    && then.ValueKind == JsonValueKind.Array && then.GetArrayLength() > 0))
+                    return (action, result, null, true, null);
                 var settled = await _bridge.WaitUntilActionableAsync(TimeSpan.FromSeconds(20), cancellationToken);
                 var latest = await _bridge.GetCompactStateJsonAsync(cancellationToken);
                 checkState?.Invoke(latest);

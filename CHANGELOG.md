@@ -1,5 +1,30 @@
 # Changelog
 
+## Unreleased
+
+### Added
+
+- 游戏画面上的 AI 横幅、出牌描边、目标连线和理由提示；F7 暂停/继续，F8 打开面板。截图时连同悬浮窗和边缘标签一起隐藏。
+- 局末成绩单显示本局已记录的决策与花费，支持复制；最多保存 50 局事实战绩，向模型提供同角色最近战绩摘要，可关闭和清空。
+- 奖励/商店增加类型、稀有度与数字价格；选牌时有牌组统计，多路线地图有房间数量范围建议；快速判断的出牌/结束回合选项带同帧战斗数字。
+- 模型测试额外检查一次流式工具参数并记住服务商能力；重复截断的学习跨重启保留，游玩输出默认上限 8192 token，可用 maxOutputTokens 调整。
+- MCP 出牌携带稳定卡牌身份到 HTTP，在动作锁内再次核对；手牌变动时拒绝，不会打错位置或重放。队友消息显示等待秒数及已知的战斗忙碌状态。
+
+- 自动处理无需取舍的小步骤，不花模型请求；整回合规划可在一次请求中给出多步出牌，每步重新检查局面，变化时停止。原生与 Python MCP 的 `act` 新增可选 `card_cid` / `then`，旧单动作调用保持兼容。
+- 战斗算术缓存限定在同一帧、同一战斗和完整战斗状态，避免复用旧 HP/意图；随机目标攻击不再声称对每个敌人都有确定斩杀伤害。
+- Compact v13 增加稳定战斗卡牌编号、卡牌类型、按目标的伤害预览和来袭/格挡/斩杀估算。段数不可确定时返回未知，不猜数；组合估算不包含抽牌与中途增益。
+- 「游玩体验」设置集中管理游戏速度、自动处理、整回合规划、战斗算术、按需截图、画面提示与暂停热键。新安装默认显示悬浮窗；F7 可暂停/继续。
+
+### Changed
+
+- 自动游玩使用游戏原生 Fast Mode 加速，暂停/停止后恢复；联机最多快速档，写盘守卫避免把临时加速写入玩家设置。
+- SSE 有订阅但状态不变时按 120/250/500/1000 ms 自适应退避，订阅或动作后复位；无人订阅时不构建状态。
+- 等待可操作时改用轻量探针，不再每帧构建完整状态；回合边界使用轻量快照，状态读取带期限。提示词移除重复数据，截图默认按需，显示服务商缓存命中率。
+- 流式空回复/截断有界降级，正文中的完整动作 JSON 可执行；唯一候选可补索引，重复截断的模型按当前配置指纹持久记为非流式。网络故障与模型错误分别退避，游戏线程超时按等待处理。
+- 决策日志使用玩家易懂的动作/来源名称，并新增请求轮数、读工具轮数、流式降级和规划步骤计量。
+
+> 开发中：以上已有离线覆盖。2026-10-29 隔离实机短测（两场战斗/段）观察到加速与恢复、小事自动处理、整回合规划（单次请求最多 6 步）、战斗算术被模型引用、截图不含悬浮窗与画面提示、局末成绩单与战绩、两套 MCP 的 `then`；实机还发现并修复了整回合规划第 2 步起被误判非法、模型测试漏做流式检查、横幅压住游戏顶栏、成绩单把外部动作算成模型决策。牌框描边/目标连线、F7 热键、联机队友与整局胜率未实机验证，详见 [docs/live-validation-checklist.md](docs/live-validation-checklist.md)。尚未发布，版本号仍为 0.17.0。
+
 ## 0.17.0
 
 Game-dependent compilation succeeded on 2026-10-27 (Release, 0 warnings, 0 errors, after the CS0173 fix below). Only the tested subset passed live acceptance: access hardening, the overlay checks, the potion-slot reward flow, and the Steam-on dual-window no-model takeover and save-continue. Model-backed items (streaming chat, vision answers, teammate auto-play, DeepSeek variants, non-combat-only mode) could not run because of provider errors and were skipped by the maintainer's decision, so they have no live evidence; the Workshop zh-CN description was not verified, the 3-4 player and LAN checks were not run, and old/duplicate local mod copies, artifact fingerprints, the second-library Workshop install, dynamic-port discovery, handshake-failure paths and slow-child reconnection were not reported as checked. See [PRODUCT_PLAN_CURRENT.md](PRODUCT_PLAN_CURRENT.md).

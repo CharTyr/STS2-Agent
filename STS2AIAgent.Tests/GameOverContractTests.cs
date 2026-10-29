@@ -157,7 +157,8 @@ internal static class GameOverContractTests
             AgentSourceFixture.MethodBody(rawStateSource, "VerifyGameOverProgressSave"));
 
         Assert.Contains("privateconstintStateVersion=16", stateSource, StringComparison.Ordinal);
-        Assert.Contains("privateconstintAgentViewVersion=12", stateSource, StringComparison.Ordinal);
+        // 13 since 2026-10-28: combat.hand[].cid/type/vs and combat.threat (the overhaul's W3/W4).
+        Assert.Contains("privateconstintAgentViewVersion=13", stateSource, StringComparison.Ordinal);
         Assert.Contains("save_status=saveVerification.Status", stateSource, StringComparison.Ordinal);
         Assert.Contains("save_verified=saveVerification.Verified", stateSource, StringComparison.Ordinal);
         Assert.Contains("save_error=saveVerification.Error", stateSource, StringComparison.Ordinal);

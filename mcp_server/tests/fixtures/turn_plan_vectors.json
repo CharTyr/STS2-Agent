@@ -1,0 +1,117 @@
+{
+  "schema": 1,
+  "comment": "Shared by STS2AIAgent.Tests/TurnPlanVectorTests.cs and mcp_server/tests/test_turn_plan_vectors.py so the C# and Python whole-turn plan rules cannot drift.",
+  "parse": [
+    {
+      "name": "three-step combat plan",
+      "args": {"action": "play_card", "card_cid": 17, "target_index": 0, "reason": "kill the louse", "then": [{"action": "play_card", "card_cid": 21}, {"action": "end_turn"}]},
+      "first": {"action": "play_card", "card_cid": 17, "card_index": null, "target_index": 0, "option_index": null, "reason": "kill the louse"},
+      "then": [
+        {"action": "play_card", "card_cid": 21, "card_index": null, "target_index": null, "option_index": null, "reason": null},
+        {"action": "end_turn", "card_cid": null, "card_index": null, "target_index": null, "option_index": null, "reason": null}
+      ],
+      "warnings": []
+    },
+    {
+      "name": "numeric strings and case are normalised",
+      "args": {"action": " Play_Card ", "card_cid": "5", "then": [{"action": "PLAY_CARD", "card_cid": "9", "target_index": "1"}]},
+      "first": {"action": "play_card", "card_cid": 5, "card_index": null, "target_index": null, "option_index": null, "reason": null},
+      "then": [{"action": "play_card", "card_cid": 9, "card_index": null, "target_index": 1, "option_index": null, "reason": null}],
+      "warnings": []
+    },
+    {
+      "name": "no then is a single act",
+      "args": {"action": "end_turn"},
+      "first": {"action": "end_turn", "card_cid": null, "card_index": null, "target_index": null, "option_index": null, "reason": null},
+      "then": [],
+      "warnings": []
+    },
+    {
+      "name": "then that is not an array",
+      "args": {"action": "end_turn", "then": "play everything"},
+      "first": {"action": "end_turn", "card_cid": null, "card_index": null, "target_index": null, "option_index": null, "reason": null},
+      "then": [],
+      "warnings": ["then: not an array"]
+    },
+    {
+      "name": "step without action, nested then and unknown key",
+      "args": {"action": "play_card", "card_index": 0, "then": [{"card_cid": 3}, {"action": "play_card", "card_cid": 4, "then": [], "speed": 9}]},
+      "first": {"action": "play_card", "card_cid": null, "card_index": 0, "target_index": null, "option_index": null, "reason": null},
+      "then": [{"action": "play_card", "card_cid": 4, "card_index": null, "target_index": null, "option_index": null, "reason": null}],
+      "warnings": ["then[0]: missing action", "then[1]: nested then ignored", "then[1]: unknown key speed ignored"]
+    },
+    {
+      "name": "negative card_cid is dropped",
+      "args": {"action": "play_card", "card_index": 0, "then": [{"action": "play_card", "card_cid": -2}]},
+      "first": {"action": "play_card", "card_cid": null, "card_index": 0, "target_index": null, "option_index": null, "reason": null},
+      "then": [{"action": "play_card", "card_cid": null, "card_index": null, "target_index": null, "option_index": null, "reason": null}],
+      "warnings": ["then[0]: card_cid must be >= 0"]
+    },
+    {
+      "name": "more than nine steps are truncated",
+      "args": {"action": "end_turn", "then": [{"action": "end_turn"}, {"action": "end_turn"}, {"action": "end_turn"}, {"action": "end_turn"}, {"action": "end_turn"}, {"action": "end_turn"}, {"action": "end_turn"}, {"action": "end_turn"}, {"action": "end_turn"}, {"action": "end_turn"}, {"action": "end_turn"}]},
+      "first": {"action": "end_turn", "card_cid": null, "card_index": null, "target_index": null, "option_index": null, "reason": null},
+      "then_count": 9,
+      "warnings": ["then: truncated to 9 steps"]
+    },
+    {
+      "name": "not an object",
+      "args": "[1,2]",
+      "first": null,
+      "then": [],
+      "warnings": ["arguments: not a JSON object"]
+    },
+    {
+      "name": "not json",
+      "args": "{nope",
+      "first": null,
+      "then": [],
+      "warnings": ["arguments: not a JSON object"]
+    }
+  ],
+  "resolve_state": {
+    "screen": "COMBAT", "turn": 3, "available_actions": ["play_card", "end_turn", "use_potion"],
+    "combat": {
+      "player": {"hp": "40/80", "block": 0, "energy": 2},
+      "hand": [
+        {"i": 0, "cid": 11, "line": "Strike", "playable": true, "targets": [0, 1]},
+        {"i": 1, "cid": 12, "line": "Defend", "playable": true, "targets": []},
+        {"i": 2, "cid": 13, "line": "Bash", "playable": false, "targets": [0, 1]},
+        {"i": 3, "cid": 14, "line": "Pommel", "playable": true, "targets": [1]}
+      ],
+      "enemies": [
+        {"i": 0, "hp": "0/40", "alive": false, "hittable": false},
+        {"i": 1, "hp": "12/40", "alive": true, "hittable": true}
+      ]
+    }
+  },
+  "resolve": [
+    {"name": "cid finds the moved card", "step": {"action": "play_card", "card_cid": 12}, "require_cid": true, "expect": {"stop_reason": null, "card_index": 1, "target_index": null, "option_index": null}},
+    {"name": "cid with explicit standing target", "step": {"action": "play_card", "card_cid": 11, "target_index": 1}, "require_cid": true, "expect": {"stop_reason": null, "card_index": 0, "target_index": 1, "option_index": null}},
+    {"name": "dead target stops", "step": {"action": "play_card", "card_cid": 11, "target_index": 0}, "require_cid": true, "expect": {"stop_reason": "target_gone"}},
+    {"name": "only standing target is filled in", "step": {"action": "play_card", "card_cid": 11}, "require_cid": true, "expect": {"stop_reason": null, "card_index": 0, "target_index": 1, "option_index": null}},
+    {"name": "target not offered by the card", "step": {"action": "play_card", "card_cid": 14, "target_index": 0}, "require_cid": true, "expect": {"stop_reason": "target_gone"}},
+    {"name": "card that left the hand", "step": {"action": "play_card", "card_cid": 99}, "require_cid": true, "expect": {"stop_reason": "card_gone"}},
+    {"name": "unplayable card", "step": {"action": "play_card", "card_cid": 13, "target_index": 1}, "require_cid": true, "expect": {"stop_reason": "card_unplayable"}},
+    {"name": "position only is refused in then", "step": {"action": "play_card", "card_index": 1}, "require_cid": true, "expect": {"stop_reason": "illegal_action"}},
+    {"name": "position only is fine for the first act", "step": {"action": "play_card", "card_index": 1}, "require_cid": false, "expect": {"stop_reason": null, "card_index": 1, "target_index": null, "option_index": null}},
+    {"name": "no card at all", "step": {"action": "play_card"}, "require_cid": false, "expect": {"stop_reason": "illegal_action"}},
+    {"name": "action not available", "step": {"action": "choose_map_node", "option_index": 0}, "require_cid": true, "expect": {"stop_reason": "illegal_action"}},
+    {"name": "end_turn passes through", "step": {"action": "end_turn"}, "require_cid": true, "expect": {"stop_reason": null, "card_index": null, "target_index": null, "option_index": null}},
+    {"name": "potion keeps its indexes", "step": {"action": "use_potion", "option_index": 0, "target_index": 1}, "require_cid": true, "expect": {"stop_reason": null, "card_index": null, "target_index": 1, "option_index": 0}}
+  ],
+  "diverged": [
+    {"name": "nothing changed", "plan_time": {"screen": "COMBAT", "turn": 3, "combat": {"player": {"hp": "40/80"}, "hand": [{"cid": 1}, {"cid": 2}]}}, "current": {"screen": "COMBAT", "turn": 3, "combat": {"player": {"hp": "40/80"}, "hand": [{"cid": 2}]}}, "expect": null},
+    {"name": "selection popped up", "plan_time": {"screen": "COMBAT", "turn": 3}, "current": {"screen": "COMBAT", "turn": 3, "selection": {"kind": "exhaust"}}, "expect": "pending_choice"},
+    {"name": "hand card selection", "plan_time": {"screen": "COMBAT", "turn": 3}, "current": {"screen": "COMBAT", "turn": 3, "combat": {"action_readiness": {"hand_in_card_selection": true}}}, "expect": "pending_choice"},
+    {"name": "card selection screen wins over screen change", "plan_time": {"screen": "COMBAT", "turn": 3}, "current": {"screen": "CARD_SELECTION", "turn": 3}, "expect": "pending_choice"},
+    {"name": "screen changed", "plan_time": {"screen": "COMBAT", "turn": 3}, "current": {"screen": "REWARD", "turn": null}, "expect": "screen_changed"},
+    {"name": "turn changed", "plan_time": {"screen": "COMBAT", "turn": 3}, "current": {"screen": "COMBAT", "turn": 4}, "expect": "turn_changed"},
+    {"name": "null turn is not a change", "plan_time": {"screen": "COMBAT", "turn": null}, "current": {"screen": "COMBAT", "turn": 4}, "expect": null},
+    {"name": "drew a new card", "plan_time": {"screen": "COMBAT", "turn": 3, "combat": {"hand": [{"cid": 1}, {"cid": 2}]}}, "current": {"screen": "COMBAT", "turn": 3, "combat": {"hand": [{"cid": 2}, {"cid": 7}]}}, "expect": "new_cards"},
+    {"name": "no cids at plan time skips the card check", "plan_time": {"screen": "COMBAT", "turn": 3, "combat": {"hand": [{"i": 0}]}}, "current": {"screen": "COMBAT", "turn": 3, "combat": {"hand": [{"cid": 7}]}}, "expect": null},
+    {"name": "took damage", "plan_time": {"screen": "COMBAT", "turn": 3, "combat": {"player": {"hp": "40/80"}}}, "current": {"screen": "COMBAT", "turn": 3, "combat": {"player": {"hp": "37/80"}}}, "expect": "took_damage"},
+    {"name": "healing is not damage", "plan_time": {"screen": "COMBAT", "turn": 3, "combat": {"player": {"hp": "40/80"}}}, "current": {"screen": "COMBAT", "turn": 3, "combat": {"player": {"hp": "44/80"}}}, "expect": null},
+    {"name": "unparsable state stops", "plan_time": "{oops", "current": {"screen": "COMBAT"}, "expect": "screen_changed"}
+  ]
+}

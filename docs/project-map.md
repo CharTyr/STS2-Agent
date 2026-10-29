@@ -100,6 +100,7 @@ one action runs at a time.
 - `STS2AIAgent/Ui/AgentOverlayHost.Setup.cs` — quick setup card and bounded, cancellable model verification; the per-model test badges (updated in place when the form has unsaved edits).
 - `STS2AIAgent/Multiplayer/CompanionPlaySettings.cs` — live play configuration allowlist; preserves instance-local settings.
 - `STS2AIAgent/Game/NativeCoopLoadGuard.cs` — intercepts unsafe native loading of identified local co-op saves.
+- `STS2AIAgent/Game/TurboController.cs` — the game's own Fast Mode (`PrefsSave.FastMode`) while the AI plays: `Engage`/`Release`/`CapForMultiplayer`/`RecoverAtStartup` (game thread), a Harmony prefix+finalizer on `PrefsSaveManager.SavePrefs` (`STS2AIAgent.turbo-prefs-guard`) so a boosted value never reaches `prefs.save`, and `/health.turbo`. Never calls the game's save itself; release only restores when the value is still ours. Decisions in `Agent/TurboPolicy.cs`.
 - `STS2AIAgent/ModEntry.cs` — `[ModInitializer]`. Order: LocSource → GameThread → GameEventService → HttpServer → AgentRuntime → `ReflectedGameMembers.ProbeAtStartup` → overlay (skipped on the companion or headless). Shutdown runs on ProcessExit/DomainUnload.
 - `STS2AIAgent/Ui/AgentOverlayHost.cs` — overlay chrome and lifecycle: CanvasLayer install and retry until `NGame.Instance`, header, hotkey poll (ignored while a text box has focus), the 800 ms `OnProcessFrame` tick, `ToggleVisible`, `RebuildInPlace` (keeps tab, visibility, position and message drafts), `WarnOnce`.
 - `STS2AIAgent/Ui/AgentOverlayHost.SettingsSave.cs` — committing the settings form: save, add/remove endpoint and model, the dirty flag, the settings notice line.
@@ -117,6 +118,7 @@ one action runs at a time.
 - `STS2AIAgent/Ui/AgentOverlayHost.Session.cs` — the session card both play modes show: session and run spend, the decision log (`RefreshDecisionPage`), and the counter reset and diagnostics buttons with their confirmation line.
 - `STS2AIAgent/Ui/AgentOverlayHost.ChatCard.cs` — conversation card, `RefreshChatLog` (draws the recorded turns, then the in-flight `AgentRuntime.LiveThought` partial when the reasoning switch is on), `ChatTailLimit = 80`.
 - `STS2AIAgent/Ui/AgentOverlayHost.Settings.cs` — settings form: `BuildSettingsPage`, jump bar (shows only sections on the form), `RebuildSettingsForm`, `HarvestSettings` (the only reader of form fields, matching editors by id), model cards and the per-model Test button, the Jev section, advanced options, theme picker and repaint.
+- `STS2AIAgent/Ui/AgentOverlayHost.Experience.cs` — the 「游玩体验」 card: game speed, forced moves, whole-turn plans, combat math, screenshots, on-screen hints, pause key, run journal. Saves on the spot (`PersistExperience`, clone + `SaveSettings`) like the theme; `HarvestSettings` clones persisted settings first, so a later form save keeps these.
 - `STS2AIAgent/Ui/AgentOverlayHost.PlayControl.cs` — solo/co-op mode switch (`ChangePlayModeAsync`: pause first, then commit), companion Jev settings sync, invite/continue launch and their availability (`RefreshContinueAvailability`), and the single writer of the play/teammate buttons' enabled state (`RefreshModeControls`).
 - `STS2AIAgent/Ui/UiFactory.cs` — every control and palette→StyleBox. `Label` does **not** wrap (reports its full text as min width); `Wrapped` does, with a 120 px floor. `Row` stretches its children, `TightRow` doesn't. Tabs carry their selected state as metadata so a theme repaint keeps it. Depth comes from fill: cards one step lighter than the window with a hairline, wells (fields, logs, tiles, help) one step darker; the accent is for the primary action, the selected tab's underline, focus and switches.
 - `STS2AIAgent/Ui/UiFactory.Status.cs` — tones (`ToneStyle`, `SetTone`), pills, status dots, `Retone`, and the tinted `Callout`.
@@ -134,6 +136,7 @@ one action runs at a time.
 - `STS2AIAgent/Config/AgentSettings.cs` — the settings model: endpoints, models, bindings, Jev, budgets, co-op, `ModelTests`, `RoleTests`. `EnsureValidShape` repairs without replacing. `TryResolvePlayModel` (play = conversation model), `TryResolveRoleModel`, `HasJevConfigured`.
 - `STS2AIAgent/Config/SettingsStore.cs` — the only persistence path: atomic temp file + `File.Replace` with a `.bak`, corrupt-file recovery, `LastNotice`. `STS2_AGENT_SETTINGS_PATH` overrides the location.
 - `STS2AIAgent/Config/SettingsClone.cs` — deep copy of **every** persisted field. A new setting must be added here too.
+- `STS2AIAgent/Config/AgentSettings.Experience.cs` — the 2026-10-28 overhaul switches, all on by default: `TurboMode` (off/fast/instant), `TurboRestoreFastMode` (the player's game speed while ours is applied; instance-local), `AutopilotEnabled`, `TurnPlansEnabled`, `CombatMathEnabled`, `VisionMode` (off/on_demand/every_step), `HudMode` (off/minimal/full), `PauseHotkey`, `RunJournalEnabled`, and their normalisation. The play switches also travel to the teammate through `CompanionPlaySettings`.
 - `STS2AIAgent/Config/SettingsBinding.cs` — blocks deleting an endpoint or model that a role still uses.
 - `STS2AIAgent/Config/FirstRunSetup.cs` — first-run and invite gate verdict from the play **role** record (`missing`/`failed`/`filled_unverified`/`verified`).
 - `STS2AIAgent/Config/ModelRoleProbe.cs` — role records (conversation/play/vision), `Fingerprint` (url+model+key SHA-256), `Current`, `Upsert`, `InvalidateMismatched`, error `Classify`.
@@ -142,7 +145,7 @@ one action runs at a time.
 - `STS2AIAgent/Config/ThinkingIntensity.cs` — thinking-level parsing and mapping.
 - `STS2AIAgent/Localization/Loc.cs` — `Loc.T`, the language switch, the `LanguageChanged` event.
 - `STS2AIAgent/Localization/LocSource.cs` — resolves the player's language (settings file first, then the game's manager).
-- `STS2AIAgent/Localization/Loc.Strings.Ui.cs` / `STS2AIAgent/Localization/Loc.Strings.Runtime.cs` / `STS2AIAgent/Localization/Loc.Strings.Facing.cs` / `STS2AIAgent/Localization/Loc.Strings.Game.cs` / `STS2AIAgent/Localization/Loc.Strings.Support.cs` — the zh→en tables, split by area.
+- `STS2AIAgent/Localization/Loc.Strings.Ui.cs` / `STS2AIAgent/Localization/Loc.Strings.Runtime.cs` / `STS2AIAgent/Localization/Loc.Strings.Facing.cs` / `STS2AIAgent/Localization/Loc.Strings.Game.cs` / `STS2AIAgent/Localization/Loc.Strings.Support.cs` / `STS2AIAgent/Localization/Loc.Strings.Overhaul.cs` — the zh→en tables, split by area (`Overhaul` holds the 2026-10 experience overhaul's copy: turbo, autopilot, plans, combat math, cost meters, HUD, run report).
 - `STS2AIAgent/Vision/ScreenshotService.cs` — JPEG readback of the game viewport; the Godot capture host hides/restores the overlay and waits for `RenderingServer.FramePostDraw`, not `SceneTree.ProcessFrame` (which still shows the old frame). The capture gate and deadline policy are in `ScreenshotCapturePolicy`.
 
 ### Flows
@@ -160,7 +163,7 @@ one action runs at a time.
 ## 4. In-game agent: loop, runtime, dual-layer, persistence
 
 ### Files — AgentLoop (one decision turn; owns no lifecycle)
-- `STS2AIAgent/Agent/AgentLoop.cs` — `ChatAsync`, `PlayOnceAsync` (check state → `WaitUntilActionableAsync(20 s)` → Jev or LLM), `CompleteWithToolsAsync` (bounded tool rounds, `MaxToolRounds = 8`), `ExecuteActAsync`, `ExecuteReadToolAsync`, `TestConfiguredRolesAsync`.
+- `STS2AIAgent/Agent/AgentLoop.cs` — `ChatAsync`, `PlayOnceAsync` (check state → `WaitUntilActionableAsync(20 s)` → Jev or LLM), `CompleteWithToolsAsync` (bounded tool rounds, `MaxToolRounds = 8`), `ExecuteActAsync`, `ExecuteReadToolAsync`. At its 1,000-line budget: new turn seams go into their own partials.
 - `STS2AIAgent/Agent/AgentLoop.Decision.cs` — `TryDecideWithJevAsync` (budget pre-check → snapshot → decide → execute) and `PlayWithModelAsync` (prompt assembly; **the prompt cache order is load-bearing**: stable prefix first, live state last).
 - `STS2AIAgent/Agent/AgentLoop.Sandpit.cs` — execute one native-playable Frantic Escape before model dispatch at a lethal local Sandpit countdown.
 - `STS2AIAgent/Agent/SandpitSafetyPolicy.cs` — pure compact-state emergency policy and action rejection; the live snapshot is rechecked before dispatch.
@@ -168,11 +171,22 @@ one action runs at a time.
 - `STS2AIAgent/Agent/AgentLoop.Arguments.cs` — pure tool-argument parsers.
 - `STS2AIAgent/Agent/ToolTimeout.cs` — the shared `timeout_seconds` argument reader (finite, invariant-culture, clamped 1–120).
 - `STS2AIAgent/Agent/AgentLoop.Probes.cs` — `CreateClient` (per-request timeout from live settings), run-id and planning-state probes.
+- `STS2AIAgent/Agent/AgentLoop.RoleProbes.cs` — the footer "test connection": `TestConnectionAsync`, `TestConfiguredRolesAsync` (one ping per configured role → role test records), `CopyForRole`. Not part of a play turn.
 
 ### Files — AgentRuntime (singleton; one partial per concern)
 - `STS2AIAgent/Agent/AgentRuntime.cs` — `_gate` (state lock), `_turnGate` (semaphore: turn, chat, step and teammate reply are mutually exclusive), `StartAutoPlay`/`StopAutoPlay`, `AutoPlayLoopAsync` (the turn body), `TryCompanionImmediateAsync` (companion follows the host's map vote, confirms FTUE modals), dual-launch core, `ClassifyStop`.
 - `STS2AIAgent/Agent/AgentRuntime.Chat.cs` — idle chat turns, including budget accounting and graceful non-combat-only yields when combat begins before dispatch.
 - `STS2AIAgent/Agent/AgentRuntime.PlayControl.cs` — `PauseForModeSwitchAsync` (bounded 30 s pause confirmation).
+- `STS2AIAgent/Agent/AutopilotPolicy.cs` — pure forced-move rules (W2): FTUE/confirm-only modal (reuses `CompanionPlayPolicy.DecideBlockingModal`), game over continue, combat with nothing playable/usable → `end_turn` (never when `end_turn_will_kill_player`), single map path, reward collect-all / gold-relic claim, single event/rest/capstone/chest option, last non-admin action standing. Never a trade-off (cards, shop, potions, multi-option, lobby, a dialog with cancel).
+- `STS2AIAgent/Agent/AgentLoop.Autopilot.cs` — `TryAutopilotAsync` (in `PlayOnceAsync` after the Sandpit escape, before Jev; off with `autopilotEnabled`, yields to queued player guidance): runs the forced move through `ExecuteActAsync`, `RequestsSpent = 0`, `Source = "autopilot"`; a refused move's frame fingerprint goes to the model instead. `ReasonFor` holds the localized reasons.
+- `STS2AIAgent/Agent/AgentLoop.Capabilities.cs` — per-session provider learning (W7): after `StreamTruncationsBeforeDemotion` (2) truncated/empty streamed acts a model route's act turns go out non-streaming from the first request; `CanFillMissingIndex` skips the stream demotion when the frame leaves exactly one usable choice (`ActIndexValidator.ResolveUniqueIndex`).
+- `STS2AIAgent/Agent/TurnPlanPolicy.cs` — pure whole-turn plan rules (W3): `Parse` (act fields + `then` ≤ 9, numeric strings, warnings), `Resolve` (card by `card_cid` → today's hand position; standing target; unique target filled), `Diverged` (pending choice / screen / turn / new cards / took damage), `FindCardIndex`, `TurnPlanStopReasons`. Shared vectors `mcp_server/tests/fixtures/turn_plan_vectors.json` keep the Python copy equal.
+- `STS2AIAgent/Agent/AgentLoop.TurnPlan.cs` — `ContinuePlanAsync`: after the model's first act succeeds (`CompleteWithToolsAsync`, `planStateJson` from `PlayWithModelAsync`), runs `then` step by step through `ExecuteActAsync` with a fresh read, divergence check and player-guidance yield before each; stops on the first non-completed step, never retries; receipt = last step + `PlanSteps`/`PlanStopReason`/`TurnId`; `turnPlansEnabled=false` → first act only (`PlayInGameSingle` offers no `then`).
+- `STS2AIAgent/Agent/PromptStateDiet.cs` — prompt-only projection of the compact state (W6): no map graph off MAP, solo `run.players` slimmed, `run.piles` dropped in combat, readiness trimmed to 10 keys, `card_value_note` moved to `PlayPrompt.PlaySystem`, null/empty hand-card keys and null top-level sections dropped. Never changes the API's compact view; bad input passes through.
+- `STS2AIAgent/Agent/TurboPolicy.cs` — pure game-speed rules (`TurboLevel`, `Decide`: off / multiplayer cap at Fast / never slow a faster player; `ShouldRestore` only when the value is still ours; `Format`/`Parse` for the persisted marker).
+- `STS2AIAgent/Agent/VisionPolicy.cs` — pure screenshot rule (`off` / `on_demand` default / `every_step`; on demand = unknown screen, last turn failed or took no action, ≥2 unsettled in a row).
+- `STS2AIAgent/Agent/StallHintPolicy.cs` — pure: which second status line a long stage earns (main-menu idle, waiting for the player, slow model, game not responding).
+- `STS2AIAgent/Agent/AgentRuntime.Turbo.cs` — game speed while the AI plays: `EngageTurboAsync` (start of `AutoPlayLoopAsync`), `ReleaseTurboAsync` (its outer `finally`, own 5 s deadline, not the ended token), `ScheduleTurboRecovery` (mod start: repairs a boost a crashed session left), and the persisted marker `TurboRestoreFastMode`.
 - `STS2AIAgent/Agent/AgentRuntime.ModeControl.cs` — solo/co-op mutual exclusion: `TryBeginPlayModeSwitch`/`EndPlayModeSwitch`, start gates.
 - `STS2AIAgent/Agent/AgentRuntime.Accounting.cs` — `AccountTurn`, `RecordTurnReceipt`, `ApplyPlayResult`, the chat history buffer, Jev panel readings, `DescribeActResult`.
 - `STS2AIAgent/Agent/AgentRuntime.Session.cs` — run-scoped session: `ObserveSessionStateSnapshot` (only a fresh **raw** game-thread frame may switch or clear the session), `FlushSessionIfDirty`, `RecordDecision`.
@@ -261,6 +275,9 @@ one action runs at a time.
 - `STS2AIAgent/Game/GameStateService.cs` — base partial: `BuildStatePayload` (about 19 builders in a fixed order), `ResolveScreen`/`ResolveNonModalScreen`, `CurrentScreenName` (cheap), `EnumerateAvailableActions` (**the** action surface), `BuildAvailableActionNames(out descriptors)`, `BuildDecisionSnapshotPayload`, `GetLocalPlayer`, `FindDescendants<T>`, shared helpers.
 - `STS2AIAgent/Game/GameStateService.Predicates.cs` — every `Can*` gate and action-level `Is*` helper.
 - `STS2AIAgent/Game/GameStateService.Combat.cs` — the `CombatActionGate` (evaluated once per build; 200 ms stability sampler), hand cards (`playable`, `valid_target_indices`), target index helpers, intents.
+- `STS2AIAgent/Game/GameStateService.Probe.cs` — cheap reads for the auto-play hot paths: `ProbeActionable()` (combat gate + action names + readiness, no payload; what `GameBridge`'s actionable wait calls every frame) and `BuildTurnProbe()` (screen / phase / run id / in-combat / act for `AutoPlayLoopAsync`). Same sources and order as `BuildStatePayload`; pinned by `ActionabilityProbeContractTests`.
+- `STS2AIAgent/Game/GameStateService.CombatMath.cs` — combat arithmetic for compact view v13: `TryGetCombatCardId` (`NetCombatCardDb`, stable per combat → `hand[].cid`), `FormatCardType` (→ `type`), per-target damage previews (`UpdateDynamicVarPreview` against each enemy on a cloned var set; hits from `CalculatedHits`/`Repeat`/a literal two-hit list, unknown → null), `combat.threat` (incoming / block needed / hp after / lethal, `kill_options`, `max_block`) via `CombatMathPolicy`; cached only within one process frame + combat identity + complete combat payload (HP, intent, targets, values included); unknown hit counts and random/self-target totals are omitted rather than guessed; off with `combatMathEnabled`.
+- `STS2AIAgent/Game/CombatMathPolicy.cs` — pure threat summary, per-cell after-block/kill, knapsack kill options and max block (estimates: ignore draw and mid-turn buffs).
 - `STS2AIAgent/Game/GameStateService.CombatRisks.cs` — `end_turn_will_kill_player` and related flags from Doom, Poison, Constrict, Magic Bomb and Sandpit.
 - `STS2AIAgent/Game/GameStateService.Rooms.cs` — event, rest, crystal sphere, game over, chest and capstone payloads.
 - `STS2AIAgent/Game/GameStateService.Rewards.cs` — reward, card reward, bundle and deck-selection payloads, plus the `GetRewardButtons`/`GetProceedButton` helpers.
@@ -399,9 +416,11 @@ but hasn't settled; the agent treats a run of these as a stall (`NoProgressPolic
 - `STS2AIAgent/Server/HealthRoleData.cs` — role, play and companion fields reported by `/health`.
 - `STS2AIAgent/Server/CompanionPortFile.cs` — the companion writes its port so the host can find it.
 - `STS2AIAgent/Server/NativeMcpServer.cs` — Streamable-HTTP MCP endpoint (JSON-RPC, sessions, off by default).
+- `STS2AIAgent/Server/NativeMcpServer.TurnPlan.cs` — native MCP opt-in `then` orchestration: shared `TurnPlanPolicy`, 9-step cap, 30 s cancellation budget, combat-only follow-ups through `ActOnceAsync`; preserves original result and appends per-step `plan`/`final_state`; pending and unknown are terminal.
 - `STS2AIAgent/Server/NativeMcpServer.Tools.cs` — `ExecuteToolAsync`: native tool implementations, kept in parity with Python `server.py`.
 - `STS2AIAgent/Server/GameEventService.cs` — SSE event production (polls state on the game thread, diffs, emits typed events).
 - `STS2AIAgent/Server/EventPollingCoordinator.cs` — polling cadence and fallback.
+- `STS2AIAgent/Server/EventPollingCadence.cs` — adaptive SSE poll delay, wired through `GameEventService`'s digest signature and the coordinator's optional interval callback: 120 ms, one step slower (250/500/1000) after every 8 unchanged polls, reset on new subscriber or accepted decision; polling reads have a 5 s game-thread deadline.
 - `STS2AIAgent/Server/EventStreamSubscribers.cs` / `STS2AIAgent/Server/GameEventSubscriberHub.cs` — SSE subscriber registry and fan-out.
 - `STS2AIAgent/Server/EventChurnPolicy.cs` / `STS2AIAgent/Server/ConsecutiveRepeatSuppressor.cs` — suppress event churn and repeated events.
 - `STS2AIAgent/Llm/OpenAiCompatibleClient.cs` — chat completions with tools, reasoning content, ping, and the tool-calling probe (`ProbeToolCallingAsync`). A successful streamed body is read incrementally: the SSE/JSON decision is made on the first non-blank line, complete lines go to `SseCompletionAccumulator`, and each reasoning delta is reported through `LlmRequest.OnReasoningDelta` while the reply is still arriving.
@@ -458,6 +477,8 @@ but hasn't settled; the agent treats a run of these as a stall (`NoProgressPolic
 - `mcp_server/src/sts2_mcp/state_views.py` — `run_summary`, `diff_state` (mirrors `StateViews.cs`).
 - `mcp_server/src/sts2_mcp/game_data.py` — `/data` cache, scene detection, field projection (mirrors `GameDataFilter.cs`).
 - `mcp_server/src/sts2_mcp/scene_guidance.py` — strategy and playbook slices (mirrors `PlaybookSections.cs`).
+- `mcp_server/src/sts2_mcp/play_tools.py` — Python MCP `act` orchestration over the existing HTTP action seam; resolves optional `card_cid`, checks fresh state before combat-only `then` steps using `turn_plan.py`, stops on pending/unknown/refusal without replay; plain calls retain their old path.
+- `mcp_server/src/sts2_mcp/turn_plan.py` — Python port of `TurnPlanPolicy.cs` (`parse`/`resolve`/`diverged`/`find_card_index`, `STOP_*`); pinned to the C# copy by the shared `tests/fixtures/turn_plan_vectors.json` (`tests/test_turn_plan_vectors.py`).
 - `mcp_server/src/sts2_mcp/legacy_tools.py` — per-action tools for the `full` profile.
 - `mcp_server/src/sts2_mcp/handoff.py` — planner, combat and event handoff packets (`layered`+).
 - `mcp_server/src/sts2_mcp/knowledge.py` — on-disk knowledge base (`agent_knowledge/`, `STS2_AGENT_KNOWLEDGE_DIR`).
@@ -524,3 +545,34 @@ Tools are **synchronous**; don't make them async. Wire keys stay spelled the way
 - `STS2AIAgent/Server/CompanionStartupFile.cs` — publish initialization, listener or failure state to the host-selected session path.
 - `STS2AIAgent/Server/InstanceEndpointFile.cs` — publish and remove PID/role/port hints for local MCP discovery.
 - `mcp_server/src/sts2_mcp/discovery.py` — validate local endpoint hints against /health and resolve a role or PID without guessing an ambiguous instance.
+
+## 12. Experience overhaul (compact v13, unreleased)
+
+The turn first uses the cheap actionable probe, then a fresh compact frame. Sandpit safety runs before Autopilot; queued player guidance yields to the model. The model can name a first `act` plus nine `then` steps. Each step checks fresh state, stable card identity, divergence and cancellation through the existing single-action lease. Only the first decision row carries the request cost. Unknown outcomes are terminal and never replayed. Live intent is display-only and does not enter saved prompts or logs.
+
+- `STS2AIAgent/Config/ProviderCapability.cs` — fingerprint-scoped streaming-tool verdict and output-token field selection; cloned and invalidated with model verification.
+- `STS2AIAgent/Llm/ToolProbeArgs.cs` — pure completeness validation for the one additional streamed card-action probe.
+- `STS2AIAgent/Agent/LiveIntent.cs` — immutable fresh-frame action/card/target/reason snapshot and pure `HudModel` expiry/visibility rules.
+- `STS2AIAgent/Agent/AgentRuntime.Intent.cs` — current display intent, plan preview and actionable long-stage hints.
+- `STS2AIAgent/Game/HudAnchors.cs` — game-thread card/creature anchors, using verified public nodes; missing nodes produce no decoration.
+- `STS2AIAgent/Ui/AgentHud.cs` — mouse-ignoring game-screen banner, card outline, target line and bounded reason.
+- `STS2AIAgent/Ui/AgentOverlayHost.Hud.cs` — HUD CanvasLayer 120 lifecycle; the main overlay remains at 128. Capture hides both plus the edge tab and restores their prior visibility.
+- `STS2AIAgent/Agent/RunSummary.cs` — pure GAME_OVER facts, source counts, bounded highlights and factual per-character digest (600 characters).
+- `STS2AIAgent/Agent/RunJournalStore.cs` — atomic, redacted journal beside the settings file; at most 50 runs, deduplicated by run id.
+- `STS2AIAgent/Agent/AgentRuntime.RunSummary.cs` — fresh GAME_OVER capture, run report, journal switch/clear and prompt digest cache; menu exits do not create a result.
+- `STS2AIAgent/Ui/AgentOverlayHost.RunSummary.cs` — live report card, copy and journal-clear controls on the play page.
+- `STS2AIAgent/Game/DeckStatsPolicy.cs` — pure deck type/cost/starter counts for card choices; unknown and X costs are not guessed.
+- `STS2AIAgent/Game/MapRoutePolicy.cs` — bounded graph traversal for per-option room-count ranges and advisory score.
+- `STS2AIAgent/Game/GameStateService.Strategy.cs` — screen-scoped compact deck statistics and route-advice projection.
+- `STS2AIAgent/Agent/JevOptionEnumerator.Numbers.cs` — numeric option descriptions from the same frame's threat and damage previews.
+
+Provider learning persists per `ModelRoleProbe.Fingerprint`, including after two live stream truncations. Model verification sends one additional streaming probe. `maxOutputTokens` defaults to 8192 (null/0 disables the cap) and is synchronized to the companion. HTTP `play_card` optionally carries `card_cid` together with `card_index`; the handler checks the live hand under the lease and refuses a stale identity without retargeting. Python forwards both fields. Co-op message progress uses the pure `TeamMessageProgress` in `Multiplayer/TeamConversation.cs`.
+
+The report's request/token values describe the retained rows of that run; `counts_are_lower_bounds` marks a full decision window. Cache hit and observed time are explicitly labelled as session cache and time watched here. A completed run -> fresh GAME_OVER verification -> in-memory report -> optional journal write -> cached factual digest in the next play prompt.
+
+| Change | Start here |
+| --- | --- |
+| Turbo / forced moves / whole-turn planning | `STS2AIAgent/Game/TurboController.cs`, `STS2AIAgent/Agent/AutopilotPolicy.cs`, `STS2AIAgent/Agent/TurnPlanPolicy.cs` |
+| HUD and capture | `STS2AIAgent/Ui/AgentHud.cs`, `STS2AIAgent/Ui/AgentOverlayHost.Hud.cs`, `STS2AIAgent/Game/HudAnchors.cs` |
+| Run report and factual journal | `STS2AIAgent/Agent/AgentRuntime.RunSummary.cs`, `STS2AIAgent/Agent/RunJournalStore.cs` |
+| Prompt projection / capabilities | `STS2AIAgent/Agent/PromptStateDiet.cs`, `STS2AIAgent/Config/ProviderCapability.cs` |
