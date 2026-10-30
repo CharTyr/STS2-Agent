@@ -48,6 +48,13 @@ internal static class ProviderCapability
         string.Equals(Find(settings, model)?.StreamToolArgs, Unsupported, StringComparison.OrdinalIgnoreCase);
 
     /// <summary>
+    /// Whether this route proved that act arguments are cut short even without streaming, so its act
+    /// turns have to be answered as JSON in the reply text instead of through a tool call.
+    /// </summary>
+    public static bool ToolArgsUnreliable(AgentSettings settings, ResolvedModel model) =>
+        string.Equals(Find(settings, model)?.ToolArgs, Unsupported, StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>
     /// The output-cap field this route accepts. The probe records it; an untested route keeps the
     /// broadly compatible <c>max_tokens</c> and the client still renames it once if the server says so.
     /// </summary>
@@ -62,7 +69,21 @@ internal static class ProviderCapability
     /// player never pressed Test for it. Returns false when it was already recorded, so the caller
     /// does not persist the same fact twice.
     /// </summary>
-    public static bool MarkStreamToolArgsUnsupported(AgentSettings settings, ResolvedModel model)
+    public static bool MarkStreamToolArgsUnsupported(AgentSettings settings, ResolvedModel model) =>
+        MarkUnsupported(settings, model, record => record.StreamToolArgs, (record, value) => record.StreamToolArgs = value);
+
+    /// <summary>
+    /// Writes back "tool-call arguments are unusable even without streaming" for this route, the same
+    /// way. Returns false when it was already recorded.
+    /// </summary>
+    public static bool MarkToolArgsUnsupported(AgentSettings settings, ResolvedModel model) =>
+        MarkUnsupported(settings, model, record => record.ToolArgs, (record, value) => record.ToolArgs = value);
+
+    private static bool MarkUnsupported(
+        AgentSettings settings,
+        ResolvedModel model,
+        Func<ModelTestRecord, string?> read,
+        Action<ModelTestRecord, string> write)
     {
         settings.ModelTests ??= new List<ModelTestRecord>();
         var record = Find(settings, model);
@@ -80,8 +101,8 @@ internal static class ProviderCapability
             settings.ModelTests.Add(record);
         }
 
-        var changed = !string.Equals(record.StreamToolArgs, Unsupported, StringComparison.OrdinalIgnoreCase);
-        record.StreamToolArgs = Unsupported;
+        var changed = !string.Equals(read(record), Unsupported, StringComparison.OrdinalIgnoreCase);
+        write(record, Unsupported);
         record.ProbeVersion = ProbeVersion;
         record.TestedAt ??= DateTimeOffset.UtcNow.ToString("o");
         return changed;
@@ -101,6 +122,7 @@ internal static class ProviderCapability
     {
         record.ModelId = record.ModelId?.Trim() ?? string.Empty;
         record.StreamToolArgs = NormalizeStreamToolArgs(record.StreamToolArgs);
+        record.ToolArgs = NormalizeStreamToolArgs(record.ToolArgs);
         record.MaxTokensField = NormalizeMaxTokensField(record.MaxTokensField);
         if (record.ProbeVersion < 0)
         {

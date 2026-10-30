@@ -262,12 +262,13 @@ internal sealed partial class AgentRuntime
     };
 
     /// <summary>
-    /// Persists the verdict a live truncation proved for this route (W7.3), so the next session starts
-    /// non-streaming instead of paying for one broken stream per turn. Called once per route and
-    /// session by <see cref="AgentLoop"/>; a provider that fixes its gateway gets re-probed by the
-    /// model test, which replaces the same record.
+    /// Persists the verdict live truncations proved for this route (W7.3), so the next session starts
+    /// on the channel below instead of paying for one broken request per turn: without streaming, or,
+    /// when even that was cut short, without tools. Called once per route, channel and session by
+    /// <see cref="AgentLoop"/>; a provider that fixes its gateway gets re-probed by the model test,
+    /// which replaces the record.
     /// </summary>
-    private void RecordStreamToolArgsUnsupported(ResolvedModel resolved)
+    private void RecordActChannelUnreliable(ResolvedModel resolved, ActChannel channel)
     {
         var changed = false;
         lock (_gate)
@@ -280,13 +281,20 @@ internal sealed partial class AgentRuntime
                 return;
             }
 
-            changed = ProviderCapability.MarkStreamToolArgsUnsupported(
-                current, new ResolvedModel(endpoint, model));
+            var route = new ResolvedModel(endpoint, model);
+            changed = channel == ActChannel.StreamedTools
+                ? ProviderCapability.MarkStreamToolArgsUnsupported(current, route)
+                : ProviderCapability.MarkToolArgsUnsupported(current, route);
         }
 
         if (!changed)
         {
             return;
+        }
+
+        if (channel != ActChannel.StreamedTools)
+        {
+            NoteEvent("tool-call arguments arrive cut short even without streaming; act turns now answer as JSON in the reply");
         }
 
         try

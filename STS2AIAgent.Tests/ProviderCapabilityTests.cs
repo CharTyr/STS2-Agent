@@ -331,6 +331,44 @@ internal static class ProviderCapabilityTests
         Assert.Equal(MaxTokensField.CompletionTokens, loop.MaxTokensParameter(resolved));
     }
 
+    /// <summary>
+    /// A route whose tool arguments were cut even without streaming starts its act turns as reply JSON
+    /// in the next session; chat on the same route keeps its tools; and a fresh model test (a new
+    /// record) gives a fixed gateway its tools back.
+    /// </summary>
+    public static void LoopReadsThePersistedToolArgsVerdict()
+    {
+        var settings = AgentSettings.CreateDefault();
+        var loop = new AgentLoop(new UnusedBridge(), new ThrowingFactory(), () => settings);
+        var resolved = settings.TryResolvePlayModel()!;
+        Assert.Equal(ActChannel.StreamedTools, loop.ActChannelFor(resolved, allowAct: true));
+
+        Assert.True(ProviderCapability.MarkStreamToolArgsUnsupported(settings, resolved));
+        Assert.Equal(ActChannel.Tools, loop.ActChannelFor(resolved, allowAct: true));
+
+        Assert.True(ProviderCapability.MarkToolArgsUnsupported(settings, resolved));
+        Assert.False(ProviderCapability.MarkToolArgsUnsupported(settings, resolved), "the same fact is not written twice");
+        Assert.Equal(ActChannel.ReplyJson, loop.ActChannelFor(resolved, allowAct: true));
+        Assert.Equal(ActChannel.StreamedTools, loop.ActChannelFor(resolved, allowAct: false),
+            "only acts are cut short; chat keeps its read tools");
+        Assert.Equal(ProviderCapability.Unsupported, SettingsClone.Clone(settings).ModelTests.Single().ToolArgs);
+
+        settings.ModelTests.Clear();
+        settings.ModelTests.Add(new ModelTestRecord
+        {
+            ModelId = resolved.Model.Id,
+            Fingerprint = ModelRoleProbe.Fingerprint(resolved),
+            Status = "verified",
+            Tools = "supported"
+        });
+        Assert.Equal(ActChannel.StreamedTools, loop.ActChannelFor(resolved, allowAct: true));
+
+        var noTools = AgentSettings.CreateDefault();
+        noTools.Models[0].SupportsTools = false;
+        var plain = new AgentLoop(new UnusedBridge(), new ThrowingFactory(), () => noTools);
+        Assert.Equal(ActChannel.ReplyJson, plain.ActChannelFor(noTools.TryResolvePlayModel()!, allowAct: true));
+    }
+
     // --- Evidence clock -----------------------------------------------------------------------
 
     public static void WaitingClockRestartsOnNewEvidence()

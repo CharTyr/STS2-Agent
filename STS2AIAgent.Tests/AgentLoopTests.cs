@@ -1764,16 +1764,79 @@ internal static class AgentLoopTests
         Assert.False(factory.Requests[4].Stream, "After two truncations the act turn goes out without streaming from the start.");
     }
 
+    /// <summary>
+    /// The gateway measured live on 2026-10-28 cut the arguments after the action name on both the
+    /// streamed and the non-streamed path. The turn steps down the whole ladder -- streamed tools,
+    /// tools, reply JSON -- and plays, instead of failing three times and stopping.
+    /// </summary>
+    public static async Task PlayOnce_FallsBackToReplyJsonWhenBothToolPathsAreCut()
+    {
+        var twoCards = """{"screen":"COMBAT","available_actions":["play_card","end_turn"],"combat":{"hand":[{"i":0,"line":"Strike","targets":[]},{"i":1,"line":"Defend","targets":[]}],"enemies":[{"i":0}]}}""";
+        LlmCompletion Cut() => new() { ToolCalls = new[] { new LlmToolCall { Id = "t", Name = "act", ArgumentsJson = "{\"action\":\"play_card\"}" } } };
+        var factory = new ScriptedClientFactory(new[]
+        {
+            Cut(),
+            Cut(),
+            new LlmCompletion { Content = "{\"action\":\"play_card\",\"card_index\":1,\"reason\":\"block first\"}" }
+        });
+        var bridge = new FakeBridge { CompactStateJson = twoCards };
+
+        var result = await new AgentLoop(bridge, factory, AgentSettings.CreateDefault).PlayOnceAsync(CancellationToken.None);
+
+        Assert.Equal("play_card", result.Acted);
+        Assert.Equal(1, bridge.ActCalls);
+        Assert.Equal(1, bridge.ActLog[0].Card);
+        Assert.Equal(3, factory.Requests.Count);
+        Assert.True(factory.Requests[0].Stream && factory.Requests[0].Tools != null, "The turn starts on streamed tools.");
+        Assert.True(!factory.Requests[1].Stream && factory.Requests[1].Tools != null, "Then tools without streaming.");
+        Assert.True(factory.Requests[2].Tools == null, "Then no tools at all: the act comes back as reply JSON.");
+        Assert.Contains(PlayPrompt.JsonActFallback, factory.Requests[2].Messages[0].Content ?? "");
+        Assert.True(result.StreamDemoted);
+    }
+
+    /// <summary>
+    /// Two turns cut on both tool paths are enough: the route's act turns start as reply JSON, both
+    /// verdicts are handed to the runtime once each, and the instructions are not appended twice.
+    /// </summary>
+    public static async Task PlayOnce_LearnsThatToolArgumentsAreCutWithoutStreaming()
+    {
+        var twoCards = """{"screen":"COMBAT","available_actions":["play_card","end_turn"],"combat":{"hand":[{"i":0,"line":"Strike","targets":[]},{"i":1,"line":"Defend","targets":[]}],"enemies":[{"i":0}]}}""";
+        LlmCompletion Cut() => new() { ToolCalls = new[] { new LlmToolCall { Id = "t", Name = "act", ArgumentsJson = "{\"action\":\"play_card\"}" } } };
+        LlmCompletion Reply() => new() { Content = "{\"action\":\"play_card\",\"card_index\":0,\"reason\":\"r\"}" };
+        var factory = new ScriptedClientFactory(new[] { Cut(), Cut(), Reply(), Cut(), Cut(), Reply(), Reply() });
+        var reported = new List<ActChannel>();
+        var loop = new AgentLoop(
+            new FakeBridge { CompactStateJson = twoCards },
+            factory,
+            AgentSettings.CreateDefault,
+            onActChannelUnreliable: (_, channel) => reported.Add(channel));
+
+        await loop.PlayOnceAsync(CancellationToken.None);
+        await loop.PlayOnceAsync(CancellationToken.None);
+        await loop.PlayOnceAsync(CancellationToken.None);
+
+        Assert.Equal(7, factory.Requests.Count);
+        var third = factory.Requests[6];
+        Assert.True(third.Tools == null, "After two turns cut on both paths, the act turn starts as reply JSON.");
+        Assert.True(third.Stream, "Reply text streams fine; only tool arguments were cut.");
+        var system = third.Messages[0].Content ?? "";
+        Assert.Equal(system.IndexOf(PlayPrompt.JsonActFallback, StringComparison.Ordinal),
+            system.LastIndexOf(PlayPrompt.JsonActFallback, StringComparison.Ordinal));
+        Assert.Equal(2, reported.Count);
+        Assert.Equal(ActChannel.StreamedTools, reported[0]);
+        Assert.Equal(ActChannel.Tools, reported[1]);
+    }
+
     public static Task TruncatedStreamedActDetection()
     {
-        Assert.True(AgentLoop.LooksLikeTruncatedStreamedAct("{\"action\":\"play_card\"}"));
-        Assert.True(AgentLoop.LooksLikeTruncatedStreamedAct("{\"action\":\"choose_map_node\"}"));
-        Assert.False(AgentLoop.LooksLikeTruncatedStreamedAct("{\"action\":\"play_card\",\"card_index\":2}"));
-        Assert.False(AgentLoop.LooksLikeTruncatedStreamedAct("{\"action\":\"choose_map_node\",\"option_index\":1}"));
-        Assert.False(AgentLoop.LooksLikeTruncatedStreamedAct("{\"action\":\"end_turn\"}"));
-        Assert.False(AgentLoop.LooksLikeTruncatedStreamedAct("{\"action\":\"play_card\",\"card_cid\":17}"),
+        Assert.True(AgentLoop.LooksLikeTruncatedAct("{\"action\":\"play_card\"}"));
+        Assert.True(AgentLoop.LooksLikeTruncatedAct("{\"action\":\"choose_map_node\"}"));
+        Assert.False(AgentLoop.LooksLikeTruncatedAct("{\"action\":\"play_card\",\"card_index\":2}"));
+        Assert.False(AgentLoop.LooksLikeTruncatedAct("{\"action\":\"choose_map_node\",\"option_index\":1}"));
+        Assert.False(AgentLoop.LooksLikeTruncatedAct("{\"action\":\"end_turn\"}"));
+        Assert.False(AgentLoop.LooksLikeTruncatedAct("{\"action\":\"play_card\",\"card_cid\":17}"),
             "A card named by card_cid is complete (W3).");
-        Assert.False(AgentLoop.LooksLikeTruncatedStreamedAct("{\"action\":"));
+        Assert.False(AgentLoop.LooksLikeTruncatedAct("{\"action\":"));
         Assert.True(AgentLoop.IsMissingIndexError("target_index must come from the latest payload for this card."));
         Assert.True(AgentLoop.IsMissingIndexError("card_index must come from the latest combat.hand."));
         Assert.False(AgentLoop.IsMissingIndexError("Action is not in available_actions."));

@@ -52,7 +52,7 @@ internal sealed partial class AgentLoop
         Action<string>? acknowledgePlayInstruction = null,
         Action<string>? onReasoningDelta = null,
         Action<LiveIntent>? reportIntent = null,
-        Action<ResolvedModel>? onStreamToolArgsUnreliable = null,
+        Action<ResolvedModel, ActChannel>? onActChannelUnreliable = null,
         Func<string, string?>? runJournalDigest = null)
     {
         _bridge = bridge;
@@ -72,7 +72,7 @@ internal sealed partial class AgentLoop
         _onReasoningDelta = onReasoningDelta;
         _reportIntent = reportIntent;
         _runJournalDigest = runJournalDigest;
-        _onStreamToolArgsUnreliable = onStreamToolArgsUnreliable;
+        _onActChannelUnreliable = onActChannelUnreliable;
         // A live provider wins over the captured instance: the runtime constructs once, but the
         // Jev configuration can appear after that, and a decider frozen at construction is the
         // dual-layer toggle that never turns on.
@@ -279,7 +279,8 @@ internal sealed partial class AgentLoop
         var nudged = false;
         var accumulatedUsage = initialUsage;
         var requestsSpent = initialRequests;
-        var toolStreamFallbackTried = false;
+        // Where this turn's act goes; it only ever moves down the ladder (see AgentLoop.Capabilities).
+        var channel = ActChannelFor(resolved, allowAct);
 
         void RememberAccepted(string action, string response, string? reason)
         {
@@ -340,10 +341,10 @@ internal sealed partial class AgentLoop
                     MaxTokens = _settings().MaxOutputTokens,
                     MaxTokensParameter = MaxTokensParameter(resolved),
                     Messages = messages.ToArray(),
-                    Tools = resolved.Model.SupportsTools ? tools : null,
+                    Tools = channel == ActChannel.ReplyJson ? null : tools,
                     Thinking = resolved.Model.GetThinkingIntensity(),
                     ThinkingMode = resolved.Model.ThinkingMode,
-                    Stream = !(allowAct && resolved.Model.SupportsTools && (toolStreamFallbackTried || StreamToolArgsUnreliable(resolved))),
+                    Stream = channel != ActChannel.Tools,
                     // The only request a player watches think: the turn's own completion. Vision
                     // captions and role probes run without a callback, so their reasoning is not shown.
                     OnReasoningDelta = _onReasoningDelta
@@ -392,7 +393,7 @@ internal sealed partial class AgentLoop
                     // An act written as JSON in the reply text is an act, whether or not the model has
                     // native tools: re-asking a tool-capable model that answered in text cost a whole
                     // second request for an answer it had already given.
-                    if (mayAct && ActJsonParser.TryParse(completion.Content, wholeReplyOnly: resolved.Model.SupportsTools, out var actJson))
+                    if (mayAct && ActJsonParser.TryParse(completion.Content, wholeReplyOnly: channel != ActChannel.ReplyJson, out var actJson))
                     {
                         var parsed = await RunActAsync(actJson);
                         if (parsed.Error == null && stopAfterAct)
@@ -408,7 +409,7 @@ internal sealed partial class AgentLoop
 
                     // A thinking model that spent its whole output on reasoning will do it again;
                     // the recovery policy owns that retry (with backoff), not this loop.
-                    if (mayAct && stopAfterAct && resolved.Model.SupportsTools
+                    if (mayAct && stopAfterAct && channel != ActChannel.ReplyJson
                         && !CompletionErrors.IsReasoningBudgetExhausted(completion))
                     {
                         // Only a reply with nothing in it is the signature of a provider that cannot
@@ -416,11 +417,10 @@ internal sealed partial class AgentLoop
                         // re-send once without streaming. Demoting on any tool-less reply re-sent the
                         // whole ~11k-token prompt on 63% of decisions (ledger of 2026-10-28).
                         var silent = string.IsNullOrWhiteSpace(completion.Content) && string.IsNullOrWhiteSpace(completion.Reasoning);
-                        if (request.Stream && !toolStreamFallbackTried && (silent || nudged))
+                        if (channel == ActChannel.StreamedTools && (silent || nudged))
                         {
-                            toolStreamFallbackTried = true;
+                            channel = Demote(resolved, channel, messages);
                             streamDemoted = true;
-                            NoteStreamTruncation(resolved);
                             continue;
                         }
 
@@ -440,23 +440,22 @@ internal sealed partial class AgentLoop
                         reasoningExhausted: acted == null && CompletionErrors.IsReasoningBudgetExhausted(completion));
                 }
 
-                // Some gateways stream only the first fragment of a tool call's arguments and then
-                // finish the stream: the JSON closes after the action name, so the call is
-                // syntactically valid but unusable. The non-streaming body of the same request carries
-                // every field (measured live 2026-10-28), so retry once without streaming instead of
-                // spending the three-failure budget on a request the provider never delivered.
+                // Some gateways send only the first fragment of a tool call's arguments: the JSON closes
+                // after the action name, so the call is syntactically valid but unusable. Re-send the
+                // turn one channel down instead of spending the three-failure budget on a request the
+                // provider never delivered: first without streaming, which fixed one gateway, then
+                // without tools, for the gateway that cut the non-streamed body the same way
+                // (measured live 2026-10-28).
                 if (allowAct &&
                     acted == null &&
-                    request.Stream &&
-                    !toolStreamFallbackTried &&
+                    channel != ActChannel.ReplyJson &&
                     completion.ToolCalls.Any(call =>
                         string.Equals(call.Name, "act", StringComparison.OrdinalIgnoreCase) &&
-                        LooksLikeTruncatedStreamedAct(call.ArgumentsJson) &&
+                        LooksLikeTruncatedAct(call.ArgumentsJson) &&
                         !CanFillMissingIndex(call.ArgumentsJson, planStateJson)))
                 {
-                    toolStreamFallbackTried = true;
+                    channel = Demote(resolved, channel, messages);
                     streamDemoted = true;
-                    NoteStreamTruncation(resolved);
                     continue;
                 }
 
@@ -494,8 +493,7 @@ internal sealed partial class AgentLoop
                                     : await ContinuePlanAsync(Receipt(), call.ArgumentsJson, planStateJson, cancellationToken, checkState, reportPhase);
                             }
                         }
-                        else if (request.Stream &&
-                            !toolStreamFallbackTried &&
+                        else if (channel == ActChannel.StreamedTools &&
                             IsMissingIndexError(actOutcome.Error))
                         {
                             // A stream can also stop right after card_index, leaving the target out.
@@ -521,9 +519,8 @@ internal sealed partial class AgentLoop
                 if (retryStreamedAct)
                 {
                     messages.RemoveRange(messagesBeforeToolCalls, messages.Count - messagesBeforeToolCalls);
-                    toolStreamFallbackTried = true;
+                    channel = Demote(resolved, channel, messages);
                     streamDemoted = true;
-                    NoteStreamTruncation(resolved);
                     continue;
                 }
             }
@@ -898,20 +895,5 @@ internal sealed partial class AgentLoop
     {
         checkState?.Invoke(json);
         return json;
-    }
-
-    /// <summary>
-    /// Tells a model that cannot call tools how to answer instead, by appending to the static system
-    /// prompt at index 0. It belongs there rather than near the final instruction: it is part of the
-    /// unchanging prefix, so it does not cost the steps that follow a cacheable message.
-    /// </summary>
-    private static void AppendJsonActFallbackIfNeeded(List<LlmMessage> messages, ResolvedModel resolved, bool allowAct)
-    {
-        if (resolved.Model.SupportsTools || !allowAct || messages.Count == 0 || messages[0].Role != "system")
-        {
-            return;
-        }
-
-        messages[0] = LlmMessage.System((messages[0].Content ?? string.Empty) + "\n\n" + PlayPrompt.JsonActFallback);
     }
 }

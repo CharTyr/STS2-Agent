@@ -102,6 +102,7 @@ internal static class SettingsClone
                 Status = test.Status,
                 Tools = test.Tools,
                 StreamToolArgs = test.StreamToolArgs,
+                ToolArgs = test.ToolArgs,
                 MaxTokensField = test.MaxTokensField,
                 ProbeVersion = test.ProbeVersion,
                 Fingerprint = test.Fingerprint,

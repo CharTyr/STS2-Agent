@@ -484,6 +484,15 @@ internal sealed class ModelTestRecord
     public string StreamToolArgs { get; set; } = ProviderCapability.Unknown;
 
     /// <summary>
+    /// unknown | unsupported — whether a <em>non-streamed</em> act arrives with complete arguments.
+    /// Some gateways cut the tool-call JSON after the action name on both paths (measured live
+    /// 2026-10-28); only play shows it, since the probe's <c>end_turn</c> needs no index. Unsupported
+    /// sends the route's act turns without tools, as JSON in the reply text. Learnt live, never by the
+    /// probe, so a fresh model test (a new record) gives a fixed gateway its tools back.
+    /// </summary>
+    public string ToolArgs { get; set; } = ProviderCapability.Unknown;
+
+    /// <summary>
     /// The output-cap field the route accepted in the probe: <c>max_tokens</c> or
     /// <c>max_completion_tokens</c>. Null means it was never established.
     /// </summary>

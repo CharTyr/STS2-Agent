@@ -58,6 +58,8 @@ internal static class ExperienceTestCatalog
         yield return ("Experience.Recovery.StalledGameIsAWait", AutoPlayRecoveryTests.AStalledGameThreadIsAWaitNotAFailure);
         yield return ("Experience.Recovery.FillsOnlyPossibleIndex", AgentLoopTests.PlayOnce_FillsTheOnlyPossibleIndex);
         yield return ("Experience.Recovery.LearnsStreamTruncation", AgentLoopTests.PlayOnce_LearnsThatStreamedArgumentsAreTruncated);
+        yield return ("Experience.Recovery.ReplyJsonWhenBothToolPathsCut", AgentLoopTests.PlayOnce_FallsBackToReplyJsonWhenBothToolPathsAreCut);
+        yield return ("Experience.Recovery.LearnsToolArgsCut", AgentLoopTests.PlayOnce_LearnsThatToolArgumentsAreCutWithoutStreaming);
         yield return ("Experience.Capability.PersistsPerRoute", () => Task.Run(ProviderCapabilityTests.CapabilityPersistsPerRouteAndInvalidatesOnEdit));
         yield return ("Experience.Capability.CloneAndTeammate", () => Task.Run(ProviderCapabilityTests.CloneAndCompanionPayloadCarryTheCapabilityAndOutputCap));
         yield return ("Experience.Capability.SettingsFileRoundTrip", () => Task.Run(ProviderCapabilityTests.CapabilitySurvivesTheSettingsFile));
@@ -69,6 +71,7 @@ internal static class ExperienceTestCatalog
         yield return ("Experience.Capability.ModelTestUnknown", ProviderCapabilityTests.ModelTestLeavesTheCapabilityUnknownWhenTheProbeCannotRun);
         yield return ("Experience.Capability.ModelTestCompletionTokens", ProviderCapabilityTests.ModelTestRecordsTheCompletionTokensField);
         yield return ("Experience.Capability.LoopReadsVerdict", () => Task.Run(ProviderCapabilityTests.LoopReadsThePersistedVerdict));
+        yield return ("Experience.Capability.LoopReadsToolArgsVerdict", () => Task.Run(ProviderCapabilityTests.LoopReadsThePersistedToolArgsVerdict));
         yield return ("Experience.Recovery.EvidenceClock", () => Task.Run(ProviderCapabilityTests.WaitingClockRestartsOnNewEvidence));
         yield return ("Experience.Turbo.EngageFirstReleaseInFinally", () => Task.Run(TurboWiringContractTests.TheLoopEngagesFirstAndReleasesInItsOuterFinally));
         yield return ("Experience.Turbo.ReleaseNotTiedToEndedToken", () => Task.Run(TurboWiringContractTests.ReleaseIsNotTiedToTheEndedLoopsToken));

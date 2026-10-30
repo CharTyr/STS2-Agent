@@ -131,7 +131,7 @@ internal sealed partial class AgentRuntime
             // text on its own tick, and the buffer decides whether the player asked to see any of it.
             onReasoningDelta: ReportReasoningDelta,
             reportIntent: ReportIntent,
-            onStreamToolArgsUnreliable: RecordStreamToolArgsUnsupported,
+            onActChannelUnreliable: RecordActChannelUnreliable,
             runJournalDigest: stateJson => RunJournalDigestForState(stateJson));
     }
 

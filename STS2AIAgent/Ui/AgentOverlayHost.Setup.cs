@@ -286,8 +286,12 @@ internal sealed partial class AgentOverlayHost
             };
         }
 
+        // A route whose tool arguments arrive cut short plays through reply JSON instead; the badge says
+        // so, since "verified" alone would not explain why its reasoning no longer streams.
         return record.Tools == "supported"
-            ? (Loc.T("已验证（{0}）", ShortTime(record.TestedAt)), UiFactory.ButtonKind.Primary)
+            ? (record.ToolArgs == ProviderCapability.Unsupported
+                ? Loc.T("已验证（{0}）· 工具参数不完整，已改为正文出牌", ShortTime(record.TestedAt))
+                : Loc.T("已验证（{0}）", ShortTime(record.TestedAt)), UiFactory.ButtonKind.Primary)
             : (Loc.T("不支持工具调用，无法自动游玩（{0}）", ShortTime(record.TestedAt)), UiFactory.ButtonKind.Normal);
     }
 

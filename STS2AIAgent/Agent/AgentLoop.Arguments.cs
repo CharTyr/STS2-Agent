@@ -41,7 +41,7 @@ internal sealed partial class AgentLoop
     }
 
     /// <summary>
-    /// Whether a streamed <c>act</c> looks cut short by the provider rather than answered with a
+    /// Whether an <c>act</c> tool call looks cut short by the provider rather than answered with a
     /// deliberate omission.
     /// </summary>
     /// <remarks>
@@ -49,11 +49,11 @@ internal sealed partial class AgentLoop
     /// only the first fragment of the tool arguments (<c>{"action":"play_card"}</c>) and then ended
     /// with <c>finish_reason=tool_calls</c>, while the non-streaming body of the same request carried
     /// every field. The JSON is well formed, so nothing downstream can tell it apart from a model that
-    /// forgot an index, and three such turns stopped a run. Treat a missing index the action requires
-    /// as this truncation: the caller retries the turn once without streaming, exactly like the
-    /// existing toolless-stream demotion.
+    /// forgot an index, and three such turns stopped a run. A second gateway cut the non-streamed body
+    /// the same way. Treat a missing index the action requires as this truncation: the caller retries
+    /// the turn one act channel down (<see cref="ActChannel"/>).
     /// </remarks>
-    internal static bool LooksLikeTruncatedStreamedAct(string? argumentsJson)
+    internal static bool LooksLikeTruncatedAct(string? argumentsJson)
     {
         try
         {
