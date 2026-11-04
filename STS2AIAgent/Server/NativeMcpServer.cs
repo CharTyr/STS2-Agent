@@ -62,6 +62,8 @@ internal sealed partial class NativeMcpServer
     private readonly DecisionLog? _decisions;
     private readonly StrategyStore? _strategyStore;
     private readonly Func<(bool DualLayer, bool JevConfigured)>? _dualLayerStatus;
+    private readonly McpSessionDedup _sessionDedup = new();
+    private readonly AsyncLocal<string?> _activeRequestSession = new();
     private readonly string _version;
     private bool _enabled;
     private string? _endpointUrl;
@@ -135,6 +137,7 @@ internal sealed partial class NativeMcpServer
             if (!enabled)
             {
                 _sessionId = null;
+                _sessionDedup.ResetAll();
             }
         }
     }
@@ -243,76 +246,89 @@ internal sealed partial class NativeMcpServer
         CancellationToken cancellationToken)
     {
         RememberSession(sessionHeader);
-        var method = (httpMethod ?? "POST").Trim().ToUpperInvariant();
-        if (method == "OPTIONS")
-        {
-            return new McpHttpResult { StatusCode = 204, SessionId = CurrentSession() };
-        }
-
-        if (method == "GET")
-        {
-            return RestError(405, "method_not_allowed", "MCP uses Streamable HTTP. POST JSON-RPC to this URL.");
-        }
-
-        if (method == "DELETE")
-        {
-            lock (_gate)
-            {
-                _sessionId = null;
-            }
-
-            return JsonResult(200, new { ok = true });
-        }
-
-        if (method != "POST")
-        {
-            return RestError(405, "method_not_allowed", "Use POST JSON-RPC.");
-        }
-
-        if (string.IsNullOrWhiteSpace(body))
-        {
-            return RpcHttp(400, RpcError(null, -32700, "Parse error: empty body"), accept);
-        }
-
-        JsonDocument document;
+        var scopedHeader = string.IsNullOrWhiteSpace(sessionHeader) ? null : sessionHeader.Trim();
+        _activeRequestSession.Value = scopedHeader;
         try
         {
-            document = JsonDocument.Parse(body);
-        }
-        catch (JsonException ex)
-        {
-            return RpcHttp(400, RpcError(null, -32700, "Parse error: " + ex.Message), accept);
-        }
-
-        using (document)
-        {
-            if (document.RootElement.ValueKind == JsonValueKind.Array)
+            var method = (httpMethod ?? "POST").Trim().ToUpperInvariant();
+            if (method == "OPTIONS")
             {
-                var batch = new List<object>();
-                foreach (var item in document.RootElement.EnumerateArray())
+                return new McpHttpResult { StatusCode = 204, SessionId = CurrentSession() };
+            }
+
+            if (method == "GET")
+            {
+                return RestError(405, "method_not_allowed", "MCP uses Streamable HTTP. POST JSON-RPC to this URL.");
+            }
+
+            if (method == "DELETE")
+            {
+                string? cleared;
+                lock (_gate)
                 {
-                    var outcome = await HandleMessageAsync(item, cancellationToken);
-                    if (outcome != null)
+                    cleared = _sessionId;
+                    _sessionId = null;
+                }
+                _sessionDedup.ResetSession(scopedHeader);
+                _sessionDedup.ResetSession(cleared);
+
+                return JsonResult(200, new { ok = true });
+            }
+
+            if (method != "POST")
+            {
+                return RestError(405, "method_not_allowed", "Use POST JSON-RPC.");
+            }
+
+            if (string.IsNullOrWhiteSpace(body))
+            {
+                return RpcHttp(400, RpcError(null, -32700, "Parse error: empty body"), accept);
+            }
+
+            JsonDocument document;
+            try
+            {
+                document = JsonDocument.Parse(body);
+            }
+            catch (JsonException ex)
+            {
+                return RpcHttp(400, RpcError(null, -32700, "Parse error: " + ex.Message), accept);
+            }
+
+            using (document)
+            {
+                if (document.RootElement.ValueKind == JsonValueKind.Array)
+                {
+                    var batch = new List<object>();
+                    foreach (var item in document.RootElement.EnumerateArray())
                     {
-                        batch.Add(outcome);
+                        var outcome = await HandleMessageAsync(item, cancellationToken);
+                        if (outcome != null)
+                        {
+                            batch.Add(outcome);
+                        }
                     }
+
+                    if (batch.Count == 0)
+                    {
+                        return new McpHttpResult { StatusCode = 202, SessionId = CurrentSession() };
+                    }
+
+                    return RpcHttp(200, batch, accept, CurrentSession());
                 }
 
-                if (batch.Count == 0)
+                var single = await HandleMessageAsync(document.RootElement, cancellationToken);
+                if (single == null)
                 {
                     return new McpHttpResult { StatusCode = 202, SessionId = CurrentSession() };
                 }
 
-                return RpcHttp(200, batch, accept, CurrentSession());
+                return RpcHttp(200, single, accept, CurrentSession());
             }
-
-            var single = await HandleMessageAsync(document.RootElement, cancellationToken);
-            if (single == null)
-            {
-                return new McpHttpResult { StatusCode = 202, SessionId = CurrentSession() };
-            }
-
-            return RpcHttp(200, single, accept, CurrentSession());
+        }
+        finally
+        {
+            _activeRequestSession.Value = null;
         }
     }
 
@@ -407,10 +423,17 @@ internal sealed partial class NativeMcpServer
                        SupportedProtocols.Contains(requested, StringComparer.Ordinal)
             ? requested
             : DefaultProtocolVersion;
+        string newSession;
+        string? previousSession;
         lock (_gate)
         {
-            _sessionId = Guid.NewGuid().ToString("N");
+            previousSession = _sessionId;
+            newSession = Guid.NewGuid().ToString("N");
+            _sessionId = newSession;
         }
+        _sessionDedup.ResetSession(previousSession);
+        _sessionDedup.ResetSession(newSession);
+        _activeRequestSession.Value = newSession;
 
         return new
         {
@@ -597,6 +620,8 @@ internal sealed partial class NativeMcpServer
             return _sessionId;
         }
     }
+
+    private string? ActiveSession() => _activeRequestSession.Value ?? CurrentSession();
 
     private static McpHttpResult StampAllowOrigin(McpHttpResult result, string? allowOrigin)
     {

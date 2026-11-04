@@ -30,6 +30,7 @@ import re
 from typing import Any
 
 from .envelope import Sts2ApiError
+from .state_diet import slim_compact_state
 
 # The request fields that index into a payload list, in the order an error message would name them.
 INDEX_FIELDS: tuple[str, ...] = ("card_index", "option_index", "target_index")
@@ -106,13 +107,15 @@ def project_agent_state(state: Any, *, raw_state: bool = False) -> Any:
     if "available_actions" not in agent_view and isinstance(agent_view.get("actions"), list):
         # The compact view names its action list `actions`; every reader of this projection looks it
         # up as `available_actions`, so the alias is added here rather than re-derived per caller.
-        return {
+        projected = {
             **agent_view,
             "available_actions": agent_view["actions"],
             "compact_agent_view": True,
         }
+    else:
+        projected = {**agent_view, "compact_agent_view": True}
 
-    return {**agent_view, "compact_agent_view": True}
+    return slim_compact_state(projected)
 
 
 def compact_action_result(result: Any) -> Any:

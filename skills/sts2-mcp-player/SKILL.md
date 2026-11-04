@@ -18,7 +18,7 @@ This skill is transport-agnostic. It only assumes that your host agent exposes o
 
 ## Two ways to play
 
-Mode A: you act. Read `decide` or `get_game_state`, then call `act`; in combat name cards by `card_cid` and put up to nine follow-up combat steps in `then`. Every step is checked against fresh state. Stop on a refusal, pending result or unknown outcome; never replay an uncertain action. Use a bounded number of decisions and report progress when the host limits autonomous loops.
+Mode A: you act. Read `decide` or `get_game_state`, then call `act`; in combat name cards by `card_cid` and put up to nine follow-up combat steps in `then` (read `final_state` after a `then` plan). Unchanged `run.deck`, `run.relic_descriptions`, `run.ascension_effects`, `glossary` terms, and `decide` `scene_guidance` are marked `*_unchanged` (or `glossary_delta`) within a session and re-sent automatically whenever they change; pass `full_state=true` to `get_game_state` only if context was compacted and you need them re-sent. Every step is checked against fresh state. Stop on a refusal, pending result or unknown outcome; never replay an uncertain action. Use a bounded number of decisions and report progress when the host limits autonomous loops.
 
 Mode B: the mod acts, you plan. Start/pause the mod through the local `POST /session/control` endpoint and use `get_planner_briefing` / `update_play_strategy` for strategic guidance. Do not issue competing direct actions while mod auto-play owns the character.
 

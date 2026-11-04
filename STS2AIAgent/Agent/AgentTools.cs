@@ -160,9 +160,22 @@ internal static class AgentTools
         required = new[] { "before", "after" }
     };
 
+    private static readonly object GetGameStateParameters = new
+    {
+        type = "object",
+        properties = new
+        {
+            full_state = new
+            {
+                type = "boolean",
+                description = "Re-send unchanged deck/relic/glossary blocks."
+            }
+        }
+    };
+
     public static readonly IReadOnlyList<LlmTool> ReadOnly = new[]
     {
-        Tool("get_game_state", "Read the compact live game state. Always prefer this over memory. This is sufficient to play every screen without vision."),
+        Tool("get_game_state", "Read compact game state (`compact_agent_view` false on raw fallback; `get_raw_game_state` reads raw `/state`).", GetGameStateParameters),
         Tool("get_raw_game_state", "Read the full raw /state snapshot when compact agent_view is missing a field."),
         Tool("get_available_actions", "List currently legal actions with requires_index / requires_target hints."),
         Tool("get_game_data_item", "Look up one card/relic/monster/potion/event/power/character by id.", CollectionItemParameters),

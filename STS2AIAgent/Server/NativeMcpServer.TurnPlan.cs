@@ -10,7 +10,7 @@ namespace STS2AIAgent.Server;
 /// </summary>
 internal sealed partial class NativeMcpServer
 {
-    private async Task<string> AppendPlanAsync(JsonElement arguments, string firstResult, string planState, CancellationToken cancellationToken)
+    private async Task<string> AppendPlanAsync(JsonElement arguments, string firstResult, string planState, bool rawState, CancellationToken cancellationToken)
     {
         // Named reader makes the optional argument visible to the two-MCP parameter contract.
         var then = ReadArray(arguments, "then");
@@ -45,7 +45,7 @@ internal sealed partial class NativeMcpServer
                 if (!resolved.Ok) { stop = resolved.StopReason; break; }
                 var (result, _) = await ActOnceAsync(resolved.Action, resolved.CardIndex, step.CardCid is { } cid && cid <= int.MaxValue ? (int)cid : null,
                     resolved.TargetIndex, resolved.OptionIndex, null, null, null, step.Reason,
-                    rawState: false, deadline.Token);
+                    rawState: rawState, deadline.Token);
                 var payload = DeserializeOrEmpty(result);
                 results.Add(payload);
                 stop = PlanResultStop(payload);
@@ -55,18 +55,50 @@ internal sealed partial class NativeMcpServer
         {
             stop = TurnPlanStopReasons.OutcomeUnknown;
         }
-        // Keep the original single-act fields unchanged. Clients opting into then inspect plan;
-        // final_state is additive and the last step's own state, never a speculative reconciliation.
+
+        JsonElement? finalState = null;
+        for (var i = results.Count - 1; i >= 0; i--)
+        {
+            if (results[i].TryGetProperty("state", out var stepState) && stepState.ValueKind == JsonValueKind.Object)
+            {
+                finalState = stepState.Clone();
+                break;
+            }
+        }
+
+        var slimSteps = rawState ? results : results.Select(StripStepState).ToList();
         var output = JsonSerializer.Deserialize<Dictionary<string, JsonElement>>(firstResult) ?? new();
         output["plan"] = JsonSerializer.SerializeToElement(new
         {
-            steps = results,
+            steps = slimSteps,
             executed = results.Count,
             stop_reason = stop ?? TurnPlanStopReasons.Completed,
             warnings = plan.Warnings
         });
-        if (results[^1].TryGetProperty("state", out var finalState)) output["final_state"] = finalState.Clone();
+        if (finalState is { } fs)
+        {
+            output["final_state"] = fs;
+            if (!rawState) output.Remove("state");
+        }
         return JsonSerializer.Serialize(output, JsonOptions);
+    }
+
+    private static JsonElement StripStepState(JsonElement step)
+    {
+        if (step.ValueKind != JsonValueKind.Object || !step.TryGetProperty("state", out _))
+        {
+            return step;
+        }
+
+        var copy = new Dictionary<string, JsonElement>(StringComparer.Ordinal);
+        foreach (var prop in step.EnumerateObject())
+        {
+            if (!string.Equals(prop.Name, "state", StringComparison.Ordinal))
+            {
+                copy[prop.Name] = prop.Value.Clone();
+            }
+        }
+        return JsonSerializer.SerializeToElement(copy, JsonOptions);
     }
 
     private static string? PlanResultStop(JsonElement result)
