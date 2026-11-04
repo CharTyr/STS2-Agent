@@ -318,6 +318,7 @@ internal static partial class Loc
         map["默认 600 秒"] = "Default 600 seconds";
         map["默认 90 秒"] = "Default 90 seconds";
         map["请求超时（秒）"] = "Request timeout (s)";
+        map["最小决策间隔（秒）"] = "Min decision interval (s)";
         map["显示高级选项"] = "Show advanced options";
         map["显示/隐藏热键"] = "Show/hide hotkey";
         map["不限（留空或0）"] = "Unlimited (blank or 0)";

@@ -18,6 +18,8 @@ STOP_SCREEN_CHANGED = "screen_changed"
 STOP_TURN_CHANGED = "turn_changed"
 STOP_NEW_CARDS = "new_cards"
 STOP_TOOK_DAMAGE = "took_damage"
+STOP_ENEMIES_CHANGED = "enemies_changed"
+STOP_INTENT_CHANGED = "intent_changed"
 STOP_PENDING_CHOICE = "pending_choice"
 STOP_UNSETTLED = "unsettled"
 STOP_REJECTED = "rejected"
@@ -181,6 +183,9 @@ def diverged(plan_time: dict | str | None, current: dict | str | None) -> str | 
     before, after = _player_hp(plan), _player_hp(now)
     if before is not None and after is not None and after < before:
         return STOP_TOOK_DAMAGE
+    enemy_stop = _enemy_divergence(plan, now)
+    if enemy_stop is not None:
+        return enemy_stop
     return None
 
 def find_card_index(state: dict | str | None, cid: int) -> int | None:
@@ -243,6 +248,89 @@ def _hand(root: dict) -> list[dict]:
     combat = root.get("combat")
     hand = combat.get("hand") if isinstance(combat, dict) else None
     return [card for card in hand if isinstance(card, dict)] if isinstance(hand, list) else []
+
+
+def _enemies(root: dict) -> list[dict]:
+    combat = root.get("combat")
+    enemies = combat.get("enemies") if isinstance(combat, dict) else None
+    return [enemy for enemy in enemies if isinstance(enemy, dict)] if isinstance(enemies, list) else []
+
+
+def _enemy_divergence(plan: dict, now: dict) -> str | None:
+    plan_enemies = _enemies(plan)
+    if not plan_enemies:
+        return None
+    current_enemies = _enemies(now)
+    plan_alive: set[tuple[int | None, str]] = set()
+    plan_intent_by_index: dict[int, dict] = {}
+    for enemy in plan_enemies:
+        if _read_bool(enemy, "alive") is False:
+            continue
+        idx = _read_int(enemy, "i")
+        plan_alive.add((idx, _read_string(enemy, "enemy_id") or ""))
+        if idx is not None and _has_intent_fields(enemy):
+            plan_intent_by_index[idx] = enemy
+
+    for enemy in current_enemies:
+        if _read_bool(enemy, "alive") is not True:
+            continue
+        key = (_read_int(enemy, "i"), _read_string(enemy, "enemy_id") or "")
+        if key not in plan_alive:
+            return STOP_ENEMIES_CHANGED
+
+    if plan_intent_by_index:
+        for enemy in current_enemies:
+            idx = _read_int(enemy, "i")
+            if _read_bool(enemy, "alive") is not True or idx is None:
+                continue
+            plan_enemy = plan_intent_by_index.get(idx)
+            if plan_enemy is not None and _intent_diverged(plan_enemy, enemy):
+                return STOP_INTENT_CHANGED
+    return None
+
+
+def _has_intent_fields(enemy: dict) -> bool:
+    return (
+        enemy.get("intent") is not None
+        or enemy.get("move_id") is not None
+        or isinstance(enemy.get("intents"), list)
+    )
+
+
+def _intent_items(enemy: dict) -> list[dict] | None:
+    intents = enemy.get("intents")
+    if not isinstance(intents, list):
+        return None
+    return [item for item in intents if isinstance(item, dict)]
+
+
+def _intent_diverged(plan_enemy: dict, current_enemy: dict) -> bool:
+    if (_read_string(plan_enemy, "intent") or "") != (_read_string(current_enemy, "intent") or ""):
+        return True
+    if (_read_string(plan_enemy, "move_id") or "") != (_read_string(current_enemy, "move_id") or ""):
+        return True
+    plan_intents = _intent_items(plan_enemy)
+    current_intents = _intent_items(current_enemy)
+    if plan_intents is None and current_intents is None:
+        return False
+    p_list = plan_intents if plan_intents is not None else []
+    c_list = current_intents if current_intents is not None else []
+    if len(p_list) != len(c_list):
+        return True
+    for p_item, c_item in zip(p_list, c_list):
+        if (
+            (_read_string(p_item, "intent_type") or "") != (_read_string(c_item, "intent_type") or "")
+            or _read_int(p_item, "hits") != _read_int(c_item, "hits")
+            or _read_int(p_item, "status_card_count") != _read_int(c_item, "status_card_count")
+        ):
+            return True
+        p_dmg, c_dmg = _read_int(p_item, "damage"), _read_int(c_item, "damage")
+        if (p_dmg is None) != (c_dmg is None) or (p_dmg is not None and c_dmg is not None and c_dmg > p_dmg):
+            return True
+        p_tot, c_tot = _read_int(p_item, "total_damage"), _read_int(c_item, "total_damage")
+        if (p_tot is None) != (c_tot is None) or (p_tot is not None and c_tot is not None and c_tot > p_tot):
+            return True
+    return False
 
 def _enemy_standing(root: dict, index: int) -> bool:
     combat = root.get("combat")

@@ -29,6 +29,7 @@ internal sealed class CompanionPlaySettings
     public string VisionMode { get; init; } = AgentSettings.VisionOnDemand;
     public bool RunJournalEnabled { get; init; } = true;
     public int? MaxOutputTokens { get; init; } = AgentSettings.DefaultMaxOutputTokens;
+    public double? MinDecisionIntervalSeconds { get; init; }
 
     public bool IsValid => Endpoints is { Count: <= 16 } && Models is { Count: <= 32 }
         && RoleTests is { Count: <= 3 } && ModelTests is { Count: <= 32 }
@@ -42,6 +43,10 @@ internal sealed class CompanionPlaySettings
         && LlmRequestTimeoutSeconds is null or (> 0 and <= 3600)
         && ReplyLanguage is "auto" or "zh" or "en" && ProactiveChatTone is { Length: <= 128 }
         && MaxOutputTokens is null or (> 0 and <= 1_000_000)
+        && (MinDecisionIntervalSeconds is null
+            || (double.IsFinite(MinDecisionIntervalSeconds.Value)
+                && MinDecisionIntervalSeconds.Value > 0
+                && MinDecisionIntervalSeconds.Value <= AgentSettings.MaxDecisionIntervalSeconds))
         && TurboMode is AgentSettings.TurboOff or AgentSettings.TurboFast or AgentSettings.TurboInstant
         && VisionMode is AgentSettings.VisionOff or AgentSettings.VisionOnDemand or AgentSettings.VisionEveryStep;
 
@@ -59,7 +64,8 @@ internal sealed class CompanionPlaySettings
             TurboMode = copy.TurboMode, AutopilotEnabled = copy.AutopilotEnabled,
             TurnPlansEnabled = copy.TurnPlansEnabled, CombatMathEnabled = copy.CombatMathEnabled,
             VisionMode = copy.VisionMode, RunJournalEnabled = copy.RunJournalEnabled,
-            MaxOutputTokens = copy.MaxOutputTokens
+            MaxOutputTokens = copy.MaxOutputTokens,
+            MinDecisionIntervalSeconds = copy.MinDecisionIntervalSeconds
         };
     }
 
@@ -93,5 +99,6 @@ internal sealed class CompanionPlaySettings
         settings.VisionMode = VisionMode;
         settings.RunJournalEnabled = RunJournalEnabled;
         settings.MaxOutputTokens = MaxOutputTokens;
+        settings.MinDecisionIntervalSeconds = MinDecisionIntervalSeconds;
     }
 }

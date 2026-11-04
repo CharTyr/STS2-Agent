@@ -135,6 +135,8 @@ internal sealed partial class AgentLoop
     private bool _lastPlayFailed;
     private bool _lastPlayTookNoAction;
     private int _consecutiveUnsettled;
+    private readonly PlayStateSplitCache _stateSplitCache = new();
+    internal DecisionPacingGate PacingGate { get; init; } = new();
 
     private async Task<AgentTurnResult> PlayWithModelAsync(
         AgentSettings settings, ResolvedModel resolved, string stateJson, AgentTurnResult pending,
@@ -152,9 +154,12 @@ internal sealed partial class AgentLoop
             cancellationToken.ThrowIfCancellationRequested();
             var budget = _budgetGuard?.Invoke()?.CheckBudget(requests, usage?.TotalTokens ?? 0);
             if (budget != null) return Receipt(budget);
-            if (requests > 0)
+            var pacedWait = await PacingGate.WaitBeforePrimaryRequestAsync(
+                settings.MinDecisionIntervalSeconds,
+                cancellationToken);
+            if (requests > 0 || pacedWait > TimeSpan.Zero)
             {
-                // A slow or rejected Jev decision must not hand the LLM its old frame.
+                // A slow or rejected Jev decision, or a configured pacing wait, must not hand the LLM its old frame.
                 stateJson = await _bridge.GetCompactStateJsonAsync(cancellationToken);
                 checkState?.Invoke(stateJson);
             }
@@ -202,6 +207,15 @@ internal sealed partial class AgentLoop
                     + FormatStrategyForPrompt(strategy)));
             }
 
+            // Hoist unchanging run inventory (deck, relics, relic descriptions, ascension effects) and
+            // baseline glossary into the static system prefix so Boss/combat prefix caches stay warm (#234).
+            var stateSplit = _stateSplitCache.Split(PromptStateDiet.Apply(stateJson), screenLabel);
+            if (stateSplit.StaticRunJson != null)
+            {
+                messages.Add(LlmMessage.System(
+                    "Current run static context:\n" + stateSplit.StaticRunJson));
+            }
+
             var teamContext = _teamContext?.Invoke();
             if (!string.IsNullOrEmpty(teamContext))
             {
@@ -244,9 +258,8 @@ internal sealed partial class AgentLoop
                     + instruction.Text));
             }
 
-            // The prompt's copy only: fields no decision on this screen can use are dropped (W6). The
-            // compact view the API serves is unchanged.
-            messages.Add(LlmMessage.User("Latest compact game state:\n" + PromptStateDiet.Apply(stateJson)));
+            // Static run inventory and baseline glossary were hoisted above; only volatile frame fields remain.
+            messages.Add(LlmMessage.User("Latest compact game state:\n" + stateSplit.DynamicStateJson));
             var plans = settings.TurnPlansEnabled;
             messages.Add(LlmMessage.User(plans && NonCombatOnlyPolicy.IsCombatSnapshot(stateJson)
                 ? PlayPrompt.ActNowInstruction + " " + PlayPrompt.PlanTurnInstruction

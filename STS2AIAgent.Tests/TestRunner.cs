@@ -1102,5 +1102,14 @@ internal static class TestRunner
         {
             yield return test;
         }
+        yield return ("PlayStateSplit.HoistsStaticRunAndGlossary", () => Task.Run(PlayStateSplitTests.HoistsStaticRunAndBaselineGlossaryIntoStableJson));
+        yield return ("PlayStateSplit.BossFramesByteIdentical", () => Task.Run(PlayStateSplitTests.KeepsStaticJsonByteIdenticalAcrossBossCombatFramesAndTransientGlossary));
+        yield return ("PlayStateSplit.DeckChangeInvalidatesCache", () => Task.Run(PlayStateSplitTests.InvalidatesCacheImmediatelyWhenDeckOrRelicsChange));
+        yield return ("PlayStateSplit.MinimalPassThrough", () => Task.Run(PlayStateSplitTests.MinimalOrInvalidSnapshotsPassThroughWithoutStaticMessage));
+        yield return ("PlayStateSplit.AgentLoopPrefixContract", PlayStateSplitTests.EndToEndAgentLoopPlacesStaticRunContextBeforeCompactionAndUserMessages);
+        yield return ("DecisionPacing.DisabledByDefault", DecisionPacingTests.DisabledByDefaultAndNeverDelays);
+        yield return ("DecisionPacing.RemainingIntervalAndClamp", DecisionPacingTests.WaitsOnlyRemainingElapsedIntervalAndClampsMaximum);
+        yield return ("DecisionPacing.CancellationSafe", DecisionPacingTests.CancellationAbortsWaitWithoutStamping);
+        yield return ("DecisionPacing.AgentLoopIntegration", DecisionPacingTests.AgentLoopPacesPrimaryRequestsRefreshesStateAndSkipsAutopilotAndTurnPlans);
     }
 }

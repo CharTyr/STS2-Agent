@@ -70,6 +70,15 @@ internal sealed partial class AgentSettings
 
     public const int DefaultMaxOutputTokens = 8192;
 
+    /// <summary>
+    /// Optional minimum wall-clock interval in seconds between consecutive primary play-model requests (#234).
+    /// Null or &lt;= 0 disables pacing (default). Zero-request forced moves and whole-turn plan <c>then</c>
+    /// steps are never delayed.
+    /// </summary>
+    public double? MinDecisionIntervalSeconds { get; set; }
+
+    public const double MaxDecisionIntervalSeconds = 300.0;
+
     private void NormalizeExperienceSettings()
     {
         TurboMode = NormalizeChoice(TurboMode, TurboInstant, TurboOff, TurboFast, TurboInstant);
@@ -85,6 +94,11 @@ internal sealed partial class AgentSettings
         {
             MaxOutputTokens = null;
         }
+        MinDecisionIntervalSeconds = MinDecisionIntervalSeconds is { } interval
+            && double.IsFinite(interval)
+            && interval > 0
+                ? Math.Round(Math.Min(interval, MaxDecisionIntervalSeconds), 2, MidpointRounding.AwayFromZero)
+                : null;
     }
 
     private static string NormalizeChoice(string? value, string fallback, params string[] allowed)

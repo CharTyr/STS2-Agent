@@ -14,6 +14,8 @@ internal static class TurnPlanStopReasons
     public const string TurnChanged = "turn_changed";
     public const string NewCards = "new_cards";
     public const string TookDamage = "took_damage";
+    public const string EnemiesChanged = "enemies_changed";
+    public const string IntentChanged = "intent_changed";
     public const string PendingChoice = "pending_choice";
     public const string Unsettled = "unsettled";
     public const string Rejected = "rejected";
@@ -247,6 +249,11 @@ internal static class TurnPlanPolicy
                 return TurnPlanStopReasons.TookDamage;
             }
 
+            if (EnemyDivergence(plan, current) is { } enemyDivergence)
+            {
+                return enemyDivergence;
+            }
+
             return null;
         }
         catch (Exception ex) when (ex is JsonException or InvalidOperationException or FormatException)
@@ -326,6 +333,135 @@ internal static class TurnPlanPolicy
         IsObject(root, "combat") && root.GetProperty("combat").TryGetProperty("hand", out var hand) && hand.ValueKind == JsonValueKind.Array
             ? hand.EnumerateArray().Where(card => card.ValueKind == JsonValueKind.Object).ToList()
             : new List<JsonElement>();
+
+    private static List<JsonElement> Enemies(JsonElement root) =>
+        IsObject(root, "combat") && root.GetProperty("combat").TryGetProperty("enemies", out var enemies) && enemies.ValueKind == JsonValueKind.Array
+            ? enemies.EnumerateArray().Where(enemy => enemy.ValueKind == JsonValueKind.Object).ToList()
+            : new List<JsonElement>();
+
+    private static string? EnemyDivergence(JsonElement plan, JsonElement current)
+    {
+        var planEnemies = Enemies(plan);
+        if (planEnemies.Count == 0)
+        {
+            return null;
+        }
+
+        var currentEnemies = Enemies(current);
+        var planAlive = new HashSet<(int? Index, string EnemyId)>();
+        var planIntentByIndex = new Dictionary<int, JsonElement>();
+        foreach (var enemy in planEnemies)
+        {
+            if (ReadBool(enemy, "alive") == false)
+            {
+                continue;
+            }
+
+            var idx = ReadInt(enemy, "i");
+            planAlive.Add((idx, ReadString(enemy, "enemy_id") ?? string.Empty));
+            if (idx is { } i && HasIntentFields(enemy))
+            {
+                planIntentByIndex[i] = enemy;
+            }
+        }
+
+        foreach (var enemy in currentEnemies)
+        {
+            if (ReadBool(enemy, "alive") != true)
+            {
+                continue;
+            }
+
+            var key = (ReadInt(enemy, "i"), ReadString(enemy, "enemy_id") ?? string.Empty);
+            if (!planAlive.Contains(key))
+            {
+                return TurnPlanStopReasons.EnemiesChanged;
+            }
+        }
+
+        if (planIntentByIndex.Count > 0)
+        {
+            foreach (var enemy in currentEnemies)
+            {
+                if (ReadBool(enemy, "alive") != true || ReadInt(enemy, "i") is not { } idx)
+                {
+                    continue;
+                }
+
+                if (planIntentByIndex.TryGetValue(idx, out var planEnemy) && IntentDiverged(planEnemy, enemy))
+                {
+                    return TurnPlanStopReasons.IntentChanged;
+                }
+            }
+        }
+
+        return null;
+    }
+
+    private static bool HasIntentFields(JsonElement enemy) =>
+        (enemy.TryGetProperty("intent", out var intent) && intent.ValueKind != JsonValueKind.Null)
+        || (enemy.TryGetProperty("move_id", out var moveId) && moveId.ValueKind != JsonValueKind.Null)
+        || (enemy.TryGetProperty("intents", out var intents) && intents.ValueKind == JsonValueKind.Array);
+
+    private static bool IntentDiverged(JsonElement planEnemy, JsonElement currentEnemy)
+    {
+        if (!string.Equals(ReadString(planEnemy, "intent") ?? string.Empty, ReadString(currentEnemy, "intent") ?? string.Empty, StringComparison.Ordinal))
+        {
+            return true;
+        }
+
+        if (!string.Equals(ReadString(planEnemy, "move_id") ?? string.Empty, ReadString(currentEnemy, "move_id") ?? string.Empty, StringComparison.Ordinal))
+        {
+            return true;
+        }
+
+        var planIntents = IntentItems(planEnemy);
+        var currentIntents = IntentItems(currentEnemy);
+        if (planIntents == null && currentIntents == null)
+        {
+            return false;
+        }
+
+        var pList = planIntents ?? Array.Empty<JsonElement>();
+        var cList = currentIntents ?? Array.Empty<JsonElement>();
+        if (pList.Count != cList.Count)
+        {
+            return true;
+        }
+
+        for (var k = 0; k < pList.Count; k++)
+        {
+            var p = pList[k];
+            var c = cList[k];
+            if (!string.Equals(ReadString(p, "intent_type") ?? string.Empty, ReadString(c, "intent_type") ?? string.Empty, StringComparison.Ordinal)
+                || ReadInt(p, "hits") != ReadInt(c, "hits")
+                || ReadInt(p, "status_card_count") != ReadInt(c, "status_card_count"))
+            {
+                return true;
+            }
+
+            var pDmg = ReadInt(p, "damage");
+            var cDmg = ReadInt(c, "damage");
+            if ((pDmg == null) != (cDmg == null) || (pDmg is { } pd && cDmg is { } cd && cd > pd))
+            {
+                return true;
+            }
+
+            var pTot = ReadInt(p, "total_damage");
+            var cTot = ReadInt(c, "total_damage");
+            if ((pTot == null) != (cTot == null) || (pTot is { } pt && cTot is { } ct && ct > pt))
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private static IReadOnlyList<JsonElement>? IntentItems(JsonElement enemy) =>
+        enemy.TryGetProperty("intents", out var intents) && intents.ValueKind == JsonValueKind.Array
+            ? intents.EnumerateArray().Where(item => item.ValueKind == JsonValueKind.Object).ToList()
+            : null;
 
     private static bool EnemyStanding(JsonElement root, int index)
     {

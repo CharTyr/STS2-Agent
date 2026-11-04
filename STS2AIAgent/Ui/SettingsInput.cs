@@ -1,4 +1,5 @@
 using System.Globalization;
+using STS2AIAgent.Config;
 
 namespace STS2AIAgent.Ui;
 
@@ -42,5 +43,41 @@ internal static class SettingsInput
     public static string FormatThreshold(double value)
     {
         return value.ToString("0.00", CultureInfo.InvariantCulture);
+    }
+
+    /// <summary>
+    /// Optional minimum decision interval in seconds. Blank or 0 disables pacing (<c>null</c>);
+    /// positive values up to <see cref="AgentSettings.MaxDecisionIntervalSeconds"/> are rounded to
+    /// two decimals; negative or malformed text returns <c>false</c> so the caller keeps the prior setting.
+    /// </summary>
+    public static bool TryParseOptionalIntervalSeconds(string? text, out double? value)
+    {
+        value = null;
+        var trimmed = (text ?? string.Empty).Trim().Replace(',', '.');
+        if (trimmed.Length == 0)
+        {
+            return true;
+        }
+
+        if (!double.TryParse(trimmed, NumberStyles.Float, CultureInfo.InvariantCulture, out var parsed)
+            || !double.IsFinite(parsed)
+            || parsed < 0
+            || parsed > AgentSettings.MaxDecisionIntervalSeconds)
+        {
+            return false;
+        }
+
+        value = parsed == 0
+            ? null
+            : Math.Round(parsed, 2, MidpointRounding.AwayFromZero);
+        return true;
+    }
+
+    /// <summary>Formats an optional interval for a text box: empty when disabled, dot decimal otherwise.</summary>
+    public static string FormatOptionalIntervalSeconds(double? value)
+    {
+        return value is { } seconds && double.IsFinite(seconds) && seconds > 0
+            ? seconds.ToString("0.##", CultureInfo.InvariantCulture)
+            : string.Empty;
     }
 }
