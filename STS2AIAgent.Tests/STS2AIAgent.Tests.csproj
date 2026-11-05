@@ -133,6 +133,7 @@
       include. A new partial is picked up here without a second edit.
     -->
     <Compile Include="..\STS2AIAgent\Server\NativeMcpServer*.cs" Link="Server\%(Filename)%(Extension)" />
+    <Compile Include="..\STS2AIAgent\Server\McpStateSlimmer.cs" Link="Server\McpStateSlimmer.cs" />
     <Compile Include="..\STS2AIAgent\Game\ReflectionMemberAccessor.cs" Link="Game\ReflectionMemberAccessor.cs" />
     <Compile Include="..\STS2AIAgent\Game\CombatPowerPayload.cs" Link="Game\CombatPowerPayload.cs" />
     <Compile Include="..\STS2AIAgent\Game\UnlockConfirmResolutionPolicy.cs" Link="Game\UnlockConfirmResolutionPolicy.cs" />

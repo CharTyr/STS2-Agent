@@ -27,7 +27,10 @@ internal sealed partial class NativeMcpServer
             case "health_check":
                 return JsonSerializer.Serialize(_health(), JsonOptions);
             case "get_game_state":
-                return await _bridge.GetCompactStateJsonAsync(cancellationToken);
+                return _sessionDedup.ApplyToStateJson(
+                    ActiveSession(),
+                    await _bridge.GetCompactStateJsonAsync(cancellationToken),
+                    ReadBool(arguments, "full_state"));
             case "get_raw_game_state":
                 return await _bridge.GetRawStateJsonAsync(cancellationToken);
             case "get_available_actions":
@@ -205,12 +208,13 @@ internal sealed partial class NativeMcpServer
         var snapshotJson = await _bridge.GetActionSnapshotJsonAsync(cancellationToken);
         using var snapshot = JsonDocument.Parse(string.IsNullOrWhiteSpace(snapshotJson) ? "{}" : snapshotJson);
         var state = ReadObjectOrEmpty(snapshot.RootElement, "state");
-        return JsonSerializer.Serialize(new
+        var rawDecision = JsonSerializer.Serialize(new
         {
             state,
             available_actions = ReadArrayOrEmpty(snapshot.RootElement, "available_actions"),
             scene_guidance = BuildSceneGuidance(ScreenOfState(state))
         }, JsonOptionsKeepingNulls);
+        return _sessionDedup.ApplyToDecideResultJson(ActiveSession(), rawDecision);
     }
 
     /// <summary>The one guidance object both guidance-shaped answers are built from.</summary>
@@ -237,17 +241,19 @@ internal sealed partial class NativeMcpServer
         var actionable = await _bridge.WaitUntilActionableAsync(timeout, cancellationToken);
         // The state half of this tool's answer is the compact agent_view by default, exactly as
         // `act` answers; raw_state asks for the full payload instead.
-        var stateJson = ReadBool(arguments, "raw_state")
+        var rawState = ReadBool(arguments, "raw_state");
+        var stateJson = rawState
             ? await _bridge.GetRawStateJsonAsync(cancellationToken)
             : await _bridge.GetCompactStateJsonAsync(cancellationToken);
         var actionsJson = await _bridge.GetAvailableActionsJsonAsync(cancellationToken);
-        return JsonSerializer.Serialize(new
+        var payload = JsonSerializer.Serialize(new
         {
             actionable,
             timeout_seconds = timeout.TotalSeconds,
             state = DeserializeOrEmpty(stateJson),
             actions = DeserializeOrEmptyArray(actionsJson)
         }, JsonOptions);
+        return _sessionDedup.ApplyToWaitResultJson(ActiveSession(), payload, rawState);
     }
 
     private async Task<string> ExecuteActAsync(JsonElement arguments, CancellationToken cancellationToken)
@@ -278,7 +284,8 @@ internal sealed partial class NativeMcpServer
             settle: !arguments.TryGetProperty("then", out _));
         // The rest of a whole-turn plan (W3/W10): same rules as the in-game loop, step results
         // appended under `plan`; nothing is retried and a non-completed step ends it.
-        return planState == null ? result : await AppendPlanAsync(arguments, result, planState, cancellationToken);
+        var finalResult = planState == null ? result : await AppendPlanAsync(arguments, result, planState, rawState, cancellationToken);
+        return _sessionDedup.ApplyToActResultJson(ActiveSession(), finalResult, rawState);
     }
 
     /// <summary>

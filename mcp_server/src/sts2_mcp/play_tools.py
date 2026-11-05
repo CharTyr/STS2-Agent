@@ -116,7 +116,7 @@ def execute_plan_act(
             following = client.execute_action(
                 resolved.action, card_index=resolved.card_index,
                 target_index=resolved.target_index, option_index=resolved.option_index,
-                raw_state=False, client_context=step_context,
+                raw_state=raw_state, client_context=step_context,
                 # Same reason as the first step: the mod validates the identity under its lease, so
                 # a step whose card has already left can be refused instead of turned into a
                 # different card at that position.
@@ -140,9 +140,20 @@ def execute_plan_act(
             break
         results.append(following)
         stop = _stop(following)
+    final_state: Any = None
+    for item in reversed(results):
+        if isinstance(item, dict) and isinstance(item.get("state"), dict):
+            final_state = item["state"]
+            break
+    steps_out = results if raw_state else [
+        {k: v for k, v in item.items() if k != "state"} if isinstance(item, dict) else item
+        for item in results
+    ]
     output = dict(result)
-    output["plan"] = {"steps": results, "executed": len(results),
+    output["plan"] = {"steps": steps_out, "executed": len(results),
                       "stop_reason": stop or "completed", "warnings": plan.warnings}
-    if "state" in results[-1]:
-        output["final_state"] = results[-1]["state"]
+    if final_state is not None:
+        output["final_state"] = final_state
+        if not raw_state:
+            output.pop("state", None)
     return output

@@ -19,6 +19,7 @@ from typing import Any
 from .action_results import project_agent_state
 from .client import Sts2ApiError
 from .scene_guidance import scene_guidance
+from .state_diet import slim_compact_state
 
 
 def read_decision(sts2: Any) -> dict[str, Any]:
@@ -61,7 +62,7 @@ def _snapshot_state(state: dict[str, Any]) -> dict[str, Any]:
     if "agent_view" in state:
         projected = project_agent_state(state)
         return projected if isinstance(projected, dict) else {}
-    return {**state, "compact_agent_view": True}
+    return slim_compact_state({**state, "compact_agent_view": True})
 
 
 def _guidance_view(state: dict[str, Any]) -> dict[str, Any]:

@@ -418,8 +418,9 @@ but hasn't settled; the agent treats a run of these as a stall (`NoProgressPolic
 - `STS2AIAgent/Server/HealthRoleData.cs` — role, play and companion fields reported by `/health`.
 - `STS2AIAgent/Server/CompanionPortFile.cs` — the companion writes its port so the host can find it.
 - `STS2AIAgent/Server/NativeMcpServer.cs` — Streamable-HTTP MCP endpoint (JSON-RPC, sessions, off by default).
-- `STS2AIAgent/Server/NativeMcpServer.TurnPlan.cs` — native MCP opt-in `then` orchestration: shared `TurnPlanPolicy`, 9-step cap, 30 s cancellation budget, combat-only follow-ups through `ActOnceAsync`; preserves original result and appends per-step `plan`/`final_state`; pending and unknown are terminal.
+- `STS2AIAgent/Server/NativeMcpServer.TurnPlan.cs` — native MCP opt-in `then` orchestration: shared `TurnPlanPolicy`, 9-step cap, 30 s cancellation budget, combat-only follow-ups through `ActOnceAsync`; strips intermediate per-step `state` copies when `raw_state=false` and exposes one deduplicated `final_state`; pending and unknown are terminal.
 - `STS2AIAgent/Server/NativeMcpServer.Tools.cs` — `ExecuteToolAsync`: native tool implementations, kept in parity with Python `server.py`.
+- `STS2AIAgent/Server/McpStateSlimmer.cs` — stateless compact intra-frame slimming (`McpStateSlimmer`) and bounded session-scoped static deduplication (`McpSessionDedup`: unchanged `run.deck` / `relic_descriptions` / `ascension_effects`, delta `glossary`, `card_value_note`, and repeated `decide()` `scene_guidance`; `get_game_state(full_state=true)` refreshes; mirrors `mcp_server/src/sts2_mcp/state_diet.py`).
 - `STS2AIAgent/Server/GameEventService.cs` — SSE event production (polls state on the game thread, diffs, emits typed events).
 - `STS2AIAgent/Server/EventPollingCoordinator.cs` — polling cadence and fallback.
 - `STS2AIAgent/Server/EventPollingCadence.cs` — adaptive SSE poll delay, wired through `GameEventService`'s digest signature and the coordinator's optional interval callback: 120 ms, one step slower (250/500/1000) after every 8 unchanged polls, reset on new subscriber or accepted decision; polling reads have a 5 s game-thread deadline.

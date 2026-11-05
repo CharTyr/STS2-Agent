@@ -688,6 +688,8 @@ internal static class TestRunner
         yield return ("NativeMcp.OriginEvilHostPair", McpServiceTests.EvilOriginAndHost_RejectedEvenWhenTheyMatchEachOther);
         yield return ("NativeMcp.OriginMalformed", McpServiceTests.MalformedOrigin_Rejected);
         yield return ("NativeMcp.OriginHttpPolicy", McpServiceTests.HandleHttp_OriginPolicyRejectsUntrustedAndAllowsSameOrigin);
+        yield return ("McpDiet.SlimAndSessionDedup", () => Task.Run(McpStateSlimmerTests.IntraFrameAndSessionDedupSlashPayloadAndTrackMutations));
+        yield return ("McpDiet.NativeServerEndToEnd", McpStateSlimmerTests.NativeServer_FullStateDecideGuidanceAndPlanSteps);
         yield return ("CrystalSettle.Progress", () => Task.Run(CrystalSphereSettlePolicyTests.RequiresObservedProgressOnSameScreen));
         yield return ("CrystalSettle.FinalProceed", () => Task.Run(CrystalSphereSettlePolicyTests.WaitsForProceedAfterFinalDivination));
         yield return ("CrystalSettle.ScreenChange", () => Task.Run(CrystalSphereSettlePolicyTests.AcceptsChildScreenButNotMissingMinigame));

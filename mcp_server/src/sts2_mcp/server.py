@@ -6,6 +6,7 @@ import time
 from typing import Annotated, Any, Callable
 
 from fastmcp import FastMCP
+from fastmcp.server.dependencies import get_context
 from pydantic import Field
 
 from .action_results import project_agent_state
@@ -22,6 +23,7 @@ from .legacy_tools import (
     register_legacy_action_tools as _register_legacy_action_tools,
 )
 from .scene_guidance import scene_guidance
+from .state_diet import SessionStateDedup, SessionStateDedupRegistry
 from .state_views import MAX_DIFF_ENTRIES, diff_state as build_state_diff, run_summary
 from .game_data import (
     ITEM_IDS_SEPARATOR,
@@ -113,11 +115,25 @@ def create_server(client: Sts2Client | None = None, tool_profile: str | None = N
 
     _reset_game_data_cache()
     mcp = FastMCP("STS2 AI Agent")
+    session_dedup_registry = SessionStateDedupRegistry()
 
-    def _agent_state(state: dict[str, Any] | None = None, *, raw_state: bool = False) -> dict[str, Any]:
+    def _session_dedup() -> SessionStateDedup:
+        try:
+            session_id = get_context().session_id
+        except Exception:
+            session_id = None
+        return session_dedup_registry.get(session_id)
+
+    def _agent_state(
+        state: dict[str, Any] | None = None,
+        *,
+        raw_state: bool = False,
+        full_state: bool = False,
+    ) -> dict[str, Any]:
         # One projection for every answer that carries a `/state` payload -- see
         # `action_results.project_agent_state` for what the marker means and when raw comes back.
-        return project_agent_state(sts2.get_state() if state is None else state, raw_state=raw_state)
+        projected = project_agent_state(sts2.get_state() if state is None else state, raw_state=raw_state)
+        return projected if raw_state else _session_dedup().apply_to_state(projected, full_state=full_state)
 
     def _state_actions(state: dict[str, Any]) -> list[Any] | None:
         actions = state.get("available_actions")
@@ -233,14 +249,14 @@ def create_server(client: Sts2Client | None = None, tool_profile: str | None = N
         return sts2.get_health()
 
     @mcp.tool
-    def get_game_state() -> dict[str, Any]:
-        """Read the compact agent-facing game state snapshot.
-
-        `compact_agent_view` is true when this is the mod's `agent_view`, and false when the full
-        raw payload came back as a degraded fallback instead -- read it before trusting the shape.
-        `get_raw_game_state` is the deliberate route to the full payload.
-        """
-        return _agent_state()
+    def get_game_state(
+        full_state: Annotated[
+            bool,
+            Field(description="Re-send unchanged deck/relic/ascension/glossary/note blocks."),
+        ] = False,
+    ) -> dict[str, Any]:
+        """Read compact game state (`compact_agent_view` false on raw fallback; `get_raw_game_state` reads raw `/state`)."""
+        return _agent_state(full_state=full_state)
 
     @mcp.tool
     def get_raw_game_state() -> dict[str, Any]:
@@ -304,7 +320,7 @@ def create_server(client: Sts2Client | None = None, tool_profile: str | None = N
         `requires_index` / `requires_target` / target hints), and `scene_guidance` (the same object
         `get_scene_guidance` returns, `playbook` included). The individual read tools stay available.
         """
-        return read_decision(sts2)
+        return _session_dedup().apply_to_decide_result(read_decision(sts2))
 
     @mcp.tool
     def diff_state(
@@ -638,11 +654,12 @@ def create_server(client: Sts2Client | None = None, tool_profile: str | None = N
         stop_reason under `plan`, plus `final_state`; stop at any non-completed step.
         Debug actions have separate gated tools.
         """
-        return execute_plan_act(
+        result = execute_plan_act(
             sts2, profile, action, card_index=card_index, target_index=target_index,
             option_index=option_index, x=x, y=y, tool=tool, raw_state=raw_state,
             reason=reason, card_cid=card_cid, then=then,
         )
+        return _session_dedup().apply_to_act_result(result, raw_state=raw_state)
 
     if profile == "full":
         _register_legacy_action_tools(mcp, sts2)
