@@ -165,6 +165,7 @@ class _SlimClient:
         }
 
     def execute_action(self, action: str, *, raw_state: bool = False, **kwargs: Any) -> dict[str, Any]:
+        self.raw["agent_view"]["run"]["gold"] = int(self.raw["agent_view"]["run"]["gold"]) + 1
         state_out = deepcopy(self.raw) if raw_state else slim_compact_state({**deepcopy(self.raw["agent_view"]), "compact_agent_view": True})
         return {"action": action, "status": "completed", "stable": True, "state": state_out}
 
@@ -205,6 +206,14 @@ class McpStateDietTests(unittest.TestCase):
         self.assertEqual(third["glossary"], {"脆弱": "通过卡牌获得的格挡减少25%。"})
         self.assertTrue(third["glossary_delta"])
 
+        # Empty deck clears cached hash so restored deck is re-emitted instead of suppressed
+        empty_deck = _bloated_raw_state()["agent_view"]
+        empty_deck["run"]["deck"] = []
+        emptied = dedup.apply_to_state(empty_deck)
+        self.assertEqual(emptied["run"]["deck"], [])
+        restored = dedup.apply_to_state(mutated)
+        self.assertIn("deck", restored["run"])
+
         # full_state=True restores full blocks and reseeds baseline
         full = dedup.apply_to_state(mutated, full_state=True)
         self.assertEqual(len(full["run"]["deck"]), 6)
@@ -217,6 +226,8 @@ class McpStateDietTests(unittest.TestCase):
         self.assertIn("glossary", next_run)
 
     def test_server_decide_full_state_and_turn_plan_steps_trim(self) -> None:
+        from fastmcp import Client
+
         client = _SlimClient()
         server = create_server(client=client, tool_profile="guided")  # type: ignore[arg-type]
         decide_tool = asyncio.run(server.get_tool("decide"))
@@ -246,6 +257,7 @@ class McpStateDietTests(unittest.TestCase):
             self.assertNotIn("state", step)
         self.assertNotIn("state", plan_res)
         self.assertTrue(plan_res["final_state"]["run"]["deck_unchanged"])
+        self.assertEqual(plan_res["final_state"]["run"]["gold"], 126)
 
         raw_plan = act_tool.fn(
             action="play_card",
@@ -256,6 +268,19 @@ class McpStateDietTests(unittest.TestCase):
         )
         self.assertIn("state", raw_plan["plan"]["steps"][0])
         self.assertIn("agent_view", raw_plan["final_state"])
+
+        # Separate MCP client sessions receive independent static baselines
+        async def _two_clients() -> tuple[dict[str, Any], dict[str, Any], dict[str, Any]]:
+            async with Client(server) as c1, Client(server) as c2:
+                r1_first = json.loads((await c1.call_tool("get_game_state", {})).content[0].text)
+                r1_second = json.loads((await c1.call_tool("get_game_state", {})).content[0].text)
+                r2_first = json.loads((await c2.call_tool("get_game_state", {})).content[0].text)
+                return r1_first, r1_second, r2_first
+
+        c1_first, c1_second, c2_first = asyncio.run(_two_clients())
+        self.assertIn("deck", c1_first["run"])
+        self.assertTrue(c1_second["run"]["deck_unchanged"])
+        self.assertIn("deck", c2_first["run"])
 
 
 if __name__ == "__main__":

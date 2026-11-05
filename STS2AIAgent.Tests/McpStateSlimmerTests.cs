@@ -304,6 +304,7 @@ internal static class McpStateSlimmerTests
         }
         Assert.False(planAct.TryGetProperty("state", out _), "Stale step-0 state omitted when final_state is present.");
         Assert.True(planAct.GetProperty("final_state").GetProperty("run").GetProperty("deck_unchanged").GetBoolean());
+        Assert.Equal(126, planAct.GetProperty("final_state").GetProperty("run").GetProperty("gold").GetInt32());
 
         // DELETE /mcp resets session deduplication
         await server.ProcessAsync("DELETE", "application/json", session, null, CancellationToken.None);
@@ -323,7 +324,8 @@ internal static class McpStateSlimmerTests
 
     private sealed class SlimMcpBridge : IGameBridge
     {
-        private readonly string _compact;
+        private string _compact;
+        private int _gold = 123;
 
         public SlimMcpBridge(string compact) => _compact = compact;
 
@@ -340,6 +342,10 @@ internal static class McpStateSlimmerTests
         public Task<string> ActAsync(string action, int? cardIndex, int? targetIndex, int? optionIndex, int? x, int? y, string? tool, CancellationToken cancellationToken, bool rawState = false, Action<string>? validateState = null)
         {
             validateState?.Invoke(_compact);
+            _gold++;
+            var node = System.Text.Json.Nodes.JsonNode.Parse(_compact)!.AsObject();
+            node["run"]!["gold"] = _gold;
+            _compact = node.ToJsonString(McpStateSlimmer.CompactJson);
             return Task.FromResult($"{{\"action\":\"{action}\",\"status\":\"completed\",\"stable\":true,\"state\":{_compact}}}");
         }
         public Task<string> GetGameDataItemJsonAsync(string collection, string itemId, CancellationToken cancellationToken) => Task.FromResult("{}");

@@ -168,7 +168,7 @@ internal static class AgentTools
             full_state = new
             {
                 type = "boolean",
-                description = "Re-send unchanged deck/relic/glossary blocks."
+                description = "Re-send unchanged deck/relic/ascension/glossary/note blocks."
             }
         }
     };

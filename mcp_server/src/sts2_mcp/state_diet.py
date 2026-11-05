@@ -55,7 +55,7 @@ _FALLBACK_ACTIVE_RUN_SCOPE = "__active_run__"
 
 
 def _is_raw_fallback(state: dict[str, Any]) -> bool:
-    return state.get("compact_agent_view") is False
+    return state.get("compact_agent_view") is False or "mod_version" in state
 
 
 def _carries_nothing(value: Any) -> bool:
@@ -268,6 +268,8 @@ class SessionStateDedup:
                     run["deck_groups"] = deck_groups
                 else:
                     self._deck_hash = deck_hash
+            elif "deck" in run:
+                self._deck_hash = None
 
             relic_descs = run.get("relic_descriptions")
             if isinstance(relic_descs, list) and len(relic_descs) > 0:
@@ -279,6 +281,8 @@ class SessionStateDedup:
                     run["relic_descriptions_unchanged"] = True
                 else:
                     self._relic_desc_hash = relic_hash
+            elif "relic_descriptions" in run:
+                self._relic_desc_hash = None
 
             ascension_effects = run.get("ascension_effects")
             if isinstance(ascension_effects, list) and len(ascension_effects) > 0:
@@ -288,6 +292,8 @@ class SessionStateDedup:
                     run["ascension_effects_unchanged"] = True
                 else:
                     self._ascension_hash = asc_hash
+            elif "ascension_effects" in run:
+                self._ascension_hash = None
 
         combat = state.get("combat")
         if isinstance(combat, dict):
@@ -299,23 +305,26 @@ class SessionStateDedup:
                     self._card_value_note_sent = True
 
         glossary = state.get("glossary")
-        if isinstance(glossary, dict) and len(glossary) > 0:
-            to_remove: list[str] = []
-            for term, definition in glossary.items():
-                def_text = json.dumps(definition, ensure_ascii=False, sort_keys=True)
-                if not full_state and self._glossary.get(term) == def_text:
-                    to_remove.append(term)
-                else:
-                    self._glossary[term] = def_text
+        if isinstance(glossary, dict):
+            if len(glossary) == 0:
+                self._glossary.clear()
+            else:
+                to_remove: list[str] = []
+                for term, definition in glossary.items():
+                    def_text = json.dumps(definition, ensure_ascii=False, sort_keys=True)
+                    if not full_state and self._glossary.get(term) == def_text:
+                        to_remove.append(term)
+                    else:
+                        self._glossary[term] = def_text
 
-            if to_remove:
-                for term in to_remove:
-                    glossary.pop(term, None)
-                if not glossary:
-                    state.pop("glossary", None)
-                    state["glossary_unchanged"] = True
-                else:
-                    state["glossary_delta"] = True
+                if to_remove:
+                    for term in to_remove:
+                        glossary.pop(term, None)
+                    if not glossary:
+                        state.pop("glossary", None)
+                        state["glossary_unchanged"] = True
+                    else:
+                        state["glossary_delta"] = True
 
     @staticmethod
     def _read_run_scope(state: dict[str, Any]) -> str | None:
@@ -330,3 +339,26 @@ class SessionStateDedup:
         if isinstance(state.get("combat"), dict) or (isinstance(glossary, dict) and len(glossary) > 0):
             return _FALLBACK_ACTIVE_RUN_SCOPE
         return None
+
+
+class SessionStateDedupRegistry:
+    """Bounded LRU registry of per-session `SessionStateDedup` trackers."""
+
+    def __init__(self, max_sessions: int = 16) -> None:
+        self._max_sessions = max(1, max_sessions)
+        self._lock = threading.Lock()
+        self._sessions: dict[str, SessionStateDedup] = {}
+
+    def get(self, session_id: str | None) -> SessionStateDedup:
+        key = session_id.strip() if isinstance(session_id, str) and session_id.strip() else "__default__"
+        with self._lock:
+            existing = self._sessions.pop(key, None)
+            if existing is not None:
+                self._sessions[key] = existing
+                return existing
+            if len(self._sessions) >= self._max_sessions:
+                oldest = next(iter(self._sessions))
+                self._sessions.pop(oldest, None)
+            created = SessionStateDedup()
+            self._sessions[key] = created
+            return created

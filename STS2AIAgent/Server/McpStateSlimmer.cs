@@ -53,8 +53,8 @@ internal static class McpStateSlimmer
     }
 
     internal static bool IsRawFallback(JsonObject state) =>
-        state["compact_agent_view"] is JsonValue marker
-        && marker.GetValueKind() == JsonValueKind.False;
+        (state["compact_agent_view"] is JsonValue marker && marker.GetValueKind() == JsonValueKind.False)
+        || state.ContainsKey("mod_version");
 
     internal static string HashNode(JsonNode? node)
     {
@@ -326,6 +326,10 @@ internal sealed class McpSessionDedup
                     session.DeckHash = deckHash;
                 }
             }
+            else if (run.ContainsKey("deck"))
+            {
+                session.DeckHash = null;
+            }
 
             if (run["relic_descriptions"] is JsonArray relicDescriptions && relicDescriptions.Count > 0)
             {
@@ -344,6 +348,10 @@ internal sealed class McpSessionDedup
                     session.RelicDescHash = relicHash;
                 }
             }
+            else if (run.ContainsKey("relic_descriptions"))
+            {
+                session.RelicDescHash = null;
+            }
 
             if (run["ascension_effects"] is JsonArray ascensionEffects && ascensionEffects.Count > 0)
             {
@@ -357,6 +365,10 @@ internal sealed class McpSessionDedup
                 {
                     session.AscensionHash = ascHash;
                 }
+            }
+            else if (run.ContainsKey("ascension_effects"))
+            {
+                session.AscensionHash = null;
             }
         }
 
@@ -375,39 +387,46 @@ internal sealed class McpSessionDedup
             }
         }
 
-        if (state["glossary"] is JsonObject glossary && glossary.Count > 0)
+        if (state["glossary"] is JsonObject glossary)
         {
-            var toRemove = new List<string>();
-            foreach (var (term, defNode) in glossary)
+            if (glossary.Count == 0)
             {
-                var defText = defNode?.ToJsonString(McpStateSlimmer.CompactJson) ?? "null";
-                if (!fullState
-                    && session.Glossary.TryGetValue(term, out var previousDef)
-                    && string.Equals(previousDef, defText, StringComparison.Ordinal))
-                {
-                    toRemove.Add(term);
-                }
-                else
-                {
-                    session.Glossary[term] = defText;
-                }
+                session.Glossary.Clear();
             }
-
-            if (toRemove.Count > 0)
+            else
             {
-                foreach (var term in toRemove)
+                var toRemove = new List<string>();
+                foreach (var (term, defNode) in glossary)
                 {
-                    glossary.Remove(term);
+                    var defText = defNode?.ToJsonString(McpStateSlimmer.CompactJson) ?? "null";
+                    if (!fullState
+                        && session.Glossary.TryGetValue(term, out var previousDef)
+                        && string.Equals(previousDef, defText, StringComparison.Ordinal))
+                    {
+                        toRemove.Add(term);
+                    }
+                    else
+                    {
+                        session.Glossary[term] = defText;
+                    }
                 }
 
-                if (glossary.Count == 0)
+                if (toRemove.Count > 0)
                 {
-                    state.Remove("glossary");
-                    state["glossary_unchanged"] = true;
-                }
-                else
-                {
-                    state["glossary_delta"] = true;
+                    foreach (var term in toRemove)
+                    {
+                        glossary.Remove(term);
+                    }
+
+                    if (glossary.Count == 0)
+                    {
+                        state.Remove("glossary");
+                        state["glossary_unchanged"] = true;
+                    }
+                    else
+                    {
+                        state["glossary_delta"] = true;
+                    }
                 }
             }
         }
