@@ -180,6 +180,7 @@ internal sealed class PlayStateSplitCache
             }
         }
 
+        state.Remove("run_id");
         return new PlayStateSplitResult(entry.StaticRunJson, state.ToJsonString(Compact));
     }
 

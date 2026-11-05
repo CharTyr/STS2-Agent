@@ -156,7 +156,8 @@ internal sealed partial class AgentLoop
             if (budget != null) return Receipt(budget);
             var pacedWait = await PacingGate.WaitBeforePrimaryRequestAsync(
                 settings.MinDecisionIntervalSeconds,
-                cancellationToken);
+                cancellationToken,
+                stampOnReturn: false);
             if (requests > 0 || pacedWait > TimeSpan.Zero)
             {
                 // A slow or rejected Jev decision, or a configured pacing wait, must not hand the LLM its old frame.
@@ -179,9 +180,6 @@ internal sealed partial class AgentLoop
                     "Playbook for the screen in the latest state (" + screenLabel + "):\n" + PlayPrompt.PlaybookGuidance(screen))
             };
 
-            var journalDigest = _runJournalDigest?.Invoke(stateJson);
-            if (!string.IsNullOrEmpty(journalDigest)) messages.Add(LlmMessage.System(journalDigest));
-
             // The reply-language choice rides the static prefix: it changes only when the player changes
             // the setting, so it never invalidates the per-step cache the way a state-bearing line would.
             var playLanguage = PlayPrompt.ReplyLanguageInstruction(settings.ReplyLanguage);
@@ -197,6 +195,19 @@ internal sealed partial class AgentLoop
                     "Strategy for the screen in the latest state (" + screenLabel + "):\n" + screenGuidance));
             }
 
+            // Hoist unchanging run inventory (deck, relics, relic descriptions, ascension effects) and
+            // baseline glossary into the static prefix ahead of refreshable journal/planner messages so
+            // Boss/combat prefix caches stay warm even when strategy refreshes mid-fight (#234).
+            var stateSplit = _stateSplitCache.Split(PromptStateDiet.Apply(stateJson), screenLabel);
+            if (stateSplit.StaticRunJson != null)
+            {
+                messages.Add(LlmMessage.System(
+                    "Current run static context:\n" + stateSplit.StaticRunJson));
+            }
+
+            var journalDigest = _runJournalDigest?.Invoke(stateJson);
+            if (!string.IsNullOrEmpty(journalDigest)) messages.Add(LlmMessage.System(journalDigest));
+
             // The dual-layer planner's standing strategy, on the static prefix: it changes only when a
             // plan refreshes, so it invalidates the per-step cache as rarely as the playbook does. A
             // never-planned (default) strategy costs nothing.
@@ -205,15 +216,6 @@ internal sealed partial class AgentLoop
                 messages.Add(LlmMessage.System(
                     "Standing strategy from the planner (historical guidance, not a fresh action):\n"
                     + FormatStrategyForPrompt(strategy)));
-            }
-
-            // Hoist unchanging run inventory (deck, relics, relic descriptions, ascension effects) and
-            // baseline glossary into the static system prefix so Boss/combat prefix caches stay warm (#234).
-            var stateSplit = _stateSplitCache.Split(PromptStateDiet.Apply(stateJson), screenLabel);
-            if (stateSplit.StaticRunJson != null)
-            {
-                messages.Add(LlmMessage.System(
-                    "Current run static context:\n" + stateSplit.StaticRunJson));
             }
 
             var teamContext = _teamContext?.Invoke();
@@ -266,6 +268,7 @@ internal sealed partial class AgentLoop
                 : PlayPrompt.ActNowInstruction));
             AppendJsonActFallbackIfNeeded(messages, resolved, allowAct: true);
 
+            PacingGate.RecordDispatch();
             handedToCompletion = true;
             var result = await CompleteWithToolsAsync(
                 resolved,

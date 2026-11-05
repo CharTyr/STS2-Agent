@@ -94,11 +94,12 @@ internal sealed partial class AgentSettings
         {
             MaxOutputTokens = null;
         }
-        MinDecisionIntervalSeconds = MinDecisionIntervalSeconds is { } interval
+        var roundedInterval = MinDecisionIntervalSeconds is { } interval
             && double.IsFinite(interval)
             && interval > 0
                 ? Math.Round(Math.Min(interval, MaxDecisionIntervalSeconds), 2, MidpointRounding.AwayFromZero)
-                : null;
+                : 0;
+        MinDecisionIntervalSeconds = roundedInterval > 0 ? roundedInterval : null;
     }
 
     private static string NormalizeChoice(string? value, string fallback, params string[] allowed)

@@ -39,12 +39,13 @@ internal sealed class DecisionPacingGate
     /// </summary>
     public async Task<TimeSpan> WaitBeforePrimaryRequestAsync(
         double? minIntervalSeconds,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        bool stampOnReturn = true)
     {
         cancellationToken.ThrowIfCancellationRequested();
         if (minIntervalSeconds is not { } seconds || !double.IsFinite(seconds) || seconds <= 0)
         {
-            StampNow();
+            if (stampOnReturn) RecordDispatch();
             return TimeSpan.Zero;
         }
 
@@ -65,8 +66,16 @@ internal sealed class DecisionPacingGate
         }
 
         cancellationToken.ThrowIfCancellationRequested();
-        StampNow();
+        if (stampOnReturn) RecordDispatch();
         return remaining > TimeSpan.Zero ? remaining : TimeSpan.Zero;
+    }
+
+    public void RecordDispatch()
+    {
+        lock (_sync)
+        {
+            _lastPrimaryDispatchAt = _clock();
+        }
     }
 
     public void Reset()
@@ -74,14 +83,6 @@ internal sealed class DecisionPacingGate
         lock (_sync)
         {
             _lastPrimaryDispatchAt = null;
-        }
-    }
-
-    private void StampNow()
-    {
-        lock (_sync)
-        {
-            _lastPrimaryDispatchAt = _clock();
         }
     }
 }

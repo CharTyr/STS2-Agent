@@ -63,12 +63,20 @@ internal static class DecisionPacingTests
     {
         var now = TimeSpan.FromSeconds(50);
         using var cts = new CancellationTokenSource();
+        var shouldCancel = true;
+        var postCancelWaits = new List<TimeSpan>();
         var gate = new DecisionPacingGate(
             clock: () => now,
-            delay: (_, token) =>
+            delay: (w, token) =>
             {
-                cts.Cancel();
-                token.ThrowIfCancellationRequested();
+                if (shouldCancel)
+                {
+                    cts.Cancel();
+                    token.ThrowIfCancellationRequested();
+                }
+
+                postCancelWaits.Add(w);
+                now += w;
                 return Task.CompletedTask;
             });
 
@@ -87,21 +95,15 @@ internal static class DecisionPacingTests
 
         Assert.True(canceled, "Canceling the token during pacing wait must throw OperationCanceledException.");
 
-        // Because the canceled turn never dispatched, a resumed turn at t=52s still waits the remaining 2s from t=50s.
+        // Because the canceled turn never dispatched, resuming on the SAME gate at t=52s still waits the remaining 2s from t=50s.
+        shouldCancel = false;
         now = TimeSpan.FromSeconds(52);
-        var resumedGateWaits = new List<TimeSpan>();
-        var gate2 = new DecisionPacingGate(
-            clock: () => now,
-            delay: (w, _) =>
-            {
-                resumedGateWaits.Add(w);
-                now += w;
-                return Task.CompletedTask;
-            });
-        await gate2.WaitBeforePrimaryRequestAsync(4.0, CancellationToken.None);
-        gate2.Reset();
-        Assert.Equal(TimeSpan.Zero, await gate2.WaitBeforePrimaryRequestAsync(4.0, CancellationToken.None));
-        Assert.Equal(0, resumedGateWaits.Count);
+        var resumedWait = await gate.WaitBeforePrimaryRequestAsync(4.0, CancellationToken.None);
+        Assert.True(Math.Abs((resumedWait - TimeSpan.FromSeconds(2.0)).TotalMilliseconds) < 1,
+            $"Original gate must retain t=50s stamp and wait 2.0s at t=52s, got {resumedWait.TotalSeconds}s.");
+        Assert.Equal(1, postCancelWaits.Count);
+        gate.Reset();
+        Assert.Equal(TimeSpan.Zero, await gate.WaitBeforePrimaryRequestAsync(4.0, CancellationToken.None));
     }
 
     public static async Task AgentLoopPacesPrimaryRequestsRefreshesStateAndSkipsAutopilotAndTurnPlans()

@@ -67,9 +67,8 @@ internal static class SettingsInput
             return false;
         }
 
-        value = parsed == 0
-            ? null
-            : Math.Round(parsed, 2, MidpointRounding.AwayFromZero);
+        var rounded = Math.Round(parsed, 2, MidpointRounding.AwayFromZero);
+        value = rounded > 0 ? rounded : null;
         return true;
     }
 
