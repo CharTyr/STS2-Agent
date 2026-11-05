@@ -29,6 +29,7 @@ internal static class ExperienceSettingsTests
         Assert.Equal("F7", settings.PauseHotkey);
         Assert.True(settings.RunJournalEnabled);
         Assert.Null(settings.TurboRestoreFastMode);
+        Assert.Null(settings.MinDecisionIntervalSeconds);
     }
 
     public static void LegacyFileGetsTheNewDefaults()
@@ -41,6 +42,7 @@ internal static class ExperienceSettingsTests
         Assert.True(settings.AutopilotEnabled);
         Assert.True(settings.TurnPlansEnabled);
         Assert.Equal(AgentSettings.VisionOnDemand, settings.VisionMode);
+        Assert.Null(settings.MinDecisionIntervalSeconds);
     }
 
     public static void JunkIsNormalised()
@@ -51,16 +53,43 @@ internal static class ExperienceSettingsTests
         settings.HudMode = null!;
         settings.PauseHotkey = null!;
         settings.TurboRestoreFastMode = "Turbo";
+        settings.MinDecisionIntervalSeconds = -2.5;
         settings.EnsureValidShape();
         Assert.Equal(AgentSettings.TurboFast, settings.TurboMode);
         Assert.Equal(AgentSettings.VisionOnDemand, settings.VisionMode);
         Assert.Equal(AgentSettings.HudFull, settings.HudMode);
         Assert.Equal(string.Empty, settings.PauseHotkey);
         Assert.Null(settings.TurboRestoreFastMode);
+        Assert.Null(settings.MinDecisionIntervalSeconds);
+
+        settings.MinDecisionIntervalSeconds = 0;
+        settings.EnsureValidShape();
+        Assert.Null(settings.MinDecisionIntervalSeconds);
+
+        settings.MinDecisionIntervalSeconds = double.PositiveInfinity;
+        settings.EnsureValidShape();
+        Assert.Null(settings.MinDecisionIntervalSeconds);
+
+        settings.MinDecisionIntervalSeconds = 999;
+        settings.EnsureValidShape();
+        Assert.Equal(AgentSettings.MaxDecisionIntervalSeconds, settings.MinDecisionIntervalSeconds);
+
+        settings.MinDecisionIntervalSeconds = 1.567;
+        settings.EnsureValidShape();
+        Assert.Equal(1.57, settings.MinDecisionIntervalSeconds);
 
         settings.TurboRestoreFastMode = " Normal ";
         settings.EnsureValidShape();
         Assert.Equal("Normal", settings.TurboRestoreFastMode);
+
+        Assert.True(Ui.SettingsInput.TryParseOptionalIntervalSeconds("  ", out var blank) && blank == null);
+        Assert.True(Ui.SettingsInput.TryParseOptionalIntervalSeconds("0", out var zero) && zero == null);
+        Assert.True(Ui.SettingsInput.TryParseOptionalIntervalSeconds("2,5", out var comma) && comma == 2.5);
+        Assert.Equal("2.5", Ui.SettingsInput.FormatOptionalIntervalSeconds(2.5));
+        Assert.Equal(string.Empty, Ui.SettingsInput.FormatOptionalIntervalSeconds(null));
+        Assert.False(Ui.SettingsInput.TryParseOptionalIntervalSeconds("-1", out _));
+        Assert.False(Ui.SettingsInput.TryParseOptionalIntervalSeconds("abc", out _));
+        Assert.False(Ui.SettingsInput.TryParseOptionalIntervalSeconds("301", out _));
     }
 
     public static void CloneCarriesEveryNonDefault()
@@ -75,6 +104,7 @@ internal static class ExperienceSettingsTests
         source.HudMode = AgentSettings.HudMinimal;
         source.PauseHotkey = "F6";
         source.RunJournalEnabled = false;
+        source.MinDecisionIntervalSeconds = 2.5;
 
         var clone = SettingsClone.Clone(source);
         Assert.Equal(AgentSettings.TurboOff, clone.TurboMode);
@@ -86,6 +116,7 @@ internal static class ExperienceSettingsTests
         Assert.Equal(AgentSettings.HudMinimal, clone.HudMode);
         Assert.Equal("F6", clone.PauseHotkey);
         Assert.False(clone.RunJournalEnabled);
+        Assert.Equal(2.5, clone.MinDecisionIntervalSeconds);
     }
 
     public static void TeammateGetsPlaySwitchesButNotLocalOnes()
@@ -97,6 +128,7 @@ internal static class ExperienceSettingsTests
         host.CombatMathEnabled = false;
         host.VisionMode = AgentSettings.VisionOff;
         host.RunJournalEnabled = false;
+        host.MinDecisionIntervalSeconds = 3.25;
         host.HudMode = AgentSettings.HudOff;
         host.PauseHotkey = "F6";
         host.TurboRestoreFastMode = "Normal";
@@ -113,6 +145,7 @@ internal static class ExperienceSettingsTests
         Assert.False(companion.CombatMathEnabled);
         Assert.Equal(AgentSettings.VisionOff, companion.VisionMode);
         Assert.False(companion.RunJournalEnabled);
+        Assert.Equal(3.25, companion.MinDecisionIntervalSeconds);
         // Instance-local: the teammate window has no overlay and owns its own speed restore record.
         Assert.Equal(AgentSettings.HudFull, companion.HudMode);
         Assert.Equal("F7", companion.PauseHotkey);
@@ -124,10 +157,14 @@ internal static class ExperienceSettingsTests
     {
         Assert.False(new CompanionPlaySettings { TurboMode = "ludicrous" }.IsValid);
         Assert.False(new CompanionPlaySettings { VisionMode = "always" }.IsValid);
+        Assert.False(new CompanionPlaySettings { MinDecisionIntervalSeconds = 0 }.IsValid);
+        Assert.False(new CompanionPlaySettings { MinDecisionIntervalSeconds = -1 }.IsValid);
+        Assert.False(new CompanionPlaySettings { MinDecisionIntervalSeconds = 301 }.IsValid);
         // A payload from a sender that predates the switches keeps the shipped defaults.
         var old = JsonSerializer.Deserialize<CompanionPlaySettings>("""{"ReplyLanguage":"auto"}""")!;
         Assert.True(old.IsValid);
         Assert.Equal(AgentSettings.TurboInstant, old.TurboMode);
         Assert.True(old.AutopilotEnabled);
+        Assert.Null(old.MinDecisionIntervalSeconds);
     }
 }

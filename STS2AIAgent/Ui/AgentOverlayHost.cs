@@ -94,6 +94,7 @@ internal sealed partial class AgentOverlayHost
     private OptionButton? _visionCombo;
     private LineEdit? _hotkeyEdit;
     private LineEdit? _llmTimeoutEdit;
+    private LineEdit? _minDecisionIntervalEdit;
     private Label? _saveStatus;
     private Label? _conversationTest;
     private Label? _playTest;

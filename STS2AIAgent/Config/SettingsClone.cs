@@ -81,6 +81,7 @@ internal static class SettingsClone
             PauseHotkey = source.PauseHotkey,
             RunJournalEnabled = source.RunJournalEnabled,
             MaxOutputTokens = source.MaxOutputTokens,
+            MinDecisionIntervalSeconds = source.MinDecisionIntervalSeconds,
             RoleTests = source.RoleTests.Select(test => new ModelRoleTestRecord
             {
                 Role = test.Role,

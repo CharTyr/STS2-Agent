@@ -75,6 +75,8 @@
     <Compile Include="..\STS2AIAgent\Agent\LiveIntent.cs" Link="Agent\LiveIntent.cs" />
     <Compile Include="..\STS2AIAgent\Agent\AutopilotPolicy.cs" Link="Agent\AutopilotPolicy.cs" />
     <Compile Include="..\STS2AIAgent\Agent\PromptStateDiet.cs" Link="Agent\PromptStateDiet.cs" />
+    <Compile Include="..\STS2AIAgent\Agent\PlayStateSplit.cs" Link="Agent\PlayStateSplit.cs" />
+    <Compile Include="..\STS2AIAgent\Agent\DecisionPacingGate.cs" Link="Agent\DecisionPacingGate.cs" />
     <Compile Include="..\STS2AIAgent\Agent\TurnPlanPolicy.cs" Link="Agent\TurnPlanPolicy.cs" />
     <Compile Include="..\STS2AIAgent\Agent\AgentLoop.TurnPlan.cs" Link="Agent\AgentLoop.TurnPlan.cs" />
     <Compile Include="..\STS2AIAgent\Agent\TurboPolicy.cs" Link="Agent\TurboPolicy.cs" />
