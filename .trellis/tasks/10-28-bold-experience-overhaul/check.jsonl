@@ -1,0 +1,6 @@
+{"file": ".trellis/spec/mod/index.md", "reason": "Quality check section for the mod layer"}
+{"file": ".trellis/spec/mod/agent-and-ui.md", "reason": "Receipt/budget ordering, reasoning display-only, overlay layout and visual contracts"}
+{"file": ".trellis/spec/mod/game-actions.md", "reason": "Action handler shape and bounded transition waits"}
+{"file": ".trellis/spec/mcp/contracts-and-tests.md", "reason": "Two MCP surfaces alignment and Python test rules"}
+{"file": ".trellis/spec/operations/validation-and-release.md", "reason": "What counts as evidence; offline vs live separation"}
+{"file": "docs/project-map.md", "reason": "Invariants (section 2) and freshness tests for new files"}

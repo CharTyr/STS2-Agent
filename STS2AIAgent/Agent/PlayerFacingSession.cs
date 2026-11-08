@@ -287,12 +287,20 @@ internal static class PlayerFacingSession
                 : Loc.T("Token 未知 · {0}", requestText);
         }
 
-        return Loc.T("{0} Token · {3}",
+        var line = Loc.T("{0} Token · {3}",
             usage.TotalTokens.ToString("N0"),
             usage.PromptTokens.ToString("N0"),
             usage.CompletionTokens.ToString("N0"),
             requestText);
+        // Only when the provider reports it: a missing figure is not a 0% hit rate.
+        return usage.CachedPromptTokens > 0 && usage.PromptTokens > 0
+            ? Loc.T("{0} · 缓存命中 {1}%", line, CacheHitPercent(usage))
+            : line;
     }
+
+    /// <summary>Share of prompt tokens served from the provider's prefix cache, 0–100.</summary>
+    public static int CacheHitPercent(LlmUsage usage) =>
+        usage.PromptTokens <= 0 ? 0 : (int)Math.Round(100.0 * Math.Min(usage.CachedPromptTokens, usage.PromptTokens) / usage.PromptTokens);
 
     /// <summary>
     /// The usage block the overlay shows above the decision log: the same token/request line as

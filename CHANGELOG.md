@@ -1,5 +1,33 @@
 # Changelog
 
+## 0.18.0
+
+### Added
+
+- **Boss 战与长战斗 LLM 缓存命中与请求节奏优化（#234）。** 自动游玩提示词新增前缀缓存友好的动静分离（`PlayStateSplitCache`），将整场战斗不变的牌组、遗物、遗物描述、进阶词条与基础术语表提升到 `ContextCompaction` 之前的静态系统前缀中，动态用户消息仅保留当前手牌、抽弃牌堆、敌人意图、生命/药水/遗物层数与战斗中新增的临时词条，避免每步出牌都重刷数千静态 Token；整回合规划（`TurnPlanPolicy.Diverged` 与 Python `turn_plan.diverged`）新增 `enemies_changed`（Boss 中途召唤/复活/阶段变形）与 `intent_changed`（Boss 反应式变招或激怒加伤；玩家施加虚弱/降力使同招式伤害降低不会打断规划）；高级设置新增可选「最小决策间隔（秒）」（`minDecisionIntervalSeconds`，默认不限），仅对连续主模型请求节流并在等待后刷新状态，不延迟零请求的自动处理与回合规划后续步骤。
+- **工具参数在流式和非流式下都被截断的服务商，自动游玩改用正文 JSON 出牌，不再停下。** 出牌回合现在按「流式工具调用 → 非流式工具调用 → 正文 JSON」三级降级：哪一级回来的参数只有动作名（例如 `{"action":"play_card"}`），这一回合就立即降一级重发；同一服务商在同一级被截断两次，之后的出牌回合直接从下一级开始，并按「端点 + 模型 + Key」记进配置，下次启动不用重新发现。降到正文 JSON 时会在系统提示里说明回答格式，回合计划（`then`）照常可用；对话不受影响，仍带工具。模型卡片会显示「工具参数不完整，已改为正文出牌」；重新点「测试主模型」会清掉这条记录，服务商修好后自动恢复工具调用。离线用模拟的截断响应测过，尚未在出问题的那个网关上实测。
+- 游戏画面上的 AI 横幅、出牌描边、目标连线和理由提示；F7 暂停/继续，F8 打开面板。截图时连同悬浮窗和边缘标签一起隐藏。
+- 局末成绩单显示本局已记录的决策与花费，支持复制；最多保存 50 局事实战绩，向模型提供同角色最近战绩摘要，可关闭和清空。
+- 奖励/商店增加类型、稀有度与数字价格；选牌时有牌组统计，多路线地图有房间数量范围建议；快速判断的出牌/结束回合选项带同帧战斗数字。
+- 模型测试额外检查一次流式工具参数并记住服务商能力；重复截断的学习跨重启保留，游玩输出默认上限 8192 token，可用 maxOutputTokens 调整。
+- MCP 出牌携带稳定卡牌身份到 HTTP，在动作锁内再次核对；手牌变动时拒绝，不会打错位置或重放。队友消息显示等待秒数及已知的战斗忙碌状态。
+
+- 自动处理无需取舍的小步骤，不花模型请求；整回合规划可在一次请求中给出多步出牌，每步重新检查局面，变化时停止。原生与 Python MCP 的 `act` 新增可选 `card_cid` / `then`，旧单动作调用保持兼容。
+- 战斗算术缓存限定在同一帧、同一战斗和完整战斗状态，避免复用旧 HP/意图；随机目标攻击不再声称对每个敌人都有确定斩杀伤害。
+- Compact v13 增加稳定战斗卡牌编号、卡牌类型、按目标的伤害预览和来袭/格挡/斩杀估算。段数不可确定时返回未知，不猜数；组合估算不包含抽牌与中途增益。
+- 「游玩体验」设置集中管理游戏速度、自动处理、整回合规划、战斗算术、按需截图、画面提示与暂停热键。新安装默认显示悬浮窗；F7 可暂停/继续。
+
+### Changed
+
+- 自动游玩使用游戏原生 Fast Mode 加速，暂停/停止后恢复；联机最多快速档，写盘守卫避免把临时加速写入玩家设置。
+- SSE 有订阅但状态不变时按 120/250/500/1000 ms 自适应退避，订阅或动作后复位；无人订阅时不构建状态。
+- 等待可操作时改用轻量探针，不再每帧构建完整状态；回合边界使用轻量快照，状态读取带期限。提示词移除重复数据，截图默认按需，显示服务商缓存命中率。
+- 流式空回复/截断有界降级，正文中的完整动作 JSON 可执行；唯一候选可补索引，重复截断的模型按当前配置指纹持久记为非流式。网络故障与模型错误分别退避，游戏线程超时按等待处理。
+- 决策日志使用玩家易懂的动作/来源名称，并新增请求轮数、读工具轮数、流式降级和规划步骤计量。
+- 原生与 Python MCP 默认返回精简后的紧凑状态：移除非地图界面的整张地图节点、单人重复背包、战斗重复牌堆与空字段；同一会话与同一局内未变化的牌组、遗物说明、进阶效果、已下发词条解释（新增词条按增量补发）及重复场景指引自动省略并在变更时立即重发，`act(..., then=[...])` 不再在每步重复嵌入完整状态，需要完整重发时可调用 `get_game_state(full_state=true)`。（#233）
+
+> 验证边界：以上已有离线覆盖。2026-10-29 隔离实机短测（两场战斗/段）观察到加速与恢复、小事自动处理、整回合规划（单次请求最多 6 步）、战斗算术被模型引用、截图不含悬浮窗与画面提示、局末成绩单与战绩、两套 MCP 的 `then`；实机还发现并修复了整回合规划第 2 步起被误判非法、模型测试漏做流式检查、横幅压住游戏顶栏、成绩单把外部动作算成模型决策。牌框描边/目标连线、F7 热键、联机队友与整局胜率未实机验证，详见 [docs/live-validation-checklist.md](docs/live-validation-checklist.md)。#233 MCP 载荷瘦身/会话去重与 #234 静态前缀缓存分离、Boss 回合规划分歧检测、最小决策间隔在 2026-10-29 实机之后合入，仅经离线测试，未经实机观察；按维护者决定随本版发布。
+
 ## 0.17.0
 
 Game-dependent compilation succeeded on 2026-10-27 (Release, 0 warnings, 0 errors, after the CS0173 fix below). Only the tested subset passed live acceptance: access hardening, the overlay checks, the potion-slot reward flow, and the Steam-on dual-window no-model takeover and save-continue. Model-backed items (streaming chat, vision answers, teammate auto-play, DeepSeek variants, non-combat-only mode) could not run because of provider errors and were skipped by the maintainer's decision, so they have no live evidence; the Workshop zh-CN description was not verified, the 3-4 player and LAN checks were not run, and old/duplicate local mod copies, artifact fingerprints, the second-library Workshop install, dynamic-port discovery, handshake-failure paths and slow-child reconnection were not reported as checked. See [PRODUCT_PLAN_CURRENT.md](PRODUCT_PLAN_CURRENT.md).

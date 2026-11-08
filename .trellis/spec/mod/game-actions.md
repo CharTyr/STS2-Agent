@@ -82,3 +82,6 @@ Actions that span frames need finite waiting logic, using a `DateTime.UtcNow` de
 
 The existing card-play fallback illustrates the recovery pattern: after a twelve-second wait, it attempts bounded cancellation/recheck cycles and still returns `pending` if the state is not stable. Copy that shape only when the operation is safe to probe; do not add broad cancellation that could interrupt a native action with irreversible effects.
 
+## Stable card identity
+
+HTTP play_card may carry optional card_cid together with card_index. The handler checks that identity against the same live hand under the existing action lease, before TryManualPlay. A mismatch is 409 invalid_target with stale=true and actual_card_cid, never a retarget or replay. Position-only requests are unchanged; cid without index is 400. In-game/native MCP dispatch uses the same lease-time guard.

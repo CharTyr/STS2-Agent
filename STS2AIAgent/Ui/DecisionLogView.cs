@@ -41,10 +41,16 @@ internal static class DecisionLogView
     /// </summary>
     public static string FormatLine(DecisionLogEntry entry)
     {
-        var parts = new List<string>(5)
+        // Player words, not action ids (W8.2): "1. 出牌", not "1. play_card".
+        var parts = new List<string>(6)
         {
-            $"{entry.id}. {entry.action}"
+            $"{entry.id}. {PlayerLabels.Action(entry.action)}"
         };
+
+        if (entry.plan_index is { } planIndex && entry.plan_size is { } planSize && planSize > 1)
+        {
+            parts.Add(Loc.T("整回合规划 {0}/{1}", planIndex + 1, planSize));
+        }
 
         if (entry.jev_attempt == true)
         {
@@ -58,7 +64,7 @@ internal static class DecisionLogView
             parts.Add(Loc.T("理由：{0}", entry.reason));
         }
 
-        parts.Add(Loc.T("来源：{0}", entry.source));
+        parts.Add(Loc.T("来源：{0}", PlayerLabels.Source(entry.source)));
         parts.Add(entry.total_tokens is { } tokens
             ? Loc.T("Token {0}", tokens.ToString("N0"))
             : Loc.T("Token 未知"));

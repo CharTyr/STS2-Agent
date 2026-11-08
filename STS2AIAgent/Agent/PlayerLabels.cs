@@ -67,7 +67,10 @@ internal static class PlayerLabels
         {
             "jev" => "快速判断",
             "agent_loop" => "LLM",
+            "autopilot" => "自动处理",
+            "plan" => "整回合规划",
             "http_api" => "外部客户端（HTTP / MCP）",
+            "native_mcp" => "外部智能体（MCP）",
             _ => null
         };
         return label == null ? (key.Length == 0 ? "-" : key) : Loc.T(label);

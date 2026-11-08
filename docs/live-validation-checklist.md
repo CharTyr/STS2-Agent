@@ -5,6 +5,45 @@
 > a screenshot failure and remaining unverified paths; it is **not** a full acceptance sign-off.
 > Everything below is historical evidence from earlier builds, not proof for that candidate.
 
+## Status as of 2026-10-29 (experience overhaul, branch `feature/bold-overhaul`, unreleased)
+
+Historical snapshot. Isolated profile `default\2026102901` (`--windowed --force-steam off --clientId 2026102901`),
+API port 18080, isolated settings file, local gateway model `workbuddy-ai/deepseek-v4.1-flash` behind
+the budget proxy. 134 model requests in total for the whole overhaul (cap 300). The installed mod was
+restored to its pre-test hash afterwards; all 187 real save files were byte-identical before and after.
+The in-overlay model played every segment; manual `/action` was used only to reach preconditions
+(abandon, character select, a debug `die` for a real GAME_OVER) and is not autoplay evidence.
+
+| Segment (two combats each) | Wall time | Requests | Req/decision | Forced moves | Actionable probes |
+| --- | --- | --- | --- | --- | --- |
+| Baseline (turbo, autopilot, plans off) | >180 s (one finished) | 29 | 0.91 | 0 | 2042 |
+| Overhaul, plan follow-ups broken | 145 s | 22 | 0.71 | 9 | 251 |
+| Overhaul, after the fixes below | 118 s | 21 | 0.44 | 12 | 417 |
+
+Observed **[eye]**: game speed Normal→Instant while playing and back to Normal on every pause; model
+test records `streamToolArgs=supported` (one extra probe request); combat reasons cite `combat.threat` /
+`hand[].vs` / kill options; autopilot end-turns, rewards and single-path maps at zero cost; a 6-step
+whole-turn plan from one request (cost on step 0 only); `/vision/screenshot` without panel, HUD or
+edge tab; HUD banner, plan preview and reason bubble; the report card plus `/health.last_run_summary`
+and one journal row after a real GAME_OVER (`died_to` null on an event-screen death); abandoning a run
+records nothing; the panel reappears after restart; both MCP surfaces ran a live `then` plan to
+`completed` with no model request.
+
+Found live and fixed (each with a regression test that fails without the fix):
+- The real OpenAI-compatible client did not declare the streaming-probe interface, so the model test
+  skipped its stream check (offline fakes hid it).
+- The model ignored `then` until the plan instruction carried a concrete example.
+- Every plan follow-up stopped as `illegal_action`: it read the frame while the previous card was still
+  resolving (no `play_card` yet). All three executors now wait for an actionable frame, bounded at 8 s.
+- A plan cut short after step 1 left no trace in the decision log; it now records `turn_id`/`plan_size`
+  and a diagnostics event with the stop reason.
+- The HUD banner sat on the game's top bar; it now starts at 16% of the height.
+- The run report counted an external HTTP/MCP action as a model decision and highlight.
+
+Not observed live: the card outline and target line (at Instant speed the card leaves the hand within a
+frame), the F7 hotkey (synthetic key input did not reach the game), co-op teammate play with the new
+features, a full run, and the win-rate/performance targets beyond the table above.
+
 ## Status as of 2026-09-22 (isolated natural run, Act 1 cleared)
 
 Isolated profile `default\2026092212` (`--windowed --force-steam off --clientId 2026092212`), API

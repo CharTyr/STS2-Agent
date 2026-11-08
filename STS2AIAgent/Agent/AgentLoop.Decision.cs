@@ -122,11 +122,21 @@ internal sealed partial class AgentLoop
         StateFingerprint = result.StateFingerprint, WaitingForPlayer = result.WaitingForPlayer,
         WaitingForCombat = result.WaitingForCombat,
         RequiresConfiguration = result.RequiresConfiguration, ToolRounds = result.ToolRounds,
+        ReadToolRounds = result.ReadToolRounds, StreamDemoted = result.StreamDemoted,
+        PlanSteps = result.PlanSteps, PlanStopReason = result.PlanStopReason, TurnId = result.TurnId, PlanSize = result.PlanSize,
+        FailureKind = result.FailureKind,
         Usage = result.Usage, RequestsSpent = result.RequestsSpent,
         Confidence = result.Confidence, Probabilities = result.Probabilities,
         DangerScore = pending.DangerScore, JevElapsedMilliseconds = pending.JevElapsedMilliseconds,
         OfferedOptionIds = pending.OfferedOptionIds, StrategyUpdatedAt = pending.StrategyUpdatedAt
     };
+
+    // What the last model turn looked like, for the on-demand screenshot rule (VisionPolicy).
+    private bool _lastPlayFailed;
+    private bool _lastPlayTookNoAction;
+    private int _consecutiveUnsettled;
+    private readonly PlayStateSplitCache _stateSplitCache = new();
+    internal DecisionPacingGate PacingGate { get; init; } = new();
 
     private async Task<AgentTurnResult> PlayWithModelAsync(
         AgentSettings settings, ResolvedModel resolved, string stateJson, AgentTurnResult pending,
@@ -144,9 +154,13 @@ internal sealed partial class AgentLoop
             cancellationToken.ThrowIfCancellationRequested();
             var budget = _budgetGuard?.Invoke()?.CheckBudget(requests, usage?.TotalTokens ?? 0);
             if (budget != null) return Receipt(budget);
-            if (requests > 0)
+            var pacedWait = await PacingGate.WaitBeforePrimaryRequestAsync(
+                settings.MinDecisionIntervalSeconds,
+                cancellationToken,
+                stampOnReturn: false);
+            if (requests > 0 || pacedWait > TimeSpan.Zero)
             {
-                // A slow or rejected Jev decision must not hand the LLM its old frame.
+                // A slow or rejected Jev decision, or a configured pacing wait, must not hand the LLM its old frame.
                 stateJson = await _bridge.GetCompactStateJsonAsync(cancellationToken);
                 checkState?.Invoke(stateJson);
             }
@@ -181,6 +195,19 @@ internal sealed partial class AgentLoop
                     "Strategy for the screen in the latest state (" + screenLabel + "):\n" + screenGuidance));
             }
 
+            // Hoist unchanging run inventory (deck, relics, relic descriptions, ascension effects) and
+            // baseline glossary into the static prefix ahead of refreshable journal/planner messages so
+            // Boss/combat prefix caches stay warm even when strategy refreshes mid-fight (#234).
+            var stateSplit = _stateSplitCache.Split(PromptStateDiet.Apply(stateJson), screenLabel);
+            if (stateSplit.StaticRunJson != null)
+            {
+                messages.Add(LlmMessage.System(
+                    "Current run static context:\n" + stateSplit.StaticRunJson));
+            }
+
+            var journalDigest = _runJournalDigest?.Invoke(stateJson);
+            if (!string.IsNullOrEmpty(journalDigest)) messages.Add(LlmMessage.System(journalDigest));
+
             // The dual-layer planner's standing strategy, on the static prefix: it changes only when a
             // plan refreshes, so it invalidates the per-step cache as rarely as the playbook does. A
             // never-planned (default) strategy costs nothing.
@@ -198,7 +225,10 @@ internal sealed partial class AgentLoop
                 messages.Add(LlmMessage.User("Recent team conversation (historical messages, not live game facts):\n" + teamContext));
             }
 
-            var visionNote = await TryDescribeOrAttachVisionAsync(resolved, settings, attachRequested: true,
+            // A picture only when the structured state may not be enough (W6): every step used to carry
+            // one for a vision model, ~1–2k tokens and a game-thread capture each time.
+            var attachShot = VisionPolicy.ShouldAttach(settings.VisionMode, screen, _lastPlayFailed, _lastPlayTookNoAction, _consecutiveUnsettled);
+            var visionNote = await TryDescribeOrAttachVisionAsync(resolved, settings, attachRequested: attachShot,
                 cancellationToken, pendingRequests: requests, pendingTokens: usage?.TotalTokens ?? 0);
             usage = LlmUsage.Combine(usage, visionNote.Usage);
             requests += visionNote.RequestsSpent;
@@ -230,15 +260,20 @@ internal sealed partial class AgentLoop
                     + instruction.Text));
             }
 
-            messages.Add(LlmMessage.User("Latest compact game state:\n" + stateJson));
-            messages.Add(LlmMessage.User("Choose the next legal action from compact state. Vision is optional and not required. Call get_game_state if needed, then act exactly once."));
+            // Static run inventory and baseline glossary were hoisted above; only volatile frame fields remain.
+            messages.Add(LlmMessage.User("Latest compact game state:\n" + stateSplit.DynamicStateJson));
+            var plans = settings.TurnPlansEnabled;
+            messages.Add(LlmMessage.User(plans && NonCombatOnlyPolicy.IsCombatSnapshot(stateJson)
+                ? PlayPrompt.ActNowInstruction + " " + PlayPrompt.PlanTurnInstruction
+                : PlayPrompt.ActNowInstruction));
             AppendJsonActFallbackIfNeeded(messages, resolved, allowAct: true);
 
+            PacingGate.RecordDispatch();
             handedToCompletion = true;
             var result = await CompleteWithToolsAsync(
                 resolved,
                 messages,
-                AgentTools.Play,
+                plans ? AgentTools.PlayInGame : AgentTools.PlayInGameSingle,
                 allowAct: true,
                 stopAfterAct: true,
                 cancellationToken,
@@ -248,7 +283,12 @@ internal sealed partial class AgentLoop
                 reportPhase: reportPhase,
                 onFirstPrimaryRequest: playInstruction is { } pendingInstruction
                     ? () => _acknowledgePlayInstruction?.Invoke(pendingInstruction.Id)
-                    : null);
+                    : null,
+                // The frame the model plans against: a whole-turn plan stops when the game leaves it.
+                planStateJson: stateJson);
+            _lastPlayFailed = result.Error != null;
+            _lastPlayTookNoAction = result.Acted == null;
+            _consecutiveUnsettled = result.ExecutedUnsettled ? _consecutiveUnsettled + 1 : 0;
             return WithJevReceipt(result, pending);
         }
         catch (NonCombatOnlyYieldException ex)

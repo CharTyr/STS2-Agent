@@ -69,7 +69,7 @@ For a change crossing state, action, agent, UI, or MCP, trace it in both directi
 
 ## Code shape and its known debts
 
-Measured from the current local `dev` tree across 210 mod source files totalling 51,717 lines (git-tracked only, which is what the gate counts -- a working tree also holds whatever the developer left in it). These numbers are here
+Measured from the current local `dev` tree across 248 mod source files totalling 59,943 lines (git-tracked only, which is what the gate counts -- a working tree also holds whatever the developer left in it). These numbers are here
 because nobody was counting, and that is how a codebase stops being navigable -- not through a bad
 commit, but through a thousand good ones. The `arch-facts` gate checks this table against the
 files, so it cannot quietly go stale the way it did between ADR 0001 and the splits below.

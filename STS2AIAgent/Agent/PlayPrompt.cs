@@ -34,6 +34,22 @@ Never invent indexes, teammates' actions, or actions missing from available_acti
 If the screen is UNKNOWN, say so and ask the player to wait or retry rather than guessing.
 """;
 
+    /// <summary>
+    /// The last message of a play request. It used to invite "call get_game_state if needed", and
+    /// models did: a read round is a whole second request for a state the prompt already carried.
+    /// </summary>
+    public const string ActNowInstruction =
+        "The compact state above is fresh and includes available_actions. Do not call get_game_state; call act now with the next legal action and a one-sentence reason. Vision is optional and never required.";
+
+    /// <summary>
+    /// Appended to <see cref="ActNowInstruction"/> on a combat frame while whole-turn plans are on:
+    /// one request can carry the whole turn instead of one request per card.
+    /// </summary>
+    public const string PlanTurnInstruction =
+        "In combat, plan the whole turn in this one call: the first action in act's own fields, the rest in `then` (cards by card_cid, usually ending with end_turn). Use combat.threat and hand[].vs for the numbers. "
+        + "Example shape: {\"action\":\"play_card\",\"card_cid\":12,\"target_index\":0,\"reason\":\"...\",\"then\":[{\"action\":\"play_card\",\"card_cid\":7},{\"action\":\"end_turn\"}]}. "
+        + "Only leave `then` out when the next card depends on something you cannot see yet (a draw or a choice).";
+
     public const string JsonActFallback = """
 If you cannot call tools, reply with a single JSON object and nothing else:
 {"action":"<name from available_actions>","card_index":0,"target_index":0,"option_index":0,"x":0,"y":0,"tool":"big","reason":"<one short sentence saying why>"}
@@ -117,15 +133,18 @@ Omit unused parameters; keep "reason" -- it is shown to the player. Do not wrap 
         builder.AppendLine("You are playing Slay the Spire 2 through structured tools. This is the same play contract as the STS2 MCP player skill.");
         builder.AppendLine();
         builder.AppendLine("Tools: get_game_state, get_raw_game_state, get_available_actions, get_game_data_item, get_game_data_items, get_relevant_game_data, wait_until_actionable, act.");
-        builder.AppendLine("Compact live state plus tools is complete. Vision/screenshots are optional supporting context and are never required.");
-        builder.AppendLine("Hand previews include Strength. Check upgrade.status before cost/vars; unavailable is not maxed. Use current metadata, never guess.");
+        builder.AppendLine("Compact live state plus tools is complete; screenshots are optional and never required.");
+        // The card-value note used to ride inside every combat frame (PromptStateDiet now drops it
+        // there); here it is paid once per request. The old "previews include Strength" line said the
+        // first half of it again.
+        builder.AppendLine(PromptStateDiet.CardValueNote + " Check upgrade.status before cost/vars; unavailable is not maxed. Never guess.");
         builder.AppendLine();
         builder.AppendLine(PlayContract.Trim());
         builder.AppendLine();
         // The playbooks are not carried here: this prompt is re-sent on every play step, and the
         // caller injects the current screen's section (PlaybookGuidance) right behind this message.
-        builder.AppendLine("The playbook section for the current screen is injected after this message. The other screens' sections stay out of the prompt: a decision can only use the screen it is on.");
-        builder.Append("Each play step: inspect state (and metadata if needed), then call act exactly once, attaching a one-sentence reason the player can read. Vision is optional; legality still comes from live state.");
+        builder.AppendLine("The playbook section for the current screen follows this message; other screens' sections are left out.");
+        builder.Append("Each play step: call act exactly once with a one-sentence reason the player can read; legality comes from live state.");
         // AppendLine uses the host newline; the prompt must not vary by build platform.
         return builder.ToString().ReplaceLineEndings("\n");
     }

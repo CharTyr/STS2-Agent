@@ -30,7 +30,7 @@ internal static partial class Loc
         // The elapsed-time suffix the status line grows while a turn sits in one stage
         // (Agent/AgentRuntime.cs, StatusWithElapsed).
         map["{0}（已等待 {1} 秒）"] = "{0} (waiting {1}s)";
-        map["已执行 {0}"] = "Executed {0}";
+        map["已执行：{0}"] = "Did: {0}";
         map["等待游戏可操作"] = "Waiting for the game";
         map["等待可操作状态"] = "Waiting for an actionable state";
         map["等待你选择地图节点，随后投同一格。"] = "Waiting for you to pick a map node; I will vote for the same one.";

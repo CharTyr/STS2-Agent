@@ -74,6 +74,11 @@ internal static partial class Loc
 
         // Multiplayer/TeamConversation.cs
         map["队伍消息需要包含 1–{0} 个字符。"] = "A team message must be 1–{0} characters long.";
+        // Multiplayer/TeamConversation.cs (the pending-message line the host shows)
+        map["消息已送达，等待队友回复（已等待 {0} 秒）"] =
+            "Message delivered; waiting for the teammate's reply ({0}s so far).";
+        map["队友正在战斗，消息会在它这次行动结束后处理（已等待 {0} 秒）"] =
+            "The teammate is in combat; your message will be handled after this turn ({0}s so far).";
 
         // Agent/McpProcessLauncher.cs
         map["mcp_server 目录无效。需要包含 pyproject.toml 和 src/sts2_mcp/server.py。"] =

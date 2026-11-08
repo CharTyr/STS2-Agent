@@ -10,6 +10,7 @@ using MegaCrit.Sts2.Core.Nodes.Screens.GameOverScreen;
 using MegaCrit.Sts2.Core.Nodes.Screens.MainMenu;
 using MegaCrit.Sts2.Core.Nodes.Screens.PauseMenu;
 using MegaCrit.Sts2.Core.Nodes.Screens.Timeline.UnlockScreens;
+using MegaCrit.Sts2.Core.Saves.Managers;
 
 namespace STS2AIAgent.Game;
 
@@ -75,6 +76,9 @@ internal static class ReflectedGameMembers
         new(typeof(NEndTurnLongPressBar), "_longPressDuration", MemberKind.Field, true, "end_turn long-press detection"),
         new(typeof(NDevConsole), "_devConsole", MemberKind.Field, false, "run_console_command"),
         new(typeof(NMultiplayerSubmenu), "StartLoad", MemberKind.Method, false, "continue_ai_teammate"),
+        // Public today, but patched by name: if it is renamed, the game-speed guard cannot keep a
+        // raised speed out of prefs.save and the boost is capped at Fast (TurboController).
+        new(typeof(PrefsSaveManager), "SavePrefs", MemberKind.Method, false, "turbo prefs guard (game speed while the AI plays)"),
         new(typeof(StartRunLobby), "_maxPlayers", MemberKind.Field, false, "multiplayer_lobby.max_players"),
         new(typeof(NCrystalSphereScreen), "_entity", MemberKind.Field, false, "crystal sphere actions"),
         new(typeof(NPlayerHand), "_prefs", MemberKind.Field, false, "combat hand selection metadata"),

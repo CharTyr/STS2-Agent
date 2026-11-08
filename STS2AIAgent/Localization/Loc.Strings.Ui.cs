@@ -312,11 +312,13 @@ internal static partial class Loc
         map["已修改，需重新测试"] = "Changed; test again";
         map["测试失败（{0}）：{1}"] = "Test failed ({0}): {1}";
         map["已验证（{0}）"] = "Verified ({0})";
+        map["已验证（{0}）· 工具参数不完整，已改为正文出牌"] = "Verified ({0}) · tool arguments arrive incomplete, so moves are sent as reply JSON";
         map["不支持工具调用，无法自动游玩（{0}）"] =
             "No tool calling; cannot auto-play ({0})";
         map["默认 600 秒"] = "Default 600 seconds";
         map["默认 90 秒"] = "Default 90 seconds";
         map["请求超时（秒）"] = "Request timeout (s)";
+        map["最小决策间隔（秒）"] = "Min decision interval (s)";
         map["显示高级选项"] = "Show advanced options";
         map["显示/隐藏热键"] = "Show/hide hotkey";
         map["不限（留空或0）"] = "Unlimited (blank or 0)";

@@ -71,6 +71,10 @@ namespace STS2AIAgent.Tests;
 /// grid's whole card list (<c>GetDeckSelectionCards</c>) instead of the holders the grid has drawn,
 /// which on a long deck are only the rows near the scroll position.
 ///
+/// <c>BuildHandCardPayload</c> was regenerated on 2026-10-28 (experience overhaul W3/W4) when each
+/// hand card gained <c>combat_card_id</c> (the game's <c>NetCombatCardDb</c> id, stable for the whole
+/// fight, which whole-turn plans name cards by) and <c>card_type</c>. The other fields are unchanged.
+///
 /// <c>BuildRunPlayerSummaryPayload</c> was regenerated when every party line gained the player's
 /// deck, relics and potions. Each client simulates the whole run, so a partner's
 /// <c>Player.Deck</c> is as current as the local one, and an external agent planning for the party
@@ -181,7 +185,7 @@ internal static class GameStateServiceRelocationContractTests
         ["BuildModalPayload"] = ("STS2AIAgent/Game/GameStateService.Rooms.cs", "e50fe34507468878d3af92cf543889a8dbc320d1a93a086db164e3c0b973d7b6"),
         ["BuildGameOverPayload"] = ("STS2AIAgent/Game/GameStateService.Rooms.cs", "b152e93a13d1239bf1c9817b9cb33220f397ac755ea3667968fdf6175c2cc1ce"),
         ["VerifyGameOverProgressSave"] = ("STS2AIAgent/Game/GameStateService.Rooms.cs", "f417813a51c483c31608d612aefbe040cce4bdf6a97e4a6ec5f81f49b9dbfe0d"),
-        ["BuildHandCardPayload"] = ("STS2AIAgent/Game/GameStateService.Combat.cs", "a87ed5050ecad5b3090e532eb44314d1517664e6e260bde204b1e9810da61353"),
+        ["BuildHandCardPayload"] = ("STS2AIAgent/Game/GameStateService.Combat.cs", "aa7201dff843161c6121fc8b2b14c79757788ddacc72dee320cd5887feba2d43"),
         ["GetModelIdEntry"] = ("STS2AIAgent/Game/GameStateService.cs", "a6bc7fd47caee58200cf2b4af006c24a62f11e89f3154de19bec4fb4abe8e745"),
         ["BuildEnemyPayload"] = ("STS2AIAgent/Game/GameStateService.Combat.cs", "61cf445651f34aa4415d3861c84c2fbf8aebb6de39f790eb3456cded6735b6f6"),
         ["BuildCreaturePowerPayloads"] = ("STS2AIAgent/Game/GameStateService.Combat.cs", "125f19a815ca7f18402d59d72f717080fefb159268277c7121c3e711dd2ffaa1"),
@@ -328,7 +332,8 @@ internal static class GameStateServiceRelocationContractTests
             var actual = Hash(text);
             if (!string.Equals(actual, entry.Hash, StringComparison.Ordinal))
             {
-                mismatches.Add($"{key}: expected {entry.Hash[..12]}, actual {actual[..12]}");
+                // The full actual value, so a deliberate regeneration can be pasted rather than recomputed.
+                mismatches.Add($"{key}: expected {entry.Hash[..12]}, actual {actual}");
             }
         }
 

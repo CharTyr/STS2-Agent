@@ -6,6 +6,15 @@ namespace STS2AIAgent.Agent;
 internal sealed class AutoPlayRecovery
 {
     private int _failures;
+    private int _transportFailures;
+
+    /// <summary>Network failures tolerated in a row before the run stops (W7).</summary>
+    internal const int TransportLimit = 5;
+
+    private static readonly TimeSpan[] TransportBackoff =
+    {
+        TimeSpan.FromSeconds(2), TimeSpan.FromSeconds(4), TimeSpan.FromSeconds(8), TimeSpan.FromSeconds(16), TimeSpan.FromSeconds(30)
+    };
 
     // The no-progress side of the policy. Nothing here is player-visible until a run stops.
     private string? _lastAction;
@@ -14,6 +23,13 @@ internal sealed class AutoPlayRecovery
     private int _unsettled;
     private int _reasoningBudgetExhausted;
     private DateTimeOffset _waitingForGameSince;
+
+    /// <summary>
+    /// The last state fingerprint a game-driven wait reported. A new fingerprint is evidence that the
+    /// game is still doing something, so it restarts the stuck clock instead of letting a long but
+    /// active phase (a slow enemy turn, a long load) end the session at the wall-clock limit.
+    /// </summary>
+    private string? _lastWaitEvidence;
 
     public (string? StopReason, string? StopKind, TimeSpan Delay) Observe(AgentTurnResult result)
     {
@@ -25,7 +41,10 @@ internal sealed class AutoPlayRecovery
         // indistinguishable from a hang: past the limit the run stops with a visible reason instead
         // of retrying silently forever. The limit is wall-clock, not turns -- a turn that waits out
         // its own 20-second timeout must not stretch the budget into tens of minutes.
-        if (result.WaitingForGame)
+        // A game thread that did not run a post in time is the window in the background (it stops
+        // rendering) or a long load, not a model failure: it used to be counted as one, and three of
+        // them stopped a session whose player had only switched windows. It runs the waiting clock.
+        if (result.WaitingForGame || (result.Acted == null && result.FailureKind == FailureKinds.GameStalled))
         {
             // A wait on the human player (the companion waiting for the host's map pick) is not a
             // hang: the host may take minutes, and stopping the teammate with "the game may be stuck"
@@ -33,10 +52,23 @@ internal sealed class AutoPlayRecovery
             if (result.WaitingForPlayer || result.WaitingForCombat)
             {
                 _waitingForGameSince = default;
+                _lastWaitEvidence = null;
                 return (null, null, TimeSpan.FromSeconds(1));
             }
 
-            if (_waitingForGameSince == default)
+            // The stuck clock is an evidence clock: a screen, phase or fingerprint change is progress
+            // even though no action has been executed yet, so it restarts the 150 s window. Without
+            // this, a boss phase or a long map travel animation that keeps the game busy past the
+            // limit stopped a session that was never stuck.
+            var evidence = result.StateFingerprint;
+            var moved = !string.IsNullOrEmpty(evidence)
+                && !string.Equals(evidence, _lastWaitEvidence, StringComparison.Ordinal);
+            if (moved)
+            {
+                _lastWaitEvidence = evidence;
+                _waitingForGameSince = DateTimeOffset.UtcNow;
+            }
+            else if (_waitingForGameSince == default)
             {
                 _waitingForGameSince = DateTimeOffset.UtcNow;
             }
@@ -56,6 +88,7 @@ internal sealed class AutoPlayRecovery
 
         // Any non-waiting turn ends the wait streak.
         _waitingForGameSince = default;
+        _lastWaitEvidence = null;
 
         // The action executed and the response is still "pending": the game accepted what the model
         // asked for, so this must not spend the retry budget -- but an unbounded run of them is a
@@ -106,6 +139,7 @@ internal sealed class AutoPlayRecovery
             _unsettled = 0;
             _reasoningBudgetExhausted = 0;
             _failures = 0;
+            _transportFailures = 0;
 
             var repeats = NoProgressPolicy.IsRepeat(
                 _lastAction,
@@ -132,6 +166,24 @@ internal sealed class AutoPlayRecovery
         }
 
         var reason = result.Error ?? Loc.T("模型未给出可执行动作");
+
+        // A network blip (timeout, 5xx, 429, refused connection) is the provider's, not the model's:
+        // five tries on a 2/4/8/16/30-second ladder before stopping, kept apart from the three-strike
+        // count so one flaky minute does not end a run.
+        if (result.FailureKind == FailureKinds.Transport)
+        {
+            _transportFailures++;
+            if (_transportFailures >= TransportLimit)
+            {
+                return (
+                    Loc.T("连续 {0} 次连不上模型服务，已停止自动游玩：{1}。你可以：检查网络或服务商状态，稍后点「继续游玩」。", TransportLimit, reason),
+                    StopKindPolicy.Network,
+                    TimeSpan.Zero);
+            }
+
+            return (null, null, TransportBackoff[Math.Min(_transportFailures, TransportBackoff.Length) - 1]);
+        }
+
         _failures++;
         // The kind stays unset so the appended reason still supplies the useful distinction:
         // a dead endpoint should read as a network stop, a rejected key as a config stop.
@@ -192,7 +244,7 @@ internal sealed class AutoPlayRecovery
                 // Keep the exception type in the message: a bare ex.Message loses the difference
                 // between a timeout, a refused connection and a serialization bug, and the turn
                 // receipt is the only place the failure is ever shown.
-                catch (Exception ex) { result = new AgentTurnResult { Error = ex.GetType().Name + ": " + ex.Message }; }
+                catch (Exception ex) { result = new AgentTurnResult { Error = ex.GetType().Name + ": " + ex.Message, FailureKind = FailureKinds.Of(ex) }; }
                 budgetReason = Commit(result, cancellationToken.IsCancellationRequested);
             }
             finally

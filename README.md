@@ -12,6 +12,12 @@ https://github.com/user-attachments/assets/89353468-a299-4315-9516-e520bcbfbd4b
 
 ---
 
+### Play experience (unreleased)
+
+Auto-play uses the game's own Fast Mode and restores your setting on pause. Forced moves spend no model requests; combat can execute a checked whole-turn plan from one request. Combat math, deck statistics and route advice accompany the current state. **F7 pauses/resumes; F8 opens the panel.** The HUD shows the action and reason, and is hidden from screenshots. A finished run gets a copyable report and an optional bounded factual journal. These switches are under **Settings → Play experience**.
+
+**Will acceleration change my saved game speed?** The temporary speed is guarded against being written to the game's settings; pause restores the previous value. Co-op is capped at Fast. All features can be switched off. The released version remains 0.17.0; this branch's live evidence is recorded separately.
+
 ## 🌟 Key Highlights
 
 - 🎮 **In-Game Overlay UI**: Press **F8** at any time to open the configuration and control window directly inside the game—no external browser required.
@@ -94,7 +100,7 @@ Request limits, proxies, thinking protocols and the External Agent route: see [M
 Both routes enforce the same structural conditions (you are on the main menu, this is not the teammate instance, and the character has no auto-play already running); only the model gate differs. Full contract: [docs/api.md](./docs/api.md).
 
 ### Model setup details
-- **Test main model** usually sends 2 requests with a 45-second deadline; while it runs the button reads **Cancel test**, so press it again to cancel. Auto-play requires verified tool calling; chat connectivity alone is not enough.
+- **Test main model** usually sends 3 requests (connectivity, tool calling and streamed arguments) with a 45-second deadline; while it runs the button reads **Cancel test**, so press it again to cancel. Auto-play requires verified tool calling; chat connectivity alone is not enough.
 - New installs stop auto-play after 1,500 requests by default, which is about one full run. Adjust the limit, or leave it empty / enter 0 for unlimited. Existing unlimited settings are preserved. Tests also call your provider. Request and token counters are not a bill; consult your provider for charges.
 - Quick setup shares one model for conversation and play. Multiple endpoints, vision, thinking protocols and advanced budgets are under **Show advanced options**. Proxy aliases do not need to be renamed `deepseek-chat`: set the endpoint protocol explicitly.
 - In **Play → Multiplayer**, choose **AI auto-play** before inviting, or explicitly choose **External Agent** to launch a teammate that waits for Claude Code / Cursor / Codex; that route needs no model.

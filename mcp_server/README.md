@@ -248,3 +248,9 @@ python -m py_compile "<repo-root>/mcp_server/src/sts2_mcp/client.py" "<repo-root
 发布包只带 sidecar 的启动 / profile 检查脚本，不要在发布包里找这些实机脚本。
 
 发布流程入口见 [release-readiness.md](../docs/release-readiness.md)；当前版本、验收证据与剩余缺口见 [当前状态页](https://github.com/CharTyr/STS2-Agent/blob/main/PRODUCT_PLAN_CURRENT.md)。
+
+## 两种驱动方式与整回合规划
+
+模式 A：外部客户端读取 decide/get_game_state 后调用 act；战斗可附 card_cid 与最多九个 then 步骤。每步检查最新状态，pending、拒绝或 outcome_unknown 就停止，绝不自动重放；返回逐步结果。Python 将 card_index 与 card_cid 一起交给 Mod 在动作锁内核对，compact v13 的 threat/vs 同时供两套 MCP 使用。
+
+模式 B：通过本机 POST /session/control 启动 Mod 自己游玩，外部客户端使用 get_planner_briefing / update_play_strategy 提供规划。部分客户端会限制长时间自动循环；采用有限步数并返回进度，或用模式 B。旧的单动作 act 与 guided/layered/full 工具清单保留兼容。

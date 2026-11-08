@@ -23,6 +23,7 @@ internal sealed class EventPollingCoordinator
     private readonly object _gate = new();
     private readonly Func<CancellationToken, Task> _pollOnce;
     private readonly TimeSpan _pollInterval;
+    private readonly Func<TimeSpan>? _nextInterval;
 
     private CancellationTokenSource? _cts;
     private Task? _loopTask;
@@ -33,10 +34,11 @@ internal sealed class EventPollingCoordinator
     private bool _stopped;
     private int _loopStartCount;
 
-    public EventPollingCoordinator(Func<CancellationToken, Task> pollOnce, TimeSpan pollInterval)
+    public EventPollingCoordinator(Func<CancellationToken, Task> pollOnce, TimeSpan pollInterval, Func<TimeSpan>? nextInterval = null)
     {
         _pollOnce = pollOnce;
         _pollInterval = pollInterval;
+        _nextInterval = nextInterval;
     }
 
     internal int LoopStartCount => Volatile.Read(ref _loopStartCount);
@@ -158,7 +160,7 @@ internal sealed class EventPollingCoordinator
 
             try
             {
-                await Task.Delay(_pollInterval, cancellationToken);
+                await Task.Delay(_nextInterval?.Invoke() ?? _pollInterval, cancellationToken);
             }
             catch (OperationCanceledException)
             {

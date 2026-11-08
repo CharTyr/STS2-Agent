@@ -16,6 +16,20 @@ namespace STS2AIAgent.Agent;
 internal sealed partial class AgentRuntime
 {
     /// <summary>
+    /// When the pending message was handed to the teammate, in <see cref="Environment.TickCount64"/>
+    /// milliseconds; 0 when nothing is pending. Read by <see cref="TeamStatus"/> through
+    /// <see cref="Volatile"/> so the overlay tick never catches a half-written timestamp.
+    /// </summary>
+    private long _teamMessageStartedAtMs;
+
+    /// <summary>
+    /// The teammate's own screen was COMBAT on the last live-status refresh. Deliberately not the
+    /// host's screen: the host can be on the map while the teammate is still in a fight, which is
+    /// exactly the case the pending-message line has to explain.
+    /// </summary>
+    private volatile bool _teammateInCombat;
+
+    /// <summary>
     /// The teammate's live game summary, or null when it is unavailable. Read from a cached snapshot
     /// rather than fetched on read: the overlay asks for it on its frame tick, and an HTTP call there
     /// would run on the game thread.
@@ -36,7 +50,7 @@ internal sealed partial class AgentRuntime
         var connection = LocalDualInstanceLauncher.Connection;
         if (connection == null)
         {
-            SetTeammateLiveStatus(null);
+            SetTeammateLiveStatus(null, inCombat: false);
             return;
         }
 
@@ -52,7 +66,8 @@ internal sealed partial class AgentRuntime
             try
             {
                 var stateJson = await connection.TryReadStateAsync(CancellationToken.None);
-                SetTeammateLiveStatus(TeammateStatus.Parse(stateJson).Describe());
+                var status = TeammateStatus.Parse(stateJson);
+                SetTeammateLiveStatus(status.Describe(), status.InCombat);
             }
             finally
             {
@@ -62,19 +77,26 @@ internal sealed partial class AgentRuntime
         });
     }
 
-    private void SetTeammateLiveStatus(string? text)
+    private void SetTeammateLiveStatus(string? text, bool inCombat)
     {
-        if (string.Equals(_teammateLiveStatus, text, StringComparison.Ordinal))
+        // The combat flag feeds the pending-message line, so a change there is a visible change even
+        // when the summary text happens to read the same (e.g. the host and the map line).
+        if (_teammateInCombat == inCombat &&
+            string.Equals(_teammateLiveStatus, text, StringComparison.Ordinal))
         {
             return;
         }
 
+        _teammateInCombat = inCombat;
         _teammateLiveStatus = text;
         RaiseChanged();
     }
 
     public async Task SendTeamMessageAsync(string text, CancellationToken cancellationToken)    {
         if (!await _teamMessageGate.WaitAsync(0, cancellationToken)) return;
+        // Stamp before flipping the flag the status line reads: a pending message never renders
+        // with a stale/zero start.
+        Volatile.Write(ref _teamMessageStartedAtMs, Environment.TickCount64);
         _teamMessagePending = true;
         try
         {
@@ -82,7 +104,8 @@ internal sealed partial class AgentRuntime
             var connection = LocalDualInstanceLauncher.Connection
                 ?? throw new InvalidOperationException(Loc.T("请先邀请 AI 队友。此处消息只发送给本次邀请的队友。"));
             _teamConversation.Add("user", text);
-            _teamStatus = Loc.T("消息正在送往队友；若它正在行动，会在本次行动完成后回复。");
+            // The pending line itself is computed by TeamStatus from the start timestamp and the
+            // teammate's combat flag; the text that used to be frozen here would stop the seconds.
             RaiseChanged();
             var reply = await connection.SendMessageAsync(text, intent: null, cancellationToken);
             _teamConversation.Add("assistant", reply.Length > TeamConversation.MaxMessageLength ? reply[..TeamConversation.MaxMessageLength] : reply);
@@ -95,6 +118,7 @@ internal sealed partial class AgentRuntime
         finally
         {
             _teamMessagePending = false;
+            Volatile.Write(ref _teamMessageStartedAtMs, 0);
             _teamMessageGate.Release();
             RaiseChanged();
         }

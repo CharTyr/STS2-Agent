@@ -254,6 +254,9 @@ def schema_for_type(type_name: str, known_components: set[str]) -> dict[str, Any
         "string": {"type": "string"},
         "int": {"type": "integer", "format": "int32"},
         "long": {"type": "integer", "format": "int64"},
+        # The game's per-combat card id (NetCombatCardDb) is a uint; JSON carries it as a plain
+        # non-negative integer.
+        "uint": {"type": "integer", "format": "int64", "minimum": 0},
         "decimal": {"type": "number"},
         "double": {"type": "number", "format": "double"},
         "float": {"type": "number", "format": "float"},

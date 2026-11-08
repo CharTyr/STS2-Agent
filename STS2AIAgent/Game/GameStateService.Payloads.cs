@@ -963,6 +963,10 @@ internal sealed class CombatHandCardPayload
 {
     public int index { get; init; }
 
+    public uint? combat_card_id { get; init; }
+
+    public string? card_type { get; init; }
+
     public string card_id { get; init; } = string.Empty;
 
     public string name { get; init; } = string.Empty;

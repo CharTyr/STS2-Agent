@@ -4,7 +4,15 @@ namespace STS2AIAgent.Agent;
 
 internal static class ActJsonParser
 {
-    public static bool TryParse(string? text, out string argumentsJson)
+    public static bool TryParse(string? text, out string argumentsJson) =>
+        TryParse(text, wholeReplyOnly: false, out argumentsJson);
+
+    /// <summary>
+    /// <paramref name="wholeReplyOnly"/> accepts only a reply that IS the act (bare or in one code
+    /// fence). A model with native tools that writes JSON as its whole answer meant to act; one that
+    /// quotes an action inside advice ("<c>{"action":"end_turn"}</c> is fine") did not.
+    /// </summary>
+    public static bool TryParse(string? text, bool wholeReplyOnly, out string argumentsJson)
     {
         argumentsJson = "{}";
         if (string.IsNullOrWhiteSpace(text))
@@ -12,7 +20,14 @@ internal static class ActJsonParser
             return false;
         }
 
-        foreach (var candidate in EnumerateCandidates(text))
+        var trimmed = text.Trim();
+        var candidates = !wholeReplyOnly
+            ? EnumerateCandidates(text)
+            : trimmed.StartsWith("```", StringComparison.Ordinal) && trimmed.EndsWith("```", StringComparison.Ordinal)
+                ? EnumerateCandidates(text).Skip(1).Take(1)
+                : new[] { trimmed };
+
+        foreach (var candidate in candidates)
         {
             if (!TryReadActionObject(candidate, out argumentsJson))
             {

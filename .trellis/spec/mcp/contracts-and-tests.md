@@ -100,3 +100,12 @@ The C# and Python state diff implementations share the same output contract. Cla
 Event-stream connect timeouts and broken reads must surface as structured `Sts2ApiError` values so `wait_until_actionable` can fall back to state polling. Only an idle read timeout on an opened stream stays within `wait_for_event`. Cap both connection and read timeouts by the remaining overall deadline. Back off an immediate EOF reconnect without extending that deadline. Read failures in an HTTP error body must not replace the HTTP error with a bare exception.
 
 Use a fake clock that advances during simulated I/O or sleep. Advancing time every time `monotonic` is read makes a harmless extra deadline check change test behavior.
+
+## Whole-turn plans
+
+Both MCP act surfaces accept optional card_cid and then. The sidecar forwards stable card identity along with its resolved card_index to POST /action; the mod validates under its lease. Every follow-up reads fresh state. A 4xx refusal is rejected; a lost response is outcome_unknown. Both stop the plan without replay, and earlier completed steps remain visible. When `raw_state` is false, intermediate `plan.steps[]` omit per-step `state` snapshots so only one `final_state` is emitted. Shared vectors keep the C# and Python policies aligned.
+
+## Compact payload slimming and session static deduplication
+
+Both MCP surfaces (`McpStateSlimmer.cs` + `mcp_server/src/sts2_mcp/state_diet.py`) apply lossless intra-frame compact slimming (dropping off-MAP graph nodes, solo `run.players[0]` inventory copies, combat `run.piles`, readiness noise, playable hand-card null/unplayable noise, and null top-level screen sections) whenever `raw_state` is false and `compact_agent_view` is not false. Within an MCP session and `run_id`, unchanged `run.deck`, `run.relic_descriptions`, `run.ascension_effects`, already-delivered `glossary` entries (delta-filtered on new terms), `combat.card_value_note`, and repeated `decide()` `scene_guidance` blocks are replaced with lightweight `*_unchanged` markers; any mutation or `run_id` switch re-emits immediately, and `get_game_state(full_state=true)` forces a full compact refresh.
+

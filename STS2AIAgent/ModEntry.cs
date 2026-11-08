@@ -37,6 +37,10 @@ public static class ModEntry
             // attaches to a bug report rather than only on an endpoint they have never called.
             ReflectedGameMembers.ProbeAtStartup();
             NativeCoopLoadGuard.Install();
+            // Before any auto-play can raise the game speed: the guard is what keeps a raised speed
+            // out of prefs.save, and the recovery gives back a speed a crashed session left raised.
+            TurboController.InstallPrefsGuard();
+            AgentRuntime.Instance.ScheduleTurboRecovery();
             if (InstanceRole.IsCompanion || IsHeadlessDisplay())
             {
                 Log.Info($"{LogPrefix} Skipping overlay (companion={InstanceRole.IsCompanion}, headless={IsHeadlessDisplay()})");

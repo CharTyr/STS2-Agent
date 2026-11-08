@@ -386,6 +386,7 @@ class RewardChoiceToolTests(unittest.TestCase):
             payload={
                 "action": "resolve_rewards",
                 "card_index": 3,
+                "card_cid": None,
                 "target_index": None,
                 "option_index": None,
                 "x": None,

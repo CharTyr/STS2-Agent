@@ -53,6 +53,8 @@ This file is about **how to drive a screen**. For **what to choose** where the c
 - If a card or potion opens `CARD_SELECTION`, immediately switch to selection flow.
 - Do not call room actions from combat, even if you still remember the prior room.
 - For unsupported ally-target cards, expect the payload to mark them unplayable instead of guessing targets.
+- Do the arithmetic from `combat.threat` (`block_needed`, `lethal`, `kill_options`) and `hand[].vs` (exact damage per enemy).
+- Plan the turn in one `act`: rest in `then`, cards by `card_cid`. It stops when anything changes.
 
 ## CARD_SELECTION
 

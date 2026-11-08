@@ -162,6 +162,7 @@ internal sealed partial class AgentOverlayHost
     {
         ("first-run", Loc.T("快速开始")),
         ("appearance", Loc.T("外观")),
+        ("experience", Loc.T("游玩体验")),
         ("endpoints", Loc.T("端点")),
         ("models", Loc.T("模型")),
         ("bindings", Loc.T("模型绑定")),
@@ -385,7 +386,7 @@ internal sealed partial class AgentOverlayHost
         _quickDirty = false;
         _conversationCombo = null;
         _visionCombo = null;
-        _maxTokensEdit = _maxRequestsEdit = _llmTimeoutEdit = _hotkeyEdit = null;
+        _maxTokensEdit = _maxRequestsEdit = _llmTimeoutEdit = _minDecisionIntervalEdit = _hotkeyEdit = null;
         _modelTestButtons.Clear();
         _modelTestBadges.Clear();
         _endpointEditors.Clear();
@@ -447,6 +448,8 @@ internal sealed partial class AgentOverlayHost
         // The section label already says 外观; the card names what it holds.
         var appearanceCard = UiFactory.Card(Loc.T("主题"), BuildThemePicker());
         _settingsBody.AddChild(appearanceCard);
+        AddSettingsSection("experience", Loc.T("游玩体验"));
+        _settingsBody.AddChild(BuildExperienceCard(settings));
 
         if (_showAdvancedValue)
         {
@@ -494,6 +497,9 @@ internal sealed partial class AgentOverlayHost
             _llmTimeoutEdit = UiFactory.Line(settings.LlmRequestTimeoutSeconds?.ToString() ?? "", Loc.T("默认 600 秒"));
             WatchLine(_llmTimeoutEdit);
             advanced.Add(Labeled(Loc.T("请求超时（秒）"), _llmTimeoutEdit));
+            _minDecisionIntervalEdit = UiFactory.Line(SettingsInput.FormatOptionalIntervalSeconds(settings.MinDecisionIntervalSeconds), Loc.T("不限（留空或0）"));
+            WatchLine(_minDecisionIntervalEdit);
+            advanced.Add(Labeled(Loc.T("最小决策间隔（秒）"), _minDecisionIntervalEdit));
             _budgetHint = UiFactory.Wrapped(_budgetInputError ?? "", 11);
             _budgetHint.Visible = !string.IsNullOrWhiteSpace(_budgetInputError);
             advanced.Add(_budgetHint);
@@ -528,6 +534,7 @@ internal sealed partial class AgentOverlayHost
             _maxTokensEdit = null;
             _maxRequestsEdit = null;
             _llmTimeoutEdit = null;
+            _minDecisionIntervalEdit = null;
             _budgetHint = null;
             _settingsResetStatsButton = null;
             _proactiveChatToggle = null;
@@ -821,6 +828,12 @@ internal sealed partial class AgentOverlayHost
                 int.TryParse(_llmTimeoutEdit.Text.Trim(), out var seconds) && seconds > 0
                     ? seconds
                     : null;
+        }
+
+        if (_minDecisionIntervalEdit != null &&
+            SettingsInput.TryParseOptionalIntervalSeconds(_minDecisionIntervalEdit.Text, out var minInterval))
+        {
+            current.MinDecisionIntervalSeconds = minInterval;
         }
 
         ModelRoleProbe.InvalidateMismatched(current);

@@ -203,15 +203,18 @@ internal static class OverlayTabContractTests
         var lines = DecisionLogView.Lines(entries);
 
         Assert.Equal(2, lines.Count);
-        Assert.Contains("2. end_turn", lines[0]);
-        Assert.Contains("agent_loop", lines[0]);
+        // Changed 2026-10-28 (W8.2): the log speaks the player's words through PlayerLabels; the raw
+        // ids ("end_turn", "agent_loop") stay in /decisions for tools.
+        Assert.Contains("2. " + PlayerLabels.Action("end_turn"), lines[0]);
+        Assert.Contains(PlayerLabels.Source("agent_loop"), lines[0]);
+        Assert.False(lines[0].Contains("end_turn", StringComparison.Ordinal), "No raw action id on the player's line.");
         Assert.Contains("未知", lines[0]);
         Assert.False(
             lines[0].Contains("本次 Token：0", StringComparison.Ordinal),
             "A step with no usage must not be reported as having spent nothing.");
-        Assert.Contains("1. play_card", lines[1]);
+        Assert.Contains("1. " + PlayerLabels.Action("play_card"), lines[1]);
         Assert.Contains("先补防", lines[1]);
-        Assert.Contains("http_api", lines[1]);
+        Assert.Contains(PlayerLabels.Source("http_api"), lines[1]);
         Assert.Contains("900", lines[1]);
     }
 
@@ -249,7 +252,7 @@ internal static class OverlayTabContractTests
         var lines = DecisionLogView.Lines(entries);
 
         Assert.Equal(DecisionLogView.RecentLimit, lines.Count);
-        Assert.Contains($"{DecisionLogView.RecentLimit + 10}. play_card", lines[0]);
+        Assert.Contains($"{DecisionLogView.RecentLimit + 10}. {PlayerLabels.Action("play_card")}", lines[0]);
     }
 
     private static string ConstantFor(string id)

@@ -24,6 +24,35 @@ internal static class DecisionLogTests
         Assert.Equal(2, json.RootElement.GetProperty("decisions").GetArrayLength());
     }
 
+    /// <summary>
+    /// How a decision was reached is additive and optional: an entry without metrics serializes
+    /// exactly as before (no new keys), one with them carries every field (W6/W3, 2026-10-28).
+    /// </summary>
+    public static void Record_CarriesOptionalMetricsWithoutChangingPlainEntries()
+    {
+        var log = new DecisionLog();
+        log.Record("agent_loop", "end_turn", "done", requestsSpent: 1, totalTokens: 9);
+        log.Record("agent_loop", "play_card", "kill", requestsSpent: 2, totalTokens: 30,
+            metrics: new DecisionMetrics(ToolRounds: 2, ReadToolRounds: 1, StreamDemoted: true, TurnId: "t-1", PlanIndex: 0, PlanSize: 3));
+        log.Record("agent_loop", "play_card", "follow-up", metrics: new DecisionMetrics(TurnId: "t-1", PlanIndex: 1, PlanSize: 3));
+
+        using var json = JsonDocument.Parse(log.RenderJson());
+        var rows = json.RootElement.GetProperty("decisions");
+        foreach (var key in new[] { "tool_rounds", "read_tool_rounds", "stream_demoted", "turn_id", "plan_index", "plan_size" })
+        {
+            Assert.False(rows[0].TryGetProperty(key, out _), "A plain entry must not grow key " + key);
+        }
+
+        Assert.Equal(2, rows[1].GetProperty("tool_rounds").GetInt32());
+        Assert.Equal(1, rows[1].GetProperty("read_tool_rounds").GetInt32());
+        Assert.True(rows[1].GetProperty("stream_demoted").GetBoolean());
+        Assert.Equal("t-1", rows[1].GetProperty("turn_id").GetString());
+        Assert.Equal(0, rows[1].GetProperty("plan_index").GetInt32());
+        Assert.Equal(3, rows[1].GetProperty("plan_size").GetInt32());
+        Assert.Equal(0, rows[2].GetProperty("requests_spent").GetInt32(), "A follow-up plan step never carries the request.");
+        Assert.False(rows[2].TryGetProperty("stream_demoted", out _), "stream_demoted only appears when true.");
+    }
+
     public static void Record_PersistsJsonlAndRotates()
     {
         var root = Path.Combine(Path.GetTempPath(), "sts2-decision-log-" + Guid.NewGuid().ToString("N"));

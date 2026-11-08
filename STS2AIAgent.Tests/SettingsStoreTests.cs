@@ -71,7 +71,10 @@ internal static class SettingsStoreTests
         var loaded = store.Load();
         Assert.NotEmpty(loaded.Endpoints);
         Assert.NotEmpty(loaded.Models);
-        Assert.False(loaded.OverlayVisibleOnStart);
+        // Changed 2026-10-28 (W8.1): a new install shows its window on every start until the player
+        // hides it. Defaulting to hidden left first-time players with only a 34-pixel edge tab once
+        // any panel toggle or a passed test had marked the guide as seen.
+        Assert.True(loaded.OverlayVisibleOnStart);
         Assert.True(File.Exists(path));
     }
 

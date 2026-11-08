@@ -345,6 +345,8 @@ internal static partial class GameActionService
             });
         }
 
+        ValidateCardIdentity(request, hand, request.card_index.Value, screen);
+
         var card = hand[request.card_index.Value];
         if (!GameStateService.IsCardTargetSupported(card))
         {
@@ -410,6 +412,67 @@ internal static partial class GameActionService
             message = stable ? "Action completed." : "Action queued but state is still transitioning.",
             state = GameStateService.BuildStatePayload()
         };
+    }
+
+    /// <summary>
+    /// Refuses a <c>play_card</c> whose stable identity no longer names the card at
+    /// <c>card_index</c>.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// The check runs inside <see cref="ExecuteAsync"/>'s one-action lease and reads the same live
+    /// hand the handler is about to index, so no other action can slip between the check and
+    /// <c>TryManualPlay</c>. That is what makes a card named by identity atomic on the HTTP surface,
+    /// which previously had no lease-time identity check at all: Python resolved <c>card_cid</c> to a
+    /// position before the request, and a hand that changed in between played a different card.
+    /// </para>
+    /// <para>
+    /// A mismatch is rejected, never retargeted. Playing whatever now sits at <c>card_index</c> would
+    /// play a card the caller did not choose, and searching the hand for the cid would accept a card
+    /// the caller never validated against the state it read. Absent <c>card_cid</c> this is a no-op,
+    /// so the existing position-only request keeps its old behaviour.
+    /// </para>
+    /// </remarks>
+    private static void ValidateCardIdentity(
+        ActionRequest request,
+        IReadOnlyList<CardModel> hand,
+        int cardIndex,
+        string screen)
+    {
+        if (request.card_cid is not { } requestedCid)
+        {
+            return;
+        }
+
+        if (requestedCid < 0 || requestedCid > uint.MaxValue)
+        {
+            throw new ApiException(400, "invalid_request", "card_cid is out of range.", new
+            {
+                action = "play_card",
+                card_index = cardIndex,
+                card_cid = requestedCid
+            });
+        }
+
+        var actualCid = GameStateService.TryGetCombatCardId(hand[cardIndex]);
+        if (actualCid == (uint)requestedCid)
+        {
+            return;
+        }
+
+        throw new ApiException(
+            409,
+            "invalid_target",
+            "The card at card_index is no longer the card named by card_cid; read the state again.",
+            new
+            {
+                action = "play_card",
+                screen,
+                card_index = cardIndex,
+                card_cid = requestedCid,
+                actual_card_cid = actualCid,
+                stale = true
+            });
     }
 
     private static Creature? ResolveCardTarget(ActionRequest request, CombatState? combatState, CardModel card)

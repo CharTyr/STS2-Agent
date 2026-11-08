@@ -115,6 +115,7 @@ class CrystalSphereToolTests(unittest.TestCase):
             payload={
                 "action": "crystal_clear_cell",
                 "card_index": None,
+                "card_cid": None,
                 "target_index": None,
                 "option_index": None,
                 "x": 2,

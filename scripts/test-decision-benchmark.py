@@ -31,8 +31,8 @@ class DecisionBenchmarkTests(unittest.TestCase):
         self.suite = benchmark.load_suite(SUITE_PATH)
         self.answers = json.loads(ANSWER_PATH.read_text(encoding="utf-8"))
 
-    def test_suite_has_eleven_cross_screen_cases_and_source_evidence(self) -> None:
-        self.assertEqual(len(self.suite.cases), 11)
+    def test_suite_has_nineteen_cross_screen_cases_and_source_evidence(self) -> None:
+        self.assertEqual(len(self.suite.cases), 19)
         self.assertEqual(
             {case.kind for case in self.suite.cases},
             {"combat", "event", "map", "rest", "shop", "reward"},
@@ -44,7 +44,7 @@ class DecisionBenchmarkTests(unittest.TestCase):
 
     def test_reference_answers_score_all_recorded_constraints(self) -> None:
         report = benchmark.score_suite(self.suite, self.answers)
-        self.assertEqual(report["answered_cases"], 11)
+        self.assertEqual(report["answered_cases"], 19)
         self.assertEqual(report["earned_points"], report["available_points"])
         self.assertEqual(report["score_percent"], 100.0)
         self.assertIn("no claim of simulated combat outcome", report["scoring_scope"])
@@ -127,12 +127,25 @@ class DecisionBenchmarkTests(unittest.TestCase):
         self.assertTrue(urlopen.call_args.args[0].full_url.endswith("/state"))
         self.assertEqual(urlopen.call_count, 1)
 
+    def test_arithmetic_constraints_reject_a_missed_kill_and_damage(self) -> None:
+        answers = copy.deepcopy(self.answers)
+        for answer in answers["answers"]:
+            if answer["case_id"] == "math-exact-lethal":
+                answer["target_index"] = 1
+            if answer["case_id"] == "math-block-exact":
+                answer["action"] = "end_turn"
+        report = benchmark.score_suite(self.suite, answers)
+        cases = {case["case_id"]: case for case in report["cases"]}
+        self.assertTrue(any(not row["passed"] for row in cases["math-exact-lethal"]["constraints"]))
+        self.assertTrue(any(not row["passed"] for row in cases["math-block-exact"]["constraints"]))
+        self.assertLess(report["score_percent"], 100.0)
+
     def test_cli_validates_without_model_game_or_network(self) -> None:
         stdout = io.StringIO()
         with contextlib.redirect_stdout(stdout):
             exit_code = benchmark.main(["--suite", str(SUITE_PATH)])
         self.assertEqual(exit_code, 0)
-        self.assertIn("11 cases validated; no model/game run requested", stdout.getvalue())
+        self.assertIn("19 cases validated; no model/game run requested", stdout.getvalue())
 
 
 if __name__ == "__main__":

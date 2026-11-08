@@ -131,7 +131,8 @@ internal static partial class Loc
             AddRuntimeEntries,
             AddFacingEntries,
             AddSupportEntries,
-            AddGameEntries
+            AddGameEntries,
+            AddOverhaulEntries
         };
 
         var shards = new List<Dictionary<string, string>>(builders.Length);

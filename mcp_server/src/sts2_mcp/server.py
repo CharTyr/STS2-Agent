@@ -6,9 +6,11 @@ import time
 from typing import Annotated, Any, Callable
 
 from fastmcp import FastMCP
+from fastmcp.server.dependencies import get_context
 from pydantic import Field
 
 from .action_results import project_agent_state
+from .play_tools import execute_plan_act
 from .client import Sts2ApiError, Sts2Client
 from .decision import read_decision
 from .handoff import Sts2HandoffService
@@ -21,6 +23,7 @@ from .legacy_tools import (
     register_legacy_action_tools as _register_legacy_action_tools,
 )
 from .scene_guidance import scene_guidance
+from .state_diet import SessionStateDedup, SessionStateDedupRegistry
 from .state_views import MAX_DIFF_ENTRIES, diff_state as build_state_diff, run_summary
 from .game_data import (
     ITEM_IDS_SEPARATOR,
@@ -112,11 +115,25 @@ def create_server(client: Sts2Client | None = None, tool_profile: str | None = N
 
     _reset_game_data_cache()
     mcp = FastMCP("STS2 AI Agent")
+    session_dedup_registry = SessionStateDedupRegistry()
 
-    def _agent_state(state: dict[str, Any] | None = None, *, raw_state: bool = False) -> dict[str, Any]:
+    def _session_dedup() -> SessionStateDedup:
+        try:
+            session_id = get_context().session_id
+        except Exception:
+            session_id = None
+        return session_dedup_registry.get(session_id)
+
+    def _agent_state(
+        state: dict[str, Any] | None = None,
+        *,
+        raw_state: bool = False,
+        full_state: bool = False,
+    ) -> dict[str, Any]:
         # One projection for every answer that carries a `/state` payload -- see
         # `action_results.project_agent_state` for what the marker means and when raw comes back.
-        return project_agent_state(sts2.get_state() if state is None else state, raw_state=raw_state)
+        projected = project_agent_state(sts2.get_state() if state is None else state, raw_state=raw_state)
+        return projected if raw_state else _session_dedup().apply_to_state(projected, full_state=full_state)
 
     def _state_actions(state: dict[str, Any]) -> list[Any] | None:
         actions = state.get("available_actions")
@@ -232,14 +249,14 @@ def create_server(client: Sts2Client | None = None, tool_profile: str | None = N
         return sts2.get_health()
 
     @mcp.tool
-    def get_game_state() -> dict[str, Any]:
-        """Read the compact agent-facing game state snapshot.
-
-        `compact_agent_view` is true when this is the mod's `agent_view`, and false when the full
-        raw payload came back as a degraded fallback instead -- read it before trusting the shape.
-        `get_raw_game_state` is the deliberate route to the full payload.
-        """
-        return _agent_state()
+    def get_game_state(
+        full_state: Annotated[
+            bool,
+            Field(description="Re-send unchanged deck/relic/ascension/glossary/note blocks."),
+        ] = False,
+    ) -> dict[str, Any]:
+        """Read compact game state (`compact_agent_view` false on raw fallback; `get_raw_game_state` reads raw `/state`)."""
+        return _agent_state(full_state=full_state)
 
     @mcp.tool
     def get_raw_game_state() -> dict[str, Any]:
@@ -303,7 +320,7 @@ def create_server(client: Sts2Client | None = None, tool_profile: str | None = N
         `requires_index` / `requires_target` / target hints), and `scene_guidance` (the same object
         `get_scene_guidance` returns, `playbook` included). The individual read tools stay available.
         """
-        return read_decision(sts2)
+        return _session_dedup().apply_to_decide_result(read_decision(sts2))
 
     @mcp.tool
     def diff_state(
@@ -616,6 +633,8 @@ def create_server(client: Sts2Client | None = None, tool_profile: str | None = N
                 )
             ),
         ] = None,
+        card_cid: Annotated[int | None, Field(description="Stable combat.hand[].cid; wins over card_index.")] = None,
+        then: Annotated[list[dict[str, Any]] | None, Field(description="Remaining combat steps (at most 9); play_card uses card_cid. Stops on changes or non-completed results; never retries.")] = None,
         raw_state: Annotated[
             bool,
             Field(
@@ -626,49 +645,21 @@ def create_server(client: Sts2Client | None = None, tool_profile: str | None = N
             ),
         ] = False,
     ) -> dict[str, Any]:
-        """Execute one game action that is currently in `available_actions`.
+        """Execute a legal action; optionally plan the remaining combat turn with `then`.
 
-        `state` in the result is the compact `agent_view` the action left behind: the same shape
-        `get_game_state` returns, so read it as the next decision instead of calling again.
-        `raw_state=True` returns the full payload. `action`, `status`, `stable`, and `message` are
-        unchanged.
-
-        `status: "outcome_unknown"` means the response was lost: one state reconciliation was
-        attempted and its compact state sits under `reconciliation.state`, but nothing compared the
-        action against it, so never replay the action automatically.
-
-        A rejected index answers with `error.code`, `error.message`, and the `error.details` keys
-        `field`, `submitted`, `valid_indices`, and `valid_field` (the payload path to re-read).
-        Recompute from those rather than resending the same index.
-
-        `run_console_command` and `inject_event_churn` are excluded; each has its own debug-gated
-        tool.
+        `state` is the compact post-action `agent_view`; `raw_state=True` opts into raw state.
+        `outcome_unknown` includes at most one reconciliation; never replay it.
+        Index errors retain code/message and details (field, submitted, valid_indices,
+        valid_field). Recompute from fresh state. Plans return per-step results and
+        stop_reason under `plan`, plus `final_state`; stop at any non-completed step.
+        Debug actions have separate gated tools.
         """
-        normalized = action.strip().lower()
-        if normalized in _DEBUG_GATED_ACTIONS:
-            raise RuntimeError(
-                f"{normalized} is gated separately and must use its own tool when enabled."
-            )
-
-        client_context: dict[str, Any] = {
-            "source": "mcp",
-            "tool_name": "act",
-            "tool_profile": profile,
-        }
-        if reason and reason.strip():
-            client_context["decision_reason"] = reason.strip()
-
-        return sts2.execute_action(
-            normalized,
-            card_index=card_index,
-            target_index=target_index,
-            option_index=option_index,
-            x=x,
-            y=y,
-            tool=tool,
-            raw_state=raw_state,
-            client_context=client_context,
+        result = execute_plan_act(
+            sts2, profile, action, card_index=card_index, target_index=target_index,
+            option_index=option_index, x=x, y=y, tool=tool, raw_state=raw_state,
+            reason=reason, card_cid=card_cid, then=then,
         )
+        return _session_dedup().apply_to_act_result(result, raw_state=raw_state)
 
     if profile == "full":
         _register_legacy_action_tools(mcp, sts2)

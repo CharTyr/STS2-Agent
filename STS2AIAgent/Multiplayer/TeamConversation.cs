@@ -141,3 +141,55 @@ internal sealed class TeamConversation
         lock (_gate) return _turns.ToArray();
     }
 }
+
+/// <summary>
+/// What the host can honestly say about a message it is still waiting on.
+/// </summary>
+/// <remarks>
+/// The host knows two facts while a message is in flight: how long it has been waiting, and -- from
+/// the companion's own <c>/state</c> -- whether that character is in combat. It does not know when
+/// the companion dequeued the message or started answering, so the line reports the wait and the one
+/// fact that explains a slow reply instead of inventing a phase.
+///
+/// Pure and Godot-free: the elapsed arithmetic, the clock-jump clamp and the wording are covered by
+/// <c>TeamMessageProgressTests</c> without a game, a teammate or a real clock.
+/// </remarks>
+internal static class TeamMessageProgress
+{
+    /// <summary>Ceiling for a printed wait, so a wall-clock jump cannot claim hours of waiting.</summary>
+    public const int MaxSeconds = 999;
+
+    /// <summary>
+    /// Whole seconds between the send and <paramref name="nowMs"/>. A missing start (0) or a clock
+    /// that ran backwards reads as 0 rather than as a huge wait.
+    /// </summary>
+    public static int ElapsedSeconds(long startedAtMs, long nowMs)
+    {
+        if (startedAtMs <= 0)
+        {
+            return 0;
+        }
+
+        var elapsed = nowMs - startedAtMs;
+        if (elapsed <= 0)
+        {
+            return 0;
+        }
+
+        var seconds = elapsed / 1000;
+        return seconds >= MaxSeconds ? MaxSeconds : (int)seconds;
+    }
+
+    /// <summary>
+    /// The status line while a message is pending. <paramref name="teammateInCombat"/> comes from the
+    /// teammate's own state: the host can be on the map while the teammate is still fighting, and the
+    /// host's screen says nothing about whether the message is waiting behind a turn.
+    /// </summary>
+    public static string DescribeWaiting(bool teammateInCombat, int elapsedSeconds)
+    {
+        var seconds = elapsedSeconds < 0 ? 0 : elapsedSeconds > MaxSeconds ? MaxSeconds : elapsedSeconds;
+        return teammateInCombat
+            ? Loc.T("队友正在战斗，消息会在它这次行动结束后处理（已等待 {0} 秒）", seconds)
+            : Loc.T("消息已送达，等待队友回复（已等待 {0} 秒）", seconds);
+    }
+}

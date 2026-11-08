@@ -240,8 +240,65 @@ internal static class JevAgentLogicTests
         Assert.True(strike.Description.Contains("Louse", StringComparison.Ordinal), strike.Description);
     }
 
-    // ---- JevOptionEnumerator: MAP ------------------------------------------
+    /// <summary>One registration for the numeric-description group in the shared test catalog.</summary>
+    public static void RunNumericDescriptions()
+    {
+        Enumerate_CombatOptionsCarryTheFramesArithmetic();
+        Enumerate_WithoutArithmeticKeepsPlainDescriptions();
+        Enumerate_AmbiguousOrUnknownDamageStaysSilent();
+    }
 
+    /// <summary>
+    /// W4.3: the option text carries the frame's own arithmetic, so the fast model never has to
+    /// subtract. The numbers come from <c>combat.hand[].vs</c>, the card's block preview and
+    /// <c>combat.threat</c>; the suffix is capped and never invented.
+    /// </summary>
+    public static void Enumerate_CombatOptionsCarryTheFramesArithmetic()
+    {
+        var options = JevOptionEnumerator.Enumerate(CombatArithmeticSnapshot);
+
+        var kill = options.First(option => option.Id == "play_card:0->0");
+        Assert.Equal("Play Strike → Louse (9 dmg | kill | 3 over)", kill.Description);
+
+        var chip = options.First(option => option.Id == "play_card:0->1");
+        Assert.Equal("Play Strike → Slime (9 dmg | 9 hp left)", chip.Description);
+
+        var block = options.First(option => option.Id == "play_card:1");
+        Assert.Equal("Play Defend (block 5 | incoming 18 | still 13)", block.Description);
+
+        var endTurn = options.First(option => option.Id == "end_turn");
+        Assert.Equal("end_turn (take 18 | HP 24→11)", endTurn.Description);
+
+        foreach (var option in options)
+        {
+            Assert.True(option.Description.Length <= 160, "one option line stays a line: " + option.Description);
+        }
+    }
+
+    /// <summary>A frame without the arithmetic keeps the plain text: no numbers are ever guessed.</summary>
+    public static void Enumerate_WithoutArithmeticKeepsPlainDescriptions()
+    {
+        var options = JevOptionEnumerator.Enumerate(CombatSnapshot);
+        Assert.Equal("Play Strike → Louse", options.First(option => option.Id == "play_card:0->0").Description);
+        Assert.Equal("Play Defend", options.First(option => option.Id == "play_card:1").Description);
+        Assert.Equal("end_turn", options.First(option => option.Id == "end_turn").Description);
+    }
+
+    /// <summary>
+    /// An unknown hit count (damage null) and a multi-enemy card with no chosen target both stay
+    /// silent rather than showing one enemy's number as if it were the card's.
+    /// </summary>
+    public static void Enumerate_AmbiguousOrUnknownDamageStaysSilent()
+    {
+        var options = JevOptionEnumerator.Enumerate(AmbiguousArithmeticSnapshot);
+        var unknown = options.First(option => option.Id == "play_card:0->0");
+        Assert.Equal("Play Strike → Louse", unknown.Description);
+
+        var multi = options.First(option => option.Id == "play_card:1");
+        Assert.Equal("Play Cleave", multi.Description);
+    }
+
+    // ---- JevOptionEnumerator: MAP ------------------------------------------
     public static void Enumerate_DoesNotOfferSaveAndQuit()
     {
         const string frame = """{"state":{"screen":"COMBAT"},"available_actions":[{"name":"save_and_quit"},{"name":"end_turn"}]}""";
@@ -411,6 +468,68 @@ internal static class JevAgentLogicTests
     {"name": "end_turn", "requires_index": false, "requires_target": false},
     {"name": "play_card", "requires_index": true, "requires_target": false},
     {"name": "use_potion", "requires_index": true, "requires_target": false}
+  ]
+}
+""";
+
+    /// <summary>One frame with the arithmetic the compact view publishes on v13.</summary>
+    private const string CombatArithmeticSnapshot = """
+{
+  "state": {
+    "screen": "COMBAT",
+    "available_actions": ["play_card", "end_turn"],
+    "combat": {
+      "threat": {
+        "incoming": 18, "incoming_unblockable": 0, "block": 0, "block_needed": 18,
+        "unblocked": 18, "hp_after": 11, "lethal": false
+      },
+      "player": {"hp": "24/40", "block": 0, "energy": 3},
+      "hand": [
+        {"i": 0, "line": "Strike", "playable": true, "targets": [0, 1],
+         "vs": [
+           {"enemy": 0, "per_hit": 9, "hits": 1, "damage": 9, "after_block": 9, "kills": true},
+           {"enemy": 1, "per_hit": 9, "hits": 1, "damage": 9, "after_block": 4, "kills": false}
+         ]},
+        {"i": 1, "line": "Defend", "playable": true, "targets": [],
+         "values": [{"name": "Block", "base_value": 5, "preview": 5}]}
+      ],
+      "enemies": [
+        {"i": 0, "name": "Louse", "hp": "6/12", "alive": true},
+        {"i": 1, "name": "Slime", "hp": "13/20", "block": 5, "alive": true}
+      ]
+    }
+  },
+  "available_actions": [
+    {"name": "play_card", "requires_index": true, "requires_target": false},
+    {"name": "end_turn", "requires_index": false, "requires_target": false}
+  ]
+}
+""";
+
+    /// <summary>Unknown hit counts and an untargeted multi-enemy card: neither may produce numbers.</summary>
+    private const string AmbiguousArithmeticSnapshot = """
+{
+  "state": {
+    "screen": "COMBAT",
+    "available_actions": ["play_card"],
+    "combat": {
+      "hand": [
+        {"i": 0, "line": "Strike", "playable": true, "targets": [0],
+         "vs": [{"enemy": 0, "per_hit": 9, "hits": null, "damage": null, "after_block": null, "kills": null}]},
+        {"i": 1, "line": "Cleave", "playable": true, "targets": [],
+         "vs": [
+           {"enemy": 0, "per_hit": 8, "hits": 1, "damage": 8, "after_block": 8, "kills": false},
+           {"enemy": 1, "per_hit": 8, "hits": 1, "damage": 8, "after_block": 8, "kills": false}
+         ]}
+      ],
+      "enemies": [
+        {"i": 0, "name": "Louse", "hp": "12/12", "alive": true},
+        {"i": 1, "name": "Slime", "hp": "10/10", "alive": true}
+      ]
+    }
+  },
+  "available_actions": [
+    {"name": "play_card", "requires_index": true, "requires_target": false}
   ]
 }
 """;

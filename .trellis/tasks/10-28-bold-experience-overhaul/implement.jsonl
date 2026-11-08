@@ -1,0 +1,12 @@
+{"file": ".trellis/spec/mod/index.md", "reason": "Mod pre-development checklist: layer choice, game-thread boundary, bounded waits, error contract, IGameBridge seam"}
+{"file": ".trellis/spec/mod/architecture.md", "reason": "Thread ownership, transport boundaries, state ownership, MCP separation"}
+{"file": ".trellis/spec/mod/game-actions.md", "reason": "Raw/compact state, available actions, action handler shape, transition waits"}
+{"file": ".trellis/spec/mod/agent-and-ui.md", "reason": "AgentLoop/AgentRuntime/UI/settings/LLM rules, receipt and budget ordering, overlay visual rules"}
+{"file": ".trellis/spec/mcp/contracts-and-tests.md", "reason": "Python MCP contracts, native/sidecar alignment, unittest-only runner"}
+{"file": ".trellis/spec/operations/validation-and-release.md", "reason": "Validation evidence rules, live vs offline, release constraints"}
+{"file": "docs/project-map.md", "reason": "Per-file map, invariants, index spaces, where-to-change table; must be updated with every new file"}
+{"file": ".trellis/tasks/10-28-bold-experience-overhaul/research/autoplay-pipeline.md", "reason": "Measured request/token baseline, forced-move predicates, plan executor pitfalls, prompt diet"}
+{"file": ".trellis/tasks/10-28-bold-experience-overhaul/research/speed-and-performance.md", "reason": "FastMode turbo members, prefs-write risk, per-frame build storm, probe design"}
+{"file": ".trellis/tasks/10-28-bold-experience-overhaul/research/decision-quality.md", "reason": "Exact damage/intent members, threat/vs design, Jev numbers, benchmark v2"}
+{"file": ".trellis/tasks/10-28-bold-experience-overhaul/research/overlay-ux-and-hud.md", "reason": "Overlay bugs (panel disappears), copy, HUD node members, screenshot hiding"}
+{"file": ".trellis/tasks/10-28-bold-experience-overhaul/research/reliability-coop-mcp.md", "reason": "Failure table F1-F15, capability profile, failure ladder, co-op and MCP friction"}
