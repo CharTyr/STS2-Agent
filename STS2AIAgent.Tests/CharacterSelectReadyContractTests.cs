@@ -23,8 +23,8 @@ internal static class CharacterSelectReadyContractTests
         var lobbyReady = flat.IndexOf("!lobby.LocalPlayer.isReady", StringComparison.Ordinal);
         Assert.True(lobbyReady >= 0, "The multiplayer test lobby must not advertise select_character while LocalPlayer.isReady.");
 
-        var characterReady = flat.IndexOf("characterSelect.Lobby.LocalPlayer.isReady", StringComparison.Ordinal);
-        Assert.True(characterReady >= 0, "NCharacterSelectScreen must not advertise select_character while the local player is ready.");
+        var characterReady = flat.IndexOf("runLobby.LocalPlayer.isReady", StringComparison.Ordinal);
+        Assert.True(characterReady >= 0, "A run-lobby screen must not advertise select_character while the local player is ready.");
 
         var buttons = flat.IndexOf("GetCharacterSelectButtons", StringComparison.Ordinal);
         Assert.True(buttons >= 0, "The unlocked-button probe must remain after the Ready gate.");

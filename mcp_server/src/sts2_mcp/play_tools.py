@@ -55,6 +55,7 @@ def execute_plan_act(
     option_index: int | None = None, x: int | None = None, y: int | None = None,
     tool: str | None = None, reason: str | None = None, raw_state: bool = False,
     card_cid: int | None = None, then: list[dict[str, Any]] | None = None,
+    mode: str | None = None,
 ) -> dict[str, Any]:
     """Execute once, then optionally run at most nine checked combat follow-ups.
 
@@ -81,7 +82,7 @@ def execute_plan_act(
     result = client.execute_action(
         action, card_index=card_index, target_index=target_index, option_index=option_index,
         x=x, y=y, tool=tool, raw_state=raw_state, client_context=context,
-        card_cid=card_cid if play_card else None,
+        card_cid=card_cid if play_card else None, mode=mode,
     )
     if not then:
         return result

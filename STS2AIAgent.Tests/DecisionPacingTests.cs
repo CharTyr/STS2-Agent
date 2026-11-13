@@ -246,7 +246,7 @@ internal static class DecisionPacingTests
 
         public Task<string> ActAsync(
             string action, int? cardIndex, int? targetIndex, int? optionIndex, int? x, int? y,
-            string? tool, CancellationToken cancellationToken, bool rawState = false, Action<string>? validateState = null)
+            string? tool, CancellationToken cancellationToken, bool rawState = false, Action<string>? validateState = null, string? mode = null)
         {
             validateState?.Invoke(StateJson);
             if (StateJson == PlanCombatTurn1 && action == "play_card")

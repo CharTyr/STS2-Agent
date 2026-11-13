@@ -101,6 +101,7 @@ layered / full 的额外工具见上文「Tool Profile」；legacy per-action to
 - `buy_relic`
 - `buy_potion`
 - `remove_card_at_shop`
+- `buy_blitz_entry`
 - `return_to_main_menu`
 
 多人 / 组队：

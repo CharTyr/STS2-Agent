@@ -90,7 +90,7 @@ internal sealed partial class AgentRuntime : IAsyncDisposable
         public Task<string> GetAvailableActionsJsonAsync(CancellationToken cancellationToken) => throw Unavailable();
         public Task<string> GetActionSnapshotJsonAsync(CancellationToken cancellationToken) => throw Unavailable();
         public Task<string> GetScreenAsync(CancellationToken cancellationToken) => throw Unavailable();
-        public Task<string> ActAsync(string action, int? cardIndex, int? targetIndex, int? optionIndex, int? x, int? y, string? tool, CancellationToken cancellationToken, bool rawState = false, Action<string>? validateState = null) => throw Unavailable();
+        public Task<string> ActAsync(string action, int? cardIndex, int? targetIndex, int? optionIndex, int? x, int? y, string? tool, CancellationToken cancellationToken, bool rawState = false, Action<string>? validateState = null, string? mode = null) => throw Unavailable();
         public Task<string> GetGameDataItemJsonAsync(string collection, string itemId, CancellationToken cancellationToken) => throw Unavailable();
         public Task<string> GetGameDataItemsJsonAsync(string collection, IReadOnlyList<string> itemIds, CancellationToken cancellationToken) => throw Unavailable();
         public Task<string> GetRelevantGameDataJsonAsync(string collection, IReadOnlyList<string> itemIds, CancellationToken cancellationToken) => throw Unavailable();

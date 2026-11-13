@@ -21,6 +21,7 @@ from fastmcp import FastMCP
 
 ToolHandler = Callable[..., dict[str, Any]]
 CrystalSphereTool = Literal["big", "small"]
+RunConfigMode = Literal["standard", "blitz", "dread", "custom"]
 
 
 @dataclass(frozen=True, slots=True)
@@ -59,12 +60,13 @@ LEGACY_ACTION_TOOLS: tuple[ActionToolSpec, ...] = (
     ActionToolSpec("buy_card", "option_index", "Buy a card from the open merchant inventory."),
     ActionToolSpec("buy_relic", "option_index", "Buy a relic from the open merchant inventory."),
     ActionToolSpec("buy_potion", "option_index", "Buy a potion from the open merchant inventory."),
+    ActionToolSpec("buy_blitz_entry", "option_index", "Pick an entry at the Blitz merchant (v0.113.0 Blitz mode)."),
     ActionToolSpec("remove_card_at_shop", "no_args", "Use the merchant card-removal service."),
     ActionToolSpec("continue_run", "no_args", "Continue the current run from the main menu."),
     ActionToolSpec("continue_game_over", "no_args", "Confirm the game-over intro and run the native score, unlock, and save summary."),
     ActionToolSpec("abandon_run", "no_args", "Open the abandon-run confirmation from the main menu."),
     ActionToolSpec("save_and_quit", "no_args", "Save the active singleplayer run and return to the main menu."),
-    ActionToolSpec("open_character_select", "no_args", "Open the character select screen."),
+    ActionToolSpec("open_character_select", "run_mode", "Open a run-config lobby (v0.113.0 mode: standard/blitz/dread/custom, default standard)."),
     ActionToolSpec("open_timeline", "no_args", "Open the timeline screen."),
     ActionToolSpec("close_main_menu_submenu", "no_args", "Close the current main-menu submenu."),
     ActionToolSpec("choose_timeline_epoch", "option_index", "Choose a visible epoch on the timeline screen."),
@@ -138,6 +140,15 @@ def _register_option_target_tool(mcp: FastMCP, name: str, description: str, hand
     mcp.tool(name=name, description=description)(tool)
 
 
+def _register_run_mode_tool(mcp: FastMCP, name: str, description: str, handler: ToolHandler) -> None:
+    def tool(mode: RunConfigMode | None = None) -> dict[str, Any]:
+        return handler(mode=mode)
+
+    tool.__name__ = name
+    tool.__doc__ = description
+    mcp.tool(name=name, description=description)(tool)
+
+
 def _register_crystal_tool(mcp: FastMCP, name: str, description: str, handler: ToolHandler) -> None:
     def action_tool(tool: CrystalSphereTool) -> dict[str, Any]:
         return handler(tool=tool)
@@ -178,6 +189,10 @@ def register_legacy_action_tools(mcp: FastMCP, sts2: Any) -> None:
 
         if spec.kind == "option_target":
             _register_option_target_tool(mcp, spec.name, spec.description, handler)
+            continue
+
+        if spec.kind == "run_mode":
+            _register_run_mode_tool(mcp, spec.name, spec.description, handler)
             continue
 
         if spec.kind == "crystal_tool":

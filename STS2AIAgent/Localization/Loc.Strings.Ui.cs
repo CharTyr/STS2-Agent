@@ -61,6 +61,7 @@ internal static partial class Loc
         map["买卡"] = "Buy a card";
         map["买遗物"] = "Buy a relic";
         map["买药水"] = "Buy a potion";
+        map["Blitz 商店选项"] = "Pick a Blitz shop option";
         map["商店删牌"] = "Remove a card at the shop";
         map["开宝箱"] = "Open the chest";
         map["选择宝箱遗物"] = "Pick a chest relic";

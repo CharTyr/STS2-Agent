@@ -876,6 +876,31 @@ internal static partial class GameStateService
         return mainMenu.GetNodeOrNull<NMainMenuTextButton>("MainMenuTextButtons/SingleplayerButton");
     }
 
+    /// <summary>
+    /// v0.113.0: the singleplayer submenu carries one NSubmenuButton per run-config mode, each wired
+    /// to its own Open*Screen method. Returns the usable button plus the fallback open method for
+    /// <c>open_character_select</c>'s `mode` param; a null button means the mode is epoch-gated on
+    /// this profile (caller refuses rather than calling the open method around the gate).
+    /// </summary>
+    public static (NButton? Button, StringName OpenMethod) GetSingleplayerModeButton(NSingleplayerSubmenu submenu, string mode)
+    {
+        var (buttonName, openMethod) = mode switch
+        {
+            "blitz" => ("%BlitzButton", NSingleplayerSubmenu.MethodName.OpenBlitzScreen),
+            "dread" => ("%DreadButton", NSingleplayerSubmenu.MethodName.OpenDreadScreen),
+            "custom" => ("%CustomRunButton", NSingleplayerSubmenu.MethodName.OpenCustomScreen),
+            _ => (null, NSingleplayerSubmenu.MethodName.OpenCharacterSelect)
+        };
+
+        NButton? button = mode == "standard"
+            ? GetSingleplayerStandardButton(submenu)
+            : submenu.GetNodeOrNull<NButton>(buttonName!);
+        var usable = button != null && GodotObject.IsInstanceValid(button) && button.IsEnabled && button.IsVisibleInTree()
+            ? button
+            : null;
+        return (usable, openMethod);
+    }
+
     public static NButton? GetSingleplayerStandardButton(NSingleplayerSubmenu submenu)
     {
         if (ReflectedGameMembers.Field(typeof(NSingleplayerSubmenu), "_standardButton")?.GetValue(submenu) is NButton fieldButton &&

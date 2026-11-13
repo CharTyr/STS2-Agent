@@ -38,9 +38,12 @@ using MegaCrit.Sts2.Core.Nodes.GodotExtensions;
 using MegaCrit.Sts2.Core.Nodes.Rewards;
 using MegaCrit.Sts2.Core.Nodes.Rooms;
 using MegaCrit.Sts2.Core.Nodes.Screens;
+using MegaCrit.Sts2.Core.Nodes.Screens.Blitz;
 using MegaCrit.Sts2.Core.Nodes.Screens.CardLibrary;
 using MegaCrit.Sts2.Core.Nodes.Screens.CardSelection;
 using MegaCrit.Sts2.Core.Nodes.Screens.CharacterSelect;
+using MegaCrit.Sts2.Core.Nodes.Screens.CustomRun;
+using MegaCrit.Sts2.Core.Nodes.Screens.Dread;
 using MegaCrit.Sts2.Core.Nodes.Screens.FeedbackScreen;
 using MegaCrit.Sts2.Core.Nodes.Screens.GameOverScreen;
 using MegaCrit.Sts2.Core.Nodes.Screens.InspectScreens;
@@ -73,19 +76,13 @@ namespace STS2AIAgent.Game;
 
 internal static partial class GameStateService
 {
-
-    private const int StateVersion = 16;
+    private const int StateVersion = 17;
 
     private static readonly TimeSpan CombatActionSnapshotStableDelay = TimeSpan.FromMilliseconds(200);
-
     private static string? _lastCombatActionReadinessSignature;
-
     private static DateTime _lastCombatActionReadinessSinceUtc = DateTime.MinValue;
-
     private static string? _lastUnlockConfirmProbeSignature;
-
     private static bool _crystalSphereEntityLookupWarningLogged;
-
     private static bool _crystalSphereButtonLookupWarningLogged;
 
     private static FieldInfo? StartRunLobbyMaxPlayersField =>
@@ -686,6 +683,16 @@ internal static partial class GameStateService
             });
         }
 
+        if (CanBuyBlitzEntry(currentScreen))
+        {
+            descriptors.Add(new ActionDescriptor
+            {
+                name = "buy_blitz_entry",
+                requires_target = false,
+                requires_index = true
+            });
+        }
+
         if (CanSelectCharacter(currentScreen))
         {
             descriptors.Add(new ActionDescriptor
@@ -1054,7 +1061,7 @@ internal static partial class GameStateService
             NEventRoom => "EVENT",
             NCombatRoom => "COMBAT",
             NMapScreen or NMapRoom => "MAP",
-            NCharacterSelectScreen => "CHARACTER_SELECT",
+            NCharacterSelectScreen or NBlitzScreen or NDreadScreen or NCustomRunScreen => "CHARACTER_SELECT",
             NMultiplayerLoadGameScreen => "MULTIPLAYER_LOAD",
             NChooseABundleSelectionScreen => "BUNDLE_SELECTION",
             NCapstoneSubmenuStack => "CAPSTONE_SELECTION",

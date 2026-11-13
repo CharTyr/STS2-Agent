@@ -139,7 +139,11 @@ if (-not (Test-Path $modIdManifestSource)) {
 }
 
 Write-Host "[build-mod] Packing mod_manifest.json into PCK..."
-& $GodotExe --headless --path $builderProjectDir --script $builderScript -- $manifestSource $pckOutput | Out-Host
+# Redirect Godot's own log into the workspace: its default user://logs/ path can sit
+# outside a sandbox's writable set and crash the headless run before the script runs.
+$godotLog = Join-Path $ProjectRoot "build/godot-pck.log"
+New-Item -ItemType Directory -Force -Path (Split-Path $godotLog) | Out-Null
+& $GodotExe --headless --log-file $godotLog --path $builderProjectDir --script $builderScript -- $manifestSource $pckOutput | Out-Host
 if ($LASTEXITCODE -ne 0) {
     throw "Godot PCK build failed with exit code $LASTEXITCODE"
 }

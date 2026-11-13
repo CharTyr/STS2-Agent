@@ -66,6 +66,7 @@
               "buy_relic",
               "buy_potion",
               "remove_card_at_shop",
+              "buy_blitz_entry",
               "select_character",
               "embark",
               "unready",
@@ -108,6 +109,12 @@
             "description": "Free-form JSON value."
           },
           "command": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "mode": {
             "type": [
               "string",
               "null"
@@ -421,6 +428,12 @@
             "format": "int32",
             "type": "integer"
           },
+          "mode": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
           "modifier_ids": {
             "items": {
               "type": "string"
@@ -475,6 +488,13 @@
           },
           "is_ready": {
             "type": "boolean"
+          },
+          "is_rotating_dread": {
+            "type": "boolean"
+          },
+          "max_blitz_ascension": {
+            "format": "int32",
+            "type": "integer"
           },
           "max_multiplayer_ascension_unlocked": {
             "format": "int32",
@@ -622,6 +642,25 @@
           },
           "snapshot_stable": {
             "type": "boolean"
+          }
+        },
+        "type": "object"
+      },
+      "CombatArrowPayload": {
+        "additionalProperties": true,
+        "properties": {
+          "available": {
+            "type": "boolean"
+          },
+          "destroy_after_impaled": {
+            "type": "boolean"
+          },
+          "index": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "status": {
+            "type": "string"
           }
         },
         "type": "object"
@@ -905,6 +944,29 @@
         },
         "type": "object"
       },
+      "CombatMelodyPayload": {
+        "additionalProperties": true,
+        "properties": {
+          "cho_played": {
+            "type": "boolean"
+          },
+          "ki_played": {
+            "type": "boolean"
+          },
+          "melodies_this_turn": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "melody_cards_this_turn": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "wah_played": {
+            "type": "boolean"
+          }
+        },
+        "type": "object"
+      },
       "CombatOrbPayload": {
         "additionalProperties": true,
         "properties": {
@@ -1006,6 +1068,12 @@
       "CombatPlayerPayload": {
         "additionalProperties": true,
         "properties": {
+          "arrows": {
+            "items": {
+              "$ref": "#/components/schemas/CombatArrowPayload"
+            },
+            "type": "array"
+          },
           "attacks_played_this_turn": {
             "format": "int32",
             "type": "integer"
@@ -1041,6 +1109,9 @@
           "max_hp": {
             "format": "int32",
             "type": "integer"
+          },
+          "melody": {
+            "$ref": "#/components/schemas/CombatMelodyPayload"
           },
           "orb_capacity": {
             "format": "int32",
@@ -2896,13 +2967,31 @@
             },
             "type": "array"
           },
+          "dominion_id": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
           "floor": {
             "format": "int32",
             "type": "integer"
           },
+          "game_mode": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
           "gold": {
             "format": "int32",
             "type": "integer"
+          },
+          "is_custom_game": {
+            "type": "boolean"
+          },
+          "is_rotating_character": {
+            "type": "boolean"
           },
           "max_energy": {
             "format": "int32",
@@ -3241,6 +3330,37 @@
         },
         "type": "object"
       },
+      "ShopBlitzEntryPayload": {
+        "additionalProperties": true,
+        "properties": {
+          "description": {
+            "type": "string"
+          },
+          "entry_type": {
+            "type": "string"
+          },
+          "index": {
+            "format": "int32",
+            "type": "integer"
+          },
+          "is_cursed": {
+            "type": "boolean"
+          },
+          "is_rare": {
+            "type": "boolean"
+          },
+          "is_stocked": {
+            "type": "boolean"
+          },
+          "name": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
       "ShopCardPayload": {
         "additionalProperties": true,
         "properties": {
@@ -3330,6 +3450,19 @@
       "ShopPayload": {
         "additionalProperties": true,
         "properties": {
+          "blitz_choices_remaining": {
+            "format": "int32",
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "blitz_entries": {
+            "items": {
+              "$ref": "#/components/schemas/ShopBlitzEntryPayload"
+            },
+            "type": "array"
+          },
           "can_close": {
             "type": "boolean"
           },
@@ -3351,6 +3484,9 @@
               "$ref": "#/components/schemas/ShopCardPayload"
             },
             "type": "array"
+          },
+          "is_blitz": {
+            "type": "boolean"
           },
           "is_open": {
             "type": "boolean"
@@ -3725,7 +3861,7 @@
   "info": {
     "description": "Generated from Router routes and C# wire payload declarations. Human guidance remains in docs/api.md.",
     "title": "STS2 AI Agent Mod HTTP API",
-    "version": "0.17.0"
+    "version": "0.19.0"
   },
   "jsonSchemaDialect": "https://json-schema.org/draft/2020-12/schema",
   "openapi": "3.1.0",

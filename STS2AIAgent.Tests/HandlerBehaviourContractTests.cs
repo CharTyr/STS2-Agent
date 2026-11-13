@@ -213,8 +213,8 @@ internal static class HandlerBehaviourContractTests
         // Through the lobby, which syncs the change to a co-op partner; and the wait is for the exact
         // target, so a change that lands elsewhere is not reported as done.
         Assert.True(
-            body.Contains("vartargetAscension=characterSelectScreen.Lobby.Ascension+delta;", StringComparison.Ordinal) &&
-            body.Contains("characterSelectScreen.Lobby.SyncAscensionChange(targetAscension);", StringComparison.Ordinal) &&
+            body.Contains("vartargetAscension=adjustLobby.Ascension+delta;", StringComparison.Ordinal) &&
+            body.Contains("adjustLobby.SyncAscensionChange(targetAscension);", StringComparison.Ordinal) &&
             body.Contains("WaitForLobbyAscensionTransitionAsync(characterSelectScreen,targetAscension,", StringComparison.Ordinal),
             "increase/decrease_ascension must move by exactly one step through Lobby.SyncAscensionChange "
             + "and wait for that exact level.");

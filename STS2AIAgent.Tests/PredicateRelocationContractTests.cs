@@ -143,11 +143,13 @@ internal static class PredicateRelocationContractTests
         ["CanBuyShopRelic"] = "7b21db2ceabd051d68c3fe489b55f4e4a2f71c3d1c6a7c7f0a62d486bd51e324",
         ["CanBuyShopPotion"] = "c3c9c1cc4ef3a51cf79e17a999fa9d9ba97823beb443050227156d38e4ebf2e7",
         ["CanRemoveCardAtShop"] = "cb25daba5c50bd937412c614d71a2058729a7b2eca94edf1e1a05761ffb660b7",
-        ["CanSelectCharacter"] = "dd5617d96984230fc2e801dc34abb71dfcec53684fd0105e6d4cbc2eba5235d5",
+        // v0.113.0: reads the lobby through GetRunLobby so Blitz/Dread/custom screens gate the same way.
+        ["CanSelectCharacter"] = "d8728efec2f1d7e2504b4a28110275c06bb5e9a7b9fe8a45a47ff0b0420e1641",
         ["CanSwitchProfile"] = "1b04286d541410a7d0c03e2eb4c18e740e4d356a135a032269e2a8b014102362",
         ["CanContinueRun"] = "c71dadd195a28495564ef486a520752a5787a516ec55e644b91c6bb0cd8ac755",
         ["CanAbandonRun"] = "f2a28179cf285bfb8d6bf3138de50e6c833dc3981d2d29a3cbee3fa97ffe7e2b",
-        ["CanSaveAndQuit"] = "35faf007df19c5a9ebebe6cf74ebbd8ab49bf431ac2abb4dadc97415545a70cf",
+        // v0.113.0: excludes every run-lobby screen (Blitz/Dread/custom), not only character select.
+        ["CanSaveAndQuit"] = "33d6fc8377d8b69a471a4cbb9f5997ff278d7ebb43b60d6a10313fca0dbae18c",
         ["CanOpenCharacterSelect"] = "92ffab8f2ffa78d5c19f87a0b33eef3c5f786bef42ebce3a37f2478241462485",
         ["CanOpenTimeline"] = "81883b112d5c97ec915bf4b1fca09a844e2288d32582d695e02cdf655b81c0c9",
         ["CanCloseMainMenuSubmenu"] = "631ab45013f334501d2dae2963a9f2cffa8fb7fb17df9d70e8c6c0116c336d0f",
@@ -176,7 +178,8 @@ internal static class PredicateRelocationContractTests
         ["CanUseCombatActions"] = "521708d9dafa05a421be19a403cf8ab7be50c9a5f52ce076379a550c5318e87e",
         ["IsGameOverSummaryStarted"] = "443827cfc15a1026dcab12f45a2e482b40182393b9001e8af77d728d98de26b3",
         ["CanConfirmUnlock"] = "e391d0846d8c1927e584df5f978438a88210bed8de3c4283dafe0b451bd92315",
-        ["CanAdjustAscension"] = "5500d5f39d68e084dc963b3fb6a7ac8d983541b63816f766609126880bde113e",
+        // v0.113.0: reads the lobby through GetRunLobby so Blitz/Dread/custom screens adjust too.
+        ["CanAdjustAscension"] = "d6d1c77d04507b9614029a5dfeb73dc9715041f9ed088ff6f117967188b2a9dd",
     };
 
     /// <summary>

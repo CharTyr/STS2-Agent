@@ -163,9 +163,9 @@ curl -s http://127.0.0.1:8080/state | jq .
   "request_id": "req_20260911_121549_7955_4",
   "data": {
     "service": "sts2-ai-agent",
-    "mod_version": "0.17.0",
+    "mod_version": "0.19.0",
     "protocol_version": "2026-03-11-v1",
-    "game_version": "v0.111.0",
+    "game_version": "v0.113.0",
     "status": "ready",
     "api_host": "127.0.0.1",
     "api_port": 8080,
@@ -253,7 +253,7 @@ curl -s http://127.0.0.1:8080/state | jq .
 
 | 字段 | 类型 | 说明 |
 | --- | --- | --- |
-| `state_version` | number | 状态模型版本（当前固定为 11） |
+| `state_version` | number | 状态模型版本（当前为 17） |
 | `native_profile_id` | number | 游戏原生存档档位 id（1..3），与 `switch_profile` 的 `option_index` 同一空间 |
 | `run_id` | string | 本局运行标识（种子字符串） |
 | `screen` | string | 当前逻辑界面（见 Screen 枚举） |
@@ -344,6 +344,7 @@ curl -s http://127.0.0.1:8080/state | jq .
 | 字段 | 类型 | 说明 |
 | --- | --- | --- |
 | `selected_character_id` | string \| null | 本地玩家已选角色 id；未选时为 null |
+| `mode` | string \| null | 当前开局界面所属模式（v0.113.0+）：`standard` / `blitz` / `dread` / `custom` |
 | `is_multiplayer` | boolean | 本次选角是否属于联机局 |
 | `net_game_type` | string | 连接类型名 |
 | `can_embark` | boolean | 此刻可执行 `embark`（出发） |
@@ -384,7 +385,9 @@ curl -s http://127.0.0.1:8080/state | jq .
 | `character_id` | string \| null | 该玩家已选角色 id |
 | `character_name` | string \| null | 该玩家已选角色名 |
 | `is_ready` | boolean | 该玩家是否已准备 |
-| `max_multiplayer_ascension_unlocked` | number | 该玩家已解锁的最高联机进阶等级 |
+| `max_multiplayer_ascension_unlocked` | number | 该玩家已解锁的最高联机标准模式进阶等级 |
+| `max_blitz_ascension` | number | 该玩家已解锁的最高 Blitz 进阶等级（v0.113.0+） |
+| `is_rotating_dread` | boolean | 该玩家是否处于 Dread 轮换角色模式（v0.113.0+） |
 
 ### `combat` 子结构
 
@@ -507,6 +510,8 @@ curl -s http://127.0.0.1:8080/state | jq .
 | `orb_capacity` | number | 本场战斗的实际球槽容量（含增益后） |
 | `empty_orb_slots` | number | 当前空余球槽数 |
 | `orbs` | object[] | 当前球列表，见下 |
+| `arrows` | object[] | Fool 的箭矢槽列表（v0.113.0+，其余角色为空数组），见下 |
+| `melody` | object | Fool 本回合已打出的旋律标签计数（v0.113.0+，其余角色全为 0/false），见下 |
 | `pets` | object[] | 玩家己方的宠物列表（亡灵契约师的奥斯提、鸟宠等），见下 |
 | `pet_missing` | bool | 该角色的遗物会生成宠物、但此刻场上没有宠物时为 true（宠物已阵亡或尚未召唤）。不会凭空判断"本来就没有宠物"的角色 |
 | `cards_played_this_turn` | number | 本回合已打出的牌数 |
@@ -523,6 +528,30 @@ curl -s http://127.0.0.1:8080/state | jq .
 | `passive_value` | number | 被动数值 |
 | `evoke_value` | number | 激发数值 |
 | `is_front` | bool | 是否为最前面的球（会被下一个激发效果取用） |
+
+#### `combat.player.arrows[]`
+
+Fool 角色的第二资源：出牌消耗箭矢，箭矢射出后可回收。其余角色此数组为空。
+
+| 字段 | 类型 | 说明 |
+| --- | --- | --- |
+| `index` | number | 箭矢槽序号 |
+| `status` | string | `retrieved`（已取回可射）/ `away`（已射出）/ `destroyed`（已损毁） |
+| `available` | bool | `status == "retrieved"`，本回合是否可射出 |
+| `destroy_after_impaled` | bool | v0.113.0：这支箭射出后会损毁而非飞回 |
+
+#### `combat.player.melody`
+
+Fool 的旋律系统（v0.113.0+）：旋律牌带 `Wah` / `Cho` / `Ki` 标签，部分效果依赖本回合已打
+出的旋律组合。其余角色全部为 `false` / `0`。
+
+| 字段 | 类型 | 说明 |
+| --- | --- | --- |
+| `wah_played` | bool | 本回合是否已打出带 `Wah` 标签的牌 |
+| `cho_played` | bool | 本回合是否已打出带 `Cho` 标签的牌 |
+| `ki_played` | bool | 本回合是否已打出带 `Ki` 标签的牌 |
+| `melodies_this_turn` | number | 本回合已触发的不同旋律标签数（0–3） |
+| `melody_cards_this_turn` | number | 本回合打出的旋律牌数（多标签牌只计一次） |
 
 #### `combat.player.pets[]`
 
@@ -648,6 +677,10 @@ curl -s http://127.0.0.1:8080/state | jq .
 | `potions[]` | object[] | 当前药水槽 |
 | `ascension` | number | 当前 run 的 Ascension 等级 |
 | `ascension_effects[]` | object[] | 当前 Ascension 等级已生效的累计效果列表 |
+| `game_mode` | string \| null | 当前 run 的游戏模式（v0.113.0+）：`standard` / `daily` / `dread` / `blitz` / `none` |
+| `dominion_id` | string \| null | Dread 模式当前生效的 Dominion id；非 Dread 局为 null（v0.113.0+） |
+| `is_custom_game` | boolean | 本局是否来自自定义开局界面（v0.113.0+） |
+| `is_rotating_character` | boolean | 本地玩家是否处于 Dread 轮换角色模式（v0.113.0+） |
 | `players[]` | object[] | 队伍摘要（含本地玩家），字段同 `combat.players[]` 另加 `gold`、`deck[]`、`relics[]`、`potions[]`，见下 |
 
 #### `run.players[]` 的牌组、遗物与药水
@@ -961,6 +994,25 @@ compact `agent_view` 的 `run.players[]` 原样携带这三个数组。
 | `relics[]` | object[] | 可购买遗物列表 |
 | `potions[]` | object[] | 可购买药水列表 |
 | `card_removal` | object \| null | 删牌服务状态 |
+| `is_blitz` | boolean | 是否为 Blitz 模式的「选择制」商店（v0.113.0+）；为 true 时上面的金币货架为空 |
+| `blitz_choices_remaining` | number \| null | 本次 Blitz 商店还可选择几项（v0.113.0+，非 Blitz 为 null） |
+| `blitz_entries[]` | object[] | Blitz 商店的选择项列表（v0.113.0+，普通商店为空数组） |
+
+#### `shop.blitz_entries[]`
+
+Blitz 商店不花金币：玩家在若干「选择项」中挑 `blitz_choices_remaining` 项（通常 3 选 3 类）。
+`buy_blitz_entry` 的 `option_index` 取这里的 `index`。
+
+| 字段 | 类型 | 说明 |
+| --- | --- | --- |
+| `index` | number | 对应 `buy_blitz_entry` 的 `option_index` |
+| `entry_type` | string | 选项类型（`CardUpgrade` / `TwoRelics` / `Glam` 等 20 种） |
+| `name` | string | 选项名称 |
+| `description` | string | 选项描述 |
+| `status` | string | `available` / `used` / `disabled`；只有 `available` 可选 |
+| `is_stocked` | boolean | 当前是否可选（等价 `status == "available"`） |
+| `is_cursed` | boolean | 是否为诅咒选项（`Glam` 及之后的类型） |
+| `is_rare` | boolean | 是否为稀有选项 |
 
 #### `shop.cards[]` / `shop.relics[]` / `shop.potions[]`
 
@@ -1125,6 +1177,7 @@ compact 的 `combat` 原样携带 `/state` 的 `action_readiness`、`end_turn_wi
 | `shop.cards[]` | `type` / `rarity` / `price` | 卡牌类型、稀有度与数字价格 |
 | `shop.relics[]` / `shop.potions[]` | `rarity` / `price` | 稀有度与数字价格 |
 | `combat.player` | `powers` | 己方 Power 短行：`power_id` + 层数，Debuff 追加 `[debuff]` |
+| `combat.player` | `arrows` / `available_arrows` / `melody` | v14 起：Fool 的箭矢槽状态数组与可用数、本回合旋律标签状态（其余角色 arrows 为空数组、melody 为 null） |
 | `combat.enemies[]` | `powers` | 敌方 Power 短行，同上 |
 | `combat.enemies[]` | `intents[]` | 怪物下一招的数值拆解：`i`（意图序号）、`intent_type`、`label`、`damage`、`hits`、`total_damage`、`status_card_count` |
 | `combat.enemies[]` | `base_max_hp` | 联机缩放前的基础血量；元数据的 `min_hp` / `max_hp` 与它同量纲，实况 `max_hp` 是缩放后的值 |
@@ -1206,7 +1259,7 @@ compact 不是 `/state` 的子集，**很多键换了名字**。MCP `get_game_st
   "ok": true,
   "request_id": "req_20260310_120000_1234",
   "data": {
-    "state_version": 11,
+    "state_version": 17,
     "run_id": "WXJVZBQFK2",
     "screen": "COMBAT",
     "in_combat": true,
@@ -1629,7 +1682,7 @@ compact 不是 `/state` 的子集，**很多键换了名字**。MCP `get_game_st
 - `dismiss_game_over_wait` — 关闭结算等待提示
 - `abandon_run` — 放弃当前局
 - `save_and_quit` — 保存并退出
-- `open_character_select` — 打开角色选择
+- `open_character_select` — 打开开局界面（v0.113.0+ 支持 `mode`：`standard` / `blitz` / `dread` / `custom`，默认 `standard`）
 - `open_timeline` — 打开时间线
 - `confirm_unlock` — 确认解锁弹窗
 - `close_main_menu_submenu` — 关闭主菜单子菜单（也关闭补丁说明页 `PATCH_NOTES`）
@@ -1658,6 +1711,7 @@ compact 不是 `/state` 的子集，**很多键换了名字**。MCP `get_game_st
 - `buy_card` — 购买卡牌（`option_index`）
 - `buy_relic` — 购买遗物（`option_index`）
 - `buy_potion` — 购买药水（`option_index`）
+- `buy_blitz_entry` — 选择 Blitz 商店选项（`option_index`，v0.113.0+）
 - `remove_card_at_shop` — 商店删牌
 - `select_character` — 选择角色（`option_index`）
 - `embark` — 出发
@@ -1965,7 +2019,7 @@ AI 队友实例上的受控端点，由宿主进程在本地调用，普通玩�
 | `potions` | 药水：id、名称、稀有度、目标类型 |
 | `events` | 事件：id、标题、选项 |
 | `powers` | 增益 / 减益：id、名称、类型、描述 |
-| `characters` | 角色：id、名称、初始牌组、初始遗物、初始药水 |
+| `characters` | 角色：id、名称、初始牌组/遗物/药水、基础球槽 `orb_slots` 与基础箭矢槽 `arrow_slots`（Fool 为 1，其余角色为 0） |
 
 导出需要读取游戏对象，因此经游戏线程执行；数据规模较大（卡牌集合数百 KB），不适合每次决策都拉取。MCP 侧（`sts2_mcp.client.Sts2Client.get_game_data_collection`）会在进程内缓存。
 
@@ -2546,6 +2600,21 @@ Python sidecar 另加 `event_id`、`event_options` 与 `guidance_source`：它�
 
 ```
 请求: { "action": "buy_potion", "option_index": 0 }
+```
+
+### `buy_blitz_entry`
+
+选择 Blitz 商店的一个选项（v0.113.0+）。Blitz 商店不花金币：玩家在若干选择项中挑
+`blitz_choices_remaining` 项，卡牌奖励/升级/删牌/转化类选项之后会再弹对应的选择屏。
+
+- **前提**：`screen` = `SHOP`，`shop.is_blitz` = true，`shop.is_open` = true，
+  `shop.blitz_choices_remaining` > 0 且 `shop.blitz_entries[]` 中存在 `status` = `available` 的条目
+- **参数**：`option_index`（必填）：`shop.blitz_entries[]` 的索引
+- **稳定条件**：所选条目 `status` 变为非 `available`、卡牌/牌库选择屏弹出，或商店关闭
+- **超时**：10 秒
+
+```
+请求: { "action": "buy_blitz_entry", "option_index": 0 }
 ```
 
 ### `remove_card_at_shop`

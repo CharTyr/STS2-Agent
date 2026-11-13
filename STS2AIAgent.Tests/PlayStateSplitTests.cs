@@ -368,7 +368,7 @@ internal static class PlayStateSplitTests
 
         public Task<string> ActAsync(
             string action, int? cardIndex, int? targetIndex, int? optionIndex, int? x, int? y,
-            string? tool, CancellationToken cancellationToken, bool rawState = false, Action<string>? validateState = null)
+            string? tool, CancellationToken cancellationToken, bool rawState = false, Action<string>? validateState = null, string? mode = null)
         {
             validateState?.Invoke(StateJson);
             return Task.FromResult($"{{\"action\":\"{action}\",\"status\":\"completed\",\"stable\":true,\"state\":{StateJson}}}");

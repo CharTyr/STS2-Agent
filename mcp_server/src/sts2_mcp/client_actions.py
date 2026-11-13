@@ -16,7 +16,7 @@ The mixin expects its host to provide ``execute_action``; :class:`Sts2Client` do
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, Literal
 
 
 class Sts2ActionMethods:
@@ -78,9 +78,14 @@ class Sts2ActionMethods:
             },
         )
 
-    def open_character_select(self) -> dict[str, Any]:
+    def open_character_select(
+        self,
+        mode: Literal["standard", "blitz", "dread", "custom"] | None = None,
+    ) -> dict[str, Any]:
+        """Open a run-config lobby; `mode` is standard/blitz/dread/custom (default standard)."""
         return self.execute_action(
             "open_character_select",
+            mode=mode,
             client_context={
                 "source": "mcp",
                 "tool_name": "open_character_select",
@@ -442,6 +447,16 @@ class Sts2ActionMethods:
             client_context={
                 "source": "mcp",
                 "tool_name": "buy_potion",
+            },
+        )
+
+    def buy_blitz_entry(self, option_index: int) -> dict[str, Any]:
+        return self.execute_action(
+            "buy_blitz_entry",
+            option_index=option_index,
+            client_context={
+                "source": "mcp",
+                "tool_name": "buy_blitz_entry",
             },
         )
 

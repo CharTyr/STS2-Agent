@@ -38,9 +38,12 @@ using MegaCrit.Sts2.Core.Nodes.GodotExtensions;
 using MegaCrit.Sts2.Core.Nodes.Rewards;
 using MegaCrit.Sts2.Core.Nodes.Rooms;
 using MegaCrit.Sts2.Core.Nodes.Screens;
+using MegaCrit.Sts2.Core.Nodes.Screens.Blitz;
 using MegaCrit.Sts2.Core.Nodes.Screens.CardLibrary;
 using MegaCrit.Sts2.Core.Nodes.Screens.CardSelection;
 using MegaCrit.Sts2.Core.Nodes.Screens.CharacterSelect;
+using MegaCrit.Sts2.Core.Nodes.Screens.CustomRun;
+using MegaCrit.Sts2.Core.Nodes.Screens.Dread;
 using MegaCrit.Sts2.Core.Nodes.Screens.FeedbackScreen;
 using MegaCrit.Sts2.Core.Nodes.Screens.GameOverScreen;
 using MegaCrit.Sts2.Core.Nodes.Screens.InspectScreens;
@@ -86,12 +89,12 @@ internal static partial class GameStateService
             };
         }
 
-        var characterSelectScreen = GetCharacterSelectScreen(currentScreen);
-        if (characterSelectScreen != null)
+        var runLobby = GetRunLobby(currentScreen);
+        if (runLobby != null)
         {
             return new SessionPayload
             {
-                mode = characterSelectScreen.Lobby.NetService.Type.IsMultiplayer() ? "multiplayer" : "singleplayer",
+                mode = runLobby.NetService.Type.IsMultiplayer() ? "multiplayer" : "singleplayer",
                 phase = "character_select",
                 control_scope = "local_player"
             };
@@ -145,10 +148,9 @@ internal static partial class GameStateService
             };
         }
 
-        var characterSelectScreen = GetCharacterSelectScreen(currentScreen);
-        if (characterSelectScreen != null)
+        var lobby = GetRunLobby(currentScreen);
+        if (lobby != null)
         {
-            var lobby = characterSelectScreen.Lobby;
             if (!lobby.NetService.Type.IsMultiplayer())
             {
                 return null;
@@ -239,7 +241,7 @@ internal static partial class GameStateService
 
     private static CharacterSelectPayload? BuildCharacterSelectPayload(IScreenContext? currentScreen)
     {
-        var screen = GetCharacterSelectScreen(currentScreen);
+        var screen = GetRunLobbyScreen(currentScreen);
         if (screen == null)
         {
             return null;
@@ -248,7 +250,8 @@ internal static partial class GameStateService
         var buttons = GetCharacterSelectButtons(currentScreen);
         try
         {
-            var lobby = screen.Lobby;
+            var lobby = GetRunLobby(currentScreen)
+                ?? throw new InvalidOperationException("Run-lobby screen has no lobby yet.");
             var localPlayer = lobby.LocalPlayer;
             var waitingPanel = screen.GetNodeOrNull<Control>("ReadyAndWaitingPanel");
             var selectedCharacterId = localPlayer.character?.Id.Entry;
@@ -256,6 +259,7 @@ internal static partial class GameStateService
             return new CharacterSelectPayload
             {
                 selected_character_id = selectedCharacterId,
+                mode = RunLobbyScreenMode(currentScreen),
                 is_multiplayer = lobby.NetService.Type.IsMultiplayer(),
                 net_game_type = lobby.NetService.Type.ToString(),
                 can_embark = CanEmbark(currentScreen),
@@ -315,7 +319,11 @@ internal static partial class GameStateService
             character_id = player.character?.Id.Entry,
             character_name = player.character?.Title.GetFormattedText(),
             is_ready = player.isReady,
-            max_multiplayer_ascension_unlocked = player.maxMultiplayerAscensionUnlocked
+            // v0.113.0 split the single ascension cap into per-mode caps; the legacy
+            // field keeps reporting the Standard cap, the Blitz cap is additive.
+            max_multiplayer_ascension_unlocked = player.maxStandardAscension,
+            max_blitz_ascension = player.maxBlitzAscension,
+            is_rotating_dread = player.isRotatingDread
         };
     }
 
@@ -366,6 +374,51 @@ internal static partial class GameStateService
         };
     }
 
+    /// <summary>
+    /// Any main-menu screen that hosts a <see cref="StartRunLobby"/> run-configuration flow:
+    /// standard character select plus the v0.113.0 Blitz, Dread and custom-run screens. They are
+    /// structural clones (lobby, character buttons, ConfirmButton/UnreadyButton), so every
+    /// predicate and executor that treats them alike goes through this one lookup. The Daily run
+    /// screen deliberately stays out: it exposes no public Lobby and its flow differs.
+    /// </summary>
+    public static NSubmenu? GetRunLobbyScreen(IScreenContext? currentScreen)
+    {
+        return currentScreen switch
+        {
+            NCharacterSelectScreen screen => screen,
+            NBlitzScreen screen => screen,
+            NDreadScreen screen => screen,
+            NCustomRunScreen screen => screen,
+            _ => null
+        };
+    }
+
+    /// <summary>The mode identifier of a run-lobby screen, for payloads that need to say which flow is open.</summary>
+    public static string? RunLobbyScreenMode(IScreenContext? currentScreen)
+    {
+        return currentScreen switch
+        {
+            NCharacterSelectScreen => "standard",
+            NBlitzScreen => "blitz",
+            NDreadScreen => "dread",
+            NCustomRunScreen => "custom",
+            _ => null
+        };
+    }
+
+    /// <summary>The lobby a run-lobby screen owns, or null when the screen is not one or its lobby is not up yet.</summary>
+    public static StartRunLobby? GetRunLobby(IScreenContext? currentScreen)
+    {
+        return currentScreen switch
+        {
+            NCharacterSelectScreen screen => screen.Lobby,
+            NBlitzScreen screen => screen.Lobby,
+            NDreadScreen screen => screen.Lobby,
+            NCustomRunScreen screen => screen.Lobby,
+            _ => null
+        };
+    }
+
     public static NCharacterSelectScreen? GetCharacterSelectScreen(IScreenContext? currentScreen)
     {
         return currentScreen as NCharacterSelectScreen;
@@ -373,14 +426,14 @@ internal static partial class GameStateService
 
     public static IReadOnlyList<NCharacterSelectButton> GetCharacterSelectButtons(IScreenContext? currentScreen)
     {
-        var screen = GetCharacterSelectScreen(currentScreen);
+        var screen = GetRunLobbyScreen(currentScreen);
         if (screen == null)
         {
             return Array.Empty<NCharacterSelectButton>();
         }
 
         return FindDescendants<NCharacterSelectButton>(screen)
-            .Where(node => GodotObject.IsInstanceValid(node))
+            .Where(node => GodotObject.IsInstanceValid(node) && node.Character != null)
             .OrderBy(node => node.GlobalPosition.Y)
             .ThenBy(node => node.GlobalPosition.X)
             .ToArray();
@@ -390,13 +443,13 @@ internal static partial class GameStateService
     {
         var load = GetMultiplayerLoadScreen(currentScreen);
         if (load != null) return load.GetNodeOrNull<NConfirmButton>("ConfirmButton");
-        return GetCharacterSelectScreen(currentScreen)?.GetNodeOrNull<NConfirmButton>("ConfirmButton");
+        return GetRunLobbyScreen(currentScreen)?.GetNodeOrNull<NConfirmButton>("ConfirmButton");
     }
 
-    // Only the character-select screen advertises unready: the executor has no load-screen path for it.
+    // Only the run-lobby screens advertise unready: the executor has no load-screen path for it.
     public static NBackButton? GetCharacterUnreadyButton(IScreenContext? currentScreen)
     {
-        return GetCharacterSelectScreen(currentScreen)?.GetNodeOrNull<NBackButton>("UnreadyButton");
+        return GetRunLobbyScreen(currentScreen)?.GetNodeOrNull<NBackButton>("UnreadyButton");
     }
 
     public static NMultiplayerTest? GetMultiplayerTestScene()
@@ -421,7 +474,7 @@ internal static partial class GameStateService
     public static void EnsureFourPlayerLobby()
     {
         var scene = GetMultiplayerTestScene();
-        var lobby = scene != null ? GetMultiplayerTestLobby(scene) : GetCharacterSelectScreen(ActiveScreenContext.Instance.GetCurrentScreen())?.Lobby;
+        var lobby = scene != null ? GetMultiplayerTestLobby(scene) : GetRunLobby(ActiveScreenContext.Instance.GetCurrentScreen());
         if (lobby == null || StartRunLobbyMaxPlayersField == null)
         {
             return;
@@ -677,6 +730,12 @@ internal static partial class GameStateService
                         if (item is AbstractModel itemModel)
                         {
                             names.Add(SafeModelTitle(itemModel));
+                        }
+                        else if (item is EpochSlotData slotData && slotData.Model != null)
+                        {
+                            // v0.113.0: the timeline unlock screen holds EpochSlotData rows,
+                            // not models; the epoch title lives on .Model.
+                            names.Add(slotData.Model.Title.GetFormattedText() ?? slotData.Model.Id);
                         }
                         else if (item != null)
                         {

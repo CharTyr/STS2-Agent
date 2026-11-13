@@ -342,6 +342,16 @@ internal static partial class GameStateService
             entry?.IsStocked == true && entry.EnoughGold;
     }
 
+    /// <summary>True while a Blitz merchant is open with at least one available choice entry.</summary>
+    public static bool CanBuyBlitzEntry(IScreenContext? currentScreen)
+    {
+        var inventoryScreen = GetMerchantInventoryScreen(currentScreen);
+        var inventory = GetMerchantInventory(currentScreen);
+        return inventoryScreen != null && inventoryScreen.IsOpen &&
+            inventory != null && inventory.IsBlitzShop && inventory.BlitzChoicesRemaining > 0 &&
+            GetMerchantBlitzEntries(currentScreen).Any(entry => entry.IsStocked);
+    }
+
     public static bool CanSelectCharacter(IScreenContext? currentScreen)
     {
         if (CanUnready(currentScreen))
@@ -358,8 +368,8 @@ internal static partial class GameStateService
                 && GetMultiplayerLobbyCharacters().Length > 0;
         }
 
-        var characterSelect = GetCharacterSelectScreen(currentScreen);
-        if (characterSelect != null && characterSelect.Lobby.LocalPlayer.isReady)
+        var runLobby = GetRunLobby(currentScreen);
+        if (runLobby != null && runLobby.LocalPlayer.isReady)
         {
             return false;
         }
@@ -432,7 +442,14 @@ internal static partial class GameStateService
             return false;
         }
 
-        return currentScreen is not (NMainMenu or NGameOverScreen or NCharacterSelectScreen or NMultiplayerTest);
+        if (currentScreen is NMainMenu or NGameOverScreen or NMultiplayerTest)
+        {
+            return false;
+        }
+
+        // A run-lobby screen (character select, Blitz, Dread, custom) is a menu flow over no
+        // live run -- save and quit belongs to the same exclusion as the character-select screen.
+        return GetRunLobbyScreen(currentScreen) == null;
     }
 
     public static bool CanOpenCharacterSelect(IScreenContext? currentScreen)
@@ -755,13 +772,12 @@ internal static partial class GameStateService
 
     private static bool CanAdjustAscension(IScreenContext? currentScreen, int delta)
     {
-        var screen = GetCharacterSelectScreen(currentScreen);
-        if (screen == null)
+        var lobby = GetRunLobby(currentScreen);
+        if (lobby == null)
         {
             return false;
         }
 
-        var lobby = screen.Lobby;
         if (lobby.NetService.Type == NetGameType.Client || lobby.LocalPlayer.isReady)
         {
             return false;

@@ -1580,3 +1580,29 @@ Improved planner fallback, parseable summaries and Jev decision evidence; added 
 ### Status
 
 [OK] **Completed**
+
+
+## Session 41: Bold experience overhaul: finished, live-validated, merged to dev (#232)
+
+**Date**: 2026-10-29
+**Task**: Bold experience overhaul: finished, live-validated, merged to dev (#232)
+**Branch**: `feature/bold-overhaul`
+
+### Summary
+
+Recovered task after a broken session; finished W3-W11 (HUD, run report/journal, strategy state, capabilities, card_cid lease check, coop message progress, benchmark v2); live validation 134/300 requests found and fixed 6 bugs (plan follow-ups read mid-animation frames -> all illegal_action; missing streaming-probe interface; model ignored then; HUD banner overlap; plan stop not logged; run report counted external actions). C# 1135/0, Python 454/454, 12 gates, Release 0/0; PR #232 merged into dev, CI green; main untouched; no release.
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `21ada0e` | (see git log) |
+| `d724469` | (see git log) |
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- User tries dev build; optional follow-ups: live co-op with new features, F7 hotkey, card outline at Fast speed, full-run win rate.

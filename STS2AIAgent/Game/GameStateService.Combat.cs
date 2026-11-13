@@ -4,6 +4,7 @@ using System.Text.RegularExpressions;
 using Godot;
 using MegaCrit.Sts2.Core.CardSelection;
 using MegaCrit.Sts2.Core.Combat;
+using MegaCrit.Sts2.Core.Commands;
 using MegaCrit.Sts2.Core.Entities.Cards;
 using MegaCrit.Sts2.Core.Entities.Creatures;
 using MegaCrit.Sts2.Core.Entities.Merchant;
@@ -383,6 +384,26 @@ internal static partial class GameStateService
             orb_capacity = orbQueue.Capacity,
             empty_orb_slots = Math.Max(0, orbQueue.Capacity - orbs.Count),
             orbs = orbs.Select((orb, index) => BuildCombatOrbPayload(orb, index)).ToArray(),
+            // v0.113.0: the Fool's second resource. Empty on every other character.
+            arrows = me.PlayerCombatState.Arrows
+                .Select((arrow, index) => new CombatArrowPayload
+                {
+                    index = index,
+                    status = arrow.Status.ToString().ToLowerInvariant(),
+                    available = arrow.IsAvailable,
+                    destroy_after_impaled = arrow.DestroyAfterImpaled
+                })
+                .ToArray(),
+            // v0.113.0: which melody tags (Wah/Cho/Ki) the Fool has already played this turn; empty
+            // flags on every other character.
+            melody = new CombatMelodyPayload
+            {
+                wah_played = MelodyCmd.PlayedWahThisTurn(me),
+                cho_played = MelodyCmd.PlayedChoThisTurn(me),
+                ki_played = MelodyCmd.PlayedKiThisTurn(me),
+                melodies_this_turn = MelodyCmd.MelodiesThisTurn(me),
+                melody_cards_this_turn = MelodyCmd.MelodyCardsPlayedThisTurn(me)
+            },
             pets = me.PlayerCombatState.Pets.Select(BuildCombatPetPayload).ToArray(),
             pet_missing = PlayerSpawnsPets(me) && me.PlayerCombatState.Pets.Count == 0,
             cards_played_this_turn = GameActionService.CardsPlayedThisTurn,

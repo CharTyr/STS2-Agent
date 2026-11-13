@@ -144,7 +144,7 @@ internal static partial class GameActionService
             "dismiss_game_over_wait" => ExecuteDismissGameOverWaitAsync(),
             "abandon_run" => ExecuteAbandonRunAsync(),
             "save_and_quit" => ExecuteSaveAndQuitAsync(),
-            "open_character_select" => ExecuteOpenCharacterSelectAsync(),
+            "open_character_select" => ExecuteOpenCharacterSelectAsync(request),
             "open_timeline" => ExecuteOpenTimelineAsync(),
             "confirm_unlock" => ExecuteConfirmUnlockAsync(),
             "close_main_menu_submenu" => ExecuteCloseMainMenuSubmenuAsync(),
@@ -174,6 +174,7 @@ internal static partial class GameActionService
             "buy_relic" => ExecuteBuyRelicAsync(request),
             "buy_potion" => ExecuteBuyPotionAsync(request),
             "remove_card_at_shop" => ExecuteRemoveCardAtShopAsync(),
+            "buy_blitz_entry" => ExecuteBuyBlitzEntryAsync(request),
             "select_character" => ExecuteSelectCharacterAsync(request),
             "embark" => ExecuteEmbarkAsync(),
             "unready" => ExecuteUnreadyAsync(),
@@ -416,7 +417,10 @@ internal static partial class GameActionService
 
             try
             {
-                _ = RunManager.Instance.ProceedFromTerminalRewardsScreen();
+                // v0.113.0 split the old async ProceedFromTerminalRewardsScreen into a sync
+                // fire-and-forget (this call) plus an awaitable ...Async twin. The drain keeps
+                // fire-and-forget: the bounded WaitForRewardFlowExitAsync below is the deadline.
+                RunManager.Instance.ProceedFromTerminalRewardsScreen();
             }
             catch (Exception ex)
             {
@@ -1072,7 +1076,7 @@ internal static partial class GameActionService
         // An open modal is its own resolved screen (MODAL) with its own actions, so the
         // transition is not settled even when the character-select screen sits underneath it.
         return MenuTransitionPolicy.IsCharacterSelectSettled(
-            characterSelectScreenVisible: currentScreen is NCharacterSelectScreen,
+            characterSelectScreenVisible: GameStateService.GetRunLobbyScreen(currentScreen) != null,
             modalOpen: GameStateService.GetOpenModal() != null);
     }
 
@@ -1227,6 +1231,9 @@ internal sealed class ActionRequest
     public string? tool { get; init; }
 
     public string? command { get; init; }
+
+    /// <summary>Run-config mode for <c>open_character_select</c> (v0.113.0): standard/blitz/dread/custom.</summary>
+    public string? mode { get; init; }
 
     public string? player_id { get; init; }
 

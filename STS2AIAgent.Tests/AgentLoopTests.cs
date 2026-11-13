@@ -1988,7 +1988,7 @@ internal static class AgentLoopTests
             string? tool,
             CancellationToken cancellationToken,
             bool rawState = false,
-            Action<string>? validateState = null)
+            Action<string>? validateState = null, string? mode = null)
         {
             validateState?.Invoke(AtDispatchStateJson ?? CompactStateJson);
             ActCalls++;

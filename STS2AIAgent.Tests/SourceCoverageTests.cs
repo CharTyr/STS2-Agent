@@ -66,6 +66,9 @@ internal static class SourceCoverageTests
         "STS2AIAgent/Game/GameActionService.Combat.cs",
         "STS2AIAgent/Game/GameActionService.Coop.cs",
         "STS2AIAgent/Game/GameActionService.Embark.cs",
+        // The timeline/unlock block, split out of Embark when the v0.113.0 run-lobby modes pushed it
+        // over its line budget; it drives Godot nodes like its siblings.
+        "STS2AIAgent/Game/GameActionService.Timeline.cs",
         "STS2AIAgent/Game/GameActionService.Menus.cs",
         "STS2AIAgent/Game/GameActionService.Rewards.cs",
         "STS2AIAgent/Game/GameActionService.Rooms.cs",

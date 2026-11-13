@@ -1,6 +1,3 @@
-using System.Collections;
-using System.Reflection;
-using System.Text.RegularExpressions;
 using Godot;
 using MegaCrit.Sts2.Core.CardSelection;
 using MegaCrit.Sts2.Core.Combat;
@@ -72,12 +69,7 @@ using STS2AIAgent.Multiplayer;
 namespace STS2AIAgent.Game;
 
 // The payload types of GET /state, moved out of GameStateService.cs on 2026-09-17.
-//
-// They are declarations, not logic: 60 types whose property names are the wire format an agent
-// reads, and which docs/api.md documents row for row. Keeping them beside the builders meant a
-// 1,170-line tail that had to be scrolled past to reach any of them, and it made the builder file
-// look bigger than the code in it. Adding a field is still two edits and a docs/api.md row -- the
-// api-facts gate refuses a field that no table names -- but now the record is where records are.
+// They are declarations, not logic, and docs/api.md documents them row for row.
 
 internal sealed class GameStatePayload
 {
@@ -266,6 +258,11 @@ internal sealed class RunPayload
 
     public AscensionEffectPayload[] ascension_effects { get; init; } = Array.Empty<AscensionEffectPayload>();
 
+    public string? game_mode { get; init; }
+    public string? dominion_id { get; init; }
+    public bool is_custom_game { get; init; }
+    public bool is_rotating_character { get; init; }
+
     public int floor { get; init; }
 
     public int current_hp { get; init; }
@@ -412,6 +409,7 @@ internal readonly record struct CombatHandSelectionMetadata(
 internal sealed class CharacterSelectPayload
 {
     public string? selected_character_id { get; init; }
+    public string? mode { get; init; }
 
     public bool is_multiplayer { get; init; }
 
@@ -461,6 +459,8 @@ internal sealed class CharacterSelectPlayerPayload
     public bool is_ready { get; init; }
 
     public int max_multiplayer_ascension_unlocked { get; init; }
+    public int max_blitz_ascension { get; init; }
+    public bool is_rotating_dread { get; init; }
 }
 
 internal sealed class CharacterSelectOptionPayload
@@ -649,6 +649,22 @@ internal sealed class ShopPayload
     public ShopPotionPayload[] potions { get; init; } = Array.Empty<ShopPotionPayload>();
 
     public ShopCardRemovalPayload? card_removal { get; init; }
+
+    public bool is_blitz { get; init; }
+    public int? blitz_choices_remaining { get; init; }
+    public ShopBlitzEntryPayload[] blitz_entries { get; init; } = Array.Empty<ShopBlitzEntryPayload>();
+}
+
+internal sealed class ShopBlitzEntryPayload
+{
+    public int index { get; init; }
+    public string entry_type { get; init; } = string.Empty;
+    public string name { get; init; } = string.Empty;
+    public string description { get; init; } = string.Empty;
+    public string status { get; init; } = string.Empty;
+    public bool is_stocked { get; init; }
+    public bool is_cursed { get; init; }
+    public bool is_rare { get; init; }
 }
 
 internal sealed class ShopCardPayload
@@ -825,14 +841,13 @@ internal sealed class CombatPlayerPayload
 
     public CombatOrbPayload[] orbs { get; init; } = Array.Empty<CombatOrbPayload>();
 
+    public CombatArrowPayload[] arrows { get; init; } = Array.Empty<CombatArrowPayload>();
+    public CombatMelodyPayload melody { get; init; } = new();
     public CombatPetPayload[] pets { get; init; } = Array.Empty<CombatPetPayload>();
-
     public bool pet_missing { get; init; }
 
     public int cards_played_this_turn { get; init; }
-
     public int attacks_played_this_turn { get; init; }
-
     public int skills_played_this_turn { get; init; }
 }
 

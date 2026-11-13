@@ -23,7 +23,9 @@ internal static class ScreenResolutionContractTests
         ("NEventRoom", "EVENT"),
         ("NCombatRoom", "COMBAT"),
         ("NMapScreen or NMapRoom", "MAP"),
-        ("NCharacterSelectScreen", "CHARACTER_SELECT"),
+        // v0.113.0: the Blitz/Dread/custom-run screens are character-select clones and resolve to
+        // the same name; character_select.mode carries which flow is open.
+        ("NCharacterSelectScreen or NBlitzScreen or NDreadScreen or NCustomRunScreen", "CHARACTER_SELECT"),
         ("NMultiplayerLoadGameScreen", "MULTIPLAYER_LOAD"),
         ("NChooseABundleSelectionScreen", "BUNDLE_SELECTION"),
         ("NCapstoneSubmenuStack", "CAPSTONE_SELECTION"),
@@ -352,9 +354,14 @@ internal static class ScreenResolutionContractTests
             rawState,
             "public static bool CanSaveAndQuit("));
         var guardIndex = canSave.IndexOf("if(IsCapstonePageOverlay(currentScreen)){returnfalse;}", StringComparison.Ordinal);
-        var permissiveIndex = canSave.IndexOf("returncurrentScreenisnot(NMainMenuor", StringComparison.Ordinal);
         Assert.True(guardIndex >= 0, "save_and_quit must refuse while a capstone page is up.");
-        Assert.True(permissiveIndex > guardIndex, "The capstone guard has to run before the permissive return.");
+        Assert.True(
+            canSave.IndexOf("if(currentScreenisNMainMenuorNGameOverScreenorNMultiplayerTest){returnfalse;}", StringComparison.Ordinal)
+                is var excludedIndex && excludedIndex > guardIndex,
+            "The menu-type exclusion must run after the capstone guard.");
+        Assert.True(
+            canSave.IndexOf("returnGetRunLobbyScreen(currentScreen)==null;", StringComparison.Ordinal) > excludedIndex,
+            "The run-lobby exclusion must be the final permissive check, after the capstone guard.");
     }
 
     private static string Normalize(string source)

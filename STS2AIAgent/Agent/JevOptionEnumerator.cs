@@ -88,6 +88,7 @@ internal static partial class JevOptionEnumerator
         ["buy_card"] = new[] { "shop", "cards" },
         ["buy_relic"] = new[] { "shop", "relics" },
         ["buy_potion"] = new[] { "shop", "potions" },
+        ["buy_blitz_entry"] = new[] { "shop", "blitz_entries" },
         ["choose_rest_option"] = new[] { "rest", "options" },
         ["choose_treasure_relic"] = new[] { "chest", "relics" },
         ["choose_capstone_option"] = new[] { "capstone", "options" },
@@ -767,7 +768,8 @@ internal static partial class JevOptionEnumerator
         ["choose_timeline_epoch"] = new[] { "actionable", "is_actionable" },
         ["buy_card"] = new[] { "affordable", "stocked", "enough_gold", "is_stocked" },
         ["buy_relic"] = new[] { "affordable", "stocked", "enough_gold", "is_stocked" },
-        ["buy_potion"] = new[] { "affordable", "stocked", "enough_gold", "is_stocked" }
+        ["buy_potion"] = new[] { "affordable", "stocked", "enough_gold", "is_stocked" },
+        ["buy_blitz_entry"] = new[] { "available", "is_stocked" }
     };
 
     private static bool IsUnavailable(string action, JsonElement item)

@@ -1,5 +1,48 @@
 # Changelog
 
+## 0.19.0
+
+### Added
+
+- **适配游戏 v0.113.0「Dread & Blitz」大版本。**
+  - 游戏新增 `GameMode`（`standard` / `daily` / `dread` / `blitz`）：`run.game_mode` 报告当前模式，
+    Dread 局再带 `run.dominion_id`、`run.is_custom_game`、`run.is_rotating_character`。
+  - Blitz、Dread、自定义开局界面与标准选角共用同一套选角 + 出发流程：`select_character` /
+    `embark` / `unready` / `increase_ascension` / `decrease_ascension` 在这些界面同样可用，
+    `character_select.mode` 标识当前是 `standard` / `blitz` / `dread` / `custom`；
+    `open_character_select` 新增可选 `mode` 参数，直接打开对应开局界面（未解锁时代纪元返回 409）。
+  - Blitz 商店是「3 选 3」的选择制而非金币购买：`shop.is_blitz`、
+    `shop.blitz_choices_remaining`、`shop.blitz_entries[]`（含 `entry_type` / `status` /
+    `is_cursed` / `is_rare`），新动作 `buy_blitz_entry`（`option_index`）购买其中一项。
+  - 联机大厅玩家字段拆分：`character_select.players[].max_blitz_ascension`、
+    `is_rotating_dread` 新增，`max_multiplayer_ascension_unlocked` 继续报告标准模式上限。
+  - 时间线时代解锁界面（`NUnlockTimelineScreen`）的条目读取迁移到 `EpochSlotData`。
+  - 第六名角色 Fool 的专属资源全部暴露：`combat.player.arrows[]`（箭矢槽状态 /
+    `destroy_after_impaled`）、`combat.player.melody`（本回合已打的 `Wah`/`Cho`/`Ki` 旋律
+    标签与计数）、`/data/characters` 的 `arrow_slots` 字段；角色本体由 `ModelDb` 自动导出。
+
+### Changed
+
+- 商店购买动作（`buy_card` / `buy_relic` / `buy_potion` / `remove_card_at_shop` /
+  `buy_blitz_entry`）改走 `MerchantSynchronizer.PurchaseLocalEntry`：与游戏 UI 完全一致的购买
+  路径，联机购买会广播给队友而不是造成状态分叉（v0.113.0 将原 `OnTryPurchaseWrapper` 标记
+  为 unsynchronized 并提示应走同步器）。
+- 进阶等级标题/描述按 `GameMode` 取（Blitz 使用独立 5 级进阶阶梯）。
+
+### Fixed
+
+- **Dread/自定义开局界面打开后 `/state` 与所有动作返回 500（NullReferenceException）。**
+  `NDreadScreen` 的「轮换连胜」按钮在未初始化时 `Character` 为 null，
+  选角状态构建直接解引用崩溃；现在未初始化按钮被正确过滤，
+  四种开局界面（standard/blitz/dread/custom）均可正常打开与选角。
+- **`open_character_select mode=custom` 永远报 "not unlocked"。** 场景节点名写成了
+  `%CustomButton`，实际是 `%CustomRunButton`。
+
+> 验证：以上改动已在游戏 v0.113.0 实机验证（隔离存档实例）——四种开局模式、Blitz 局
+> `game_mode`、Blitz 商店 `buy_blitz_entry` 三选三流程、标准商店购买回归、时间线
+> EpochSlotData 与 `/data/characters` `arrow_slots` 均通过，见
+> `build/live-2026-11-14/report.md`。
+
 ## 0.18.0
 
 ### Added

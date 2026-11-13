@@ -35,7 +35,8 @@ internal interface IGameBridge
         string? tool,
         CancellationToken cancellationToken,
         bool rawState = false,
-        Action<string>? validateState = null);
+        Action<string>? validateState = null,
+        string? mode = null);
 
     Task<string> GetGameDataItemJsonAsync(string collection, string itemId, CancellationToken cancellationToken);
 
