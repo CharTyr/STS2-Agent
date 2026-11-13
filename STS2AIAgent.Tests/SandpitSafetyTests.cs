@@ -240,7 +240,7 @@ internal static class SandpitSafetyTests
         public Task<string> GetGameDataItemJsonAsync(string collection, string id, CancellationToken token) => Task.FromResult("{}");
         public Task<string> GetGameDataItemsJsonAsync(string collection, IReadOnlyList<string> ids, CancellationToken token) => Task.FromResult("[]");
         public Task<string> GetRelevantGameDataJsonAsync(string collection, IReadOnlyList<string> ids, CancellationToken token) => Task.FromResult("[]");
-        public Task<string> ActAsync(string action, int? cardIndex, int? targetIndex, int? optionIndex, int? x, int? y, string? tool, CancellationToken token, bool rawState = false, Action<string>? validateState = null)
+        public Task<string> ActAsync(string action, int? cardIndex, int? targetIndex, int? optionIndex, int? x, int? y, string? tool, CancellationToken token, bool rawState = false, Action<string>? validateState = null, string? mode = null)
         {
             BeforeGate?.Invoke();
             using var lease = Gate.Acquire(action);

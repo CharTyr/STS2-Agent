@@ -101,7 +101,7 @@ internal static class ReflectedGameMembers
         new(typeof(NUnlockRelicsScreen), "_relics", MemberKind.Field, false, "unlock.items"),
         new(typeof(NUnlockCardsScreen), "_cards", MemberKind.Field, false, "unlock.items"),
         new(typeof(NUnlockPotionsScreen), "_potions", MemberKind.Field, false, "unlock.items"),
-        new(typeof(NUnlockEpochScreen), "_unlockedEpochs", MemberKind.Field, false, "unlock.items"),
+        new(typeof(NUnlockTimelineScreen), "_erasToUnlock", MemberKind.Field, false, "unlock.items"),
         new(typeof(NUnlockCharacterScreen), "_character", MemberKind.Field, false, "unlock.items"),
         new(typeof(NUnlockCharacterScreen), "_epoch", MemberKind.Field, false, "unlock.items"),
     };
@@ -137,7 +137,7 @@ internal static class ReflectedGameMembers
             Field(typeof(NUnlockRelicsScreen), "_relics"),
             Field(typeof(NUnlockCardsScreen), "_cards"),
             Field(typeof(NUnlockPotionsScreen), "_potions"),
-            Field(typeof(NUnlockEpochScreen), "_unlockedEpochs"),
+            Field(typeof(NUnlockTimelineScreen), "_erasToUnlock"),
             Field(typeof(NUnlockCharacterScreen), "_character"),
             Field(typeof(NUnlockCharacterScreen), "_epoch"),
         }

@@ -373,6 +373,7 @@ class Sts2Client(Sts2ActionMethods):
         raw_state: bool = False,
         client_context: dict[str, Any] | None = None,
         card_cid: int | None = None,
+        mode: str | None = None,
     ) -> dict[str, Any]:
         """`POST /action`, answering with the compact state unless `raw_state` asks for the raw one.
 
@@ -398,7 +399,7 @@ class Sts2Client(Sts2ActionMethods):
                     "y": y,
                     "tool": tool,
                     "command": command,
-                    "client_context": client_context,
+                    "mode": mode, "client_context": client_context,
                 },
                 is_action=True,
             )

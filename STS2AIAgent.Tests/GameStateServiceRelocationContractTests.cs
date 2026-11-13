@@ -90,7 +90,8 @@ internal static class GameStateServiceRelocationContractTests
     private static readonly IReadOnlyDictionary<string, (string File, string Hash)> PreSplitDeclarationHashes =
         new Dictionary<string, (string, string)>(StringComparer.Ordinal)
     {
-        ["StateVersion"] = ("STS2AIAgent/Game/GameStateService.cs", "f49686a81fa6b522f58a5b93fed2b6dc85610f692c6890cf588494bfd3a68261"),
+        // v0.113.0: 17 adds game_mode/dominion_id/mode/blitz fields to raw /state.
+        ["StateVersion"] = ("STS2AIAgent/Game/GameStateService.cs", "58eb59d43ac5947a15738ff5dbe249a376e916cdce80e6b876d640982bcf49e9"),
         ["FromMilliseconds"] = ("STS2AIAgent/Game/GameStateService.cs", "fd87082c9a12d32d8fb7b84654edfcebad89721af9a194f75b52fbecc1ff88cb"),
         ["_lastCombatActionReadinessSignature"] = ("STS2AIAgent/Game/GameStateService.cs", "2d0ca3660a9668761ec0ea4c0cc3255437322b01ad6a31fb23c9ad6fcd38a086"),
         ["_lastCombatActionReadinessSinceUtc"] = ("STS2AIAgent/Game/GameStateService.cs", "0bd295930bd58e4a30a8b5eba394a85153b8ec9d10ef646058c9c4ab62937c6d"),
@@ -99,9 +100,11 @@ internal static class GameStateServiceRelocationContractTests
         ["_crystalSphereButtonLookupWarningLogged"] = ("STS2AIAgent/Game/GameStateService.cs", "c16d410de6049f3e70e37296414fe3bd8af1ec1751280ab8f8e96eb0c9f86c82"),
         ["StartRunLobbyMaxPlayersField"] = ("STS2AIAgent/Game/GameStateService.cs", "19edb0e3c9f24ab60b3a0446ceb73aac1f773e4b31d22142439eb6ca3dcf973a"),
         ["BuildStatePayload"] = ("STS2AIAgent/Game/GameStateService.cs", "d325d70174b8eed652b0f049cd0470f0fc6df5813e33a5b66fb945fa13cf36a6"),
-        ["BuildSessionPayload"] = ("STS2AIAgent/Game/GameStateService.Menus.cs", "c5ba61aed0a963ac73c60c7ac9890a010329625a5db703557d300b66ffc53795"),
+        // v0.113.0: the character_select session phase is read from GetRunLobby, covering all mode screens.
+        ["BuildSessionPayload"] = ("STS2AIAgent/Game/GameStateService.Menus.cs", "17ec0b83ff3bf6c31fdc0755911ff491f97b3b063e79084b81e3af7b59cc007d"),
         ["BuildAvailableActionsPayload"] = ("STS2AIAgent/Game/GameStateService.cs", "f94bfce253aebe76836b96be74844eac681be85f9448f50c96a7617bcd7fb1ad"),
-        ["EnumerateAvailableActions"] = ("STS2AIAgent/Game/GameStateService.cs", "933b45a4c8c765a5bfd09471d850e956f54385168d3dc3ab02eed2643b9a66da"),
+        // v0.113.0: advertises buy_blitz_entry at a Blitz merchant.
+        ["EnumerateAvailableActions"] = ("STS2AIAgent/Game/GameStateService.cs", "4b6f7e333e82112b0dfd043336f54b8ac10e487e9fc4c2e8456b49cff28710bc"),
         ["ResolveScreen"] = ("STS2AIAgent/Game/GameStateService.cs", "2d5f3c899e556f73ecd366debaee5110c253eedcb86b0b85de591e5a95d37ed3"),
         ["FindActiveCombatRoom"] = ("STS2AIAgent/Game/GameStateService.cs", "42717fd1bfc51e6798bf5336d03ee7dad905a31236f6424d0c0702a16de6b60f"),
         ["GetLocalPlayer"] = ("STS2AIAgent/Game/GameStateService.cs", "4d521866d4f33356a64c6346f8151bc401181c256b001360a729386efbf612df"),
@@ -138,7 +141,8 @@ internal static class GameStateServiceRelocationContractTests
         ["GetCardRulesText"] = ("STS2AIAgent/Game/GameStateService.Run.cs", "506dbaee5b3640bbf9daaeeafa27b35ea08cffd57f9ca95bd407430c8fbc4e44"),
         ["GetResolvedCardRulesText"] = ("STS2AIAgent/Game/GameStateService.Run.cs", "b88f83a47ffc60f13ed0eab6218f415e99462d25d45aff0d1b5b88df53ce4bca"),
         ["BuildCardDynamicValuePayloads"] = ("STS2AIAgent/Game/GameStateService.Run.cs", "ad1b70543b3a7dabfd053fdc19f1779e7f50111114a56381ef53eabff933755f"),
-        ["BuildAscensionEffectPayloads"] = ("STS2AIAgent/Game/GameStateService.Run.cs", "5ed14eb94a37b66e63ac7412ae0ff234c75250bb7afde037fdd2061fc1f89b99"),
+        // v0.113.0: AscensionHelper titles/descriptions take the run's GameMode (Blitz has its own ladder).
+        ["BuildAscensionEffectPayloads"] = ("STS2AIAgent/Game/GameStateService.Run.cs", "cbbb99dd63e4ccdc681b7f3ba132cc05cea5ca8b79d0fd4ea886887f9c92f3f7"),
         ["TryCoerceText"] = ("STS2AIAgent/Game/GameStateService.cs", "bcbd545c25921f20cf18e1887341635b364af4685b7c631290832b09e74cd08d"),
         ["NormalizeCardRulesText"] = ("STS2AIAgent/Game/GameStateService.cs", "9038d00cc5f79647568411e56dd18468d8b5104a1f19afd67cbbb578c1893e2a"),
         ["GetProceedButton"] = ("STS2AIAgent/Game/GameStateService.Rewards.cs", "3677b9f438d88ed0cd3d9851593dd6bb406088d4bc58c450ae16af334349375d"),
@@ -161,21 +165,26 @@ internal static class GameStateServiceRelocationContractTests
         ["ResetCombatActionReadiness"] = ("STS2AIAgent/Game/GameStateService.Combat.cs", "aa3bec113453f87628ba0577d450cca0dd4c11b0c4c23c6dc7425ee343732cf8"),
         ["GetEndTurnButton"] = ("STS2AIAgent/Game/GameStateService.Combat.cs", "8f76bfc88b7b47c46491119d5d891be8a53afda09d94b127e64a548c57c53b0f"),
         ["BuildAvailableActionNames"] = ("STS2AIAgent/Game/GameStateService.cs", "b95d51aabf1bee52abb8ee13f1c27e166135bd2a33ce927504160b6cff111863"),
-        ["BuildCombatPayload"] = ("STS2AIAgent/Game/GameStateService.Combat.cs", "2b54101bd86e153369f9c157d59e4eaf62126e9a0a85caf146a0dd3a23918ead"),
+        // v0.113.0: combat.player.arrows for the Fool's second resource.
+        ["BuildCombatPayload"] = ("STS2AIAgent/Game/GameStateService.Combat.cs", "f7797408820987e68e761a2be0abf0dab01dd2294a47733c4f9e0369d04dd2bc"),
         ["BuildCombatLethalRiskPayloads"] = ("STS2AIAgent/Game/GameStateService.CombatRisks.cs", "9ce53854ce7bf64fbe6a7f56633e728669dcf1ee48fe2e3e64140cee2cc3edad"),
-        ["BuildRunPayload"] = ("STS2AIAgent/Game/GameStateService.Run.cs", "962e03e89804b00e8de0e4632ed48b08e00a711b5f90e19690b1ec2cdbab12c0"),
+        // v0.113.0: run payload gained game_mode/dominion_id/is_custom_game/is_rotating_character.
+        ["BuildRunPayload"] = ("STS2AIAgent/Game/GameStateService.Run.cs", "8a94c6189d6069070d975ed59b090078032f3731baa6623e9eedbe3f29c827f9"),
         ["ResolveBossId"] = ("STS2AIAgent/Game/GameStateService.Run.cs", "70aecade3371139e3fdb777685e7b1648c90ad859bc9d90a8de5592e1283949d"),
         ["IsCardSelected"] = ("STS2AIAgent/Game/GameStateService.Rewards.cs", "205981806775d8b3741743ab0d2d9d07459ba3484dc5b3b9d3265bd08dd23ece"),
         ["TryGetMemberValue"] = ("STS2AIAgent/Game/GameStateService.cs", "e836d94766bdb94033d236744ba1614100023dc4fcfa20c663e207041f9022d9"),
-        ["BuildMultiplayerPayload"] = ("STS2AIAgent/Game/GameStateService.Menus.cs", "fd638afff65048407a7b5a592a642176c7f8b8867ab0022c471b55ea25c158cd"),
+        // v0.113.0: reads the lobby through GetRunLobby so Blitz/Dread/custom screens report too.
+        ["BuildMultiplayerPayload"] = ("STS2AIAgent/Game/GameStateService.Menus.cs", "dbcf9cf6a201c8349e4656c72012d096e9e1dc3fafe0adc4bc27891bcfae9546"),
         ["BuildMultiplayerLobbyPayload"] = ("STS2AIAgent/Game/GameStateService.Menus.cs", "0370cd7fb6abc690af47ac5b0f3cc7db1424d214f5efa840af620d5761add1aa"),
         ["BuildMapPayload"] = ("STS2AIAgent/Game/GameStateService.Map.cs", "6a6615b8d4cf3fcd04e122ee512c33bbcd9f55ff17cb61883109dc39ed3daef0"),
         ["BuildSelectionPayload"] = ("STS2AIAgent/Game/GameStateService.Rewards.cs", "caafc3b4e19f49a932ed333491f95f2df1c36134d4d1c51a22a3be1a95c1c011"),
-        ["BuildCharacterSelectPayload"] = ("STS2AIAgent/Game/GameStateService.Menus.cs", "c7e28df2cbbdb89eb640d940a41803dc11bf66babcaef667e55b6a8e2a3e1d96"),
+        // v0.113.0: builds for every run-lobby screen and reports mode (standard/blitz/dread/custom).
+        ["BuildCharacterSelectPayload"] = ("STS2AIAgent/Game/GameStateService.Menus.cs", "4510e5aa7f976a9b8841c3ce873bedbd9c115b0758985966db28282f4235f37f"),
         ["BuildEventPayload"] = ("STS2AIAgent/Game/GameStateService.Rooms.cs", "072fb8972e2738c52551e7c6e4902daa8d62747f826cfeb60060a58f5c6f5da6"),
         ["BuildCrystalSpherePayload"] = ("STS2AIAgent/Game/GameStateService.Rooms.cs", "c25d3e74c33cb001be8e1d6dbdceda1fc15c77f49149793c26f6b45eb1b66fcd"),
         ["BuildRestPayload"] = ("STS2AIAgent/Game/GameStateService.Rooms.cs", "378745fd9c1683082eda3041e03a6f6b445ca3df1a180fd5d4ddaa9333e92830"),
-        ["BuildShopPayload"] = ("STS2AIAgent/Game/GameStateService.Shop.cs", "1b4998ed24c5a309edd3b6d9056b2b7f825a0a548307f0d875ae35fb7dc8946d"),
+        // v0.113.0: shop payload gained is_blitz/blitz_choices_remaining/blitz_entries.
+        ["BuildShopPayload"] = ("STS2AIAgent/Game/GameStateService.Shop.cs", "cfd190c5dcb29a1db7aceb0be59c43163644d5ad9d9bce8729a458b0a69b99f7"),
         ["BuildTimelinePayload"] = ("STS2AIAgent/Game/GameStateService.Menus.cs", "55429d92bc128646dbe1fd75b3fe7ec0557b5a09893811da0988f4a7fc11b198"),
         ["BuildUnlockPayload"] = ("STS2AIAgent/Game/GameStateService.Menus.cs", "381074670c939c328228fa0fb3211e2a6cc85817f6cea702bcb143a395b4bc0c"),
         ["BuildChestPayload"] = ("STS2AIAgent/Game/GameStateService.Rewards.cs", "74bc5f11e0d71eec527e0b00b040a2b7d614459d24673f45e1300618b5c6a339"),
@@ -209,7 +218,9 @@ internal static class GameStateServiceRelocationContractTests
         ["BuildRunPotionPayload"] = ("STS2AIAgent/Game/GameStateService.Run.cs", "afcda41a6fb11ca24f1f38bb776de8b13237df6f27c8b1aea67ca6d94573ce16"),
         ["RawTextOrNull"] = ("STS2AIAgent/Game/GameStateService.cs", "18842f331110953fa0b4999e7efe9383feedc6b654f8a3f91c62670c1cb95579"),
         ["GetEventOptionWillKillPlayer"] = ("STS2AIAgent/Game/GameStateService.Rooms.cs", "14b90dc6f74d6704bba17aa3c1c627e498dafb0096c2ba73e80c1e77510dad6e"),
-        ["BuildCharacterSelectPlayerPayload"] = ("STS2AIAgent/Game/GameStateService.Menus.cs", "3d8050b088e35e015cc63476fdf7a2ea5a75f1b9c144d5b616f1af9e6841ca00"),
+        // v0.113.0: the single ascension cap split into maxStandardAscension + maxBlitzAscension;
+        // is_rotating_dread rides along for Dread lobbies.
+        ["BuildCharacterSelectPlayerPayload"] = ("STS2AIAgent/Game/GameStateService.Menus.cs", "e655bc67414a6f2f5bf0b13356378c57ba9727008658ed0f2a0a7fb682828d2d"),
         ["BuildRunPlayerSummaryPayload"] = ("STS2AIAgent/Game/GameStateService.Run.cs", "896dec5e055fc6dcb06693f6114ca57954c0e49efcf532ae6d40ce3eb6b4814b"),
         ["BuildCombatPlayerSummaryPayload"] = ("STS2AIAgent/Game/GameStateService.Combat.cs", "f3a846917b3a8fe485a377a164a2e9bd3e649684150da7a42c6d3a46df3312e0"),
         ["GetCardTargetIndexSpace"] = ("STS2AIAgent/Game/GameStateService.Combat.cs", "df45d23fd058b00cec7086bba4173505b24d06bc266174689090914d58cb292a"),
@@ -246,16 +257,21 @@ internal static class GameStateServiceRelocationContractTests
         ["GetMultiplayerTestScene"] = ("STS2AIAgent/Game/GameStateService.Menus.cs", "a1eed6dd486e980cd805f38db2d6e6126f6c5b9e91f39961f3d74ceae1e71fd8"),
         ["GetMultiplayerTestLobby"] = ("STS2AIAgent/Game/GameStateService.Menus.cs", "c64e5bf1b51863d40e03b682a7c41d59bdb8aa28a7e51a371b5ae684d3e1b5a4"),
         ["GetStartRunLobbyMaxPlayers"] = ("STS2AIAgent/Game/GameStateService.Menus.cs", "6c78e846744306380892377fb260a4fbf40c404796ec20b81e8fe86be8d7417d"),
-        ["EnsureFourPlayerLobby"] = ("STS2AIAgent/Game/GameStateService.Menus.cs", "2675349e298e9fcdcdc4310ef9b40f434439d416f4450202ca5aa552c5042be7"),
+        // v0.113.0: the lobby read goes through GetRunLobby for the new mode screens.
+        ["EnsureFourPlayerLobby"] = ("STS2AIAgent/Game/GameStateService.Menus.cs", "1416c1b1a42ea3fe6ec11cccbdc7b1a73515f7c21ffe1b8233d27c82e3db6894"),
         ["GetMultiplayerTestCharacterPaginator"] = ("STS2AIAgent/Game/GameStateService.Menus.cs", "3ab4d485ac3edcebfd40a1e5c050779e1b923bc02a93d0525f55c8cc5a55be33"),
         ["GetMultiplayerLobbyJoinHost"] = ("STS2AIAgent/Game/GameStateService.Menus.cs", "60783bd6e5a7900de14e6a49854db52e1f09849b039062668b075a9656347ae6"),
         ["GetMultiplayerLobbyJoinPort"] = ("STS2AIAgent/Game/GameStateService.Menus.cs", "d7dc9e3729c38ab6218a59e6bfdf85a2adfaaf599f3966c840cd7c72f93274cc"),
         ["GetMultiplayerLobbyJoinNetIdHint"] = ("STS2AIAgent/Game/GameStateService.Menus.cs", "478ef2ee66a4a5bc1ba69bc81b9487a68b7e216d696a109d36f0bb66b1d51fef"),
         ["GetMultiplayerLobbyCharacters"] = ("STS2AIAgent/Game/GameStateService.Menus.cs", "bf6c3f53aaf371a42b61f8a00613fa6096aafcc36acbfcdfbe9fbcf24a2bcfbb"),
-        ["GetCharacterSelectButtons"] = ("STS2AIAgent/Game/GameStateService.Menus.cs", "e5083e254571b710cdad2e127185e66c74f40dec903b4af1f5d2014192859bc9"),
+        // v0.113.0: scans any run-lobby screen for its character buttons.
+        // 2026-11-14: body intentionally changed — NCharacterSelectButton rows with a null Character
+        // (NDreadScreen's uninitialized rotating-streak button) are filtered out; hash regenerated.
+        ["GetCharacterSelectButtons"] = ("STS2AIAgent/Game/GameStateService.Menus.cs", "ea14e122b5b7b9e0eb63c67152a6d7438d291bdf4d1b1336cdc3775ca5421e1f"),
         ["GetMultiplayerLoadScreen"] = ("STS2AIAgent/Game/GameStateService.Menus.cs", "449ae04cf053cee8427063bc7a1cdd61ede8a16c55647eeacf808c290cd9d430"),
-        ["GetCharacterEmbarkButton"] = ("STS2AIAgent/Game/GameStateService.Menus.cs", "533cfc6f34534d630619a62ee7ea7eb29a4531a533dbbbf7e3ffe4007c6d3727"),
-        ["GetCharacterUnreadyButton"] = ("STS2AIAgent/Game/GameStateService.Menus.cs", "5eefa883510027190c7d5d15c1ea0685980d20f3bc878c2410d865b772065644"),
+        // v0.113.0: embark/unready resolve on any run-lobby screen, not only character select.
+        ["GetCharacterEmbarkButton"] = ("STS2AIAgent/Game/GameStateService.Menus.cs", "706afde75135cc357e29abb5fb910eb0424184880fdea09b8cfe31829bbdaaf2"),
+        ["GetCharacterUnreadyButton"] = ("STS2AIAgent/Game/GameStateService.Menus.cs", "9f148321c3103211e6fa7211ef1e0c79d4f18d25e65e2257e4b0a06ee5d536f8"),
         ["GetMainMenuContinueButton"] = ("STS2AIAgent/Game/GameStateService.Rooms.cs", "1f1fa9b53c05387d223e337ca6e9ca3be060ccaa5c278e4085fc602564858527"),
         ["GetGameOverContinueButton"] = ("STS2AIAgent/Game/GameStateService.Rooms.cs", "3af619208a99a4acc7ee5939fb364fe6d546b3b7a61b64cc7967866a44c032a7"),
         ["GetWaitingForOtherPlayersOverlay"] = ("STS2AIAgent/Game/GameStateService.Rooms.cs", "e7db9a64d235f514a700d18c74f2701ce4b030b8087fbb59ab8e6f12dc1ad4bf"),
@@ -276,7 +292,8 @@ internal static class GameStateServiceRelocationContractTests
         ["GetUnlockConfirmButton"] = ("STS2AIAgent/Game/GameStateService.Menus.cs", "62bebc6303eea80e9beb95523f209d5c1859513a4b3e026bec9c53bb3e519e46"),
         ["IsUnlockConfirmButtonUsable"] = ("STS2AIAgent/Game/GameStateService.Menus.cs", "d2fb2142d2b1f3826e9b41ceea1aca7bc453170da6881d13800f856c19f2ebc1"),
         ["LogUnlockConfirmProbe"] = ("STS2AIAgent/Game/GameStateService.Menus.cs", "b2480b799797a1fa2ca54e264da0f3fd4081af2d327c5ceac5e25fbbcdde8cb2"),
-        ["GetUnlockItemNames"] = ("STS2AIAgent/Game/GameStateService.Menus.cs", "a7eb70439ba6f3d838d416f2325e7ba090518caa81177dc53e5e4f80f7d0751c"),
+        // v0.113.0: the timeline unlock screen holds EpochSlotData; titles come from .Model.
+        ["GetUnlockItemNames"] = ("STS2AIAgent/Game/GameStateService.Menus.cs", "5b13343d30673a39d654115ebbe4be9dc7379731a20cf5f91c6cd1d3e3fb6e85"),
         ["SafeModelTitle"] = ("STS2AIAgent/Game/GameStateService.cs", "bc3c7e4468de06622a53636724fadc6ead3912a53f8b93af5d1f5aaed17e9b8b"),
         ["GetTimelineBackButton"] = ("STS2AIAgent/Game/GameStateService.Menus.cs", "3da84f75dc97860bd0440d1e5bc3cd9724162244cc501217b2317d5b5da7a795"),
         ["GetTimelineInspectCloseButton"] = ("STS2AIAgent/Game/GameStateService.Menus.cs", "a47939649b81fed486f3f7ec67f3477cb8a0aad35a3c6baaa4b1f6495dbf2075"),
@@ -294,7 +311,8 @@ internal static class GameStateServiceRelocationContractTests
         ["IsDismissNamedModalButton"] = ("STS2AIAgent/Game/GameStateService.Rooms.cs", "bc11d30837ba20f850fa471b3e38f5b43dd47b3e1a7563f9e5389190ea07665e"),
         ["ModalButtonNameContains"] = ("STS2AIAgent/Game/GameStateService.Rooms.cs", "1e5d0143fd6f33c1de424a527fda0059a4771df8f8d683b20e58cc55b89476bd"),
         ["ResolveUnderlyingScreen"] = ("STS2AIAgent/Game/GameStateService.cs", "64f82250ecbd2761b4a1357c0338d52098ff20199e830088335aa7187fb0ea81"),
-        ["ResolveNonModalScreen"] = ("STS2AIAgent/Game/GameStateService.cs", "ad17d9bc792af44dffbd9a99182e89c8db6a3f347c583eef7a36c2382f86c42c"),
+        // v0.113.0: Blitz/Dread/custom-run screens resolve to CHARACTER_SELECT.
+        ["ResolveNonModalScreen"] = ("STS2AIAgent/Game/GameStateService.cs", "d426287af529a92f56d87820e8fe138e32d94d15423c9d0db24a1a1c8c562261"),
         ["GetButtonLabel"] = ("STS2AIAgent/Game/GameStateService.cs", "9b0d763716172010536f3bb1c9fa377876ce7e70f607735a2efdc4baf62a5603"),
         ["TryGetMapScreen"] = ("STS2AIAgent/Game/GameStateService.cs", "b46f520ac4004903cbb21e1d8a7a851d59804d9daafc0ee8d61f075af933ec0e"),
         ["FindDescendants"] = ("STS2AIAgent/Game/GameStateService.cs", "723b112cc6fade648b6bf51f33278dcaa3568efc3c855efd3369801410d699fe"),

@@ -27,6 +27,12 @@ internal static class AgentTools
                 description = "One short sentence saying why you chose this action. Shown to the player as the decision's rationale."
             },
             card_cid = new { type = "integer", description = "Stable combat.hand[].cid; wins over card_index." },
+            mode = new
+            {
+                type = "string",
+                @enum = new[] { "standard", "blitz", "dread", "custom" },
+                description = "Run-config mode for open_character_select (game v0.113.0); default standard."
+            },
             then = new
             {
                 type = "array", maxItems = 9,
@@ -76,6 +82,7 @@ internal static class AgentTools
             y = new { type = "integer", description = "Crystal Sphere grid y-coordinate for crystal_clear_cell." },
             tool = new { type = "string", @enum = new[] { "big", "small" }, description = "Crystal Sphere tool." },
             reason = new { type = "string", description = "One short sentence saying why you chose this action. Shown to the player as the decision's rationale." },
+            mode = new { type = "string", @enum = new[] { "standard", "blitz", "dread", "custom" }, description = "Run-config mode for open_character_select (game v0.113.0); default standard." },
             then = new
             {
                 type = "array",

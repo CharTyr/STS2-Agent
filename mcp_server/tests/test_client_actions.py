@@ -40,11 +40,12 @@ SENTINELS: dict[str, Any] = {
     "y": 15,
     "tool": "small",
     "command": "cmd",
+    "mode": "blitz",
 }
 
 # `card_cid` is a whole-`act` field: the per-action methods do not take it, but `execute_action`
 # always sends the key so the mod can re-check a stable card identity under the action lease.
-_PAYLOAD_KEYS = ("card_index", "card_cid", "target_index", "option_index", "x", "y", "tool", "command")
+_PAYLOAD_KEYS = ("card_index", "card_cid", "target_index", "option_index", "x", "y", "tool", "command", "mode")
 
 # The parameter shapes the per-action methods are allowed to use. Every signature
 # parameter is also a wire key, so a client method and its payload cannot drift apart.
@@ -58,6 +59,7 @@ _PARAM_SHAPES: frozenset[tuple[str, ...]] = frozenset(
         ("tool",),
         ("x", "y", "tool"),
         ("command",),
+        ("mode",),
     }
 )
 
@@ -150,6 +152,7 @@ class ClientActionSurfaceTests(unittest.TestCase):
             ("tool",): "crystal_set_tool",
             ("x", "y", "tool"): "crystal_clear_cell",
             ("command",): "run_console_command",
+            ("mode",): "open_character_select",
         }
         for shape, representative in representatives.items():
             with self.subTest(shape=shape):

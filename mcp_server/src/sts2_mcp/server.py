@@ -590,10 +590,9 @@ def create_server(client: Sts2Client | None = None, tool_profile: str | None = N
             int | None,
             Field(
                 description=(
-                    "Target index when the latest state gives a card or potion a non-null `target` "
-                    "and a non-empty `targets` list. The compact `target` hint names the list this "
-                    "indexes into (`enemy` = `combat.enemies[]`, `player` = the local player list); "
-                    "the full state spells it `target_index_space` / `valid_target_indices`."
+                    "Target index into the card/potion's `targets` list when `target` is non-null. "
+                    "`enemy` = `combat.enemies[]`, `player` = the local player; full state spells "
+                    "it `target_index_space` / `valid_target_indices`."
                 )
             ),
         ] = None,
@@ -635,6 +634,10 @@ def create_server(client: Sts2Client | None = None, tool_profile: str | None = N
         ] = None,
         card_cid: Annotated[int | None, Field(description="Stable combat.hand[].cid; wins over card_index.")] = None,
         then: Annotated[list[dict[str, Any]] | None, Field(description="Remaining combat steps (at most 9); play_card uses card_cid. Stops on changes or non-completed results; never retries.")] = None,
+        mode: Annotated[
+            str | None,
+            Field(description="open_character_select run mode: standard|blitz|dread|custom."),
+        ] = None,
         raw_state: Annotated[
             bool,
             Field(
@@ -657,7 +660,7 @@ def create_server(client: Sts2Client | None = None, tool_profile: str | None = N
         result = execute_plan_act(
             sts2, profile, action, card_index=card_index, target_index=target_index,
             option_index=option_index, x=x, y=y, tool=tool, raw_state=raw_state,
-            reason=reason, card_cid=card_cid, then=then,
+            reason=reason, card_cid=card_cid, then=then, mode=mode,
         )
         return _session_dedup().apply_to_act_result(result, raw_state=raw_state)
 

@@ -520,7 +520,7 @@ internal static class ProviderCapabilityTests
         public Task<string> GetScreenAsync(CancellationToken cancellationToken) => throw Unused();
         public Task<string> ActAsync(string action, int? cardIndex, int? targetIndex, int? optionIndex,
             int? x, int? y, string? tool, CancellationToken cancellationToken, bool rawState = false,
-            Action<string>? validateState = null) => throw Unused();
+            Action<string>? validateState = null, string? mode = null) => throw Unused();
         public Task<string> GetGameDataItemJsonAsync(string collection, string itemId, CancellationToken cancellationToken) => throw Unused();
         public Task<string> GetGameDataItemsJsonAsync(string collection, IReadOnlyList<string> itemIds, CancellationToken cancellationToken) => throw Unused();
         public Task<string> GetRelevantGameDataJsonAsync(string collection, IReadOnlyList<string> itemIds, CancellationToken cancellationToken) => throw Unused();

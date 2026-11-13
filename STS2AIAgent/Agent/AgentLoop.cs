@@ -774,6 +774,8 @@ internal sealed partial class AgentLoop
             // The tool schema is shared with the MCP surface, so this one is honored here too rather
             // than advertised and ignored.
             var rawState = ReadBool(args, "raw_state");
+            // v0.113.0: open_character_select's run-config mode (standard/blitz/dread/custom).
+            var mode = ReadString(args, "mode");
             var indexError = ActIndexValidator.Validate(
                 action,
                 cardIndex,
@@ -815,7 +817,8 @@ internal sealed partial class AgentLoop
                 tool,
                 cancellationToken,
                 rawState,
-                latest =>
+                mode: mode,
+                validateState: latest =>
                 {
                     if (_settings().NonCombatOnlyEnabled && NonCombatOnlyPolicy.IsCombatSnapshot(latest))
                         throw new NonCombatOnlyYieldException();

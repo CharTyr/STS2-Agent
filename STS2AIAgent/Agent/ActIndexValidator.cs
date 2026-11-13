@@ -67,6 +67,7 @@ internal static class ActIndexValidator
         ["buy_card"] = new[] { new[] { "shop", "cards" } },
         ["buy_relic"] = new[] { new[] { "shop", "relics" } },
         ["buy_potion"] = new[] { new[] { "shop", "potions" } },
+        ["buy_blitz_entry"] = new[] { new[] { "shop", "blitz_entries" } },
         ["choose_rest_option"] = new[] { new[] { "rest", "options" } },
         ["choose_treasure_relic"] = new[] { new[] { "chest", "relics" }, new[] { "chest", "options" } },
         ["choose_capstone_option"] = new[] { new[] { "capstone", "options" } },

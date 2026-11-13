@@ -156,9 +156,10 @@ internal static class GameOverContractTests
         var verificationBody = AgentSourceFixture.WithoutWhitespace(
             AgentSourceFixture.MethodBody(rawStateSource, "VerifyGameOverProgressSave"));
 
-        Assert.Contains("privateconstintStateVersion=16", stateSource, StringComparison.Ordinal);
-        // 13 since 2026-10-28: combat.hand[].cid/type/vs and combat.threat (the overhaul's W3/W4).
-        Assert.Contains("privateconstintAgentViewVersion=13", stateSource, StringComparison.Ordinal);
+        Assert.Contains("privateconstintStateVersion=17", stateSource, StringComparison.Ordinal);
+        // 14 since game v0.113.0: run.game_mode/dominion_id/custom/rotating_character,
+        // character_select.mode and the Blitz merchant fields (shop.blitz/blitz_entries).
+        Assert.Contains("privateconstintAgentViewVersion=14", stateSource, StringComparison.Ordinal);
         Assert.Contains("save_status=saveVerification.Status", stateSource, StringComparison.Ordinal);
         Assert.Contains("save_verified=saveVerification.Verified", stateSource, StringComparison.Ordinal);
         Assert.Contains("save_error=saveVerification.Error", stateSource, StringComparison.Ordinal);

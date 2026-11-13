@@ -100,7 +100,12 @@ internal static partial class GameStateService
             character_id = player.Character.Id.Entry,
             character_name = player.Character.Title.GetFormattedText(),
             ascension = runState.AscensionLevel,
-            ascension_effects = BuildAscensionEffectPayloads(runState.AscensionLevel),
+            ascension_effects = BuildAscensionEffectPayloads(runState.AscensionLevel, runState.GameMode),
+            game_mode = runState.GameMode.ToString().ToLowerInvariant(),
+            // v0.113.0: dominion only ever applies under GameMode.Dread.
+            dominion_id = runState.Dominion?.Id.Entry,
+            is_custom_game = runState.IsCustomGame,
+            is_rotating_character = player.ExtraFields.IsPlayingRotatingCharacter,
             floor = runState.TotalFloor,
             current_hp = player.Creature.CurrentHp,
             max_hp = player.Creature.MaxHp,
@@ -305,19 +310,21 @@ internal static partial class GameStateService
         }
     }
 
-    private static AscensionEffectPayload[] BuildAscensionEffectPayloads(int ascensionLevel)
+    private static AscensionEffectPayload[] BuildAscensionEffectPayloads(int ascensionLevel, GameMode gameMode)
     {
         if (ascensionLevel <= 0)
         {
             return Array.Empty<AscensionEffectPayload>();
         }
 
+        // v0.113.0: ascension titles/descriptions are mode-dependent (Blitz uses its own
+        // five-level ladder, so LEVEL_XX resolves through GetLevelForBlitz first).
         return Enumerable.Range(1, ascensionLevel)
             .Select(level => new AscensionEffectPayload
             {
                 id = $"LEVEL_{level:D2}",
-                name = AscensionHelper.GetTitle(level).GetFormattedText(),
-                description = AscensionHelper.GetDescription(level).GetFormattedText()
+                name = AscensionHelper.GetTitle(level, gameMode).GetFormattedText(),
+                description = AscensionHelper.GetDescription(level, gameMode).GetFormattedText()
             })
             .ToArray();
     }

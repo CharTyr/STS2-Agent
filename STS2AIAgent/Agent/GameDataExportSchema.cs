@@ -44,7 +44,7 @@ internal static class GameDataExportSchema
             ["characters"] = new[]
             {
                 "id", "name", "description", "starting_hp", "starting_gold", "max_energy",
-                "orb_slots", "gender", "color", "starting_deck", "starting_relics", "starting_potions"
+                "orb_slots", "arrow_slots", "gender", "color", "starting_deck", "starting_relics", "starting_potions"
             },
             ["monsters"] = new[]
             {

@@ -11,7 +11,7 @@
 > a mod source or MCP module is missing from this map, or when the map names a path that no longer
 > exists. They don't catch outdated prose, so skim the sections you touched.
 >
-> Snapshot: 2026-09-23, `dev`. Deeper references: [api.md](api.md) (HTTP contract),
+> Snapshot: 2026-11-13, `dev` on game v0.113.0. Deeper references: [api.md](api.md) (HTTP contract),
 > [ADR 0001](adr/0001-single-action-surface.md) (one action surface),
 > [ADR 0002](adr/0002-two-mcp-surfaces.md) (two MCP surfaces), `.trellis/spec/` (coding specs),
 > `AGENTS.md` (build/test/release commands; local, gitignored), `.trellis/spec/index.md`.
@@ -290,7 +290,7 @@ one action runs at a time.
 - `STS2AIAgent/Game/GameStateService.Menus.cs` — session phase, main menu, character select, lobby and timeline payloads.
 - `STS2AIAgent/Game/GameStateService.AgentView.cs` — the compact `agent_view` rewrite (`AgentViewVersion`), one `BuildAgent<Screen>Payload` per screen. MCP `get_game_state` returns this view by default.
 - `STS2AIAgent/Game/GameStateService.Payloads.cs` — every payload record. A new state field goes here first, then into `docs/api.md`.
-- `STS2AIAgent/Game/CombatPowerPayload.cs` — combat power payload shared with offline serialization tests; `amount` is the native stack value, while nullable `display_amount` preserves the native UI counter without inferring a remaining value.
+- `STS2AIAgent/Game/CombatPowerPayload.cs` — combat-scoped payloads shared with offline serialization tests: `CombatPowerPayload` (`amount` is the native stack value, nullable `display_amount` preserves the native UI counter without inferring a remaining value) and `CombatArrowPayload` (the Fool's arrow slots, v0.113.0).
 - `STS2AIAgent/Game/StateBuildTiming.cs` — slow-build ring buffer (100 ms threshold), reported in `/health`.
 - `STS2AIAgent/Game/GameDataExportService.cs` — `/data/{cards,relics,monsters,potions,events,powers,characters}`. Monster `damage_values`/`block_values` are always null (there are no static numbers; live damage is in `combat.enemies[].intents`), so projections omit them.
 - `STS2AIAgent/Game/CardUpgradePreviewPolicy.cs` — distinguishes a fully upgraded card (`null`) from a failed metadata preview (`status: unavailable`) without leaking exception details.
@@ -311,6 +311,7 @@ one action runs at a time.
 | `choose_rest_option` (+MEND target) | `rest.options[]` (+ `run.players[]`) | `GetRestOptionTargetIndices` |
 | `choose_event_option` | `event.options[]` (locked options included; a finished event has PROCEED at 0) | `eventModel.CurrentOptions` |
 | `buy_card` / `buy_relic` / `buy_potion` | `shop.cards[]` / `relics[]` / `potions[]` | `GetMerchant*Entries` |
+| `buy_blitz_entry` | `shop.blitz_entries[]` | `GetMerchantBlitzEntries` |
 | `choose_capstone_option` | `capstone.options[]` | `GetCapstoneButtons` |
 
 ### Traps
@@ -335,8 +336,9 @@ one action runs at a time.
 - `STS2AIAgent/Game/GameActionService.Rooms.cs` — events, rest site, chest and treasure relics, crystal sphere, capstone screens, `proceed`.
 - `STS2AIAgent/Game/GameActionService.Shop.cs` — open/close the shop, buy card/relic/potion, card removal.
 - `STS2AIAgent/Game/GameActionService.Run.cs` — `choose_map_node` (single-player `ForceClick`; co-op `OnMapPointSelectedLocally` plus vote wait), deck view, game over / `continue_game_over`.
-- `STS2AIAgent/Game/GameActionService.Menus.cs` — main menu, timeline epochs, FTUE and modal confirm/dismiss, settings and abandon flows.
-- `STS2AIAgent/Game/GameActionService.Embark.cs` — new run: character select, ascension, embark, continue run.
+- `STS2AIAgent/Game/GameActionService.Menus.cs` — main menu, FTUE and modal confirm/dismiss, settings and abandon flows.
+- `STS2AIAgent/Game/GameActionService.Embark.cs` — new run: character select (standard/blitz/dread/custom via `open_character_select`'s `mode`), ascension, embark, continue run.
+- `STS2AIAgent/Game/GameActionService.Timeline.cs` — timeline epochs, overlays and unlock confirm, split out of Embark on 2026-11-13.
 - `STS2AIAgent/Game/GameActionService.Coop.cs` — multiplayer lobby host/join/load, local four-player host for the companion, ready and start.
 - `STS2AIAgent/Game/ActionExecutionGate.cs` — process-wide single-action lease (`action_in_flight` 409 on overlap; released on throw or cancel).
 - `STS2AIAgent/Game/GameThread.cs` — the game thread's SynchronizationContext: `InvokeAsync` overloads (see §2), `WaitForNextFrameAsync` (bounded at 50 ms when frames stop).
@@ -362,10 +364,11 @@ one action runs at a time.
 | Combat | `end_turn`, `play_card`, `use_potion`, `discard_potion` |
 | Rewards | `resolve_rewards`, `collect_rewards_and_proceed`, `claim_reward`, `choose_reward_card`, `skip_reward_cards`, `select_deck_card`, `close_cards_view`, `confirm_selection` |
 | Rooms | `proceed`, `open_chest`, `choose_treasure_relic`, `choose_event_option`, `crystal_set_tool`, `crystal_clear_cell`, `choose_capstone_option`, `choose_bundle`, `confirm_bundle`, `choose_rest_option` |
-| Shop | `open_shop_inventory`, `close_shop_inventory`, `buy_card`, `buy_relic`, `buy_potion`, `remove_card_at_shop` |
+| Shop | `open_shop_inventory`, `close_shop_inventory`, `buy_card`, `buy_relic`, `buy_potion`, `remove_card_at_shop`, `buy_blitz_entry` |
 | Run | `continue_run`, `abandon_run`, `save_and_quit`, `choose_map_node`, `return_to_main_menu`, `dismiss_game_over_wait`, `continue_game_over` |
 | Menus | `switch_profile`, `confirm_modal`, `dismiss_modal`, `close_main_menu_submenu`, `run_console_command`*, `inject_event_churn`* (*debug-gated) |
-| Embark | `open_character_select`, `open_timeline`, `confirm_unlock`, `choose_timeline_epoch`, `confirm_timeline_overlay`, `select_character`, `embark`, `unready`, `increase_ascension`, `decrease_ascension` |
+| Embark | `open_character_select` (`mode`: standard/blitz/dread/custom), `select_character`, `embark`, `unready`, `increase_ascension`, `decrease_ascension` |
+| Timeline | `open_timeline`, `choose_timeline_epoch`, `confirm_timeline_overlay`, `confirm_unlock` |
 | Coop | `host_multiplayer_lobby`, `join_multiplayer_lobby`, `ready_multiplayer_lobby`, `disconnect_multiplayer_lobby`, `invite_ai_teammate`, `continue_ai_teammate` |
 
 ### Wait budgets (bounded; tighter than the game's own AutoSlay 10 s/30 s; don't widen casually)
@@ -394,7 +397,16 @@ but hasn't settled; the agent treats a run of these as a stall (`NoProgressPolic
   potion belt is full, and `NEndTurnButton.CallReleaseLogic` no-ops when the turn can't end. Every
   handler must verify its own transition.
 - In co-op, choices go through the game's synchronizers (`ActionQueueSynchronizer.RequestEnqueue`,
-  `*Synchronizer.ChooseLocalOption`, `OnMapPointSelectedLocally`), not UI clicks.
+  `*Synchronizer.ChooseLocalOption`, `OnMapPointSelectedLocally`), not UI clicks. Shop purchases go
+  through `MerchantSynchronizer.PurchaseLocalEntry` (v0.113.0 renamed the old wrapper to warn that
+  calling the unsynchronized path diverges multiplayer).
+- **Run-lobby screens (v0.113.0).** `NCharacterSelectScreen`, `NBlitzScreen`, `NDreadScreen` and
+  `NCustomRunScreen` are structural clones (lobby + character buttons + ConfirmButton/UnreadyButton).
+  `GameStateService.GetRunLobbyScreen`/`GetRunLobby` resolve any of them; `NDailyRunScreen` stays out
+  (no public Lobby). They all resolve to `CHARACTER_SELECT`; `character_select.mode` says which one.
+  `NDreadScreen` adds an extra rotating-streak `NCharacterSelectButton` that stays uninitialized
+  (`Character == null`) in multiplayer / before the rotating pick resolves —
+  `GetCharacterSelectButtons` filters `Character != null` so every enumerated index is selectable.
 - Predicate and executor must filter the same way (for example, the card-reward alternatives
   `[Skip, Reroll]` are sorted by position; filter `IsEnabled` on both sides).
 - `NEventRoom.Proceed()` dereferences `NMapScreen.Instance` synchronously, so guard it (503 retryable).

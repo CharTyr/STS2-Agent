@@ -292,6 +292,7 @@ _ACTION_ARGUMENT_VOCABULARY = {
     "x",
     "y",
     "tool",
+    "mode",
 }
 
 

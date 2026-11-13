@@ -113,7 +113,36 @@ internal static partial class GameStateService
             cards = cards,
             relics = inventory.RelicEntries.Select((entry, index) => BuildShopRelicPayload(entry, index)).ToArray(),
             potions = inventory.PotionEntries.Select((entry, index) => BuildShopPotionPayload(entry, index, inventory.Player)).ToArray(),
-            card_removal = BuildShopCardRemovalPayload(inventory.CardRemovalEntry)
+            card_removal = BuildShopCardRemovalPayload(inventory.CardRemovalEntry),
+            // v0.113.0: a Blitz merchant stocks choices (BlitzEntries), never gold items.
+            is_blitz = inventory.IsBlitzShop,
+            blitz_choices_remaining = inventory.IsBlitzShop ? inventory.BlitzChoicesRemaining : null,
+            blitz_entries = GetMerchantBlitzEntries(currentScreen)
+                .Select((entry, index) => BuildShopBlitzEntryPayload(entry, index))
+                .ToArray()
+        };
+    }
+
+    /// <summary>The Blitz merchant's choice entries in slot order; empty on a standard shop.</summary>
+    public static IReadOnlyList<BlitzMerchantEntry> GetMerchantBlitzEntries(IScreenContext? currentScreen)
+    {
+        var inventoryScreen = GetMerchantInventoryScreen(currentScreen);
+        var inventory = inventoryScreen?.Inventory ?? GetMerchantRoom(currentScreen)?.Inventory?.Inventory;
+        return inventory?.BlitzEntries ?? (IReadOnlyList<BlitzMerchantEntry>)Array.Empty<BlitzMerchantEntry>();
+    }
+
+    private static ShopBlitzEntryPayload BuildShopBlitzEntryPayload(BlitzMerchantEntry entry, int index)
+    {
+        return new ShopBlitzEntryPayload
+        {
+            index = index,
+            entry_type = entry.MerchantEntryType.ToString(),
+            name = entry.Title.GetFormattedText() ?? string.Empty,
+            description = entry.Description.GetFormattedText() ?? string.Empty,
+            status = entry.Status.ToString().ToLowerInvariant(),
+            is_stocked = entry.IsStocked,
+            is_cursed = entry.IsCursed,
+            is_rare = entry.IsRare
         };
     }
 

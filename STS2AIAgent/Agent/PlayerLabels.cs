@@ -99,6 +99,7 @@ internal static class PlayerLabels
             "buy_card" => "买卡",
             "buy_relic" => "买遗物",
             "buy_potion" => "买药水",
+            "buy_blitz_entry" => "Blitz 商店选项",
             "remove_card_at_shop" => "商店删牌",
             "open_chest" => "开宝箱",
             "choose_treasure_relic" => "选择宝箱遗物",

@@ -148,6 +148,7 @@ internal static class GameDataExportService
                 starting_gold = character.StartingGold,
                 max_energy = character.MaxEnergy,
                 orb_slots = character.BaseOrbSlotCount,
+                arrow_slots = character.BaseArrowSlotCount,
                 gender = character.Gender.ToString(),
                 color = character.CardPool.Title.ToLowerInvariant(),
                 starting_deck = character.StartingDeck.Select(card => card.Id.Entry).ToArray(),

@@ -87,7 +87,8 @@ internal sealed class GameBridge : IGameBridge
         string? tool,
         CancellationToken cancellationToken,
         bool rawState = false,
-        Action<string>? validateState = null)
+        Action<string>? validateState = null,
+        string? mode = null)
     {
         // Abandonable only while queued: a game thread that stops pumping used to leave this await
         // hanging with pause unable to break it. Once the action starts it runs under its own waits.
@@ -105,6 +106,7 @@ internal sealed class GameBridge : IGameBridge
                     x = x,
                     y = y,
                     tool = tool,
+                    mode = mode,
                     client_context = new
                     {
                         source = "in_game_agent",

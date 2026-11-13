@@ -122,6 +122,7 @@ class CrystalSphereToolTests(unittest.TestCase):
                 "y": 9,
                 "tool": "big",
                 "command": None,
+                "mode": None,
                 "client_context": {"source": "test"},
             },
             is_action=True,

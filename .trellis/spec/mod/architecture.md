@@ -76,11 +76,11 @@ files, so it cannot quietly go stale the way it did between ADR 0001 and the spl
 
 | File | Lines |
 | --- | ---: |
-| [AgentRuntime.cs](../../../STS2AIAgent/Agent/AgentRuntime.cs) | 1,233 |
-| [GameStateService.cs](../../../STS2AIAgent/Game/GameStateService.cs) | 1,388 |
-| [GameStateService.Payloads.cs](../../../STS2AIAgent/Game/GameStateService.Payloads.cs) | 1,320 |
-| [GameStateService.AgentView.cs](../../../STS2AIAgent/Game/GameStateService.AgentView.cs) | 1,252 |
-| [GameActionService.cs](../../../STS2AIAgent/Game/GameActionService.cs) | 1,237 |
+| [GameStateService.cs](../../../STS2AIAgent/Game/GameStateService.cs) | 1,395 |
+| [GameStateService.Payloads.cs](../../../STS2AIAgent/Game/GameStateService.Payloads.cs) | 1,339 |
+| [GameStateService.AgentView.cs](../../../STS2AIAgent/Game/GameStateService.AgentView.cs) | 1,324 |
+| [AgentRuntime.cs](../../../STS2AIAgent/Agent/AgentRuntime.cs) | 1,254 |
+| [GameActionService.cs](../../../STS2AIAgent/Game/GameActionService.cs) | 1,254 |
 | [GameActionService.Rooms.cs](../../../STS2AIAgent/Game/GameActionService.Rooms.cs) | 1,148 |
 
 The overlay used to be the second name on that list. It moved to the bottom of it on 2026-10-01, when

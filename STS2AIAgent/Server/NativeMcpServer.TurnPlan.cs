@@ -44,7 +44,7 @@ internal sealed partial class NativeMcpServer
                 var resolved = TurnPlanPolicy.Resolve(step, current, requireCid: true);
                 if (!resolved.Ok) { stop = resolved.StopReason; break; }
                 var (result, _) = await ActOnceAsync(resolved.Action, resolved.CardIndex, step.CardCid is { } cid && cid <= int.MaxValue ? (int)cid : null,
-                    resolved.TargetIndex, resolved.OptionIndex, null, null, null, step.Reason,
+                    resolved.TargetIndex, resolved.OptionIndex, null, null, null, null, step.Reason,
                     rawState: rawState, deadline.Token);
                 var payload = DeserializeOrEmpty(result);
                 results.Add(payload);

@@ -275,12 +275,14 @@ internal sealed partial class NativeMcpServer
         var x = ReadInt(arguments, "x");
         var y = ReadInt(arguments, "y");
         var tool = ReadString(arguments, "tool");
+        // v0.113.0: open_character_select's run-config mode.
+        var mode = ReadString(arguments, "mode");
         // The state half of this tool's answer is the compact agent_view by default; raw_state asks
         // for the full post-action payload instead.
         var rawState = ReadBool(arguments, "raw_state");
         // Metadata never enters the game action itself; it is recorded only after acceptance.
         var reason = ReadString(arguments, "reason")?.Trim();
-        var (result, planState) = await ActOnceAsync(action, cardIndex, cardCid, targetIndex, optionIndex, x, y, tool, reason, rawState, cancellationToken,
+        var (result, planState) = await ActOnceAsync(action, cardIndex, cardCid, targetIndex, optionIndex, x, y, tool, mode, reason, rawState, cancellationToken,
             settle: !arguments.TryGetProperty("then", out _));
         // The rest of a whole-turn plan (W3/W10): same rules as the in-game loop, step results
         // appended under `plan`; nothing is retried and a non-completed step ends it.
@@ -294,7 +296,7 @@ internal sealed partial class NativeMcpServer
     /// </summary>
     private async Task<(string Result, string? PlanState)> ActOnceAsync(
         string action, int? cardIndex, int? cardCid, int? targetIndex, int? optionIndex, int? x, int? y,
-        string? tool, string? reason, bool rawState, CancellationToken cancellationToken, bool settle = false)
+        string? tool, string? mode, string? reason, bool rawState, CancellationToken cancellationToken, bool settle = false)
     {
         // One state read for the legality check and for the validator: the descriptors and the
         // state's own available_actions come from the same walk, and now from the same frame, so a
@@ -360,6 +362,7 @@ internal sealed partial class NativeMcpServer
             tool,
             cancellationToken,
             rawState,
+            mode: mode,
             validateState: latest =>
             {
                 if (action == "play_card" && cardCid is >= 0 and var expectedCid

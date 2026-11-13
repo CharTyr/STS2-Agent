@@ -202,7 +202,7 @@ internal static partial class GameActionService
         var previousGold = inventory.Player.Gold;
         var previousCardId = entry.CreationResult?.Card.Id.Entry;
         var purchaseTimeout = TimeSpan.FromSeconds(10);
-        var purchaseTask = entry.OnTryPurchaseWrapper(inventory);
+        var purchaseTask = RunManager.Instance.MerchantSynchronizer.PurchaseLocalEntry(entry);
         var completedPurchaseTask = await WaitForGameTaskAsync(purchaseTask, purchaseTimeout);
         var purchaseOutcome = ClassifyGameTaskWait(purchaseTask, completedPurchaseTask == null);
         if (purchaseOutcome == GameTaskWaitOutcome.TimedOut)
@@ -294,7 +294,7 @@ internal static partial class GameActionService
         var previousGold = inventory.Player.Gold;
         var previousRelicId = entry.Model?.Id.Entry;
         var purchaseTimeout = TimeSpan.FromSeconds(10);
-        var purchaseTask = entry.OnTryPurchaseWrapper(inventory);
+        var purchaseTask = RunManager.Instance.MerchantSynchronizer.PurchaseLocalEntry(entry);
         var completedPurchaseTask = await WaitForGameTaskAsync(purchaseTask, purchaseTimeout);
         var purchaseOutcome = ClassifyGameTaskWait(purchaseTask, completedPurchaseTask == null);
         if (purchaseOutcome == GameTaskWaitOutcome.TimedOut)
@@ -386,7 +386,7 @@ internal static partial class GameActionService
         var previousGold = inventory.Player.Gold;
         var previousPotionId = entry.Model?.Id.Entry;
         var purchaseTimeout = TimeSpan.FromSeconds(10);
-        var purchaseTask = entry.OnTryPurchaseWrapper(inventory);
+        var purchaseTask = RunManager.Instance.MerchantSynchronizer.PurchaseLocalEntry(entry);
         var completedPurchaseTask = await WaitForGameTaskAsync(purchaseTask, purchaseTimeout);
         var purchaseOutcome = ClassifyGameTaskWait(purchaseTask, completedPurchaseTask == null);
         if (purchaseOutcome == GameTaskWaitOutcome.TimedOut)
@@ -456,7 +456,7 @@ internal static partial class GameActionService
         // Fire-and-forget: merchant card removal opens deck selection and blocks
         // until the player confirms a card. Do not await the full task here, but a
         // purchase that already failed must not look like a pending transition.
-        var purchaseTask = entry.OnTryPurchaseWrapper(inventory);
+        var purchaseTask = RunManager.Instance.MerchantSynchronizer.PurchaseLocalEntry(entry);
         ObserveBackgroundResult(purchaseTask, "remove_card_at_shop");
         var stable = await WaitForShopCardRemovalTransitionAsync(TimeSpan.FromSeconds(10));
 
@@ -607,5 +607,115 @@ internal static partial class GameActionService
 
         var finalScreen = ActiveScreenContext.Instance.GetCurrentScreen();
         return finalScreen is NCardGridSelectionScreen || finalScreen is not NMerchantInventory;
+    }
+
+    /// <summary>
+    /// v0.113.0 Blitz merchant: a pick is a lobby-style choice, not a gold purchase. Settles when the
+    /// entry leaves Available (the choice landed), a card-pile selection opens over the shop (the
+    /// entry's own follow-up), or the shop closes.
+    /// </summary>
+    private static async Task<ActionResponsePayload> ExecuteBuyBlitzEntryAsync(ActionRequest request)
+    {
+        var currentScreen = ActiveScreenContext.Instance.GetCurrentScreen();
+        var screen = GameStateService.ResolveScreen(currentScreen);
+
+        if (!GameStateService.CanBuyBlitzEntry(currentScreen))
+        {
+            throw new ApiException(409, "invalid_action", "Action is not available in the current state.", new
+            {
+                action = "buy_blitz_entry",
+                screen
+            });
+        }
+
+        if (request.option_index == null)
+        {
+            throw new ApiException(400, "invalid_request", "buy_blitz_entry requires option_index.", new
+            {
+                action = "buy_blitz_entry"
+            });
+        }
+
+        var entries = GameStateService.GetMerchantBlitzEntries(currentScreen).ToList();
+        if (request.option_index < 0 || request.option_index >= entries.Count)
+        {
+            throw new ApiException(409, "invalid_target", "option_index is out of range.", new
+            {
+                action = "buy_blitz_entry",
+                option_index = request.option_index,
+                option_count = entries.Count
+            });
+        }
+
+        var entry = entries[request.option_index.Value];
+        if (!entry.IsStocked)
+        {
+            throw new ApiException(409, "invalid_target", "The selected Blitz entry is not available.", new
+            {
+                action = "buy_blitz_entry",
+                option_index = request.option_index
+            });
+        }
+
+        var purchaseTimeout = TimeSpan.FromSeconds(10);
+        var purchaseTask = RunManager.Instance.MerchantSynchronizer.PurchaseLocalEntry(entry);
+        var completedPurchaseTask = await WaitForGameTaskAsync(purchaseTask, purchaseTimeout);
+        var purchaseOutcome = ClassifyGameTaskWait(purchaseTask, completedPurchaseTask == null);
+        if (purchaseOutcome == GameTaskWaitOutcome.TimedOut)
+        {
+            ObserveBackgroundResult(purchaseTask, "buy_blitz_entry");
+            return BuildGameTaskTimeoutResponse("buy_blitz_entry", purchaseTimeout);
+        }
+
+        if (purchaseOutcome == GameTaskWaitOutcome.Failed)
+        {
+            throw new ApiException(409, "invalid_action", $"Blitz entry failed: {DescribeGameTaskFailure(purchaseTask)}.", new
+            {
+                action = "buy_blitz_entry",
+                option_index = request.option_index
+            });
+        }
+
+        var success = await completedPurchaseTask!;
+        if (!success)
+        {
+            throw new ApiException(409, "invalid_action", "Blitz entry could not be picked in the current state.", new
+            {
+                action = "buy_blitz_entry",
+                option_index = request.option_index
+            });
+        }
+
+        var stable = await WaitForBlitzEntryTransitionAsync(entry, purchaseTimeout);
+        return new ActionResponsePayload
+        {
+            action = "buy_blitz_entry",
+            status = stable ? "completed" : "pending",
+            stable = stable,
+            message = stable ? "Action completed." : "Action queued but state is still transitioning.",
+            state = GameStateService.BuildStatePayload()
+        };
+    }
+
+    private static async Task<bool> WaitForBlitzEntryTransitionAsync(BlitzMerchantEntry entry, TimeSpan timeout)
+    {
+        var deadline = DateTime.UtcNow + timeout;
+        while (DateTime.UtcNow < deadline)
+        {
+            await WaitForNextFrameAsync();
+
+            var currentScreen = ActiveScreenContext.Instance.GetCurrentScreen();
+            if (entry.Status != BlitzMerchantEntry.BlitzEntryStatus.Available ||
+                currentScreen is NCardGridSelectionScreen ||
+                currentScreen is not NMerchantInventory)
+            {
+                return true;
+            }
+        }
+
+        var finalScreen = ActiveScreenContext.Instance.GetCurrentScreen();
+        return entry.Status != BlitzMerchantEntry.BlitzEntryStatus.Available ||
+            finalScreen is NCardGridSelectionScreen ||
+            finalScreen is not NMerchantInventory;
     }
 }

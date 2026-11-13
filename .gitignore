@@ -32,3 +32,6 @@ mod-uploader.log
 
 # Local validation run logs
 .baseline-logs/
+
+.tmp-journal-test/
+sts2-tests-out/

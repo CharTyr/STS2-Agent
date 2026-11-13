@@ -53,6 +53,7 @@ INDEX_PATHS_BY_ACTION: dict[str, str] = {
     "buy_card": "shop.cards",
     "buy_relic": "shop.relics",
     "buy_potion": "shop.potions",
+    "buy_blitz_entry": "shop.blitz_entries",
     "choose_rest_option": "rest.options",
     "choose_treasure_relic": "chest.relics",
     "choose_capstone_option": "capstone.options",

@@ -107,12 +107,14 @@ internal static class MenuWaitObservationTests
 
         // An honest fix must not swing the other way: the genuine target still settles the wait.
         Assert.Contains("currentScreenisTSubmenu", submenuWait, StringComparison.Ordinal);
+        // v0.113.0: the waits read the lobby through GameStateService.GetRunLobby, because any of
+        // the character-select/Blitz/Dread/custom screens can be the observation node.
         Assert.Contains(
-            "screen.Lobby.LocalPlayer.character.Id.Entry==currentCharacterId",
+            "GameStateService.GetRunLobby(screen)?.LocalPlayer.character?.Id.Entry==currentCharacterId",
             characterSelectWait,
             StringComparison.Ordinal);
         Assert.Contains(
-            "screen.Lobby.LocalPlayer.isReady==ready",
+            "GameStateService.GetRunLobby(screen)?.LocalPlayer.isReady==ready",
             lobbyReadyWait,
             StringComparison.Ordinal);
     }

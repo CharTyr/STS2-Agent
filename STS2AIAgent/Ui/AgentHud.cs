@@ -43,7 +43,9 @@ internal sealed partial class AgentHud : Control
         _lastIntent = runtime.CurrentIntent;
         _lastTick = tick;
         var settings = runtime.Settings;
-        Visible = !captureHidden && settings.HudMode != AgentSettings.HudOff;
+        // A paused agent used to keep a "resumed with F7" banner on the screen; the player reads
+        // that as leftover UI rather than as information, so pause now hides the HUD entirely.
+        Visible = !captureHidden && settings.HudMode != AgentSettings.HudOff && runtime.PlayRunning;
         if (!Visible) return;
         _accent = UiFactory.ToGodot(UiFactory.Palette.Accent);
         var width = GetViewportRect().Size.X;
@@ -55,10 +57,9 @@ internal sealed partial class AgentHud : Control
         {
             AgentSettings.TurboInstant => Loc.T("极速"), AgentSettings.TurboFast => Loc.T("快速"), _ => Loc.T("关闭")
         };
-        _banner.Text = runtime.PlayRunning
-            ? Loc.T("AI 正在游玩 · {0} · {1} 暂停 · {2} 打开面板", speed, settings.PauseHotkey, settings.Hotkey)
-                + "\n" + runtime.StatusWithElapsed
-            : Loc.T("AI 已暂停 · {0} 继续 · {1} 打开面板", settings.PauseHotkey, settings.Hotkey);
+        _banner.Text =
+            Loc.T("AI 正在游玩 · {0} · {1} 暂停 · {2} 打开面板", speed, settings.PauseHotkey, settings.Hotkey)
+                + "\n" + runtime.StatusWithElapsed;
         _card = null;
         _target = null;
         _reason.Visible = false;

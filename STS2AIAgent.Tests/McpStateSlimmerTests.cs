@@ -339,7 +339,7 @@ internal static class McpStateSlimmerTests
         public Task<bool> WaitUntilActionableAsync(TimeSpan timeout, CancellationToken cancellationToken) => Task.FromResult(true);
         public Task<(bool Actionable, string CompactJson)> WaitUntilActionableWithStateAsync(TimeSpan timeout, CancellationToken cancellationToken) =>
             Task.FromResult((true, _compact));
-        public Task<string> ActAsync(string action, int? cardIndex, int? targetIndex, int? optionIndex, int? x, int? y, string? tool, CancellationToken cancellationToken, bool rawState = false, Action<string>? validateState = null)
+        public Task<string> ActAsync(string action, int? cardIndex, int? targetIndex, int? optionIndex, int? x, int? y, string? tool, CancellationToken cancellationToken, bool rawState = false, Action<string>? validateState = null, string? mode = null)
         {
             validateState?.Invoke(_compact);
             _gold++;

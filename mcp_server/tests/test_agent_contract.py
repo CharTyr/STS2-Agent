@@ -393,6 +393,7 @@ class RewardChoiceToolTests(unittest.TestCase):
                 "y": None,
                 "tool": None,
                 "command": None,
+                "mode": None,
                 "client_context": {"source": "mcp", "tool_name": "resolve_rewards"},
             },
             is_action=True,

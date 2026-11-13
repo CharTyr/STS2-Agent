@@ -96,7 +96,7 @@ internal static partial class GameStateService
     // unreleased overhaul also carries W5's strategy state here (reward/shop type/rarity/price,
     // run.deck_stats, map.route_advice); they are additive keys, not a shape change, so the version
     // stays at 13 until the overhaul ships and one bump documents the whole set.
-    private const int AgentViewVersion = 13;
+    private const int AgentViewVersion = 14;
 
     private static string GetPreferredCardRulesText(string rulesText, string? resolvedRulesText)
     {
@@ -261,6 +261,20 @@ internal static partial class GameStateService
                 stars = combat.player.stars,
                 focus = combat.player.focus,
                 orbs = combat.player.orbs.Select(orb => FormatOrbLine(orb)).ToArray(),
+                // v0.113.0: the Fool's arrow slots; empty on other characters.
+                arrows = combat.player.arrows.Select(arrow => arrow.status).ToArray(),
+                available_arrows = combat.player.arrows.Count(arrow => arrow.available),
+                // v0.113.0: the Fool's melody tags already played this turn; all-zero elsewhere.
+                melody = combat.player.melody.melodies_this_turn == 0 && combat.player.melody.melody_cards_this_turn == 0
+                    ? null
+                    : new
+                    {
+                        wah = combat.player.melody.wah_played,
+                        cho = combat.player.melody.cho_played,
+                        ki = combat.player.melody.ki_played,
+                        melodies_this_turn = combat.player.melody.melodies_this_turn,
+                        melody_cards_this_turn = combat.player.melody.melody_cards_this_turn
+                    },
                 pets = combat.player.pets.Select(pet => FormatPetLine(pet)).ToArray(),
                 pet_missing = combat.player.pet_missing,
                 cards_played_this_turn = combat.player.cards_played_this_turn,
@@ -362,6 +376,11 @@ internal static partial class GameStateService
             character = run.character_name,
             ascension = run.ascension,
             ascension_effects = run.ascension_effects,
+            // v0.113.0: game mode and the Dread-specific facts.
+            game_mode = run.game_mode,
+            dominion_id = run.dominion_id,
+            custom = run.is_custom_game,
+            rotating_character = run.is_rotating_character,
             floor = run.floor,
             act_id = run.act_id,
             boss_id = run.boss_id,
@@ -570,7 +589,21 @@ internal static partial class GameStateService
                     affordable = shop.card_removal.enough_gold,
                     available = shop.card_removal.available,
                     used = shop.card_removal.used
-                }
+                },
+            // v0.113.0 Blitz merchant: choices, not gold purchases.
+            blitz = shop.is_blitz,
+            choices_remaining = shop.blitz_choices_remaining,
+            blitz_entries = shop.blitz_entries.Select(entry => new
+            {
+                i = entry.index,
+                entry_type = entry.entry_type,
+                name = entry.name,
+                line = entry.is_cursed ? $"{entry.name} (CURSED)" : entry.name,
+                status = entry.status,
+                available = entry.is_stocked,
+                cursed = entry.is_cursed,
+                rare = entry.is_rare
+            }).ToArray()
         };
     }
 
@@ -659,6 +692,7 @@ internal static partial class GameStateService
         {
             selected = characterSelect.selected_character_id,
             embark = characterSelect.can_embark,
+            mode = characterSelect.mode,
             ascension = characterSelect.ascension,
             characters = characterSelect.characters.Select(character => new
             {
