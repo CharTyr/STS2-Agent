@@ -210,7 +210,7 @@ one action runs at a time.
 - `STS2AIAgent/Agent/CurrentRunBoundary.cs` — leaving the run, or a new run identity → `AutoPlayStoppedException(RunEnd)`.
 - `STS2AIAgent/Agent/AgentTurnCanceledException.cs` — cancellation that carries the partial turn receipt.
 - `STS2AIAgent/Agent/ContextCompaction.cs` — summary plus the last ≤6 decisions once 80% of the context window is used.
-- `STS2AIAgent/Agent/PlayPrompt.cs` — system prompts (play, chat, teammate), guidance slices, reply-language rule, JSON act fallback.
+- `STS2AIAgent/Agent/PlayPrompt.cs` — system prompts (play, chat, teammate), guidance slices, reply-language rule, JSON act fallback. The play prompt names the actual in-game tool set; the loop injects a fresh state and current-screen guidance before each model decision.
 - `STS2AIAgent/Agent/PlaybookSections.cs` — screen → embedded playbook slice (≤2400 chars; mirrors `mcp_server/src/sts2_mcp/scene_guidance.py`).
 - `STS2AIAgent/Agent/PlanningSummary.cs` — JSON-aware trim of the compact state for the planner's prompt: glossary/deck/piles go first, combat facts last, and the result is always parseable (a character cut used to produce invalid JSON, which left plan scope empty).
 - `STS2AIAgent/Agent/PlayPhases.cs` — the five status phases.
@@ -220,7 +220,7 @@ one action runs at a time.
 - `STS2AIAgent/Agent/AgentErrorEnvelope.cs` — in-process action failure → the same error envelope HTTP would send.
 - `STS2AIAgent/Agent/ActIndexValidator.cs` — rejects a stale index before acting (409 plus valid indices; `OptionPaths`), and `IsUnsettled`.
 - `STS2AIAgent/Agent/ActJsonParser.cs` — parses the no-tools JSON act fallback.
-- `STS2AIAgent/Agent/AgentTools.cs` — tool schemas for `ReadOnly`, `Play` (last = `act`), `Chat`, vision, and the MCP subset.
+- `STS2AIAgent/Agent/AgentTools.cs` — tool schemas for `ReadOnly`, `Play` (last = `act`), `Chat`, vision, and the MCP subset. In-game play omits state readers and offers metadata lookups for decision-critical gaps; external MCP retains its read tools.
 - `STS2AIAgent/Agent/IGameBridge.cs` — the seam interface plus `AgentTurnResult`/`ChatTurn` records (test fakes implement it).
 - `STS2AIAgent/Agent/GameBridge.cs` — the implementation: every call is a bounded, token-carrying `GameThread` post. `ActAsync` → `GameActionService.ExecuteAsync`, compact or raw state reads, `WaitUntilActionableAsync` (5 s per probe), game-data lookups, screenshots.
 - `STS2AIAgent/Agent/IScreenshotCaptureHost.cs` — the game-side half of a screenshot: overlay visibility, hide/restore, one bounded wait for a frame the renderer actually drew, and the JPEG read-back. Implemented by `ScreenshotService`'s Godot host, faked by the offline tests.
@@ -429,7 +429,7 @@ but hasn't settled; the agent treats a run of these as a stall (`NoProgressPolic
 - `STS2AIAgent/Server/JsonHelper.cs` — shared JSON options and writing.
 - `STS2AIAgent/Server/HealthRoleData.cs` — role, play and companion fields reported by `/health`.
 - `STS2AIAgent/Server/CompanionPortFile.cs` — the companion writes its port so the host can find it.
-- `STS2AIAgent/Server/NativeMcpServer.cs` — Streamable-HTTP MCP endpoint (JSON-RPC, sessions, off by default).
+- `STS2AIAgent/Server/NativeMcpServer.cs` — Streamable-HTTP MCP endpoint (JSON-RPC, sessions, off by default); initialize uses external-client instructions rather than the in-game tool directory.
 - `STS2AIAgent/Server/NativeMcpServer.TurnPlan.cs` — native MCP opt-in `then` orchestration: shared `TurnPlanPolicy`, 9-step cap, 30 s cancellation budget, combat-only follow-ups through `ActOnceAsync`; strips intermediate per-step `state` copies when `raw_state=false` and exposes one deduplicated `final_state`; pending and unknown are terminal.
 - `STS2AIAgent/Server/NativeMcpServer.Tools.cs` — `ExecuteToolAsync`: native tool implementations, kept in parity with Python `server.py`.
 - `STS2AIAgent/Server/McpStateSlimmer.cs` — stateless compact intra-frame slimming (`McpStateSlimmer`) and bounded session-scoped static deduplication (`McpSessionDedup`: unchanged `run.deck` / `relic_descriptions` / `ascension_effects`, delta `glossary`, `card_value_note`, and repeated `decide()` `scene_guidance`; `get_game_state(full_state=true)` refreshes; mirrors `mcp_server/src/sts2_mcp/state_diet.py`).
@@ -502,6 +502,16 @@ but hasn't settled; the agent treats a run of these as a stall (`NoProgressPolic
 - `mcp_server/src/sts2_mcp/__init__.py` — package marker.
 
 Tools are **synchronous**; don't make them async. Wire keys stay spelled the way the mod spells them.
+
+The shared gameplay contract in `skills/sts2-mcp-player/SKILL.md` starts an external client with
+`decide` when it lacks fresh context, then reuses current `act.state`, plan `final_state` or wait `state`.
+The sidecar prioritizes `outcome_unknown` over a generic `error` when classifying a plan stop.
+Check both `plan.stop_reason` and each step status; on an unknown result, refresh before relying
+on `final_state`, which may belong to an earlier completed step.
+The in-game model instead uses its injected fresh frame and per-screen guidance. Both query static
+metadata only for a decision-critical gap, keep current legality and numbers from live state, and
+stop without blind replay on pending, rejected or unknown actions. Combat `then` plans contain at
+most nine follow-ups and stop before unknown draw/choice outcomes.
 
 ## 9. Scripts, tests, gates
 

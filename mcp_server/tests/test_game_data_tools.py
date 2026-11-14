@@ -64,6 +64,13 @@ class DummyClient:
 
 
 class GameDataToolsTests(unittest.TestCase):
+    def test_metadata_tool_descriptions_target_missing_decision_facts(self) -> None:
+        server = create_server(client=DummyClient())
+        for name in ("get_game_data_item", "get_game_data_items", "get_relevant_game_data"):
+            with self.subTest(tool=name):
+                tool = asyncio.run(server.get_tool(name))
+                self.assertIn("missing", tool.description)
+
     def test_get_game_data_item_returns_none_for_empty_item_id(self) -> None:
         client = DummyClient()
         server = create_server(client=client)

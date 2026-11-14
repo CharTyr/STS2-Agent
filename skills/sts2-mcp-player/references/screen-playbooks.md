@@ -24,7 +24,7 @@ This file is about **how to drive a screen**. For **what to choose** where the c
 
 - Use the first unlocked character unless the task specifies otherwise.
 - After `select_character`, wait for `character_select.embark = true`.
-- `embark` can be a heavy transition. Prefer a longer request timeout and tolerate a short retry window.
+- `embark` can be a heavy transition. Prefer a longer request timeout; if its result is pending or unknown, wait or inspect fresh state before deciding, and never blindly resend it.
 - If a `MODAL` appears after `open_character_select` or `embark`, resolve it before making any gameplay decision.
 
 ## BUNDLE_SELECTION
@@ -37,7 +37,7 @@ This file is about **how to drive a screen**. For **what to choose** where the c
 
 - Read `capstone.options[].i` and `line`.
 - `choose_capstone_option` once per exposed option set.
-- Re-read state; capstone can return to map, an event, or another overlay.
+- Use the returned state; capstone can return to map, an event, or another overlay.
 
 ## MAP
 
@@ -54,7 +54,9 @@ This file is about **how to drive a screen**. For **what to choose** where the c
 - Do not call room actions from combat, even if you still remember the prior room.
 - For unsupported ally-target cards, expect the payload to mark them unplayable instead of guessing targets.
 - Do the arithmetic from `combat.threat` (`block_needed`, `lethal`, `kill_options`) and `hand[].vs` (exact damage per enemy).
-- Plan the turn in one `act`: rest in `then`, cards by `card_cid`. It stops when anything changes.
+- When the `act` schema offers `then`, plan known combat steps in one call (at most nine follow-ups),
+  using `card_cid` for cards. Stop before an unknown draw or choice. Each step is rechecked and the
+  plan stops on divergence or a non-completed result.
 
 ## CARD_SELECTION
 
@@ -69,7 +71,7 @@ This file is about **how to drive a screen**. For **what to choose** where the c
 - A card reward is a deck-building decision: `resolve_rewards` / `collect_rewards_and_proceed` called without `option_index` now STOP at the card selection and return `pending` with `reward.pending_card_choice = true` instead of taking the first card. Decide the card on its merits, then call `choose_reward_card` (or `skip_reward_cards`), or re-call `resolve_rewards` with an explicit `option_index` (0/1/2 = that card, -1 = skip).
 - Use `collect_rewards_and_proceed` for hands-off cleanup only when no card choice is pending (`reward.pending_card_choice = false`). An empty rewards overlay with `can_proceed=false` is still that action; it should close the overlay instead of staying pending.
 - If `reward.pending_card_choice = true`, use `choose_reward_card` or `skip_reward_cards`.
-- If `skip_reward_cards` closes only the overlay, re-read state to see whether the parent reward remains claimable.
+- If `skip_reward_cards` closes only the overlay, use the returned state to see whether the parent reward remains claimable.
 - Do not use `proceed` on reward flows.
 - A potion reward with every potion slot full is `claimable: false`, and `claim_reward` answers 409 `invalid_action` with `details.reason = "potion_slots_full"`. To take it, `discard_potion` a slot first (offered on the main reward screen, not inside the card-choice sub-screen), then `claim_reward` again. Bulk cleanup never discards a potion for you.
 - `claim_reward` indexes refer to the reward payload's original entries, not a filtered list of claimable rewards.
@@ -102,12 +104,11 @@ This file is about **how to drive a screen**. For **what to choose** where the c
 - `THE_ARCHITECT` EVENT `PROCEED` is lethal even with godmode. The `fight THE_ARCHITECT_EVENT_ENCOUNTER` debug shortcut is **external MCP only** (it needs `STS2_ENABLE_DEBUG_ACTIONS=1` plus the console/command path, which the in-game play loop does not have). In-game there is no shortcut into that encounter: resolve the event through its own unlocked, non-lethal options and never send the lethal `PROCEED` entry.
 - `available_actions` can still contain `choose_event_option` when the first option is locked; that is not permission to pick index 0.
 - Expect event flows like `EVENT -> COMBAT -> EVENT` or `EVENT -> COMBAT -> MAP`.
-- Re-read state after every branch because events mutate in place.
+- Use the returned fresh state after every branch because events mutate in place.
 
 ## CRYSTAL_SPHERE
 
-- Read `crystal_sphere.items` and `crystal_sphere.hidden_cells` from compact
-  `get_game_state`; vision is not required.
+- Read `crystal_sphere.items` and `crystal_sphere.hidden_cells` from the compact state; vision is not required.
 - `crystal_clear_cell` requires `x` and `y`. Pass `tool="big"` for a
   3×3 clear or `tool="small"` for one cell; the tool can be switched atomically
   in the same `act` call.
@@ -123,10 +124,10 @@ This file is about **how to drive a screen**. For **what to choose** where the c
 
 ## MODAL, GAME_OVER, and UNLOCK
 
-- Resolve `MODAL` before anything else with `confirm_modal` or `dismiss_modal`. Relic/potion FTUEs listen to `Released`; if `confirm_modal` stays pending, retry once and keep waiting until the modal is gone.
+- Resolve `MODAL` before anything else with `confirm_modal` or `dismiss_modal`. Relic/potion FTUEs listen to `Released`; if a confirmation is pending, wait and inspect the fresh state. If the modal still needs confirmation and the fresh state offers it, decide whether to confirm once more; never blindly replay the pending action.
 - On `GAME_OVER`, use `continue_game_over` first so the native summary, score, and save flow runs. Wait while `game_over.phase=summary_animating`. Use `return_to_main_menu` only when `game_over.can_return` is true and the action is in `available_actions`. Death/victory summary itself does not show character unlocks.
 - After returning to `MAIN_MENU`, open the timeline and slot obtained epochs. That is where `UNLOCK` / `confirm_unlock` appears.
-- On `UNLOCK`, use `confirm_unlock` repeatedly until the unlock screen closes. Do not call `select_deck_card` or `return_to_main_menu` here.
+- On `UNLOCK`, use `confirm_unlock` until the screen closes, deciding each time from fresh state. Never blindly replay a pending or unknown result. Do not call `select_deck_card` or `return_to_main_menu` here.
 
 ## FAKE_MERCHANT
 
@@ -144,7 +145,7 @@ This file is about **how to drive a screen**. For **what to choose** where the c
 
 - `CARD_INSPECT` and `RELIC_INSPECT` are inspect overlays that can cover a room or a menu.
 - `close_cards_view` closes them; its scope now covers the plain card list plus both inspect overlays.
-- Resolve them before choosing a room action, then re-read state because the underlying screen resumes underneath.
+- Resolve them before choosing a room action, then use the returned state because the underlying screen resumes underneath.
 
 ## FEEDBACK
 

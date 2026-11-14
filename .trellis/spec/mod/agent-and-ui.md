@@ -81,9 +81,25 @@ The Python implementation uses [Sts2Client](../../../mcp_server/src/sts2_mcp/cli
 
 When a shared guided tool changes, update the C# `AgentTools.Mcp`, native dispatch, Python guided registration, and the alignment/contract tests. [test_native_tool_alignment.py](../../../mcp_server/tests/test_native_tool_alignment.py) reads the C# source contract and expects Python guided tools to match it plus exactly `wait_for_event`; this is an intentional synchronization check, not permission to merge the two implementations.
 
+## Gameplay prompt entry points
+
+`PlayPrompt.PlaySystem` is for `AgentLoop.PlayWithModelAsync`, which supplies fresh compact state and the current screen's playbook/strategy. Its `In-game tools:` directory must match both `AgentTools.PlayInGame` and `PlayInGameSingle`; do not advertise external state readers that these schemas omit. `NativeMcpServer.Initialize` instead returns `PlayPrompt.McpInstructions`: an external client has not received a frame and starts with `decide` when fresh context is missing. Both entry points embed the same `PlayPrompt.PlayContract` safety rules.
+
+| Context | Correct behavior | Avoid |
+| --- | --- | --- |
+| Fresh injected state or action/wait result | Decide from that frame; retain known static descriptions | An obligatory new state read and metadata lookup every move |
+| Missing decision-critical mechanic | Use an advertised item/batch/scene metadata tool | Guessing effects from memory or using metadata as live damage/legality |
+| `then` is offered in combat | Plan at most nine known follow-ups, cards by `card_cid` | Predicting an unknown draw/choice or requiring plans in single-step mode |
+| Pending, refused or unknown step | Inspect the new choice or wait for fresh state; never blindly replay | Treating the first completed action as proof the entire plan completed |
+| Later plan step has unknown outcome | Inspect `plan.stop_reason` and each `plan.steps[].status`; refresh before deciding | Assuming `final_state` necessarily follows that uncertain step or that `stop_reason` alone identifies it |
+
+`McpPlayerSkillTests.PlayFlowMatchesTheAdvertisedInGameTools` asserts actual directory/schema equality and shared freshness, knowledge-gap and no-replay instructions. `HealthCheckParityTests` prevents external-only imperative calls from leaking into game prompts. `McpServiceTests.Initialize_ReturnsServerInfoAndSession` checks external initialization uses `McpInstructions`, not the in-game directory. Keep raw-state and full-context recovery guidance available to external clients even though it is not an in-game tool.
+
 ## Test execution shape
 
 The C# test project [STS2AIAgent.Tests.csproj](../../../STS2AIAgent.Tests/STS2AIAgent.Tests.csproj) targets `net9.0`, sets `OutputType` to `Exe`, links selected production source files with `Compile Include`, and runs [TestRunner.Main](../../../STS2AIAgent.Tests/TestRunner.cs). Use `dotnet run --project STS2AIAgent.Tests/STS2AIAgent.Tests.csproj`; `dotnet test` is not the local contract for this project. Tests should remain deterministic and focused on state, transport, policy, parsing, and orchestration seams. Live game startup, mod deployment, and provider calls are separate validations and should never be smuggled into the unit runner.
+
+The runner reports passed, failed, and skipped counts separately. The two real loopback HTTP tests may skip only when `HttpListener.IsSupported` is false and an independently created listener on Windows returns native error 6 at `Start`; a product listener or HTTP assertion failure still fails. The in-memory MCP Origin policy tests always run. A runner regression verifies that a deliberate assertion failure stays a failure even when a separate test is skipped. These offline tests do not substitute for a real HTTP round trip when native listener support is unavailable.
 
 ## Regression rules from the dev audit
 

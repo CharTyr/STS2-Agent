@@ -7,47 +7,19 @@ description: Play or validate Slay the Spire 2 through the local sts2-ai-agent M
 
 Use this skill when driving the STS2 MCP mod as a gameplay agent or when validating the live MCP contract against the running game.
 
-## Server Names
+## Connection
 
-This skill is transport-agnostic. It only assumes that your host agent exposes one active STS2 MCP server with the standard tool surface.
-
-- Recommended local server name (`local_server_name`): `sts2-ai-agent`
-- Recommended remote server name (`remote_server_name`): `sts2-ai-agent-remote`
-- Runtime rule: always try `local_server_name` first, then `remote_server_name`.
-- If your host already exposes STS2 tools directly, call tools directly and skip MCP config troubleshooting.
+Use the STS2 tools already exposed by the host. Before external play, use `health_check` to check
+the connection and whether in-game auto-play owns the character. For local-first server names and
+optional host configuration, see [references/remote-connection.md](references/remote-connection.md).
 
 ## Two ways to play
 
-Mode A: you act. Read `decide` or `get_game_state`, then call `act`; in combat name cards by `card_cid` and put up to nine follow-up combat steps in `then` (read `final_state` after a `then` plan). Unchanged `run.deck`, `run.relic_descriptions`, `run.ascension_effects`, `glossary` terms, and `decide` `scene_guidance` are marked `*_unchanged` (or `glossary_delta`) within a session and re-sent automatically whenever they change; pass `full_state=true` to `get_game_state` only if context was compacted and you need them re-sent. Every step is checked against fresh state. Stop on a refusal, pending result or unknown outcome; never replay an uncertain action. Use a bounded number of decisions and report progress when the host limits autonomous loops.
+Mode A: you act. Start with `decide` when you do not already have fresh state; use a current action or
+wait state for the next decision. A single combat `act` can carry a `then` plan when its schema
+offers it. Follow the shared contract below and respect host limits on autonomous loops.
 
 Mode B: the mod acts, you plan. Start/pause the mod through the local `POST /session/control` endpoint and use `get_planner_briefing` / `update_play_strategy` for strategic guidance. Do not issue competing direct actions while mod auto-play owns the character.
-
-## Recommended SubAgent Config
-
-Use a conservative SubAgent profile for STS2. The goal is to keep the tool surface small, keep one MCP action per iteration, and avoid polluting the main chat prompt with long-running game state.
-
-- Recommended plugin settings: `max_concurrent = 1`, `auto_discover = false`, `broadcast_iteration_progress = false`, `inject_status_to_main_prompt = false`
-- Recommended retention settings: `inject_completed_for_seconds = 120`, `status_retention_seconds = 900`
-- Recommended skill settings: `allowed_tool_names = ["health_check", "get_game_state", "get_raw_game_state", "get_available_actions", "get_decision_log", "get_run_summary", "get_scene_guidance", "diff_state", "get_game_data_item", "get_game_data_items", "get_relevant_game_data", "wait_for_event", "wait_until_actionable", "decide", "act", "get_planner_briefing", "update_play_strategy"]`, `max_mcp_tools_per_iteration = 1`, `share_to_main_chat = false`. This is the whole guided profile; the authoritative list is `ESSENTIAL_TOOLS` in `scripts/test-mcp-tool-profile.ps1`.
-
-### Simplified Config
-
-If your host plugin supports the built-in STS2 shortcut section, prefer this minimal config over a long JSON blob:
-
-```toml
-[sts2]
-enabled = true
-local_server_name = "sts2-ai-agent"
-remote_server_name = "sts2-ai-agent-remote"
-```
-
-This skill does not require a long MCP config walkthrough. At runtime, simply follow local-first fallback:
-
-1. Use `local_server_name` first.
-2. If local is unavailable, retry the same flow on `remote_server_name`.
-3. If aliases are unavailable but STS2 tools are already exposed, call the tools directly.
-
-For an optional skill-local remote checklist, read [references/remote-connection.md](references/remote-connection.md).
 
 The in-game overlay agent loads the shared play contract below plus the screen-playbooks.md section for the screen it is on as its system prompt. Follow those same documents. Do not invent a parallel workflow.
 
@@ -55,70 +27,69 @@ The in-game overlay agent loads the shared play contract below plus the screen-p
 
 ## Quick Start
 
-1. Connection checking belongs to the external MCP client or orchestrator that launched the session; the in-game play loop has no `health_check`, so it reads live state instead.
-2. Read one decision at a time: `get_game_state`, then `act` once, using the state `act` returns
-   for the step after it. Use `wait_until_actionable` across animations and screen changes. Use `get_raw_game_state` only if compact state is missing a needed field.
-   When you call `act`, attach a one-sentence `reason` -- it is optional for the protocol but it
-   is what the player sees as the decision's rationale, so treat it as part of every act.
-3. For cards, monsters, relics, potions, shop items, and event options, prioritize game-data tools before using memory:
-   `get_relevant_game_data` (default, scene-aware minimal context; omit `item_ids` and the current
-   screen decides which ids to look up) ->
-   `get_game_data_item` (single-entity lookup) ->
-   `get_game_data_items` (batch compare/filter).
-   The compact view carries the ids those lookups key on: `combat.hand[].card_id`,
-   `combat.enemies[].enemy_id`, `run.deck[].card_ids`, `run.relic_ids`,
-   `selection.cards[].card_id`, `reward.cards[].card_id`, `shop.cards[].card_id`,
-    `shop.relics[].relic_id`, `shop.potions[].potion_id`,
-   `bundles[].cards[].card_id`, and `chest.relics[].relic_id`.
-4. Use fresh state; call `get_game_state` only when it is stale.
-5. Route by `state.session` first:
-   `session.mode` distinguishes `singleplayer` vs `multiplayer`, and
-   `session.phase` distinguishes `menu`, `character_select`,
-   `multiplayer_lobby`, and `run`.
-6. Only invoke actions that are present in `available_actions`.
-7. `act` answers with the state the action left behind, already compact: use it for the next decision
-   instead of reading again. Re-read after a `pending` response, a screen change, or when you
-   deliberately want the full payload with `raw_state=true`.
-8. Treat multiplayer as local-player control only. Never invent teammate actions that are not present in the latest state.
-9. Recompute indexes from fresh payloads every time. Never reuse stale hand, node, reward, or selection indexes.
+1. **Use the state you have.** The in-game loop already supplies fresh compact state and the current
+   screen's playbook and strategy. Use only advertised tools: external reads and connection checks
+   are absent in-game. If an essential fact is unavailable, wait or stop instead of guessing.
+2. **External MCP:** decision snapshots include `state`, action descriptors and `scene_guidance`
+   from one frame on current mods (the sidecar falls back to separate reads on older mods). A screen
+   change alone needs no state read; get guidance only if needed.
+3. **Act and continue:** choose from the latest `available_actions` and give a one-sentence `reason`.
+   External clients use `act`'s `state`, or a current `final_state` after a `then` plan, for the next
+   decision. Check `plan.stop_reason` and every `plan.steps[].status` first; if any indicates an
+   unknown outcome, get fresh state before deciding. For transitions or `pending` needing settlement, use `wait_until_actionable` and its
+   returned `state`; check `actionable`. A new choice never justifies blindly repeating the prior act.
+4. **Plan only known steps:** when `act` offers `then`, combat may include up to nine follow-ups;
+   name cards by `card_cid` when available. Stop the plan before an unknown draw or choice. Each
+   follow-up checks fresh state; divergence, pending, refusal or unknown outcome stops the plan.
+5. **Keep indexes aligned:** route by `state.session` (`mode` and `phase`); control only the local
+   player. Take hand, target, node, reward and selection indexes from the latest payload.
+6. **Recover context only when needed:** session deduplication marks unchanged deck, relic
+   descriptions, ascension effects, glossary and decision guidance with `*_unchanged` /
+   `glossary_delta`; changes are sent again. Restore lost context before relying on those blocks.
 
 Do not trust memory over the current payload. The game mutates screens in place, overlays replace rooms, and some actions complete only after a follow-up state transition.
 
 ## Game Data Priority Rules
 
-- Never guess static game facts (card text, potion targeting, monster metadata, relic effects, event option details) from memory when game-data tools are available.
-- Use `get_relevant_game_data` first for current-scene context in combat/shop/event/reward/card-selection/chest/bundle flows.
-  Passing `item_ids` is optional: without it the tool derives the ids the screen is about (the hand
-  in a fight, the stock in a shop, the offered cards on a reward, card-selection or bundle screen,
-  the offered relics in a chest, the event you are in). Pass them when you want to ask about
-  a specific id instead.
-- Use `get_game_data_item` when you need deep details for one entity id.
-- Use `get_game_data_items` when comparing multiple entities (for example, reward-card choices, shop candidates, potion options).
-- If state and metadata disagree, trust live state for legality and metadata for semantics; then re-read state.
+- First use the current payload's descriptions, `glossary`, and metadata already known this run. Do
+  not guess a decision-critical mechanic from memory: query game data only to fill a real gap.
+- Use `get_game_data_item` for one entity or `get_game_data_items` for a comparison. Use
+  `get_relevant_game_data` when broader scene context is needed; without `item_ids` it derives ids
+  for the current screen. Compact state supplies ids for hands, enemies, deck, relics, selections,
+  rewards, shop stock, bundles and chests.
+- Live state controls legality, targeting and current damage; metadata explains static mechanics,
+  not live numbers. If they disagree, trust the live state for the current action and refresh only
+  if the state is stale or the discrepancy prevents a safe decision.
 
 ## Non-Negotiable State Rules
 
-- Treat `UNKNOWN` as transient only once. Re-read state once; if it persists, stop guessing and inspect the payload.
-- Treat `state.session` as the source of truth for singleplayer vs multiplayer. Do not infer mode from screen names or tool names alone.
+- Treat `UNKNOWN` as transient only once. Obtain one fresh state (the in-game loop supplies one on
+  the next decision); if it persists, stop guessing and inspect the payload.
+- Treat `state.session` as the source of truth: `mode` is singleplayer or multiplayer, and `phase`
+  is menu, character_select, multiplayer_lobby or run. Never infer mode from a screen or tool name.
 - Resolve overlays before room flow. `MODAL`, `CARD_SELECTION`, reward-card overlays, and timeline overlays take priority over map or combat planning; `modal.underlying_screen` names the room underneath.
-- Treat `pending` responses as an instruction to stay inside the returned screen flow.
-- In combat, `combat.action_readiness` explains an action list that looks wrong, and it is the
-  field to read before concluding anything is broken. It is built from the same single gate
-  evaluation as that response's `available_actions`, so the two can never disagree:
-  `can_use_combat_actions = true` always carries `play_card` / `end_turn`. When it is false,
-  `reason` names the one thing in the way. `modal_open` means clear the modal first;
+- Treat `pending` responses as an instruction to stay inside the returned screen flow; wait or
+  resolve the newly exposed choice, never blindly resend the previous action.
+- In combat, `combat.action_readiness` shares its gate with `available_actions`:
+  `can_use_combat_actions = true` carries `play_card` / `end_turn`. Otherwise `reason` names the
+  blocker. `modal_open` means clear the modal first;
   `hand_in_card_play`, `action_queue_unsettled`, `game_action_running`, `not_player_action_phase`
   and `snapshot_stabilizing` all mean wait with `wait_until_actionable`; `combat_paused` means a
-  person paused the run, so wait rather than act. A missing `play_card` on `COMBAT` is one of
-  these, not a lost turn - do not spam re-reads inside the same frame and do not switch to an
-  unrelated action to make progress.
+  person paused the run, so wait. A missing `play_card` on `COMBAT` is not a lost turn: don't spam
+  same-frame reads or switch to an unrelated action.
 - Treat `proceed` as a room action, not a universal fallback.
 
 ## Action Failure Rules
 
-- A failed action (or failed game-data call) returns an `error` object. Read `error.code` before deciding what to do: `invalid_request`, `invalid_action`, and `invalid_target` mean the request itself was wrong, so re-read state and fix the action or its indexes instead of repeating it.
-- Retry only when `error.retryable` is `true` (for example `state_unavailable` while a transition is still settling). When it is false, change your approach rather than retrying the same call.
-- `error.status_code` mirrors the API status when present; `internal_error` means an unexpected failure, not a legal move you can reach by retrying.
+- Read a failed action or game-data call's `error.code`: `invalid_request`, `invalid_action` and
+  `invalid_target` require a corrected action or indexes from fresh state, not the same call again.
+- `outcome_unknown` means an action may have executed. Never automatically replay it; inspect any
+  `reconciliation.state` (which does not prove the action's effect), then decide from fresh state.
+- Check `plan.stop_reason` and every `plan.steps[].status` even if the first action completed: a
+  sidecar can report `rejected` while a step has `outcome_unknown`. If either indicates an unknown
+  outcome, `final_state` may predate that step; obtain fresh state before choosing again and never replay it.
+- Retry only when `error.retryable` is `true` (for example `state_unavailable` while a transition is still settling), after checking fresh state. When it is false, change your approach rather than retrying the same call.
+- `error.status_code` mirrors the API status when present; `internal_error` is unexpected, not a legal move to retry.
 - The three game-data tools answer with the same envelope: `collection_not_found` (a bad name, so fix the call),
   `game_data_unavailable` (the mod could not be reached, so `retryable` tells you whether to wait), and
   `invalid_game_data` (the payload shape was wrong; do not retry).
@@ -140,7 +111,7 @@ Do not trust memory over the current payload. The game mutates screens in place,
 - `EVENT`: use `choose_event_option` even after combat returns to a finished event.
 - `CRYSTAL_SPHERE`: `crystal_clear_cell` until divinations are spent, then `proceed`.
 - `GAME_OVER`: `continue_game_over` first. Wait while `game_over.phase=summary_animating`. Use `return_to_main_menu` only when it is exposed.
-- `UNLOCK`: `confirm_unlock` repeatedly until the screen closes; never bypass it with a menu-return action. The compact top level mirrors the raw block under `unlock` (`unlock_type`, `items`).
+- `UNLOCK`: use `confirm_unlock` until the screen closes, deciding each time from fresh state; never blindly replay a pending or unknown result, or bypass it with a menu-return action. The compact top level mirrors the raw block under `unlock` (`unlock_type`, `items`).
 - `FAKE_MERCHANT`: the Fake Merchant event screen. `open_shop_inventory` opens its inventory and `proceed` leaves the screen.
 - `PATCH_NOTES`: patch notes shown from the main menu. `close_main_menu_submenu` closes it.
 - `CARD_LIBRARY`: the deck / compendium card viewer. `close_main_menu_submenu` returns to the previous screen, both from the main menu and from inside a run.
@@ -169,7 +140,7 @@ For detailed per-screen sequences and pitfalls, read the section for the current
 - In combat, spend energy efficiently and avoid ending turn with obvious free value unused.
 - In rewards, take cards only when the upgrade is clear; otherwise skip.
 - In shops, check relics and removal before committing all gold.
-- In events, prefer unlocked options and re-read state after every branch.
+- In events, prefer unlocked options and use the returned fresh state after every branch.
 
 <!-- END SHARED PLAY CONTRACT -->
 
@@ -177,12 +148,15 @@ For detailed per-screen sequences and pitfalls, read the section for the current
 
 Both MCP surfaces expose the same tool face, and the read half of a decision can be one call:
 
+- When fresh state is missing, stale or lost, call `decide`. For a needed field absent from compact
+  state, call `get_raw_game_state`; after context compaction, use `get_game_state(full_state=true)`
+  to restore lost unchanged static blocks.
 - `decide` answers with `state` (the compact `agent_view`, same shape as `get_game_state`),
   `available_actions` (the descriptors from `get_available_actions`, with their `requires_index` /
   `requires_target` / target hints), and `scene_guidance` (the same object `get_scene_guidance`
-  returns). The documented loop assembles those three from three or four calls, each rebuilding the
-  state on the game thread; `decide` reads one route, so the actions belong to the state beside them
-  rather than to a frame the game may already have left.
+  returns). On current mods `decide` reads one snapshot, so the actions belong to the state beside
+  them rather than to a frame the game may already have left. The sidecar falls back to separate
+  reads for older mods without that snapshot route.
 - `scene_guidance` always carries `screen`, `scene`, `guidance`, and `playbook`. `guidance` is empty
   on a screen with no strategic choice; `playbook` is the per-screen action sequence and is never
   empty (an unmapped screen gets the index of the sections). The Python sidecar adds `event_id` /
@@ -190,9 +164,14 @@ Both MCP surfaces expose the same tool face, and the read half of a decision can
 
 ## Reading an Action Result
 
-- `act` answers with the state the action left behind, and on both surfaces that `state` is the
-  compact `agent_view`: the same shape `get_game_state` returns, so it is the next decision's input
-  rather than something to re-read. `action`, `status`, `stable`, and `message` are unchanged.
+- When `act` returns a current state, on both surfaces `state` is the compact `agent_view`: the same
+  shape `get_game_state` returns. Check `status` and `stable` before using it as the next decision's
+  input. `action`, `status`, `stable`, and `message` are unchanged.
+- For a non-empty `then` plan, inspect `plan.stop_reason` and every `plan.steps[].status` before
+  using a present, current `final_state`; earlier completed steps remain completed if the plan stops.
+  A sidecar may report `rejected` while a step says `outcome_unknown`. If either indicates an unknown
+  outcome, `final_state` may predate it; obtain fresh state before choosing again. An empty `then` uses
+  the ordinary single-action response.
 - `raw_state=true` returns the full `/state` payload instead. Use it only to inspect a field the
   compact view does not carry: it is roughly 4,000-9,500 tokens per action.
 - A rejected index is correctable rather than merely refused. The error object carries
@@ -207,7 +186,8 @@ Both MCP surfaces expose the same tool face, and the read half of a decision can
   (compact, marked); `reconciliation.state_read` / `action_effect_compared` (always `false`) /
   `action_outcome` (always `"unknown"`) say that the state was read but the action was never compared
   against it, and `succeeded` / `status` describe that read rather than the action. **Never replay the
-  action automatically**: read the reconciled state and decide again from it.
+  action automatically**: if `reconciliation.state_read` succeeded and the state is still fresh, use
+  it to decide again; otherwise obtain fresh state first.
 - `wait_until_actionable` answers with the same compact `state` as `get_game_state`, so a wait across an
   animation costs a decision-sized payload rather than the full one. `raw_state=true` is its escape
   hatch, exactly as on `act`.
@@ -224,6 +204,8 @@ Both MCP surfaces expose the same tool face, and the read half of a decision can
 
 - Use the guided profile for normal play and most evaluations.
 - Keep `get_relevant_game_data` / `get_game_data_item` / `get_game_data_items` available in guided runs for card, monster, potion, shop, and event decisions.
+- The Python sidecar also provides `wait_for_event` for event monitoring; ordinary actionability
+  waits use `wait_until_actionable`.
 - Prefer `decide` when a step needs state and guidance together; it is the same answers as the individual read tools, from one call.
 - Use legacy per-action tools only when a harness explicitly needs tool-by-tool coverage.
 - Use `run_console_command` and `inject_event_churn` only in development flows where debug actions are enabled.

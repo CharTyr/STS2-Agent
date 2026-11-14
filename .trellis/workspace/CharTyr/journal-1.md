@@ -1606,3 +1606,37 @@ Recovered task after a broken session; finished W3-W11 (HUD, run report/journal,
 ### Next Steps
 
 - User tries dev build; optional follow-ups: live co-op with new features, F7 hotkey, card outline at Fast speed, full-run win rate.
+
+
+## Session 42: AI 游玩流程收敛与离线环境测试修复
+
+**Date**: 2026-11-14
+**Task**: AI 游玩流程收敛与离线环境测试修复
+**Branch**: `codex/gameplay-convergence`
+
+### Summary
+
+固定 Luna/Terra 分工，统一新鲜状态复用与按需知识查询，修复未知计划结果误分类；隔离知识夹具并显式报告不支持的原生监听测试。
+
+### Main Changes
+
+- 游戏内及外部 MCP 提示分离，保留计划中断和禁止重放；静态提示预算恢复。
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `b90b492` | (see git log) |
+| `422c5e3` | (see git log) |
+
+### Testing
+
+- [OK] Python 全套 461 通过；C# 1149 通过、0 失败、2 系统能力跳过；12 静态闸门通过。
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- 在支持 HttpListener 的环境补验两项真实 HTTP 集成测试；实际模型对局效果尚未测量。

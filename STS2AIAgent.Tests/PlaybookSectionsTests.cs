@@ -234,6 +234,8 @@ internal static class PlaybookSectionsTests
             Assert.Contains("MAIN_MENU and Timeline", slice);
             Assert.Contains("CRYSTAL_SPHERE", slice);
             Assert.Contains("shared play contract", slice);
+            Assert.Contains("Use a current action or wait result", slice);
+            Assert.False(slice.Contains("re-read state after every action", StringComparison.Ordinal));
             Assert.True(
                 slice.Length < Playbooks.Length / 4,
                 "the index fallback must stay a small fraction of the document, not a quiet way to send it whole");

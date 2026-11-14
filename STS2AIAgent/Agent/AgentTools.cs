@@ -87,7 +87,7 @@ internal static class AgentTools
             {
                 type = "array",
                 maxItems = TurnPlanPolicy.MaxThenSteps,
-                description = "Combat only: the rest of this turn, in order (at most 9 steps, usually ending with end_turn). Name cards by card_cid. Leave it out when the next step depends on something you cannot see yet (a draw, a choice).",
+                description = "Combat only: up to 9 known follow-up steps, in order. Name cards by card_cid. Stop before a step depending on an unknown draw or choice.",
                 items = PlanStepParameters
             }
         },
@@ -185,9 +185,9 @@ internal static class AgentTools
         Tool("get_game_state", "Read compact game state (`compact_agent_view` false on raw fallback; `get_raw_game_state` reads raw `/state`).", GetGameStateParameters),
         Tool("get_raw_game_state", "Read the full raw /state snapshot when compact agent_view is missing a field."),
         Tool("get_available_actions", "List currently legal actions with requires_index / requires_target hints."),
-        Tool("get_game_data_item", "Look up one card/relic/monster/potion/event/power/character by id.", CollectionItemParameters),
-        Tool("get_game_data_items", "Look up several metadata entities by comma-separated ids.", CollectionItemsParameters),
-        Tool("get_relevant_game_data", "Look up metadata with fields trimmed for the current screen. Omit item_ids to use the ids this screen is about.", RelevantDataParameters),
+        Tool("get_game_data_item", "Look up one entity by id when a decision-critical mechanic is missing from known facts.", CollectionItemParameters),
+        Tool("get_game_data_items", "Look up several entities by id when missing mechanics need comparison.", CollectionItemsParameters),
+        Tool("get_relevant_game_data", "Look up missing decision-critical metadata for the current screen. Omit item_ids to use the ids this screen is about.", RelevantDataParameters),
         Tool("wait_until_actionable", "Wait until a non-passive action is available, then return fresh compact state. Use during animations and screen transitions.", WaitParameters)
     };
 
@@ -222,7 +222,7 @@ internal static class AgentTools
         .Append(new LlmTool
         {
             Name = "act",
-            Description = "Execute one legal game action with a short reason the player can read. In combat, plan the whole turn: put the first action here and the rest of the turn (ending with end_turn when you are done) in `then`. Refer to hand cards by `card_cid`. Each step is re-checked against fresh state; the plan stops early when something changes and you will be asked again.",
+            Description = "Execute one legal game action with a short reason the player can read. In combat, `then` may contain up to nine known follow-ups, with hand cards named by `card_cid`. Stop before an unknown draw or choice. Each step is re-checked against fresh state; the plan stops early when something changes and you will be asked again.",
             Parameters = PlanActParameters
         })
         .ToArray();

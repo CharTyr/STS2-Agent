@@ -8,8 +8,8 @@ namespace STS2AIAgent.Tests;
 
 /// <summary>
 /// The in-game auto-play prompt is <see cref="PlayPrompt.PlaySystem"/>: the shared skill contract plus
-/// the screen playbooks. The model answers it with <see cref="AgentTools.Play"/>, which does not expose
-/// <c>health_check</c>, so an imperative mention of it costs a wasted round and contradicts the tool list
+/// the screen playbooks. The model answers it with <see cref="AgentTools.PlayInGame"/>, which excludes
+/// external readers and <c>health_check</c>, so an imperative mention contradicts the tool list
 /// printed right above the contract. These tests keep the embedded text honest without removing the tool
 /// from the MCP surfaces that really do offer it.
 /// </summary>
@@ -60,6 +60,14 @@ internal static class HealthCheckParityTests
     {
         AssertNoInstructedExternalTool(PlayPrompt.PlayContract, "the shared play contract");
         AssertNoInstructedExternalTool(PlayPrompt.PlaySystem, "the in-game play system prompt");
+        AssertNoInstructedExternalTool(PlayPrompt.ActNowInstruction, "the act-now instruction");
+        AssertNoInstructedExternalTool(PlayPrompt.PlanTurnInstruction, "the plan-turn instruction");
+        foreach (var screen in PlaybookSections.Playbooks.Screens.Concat(PlaybookSections.Strategy.Screens).Distinct())
+        {
+            AssertNoInstructedExternalTool(PlayPrompt.PlaybookGuidance(screen), screen + " playbook");
+            AssertNoInstructedExternalTool(PlayPrompt.ScreenGuidance(screen), screen + " strategy");
+        }
+        AssertNoInstructedExternalTool(PlayPrompt.PlaybookGuidance("UNKNOWN"), "fallback playbook");
     }
 
     public static void McpSurfaceStillDocumentsHealthCheck()
@@ -73,7 +81,7 @@ internal static class HealthCheckParityTests
         Assert.True(begin >= 0 && end > begin, "Both shared contract markers must exist once each, in order.");
 
         var outsideTheContract = skill[..begin] + skill[(end + PlayPrompt.SharedContractEnd.Length)..];
-        Assert.Contains("\"health_check\"", outsideTheContract, StringComparison.Ordinal);
+        Assert.Contains("`health_check`", outsideTheContract, StringComparison.Ordinal);
     }
 
     private static void AssertNoInstructedExternalTool(string text, string label)
@@ -109,7 +117,7 @@ internal static class HealthCheckParityTests
     }
 
     private static HashSet<string> PlayToolNames() =>
-        AgentTools.Play.Select(tool => tool.Name).ToHashSet(StringComparer.Ordinal);
+        AgentTools.PlayInGame.Select(tool => tool.Name).ToHashSet(StringComparer.Ordinal);
 
     private static HashSet<string> McpToolNames() =>
         AgentTools.Mcp.Select(tool => tool.Name).ToHashSet(StringComparer.Ordinal);
