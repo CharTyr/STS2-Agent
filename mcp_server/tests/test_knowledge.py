@@ -49,7 +49,8 @@ def isolated_checkout_markers(root: Path) -> Iterator[None]:
     actual_is_file = Path.is_file
 
     def is_file(path: Path) -> bool:
-        return False if path in outside_markers else actual_is_file(path)
+        # Windows may hand tempfile an 8.3 path while fixture_root.resolve() uses its long form.
+        return False if path.resolve() in outside_markers else actual_is_file(path)
 
     with patch.object(Path, "is_file", is_file):
         yield
