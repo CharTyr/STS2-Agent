@@ -1,4 +1,5 @@
 using System.Net;
+using System.Net.Sockets;
 using STS2AIAgent.Server;
 
 namespace STS2AIAgent.Tests;
@@ -75,6 +76,7 @@ internal static class LoopbackListenerTests
 
     public static async Task RealLoopbackListenerResponds()
     {
+        RealHttpListenerCapability.Require();
         var started = LoopbackListener.Start(49080, allowFallback: true);
         using var listener = started.Listener;
         using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(5));
@@ -87,10 +89,76 @@ internal static class LoopbackListenerTests
         Assert.Equal(HttpStatusCode.NoContent, response.StatusCode);
     }
 
+    public static void RunnerDistinguishesFailureAndSkip()
+    {
+        using var output = new StringWriter();
+        var originalOutput = Console.Out;
+        int failures;
+        try
+        {
+            Console.SetOut(output);
+            failures = TestRunner.Run(new (string Name, Func<Task> Body)[]
+            {
+                ("passes", () => Task.CompletedTask),
+                ("skipped", () => throw new TestSkippedException("probe confirmed unavailable")),
+                ("assertion", () => { Assert.True(false, "deliberate assertion failure"); return Task.CompletedTask; })
+            });
+        }
+        finally
+        {
+            Console.SetOut(originalOutput);
+        }
+
+        var report = output.ToString();
+        Assert.Equal(1, failures);
+        Assert.Contains("PASS  passes", report);
+        Assert.Contains("SKIP  skipped", report);
+        Assert.Contains("FAIL  assertion", report);
+        Assert.Contains("deliberate assertion failure", report);
+        Assert.Contains("SUMMARY Passed=1 Failed=1 Skipped=1", report);
+    }
+
     private static T Expect<T>(Action action) where T : Exception
     {
         try { action(); }
         catch (T error) { return error; }
         throw new Exception($"Expected {typeof(T).Name}.");
+    }
+}
+
+internal static class RealHttpListenerCapability
+{
+    public static void Require()
+    {
+        if (HttpListener.IsSupported)
+        {
+            return;
+        }
+
+        // Probe the native listener independently, on an OS-selected loopback port.
+        // Do not turn failures from the actual product listener or HTTP checks into skips.
+        var tcp = new TcpListener(IPAddress.Loopback, 0);
+        tcp.Start();
+        int port;
+        try
+        {
+            port = ((IPEndPoint)tcp.LocalEndpoint).Port;
+        }
+        finally
+        {
+            tcp.Stop();
+        }
+
+        using var probe = new HttpListener();
+        probe.Prefixes.Add($"http://127.0.0.1:{port}/");
+        try
+        {
+            probe.Start();
+        }
+        catch (HttpListenerException ex) when (OperatingSystem.IsWindows() && ex.NativeErrorCode == 6)
+        {
+            throw new TestSkippedException(
+                "HttpListener.IsSupported is false and an independent listener probe returned Windows error 6 (invalid handle).");
+        }
     }
 }

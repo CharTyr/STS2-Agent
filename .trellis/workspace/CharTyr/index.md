@@ -8,8 +8,8 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-1.md`
-- **Total Sessions**: 41
-- **Last Active**: 2026-10-29
+- **Total Sessions**: 42
+- **Last Active**: 2026-11-14
 <!-- @@@/auto:current-status -->
 
 ---
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-1.md` | ~1608 | Active |
+| `journal-1.md` | ~1642 | Active |
 <!-- @@@/auto:active-documents -->
 
 ---
@@ -29,6 +29,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 42 | 2026-11-14 | AI 游玩流程收敛与离线环境测试修复 | `b90b492`, `422c5e3` | `codex/gameplay-convergence` |
 | 41 | 2026-10-29 | Bold experience overhaul: finished, live-validated, merged to dev (#232) | `21ada0e`, `d724469` | `feature/bold-overhaul` |
 | 40 | 2026-09-24 | v0.16.2 dual-layer fixes and release | `a1a7981`, `eb3963c`, `abbdbf8`, `510115c`, `cbba3ed` | `dev` |
 | 39 | 2026-09-24 | v0.16.0: live reasoning, dual-layer goal, overlay fit, clean screenshots; released to GitHub and Workshop | `746bfc3`, `6a10414`, `eaa0edc`, `0bd5a76` | `dev` |

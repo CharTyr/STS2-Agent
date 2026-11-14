@@ -56,6 +56,7 @@ Use the standard library `unittest` runner used by the project. Prefer small fak
 - Patch `request.urlopen` and `time.sleep` to verify transport outcomes. The replay-safety tests in [test_action_replay_safety.py](../../../mcp_server/tests/test_action_replay_safety.py) (for example `test_action_transport_failures_post_once_and_reconcile`) assert one action POST, no action retry, and one reconciliation GET for an ambiguous result.
 - `NativeToolAlignmentTests` in [test_native_tool_alignment.py](../../../mcp_server/tests/test_native_tool_alignment.py) compares the Python guided surface with the C# native MCP surface. Update both sides deliberately when a guided tool changes.
 - [test_client_payloads.py](../../../mcp_server/tests/test_client_payloads.py) is the typed-model pattern: pure parser tests plus one transport test per getter, patching `request.urlopen` with a minimal `JsonResponse` double.
+- A `test_knowledge.py` fixture modeling an installation without a checkout must remain valid when its temporary directory is inside the real checkout. Scope the marker-file probe isolation to checkout markers above that fixture; keep real files and markers inside the fixture visible, and exercise the real `_repo_root` traversal. A positive fixture check guards against hiding a valid nested checkout.
 
 ## Dependency refresh checklist
 
@@ -103,7 +104,7 @@ Use a fake clock that advances during simulated I/O or sleep. Advancing time eve
 
 ## Whole-turn plans
 
-Both MCP act surfaces accept optional card_cid and then. The sidecar forwards stable card identity along with its resolved card_index to POST /action; the mod validates under its lease. Every follow-up reads fresh state. A 4xx refusal is rejected; a lost response is outcome_unknown. Both stop the plan without replay, and earlier completed steps remain visible. When `raw_state` is false, intermediate `plan.steps[]` omit per-step `state` snapshots so only one `final_state` is emitted. Shared vectors keep the C# and Python policies aligned.
+Both MCP act surfaces accept optional card_cid and then. The sidecar forwards stable card identity along with its resolved card_index to POST /action; the mod validates under its lease. Every follow-up reads fresh state. A 4xx refusal is rejected; a lost response is outcome_unknown. The actual sidecar transport result carries both `status: outcome_unknown` and `error`, so plan classification must check the status before treating a generic error as a rejection. Both outcomes stop the plan without replay, and earlier completed steps remain visible. When `raw_state` is false, intermediate `plan.steps[]` omit per-step `state` snapshots so only one `final_state` is emitted. A later unknown step may leave `final_state` at an earlier completed step: inspect the stop reason and step statuses, and obtain fresh state before deciding. [test_play_plans.py](../../../mcp_server/tests/test_play_plans.py) simulates a lost response through the real client on both the first and a later step, checking the reported status, one reconciliation and action-call counts. Shared vectors keep the C# and Python policies aligned.
 
 ## Compact payload slimming and session static deduplication
 

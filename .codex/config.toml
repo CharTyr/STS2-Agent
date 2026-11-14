@@ -37,3 +37,5 @@ project_doc_fallback_filenames = ["AGENTS.md"]
 # (this file) takes precedence over user-level `~/.codex/config.toml`.
 [agents]
 max_depth = 1
+default_subagent_model = "gpt-6-luna"
+default_subagent_reasoning_effort = "max"

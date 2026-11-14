@@ -4,6 +4,7 @@ import contextlib
 import os
 import tempfile
 import unittest
+from collections.abc import Iterator
 from pathlib import Path
 from unittest.mock import patch
 
@@ -36,6 +37,23 @@ def canonical(path: str | os.PathLike[str]) -> str:
 def cleared_knowledge_env():
     """Disable both knowledge env overrides without touching the rest of os.environ."""
     return patch.dict(os.environ, {key: "" for key in KNOWLEDGE_ENV_KEYS}, clear=False)
+
+
+@contextlib.contextmanager
+def isolated_checkout_markers(root: Path) -> Iterator[None]:
+    """Hide checkout markers above this fixture; keep its real files visible."""
+    fixture_root = root.resolve()
+    outside_markers = {
+        parent / "mcp_server" / "pyproject.toml" for parent in fixture_root.parents
+    }
+    actual_is_file = Path.is_file
+
+    def is_file(path: Path) -> bool:
+        # Windows may hand tempfile an 8.3 path while fixture_root.resolve() uses its long form.
+        return False if path.resolve() in outside_markers else actual_is_file(path)
+
+    with patch.object(Path, "is_file", is_file):
+        yield
 
 
 def make_fake_checkout(root: Path) -> Path:
@@ -84,9 +102,27 @@ class RepoRootResolutionTests(unittest.TestCase):
 
     def test_repo_root_is_none_when_no_marker_exists(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
-            module_path = make_installed_module(Path(tmp))
-            with cleared_knowledge_env():
+            tmp_path = Path(tmp)
+            module_path = make_installed_module(tmp_path)
+            with cleared_knowledge_env(), isolated_checkout_markers(tmp_path):
                 self.assertIsNone(knowledge._repo_root(start=module_path))
+
+    def test_marker_isolation_preserves_checkout_inside_fixture(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            outer = Path(tmp) / "outer"
+            outer_module = make_fake_checkout(outer)
+            fixture = outer / "fixture"
+            module_path = make_installed_module(fixture)
+            inner = fixture / "inner"
+            inner_module = make_fake_checkout(inner)
+
+            with cleared_knowledge_env():
+                self.assertEqual(knowledge._repo_root(start=module_path), outer.resolve())
+                with isolated_checkout_markers(fixture):
+                    self.assertFalse((outer / "mcp_server" / "pyproject.toml").is_file())
+                    self.assertTrue(outer_module.is_file())
+                    self.assertIsNone(knowledge._repo_root(start=module_path))
+                    self.assertEqual(knowledge._repo_root(start=inner_module), inner.resolve())
 
     def test_default_root_prefers_knowledge_dir_env(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -116,7 +152,7 @@ class RepoRootResolutionTests(unittest.TestCase):
             workdir = tmp_path / "workspace"
             workdir.mkdir()
 
-            with cleared_knowledge_env(), patch.object(
+            with cleared_knowledge_env(), isolated_checkout_markers(tmp_path), patch.object(
                 knowledge, "__file__", str(module_path)
             ), contextlib.chdir(workdir):
                 install_root = module_path.resolve().parent
@@ -141,7 +177,9 @@ class ReferenceFileTests(unittest.TestCase):
             tmp_path = Path(tmp)
             module_path = make_installed_module(tmp_path)
             knowledge_base = self._knowledge(tmp_path / "kb")
-            with cleared_knowledge_env(), patch.object(knowledge, "__file__", str(module_path)):
+            with cleared_knowledge_env(), isolated_checkout_markers(tmp_path), patch.object(
+                knowledge, "__file__", str(module_path)
+            ):
                 context = knowledge_base.build_planner_context({"run_id": "run_1", "screen": "MAP"})
 
             self.assertEqual(context["reference_files"], [])
@@ -151,7 +189,9 @@ class ReferenceFileTests(unittest.TestCase):
             tmp_path = Path(tmp)
             module_path = make_installed_module(tmp_path)
             knowledge_base = self._knowledge(tmp_path / "kb")
-            with cleared_knowledge_env(), patch.object(knowledge, "__file__", str(module_path)):
+            with cleared_knowledge_env(), isolated_checkout_markers(tmp_path), patch.object(
+                knowledge, "__file__", str(module_path)
+            ):
                 context = knowledge_base.build_combat_context(
                     combat_state([{"enemy_id": "cultist"}])
                 )

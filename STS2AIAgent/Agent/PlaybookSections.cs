@@ -403,8 +403,8 @@ internal static class PlaybookSections
             }
 
             builder.Append(
-                "Drive this screen from the shared play contract above and the live state, and re-read "
-                + "state after every action instead of assuming an action sequence.");
+                "Drive this screen from the shared play contract and the latest state. Use a current "
+                + "action or wait result, or the next supplied state; do not assume an action sequence.");
             return Cap(builder.ToString());
         }
     }

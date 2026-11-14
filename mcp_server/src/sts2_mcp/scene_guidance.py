@@ -405,8 +405,8 @@ def playbook_index(markdown: str, screen: str | None) -> str:
     ]
     lines.extend(f"- {heading}" for heading in headings(markdown))
     lines.append(
-        "Drive this screen from the shared play contract and the live state, and re-read state after "
-        "every action instead of assuming an action sequence."
+        "Drive this screen from the shared play contract and the latest state. Use a current "
+        "action or wait result, or the next supplied state; do not assume an action sequence."
     )
     return cap("\n".join(lines))
 

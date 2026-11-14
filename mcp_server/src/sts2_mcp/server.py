@@ -449,7 +449,7 @@ def create_server(client: Sts2Client | None = None, tool_profile: str | None = N
             Field(description="Entity id, for example ABRASIVE."),
         ],
     ) -> dict[str, Any] | None:
-        """Return a single item from a game metadata collection by id."""
+        """Look up one entity by id when a decision-critical mechanic is missing from known facts."""
         if not item_id:
             return None
 
@@ -470,7 +470,7 @@ def create_server(client: Sts2Client | None = None, tool_profile: str | None = N
             Field(description="Comma-separated entity ids."),
         ],
     ) -> dict[str, Any]:
-        """Return multiple items (by comma-separated ids) from a collection."""
+        """Look up several entities by id when missing mechanics need comparison."""
         if not item_ids:
             return {}
 
@@ -501,7 +501,7 @@ def create_server(client: Sts2Client | None = None, tool_profile: str | None = N
             ),
         ] = "",
     ) -> dict[str, Any]:
-        """Return items with only the most relevant fields for the current context.
+        """Look up missing decision-critical metadata for the current screen.
 
         The scene decides which fields come back: combat, shop, event, reward, card_selection,
         chest, bundle_selection, else menu.

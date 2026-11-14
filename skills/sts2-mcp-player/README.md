@@ -6,7 +6,7 @@
 
 它解决的核心问题是：
 
-- 每一步都先读状态，再决定动作
+- 用当前新鲜状态决定动作，并复用动作或等待返回的状态
 - 不误用 `proceed`、旧索引、过期 screen 信息
 - 区分普通游玩、全量验证、debug 注入三种场景
 - 优先使用精简的 guided 工具集，减少 AI 被过多 MCP 工具干扰
@@ -65,7 +65,7 @@ debug 模式：
 
 ```text
 使用 $sts2-mcp-player 接管当前局面。
-先检查 health 和 game state，
+先检查 health；没有新鲜状态时用 decide，
 然后按 state-first 规则继续推进，遇到 card selection、reward、shop 时按技能约定处理。
 ```
 
@@ -114,12 +114,12 @@ debug 模式：
 它的核心循环很简单：
 
 1. 先 `health_check`
-2. 每次决策前读一次状态：`decide`（一次拿到 compact `state`、`available_actions` 与 `scene_guidance`）
-   或 `get_game_state`
-3. 只调用 `available_actions` 里真实存在的动作
-4. `act` 返回的 `state` 就是下一个决策的输入；只有 `pending`、屏幕变化或需要完整载荷（`raw_state=true`）时才重读
-5. 所有索引都从最新 payload 重新计算；索引被拒时按 `error.details` 的 `field` / `valid_indices` / `valid_field` 改正
-6. 按 `agent_knowledge/run_logs/README.md` 模板维护单局决策日志，记录种子号、角色、路线、阶段选择和理由
+2. 首次或缺少新鲜状态时用 `decide` 取得 compact `state`、`available_actions` 与 `scene_guidance`
+3. 只调用最新 `available_actions` 中的动作，索引取自当前状态；索引被拒时按 `error.details` 和新鲜状态改正
+4. 复用 `act.state`；非空 `then` 计划检查 `plan.stop_reason` 和各 `plan.steps[].status`，并复用仍为最新的 `final_state`。状态需要等待稳定时用 `wait_until_actionable` 的 `state`，屏幕变化本身无需重复读取
+5. 战斗中 schema 支持 `then` 时可附最多九步，优先使用 `card_cid`；未知抽牌或选择之后不预编。后续步骤结果未知时，`final_state` 可能早于该步，取得新鲜状态后再决定，绝不盲目重放
+6. 先看状态描述、`glossary` 与本局已知数据，只在关键机制缺失时查询元数据；实时伤害和合法性以状态为准
+7. 按 `agent_knowledge/run_logs/README.md` 模板维护单局决策日志，记录种子号、角色、路线、阶段选择和理由
 
 这意味着它特别适合处理这些容易出错的情况：
 
