@@ -256,6 +256,10 @@ class SceneGuidanceAlignmentTests(unittest.TestCase):
                     playbook_for_screen(markdown, screen).strip(),
                     "an empty playbook answer reads as 'there is nothing to know here'",
                 )
+                if screen in ("NOT_A_SCREEN", "UNKNOWN", None, "  "):
+                    fallback = playbook_for_screen(markdown, screen)
+                    self.assertIn("Use a current action or wait result", fallback)
+                    self.assertNotIn("re-read state after every action", fallback)
 
     def test_deliberate_omissions_match(self) -> None:
         self.assertEqual(

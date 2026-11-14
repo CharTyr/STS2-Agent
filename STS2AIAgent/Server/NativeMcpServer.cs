@@ -449,7 +449,7 @@ internal sealed partial class NativeMcpServer
                 version = _version,
                 title = "STS2 AI Agent"
             },
-            instructions = PlayPrompt.PlaySystem
+            instructions = PlayPrompt.McpInstructions
         };
     }
 

@@ -28,7 +28,7 @@ Read `map.nodes[]` for the whole graph and `map.options[]` for what may be picke
 Read `rest.options[]`: `option_id` says what each entry does and `enabled` says whether it can be taken now — `SMITH` is disabled when nothing can be upgraded. Raw `/state` spells that flag with an `is_` prefix.
 
 1. **Compare healing with a specific upgrade.** Low health (roughly below 45-50%) usually favors healing, but inspect the actual next reachable fights and expected damage. A nearby boss alone does not make HEAL mandatory; do not guess proximity from floor number.
-2. **When health covers the next fights, consider SMITH on a core card.** Read `get_game_data_item`; use `upgrade.description`, `upgrade.cost` and `upgrade.vars` only when `upgrade.status` is `available`. An unavailable preview is not a maxed card. Compare with current values without inventing cost reductions. Heal when the survival margin is inadequate.
+2. **When health covers the next fights, consider SMITH on a core card.** If its upgrade preview is needed and not already known, use `get_game_data_item`; use `upgrade.description`, `upgrade.cost` and `upgrade.vars` only when `upgrade.status` is `available`. An unavailable preview is not a maxed card. Compare with current values without inventing cost reductions. Heal when the survival margin is inadequate.
 3. **`MEND`, `LIFT`, `COOK`, `DIG`, `HATCH` and `CLONE` are relic- or run-specific.** Take them when enabled and the heal is not urgent; their `description` states the effect, and an unused rest site is a wasted one.
 4. **A rest option that needs a target** (`requires_target` true) picks a player, not a card: use that option's `valid_target_indices` (also written into its `line`) to choose the teammate who needs it — the lowest `current_hp` relative to `max_hp` in `run.players[]` — and never pass an index from another array. `valid_target_player_ids` is not on the compact option.
 5. **Never leave a rest site unspent.** There is no benefit to `proceed` while an enabled option remains.
@@ -57,7 +57,7 @@ Read `event.options[]` and skip every entry with `locked` true. `event.options[]
 3. **A card or relic the deck does not want is not a reward.** When an option "adds a card to your deck", read what it adds before taking it: a curse is a cost dressed as a reward.
 4. **`none-detected` is not a promise.** It means the handler body showed no harmful command, not that the option is safe. When a risk grade is `?` or `unknown`, prefer an option whose cost is written down.
 5. **Leave when the remaining options all cost more than they give.** `proceed` / the finished-event entry is a legitimate answer; an unspent event is not a loss.
-6. **Re-read state after every branch.** Events mutate in place, and the options on the next page are not the options on this one.
+6. **Use the returned fresh state after every branch.** Events mutate in place, and the options on the next page are not the options on this one.
 
 ### Where the risk grades come from
 
@@ -65,12 +65,12 @@ The grades are derived offline from the decompiled event sources into `docs/game
 
 ## Potions: when to drink
 
-Read `run.potions[]` for `usable`, `target` and `targets`. Usage is folded into `line`; a queued potion is confirmed by re-reading, not by a key on this object. Targeting is in `screen-playbooks.md`.
+Read `run.potions[]` for `usable`, `target` and `targets`. Usage is folded into `line`; a queued potion is confirmed by observing fresh state, not by a key on this object. Targeting is in `screen-playbooks.md`.
 
 1. **A potion unspent at the end of the run was worth nothing.** Spend them on the boss, on an `Elite` entered at low health, or on a fight being lost — but spend them.
 2. **A `CombatOnly` line is for the turn it matters.** Check `combat.enemies[].intents[]` first: drink a block or damage potion before the heavy hit, not on a quiet turn.
 3. **Do not drink a healing potion above roughly 80% of `run.hp`** — the slot is worth more than the overheal. An `AnyTime` line can wait for the fight that needs it.
-4. **A potion already resolving must not be used again.** Compact has no queue flag; if the last drink is still settling, re-read instead of using the same slot.
+4. **A potion already resolving must not be used again.** Compact has no queue flag; if the last drink is still settling, wait for fresh state instead of using the same slot.
 5. **In co-op, a `players`-targeted potion belongs on the teammate at the lowest `current_hp`** when the payload asks for a target.
 
 ## Combat: what to prioritise

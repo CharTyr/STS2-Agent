@@ -63,6 +63,10 @@ internal static class McpServiceTests
         var instructions = root.GetProperty("result").GetProperty("instructions").GetString();
         Assert.Contains("continue_game_over", instructions);
         Assert.Contains("get_game_state", instructions);
+        Assert.Contains("use decide", instructions);
+        Assert.Equal(PlayPrompt.McpInstructions, instructions);
+        Assert.False(instructions!.Contains("In-game tools:", StringComparison.Ordinal),
+            "external initialization must not claim the in-game-only tool list");
         Assert.Contains("same play contract as the STS2 MCP player skill", instructions);
     }
 
@@ -587,6 +591,7 @@ internal static class McpServiceTests
 
     public static async Task HandleHttp_OriginPolicyRejectsUntrustedAndAllowsSameOrigin()
     {
+        RealHttpListenerCapability.Require();
         var started = LoopbackListener.Start(49170, allowFallback: true);
         using var listener = started.Listener;
         var endpoint = $"http://127.0.0.1:{started.Port}/mcp";

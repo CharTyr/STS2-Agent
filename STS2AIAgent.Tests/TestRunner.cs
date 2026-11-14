@@ -76,17 +76,28 @@ internal static class Assert
     }
 }
 
+internal sealed class TestSkippedException(string message) : Exception(message);
+
 internal static class TestRunner
 {
     public static int Run(IEnumerable<(string Name, Func<Task> Body)> tests)
     {
+        var passed = 0;
         var failed = 0;
+        var skipped = 0;
         foreach (var test in tests)
         {
             try
             {
                 test.Body().GetAwaiter().GetResult();
+                passed++;
                 Console.WriteLine("PASS  " + test.Name);
+            }
+            catch (TestSkippedException ex)
+            {
+                skipped++;
+                Console.WriteLine("SKIP  " + test.Name);
+                Console.WriteLine("      " + ex.Message);
             }
             catch (Exception ex)
             {
@@ -96,6 +107,7 @@ internal static class TestRunner
             }
         }
 
+        Console.WriteLine($"SUMMARY Passed={passed} Failed={failed} Skipped={skipped}");
         return failed;
     }
 
@@ -462,6 +474,7 @@ internal static class TestRunner
         yield return ("GameOver.ContinueAction", () => Task.Run(GameOverContractTests.DedicatedContinueActionIsWiredEndToEnd));
         yield return ("Reward.EmptyScreenEscape", () => Task.Run(RewardFlowContractTests.EmptyRewardsScreenEscapesInsteadOfPending));
         yield return ("Skill.McpPlayerContract", () => Task.Run(McpPlayerSkillTests.SkillTracksLivePlayContract));
+        yield return ("Skill.PlayFlowUsesFreshState", () => Task.Run(McpPlayerSkillTests.PlayFlowMatchesTheAdvertisedInGameTools));
         yield return ("Skill.ContractLineEndings", () => Task.Run(McpPlayerSkillTests.SharedContractIsIndependentOfLineEndings));
         yield return ("Skill.PromptResourceReaderLineEndings", () => Task.Run(McpPlayerSkillTests.PromptResourceReaderNormalizesLineEndings));
         yield return ("Skill.EmbeddedPromptLineEndings", () => Task.Run(McpPlayerSkillTests.EmbeddedPromptsUseCanonicalLineEndings));
@@ -777,6 +790,7 @@ internal static class TestRunner
         yield return ("LoopbackListener.ExplicitReservedPortFailsClearly", () => Task.Run(LoopbackListenerTests.ExplicitReservedPortFailsClearly));
         yield return ("LoopbackListener.ExhaustionIsBounded", () => Task.Run(LoopbackListenerTests.ExhaustionIsBounded));
         yield return ("LoopbackListener.UnexpectedFailureIsNotHidden", () => Task.Run(LoopbackListenerTests.UnexpectedFailureIsNotHidden));
+        yield return ("LoopbackListener.RunnerDistinguishesFailureAndSkip", () => Task.Run(LoopbackListenerTests.RunnerDistinguishesFailureAndSkip));
         yield return ("LoopbackListener.RealLoopbackListenerResponds", LoopbackListenerTests.RealLoopbackListenerResponds);
         yield return ("ProactiveChat.DefaultsOff", () => Task.Run(ProactiveChatPolicyTests.DefaultsStayOff));
         yield return ("ProactiveChat.UnknownToneFallsBack", () => Task.Run(ProactiveChatPolicyTests.UnknownToneFallsBackToDefault));

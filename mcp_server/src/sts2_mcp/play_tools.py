@@ -17,10 +17,10 @@ _DEBUG_ACTIONS = {"run_console_command", "inject_event_churn"}
 
 
 def _stop(result: dict[str, Any]) -> str | None:
-    if "error" in result:
-        return "rejected"
     if result.get("status") == "outcome_unknown":
         return "outcome_unknown"
+    if "error" in result:
+        return "rejected"
     if result.get("status") != "completed" or result.get("stable") is False:
         return "unsettled"
     return None

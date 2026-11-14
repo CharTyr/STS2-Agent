@@ -41,7 +41,7 @@
 | `diff_state` | 两份 `/state` 的逐路径差异（前后值），`truncated` 标明触顶 |
 | `get_game_data_item` | 按 id 查单个游戏元数据条目 |
 | `get_game_data_items` | 按逗号分隔的 id 批量查游戏元数据 |
-| `get_relevant_game_data` | 按当前场景自动裁剪字段的相关元数据（默认用它） |
+| `get_relevant_game_data` | 决策所需信息缺失时，按当前场景自动裁剪字段的相关元数据 |
 | `wait_for_event` | 等一条匹配的 `/events/stream` 事件 |
 | `wait_until_actionable` | 等到重新可操作，返回 `matched`（有事件命中）与 `actionable` |
 | `decide` | 一次调用给出 `state` + `available_actions` + `scene_guidance`，即一次决策要读的全部内容 |
@@ -145,13 +145,14 @@ Modal：
 
 这个 MCP 已经不算小，所以真正影响稳定性的，不只是“工具有没有”，还包括“模型是不是按正确节奏调用”：
 
-1. 会话开始先调 `health_check`。
-2. 每次决策前读一次状态：`decide`（一次拿到状态、动作与指引）或 `get_game_state`。
-3. 只调用当前 `available_actions` 里出现的动作；`act` 附一条简短的 `reason`，供玩家界面与决策日志解释本步选择。
-4. `act` 返回的 `state` 就是下一个决策的输入，不必再读一次；只有 `pending` / 屏幕变化时才重读，要完整载荷才传 `raw_state=True`（一次约 4,000–9,500 token）。
-5. `wait_until_actionable` 的 `state` 与 `act` / `get_game_state` 同形（compact），同样支持 `raw_state=True`：跨动画等待不需要完整载荷。
-6. 索引被拒时错误对象带 `field` / `submitted` / `valid_indices` / `valid_field`：按它改正索引，而不是重发同一个值。
-7. 优先用高层动作，不要把可合并流程拆碎（优先级见下）。
+1. 会话开始先调 `health_check`。首次决策、状态过期或上下文丢失时调 `decide`，一次拿到状态、动作与指引；已有新鲜状态则直接使用。旧 Mod 缺少快照路由时 sidecar 会回退到分开读取。
+2. 只调用最新 `available_actions` 里出现的动作，索引取自同一份新鲜状态；`act` 附简短的 `reason`，供玩家界面与决策日志解释选择。
+3. `act.state` 是下一次决策的输入；非空 `then` 计划检查 `plan.stop_reason` 和每个 `plan.steps[].status`，并在 `final_state` 存在且仍是最新状态时复用它。sidecar 可能把未知结果的步骤标为 `rejected`，若任一步结果未知，`final_state` 可能早于该步骤，必须取得新鲜状态后再决定。单纯切换屏幕不要求再读状态，缺少该屏指导时才按需查询。
+4. 等待动画或 `pending` 结果稳定时用 `wait_until_actionable`，检查 `actionable` 后直接使用返回的 `state`；若已出现新的选择，按新状态作决定，勿盲目重发上一个动作。
+5. 战斗中若 `act` schema 提供 `then`，可附最多九个后续步骤，优先用 `card_cid` 标识卡牌。未知抽牌或选择之后不要预编步骤；每步会重新检查，变化、拒绝、pending 或未知结果会停止。
+6. 先看载荷描述、`glossary` 和本局已知元数据，只在缺失信息影响决策时查询单个、批量或场景元数据。实时伤害、目标和合法性以当前状态为准。
+7. 索引被拒时错误对象带 `field` / `submitted` / `valid_indices` / `valid_field`：按新鲜状态改正，不重发同一个值。compact 缺字段时可用 `get_raw_game_state` 或传 `raw_state=True`；上下文压缩丢失静态块时用 `get_game_state(full_state=True)` 恢复。
+8. 优先用高层动作，不要把可合并流程拆碎（优先级见下）。
 
 **`outcome_unknown`（动作响应丢失）**：`status` 为 `outcome_unknown` 时，动作可能已经执行，只是响应没回来。
 客户端只做**一次** `/state` 对齐，读到的状态放在 `reconciliation.state`（compact，带 `compact_agent_view` 标记）；
@@ -252,6 +253,6 @@ python -m py_compile "<repo-root>/mcp_server/src/sts2_mcp/client.py" "<repo-root
 
 ## 两种驱动方式与整回合规划
 
-模式 A：外部客户端读取 decide/get_game_state 后调用 act；战斗可附 card_cid 与最多九个 then 步骤。每步检查最新状态，pending、拒绝或 outcome_unknown 就停止，绝不自动重放；返回逐步结果。Python 将 card_index 与 card_cid 一起交给 Mod 在动作锁内核对，compact v13 的 threat/vs 同时供两套 MCP 使用。
+模式 A：外部客户端首次或没有新鲜状态时读取 `decide`，之后复用当前可用的 `act.state`、计划的 `final_state` 或等待返回的 `state`；战斗可附 `card_cid` 与最多九个 `then` 步骤。检查 `plan.stop_reason` 和各步骤状态；若结果未知先取得新鲜状态。每步检查最新状态，pending、拒绝或 outcome_unknown 就停止，绝不自动重放；返回逐步结果。Python 将 card_index 与 card_cid 一起交给 Mod 在动作锁内核对，compact v13 的 threat/vs 同时供两套 MCP 使用。
 
 模式 B：通过本机 POST /session/control 启动 Mod 自己游玩，外部客户端使用 get_planner_briefing / update_play_strategy 提供规划。部分客户端会限制长时间自动循环；采用有限步数并返回进度，或用模式 B。旧的单动作 act 与 guided/layered/full 工具清单保留兼容。

@@ -39,16 +39,16 @@ If the screen is UNKNOWN, say so and ask the player to wait or retry rather than
     /// models did: a read round is a whole second request for a state the prompt already carried.
     /// </summary>
     public const string ActNowInstruction =
-        "The compact state above is fresh and includes available_actions. Do not call get_game_state; call act now with the next legal action and a one-sentence reason. Vision is optional and never required.";
+        "The compact state above is fresh and includes available_actions. Do not call get_game_state; use advertised metadata tools only for a decision-critical missing mechanic, otherwise call act now with the next legal action and a one-sentence reason. Vision is optional and never required.";
 
     /// <summary>
     /// Appended to <see cref="ActNowInstruction"/> on a combat frame while whole-turn plans are on:
     /// one request can carry the whole turn instead of one request per card.
     /// </summary>
     public const string PlanTurnInstruction =
-        "In combat, plan the whole turn in this one call: the first action in act's own fields, the rest in `then` (cards by card_cid, usually ending with end_turn). Use combat.threat and hand[].vs for the numbers. "
+        "In combat, plan known steps in this one call: the first action in act's own fields, up to nine follow-ups in `then` (cards by card_cid). Use combat.threat and hand[].vs for the numbers. "
         + "Example shape: {\"action\":\"play_card\",\"card_cid\":12,\"target_index\":0,\"reason\":\"...\",\"then\":[{\"action\":\"play_card\",\"card_cid\":7},{\"action\":\"end_turn\"}]}. "
-        + "Only leave `then` out when the next card depends on something you cannot see yet (a draw or a choice).";
+        + "Stop the plan before a step depending on an unknown draw or choice; each follow-up is checked against fresh state.";
 
     public const string JsonActFallback = """
 If you cannot call tools, reply with a single JSON object and nothing else:
@@ -119,6 +119,9 @@ Omit unused parameters; keep "reason" -- it is shown to the player. Do not wrap 
 
     public static string PlaySystem { get; } = BuildPlaySystem();
 
+    /// <summary>MCP initialization instructions for an external client, which has not been given a live frame.</summary>
+    public static string McpInstructions { get; } = BuildMcpInstructions();
+
     public readonly record struct SkillResource(string Uri, string Name, string Description, string Text);
 
     public static IReadOnlyList<SkillResource> SkillResources { get; } =
@@ -130,10 +133,10 @@ Omit unused parameters; keep "reason" -- it is shown to the player. Do not wrap 
     private static string BuildPlaySystem()
     {
         var builder = new StringBuilder();
-        builder.AppendLine("You are playing Slay the Spire 2 through structured tools. This is the same play contract as the STS2 MCP player skill.");
+        builder.AppendLine("Play Slay the Spire 2 under the same play contract as the STS2 MCP player skill.");
         builder.AppendLine();
-        builder.AppendLine("Tools: get_game_state, get_raw_game_state, get_available_actions, get_game_data_item, get_game_data_items, get_relevant_game_data, wait_until_actionable, act.");
-        builder.AppendLine("Compact live state plus tools is complete; screenshots are optional and never required.");
+        builder.AppendLine("In-game tools: get_game_data_item, get_game_data_items, get_relevant_game_data, wait_until_actionable, act.");
+        builder.AppendLine("Use compact state and tools; screenshots are optional.");
         // The card-value note used to ride inside every combat frame (PromptStateDiet now drops it
         // there); here it is paid once per request. The old "previews include Strength" line said the
         // first half of it again.
@@ -143,9 +146,20 @@ Omit unused parameters; keep "reason" -- it is shown to the player. Do not wrap 
         builder.AppendLine();
         // The playbooks are not carried here: this prompt is re-sent on every play step, and the
         // caller injects the current screen's section (PlaybookGuidance) right behind this message.
-        builder.AppendLine("The playbook section for the current screen follows this message; other screens' sections are left out.");
-        builder.Append("Each play step: call act exactly once with a one-sentence reason the player can read; legality comes from live state.");
+        builder.AppendLine("The playbook section for the current screen follows.");
+        builder.Append("Call act once per step with a one-sentence reason; then may include known combat follow-ups when offered. Live state decides legality.");
         // AppendLine uses the host newline; the prompt must not vary by build platform.
+        return builder.ToString().ReplaceLineEndings("\n");
+    }
+
+    private static string BuildMcpInstructions()
+    {
+        var builder = new StringBuilder();
+        builder.AppendLine("You are an external Slay the Spire 2 MCP client. This is the same play contract as the STS2 MCP player skill.");
+        builder.AppendLine("Check health_check and avoid competing with running in-game auto-play. When fresh state is missing, stale or lost, use decide for state, legal actions and screen guidance; reuse fresh action or wait results thereafter.");
+        builder.AppendLine("If compact state lacks a needed field, use get_raw_game_state. If context compaction lost unchanged static blocks, use get_game_state(full_state=true) to restore them.");
+        builder.AppendLine();
+        builder.Append(PlayContract.Trim());
         return builder.ToString().ReplaceLineEndings("\n");
     }
 

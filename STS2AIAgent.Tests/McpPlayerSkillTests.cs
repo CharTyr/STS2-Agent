@@ -43,7 +43,6 @@ internal static class McpPlayerSkillTests
                      "choose_bundle",
                      "confirm_bundle",
                      "wait_until_actionable",
-                     "get_raw_game_state",
                      "crystal_clear_cell",
                      "local_vote"
                  })
@@ -54,6 +53,51 @@ internal static class McpPlayerSkillTests
                 "no in-game prompt text reaches " + token
                 + "; if it moved out of the shared contract it has to be in a screen's slice");
         }
+        var outsideContract = skill[(skill.IndexOf(PlayPrompt.SharedContractEnd, StringComparison.Ordinal)
+            + PlayPrompt.SharedContractEnd.Length)..];
+        Assert.Contains("`get_raw_game_state`", outsideContract, StringComparison.Ordinal);
+        Assert.Contains("`get_game_state(full_state=true)`", outsideContract, StringComparison.Ordinal);
+    }
+
+    public static void PlayFlowMatchesTheAdvertisedInGameTools()
+    {
+        const string prefix = "In-game tools: ";
+        var directory = PlayPrompt.PlaySystem.Split('\n')
+            .Single(line => line.StartsWith(prefix, StringComparison.Ordinal));
+        var names = directory[prefix.Length..].TrimEnd('.').Split(", ", StringSplitOptions.RemoveEmptyEntries);
+        var listed = string.Join(",", names.OrderBy(name => name, StringComparer.Ordinal));
+        foreach (var tools in new[] { AgentTools.PlayInGame, AgentTools.PlayInGameSingle })
+        {
+            Assert.Equal(string.Join(",", tools.Select(tool => tool.Name).OrderBy(name => name, StringComparer.Ordinal)),
+                listed, "the play prompt's tool directory must match both in-game tool schemas");
+        }
+
+        var contract = PlayPrompt.PlayContract;
+        foreach (var text in new[]
+                 {
+                     "in-game loop already supplies fresh compact state", "`scene_guidance`",
+                     "`final_state`", "`wait_until_actionable`", "`*_unchanged`",
+                     "up to nine", "`card_cid`", "unknown draw or choice", "`outcome_unknown`",
+                     "Never automatically replay", "`plan.stop_reason`", "`plan.steps[].status`", "`final_state` may predate",
+                     "decision-critical mechanic", "Live state controls legality"
+                 })
+        {
+            Assert.Contains(text, contract, StringComparison.Ordinal);
+        }
+        var skill = AgentSourceFixture.Read("skills/sts2-mcp-player/SKILL.md");
+        Assert.Contains("call `decide`", skill, StringComparison.Ordinal);
+
+        foreach (var name in new[] { "get_game_data_item", "get_game_data_items", "get_relevant_game_data" })
+        {
+            var tool = AgentTools.PlayInGame.Single(item => item.Name == name);
+            Assert.Contains("missing", tool.Description, StringComparison.Ordinal);
+        }
+        var planTool = AgentTools.PlayInGame.Single(item => item.Name == "act");
+        Assert.Contains("known follow-ups", planTool.Description, StringComparison.Ordinal);
+        Assert.Contains("unknown draw or choice", planTool.Description, StringComparison.Ordinal);
+        Assert.Contains("unknown draw or choice", System.Text.Json.JsonSerializer.Serialize(planTool.Parameters), StringComparison.Ordinal);
+        Assert.Contains("returned fresh state", PlayPrompt.PlaybookGuidance("EVENT"), StringComparison.Ordinal);
+        Assert.Contains("returned fresh state", PlayPrompt.ScreenGuidance("EVENT"), StringComparison.Ordinal);
     }
 
     public static void SharedContractIsIndependentOfLineEndings()
