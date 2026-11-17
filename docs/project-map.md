@@ -190,7 +190,7 @@ one action runs at a time.
 - `STS2AIAgent/Agent/StallHintPolicy.cs` — pure: which second status line a long stage earns (main-menu idle, waiting for the player, slow model, game not responding).
 - `STS2AIAgent/Agent/AgentRuntime.Turbo.cs` — game speed while the AI plays: `EngageTurboAsync` (start of `AutoPlayLoopAsync`), `ReleaseTurboAsync` (its outer `finally`, own 5 s deadline, not the ended token), `ScheduleTurboRecovery` (mod start: repairs a boost a crashed session left), and the persisted marker `TurboRestoreFastMode`.
 - `STS2AIAgent/Agent/AgentRuntime.ModeControl.cs` — solo/co-op mutual exclusion: `TryBeginPlayModeSwitch`/`EndPlayModeSwitch`, start gates.
-- `STS2AIAgent/Agent/AgentRuntime.Accounting.cs` — `AccountTurn`, `RecordTurnReceipt`, `ApplyPlayResult`, the chat history buffer, Jev panel readings, `DescribeActResult`.
+- `STS2AIAgent/Agent/AgentRuntime.Accounting.cs` — `AccountTurn`, `RecordTurnReceipt`, `ApplyPlayResult`, bounded numeric context diagnostics, the chat history buffer, Jev panel readings, `DescribeActResult`.
 - `STS2AIAgent/Agent/AgentRuntime.Session.cs` — run-scoped session: `ObserveSessionStateSnapshot` (only a fresh **raw** game-thread frame may switch or clear the session), `FlushSessionIfDirty`, `RecordDecision`.
 - `STS2AIAgent/Agent/AgentRuntime.Status.cs` — status line: `SetStatus`, `SetPlayPhase` (phase plus elapsed seconds), `SetRequestingModelStatus` (also drops the previous request's streamed reasoning).
 - `STS2AIAgent/Agent/AgentRuntime.PlayInstructions.cs` — messages sent during solo auto-play become bounded, one-shot, run-scoped guidance for the next decision.
@@ -209,7 +209,8 @@ one action runs at a time.
 - `STS2AIAgent/Agent/SessionBudgetGuard.cs` — token and request caps; `CheckBudget(extraRequests, extraTokens)` runs before every dispatch.
 - `STS2AIAgent/Agent/CurrentRunBoundary.cs` — leaving the run, or a new run identity → `AutoPlayStoppedException(RunEnd)`.
 - `STS2AIAgent/Agent/AgentTurnCanceledException.cs` — cancellation that carries the partial turn receipt.
-- `STS2AIAgent/Agent/ContextCompaction.cs` — summary plus the last ≤6 decisions once 80% of the context window is used.
+- `STS2AIAgent/Agent/ContextCompaction.cs` — fixed-size memory of at most six recent decisions, independent of prior usage.
+- `STS2AIAgent/Agent/ContextBudget.cs` — pure per-request local estimate, protected-message/history trimming and numeric diagnostics; checks configured window, output reserve, safety margin, schemas, tool exchanges and images.
 - `STS2AIAgent/Agent/PlayPrompt.cs` — system prompts (play, chat, teammate), guidance slices, reply-language rule, JSON act fallback. The play prompt names the actual in-game tool set; the loop injects a fresh state and current-screen guidance before each model decision.
 - `STS2AIAgent/Agent/PlaybookSections.cs` — screen → embedded playbook slice (≤2400 chars; mirrors `mcp_server/src/sts2_mcp/scene_guidance.py`).
 - `STS2AIAgent/Agent/PlanningSummary.cs` — JSON-aware trim of the compact state for the planner's prompt: glossary/deck/piles go first, combat facts last, and the result is always parseable (a character cut used to produce invalid JSON, which left plan scope empty).
@@ -232,7 +233,7 @@ one action runs at a time.
 - `STS2AIAgent/Agent/DecisionLog.cs` — bounded, redacted accepted-decision log (`/decisions`). Dual-layer rows carry the per-turn Jev trace (`option_ids`, `probabilities`, `danger`, `strategy_updated_at`); an LLM fallback after a failed Jev attempt is marked `jev_attempt`.
 - `STS2AIAgent/Agent/PlayerLabels.cs` — the words the overlay shows for API screen, action and decision-source identifiers (display only; the API and the model keep the identifiers).
 - `STS2AIAgent/Agent/PlayerFacingSession.cs` — the player-facing session summary the overlay renders (headline, next step, waiting-for-player).
-- `STS2AIAgent/Agent/DiagnosticExport.cs` — "export diagnostics" text and `Redact` (masks keys and bearer tokens).
+- `STS2AIAgent/Agent/DiagnosticExport.cs` — "export diagnostics" text, numeric context estimates and available provider usage (no prompt bodies), and `Redact` (masks keys and bearer tokens).
 - `STS2AIAgent/Agent/McpProcessLauncher.cs` — optional launch of the Python MCP sidecar.
 - `STS2AIAgent/Agent/DualLaunchOutcome.cs` — typed result of a co-op launch attempt.
 - `STS2AIAgent/Agent/DualLaunchBlockReason.cs` — why a launch may not start (solo mode, autoplay running, genuine concurrency) before the gate is claimed, so `TryLaunchDualInstanceAsync` can record `Rejected` with a readable reason instead of returning the silent "pending" a solo-mode invite used to hang on.
@@ -256,6 +257,7 @@ one action runs at a time.
 ### Flows
 - **Turn:** `StartAutoPlay` → `AutoPlaySession.TryStart(AutoPlayLoopAsync)` → `AutoPlayRecovery.RunAsync` takes `_turnGate` → snapshot (bounded game-thread read) → `CurrentRunBoundary.Check` → session observe → `TryCompanionImmediateAsync` → `AgentLoop.PlayOnceAsync` → (dual-layer on and no pending instruction) `TryDecideWithJevAsync`, otherwise `PlayWithModelAsync` → `CompleteWithToolsAsync` → model calls `act` → `ExecuteActAsync` → `ActIndexValidator` against a fresh decision snapshot → `GameBridge.ActAsync` → `GameActionService.ExecuteAsync` → `AgentTurnResult` → commit (budget `Observe`, `ApplyPlayResult`, `RecordTurnReceipt`, decision log and session) → `Observe` (stop or backoff) → `afterTurn` (proactive chat, same gate). While the model request is in flight, `LlmRequest.OnReasoningDelta` → `AgentRuntime.ReportReasoningDelta` fills `LiveThoughtBuffer` (only when the player's switch is on), the overlay's 800 ms tick draws it, and the turn's own `finally` plus `AppendTurnTraces` clear it — so the streamed bubble yields to the recorded one and never outlives the turn.
 - **Pause:** `StopAutoPlay` → `RequestPause` cancels the CTS → every dispatch boundary and game-thread post observes it → the interrupted receipt is committed → `Phase = paused`.
+- **Context:** before each `CompleteWithToolsAsync` play/chat dispatch and transport compatibility retry, `ContextBudget` estimates messages, schemas, images, output reserve and margin; it removes only explicitly tagged historical messages, preserves live facts and complete tool/reasoning exchanges, and refuses if required material still exceeds the estimate. Only actual dispatch acknowledges pending guidance and advances the receipt. Diagnostics retain the latest 40 numeric snapshots and session peak; provider usage remains separate and may be unknown. Estimates are not a tokenizer or an overflow guarantee. Independent planner, vision-caption, Jev and role-probe requests do not use this guard.
 - **Chat:** `SendChatCoreAsync`. While auto-play runs, a message becomes a queued play instruction. Otherwise: budget check → `_turnGate` → `AgentLoop.ChatAsync` (read-only tools unless `PlayIntent` matches).
 - **Stops:** budget → `budget`; left the run or a new run → `run_end`; 401/403 → `config`; 3 consecutive failures, repeats, unsettled streaks or a 150 s game-driven wait → `failed`, with a visible reason.
 - **Jev turn** (dual-layer on for this mode, Jev configured, no queued play instruction): decision snapshot → `JevOptionEnumerator.Enumerate` (≤255 options; card plays first; ids like `play_card:0->1`, `choose_map_node:2`, `resolve_rewards:skip`) → `JevExecutionDecider` → `/v1/systemone` (a 429 is retried at most once within the turn deadline; each attempt is billed) → confidence below the threshold (default 0.35), an unknown id or an error → empty receipt → **LLM fallback** (`PlayWithModelAsync`). An executed act returns early; a rejected act also falls back (the cost is doubled work, not a stall).
@@ -443,7 +445,8 @@ but hasn't settled; the agent treats a run of these as a stall (`NoProgressPolic
 - `STS2AIAgent/Llm/LlmTypes.cs` — request and response DTOs, `ResolvedModel`, `LlmException`.
 - `STS2AIAgent/Llm/MaxTokensField.cs` — `max_tokens` vs `max_completion_tokens` per provider.
 - `STS2AIAgent/Llm/ThinkingRequestBuilder.cs` — provider-specific thinking/reasoning request fields.
-- `STS2AIAgent/Multiplayer/LocalDualInstanceLauncher.cs` — launches the second game process as the companion (isolated profile, env vars, single-instance guard).
+- `STS2AIAgent/Multiplayer/LocalDualInstanceLauncher.cs` — launches the second game process as the companion (isolated profile, env vars, single-instance guard); on an explicit new root-menu invite/continue, closes and waits for its own old child before starting another.
+- `STS2AIAgent/Multiplayer/CompanionRetirement.cs` — Godot-free setup/control visibility and bounded retirement sequencing using the launch gate; a failed or timed-out close never clears the child.
 - `STS2AIAgent/Multiplayer/DualInstanceCoordinator.cs` — host side of local co-op: host the lobby, wait for the companion, start or continue the run.
 - `STS2AIAgent/Multiplayer/CoopLaunchPolicy.cs` — whether an invite may launch, and whether the companion auto-plays (requires a verified play role).
 - `STS2AIAgent/Multiplayer/CoopSavePrecheckPolicy.cs` / `STS2AIAgent/Multiplayer/CoopSaveProbe.cs` — whether a saved co-op run can be continued.
@@ -469,7 +472,7 @@ but hasn't settled; the agent treats a run of these as a stall (`NoProgressPolic
   calls tolerate numeric ids, object `arguments` and missing ids (an id is synthesized, never dropped).
   The assistant tool-call turn echoes the provider's `reasoning_content` (DeepSeek and Kimi thinking modes
   return 400 without it; nothing is sent to providers that never returned it).
-- **Co-op invite:** overlay `LaunchDualAsync` → `CoopLaunchPolicy` (verified play role → the companion auto-plays) → `LocalDualInstanceLauncher.LaunchCompanionAsync` (isolated settings, env: role, port, token, host PID, autoplay) → wait for `/health` from the expected PID (90 s) → `DualInstanceCoordinator` hosts the lobby, the companion joins, run start or continue. The host talks to the companion over HTTP with the `X-STS2-Companion-Session` token.
+- **Co-op invite:** overlay `LaunchDualAsync` → runtime's dual-launch gate and `CoopLaunchPolicy` (verified play role → the companion auto-plays) → on an explicit root-menu invite/continue, `CompanionRetirement` closes the previously launched child and waits for its exit under the launcher's gate; root menu is rechecked before opening the lobby or loading. `LocalDualInstanceLauncher.LaunchCompanionAsync` starts the isolated child (role, port, token, host PID, autoplay), then waits for `/health` from its expected PID (90 s). A failed close stops the attempt; an active session may reconnect a live unconnected child without retiring it. UI/state reads never retire a child. Host HTTP uses `X-STS2-Companion-Session`.
 
 ### Provider quirks the client handles
 | Provider | Handling |
@@ -558,7 +561,7 @@ most nine follow-ups and stop before unknown draw/choice outcomes.
 - Known and deliberately not changed in the 2026-09-23 sweep (low frequency or design trade-offs):
   session file I/O runs inside the game-thread read at run boundaries (a one-frame hitch per boundary);
   `TryAdvanceRewardModalAsync` keeps waiting on a modal it can't advance until the 20 s drain budget
-  ends (this also covers modals still animating in); a 400/415/422 on a streamed LLM request is retried
+  ends (this also covers modals still animating in); a 400/415/422 on a streamed LLM request (except a recognized context-limit error) is retried
   once without streaming (one extra request on a permanent misconfiguration); non-action MCP reads keep
   raw transport exception types (pinned by `test_action_replay_safety.py`); `start-game-session.ps1
   -ExtraArguments` splits on whitespace (no quoted arguments).

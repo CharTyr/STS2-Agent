@@ -12,11 +12,21 @@ https://github.com/user-attachments/assets/89353468-a299-4315-9516-e520bcbfbd4b
 
 ---
 
-### Play experience (unreleased)
+### Play experience
 
 Auto-play uses the game's own Fast Mode and restores your setting on pause. Forced moves spend no model requests; combat can execute a checked whole-turn plan from one request. Combat math, deck statistics and route advice accompany the current state. **F7 pauses/resumes; F8 opens the panel.** The HUD shows the action and reason, and is hidden from screenshots. A finished run gets a copyable report and an optional bounded factual journal. These switches are under **Settings → Play experience**.
 
-**Will acceleration change my saved game speed?** The temporary speed is guarded against being written to the game's settings; pause restores the previous value. Co-op is capped at Fast. All features can be switched off. The released version remains 0.17.0; this branch's live evidence is recorded separately.
+**Will acceleration change my saved game speed?** The temporary speed is guarded against being written to the game's settings; pause restores the previous value. Co-op is capped at Fast. All features can be switched off. See the current status page for release and validation evidence.
+
+### In-game screenshots
+
+Real v0.19.2 interface captures using an isolated profile with no API key.
+
+![Single-player control panel](https://raw.githubusercontent.com/CharTyr/STS2-Agent/main/steam-workshop/previews/01-solo-panel.jpg)
+
+![AI teammate invitation](https://raw.githubusercontent.com/CharTyr/STS2-Agent/main/steam-workshop/previews/02-teammate-invite.jpg)
+
+![Quick setup and themes](https://raw.githubusercontent.com/CharTyr/STS2-Agent/main/steam-workshop/previews/03-settings.jpg)
 
 ## 🌟 Key Highlights
 
@@ -88,6 +98,7 @@ Request limits, proxies, thinking protocols and the External Agent route: see [M
 - The main window shows whether the teammate is connected, waiting on you/the game/the model, or why it stopped and what to click next. **Pause teammate** gives immediate feedback; already submitted actions still finish.
 - Use team chat to coordinate in plain English or Chinese.
 - By default the teammate takes the preselected character and readies up by itself. To pick its character yourself (in the teammate window, or through the companion API with `select_character` then `embark`), tick **Pick teammate character** above the invite button (it sets `companionAutoSelectCharacter` to `false` in the mod's `settings.json`); the teammate then waits on the character screen, for the AI driving it or for you, without a timeout.
+- After a run, return to the root main menu and invite again: the mod closes its previous teammate window and starts a fresh one. If that window does not close, close it normally and retry.
 - To pick up a saved co-op run, use **Continue co-op save**, the button under the invite; it is enabled on the main menu while a co-op save exists. It hosts the saved run over the local connection and brings the teammate back. Do not use the game's own Load button for that save: it opens the run over Steam networking, rejects the local-connection player ids, and renames the save as corrupt.
 
 #### Option C: Hand The Teammate Window To An External Agent
@@ -101,7 +112,7 @@ Both routes enforce the same structural conditions (you are on the main menu, th
 
 ### Model setup details
 - **Test main model** usually sends 3 requests (connectivity, tool calling and streamed arguments) with a 45-second deadline; while it runs the button reads **Cancel test**, so press it again to cancel. Auto-play requires verified tool calling; chat connectivity alone is not enough.
-- New installs stop auto-play after 1,500 requests by default, which is about one full run. Adjust the limit, or leave it empty / enter 0 for unlimited. Existing unlimited settings are preserved. Tests also call your provider. Request and token counters are not a bill; consult your provider for charges.
+- New installs stop auto-play after 1,500 requests by default. Adjust the limit, or leave it empty / enter 0 for unlimited. Existing unlimited settings are preserved. Tests also call your provider. Request and token counters are not a bill; consult your provider for charges.
 - Quick setup shares one model for conversation and play. Multiple endpoints, vision, thinking protocols and advanced budgets are under **Show advanced options**. Proxy aliases do not need to be renamed `deepseek-chat`: set the endpoint protocol explicitly.
 - In **Play → Multiplayer**, choose **AI auto-play** before inviting, or explicitly choose **External Agent** to launch a teammate that waits for Claude Code / Cursor / Codex; that route needs no model.
 - A ChatGPT subscription does not include an OpenAI API key or API credits.
@@ -205,6 +216,10 @@ Default shape (replace the port with the one under Settings → MCP):
 Built-in MCP tools add `health_check` on top of the surface in-game Auto-Play uses: `get_game_state`, `get_available_actions`, `act`, `get_game_data_*`, `wait_until_actionable`. The default `guided` profile also exposes `decide` (state, available actions and scene guidance from one call), `get_scene_guidance`, `get_raw_game_state`, `get_decision_log`, `get_run_summary` and `diff_state`.
 
 In-game Auto-Play already follows the bundled play contract. If you drive the game from an **external** agent over MCP (Cursor, Claude, Codex, or the optional Python sidecar), also load the companion skill [`sts2-mcp-player`](./skills/sts2-mcp-player/SKILL.md). Connecting tools without that skill can click legal actions; the skill is what matches in-game play quality.
+
+For character selection, tell the external agent which character you want; the shared playbook requires it to honor that choice and report if the character is unavailable. Without a specified character it keeps a valid unlocked selection, or chooses an unlocked character if needed. The teammate's automatic preselection above is a separate bootstrap setting.
+
+The built-in play/chat tool loop estimates every request against the configured model context window (256,000 tokens when unset), including tool schemas, replies and attached images, plus the configured output cap (or an 8,192-token assumption when unset) and a safety margin. It keeps a fixed-size memory of recent decisions and removes optional history first; current game facts, legal actions, player instructions and complete tool exchanges are retained. If required content still exceeds the estimate, the request is stopped and queued play guidance remains available. Estimates are local approximations, not exact tokenizer counts or a guarantee that a provider will accept the request. Cached tokens still count against the context window. The session card's **Copy diagnostics** / **Save diagnostics** includes at most 40 recent numeric request breakdowns and the session peak, alongside provider-reported input, output and cache usage when available; it contains no prompt bodies or keys. Separate planner, vision-caption, fast-judgment and model-test requests do not use this check. An external MCP client's conversation and context are managed by that client. If compact MCP state omits unchanged data after the client loses context, request `get_game_state(full_state=true)`; the Python sidecar also offers `get_raw_game_state`. Session request limits do not guarantee a fixed run cost.
 
 ---
 

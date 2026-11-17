@@ -12,11 +12,21 @@ https://github.com/user-attachments/assets/89353468-a299-4315-9516-e520bcbfbd4b
 
 ---
 
-### 游玩体验改造（未发版）
+### 游玩体验
 
 自动游玩使用游戏自带加速，暂停后恢复原档位；无需取舍的小步骤不问模型，战斗可一次请求规划多步并逐步校验。状态包含战斗算术、牌组统计和路线建议。**F7 暂停/继续，F8 打开面板**。画面提示显示动作和理由，截图时自动隐藏；局末有可复制成绩单与可关闭、可清空的事实战绩。设置位于 **设置 → 游玩体验**。
 
-**加速会改我的游戏设置吗？** 临时加速有写盘守卫，暂停恢复原值；联机最多快速档。各功能均可关闭。已发布版本仍为 0.17.0，本分支实机证据单独记录。
+**加速会改我的游戏设置吗？** 临时加速有写盘守卫，暂停恢复原值；联机最多快速档。各功能均可关闭。发布与验证范围见当前状态页。
+
+### 游戏内实拍
+
+以下为 v0.19.2 的真实界面，使用独立测试档，未配置 API Key。
+
+![单人游玩面板](https://raw.githubusercontent.com/CharTyr/STS2-Agent/main/steam-workshop/previews/01-solo-panel.jpg)
+
+![邀请 AI 队友](https://raw.githubusercontent.com/CharTyr/STS2-Agent/main/steam-workshop/previews/02-teammate-invite.jpg)
+
+![快速设置与主题](https://raw.githubusercontent.com/CharTyr/STS2-Agent/main/steam-workshop/previews/03-settings.jpg)
 
 ## 🌟 项目亮点
 

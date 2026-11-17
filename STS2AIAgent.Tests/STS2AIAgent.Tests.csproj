@@ -14,6 +14,7 @@
     <Compile Include="../STS2AIAgent/Multiplayer/CompanionPlaySettings.cs" Link="Multiplayer/CompanionPlaySettings.cs" />
     <Compile Include="../STS2AIAgent/Multiplayer/CompanionModStager.cs" Link="Multiplayer/CompanionModStager.cs" />
     <Compile Include="../STS2AIAgent/Multiplayer/CompanionDiscovery.cs" Link="Multiplayer/CompanionDiscovery.cs" />
+    <Compile Include="../STS2AIAgent/Multiplayer/CompanionRetirement.cs" Link="Multiplayer/CompanionRetirement.cs" />
     <Compile Include="../STS2AIAgent/Server/InstanceEndpointFile.cs" Link="Server/InstanceEndpointFile.cs" />
     <Compile Include="../STS2AIAgent/Server/CompanionStartupFile.cs" Link="Server/CompanionStartupFile.cs" />
     <Compile Include="..\STS2AIAgent\Agent\AutoPlaySession.cs" Link="Agent\AutoPlaySession.cs" />
@@ -95,6 +96,7 @@
     <Compile Include="..\STS2AIAgent\Agent\PlayPhases.cs" Link="Agent\PlayPhases.cs" />
     <Compile Include="..\STS2AIAgent\Agent\AgentTurnCanceledException.cs" Link="Agent\AgentTurnCanceledException.cs" />
     <Compile Include="..\STS2AIAgent\Agent\CompletionErrors.cs" Link="Agent\CompletionErrors.cs" />
+    <Compile Include="..\STS2AIAgent\Agent\ContextBudget.cs" Link="Agent\ContextBudget.cs" />
     <Compile Include="..\STS2AIAgent\Agent\ContextCompaction.cs" Link="Agent\ContextCompaction.cs" />
     <Compile Include="..\STS2AIAgent\Agent\AgentTools.cs" Link="Agent\AgentTools.cs" />
     <Compile Include="..\STS2AIAgent\Agent\ActIndexValidator.cs" Link="Agent\ActIndexValidator.cs" />

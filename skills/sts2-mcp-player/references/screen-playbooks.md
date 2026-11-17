@@ -22,7 +22,8 @@ This file is about **how to drive a screen**. For **what to choose** where the c
 
 ## CHARACTER_SELECT
 
-- Use the first unlocked character unless the task specifies otherwise.
+- If the player explicitly requests a character, select that character; if it is unavailable or locked, report the blocker and do not silently substitute another.
+- Otherwise keep the character already selected and unlocked. If no valid character is selected, choose an unlocked character and continue without stopping to ask.
 - After `select_character`, wait for `character_select.embark = true`.
 - `embark` can be a heavy transition. Prefer a longer request timeout; if its result is pending or unknown, wait or inspect fresh state before deciding, and never blindly resend it.
 - If a `MODAL` appears after `open_character_select` or `embark`, resolve it before making any gameplay decision.

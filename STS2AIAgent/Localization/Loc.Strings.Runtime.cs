@@ -11,6 +11,7 @@ internal static partial class Loc
             "Non-combat-only mode is enabled; the Agent stays read-only until combat ends.";
         map["非战斗模式已启用；等待战斗结束"] =
             "Non-combat-only mode is enabled; waiting for combat to end";
+        map["模型上下文估算超出窗口，已停止发送。请检查模型窗口或输出上限。"] = "The estimated model context exceeds the window; sending stopped. Check the model window or output limit.";
         // Status line.
         map["沙坑计数即将归零，优先打出狂乱逃离，避免下次敌方回合开始时被吞噬。"] = "Sandpit is about to reach zero. Play Frantic Escape first to avoid being devoured at the next enemy turn start.";
         map["沙坑状态或手牌已变化，已取消自动逃离，请重新读取状态。"] = "Sandpit or the hand changed. Automatic escape was canceled; read the state again.";

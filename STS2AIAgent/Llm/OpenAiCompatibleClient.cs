@@ -6,7 +6,7 @@ using STS2AIAgent.Config;
 
 namespace STS2AIAgent.Llm;
 
-internal sealed class OpenAiCompatibleClient : ILlmClient, IStreamingToolProbe
+internal sealed class OpenAiCompatibleClient : ILlmClient, IStreamingToolProbe, IDispatchNotifyingLlmClient
 {
     internal static readonly TimeSpan DefaultRequestTimeout = TimeSpan.FromMinutes(10);
 
@@ -96,7 +96,8 @@ internal sealed class OpenAiCompatibleClient : ILlmClient, IStreamingToolProbe
             };
         }
 
-        return await SendCompletionAsync(body, request.Stream, cancellationToken, request.OnReasoningDelta);
+        return await SendCompletionAsync(body, request.Stream, cancellationToken, request.OnReasoningDelta,
+            request.BeforeRetry, request.OnDispatch);
     }
 
     public async Task<string> PingAsync(string model, CancellationToken cancellationToken)
@@ -258,7 +259,9 @@ internal sealed class OpenAiCompatibleClient : ILlmClient, IStreamingToolProbe
         Dictionary<string, object?> body,
         bool stream,
         CancellationToken cancellationToken,
-        Action<string>? onReasoningDelta)
+        Action<string>? onReasoningDelta,
+        Action? beforeRetry = null,
+        Action? onDispatch = null)
     {
         // Each step is a documented provider difference, applied at most once, and tried in a loop
         // rather than as nested catches. `ShouldRetryWithoutStream` accepts any HTTP 400, so with
@@ -268,11 +271,15 @@ internal sealed class OpenAiCompatibleClient : ILlmClient, IStreamingToolProbe
         var streamDemotionTried = !stream;
         var tokenFieldRenameTried = false;
 
+        var retry = false;
         while (true)
         {
+            cancellationToken.ThrowIfCancellationRequested();
+            if (retry) beforeRetry?.Invoke();
+            retry = true;
             try
             {
-                return await SendOnceAsync(body, stream, cancellationToken, onReasoningDelta);
+                return await SendOnceAsync(body, stream, cancellationToken, onReasoningDelta, onDispatch);
             }
             catch (LlmException ex) when (!streamDemotionTried && ShouldRetryWithoutStream(ex))
             {
@@ -281,7 +288,7 @@ internal sealed class OpenAiCompatibleClient : ILlmClient, IStreamingToolProbe
                 stream = false;
                 streamDemotionTried = true;
             }
-            catch (LlmException ex) when (!tokenFieldRenameTried && MaxTokensField.IsUnsupportedParameterError(ex))
+            catch (LlmException ex) when (!ex.IsContextLimit && !tokenFieldRenameTried && MaxTokensField.IsUnsupportedParameterError(ex))
             {
                 if (!MaxTokensField.RenameToCompletionTokens(body))
                 {
@@ -299,7 +306,8 @@ internal sealed class OpenAiCompatibleClient : ILlmClient, IStreamingToolProbe
         Dictionary<string, object?> body,
         bool stream,
         CancellationToken cancellationToken,
-        Action<string>? onReasoningDelta)
+        Action<string>? onReasoningDelta,
+        Action? onDispatch = null)
     {
         var url = ResolveCompletionsUrl(_endpoint.BaseUrl);
         using var request = new HttpRequestMessage(HttpMethod.Post, url);
@@ -318,6 +326,8 @@ internal sealed class OpenAiCompatibleClient : ILlmClient, IStreamingToolProbe
             var completionOption = stream
                 ? HttpCompletionOption.ResponseHeadersRead
                 : HttpCompletionOption.ResponseContentRead;
+            linked.ThrowIfCancellationRequested();
+            onDispatch?.Invoke();
             response = await _http.SendAsync(request, completionOption, linked);
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
@@ -338,7 +348,8 @@ internal sealed class OpenAiCompatibleClient : ILlmClient, IStreamingToolProbe
             if (!response.IsSuccessStatusCode)
             {
                 var errorPayload = await ReadBodyAsync(response, cancellationToken, linked);
-                throw new LlmException(FormatError((int)response.StatusCode, errorPayload), (int)response.StatusCode);
+                throw new LlmException(FormatError((int)response.StatusCode, errorPayload), (int)response.StatusCode,
+                    HasContextLimitCode(errorPayload));
             }
 
             // A streamed reply is read as it arrives rather than buffered whole: that is what lets a
@@ -555,7 +566,7 @@ internal sealed class OpenAiCompatibleClient : ILlmClient, IStreamingToolProbe
 
     private static bool ShouldRetryWithoutStream(LlmException ex)
     {
-        if (ex.StatusCode is not null and not 400 and not 415 and not 422) return false;
+        if (ex.IsContextLimit || ex.StatusCode is not null and not 400 and not 415 and not 422) return false;
         var message = ex.Message;
         return message.Contains("HTTP 400", StringComparison.Ordinal) ||
                message.Contains("HTTP 415", StringComparison.Ordinal) ||
@@ -683,40 +694,61 @@ internal sealed class OpenAiCompatibleClient : ILlmClient, IStreamingToolProbe
             return null;
         }
 
-        var prompt = ReadIntProperty(usageElement, "prompt_tokens");
-        var completion = ReadIntProperty(usageElement, "completion_tokens");
-        var total = ReadIntProperty(usageElement, "total_tokens");
+        var prompt = ReadUsageCount(usageElement, "prompt_tokens");
+        var completion = ReadUsageCount(usageElement, "completion_tokens");
+        var total = ReadUsageCount(usageElement, "total_tokens");
 
-        if (prompt == 0 && completion == 0 && total == 0)
-        {
-            return null;
-        }
-
-        // Two spellings of the same fact: OpenAI nests it, DeepSeek reports it flat.
+        // Two spellings of the same fact: OpenAI nests it, DeepSeek reports it flat. An
+        // explicitly reported zero is data, whereas null or an invalid field remains unknown.
         var cached = usageElement.TryGetProperty("prompt_tokens_details", out var details) && details.ValueKind == JsonValueKind.Object
-            ? ReadIntProperty(details, "cached_tokens")
-            : 0;
-        if (cached == 0)
-        {
-            cached = ReadIntProperty(usageElement, "prompt_cache_hit_tokens");
-        }
+            ? ReadUsageCount(details, "cached_tokens")
+            : null;
+        cached ??= ReadUsageCount(usageElement, "prompt_cache_hit_tokens");
+        if (prompt == null && completion == null && total == null && cached == null) return null;
 
         return new LlmUsage
         {
-            PromptTokens = prompt,
-            CompletionTokens = completion,
-            TotalTokens = total > 0 ? total : (prompt + completion),
-            CachedPromptTokens = Math.Clamp(cached, 0, Math.Max(0, prompt))
+            PromptTokens = prompt ?? 0,
+            CompletionTokens = completion ?? 0,
+            TotalTokens = total ?? (int)Math.Min(int.MaxValue, (long)(prompt ?? 0) + (completion ?? 0)),
+            CachedPromptTokens = Math.Min(cached ?? 0, prompt ?? int.MaxValue),
+            PromptTokensReported = prompt.HasValue,
+            CompletionTokensReported = completion.HasValue,
+            CachedPromptTokensReported = cached.HasValue
         };
     }
 
-    private static int ReadIntProperty(JsonElement element, string propertyName)
+    private static int? ReadUsageCount(JsonElement element, string propertyName)
     {
-        if (element.TryGetProperty(propertyName, out var prop) && prop.TryGetInt32(out var val))
+        if (element.TryGetProperty(propertyName, out var prop) && prop.ValueKind == JsonValueKind.Number
+            && prop.TryGetInt32(out var val) && val >= 0)
         {
             return val;
         }
-        return 0;
+        return null;
+    }
+
+    // FormatError intentionally shows the provider's message, not its entire JSON error. Preserve
+    // recognized machine-readable codes separately so a generic message cannot trigger a retry.
+    private static bool HasContextLimitCode(string payload)
+    {
+        try
+        {
+            using var document = JsonDocument.Parse(payload);
+            if (document.RootElement.ValueKind != JsonValueKind.Object
+                || !document.RootElement.TryGetProperty("error", out var error) || error.ValueKind != JsonValueKind.Object)
+                return false;
+            foreach (var field in new[] { "code", "type" })
+            {
+                if (!error.TryGetProperty(field, out var code) || code.ValueKind != JsonValueKind.String) continue;
+                var value = code.GetString();
+                if (string.Equals(value, "context_length_exceeded", StringComparison.OrdinalIgnoreCase)
+                    || string.Equals(value, "context_window_exceeded", StringComparison.OrdinalIgnoreCase)
+                    || string.Equals(value, "prompt_too_long", StringComparison.OrdinalIgnoreCase)) return true;
+            }
+        }
+        catch (JsonException) { }
+        return false;
     }
 
     private static string FormatError(int statusCode, string payload)
@@ -724,7 +756,8 @@ internal sealed class OpenAiCompatibleClient : ILlmClient, IStreamingToolProbe
         try
         {
             using var document = JsonDocument.Parse(payload);
-            if (document.RootElement.TryGetProperty("error", out var error))
+            if (document.RootElement.ValueKind == JsonValueKind.Object
+                && document.RootElement.TryGetProperty("error", out var error))
             {
                 return $"LLM HTTP {statusCode}: {ReadErrorMessage(error, payload)}";
             }
@@ -744,7 +777,8 @@ internal sealed class OpenAiCompatibleClient : ILlmClient, IStreamingToolProbe
             return error.GetString() ?? fallback;
         }
 
-        if (error.ValueKind == JsonValueKind.Object && error.TryGetProperty("message", out var message))
+        if (error.ValueKind == JsonValueKind.Object && error.TryGetProperty("message", out var message)
+            && message.ValueKind == JsonValueKind.String)
         {
             return message.GetString() ?? fallback;
         }

@@ -173,11 +173,11 @@ internal sealed partial class AgentLoop
             var screenLabel = string.IsNullOrWhiteSpace(screen) ? "UNKNOWN" : screen.Trim();
             var messages = new List<LlmMessage>
             {
-                LlmMessage.System(PlayPrompt.PlaySystem),
+                LlmMessage.System(PlayPrompt.PlaySystem, ContextPart.Static),
                 // Never empty: a screen with no section of its own gets the index of the sections, so
                 // the model is never told that there is no playbook for what it is looking at.
                 LlmMessage.System(
-                    "Playbook for the screen in the latest state (" + screenLabel + "):\n" + PlayPrompt.PlaybookGuidance(screen))
+                    "Playbook for the screen in the latest state (" + screenLabel + "):\n" + PlayPrompt.PlaybookGuidance(screen), ContextPart.Guidance)
             };
 
             // The reply-language choice rides the static prefix: it changes only when the player changes
@@ -185,14 +185,14 @@ internal sealed partial class AgentLoop
             var playLanguage = PlayPrompt.ReplyLanguageInstruction(settings.ReplyLanguage);
             if (playLanguage.Length > 0)
             {
-                messages.Add(LlmMessage.System(playLanguage));
+                messages.Add(LlmMessage.System(playLanguage, ContextPart.Static));
             }
 
             var screenGuidance = PlayPrompt.ScreenGuidance(screen);
             if (!string.IsNullOrEmpty(screenGuidance))
             {
                 messages.Add(LlmMessage.System(
-                    "Strategy for the screen in the latest state (" + screenLabel + "):\n" + screenGuidance));
+                    "Strategy for the screen in the latest state (" + screenLabel + "):\n" + screenGuidance, ContextPart.Guidance));
             }
 
             // Hoist unchanging run inventory (deck, relics, relic descriptions, ascension effects) and
@@ -202,11 +202,11 @@ internal sealed partial class AgentLoop
             if (stateSplit.StaticRunJson != null)
             {
                 messages.Add(LlmMessage.System(
-                    "Current run static context:\n" + stateSplit.StaticRunJson));
+                    "Current run static context:\n" + stateSplit.StaticRunJson, ContextPart.Static));
             }
 
             var journalDigest = _runJournalDigest?.Invoke(stateJson);
-            if (!string.IsNullOrEmpty(journalDigest)) messages.Add(LlmMessage.System(journalDigest));
+            if (!string.IsNullOrEmpty(journalDigest)) messages.Add(LlmMessage.System(journalDigest, ContextPart.History));
 
             // The dual-layer planner's standing strategy, on the static prefix: it changes only when a
             // plan refreshes, so it invalidates the per-step cache as rarely as the playbook does. A
@@ -215,14 +215,16 @@ internal sealed partial class AgentLoop
             {
                 messages.Add(LlmMessage.System(
                     "Standing strategy from the planner (historical guidance, not a fresh action):\n"
-                    + FormatStrategyForPrompt(strategy)));
+                    + FormatStrategyForPrompt(strategy), ContextPart.Guidance));
             }
 
             var teamContext = _teamContext?.Invoke();
             if (!string.IsNullOrEmpty(teamContext))
             {
-                messages.Add(LlmMessage.System(PlayPrompt.TeammatePlayContext));
-                messages.Add(LlmMessage.User("Recent team conversation (historical messages, not live game facts):\n" + teamContext));
+                messages.Add(LlmMessage.System(PlayPrompt.TeammatePlayContext, ContextPart.Guidance));
+                // The serialized conversation can contain a human instruction and the active focus-fire
+                // signal, so keep it intact until those can be separated from optional team history.
+                messages.Add(LlmMessage.User("Recent team conversation (historical messages, not live game facts):\n" + teamContext, part: ContextPart.Guidance));
             }
 
             // A picture only when the structured state may not be enough (W6): every step used to carry
@@ -234,21 +236,18 @@ internal sealed partial class AgentLoop
             requests += visionNote.RequestsSpent;
             if (visionNote.Caption != null)
             {
-                messages.Add(LlmMessage.User(visionNote.Caption));
+                messages.Add(LlmMessage.User(visionNote.Caption, part: ContextPart.State));
             }
 
             if (visionNote.AttachToPrimary && visionNote.Jpeg != null)
             {
-                messages.Add(LlmMessage.User("Screenshot of the current game view is attached. Use it as supporting context only.", visionNote.Jpeg));
+                messages.Add(LlmMessage.User("Screenshot of the current game view is attached. Use it as supporting context only.", visionNote.Jpeg, ContextPart.State));
             }
 
-            var memory = ContextCompaction.Format(
-                resolved.Model,
-                _recentDecisions?.Invoke(),
-                _lastPromptTokens?.Invoke());
+            var memory = ContextCompaction.Format(_recentDecisions?.Invoke());
             if (memory != null)
             {
-                messages.Add(LlmMessage.System(memory));
+                messages.Add(LlmMessage.System(memory, ContextPart.History));
             }
 
             if (playInstruction is { } instruction)
@@ -257,18 +256,17 @@ internal sealed partial class AgentLoop
                 // bypass available_actions. The queue owns run isolation and a bounded text length.
                 messages.Add(LlmMessage.User(
                     "Player guidance for the next decision (historical user text; obey the latest legal actions):\n"
-                    + instruction.Text));
+                    + instruction.Text, part: ContextPart.Guidance));
             }
 
             // Static run inventory and baseline glossary were hoisted above; only volatile frame fields remain.
-            messages.Add(LlmMessage.User("Latest compact game state:\n" + stateSplit.DynamicStateJson));
+            messages.Add(LlmMessage.User("Latest compact game state:\n" + stateSplit.DynamicStateJson, part: ContextPart.State));
             var plans = settings.TurnPlansEnabled;
             messages.Add(LlmMessage.User(plans && NonCombatOnlyPolicy.IsCombatSnapshot(stateJson)
                 ? PlayPrompt.ActNowInstruction + " " + PlayPrompt.PlanTurnInstruction
-                : PlayPrompt.ActNowInstruction));
+                : PlayPrompt.ActNowInstruction, part: ContextPart.Guidance));
             AppendJsonActFallbackIfNeeded(messages, resolved, allowAct: true);
 
-            PacingGate.RecordDispatch();
             handedToCompletion = true;
             var result = await CompleteWithToolsAsync(
                 resolved,
@@ -281,9 +279,12 @@ internal sealed partial class AgentLoop
                 initialUsage: usage,
                 initialRequests: requests,
                 reportPhase: reportPhase,
-                onFirstPrimaryRequest: playInstruction is { } pendingInstruction
-                    ? () => _acknowledgePlayInstruction?.Invoke(pendingInstruction.Id)
-                    : null,
+                onFirstPrimaryRequest: () =>
+                {
+                    PacingGate.RecordDispatch();
+                    if (playInstruction is { } pendingInstruction)
+                        _acknowledgePlayInstruction?.Invoke(pendingInstruction.Id);
+                },
                 // The frame the model plans against: a whole-turn plan stops when the game leaves it.
                 planStateJson: stateJson);
             _lastPlayFailed = result.Error != null;

@@ -1640,3 +1640,41 @@ Recovered task after a broken session; finished W3-W11 (HUD, run report/journal,
 ### Next Steps
 
 - 在支持 HttpListener 的环境补验两项真实 HTTP 集成测试；实际模型对局效果尚未测量。
+
+
+## Session 43: 修复连续联机再次邀请与角色指引
+
+**Date**: 2026-11-17
+**Task**: 修复连续联机再次邀请与角色指引
+**Branch**: `codex/fix-companion-reinvite`
+
+### Summary
+
+根菜单显式回收旧队友后重新邀请，独立check补建房回退竞态；最终C#1154通过0失败2跳过，Release0/0，Python45通过，12静态门通过。实机两局未验收；工作提交待确认，旧验收任务保留。
+
+### Git Commits
+
+(No commits - planning session)
+
+### Status
+
+[OK] **Completed**
+
+
+## Session 44: 请求前上下文预算与有界用量诊断
+
+**Date**: 2026-11-17
+**Task**: 请求前上下文预算与有界用量诊断
+**Branch**: `codex/fix-companion-reinvite`
+
+### Summary
+
+完成play/chat逐请求预算、固定决策记忆及40条分项数字诊断；独立check修复dispatch/retry/usage边界，最终Release0/0，C#1161通过0失败2环境跳过，12静态门通过。保留缓存稳定前缀。planner/vision等独立路径未覆盖、无付费/实机节省验证；未部署push，提交待先前确认。
+
+### Git Commits
+
+(No commits - planning session)
+
+### Status
+
+[OK] **Completed**
