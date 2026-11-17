@@ -1,5 +1,5 @@
 # STS2 AI Agent：当前状态页
-> **当前发布：v0.19.1（2026-11-15）**。tag `v0.19.1` @ `ec7765d`（PR #241 dev→main 合并）；[GitHub Release](https://github.com/CharTyr/STS2-Agent/releases/tag/v0.19.1) 资产 972236 字节 / SHA256 `135940AE…17EC4CCE`；工坊物品 3796486050 于 00:11:40 更新（`file_size` 2219667 = 本地 content 字节和）。本版收敛 AI 游玩提示与状态复用，修复 MCP 整回合未知结果误分类。发布 DLL 在游戏 v0.113.0 隔离实例通过加载、健康与主菜单状态一致性冒烟；模型自动游玩、真实 HTTP 监听测试和多人局未在本版复验。见 [v0.19.1 发布记录](history/release-v0.19.1_2026-11-15.md)；上一版见 [v0.19.0 发布记录](history/release-v0.19.0_2026-11-14.md)。**工坊简体中文列表仍待网页端手工粘贴**。
+> **当前发布：v0.19.2（2026-11-17）**。tag `v0.19.2` @ `ad6aa14`（PR #244）；[GitHub Release](https://github.com/CharTyr/STS2-Agent/releases/tag/v0.19.2) 980927 字节；工坊3796486050已公开更新，`file_size=2243207`与本地一致。本版修复再次邀请队友，加入逐请求上下文预算和分项诊断，新增三张真实截图至中英文README和工坊预览。发布预检通过：C#1161通过/2环境跳过，Python462通过，12静态门通过。游戏v0.113.1候选加载与主菜单一致性通过；真实模型节省、连续两局完整邀请和订阅副本加载未验收。详见[v0.19.2发布记录](history/release-v0.19.2_2026-11-17.md)。工坊简体中文独立文案仍待网页更新。
 > 下方各版本的发布、工坊与实机数据保留其原始日期，作为历史证据。
 
 旧路线图见 [history/PRODUCT_ROADMAP_2026-09-05.md](history/PRODUCT_ROADMAP_2026-09-05.md)（历史），旧交付原文见 [history/PRODUCT_PLAN_CURRENT_2026-09-07.md](history/PRODUCT_PLAN_CURRENT_2026-09-07.md) 和 [history/COOP_DELIVERY_2026-09-07.md](history/COOP_DELIVERY_2026-09-07.md)。本页不继承历史文档中的审批、工作树或测试前执行约束。
