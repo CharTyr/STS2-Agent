@@ -1678,3 +1678,26 @@ Recovered task after a broken session; finished W3-W11 (HUD, run report/journal,
 ### Status
 
 [OK] **Completed**
+
+
+## Session 45: 发布v0.19.2并上传工坊实拍预览
+
+**Date**: 2026-11-17
+**Task**: 发布v0.19.2并上传工坊实拍预览
+**Branch**: `codex/v0.19.2-release-record`
+
+### Summary
+
+已通过PR合入main并同步dev，GitHub Release与现有工坊3796486050更新完成，三张实拍预览在线确认。C#1161通过2环境跳过，Python462通过，12门禁通过；游戏v0.113.1候选加载与主菜单一致性通过，代理恢复。长期模型/连续两局/订阅加载验收仍留待，不归档原任务。
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `e151b50` | (see git log) |
+| `ad6aa14` | (see git log) |
+| `24f684f` | (see git log) |
+
+### Status
+
+[OK] **Completed**
