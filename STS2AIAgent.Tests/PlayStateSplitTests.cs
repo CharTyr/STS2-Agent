@@ -284,13 +284,12 @@ internal static class PlayStateSplitTests
             .Select(i => new DecisionLogEntry(i, $"t{i}", "agent", "play_card", $"turn {i}", $"fp{i}", 1, 1000, "RUN_BOSS_234"))
             .ToList();
         var settings = AgentSettings.CreateDefault();
-        settings.Models[0].ContextWindow = 10_000;
+        settings.Models[0].ContextWindow = 100_000;
         var loop = new AgentLoop(
             bridge,
             new CapturingFactory(requests, completions),
             () => settings,
-            recentDecisions: () => decisions,
-            lastPromptTokens: () => 9_000);
+            recentDecisions: () => decisions);
 
         var r1 = await loop.PlayOnceAsync(CancellationToken.None);
         Assert.Equal("play_card", r1.Acted);
@@ -304,7 +303,7 @@ internal static class PlayStateSplitTests
         var m1 = requests[0].Messages;
         var m2 = requests[1].Messages;
         var staticIdx1 = m1.ToList().FindIndex(m => (m.Content ?? string.Empty).StartsWith("Current run static context:\n", StringComparison.Ordinal));
-        var compactionIdx1 = m1.ToList().FindIndex(m => (m.Content ?? string.Empty).Contains("Context compaction:", StringComparison.Ordinal));
+        var compactionIdx1 = m1.ToList().FindIndex(m => (m.Content ?? string.Empty).Contains("Recent decision memory", StringComparison.Ordinal));
         var stateIdx1 = m1.ToList().FindIndex(m => (m.Content ?? string.Empty).StartsWith("Latest compact game state:\n", StringComparison.Ordinal));
 
         Assert.True(staticIdx1 > 0, "Static run context message must be present.");

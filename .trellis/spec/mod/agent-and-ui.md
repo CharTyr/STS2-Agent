@@ -130,3 +130,57 @@ Recovery's optional `turnGate` spans model/game work and receipt commit; the gat
 Autopilot handles forced moves only and yields to player guidance; no card picks, shopping or potion trade-offs. Turn plans validate each step with fresh state and stable card ids, stop on divergence (including Boss mid-turn summons/revives `enemies_changed` and hostile move shifts or damage scaling `intent_changed`, while allowing Weak/Strength-down damage reductions on the same move) or unknown results, and count request spend once (first decision row only). Provider capabilities are keyed by ModelRoleProbe.Fingerprint; verification adds one streaming probe and repeated live truncation persists the same verdict once. PromptStateDiet and PlayStateSplitCache change model input only, never the public API: static run inventory and baseline glossary are hoisted into the system prefix before ContextCompaction so combat prefix caches stay warm. Optional MinDecisionIntervalSeconds paces consecutive primary model requests via DecisionPacingGate without delaying zero-request Autopilot or turn-plan follow-ups.
 
 The HUD ignores mouse input; screenshot capture hides the HUD, panel and edge tab and restores only their prior visibility. Turbo uses native Fast Mode, guards preference writes and restores on every auto-play exit. Run reports require fresh GAME_OVER evidence, label bounded decision counts and session cache honestly, and retain at most 50 factual journal rows. Disabling the journal prevents writing and prompt injection.
+
+## Explicit root-menu companion replacement (2026-11-17)
+
+### Scope / trigger
+After a run, a child process or connection can survive while the host returns to its menu. Neither proves an active team. UI refresh and state reads must never close a process.
+
+### Signatures
+`GameStateService.IsRootMainMenu(IScreenContext?)` checks a valid visible in-tree `NMainMenu`, no open submenu and no modal. `LocalDualInstanceLauncher.PrepareForNewSessionAsync(CancellationToken)` returns `(bool Ok, string Message)`. `CompanionRetirement.TryRetireAsync` serializes close/wait/cleanup through the launcher's `LaunchGate`.
+
+### Contracts
+An explicit invite/continue from the root menu may normally close only the child handle owned by this mod, never the host. Root-menu validation and `CloseMainWindow` run in the same game-thread callback; wait for exit has a 15-second deadline. Clear process, connection and startup metadata only after confirmed exit. Runtime's dual-launch gate covers the overall replacement/host/launch sequence. Recheck the real root before host/load and before debug-lobby fallback. API signatures and settings are unchanged. A non-root reconnect of a live child with no established connection retains the existing path.
+
+### Validation / error matrix
+- Busy launch gate: return Busy without closing or clearing anything.
+- Not at root: reject before signaling the process; never fall back into a debug lobby.
+- Close refused or timed out: stop the new attempt, retain the child handle, allow later retry.
+- Child exited: the public connection getter exposes null; stale connections cannot hide setup.
+- Caller cancellation: propagate and release the gate, without clearing a live child.
+
+### Good / base / bad cases
+Good: return to root after a run, click invite, close the old child, confirm exit, host and launch again. Base: no old child, proceed after root validation. Bad: a submenu is labeled MAIN_MENU, or a failed close is followed by another launch.
+
+### Tests required
+`CompanionRetirementTests` covers visibility, concurrent attempts, exit-before-cleanup, timeout, refusal, retry, owned-process protection and root checks at the host/fallback sites. C# offline tests do not prove native window close or port release: consecutive-run replacement still requires a live observation.
+
+### Wrong vs correct
+Wrong: `Connection != null || CompanionProcessAlive` hides invite indefinitely, or `screen == "MAIN_MENU"` authorizes replacement. Correct: setup is available at the true root; explicit replacement uses bounded retirement, with fresh root checks. Character playbooks honor explicit requests without silent substitution, otherwise retain a valid selected unlocked character; do not force the first unlocked character. This does not change companion bootstrap preselection.
+
+## Primary tool-loop context budget and usage (2026-11-17)
+
+### Scope / trigger
+Applies to built-in play/chat `CompleteWithToolsAsync`, including tool follow-ups and HTTP compatibility retries. Separate planner, vision-caption, Jev, model probes and external MCP histories are outside this check. No claim of exact provider tokenization or measured run savings.
+
+### Signatures
+`ContextBudget.Prepare(List<LlmMessage>, IReadOnlyList<LlmTool>?, int window, int? maxOutput, int round, ...)` returns `ContextRequestStats`; `ContextBudget.Fits(stats)` gates dispatch. `LlmMessage.ContextPart` tags local categories without changing provider payloads. `LlmRequest.OnDispatch` and `BeforeRetry` preserve physical-attempt accounting.
+
+### Contracts
+Estimate includes messages, reasoning/tool exchanges, schemas, thinking suffix and images. Text uses rounded UTF-8 bytes / 2; images use a local conservative approximation. Resolve configured model window, otherwise 256000. Reserve configured positive output cap, otherwise assume 8192; margin is max(128, window/10). Only History-tagged messages without tool calls/replies may be removed. Current state, player guidance, team coordination and protocol exchanges remain intact. `ContextCompaction.Format` keeps at most six recent decisions within 1800 characters, independent of previous usage; original logs stay unchanged. Stable inventory and baseline glossary remain ahead of changing memory to preserve prefix-cache opportunities.
+
+### Validation / error matrix
+- Still over estimate after removable history: return context failure, no HTTP dispatch or instruction acknowledgement.
+- Invalid endpoint/request construction: zero physical sends, guidance stays queued.
+- Compatibility retry: check request/spend budgets again; count each HTTP submission, including cancellation receipts, once.
+- Provider structured context_length_exceeded / recognized input-too-long: context failure, no generic compatibility retry.
+- Missing/null/invalid usage field: unknown; explicitly reported zero remains known zero.
+
+### Good / base / bad cases
+Good: large optional history is removed while state and complete tool pairs remain; request fits and dispatches. Base: request fits unchanged. Bad: truncate a tool reply, drop player guidance, or treat cached input as absent from the context window. HTTP submission is evidence of an attempt, not proof that a provider received or billed it.
+
+### Tests required
+ContextCompactionTests and AgentLoopTests cover memory bounds, small windows, schema/image estimates, multi-round growth refusal, protected tool pairs and guidance, no dispatch on local refusal/invalid URL, structured provider errors, retry/cancellation counts and usage presence. PlayStateSplitTests preserve byte-identical inventory prefixes across volatile combat changes. C# final suite: 1161 pass, 0 fail, 2 HttpListener environment skips.
+
+### Wrong vs correct
+Wrong: wait for last prompt to reach 80%, then append memory and call that compaction. Correct: fixed memory budget plus a fresh check before each submission. Diagnostics expose at most 40 numeric request rows and the session estimated-input peak; actual input/output/cache values are nullable, not inferred from estimates. No prompt bodies/keys are recorded there. Existing /health and run-level aggregate unknown/cache semantics are coarser and not repaired by this change; use the new per-request rows for field presence. Cache hits may affect provider cost, but cached content remains counted in input/context estimates.

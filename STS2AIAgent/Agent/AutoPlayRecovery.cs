@@ -33,6 +33,9 @@ internal sealed class AutoPlayRecovery
 
     public (string? StopReason, string? StopKind, TimeSpan Delay) Observe(AgentTurnResult result)
     {
+        if (result.FailureKind == FailureKinds.Context)
+            return (result.Error, StopKindPolicy.Failed, TimeSpan.Zero);
+
         if (result.RequiresConfiguration)
             return (Loc.T("请检查模型、端点或凭据后再继续：{0}", result.Error), StopKindPolicy.Configuration, TimeSpan.Zero);
 

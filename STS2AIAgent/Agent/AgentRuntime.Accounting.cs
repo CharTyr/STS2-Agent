@@ -354,6 +354,16 @@ internal sealed partial class AgentRuntime
         return flat.Length <= max ? flat : flat[..max] + "…";
     }
 
+    private void RecordContextRequest(ContextRequestStats stats)
+    {
+        lock (_gate)
+        {
+            _contextRequests.Add(stats);
+            if (_contextRequests.Count > 40) _contextRequests.RemoveAt(0);
+            _contextPeak = Math.Max(_contextPeak, stats.Input);
+        }
+    }
+
     private void AccountTurn(AgentTurnResult result, bool recordBudget = false)
     {
         lock (_gate)
@@ -362,10 +372,6 @@ internal sealed partial class AgentRuntime
             {
                 _sessionUsage = LlmUsage.Combine(_sessionUsage, result.Usage) ?? LlmUsage.Empty;
                 _sessionUsageKnown = true;
-                if (result.Usage.PromptTokens > 0)
-                {
-                    _lastPromptTokens = result.Usage.PromptTokens;
-                }
             }
 
             _sessionRequests += Math.Max(0, result.RequestsSpent);

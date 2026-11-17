@@ -16,6 +16,9 @@ internal interface ILlmClient
     Task<bool> ProbeToolCallingAsync(string model, LlmTool tool, string prompt, CancellationToken cancellationToken);
 }
 
+/// <summary>Calls LlmRequest.OnDispatch at each actual provider submission, including retries.</summary>
+internal interface IDispatchNotifyingLlmClient { }
+
 /// <summary>
 /// Capability probes a non-streaming tools ping cannot answer (W7). Implemented by the production
 /// client and kept as a separate interface so a test fake that only implements <see cref="ILlmClient"/>
@@ -123,10 +126,21 @@ internal sealed class LlmRequest
     /// means the caller wants no partials at all.
     /// </summary>
     public Action<string>? OnReasoningDelta { get; init; }
+
+    // Production transport invokes this immediately before each internal compatibility retry.
+    public Action? BeforeRetry { get; init; }
+
+    // A dispatch-aware transport calls this at the HTTP submission boundary, after preparation.
+    public Action? OnDispatch { get; init; }
 }
+
+internal enum ContextPart { Other, State, Static, Guidance, History, Tools }
 
 internal sealed class LlmMessage
 {
+    // Internal accounting metadata only; never serialized into provider messages.
+    public ContextPart ContextPart { get; init; }
+
     public required string Role { get; init; }
 
     public string? Content { get; init; }
@@ -144,10 +158,10 @@ internal sealed class LlmMessage
     /// </summary>
     public string? Reasoning { get; init; }
 
-    public static LlmMessage System(string content) => new() { Role = "system", Content = content };
+    public static LlmMessage System(string content, ContextPart part = ContextPart.Other) => new() { Role = "system", Content = content, ContextPart = part };
 
-    public static LlmMessage User(string content, byte[]? imageJpeg = null) =>
-        new() { Role = "user", Content = content, ImageJpeg = imageJpeg };
+    public static LlmMessage User(string content, byte[]? imageJpeg = null, ContextPart part = ContextPart.Other) =>
+        new() { Role = "user", Content = content, ImageJpeg = imageJpeg, ContextPart = part };
 
     public static LlmMessage Assistant(string? content, IReadOnlyList<LlmToolCall>? toolCalls = null, string? reasoning = null) =>
         new() { Role = "assistant", Content = content, ToolCalls = toolCalls, Reasoning = reasoning };
@@ -189,6 +203,10 @@ internal sealed class LlmUsage
     /// </summary>
     public int CachedPromptTokens { get; init; }
 
+    public bool PromptTokensReported { get; init; }
+    public bool CompletionTokensReported { get; init; }
+    public bool CachedPromptTokensReported { get; init; }
+
     public static LlmUsage Empty => new();
 
     public static LlmUsage operator +(LlmUsage left, LlmUsage right)
@@ -198,6 +216,9 @@ internal sealed class LlmUsage
             PromptTokens = left.PromptTokens + right.PromptTokens,
             CompletionTokens = left.CompletionTokens + right.CompletionTokens,
             CachedPromptTokens = left.CachedPromptTokens + right.CachedPromptTokens,
+            PromptTokensReported = left.PromptTokensReported && right.PromptTokensReported,
+            CompletionTokensReported = left.CompletionTokensReported && right.CompletionTokensReported,
+            CachedPromptTokensReported = left.CachedPromptTokensReported && right.CachedPromptTokensReported,
             TotalTokens = (left.TotalTokens > 0 || right.TotalTokens > 0)
                 ? (left.TotalTokens + right.TotalTokens)
                 : (left.PromptTokens + right.PromptTokens + left.CompletionTokens + right.CompletionTokens)
@@ -231,9 +252,21 @@ internal sealed class LlmException : Exception
 {
     public int? StatusCode { get; }
 
-    public LlmException(string message, int statusCode) : base(message)
+    private readonly bool _providerContextLimit;
+
+    public bool IsContextLimit => StatusCode is >= 400 and < 500 &&
+        (_providerContextLimit
+         || Message.Contains("context_length_exceeded", StringComparison.OrdinalIgnoreCase)
+         || Message.Contains("maximum context length", StringComparison.OrdinalIgnoreCase)
+         || Message.Contains("context window", StringComparison.OrdinalIgnoreCase)
+         || Message.Contains("context length exceeded", StringComparison.OrdinalIgnoreCase)
+         || Message.Contains("prompt is too long", StringComparison.OrdinalIgnoreCase)
+         || Message.Contains("input is too long", StringComparison.OrdinalIgnoreCase));
+
+    public LlmException(string message, int statusCode, bool providerContextLimit = false) : base(message)
     {
         StatusCode = statusCode;
+        _providerContextLimit = providerContextLimit;
     }
 
     public LlmException(string message) : base(message)

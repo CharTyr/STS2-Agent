@@ -1,4 +1,5 @@
 using MegaCrit.Sts2.Core.Logging;
+using MegaCrit.Sts2.Core.Nodes.Screens.ScreenContext;
 using STS2AIAgent.Config;
 using STS2AIAgent.Game;
 using STS2AIAgent.Llm;
@@ -58,7 +59,8 @@ internal sealed partial class AgentRuntime
     private LlmUsage _sessionUsage = LlmUsage.Empty;
     private int _sessionRequests;
     private bool _sessionUsageKnown;
-    private int _lastPromptTokens;
+    private readonly List<ContextRequestStats> _contextRequests = new();
+    private long _contextPeak;
     private string? _stopKind;
     private string? _stopDetail;
     private string? _stopRole;
@@ -104,13 +106,6 @@ internal sealed partial class AgentRuntime
             },
             // The memory provider prefers a continued run's restored decisions over the live log.
             RecentDecisionsForMemory,
-            () =>
-            {
-                lock (_gate)
-                {
-                    return _lastPromptTokens;
-                }
-            },
             // The dual-layer engine: the decider is resolved live on every turn, because the Jev
             // configuration typically appears after this runtime is constructed -- a decider captured
             // here is frozen to the pre-settings state and the toggle never turns on. The store is
@@ -132,7 +127,8 @@ internal sealed partial class AgentRuntime
             onReasoningDelta: ReportReasoningDelta,
             reportIntent: ReportIntent,
             onActChannelUnreliable: RecordActChannelUnreliable,
-            runJournalDigest: stateJson => RunJournalDigestForState(stateJson));
+            runJournalDigest: stateJson => RunJournalDigestForState(stateJson),
+            reportContext: RecordContextRequest);
     }
 
     public AgentSettings Settings
@@ -275,6 +271,8 @@ internal sealed partial class AgentRuntime
             _sessionUsage = LlmUsage.Empty;
             _sessionRequests = 0;
             _sessionUsageKnown = false;
+            _contextRequests.Clear();
+            _contextPeak = 0;
             _jevAcceptedTurns = 0;
             _jevFallbackTurns = 0;
             _budgetGuard = _settings.CreateBudgetGuard();
@@ -728,11 +726,20 @@ internal sealed partial class AgentRuntime
                 _dualLaunchOutcome = DualLaunchOutcome.Rejected;
                 return;
             }
-            if (LocalDualInstanceLauncher.CanReconnect)
+            var atRootMenu = await GameThread.InvokeAsync(
+                () => GameStateService.IsRootMainMenu(ActiveScreenContext.Instance.GetCurrentScreen()),
+                TimeSpan.FromSeconds(5), cancellationToken);
+            if (!atRootMenu && !continueRun && LocalDualInstanceLauncher.CanReconnect)
             {
                 var recovered = await LocalDualInstanceLauncher.LaunchCompanionAsync(cancellationToken);
                 _dualStatus = recovered.Message;
                 _dualLaunchOutcome = recovered.Ok ? DualLaunchOutcome.Succeeded : DualLaunchOutcome.Failed;
+                return;
+            }
+            if (!atRootMenu)
+            {
+                _dualStatus = Loc.T("请先回到主菜单，再邀请 AI 队友组队。");
+                _dualLaunchOutcome = DualLaunchOutcome.Rejected;
                 return;
             }
             var screen = await new GameBridge().GetScreenAsync(cancellationToken);
@@ -1152,9 +1159,13 @@ internal sealed partial class AgentRuntime
     public string ExportDiagnostics()
     {
         IReadOnlyList<string> events;
+        IReadOnlyList<ContextRequestStats> contextRequests;
+        long contextPeak;
         lock (_gate)
         {
             events = _diagnosticEvents.ToArray();
+            contextRequests = _contextRequests.ToArray();
+            contextPeak = _contextPeak;
         }
 
         return DiagnosticExport.Render(new DiagnosticSnapshot
@@ -1174,6 +1185,8 @@ internal sealed partial class AgentRuntime
             SessionRequests = SessionRequests,
             SessionTokens = _sessionUsageKnown ? SessionUsage.TotalTokens : null,
             RecentEvents = events,
+            ContextRequests = contextRequests,
+            ContextPeak = contextPeak,
             RecentRequestIds = Router.RecentRequestIds(),
             Settings = Settings
         });

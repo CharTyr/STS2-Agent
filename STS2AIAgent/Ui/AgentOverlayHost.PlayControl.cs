@@ -224,7 +224,9 @@ internal sealed partial class AgentOverlayHost
             _companionSettingsStatus.Text = _companionSettingsNotice ?? string.Empty;
             _companionSettingsStatus.Visible = !string.IsNullOrWhiteSpace(_companionSettingsNotice);
         }
-        if (_companionMode != null) _companionMode.Disabled = LocalDualInstanceLauncher.CompanionProcessAlive || AgentRuntime.Instance.DualLaunching;
+        if (_companionMode != null) _companionMode.Disabled = AgentRuntime.Instance.DualLaunching
+            || (LocalDualInstanceLauncher.CompanionProcessAlive
+                && !GameStateService.IsRootMainMenu(ActiveScreenContext.Instance.GetCurrentScreen()));
         if (_dualLayerCoopCheck != null) _dualLayerCoopCheck.Disabled = _companionSettingsSyncing;
         if (_jevPanel != null) _jevPanel.Visible = dualEnabled;
         if (_decisionUsageTile != null) _decisionUsageTile.Visible = coopMode;
@@ -377,8 +379,10 @@ internal sealed partial class AgentOverlayHost
     private void RefreshCoopPhase(bool canContinue)
     {
         var launching = AgentRuntime.Instance.DualLaunching;
-        var teamed = !launching
-            && (LocalDualInstanceLauncher.Connection != null || LocalDualInstanceLauncher.CompanionProcessAlive);
+        var teamed = !launching && CompanionRetirement.ShowTeamControls(
+            GameStateService.IsRootMainMenu(ActiveScreenContext.Instance.GetCurrentScreen()),
+            LocalDualInstanceLauncher.CompanionProcessAlive,
+            LocalDualInstanceLauncher.Connection != null);
         var settingUp = !teamed && !launching;
         if (_companionChoiceToggle != null) _companionChoiceToggle.Visible = settingUp;
         if (_dualHint != null) _dualHint.Visible = settingUp && _dualHint.Text.Length > 0;

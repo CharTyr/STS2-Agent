@@ -156,7 +156,8 @@ internal sealed partial class AgentLoop
             return;
         }
 
-        messages[0] = LlmMessage.System((messages[0].Content ?? string.Empty) + "\n\n" + PlayPrompt.JsonActFallback);
+        messages[0] = LlmMessage.System((messages[0].Content ?? string.Empty) + "\n\n" + PlayPrompt.JsonActFallback,
+            messages[0].ContextPart);
     }
 
     /// <summary>The prompt half of <see cref="ActChannelFor"/>: an act turn that starts without tools is told how to answer.</summary>

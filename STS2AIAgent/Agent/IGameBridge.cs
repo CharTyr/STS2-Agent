@@ -70,6 +70,8 @@ internal static class FailureKinds
     /// <summary>Timeout, 5xx, 408/429, refused connection: retried with a longer backoff, 5 tries.</summary>
     public const string Transport = "transport";
 
+    public const string Context = "context";
+
     /// <summary>A 4xx the player must fix (key, model name, endpoint): stops at once.</summary>
     public const string Config = "config";
 
@@ -89,6 +91,7 @@ internal static class FailureKinds
     public static string? Of(Exception exception) => exception switch
     {
         TimeoutException timeout when timeout.Message.Contains("game thread", StringComparison.OrdinalIgnoreCase) => GameStalled,
+        Llm.LlmException { IsContextLimit: true } => Context,
         Llm.LlmException { StatusCode: >= 400 and < 500 and not 408 and not 429 } => Config,
         Llm.LlmException or HttpRequestException or TimeoutException or TaskCanceledException or IOException => Transport,
         _ => null

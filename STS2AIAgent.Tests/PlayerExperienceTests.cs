@@ -226,6 +226,9 @@ internal static class PlayerExperienceTests
             UsageKnown = false,
             SessionRequests = 2,
             SessionTokens = null,
+            ContextPeak = 1000,
+            ContextRequests = new[] { new ContextRequestStats(1, true, true, 4000, 100, 400, 10, 20, 30, 40, 50, 60, 70,
+                ActualInput: 42, ActualOutput: null, ActualCache: null, RemovedMessages: 1, RemovedEstimate: 200) },
             RecentEvents = new[] { "api_key=sk-secretvalue connected" },
             RecentRequestIds = new[] { "req_1" },
             Settings = settings
@@ -236,6 +239,12 @@ internal static class PlayerExperienceTests
         Assert.False(rendered.Contains("sk-secretvalue"));
         Assert.Contains("req_1", rendered);
         Assert.Contains("session_tokens=unknown", rendered);
+        Assert.Contains("context_peak_estimated_input=1000", rendered);
+        Assert.Contains("estimated_input=280", rendered);
+        Assert.Contains("removed_messages=1", rendered);
+        Assert.Contains("actual_input=42", rendered);
+        Assert.Contains("actual_output=unknown", rendered);
+        Assert.Contains("actual_cache=unknown", rendered);
     }
 
     public static void IllegalBudgetInputKeepsSafeValue()

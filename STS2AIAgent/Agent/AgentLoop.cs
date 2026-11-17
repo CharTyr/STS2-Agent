@@ -25,7 +25,6 @@ internal sealed partial class AgentLoop
     private readonly Func<string?>? _teamContext;
     private readonly Func<SessionBudgetGuard?>? _budgetGuard;
     private readonly Func<IReadOnlyList<DecisionLogEntry>>? _recentDecisions;
-    private readonly Func<int>? _lastPromptTokens;
     private readonly IActionDecider? _decider;
     private readonly Func<IActionDecider?>? _deciderProvider;
     private readonly StrategyStore? _strategyStore;
@@ -35,6 +34,7 @@ internal sealed partial class AgentLoop
     private readonly Action<string>? _onReasoningDelta;
     private readonly Action<LiveIntent>? _reportIntent;
     private readonly Func<string, string?>? _runJournalDigest;
+    private readonly Action<ContextRequestStats>? _reportContext;
 
     public AgentLoop(
         IGameBridge bridge,
@@ -43,7 +43,6 @@ internal sealed partial class AgentLoop
         Func<string?>? teamContext = null,
         Func<SessionBudgetGuard?>? budgetGuard = null,
         Func<IReadOnlyList<DecisionLogEntry>>? recentDecisions = null,
-        Func<int>? lastPromptTokens = null,
         IActionDecider? decider = null,
         StrategyStore? strategyStore = null,
         Func<double>? confidenceThreshold = null,
@@ -53,7 +52,8 @@ internal sealed partial class AgentLoop
         Action<string>? onReasoningDelta = null,
         Action<LiveIntent>? reportIntent = null,
         Action<ResolvedModel, ActChannel>? onActChannelUnreliable = null,
-        Func<string, string?>? runJournalDigest = null)
+        Func<string, string?>? runJournalDigest = null,
+        Action<ContextRequestStats>? reportContext = null)
     {
         _bridge = bridge;
         _factory = factory;
@@ -61,7 +61,6 @@ internal sealed partial class AgentLoop
         _teamContext = teamContext;
         _budgetGuard = budgetGuard;
         _recentDecisions = recentDecisions;
-        _lastPromptTokens = lastPromptTokens;
         _decider = decider;
         _strategyStore = strategyStore;
         _confidenceThreshold = confidenceThreshold;
@@ -72,6 +71,7 @@ internal sealed partial class AgentLoop
         _onReasoningDelta = onReasoningDelta;
         _reportIntent = reportIntent;
         _runJournalDigest = runJournalDigest;
+        _reportContext = reportContext;
         _onActChannelUnreliable = onActChannelUnreliable;
         // A live provider wins over the captured instance: the runtime constructs once, but the
         // Jev configuration can appear after that, and a decider frozen at construction is the
@@ -108,7 +108,7 @@ internal sealed partial class AgentLoop
 
         var messages = new List<LlmMessage>
         {
-            LlmMessage.System(system)
+            LlmMessage.System(system, ContextPart.Static)
         };
 
         // The conversation stream carries display-only turns as well -- the reasoning and the action a
@@ -116,14 +116,14 @@ internal sealed partial class AgentLoop
         // conversational roles are replayed; the rest exist for the page that renders them.
         foreach (var turn in history.Where(turn => turn.Role is "user" or "assistant").TakeLast(12))
         {
-            messages.Add(new LlmMessage { Role = turn.Role, Content = turn.Text });
+            messages.Add(new LlmMessage { Role = turn.Role, Content = turn.Text, ContextPart = ContextPart.History });
         }
 
         if (options.AttachState)
         {
             var state = await _bridge.GetCompactStateJsonAsync(cancellationToken);
             checkState?.Invoke(state);
-            messages.Add(LlmMessage.User("Current compact game state:\n" + state));
+            messages.Add(LlmMessage.User("Current compact game state:\n" + state, part: ContextPart.State));
         }
 
         byte[]? screenshot = null;
@@ -138,7 +138,7 @@ internal sealed partial class AgentLoop
         }
 
         screenshot = visionNote.AttachToPrimary ? visionNote.Jpeg : null;
-        messages.Add(LlmMessage.User(userText, screenshot));
+        messages.Add(LlmMessage.User(userText, screenshot, ContextPart.Guidance));
 
         // There is no "act" switch in the overlay: the conversation is read-only unless the player's
         // own words ask it to play. The explicit phrase is the whole opt-in, so a message that is not
@@ -277,6 +277,8 @@ internal sealed partial class AgentLoop
         var readToolRounds = 0;
         var streamDemoted = false;
         var nudged = false;
+        var contextTrimmed = false;
+        var firstPrimaryDispatched = false;
         var accumulatedUsage = initialUsage;
         var requestsSpent = initialRequests;
         // Where this turn's act goes; it only ever moves down the ladder (see AgentLoop.Capabilities).
@@ -335,40 +337,76 @@ internal sealed partial class AgentLoop
             {
                 cancellationToken.ThrowIfCancellationRequested();
                 rounds = round + 1;
+                var budgetReason = _budgetGuard?.Invoke()?.CheckBudget(requestsSpent, accumulatedUsage?.TotalTokens ?? 0);
+                if (budgetReason != null)
+                    return Receipt(budgetReason, failureKind: "budget");
+
+                var activeTools = channel == ActChannel.ReplyJson ? null : tools;
+                var outputCap = _settings().MaxOutputTokens;
+                var thinkingSuffix = ThinkingRequestBuilder.Build(resolved.Model.Model,
+                    resolved.Model.ThinkingMode == "auto" ? resolved.Endpoint.ThinkingProtocol : resolved.Model.ThinkingMode,
+                    resolved.Model.GetThinkingIntensity()).PromptSuffix;
+                var context = ContextBudget.Prepare(messages, activeTools, ContextCompaction.ResolveWindow(resolved.Model),
+                    outputCap, round + 1, contextTrimmed, thinkingSuffix);
+                contextTrimmed = context.Trimmed;
+                if (!ContextBudget.Fits(context))
+                {
+                    ReportContext(context);
+                    return Receipt(Loc.T("模型上下文估算超出窗口，已停止发送。请检查模型窗口或输出上限。"), failureKind: FailureKinds.Context);
+                }
+                var dispatched = false;
                 var request = new LlmRequest
                 {
                     Model = resolved.Model.Model,
-                    MaxTokens = _settings().MaxOutputTokens,
+                    MaxTokens = outputCap,
                     MaxTokensParameter = MaxTokensParameter(resolved),
                     Messages = messages.ToArray(),
-                    Tools = channel == ActChannel.ReplyJson ? null : tools,
+                    Tools = activeTools,
                     Thinking = resolved.Model.GetThinkingIntensity(),
                     ThinkingMode = resolved.Model.ThinkingMode,
                     Stream = channel != ActChannel.Tools,
-                    // The only request a player watches think: the turn's own completion. Vision
-                    // captions and role probes run without a callback, so their reasoning is not shown.
-                    OnReasoningDelta = _onReasoningDelta
+                    OnReasoningDelta = _onReasoningDelta,
+                    BeforeRetry = () =>
+                    {
+                        // The previous compatibility attempt was sent but supplied no usable usage.
+                        ReportContext(context with { Sent = true });
+                        dispatched = false;
+                        var retryBudget = _budgetGuard?.Invoke()?.CheckBudget(requestsSpent, accumulatedUsage?.TotalTokens ?? 0);
+                        if (retryBudget != null) throw new ContextDispatchException(retryBudget, "budget");
+                        context = ContextBudget.Prepare(messages, activeTools, ContextCompaction.ResolveWindow(resolved.Model),
+                            outputCap, round + 1, contextTrimmed, thinkingSuffix);
+                        if (!ContextBudget.Fits(context))
+                        {
+                            ReportContext(context);
+                            throw new ContextDispatchException(Loc.T("模型上下文估算超出窗口，已停止发送。请检查模型窗口或输出上限。"), FailureKinds.Context);
+                        }
+                    },
+                    OnDispatch = () =>
+                    {
+                        if (!firstPrimaryDispatched)
+                        {
+                            onFirstPrimaryRequest?.Invoke();
+                            firstPrimaryDispatched = true;
+                        }
+                        requestsSpent++;
+                        dispatched = true;
+                    }
                 };
 
-                var budgetReason = _budgetGuard?.Invoke()?.CheckBudget(requestsSpent, accumulatedUsage?.TotalTokens ?? 0);
-                if (budgetReason != null)
-                {
-                    return Receipt(budgetReason, failureKind: "budget");
-                }
-
                 LlmCompletion completion;
+                LlmUsage? requestUsage = null;
                 try
                 {
                     cancellationToken.ThrowIfCancellationRequested();
-                    // Acknowledge queued guidance only at the first primary provider dispatch.
-                    // Vision/canceled preparation did not consume it; later rounds must not consume
-                    // another instruction. The runtime callback is an in-memory, nonthrowing dequeue.
                     if (allowAct && _settings().NonCombatOnlyEnabled
                         && NonCombatOnlyPolicy.IsCombatSnapshot(await _bridge.GetCompactStateJsonAsync(cancellationToken)))
                         throw new NonCombatOnlyYieldException();
-                    if (round == 0) onFirstPrimaryRequest?.Invoke();
-                    requestsSpent++;
+                    cancellationToken.ThrowIfCancellationRequested();
+                    // The production transport signals after request construction, at HTTP submission.
+                    // Simple test clients without that contract dispatch on CompleteAsync itself.
+                    if (client is not IDispatchNotifyingLlmClient) request.OnDispatch?.Invoke();
                     completion = await client.CompleteAsync(request, cancellationToken);
+                    requestUsage = completion.Usage;
                     if (completion.Usage != null)
                     {
                         accumulatedUsage = LlmUsage.Combine(accumulatedUsage, completion.Usage);
@@ -378,11 +416,26 @@ internal sealed partial class AgentLoop
                 {
                     throw;
                 }
+                catch (ContextDispatchException ex)
+                {
+                    return Receipt(ex.Message, failureKind: ex.Kind);
+                }
                 catch (Exception ex)
                 {
                     return Receipt(ex.Message,
-                        requiresConfiguration: ex is LlmException { StatusCode: >= 400 and < 500 and not 408 and not 429 },
+                        requiresConfiguration: ex is LlmException { IsContextLimit: false, StatusCode: >= 400 and < 500 and not 408 and not 429 },
                         failureKind: FailureKinds.Of(ex) ?? FailureKinds.Transport);
+                }
+                finally
+                {
+                    if (dispatched)
+                        ReportContext(context with
+                        {
+                            Sent = true,
+                            ActualInput = requestUsage?.PromptTokensReported == true ? requestUsage.PromptTokens : null,
+                            ActualOutput = requestUsage?.CompletionTokensReported == true ? requestUsage.CompletionTokens : null,
+                            ActualCache = requestUsage?.CachedPromptTokensReported == true ? requestUsage.CachedPromptTokens : null
+                        });
                 }
 
                 lastText = completion.Content;
@@ -544,6 +597,12 @@ internal sealed partial class AgentLoop
             ex.Receipt ??= Receipt();
             throw;
         }
+    }
+
+    private void ReportContext(ContextRequestStats stats)
+    {
+        try { _reportContext?.Invoke(stats); }
+        catch (Exception) { /* Diagnostics never change dispatch or accounting. */ }
     }
 
     private async Task<(string? Caption, byte[]? Jpeg, bool AttachToPrimary, LlmUsage? Usage, int RequestsSpent)> TryDescribeOrAttachVisionAsync(
