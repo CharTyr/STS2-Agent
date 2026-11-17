@@ -153,8 +153,9 @@ internal static class PredicateRelocationContractTests
         ["CanOpenCharacterSelect"] = "92ffab8f2ffa78d5c19f87a0b33eef3c5f786bef42ebce3a37f2478241462485",
         ["CanOpenTimeline"] = "81883b112d5c97ec915bf4b1fca09a844e2288d32582d695e02cdf655b81c0c9",
         ["CanCloseMainMenuSubmenu"] = "631ab45013f334501d2dae2963a9f2cffa8fb7fb17df9d70e8c6c0116c336d0f",
-        ["CanInviteAiTeammate"] = "fa089f3dd6928f59274722ff20f65b5c06f735f104777ea130d4023bcda2e01f",
-        ["CanContinueAiTeammate"] = "7938e106f94baacf65fd4772a8aa0d1d937e8de6c5ae6c34e6f31b53c6d51a19",
+        // Re-invites/continues require the unobstructed root menu; active-session reconnect remains available.
+        ["CanInviteAiTeammate"] = "2349acad968539441ad31853d812045014ad81cd9219429998e5f88c27767d67",
+        ["CanContinueAiTeammate"] = "34069380df3362e59212425e6efcb5b24c94b4bb4e775657d64a534a2fbde31e",
         ["CanEmbark"] = "48a9f6b0e3470f0c486788ae25a944a257edb2973e4649fca6472889667458e9",
         ["CanUnready"] = "e15c655f98a0c783ca20bd92db047f4088af4c91261e9ca557210ab284132f27",
         ["CanHostMultiplayerLobby"] = "03b6043ddf89fccf90a6cea3ab1404af396f5c000c3967f96cb91fe04f16d7e1",

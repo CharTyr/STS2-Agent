@@ -204,6 +204,188 @@ internal static class ActIndexValidatorTests
 
 internal static class AgentLoopTests
 {
+    public static async Task ContextRefusalKeepsGuidanceAndDoesNotSend()
+    {
+        var settings = AgentSettings.CreateDefault();
+        settings.Models[0].ContextWindow = 512;
+        settings.MaxOutputTokens = 64;
+        var factory = new ScriptedClientFactory(Array.Empty<LlmCompletion>());
+        var rows = new List<ContextRequestStats>();
+        var ack = 0;
+        var loop = new AgentLoop(new FakeBridge(), factory, () => settings,
+            peekPlayInstruction: _ => ("id", "protect me"),
+            acknowledgePlayInstruction: _ => ack++, reportContext: rows.Add);
+        var result = await loop.PlayOnceAsync(CancellationToken.None);
+        Assert.Equal(FailureKinds.Context, result.FailureKind);
+        Assert.Equal(0, result.RequestsSpent);
+        Assert.Equal(0, factory.Requests.Count);
+        Assert.Equal(0, ack);
+        Assert.False(rows.Single().Sent);
+        Assert.NotNull(new AutoPlayRecovery().Observe(result).StopReason);
+    }
+
+    public static async Task ContextInvalidEndpointDoesNotConsumeGuidanceOrCount()
+    {
+        var settings = AgentSettings.CreateDefault();
+        settings.Endpoints[0].BaseUrl = "";
+        var handler = new ContextRetryHandler();
+        var rows = new List<ContextRequestStats>();
+        var ack = 0;
+        var loop = new AgentLoop(new FakeBridge(), new RealContextFactory(handler), () => settings,
+            peekPlayInstruction: _ => ("id", "protect me"),
+            acknowledgePlayInstruction: _ => ack++, reportContext: rows.Add);
+        var result = await loop.PlayOnceAsync(CancellationToken.None);
+        Assert.NotNull(result.Error);
+        Assert.Equal(0, result.RequestsSpent);
+        Assert.Equal(0, handler.Count);
+        Assert.Equal(0, ack);
+        Assert.Equal(0, rows.Count);
+    }
+
+    public static async Task ContextCancellationAtHttpRetryIsAccountedOnce()
+    {
+        using var cancellation = new CancellationTokenSource();
+        var handler = new ContextRetryCancellationHandler(cancellation);
+        var guard = new SessionBudgetGuard(maxRequests: 10);
+        var rows = new List<ContextRequestStats>();
+        var receipts = new List<AgentTurnResult>();
+        var loop = new AgentLoop(new FakeBridge(), new RealContextFactory(handler), AgentSettings.CreateDefault,
+            budgetGuard: () => guard, reportContext: rows.Add);
+        try
+        {
+            await AutoPlayRecovery.RunAsync(token => loop.PlayOnceAsync(token), receipts.Add,
+                cancellation.Token, (_, _) => Task.CompletedTask, guard);
+        }
+        catch (OperationCanceledException) { }
+        Assert.True(cancellation.IsCancellationRequested);
+        Assert.Equal(2, handler.Count);
+        Assert.Equal(2, guard.RequestCount);
+        Assert.Equal(1, receipts.Count);
+        Assert.Equal(2, receipts[0].RequestsSpent);
+        Assert.Equal(2, rows.Count);
+        Assert.True(rows.All(row => row.Sent && row.ActualInput == null));
+    }
+
+    public static async Task ContextProtectsTeamInstructionsAndSignals()
+    {
+        var settings = AgentSettings.CreateDefault();
+        settings.Models[0].ContextWindow = 30_000;
+        settings.MaxOutputTokens = 256;
+        var factory = new ScriptedClientFactory(Array.Empty<LlmCompletion>());
+        var rows = new List<ContextRequestStats>();
+        var loop = new AgentLoop(new FakeBridge(), factory, () => settings,
+            teamContext: () => "human teammate: focus here " + new string('x', 100_000), reportContext: rows.Add);
+        var result = await loop.PlayOnceAsync(CancellationToken.None);
+        Assert.Equal(FailureKinds.Context, result.FailureKind);
+        Assert.Equal(0, result.RequestsSpent);
+        Assert.Equal(0, factory.Requests.Count);
+        Assert.True(rows.Single().Guidance > 50_000);
+    }
+
+    public static async Task ContextHttpCompatibilityRetriesAreCountedAndBounded()
+    {
+        foreach (var limit in new int?[] { null, 1 })
+        {
+            var settings = AgentSettings.CreateDefault();
+            var handler = new ContextRetryHandler();
+            var rows = new List<ContextRequestStats>();
+            var guard = new SessionBudgetGuard(maxRequests: limit);
+            var loop = new AgentLoop(new FakeBridge(), new RealContextFactory(handler), () => settings,
+                budgetGuard: () => guard, reportContext: rows.Add);
+            var result = await loop.ChatAsync("hello", Array.Empty<ChatTurn>(), new ChatOptions(), CancellationToken.None);
+            var expected = limit == null ? 2 : 1;
+            Assert.Equal(expected, handler.Count);
+            Assert.Equal(expected, result.RequestsSpent);
+            Assert.Equal(expected, rows.Count);
+            Assert.True(rows.All(row => row.Sent));
+            Assert.Null(rows[0].ActualInput);
+            if (limit == null)
+            {
+                Assert.Equal(42, rows[1].ActualInput);
+                Assert.Equal(3, rows[1].ActualOutput);
+                Assert.Equal(0, rows[1].ActualCache);
+                Assert.True(rows[1].Input > 42, "Cached input is still counted in the local window estimate.");
+            }
+            else Assert.Equal("budget", result.FailureKind);
+        }
+    }
+
+    public static async Task ContextProviderRefusalIsNotRetried()
+    {
+        foreach (var error in new[] { "maximum context length exceeded", "prompt is too long",
+            """{"error":{"message":"Request rejected","code":"context_length_exceeded"}}""" })
+        {
+            var handler = new ContextRetryHandler(contextError: error);
+            var loop = new AgentLoop(new FakeBridge(), new RealContextFactory(handler), AgentSettings.CreateDefault);
+            var result = await loop.ChatAsync("hello", Array.Empty<ChatTurn>(), new ChatOptions(), CancellationToken.None);
+            Assert.Equal(FailureKinds.Context, result.FailureKind);
+            Assert.Equal(1, result.RequestsSpent);
+            Assert.Equal(1, handler.Count);
+            Assert.NotNull(new AutoPlayRecovery().Observe(result).StopReason);
+        }
+    }
+
+    private sealed class RealContextFactory(HttpMessageHandler handler) : ILlmClientFactory
+    {
+        public ILlmClient Create(LlmEndpoint endpoint, TimeSpan? requestTimeout = null) =>
+            new OpenAiCompatibleClient(endpoint, handler);
+    }
+
+    private sealed class ContextRetryCancellationHandler(CancellationTokenSource cancellation) : HttpMessageHandler
+    {
+        public int Count { get; private set; }
+        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken token)
+        {
+            Count++;
+            if (Count == 1)
+                return Task.FromResult(new HttpResponseMessage(System.Net.HttpStatusCode.BadRequest)
+                    { Content = new StringContent("stream unsupported") });
+            cancellation.Cancel();
+            return Task.FromCanceled<HttpResponseMessage>(token);
+        }
+    }
+
+    private sealed class ContextRetryHandler(string? contextError = null) : HttpMessageHandler
+    {
+        public int Count { get; private set; }
+        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken token)
+        {
+            Count++;
+            var body = Count == 1
+                ? contextError ?? "stream unsupported"
+                : """{"choices":[{"message":{"role":"assistant","content":"ok"}}],"usage":{"prompt_tokens":42,"completion_tokens":3,"prompt_tokens_details":{"cached_tokens":0}}}""";
+            return Task.FromResult(new HttpResponseMessage(Count == 1 ? System.Net.HttpStatusCode.BadRequest : System.Net.HttpStatusCode.OK)
+                { Content = new StringContent(body) });
+        }
+    }
+
+    public static async Task ContextGrowthStopsBeforeThirdDispatch()
+    {
+        var settings = AgentSettings.CreateDefault();
+        settings.Models[0].ContextWindow = 30_000;
+        settings.MaxOutputTokens = 256;
+        var bridge = new FakeBridge();
+        bridge.RawStates.Enqueue("small result");
+        bridge.RawStates.Enqueue(new string('x', 100_000));
+        var factory = new ScriptedClientFactory(new[] {
+            new LlmCompletion { Reasoning = "reason one", ToolCalls = new[] { new LlmToolCall { Id = "a", Name = "get_raw_game_state", ArgumentsJson = "{}" } } },
+            new LlmCompletion { Reasoning = "reason two", ToolCalls = new[] { new LlmToolCall { Id = "b", Name = "get_raw_game_state", ArgumentsJson = "{}" } } }
+        });
+        var rows = new List<ContextRequestStats>();
+        var loop = new AgentLoop(bridge, factory, () => settings, reportContext: rows.Add);
+        var result = await loop.ChatAsync("what now?", Array.Empty<ChatTurn>(), new ChatOptions(), CancellationToken.None);
+        Assert.Equal(FailureKinds.Context, result.FailureKind);
+        Assert.Equal(2, result.RequestsSpent);
+        Assert.Equal(2, factory.Requests.Count);
+        Assert.Equal(3, rows.Count);
+        Assert.True(rows[0].Sent && rows[1].Sent && !rows[2].Sent);
+        Assert.Null(rows[0].ActualInput);
+        Assert.True(rows[2].Tools > rows[1].Tools);
+        var echoed = factory.Requests[1].Messages.Single(m => m.ToolCalls?.Count > 0);
+        Assert.Equal("reason one", echoed.Reasoning);
+        Assert.True(factory.Requests[1].Messages.Any(m => m.ToolCallId == "a"));
+    }
+
     public static async Task NonCombatOnly_YieldsBeforeWaitModelOrAction()
     {
         var settings = AgentSettings.CreateDefault();
@@ -1903,6 +2085,7 @@ internal static class AgentLoopTests
     private sealed class FakeBridge : IGameBridge
     {
         public Queue<string> ActionSnapshots { get; } = new();
+        public Queue<string> RawStates { get; } = new();
 
         public int ActCalls { get; private set; }
 
@@ -1951,7 +2134,7 @@ internal static class AgentLoopTests
 
         public Task<string> GetRawStateJsonAsync(CancellationToken cancellationToken)
         {
-            return Task.FromResult("""{"screen":"COMBAT","raw":true}""");
+            return Task.FromResult(RawStates.Count > 0 ? RawStates.Dequeue() : """{"screen":"COMBAT","raw":true}""");
         }
 
         public Task<string> GetAvailableActionsJsonAsync(CancellationToken cancellationToken)

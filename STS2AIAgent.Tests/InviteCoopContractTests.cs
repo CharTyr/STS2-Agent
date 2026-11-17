@@ -13,7 +13,7 @@ internal static class InviteCoopContractTests
     {
         var state = AgentSourceFixture.ReadStateService();
         var probe = AgentSourceFixture.MethodBody(state, "CanInviteAiTeammate");
-        Assert.Contains("currentScreen is not NMainMenu mainMenu || !mainMenu.IsVisibleInTree()", probe, StringComparison.Ordinal);
+        Assert.Contains("!IsRootMainMenu(currentScreen)", probe, StringComparison.Ordinal);
         Assert.Contains("CoopLaunchPolicy.GetStructuralError", probe, StringComparison.Ordinal);
         Assert.Contains("InstanceRole.IsCompanion", probe, StringComparison.Ordinal);
         Assert.Contains("PlayRunning", probe, StringComparison.Ordinal);

@@ -77,6 +77,14 @@ namespace STS2AIAgent.Game;
 internal static partial class GameStateService
 {
 
+    /// <summary>Only the visible, unobstructed root menu can begin a fresh local co-op session.</summary>
+    public static bool IsRootMainMenu(IScreenContext? currentScreen)
+    {
+        return currentScreen is NMainMenu mainMenu && GodotObject.IsInstanceValid(mainMenu)
+            && mainMenu.IsInsideTree() && mainMenu.IsVisibleInTree()
+            && mainMenu.SubmenuStack is { SubmenusOpen: false } && GetOpenModal() == null;
+    }
+
     private static SessionPayload BuildSessionPayload(IScreenContext? currentScreen, RunState? runState)
     {
         if (GetMultiplayerTestScene() != null)

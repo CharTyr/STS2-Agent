@@ -138,7 +138,6 @@ internal sealed partial class AgentRuntime
                 _sessionMemory.Restore("run_unknown", null);
                 _strategyStore.Update(PlayStrategy.Default);
                 _strategyPlanner = null;
-                _lastPromptTokens = 0;
                 _lastJevChoice = null;
                 _lastJevProbabilities = null;
                 _lastJevDanger = null;
@@ -177,7 +176,6 @@ internal sealed partial class AgentRuntime
                 _sessionMemory.Restore(boundaryRunId!, record?.Decisions);
                 _strategyStore.Update(record?.Strategy ?? PlayStrategy.Default);
                 _strategyPlanner = null;
-                _lastPromptTokens = 0;
                 _lastJevChoice = null;
                 _lastJevProbabilities = null;
                 _lastJevDanger = null;

@@ -36,6 +36,10 @@ internal sealed class DiagnosticSnapshot
 
     public required int? SessionTokens { get; init; }
 
+    public IReadOnlyList<ContextRequestStats> ContextRequests { get; init; } = Array.Empty<ContextRequestStats>();
+
+    public long ContextPeak { get; init; }
+
     public required IReadOnlyList<string> RecentEvents { get; init; }
 
     public required IReadOnlyList<string> RecentRequestIds { get; init; }
@@ -121,6 +125,17 @@ internal static class DiagnosticExport
         builder.AppendLine("usage_known=" + snapshot.UsageKnown);
         builder.AppendLine("session_requests=" + snapshot.SessionRequests);
         builder.AppendLine("session_tokens=" + (snapshot.UsageKnown ? snapshot.SessionTokens?.ToString() ?? "0" : "unknown"));
+        builder.AppendLine("context_estimates: local approximations, not a guarantee; cache occupies the window");
+        builder.AppendLine("context_peak_estimated_input=" + snapshot.ContextPeak);
+        foreach (var row in snapshot.ContextRequests)
+        {
+            builder.AppendLine($"  round={row.Round} sent={row.Sent} trimmed={row.Trimmed} window={row.Window} "
+                + $"estimated_input={row.Input} state={row.State} static={row.Static} guidance={row.Guidance} "
+                + $"history={row.History} tools={row.Tools} images={row.Images} other={row.Other} "
+                + $"output_reserve={row.OutputReserve} margin={row.Margin} removed_messages={row.RemovedMessages} removed_estimate={row.RemovedEstimate} "
+                + $"actual_input={row.ActualInput?.ToString() ?? "unknown"} actual_output={row.ActualOutput?.ToString() ?? "unknown"} "
+                + $"actual_cache={row.ActualCache?.ToString() ?? "unknown"}");
+        }
         builder.AppendLine("request_ids=" + Redact(snapshot.RecentRequestIds.Count == 0 ? "-" : string.Join(",", snapshot.RecentRequestIds)));
         builder.AppendLine("events:");
         foreach (var line in snapshot.RecentEvents)

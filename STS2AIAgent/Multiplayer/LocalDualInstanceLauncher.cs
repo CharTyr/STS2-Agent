@@ -2,7 +2,9 @@ using System.Diagnostics;
 using Godot;
 using MegaCrit.Sts2.Core.Logging;
 using MegaCrit.Sts2.Core.Helpers;
+using MegaCrit.Sts2.Core.Nodes.Screens.ScreenContext;
 using STS2AIAgent.Config;
+using STS2AIAgent.Game;
 using STS2AIAgent.Localization;
 using STS2AIAgent.Server;
 
@@ -27,15 +29,75 @@ internal static class LocalDualInstanceLauncher
     private static Process? _companionProcess;
     private static string? _startupPath;
     private static string? _sessionToken;
-    public static CompanionConnection? Connection { get; private set; }
+    private static CompanionConnection? _connection;
+    public static CompanionConnection? Connection
+    {
+        get => CompanionProcessAlive ? _connection : null;
+        private set => _connection = value;
+    }
 
     public static bool CompanionAutoPlay { get; private set; } = true;
 
     public static bool CanReconnect => !InstanceRole.IsCompanion && Connection == null && CompanionProcessAlive;
 
-    public static bool CompanionProcessAlive => _companionProcess is { HasExited: false };
+    public static bool CompanionProcessAlive
+    {
+        get
+        {
+            var process = _companionProcess;
+            try { return process is { HasExited: false }; }
+            catch (InvalidOperationException) { return false; }
+        }
+    }
 
-    public static bool CompanionProcessExited => _companionProcess is { HasExited: true };
+    public static bool CompanionProcessExited => _companionProcess != null && !CompanionProcessAlive;
+
+    /// <summary>Retire only our previously launched child, after an explicit root-menu request.</summary>
+    public static async Task<(bool Ok, string Message)> PrepareForNewSessionAsync(CancellationToken cancellationToken)
+    {
+        var process = _companionProcess;
+        var result = await CompanionRetirement.TryRetireAsync(
+            LaunchGate,
+            token => GameThread.InvokeAsync<CompanionCloseStart>(
+                () => Task.FromResult(RequestCloseAtRoot(process, token)), TimeSpan.FromSeconds(5), token),
+            token => process!.WaitForExitAsync(token),
+            () => ClearExitedCompanion(process),
+            TimeSpan.FromSeconds(15), cancellationToken);
+
+        return result switch
+        {
+            CompanionRetirementResult.Retired => (true, string.Empty),
+            CompanionRetirementResult.NotAtRoot => (false, Loc.T("请先回到主菜单，再邀请 AI 队友组队。")),
+            CompanionRetirementResult.Busy => (false, Loc.T("正在邀请 AI 队友，请等待连接结果。")),
+            _ => (false, Loc.T("AI 队友窗口已经在运行。请查看该窗口；若要重新组队，请先正常关闭它。"))
+        };
+    }
+
+    private static CompanionCloseStart RequestCloseAtRoot(Process? process, CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        if (!GameStateService.IsRootMainMenu(ActiveScreenContext.Instance.GetCurrentScreen()))
+            return CompanionCloseStart.NotAtRoot;
+        if (!ReferenceEquals(process, _companionProcess)) return CompanionCloseStart.Failed;
+        if (process == null || process.HasExited) return CompanionCloseStart.AlreadyExited;
+        // The only eligible process is the handle returned by our Process.Start, never the host.
+        if (process.Id == System.Environment.ProcessId) return CompanionCloseStart.Failed;
+        cancellationToken.ThrowIfCancellationRequested();
+        return process.CloseMainWindow() || process.HasExited
+            ? CompanionCloseStart.Closing : CompanionCloseStart.Failed;
+    }
+
+    private static void ClearExitedCompanion(Process? process)
+    {
+        if (!ReferenceEquals(process, _companionProcess) || (process != null && !process.HasExited))
+            throw new InvalidOperationException("The previous companion has not exited.");
+        _companionProcess = null;
+        Connection = null;
+        _sessionToken = null;
+        if (_startupPath != null) { try { File.Delete(_startupPath); } catch (IOException) { } }
+        _startupPath = null;
+        process?.Dispose();
+    }
 
     /// <summary>
     /// Best-effort, non-blocking close of the companion window when the host shuts down normally.
@@ -135,8 +197,9 @@ internal static class LocalDualInstanceLauncher
                 };
             }
 
-            _companionProcess?.Dispose();
+            var exited = _companionProcess;
             _companionProcess = null;
+            exited?.Dispose();
             if (_startupPath != null) { try { File.Delete(_startupPath); } catch (IOException) { } }
             _startupPath = null;
             _sessionToken = null;

@@ -354,6 +354,15 @@ internal static class McpServiceTests
             playbook!.Contains("## SHOP", StringComparison.Ordinal),
             "the playbook answer is the screen's slice, not the whole document");
 
+        bridge.CompactStateJson = """{"screen":"CHARACTER_SELECT","available_actions":[]}""";
+        var character = await Rpc(server, """{"jsonrpc":"2.0","id":49,"method":"tools/call","params":{"name":"get_scene_guidance"}}""");
+        using var characterDocument = JsonDocument.Parse(
+            character.GetProperty("result").GetProperty("content")[0].GetProperty("text").GetString()!);
+        var characterPlaybook = characterDocument.RootElement.GetProperty("playbook").GetString();
+        Assert.Contains("explicitly requests", characterPlaybook);
+        Assert.Contains("do not silently substitute", characterPlaybook);
+        Assert.Contains("already selected and unlocked", characterPlaybook);
+
         // An unmapped screen still gets an answer: the index of the sections it could read.
         bridge.CompactStateJson = """{"screen":"UNKNOWN","available_actions":[]}""";
         var unmapped = await Rpc(server, """{"jsonrpc":"2.0","id":48,"method":"tools/call","params":{"name":"get_scene_guidance"}}""");

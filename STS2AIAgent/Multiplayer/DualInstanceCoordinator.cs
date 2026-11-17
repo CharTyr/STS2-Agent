@@ -1,6 +1,7 @@
 using System.Reflection;
 using MegaCrit.Sts2.Core.Helpers;
 using MegaCrit.Sts2.Core.Logging;
+using MegaCrit.Sts2.Core.Nodes.Screens.ScreenContext;
 using STS2AIAgent.Agent;
 using STS2AIAgent.Config;
 using STS2AIAgent.Game;
@@ -28,10 +29,13 @@ internal static class DualInstanceCoordinator
         CancellationToken cancellationToken,
         bool companionAutoPlay = true)
     {
-        if (await GetScreenAsync() != "MAIN_MENU")
+        if (!await IsRootMainMenuAsync(cancellationToken))
         {
             return (false, Loc.T("请先回到主菜单，再邀请 AI 队友组队。"));
         }
+
+        var retired = await LocalDualInstanceLauncher.PrepareForNewSessionAsync(cancellationToken);
+        if (!retired.Ok) return retired;
 
         try
         {
@@ -66,7 +70,7 @@ internal static class DualInstanceCoordinator
         CancellationToken cancellationToken,
         bool companionAutoPlay = true)
     {
-        if (await GetScreenAsync() != "MAIN_MENU")
+        if (!await IsRootMainMenuAsync(cancellationToken))
         {
             return (false, Loc.T("请先回到主菜单，再继续联机对局。"));
         }
@@ -93,10 +97,17 @@ internal static class DualInstanceCoordinator
             return (false, companionMismatch);
         }
 
+        var retired = await LocalDualInstanceLauncher.PrepareForNewSessionAsync(cancellationToken);
+        if (!retired.Ok) return retired;
+
         try
         {
             EnableFastMpENetHost();
-            await GameThread.InvokeAsync(async () => await GameActionService.StartLocalLoadAsync(cancellationToken));
+            await GameThread.InvokeAsync(async () =>
+            {
+                RequireRootMainMenu();
+                return await GameActionService.StartLocalLoadAsync(cancellationToken);
+            }, TimeSpan.FromSeconds(5), cancellationToken);
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
@@ -198,9 +209,15 @@ internal static class DualInstanceCoordinator
     private static async Task OpenLocalFourPlayerLobbyAsync(CancellationToken cancellationToken)
     {
         EnableFastMpENetHost();
+        var hostStarted = false;
         try
         {
-            await GameThread.InvokeAsync(async () => await GameActionService.StartLocalFourPlayerHostAsync());
+            await GameThread.InvokeAsync(async () =>
+            {
+                RequireRootMainMenu();
+                hostStarted = true;
+                return await GameActionService.StartLocalFourPlayerHostAsync();
+            }, TimeSpan.FromSeconds(5), cancellationToken);
             await GameThread.InvokeAsync(() =>
             {
                 GameStateService.EnsureFourPlayerLobby();
@@ -208,7 +225,7 @@ internal static class DualInstanceCoordinator
             });
             return;
         }
-        catch (Exception ex) when (ex is not OperationCanceledException)
+        catch (Exception ex) when (hostStarted && ex is not OperationCanceledException)
         {
             Log.Warn($"{LogPrefix} FastHost ENet lobby failed, falling back to debug lobby: {ex.Message}");
         }
@@ -258,10 +275,9 @@ internal static class DualInstanceCoordinator
         await GameThread.InvokeAsync(() =>
         {
             cancellationToken.ThrowIfCancellationRequested();
-            if (GameStateService.BuildStatePayload().screen != "MAIN_MENU")
-            {
-                throw new InvalidOperationException(Loc.T("请先回到主菜单，再邀请 AI 队友组队。"));
-            }
+            // MAIN_MENU also describes nested menu screens. The player may have opened one
+            // while the first host attempt was failing, so recheck the actual root here.
+            RequireRootMainMenu();
 
             return GameActionService.ExecuteInternalConsoleCommandAsync("multiplayer test");
         });
@@ -289,6 +305,16 @@ internal static class DualInstanceCoordinator
     private static Task<string> GetScreenAsync()
     {
         return GameThread.InvokeAsync(() => GameStateService.BuildStatePayload().screen);
+    }
+
+    private static Task<bool> IsRootMainMenuAsync(CancellationToken cancellationToken) =>
+        GameThread.InvokeAsync(() => GameStateService.IsRootMainMenu(ActiveScreenContext.Instance.GetCurrentScreen()),
+            TimeSpan.FromSeconds(5), cancellationToken);
+
+    private static void RequireRootMainMenu()
+    {
+        if (!GameStateService.IsRootMainMenu(ActiveScreenContext.Instance.GetCurrentScreen()))
+            throw new InvalidOperationException(Loc.T("请先回到主菜单，再邀请 AI 队友组队。"));
     }
 
     private static Task<CompanionBootstrapSnapshot> GetBootstrapSnapshotAsync()

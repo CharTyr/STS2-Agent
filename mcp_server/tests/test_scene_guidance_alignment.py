@@ -261,6 +261,13 @@ class SceneGuidanceAlignmentTests(unittest.TestCase):
                     self.assertIn("Use a current action or wait result", fallback)
                     self.assertNotIn("re-read state after every action", fallback)
 
+    def test_character_selection_respects_the_players_choice(self) -> None:
+        markdown = (_find_source_root() / _PLAYBOOKS_MD).read_text(encoding="utf-8")
+        playbook = playbook_for_screen(markdown, "CHARACTER_SELECT")
+        self.assertIn("explicitly requests", playbook)
+        self.assertIn("do not silently substitute", playbook)
+        self.assertIn("already selected and unlocked", playbook)
+
     def test_deliberate_omissions_match(self) -> None:
         self.assertEqual(
             sorted(_csharp_not_injected()),
