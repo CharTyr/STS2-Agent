@@ -1018,6 +1018,11 @@ internal static class TestRunner
         yield return ("ReflectedMembers.ResolverNeverThrows", () => Task.Run(ReflectedMemberResolverTests.AmbiguityAndInheritanceResolveToNothingInsteadOfThrowing));
         yield return ("ReflectedMembers.StaticnessIsPartOfLookup", () => Task.Run(ReflectedMemberResolverTests.StaticnessIsPartOfTheLookup));
         yield return ("ReflectedMembers.RegistryUsesResolver", () => Task.Run(ReflectedMemberResolverTests.TheRegistryResolvesThroughTheResolver));
+        yield return ("FastHost.NewGameStandardNonCustom", () => Task.Run(FastHostCompatibilityTests.NewGameHostsStandardNonCustomOnce));
+        yield return ("FastHost.OldGameStandard", () => Task.Run(FastHostCompatibilityTests.OldGameHostsStandardOnce));
+        yield return ("FastHost.RejectsUnknownShapes", () => Task.Run(FastHostCompatibilityTests.UnknownShapesDoNotDispatch));
+        yield return ("FastHost.NoRetryAfterDispatch", () => Task.Run(FastHostCompatibilityTests.SelectedOverloadIsNotRetriedAfterDispatchFailure));
+        yield return ("FastHost.LocalLobbyWiring", () => Task.Run(FastHostCompatibilityTests.LocalLobbyInvokesTheCompatibilitySeam));
         yield return ("ReflectedMembers.NoLookupOutsideTheRegistry", () => Task.Run(ReflectedMemberRegistryTests.NothingLooksUpAGameMemberByNameOutsideTheRegistry));
         yield return ("ReflectedMembers.NoNameTakingHelpers", () => Task.Run(ReflectedMemberRegistryTests.NoHelperTakesAGameMemberNameAsAParameter));
         yield return ("ReflectedMembers.NoGodotCallByString", () => Task.Run(ReflectedMemberRegistryTests.GodotIsNeverCalledByAString));

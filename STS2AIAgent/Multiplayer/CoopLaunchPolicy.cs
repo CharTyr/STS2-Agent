@@ -14,6 +14,9 @@ internal static class CoopLaunchPolicy
     public const int CompanionSlotCount = 1;
     public const ulong DefaultCompanionClientId = 1001;
 
+    // The launcher sets exactly "0" for external takeover. An unset flag is the legacy auto-play path.
+    public static bool IsExternalCompanion(bool isCompanion, string? autoPlay) => isCompanion && autoPlay == "0";
+
     public static string CompanionArguments(string? forceSteam, string? clientId)
     {
         _ = forceSteam;

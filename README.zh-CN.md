@@ -104,8 +104,8 @@ https://github.com/user-attachments/assets/89353468-a299-4315-9516-e520bcbfbd4b
 - 在 **游玩 → 多人** 明确选择 **外部 Agent** 再邀请。HTTP/MCP 的已有邀请动作仍兼容按模型验证状态选择路线。
 - 这条路线不需要配置或验证任何模型就能拉起队友——它根本不调用模型，所以没有模型也不会失败。队友照常拉起、照常加入大厅、照常准备。
 - 进图后队友会停在原地，不会自己出牌：它的 `/health` 报 `play_phase: "paused"` 与 `session_requests: 0`，因为这条路线根本不调用模型。
-- 从外部用队友实例自己的 `GET /state` 与 `POST /action` 驱动那个角色。队友入队后，**游玩 → 多人** 会显示它的接口地址，并有 **复制地址** 按钮；也可以从主窗口 `GET /health` 的 `data.companion.api_port` 找到（该端口通常不是 8080）。队友只能操作自己的角色，越界会返回 403 `forbidden_actor`；这条路线下 `data.companion.auto_play` 为 `false`。
-- 用**主窗口**的 `POST /teammate/control`（请求体 `{"running": true|false}`）开始 / 暂停它。这是受支持入口，不需要会话令牌（主窗口自己持有队友会话令牌）。`running: true` 仍然需要已验证的游玩模型，与游戏内「继续游玩」按钮是同一道门禁；`running: false` 随时可用。
+- 在 **游玩 → 多人** 点 **复制 MCP 地址**，把 `http://127.0.0.1:<队友端口>/mcp` 填到 DSH 等客户端的 Streamable HTTP MCP 配置里。这个模式只给队友窗口本次开启本机 MCP，不会打开主窗口的 MCP。让 Agent 用 `decide` 看局面、用 `act` 出牌；它只操控队友角色。
+- **不要点「继续游玩」来接管。** 该按钮和主窗口的 `POST /teammate/control` 只控制 Mod 的内置自动游玩，`running: true` 仍需要验证模型。用 REST 或 Python MCP sidecar 的客户端，可以从主窗口 `GET /health` 的 `data.companion.api_port` 找到队友端口，连接它的 HTTP 基础地址（不带 `/mcp`）。这条路线下 `data.companion.auto_play` 为 `false`。
 
 两条路线共用同一组结构条件（必须在主菜单、这是人玩的窗口、当前角色没有正在跑的自动游玩），只有模型这一档不同。完整契约见 [docs/api.md](./docs/api.md)。
 
@@ -185,7 +185,7 @@ Mod 默认在本地启动 HTTP 服务（默认端口 `8080`，遇冲突自动动
 - `POST /action`：执行具体游戏动作（例如 `play_card`、`choose_map_node`、`proceed` 等）。
 - `GET /data/{collection}`：导出打包的游戏元数据集合（`cards`、`relics`、`monsters`、`potions`、`events`、`powers`、`characters`）。
 - `POST /session/control`：启动 / 暂停本机角色的自动游玩（`{"running": true|false}`）。
-- `POST /teammate/control`：在**主窗口**上开始 / 暂停 AI 队友（`{"running": true|false}`）。仅 loopback、仅主窗口；这是外部 agent 受支持的控制入口（对应选项 C）。
+- `POST /teammate/control`：在主窗口开始 / 暂停队友的**内置自动游玩**（`{"running": true|false}`）。仅本机、仅主窗口。外部接管应连接队友自己的 MCP 地址（见选项 C）。
 - `POST /companion/control` / `POST /companion/message`：控制 AI 队友实例 / 给队友发消息（仅本地双开）。这是队友实例自身的受控端点，由主进程带本次会话令牌调用；外部调用方改用 `POST /teammate/control`。
 - `POST /mcp`：可选 MCP（Streamable HTTP）。默认关闭，在悬浮窗「MCP」页打开。
 

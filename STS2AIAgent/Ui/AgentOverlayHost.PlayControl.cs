@@ -302,7 +302,7 @@ internal sealed partial class AgentOverlayHost
     {
         var settings = AgentRuntime.Instance.Settings;
         if (settings.CompanionControlMode == "external")
-            return Loc.T("外部 Agent 模式：队友入队后等待接管，不会自己出牌；入队后这里会显示它的接口地址。");
+            return Loc.T("外部 Agent 模式：队友不会自己出牌。连接后，这里会显示队友的 MCP 地址。");
         var ready = FirstRunSetup.Evaluate(settings);
         // The play page's setup line already names what is missing; repeating the long hint here
         // said the same thing twice on one screen.
@@ -391,22 +391,25 @@ internal sealed partial class AgentOverlayHost
         if (_teamControlRow != null) _teamControlRow.Visible = teamed;
         if (_teamControlStatus != null) _teamControlStatus.Visible = teamed && _teamControlStatus.Text.Length > 0;
 
-        var external = AgentRuntime.Instance.Settings.CompanionControlMode == "external";
-        var connection = LocalDualInstanceLauncher.Connection;
-        if (_externalAgentBox != null) _externalAgentBox.Visible = external && teamed && connection != null;
-        if (_externalAgentInfo != null && connection != null)
+        var mcpUrl = ExternalAgentMcpUrl();
+        if (_externalAgentBox != null) _externalAgentBox.Visible = teamed && mcpUrl != null;
+        if (_externalAgentInfo != null && mcpUrl != null)
         {
             _externalAgentInfo.Text = Loc.T(
-                "队友接口：{0}\n用 GET /state 读局面、POST /action 出牌，只能操作队友自己的角色。完整说明见 docs/api.md。",
-                ExternalAgentUrl(connection));
+                "队友 MCP：{0}\n把地址填到 DSH 等客户端的 Streamable HTTP MCP 配置里。用 decide 看局面、用 act 出牌，只操作队友角色，不用点「继续游玩」。",
+                mcpUrl);
         }
     }
 
-    private static string ExternalAgentUrl(CompanionConnection connection) => $"http://127.0.0.1:{connection.Port}";
+    private static string? ExternalAgentMcpUrl()
+    {
+        return AgentRuntime.Instance.CompanionAutoPlay || LocalDualInstanceLauncher.CompanionProcessExited
+            ? null
+            : LocalDualInstanceLauncher.Connection?.McpUrl;
+    }
 
     private void CopyExternalAgentUrl()
     {
-        var connection = LocalDualInstanceLauncher.Connection;
-        if (connection != null) CopyText(ExternalAgentUrl(connection));
+        if (ExternalAgentMcpUrl() is { } url) CopyText(url);
     }
 }

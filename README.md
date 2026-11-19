@@ -105,8 +105,8 @@ Request limits, proxies, thinking protocols and the External Agent route: see [M
 - Select **External Agent** in **Play → Multiplayer** before inviting. Existing HTTP/MCP invite actions retain their verification-based route selection for compatibility.
 - You do not need to configure or verify any model to invite a teammate on this route: it never calls a model, so a missing or broken model cannot make it fail. The teammate still launches, joins the lobby, and readies up on its own.
 - When the run starts, the teammate stops where it is and plays nothing by itself: its `/health` reports `play_phase: "paused"` with `session_requests: 0`, because this route never calls a model.
-- Drive that character from outside with the teammate instance's own `GET /state` and `POST /action`. Once the teammate joins, **Play → Multiplayer** shows its address with a **Copy address** button; it is also `data.companion.api_port` on the main window's `GET /health` (that port is usually not 8080). The teammate can only act for its own character; acting outside it returns 403 `forbidden_actor`. On this route `data.companion.auto_play` is `false`.
-- Start and pause it with `POST /teammate/control` on the **main window**, body `{"running": true|false}`. This is the supported entry point and it needs no session token (the main window holds the teammate session token itself). `running: true` still requires a verified play model, exactly like the in-game **Continue Auto-Play** button; `running: false` works at any time.
+- In **Play → Multiplayer**, select **Copy MCP URL** and add `http://127.0.0.1:<teammate-port>/mcp` to DSH or another local Streamable HTTP MCP client. This mode enables native MCP for the teammate session only and does not change the main window's MCP setting. Tell the agent to use `decide` for its game state and `act` to play; it only controls the teammate's character.
+- **Do not press Resume to take over.** Resume and `POST /teammate/control` on the main window control the mod's own auto-play loop; `running: true` still requires a verified play model. REST clients or the Python MCP sidecar can read `data.companion.api_port` from the host's `GET /health`, then use the teammate's HTTP base URL without `/mcp`. On this route `data.companion.auto_play` is `false`.
 
 Both routes enforce the same structural conditions (you are on the main menu, this is not the teammate instance, and the character has no auto-play already running); only the model gate differs. Full contract: [docs/api.md](./docs/api.md).
 
@@ -186,7 +186,7 @@ The mod runs an embedded HTTP server on `http://127.0.0.1:8080` (with dynamic fa
 - `POST /action`: Dispatch an action (e.g., `play_card`, `choose_map_node`, `proceed`).
 - `GET /data/{collection}`: Export a bundled game metadata collection (`cards`, `relics`, `monsters`, `potions`, `events`, `powers`, `characters`).
 - `POST /session/control`: Start or pause autoplay for this instance (`{"running": true|false}`).
-- `POST /teammate/control`: Start or pause the AI teammate from the **main window** (`{"running": true|false}`). Loopback only and main-window only; this is the supported entry point for an external agent (see **Option C** above).
+- `POST /teammate/control`: Start or pause the teammate's **built-in auto-play** from the main window (`{"running": true|false}`). Loopback only and main-window only. For direct external control, use the teammate's MCP URL (see **Option C** above).
 - `POST /companion/control` / `POST /companion/message`: Control or message the AI teammate instance (local dual-instance only). These are the teammate instance's own controlled endpoints, called by the main process with this session's token; external callers should use `POST /teammate/control` instead.
 - `POST /mcp`: Optional MCP (Streamable HTTP). Off by default; enable it on the Settings → MCP section.
 

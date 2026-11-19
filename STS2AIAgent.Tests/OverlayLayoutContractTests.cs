@@ -167,8 +167,14 @@ internal static class OverlayLayoutContractTests
         Assert.Contains("_teamControlRow.Visible = teamed;", phase);
         Assert.Contains("_companionChoiceToggle.Visible = settingUp;", phase);
         // An external-agent teammate shows where to reach it once it is up, inside the invite card.
-        Assert.Contains("_externalAgentBox.Visible = external && teamed && connection != null;", phase);
+        Assert.Contains("ExternalAgentMcpUrl()", phase);
+        Assert.Contains("_externalAgentBox.Visible = teamed && mcpUrl != null;", phase);
         Assert.Contains("_externalAgentBox));", section);
+        var externalUrl = AgentSourceFixture.MethodBody(control, "ExternalAgentMcpUrl");
+        Assert.Contains("AgentRuntime.Instance.CompanionAutoPlay", externalUrl);
+        Assert.Contains("LocalDualInstanceLauncher.CompanionProcessExited", externalUrl);
+        Assert.Contains("LocalDualInstanceLauncher.Connection?.McpUrl", externalUrl);
+        Assert.Contains("ExternalAgentMcpUrl()", AgentSourceFixture.MethodBody(control, "CopyExternalAgentUrl"));
         Assert.Contains("RefreshCoopPhase(canContinue);", AgentSourceFixture.MethodBody(control, "RefreshContinueAvailability"));
     }
 
