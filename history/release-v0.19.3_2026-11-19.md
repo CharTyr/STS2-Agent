@@ -6,7 +6,7 @@
 | --- | --- |
 | PR / 提交 | [#246](https://github.com/CharTyr/STS2-Agent/pull/246) → dev；[#247](https://github.com/CharTyr/STS2-Agent/pull/247) → main；tag `v0.19.3` → `f7ca4c4267574ee4e4762170a495add43b6a708e` |
 | GitHub Release | [v0.19.3](https://github.com/CharTyr/STS2-Agent/releases/tag/v0.19.3)；`sts2-ai-agent-v0.19.3-windows.zip`，980700 字节；SHA256 `EE32BDDB17829DD0D4CB986546107FECBA5EFB1B30DF0F13541E0C1457B7C716` |
-| Steam 工坊 | 未上传（本次无工坊更新） |
+| Steam 工坊 | [3796486050](https://steamcommunity.com/sharedfiles/filedetails/?id=3796486050)，公开；2026-11-20 00:54:22 `Upload finished … : OK`；Web API `file_size=2241683` 与本地内容字节和相等，`hcontent_file=5159012035531185497`（与 Steam 日志 ManifestID 一致），`time_updated=1795107257` |
 | 共用 DLL | SHA256 `C4C446B72BABE87276760AFF2BB99849DEB015C9F1E90403A5DF47FD3F3DCD5F`，来自干净 `416ff4d` |
 | 指纹 | `build/release/sts2-ai-agent-v0.19.3-windows-fingerprint.json`（33 文件 / 2874089 字节） |
 
@@ -24,5 +24,5 @@
 ## 边界
 
 - 未调用任何付费模型，未修改玩家真实存档与正式安装。
-- 未上传创意工坊；未创建新的工坊物品。
+- 工坊为**更新既有物品** 3796486050，未新建物品；上传期间临时关闭系统代理，结束后恢复为上传前的值。首次尝试因 Steam 客户端尚未就绪返回 `ConnectToGlobalUser failed`，重试一次成功。
 - 打包在独立 worktree（`416ff4d`，working tree clean）中进行；主工作区里另一并行会话的未提交改动未被带入产物。
