@@ -26,7 +26,8 @@ internal static partial class Loc
 
         // Co-op launch failures raised straight from Game/GameActionService.cs.
         map["找不到多人子菜单。"] = "Could not find the multiplayer submenu.";
-        map["找不到 FastHost。"] = "Could not find FastHost.";
+        map["找不到受支持的 FastHost 签名（GameMode 或 GameMode, bool）。"] =
+            "No supported FastHost signature found (GameMode or GameMode, bool).";
 
         // Glossary keyword labels.
         map["力量"] = "Strength";

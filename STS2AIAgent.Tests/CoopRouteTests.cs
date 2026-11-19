@@ -46,6 +46,13 @@ internal static class CoopRouteTests
         // A verified play model collapses the two routes: the same settings now auto-play.
         ModelRoleProbe.Upsert(settings, ModelRoleProbe.FromSuccess(ModelRoleNames.Play, settings.TryResolvePlayModel()!, tools: true));
         Assert.True(CoopLaunchPolicy.GetError(false, false, "MAIN_MENU", settings) == null);
+
+        Assert.True(CoopLaunchPolicy.IsExternalCompanion(isCompanion: true, "0"));
+        Assert.False(CoopLaunchPolicy.IsExternalCompanion(isCompanion: false, "0"));
+        Assert.False(CoopLaunchPolicy.IsExternalCompanion(isCompanion: true, "1"));
+        Assert.False(CoopLaunchPolicy.IsExternalCompanion(isCompanion: true, null));
+        var connection = new CompanionConnection(18081, 444, "test-token");
+        Assert.Equal("http://127.0.0.1:18081/mcp", connection.McpUrl);
     }
 
     /// <summary>
@@ -76,6 +83,14 @@ internal static class CoopRouteTests
         // An idle companion says why it is idle instead of looking stalled.
         Assert.Contains("等待外部接管", runtime);
         Assert.Contains("TeammateControlResult", runtime);
+
+        // External control must be reachable through native MCP even when the isolated settings
+        // inherited from the host have MCP disabled. Later settings sync must not reset the choice.
+        var mcpSettings = AgentSourceFixture.MethodBody(runtime, "ApplyMcpFromSettings");
+        Assert.Contains("_externalCompanion ? _externalCompanionMcpOverride ?? true : _settings.McpEnabled", mcpSettings);
+        var mcpToggle = AgentSourceFixture.MethodBody(runtime, "SetMcpEnabled");
+        Assert.Contains("if (_externalCompanion) _externalCompanionMcpOverride = enabled;", mcpToggle);
+        Assert.Contains("CoopLaunchPolicy.IsExternalCompanion(InstanceRole.IsCompanion,", runtime);
 
         // The reported route has to describe the teammate that is actually running. Recording it
         // before the attempt would let a rejected retry (the usual one: "the teammate window is

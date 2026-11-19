@@ -45,9 +45,11 @@ internal static partial class Loc
         map["AI 自动游玩"] = "AI auto-play";
         map["外部 Agent"] = "External Agent";
         map["手动选队友角色"] = "Pick teammate character";
-        map["队友接口：{0}\n用 GET /state 读局面、POST /action 出牌，只能操作队友自己的角色。完整说明见 docs/api.md。"] =
-            "Teammate API: {0}\nRead the game with GET /state and act with POST /action; only the teammate's own character can be controlled. See docs/api.md for the full contract.";
-        map["外部 Agent 模式：队友入队后等待接管，不会自己出牌；入队后这里会显示它的接口地址。"] = "External mode: the teammate waits to be taken over and will not play on its own; once it joins, its API address appears here.";
+        map["队友 MCP：{0}\n把地址填到 DSH 等客户端的 Streamable HTTP MCP 配置里。用 decide 看局面、用 act 出牌，只操作队友角色，不用点「继续游玩」。"] =
+            "Teammate MCP: {0}\nAdd this Streamable HTTP address to DSH or another MCP client. Use decide to read the game and act to play the teammate only. No need to press Resume.";
+        map["复制 MCP 地址"] = "Copy MCP URL";
+        map["外部 Agent 模式：队友不会自己出牌。连接后，这里会显示队友的 MCP 地址。"] =
+            "External mode: the teammate will not play on its own. Its MCP address appears here once connected.";
         map["在主菜单邀请，队友会自动选角并游玩。"] = "Invite from the main menu; the teammate picks a character and plays.";
         map["在主菜单邀请，到第二窗口为队友选角色。"] = "Invite from the main menu, then pick the teammate's character in the second window.";
         map["复制诊断"] = "Copy diagnostics";

@@ -30,6 +30,26 @@ internal static class ReflectedMemberResolver
     public static PropertyInfo? Property(Type declaringType, string name, bool isStatic) =>
         Guarded(() => declaringType.GetProperty(name, Flags(isStatic)));
 
+    /// <summary>Invokes one known public FastHost signature; false means no compatible method was found.</summary>
+    /// <remarks>Invocation failures propagate. Once hosting has been attempted, do not try another overload.</remarks>
+    public static bool TryInvokeStandardFastHost<TMode>(Type declaringType, object target, TMode standard, out object? result)
+        where TMode : struct, Enum
+    {
+        const BindingFlags flags = BindingFlags.Public | BindingFlags.Instance | BindingFlags.DeclaredOnly | BindingFlags.ExactBinding;
+        var current = Guarded(() => declaringType.GetMethod("FastHost", genericParameterCount: 0, flags, binder: null,
+            types: [typeof(TMode), typeof(bool)], modifiers: null));
+        if (current != null)
+        {
+            result = current.Invoke(target, [standard, false]); // v0.113.1: isCustom = false.
+            return true;
+        }
+
+        var legacy = Guarded(() => declaringType.GetMethod("FastHost", genericParameterCount: 0, flags, binder: null,
+            types: [typeof(TMode)], modifiers: null));
+        result = legacy?.Invoke(target, [standard]);
+        return legacy != null;
+    }
+
     private static BindingFlags Flags(bool isStatic) =>
         BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.DeclaredOnly |
         (isStatic ? BindingFlags.Static : BindingFlags.Instance);

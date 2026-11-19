@@ -163,7 +163,7 @@ curl -s http://127.0.0.1:8080/state | jq .
   "request_id": "req_20260911_121549_7955_4",
   "data": {
     "service": "sts2-ai-agent",
-    "mod_version": "0.19.2",
+    "mod_version": "0.19.3",
     "protocol_version": "2026-03-11-v1",
     "game_version": "v0.113.0",
     "status": "ready",
@@ -1863,19 +1863,19 @@ data: }
 
 ## 两条组队路线
 
-「邀请 AI 队友」有两条路线，前置要求不同。走哪条由**游玩模型是否已验证**决定（代码里就是 `FirstRunSetup.Evaluate(settings).ReadyToInvite`），调用方不需要额外参数。
+「邀请 AI 队友」有两条路线，前置要求不同。游戏界面在「游玩 → 多人」中显式选择。已有 HTTP/MCP 邀请动作继续按**游玩模型是否已验证**决定路线（`FirstRunSetup.Evaluate(settings).ReadyToInvite`），不需要额外参数。
 
 | | AI 自走 | 外部接管 |
 | --- | --- | --- |
 | 前置要求 | 主菜单、本窗口不是队友实例、当前角色没有自动游玩，**并且**游玩模型已配置、端点合法、`测试连接` 已通过 | 只要前三条结构条件；**模型可以完全没配** |
 | 队友进程 | 加入大厅 → 点开局 → 进图后自动出牌 | 加入大厅 → 点开局 → 进图后**停在原地**：子进程拿到 `STS2_AGENT_AUTOPLAY=0`，`/health` 报 `play_phase: "paused"` 与 `session_requests: 0`，从不出牌也从不调用模型 |
-| 谁在打 | 队友进程里的模型循环 | 外部 agent 自己调队友实例的 `GET /state` 与 `POST /action` |
-| 开始 / 暂停 | 主窗口的「暂停队友 / 继续游玩」，或 `POST /teammate/control` | 同上；之后若补齐并验证了游玩模型，`running: true` 会让队友开始自己打 |
+| 谁在打 | 队友进程里的模型循环 | 外部 MCP 客户端在队友实例上用 `decide`/`act`，或直接调用该实例的 `GET /state` 和 `POST /action` |
+| 开始 / 暂停 | 主窗口的「暂停队友 / 继续游玩」，或 `POST /teammate/control` | 外部客户端自行发出或停止发送动作；不调用 `POST /teammate/control` |
 | 怎么识别 | `/health` 的 `companion.auto_play` 为 `true` | 同一字段为 `false` |
 
 两条路线共用同一组结构条件，所以拆分只在模型这一档，不构成绕过：不是队友实例、当前角色没有正在跑的自动游玩、必须在主菜单，缺一条都拉不起来。
 
-外部接管路线下，队友自己的 `POST /action` 一直可用，并且只作用于**它自己的角色**（`CompanionActPolicy`，越界返回 403 `forbidden_actor`）。队友起来后也不会因为没有模型而报错：这条路线根本不调用模型。
+外部接管时，只有**队友实例**为本次会话默认开启原生 MCP；主窗口的 MCP 设置不变。用主窗口「游玩 → 多人 → 复制 MCP 地址」得到 `http://127.0.0.1:<队友端口>/mcp`，把它作为 Streamable HTTP URL 填进 DSH 等本机客户端。在外部客户端用 `health_check` 确认 `instance_role` 为 `companion`，再用 `decide` 和 `act` 游玩。也可连接同一实例的 REST，或让 Python sidecar 的 `STS2_API_BASE_URL` 指向不带 `/mcp` 的基础地址。两者只作用于**队友自己的角色**（`CompanionActPolicy`，REST 越界返回 403 `forbidden_actor`），均不需要队友会话令牌。
 
 ```powershell
 # 未配置任何模型也能拉起队友；它起来后停在原地等接管
@@ -1894,7 +1894,7 @@ Invoke-RestMethod -Uri 'http://127.0.0.1:8080/teammate/control' -Method POST -Co
 
 ## `POST /teammate/control`
 
-主窗口上的受支持队友控制入口：外部 agent 用它开始 / 暂停本次组队的队友实例，**不需要**持有 `X-STS2-Companion-Session`——主窗口自己拿着该令牌，并由它去调队友实例的 `POST /companion/control`。
+从主窗口开始 / 暂停本次组队队友的**内置自动游玩**，不用于外部接管。调用者**不需要**持有 `X-STS2-Companion-Session`——主窗口自己拿着该令牌，并由它去调队友实例的 `POST /companion/control`。
 
 - 鉴权：仅 loopback（非本机 403 `local_only`），且仅主窗口（在 `companion` 实例上 409 `not_host`）。与其他本机端点同级；令牌不下发给调用方，也不出现在任何响应里。
 - 请求体：`{"running": true|false}`，`running` 必须是布尔值
@@ -2101,7 +2101,7 @@ Invoke-RestMethod -Uri 'http://127.0.0.1:8080/data/cards' | ConvertTo-Json -Dept
 
 - 仅接受 loopback 请求，非本机来源返回 403 `local_only`
 - 请求体 `{"running": true}` 开启，`{"running": false}` 关闭；字段缺失或不是布尔值返回 400 `invalid_request`
-- 这个开关不启动、不暂停自动游玩，也不执行游戏动作
+- 这个开关不启动、不暂停自动游玩，也不执行游戏动作；在外部接管的队友实例上只影响该进程本次会话，不改写继承的 MCP 设置
 
 ### 响应示例
 
@@ -2121,7 +2121,7 @@ Invoke-RestMethod -Uri 'http://127.0.0.1:8080/data/cards' | ConvertTo-Json -Dept
 
 进程内 MCP 端点，路径为 `/mcp`（`/mcp/` 等价，路由匹配不区分大小写）。这是 MCP Streamable HTTP 的**独立面**：`OPTIONS` 返回 204，`DELETE` 清除 MCP session 并返回 `{ok:true}`，JSON-RPC 只接受 `POST`；`GET` 和其它方法返回 405 `method_not_allowed`。它与其它路由共用同一个 HTTP 监听端口，默认 `http://127.0.0.1:8080/mcp`。
 
-- 需在游戏内悬浮窗「接入」页勾选开启（settings 的 `mcpEnabled`）；未开启时返回 403 `mcp_disabled`
+- 普通窗口由游戏内悬浮窗的 MCP 开关（settings 的 `mcpEnabled`）决定；明确为外部接管启动的队友实例本次会话默认开启。未开启时返回 403 `mcp_disabled`
 - 走 MCP Streamable HTTP 语义：请求体为 JSON-RPC，响应为 JSON 或 SSE
 - **Origin 策略**：带 `Origin` 头的请求必须与端点 authority 一致（可另带 `Host` 头，同样需匹配），否则 403 `origin_not_allowed`。缺少 `Origin` 的请求放行（原生客户端）。`Origin: null` 一律拒绝
 - 该端点使用自己的错误信封（`{ok:false, error:{code,message}}`）与 JSON-RPC 错误码，不套用本文档其余路由的 `request_id` 信封

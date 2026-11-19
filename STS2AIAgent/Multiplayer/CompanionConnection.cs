@@ -26,6 +26,8 @@ internal sealed class CompanionConnection
     /// <summary>Loopback port the companion instance listens on.</summary>
     public int Port => _port;
 
+    public string McpUrl => $"http://127.0.0.1:{Port}/mcp";
+
     /// <summary>Process id this session was verified against.</summary>
     public int ProcessId => _pid;
 

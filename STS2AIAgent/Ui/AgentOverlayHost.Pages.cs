@@ -345,7 +345,7 @@ internal sealed partial class AgentOverlayHost
         _externalAgentInfo = UiFactory.Wrapped("", UiFactory.FontCaption, muted: false);
         _externalAgentBox = UiFactory.Column();
         _externalAgentBox.AddChild(_externalAgentInfo);
-        _externalAgentBox.AddChild(UiFactory.TightRow(UiFactory.Button(Loc.T("复制地址"), CopyExternalAgentUrl, UiFactory.ButtonKind.Ghost)));
+        _externalAgentBox.AddChild(UiFactory.TightRow(UiFactory.Button(Loc.T("复制 MCP 地址"), CopyExternalAgentUrl, UiFactory.ButtonKind.Ghost)));
         _externalAgentBox.Visible = false;
         // The card shows one phase at a time (see RefreshCoopPhase): before a teammate exists, the
         // character switch, invite and -- when a save exists -- continue; once one exists, pause and

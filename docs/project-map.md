@@ -358,7 +358,7 @@ one action runs at a time.
 - `STS2AIAgent/Game/FtueModalPolicy.cs` — first-time-user modals that block actions and how to clear them.
 - `STS2AIAgent/Game/UnlockConfirmResolutionPolicy.cs` — unlock-confirm screen resolution.
 - `STS2AIAgent/Game/ReflectedGameMembers.cs` — every private game member the mod reads by reflection, probed and logged at startup.
-- `STS2AIAgent/Game/ReflectedMemberResolver.cs` / `STS2AIAgent/Game/ReflectionMemberAccessor.cs` — reflection lookup and cached accessors.
+- `STS2AIAgent/Game/ReflectedMemberResolver.cs` / `STS2AIAgent/Game/ReflectionMemberAccessor.cs` — reflection lookup and cached accessors. The resolver also dispatches the public standard `FastHost` exactly once: prefer `(GameMode, bool)` with `isCustom=false`, then the legacy `(GameMode)` signature.
 
 ### Partial → actions
 | Partial | Actions |
@@ -431,7 +431,7 @@ but hasn't settled; the agent treats a run of these as a stall (`NoProgressPolic
 - `STS2AIAgent/Server/JsonHelper.cs` — shared JSON options and writing.
 - `STS2AIAgent/Server/HealthRoleData.cs` — role, play and companion fields reported by `/health`.
 - `STS2AIAgent/Server/CompanionPortFile.cs` — the companion writes its port so the host can find it.
-- `STS2AIAgent/Server/NativeMcpServer.cs` — Streamable-HTTP MCP endpoint (JSON-RPC, sessions, off by default); initialize uses external-client instructions rather than the in-game tool directory.
+- `STS2AIAgent/Server/NativeMcpServer.cs` — Streamable-HTTP MCP endpoint (JSON-RPC, sessions); initialize uses external-client instructions rather than the in-game tool directory. Off by default, except for the companion process launched for external takeover.
 - `STS2AIAgent/Server/NativeMcpServer.TurnPlan.cs` — native MCP opt-in `then` orchestration: shared `TurnPlanPolicy`, 9-step cap, 30 s cancellation budget, combat-only follow-ups through `ActOnceAsync`; strips intermediate per-step `state` copies when `raw_state=false` and exposes one deduplicated `final_state`; pending and unknown are terminal.
 - `STS2AIAgent/Server/NativeMcpServer.Tools.cs` — `ExecuteToolAsync`: native tool implementations, kept in parity with Python `server.py`.
 - `STS2AIAgent/Server/McpStateSlimmer.cs` — stateless compact intra-frame slimming (`McpStateSlimmer`) and bounded session-scoped static deduplication (`McpSessionDedup`: unchanged `run.deck` / `relic_descriptions` / `ascension_effects`, delta `glossary`, `card_value_note`, and repeated `decide()` `scene_guidance`; `get_game_state(full_state=true)` refreshes; mirrors `mcp_server/src/sts2_mcp/state_diet.py`).
@@ -450,7 +450,7 @@ but hasn't settled; the agent treats a run of these as a stall (`NoProgressPolic
 - `STS2AIAgent/Multiplayer/DualInstanceCoordinator.cs` — host side of local co-op: host the lobby, wait for the companion, start or continue the run.
 - `STS2AIAgent/Multiplayer/CoopLaunchPolicy.cs` — whether an invite may launch, and whether the companion auto-plays (requires a verified play role).
 - `STS2AIAgent/Multiplayer/CoopSavePrecheckPolicy.cs` / `STS2AIAgent/Multiplayer/CoopSaveProbe.cs` — whether a saved co-op run can be continued.
-- `STS2AIAgent/Multiplayer/CompanionConnection.cs` — host → companion HTTP (token header `X-STS2-Companion-Session`).
+- `STS2AIAgent/Multiplayer/CompanionConnection.cs` — host → companion HTTP (token header `X-STS2-Companion-Session`) and the companion's native MCP URL built from its confirmed listener port.
 - `STS2AIAgent/Multiplayer/CompanionHealth.cs` — companion liveness.
 - `STS2AIAgent/Multiplayer/CompanionProfileBootstrap.cs` — seeds the companion's isolated settings and profile.
 - `STS2AIAgent/Multiplayer/CompanionSettingsPatch.cs` — the Jev settings patch pushed to a running companion.
@@ -472,7 +472,7 @@ but hasn't settled; the agent treats a run of these as a stall (`NoProgressPolic
   calls tolerate numeric ids, object `arguments` and missing ids (an id is synthesized, never dropped).
   The assistant tool-call turn echoes the provider's `reasoning_content` (DeepSeek and Kimi thinking modes
   return 400 without it; nothing is sent to providers that never returned it).
-- **Co-op invite:** overlay `LaunchDualAsync` → runtime's dual-launch gate and `CoopLaunchPolicy` (verified play role → the companion auto-plays) → on an explicit root-menu invite/continue, `CompanionRetirement` closes the previously launched child and waits for its exit under the launcher's gate; root menu is rechecked before opening the lobby or loading. `LocalDualInstanceLauncher.LaunchCompanionAsync` starts the isolated child (role, port, token, host PID, autoplay), then waits for `/health` from its expected PID (90 s). A failed close stops the attempt; an active session may reconnect a live unconnected child without retiring it. UI/state reads never retire a child. Host HTTP uses `X-STS2-Companion-Session`.
+- **Co-op invite:** overlay `LaunchDualAsync` → runtime's dual-launch gate and `CoopLaunchPolicy` (verified play role → the companion auto-plays) → on an explicit root-menu invite/continue, `CompanionRetirement` closes the previously launched child and waits for its exit under the launcher's gate; root menu is rechecked before opening the lobby or loading. `LocalDualInstanceLauncher.LaunchCompanionAsync` starts the isolated child (role, port, token, host PID, autoplay), then waits for `/health` from its expected PID (90 s). A failed close stops the attempt; an active session may reconnect a live unconnected child without retiring it. UI/state reads never retire a child. Host HTTP uses `X-STS2-Companion-Session`. An externally controlled child remains paused, enables native MCP for that process only, and the host overlay displays the verified child's `/mcp` address; external `decide`/`act` do not use `/teammate/control`.
 
 ### Provider quirks the client handles
 | Provider | Handling |
