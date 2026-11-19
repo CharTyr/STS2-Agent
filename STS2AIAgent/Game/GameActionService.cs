@@ -789,86 +789,22 @@ internal static partial class GameActionService
 
     private static async Task<bool> InvokeFastHostAsync(NMultiplayerSubmenu submenu)
     {
-        var fastHostTimeout = TimeSpan.FromSeconds(10);
-        const BindingFlags flags = BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic;
-        var method = typeof(NMultiplayerSubmenu).GetMethods(flags)
-            .FirstOrDefault(candidate => candidate.Name == "FastHost");
-        if (method == null)
+        if (!ReflectedMemberResolver.TryInvokeStandardFastHost(typeof(NMultiplayerSubmenu), submenu, GameMode.Standard, out var result))
         {
-            throw new InvalidOperationException(Loc.T("找不到 FastHost。"));
+            throw new InvalidOperationException(Loc.T("找不到受支持的 FastHost 签名（GameMode 或 GameMode, bool）。"));
         }
 
-        var parameters = method.GetParameters();
-        if (parameters.Length == 1)
+        if (result is Task task)
         {
-            foreach (var mode in EnumerateFastHostModes(parameters[0].ParameterType))
+            var completedHostTask = await WaitForGameTaskAsync(task, TimeSpan.FromSeconds(10));
+            if (ClassifyGameTaskWait(task, completedHostTask == null) != GameTaskWaitOutcome.Completed)
             {
-                var result = method.Invoke(submenu, new[] { mode });
-                if (result is Task task)
-                {
-                    var completedHostTask = await WaitForGameTaskAsync(task, fastHostTimeout);
-                    if (ClassifyGameTaskWait(task, completedHostTask == null) != GameTaskWaitOutcome.Completed)
-                    {
-                        ObserveBackgroundTask(task, "invite_ai_teammate");
-                        return false;
-                    }
-                }
-
-                if (await WaitForCharacterSelectOpenAsync(TimeSpan.FromSeconds(8)))
-                {
-                    return true;
-                }
-            }
-        }
-        else
-        {
-            var result = method.Invoke(submenu, Array.Empty<object>());
-            if (result is Task task)
-            {
-                var completedHostTask = await WaitForGameTaskAsync(task, fastHostTimeout);
-                if (ClassifyGameTaskWait(task, completedHostTask == null) != GameTaskWaitOutcome.Completed)
-                {
-                    ObserveBackgroundTask(task, "invite_ai_teammate");
-                    return false;
-                }
-            }
-
-            return await WaitForCharacterSelectOpenAsync(TimeSpan.FromSeconds(8));
-        }
-
-        return false;
-    }
-
-    private static IEnumerable<object> EnumerateFastHostModes(Type modeType)
-    {
-        var values = new List<(string Name, object Value)>();
-        if (modeType.IsEnum)
-        {
-            foreach (var value in Enum.GetValues(modeType))
-            {
-                if (value != null)
-                {
-                    values.Add((Enum.GetName(modeType, value) ?? string.Empty, value));
-                }
-            }
-        }
-        else
-        {
-            foreach (var field in modeType.GetFields(BindingFlags.Public | BindingFlags.Static))
-            {
-                var value = field.GetValue(null);
-                if (value != null)
-                {
-                    values.Add((field.Name, value));
-                }
+                ObserveBackgroundTask(task, "invite_ai_teammate");
+                return false;
             }
         }
 
-        foreach (var item in values.OrderBy(value =>
-                     value.Name.Contains("Standard", StringComparison.OrdinalIgnoreCase) ? 0 : 1))
-        {
-            yield return item.Value;
-        }
+        return await WaitForCharacterSelectOpenAsync(TimeSpan.FromSeconds(8));
     }
 
     private static string DescribeHostMethods()

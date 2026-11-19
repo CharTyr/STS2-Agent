@@ -1,0 +1,4 @@
+{"file":".trellis/spec/mod/architecture.md","reason":"Game-thread and reflection boundary; runtime ownership and source gates"}
+{"file":".trellis/spec/mod/game-actions.md","reason":"Bounded lobby action waits and shared execution path"}
+{"file":".trellis/spec/mod/agent-and-ui.md","reason":"Companion settings, native MCP, and localized overlay conventions"}
+{"file":".trellis/spec/operations/validation-and-release.md","reason":"Distinguish build and isolated live acceptance"}

@@ -56,6 +56,9 @@ internal sealed partial class AgentRuntime
     private string? _dualStatus;
     private volatile DualLaunchOutcome _dualLaunchOutcome = DualLaunchOutcome.Idle;
     private string? _mcpStatus;
+    private readonly bool _externalCompanion = CoopLaunchPolicy.IsExternalCompanion(InstanceRole.IsCompanion,
+        Environment.GetEnvironmentVariable("STS2_AGENT_AUTOPLAY"));
+    private bool? _externalCompanionMcpOverride;
     private LlmUsage _sessionUsage = LlmUsage.Empty;
     private int _sessionRequests;
     private bool _sessionUsageKnown;
@@ -540,8 +543,12 @@ internal sealed partial class AgentRuntime
     {
         lock (_gate)
         {
-            _settings.McpEnabled = enabled;
-            SaveSettingsQuietly();
+            if (_externalCompanion) _externalCompanionMcpOverride = enabled;
+            else
+            {
+                _settings.McpEnabled = enabled;
+                SaveSettingsQuietly();
+            }
         }
 
         ApplyMcpFromSettings();
@@ -1108,12 +1115,16 @@ internal sealed partial class AgentRuntime
 
     private void ApplyMcpFromSettings()
     {
-        var enabled = Settings.McpEnabled;
-        var url = McpEndpointUrl();
-        NativeMcpServer.Runtime?.SetEnabled(enabled, url);
-        _mcpStatus = enabled
-            ? Loc.T("MCP 已打开。把下面的地址或配置贴进外部客户端。")
-            : null;
+        lock (_gate)
+        {
+            // The companion has no overlay. External takeover opts this process in without changing
+            // the inherited settings, and an explicit /mcp/control toggle lasts for this process only.
+            var enabled = _externalCompanion ? _externalCompanionMcpOverride ?? true : _settings.McpEnabled;
+            NativeMcpServer.Runtime?.SetEnabled(enabled, McpEndpointUrl());
+            _mcpStatus = enabled
+                ? Loc.T("MCP 已打开。把下面的地址或配置贴进外部客户端。")
+                : null;
+        }
     }
 
     private static string McpEndpointUrl()
