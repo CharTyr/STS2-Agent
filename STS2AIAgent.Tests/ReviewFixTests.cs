@@ -59,7 +59,7 @@ internal static class ReviewFixTests
         var firstRoute = source.IndexOf("\"/session/control\"", StringComparison.Ordinal);
         Assert.True(refusal > guard && refusal < firstRoute,
             "A refused request must be rejected with 403 before any route is matched.");
-        Assert.Contains("fetchSite: request.Headers[\"Sec-Fetch-Site\"]", source);
+        Assert.Contains("fetchSite: request.GetHeader(\"Sec-Fetch-Site\")", source);
     }
 
     public static void SettingsWithNullEntriesAreRecovered()

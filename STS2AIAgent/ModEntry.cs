@@ -31,7 +31,17 @@ public static class ModEntry
             LocSource.Initialize();
             GameThread.Initialize();
             GameEventService.Instance.Start();
-            HttpServer.Instance.Start();
+            try
+            {
+                HttpServer.Instance.Start();
+            }
+            catch (HttpServer.StartupException ex)
+            {
+                // No loopback transport bound: MCP, the Python sidecar and the mod's own co-op are
+                // unusable, but the overlay and in-game solo play do not need the API. Keep them.
+                Log.Warn($"{LogPrefix} Local API unavailable: {ex.Message}");
+            }
+
             AgentRuntime.Instance.Initialize();
             // Before anything asks for a private game member, so a renamed one is in the log a player
             // attaches to a bug report rather than only on an endpoint they have never called.
@@ -50,7 +60,9 @@ public static class ModEntry
                 AgentOverlayHost.Install();
             }
 
-            Log.Info($"{LogPrefix} Ready on {HttpServer.Instance.Prefix}");
+            Log.Info(HttpServer.Instance.IsListening
+                ? $"{LogPrefix} Ready on {HttpServer.Instance.Prefix}"
+                : $"{LogPrefix} Ready without a local API");
         }
         catch (Exception ex)
         {

@@ -793,7 +793,14 @@ internal sealed partial class AgentOverlayHost
 
         if (_apiAddressLabel != null)
         {
-            _apiAddressLabel.Text = Loc.T("本机 API：{0}", HttpServer.Instance.Prefix);
+            _apiAddressLabel.Text = HttpServer.Instance.IsListening
+                ? Loc.T("本机 API：{0}", HttpServer.Instance.Prefix)
+                : Loc.T("本机 API 未启动。游戏内单人功能可用；MCP 与 AI 队友不可用。");
+        }
+
+        if (_mcpToggle != null)
+        {
+            _mcpToggle.Disabled = !HttpServer.Instance.IsListening;
         }
 
         if (_mcpClientCard != null)

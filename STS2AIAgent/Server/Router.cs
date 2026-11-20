@@ -16,7 +16,7 @@ internal static class Router
 {
     private const string ServiceName = "sts2-ai-agent";
     private const string ProtocolVersion = "2026-03-11-v1";
-    internal const string ModVersion = "0.19.3";
+    internal const string ModVersion = "0.19.4";
     private const string LogPrefix = "[STS2AIAgent.Router]";
 
     private static long _requestCounter;
@@ -32,7 +32,11 @@ internal static class Router
         }
     }
 
-    public static async Task HandleAsync(HttpListenerContext context, CancellationToken cancellationToken)
+    /// <summary>The primary loopback listener's entry point, kept for existing call sites and tests.</summary>
+    public static Task HandleAsync(HttpListenerContext context, CancellationToken cancellationToken) =>
+        HandleAsync(new HttpListenerRequestContext(context), cancellationToken);
+
+    public static async Task HandleAsync(HttpRequestContext context, CancellationToken cancellationToken)
     {
         var seq = Interlocked.Increment(ref _requestCounter);
         var requestId = $"req_{DateTime.UtcNow:yyyyMMdd_HHmmss_ffff}_{seq}";
@@ -49,9 +53,9 @@ internal static class Router
             // Every route sits behind the same browser guard. The MCP route keeps its own stricter
             // Origin check (it answers a same-origin browser client), so only Host is enforced there.
             if (!LocalRequestGuard.IsTrusted(
-                    request.Headers["Host"], request.Headers["Origin"], HttpServer.Instance.Port,
+                    request.GetHeader("Host"), request.GetHeader("Origin"), HttpServer.Instance.Port,
                     allowOrigin: IsMcpPath(request.Url?.AbsolutePath),
-                    fetchSite: request.Headers["Sec-Fetch-Site"]))
+                    fetchSite: request.GetHeader("Sec-Fetch-Site")))
             {
                 throw new ApiException(403, "untrusted_origin",
                     "Requests from web pages or non-loopback hosts are refused.");
@@ -60,7 +64,7 @@ internal static class Router
             if (request.HttpMethod == "GET" && request.Url?.AbsolutePath == "/companion/jev")
             {
                 if (!InstanceRole.IsCompanion || !request.IsLocal || !CompanionConnection.IsAuthorized(
-                    Environment.GetEnvironmentVariable(CompanionConnection.TokenEnvironment), request.Headers[CompanionConnection.TokenHeader]))
+                    Environment.GetEnvironmentVariable(CompanionConnection.TokenEnvironment), request.GetHeader(CompanionConnection.TokenHeader)))
                     throw new ApiException(403, "companion_session_required", "This endpoint requires the active local companion session.");
                 await WriteJsonAsync(response, 200, new
                 {
@@ -73,7 +77,7 @@ internal static class Router
             if (request.HttpMethod == "POST" && request.Url?.AbsolutePath is "/companion/message" or "/companion/control")
             {
                 if (!InstanceRole.IsCompanion || !request.IsLocal || !CompanionConnection.IsAuthorized(
-                    Environment.GetEnvironmentVariable(CompanionConnection.TokenEnvironment), request.Headers[CompanionConnection.TokenHeader]))
+                    Environment.GetEnvironmentVariable(CompanionConnection.TokenEnvironment), request.GetHeader(CompanionConnection.TokenHeader)))
                     throw new ApiException(403, "companion_session_required", "This endpoint requires the active local companion session.");
                 if (request.ContentLength64 < 0 || request.ContentLength64 > (request.Url.AbsolutePath == "/companion/control" ? 131072 : 16000))
                     throw new ApiException(400, "invalid_request", "A bounded JSON body is required.");
@@ -583,7 +587,7 @@ internal static class Router
         finally
         {
             Log.Info($"{LogPrefix} {requestId} Completed {statusCode} in {stopwatch.ElapsedMilliseconds}ms");
-            response.Close();
+            await response.CompleteAsync();
         }
     }
 
@@ -664,9 +668,9 @@ internal static class Router
     /// Reads the optional <c>limit</c> query parameter for <c>GET /decisions</c>, clamped so a
     /// caller cannot ask the mod to materialize an unbounded slice of the log.
     /// </summary>
-    internal static int ReadDecisionLimit(HttpListenerRequest request)
+    internal static int ReadDecisionLimit(HttpRequestData request)
     {
-        var raw = request.QueryString["limit"];
+        var raw = request.GetQueryValue("limit");
         return int.TryParse(raw, out var parsed) ? Math.Clamp(parsed, 1, 200) : 50;
     }
 
@@ -682,7 +686,7 @@ internal static class Router
     }
 
     public static Task WriteErrorAsync(
-        HttpListenerResponse response,
+        HttpResponseData response,
         int statusCode,
         string code,
         string message,
@@ -704,7 +708,7 @@ internal static class Router
         });
     }
 
-    private static async Task<System.Text.Json.JsonDocument> ReadCompanionBodyAsync(HttpListenerRequest request, CancellationToken cancellationToken)
+    private static async Task<System.Text.Json.JsonDocument> ReadCompanionBodyAsync(HttpRequestData request, CancellationToken cancellationToken)
     {
         try { return await System.Text.Json.JsonDocument.ParseAsync(request.InputStream, cancellationToken: cancellationToken); }
         catch (System.Text.Json.JsonException) { throw new ApiException(400, "invalid_request", "Body must be valid JSON."); }
@@ -712,7 +716,7 @@ internal static class Router
 
     // Every JSON route needs the same two guarantees: a bounded body, and malformed JSON reported as
     // a 400 request error instead of escaping as an unhandled 500.
-    private static void RequireBoundedBody(HttpListenerRequest request)
+    private static void RequireBoundedBody(HttpRequestData request)
     {
         if (request.ContentLength64 < 0 || request.ContentLength64 > 16000)
         {
@@ -720,13 +724,13 @@ internal static class Router
         }
     }
 
-    private static async Task<T?> ReadJsonBodyAsync<T>(HttpListenerRequest request, CancellationToken cancellationToken)
+    private static async Task<T?> ReadJsonBodyAsync<T>(HttpRequestData request, CancellationToken cancellationToken)
     {
         try { return await JsonHelper.DeserializeAsync<T>(request.InputStream, cancellationToken); }
         catch (System.Text.Json.JsonException) { throw new ApiException(400, "invalid_request", "Body must be valid JSON."); }
     }
 
-    private static async Task WriteJsonAsync(HttpListenerResponse response, int statusCode, object payload)
+    private static async Task WriteJsonAsync(HttpResponseData response, int statusCode, object payload)
     {
         var json = JsonHelper.Serialize(payload);
         var bytes = Encoding.UTF8.GetBytes(json);
@@ -739,15 +743,15 @@ internal static class Router
         await response.OutputStream.WriteAsync(bytes);
     }
 
-    private static async Task<int> HandleEventStreamAsync(HttpListenerResponse response, CancellationToken cancellationToken)
+    private static async Task<int> HandleEventStreamAsync(HttpResponseData response, CancellationToken cancellationToken)
     {
         response.StatusCode = 200;
         response.ContentType = "text/event-stream";
         response.ContentEncoding = Encoding.UTF8;
-        response.SendChunked = true;
-        response.Headers["Cache-Control"] = "no-cache";
-        response.Headers["Connection"] = "keep-alive";
-        response.Headers["X-Accel-Buffering"] = "no";
+        response.EnableStreaming();
+        response.SetHeader("Cache-Control", "no-cache");
+        response.SetHeader("Connection", "keep-alive");
+        response.SetHeader("X-Accel-Buffering", "no");
 
         using var subscription = GameEventService.Instance.Subscribe();
         try
@@ -799,7 +803,7 @@ internal static class Router
         }
     }
 
-    private static async Task WriteSseEventAsync(HttpListenerResponse response, GameEventEnvelope envelope)
+    private static async Task WriteSseEventAsync(HttpResponseData response, GameEventEnvelope envelope)
     {
         await WriteSseRawAsync(response, $"id: {envelope.event_id}\n");
         await WriteSseRawAsync(response, $"event: {envelope.type}\n");
@@ -814,13 +818,13 @@ internal static class Router
         await response.OutputStream.FlushAsync();
     }
 
-    private static async Task WriteSseCommentAsync(HttpListenerResponse response, string comment)
+    private static async Task WriteSseCommentAsync(HttpResponseData response, string comment)
     {
         await WriteSseRawAsync(response, $": {comment}\n\n");
         await response.OutputStream.FlushAsync();
     }
 
-    private static ValueTask WriteSseRawAsync(HttpListenerResponse response, string text)
+    private static ValueTask WriteSseRawAsync(HttpResponseData response, string text)
     {
         var bytes = Encoding.UTF8.GetBytes(text);
         return response.OutputStream.WriteAsync(bytes);
