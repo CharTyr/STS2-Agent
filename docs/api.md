@@ -2102,6 +2102,7 @@ Invoke-RestMethod -Uri 'http://127.0.0.1:8080/data/cards' | ConvertTo-Json -Dept
 - 仅接受 loopback 请求，非本机来源返回 403 `local_only`
 - 请求体 `{"running": true}` 开启，`{"running": false}` 关闭；字段缺失或不是布尔值返回 400 `invalid_request`
 - 这个开关不启动、不暂停自动游玩，也不执行游戏动作；在外部接管的队友实例上只影响该进程本次会话，不改写继承的 MCP 设置
+- 监听细节：优先使用 Windows HTTP.sys；该系统调用返回错误 6（无效句柄）时，同一个端口上的路由改由回环 socket 传输提供，`/health`、`/state`、`/action`、SSE 与 `/mcp` 的契约与状态码不变
 
 ### 响应示例
 
@@ -2119,7 +2120,7 @@ Invoke-RestMethod -Uri 'http://127.0.0.1:8080/data/cards' | ConvertTo-Json -Dept
 
 ## `POST /mcp`（原生 MCP）
 
-进程内 MCP 端点，路径为 `/mcp`（`/mcp/` 等价，路由匹配不区分大小写）。这是 MCP Streamable HTTP 的**独立面**：`OPTIONS` 返回 204，`DELETE` 清除 MCP session 并返回 `{ok:true}`，JSON-RPC 只接受 `POST`；`GET` 和其它方法返回 405 `method_not_allowed`。它与其它路由共用同一个 HTTP 监听端口，默认 `http://127.0.0.1:8080/mcp`。
+进程内 MCP 端点，路径为 `/mcp`（`/mcp/` 等价，路由匹配不区分大小写）。这是 MCP Streamable HTTP 的**独立面**：`OPTIONS` 返回 204，`DELETE` 清除 MCP session 并返回 `{ok:true}`，JSON-RPC 只接受 `POST`；`GET` 和其它方法返回 405 `method_not_allowed`。它与其它路由共用同一个 HTTP 监听端口，默认 `http://127.0.0.1:8080/mcp`；端口由哪个传输提供（HTTP.sys 或回环 socket）对客户端不可见。
 
 - 普通窗口由游戏内悬浮窗的 MCP 开关（settings 的 `mcpEnabled`）决定；明确为外部接管启动的队友实例本次会话默认开启。未开启时返回 403 `mcp_disabled`
 - 走 MCP Streamable HTTP 语义：请求体为 JSON-RPC，响应为 JSON 或 SSE

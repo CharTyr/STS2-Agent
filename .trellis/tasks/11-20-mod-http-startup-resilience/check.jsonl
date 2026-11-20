@@ -1,0 +1,2 @@
+{"file":".trellis/spec/mod/architecture.md","reason":"Check listener/startup isolation, success behavior, and documented contracts"}
+{"file":".trellis/spec/operations/validation-and-release.md","reason":"Separate deterministic regression and isolated live evidence"}

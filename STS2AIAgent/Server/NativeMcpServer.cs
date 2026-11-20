@@ -185,7 +185,11 @@ internal sealed partial class NativeMcpServer
             "}";
     }
 
-    public async Task<int> HandleHttpAsync(HttpListenerContext context, CancellationToken cancellationToken)
+    /// <summary>The primary loopback listener's entry point, kept for existing call sites and tests.</summary>
+    public Task<int> HandleHttpAsync(HttpListenerContext context, CancellationToken cancellationToken) =>
+        HandleHttpAsync(new HttpListenerRequestContext(context), cancellationToken);
+
+    public async Task<int> HandleHttpAsync(HttpRequestContext context, CancellationToken cancellationToken)
     {
         var request = context.Request;
         var response = context.Response;
@@ -205,12 +209,12 @@ internal sealed partial class NativeMcpServer
 
         var result = await ProcessAsync(
             request.HttpMethod,
-            request.Headers["Accept"],
-            request.Headers["Mcp-Session-Id"] ?? request.Headers["MCP-Session-Id"],
+            request.GetHeader("Accept"),
+            request.GetHeader("Mcp-Session-Id") ?? request.GetHeader("MCP-Session-Id"),
             body,
             cancellationToken,
-            request.Headers["Origin"],
-            request.Headers["Host"]);
+            request.GetHeader("Origin"),
+            request.GetHeader("Host"));
         await WriteHttpAsync(response, result);
         return result.StatusCode;
     }
@@ -570,21 +574,21 @@ internal sealed partial class NativeMcpServer
         };
     }
 
-    private static async Task WriteHttpAsync(HttpListenerResponse response, McpHttpResult result)
+    private static async Task WriteHttpAsync(HttpResponseData response, McpHttpResult result)
     {
         response.StatusCode = result.StatusCode;
         if (!string.IsNullOrWhiteSpace(result.AllowOrigin))
         {
-            response.Headers["Access-Control-Allow-Origin"] = result.AllowOrigin;
-            response.Headers["Vary"] = "Origin";
-            response.Headers["Access-Control-Allow-Methods"] = "GET, POST, DELETE, OPTIONS";
-            response.Headers["Access-Control-Allow-Headers"] = "Content-Type, Accept, MCP-Protocol-Version, Mcp-Session-Id, Last-Event-ID";
-            response.Headers["Access-Control-Expose-Headers"] = "MCP-Protocol-Version, Mcp-Session-Id";
+            response.SetHeader("Access-Control-Allow-Origin", result.AllowOrigin);
+            response.SetHeader("Vary", "Origin");
+            response.SetHeader("Access-Control-Allow-Methods", "GET, POST, DELETE, OPTIONS");
+            response.SetHeader("Access-Control-Allow-Headers", "Content-Type, Accept, MCP-Protocol-Version, Mcp-Session-Id, Last-Event-ID");
+            response.SetHeader("Access-Control-Expose-Headers", "MCP-Protocol-Version, Mcp-Session-Id");
         }
-        response.Headers["MCP-Protocol-Version"] = result.ProtocolVersion;
+        response.SetHeader("MCP-Protocol-Version", result.ProtocolVersion);
         if (!string.IsNullOrWhiteSpace(result.SessionId))
         {
-            response.Headers["Mcp-Session-Id"] = result.SessionId;
+            response.SetHeader("Mcp-Session-Id", result.SessionId);
         }
 
         if (result.StatusCode == 204 || result.Body == null)

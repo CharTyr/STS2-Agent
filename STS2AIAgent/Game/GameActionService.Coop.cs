@@ -310,6 +310,13 @@ internal static partial class GameActionService
             });
         }
 
+        if (!HttpServer.Instance.IsListening)
+        {
+            throw new ApiException(409, "invalid_action", Loc.T("本机 API 未启动，暂时无法继续联机存档。游戏内单人功能不受影响。"), new
+            {
+                action = "continue_ai_teammate", reason = "api_unavailable"
+            });
+        }
         if (!GameStateService.CanContinueAiTeammate(ActiveScreenContext.Instance.GetCurrentScreen()))
         {
             throw new ApiException(409, "invalid_action", "No saved multiplayer run to continue.", new
@@ -413,6 +420,13 @@ internal static partial class GameActionService
 
     private static Task<ActionResponsePayload> ExecuteInviteAiTeammateAsync()
     {
+        if (!HttpServer.Instance.IsListening)
+        {
+            throw new ApiException(409, "invalid_action", Loc.T("本机 API 未启动，暂时无法邀请 AI 队友。游戏内单人功能不受影响。"), new
+            {
+                action = "invite_ai_teammate", reason = "api_unavailable"
+            });
+        }
         var payload = GameStateService.BuildStatePayload();
         var settings = AgentRuntime.Instance.Settings;
         // A play model that passed 测试连接 is what makes auto-play possible, so it also picks the

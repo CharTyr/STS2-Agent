@@ -35,12 +35,14 @@ internal static class HttpServerPortPolicyTests
     public static void AutoIncrementedPortIsFlagged()
     {
         var source = AgentSourceFixture.Read(SourcePath);
-        var start = Flat(AgentSourceFixture.DeclarationBody(source, "public void Start()"));
+        var serving = Flat(AgentSourceFixture.DeclarationBody(source, "private void BeginServing(int port, int preferredPort, string transport)"));
         var flatSource = AgentSourceFixture.WithoutWhitespace(source);
 
         Assert.Contains("publicboolPortWasAutoIncremented{get;privateset;}", flatSource);
-        Assert.Contains("Port=started.Port;", start);
-        Assert.Contains("PortWasAutoIncremented=started.Port!=preferredPort;", start);
+        // Both transports funnel into one place that records the chosen port, because the socket
+        // fallback made "the port the HTTP.sys listener picked" no longer the only source.
+        Assert.Contains("Port=port;", serving);
+        Assert.Contains("PortWasAutoIncremented=port!=preferredPort;", serving);
     }
 
     public static void FallbackPolicyGateIsPresent()

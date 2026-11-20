@@ -1119,11 +1119,14 @@ internal sealed partial class AgentRuntime
         {
             // The companion has no overlay. External takeover opts this process in without changing
             // the inherited settings, and an explicit /mcp/control toggle lasts for this process only.
-            var enabled = _externalCompanion ? _externalCompanionMcpOverride ?? true : _settings.McpEnabled;
+            var enabled = HttpServer.Instance.IsListening &&
+                (_externalCompanion ? _externalCompanionMcpOverride ?? true : _settings.McpEnabled);
             NativeMcpServer.Runtime?.SetEnabled(enabled, McpEndpointUrl());
-            _mcpStatus = enabled
-                ? Loc.T("MCP 已打开。把下面的地址或配置贴进外部客户端。")
-                : null;
+            _mcpStatus = !HttpServer.Instance.IsListening
+                ? Loc.T("本机 API 未启动，MCP 不可用；游戏内单人功能不受影响。")
+                : enabled
+                    ? Loc.T("MCP 已打开。把下面的地址或配置贴进外部客户端。")
+                    : null;
         }
     }
 

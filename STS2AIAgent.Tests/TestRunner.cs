@@ -799,6 +799,12 @@ internal static class TestRunner
         yield return ("LoopbackListener.UnexpectedFailureIsNotHidden", () => Task.Run(LoopbackListenerTests.UnexpectedFailureIsNotHidden));
         yield return ("LoopbackListener.RunnerDistinguishesFailureAndSkip", () => Task.Run(LoopbackListenerTests.RunnerDistinguishesFailureAndSkip));
         yield return ("LoopbackListener.RealLoopbackListenerResponds", LoopbackListenerTests.RealLoopbackListenerResponds);
+        yield return ("LocalSocket.ServesJsonHealth", LocalSocketTransportTests.RealSocketServesJsonHealth);
+        yield return ("LocalSocket.RequestReachesHandler", LocalSocketTransportTests.RequestLineHeaderQueryAndBodyReachTheHandler);
+        yield return ("LocalSocket.ChunkedBodyDecoded", LocalSocketTransportTests.ChunkedRequestBodyIsDecoded);
+        yield return ("LocalSocket.StreamingUsesChunkedFraming", LocalSocketTransportTests.StreamingResponseUsesChunkedFraming);
+        yield return ("LocalSocket.MalformedRequestRefused", LocalSocketTransportTests.MalformedRequestIsRefusedWithoutHanging);
+        yield return ("LocalSocket.ChunkSizeIsCapped", () => Task.Run(LocalSocketTransportTests.ChunkSizeIsCapped));
         yield return ("ProactiveChat.DefaultsOff", () => Task.Run(ProactiveChatPolicyTests.DefaultsStayOff));
         yield return ("ProactiveChat.UnknownToneFallsBack", () => Task.Run(ProactiveChatPolicyTests.UnknownToneFallsBackToDefault));
         yield return ("ProactiveChat.ShapeRepair", () => Task.Run(ProactiveChatPolicyTests.ShapeRepairKeepsOptInOffAndFixesTone));
