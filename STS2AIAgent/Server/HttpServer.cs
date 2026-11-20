@@ -75,6 +75,13 @@ public sealed class HttpServer
                 // loopback TCP still works in that process, so serve the same routes over a socket.
                 Log.Warn($"{LogPrefix} HTTP.sys refused the request queue ({ex.Message}); using the loopback socket transport.");
             }
+            catch (InvalidOperationException ex) when (!allowIncrement)
+            {
+                // A pinned port that cannot be registered is a configuration dead end, not a bug in
+                // the routes: callers that work without the API must be able to keep going.
+                Unavailable = ex.Message;
+                throw new StartupException("The configured local API port is unavailable.", ex);
+            }
 
             try
             {
