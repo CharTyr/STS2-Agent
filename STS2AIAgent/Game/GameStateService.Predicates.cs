@@ -67,6 +67,7 @@ using MegaCrit.Sts2.addons.mega_text;
 using STS2AIAgent.Agent;
 using STS2AIAgent.Config;
 using STS2AIAgent.Localization;
+using STS2AIAgent.Server;
 using STS2AIAgent.Multiplayer;
 
 namespace STS2AIAgent.Game;
@@ -523,6 +524,9 @@ internal static partial class GameStateService
 
     public static bool CanInviteAiTeammate(IScreenContext? currentScreen)
     {
+        // The teammate is launched and then reached over the loopback API; without it the invite
+        // cannot complete, so it is not offered rather than failing halfway through a launch.
+        if (!HttpServer.Instance.IsListening) return false;
         if (!IsRootMainMenu(currentScreen) && LocalDualInstanceLauncher.CanReconnect)
             return AgentRuntime.Instance?.DualLaunching != true && AgentRuntime.Instance?.PlayRunning != true;
         if (!IsRootMainMenu(currentScreen))
@@ -541,6 +545,7 @@ internal static partial class GameStateService
 
     public static bool CanContinueAiTeammate(IScreenContext? currentScreen)
     {
+        if (!HttpServer.Instance.IsListening) return false;
         if (InstanceRole.IsCompanion)
         {
             return false;

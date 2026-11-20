@@ -423,8 +423,10 @@ but hasn't settled; the agent treats a run of these as a stall (`NoProgressPolic
 ## 7. HTTP server, native MCP, LLM client, co-op
 
 ### Files
-- `STS2AIAgent/Server/HttpServer.cs` — the loopback `HttpListener` host. The port increments when busy unless `STS2_API_PORT` pins it (`STS2_API_ALLOW_FALLBACK`).
+- `STS2AIAgent/Server/HttpServer.cs` — the loopback API host: HTTP.sys first, a socket fallback on Windows error 6, and `IsListening` for the features that need it. The port increments when busy unless `STS2_API_PORT` pins it (`STS2_API_ALLOW_FALLBACK`).
 - `STS2AIAgent/Server/LoopbackListener.cs` — listener binding and port-fallback rules.
+- `STS2AIAgent/Server/HttpRequestContext.cs` — the transport-neutral request/response contract every route reads, plus the HTTP.sys adapter.
+- `STS2AIAgent/Server/LocalSocketHttpServer.cs` — the loopback socket fallback used when HTTP.sys refuses to create its request queue (Windows error 6): one request per connection, capped headers and body, chunked streaming for SSE.
 - `STS2AIAgent/Server/LocalRequestGuard.cs` — Host/Origin rules that keep web pages (cross-site POST, DNS rebinding) away from the REST routes; `Router` applies it to every request.
 - `STS2AIAgent/Server/Router.cs` — every route (`/health`, `/state`, `/actions/available`, `/decision-snapshot`, `/action`, `/data/*`, `/decisions`, `/strategy`, `/planner-briefing`, `/session/control`, `/teammate/control`, `/companion/*`, `/screenshot`, `/mcp`), the error envelope, and `ModVersion` (one of the five version files).
 - `STS2AIAgent/Server/ApiException.cs` — typed API error (status, code, details, retryable).

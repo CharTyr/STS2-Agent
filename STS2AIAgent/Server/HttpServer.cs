@@ -1,4 +1,5 @@
 using System.Net;
+using System.Net.Sockets;
 using System.Threading;
 using MegaCrit.Sts2.Core.Logging;
 
@@ -14,6 +15,7 @@ public sealed class HttpServer
 
     private readonly object _gate = new();
     private HttpListener? _listener;
+    private LocalSocketHttpServer? _socketServer;
     private CancellationTokenSource? _cts;
     private Task? _listenLoopTask;
 
@@ -27,6 +29,23 @@ public sealed class HttpServer
 
     public bool PortWasAutoIncremented { get; private set; }
 
+    /// <summary>True only while a transport is bound and dispatching requests.</summary>
+    public bool IsListening => _listener != null || _socketServer != null;
+
+    /// <summary>
+    /// Why no transport is bound, for the overlay and diagnostics. Null while listening.
+    /// </summary>
+    public string? Unavailable { get; private set; }
+
+    /// <summary>The transport currently answering, for diagnostics: "http.sys" or "socket".</summary>
+    public string Transport => _socketServer != null ? "socket" : "http.sys";
+
+    /// <summary>
+    /// The transport could not start at all. Callers that can keep working without the API catch
+    /// this; anything else must still see it as a startup failure.
+    /// </summary>
+    public sealed class StartupException(string message, Exception? inner) : Exception(message, inner);
+
     private HttpServer()
     {
     }
@@ -35,7 +54,7 @@ public sealed class HttpServer
     {
         lock (_gate)
         {
-            if (_listener != null)
+            if (_listener != null || _socketServer != null)
             {
                 Log.Info($"{LogPrefix} Already started on {Prefix}");
                 return;
@@ -43,19 +62,96 @@ public sealed class HttpServer
 
             var preferredPort = ResolvePreferredPort();
             var allowIncrement = !IsExplicitPortConfigured() || AllowFallback();
-            var started = LoopbackListener.Start(preferredPort, allowIncrement);
-            _listener = started.Listener;
-            Port = started.Port;
-            PortWasAutoIncremented = started.Port != preferredPort;
-            Prefix = $"http://{DefaultHost}:{Port}/";
-            InstanceEndpointFile.Publish(Port);
-            PublishCompanionPort(Port);
-            CompanionStartupFile.Publish("listening", Port);
+            try
+            {
+                var started = LoopbackListener.Start(preferredPort, allowIncrement);
+                _listener = started.Listener;
+                BeginServing(started.Port, preferredPort, transport: "http.sys");
+                return;
+            }
+            catch (HttpListenerException ex) when (ex.NativeErrorCode == InvalidHandleErrorCode)
+            {
+                // The HTTP Server API refused to create its request queue (Windows error 6). Plain
+                // loopback TCP still works in that process, so serve the same routes over a socket.
+                Log.Warn($"{LogPrefix} HTTP.sys refused the request queue ({ex.Message}); using the loopback socket transport.");
+            }
+            catch (InvalidOperationException ex) when (!allowIncrement)
+            {
+                // A pinned port that cannot be registered is a configuration dead end, not a bug in
+                // the routes: callers that work without the API must be able to keep going.
+                Unavailable = ex.Message;
+                throw new StartupException("The configured local API port is unavailable.", ex);
+            }
 
-            _cts = new CancellationTokenSource();
-            _listenLoopTask = Task.Run(() => ListenLoopAsync(_listener, _cts.Token));
-            Log.Info($"{LogPrefix} Listening on {Prefix}");
+            try
+            {
+                var socketPort = BindSocketPort(preferredPort, allowIncrement);
+                _socketServer = new LocalSocketHttpServer(socketPort, (context, token) => Router.HandleAsync(context, token));
+                _socketServer.Start();
+                BeginServing(_socketServer.Port, preferredPort, transport: "socket");
+            }
+            catch (Exception ex) when (ex is SocketException or IOException or InvalidOperationException)
+            {
+                _socketServer?.Dispose();
+                _socketServer = null;
+                Unavailable = ex.Message;
+                Log.Error($"{LogPrefix} No loopback transport could start: {ex.Message}");
+                throw new StartupException("The local HTTP API could not start on any transport.", ex);
+            }
         }
+    }
+
+    private const int InvalidHandleErrorCode = 6;
+
+    private static int BindSocketPort(int preferredPort, bool allowIncrement)
+    {
+        var nearby = allowIncrement ? Math.Min(LoopbackListener.NearbyPortCount, 65536 - preferredPort) : 1;
+        for (var offset = 0; offset < nearby; offset++)
+        {
+            try
+            {
+                var probe = new TcpListener(IPAddress.Loopback, preferredPort + offset);
+                probe.Start();
+                var port = ((IPEndPoint)probe.LocalEndpoint).Port;
+                probe.Stop();
+                return port;
+            }
+            catch (SocketException)
+            {
+                // Try the next nearby port, exactly like the HTTP.sys path.
+            }
+        }
+
+        if (!allowIncrement)
+        {
+            throw new InvalidOperationException(
+                $"Configured loopback HTTP port {preferredPort} is unavailable for the socket transport.");
+        }
+
+        var dynamic = new TcpListener(IPAddress.Loopback, 0);
+        dynamic.Start();
+        var allocated = ((IPEndPoint)dynamic.LocalEndpoint).Port;
+        dynamic.Stop();
+        return allocated;
+    }
+
+    private void BeginServing(int port, int preferredPort, string transport)
+    {
+        Port = port;
+        PortWasAutoIncremented = port != preferredPort;
+        Prefix = $"http://{DefaultHost}:{Port}/";
+        Unavailable = null;
+        InstanceEndpointFile.Publish(Port);
+        PublishCompanionPort(Port);
+        CompanionStartupFile.Publish("listening", Port);
+
+        _cts = new CancellationTokenSource();
+        if (_listener != null)
+        {
+            _listenLoopTask = Task.Run(() => ListenLoopAsync(_listener, _cts.Token));
+        }
+
+        Log.Info($"{LogPrefix} Listening on {Prefix} via {transport}");
     }
 
     public static int FindFreePort(int startPort)
@@ -69,23 +165,29 @@ public sealed class HttpServer
     public void Stop()
     {
         HttpListener? listener;
+        LocalSocketHttpServer? socketServer;
         CancellationTokenSource? cts;
         Task? listenLoopTask;
 
         lock (_gate)
         {
-            if (_listener == null && _cts == null && _listenLoopTask == null)
+            if (_listener == null && _socketServer == null && _cts == null && _listenLoopTask == null)
             {
                 return;
             }
 
             listener = _listener;
+            socketServer = _socketServer;
             cts = _cts;
             listenLoopTask = _listenLoopTask;
             _listener = null;
+            _socketServer = null;
             _cts = null;
             _listenLoopTask = null;
         }
+
+        try { socketServer?.Dispose(); }
+        catch (Exception ex) { Log.Warn($"{LogPrefix} Socket transport stop failed: {ex.Message}"); }
 
         try
         {
@@ -160,7 +262,7 @@ public sealed class HttpServer
 
                 if (context != null)
                 {
-                    await Router.WriteErrorAsync(context.Response, 500, "listener_error", "HTTP listener failed.");
+                    await Router.WriteErrorAsync(new HttpListenerResponseData(context.Response), 500, "listener_error", "HTTP listener failed.");
                 }
             }
         }

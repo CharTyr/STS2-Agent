@@ -35,6 +35,15 @@ internal static partial class Loc
         map["队友未能确认请求，请查看队友窗口中的状态。请求不会自动重发。"] =
             "Your teammate did not confirm the request. Check the status in the teammate window; the request is not retried automatically.";
 
+        // Server/HttpServer.cs (fallback transport) and the co-op guard that depends on it.
+        map["本机 API 未启动。游戏内单人功能可用；MCP 与 AI 队友不可用。"] =
+            "The local API is not running. In-game solo play works; MCP and AI teammates do not.";
+        map["本机 API 未启动，MCP 不可用；游戏内单人功能不受影响。"] =
+            "The local API is not running, so MCP is unavailable. In-game solo play still works.";
+        map["本机 API 未启动，暂时无法邀请 AI 队友。游戏内单人功能不受影响。"] =
+            "The local API is not running, so an AI teammate cannot be invited right now. In-game solo play still works.";
+        map["本机 API 未启动，暂时无法继续联机存档。游戏内单人功能不受影响。"] =
+            "The local API is not running, so a co-op save cannot be continued right now. In-game solo play still works.";
         // Multiplayer/CoopLaunchPolicy.cs
         map["当前窗口已是 AI 队友。请在你的主窗口邀请队友。"] =
             "This window is already the AI teammate. Invite your teammate from the main window.";

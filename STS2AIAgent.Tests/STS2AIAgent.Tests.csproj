@@ -45,6 +45,8 @@
     <Compile Include="..\STS2AIAgent\Agent\StateViews.cs" Link="Agent\StateViews.cs" />
     <Compile Include="..\STS2AIAgent\Agent\PlaybookSections.cs" Link="Agent\PlaybookSections.cs" />
     <Compile Include="..\STS2AIAgent\Server\LoopbackListener.cs" Link="Server\LoopbackListener.cs" />
+    <Compile Include="..\STS2AIAgent\Server\HttpRequestContext.cs" Link="Server\HttpRequestContext.cs" />
+    <Compile Include="..\STS2AIAgent\Server\LocalSocketHttpServer.cs" Link="Server\LocalSocketHttpServer.cs" />
     <Compile Include="..\STS2AIAgent\Server\CompanionPortFile.cs" Link="Server\CompanionPortFile.cs" />
     <Compile Include="..\STS2AIAgent\Multiplayer\CompanionHealth.cs" Link="Multiplayer\CompanionHealth.cs" />
     <Compile Include="..\STS2AIAgent\Multiplayer\CompanionActPolicy.cs" Link="Multiplayer\CompanionActPolicy.cs" />
