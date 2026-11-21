@@ -163,7 +163,7 @@ curl -s http://127.0.0.1:8080/state | jq .
   "request_id": "req_20260911_121549_7955_4",
   "data": {
     "service": "sts2-ai-agent",
-    "mod_version": "0.19.4",
+    "mod_version": "0.19.5",
     "protocol_version": "2026-03-11-v1",
     "game_version": "v0.113.0",
     "status": "ready",
@@ -370,7 +370,7 @@ curl -s http://127.0.0.1:8080/state | jq .
 | `character_id` | string | 角色 id |
 | `name` | string | 角色显示名 |
 | `is_locked` | boolean | 未解锁；选它会被拒 |
-| `is_selected` | boolean | 本地玩家当前选中的就是它 |
+| `is_selected` | boolean | 本地玩家当前选中的按钮。Dread 轮换按钮可为真，此时 `selected_character_id` 报告轮换解析出的实际角色 |
 | `is_random` | boolean | 这一项是「随机」而不是具体角色 |
 
 #### `character_select.players[]`
@@ -400,7 +400,7 @@ curl -s http://127.0.0.1:8080/state | jq .
 | `players` | object[] | 本局全部玩家的战斗血线（含本地玩家）。联机时用来判断队友是否需要救援；单人局只有一项 |
 | `hand` | object[] | 本地玩家手牌 |
 | `enemies` | object[] | 场上敌人 |
-| `end_turn_will_kill_player` | boolean | 此刻直接结束回合是否会打死本地玩家；包含敌人意图**与**中毒 / 缠绕这类在你能再行动之前结算的持续伤害，逐条依据见 `lethal_risks` |
+| `end_turn_will_kill_player` | boolean | 此刻直接结束回合是否会打死本地玩家。包含敌人意图和中毒、缠绕等持续伤害，逐条依据见 `lethal_risks`。单人标准局能确认单颗闪电球先击杀唯一敌人时，省略厄运致死项 |
 | `lethal_risks` | object[] | 致命风险逐条拆解，见下 |
 
 #### `combat.action_readiness`
@@ -598,12 +598,12 @@ Fool 的旋律系统（v0.113.0+）：旋律牌带 `Wah` / `Cho` / `Ki` 标签�
 | `rules_text` | string | 原始兼容规则文本 |
 | `resolved_rules_text` | string | 按当前实例动态变量展开后的规则文本 |
 | `dynamic_values` | object[] | 当前实例的动态变量列表 |
-| `playable` | boolean | **当前是否可打出** |
-| `unplayable_reason` | string \| null | 不可打出原因（`not_enough_energy`, `not_enough_stars`, `no_living_allies`, `blocked_by_hook`, `unplayable`, `unsupported_target_type`） |
+| `playable` | boolean | 手牌快照中的可用性。带 `Shoot` 标签的牌在持有者没有可用箭矢时为 `false`。显式 `play_card` 仍可按游戏原生规则空射 |
+| `unplayable_reason` | string \| null | 不可打出原因（`not_enough_energy`, `not_enough_stars`, `no_living_allies`, `blocked_by_hook`, `unplayable`, `unsupported_target_type`, `not_enough_arrows`）。有其他原生阻挡原因时优先报告已有原因 |
 | `unplayable_reason_raw` | string \| null | 游戏侧 `UnplayableReason` 枚举的原始名，供排查用；稳定分支请用 `unplayable_reason` |
 | `unplayable_preventer_id` | string \| null | 阻止出牌的来源 id（某个 Power 或遗物） |
 | `unplayable_preventer_type` | string \| null | 该来源的游戏侧类型全名，排查用 |
-| `can_play_result` | boolean | 游戏自己的可打出判定。与 `playable` 的区别是它**不含目标类型是否受支持**这一层：`target_type` 本 mod 尚未支持时 `can_play_result` 仍为 true 而 `playable` 为 false。**决策请用 `playable`** |
+| `can_play_result` | boolean | 原生 `CardModel.CanPlay` 的结果。常规出牌决策使用 `playable`，它还考虑 Mod 的目标类型支持与箭矢可用性 |
 | `target_index_space` | string \| null | `target_index` 落在哪个数组的下标空间（如 `combat.enemies[].index` / `combat.players[].slot_index`）。需要目标时才有值 |
 | `valid_target_indices` | number[] | 在上述空间里此刻合法的 `target_index`。传这个列表之外的值是 409 `invalid_target` |
 
@@ -1169,6 +1169,8 @@ compact 的 `combat` 原样携带 `/state` 的 `action_readiness`、`end_turn_wi
 `lethal_risks[]`（这三处不做文本化改写，字段名与类型逐一相同），因此上面 [`combat.action_readiness`](#combataction_readiness)
 一节对 MCP `get_game_state` 的返回同样适用——**这是 agent 判断「该等还是该动」的首选字段**。
 
+射击牌获得附魔重放时，只有一支可用箭的伤害预览只计首发。多支箭的后续射击可能受到瞄准消耗等效果影响，`hits`、`damage`、`after_block` 和 `kills` 留为 `null`。
+
 | compact 位置 | 字段 | 说明 |
 | --- | --- | --- |
 | `run` | `deck_stats` | 仅奖励/商店/休息/牌组选择屏：count、attacks、skills、powers、curses、statuses、upgraded、avg_cost、zero_cost、starter_strikes、starter_defends；数字费用平均保留两位，X 费不计。其余屏为 null |
@@ -1183,6 +1185,7 @@ compact 的 `combat` 原样携带 `/state` 的 `action_readiness`、`end_turn_wi
 | `combat.enemies[]` | `base_max_hp` | 联机缩放前的基础血量；元数据的 `min_hp` / `max_hp` 与它同量纲，实况 `max_hp` 是缩放后的值 |
 | `combat.players[]` | `player_id` / `slot_index` / `is_local` / `is_connected` / `character_id` / `character_name` / `current_hp` / `max_hp` / `block` / `energy` / `stars` / `focus` / `is_alive` | 队伍血线（含本地玩家），用于判断队友是否需要救援 |
 | `combat.hand[]` | `card_id` | 手牌内部 ID，用于 `get_game_data_item` 精确查询 |
+| `combat.hand[]` | `playable` / `can_play_result` / `why` | 可用性和原生判定沿用原始手牌快照。手牌不可用时 `why` 为其 `unplayable_reason` |
 | `combat.hand[]` | `upgraded` / `energy_cost` / `star_cost` | 结构化数值，与 `line` 里文本化的费用同源；判断「这手还能打什么」不必解析本地化字符串 |
 | `combat.hand[]` | `cid` / `type` | v13 起：`/state` 的 `combat_card_id`（本场战斗内稳定的卡牌编号，整回合规划用 `card_cid` 指认）与 `card_type` |
 | `combat.hand[]` | `vs` | v13 起：这张牌对**每个能打到的敌人**的精确伤害，来自游戏自己的伤害预览（力量、虚弱、**目标的易伤**、上限都已计入，`values[].preview` 不含目标易伤）。每项 `{enemy, per_hit, hits, damage, after_block, kills}`：`damage = per_hit × hits`（含附魔重放），`after_block` = 扣掉该敌人当前格挡后的掉血，`kills` = 单靠这张牌能否打死。段数只在可确定时给出（`CalculatedHits` / `Repeat` 变量或游戏代码写死的两段）；段数在出牌时才计算的牌 `hits`/`damage`/`after_block`/`kills` 为 `null`，绝不猜数。随机目标/自身目标的牌不声称对每个敌人有确定总伤，`vs` 为 `null`；未确认段数的普通攻击也保留未知，不默认一段。没有伤害的牌、不可打出的牌、`combatMathEnabled` 关闭时为 `null` |

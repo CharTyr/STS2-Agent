@@ -524,6 +524,8 @@ internal static class TestRunner
         yield return ("CombatDiagnostics.CancelPlayCard", () => Task.Run(CombatDiagnosticsContractTests.PlayCardTimeoutCancelsNativeGameAction));
         yield return ("CombatDiagnostics.OwnPets", () => Task.Run(CombatDiagnosticsContractTests.CombatPayloadExposesOwnPets));
         yield return ("CombatDiagnostics.DamageOverTimeRisks", () => Task.Run(CombatDiagnosticsContractTests.LethalRisksIncludeDamageOverTime));
+        yield return ("CombatDiagnostics.LightningBeforeDoom", () => Task.Run(CombatDiagnosticsContractTests.LightningCanWinBeforeDoom));
+        yield return ("CombatDiagnostics.ShootingReplays", () => Task.Run(CombatDiagnosticsContractTests.ShootingReplaysRespectAvailableArrows));
         yield return ("ProfileSelection.NativeSwitch", () => Task.Run(ProfileSelectionContractTests.NativeProfileIdentityAndSwitchAreWiredEndToEnd));
         yield return ("DecisionLog.BoundsAndRedacts", () => Task.Run(DecisionLogTests.Record_RedactsBoundsAndKeepsNewest));
         yield return ("DecisionLog.OptionalMetrics", () => Task.Run(DecisionLogTests.Record_CarriesOptionalMetricsWithoutChangingPlainEntries));

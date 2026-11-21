@@ -48,6 +48,8 @@ https://github.com/user-attachments/assets/89353468-a299-4315-9516-e520bcbfbd4b
 
 ### 第 1 步：安装 Mod
 
+当前构建需要《杀戮尖塔 2》v0.113.0 或以上。Steam 中可通过 **属性 → 游戏版本与测试版 → public-beta** 使用 v0.113.x。
+
 **方式 A：Steam 创意工坊（推荐）**
 
 1. 打开 [Steam 创意工坊页面](https://steamcommunity.com/sharedfiles/filedetails/?id=3796486050) 点订阅，等下载完成。

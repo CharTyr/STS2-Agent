@@ -48,6 +48,8 @@ This mod is still in development. Some things may be unfinished or break. Please
 
 ### Step 1: Install The Mod
 
+This build requires Slay the Spire 2 v0.113.0 or later. In Steam, choose **Properties → Game Versions & Betas → public-beta** to use v0.113.x.
+
 **Option A: Steam Workshop (recommended)**
 
 1. Subscribe on the [Workshop page](https://steamcommunity.com/sharedfiles/filedetails/?id=3796486050) and wait for the download.

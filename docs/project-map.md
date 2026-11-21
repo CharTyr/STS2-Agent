@@ -278,11 +278,11 @@ one action runs at a time.
 ### Files
 - `STS2AIAgent/Game/GameStateService.cs` — base partial: `BuildStatePayload` (about 19 builders in a fixed order), `ResolveScreen`/`ResolveNonModalScreen`, `CurrentScreenName` (cheap), `EnumerateAvailableActions` (**the** action surface), `BuildAvailableActionNames(out descriptors)`, `BuildDecisionSnapshotPayload`, `GetLocalPlayer`, `FindDescendants<T>`, shared helpers.
 - `STS2AIAgent/Game/GameStateService.Predicates.cs` — every `Can*` gate and action-level `Is*` helper.
-- `STS2AIAgent/Game/GameStateService.Combat.cs` — the `CombatActionGate` (evaluated once per build; 200 ms stability sampler), hand cards (`playable`, `valid_target_indices`), target index helpers, intents.
+- `STS2AIAgent/Game/GameStateService.Combat.cs` — the `CombatActionGate` (evaluated once per build; 200 ms stability sampler), hand cards (`playable`, `valid_target_indices`), target index helpers, intents. The hand snapshot marks a `Shoot` card unavailable when its owner has no ready arrow. Explicit plays still use the native action checks.
 - `STS2AIAgent/Game/GameStateService.Probe.cs` — cheap reads for the auto-play hot paths: `ProbeActionable()` (combat gate + action names + readiness, no payload; what `GameBridge`'s actionable wait calls every frame) and `BuildTurnProbe()` (screen / phase / run id / in-combat / act for `AutoPlayLoopAsync`). Same sources and order as `BuildStatePayload`; pinned by `ActionabilityProbeContractTests`.
 - `STS2AIAgent/Game/GameStateService.CombatMath.cs` — combat arithmetic for compact view v13: `TryGetCombatCardId` (`NetCombatCardDb`, stable per combat → `hand[].cid`), `FormatCardType` (→ `type`), per-target damage previews (`UpdateDynamicVarPreview` against each enemy on a cloned var set; hits from `CalculatedHits`/`Repeat`/a literal two-hit list, unknown → null), `combat.threat` (incoming / block needed / hp after / lethal, `kill_options`, `max_block`) via `CombatMathPolicy`; cached only within one process frame + combat identity + complete combat payload (HP, intent, targets, values included); unknown hit counts and random/self-target totals are omitted rather than guessed; off with `combatMathEnabled`.
 - `STS2AIAgent/Game/CombatMathPolicy.cs` — pure threat summary, per-cell after-block/kill, knapsack kill options and max block (estimates: ignore draw and mid-turn buffs).
-- `STS2AIAgent/Game/GameStateService.CombatRisks.cs` — `end_turn_will_kill_player` and related flags from Doom, Poison, Constrict, Magic Bomb and Sandpit.
+- `STS2AIAgent/Game/GameStateService.CombatRisks.cs` — `end_turn_will_kill_player` and related flags from Doom, Poison, Constrict, Magic Bomb and Sandpit. In a solo standard fight, a single lightning passive that can kill the last enemy through native damage checks takes precedence over Doom.
 - `STS2AIAgent/Game/GameStateService.Rooms.cs` — event, rest, crystal sphere, game over, chest and capstone payloads.
 - `STS2AIAgent/Game/GameStateService.Rewards.cs` — reward, card reward, bundle and deck-selection payloads, plus the `GetRewardButtons`/`GetProceedButton` helpers.
 - `STS2AIAgent/Game/GameStateService.Shop.cs` — shop payload and the merchant entry helpers.
@@ -339,7 +339,7 @@ one action runs at a time.
 - `STS2AIAgent/Game/GameActionService.Shop.cs` — open/close the shop, buy card/relic/potion, card removal.
 - `STS2AIAgent/Game/GameActionService.Run.cs` — `choose_map_node` (single-player `ForceClick`; co-op `OnMapPointSelectedLocally` plus vote wait), deck view, game over / `continue_game_over`.
 - `STS2AIAgent/Game/GameActionService.Menus.cs` — main menu, FTUE and modal confirm/dismiss, settings and abandon flows.
-- `STS2AIAgent/Game/GameActionService.Embark.cs` — new run: character select (standard/blitz/dread/custom via `open_character_select`'s `mode`), ascension, embark, continue run.
+- `STS2AIAgent/Game/GameActionService.Embark.cs` — new run: character select (standard/blitz/dread/custom via `open_character_select`'s `mode`), ascension, embark, continue run. Dread rotation settles when its button is selected and the lobby marks an actual character as rotating.
 - `STS2AIAgent/Game/GameActionService.Timeline.cs` — timeline epochs, overlays and unlock confirm, split out of Embark on 2026-11-13.
 - `STS2AIAgent/Game/GameActionService.Coop.cs` — multiplayer lobby host/join/load, local four-player host for the companion, ready and start.
 - `STS2AIAgent/Game/ActionExecutionGate.cs` — process-wide single-action lease (`action_in_flight` 409 on overlap; released on throw or cancel).
