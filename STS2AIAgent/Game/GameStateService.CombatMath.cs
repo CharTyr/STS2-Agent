@@ -6,6 +6,7 @@ using MegaCrit.Sts2.Core.Localization.DynamicVars;
 using MegaCrit.Sts2.Core.Logging;
 using MegaCrit.Sts2.Core.Models;
 using MegaCrit.Sts2.Core.Models.Powers;
+using MegaCrit.Sts2.Core.Commands;
 using MegaCrit.Sts2.Core.ValueProps;
 using STS2AIAgent.Agent;
 
@@ -292,9 +293,19 @@ internal static partial class GameStateService
                 }
 
                 var hits = ReadHitCount(card, preview);
-                if (hits is { } known)
+                var replayCount = card.GetEnchantedReplayCount();
+                if (hits is { } known && replayCount > 0)
                 {
-                    hits = known * (1 + Math.Max(0, card.GetEnchantedReplayCount()));
+                    if (card.Tags.Contains(CardTag.Shoot))
+                    {
+                        // Each replay needs a fresh arrow. With more than one arrow, on-play
+                        // changes such as spent Aim can make the later damage differ.
+                        hits = ArrowCmd.GetAvailableArrowCount(card.Owner) == 1 ? known : null;
+                    }
+                    else
+                    {
+                        hits = known * (1 + replayCount);
+                    }
                 }
 
                 cells.Add((index, Math.Max(0, (int)perHit), hits, props.HasFlag(ValueProp.Unblockable)));

@@ -41,6 +41,7 @@ using MegaCrit.Sts2.Core.Nodes.TopBar;
 using MegaCrit.Sts2.Core.Nodes.Rooms;
 using MegaCrit.Sts2.Core.Runs;
 using MegaCrit.Sts2.Core.Models;
+using MegaCrit.Sts2.Core.Models.Characters;
 using MegaCrit.Sts2.Core.GameActions.Multiplayer;
 using MegaCrit.Sts2.Core.Map;
 using MegaCrit.Sts2.Core.Logging;
@@ -156,7 +157,7 @@ internal static partial class GameActionService
         }
 
         if (GameStateService.GetRunLobbyScreen(currentScreen) is not NSubmenu characterSelectScreen ||
-            GameStateService.GetRunLobby(currentScreen) is not { } characterSelectLobby ||
+            GameStateService.GetRunLobby(currentScreen) == null ||
             !GameStateService.CanSelectCharacter(currentScreen))
         {
             throw new ApiException(409, "invalid_action", "Action is not available in the current state.", new
@@ -206,9 +207,8 @@ internal static partial class GameActionService
             });
         }
 
-        var previousCharacterId = characterSelectLobby.LocalPlayer.character.Id.Entry;
         button.Select();
-        var stable = await WaitForCharacterSelectionTransitionAsync(characterSelectScreen, button.Character.Id.Entry, previousCharacterId, TimeSpan.FromSeconds(5));
+        var stable = await WaitForCharacterSelectionTransitionAsync(characterSelectScreen, button, TimeSpan.FromSeconds(5));
 
         return new ActionResponsePayload
         {
@@ -465,36 +465,29 @@ internal static partial class GameActionService
 
     private static async Task<bool> WaitForCharacterSelectionTransitionAsync(
         NSubmenu screen,
-        string currentCharacterId,
-        string previousCharacterId,
+        NCharacterSelectButton button,
         TimeSpan timeout)
     {
-        if (currentCharacterId == previousCharacterId)
-        {
-            return true;
-        }
-
         var deadline = DateTime.UtcNow + timeout;
-        while (DateTime.UtcNow < deadline)
+        while (GodotObject.IsInstanceValid(screen) && GodotObject.IsInstanceValid(button))
         {
-            await WaitForNextFrameAsync();
+            if (button.IsSelected && GameStateService.GetRunLobby(screen)?.LocalPlayer is { } local &&
+                (button.Character is RotatingCharacter
+                    ? local.isRotatingDread && local.character is not (null or RotatingCharacter)
+                    : local.character?.Id == button.Character.Id))
+            {
+                return true;
+            }
 
-            // The run-lobby node disappearing (for example because the run started) removes
-            // our ability to read the local character. It is not evidence that the requested
-            // character was selected, so stop waiting and judge below.
-            if (!GodotObject.IsInstanceValid(screen))
+            if (DateTime.UtcNow >= deadline)
             {
                 break;
             }
 
-            if (GameStateService.GetRunLobby(screen)?.LocalPlayer.character?.Id.Entry == currentCharacterId)
-            {
-                return true;
-            }
+            await WaitForNextFrameAsync();
         }
 
-        return GodotObject.IsInstanceValid(screen) &&
-            GameStateService.GetRunLobby(screen)?.LocalPlayer.character?.Id.Entry == currentCharacterId;
+        return false;
     }
 
     /// <summary>

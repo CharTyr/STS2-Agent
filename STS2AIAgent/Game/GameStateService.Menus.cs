@@ -292,9 +292,7 @@ internal static partial class GameStateService
                     character_id = button.Character.Id.Entry,
                     name = button.Character.Title.GetFormattedText(),
                     is_locked = button.IsLocked,
-                    is_selected = button.IsRandom
-                        ? selectedCharacterId == button.Character.Id.Entry
-                        : selectedCharacterId == button.Character.Id.Entry,
+                    is_selected = button.IsSelected,
                     is_random = button.IsRandom
                 }).ToArray()
             };

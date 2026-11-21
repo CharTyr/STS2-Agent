@@ -73,7 +73,10 @@ namespace STS2AIAgent.Tests;
 ///
 /// <c>BuildHandCardPayload</c> was regenerated on 2026-10-28 (experience overhaul W3/W4) when each
 /// hand card gained <c>combat_card_id</c> (the game's <c>NetCombatCardDb</c> id, stable for the whole
-/// fight, which whole-turn plans name cards by) and <c>card_type</c>. The other fields are unchanged.
+/// fight, which whole-turn plans name cards by) and <c>card_type</c>. It was regenerated again
+/// for #253 to flag zero-arrow shots in the hand snapshot while retaining native diagnostics.
+/// The v0.113.1 audit regenerates <c>BuildCombatLethalRiskPayloads</c> for a lethal lightning
+/// passive preceding Doom, and <c>BuildCharacterSelectPayload</c> for Dread's rotating button.
 ///
 /// <c>BuildRunPlayerSummaryPayload</c> was regenerated when every party line gained the player's
 /// deck, relics and potions. Each client simulates the whole run, so a partner's
@@ -167,7 +170,7 @@ internal static class GameStateServiceRelocationContractTests
         ["BuildAvailableActionNames"] = ("STS2AIAgent/Game/GameStateService.cs", "b95d51aabf1bee52abb8ee13f1c27e166135bd2a33ce927504160b6cff111863"),
         // v0.113.0: combat.player.arrows for the Fool's second resource.
         ["BuildCombatPayload"] = ("STS2AIAgent/Game/GameStateService.Combat.cs", "f7797408820987e68e761a2be0abf0dab01dd2294a47733c4f9e0369d04dd2bc"),
-        ["BuildCombatLethalRiskPayloads"] = ("STS2AIAgent/Game/GameStateService.CombatRisks.cs", "9ce53854ce7bf64fbe6a7f56633e728669dcf1ee48fe2e3e64140cee2cc3edad"),
+        ["BuildCombatLethalRiskPayloads"] = ("STS2AIAgent/Game/GameStateService.CombatRisks.cs", "3c4920568b7b7bdf2fd3bb88b47790fce34c19d5190ec3fd2a7016f807d067f6"),
         // v0.113.0: run payload gained game_mode/dominion_id/is_custom_game/is_rotating_character.
         ["BuildRunPayload"] = ("STS2AIAgent/Game/GameStateService.Run.cs", "8a94c6189d6069070d975ed59b090078032f3731baa6623e9eedbe3f29c827f9"),
         ["ResolveBossId"] = ("STS2AIAgent/Game/GameStateService.Run.cs", "70aecade3371139e3fdb777685e7b1648c90ad859bc9d90a8de5592e1283949d"),
@@ -179,7 +182,7 @@ internal static class GameStateServiceRelocationContractTests
         ["BuildMapPayload"] = ("STS2AIAgent/Game/GameStateService.Map.cs", "6a6615b8d4cf3fcd04e122ee512c33bbcd9f55ff17cb61883109dc39ed3daef0"),
         ["BuildSelectionPayload"] = ("STS2AIAgent/Game/GameStateService.Rewards.cs", "caafc3b4e19f49a932ed333491f95f2df1c36134d4d1c51a22a3be1a95c1c011"),
         // v0.113.0: builds for every run-lobby screen and reports mode (standard/blitz/dread/custom).
-        ["BuildCharacterSelectPayload"] = ("STS2AIAgent/Game/GameStateService.Menus.cs", "4510e5aa7f976a9b8841c3ce873bedbd9c115b0758985966db28282f4235f37f"),
+        ["BuildCharacterSelectPayload"] = ("STS2AIAgent/Game/GameStateService.Menus.cs", "fe965332c6c3ebd6434a38ca80c8db098ac3d05f009bcf26682f924a2ac6ef88"),
         ["BuildEventPayload"] = ("STS2AIAgent/Game/GameStateService.Rooms.cs", "072fb8972e2738c52551e7c6e4902daa8d62747f826cfeb60060a58f5c6f5da6"),
         ["BuildCrystalSpherePayload"] = ("STS2AIAgent/Game/GameStateService.Rooms.cs", "c25d3e74c33cb001be8e1d6dbdceda1fc15c77f49149793c26f6b45eb1b66fcd"),
         ["BuildRestPayload"] = ("STS2AIAgent/Game/GameStateService.Rooms.cs", "378745fd9c1683082eda3041e03a6f6b445ca3df1a180fd5d4ddaa9333e92830"),
@@ -194,7 +197,7 @@ internal static class GameStateServiceRelocationContractTests
         ["BuildModalPayload"] = ("STS2AIAgent/Game/GameStateService.Rooms.cs", "e50fe34507468878d3af92cf543889a8dbc320d1a93a086db164e3c0b973d7b6"),
         ["BuildGameOverPayload"] = ("STS2AIAgent/Game/GameStateService.Rooms.cs", "b152e93a13d1239bf1c9817b9cb33220f397ac755ea3667968fdf6175c2cc1ce"),
         ["VerifyGameOverProgressSave"] = ("STS2AIAgent/Game/GameStateService.Rooms.cs", "f417813a51c483c31608d612aefbe040cce4bdf6a97e4a6ec5f81f49b9dbfe0d"),
-        ["BuildHandCardPayload"] = ("STS2AIAgent/Game/GameStateService.Combat.cs", "aa7201dff843161c6121fc8b2b14c79757788ddacc72dee320cd5887feba2d43"),
+        ["BuildHandCardPayload"] = ("STS2AIAgent/Game/GameStateService.Combat.cs", "2abbbd12a7547b92cdfa726a1574a6f851fa3c1614ba0fa5a5eaab7e1e0e344f"),
         ["GetModelIdEntry"] = ("STS2AIAgent/Game/GameStateService.cs", "a6bc7fd47caee58200cf2b4af006c24a62f11e89f3154de19bec4fb4abe8e745"),
         ["BuildEnemyPayload"] = ("STS2AIAgent/Game/GameStateService.Combat.cs", "61cf445651f34aa4415d3861c84c2fbf8aebb6de39f790eb3456cded6735b6f6"),
         ["BuildCreaturePowerPayloads"] = ("STS2AIAgent/Game/GameStateService.Combat.cs", "125f19a815ca7f18402d59d72f717080fefb159268277c7121c3e711dd2ffaa1"),

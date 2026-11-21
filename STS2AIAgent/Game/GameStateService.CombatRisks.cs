@@ -15,9 +15,12 @@ using MegaCrit.Sts2.Core.Events;
 using MegaCrit.Sts2.Core.Context;
 using MegaCrit.Sts2.Core.Events.Custom.CrystalSphereEvent;
 using MegaCrit.Sts2.Core.Helpers;
+using MegaCrit.Sts2.Core.Hooks;
 using MegaCrit.Sts2.Core.Map;
 using MegaCrit.Sts2.Core.Models;
+using MegaCrit.Sts2.Core.Models.Cards;
 using MegaCrit.Sts2.Core.Models.Characters;
+using MegaCrit.Sts2.Core.Models.Orbs;
 using MegaCrit.Sts2.Core.Models.Powers;
 using MegaCrit.Sts2.Core.Models.Relics;
 using MegaCrit.Sts2.Core.Logging;
@@ -63,6 +66,7 @@ using MegaCrit.Sts2.Core.Runs;
 using MegaCrit.Sts2.Core.Saves;
 using MegaCrit.Sts2.Core.Saves.Managers;
 using MegaCrit.Sts2.Core.Timeline;
+using MegaCrit.Sts2.Core.ValueProps;
 using MegaCrit.Sts2.addons.mega_text;
 using STS2AIAgent.Agent;
 using STS2AIAgent.Config;
@@ -151,11 +155,11 @@ internal static partial class GameStateService
         // model.
         foreach (var power in playerCreature.Powers)
         {
-            // Doom is not damage. BeforeTurnEnd kills the owner when CurrentHp <= Amount, and block
-            // does not enter that comparison. A damage row would under-report it.
+            // Player-side Doom resolves after turn-end orb passives, if the fight is still going.
             if (power is DoomPower doom
                 && SafeReadNullableInt(() => doom.Amount) is int doomAmount
-                && doomAmount >= player.current_hp)
+                && doomAmount >= player.current_hp
+                && !LastEnemyDiesToLightning(playerCreature))
             {
                 risks.Add(new CombatLethalRiskPayload
                 {
@@ -217,5 +221,57 @@ internal static partial class GameStateService
         }
 
         return risks.ToArray();
+    }
+
+    private static bool LastEnemyDiesToLightning(Creature player)
+    {
+        if (player.CombatState is not { } combat || combat.Players.Count != 1 ||
+            combat.RunState.GameMode != GameMode.Standard || combat.RunState.Modifiers.Count != 0 ||
+            player.Player?.PlayerCombatState is not { } playerState ||
+            playerState.OrbQueue.Orbs is not [LightningOrb lightning] ||
+            playerState.Hand.Cards.Any(card => card is Regret))
+        {
+            return false;
+        }
+
+        var enemies = combat.Enemies.Where(enemy => enemy.IsAlive).Take(2).ToArray();
+        if (enemies is not [var enemy] || !enemy.IsPrimaryEnemy || !enemy.IsHittable || enemy.PetOwner != null)
+        {
+            return false;
+        }
+
+        try
+        {
+            if (Hook.ShouldStopCombatFromEnding(combat))
+            {
+                return false;
+            }
+
+            var run = combat.RunState;
+            const ValueProp props = ValueProp.Unpowered;
+            var passive = lightning.PassiveVal;
+            var damage = Hook.ModifyDamage(run, combat, enemy, player, passive, props,
+                null, null, ModifyDamageHookType.All, CardPreviewMode.Normal, out _);
+            if (Hook.ModifyPreBlockDamageTarget(combat, enemy, passive, props, player) != null)
+            {
+                return false;
+            }
+
+            var unblocked = Hook.ModifyHpLost(run, combat, enemy, Math.Max(0, damage - enemy.Block),
+                props, player, null, HpLossHookPhase.BeforeOsty, out _);
+            if (Hook.ModifyUnblockedDamageTarget(combat, enemy, unblocked, props, player) != enemy)
+            {
+                return false;
+            }
+
+            var hpLost = Hook.ModifyHpLost(run, combat, enemy, unblocked,
+                props, player, null, HpLossHookPhase.AfterOsty, out _);
+            return hpLost >= enemy.CurrentHp && Hook.ShouldDie(run, combat, enemy, out _);
+        }
+        catch (Exception)
+        {
+            // An unavailable preview leaves the Doom warning in place.
+            return false;
+        }
     }
 }

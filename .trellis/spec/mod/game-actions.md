@@ -8,6 +8,12 @@
 
 Do not rebuild state in a caller by reaching into native managers. Use `BuildStatePayload` so all screen guards, local-player selection, and payload conventions remain centralized. If a new screen or modal is introduced, update its screen resolution, payload builder, availability predicates, and compact projection together.
 
+The hand snapshot marks a `CardTag.Shoot` card as `playable: false` when its owner has no available arrow. Raw and compact views preserve the native `can_play_result` and target indexes. Keep the arrow check in the hand projection so an explicit `play_card` can still use a zero-arrow shot for its on-play effects when the game allows it.
+
+A shooting replay spends an arrow each time. When only one arrow remains, use the opening shot's hit count for combat arithmetic. With multiple arrows and a replay, leave totals unknown because later shots can have different modifiers.
+
+For Dread, the selected option is the native button's state. The lobby's character is the resolved character and its rotation flag confirms selection of the rotating option.
+
 ## Available actions are the legal action source
 
 `EnumerateAvailableActions` is the single walk that decides what the executor would accept right now. `GET /state` reports its names as `available_actions` and `GET /actions/available` reports its descriptors (`requires_index`, `requires_target`, ...), so the two endpoints cannot disagree about what is offered. They used to be two hand-written implementations of that decision -- 301 and 609 lines consulting the same 50 `Can*` predicates to emit the same 55 names -- until [ADR 0001](../../../docs/adr/0001-single-action-surface.md) collapsed them, with a live replay across all twelve baseline screens confirming nothing changed. `ActionSurface.*` keeps it that way: neither surface may name an action or consult a predicate of its own.
