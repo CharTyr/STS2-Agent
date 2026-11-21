@@ -431,6 +431,8 @@ internal static partial class GameStateService
     {
         var canPlay = card.CanPlay(out var reason, out var preventer);
         var targetSupported = IsCardTargetSupported(card);
+        // A shot can still trigger on-play effects when the owner has no arrow.
+        var missingArrow = card.Tags.Contains(CardTag.Shoot) && !ArrowCmd.PlayerHasAnyArrows(card.Owner);
         var targetIndexSpace = GetCardTargetIndexSpace(card);
         var validTargetIndices = GetCardTargetIndices(combatState, card);
         var resolvedRulesText = GetResolvedCardRulesText(card);
@@ -455,10 +457,10 @@ internal static partial class GameStateService
             rules_text = GetCardRulesText(card),
             resolved_rules_text = resolvedRulesText,
             dynamic_values = dynamicValues,
-            playable = targetSupported && canPlay,
+            playable = targetSupported && canPlay && !missingArrow,
             can_play_result = canPlay,
             unplayable_reason = targetSupported
-                ? GetUnplayableReasonCode(reason)
+                ? GetUnplayableReasonCode(reason) ?? (missingArrow ? "not_enough_arrows" : null)
                 : "unsupported_target_type",
             unplayable_reason_raw = reason == UnplayableReason.None ? null : reason.ToString(),
             unplayable_preventer_id = GetModelIdEntry(preventer),

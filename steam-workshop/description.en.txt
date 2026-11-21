@@ -41,6 +41,6 @@ If you used to copy this mod into the game folder by hand, delete those files an
 [*]No new cards or balance tweaks; local co-op saves use the game save system
 [/list]
 
-Built against Slay the Spire 2 [b]v0.111.0[/b]; later versions require compatibility verification. License: AGPL-3.0-only.
+Requires Slay the Spire 2 [b]v0.113.0[/b] or later. Use Steam's public-beta branch for v0.113.x. Licensed under AGPL-3.0-only.
 
 Quick setup needs a provider, API key and model name. Test main model verifies tools as well as chat, with cancellation and a 45-second deadline. New installations have an adjustable 1,500-request auto-play limit (about one full run); zero or empty means unlimited. Tests also call your provider.

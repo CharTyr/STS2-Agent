@@ -17,12 +17,22 @@ internal static class CombatDiagnosticsContractTests
             "varcanPlay=card.CanPlay(outvarreason,outvarpreventer)",
             handBody,
             StringComparison.Ordinal);
-        Assert.Contains("playable=targetSupported&&canPlay", handBody, StringComparison.Ordinal);
+        // The snapshot suppresses a shot with no arrow, while the native result stays available
+        // to callers that deliberately want to play the card for its other effects.
+        Assert.Contains(
+            "varmissingArrow=card.Tags.Contains(CardTag.Shoot)&&!ArrowCmd.PlayerHasAnyArrows(card.Owner)",
+            handBody,
+            StringComparison.Ordinal);
+        Assert.Contains("playable=targetSupported&&canPlay&&!missingArrow", handBody, StringComparison.Ordinal);
         Assert.Contains("can_play_result=canPlay", handBody, StringComparison.Ordinal);
+        Assert.Contains("GetUnplayableReasonCode(reason)??(missingArrow?\"not_enough_arrows\":null)", handBody, StringComparison.Ordinal);
         Assert.Contains("unplayable_reason_raw=", handBody, StringComparison.Ordinal);
         Assert.Contains("unplayable_preventer_id=GetModelIdEntry(preventer)", handBody, StringComparison.Ordinal);
         Assert.Contains("unplayable_preventer_type=preventer?.GetType().FullName", handBody, StringComparison.Ordinal);
 
+        Assert.Contains("playable=card.playable", agentHandBody, StringComparison.Ordinal);
+        Assert.Contains("can_play_result=card.can_play_result", agentHandBody, StringComparison.Ordinal);
+        Assert.Contains("why=card.playable?null:card.unplayable_reason", agentHandBody, StringComparison.Ordinal);
         Assert.Contains("unplayable_reason=card.unplayable_reason", agentHandBody, StringComparison.Ordinal);
         Assert.Contains("unplayable_reason_raw=card.unplayable_reason_raw", agentHandBody, StringComparison.Ordinal);
         Assert.Contains("unplayable_preventer_id=card.unplayable_preventer_id", agentHandBody, StringComparison.Ordinal);
@@ -124,7 +134,7 @@ internal static class CombatDiagnosticsContractTests
         Assert.Contains("\"constrict_turn_end\"", risksBody, StringComparison.Ordinal);
         Assert.Contains("\"doom_turn_end\"", risksBody, StringComparison.Ordinal);
         Assert.Contains("\"magic_bomb_turn_end\"", risksBody, StringComparison.Ordinal);
-        Assert.Contains("doomAmount>=player.current_hp", risksBody, StringComparison.Ordinal);
+        Assert.Contains("doomAmount>=player.current_hp&&!LastEnemyDiesToLightning(playerCreature)", risksBody, StringComparison.Ordinal);
         Assert.Contains("MagicBombPowermagicBomb=>SafeReadNullableInt(()=>magicBomb.Amount)", risksBody, StringComparison.Ordinal);
         Assert.False(
             risksBody.Contains("HittableEnemies", StringComparison.Ordinal),
@@ -143,6 +153,28 @@ internal static class CombatDiagnosticsContractTests
             "BuildCombatLethalRiskPayloads(me.Creature,playerPayload,enemyPayloads)",
             combatBody,
             StringComparison.Ordinal);
+    }
+
+    public static void LightningCanWinBeforeDoom()
+    {
+        var body = WithoutWhitespace(MethodBody(AgentSourceFixture.ReadStateService(), "LastEnemyDiesToLightning"));
+
+        Assert.Contains("combat.Players.Count!=1", body, StringComparison.Ordinal);
+        Assert.Contains("playerState.OrbQueue.Orbsisnot[LightningOrblightning]", body, StringComparison.Ordinal);
+        Assert.Contains("enemiesisnot[varenemy]", body, StringComparison.Ordinal);
+        Assert.Contains("Hook.ShouldStopCombatFromEnding(combat)", body, StringComparison.Ordinal);
+        Assert.Contains("Math.Max(0,damage-enemy.Block)", body, StringComparison.Ordinal);
+        Assert.Contains("HpLossHookPhase.AfterOsty", body, StringComparison.Ordinal);
+        Assert.Contains("hpLost>=enemy.CurrentHp&&Hook.ShouldDie(run,combat,enemy,out_)", body, StringComparison.Ordinal);
+    }
+
+    public static void ShootingReplaysRespectAvailableArrows()
+    {
+        var body = WithoutWhitespace(MethodBody(AgentSourceFixture.ReadStateService(), "PreviewCardAgainstEnemies"));
+
+        Assert.Contains("card.Tags.Contains(CardTag.Shoot)", body, StringComparison.Ordinal);
+        Assert.Contains("hits=ArrowCmd.GetAvailableArrowCount(card.Owner)==1?known:null", body, StringComparison.Ordinal);
+        Assert.Contains("else{hits=known*(1+replayCount);}", body, StringComparison.Ordinal);
     }
 
     private static string ReadSource(string relativePath)

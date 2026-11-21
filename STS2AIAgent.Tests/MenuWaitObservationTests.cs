@@ -98,7 +98,7 @@ internal static class MenuWaitObservationTests
 
         // Losing the node must stop the loop instead of settling it.
         Assert.Contains("break;", submenuWait, StringComparison.Ordinal);
-        Assert.Contains("break;", characterSelectWait, StringComparison.Ordinal);
+        Assert.Contains("while(GodotObject.IsInstanceValid(screen)&&GodotObject.IsInstanceValid(button))", characterSelectWait, StringComparison.Ordinal);
         Assert.Contains("break;", lobbyReadyWait, StringComparison.Ordinal);
 
         // ... and the final answer must come from the shared observation rules.
@@ -110,9 +110,13 @@ internal static class MenuWaitObservationTests
         // v0.113.0: the waits read the lobby through GameStateService.GetRunLobby, because any of
         // the character-select/Blitz/Dread/custom screens can be the observation node.
         Assert.Contains(
-            "GameStateService.GetRunLobby(screen)?.LocalPlayer.character?.Id.Entry==currentCharacterId",
+            "button.IsSelected&&GameStateService.GetRunLobby(screen)?.LocalPlayeris{}local",
             characterSelectWait,
             StringComparison.Ordinal);
+        Assert.Contains("?local.isRotatingDread&&local.characterisnot(nullorRotatingCharacter)", characterSelectWait, StringComparison.Ordinal);
+        Assert.Contains(":local.character?.Id==button.Character.Id", characterSelectWait, StringComparison.Ordinal);
+        var characterSelectState = Body(AgentSourceFixture.ReadStateService(), "private static CharacterSelectPayload? BuildCharacterSelectPayload(");
+        Assert.Contains("is_selected=button.IsSelected", characterSelectState, StringComparison.Ordinal);
         Assert.Contains(
             "GameStateService.GetRunLobby(screen)?.LocalPlayer.isReady==ready",
             lobbyReadyWait,

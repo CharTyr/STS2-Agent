@@ -1017,7 +1017,12 @@ def evaluate_state_invariants(client: ApiClient) -> dict[str, Any]:
             test_player_summaries(failures, combat_players, "combat.players")
 
         hand = list(combat.get("hand") or [])
-        if any(card.get("playable") for card in hand):
+        # Native play_card availability includes deliberate empty shots.
+        if any(
+            card.get("playable")
+            or (card.get("unplayable_reason") == "not_enough_arrows" and card.get("can_play_result") is True)
+            for card in hand
+        ):
             if combat_selection_active:
                 add_forbidden_action_failure(
                     failures,
@@ -1026,9 +1031,9 @@ def evaluate_state_invariants(client: ApiClient) -> dict[str, Any]:
                     "combat card-selection overlay should suspend play_card",
                 )
             elif is_local_combat_action_window(combat):
-                add_missing_action_failure(failures, action_set, "play_card", "combat.hand[] has playable cards")
+                add_missing_action_failure(failures, action_set, "play_card", "combat.hand[] has cards that allow explicit play")
         elif not combat_selection_active:
-            add_forbidden_action_failure(failures, action_set, "play_card", "combat.hand[] has no playable cards")
+            add_forbidden_action_failure(failures, action_set, "play_card", "combat.hand[] has no cards that allow explicit play")
 
         if combat_selection_active:
             add_forbidden_action_failure(
