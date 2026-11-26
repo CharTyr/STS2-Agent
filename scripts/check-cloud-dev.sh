@@ -349,8 +349,16 @@ if [[ "$mode" != "none" ]]; then
     run_check "path resolver tests" bash "$repo_root/scripts/test-lib-sts2-paths.sh"
 
     if have pwsh; then
-      run_check "MCP tool contracts" \
-        pwsh -NoProfile -ExecutionPolicy Bypass -File "$repo_root/scripts/test-mcp-tool-profile.ps1"
+      case "$(uname -s)" in
+        MINGW*|MSYS*|CYGWIN*)
+          run_check "MCP tool contracts" \
+            pwsh -NoProfile -ExecutionPolicy Bypass -File "$repo_root/scripts/test-mcp-tool-profile.ps1"
+          ;;
+        *)
+          run_check "MCP tool contracts" \
+            pwsh -NoProfile -File "$repo_root/scripts/test-mcp-tool-profile.ps1"
+          ;;
+      esac
     else
       gone "MCP tool contracts" "pwsh missing"
     fi

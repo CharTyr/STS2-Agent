@@ -51,3 +51,19 @@ jobs:
         run: powershell -NoProfile -ExecutionPolicy Bypass -File scripts/test-verification-gates.ps1
       - name: Windows PowerShell failure propagation
         run: powershell -NoProfile -ExecutionPolicy Bypass -File scripts/test-native-exit-propagation.ps1
+
+  linux-offline:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '9.0.x'
+      - uses: astral-sh/setup-uv@v6
+        with:
+          python-version: '3.12'
+      - name: Bootstrap Linux offline environment
+        run: bash scripts/setup-cloud-dev.sh --no-apt --no-dotnet --no-uv
+      - name: Run full offline verification suite
+        run: bash scripts/check-cloud-dev.sh --run offline
