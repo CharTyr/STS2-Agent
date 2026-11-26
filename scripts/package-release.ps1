@@ -2,7 +2,10 @@ param(
     [string]$ProjectRoot = "",
     [string]$Configuration = "Release",
     [string]$OutputRoot = "",
-    [string]$GodotExe = ""
+    [string]$GodotExe = "",
+    [string]$MinimumGameRoot = "",
+    [string]$TargetGameRoot = "",
+    [string]$TargetGameVersion = ""
 )
 
 $ErrorActionPreference = "Stop"
@@ -58,6 +61,9 @@ function Get-UniquePath {
 }
 
 $ProjectRoot = Resolve-ProjectRoot -InputRoot $ProjectRoot
+if (-not $MinimumGameRoot -or -not $TargetGameRoot -or -not $TargetGameVersion) {
+    throw "Release packaging requires -MinimumGameRoot, -TargetGameRoot, and -TargetGameVersion."
+}
 
 if ([string]::IsNullOrWhiteSpace($OutputRoot)) {
     $OutputRoot = Join-Path $ProjectRoot "build/release"
@@ -100,9 +106,11 @@ function Rewrite-PackagedReadmeLinks {
 }
 
 function Invoke-ArtifactCheck {
-    param([string]$ArtifactPath)
+    param([string]$ArtifactPath, [string]$ExpectedDllHash = "")
 
-    & python $packageChecker --artifact $ArtifactPath | Out-Host
+    $checkArguments = @("--artifact", $ArtifactPath)
+    if ($ExpectedDllHash) { $checkArguments += @("--dll-sha256", $ExpectedDllHash) }
+    & python $packageChecker @checkArguments | Out-Host
     if ($LASTEXITCODE -ne 0) {
         throw "Release artifact check failed for '$ArtifactPath' with exit code $LASTEXITCODE."
     }
@@ -132,6 +140,7 @@ $buildArgs = @(
     "-File", $buildScript,
     "-ProjectRoot", $ProjectRoot,
     "-Configuration", $Configuration,
+    "-GameRoot", $TargetGameRoot,
     "-SkipInstall"
 )
 if (-not [string]::IsNullOrWhiteSpace($GodotExe)) {
@@ -181,6 +190,11 @@ Copy-Item -Path (Join-Path $ProjectRoot "scripts/test-mcp-tool-profile.ps1") -De
 
 Write-Host "[package-release] Checking release directory artifact..."
 Invoke-ArtifactCheck -ArtifactPath $releaseDir
+$gate = Join-Path $ProjectRoot "scripts/test-release-compatibility.ps1"
+$compatibilityReport = "$releaseDir-compatibility.json"
+$compatibility = & $gate -ArtifactDirectory $modOutputDir -MinimumGameRoot $MinimumGameRoot `
+    -TargetGameRoot $TargetGameRoot -TargetGameVersion $TargetGameVersion -ReportPath $compatibilityReport |
+    ConvertFrom-Json
 Write-BuildFingerprint `
     -RepositoryRoot $ProjectRoot `
     -ArtifactKind "github-release-directory" `
@@ -191,7 +205,8 @@ Write-BuildFingerprint `
 
 Compress-Archive -Path (Join-Path $releaseDir "*") -DestinationPath $zipPath
 Write-Host "[package-release] Checking release zip artifact..."
-Invoke-ArtifactCheck -ArtifactPath $zipPath
+Invoke-ArtifactCheck -ArtifactPath $zipPath -ExpectedDllHash $compatibility.dll_sha256
 
 Write-Host "[package-release] Release directory: $releaseDir"
 Write-Host "[package-release] Release zip: $zipPath"
+Write-Host "[package-release] Compatibility report: $compatibilityReport"

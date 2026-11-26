@@ -13,20 +13,31 @@ if (-not $caught) { throw 'A failing native command incorrectly passed the prefl
 Invoke-CheckedNative -FilePath 'powershell' -Arguments @('-NoProfile', '-Command', 'exit 0')
 
 # Exercise the actual preflight entry point in a separate Windows PowerShell process.
-# Shadow only its first build command, so no installed game or dependencies are needed.
+# Supply reference filenames for preflight and intercept dotnet before it reads them.
 $fixtureRoot = Join-Path ([IO.Path]::GetTempPath()) ('sts2-preflight-failure-' + [guid]::NewGuid().ToString('N'))
 $fakeDotnet = Join-Path $fixtureRoot 'dotnet.cmd'
+$gameRoot = Join-Path $fixtureRoot 'selected game'
+$dataDir = Join-Path $gameRoot 'data_sts2_windows_x86_64'
+$referenceFiles = @('sts2.dll', 'GodotSharp.dll', '0Harmony.dll') | ForEach-Object { Join-Path $dataDir $_ }
 $originalPath = $env:PATH
+$originalDataDir = $env:STS2_DATA_DIR
+$originalExpectedData = $env:STS2_PREFLIGHT_TEST_DATA
 try {
-    New-Item -ItemType Directory -Path $fixtureRoot | Out-Null
-    Set-Content -LiteralPath $fakeDotnet -Value '@exit /b 23' -Encoding Ascii
+    New-Item -ItemType Directory -Path $dataDir -Force | Out-Null
+    foreach ($file in $referenceFiles) { Set-Content -LiteralPath $file -Value 'offline fixture' -Encoding Ascii }
+    $env:STS2_DATA_DIR = $null
+    $env:STS2_PREFLIGHT_TEST_DATA = (Resolve-Path -LiteralPath $dataDir).Path
+    Set-Content -LiteralPath $fakeDotnet -Value @(
+        '@if not "%~5"=="-p:Sts2DataDir=%STS2_PREFLIGHT_TEST_DATA%" exit /b 24'
+        '@exit /b 23'
+    ) -Encoding Ascii
     $env:PATH = $fixtureRoot + [IO.Path]::PathSeparator + $originalPath
     $preflight = Join-Path $PSScriptRoot 'preflight-release.ps1'
     # Windows PowerShell turns redirected native stderr into error records.
     # Collect the expected failure instead of terminating before checking its exit code.
     $ErrorActionPreference = 'Continue'
     try {
-        $output = & powershell -NoProfile -ExecutionPolicy Bypass -File $preflight 2>&1
+        $output = & powershell -NoProfile -ExecutionPolicy Bypass -File $preflight -GameRoot $gameRoot 2>&1
         $preflightExitCode = $LASTEXITCODE
     }
     finally { $ErrorActionPreference = 'Stop' }
@@ -39,7 +50,10 @@ try {
 }
 finally {
     $env:PATH = $originalPath
-    if (Test-Path -LiteralPath $fakeDotnet) { Remove-Item -LiteralPath $fakeDotnet }
-    if (Test-Path -LiteralPath $fixtureRoot) { Remove-Item -LiteralPath $fixtureRoot }
+    $env:STS2_DATA_DIR = $originalDataDir
+    $env:STS2_PREFLIGHT_TEST_DATA = $originalExpectedData
+    foreach ($path in ($referenceFiles + @($fakeDotnet, $dataDir, $gameRoot, $fixtureRoot))) {
+        if (Test-Path -LiteralPath $path) { Remove-Item -LiteralPath $path }
+    }
 }
 Write-Host 'PASS: native failures stop the preflight process and successful commands remain successful.'

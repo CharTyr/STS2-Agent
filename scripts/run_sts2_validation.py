@@ -1912,6 +1912,120 @@ def replay_action_surface_baseline(
     }
 
 
+def check_release_identity(health: dict[str, Any], args: argparse.Namespace) -> None:
+    for field, expected in (
+        ("game_version", args.expected_game_version),
+        ("mod_version", args.expected_mod_version),
+        ("process_id", args.expected_process_id),
+    ):
+        actual = health.get(field)
+        if field == "game_version" and isinstance(actual, str):
+            actual = actual.removeprefix("v")
+        if actual != expected:
+            raise ValidationError(f"Release game {field} mismatch: expected {expected!r}, got {actual!r}.")
+
+
+def check_card_upgrade_preview(client: ApiClient) -> dict[str, Any]:
+    payload = client.request("GET", "/data/cards")
+    client._require_ok(payload, "GET /data/cards")
+    card = next((card for card in payload["data"] if card.get("id") == "STRIKE_IRONCLAD"), None)
+    upgrade = (card or {}).get("upgrade") or {}
+    if upgrade.get("status") != "available" or upgrade.get("upgrade_level") != 1:
+        raise ValidationError(f"STRIKE_IRONCLAD upgrade preview is unavailable: {upgrade!r}.")
+    return {"card": card["id"], "upgrade_level": upgrade["upgrade_level"]}
+
+
+def check_native_mcp_state(client: ApiClient, expected_screen: str) -> dict[str, str]:
+    headers = {"Accept": "application/json", "Content-Type": "application/json"}
+
+    def rpc(method: str, params: dict[str, Any] | None, request_id: int | None) -> Any:
+        message: dict[str, Any] = {"jsonrpc": "2.0", "method": method}
+        if params is not None:
+            message["params"] = params
+        if request_id is not None:
+            message["id"] = request_id
+        req = request.Request(client.base_url.rstrip("/") + "/mcp", json.dumps(message).encode(), headers)
+        with request.urlopen(req, timeout=client.timeout) as response:
+            if method == "initialize":
+                session = response.headers.get("Mcp-Session-Id")
+                if not session:
+                    raise ValidationError("Native MCP initialization returned no session ID.")
+                headers["Mcp-Session-Id"] = session
+            if request_id is None:
+                return None
+            reply = json.load(response)
+        if reply.get("id") != request_id or "result" not in reply:
+            raise ValidationError(f"Native MCP {method} failed: {reply!r}.")
+        return reply["result"]
+
+    try:
+        initialized = rpc("initialize", {
+            "protocolVersion": "2025-03-26", "capabilities": {},
+            "clientInfo": {"name": "sts2-release-check", "version": "1"},
+        }, 1)
+        headers["MCP-Protocol-Version"] = initialized["protocolVersion"]
+        rpc("notifications/initialized", None, None)
+        for request_id, name in enumerate(("get_game_state", "get_raw_game_state"), start=2):
+            result = rpc("tools/call", {"name": name, "arguments": {}}, request_id)
+            if result.get("isError"):
+                raise ValidationError(f"Native MCP {name} returned a tool error: {result!r}.")
+            screen = json.loads(result["content"][0]["text"]).get("screen")
+            if screen != expected_screen:
+                raise ValidationError(f"Native MCP {name} expected {expected_screen}, got {screen!r}.")
+    except (error.URLError, TimeoutError, ValueError, KeyError, IndexError, TypeError) as exc:
+        raise ValidationError(f"Native MCP state check failed on {expected_screen}: {exc}") from exc
+    return {"screen": expected_screen, "protocol": headers["MCP-Protocol-Version"]}
+
+
+def check_release_combat(client: ApiClient, *, attempts: int, delay_ms: int) -> dict[str, Any]:
+    run_debug_command(client, "unlock all")
+    catalog = client.request("GET", "/data/characters")
+    client._require_ok(catalog, "GET /data/characters")
+    character_id = "FOOL" if any(item.get("id") == "FOOL" for item in catalog["data"]) else "IRONCLAD"
+    start_standard_run(client, attempts=attempts, delay_ms=delay_ms, character_id=character_id)
+    client.wait_for_state(
+        "interactive room after embark",
+        lambda current: current.get("screen") in {"EVENT", "MAP", "COMBAT"},
+        attempts=attempts, delay_ms=delay_ms, resolve_modals=True,
+    )
+    run_debug_command(client, "fight BYRDONIS_ELITE")
+    state = client.wait_for_state(
+        f"{character_id} combat state and enemy intents",
+        lambda current: current.get("screen") == "COMBAT"
+        and any(enemy.get("intents") for enemy in (current.get("combat") or {}).get("enemies", [])),
+        attempts=attempts, delay_ms=delay_ms, resolve_modals=True,
+    )
+    if state["run"]["character_id"] != character_id:
+        raise ValidationError(f"Release combat expected {character_id}, got {state['run']['character_id']!r}.")
+    card_id = "WAH_CHO_KI" if character_id == "FOOL" else "STRIKE_IRONCLAD"
+    run_debug_command(client, f"card {card_id} hand")
+    state = client.wait_for_state(
+        f"playable {card_id}",
+        lambda current: "play_card" in (current.get("available_actions") or [])
+        and any(card.get("card_id") == card_id and card.get("playable")
+                for card in (current.get("combat") or {}).get("hand", [])),
+        attempts=attempts, delay_ms=delay_ms, resolve_modals=True,
+    )
+    card = next(card for card in state["combat"]["hand"] if card["card_id"] == card_id and card.get("playable"))
+    params = {"card_index": card["index"], "target_index": card["valid_target_indices"][0]}
+    if card.get("combat_card_id") is not None:
+        params["card_cid"] = card["combat_card_id"]
+    receipt = ensure_action_ok(client.action("play_card", **params), f"play {card_id}")["data"]
+    if receipt.get("status") != "completed" or not receipt.get("stable"):
+        raise ValidationError(f"Release combat {card_id} did not complete: {receipt.get('message')!r}.")
+    if character_id == "FOOL":
+        player = receipt["state"]["combat"]["player"]
+        melody = player.get("melody") or {}
+        if not player.get("arrows") or (melody.get("melodies_this_turn"), melody.get("melody_cards_this_turn")) != (3, 1):
+            raise ValidationError(f"Fool's three-tag play should count as one melody card: {melody!r}.")
+    return {
+        "character": state["run"]["character_id"],
+        "played_card": card_id,
+        "native_mcp": check_native_mcp_state(client, "COMBAT"),
+        "invariants": assert_state_invariants(client),
+    }
+
+
 def suite_patch_check(args: argparse.Namespace) -> dict[str, Any]:
     """The patch-regression runbook, in one command.
 
@@ -1923,9 +2037,13 @@ def suite_patch_check(args: argparse.Namespace) -> dict[str, Any]:
     health = client.request("GET", "/health")
     client._require_ok(health, "GET /health")
     data = health["data"]
+    release_smoke = getattr(args, "release_smoke", False)
+    if release_smoke:
+        check_release_identity(data, args)
+        wait_until_main_menu_ready(client, attempts=args.poll_attempts, delay_ms=args.poll_delay_ms)
     compatibility = data.get("compatibility") or {}
     missing = list(compatibility.get("missing_members") or [])
-    if missing:
+    if missing or (release_smoke and (data.get("status") != "ready" or compatibility.get("reflected_members_missing") != 0)):
         raise ValidationError(
             "reflected game members are missing, so this game build is not supported by this mod: "
             + json.dumps(missing, ensure_ascii=False)
@@ -1937,6 +2055,15 @@ def suite_patch_check(args: argparse.Namespace) -> dict[str, Any]:
     invariants = suite_state_invariants(
         argparse.Namespace(base_url=args.base_url, timeout_sec=args.timeout_sec)
     )
+    release_evidence = None
+    if release_smoke:
+        if deep_load.get("screen") != "MAIN_MENU":
+            raise ValidationError(f"Release smoke expected MAIN_MENU, got {deep_load.get('screen')!r}.")
+        release_evidence = {
+            "process_id": data["process_id"],
+            "upgrade_preview": check_card_upgrade_preview(client),
+            "native_mcp": check_native_mcp_state(client, "MAIN_MENU"),
+        }
 
     baseline_arg = getattr(args, "baseline", None)
     baseline_path = Path(baseline_arg) if baseline_arg else find_latest_action_surface_baseline(repo_root())
@@ -1958,6 +2085,14 @@ def suite_patch_check(args: argparse.Namespace) -> dict[str, Any]:
             + json.dumps(replay["mismatches"], ensure_ascii=False)
         )
 
+    if release_evidence is not None:
+        # Release packaging runs this mode in a fresh, debug-enabled test profile.
+        client.timeout = max(client.timeout, 25)
+        client.retries = 0
+        release_evidence["combat"] = check_release_combat(
+            client, attempts=args.poll_attempts, delay_ms=args.poll_delay_ms,
+        )
+
     return {
         "mod_version": data.get("mod_version"),
         "game_version": data.get("game_version"),
@@ -1967,6 +2102,7 @@ def suite_patch_check(args: argparse.Namespace) -> dict[str, Any]:
         "deep_load": deep_load,
         "invariants": invariants,
         "action_surface_replay": replay,
+        **({"release_smoke": release_evidence} if release_smoke else {}),
     }
 
 
@@ -2108,6 +2244,62 @@ def suite_main_menu_active_run(args: argparse.Namespace) -> dict[str, Any]:
     }
 
 
+def start_standard_run(
+    client: ApiClient, *, attempts: int, delay_ms: int, character_id: str | None = None,
+) -> dict[str, Any]:
+    open_response = ensure_action_ok(client.action("open_character_select"), "open_character_select")
+    character_select_state = wait_for_character_select(
+        client,
+        open_response["data"]["state"],
+        attempts=attempts,
+        delay_ms=delay_ms,
+        description="CHARACTER_SELECT",
+    )
+
+    if character_id is None:
+        selected_character = first_unlocked_character(character_select_state)
+    else:
+        selected_character = next((
+            item for item in character_select_state["character_select"]["characters"]
+            if item.get("character_id") == character_id and not item.get("is_locked")
+        ), None)
+        if selected_character is None:
+            raise ValidationError(f"Character {character_id} is unavailable.")
+    ensure_action_ok(client.action("select_character", option_index=int(selected_character["index"])), "select_character")
+
+    client.wait_for_state(
+        "character select can embark",
+        lambda current: current.get("screen") == "CHARACTER_SELECT"
+        and current.get("character_select") is not None
+        and bool(current["character_select"].get("can_embark")),
+        attempts=attempts,
+        delay_ms=delay_ms,
+        resolve_modals=True,
+    )
+
+    ensure_action_ok(client.action("embark"), "embark")
+    run_state = client.wait_for_state(
+        "leave CHARACTER_SELECT into a run",
+        lambda current: current.get("screen") != "CHARACTER_SELECT",
+        attempts=attempts,
+        delay_ms=delay_ms,
+        resolve_modals=True,
+    )
+
+    while run_state.get("screen") == "MODAL":
+        available_actions = list(run_state.get("available_actions") or [])
+        modal_action = "confirm_modal" if "confirm_modal" in available_actions else "dismiss_modal"
+        ensure_action_ok(client.action(modal_action), modal_action)
+        run_state = client.wait_for_state(
+            "leave embark modal",
+            lambda current: current.get("screen") != "MODAL",
+            attempts=attempts,
+            delay_ms=delay_ms,
+            resolve_modals=True,
+        )
+    return run_state
+
+
 def suite_new_run_lifecycle(args: argparse.Namespace) -> dict[str, Any]:
     client = ApiClient(
         base_url=args.base_url,
@@ -2132,48 +2324,7 @@ def suite_new_run_lifecycle(args: argparse.Namespace) -> dict[str, Any]:
             delay_ms=args.poll_delay_ms,
         )
 
-    open_response = ensure_action_ok(client.action("open_character_select"), "open_character_select")
-    character_select_state = wait_for_character_select(
-        client,
-        open_response["data"]["state"],
-        attempts=args.poll_attempts,
-        delay_ms=args.poll_delay_ms,
-        description="CHARACTER_SELECT",
-    )
-
-    selected_character = first_unlocked_character(character_select_state)
-    ensure_action_ok(client.action("select_character", option_index=int(selected_character["index"])), "select_character")
-
-    client.wait_for_state(
-        "character select can embark",
-        lambda current: current.get("screen") == "CHARACTER_SELECT"
-        and current.get("character_select") is not None
-        and bool(current["character_select"].get("can_embark")),
-        attempts=args.poll_attempts,
-        delay_ms=args.poll_delay_ms,
-        resolve_modals=True,
-    )
-
-    ensure_action_ok(client.action("embark"), "embark")
-    run_state = client.wait_for_state(
-        "leave CHARACTER_SELECT into a run",
-        lambda current: current.get("screen") != "CHARACTER_SELECT",
-        attempts=args.poll_attempts,
-        delay_ms=args.poll_delay_ms,
-        resolve_modals=True,
-    )
-
-    while run_state.get("screen") == "MODAL":
-        available_actions = list(run_state.get("available_actions") or [])
-        modal_action = "confirm_modal" if "confirm_modal" in available_actions else "dismiss_modal"
-        ensure_action_ok(client.action(modal_action), modal_action)
-        run_state = client.wait_for_state(
-            "leave embark modal",
-            lambda current: current.get("screen") != "MODAL",
-            attempts=args.poll_attempts,
-            delay_ms=args.poll_delay_ms,
-            resolve_modals=True,
-        )
+    start_standard_run(client, attempts=args.poll_attempts, delay_ms=args.poll_delay_ms)
 
     # Let the freshly started run settle before ending it; see RUN_SETTLE_SECONDS.
     run_state = client.wait_for_state(
@@ -3069,6 +3220,10 @@ def build_parser() -> argparse.ArgumentParser:
             "build/validation-*/action-surface-baseline.jsonl in this checkout"
         ),
     )
+    patch_check.add_argument("--release-smoke", action="store_true")
+    patch_check.add_argument("--expected-game-version", type=lambda value: value.removeprefix("v"))
+    patch_check.add_argument("--expected-mod-version")
+    patch_check.add_argument("--expected-process-id", type=int)
     patch_check.set_defaults(func=suite_patch_check)
 
     debug_gating = subparsers.add_parser("debug-console-gating")
@@ -3134,6 +3289,11 @@ def build_parser() -> argparse.ArgumentParser:
 def main(argv: list[str] | None = None) -> int:
     parser = build_parser()
     args = parser.parse_args(argv)
+    if getattr(args, "release_smoke", False) and (
+        not args.expected_game_version or not args.expected_mod_version
+        or args.expected_process_id is None or args.expected_process_id <= 0
+    ):
+        parser.error("--release-smoke requires the expected game version, mod version, and positive process ID")
     try:
         payload = args.func(args)
     except ValidationError as exc:

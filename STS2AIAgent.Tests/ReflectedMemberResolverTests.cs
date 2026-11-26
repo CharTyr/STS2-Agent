@@ -39,6 +39,47 @@ internal static class ReflectedMemberResolverTests
         private void Twice(string value) => _players = value.Length + (int)_longPressDuration + (IsReady ? 1 : 0);
     }
 
+    private sealed class CurrentUpgradeCard
+    {
+        public bool? WasSilent { get; private set; }
+        public void UpgradeInternal(bool silent) => WasSilent = silent;
+        public void UpgradeInternal() => throw new InvalidOperationException("The current signature takes precedence.");
+    }
+
+    private sealed class LegacyUpgradeCard
+    {
+        public int UpgradeLevel { get; private set; }
+        public void UpgradeInternal() => UpgradeLevel++;
+    }
+
+    private sealed class UnsupportedUpgradeCard
+    {
+        public void UpgradeInternal(int level) => throw new InvalidOperationException();
+    }
+
+    public static void CardUpgraderInvokesCurrentSignatureWithOldDefault()
+    {
+        var card = new CurrentUpgradeCard();
+        var upgrade = ReflectedMemberResolver.ResolveCardUpgrader<CurrentUpgradeCard>();
+        Assert.NotNull(upgrade);
+        upgrade!(card);
+        Assert.Equal(false, card.WasSilent);
+    }
+
+    public static void CardUpgraderInvokesLegacySignature()
+    {
+        var card = new LegacyUpgradeCard();
+        var upgrade = ReflectedMemberResolver.ResolveCardUpgrader<LegacyUpgradeCard>();
+        Assert.NotNull(upgrade);
+        upgrade!(card);
+        Assert.Equal(1, card.UpgradeLevel);
+    }
+
+    public static void CardUpgraderRefusesUnknownSignatures()
+    {
+        Assert.Null(ReflectedMemberResolver.ResolveCardUpgrader<UnsupportedUpgradeCard>());
+    }
+
     public static void ADeclaredMethodIsFoundDespiteAPublicBaseMethodOfTheSameName()
     {
         // The lookup the registry used to make. It is here so the failure it guards against stays
@@ -76,6 +117,13 @@ internal static class ReflectedMemberResolverTests
         Assert.True(
             ReflectedMemberResolver.Field(typeof(FakeLobbyScene), "_noSuchField", isStatic: false) == null,
             "An absent member resolves to null.");
+    }
+
+    public static void AnExactSignatureSelectsOnlyTheRequestedOverload()
+    {
+        var method = ReflectedMemberResolver.Method(typeof(FakeLobbyScene), "Twice", isStatic: false, [typeof(int)]);
+        Assert.Equal(typeof(int), method?.GetParameters().Single().ParameterType);
+        Assert.Null(ReflectedMemberResolver.Method(typeof(FakeLobbyScene), "Twice", isStatic: false, [typeof(short)]));
     }
 
     public static void StaticnessIsPartOfTheLookup()

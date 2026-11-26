@@ -113,7 +113,7 @@ internal static class MenuWaitObservationTests
             "button.IsSelected&&GameStateService.GetRunLobby(screen)?.LocalPlayeris{}local",
             characterSelectWait,
             StringComparison.Ordinal);
-        Assert.Contains("?local.isRotatingDread&&local.characterisnot(nullorRotatingCharacter)", characterSelectWait, StringComparison.Ordinal);
+        Assert.Contains("?GameApiCompatibility.IsRotatingDread(local)&&local.character!=null&&!GameApiCompatibility.IsRotatingCharacter(local.character)", characterSelectWait, StringComparison.Ordinal);
         Assert.Contains(":local.character?.Id==button.Character.Id", characterSelectWait, StringComparison.Ordinal);
         var characterSelectState = Body(AgentSourceFixture.ReadStateService(), "private static CharacterSelectPayload? BuildCharacterSelectPayload(");
         Assert.Contains("is_selected=button.IsSelected", characterSelectState, StringComparison.Ordinal);

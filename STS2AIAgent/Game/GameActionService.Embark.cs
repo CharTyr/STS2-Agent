@@ -441,12 +441,12 @@ internal static partial class GameActionService
     /// </summary>
     private static void ClickSingleplayerModeButton(NSingleplayerSubmenu submenu, string mode, string screen)
     {
-        var (button, openMethod) = GameStateService.GetSingleplayerModeButton(submenu, mode);
+        var button = GameStateService.GetSingleplayerModeButton(submenu, mode);
         if (button == null)
         {
             if (mode == "standard")
             {
-                submenu.Call(openMethod);
+                submenu.Call(NSingleplayerSubmenu.MethodName.OpenCharacterSelect);
                 return;
             }
 
@@ -472,8 +472,9 @@ internal static partial class GameActionService
         while (GodotObject.IsInstanceValid(screen) && GodotObject.IsInstanceValid(button))
         {
             if (button.IsSelected && GameStateService.GetRunLobby(screen)?.LocalPlayer is { } local &&
-                (button.Character is RotatingCharacter
-                    ? local.isRotatingDread && local.character is not (null or RotatingCharacter)
+                (GameApiCompatibility.IsRotatingCharacter(button.Character)
+                    ? GameApiCompatibility.IsRotatingDread(local) && local.character != null &&
+                        !GameApiCompatibility.IsRotatingCharacter(local.character)
                     : local.character?.Id == button.Character.Id))
             {
                 return true;

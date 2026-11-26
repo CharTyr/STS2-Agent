@@ -36,6 +36,15 @@ internal static class CardUpgradePreviewPolicyTests
         Assert.False(generated);
     }
 
+    public static void MissingGeneratorKeepsUnavailableDistinctFromMaxLevel()
+    {
+        Assert.Null(CardUpgradePreviewPolicy.Build(() => true, null));
+        var result = CardUpgradePreviewPolicy.Build(() => false, null);
+        using var doc = JsonDocument.Parse(JsonSerializer.Serialize(result));
+        Assert.Equal("unavailable", doc.RootElement.GetProperty("status").GetString());
+        Assert.Equal("upgrade_preview_failed", doc.RootElement.GetProperty("reason").GetString());
+    }
+
     public static void AvailableResultPreservesTheGeneratedMetadata()
     {
         var metadata = new { status = "available", cost = 3, description = "Gain 4 Strength.", vars = new[] { new { name = "StrengthPower", current_value = 4 } } };

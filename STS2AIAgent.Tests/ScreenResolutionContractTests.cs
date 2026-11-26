@@ -25,7 +25,7 @@ internal static class ScreenResolutionContractTests
         ("NMapScreen or NMapRoom", "MAP"),
         // v0.113.0: the Blitz/Dread/custom-run screens are character-select clones and resolve to
         // the same name; character_select.mode carries which flow is open.
-        ("NCharacterSelectScreen or NBlitzScreen or NDreadScreen or NCustomRunScreen", "CHARACTER_SELECT"),
+        ("NCharacterSelectScreen or NCustomRunScreen", "CHARACTER_SELECT"),
         ("NMultiplayerLoadGameScreen", "MULTIPLAYER_LOAD"),
         ("NChooseABundleSelectionScreen", "BUNDLE_SELECTION"),
         ("NCapstoneSubmenuStack", "CAPSTONE_SELECTION"),
@@ -46,6 +46,7 @@ internal static class ScreenResolutionContractTests
     {
         var rawState = AgentSourceFixture.ReadStateService();
         var body = AgentSourceFixture.MethodBody(rawState, "ResolveNonModalScreen");
+        Assert.Contains("GameApiCompatibility.ExtraRunMode(currentScreen)", body, StringComparison.Ordinal);
         var actual = SwitchMappings(body).ToDictionary(pair => pair.ScreenType, pair => pair.ScreenName);
 
         Assert.Equal(ExpectedMappings.Length, actual.Count);

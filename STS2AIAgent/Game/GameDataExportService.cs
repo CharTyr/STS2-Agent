@@ -14,6 +14,9 @@ internal static class GameDataExportService
 {
     private static readonly Regex CardMarkupRegex = new(@"\[(?:/?[^\]]+)\]", RegexOptions.Compiled);
     private static readonly Regex CardWhitespaceRegex = new(@"\s+", RegexOptions.Compiled);
+    private static readonly Action<CardModel>? UpgradeDetachedCard = ReflectedMemberResolver.ResolveCardUpgrader<CardModel>();
+
+    internal static bool HasCardUpgrader => UpgradeDetachedCard != null;
 
     public static object ExportCollection(string collection)
     {
@@ -148,7 +151,7 @@ internal static class GameDataExportService
                 starting_gold = character.StartingGold,
                 max_energy = character.MaxEnergy,
                 orb_slots = character.BaseOrbSlotCount,
-                arrow_slots = character.BaseArrowSlotCount,
+                arrow_slots = GameApiCompatibility.InitialArrows(character),
                 gender = character.Gender.ToString(),
                 color = character.CardPool.Title.ToLowerInvariant(),
                 starting_deck = character.StartingDeck.Select(card => card.Id.Entry).ToArray(),
@@ -345,14 +348,15 @@ internal static class GameDataExportService
 
     internal static object? BuildCardUpgradePreview(CardModel card)
     {
+        var upgrade = UpgradeDetachedCard;
         return CardUpgradePreviewPolicy.Build(
             () => card.CurrentUpgradeLevel >= card.MaxUpgradeLevel,
-            () =>
+            upgrade is null ? null : () =>
         {
             // A display-preview call on an unmodified canonical card can return the base numbers.
             // Upgrade a detached canonical copy: never mutate a card in the player's deck.
             var upgraded = ModelDb.GetById<CardModel>(card.Id).ToMutable();
-            for (var level = 0; level <= card.CurrentUpgradeLevel; level++) upgraded.UpgradeInternal();
+            for (var level = 0; level <= card.CurrentUpgradeLevel; level++) upgrade(upgraded);
             upgraded.FinalizeUpgradeInternal();
             // Refresh the same detached DynamicVars that GetDescriptionForPile will read.
             // An error here must escape to the unavailable result, not become an empty vars array.

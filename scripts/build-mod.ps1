@@ -3,7 +3,8 @@ param(
     [string]$ProjectRoot = "",
     [string]$GameRoot = "",
     [string]$GodotExe = "",
-    [switch]$SkipInstall
+    [switch]$SkipInstall,
+    [string]$DataDir = ""
 )
 
 $ErrorActionPreference = "Stop"
@@ -119,7 +120,8 @@ $builderProjectDir = Join-Path $ProjectRoot "tools/pck_builder"
 $builderScript = Join-Path $builderProjectDir "build_pck.gd"
 
 Write-Host "[build-mod] Building C# mod project..."
-dotnet build $modProject -c $Configuration | Out-Host
+$referenceArgument = Get-Sts2BuildReferenceArgument -DataDir $DataDir -GameRoot $GameRoot
+dotnet build $modProject -c $Configuration $referenceArgument | Out-Host
 if ($LASTEXITCODE -ne 0) {
     throw "dotnet build failed with exit code $LASTEXITCODE"
 }

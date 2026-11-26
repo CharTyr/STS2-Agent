@@ -349,7 +349,7 @@ internal static partial class GameStateService
         var inventoryScreen = GetMerchantInventoryScreen(currentScreen);
         var inventory = GetMerchantInventory(currentScreen);
         return inventoryScreen != null && inventoryScreen.IsOpen &&
-            inventory != null && inventory.IsBlitzShop && inventory.BlitzChoicesRemaining > 0 &&
+            inventory != null && GameApiCompatibility.IsBlitzShop(inventory) && GameApiCompatibility.RemainingBlitzChoices(inventory) > 0 &&
             GetMerchantBlitzEntries(currentScreen).Any(entry => entry.IsStocked);
     }
 

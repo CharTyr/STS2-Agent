@@ -21,10 +21,15 @@ Workshop tags: `Tools & APIs`, `Utility`, `QoL`.
 
 ## Package
 
-Build an upload-ready folder from the repository root. Package from a clean release tag, not a dirty worktree:
+Build an upload-ready folder from the repository root and a clean release tag. Supply the game directories and explicit target version required by the [release compatibility gate](../docs/release-readiness.md#发布包兼容门禁).
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File ".\scripts\package-steam-workshop.ps1" -Configuration Release
+$compatibility = @{
+    MinimumGameRoot = '<minimum-game-directory>'
+    TargetGameRoot = '<target-game-directory>'
+    TargetGameVersion = '<target-version>'
+}
+./scripts/package-steam-workshop.ps1 -Configuration Release @compatibility
 ```
 
 The output directory is both a SteamCMD payload and a Mega Crit [ModUploader](https://github.com/megacrit/sts2-mod-uploader) workspace:
@@ -34,13 +39,14 @@ build/steam-workshop/sts2-ai-agent-vX.Y.Z/
   workshop.json
   image.png
   content/
+  release-compatibility.json
   steam-workshop.vdf
 ```
 
 For a first upload, `PublishedFileId` 0 defaults to private visibility. Steam returns the item ID. Reuse that ID for every later update; a nonzero ID defaults to public with the script from commit `96bd410` onward. Explicit `-Visibility` always wins. The generated `workshop.json` and VDF use the resolved script value, not just the source JSON default.
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File ".\scripts\package-steam-workshop.ps1" -Configuration Release -PublishedFileId "<Steam Workshop item ID>" -Visibility public -ChangeNote "v0.10.5: reward overlay, native game-over save wait, budget and recovery fixes"
+./scripts/package-steam-workshop.ps1 -Configuration Release @compatibility -PublishedFileId "<Steam Workshop item ID>" -Visibility public -ChangeNote "<release notes>"
 ```
 
 The `v0.10.5` tag predates the default-visibility fix. When packaging from that tag, pass `-Visibility public` explicitly for an existing public item. Always provide a version-specific `-ChangeNote` for updates: the script otherwise uses `Initial Workshop upload` and overwrites the source JSON change note in generated output.

@@ -202,7 +202,7 @@ internal static partial class GameActionService
         var previousGold = inventory.Player.Gold;
         var previousCardId = entry.CreationResult?.Card.Id.Entry;
         var purchaseTimeout = TimeSpan.FromSeconds(10);
-        var purchaseTask = RunManager.Instance.MerchantSynchronizer.PurchaseLocalEntry(entry);
+        var purchaseTask = GameApiCompatibility.Purchase(inventory, entry);
         var completedPurchaseTask = await WaitForGameTaskAsync(purchaseTask, purchaseTimeout);
         var purchaseOutcome = ClassifyGameTaskWait(purchaseTask, completedPurchaseTask == null);
         if (purchaseOutcome == GameTaskWaitOutcome.TimedOut)
@@ -294,7 +294,7 @@ internal static partial class GameActionService
         var previousGold = inventory.Player.Gold;
         var previousRelicId = entry.Model?.Id.Entry;
         var purchaseTimeout = TimeSpan.FromSeconds(10);
-        var purchaseTask = RunManager.Instance.MerchantSynchronizer.PurchaseLocalEntry(entry);
+        var purchaseTask = GameApiCompatibility.Purchase(inventory, entry);
         var completedPurchaseTask = await WaitForGameTaskAsync(purchaseTask, purchaseTimeout);
         var purchaseOutcome = ClassifyGameTaskWait(purchaseTask, completedPurchaseTask == null);
         if (purchaseOutcome == GameTaskWaitOutcome.TimedOut)
@@ -386,7 +386,7 @@ internal static partial class GameActionService
         var previousGold = inventory.Player.Gold;
         var previousPotionId = entry.Model?.Id.Entry;
         var purchaseTimeout = TimeSpan.FromSeconds(10);
-        var purchaseTask = RunManager.Instance.MerchantSynchronizer.PurchaseLocalEntry(entry);
+        var purchaseTask = GameApiCompatibility.Purchase(inventory, entry);
         var completedPurchaseTask = await WaitForGameTaskAsync(purchaseTask, purchaseTimeout);
         var purchaseOutcome = ClassifyGameTaskWait(purchaseTask, completedPurchaseTask == null);
         if (purchaseOutcome == GameTaskWaitOutcome.TimedOut)
@@ -456,7 +456,7 @@ internal static partial class GameActionService
         // Fire-and-forget: merchant card removal opens deck selection and blocks
         // until the player confirms a card. Do not await the full task here, but a
         // purchase that already failed must not look like a pending transition.
-        var purchaseTask = RunManager.Instance.MerchantSynchronizer.PurchaseLocalEntry(entry);
+        var purchaseTask = GameApiCompatibility.Purchase(inventory, entry);
         ObserveBackgroundResult(purchaseTask, "remove_card_at_shop");
         var stable = await WaitForShopCardRemovalTransitionAsync(TimeSpan.FromSeconds(10));
 
@@ -658,7 +658,9 @@ internal static partial class GameActionService
         }
 
         var purchaseTimeout = TimeSpan.FromSeconds(10);
-        var purchaseTask = RunManager.Instance.MerchantSynchronizer.PurchaseLocalEntry(entry);
+        var inventory = GameStateService.GetMerchantInventory(currentScreen)
+            ?? throw new ApiException(503, "state_unavailable", "Shop inventory is unavailable.", retryable: true);
+        var purchaseTask = GameApiCompatibility.Purchase(inventory, entry);
         var completedPurchaseTask = await WaitForGameTaskAsync(purchaseTask, purchaseTimeout);
         var purchaseOutcome = ClassifyGameTaskWait(purchaseTask, completedPurchaseTask == null);
         if (purchaseOutcome == GameTaskWaitOutcome.TimedOut)
@@ -697,7 +699,7 @@ internal static partial class GameActionService
         };
     }
 
-    private static async Task<bool> WaitForBlitzEntryTransitionAsync(BlitzMerchantEntry entry, TimeSpan timeout)
+    private static async Task<bool> WaitForBlitzEntryTransitionAsync(MerchantEntry entry, TimeSpan timeout)
     {
         var deadline = DateTime.UtcNow + timeout;
         while (DateTime.UtcNow < deadline)
@@ -705,7 +707,7 @@ internal static partial class GameActionService
             await WaitForNextFrameAsync();
 
             var currentScreen = ActiveScreenContext.Instance.GetCurrentScreen();
-            if (entry.Status != BlitzMerchantEntry.BlitzEntryStatus.Available ||
+            if (!entry.IsStocked ||
                 currentScreen is NCardGridSelectionScreen ||
                 currentScreen is not NMerchantInventory)
             {
@@ -714,7 +716,7 @@ internal static partial class GameActionService
         }
 
         var finalScreen = ActiveScreenContext.Instance.GetCurrentScreen();
-        return entry.Status != BlitzMerchantEntry.BlitzEntryStatus.Available ||
+        return !entry.IsStocked ||
             finalScreen is NCardGridSelectionScreen ||
             finalScreen is not NMerchantInventory;
     }

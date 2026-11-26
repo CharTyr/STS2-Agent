@@ -188,6 +188,19 @@ the misses are written to the game log and named on `GET /health` under `compati
 types are `typeof` expressions, so the compiler still checks them; only the member names -- the part
 that actually rots -- are text.
 
+The reflection probe covers registered members. After a game update, build against the actual
+game DLL and check `GET /state` in a running game. A published build may still return 500 on a
+removed public reference even when `/health` reports `ready` (#257). Public APIs that differ
+between the current Steam stable and public beta builds live in `GameApiCompatibility`.
+Resolve beta-only types from the loaded game assembly and cache their bindings before using them
+in state or action paths. Resolve changed enum values by name from the loaded game. The legacy
+arrow-break payload field is false on the supported builds.
+An added optional parameter can also break an already compiled DLL. The card upgrade preview
+resolves `CardModel.UpgradeInternal(bool)` with `silent: false` on v0.114.0 and the parameterless
+signature on v0.111.1. The cached delegate determines both preview availability and the named
+compatibility check. A missing pair degrades `/health` and is logged at startup with the game
+version. Both release packaging commands run the same-DLL compatibility gate.
+
 **It is also the only place those members are looked up**, and that is the part that matters. The
 first version resolved its own copy of each member while the call sites resolved theirs, with their
 own binding flags, so the probe could report `ready` while a reader was broken: reintroducing the
