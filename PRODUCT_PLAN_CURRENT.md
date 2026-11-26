@@ -22,14 +22,15 @@
 | v0.18.0 | 2026-11-09 | 体验大改造（compact v13、Turbo、Autopilot、整回合计划、战斗算术、HUD、战报、前缀缓存与节流） | [release-v0.18.0](history/release-v0.18.0_2026-11-09.md) |
 | v0.17.0 | 2026-10-28 | 界面视觉与上手体验优化、快速判断多家服务与熔断、长选牌网格修复 | [release-v0.17.0](history/release-v0.17.0_2026-10-28.md) |
 
-### 主线 `dev` 未发布变更（仅开发工程与仓库维护，不改 Mod 运行时行为）
+### 主线 `dev` 未发布变更
 
 - 云主机 / Dev Container 开发环境套件（[docs/cloud-dev.md](docs/cloud-dev.md)、`.devcontainer/`、`scripts/*cloud-dev*` / `*game-assemblies*`）。
 - 仓库卫生与可维护性整理：移出误跟踪的顶级 `bin/`、加固 `.gitignore` / `.gitattributes`、清零测试工程 `CS8613` 警告、归档已发布 Trellis 任务、刷新架构行数表与代码地图、补齐 Linux 离线 CI 校验。
+- 五阶段 Mod 能力与工程升级（详见 [CHANGELOG.md](CHANGELOG.md) `Unreleased`）：多资源/充能球/`v0.114.0` `HitCount` 战斗数学与 Act 1 精英选路、降低 `TurnPlan` 误中断与扩展零权衡 `Autopilot`、离线 `sts2.dll` ABI/反射审计与 `/state` 按段容错、三档游玩预设/观战高亮停顿/跨局偏好/联机快捷战术指令/细化排障指引，以及 24 例决策基准与跨模型评测工具。
 
 ## 2. 验证体系与剩余边界
 
-- **离线契约**：C# 核心单测（`STS2AIAgent.Tests`，1,182 项，含体量棘轮、反射注册表、动作面与代码地图新鲜度）、Python MCP 单元测试（`mcp_server/tests`，含原生/Python 工具双向对齐与脚本可移植性）、12 项静态验证闸门（`scripts/check_verification_gates.py`）。
+- **离线契约**：C# 核心单测（`STS2AIAgent.Tests`，1,192 项，含体量棘轮、反射注册表、离线 ABI 审计、动作面与代码地图新鲜度）、Python MCP 单元测试（`mcp_server/tests`，466 项，含原生/Python 工具双向对齐与脚本可移植性）、12 项静态验证闸门（`scripts/check_verification_gates.py`）。
 - **发版双版本门禁**：`scripts/package-release.ps1` 与 `scripts/package-steam-workshop.ps1` 强制调用 `scripts/test-release-compatibility.ps1`，使用同一份最终 DLL 在最低支持版本与目标版本两个真实游戏副本上跑隔离冒烟。流程见 [docs/release-readiness.md](docs/release-readiness.md)。
 - **已知后置与未覆盖边界**（不构成当前阻塞，后续按需补测，详情见 [docs/live-validation-checklist.md](docs/live-validation-checklist.md)）：
   1. 3–4 人真实在线联机局尚未实机测试。

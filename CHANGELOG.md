@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+### Added
+
+- **战斗数学与选路升级**：`CombatMathPolicy` 新增星能（Regent）、箭矢（Fool）及超额能耗转星能的资源子集约束，并将冰霜充能球回合末被动格挡计入 `combat.threat.block_needed` / `hp_after`（新增 `end_of_turn_orb_block` / `end_of_turn_orb_damage`）；适配 `v0.114.0` `DynamicVars["HitCount"]` 与 `StrikeFool`；高血量（≥70%）Act 1 路线评分改为正向肯定精英房遗物收益；策略与手册同步补充愚者/摄政王/充能球与 Blitz 商店指引。
+- **减少多余模型调用**：整回合计划（C# 与 Python 同步）抽到全为 `playable: false` 的新牌时不再误中断；零权衡 `AutopilotPolicy` 新增自动关闭更新日志（`PATCH_NOTES`）、领取有空位的药水奖励，以及战斗中唯一必选牌（`min=max=1` 且仅 1 张候选）直接选择。
+- **上游游戏版本兼容与状态容错**：新增跨平台离线 ABI/反射审计工具（`scripts/check-game-abi.ps1` / `.sh`）；`GET /health.compatibility` 暴露 `api_bindings[]`（7 组跨分支能力绑定状态）与 `state_builder_faults[]`；`/state` 的 19 个可选子段接入按段异常隔离，避免单个过期界面读取把整帧 `/state` 拖成 500。
+- **玩家体验与联机打磨**：游玩体验卡片新增三档一键预设（省钱速通 / 均衡游玩 / 冲层观战）、出牌前高亮停顿（`SpectatorHighlightMs`，默认关闭）、跨局风格偏好备注（注入静态前缀保持缓存命中）；联机队伍交流新增 4 个一键快捷战术指令（附带结构化 `focus_fire` / `target_announce` 信号）；模型连通测试细分余额不足、地区受限、不支持工具调用、长度参数冲突与 TLS/代理握手排查指引。
+- **离线决策基准实测工具**：新增显式 opt-in、带硬请求上限与密钥脱敏的模型评测和跨模型对比工具 `scripts/run_decision_benchmark_eval.py`，并将 `docs/decision-benchmark.json` 扩充至 24 个用例（新增 Fool 零箭矢、Regent 星能斩杀、Defect 冰球被动、流沙倒计时 1、Blitz 免费商店）。
+
 ## 0.19.6
 
 ### Fixed
