@@ -1,7 +1,7 @@
 {
   "title": "STS2 AI Agent",
   "visibility": "public",
-  "changeNote": "v0.16.2: dual-layer Jev decisions now show per-turn option and probability evidence, clearly mark LLM fallbacks, and display the session's Jev/fallback counts. The planner receives valid compact state even in extreme fights and shares its goal with LLM fallback. Added a loopback-only redacted diagnostics endpoint; improved long-thinking stream performance, screenshot cleanup, and overlay width diagnostics. No cards, saves, or game balance are changed.",
+  "changeNote": "v0.20.0: Combat math now tracks Regent stars, Fool arrows, overflow-energy-to-stars, Frost orb end-of-turn block, and v0.114.0 HitCount; TurnPlan tolerates unplayable draws and auto-ends turn at zero cost when no moves remain; added 3-tier play presets, pre-play highlight dwell with HUD/hotkey/button intercept, cross-run playstyle notes with live counter, editable MaxOutputTokens, dynamic standing-enemy co-op quick tactical commands, per-section /state fault isolation, and fixed a mid-embark close_main_menu_submenu race. Supports Steam stable v0.111.1 and public beta v0.114.0.",
   "tags": [
     "Tools & APIs",
     "Utility",

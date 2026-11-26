@@ -1194,7 +1194,7 @@ wheels = [
 
 [[package]]
 name = "sts2-ai-agent-mcp"
-version = "0.19.6"
+version = "0.20.0"
 source = { editable = "." }
 dependencies = [
     { name = "fastmcp" },

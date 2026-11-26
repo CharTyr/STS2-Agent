@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## 0.20.0
+
 ### Added
 
 - **战斗数学与选路升级**：`CombatMathPolicy` 新增星能（Regent）、箭矢（Fool）及超额能耗转星能的资源子集约束，并将冰霜充能球回合末被动格挡计入 `combat.threat.block_needed` / `hp_after`（新增 `end_of_turn_orb_block` / `end_of_turn_orb_damage`）；适配 `v0.114.0` `DynamicVars["HitCount"]` 与 `StrikeFool`；高血量（≥70%）Act 1 路线评分改为正向肯定精英房遗物收益；策略与手册同步补充愚者/摄政王/充能球与 Blitz 商店指引。
