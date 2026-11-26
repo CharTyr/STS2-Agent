@@ -1343,6 +1343,503 @@
         "The target_action constraint scores target_index separately from the benchmark's neutral option_index field.",
         "The fixture retains valid_target_indices so a candidate runner can validate the full request before recording its answer."
       ]
+    },
+    {
+      "id": "combat-fool-zero-arrows",
+      "kind": "combat",
+      "title": "Fool with 0 available arrows must skip unplayable arrow shots and play a legal strike",
+      "state": {
+        "screen": "COMBAT",
+        "available_actions": [
+          "play_card",
+          "end_turn"
+        ],
+        "combat": {
+          "action_readiness": {
+            "can_use_combat_actions": true
+          },
+          "player": {
+            "hp": "64/72",
+            "block": 0,
+            "energy": 2,
+            "arrows": [
+              "impaled"
+            ],
+            "available_arrows": 0
+          },
+          "hand": [
+            {
+              "i": 0,
+              "cid": 301,
+              "card_id": "TWIN_SHOT",
+              "playable": false,
+              "unplayable_reason": "not_enough_arrows",
+              "energy_cost": 1,
+              "targets": [
+                0
+              ]
+            },
+            {
+              "i": 1,
+              "cid": 302,
+              "card_id": "STRIKE_FOOL",
+              "playable": true,
+              "energy_cost": 1,
+              "targets": [
+                0
+              ]
+            }
+          ],
+          "enemies": [
+            {
+              "i": 0,
+              "hp": 6,
+              "block": 0,
+              "alive": true,
+              "hittable": true,
+              "intents": [
+                {
+                  "total_damage": 11,
+                  "hits": 1
+                }
+              ]
+            }
+          ]
+        }
+      },
+      "expectations": [
+        {
+          "id": "fixture-has-zero-arrows",
+          "kind": "state_path",
+          "path": "combat.player.available_arrows",
+          "equals": 0,
+          "points": 0.5
+        },
+        {
+          "id": "play-legal-strike-fool",
+          "kind": "option_action",
+          "action": "play_card",
+          "option_index": 1,
+          "points": 2
+        },
+        {
+          "id": "target-enemy-0",
+          "kind": "target_action",
+          "action": "play_card",
+          "target_index": 0,
+          "points": 1
+        },
+        {
+          "id": "do-not-end-turn-with-legal-play",
+          "kind": "forbid_action",
+          "action": "end_turn",
+          "points": 1
+        }
+      ],
+      "evidence": [
+        "Strategy Rules §Combat: Fool arrow shots require available_arrows > 0; respect playable=false (not_enough_arrows).",
+        "v0.114.0 combat hand flags zero-arrow shots unplayable while basic StrikeFool remains legal."
+      ]
+    },
+    {
+      "id": "combat-regent-star-budget",
+      "kind": "combat",
+      "title": "Regent uses available stars for a single-card lethal that removes incoming damage",
+      "calculator": "combat_math",
+      "state": {
+        "screen": "COMBAT",
+        "available_actions": [
+          "play_card",
+          "end_turn"
+        ],
+        "combat": {
+          "player": {
+            "hp": "50/80",
+            "block": 0,
+            "energy": 2,
+            "stars": 2
+          },
+          "hand": [
+            {
+              "i": 0,
+              "cid": 401,
+              "card_id": "REGENT_STAR_FINISHER",
+              "playable": true,
+              "energy_cost": 1,
+              "star_cost": 2,
+              "target": "enemy",
+              "targets": [
+                0
+              ],
+              "values": [
+                {
+                  "name": "Block",
+                  "preview": 0
+                }
+              ],
+              "vs": [
+                {
+                  "enemy": 0,
+                  "per_hit": 14,
+                  "hits": 1,
+                  "damage": 14,
+                  "after_block": 14,
+                  "kills": true,
+                  "ignores_block": false
+                }
+              ]
+            },
+            {
+              "i": 1,
+              "cid": 402,
+              "card_id": "STRIKE_REGENT",
+              "playable": true,
+              "energy_cost": 1,
+              "star_cost": 0,
+              "target": "enemy",
+              "targets": [
+                0
+              ],
+              "values": [
+                {
+                  "name": "Block",
+                  "preview": 0
+                }
+              ],
+              "vs": [
+                {
+                  "enemy": 0,
+                  "per_hit": 6,
+                  "hits": 1,
+                  "damage": 6,
+                  "after_block": 6,
+                  "kills": false,
+                  "ignores_block": false
+                }
+              ]
+            }
+          ],
+          "enemies": [
+            {
+              "i": 0,
+              "hp": 14,
+              "block": 0,
+              "alive": true,
+              "hittable": true,
+              "intents": [
+                {
+                  "total_damage": 16,
+                  "hits": 1
+                }
+              ]
+            }
+          ],
+          "threat": {
+            "incoming": 16,
+            "incoming_unblockable": 0,
+            "block": 0,
+            "block_needed": 16,
+            "unblocked": 16,
+            "hp_after": 34,
+            "lethal": false,
+            "end_of_turn_self_damage": 0,
+            "end_of_turn_orb_block": 0,
+            "per_enemy": [
+              {
+                "i": 0,
+                "incoming": 16,
+                "hits": 1
+              }
+            ]
+          }
+        }
+      },
+      "expectations": [
+        {
+          "id": "fixture-has-two-stars",
+          "kind": "state_path",
+          "path": "combat.player.stars",
+          "equals": 2,
+          "points": 0.5
+        },
+        {
+          "id": "kill-enemy-with-star-card",
+          "kind": "plan",
+          "must_kill_enemy": 0,
+          "points": 2
+        },
+        {
+          "id": "prevent-all-incoming-damage",
+          "kind": "plan",
+          "max_damage_taken": 0,
+          "points": 2
+        }
+      ],
+      "evidence": [
+        "CombatMathPolicy tracks Regent stars alongside energy; spending 2 stars on card 0 secures exact lethal and avoids 16 damage."
+      ]
+    },
+    {
+      "id": "combat-defect-frost-orb-block",
+      "kind": "combat",
+      "title": "Defect accounts for end-of-turn Frost passive block when picking the exact defensive play",
+      "calculator": "combat_math",
+      "state": {
+        "screen": "COMBAT",
+        "available_actions": [
+          "play_card",
+          "end_turn"
+        ],
+        "combat": {
+          "player": {
+            "hp": "50/75",
+            "block": 2,
+            "energy": 1,
+            "focus": 0,
+            "orbs": [
+              "Frost (passive 2, evoke 5)",
+              "Frost (passive 2, evoke 5)",
+              "Frost (passive 2, evoke 5)"
+            ]
+          },
+          "hand": [
+            {
+              "i": 0,
+              "cid": 501,
+              "card_id": "DEFEND_DEFECT",
+              "playable": true,
+              "energy_cost": 1,
+              "values": [
+                {
+                  "name": "Block",
+                  "preview": 5
+                }
+              ],
+              "vs": []
+            },
+            {
+              "i": 1,
+              "cid": 502,
+              "card_id": "STRIKE_DEFECT",
+              "playable": true,
+              "energy_cost": 1,
+              "target": "enemy",
+              "targets": [
+                0
+              ],
+              "values": [
+                {
+                  "name": "Block",
+                  "preview": 0
+                }
+              ],
+              "vs": [
+                {
+                  "enemy": 0,
+                  "per_hit": 6,
+                  "hits": 1,
+                  "damage": 6,
+                  "after_block": 6,
+                  "kills": false,
+                  "ignores_block": false
+                }
+              ]
+            }
+          ],
+          "enemies": [
+            {
+              "i": 0,
+              "hp": 32,
+              "block": 0,
+              "alive": true,
+              "hittable": true,
+              "intents": [
+                {
+                  "total_damage": 12,
+                  "hits": 1
+                }
+              ]
+            }
+          ],
+          "threat": {
+            "incoming": 12,
+            "incoming_unblockable": 0,
+            "block": 2,
+            "block_needed": 4,
+            "unblocked": 4,
+            "hp_after": 46,
+            "lethal": false,
+            "end_of_turn_self_damage": 0,
+            "end_of_turn_orb_block": 6,
+            "per_enemy": [
+              {
+                "i": 0,
+                "incoming": 12,
+                "hits": 1
+              }
+            ]
+          }
+        }
+      },
+      "expectations": [
+        {
+          "id": "fixture-counts-frost-passive",
+          "kind": "state_path",
+          "path": "combat.threat.end_of_turn_orb_block",
+          "equals": 6,
+          "points": 0.5
+        },
+        {
+          "id": "cover-remaining-four-damage",
+          "kind": "plan",
+          "max_damage_taken": 0,
+          "points": 3
+        }
+      ],
+      "evidence": [
+        "CombatMathPolicy.Threat folds Frost passive block (6) into block_needed (4); playing Defend (5) covers the remaining 4 damage cleanly."
+      ]
+    },
+    {
+      "id": "combat-sandpit-counter-one",
+      "kind": "combat",
+      "title": "Play Frantic Escape immediately when Sandpit countdown reaches 1",
+      "state": {
+        "screen": "COMBAT",
+        "available_actions": [
+          "play_card",
+          "end_turn"
+        ],
+        "combat": {
+          "action_readiness": {
+            "can_use_combat_actions": true
+          },
+          "end_turn_will_kill_player": true,
+          "lethal_risks": [
+            {
+              "risk_id": "sandpit_countdown",
+              "will_kill_player": true,
+              "power_amount": 1
+            }
+          ],
+          "player": {
+            "hp": "70/80",
+            "block": 40,
+            "energy": 1
+          },
+          "hand": [
+            {
+              "i": 0,
+              "cid": 601,
+              "card_id": "STRIKE_IRONCLAD",
+              "playable": true,
+              "energy_cost": 1,
+              "targets": [
+                0
+              ]
+            },
+            {
+              "i": 1,
+              "cid": 602,
+              "card_id": "FRANTIC_ESCAPE",
+              "playable": true,
+              "energy_cost": 1,
+              "targets": []
+            }
+          ],
+          "enemies": [
+            {
+              "i": 0,
+              "enemy_id": "THE_INSATIABLE",
+              "hp": 180,
+              "block": 0,
+              "alive": true,
+              "hittable": true,
+              "intents": [
+                {
+                  "total_damage": 12,
+                  "hits": 1
+                }
+              ]
+            }
+          ]
+        }
+      },
+      "expectations": [
+        {
+          "id": "fixture-is-lethal",
+          "kind": "state_path",
+          "path": "combat.end_turn_will_kill_player",
+          "equals": true,
+          "points": 0.5
+        },
+        {
+          "id": "play-frantic-escape",
+          "kind": "option_action",
+          "action": "play_card",
+          "option_index": 1,
+          "points": 3
+        },
+        {
+          "id": "forbid-ending-into-sandpit",
+          "kind": "forbid_action",
+          "action": "end_turn",
+          "points": 1.5
+        }
+      ],
+      "evidence": [
+        "Strategy Rules §Combat: sandpit_countdown kills at 0 regardless of HP or block; at counter 1 play FRANTIC_ESCAPE before spending its energy."
+      ]
+    },
+    {
+      "id": "shop-blitz-choice-before-leave",
+      "kind": "shop",
+      "title": "Spend remaining free Blitz shop choices before closing the shop inventory",
+      "state": {
+        "screen": "SHOP",
+        "available_actions": [
+          "buy_blitz_entry",
+          "close_shop_inventory"
+        ],
+        "shop": {
+          "open": true,
+          "blitz": true,
+          "choices_remaining": 1,
+          "blitz_entries": [
+            {
+              "i": 0,
+              "entry_type": "Relic",
+              "name": "Bag of Preparation",
+              "stocked": true
+            }
+          ]
+        }
+      },
+      "expectations": [
+        {
+          "id": "fixture-is-blitz-shop",
+          "kind": "state_path",
+          "path": "shop.blitz",
+          "equals": true,
+          "points": 0.5
+        },
+        {
+          "id": "claim-blitz-entry",
+          "kind": "option_action",
+          "action": "buy_blitz_entry",
+          "option_index": 0,
+          "points": 3
+        },
+        {
+          "id": "do-not-close-with-free-choice",
+          "kind": "forbid_action",
+          "action": "close_shop_inventory",
+          "points": 1
+        }
+      ],
+      "evidence": [
+        "Strategy Rules §Shop & Screen Playbooks §SHOP: Blitz entries consume choices rather than gold; spend choices with buy_blitz_entry before leaving."
+      ]
     }
   ]
 }

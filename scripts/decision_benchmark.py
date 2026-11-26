@@ -335,6 +335,9 @@ def _validate_action_expectation(case_id: str, expectation: Expectation, state: 
         elif expectation.action == "buy_card":
             entries = ((state.get("shop") or {}).get("cards") or [])
             index_name = "option_index"
+        elif expectation.action == "buy_blitz_entry":
+            entries = ((state.get("shop") or {}).get("blitz_entries") or [])
+            index_name = "option_index"
         elif expectation.action == "choose_reward_card":
             reward = state.get("reward") or {}
             entries = reward.get("card_options") or reward.get("cards") or []

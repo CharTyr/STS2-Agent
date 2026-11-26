@@ -20,8 +20,10 @@ internal static class DecisionBenchmarkMathTests
                 N(enemy, "i"), N(enemy, "hp"), N(enemy, "block"), enemy.GetProperty("alive").GetBoolean(),
                 enemy.GetProperty("hittable").GetBoolean(), enemy.GetProperty("intents").EnumerateArray()
                     .Select(intent => new IntentMath(N(intent, "total_damage"), N(intent, "hits"), false)).ToArray())).ToArray();
+            var orbBlock = threat.TryGetProperty("end_of_turn_orb_block", out var ob) ? ob.GetInt32() : 0;
             var input = new CombatMathInput(50, N(player, "block"), N(player, "energy"),
-                N(threat, "end_of_turn_self_damage"), enemies, Array.Empty<CardMath>());
+                N(threat, "end_of_turn_self_damage"), enemies, Array.Empty<CardMath>(),
+                EndOfTurnOrbBlock: orbBlock);
             var actual = CombatMathPolicy.Threat(input);
             Assert.Equal(N(threat, "incoming"), actual.Incoming);
             Assert.Equal(N(threat, "unblocked"), actual.Unblocked);

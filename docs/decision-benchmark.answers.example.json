@@ -102,6 +102,38 @@
       "action": "play_card",
       "option_index": 0,
       "target_index": 1
+    },
+    {
+      "case_id": "combat-fool-zero-arrows",
+      "action": "play_card",
+      "option_index": 1,
+      "target_index": 0,
+      "reason": "Card 0 needs an arrow; play StrikeFool at index 1."
+    },
+    {
+      "case_id": "combat-regent-star-budget",
+      "action": "play_card",
+      "option_index": 0,
+      "target_index": 0,
+      "reason": "Spend 2 stars on card 0 for exact lethal and zero incoming damage."
+    },
+    {
+      "case_id": "combat-defect-frost-orb-block",
+      "action": "play_card",
+      "option_index": 0,
+      "reason": "Frost orbs cover 6 of 12; Defend covers the remaining 4 cleanly."
+    },
+    {
+      "case_id": "combat-sandpit-counter-one",
+      "action": "play_card",
+      "option_index": 1,
+      "reason": "Play Frantic Escape at Sandpit counter 1 before spending its energy."
+    },
+    {
+      "case_id": "shop-blitz-choice-before-leave",
+      "action": "buy_blitz_entry",
+      "option_index": 0,
+      "reason": "Take the free Blitz shop choice before closing inventory."
     }
   ]
 }

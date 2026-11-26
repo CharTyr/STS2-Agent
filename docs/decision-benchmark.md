@@ -128,12 +128,27 @@ kind，不能暗中重解释 v1 的字段。
    可用 `decision_benchmark.py --capture-base-url ... --output build/...` 作一次明确的只读捕获；它不会
    自动导航、执行 action 或调用模型。人工审核状态、删去不宜提交的标识符后，再将该 state 连同可复核
    `evidence` 归档为一个新 case；不要把 save 或 token/密钥提交到仓库。
-2. **候选 runner（不在本提交中实现）**：对每个 case 把 state 交给一个模型/agent，记录它实际尝试的
-   `{case_id, action, option_index, reason}`。先用 runner 本地的请求预算和 provider 同意流程；真实调用
-   会消耗额度，必须先取得用户授权。
+2. **候选模型评测与跨模型对比（`scripts/run_decision_benchmark_eval.py`，显式 opt-in）**：
+   - 默认零网络开销：必须显式传入 `--allow-live-api` 才会请求模型，并受硬上限 `--max-requests` 保护；密钥仅从环境变量读取且绝不写入报告。
+   - 离线 dry-run（零费用、检查 prompt 组装与请求数）：
+     ```powershell
+     python scripts/run_decision_benchmark_eval.py --dry-run --output build/decision-benchmark/dry-run.json
+     ```
+   - 在获得用户授权后评测单个 OpenAI 兼容模型：
+     ```powershell
+     python scripts/run_decision_benchmark_eval.py `
+       --allow-live-api --max-requests 24 `
+       --base-url https://api.openai.com/v1 --model gpt-4o `
+       --api-key-env OPENAI_API_KEY `
+       --output build/decision-benchmark/gpt-4o.json
+     ```
+   - 跨模型横向对比（输出 Markdown 得分/延迟/Token 汇总与逐题分歧）：
+     ```powershell
+     python scripts/run_decision_benchmark_eval.py `
+       --compare build/decision-benchmark/model-a.json build/decision-benchmark/model-b.json `
+       --markdown
+     ```
 3. **实机 outcome（独立的更强证据）**：若要声称“该模型在局面 X 成功”，记录初始 state、请求、
-   action response、fresh state 和可观察的前后值，按项目现有 live-validation 规则验证。不要用 v1
-   离线分数替代该证据。
+   action response、fresh state 和可观察的前后值，按项目现有 live-validation 规则验证。不要用离线分数替代该证据。
 
-当前 v1 有 11 个跨 combat/event/map/rest/shop/reward 的 case，作为结构化最小集；计划中的 20–30
-个**真实 debug-console 快照**仍是后续实际采集任务，不由本离线脚手架假装完成。
+当前 v2 基准包含 24 个跨 combat/event/map/rest/shop/reward 的结构化与算术用例（含 `v0.114.0` Fool 零箭矢、Regent 星能斩杀、Defect 冰球被动格挡、流沙倒计时 1 与 Blitz 免费商店选择）。
