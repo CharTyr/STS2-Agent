@@ -17,6 +17,7 @@
 ## 开发者
 
 - [build-and-env.md](build-and-env.md)：构建、部署与环境变量
+- [cloud-dev.md](cloud-dev.md)：云主机开发环境（离线 / 编译与逆向 / 实机三层，含最小程序集包流程）
 - [project-map.md](project-map.md)：代码地图
 - [reverse-engineering.md](reverse-engineering.md)：逆向工程笔记
 - [mechanic-coverage-matrix.md](mechanic-coverage-matrix.md)：机制覆盖矩阵（历史快照）

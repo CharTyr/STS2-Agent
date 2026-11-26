@@ -209,7 +209,7 @@ fi
 mkdir -p "$staging_dir"
 
 echo "[build-mod] Building C# mod project..."
-dotnet build "$mod_project" -c "$configuration" /p:Sts2DataDir="$data_dir"
+dotnet build "$mod_project" -c "$configuration" "-p:Sts2DataDir=$data_dir"
 
 if [[ ! -f "$dll_source" ]]; then
   echo "Built DLL not found: $dll_source" >&2

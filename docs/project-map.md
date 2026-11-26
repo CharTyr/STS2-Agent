@@ -522,6 +522,7 @@ most nine follow-ups and stop before unknown draw/choice outcomes.
 ## 9. Scripts, tests, gates
 
 - **Build:** `scripts/build-mod.ps1` / `build-mod.sh` (dotnet build → headless Godot PCK with `mod_manifest.json` inside → copies dll/pck/`mod_id.json` to `<game>/mods`). **Close the game first** (the DLL is locked while it runs).
+- **Cloud / headless dev:** `scripts/pack-game-assemblies.ps1` (packs `sts2.dll`/`GodotSharp.dll`/`0Harmony.dll` + optional `sts2.xml` & game metadata with SHA-256 manifest), `scripts/unpack-game-assemblies.sh` (verifies, unpacks primary or `--as-min` baseline, optional `--decompile`), `scripts/setup-cloud-dev.sh` (L0 toolchain + optional `--with-ilspy`/`--with-godot`), `scripts/check-cloud-dev.sh` (3-layer report + CI-aligned offline/build checks), and `.devcontainer/`; guide in `docs/cloud-dev.md`.
 - **Paths:** only `scripts/lib-sts2-paths.ps1` / `.sh` know the install layout (arg → env → detect → default). `lib-sts2.sh` holds the runtime helpers.
 - **Run:** `start-game-session.ps1`/`.sh` (pins `STS2_API_PORT`, fails if the old listener doesn't release the port, `--clientId` for an isolated profile), `start-mcp-stdio.*`, `start-mcp-network.*` / `serve-sts2-network-mcp.ps1` (all honor `STS2_API_BASE_URL`).
 - **Release:** `package-release.ps1` and `package-steam-workshop.ps1` run `test-release-compatibility.ps1` on the packaged DLL with two actual game versions before generating the ZIP or upload configuration. See also `check_release_package.py`, `check_release_metadata.py`, and static `preflight-release.ps1`.

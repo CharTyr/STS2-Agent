@@ -2,6 +2,8 @@
 
 本文档用于统一 STS2 Agent 的构建、部署与运行环境流程，覆盖 Windows 与 macOS/Linux。
 
+在一台没有游戏的云主机或容器上开发时（离线测试、无游戏编译、云端反编译与 PCK 预打包），流程见 [cloud-dev.md](cloud-dev.md)。那里把能力拆成离线 / 编译 / 实机三层，并支持用本机打包的约 5.7 MB 程序集与元数据压缩包完成云端编译和双版本兼容检查。
+
 ## 1. Prerequisites
 
 ### Common
