@@ -84,6 +84,11 @@ namespace STS2AIAgent.Tests;
 /// deck, relics and potions. Each client simulates the whole run, so a partner's
 /// <c>Player.Deck</c> is as current as the local one, and an external agent planning for the party
 /// needs it.
+///
+/// <c>BuildStatePayload</c> was regenerated in Phase 3 patch-resilience work to route the 19
+/// nullable sub-section builders through <c>GuardStateSection</c> (<c>GameStateService.FaultIsolation.cs</c>),
+/// isolating any single broken screen reader from 500ing the whole <c>/state</c> response while
+/// surfacing faults in <c>GET /health.compatibility.state_builder_faults</c>.
 /// </remarks>
 internal static class GameStateServiceRelocationContractTests
 {
@@ -104,12 +109,12 @@ internal static class GameStateServiceRelocationContractTests
         ["_crystalSphereEntityLookupWarningLogged"] = ("STS2AIAgent/Game/GameStateService.cs", "8cfbf4ecee8d49d9b44920162e162489a0d3efd8e49f94016e9dd3e42a7354af"),
         ["_crystalSphereButtonLookupWarningLogged"] = ("STS2AIAgent/Game/GameStateService.cs", "c16d410de6049f3e70e37296414fe3bd8af1ec1751280ab8f8e96eb0c9f86c82"),
         ["StartRunLobbyMaxPlayersField"] = ("STS2AIAgent/Game/GameStateService.cs", "19edb0e3c9f24ab60b3a0446ceb73aac1f773e4b31d22142439eb6ca3dcf973a"),
-        ["BuildStatePayload"] = ("STS2AIAgent/Game/GameStateService.cs", "d325d70174b8eed652b0f049cd0470f0fc6df5813e33a5b66fb945fa13cf36a6"),
+        ["BuildStatePayload"] = ("STS2AIAgent/Game/GameStateService.cs", "93719109cd036d345f68212e4e9318573e014d8b7e17ecd0e32d66b2cc8f9d85"),
         // v0.113.0: the character_select session phase is read from GetRunLobby, covering all mode screens.
         ["BuildSessionPayload"] = ("STS2AIAgent/Game/GameStateService.Menus.cs", "17ec0b83ff3bf6c31fdc0755911ff491f97b3b063e79084b81e3af7b59cc007d"),
         ["BuildAvailableActionsPayload"] = ("STS2AIAgent/Game/GameStateService.cs", "f94bfce253aebe76836b96be74844eac681be85f9448f50c96a7617bcd7fb1ad"),
-        // v0.113.0: advertises buy_blitz_entry at a Blitz merchant.
-        ["EnumerateAvailableActions"] = ("STS2AIAgent/Game/GameStateService.cs", "4b6f7e333e82112b0dfd043336f54b8ac10e487e9fc4c2e8456b49cff28710bc"),
+        // v0.113.0: advertises buy_blitz_entry at a Blitz merchant; Phase 3 guards BuildGameOverPayload.
+        ["EnumerateAvailableActions"] = ("STS2AIAgent/Game/GameStateService.cs", "5bf1c34ac47e2fde1471b1d102361ae79fb357891eeff8fb4692ed30aee9025f"),
         ["ResolveScreen"] = ("STS2AIAgent/Game/GameStateService.cs", "2d5f3c899e556f73ecd366debaee5110c253eedcb86b0b85de591e5a95d37ed3"),
         ["FindActiveCombatRoom"] = ("STS2AIAgent/Game/GameStateService.cs", "42717fd1bfc51e6798bf5336d03ee7dad905a31236f6424d0c0702a16de6b60f"),
         ["GetLocalPlayer"] = ("STS2AIAgent/Game/GameStateService.cs", "4d521866d4f33356a64c6346f8151bc401181c256b001360a729386efbf612df"),
@@ -172,7 +177,8 @@ internal static class GameStateServiceRelocationContractTests
         ["BuildAvailableActionNames"] = ("STS2AIAgent/Game/GameStateService.cs", "b95d51aabf1bee52abb8ee13f1c27e166135bd2a33ce927504160b6cff111863"),
         // Fool resources are read through the branch compatibility adapter (#257).
         ["BuildCombatPayload"] = ("STS2AIAgent/Game/GameStateService.Combat.cs", "414e771ab00be51c5dca2af8db5e02f98cda199f8e7d2ef3c5b1a2de71d91a3a"),
-        ["BuildCombatLethalRiskPayloads"] = ("STS2AIAgent/Game/GameStateService.CombatRisks.cs", "3c4920568b7b7bdf2fd3bb88b47790fce34c19d5190ec3fd2a7016f807d067f6"),
+        // Review fix: include end-of-turn Frost orb passive block so end_turn_will_kill_player matches combat.threat.lethal.
+        ["BuildCombatLethalRiskPayloads"] = ("STS2AIAgent/Game/GameStateService.CombatRisks.cs", "1790ac32ae30dc48def72fff3573eec4df92532244f2f8c0445212efe0b1ea97"),
         // v0.113.0: run payload gained game_mode/dominion_id/is_custom_game/is_rotating_character.
         ["BuildRunPayload"] = ("STS2AIAgent/Game/GameStateService.Run.cs", "8b31538683c7fdd1cfc1c33e8eae01185825796a863edd6a860170e9fb418ca5"),
         ["ResolveBossId"] = ("STS2AIAgent/Game/GameStateService.Run.cs", "70aecade3371139e3fdb777685e7b1648c90ad859bc9d90a8de5592e1283949d"),

@@ -111,25 +111,25 @@ internal static partial class GameStateService
             runState,
             combatActionGate,
             out var availableActionDescriptors);
-        var combat = BuildCombatPayload(combatState, combatActionGate);
-        var run = BuildRunPayload(currentScreen, combatState, runState, combatActionGate);
-        var multiplayer = BuildMultiplayerPayload(currentScreen, runState);
-        var multiplayerLobby = BuildMultiplayerLobbyPayload(currentScreen);
-        var map = BuildMapPayload(currentScreen, runState);
-        var selection = BuildSelectionPayload(currentScreen);
-        var characterSelect = BuildCharacterSelectPayload(currentScreen);
-        var timeline = BuildTimelinePayload(currentScreen);
-        var unlock = BuildUnlockPayload(currentScreen);
-        var chest = BuildChestPayload(currentScreen);
-        var eventPayload = BuildEventPayload(currentScreen);
-        var crystalSphere = BuildCrystalSpherePayload(currentScreen);
-        var shop = BuildShopPayload(currentScreen);
-        var rest = BuildRestPayload(currentScreen, runState);
-        var reward = BuildRewardPayload(currentScreen);
-        var bundles = BuildBundlePayload(currentScreen);
-        var capstone = BuildCapstonePayload(currentScreen);
-        var modal = BuildModalPayload(currentScreen);
-        var gameOver = BuildGameOverPayload(currentScreen, runState);
+        var combat = GuardStateSection("combat", () => BuildCombatPayload(combatState, combatActionGate));
+        var run = GuardStateSection("run", () => BuildRunPayload(currentScreen, combatState, runState, combatActionGate));
+        var multiplayer = GuardStateSection("multiplayer", () => BuildMultiplayerPayload(currentScreen, runState));
+        var multiplayerLobby = GuardStateSection("multiplayer_lobby", () => BuildMultiplayerLobbyPayload(currentScreen));
+        var map = GuardStateSection("map", () => BuildMapPayload(currentScreen, runState));
+        var selection = GuardStateSection("selection", () => BuildSelectionPayload(currentScreen));
+        var characterSelect = GuardStateSection("character_select", () => BuildCharacterSelectPayload(currentScreen));
+        var timeline = GuardStateSection("timeline", () => BuildTimelinePayload(currentScreen));
+        var unlock = GuardStateSection("unlock", () => BuildUnlockPayload(currentScreen));
+        var chest = GuardStateSection("chest", () => BuildChestPayload(currentScreen));
+        var eventPayload = GuardStateSection("event", () => BuildEventPayload(currentScreen));
+        var crystalSphere = GuardStateSection("crystal_sphere", () => BuildCrystalSpherePayload(currentScreen));
+        var shop = GuardStateSection("shop", () => BuildShopPayload(currentScreen));
+        var rest = GuardStateSection("rest", () => BuildRestPayload(currentScreen, runState));
+        var reward = GuardStateSection("reward", () => BuildRewardPayload(currentScreen));
+        var bundles = GuardStateSection("bundles", () => BuildBundlePayload(currentScreen));
+        var capstone = GuardStateSection("capstone", () => BuildCapstonePayload(currentScreen));
+        var modal = GuardStateSection("modal", () => BuildModalPayload(currentScreen));
+        var gameOver = GuardStateSection("game_over", () => BuildGameOverPayload(currentScreen, runState));
 
         var inCombat = CombatManager.Instance.IsInProgress;
         var payload = new GameStatePayload
@@ -162,7 +162,7 @@ internal static partial class GameStateService
             modal = modal,
             game_over = gameOver,
             AvailableActionDescriptors = availableActionDescriptors,
-            agent_view = BuildAgentViewPayload(
+            agent_view = GuardStateSection("agent_view", () => BuildAgentViewPayload(
                 screen,
                 inCombat,
                 session,
@@ -190,7 +190,7 @@ internal static partial class GameStateService
                 capstone,
                 unlock,
                 modal,
-                gameOver)
+                gameOver))
         };
 
         var slowBuild = StateBuildTiming.Instance.Record(buildTimer.Elapsed.TotalMilliseconds, screen, DateTime.UtcNow);
@@ -801,7 +801,7 @@ internal static partial class GameStateService
             });
         }
 
-        var gameOver = BuildGameOverPayload(currentScreen, runState) ?? new GameOverPayload();
+        var gameOver = GuardStateSection("game_over", () => BuildGameOverPayload(currentScreen, runState)) ?? new GameOverPayload();
         if (gameOver.waiting_for_other_players)
         {
             descriptors.Add(new ActionDescriptor

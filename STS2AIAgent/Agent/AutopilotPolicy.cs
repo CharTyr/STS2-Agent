@@ -88,7 +88,7 @@ internal static class AutopilotPolicy
                 ?? Combat(root, screen, actions)
                 ?? Map(root, screen, actions)
                 ?? Reward(root, screen, actions)
-                ?? SingleOption(root, screen, actions)
+                ?? SingleOption(root, screen, actions, inCombat)
                 ?? LastActionStanding(actions)
                 ?? AutopilotDecision.None;
         }
@@ -196,17 +196,26 @@ internal static class AutopilotPolicy
         var rows = Array(reward, "rewards").ToList();
         var cardsPending = ReadBool(reward, "pending_card_choice") == true || Array(reward, "cards").Any();
         var fullBeltPotion = rows.Any(row => RowType(row) == "potion" && ReadBool(row, "claimable") == false);
-        var unopenedCard = rows.Any(row => RowType(row) == "card" && ReadBool(row, "claimable") == true);
+        var needsChoiceRow = rows.Any(row =>
+            ReadBool(row, "claimable") == true
+            && RowType(row) is "card" or "specialcard" or "removecard" or "linkedrewardset");
+        var claimablePotions = rows.Count(row => RowType(row) == "potion" && ReadBool(row, "claimable") == true);
+        var allPotionsFit = claimablePotions == 0 || CountOpenPotionSlots(root) switch
+        {
+            { } open => claimablePotions <= open,
+            null => claimablePotions == 1
+        };
 
-        if (Has(actions, "collect_rewards_and_proceed") && !cardsPending && !fullBeltPotion && !unopenedCard)
+        if (Has(actions, "collect_rewards_and_proceed") && !cardsPending && !fullBeltPotion && !needsChoiceRow && allPotionsFit)
         {
             return new AutopilotDecision("collect_rewards_and_proceed", null, "reward_collect_all", null);
         }
 
         if (Has(actions, "claim_reward"))
         {
-            // Gold and relic rows have no downside; card rows and potion rows are choices.
-            var safe = rows.FirstOrDefault(row => ReadBool(row, "claimable") == true && RowType(row) is "gold" or "relic");
+            // Gold, relic and open-slot potion rows (claimable == true) have no downside; card
+            // rows and full-belt potions (claimable == false) stay with the model.
+            var safe = rows.FirstOrDefault(row => ReadBool(row, "claimable") == true && RowType(row) is "gold" or "relic" or "potion");
             if (safe.ValueKind == JsonValueKind.Object && ReadInt(safe, "i") is { } index)
             {
                 return new AutopilotDecision("claim_reward", index, "reward_claim_safe", RowType(safe));
@@ -216,10 +225,54 @@ internal static class AutopilotPolicy
         return null;
     }
 
-    private static AutopilotDecision? SingleOption(JsonElement root, string screen, IReadOnlyList<string> actions)
+    private static int? CountOpenPotionSlots(JsonElement root)
+    {
+        if (Object(root, "run") is not { } run || !run.TryGetProperty("potions", out var potions) || potions.ValueKind != JsonValueKind.Array)
+        {
+            return null;
+        }
+
+        var open = 0;
+        foreach (var slot in potions.EnumerateArray())
+        {
+            if (slot.ValueKind == JsonValueKind.Object && ReadString(slot, "potion_id") == null)
+            {
+                open++;
+            }
+        }
+
+        return open;
+    }
+
+    private static AutopilotDecision? SingleOption(JsonElement root, string screen, IReadOnlyList<string> actions, bool inCombat)
     {
         switch (screen)
         {
+            case "PATCH_NOTES" when Has(actions, "close_main_menu_submenu"):
+                return new AutopilotDecision("close_main_menu_submenu", null, "patch_notes_close", null);
+            case "CARD_SELECTION" when inCombat && Has(actions, "select_deck_card") && Object(root, "selection") is { } selection:
+            {
+                // Restrict to non-skippable combat selection screens (exclude choose_card_select,
+                // where NChooseACardSelectionScreen may expose a Skip button not reflected in min).
+                var kind = ReadString(selection, "kind");
+                if (kind is not ("combat_hand_select" or "combat_hand_upgrade_select" or "deck_card_select"))
+                {
+                    return null;
+                }
+
+                var min = ReadInt(selection, "min");
+                var max = ReadInt(selection, "max");
+                var selected = ReadInt(selection, "selected");
+                var canConfirm = ReadBool(selection, "confirm") == true;
+                var cards = Array(selection, "cards").ToList();
+                if (min == 1 && max == 1 && selected == 0 && !canConfirm && cards.Count == 1
+                    && ReadInt(cards[0], "i") is { } index)
+                {
+                    return new AutopilotDecision("select_deck_card", index, "combat_card_selection_single", null);
+                }
+
+                return null;
+            }
             case "EVENT" when Has(actions, "choose_event_option") && Object(root, "event") is { } eventPayload:
             {
                 var open = Array(eventPayload, "options").Where(option => ReadBool(option, "locked") != true).ToList();

@@ -82,6 +82,8 @@ internal static class SettingsClone
             RunJournalEnabled = source.RunJournalEnabled,
             MaxOutputTokens = source.MaxOutputTokens,
             MinDecisionIntervalSeconds = source.MinDecisionIntervalSeconds,
+            SpectatorHighlightMs = source.SpectatorHighlightMs,
+            PlayerPreferences = source.PlayerPreferences,
             RoleTests = source.RoleTests.Select(test => new ModelRoleTestRecord
             {
                 Role = test.Role,

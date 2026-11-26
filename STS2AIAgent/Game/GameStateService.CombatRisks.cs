@@ -94,6 +94,8 @@ internal static partial class GameStateService
         CombatEnemyPayload[] enemies)
     {
         var risks = new List<CombatLethalRiskPayload>();
+        var frostOrbBlock = ReadEndOfTurnOrbEffects(playerCreature.CombatState, playerCreature.Player).OrbBlock;
+        var effectiveBlock = Math.Max(0, player.block) + frostOrbBlock;
         var incomingDamage = enemies
             .Where(enemy => enemy.is_alive)
             .SelectMany(enemy => enemy.intents)
@@ -101,7 +103,7 @@ internal static partial class GameStateService
 
         if (incomingDamage > 0)
         {
-            var damageAfterBlock = Math.Max(0, incomingDamage - Math.Max(0, player.block));
+            var damageAfterBlock = Math.Max(0, incomingDamage - effectiveBlock);
             if (damageAfterBlock >= player.current_hp)
             {
                 risks.Add(new CombatLethalRiskPayload
@@ -109,11 +111,11 @@ internal static partial class GameStateService
                     risk_id = "incoming_damage",
                     source = "enemy_intents",
                     will_kill_player = true,
-                    reason = "Enemy intent damage after current block is at least current HP.",
+                    reason = "Enemy intent damage after current block (including end-of-turn Frost orb passive block) is at least current HP.",
                     incoming_damage = incomingDamage,
                     damage_after_block = damageAfterBlock,
                     player_hp = player.current_hp,
-                    player_block = player.block
+                    player_block = effectiveBlock
                 });
             }
         }
@@ -193,7 +195,7 @@ internal static partial class GameStateService
                 _ => null
             };
             var damageAfterBlock = blockable
-                ? Math.Max(0, damage.GetValueOrDefault() - Math.Max(0, player.block))
+                ? Math.Max(0, damage.GetValueOrDefault() - effectiveBlock)
                 : damage.GetValueOrDefault();
             if (riskId == null || damage is not > 0 || damageAfterBlock < player.current_hp)
             {

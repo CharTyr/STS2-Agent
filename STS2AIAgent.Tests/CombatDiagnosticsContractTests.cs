@@ -152,9 +152,13 @@ internal static class CombatDiagnosticsContractTests
             "the player-played bomb damages enemies; it must not become a player-lethal row");
 
         // Poison is Unblockable, so its damage-after-block figure must not have block subtracted;
-        // Constrict is only Unpowered and stays blockable.
+        // Constrict is only Unpowered and stays blockable (including end-of-turn Frost orb passive block).
         Assert.Contains(
-            "blockable?Math.Max(0,damage.GetValueOrDefault()-Math.Max(0,player.block)):damage.GetValueOrDefault()",
+            "effectiveBlock=Math.Max(0,player.block)+frostOrbBlock",
+            risksBody,
+            StringComparison.Ordinal);
+        Assert.Contains(
+            "blockable?Math.Max(0,damage.GetValueOrDefault()-effectiveBlock):damage.GetValueOrDefault()",
             risksBody,
             StringComparison.Ordinal);
 

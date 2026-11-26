@@ -179,6 +179,12 @@ internal static class DiagnosticExport
             mcpEnabled = settings.McpEnabled,
             maxSessionTokens = settings.MaxSessionTokens,
             maxSessionRequests = settings.MaxSessionRequests,
+            maxOutputTokens = settings.MaxOutputTokens,
+            turboMode = settings.TurboMode,
+            visionMode = settings.VisionMode,
+            hudMode = settings.HudMode,
+            spectatorHighlightMs = settings.SpectatorHighlightMs,
+            playerPreferencesLength = (settings.PlayerPreferences ?? string.Empty).Length,
             endpoints = (settings.Endpoints ?? new List<LlmEndpoint>()).Select(endpoint => new
             {
                 Id = Redact(endpoint.Id),

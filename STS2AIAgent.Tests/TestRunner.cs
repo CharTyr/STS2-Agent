@@ -111,8 +111,13 @@ internal static class TestRunner
         return failed;
     }
 
-    public static void Main()
+    public static void Main(string[] args)
     {
+        if (args.Length > 0 && string.Equals(args[0], "--check-abi", StringComparison.Ordinal))
+        {
+            Environment.Exit(GameAbiAuditor.RunCli(args));
+        }
+
         var failed = Run(AllTests());
         if (failed > 0)
         {
@@ -1158,5 +1163,14 @@ internal static class TestRunner
         yield return ("DecisionPacing.RemainingIntervalAndClamp", DecisionPacingTests.WaitsOnlyRemainingElapsedIntervalAndClampsMaximum);
         yield return ("DecisionPacing.CancellationSafe", DecisionPacingTests.CancellationAbortsWaitWithoutStamping);
         yield return ("DecisionPacing.AgentLoopIntegration", DecisionPacingTests.AgentLoopPacesPrimaryRequestsRefreshesStateAndSkipsAutopilotAndTurnPlans);
+        yield return ("Compatibility.StateFaultTrackerDeduplicationAndRecovery", () => Task.Run(GameAbiAndFaultTests.FaultTrackerDeduplicatesLogsAndRecoversCleanly));
+        yield return ("Compatibility.StateFaultTrackerBounded", () => Task.Run(GameAbiAndFaultTests.FaultTrackerBoundsTrackedSections));
+        yield return ("Compatibility.OfflineAbiAuditorDetectsDrift", () => Task.Run(GameAbiAndFaultTests.AbiAuditorDetectsValidAndMissingReflectedEntriesOffline));
+        yield return ("Compatibility.OfflineAbiAuditorCrossAssemblyBreaks", () => Task.Run(GameAbiAndFaultTests.AbiAuditorCatchesRealCrossAssemblyPropertySignatureVisibilityAndStaticBreaks));
+        yield return ("Phase4Ux.PlayStylePresets", () => Task.Run(Phase4ExperienceUxTests.PlayStylePresetsApplyDetectAndPreserveSecrets));
+        yield return ("Phase4Ux.SpectatorDwellAndPreferences", () => Task.Run(Phase4ExperienceUxTests.SpectatorDwellAndPreferencesNormalizeCloneAndSyncCorrectly));
+        yield return ("Phase4Ux.TeamQuickCommands", () => Task.Run(Phase4ExperienceUxTests.TeamQuickCommandsCarryStructuredIntents));
+        yield return ("Phase4Ux.ActionableTroubleshooting", () => Task.Run(Phase4ExperienceUxTests.ModelProbeClassifiesActionableTroubleshootingCases));
+        yield return ("Phase4Ux.StaticPrefixAndDwellLoop", Phase4ExperienceUxTests.PlayerPreferencesInjectIntoStaticPrefixAndSpectatorDwellIsBounded);
     }
 }

@@ -189,9 +189,11 @@ internal static class ReflectedGameMembers
     internal static void ProbeAtStartup()
     {
         var missing = Missing;
-        if (missing.Count == 0)
+        var apiBindings = GameApiCompatibility.BuildHealthBindings();
+        var missingBindings = apiBindings.Where(binding => binding.status == "missing").ToArray();
+        if (missing.Count == 0 && missingBindings.Length == 0)
         {
-            Log.Info($"[STS2AIAgent] Compatibility: all {Probes.Count} reflected game members resolved.");
+            Log.Info($"[STS2AIAgent] Compatibility: all {Probes.Count} reflected game members and {apiBindings.Count} API capability groups resolved.");
             return;
         }
 
@@ -201,18 +203,31 @@ internal static class ReflectedGameMembers
             Log.Warn($"[STS2AIAgent] Compatibility: {probe.Id} is missing in game {version}; {probe.Feature} will fall back to defaults.");
         }
 
-        Log.Warn($"[STS2AIAgent] Compatibility: {missing.Count} of {Probes.Count} reflected game members are missing. GET /health reports status \"degraded\".");
+        foreach (var binding in missingBindings)
+        {
+            Log.Warn($"[STS2AIAgent] Compatibility: API capability '{binding.capability}' is missing in game {version}: {binding.detail}");
+        }
+
+        Log.Warn($"[STS2AIAgent] Compatibility: {missing.Count} of {Probes.Count} reflected members and {missingBindings.Length} API capability group(s) are missing. GET /health reports status \"degraded\".");
     }
 
     /// <summary>
-    /// The <c>compatibility</c> block of <c>GET /health</c>: whether this mod can still read the
-    /// game it is running inside, and what stops working if it cannot.
+    /// Captures <c>status</c> and <c>compatibility</c> from one coherent snapshot so an HTTP thread
+    /// reading <c>GET /health</c> cannot observe a torn transition between the two fields while the
+    /// game thread updates <see cref="GameStateService.SectionFaults"/>.
     /// </summary>
-    internal static object BuildHealthSection()
+    internal static (string Status, object Compatibility) BuildHealthSnapshot()
     {
         var probes = Probes;
         var missing = Missing;
-        return new
+        var apiBindings = GameApiCompatibility.BuildHealthBindings();
+        var faults = GameStateService.SectionFaults.Snapshot();
+        var status = missing.Count == 0
+            && apiBindings.All(binding => !string.Equals(binding.status, "missing", StringComparison.Ordinal))
+            && faults.All(fault => !fault.active)
+            ? "ready"
+            : "degraded";
+        var compatibility = new
         {
             reflected_members_checked = probes.Count,
             reflected_members_missing = missing.Count,
@@ -221,8 +236,17 @@ internal static class ReflectedGameMembers
             missing_members = missing
                 .Select(probe => new { member = probe.Id, feature = probe.Feature })
                 .ToArray(),
+            api_bindings = apiBindings,
+            state_builder_faults = faults,
         };
+        return (status, compatibility);
     }
+
+    /// <summary>
+    /// The <c>compatibility</c> block of <c>GET /health</c>: whether this mod can still read the
+    /// game it is running inside, and what stops working if it cannot.
+    /// </summary>
+    internal static object BuildHealthSection() => BuildHealthSnapshot().Compatibility;
 
     /// <summary>
     /// The <c>status</c> of <c>GET /health</c>, derived rather than asserted.
@@ -231,5 +255,5 @@ internal static class ReflectedGameMembers
     /// This used to be the literal <c>"ready"</c>, which made it the one field on the endpoint that
     /// could never be wrong and never be useful.
     /// </remarks>
-    internal static string ResolveStatus() => Missing.Count == 0 ? "ready" : "degraded";
+    internal static string ResolveStatus() => BuildHealthSnapshot().Status;
 }

@@ -96,6 +96,11 @@ bash scripts/unpack-game-assemblies.sh /tmp/sts2-assemblies-v0.111.1-stable-*.zi
 
 # 验证编译（若配置了 STS2_MIN_DATA_DIR，会自动对两个版本各编译一次）
 bash scripts/check-cloud-dev.sh --run build
+
+# 离线检查编译后的 STS2AIAgent.dll ABI、ReflectedGameMembers 私有成员与跨分支能力绑定
+bash scripts/check-game-abi.sh --data-dir "$STS2_DATA_DIR"
+# Windows 本机对应命令：
+# pwsh -File scripts/check-game-abi.ps1
 ```
 
 `unpack-game-assemblies.sh` 会先核对每个文件相对 `manifest.json` 的 SHA-256 再解压，避免下载截断后变成莫名其妙的编译报错。参数说明：
@@ -208,6 +213,7 @@ steamcmd +login <你的账号> +app_info_update 1 +app_info_print 2868840 +quit 
 - `scripts/check-cloud-dev.sh` — 三层能力报告 + CI 对齐的离线/双版本编译检查
 - `scripts/pack-game-assemblies.ps1` — 有游戏的 Windows 机器上提取最小程序集与元数据压缩包
 - `scripts/unpack-game-assemblies.sh` — 云机校验解包（支持 `--as-min`、`--slot`、`--decompile`）
+- `scripts/check-game-abi.ps1` / `scripts/check-game-abi.sh` — 离线 ECMA-335 ABI、反射成员与跨分支能力审计包装脚本
 - `.devcontainer/` — 固化 L0 工具链的容器配置（自动解包工作区 `build/game-assemblies/`）
 - [build-and-env.md](build-and-env.md) — 构建、部署与环境变量总表
 - [project-map.md](project-map.md) — 仓库架构与代码地图

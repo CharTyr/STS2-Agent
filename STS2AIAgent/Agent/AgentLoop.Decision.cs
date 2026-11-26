@@ -1,3 +1,4 @@
+using System.Text.Json;
 using STS2AIAgent.Config;
 using STS2AIAgent.Llm;
 
@@ -188,6 +189,16 @@ internal sealed partial class AgentLoop
                 messages.Add(LlmMessage.System(playLanguage, ContextPart.Static));
             }
 
+            var playerPreferences = AgentSettings.NormalizePreferences(settings.PlayerPreferences);
+            if (playerPreferences.Length > 0)
+            {
+                // User-authored taste belongs in a User message (not System role) while staying in
+                // the static prefix so prompt caching stays warm across turns.
+                messages.Add(LlmMessage.User(
+                    "Standing player playstyle preferences (user-configured taste; obey live state and legal available_actions first):\n"
+                    + playerPreferences, part: ContextPart.Static));
+            }
+
             var screenGuidance = PlayPrompt.ScreenGuidance(screen);
             if (!string.IsNullOrEmpty(screenGuidance))
             {
@@ -325,5 +336,57 @@ internal sealed partial class AgentLoop
         {
             return Receipt(ex.GetType().Name + ": " + DiagnosticExport.Redact(ex.Message));
         }
+    }
+
+    private static uint? ReadCardCidAtIndex(string? compactJson, int cardIndex)
+    {
+        if (string.IsNullOrWhiteSpace(compactJson) || cardIndex < 0) return null;
+        try
+        {
+            using var doc = JsonDocument.Parse(compactJson);
+            if (!doc.RootElement.TryGetProperty("combat", out var combat) || combat.ValueKind != JsonValueKind.Object
+                || !combat.TryGetProperty("hand", out var hand) || hand.ValueKind != JsonValueKind.Array)
+            {
+                return null;
+            }
+
+            foreach (var card in hand.EnumerateArray())
+            {
+                if (card.ValueKind == JsonValueKind.Object
+                    && card.TryGetProperty("i", out var iProp) && iProp.TryGetInt32(out var idx) && idx == cardIndex
+                    && card.TryGetProperty("cid", out var cidProp) && cidProp.TryGetUInt32(out var cid))
+                {
+                    return cid;
+                }
+            }
+        }
+        catch (JsonException) { }
+        return null;
+    }
+
+    private static string? ReadPotionIdAtIndex(string? compactJson, int slotIndex)
+    {
+        if (string.IsNullOrWhiteSpace(compactJson) || slotIndex < 0) return null;
+        try
+        {
+            using var doc = JsonDocument.Parse(compactJson);
+            if (!doc.RootElement.TryGetProperty("run", out var run) || run.ValueKind != JsonValueKind.Object
+                || !run.TryGetProperty("potions", out var potions) || potions.ValueKind != JsonValueKind.Array)
+            {
+                return null;
+            }
+
+            foreach (var potion in potions.EnumerateArray())
+            {
+                if (potion.ValueKind == JsonValueKind.Object
+                    && potion.TryGetProperty("i", out var iProp) && iProp.TryGetInt32(out var idx) && idx == slotIndex
+                    && potion.TryGetProperty("potion_id", out var idProp) && idProp.ValueKind == JsonValueKind.String)
+                {
+                    return idProp.GetString();
+                }
+            }
+        }
+        catch (JsonException) { }
+        return null;
     }
 }

@@ -54,8 +54,9 @@ internal sealed record MapRouteAdvice(IReadOnlyList<MapRouteOption> Options, int
 /// <item>a rest is worth <c>6</c>, plus another <c>6</c> below <c>45%</c> HP;</item>
 /// <item>a shop is worth <c>3</c>, or <c>7</c> with at least <c>120</c> gold;</item>
 /// <item>an unknown room is worth <c>2</c> and a treasure <c>2</c>; a plain combat costs <c>2</c>;</item>
-/// <item>an elite costs <c>16</c> below <c>45%</c> HP, <c>9</c> below <c>70%</c>, else <c>6</c>, times
-/// the act number, because an act-2 elite is not an act-1 elite.</item>
+/// <item>an elite costs <c>16 * act</c> below <c>45%</c> HP and <c>9 * act</c> below <c>70%</c> HP;
+/// at <c>70%</c> HP or above it yields <c>10 - 6 * act</c> (+4 in Act 1 for the relic and gold value,
+/// -2 in Act 2, -8 in Act 3 as later elites grow deadlier).</item>
 /// </list>
 /// The recommendation is the highest score; a tie recommends nothing rather than picking arbitrarily.
 /// </remarks>
@@ -88,7 +89,9 @@ internal static class MapRoutePolicy
 
     internal const int ElitePenaltyMidHp = 9;
 
-    internal const int ElitePenaltyHighHp = 6;
+    internal const int EliteRewardHighHp = 10;
+
+    internal const int EliteRiskHighHp = 6;
 
     internal const int LowHpPercent = 45;
 
@@ -146,6 +149,7 @@ internal static class MapRoutePolicy
             var unknowns = Range(tallies, tally => tally.Unknowns);
             var combats = Range(tallies, tally => tally.Combats);
             var treasures = Range(tallies, tally => tally.Treasures);
+            var eliteWeight = EliteWeight(hpPercent, act);
             var score = Score(elites, rests, shops, unknowns, combats, treasures, hpPercent, input.Gold, act);
             options.Add(new MapRouteOption(
                 start.Index,
@@ -156,7 +160,7 @@ internal static class MapRoutePolicy
                 combats,
                 treasures,
                 score,
-                Explain(elites, rests, shops, unknowns, score, hpPercent)));
+                Explain(elites, rests, shops, unknowns, score, hpPercent, act, eliteWeight)));
         }
 
         if (options.Count < 2)
@@ -297,6 +301,13 @@ internal static class MapRoutePolicy
         return tallies.Count == 0 ? new MapRouteRange(0, 0) : new MapRouteRange(min, max);
     }
 
+    private static int EliteWeight(int hpPercent, int act) =>
+        hpPercent < LowHpPercent
+            ? -ElitePenaltyLowHp * act
+            : hpPercent < MidHpPercent
+                ? -ElitePenaltyMidHp * act
+                : EliteRewardHighHp - EliteRiskHighHp * act;
+
     private static int Score(
         MapRouteRange elites,
         MapRouteRange rests,
@@ -308,11 +319,7 @@ internal static class MapRoutePolicy
         int gold,
         int act)
     {
-        var elitePenalty = hpPercent < LowHpPercent
-            ? ElitePenaltyLowHp
-            : hpPercent < MidHpPercent
-                ? ElitePenaltyMidHp
-                : ElitePenaltyHighHp;
+        var eliteWeight = EliteWeight(hpPercent, act);
         var restWeight = RestWeight + (hpPercent < LowHpPercent ? LowHpRestBonus : 0);
         var shopWeight = gold >= FundedShopGold ? FundedShopWeight : ShopWeight;
 
@@ -321,7 +328,7 @@ internal static class MapRoutePolicy
             + Expected(unknowns) * UnknownWeight
             + Expected(treasures) * TreasureWeight
             + Expected(combats) * CombatWeight
-            - Expected(elites) * elitePenalty * act;
+            + Expected(elites) * eliteWeight;
     }
 
     /// <summary>The middle of a range, rounded up, so every count stays an integer.</summary>
@@ -337,7 +344,9 @@ internal static class MapRoutePolicy
         MapRouteRange shops,
         MapRouteRange unknowns,
         int score,
-        int hpPercent)
+        int hpPercent,
+        int act,
+        int eliteWeight)
     {
         var parts = new List<string>();
         if (elites.Max == 0)
@@ -348,9 +357,13 @@ internal static class MapRoutePolicy
         {
             parts.Add($"{elites} elite at {hpPercent}% HP");
         }
-        else
+        else if (eliteWeight > 0)
         {
             parts.Add($"{elites} elite for rewards");
+        }
+        else
+        {
+            parts.Add($"{elites} elite risk (Act {act})");
         }
 
         if (rests.Max > 0)

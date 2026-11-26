@@ -136,7 +136,8 @@ one action runs at a time.
 - `STS2AIAgent/Config/AgentSettings.cs` — the settings model: endpoints, models, bindings, Jev, budgets, co-op, `ModelTests`, `RoleTests`. `EnsureValidShape` repairs without replacing. `TryResolvePlayModel` (play = conversation model), `TryResolveRoleModel`, `HasJevConfigured`.
 - `STS2AIAgent/Config/SettingsStore.cs` — the only persistence path: atomic temp file + `File.Replace` with a `.bak`, corrupt-file recovery, `LastNotice`. `STS2_AGENT_SETTINGS_PATH` overrides the location.
 - `STS2AIAgent/Config/SettingsClone.cs` — deep copy of **every** persisted field. A new setting must be added here too.
-- `STS2AIAgent/Config/AgentSettings.Experience.cs` — the 2026-10-28 overhaul switches, all on by default: `TurboMode` (off/fast/instant), `TurboRestoreFastMode` (the player's game speed while ours is applied; instance-local), `AutopilotEnabled`, `TurnPlansEnabled`, `CombatMathEnabled`, `VisionMode` (off/on_demand/every_step), `HudMode` (off/minimal/full), `PauseHotkey`, `RunJournalEnabled`, and their normalisation. The play switches also travel to the teammate through `CompanionPlaySettings`.
+- `STS2AIAgent/Config/AgentSettings.Experience.cs` — the 2026-10-28 overhaul switches, all on by default: `TurboMode` (off/fast/instant), `TurboRestoreFastMode` (the player's game speed while ours is applied; instance-local), `AutopilotEnabled`, `TurnPlansEnabled`, `CombatMathEnabled`, `VisionMode` (off/on_demand/every_step), `HudMode` (off/minimal/full), `SpectatorHighlightMs` (optional bounded pre-play HUD dwell, instance-local), `PauseHotkey`, `RunJournalEnabled`, `PlayerPreferences` (opt-in static-prefix playstyle notes), and their normalisation. The play switches and preferences also travel to the teammate through `CompanionPlaySettings`.
+- `STS2AIAgent/Config/PlayStylePresetPolicy.cs` — pure 3-tier one-click play style presets (`economy` / `balanced` / `push`), applied without touching endpoints, models or keys.
 - `STS2AIAgent/Config/SettingsBinding.cs` — blocks deleting an endpoint or model that a role still uses.
 - `STS2AIAgent/Config/FirstRunSetup.cs` — first-run and invite gate verdict from the play **role** record (`missing`/`failed`/`filled_unverified`/`verified`).
 - `STS2AIAgent/Config/ModelRoleProbe.cs` — role records (conversation/play/vision), `Fingerprint` (url+model+key SHA-256), `Current`, `Upsert`, `InvalidateMismatched`, error `Classify`.
@@ -276,7 +277,9 @@ one action runs at a time.
 ## 5. Game state (`/state`, `agent_view`, `/data`)
 
 ### Files
-- `STS2AIAgent/Game/GameStateService.cs` — base partial: `BuildStatePayload` (about 19 builders in a fixed order), `ResolveScreen`/`ResolveNonModalScreen`, `CurrentScreenName` (cheap), `EnumerateAvailableActions` (**the** action surface), `BuildAvailableActionNames(out descriptors)`, `BuildDecisionSnapshotPayload`, `GetLocalPlayer`, `FindDescendants<T>`, shared helpers.
+- `STS2AIAgent/Game/GameStateService.cs` — base partial: `BuildStatePayload` (about 19 guarded builders in a fixed order), `ResolveScreen`/`ResolveNonModalScreen`, `CurrentScreenName` (cheap), `EnumerateAvailableActions` (**the** action surface), `BuildAvailableActionNames(out descriptors)`, `BuildDecisionSnapshotPayload`, `GetLocalPlayer`, `FindDescendants<T>`, shared helpers.
+- `STS2AIAgent/Game/GameStateService.FaultIsolation.cs` — per-section fault isolation wrapper (`GuardStateSection`) for `BuildStatePayload`: catches unexpected sub-builder exceptions, logs deduplicated warnings, and records faults in `SectionFaults` (surfaced in `/health.compatibility.state_builder_faults`).
+- `STS2AIAgent/Game/StateSectionFaultTracker.cs` — pure bounded tracker behind `GameStateService.SectionFaults` (deduplicated log throttling, active/recovered state, and `/health` snapshots).
 - `STS2AIAgent/Game/GameStateService.Predicates.cs` — every `Can*` gate and action-level `Is*` helper.
 - `STS2AIAgent/Game/GameApiCompatibility.cs` — cached public API bindings for Steam stable and public beta. Resolves optional Fool resources and run modes, native merchant actions and reward transitions, and the loaded values of moved combat enum members.
 - `STS2AIAgent/Game/GameStateService.Combat.cs` — the `CombatActionGate` (evaluated once per build; 200 ms stability sampler), hand cards (`playable`, `valid_target_indices`), target index helpers, intents. The hand snapshot marks a `Shoot` card unavailable when its owner has no ready arrow. Explicit plays still use the native action checks. The Fool's melody-card count reads finished plays for the current player and turn. The legacy arrow break flag is optional since v0.114.0.
@@ -460,7 +463,7 @@ but hasn't settled; the agent treats a run of these as a stall (`NoProgressPolic
 - `STS2AIAgent/Multiplayer/CompanionJevSnapshot.cs` — the companion's non-secret Jev readings shown on the host.
 - `STS2AIAgent/Multiplayer/CompanionPlayPolicy.cs` — the companion's immediate decisions (follow the host's map vote, confirm FTUE modals, or wait).
 - `STS2AIAgent/Multiplayer/CompanionActPolicy.cs` — which actions the companion may take by itself.
-- `STS2AIAgent/Multiplayer/TeamConversation.cs` / `STS2AIAgent/Multiplayer/TeamIntent.cs` — host ↔ teammate chat and intent parsing.
+- `STS2AIAgent/Multiplayer/TeamConversation.cs` / `STS2AIAgent/Multiplayer/TeamIntent.cs` / `STS2AIAgent/Multiplayer/TeamQuickCommands.cs` — host ↔ teammate chat, structured intent parsing, and one-click tactical command presets.
 - `STS2AIAgent/Multiplayer/TeammateStatus.cs` — the teammate's live status shown on the host.
 - `STS2AIAgent/Multiplayer/CompanionHostWatch.cs` — the companion's host watchdog. The launcher passes `STS2_AGENT_HOST_PID`, and the companion (`AgentRuntime.WatchHostAsync`) quits once the host exits, crashes or is force-killed, so an invisible AI teammate never keeps playing and spending. The host also sends `CloseMainWindow` on a normal shutdown (`LocalDualInstanceLauncher.TryCloseCompanion`).
 
@@ -522,7 +525,7 @@ most nine follow-ups and stop before unknown draw/choice outcomes.
 ## 9. Scripts, tests, gates
 
 - **Build:** `scripts/build-mod.ps1` / `build-mod.sh` (dotnet build → headless Godot PCK with `mod_manifest.json` inside → copies dll/pck/`mod_id.json` to `<game>/mods`). **Close the game first** (the DLL is locked while it runs).
-- **Cloud / headless dev:** `scripts/pack-game-assemblies.ps1` (packs `sts2.dll`/`GodotSharp.dll`/`0Harmony.dll` + optional `sts2.xml` & game metadata with SHA-256 manifest), `scripts/unpack-game-assemblies.sh` (verifies, unpacks primary or `--as-min` baseline, optional `--decompile`), `scripts/setup-cloud-dev.sh` (L0 toolchain + optional `--with-ilspy`/`--with-godot`), `scripts/check-cloud-dev.sh` (3-layer report + CI-aligned offline/build checks), and `.devcontainer/`; guide in `docs/cloud-dev.md`.
+- **Cloud / headless dev:** `scripts/pack-game-assemblies.ps1` (packs `sts2.dll`/`GodotSharp.dll`/`0Harmony.dll` + optional `sts2.xml` & game metadata with SHA-256 manifest), `scripts/unpack-game-assemblies.sh` (verifies, unpacks primary or `--as-min` baseline, optional `--decompile`), `scripts/check-game-abi.ps1`/`.sh` (offline ECMA-335 ABI/reflection/capability auditor), `scripts/run_decision_benchmark_eval.py` (opt-in OpenAI evaluator & multi-model comparator), `scripts/setup-cloud-dev.sh` (L0 toolchain + optional `--with-ilspy`/`--with-godot`), `scripts/check-cloud-dev.sh` (3-layer report + CI-aligned offline/build checks), and `.devcontainer/`; guide in `docs/cloud-dev.md`.
 - **Paths:** only `scripts/lib-sts2-paths.ps1` / `.sh` know the install layout (arg → env → detect → default). `lib-sts2.sh` holds the runtime helpers.
 - **Run:** `start-game-session.ps1`/`.sh` (pins `STS2_API_PORT`, fails if the old listener doesn't release the port, `--clientId` for an isolated profile), `start-mcp-stdio.*`, `start-mcp-network.*` / `serve-sts2-network-mcp.ps1` (all honor `STS2_API_BASE_URL`).
 - **Release:** `package-release.ps1` and `package-steam-workshop.ps1` run `test-release-compatibility.ps1` on the packaged DLL with two actual game versions before generating the ZIP or upload configuration. See also `check_release_package.py`, `check_release_metadata.py`, and static `preflight-release.ps1`.
@@ -532,8 +535,8 @@ most nine follow-ups and stop before unknown draw/choice outcomes.
 | Command | Covers |
 |---|---|
 | `dotnet build STS2AIAgent/STS2AIAgent.csproj -c Release` | mod compiles (0 warnings expected) |
-| `dotnet run --project STS2AIAgent.Tests/STS2AIAgent.Tests.csproj -c Release` | ~800 offline tests: pure policies (compiled in), source contracts (Roslyn/text) for game-dependent files, this map's freshness. Tests are registered by hand in `STS2AIAgent.Tests/TestRunner.cs` |
-| `cd mcp_server; uv run --locked python -m unittest discover -s tests` | 420 Python tests (stdlib unittest only, no pytest) |
+| `dotnet run --project STS2AIAgent.Tests/STS2AIAgent.Tests.csproj -c Release` | 1,190+ offline tests: pure policies (compiled in), source contracts (Roslyn/text) for game-dependent files, this map's freshness. Tests are registered by hand in `STS2AIAgent.Tests/TestRunner.cs` |
+| `cd mcp_server; uv run --locked python -m unittest discover -s tests` | 466 Python tests (stdlib unittest only, no pytest) |
 | `python scripts/check_verification_gates.py` | static doc/code gates |
 | `powershell -File scripts/preflight-release.ps1` | everything above plus packaging checks |
 

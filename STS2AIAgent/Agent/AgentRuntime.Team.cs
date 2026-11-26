@@ -92,7 +92,11 @@ internal sealed partial class AgentRuntime
         RaiseChanged();
     }
 
-    public async Task SendTeamMessageAsync(string text, CancellationToken cancellationToken)    {
+    public Task SendTeamMessageAsync(string text, CancellationToken cancellationToken) =>
+        SendTeamMessageAsync(text, intent: null, cancellationToken);
+
+    public async Task SendTeamMessageAsync(string text, TeamIntent? intent, CancellationToken cancellationToken)
+    {
         if (!await _teamMessageGate.WaitAsync(0, cancellationToken)) return;
         // Stamp before flipping the flag the status line reads: a pending message never renders
         // with a stale/zero start.
@@ -103,11 +107,11 @@ internal sealed partial class AgentRuntime
             if (_dualLaunching) throw new InvalidOperationException(Loc.T("正在组队，请等待连接完成后发送消息。"));
             var connection = LocalDualInstanceLauncher.Connection
                 ?? throw new InvalidOperationException(Loc.T("请先邀请 AI 队友。此处消息只发送给本次邀请的队友。"));
-            _teamConversation.Add("user", text);
+            _teamConversation.Add("user", text, intent);
             // The pending line itself is computed by TeamStatus from the start timestamp and the
             // teammate's combat flag; the text that used to be frozen here would stop the seconds.
             RaiseChanged();
-            var reply = await connection.SendMessageAsync(text, intent: null, cancellationToken);
+            var reply = await connection.SendMessageAsync(text, intent, cancellationToken);
             _teamConversation.Add("assistant", reply.Length > TeamConversation.MaxMessageLength ? reply[..TeamConversation.MaxMessageLength] : reply);
             _teamStatus = Loc.T("队友已回复。你的建议会作为后续决策的参考。");
         }

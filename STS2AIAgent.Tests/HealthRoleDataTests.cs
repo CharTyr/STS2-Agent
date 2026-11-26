@@ -44,14 +44,15 @@ internal static class HealthRoleDataTests
         foreach (var commonField in new[]
         {
             "service = ServiceName",
-            "status = ReflectedGameMembers.ResolveStatus()",
+            "ReflectedGameMembers.BuildHealthSnapshot()",
+            "status = healthStatus",
             "api_port = HttpServer.Instance.Port",
             "process_id = Environment.ProcessId",
             "instance_role = InstanceRole.Current",
             "play_running = AgentRuntime.Instance.PlayRunning",
             "play_phase = AgentRuntime.Instance.PlayPhase",
             "session_requests = AgentRuntime.Instance.SessionRequests",
-            "compatibility = ReflectedGameMembers.BuildHealthSection()",
+            "compatibility = healthCompatibility",
             "state_build = StateBuildTiming.Instance.Snapshot()"
         })
         {
