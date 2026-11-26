@@ -170,7 +170,7 @@ sts2_write_isolated_fallback_settings() {
   "skip_intro_logo": true,
   "fullscreen": false,
   "limit_fps_in_background": false,
-  "vsync": "disabled",
+  "vsync": "off",
   "window_size": { "X": 1280, "Y": 720 },
   "window_position": { "X": -1, "Y": -1 },
   "language": "en",

@@ -374,7 +374,7 @@ function Write-IsolatedProgressSaves {
   "skip_intro_logo": true,
   "fullscreen": false,
   "limit_fps_in_background": false,
-  "vsync": "disabled",
+  "vsync": "off",
   "window_size": { "X": 1280, "Y": 720 }
 }
 '@

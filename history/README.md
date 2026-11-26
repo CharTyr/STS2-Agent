@@ -40,5 +40,8 @@
 | [PR #56 档案切换实机测试](evidence/pr56-live-test/README.md) | 2026-09-05 | 原生档案切换验收截图 |
 | [运行决策日志（defect）](20260704-1143_defect_WJT8A736AV.md) | 2026-07-04 | 早期单局决策日志样例 |
 | [动作窗口验证日志](20260704-sts2-mod-action-window-validation.md) | 2026-07-04 | 早期动作窗口实机验证日志 |
+| [状态页历史归档（v0.12.4–v0.13.0）](PRODUCT_PLAN_CURRENT_2026-10-26-archive.md) | 2026-10-26 | 原状态页中已随 v0.13.0 发布的标签后清单 |
+| [状态页历史归档（v0.10.5–v0.16.2 / 10-27）](PRODUCT_PLAN_CURRENT_2026-11-26-archive.md) | 2026-11-26 | 原状态页中 v0.10.5–v0.16.2 能力矩阵与 2026-10-27 阶段验收正文 |
+| [v0.14.0–v0.19.6 各版发布记录](build-fingerprints.md) | 2026-09-21 起 | 各版发布摘要、工坊上传与双渠道指纹索引 |
 
 2026-10-26 整理时删除了 docs/ 与根目录里只剩跳转的空壳页（`docs/sts2-coverage-gaps.md`、`docs/release-readiness.md` 因 CI 与打包脚本引用而保留）；截图类证据从 docs/ 移到了 `evidence/`。归档只表示退出当前文档入口，不表示历史待办全部完成，也不删除验收证据。

@@ -26,6 +26,7 @@ PROXY_PATH = ROOT / "scripts" / "sts2-model-budget-proxy.py"
 RESOLVER_PATH = ROOT / "scripts" / "lib-sts2-paths.ps1"
 GAME_SCRIPTS = (
     "build-mod.ps1",
+    "pack-game-assemblies.ps1",
     "start-game-session.ps1",
     "test-mod-load.ps1",
     "test-debug-console-gating.ps1",

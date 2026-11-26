@@ -6,9 +6,9 @@ Slay the Spire 2 v0.113.1 的本机双开能正常组队。玩家不在 Mod 里�
 
 ## 背景
 
-- 反馈环境：Mod 0.19.2、游戏 v0.113.1。自动组队日志包含 `FastHost ENet lobby failed` 和 `Parameter count mismatch`。已用本机同版本游戏 DLL 在不启动游戏的情况下复现 `TargetParameterCountException: Parameter count mismatch.`：[现行调用](../../../STS2AIAgent/Game/GameActionService.cs)（`InvokeFastHostAsync`）对长度大于 1 的签名传空参数，但游戏的公开方法是 `FastHost(GameMode gameMode, bool isCustom)`。旧版声明为 `FastHost(GameMode gameMode)`。
-- [现有「外部 Agent」队友模式](../../../README.zh-CN.md)（选项 C）已能跳过模型验证；[队友启动](../../../STS2AIAgent/Agent/AgentRuntime.cs)（`CompanionEntryAsync`）在进图后停在等待外部接管。当前邀请页仅显示 REST 地址，而无悬浮窗的第二窗口不会默认启用原生 MCP。
-- [`POST /teammate/control`](../../../docs/api.md) 控制的是 Mod 内置自动游玩，不是外部 MCP 的开关。`running: true` 拒绝未验证模型符合既有契约。
+- 反馈环境：Mod 0.19.2、游戏 v0.113.1。自动组队日志包含 `FastHost ENet lobby failed` 和 `Parameter count mismatch`。已用本机同版本游戏 DLL 在不启动游戏的情况下复现 `TargetParameterCountException: Parameter count mismatch.`：[现行调用](../../../../../STS2AIAgent/Game/GameActionService.cs)（`InvokeFastHostAsync`）对长度大于 1 的签名传空参数，但游戏的公开方法是 `FastHost(GameMode gameMode, bool isCustom)`。旧版声明为 `FastHost(GameMode gameMode)`。
+- [现有「外部 Agent」队友模式](../../../../../README.zh-CN.md)（选项 C）已能跳过模型验证；[队友启动](../../../../../STS2AIAgent/Agent/AgentRuntime.cs)（`CompanionEntryAsync`）在进图后停在等待外部接管。当前邀请页仅显示 REST 地址，而无悬浮窗的第二窗口不会默认启用原生 MCP。
+- [`POST /teammate/control`](../../../../../docs/api.md) 控制的是 Mod 内置自动游玩，不是外部 MCP 的开关。`running: true` 拒绝未验证模型符合既有契约。
 
 ## 要求与验收
 

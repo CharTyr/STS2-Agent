@@ -161,6 +161,30 @@ sts2_data_dir_candidates() {
   printf '%s\n' "$app_bundle/Contents/MacOS/data_sts2_macos"
   printf '%s\n' "$app_bundle/Contents/MacOS/data_sts2_macos_arm64"
   printf '%s\n' "$app_bundle/Contents/MacOS/data_sts2_macos_x86_64"
+
+  # Whatever platform directory is actually on disk, after the spellings above so their order
+  # stays fixed. A native Linux build names its directory after its own platform, and the name
+  # is the game's to choose: a glob is how this keeps answering for a build this repository has
+  # never seen, where one more guessed string would silently stop matching. The caller's
+  # existence check still decides -- a candidate here is not a claim that the game is installed.
+  sts2_existing_data_dir_globs "$game_root" "$app_bundle"
+}
+
+sts2_existing_data_dir_globs() {
+  local game_root="${1:-}"
+  local app_bundle="${2:-}"
+  local candidate=""
+
+  for candidate in \
+    "$game_root"/data_sts2_* \
+    "$app_bundle"/Contents/Resources/data_sts2_* \
+    "$app_bundle"/Contents/MacOS/data_sts2_*; do
+    # An unmatched glob arrives literally, so the directory test is what does the filtering --
+    # including for the empty-input case, where the pattern would otherwise anchor at "/".
+    if [[ -d "$candidate" ]]; then
+      printf '%s\n' "$candidate"
+    fi
+  done
 }
 
 sts2_detect_data_dir() {

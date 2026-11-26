@@ -11,7 +11,7 @@
 > a mod source or MCP module is missing from this map, or when the map names a path that no longer
 > exists. They don't catch outdated prose, so skim the sections you touched.
 >
-> Snapshot: 2026-11-13, `dev` on game v0.113.0. Deeper references: [api.md](api.md) (HTTP contract),
+> Snapshot: 2026-11-26, `dev` on v0.19.6 (game v0.111.1 stable + v0.114.0 public beta). Deeper references: [api.md](api.md) (HTTP contract),
 > [ADR 0001](adr/0001-single-action-surface.md) (one action surface),
 > [ADR 0002](adr/0002-two-mcp-surfaces.md) (two MCP surfaces), `.trellis/spec/` (coding specs),
 > `AGENTS.md` (build/test/release commands; local, gitignored), `.trellis/spec/index.md`.
@@ -522,6 +522,7 @@ most nine follow-ups and stop before unknown draw/choice outcomes.
 ## 9. Scripts, tests, gates
 
 - **Build:** `scripts/build-mod.ps1` / `build-mod.sh` (dotnet build → headless Godot PCK with `mod_manifest.json` inside → copies dll/pck/`mod_id.json` to `<game>/mods`). **Close the game first** (the DLL is locked while it runs).
+- **Cloud / headless dev:** `scripts/pack-game-assemblies.ps1` (packs `sts2.dll`/`GodotSharp.dll`/`0Harmony.dll` + optional `sts2.xml` & game metadata with SHA-256 manifest), `scripts/unpack-game-assemblies.sh` (verifies, unpacks primary or `--as-min` baseline, optional `--decompile`), `scripts/setup-cloud-dev.sh` (L0 toolchain + optional `--with-ilspy`/`--with-godot`), `scripts/check-cloud-dev.sh` (3-layer report + CI-aligned offline/build checks), and `.devcontainer/`; guide in `docs/cloud-dev.md`.
 - **Paths:** only `scripts/lib-sts2-paths.ps1` / `.sh` know the install layout (arg → env → detect → default). `lib-sts2.sh` holds the runtime helpers.
 - **Run:** `start-game-session.ps1`/`.sh` (pins `STS2_API_PORT`, fails if the old listener doesn't release the port, `--clientId` for an isolated profile), `start-mcp-stdio.*`, `start-mcp-network.*` / `serve-sts2-network-mcp.ps1` (all honor `STS2_API_BASE_URL`).
 - **Release:** `package-release.ps1` and `package-steam-workshop.ps1` run `test-release-compatibility.ps1` on the packaged DLL with two actual game versions before generating the ZIP or upload configuration. See also `check_release_package.py`, `check_release_metadata.py`, and static `preflight-release.ps1`.
@@ -577,7 +578,7 @@ most nine follow-ups and stop before unknown draw/choice outcomes.
 - `STS2AIAgent/Server/InstanceEndpointFile.cs` — publish and remove PID/role/port hints for local MCP discovery.
 - `mcp_server/src/sts2_mcp/discovery.py` — validate local endpoint hints against /health and resolve a role or PID without guessing an ambiguous instance.
 
-## 12. Experience overhaul (compact v13, unreleased)
+## 12. Experience overhaul (compact v13, released in v0.18.0)
 
 The turn first uses the cheap actionable probe, then a fresh compact frame. Sandpit safety runs before Autopilot; queued player guidance yields to the model. The model can name a first `act` plus nine `then` steps. Each step checks fresh state, stable card identity, divergence and cancellation through the existing single-action lease. Only the first decision row carries the request cost. Unknown outcomes are terminal and never replayed. Live intent is display-only and does not enter saved prompts or logs.
 

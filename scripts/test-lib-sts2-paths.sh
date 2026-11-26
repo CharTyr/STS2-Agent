@@ -180,6 +180,24 @@ check_same "mods live at the top of an unpacked install" "$unpacked/mods" \
   "$(sts2_mods_dir_for "" "$unpacked")"
 
 echo
+echo "-- a Linux install names its data directory after its own platform --"
+linux_root="$WORK/linux"
+mkdir -p "$linux_root/data_sts2_linux_x86_64"
+check_same "the native Linux data directory is found" \
+  "$linux_root/data_sts2_linux_x86_64" \
+  "$(sts2_detect_data_dir "$linux_root" "")"
+check_same "the Linux mods directory is the top of the game directory" "$linux_root/mods" \
+  "$(sts2_mods_dir_for "" "$linux_root")"
+
+# The point of the glob, stated as a check: a platform directory nobody wrote down still resolves,
+# so this file does not have to be edited again when the game gains a platform.
+unseen_root="$WORK/unseen"
+mkdir -p "$unseen_root/data_sts2_plan9_x86_64"
+check_same "a platform directory nobody listed is still found" \
+  "$unseen_root/data_sts2_plan9_x86_64" \
+  "$(sts2_detect_data_dir "$unseen_root" "")"
+
+echo
 echo "-- the process matcher gets its candidate paths from the same resolver --"
 game_root_fixture="$WORK/installed/SteamLibrary/steamapps/common/Slay the Spire 2"
 mkdir -p "$game_root_fixture/Slay the Spire 2.app/Contents/MacOS"

@@ -1,3 +1,5 @@
+/bin/
+/obj/
 STS2AIAgent/bin/
 STS2AIAgent/obj/
 STS2AIAgent.Tests/bin/
@@ -8,6 +10,7 @@ STS2AIAgent/local.props
 build/
 extraction/decompiled/
 .venv/
+.uv-cache/
 mcp_server/.venv/
 __pycache__/
 *.pyc

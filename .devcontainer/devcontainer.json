@@ -1,0 +1,26 @@
+{
+  "name": "STS2 Agent (cloud / offline + layer 1 build)",
+  "build": {
+    "dockerfile": "Dockerfile",
+    "context": ".."
+  },
+  "postCreateCommand": "bash scripts/setup-cloud-dev.sh --no-apt --no-dotnet --no-uv --no-pwsh",
+  "containerEnv": {
+    "DOTNET_CLI_TELEMETRY_OPTOUT": "1",
+    "DOTNET_NOLOGO": "1",
+    "STS2_API_BASE_URL": "http://127.0.0.1:8080"
+  },
+  "remoteEnv": {
+    "STS2_DATA_DIR": "/root/.sts2/game-assemblies",
+    "STS2_MIN_DATA_DIR": "/root/.sts2/game-assemblies-min"
+  },
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "ms-dotnettools.csharp",
+        "ms-python.python",
+        "charliermarsh.ruff"
+      ]
+    }
+  }
+}

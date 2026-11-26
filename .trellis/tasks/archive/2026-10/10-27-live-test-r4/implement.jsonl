@@ -1,0 +1,4 @@
+{"reason":"UI boundaries, layout and test seams","file":".trellis/spec/mod/agent-and-ui.md"}
+{"reason":"Runtime boundaries","file":".trellis/spec/mod/architecture.md"}
+{"reason":"Reuse existing helpers","file":".trellis/spec/guides/code-reuse-thinking-guide.md"}
+{"reason":"Python sidecar test conventions","file":".trellis/spec/mcp/index.md"}
