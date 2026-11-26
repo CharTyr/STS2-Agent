@@ -16,6 +16,14 @@ internal static partial class Loc
         map["游戏窗口可能在后台，请切回游戏并保持画面可见。"] = "The game may be in the background; bring it forward and keep it visible.";
         map["AI 正在游玩 · {0} · {1} 暂停 · {2} 打开面板"] = "AI playing · {0} · {1} pause · {2} open panel";
         map["AI 已暂停 · {0} 继续 · {1} 打开面板"] = "AI paused · {0} resume · {1} open panel";
+        map["即将出牌 · 按 {0} 拦截并接管 · {1} 打开面板"] = "About to play · {0} intercept & take over · {1} open panel";
+        map["即将出牌 · 点面板「拦截并暂停」可接管 · {0} 打开面板"] = "About to play · click Intercept to take over · {0} open panel";
+        map["拦截本次出牌并暂停"] = "Intercept this play & pause";
+        map["已拦截本次出牌并暂停，请由你接管。"] = "Intercepted this play and paused. You have control.";
+        map["单次输出上限"] = "Max output tokens";
+        map["默认 8192（留空或0不限）"] = "Default 8192 (blank or 0 for no cap)";
+        map["已输入 {0} / {1} 字"] = "{0} / {1} chars";
+        map["已输入 {0} / {1} 字（保存时将截断）"] = "{0} / {1} chars (truncated on save)";
         // Cost meters (Agent/PlayerFacingSession.cs).
         map["{0} · 缓存命中 {1}%"] = "{0} · cache hit {1}%";
 
@@ -87,10 +95,10 @@ internal static partial class Loc
             "Your teammate asked to focus fire enemy_index {0} together this turn. Prioritize dealing damage to that target to finish it quickly while staying safe.";
         map["聊天不会替你出牌，也不会恢复已暂停的队友。\n你的建议和快捷战术指令会作为队友下一次决策的参考。"] =
             "Chat will not play for you or resume a paused teammate.\nYour messages and quick tactical commands guide your teammate's next decision.";
-        map["我打 0 号（你打其他）"] = "I'll hit #0 (split fire)";
-        map["这回合我来打 0 号敌人，请优先处理其他目标，避免重复溢出。"] = "I am hitting enemy #0 this turn; please focus other targets to avoid overkill.";
-        map["一起集火 0 号"] = "Focus #0 together";
-        map["这回合优先集火 0 号敌人，尽量一起先秒掉它。"] = "Please focus fire enemy #0 this turn so we can take it down together.";
+        map["我打 {0} 号（你打其他）"] = "I'll hit #{0} (split fire)";
+        map["这回合我来打 {0} 号敌人，请优先处理其他目标，避免重复溢出。"] = "I am hitting enemy #{0} this turn; please focus other targets to avoid overkill.";
+        map["一起集火 {0} 号"] = "Focus #{0} together";
+        map["这回合优先集火 {0} 号敌人，尽量一起先秒掉它。"] = "Please focus fire enemy #{0} this turn so we can take it down together.";
         map["本回合优先防御"] = "Play defensive";
         map["这回合敌人伤害高，请优先叠格挡保血，必要时喝防御/回血药水。"] = "Incoming damage is heavy this turn; prioritize block and defensive/healing potions.";
         map["血量健康打精英"] = "Hunt elites";

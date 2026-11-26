@@ -131,7 +131,8 @@ internal sealed partial class AgentRuntime
             reportIntent: ReportIntent,
             onActChannelUnreliable: RecordActChannelUnreliable,
             runJournalDigest: stateJson => RunJournalDigestForState(stateJson),
-            reportContext: RecordContextRequest);
+            reportContext: RecordContextRequest,
+            reportSpectatorDwell: ReportSpectatorDwell);
     }
 
     public AgentSettings Settings
@@ -533,6 +534,7 @@ internal sealed partial class AgentRuntime
             }
         }
         CancelStrategyRefresh();
+        ClearIntent();
         var task = _playSession.RequestPause();
         FlushSessionIfDirty();
         SetStatus(task.IsCompleted ? Loc.T("已暂停自动游玩") : Loc.T("正在暂停，等待当前任务完成…"));

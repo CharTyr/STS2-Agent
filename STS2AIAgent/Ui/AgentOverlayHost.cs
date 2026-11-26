@@ -43,6 +43,7 @@ internal sealed partial class AgentOverlayHost
     private Label? _playUsage;
     private LineEdit? _maxTokensEdit;
     private LineEdit? _maxRequestsEdit;
+    private LineEdit? _maxOutputTokensEdit;
     private CheckBox? _proactiveChatToggle;
     private OptionButton? _proactiveToneCombo;
 
@@ -68,6 +69,7 @@ internal sealed partial class AgentOverlayHost
     private Button? _teamPause;
     private Button? _teamResume;
     private Button? _playToggle;
+    private Button? _interceptButton;
     private Button? _stepButton;
     private Button? _sendButton;
     private CheckBox? _mcpToggle;

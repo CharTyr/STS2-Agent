@@ -33,6 +33,7 @@ internal sealed partial class AgentLoop
     private readonly Action<string>? _acknowledgePlayInstruction;
     private readonly Action<string>? _onReasoningDelta;
     private readonly Action<LiveIntent>? _reportIntent;
+    private readonly Action<bool>? _reportSpectatorDwell;
     private readonly Func<string, string?>? _runJournalDigest;
     private readonly Action<ContextRequestStats>? _reportContext;
 
@@ -53,7 +54,8 @@ internal sealed partial class AgentLoop
         Action<LiveIntent>? reportIntent = null,
         Action<ResolvedModel, ActChannel>? onActChannelUnreliable = null,
         Func<string, string?>? runJournalDigest = null,
-        Action<ContextRequestStats>? reportContext = null)
+        Action<ContextRequestStats>? reportContext = null,
+        Action<bool>? reportSpectatorDwell = null)
     {
         _bridge = bridge;
         _factory = factory;
@@ -70,6 +72,7 @@ internal sealed partial class AgentLoop
         // callback rather than a field on the result because a partial is only meaningful in flight.
         _onReasoningDelta = onReasoningDelta;
         _reportIntent = reportIntent;
+        _reportSpectatorDwell = reportSpectatorDwell;
         _runJournalDigest = runJournalDigest;
         _reportContext = reportContext;
         _onActChannelUnreliable = onActChannelUnreliable;
@@ -875,15 +878,7 @@ internal sealed partial class AgentLoop
             var expectedPotionId = action == "use_potion" && optionIndex is >= 0
                 ? ReadPotionIdAtIndex(compactJson, optionIndex.Value)
                 : null;
-            if (currentSettings.SpectatorHighlightMs > 0
-                && string.Equals(currentSettings.HudMode, AgentSettings.HudFull, StringComparison.Ordinal)
-                && !InstanceRole.IsCompanion
-                && !string.Equals(mode, "chat", StringComparison.Ordinal)
-                && action is "play_card" or "use_potion")
-            {
-                var dwellMs = Math.Clamp(currentSettings.SpectatorHighlightMs, 0, AgentSettings.MaxSpectatorHighlightMs);
-                await Task.Delay(dwellMs, cancellationToken);
-            }
+            await WaitSpectatorDwellAsync(currentSettings, action, mode, cancellationToken);
             var result = await _bridge.ActAsync(
                 action,
                 cardIndex,

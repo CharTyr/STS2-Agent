@@ -463,7 +463,7 @@ but hasn't settled; the agent treats a run of these as a stall (`NoProgressPolic
 - `STS2AIAgent/Multiplayer/CompanionJevSnapshot.cs` — the companion's non-secret Jev readings shown on the host.
 - `STS2AIAgent/Multiplayer/CompanionPlayPolicy.cs` — the companion's immediate decisions (follow the host's map vote, confirm FTUE modals, or wait).
 - `STS2AIAgent/Multiplayer/CompanionActPolicy.cs` — which actions the companion may take by itself.
-- `STS2AIAgent/Multiplayer/TeamConversation.cs` / `STS2AIAgent/Multiplayer/TeamIntent.cs` / `STS2AIAgent/Multiplayer/TeamQuickCommands.cs` — host ↔ teammate chat, structured intent parsing, and one-click tactical command presets.
+- `STS2AIAgent/Multiplayer/TeamConversation.cs` / `STS2AIAgent/Multiplayer/TeamIntent.cs` / `STS2AIAgent/Multiplayer/TeamQuickCommands.cs` — host ↔ teammate chat, structured intent parsing, and one-click tactical command presets targeting the first standing hittable enemy.
 - `STS2AIAgent/Multiplayer/TeammateStatus.cs` — the teammate's live status shown on the host.
 - `STS2AIAgent/Multiplayer/CompanionHostWatch.cs` — the companion's host watchdog. The launcher passes `STS2_AGENT_HOST_PID`, and the companion (`AgentRuntime.WatchHostAsync`) quits once the host exits, crashes or is force-killed, so an invisible AI teammate never keeps playing and spending. The host also sends `CloseMainWindow` on a normal shutdown (`LocalDualInstanceLauncher.TryCloseCompanion`).
 
@@ -530,7 +530,7 @@ most nine follow-ups and stop before unknown draw/choice outcomes.
 - **Run:** `start-game-session.ps1`/`.sh` (pins `STS2_API_PORT`, fails if the old listener doesn't release the port, `--clientId` for an isolated profile), `start-mcp-stdio.*`, `start-mcp-network.*` / `serve-sts2-network-mcp.ps1` (all honor `STS2_API_BASE_URL`).
 - **Release:** `package-release.ps1` and `package-steam-workshop.ps1` run `test-release-compatibility.ps1` on the packaged DLL with two actual game versions before generating the ZIP or upload configuration. See also `check_release_package.py`, `check_release_metadata.py`, and static `preflight-release.ps1`.
 - **Gates:** `python scripts/check_verification_gates.py` (api-facts, doc marks, docs tracked, links, script encoding — `.ps1` with non-ASCII needs a UTF-8 BOM, ps1/sh syntax, architecture facts, api schema, lockfile).
-- **Live validation** (game running): `python scripts/run_sts2_validation.py <mod-load|state-summary|state-invariants|main-menu-active-run|…>` and `scripts/test-*.ps1|.sh`. These never count as offline evidence, and offline tests never count as live acceptance.
+- **Live validation** (game running): `python scripts/run_sts2_validation.py <mod-load|state-summary|state-invariants|main-menu-active-run|…>`, `scripts/test-*.ps1|.sh`, and `scripts/test-in-game-autoplay.ps1` / `scripts/in_game_autoplay_probe.py` (isolated windowed/headless built-in `AgentRuntime` + Overlay/HUD end-to-end probe with zero-cost Mock OpenAI SSE or opt-in `--live-base-url`). These never count as offline evidence, and offline tests never count as live acceptance.
 
 | Command | Covers |
 |---|---|
@@ -588,7 +588,7 @@ The turn first uses the cheap actionable probe, then a fresh compact frame. Sand
 - `STS2AIAgent/Config/ProviderCapability.cs` — fingerprint-scoped tool-argument verdicts (streamed `StreamToolArgs` from the probe or live; non-streamed `ToolArgs` learnt live only) and output-token field selection; cloned and invalidated with model verification.
 - `STS2AIAgent/Llm/ToolProbeArgs.cs` — pure completeness validation for the one additional streamed card-action probe.
 - `STS2AIAgent/Agent/LiveIntent.cs` — immutable fresh-frame action/card/target/reason snapshot and pure `HudModel` expiry/visibility rules.
-- `STS2AIAgent/Agent/AgentRuntime.Intent.cs` — current display intent, plan preview and actionable long-stage hints.
+- `STS2AIAgent/Agent/AgentRuntime.Intent.cs` — current display intent, spectator dwell intercept state (`InSpectatorDwell` / `InterceptAndPause`), plan preview and actionable long-stage hints.
 - `STS2AIAgent/Game/HudAnchors.cs` — game-thread card/creature anchors, using verified public nodes; missing nodes produce no decoration.
 - `STS2AIAgent/Ui/AgentHud.cs` — mouse-ignoring game-screen banner, card outline, target line and bounded reason.
 - `STS2AIAgent/Ui/AgentOverlayHost.Hud.cs` — HUD CanvasLayer 120 lifecycle; the main overlay remains at 128. Capture hides both plus the edge tab and restores their prior visibility.

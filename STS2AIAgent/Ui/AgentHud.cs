@@ -16,6 +16,7 @@ internal sealed partial class AgentHud : Control
     private Color _accent;
     private ulong _lastTick;
     private LiveIntent? _lastIntent;
+    private bool _lastInDwell;
 
     public AgentHud()
     {
@@ -39,8 +40,10 @@ internal sealed partial class AgentHud : Control
     {
         var tick = Time.GetTicksMsec();
         var intentChanged = !ReferenceEquals(_lastIntent, runtime.CurrentIntent);
-        if (tick - _lastTick < 100 && !intentChanged) return;
+        var dwellChanged = _lastInDwell != runtime.InSpectatorDwell;
+        if (tick - _lastTick < 100 && !intentChanged && !dwellChanged) return;
         _lastIntent = runtime.CurrentIntent;
+        _lastInDwell = runtime.InSpectatorDwell;
         _lastTick = tick;
         var settings = runtime.Settings;
         // A paused agent used to keep a "resumed with F7" banner on the screen; the player reads
@@ -57,9 +60,12 @@ internal sealed partial class AgentHud : Control
         {
             AgentSettings.TurboInstant => Loc.T("极速"), AgentSettings.TurboFast => Loc.T("快速"), _ => Loc.T("关闭")
         };
-        _banner.Text =
-            Loc.T("AI 正在游玩 · {0} · {1} 暂停 · {2} 打开面板", speed, settings.PauseHotkey, settings.Hotkey)
-                + "\n" + runtime.StatusWithElapsed;
+        var headerLine = runtime.InSpectatorDwell && runtime.CurrentIntent != null
+            ? (string.IsNullOrWhiteSpace(settings.PauseHotkey)
+                ? Loc.T("即将出牌 · 点面板「拦截并暂停」可接管 · {0} 打开面板", settings.Hotkey)
+                : Loc.T("即将出牌 · 按 {0} 拦截并接管 · {1} 打开面板", settings.PauseHotkey, settings.Hotkey))
+            : Loc.T("AI 正在游玩 · {0} · {1} 暂停 · {2} 打开面板", speed, settings.PauseHotkey, settings.Hotkey);
+        _banner.Text = headerLine + "\n" + runtime.StatusWithElapsed;
         _card = null;
         _target = null;
         _reason.Visible = false;

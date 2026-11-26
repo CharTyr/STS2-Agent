@@ -102,6 +102,9 @@ internal static class ScreenResolutionContractTests
         Assert.Contains("currentScreen is NPatchNotesScreen patchNotes", canClose, StringComparison.Ordinal);
         Assert.Contains("GodotObject.IsInstanceValid(patchNotes) && patchNotes.IsVisibleInTree()", canClose, StringComparison.Ordinal);
         Assert.Contains("currentScreen is not NSubmenu submenu || !submenu.IsVisibleInTree()", canClose, StringComparison.Ordinal);
+        Assert.Contains("GetRunLobbyScreen(currentScreen) != null", canClose, StringComparison.Ordinal);
+        Assert.Contains("RunManager.Instance.IsInProgress", canClose, StringComparison.Ordinal);
+        Assert.Contains("runLobby.LocalPlayer.isReady", canClose, StringComparison.Ordinal);
         Assert.Contains("submenuStack != null && submenuStack.SubmenusOpen", canClose, StringComparison.Ordinal);
 
         var rawAction = AgentSourceFixture.ReadActionService();

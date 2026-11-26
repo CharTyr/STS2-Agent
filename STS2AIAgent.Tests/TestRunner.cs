@@ -1172,5 +1172,7 @@ internal static class TestRunner
         yield return ("Phase4Ux.TeamQuickCommands", () => Task.Run(Phase4ExperienceUxTests.TeamQuickCommandsCarryStructuredIntents));
         yield return ("Phase4Ux.ActionableTroubleshooting", () => Task.Run(Phase4ExperienceUxTests.ModelProbeClassifiesActionableTroubleshootingCases));
         yield return ("Phase4Ux.StaticPrefixAndDwellLoop", Phase4ExperienceUxTests.PlayerPreferencesInjectIntoStaticPrefixAndSpectatorDwellIsBounded);
+        yield return ("Phase4Ux.SpectatorDwellIntercept", Phase4ExperienceUxTests.SpectatorDwellInterceptCancelsBeforeDispatch);
+        yield return ("Phase4Ux.TurnPlanTailAutoEndTurn", Phase4ExperienceUxTests.TurnPlanTailAutoEndsTurnOnlyWhenSafeAndNoMovesLeft);
     }
 }

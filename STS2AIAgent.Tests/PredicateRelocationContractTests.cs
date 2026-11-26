@@ -153,7 +153,8 @@ internal static class PredicateRelocationContractTests
         ["CanSaveAndQuit"] = "33d6fc8377d8b69a471a4cbb9f5997ff278d7ebb43b60d6a10313fca0dbae18c",
         ["CanOpenCharacterSelect"] = "92ffab8f2ffa78d5c19f87a0b33eef3c5f786bef42ebce3a37f2478241462485",
         ["CanOpenTimeline"] = "81883b112d5c97ec915bf4b1fca09a844e2288d32582d695e02cdf655b81c0c9",
-        ["CanCloseMainMenuSubmenu"] = "631ab45013f334501d2dae2963a9f2cffa8fb7fb17df9d70e8c6c0116c336d0f",
+        // Mid-embark guard: refuse close_main_menu_submenu on a run-lobby screen once embark/ready is in flight.
+        ["CanCloseMainMenuSubmenu"] = "0c286a097edc6960cb8518d12dd7f980385bf445a0487871c4674292325a85fb",
         // Re-invites/continues require the unobstructed root menu; active-session reconnect remains available.
         ["CanInviteAiTeammate"] = "e452424ffcabc516714c5f5709cd180cf12d1765077a30e3ef5cec87bd5ba619",
         ["CanContinueAiTeammate"] = "9c3dff575d7884ec7738369c065cfdcc08f42f713efdb8607d60d6ddccf5c86f",

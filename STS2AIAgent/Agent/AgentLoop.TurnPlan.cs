@@ -1,4 +1,5 @@
 using System.Text.Json;
+using STS2AIAgent.Config;
 
 namespace STS2AIAgent.Agent;
 
@@ -52,7 +53,7 @@ internal sealed partial class AgentLoop
             Acted = lastAction, ActResultJson = lastResult, StateFingerprint = lastFingerprint,
             ExecutedUnsettled = lastUnsettled, ToolRounds = first.ToolRounds, ReadToolRounds = first.ReadToolRounds,
             StreamDemoted = first.StreamDemoted, Usage = first.Usage, RequestsSpent = first.RequestsSpent,
-            PlanSteps = steps, PlanStopReason = stop, TurnId = turnId, PlanSize = plan.Then.Count + 1
+            PlanSteps = steps, PlanStopReason = stop, TurnId = turnId, PlanSize = Math.Max(plan.Then.Count + 1, steps.Count)
         };
 
         if (!_settings().TurnPlansEnabled)
@@ -155,6 +156,48 @@ internal sealed partial class AgentLoop
                     break;
                 }
             }
+
+            if (stop == TurnPlanStopReasons.Completed
+                && !lastUnsettled
+                && !string.Equals(lastAction, "end_turn", StringComparison.OrdinalIgnoreCase)
+                && _settings().AutopilotEnabled
+                && !_settings().NonCombatOnlyEnabled)
+            {
+                token.ThrowIfCancellationRequested();
+                var afterPlan = await _bridge.WaitUntilActionableWithStateAsync(PlanStepSettleBudget, token);
+                checkState?.Invoke(afterPlan.CompactJson);
+                if (afterPlan.Actionable && _peekPlayInstruction?.Invoke(afterPlan.CompactJson) == null)
+                {
+                    var autoEnd = AutopilotPolicy.Decide(afterPlan.CompactJson, nonCombatOnlyEnabled: false, playerInstructionQueued: false);
+                    if (autoEnd.ShouldAct && string.Equals(autoEnd.RuleId, "combat_no_moves", StringComparison.Ordinal))
+                    {
+                        var endReason = ReasonFor(autoEnd);
+                        var endArgs = JsonSerializer.Serialize(new { action = "end_turn", reason = endReason }, JsonOptions);
+                        reportPhase?.Invoke(PlayPhases.ExecutingAction);
+                        string? endAccepted = null;
+                        var endOutcome = await ExecuteActAsync(endArgs, token, checkState, (action, response) =>
+                        {
+                            endAccepted = action;
+                            lastAction = action;
+                            lastResult = response;
+                            lastUnsettled = true;
+                        }, stopPlanOnPending: true);
+                        if (endOutcome.Error == null)
+                        {
+                            lastAction = endOutcome.Action ?? endAccepted ?? lastAction;
+                            lastResult = endOutcome.ResultJson;
+                            lastFingerprint = endOutcome.Fingerprint;
+                            lastUnsettled = endOutcome.Unsettled;
+                            steps.Add(new PlanStepReceipt(lastAction!, endReason, endOutcome.Fingerprint));
+                        }
+                        else if (endAccepted != null)
+                        {
+                            steps.Add(new PlanStepReceipt(endAccepted, endReason, null));
+                            stop = TurnPlanStopReasons.OutcomeUnknown;
+                        }
+                    }
+                }
+            }
         }
         catch (NonCombatOnlyYieldException)
         {
@@ -171,5 +214,32 @@ internal sealed partial class AgentLoop
         }
 
         return Receipt(stop);
+    }
+
+    private async Task WaitSpectatorDwellAsync(
+        AgentSettings currentSettings,
+        string action,
+        string? mode,
+        CancellationToken cancellationToken)
+    {
+        if (currentSettings.SpectatorHighlightMs <= 0
+            || !string.Equals(currentSettings.HudMode, AgentSettings.HudFull, StringComparison.Ordinal)
+            || InstanceRole.IsCompanion
+            || string.Equals(mode, "chat", StringComparison.Ordinal)
+            || action is not ("play_card" or "use_potion"))
+        {
+            return;
+        }
+
+        var dwellMs = Math.Clamp(currentSettings.SpectatorHighlightMs, 0, AgentSettings.MaxSpectatorHighlightMs);
+        _reportSpectatorDwell?.Invoke(true);
+        try
+        {
+            await Task.Delay(dwellMs, cancellationToken);
+        }
+        finally
+        {
+            _reportSpectatorDwell?.Invoke(false);
+        }
     }
 }
