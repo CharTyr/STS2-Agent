@@ -84,6 +84,11 @@ namespace STS2AIAgent.Tests;
 /// deck, relics and potions. Each client simulates the whole run, so a partner's
 /// <c>Player.Deck</c> is as current as the local one, and an external agent planning for the party
 /// needs it.
+///
+/// <c>BuildStatePayload</c> was regenerated in Phase 3 patch-resilience work to route the 19
+/// nullable sub-section builders through <c>GuardStateSection</c> (<c>GameStateService.FaultIsolation.cs</c>),
+/// isolating any single broken screen reader from 500ing the whole <c>/state</c> response while
+/// surfacing faults in <c>GET /health.compatibility.state_builder_faults</c>.
 /// </remarks>
 internal static class GameStateServiceRelocationContractTests
 {
@@ -104,7 +109,7 @@ internal static class GameStateServiceRelocationContractTests
         ["_crystalSphereEntityLookupWarningLogged"] = ("STS2AIAgent/Game/GameStateService.cs", "8cfbf4ecee8d49d9b44920162e162489a0d3efd8e49f94016e9dd3e42a7354af"),
         ["_crystalSphereButtonLookupWarningLogged"] = ("STS2AIAgent/Game/GameStateService.cs", "c16d410de6049f3e70e37296414fe3bd8af1ec1751280ab8f8e96eb0c9f86c82"),
         ["StartRunLobbyMaxPlayersField"] = ("STS2AIAgent/Game/GameStateService.cs", "19edb0e3c9f24ab60b3a0446ceb73aac1f773e4b31d22142439eb6ca3dcf973a"),
-        ["BuildStatePayload"] = ("STS2AIAgent/Game/GameStateService.cs", "d325d70174b8eed652b0f049cd0470f0fc6df5813e33a5b66fb945fa13cf36a6"),
+        ["BuildStatePayload"] = ("STS2AIAgent/Game/GameStateService.cs", "ff9ff58440fe8ffc9ff1266f387c13056fea67b7bf04a9b1c0ee4d14bd8d2e5f"),
         // v0.113.0: the character_select session phase is read from GetRunLobby, covering all mode screens.
         ["BuildSessionPayload"] = ("STS2AIAgent/Game/GameStateService.Menus.cs", "17ec0b83ff3bf6c31fdc0755911ff491f97b3b063e79084b81e3af7b59cc007d"),
         ["BuildAvailableActionsPayload"] = ("STS2AIAgent/Game/GameStateService.cs", "f94bfce253aebe76836b96be74844eac681be85f9448f50c96a7617bcd7fb1ad"),

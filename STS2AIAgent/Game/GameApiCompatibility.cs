@@ -56,6 +56,8 @@ internal static class GameApiCompatibility
     private static readonly PropertyInfo? PlayingRotating = PublicProperty(typeof(ExtraPlayerFields), "IsPlayingRotatingCharacter");
     private static readonly Func<int, GameMode, LocString> AscensionTitle = BindAscensionText("GetTitle");
     private static readonly Func<int, GameMode, LocString> AscensionDescription = BindAscensionText("GetDescription");
+    private static readonly bool HasAscensionTitle = HasAscensionMethod("GetTitle");
+    private static readonly bool HasAscensionDescription = HasAscensionMethod("GetDescription");
 
     // The older game uses the native entry wrapper. The beta synchronizes purchases explicitly.
     private static readonly PropertyInfo? MerchantSynchronizer = PublicProperty(typeof(RunManager), "MerchantSynchronizer");
@@ -182,6 +184,62 @@ internal static class GameApiCompatibility
 
     public static bool RedirectsPreBlockDamage(ICombatState combat, Creature target, decimal amount, ValueProp props, Creature source) =>
         PreBlockTarget?.Invoke(combat, target, amount, props, source) != null;
+
+    internal sealed record CapabilityStatus(string capability, string status, string? binding, string? detail);
+
+    /// <summary>
+    /// Binding status for every cross-branch public API group, surfaced on <c>GET /health.compatibility</c>.
+    /// Branch-optional features report <c>not_in_branch</c> when their root type is absent (e.g. Fool/Blitz on
+    /// stable), and <c>missing</c> only when a required capability has no working path or a branch feature is
+    /// partially broken.
+    /// </summary>
+    internal static IReadOnlyList<CapabilityStatus> BuildHealthBindings()
+    {
+        var merchant = MerchantSynchronizer != null && SynchronizedPurchase != null
+            ? new CapabilityStatus("merchant_purchase", "available", "MerchantSynchronizer.PurchaseLocalEntry", null)
+            : MerchantSynchronizer == null && LegacyPurchase != null
+                ? new CapabilityStatus("merchant_purchase", "fallback", "MerchantEntry.OnTryPurchaseWrapper", null)
+                : new CapabilityStatus("merchant_purchase", "missing", null, "Neither MerchantSynchronizer.PurchaseLocalEntry nor LegacyPurchase resolved.");
+
+        var rewards = ProceedRewards != null
+            ? new CapabilityStatus("terminal_rewards_proceed", "available", "RunManager.ProceedFromTerminalRewardsScreen", null)
+            : new CapabilityStatus("terminal_rewards_proceed", "missing", null, "RunManager.ProceedFromTerminalRewardsScreen not found.");
+
+        var ascension = StandardAscension != null && HasAscensionTitle && HasAscensionDescription
+            ? new CapabilityStatus("ascension_metadata", "available", StandardAscension.Name, null)
+            : new CapabilityStatus("ascension_metadata", "missing", null, "StartRunLobbyPlayer ascension field or AscensionHelper text method missing.");
+
+        var arrows = ArrowType == null
+            ? new CapabilityStatus("fool_arrows", "not_in_branch", null, null)
+            : Arrows != null && ArrowStatus != null && ArrowAvailable != null && ReadArrowCount != null && ShootTag != null
+                ? new CapabilityStatus("fool_arrows", "available", "PlayerCombatState.Arrows", null)
+                : new CapabilityStatus("fool_arrows", "missing", "ArrowSlot", "Fool ArrowSlot type exists, but one or more arrow members failed to bind.");
+
+        var melody = MelodyCommands == null
+            ? new CapabilityStatus("fool_melody", "not_in_branch", null, null)
+            : PlayedWah != null && PlayedCho != null && PlayedKi != null && WahTag != null && ChoTag != null && KiTag != null
+                ? new CapabilityStatus("fool_melody", "available", "MelodyCmd", null)
+                : new CapabilityStatus("fool_melody", "missing", "MelodyCmd", "MelodyCmd type exists, but one or more melody flags or tags failed to bind.");
+
+        var blitzDread = BlitzScreen == null && DreadScreen == null
+            ? new CapabilityStatus("blitz_dread_modes", "not_in_branch", null, null)
+            : BlitzScreen != null && DreadScreen != null && BlitzLobby != null && DreadLobby != null
+                && BlitzShop != null && BlitzChoices != null && BlitzEntries != null
+                ? new CapabilityStatus("blitz_dread_modes", "available", "NBlitzScreen/NDreadScreen", null)
+                : new CapabilityStatus("blitz_dread_modes", "missing", "NBlitzScreen/NDreadScreen", "Blitz/Dread screens partially present, but lobby or Blitz shop properties failed to bind.");
+
+        var preBlock = PreBlockTarget != null
+            ? new CapabilityStatus("pre_block_damage_redirect", "available", "Hook.ModifyPreBlockDamageTarget", null)
+            : new CapabilityStatus("pre_block_damage_redirect", "not_in_branch", null, null);
+
+        return [merchant, rewards, ascension, arrows, melody, blitzDread, preBlock];
+    }
+
+    internal static bool HasMissingBindings => BuildHealthBindings().Any(item => item.status == "missing");
+
+    private static bool HasAscensionMethod(string name) =>
+        Method(typeof(AscensionHelper), name, true, [typeof(int), typeof(GameMode)]) != null
+        || Method(typeof(AscensionHelper), name, true, [typeof(int)]) != null;
 
     private static CardTag? FindTag(string name) => Enum.TryParse<CardTag>(name, out var tag) ? tag : null;
 

@@ -30,6 +30,7 @@ internal static class SourceCoverageTests
         "STS2AIAgent/Agent/AgentRuntime.Intent.cs",
         "STS2AIAgent/Agent/AgentRuntime.RunSummary.cs",
         "STS2AIAgent/Game/GameStateService.cs",
+        "STS2AIAgent/Game/GameStateService.FaultIsolation.cs",
         "STS2AIAgent/Game/GameStateService.Predicates.cs",
         // The raw /state builders, split by screen on 2026-09-20. They stay unlinked for the same
         // reason the base file does -- they read the game assemblies -- and the relocation contract

@@ -96,6 +96,11 @@ bash scripts/unpack-game-assemblies.sh /tmp/sts2-assemblies-v0.111.1-stable-*.zi
 
 # 验证编译（若配置了 STS2_MIN_DATA_DIR，会自动对两个版本各编译一次）
 bash scripts/check-cloud-dev.sh --run build
+
+# 离线检查编译后的 STS2AIAgent.dll ABI、ReflectedGameMembers 私有成员与跨分支能力绑定
+bash scripts/check-game-abi.sh --data-dir "$STS2_DATA_DIR"
+# Windows 本机对应命令：
+# pwsh -File scripts/check-game-abi.ps1
 ```
 
 `unpack-game-assemblies.sh` 会先核对每个文件相对 `manifest.json` 的 SHA-256 再解压，避免下载截断后变成莫名其妙的编译报错。参数说明：
