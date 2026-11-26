@@ -552,7 +552,7 @@ most nine follow-ups and stop before unknown draw/choice outcomes.
 | Overlay control/page | `Ui/AgentOverlayHost.Pages.cs` / `.Settings.cs` | `Loc.Strings.Ui.cs`, layout contract tests |
 | Co-op | `Multiplayer/DualInstanceCoordinator.cs`, `LocalDualInstanceLauncher.cs`, `CoopLaunchPolicy.cs` | `GameActionService.Coop.cs`, `AgentRuntime.cs` dual-launch core |
 | HTTP route | `Server/Router.cs` | `docs/api.md`, `docs/openapi.json`, `mcp_server/src/sts2_mcp/client.py` |
-| Version bump | the five files in AGENTS.md | `CHANGELOG.md` (`## Unreleased` → version) |
+| Version bump | the five files in AGENTS.md | `CHANGELOG.md`, `docs/api.md` version example, and `python scripts/api_schema.py` |
 
 ## 11. Known open items (not bugs to rediscover)
 
