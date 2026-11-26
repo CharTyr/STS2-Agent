@@ -79,6 +79,23 @@ internal sealed partial class AgentSettings
 
     public const double MaxDecisionIntervalSeconds = 300.0;
 
+    /// <summary>
+    /// Optional spectator dwell (ms) after drawing the HUD card highlight / targeting line and before
+    /// executing <c>play_card</c> or <c>use_potion</c>, so players watching Instant speed can see what
+    /// the AI is about to play. 0 disables dwell (default). Instance-local: never sent to a companion.
+    /// </summary>
+    public int SpectatorHighlightMs { get; set; }
+
+    public const int MaxSpectatorHighlightMs = 2000;
+
+    /// <summary>
+    /// Opt-in persistent playstyle preferences (e.g. favored archetypes, route risk appetite) injected
+    /// into the static run prefix so prompt caching stays warm across turns. Empty by default.
+    /// </summary>
+    public string PlayerPreferences { get; set; } = string.Empty;
+
+    public const int MaxPlayerPreferencesLength = 400;
+
     private void NormalizeExperienceSettings()
     {
         TurboMode = NormalizeChoice(TurboMode, TurboInstant, TurboOff, TurboFast, TurboInstant);
@@ -100,6 +117,21 @@ internal sealed partial class AgentSettings
                 ? Math.Round(Math.Min(interval, MaxDecisionIntervalSeconds), 2, MidpointRounding.AwayFromZero)
                 : 0;
         MinDecisionIntervalSeconds = roundedInterval > 0 ? roundedInterval : null;
+        SpectatorHighlightMs = Math.Clamp(SpectatorHighlightMs, 0, MaxSpectatorHighlightMs);
+        PlayerPreferences = NormalizePreferences(PlayerPreferences);
+    }
+
+    private static string NormalizePreferences(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return string.Empty;
+        }
+
+        var normalized = value.Replace("\r\n", "\n").Replace('\r', '\n').Trim();
+        return normalized.Length <= MaxPlayerPreferencesLength
+            ? normalized
+            : normalized[..MaxPlayerPreferencesLength].TrimEnd();
     }
 
     private static string NormalizeChoice(string? value, string fallback, params string[] allowed)

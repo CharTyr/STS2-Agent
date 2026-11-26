@@ -136,7 +136,8 @@ one action runs at a time.
 - `STS2AIAgent/Config/AgentSettings.cs` — the settings model: endpoints, models, bindings, Jev, budgets, co-op, `ModelTests`, `RoleTests`. `EnsureValidShape` repairs without replacing. `TryResolvePlayModel` (play = conversation model), `TryResolveRoleModel`, `HasJevConfigured`.
 - `STS2AIAgent/Config/SettingsStore.cs` — the only persistence path: atomic temp file + `File.Replace` with a `.bak`, corrupt-file recovery, `LastNotice`. `STS2_AGENT_SETTINGS_PATH` overrides the location.
 - `STS2AIAgent/Config/SettingsClone.cs` — deep copy of **every** persisted field. A new setting must be added here too.
-- `STS2AIAgent/Config/AgentSettings.Experience.cs` — the 2026-10-28 overhaul switches, all on by default: `TurboMode` (off/fast/instant), `TurboRestoreFastMode` (the player's game speed while ours is applied; instance-local), `AutopilotEnabled`, `TurnPlansEnabled`, `CombatMathEnabled`, `VisionMode` (off/on_demand/every_step), `HudMode` (off/minimal/full), `PauseHotkey`, `RunJournalEnabled`, and their normalisation. The play switches also travel to the teammate through `CompanionPlaySettings`.
+- `STS2AIAgent/Config/AgentSettings.Experience.cs` — the 2026-10-28 overhaul switches, all on by default: `TurboMode` (off/fast/instant), `TurboRestoreFastMode` (the player's game speed while ours is applied; instance-local), `AutopilotEnabled`, `TurnPlansEnabled`, `CombatMathEnabled`, `VisionMode` (off/on_demand/every_step), `HudMode` (off/minimal/full), `SpectatorHighlightMs` (optional bounded pre-play HUD dwell, instance-local), `PauseHotkey`, `RunJournalEnabled`, `PlayerPreferences` (opt-in static-prefix playstyle notes), and their normalisation. The play switches and preferences also travel to the teammate through `CompanionPlaySettings`.
+- `STS2AIAgent/Config/PlayStylePresetPolicy.cs` — pure 3-tier one-click play style presets (`economy` / `balanced` / `push`), applied without touching endpoints, models or keys.
 - `STS2AIAgent/Config/SettingsBinding.cs` — blocks deleting an endpoint or model that a role still uses.
 - `STS2AIAgent/Config/FirstRunSetup.cs` — first-run and invite gate verdict from the play **role** record (`missing`/`failed`/`filled_unverified`/`verified`).
 - `STS2AIAgent/Config/ModelRoleProbe.cs` — role records (conversation/play/vision), `Fingerprint` (url+model+key SHA-256), `Current`, `Upsert`, `InvalidateMismatched`, error `Classify`.
@@ -462,7 +463,7 @@ but hasn't settled; the agent treats a run of these as a stall (`NoProgressPolic
 - `STS2AIAgent/Multiplayer/CompanionJevSnapshot.cs` — the companion's non-secret Jev readings shown on the host.
 - `STS2AIAgent/Multiplayer/CompanionPlayPolicy.cs` — the companion's immediate decisions (follow the host's map vote, confirm FTUE modals, or wait).
 - `STS2AIAgent/Multiplayer/CompanionActPolicy.cs` — which actions the companion may take by itself.
-- `STS2AIAgent/Multiplayer/TeamConversation.cs` / `STS2AIAgent/Multiplayer/TeamIntent.cs` — host ↔ teammate chat and intent parsing.
+- `STS2AIAgent/Multiplayer/TeamConversation.cs` / `STS2AIAgent/Multiplayer/TeamIntent.cs` / `STS2AIAgent/Multiplayer/TeamQuickCommands.cs` — host ↔ teammate chat, structured intent parsing, and one-click tactical command presets.
 - `STS2AIAgent/Multiplayer/TeammateStatus.cs` — the teammate's live status shown on the host.
 - `STS2AIAgent/Multiplayer/CompanionHostWatch.cs` — the companion's host watchdog. The launcher passes `STS2_AGENT_HOST_PID`, and the companion (`AgentRuntime.WatchHostAsync`) quits once the host exits, crashes or is force-killed, so an invisible AI teammate never keeps playing and spending. The host also sends `CloseMainWindow` on a normal shutdown (`LocalDualInstanceLauncher.TryCloseCompanion`).
 

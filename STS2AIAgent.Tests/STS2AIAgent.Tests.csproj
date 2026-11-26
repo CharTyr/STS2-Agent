@@ -57,6 +57,7 @@
     <Compile Include="..\STS2AIAgent\Multiplayer\CoopSavePrecheckPolicy.cs" Link="Multiplayer\CoopSavePrecheckPolicy.cs" />
     <Compile Include="..\STS2AIAgent\Multiplayer\TeamConversation.cs" Link="Multiplayer\TeamConversation.cs" />
     <Compile Include="..\STS2AIAgent\Multiplayer\TeamIntent.cs" Link="Multiplayer\TeamIntent.cs" />
+    <Compile Include="..\STS2AIAgent\Multiplayer\TeamQuickCommands.cs" Link="Multiplayer\TeamQuickCommands.cs" />
     <Compile Include="..\STS2AIAgent\Multiplayer\TeammateStatus.cs" Link="Multiplayer\TeammateStatus.cs" />
     <Compile Include="..\STS2AIAgent\Multiplayer\CompanionConnection.cs" Link="Multiplayer\CompanionConnection.cs" />
     <Compile Include="..\STS2AIAgent\Multiplayer\CompanionSettingsPatch.cs" Link="Multiplayer\CompanionSettingsPatch.cs" />

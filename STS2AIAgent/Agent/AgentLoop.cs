@@ -866,6 +866,14 @@ internal sealed partial class AgentLoop
             // Display failure must never prevent a validated game action.
             try { _reportIntent?.Invoke(LiveIntent.Create(argumentsJson, compactJson, DateTimeOffset.UtcNow)); }
             catch (Exception) { }
+            var currentSettings = _settings();
+            if (currentSettings.SpectatorHighlightMs > 0
+                && !string.Equals(currentSettings.HudMode, AgentSettings.HudOff, StringComparison.Ordinal)
+                && action is "play_card" or "use_potion")
+            {
+                var dwellMs = Math.Clamp(currentSettings.SpectatorHighlightMs, 0, AgentSettings.MaxSpectatorHighlightMs);
+                await Task.Delay(dwellMs, cancellationToken);
+            }
             var result = await _bridge.ActAsync(
                 action,
                 cardIndex,

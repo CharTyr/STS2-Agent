@@ -1166,5 +1166,10 @@ internal static class TestRunner
         yield return ("Compatibility.StateFaultTrackerDeduplicationAndRecovery", () => Task.Run(GameAbiAndFaultTests.FaultTrackerDeduplicatesLogsAndRecoversCleanly));
         yield return ("Compatibility.StateFaultTrackerBounded", () => Task.Run(GameAbiAndFaultTests.FaultTrackerBoundsTrackedSections));
         yield return ("Compatibility.OfflineAbiAuditorDetectsDrift", () => Task.Run(GameAbiAndFaultTests.AbiAuditorDetectsValidAndMissingReflectedEntriesOffline));
+        yield return ("Phase4Ux.PlayStylePresets", () => Task.Run(Phase4ExperienceUxTests.PlayStylePresetsApplyDetectAndPreserveSecrets));
+        yield return ("Phase4Ux.SpectatorDwellAndPreferences", () => Task.Run(Phase4ExperienceUxTests.SpectatorDwellAndPreferencesNormalizeCloneAndSyncCorrectly));
+        yield return ("Phase4Ux.TeamQuickCommands", () => Task.Run(Phase4ExperienceUxTests.TeamQuickCommandsCarryStructuredIntents));
+        yield return ("Phase4Ux.ActionableTroubleshooting", () => Task.Run(Phase4ExperienceUxTests.ModelProbeClassifiesActionableTroubleshootingCases));
+        yield return ("Phase4Ux.StaticPrefixAndDwellLoop", Phase4ExperienceUxTests.PlayerPreferencesInjectIntoStaticPrefixAndSpectatorDwellIsBounded);
     }
 }

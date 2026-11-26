@@ -41,6 +41,7 @@ internal sealed partial class AgentOverlayHost
 
     /// <summary>The team chat's redraw-only-on-change wrapper. See <see cref="RichLog"/>.</summary>
     private RichLog? _teamChatView;
+    private readonly List<Button> _teamQuickButtons = new();
     private UiFactory.ButtonKind? _teammateLiveTone;
 
     /// <summary>The play page's solo/multiplayer sections and the switch that swaps between them.</summary>
@@ -400,11 +401,32 @@ internal sealed partial class AgentOverlayHost
         _teamInput.CustomMinimumSize = new Vector2(UiFactory.MinReflowWidth, 56);
         _teamSend = UiFactory.Button(Loc.T("发送"), () => _ = SendTeamMessageAsync(), UiFactory.ButtonKind.Primary);
         _teamStatus = UiFactory.Wrapped(AgentRuntime.Instance.TeamStatus, UiFactory.FontCaption);
+        _teamQuickButtons.Clear();
+        var quickCommands = TeamQuickCommands.BuildAll();
+        var quickBox = UiFactory.Column();
+        for (var i = 0; i < quickCommands.Count; i += 2)
+        {
+            var left = quickCommands[i];
+            var leftButton = UiFactory.Button(left.Label, () => _ = SendQuickTeamCommandAsync(left), UiFactory.ButtonKind.Ghost);
+            _teamQuickButtons.Add(leftButton);
+            if (i + 1 < quickCommands.Count)
+            {
+                var right = quickCommands[i + 1];
+                var rightButton = UiFactory.Button(right.Label, () => _ = SendQuickTeamCommandAsync(right), UiFactory.ButtonKind.Ghost);
+                _teamQuickButtons.Add(rightButton);
+                quickBox.AddChild(UiFactory.Row(leftButton, rightButton));
+            }
+            else
+            {
+                quickBox.AddChild(leftButton);
+            }
+        }
         page.AddChild(HelpCard.Build(
             "coop.chat",
             Loc.T("队伍交流"),
-            Loc.T("聊天不会替你出牌，也不会恢复已暂停的队友。\n你的建议会作为队友下一次决策的参考。"),
+            Loc.T("聊天不会替你出牌，也不会恢复已暂停的队友。\n你的建议和快捷战术指令会作为队友下一次决策的参考。"),
             _teamChat,
+            quickBox,
             _teamInput,
             UiFactory.TightRow(_teamSend),
             _teamStatus));
@@ -461,6 +483,13 @@ internal sealed partial class AgentOverlayHost
         if (text.Length == 0 || AgentRuntime.Instance.TeamMessagePending) return;
         if (_teamInput != null) _teamInput.Text = "";
         await AgentRuntime.Instance.SendTeamMessageAsync(text, CancellationToken.None);
+        await GameThread.InvokeAsync(RefreshDynamic);
+    }
+
+    private async Task SendQuickTeamCommandAsync(TeamQuickCommand command)
+    {
+        if (AgentRuntime.Instance.TeamMessagePending) return;
+        await AgentRuntime.Instance.SendTeamMessageAsync(command.Message, command.Intent, CancellationToken.None);
         await GameThread.InvokeAsync(RefreshDynamic);
     }
 
@@ -726,8 +755,13 @@ internal sealed partial class AgentOverlayHost
 
         if (_teamSend != null)
         {
-            _teamSend.Disabled = AgentRuntime.Instance.TeamMessagePending || AgentRuntime.Instance.DualLaunching || InstanceRole.IsCompanion;
+            var teamBusy = AgentRuntime.Instance.TeamMessagePending || AgentRuntime.Instance.DualLaunching || InstanceRole.IsCompanion;
+            _teamSend.Disabled = teamBusy;
             _teamSend.Text = AgentRuntime.Instance.TeamMessagePending ? Loc.T("等待回复…") : Loc.T("发送");
+            foreach (var button in _teamQuickButtons)
+            {
+                button.Disabled = teamBusy;
+            }
         }
 
         if (_teamStatus != null) _teamStatus.Text = AgentRuntime.Instance.TeamStatus;

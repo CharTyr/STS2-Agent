@@ -42,6 +42,10 @@ internal sealed record TeamIntent
 
     public string? potion_id { get; init; }
 
+    public static TeamIntent ForFocusFire(int enemyIndex) => new(FocusFire) { enemy_index = enemyIndex };
+
+    public static TeamIntent ForTargetAnnounce(int enemyIndex) => new(TargetAnnounce) { enemy_index = enemyIndex };
+
     /// <summary>
     /// Reads a signal out of a request body, or returns null when none was sent.
     /// </summary>

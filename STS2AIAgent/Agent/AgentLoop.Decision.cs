@@ -188,6 +188,13 @@ internal sealed partial class AgentLoop
                 messages.Add(LlmMessage.System(playLanguage, ContextPart.Static));
             }
 
+            if (!string.IsNullOrWhiteSpace(settings.PlayerPreferences))
+            {
+                messages.Add(LlmMessage.System(
+                    "Standing player playstyle preferences (user-configured taste; obey live state and legal available_actions first):\n"
+                    + settings.PlayerPreferences.Trim(), ContextPart.Static));
+            }
+
             var screenGuidance = PlayPrompt.ScreenGuidance(screen);
             if (!string.IsNullOrEmpty(screenGuidance))
             {

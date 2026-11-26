@@ -30,6 +30,7 @@ internal sealed class CompanionPlaySettings
     public bool RunJournalEnabled { get; init; } = true;
     public int? MaxOutputTokens { get; init; } = AgentSettings.DefaultMaxOutputTokens;
     public double? MinDecisionIntervalSeconds { get; init; }
+    public string PlayerPreferences { get; init; } = string.Empty;
 
     public bool IsValid => Endpoints is { Count: <= 16 } && Models is { Count: <= 32 }
         && RoleTests is { Count: <= 3 } && ModelTests is { Count: <= 32 }
@@ -47,6 +48,7 @@ internal sealed class CompanionPlaySettings
             || (double.IsFinite(MinDecisionIntervalSeconds.Value)
                 && MinDecisionIntervalSeconds.Value > 0
                 && MinDecisionIntervalSeconds.Value <= AgentSettings.MaxDecisionIntervalSeconds))
+        && (PlayerPreferences == null || PlayerPreferences.Length <= AgentSettings.MaxPlayerPreferencesLength)
         && TurboMode is AgentSettings.TurboOff or AgentSettings.TurboFast or AgentSettings.TurboInstant
         && VisionMode is AgentSettings.VisionOff or AgentSettings.VisionOnDemand or AgentSettings.VisionEveryStep;
 
@@ -65,7 +67,8 @@ internal sealed class CompanionPlaySettings
             TurnPlansEnabled = copy.TurnPlansEnabled, CombatMathEnabled = copy.CombatMathEnabled,
             VisionMode = copy.VisionMode, RunJournalEnabled = copy.RunJournalEnabled,
             MaxOutputTokens = copy.MaxOutputTokens,
-            MinDecisionIntervalSeconds = copy.MinDecisionIntervalSeconds
+            MinDecisionIntervalSeconds = copy.MinDecisionIntervalSeconds,
+            PlayerPreferences = copy.PlayerPreferences
         };
     }
 
@@ -100,5 +103,7 @@ internal sealed class CompanionPlaySettings
         settings.RunJournalEnabled = RunJournalEnabled;
         settings.MaxOutputTokens = MaxOutputTokens;
         settings.MinDecisionIntervalSeconds = MinDecisionIntervalSeconds;
+        settings.PlayerPreferences = PlayerPreferences ?? string.Empty;
+        settings.EnsureValidShape();
     }
 }

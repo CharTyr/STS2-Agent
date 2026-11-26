@@ -308,11 +308,41 @@ internal static class ModelRoleProbe
     {
         var endpoint = string.IsNullOrWhiteSpace(model.Endpoint.Name) ? model.Endpoint.BaseUrl : model.Endpoint.Name;
         var modelName = model.Model.Model;
+        var lower = message ?? string.Empty;
+
+        if (statusCode == 402 || ContainsAny(lower, "insufficient_quota", "insufficient balance", "余额不足", "arrearage", "exceeded your current quota", "billing hard limit"))
+        {
+            return (
+                Loc.T("{0} 账户余额或额度不足。", endpoint),
+                Loc.T("请前往服务商后台充值、检查配额，或切换其他可用端点。"));
+        }
+
+        if (statusCode == 403 && ContainsAny(lower, "unsupported_country", "region", "territory", "not available in your"))
+        {
+            return (
+                Loc.T("{0} 拒绝了当前地区或代理出口（403）。", endpoint),
+                Loc.T("请切换支持的代理地区，或改用支持直连的服务商端点。"));
+        }
+
+        if (statusCode == 400 && ContainsAny(lower, "tool", "function_call", "function call"))
+        {
+            return (
+                Loc.T("{0} / {1} 不支持当前工具调用格式（400）。", endpoint, modelName),
+                Loc.T("建议更换支持 OpenAI Tool Calling 的模型（如 gpt-4o / deepseek-chat / claude / gemini）。"));
+        }
+
+        if (statusCode == 400 && ContainsAny(lower, "max_tokens", "max_completion_tokens", "context_length", "maximum context"))
+        {
+            return (
+                Loc.T("{0} / {1} 拒绝了长度参数（400）。", endpoint, modelName),
+                Loc.T("请调低「单次输出上限」，或检查该服务商是否兼容标准 OpenAI 接口。"));
+        }
+
         if (statusCode is 401 or 403)
         {
             return (
                 Loc.T("{0} 返回 {1}，认证失败。", endpoint, statusCode),
-                Loc.T("请检查该端点的 API Key。"));
+                Loc.T("请检查该端点的 API Key 是否填写正确且未过期。"));
         }
 
         if (statusCode == 404)
@@ -336,18 +366,25 @@ internal static class ModelRoleProbe
                 Loc.T("请确认服务已启动，稍后重试。"));
         }
 
-        if (message.Contains("timed out", StringComparison.OrdinalIgnoreCase) ||
-            message.Contains("Timeout", StringComparison.OrdinalIgnoreCase) ||
-            message.Contains("TaskCanceled", StringComparison.OrdinalIgnoreCase))
+        if (ContainsAny(lower, "ssl", "tls", "certificate", "handshake", "proxy"))
+        {
+            return (
+                Loc.T("连接 {0} 时发生 TLS/代理握手错误。", endpoint),
+                Loc.T("请检查系统代理、VPN 节点与 HTTPS 证书设置。"));
+        }
+
+        if (lower.Contains("timed out", StringComparison.OrdinalIgnoreCase) ||
+            lower.Contains("Timeout", StringComparison.OrdinalIgnoreCase) ||
+            lower.Contains("TaskCanceled", StringComparison.OrdinalIgnoreCase))
         {
             return (
                 Loc.T("连接 {0} 超时。", endpoint),
                 Loc.T("请检查网络、防火墙和 Base URL。"));
         }
 
-        if (message.Contains("failed", StringComparison.OrdinalIgnoreCase) ||
-            message.Contains("refused", StringComparison.OrdinalIgnoreCase) ||
-            message.Contains("Name or service", StringComparison.OrdinalIgnoreCase))
+        if (lower.Contains("failed", StringComparison.OrdinalIgnoreCase) ||
+            lower.Contains("refused", StringComparison.OrdinalIgnoreCase) ||
+            lower.Contains("Name or service", StringComparison.OrdinalIgnoreCase))
         {
             return (
                 Loc.T("无法连接 {0}。", endpoint),
@@ -355,7 +392,7 @@ internal static class ModelRoleProbe
         }
 
         return (
-            Loc.T("{0}请求 {1} / {2} 失败：{3}", RoleLabel(role), endpoint, modelName, Trim(message, 180)),
+            Loc.T("{0}请求 {1} / {2} 失败：{3}", RoleLabel(role), endpoint, modelName, Trim(lower, 180)),
             Loc.T("请按错误信息核对后重测。"));
     }
 
