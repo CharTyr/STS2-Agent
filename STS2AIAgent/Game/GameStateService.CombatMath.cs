@@ -1,10 +1,13 @@
 using MegaCrit.Sts2.Core.Combat;
 using MegaCrit.Sts2.Core.Entities.Cards;
 using MegaCrit.Sts2.Core.Entities.Creatures;
+using MegaCrit.Sts2.Core.Entities.Players;
 using MegaCrit.Sts2.Core.GameActions.Multiplayer;
+using MegaCrit.Sts2.Core.Hooks;
 using MegaCrit.Sts2.Core.Localization.DynamicVars;
 using MegaCrit.Sts2.Core.Logging;
 using MegaCrit.Sts2.Core.Models;
+using MegaCrit.Sts2.Core.Models.Orbs;
 using MegaCrit.Sts2.Core.Models.Powers;
 using MegaCrit.Sts2.Core.Commands;
 using MegaCrit.Sts2.Core.ValueProps;
@@ -122,7 +125,7 @@ internal static partial class GameStateService
                 return _combatMathFrame;
             }
 
-            var frame = ComputeCombatMath(combat, liveHand, enemies, me?.Creature);
+            var frame = ComputeCombatMath(combatState, combat, liveHand, enemies, me);
             _combatMathKey = key;
             _combatMathFrame = frame;
             return frame;
@@ -140,11 +143,13 @@ internal static partial class GameStateService
     }
 
     private static CombatMathFrame ComputeCombatMath(
+        CombatState combatState,
         CombatPayload combat,
         IReadOnlyList<CardModel> liveHand,
         IReadOnlyList<Creature> enemies,
-        Creature? playerCreature)
+        Player? localPlayer)
     {
+        var playerCreature = localPlayer?.Creature;
         var enemyMath = combat.enemies.Select(enemy => new EnemyMath(
             enemy.index,
             enemy.current_hp,
@@ -189,6 +194,7 @@ internal static partial class GameStateService
                 vsByHand[card.index] = rendered.ToArray();
             }
 
+            var arrowCost = live != null && GameApiCompatibility.ShootsArrow(live) ? 1 : 0;
             cards.Add(new CardMath(
                 card.index,
                 card.combat_card_id,
@@ -196,16 +202,27 @@ internal static partial class GameStateService
                 card.costs_x,
                 card.playable,
                 ReadPreviewBlock(card) * (1 + Math.Max(0, live?.GetEnchantedReplayCount() ?? 0)),
-                known));
+                known,
+                card.star_costs_x ? 0 : Math.Max(0, card.star_cost),
+                card.star_costs_x,
+                arrowCost));
         }
 
+        var (orbBlock, orbDamage) = ReadEndOfTurnOrbEffects(localPlayer?.PlayerCombatState);
+        var availableArrows = combat.player.arrows.Count(arrow => arrow.available);
+        var canPayExcessEnergyWithStars = localPlayer != null && SafeReadExcessEnergyWithStars(combatState, localPlayer);
         var input = new CombatMathInput(
             combat.player.current_hp,
             combat.player.block,
             combat.player.energy,
             playerCreature == null ? 0 : ReadEndOfTurnSelfDamage(playerCreature),
             enemyMath,
-            cards);
+            cards,
+            combat.player.stars,
+            availableArrows,
+            orbBlock,
+            orbDamage,
+            canPayExcessEnergyWithStars);
         var threat = CombatMathPolicy.Threat(input);
         var kills = CombatMathPolicy.KillOptions(input);
         var block = CombatMathPolicy.MaxBlock(input);
@@ -221,6 +238,8 @@ internal static partial class GameStateService
             // Never weaker than the flag the strategy text tells the model to trust.
             lethal = threat.Lethal || combat.end_turn_will_kill_player,
             end_of_turn_self_damage = threat.EndOfTurnSelfDamage,
+            end_of_turn_orb_block = threat.EndOfTurnOrbBlock,
+            end_of_turn_orb_damage = threat.EndOfTurnOrbDamage,
             per_enemy = threat.PerEnemy.Select(enemy => new { i = enemy.Index, incoming = enemy.Incoming, hits = enemy.Hits }).ToArray(),
             max_block = new { block = block.Block, energy = block.Energy, cids = block.CardCids, cards = block.CardIndices },
             kill_options = kills.Select(option => new
@@ -326,6 +345,15 @@ internal static partial class GameStateService
             return Math.Max(0, (int)calculatedHits.PreviewValue);
         }
 
+        // Conditional/computed multi-hit cards (e.g. Dismantle, Spite) may declare a HitCountVar
+        // that only applies when their condition holds; fail closed before reading HitCount/Repeat.
+        if (card.EnergyCost.CostsX || card.HasStarCostX || ComputedHitCards.Contains(card.GetType().Name)) return null;
+
+        if (card.Type == CardType.Attack && preview.TryGetValue("HitCount", out var hitCount))
+        {
+            return Math.Max(0, (int)hitCount.PreviewValue);
+        }
+
         if (card.Type == CardType.Attack && preview.TryGetValue("Repeat", out var repeat))
         {
             return Math.Max(0, (int)repeat.PreviewValue);
@@ -338,16 +366,56 @@ internal static partial class GameStateService
 
         // No generic one-hit assumption: card play code may compute repetitions without exposing
         // a variable. Only the inspected basic Strike implementations and Bash are known single hits.
-        if (card.EnergyCost.CostsX || ComputedHitCards.Contains(card.GetType().Name)) return null;
         return card.GetType().Name is "StrikeIronclad" or "StrikeSilent" or "StrikeDefect"
-            or "StrikeRegent" or "StrikeNecrobinder" or "Bash" ? 1 : null;
+            or "StrikeRegent" or "StrikeNecrobinder" or "StrikeFool" or "Bash" ? 1 : null;
     }
 
-    /// <summary>Cards whose hit count is computed in their play code from live counters.</summary>
+    /// <summary>Cards whose hit count is computed or gated in their play code from live conditions.</summary>
     private static readonly HashSet<string> ComputedHitCards = new(StringComparer.Ordinal)
     {
-        "Dismantle", "HeavenlyDrill", "MadScience", "Spite", "Whirlwind"
+        "Dismantle", "FiendFire", "FlakCannon", "HeavenlyDrill", "MadScience",
+        "RepeatShot", "Spite", "WahBlast", "Whirlwind"
     };
+
+    private static (int OrbBlock, int OrbDamage) ReadEndOfTurnOrbEffects(PlayerCombatState? playerCombatState)
+    {
+        if (playerCombatState == null)
+        {
+            return (0, 0);
+        }
+
+        var block = 0;
+        var damage = 0;
+        foreach (var orb in playerCombatState.OrbQueue.Orbs)
+        {
+            switch (orb)
+            {
+                case FrostOrb frost:
+                    block += Math.Max(0, (int)frost.PassiveVal);
+                    break;
+                case LightningOrb lightning:
+                    damage += Math.Max(0, (int)lightning.PassiveVal);
+                    break;
+                case GlassOrb glass:
+                    damage += Math.Max(0, (int)glass.PassiveVal);
+                    break;
+            }
+        }
+
+        return (block, damage);
+    }
+
+    private static bool SafeReadExcessEnergyWithStars(CombatState combatState, Player player)
+    {
+        try
+        {
+            return Hook.ShouldPayExcessEnergyCostWithStars(combatState, player);
+        }
+        catch (Exception)
+        {
+            return false;
+        }
+    }
 
     private static int ReadPreviewBlock(CombatHandCardPayload card)
     {

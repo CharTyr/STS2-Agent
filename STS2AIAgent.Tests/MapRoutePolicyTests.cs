@@ -12,7 +12,8 @@ internal static class MapRoutePolicyTests
     public static void RunAll()
     {
         CountsEveryRoomTypeOnEveryPath();
-        HealthyRunPrefersTheDoorWithoutAnElite();
+        HealthyActOneRunPrefersTheEliteDoor();
+        MidHealthRunAvoidsTheEliteDoor();
         LaterActsPunishElitesHarder();
         TiesRecommendNothing();
         NeedsAChoiceToAdvise();
@@ -66,27 +67,42 @@ internal static class MapRoutePolicyTests
     }
 
     /// <summary>
-    /// At healthy HP with gold, the elite door's single elite costs more than the extra rest/shop
-    /// variety is worth; the plain door is recommended.
+    /// At healthy HP in Act 1, the elite door's relic and gold reward outweighs Act 1 elite risk,
+    /// matching the strategy rule that healthy runs pursue elites.
     /// </summary>
-    public static void HealthyRunPrefersTheDoorWithoutAnElite()
+    public static void HealthyActOneRunPrefersTheEliteDoor()
     {
-        var advice = MapRoutePolicy.Advise(Fork(hp: 70));
+        var advice = MapRoutePolicy.Advise(Fork(hp: 70, act: 1));
         Assert.NotNull(advice);
-        Assert.Equal(1, advice!.Recommended);
+        Assert.Equal(0, advice!.Recommended);
         Assert.True(advice.Note == MapRoutePolicy.AdvisoryNote, "the advice always says it is advisory");
         Assert.Contains("elite", advice.Options[0].Why, StringComparison.Ordinal);
         Assert.Contains("no elites", advice.Options[1].Why, StringComparison.Ordinal);
     }
 
-    /// <summary>Act 2 makes the same elite hurt more, so the gap only widens.</summary>
+    /// <summary>
+    /// Below the healthy threshold (45%–69% HP), elite risk outweighs the reward and the plain door wins.
+    /// </summary>
+    public static void MidHealthRunAvoidsTheEliteDoor()
+    {
+        var advice = MapRoutePolicy.Advise(Fork(hp: 45, act: 1));
+        Assert.NotNull(advice);
+        Assert.Equal(1, advice!.Recommended);
+    }
+
+    /// <summary>Act 2 and Act 3 elites hurt harder, so the elite door's score drops each act.</summary>
     public static void LaterActsPunishElitesHarder()
     {
         var actOne = MapRoutePolicy.Advise(Fork(hp: 70, act: 1))!;
         var actTwo = MapRoutePolicy.Advise(Fork(hp: 70, act: 2))!;
+        var actThree = MapRoutePolicy.Advise(Fork(hp: 70, act: 3))!;
         Assert.True(
             actTwo.Options[0].Score < actOne.Options[0].Score,
-            "the elite door cannot score better in a later act");
+            "the elite door cannot score better in Act 2 than Act 1");
+        Assert.True(
+            actThree.Options[0].Score < actTwo.Options[0].Score,
+            "the elite door cannot score better in Act 3 than Act 2");
+        Assert.Equal(1, actThree.Recommended, "Act 3 elite risk pushes even a healthy fork toward the safer door");
     }
 
     /// <summary>Two doors with the same numbers recommend neither: a false preference is worse.</summary>

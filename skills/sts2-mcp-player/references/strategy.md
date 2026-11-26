@@ -43,6 +43,7 @@ Read `shop.cards[]`, `shop.relics[]`, `shop.potions[]` and `shop.remove`. **`aff
 4. **Keep a reserve.** Spending `run.gold` to zero means the next shop cannot sell the card removal wanted after a bad act. Leave roughly 75 gold behind unless the purchase wins the act outright.
 5. **`on_sale` is a discount, not a reason.** A discounted card you would not otherwise take is still a card you did not want.
 6. **Buy to fill a deck gap.** Compare energy, draw, defense and setup reliability before adding another attack. Count copies from the grouped deck lines; an X-cost duplicate does not solve an energy bottleneck.
+7. **In Blitz shops**, read `shop.blitz`, `shop.choices_remaining` and `shop.blitz_entries[]`: Blitz entries consume choices rather than gold, so spend choices before leaving with `buy_blitz_entry`.
 
 ## Card rewards: take or skip
 
@@ -65,24 +66,25 @@ The grades are derived offline from the decompiled event sources into `docs/game
 
 ## Potions: when to drink
 
-Read `run.potions[]` for `usable`, `target` and `targets`. Usage is folded into `line`; a queued potion is confirmed by observing fresh state, not by a key on this object. Targeting is in `screen-playbooks.md`.
+Read `run.potions[]` (`usable`, `target`, `targets`); targeting rules are in `screen-playbooks.md`.
 
-1. **A potion unspent at the end of the run was worth nothing.** Spend them on the boss, on an `Elite` entered at low health, or on a fight being lost — but spend them.
-2. **A `CombatOnly` line is for the turn it matters.** Check `combat.enemies[].intents[]` first: drink a block or damage potion before the heavy hit, not on a quiet turn.
-3. **Do not drink a healing potion above roughly 80% of `run.hp`** — the slot is worth more than the overheal. An `AnyTime` line can wait for the fight that needs it.
-4. **A potion already resolving must not be used again.** Compact has no queue flag; if the last drink is still settling, wait for fresh state instead of using the same slot.
-5. **In co-op, a `players`-targeted potion belongs on the teammate at the lowest `current_hp`** when the payload asks for a target.
+1. **Spend potions when they matter:** on the boss, a low-HP `Elite`, or a fight being lost—unspent potions at run end are wasted.
+2. **Time `CombatOnly` potions** against `combat.enemies[].intents[]`: drink block/damage potions before heavy hits, not on quiet turns.
+3. **Save healing potions** below ~80% of `run.hp`; `AnyTime` potions can wait for a real fight.
+4. **Wait for fresh state** before drinking the same slot again if the previous drink is still settling.
+5. **In co-op**, target `players`-scoped potions on the teammate with the lowest `current_hp`.
 
 ## Combat: what to prioritise
 
-Stated as a check order rather than a heuristic, because this is the decision the loop makes most often.
+Check in order:
 
-1. **Read `combat.action_readiness` first.** It is the same field the mod's own executor gates on, so it decides "act or wait" before any card choice does.
-2. **Read `combat.lethal_risks[]` before spending energy.** For `sandpit_countdown`, the counter is on The Insatiable and targets you. Each enemy turn start decrements it; zero kills regardless of HP, block or Buffer. FRANTIC_ESCAPE raises the counter and buys time. At counter 1, play it before other actions consume its energy.
-3. **If `combat.end_turn_will_kill_player` is true, do not end the turn.** Address the stated cause: block helps damage, not Sandpit. Use escape, draw, potions or a confirmed kill; if no rescue is possible, stop for player input. The flag describes danger to YOU, not a lethal attack against an enemy.
-4. **Otherwise prefer the play that minimises `combat.enemies[].intents[].total_damage` reaching you**, weighing block against killing the attacker. Killing the enemy that deals the most damage is usually better than blocking it, because it also stops the turn after this one.
-5. **Spend remaining energy only after reserving survival costs.** Hand lines and `values[].preview` already include live player modifiers such as Strength: never add them again. Check target multipliers separately. Complete needed draws before BATTLE_TRANCE blocks further drawing that turn.
-6. **Do not target an ally with an unsupported card.** If the payload marks it unplayable rather than guessing a target, that is the answer.
+1. **Read `combat.action_readiness` first** to decide act vs wait.
+2. **Read `combat.lethal_risks[]` before spending energy.** `sandpit_countdown` (on The Insatiable) kills at 0 regardless of HP, block or Buffer; at counter 1, play FRANTIC_ESCAPE before other actions spend its energy.
+3. **If `combat.end_turn_will_kill_player` is true, do not end the turn.** Fix the stated cause (escape, draw, potions, block or confirmed kill); this flags danger to YOU. If unrecoverable, stop for player input.
+4. **Minimise `combat.enemies[].intents[].total_damage` reaching you.** Killing a heavy attacker usually beats blocking it because it also stops next turn.
+5. **Reserve survival costs first.** Hand lines and `values[].preview` already include Strength; check target multipliers separately. Finish draws before BATTLE_TRANCE.
+6. **Never force unsupported ally targets**—trust `playable: false`.
+7. **Track secondary resources and orb passives:** `combat.player.stars` (Regent), `combat.player.available_arrows`/`combat.player.melody` (Fool: shots spend arrows), and `combat.threat.end_of_turn_orb_block` (Frost block already in `block_needed`).
 
 ## Co-op: dividing the work
 

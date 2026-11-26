@@ -30,6 +30,8 @@ internal static class ExperienceTestCatalog
         yield return ("Experience.CombatMath.BlockSoaksOnce", () => Task.Run(CombatMathPolicyTests.KillOptionsSoakEnemyBlockOnce));
         yield return ("Experience.CombatMath.XCost", () => Task.Run(CombatMathPolicyTests.XCostCardsSpendEverything));
         yield return ("Experience.CombatMath.MaxBlock", () => Task.Run(CombatMathPolicyTests.MaxBlockPicksTheBestAffordableSet));
+        yield return ("Experience.CombatMath.OrbPassives", () => Task.Run(CombatMathPolicyTests.ThreatIncludesEndOfTurnOrbBlockAndDamage));
+        yield return ("Experience.CombatMath.SecondaryResources", () => Task.Run(CombatMathPolicyTests.SecondaryResourcesConstrainSubsets));
         yield return ("Experience.Autopilot.CombatNoMoves", () => Task.Run(AutopilotPolicyTests.CombatWithNothingToDoEndsTheTurn));
         yield return ("Experience.Autopilot.CombatChoicesToModel", () => Task.Run(AutopilotPolicyTests.CombatWithAnyChoiceGoesToTheModel));
         yield return ("Experience.Autopilot.Guards", () => Task.Run(AutopilotPolicyTests.GuardsYieldToThePlayerAndToNonCombatMode));

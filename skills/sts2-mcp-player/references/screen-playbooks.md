@@ -81,6 +81,7 @@ This file is about **how to drive a screen**. For **what to choose** where the c
 
 - Enter the inventory with `open_shop_inventory`.
 - While `shop.open = true`, use `buy_card`, `buy_relic`, `buy_potion`, and `remove_card_at_shop`. Buy only a row whose compact `affordable` is true; `stocked` alone still answers 409 when the gold is short. Raw `/state` spells those `enough_gold` and `is_stocked`.
+- In Blitz mode (`shop.blitz = true`), use `buy_blitz_entry` on `shop.blitz_entries[]` while `shop.choices_remaining > 0`.
 - Leave inner inventory with `close_shop_inventory`.
 - Leave the shop room with `proceed`.
 - If potion slots are full, do not expect `buy_potion` to remain available.

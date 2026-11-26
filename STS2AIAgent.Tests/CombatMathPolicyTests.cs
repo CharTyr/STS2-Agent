@@ -143,4 +143,84 @@ internal static class CombatMathPolicyTests
         Assert.Equal(0, none.Block);
         Assert.Equal(0, none.CardIndices.Count);
     }
+
+    public static void ThreatIncludesEndOfTurnOrbBlockAndDamage()
+    {
+        var enemies = new[] { Enemy(0, 30, attacks: 12) };
+        var input = new CombatMathInput(
+            PlayerHp: 10,
+            PlayerBlock: 2,
+            Energy: 3,
+            EndOfTurnSelfDamage: 0,
+            Enemies: enemies,
+            Hand: Array.Empty<CardMath>(),
+            EndOfTurnOrbBlock: 6,
+            EndOfTurnOrbDamage: 7);
+        var threat = CombatMathPolicy.Threat(input);
+        Assert.Equal(2, threat.Block, "Current player block stays distinct from end-of-turn orb block.");
+        Assert.Equal(6, threat.EndOfTurnOrbBlock);
+        Assert.Equal(7, threat.EndOfTurnOrbDamage);
+        Assert.Equal(4, threat.BlockNeeded, "12 incoming - (2 current + 6 Frost orb) = 4 block still needed.");
+        Assert.Equal(4, threat.Unblocked);
+        Assert.Equal(6, threat.HpAfter, "Frost passive block turns an apparent lethal into 6 HP remaining.");
+        Assert.False(threat.Lethal);
+    }
+
+    public static void SecondaryResourcesConstrainSubsets()
+    {
+        var enemy = new[] { Enemy(0, 20) };
+
+        // Regent: two 2-star attacks cannot both be played with only 3 stars available.
+        var starHand = new[]
+        {
+            new CardMath(0, 200, 1, false, true, 0, new[] { new CardVsEnemy(0, 12, false) }, StarCost: 2),
+            new CardMath(1, 201, 1, false, true, 0, new[] { new CardVsEnemy(0, 12, false) }, StarCost: 2),
+            new CardMath(2, 202, 1, false, true, 0, new[] { new CardVsEnemy(0, 9, false) }, StarCost: 1)
+        };
+        var starKill = CombatMathPolicy.KillOptions(new CombatMathInput(40, 0, 3, 0, enemy, starHand, Stars: 3))[0];
+        Assert.True(starKill.Killable, "Card 0 (2 stars, 12 dmg) + Card 2 (1 star, 9 dmg) = 21 dmg within 3 stars.");
+        Assert.Equal(3, starKill.Stars);
+        Assert.Equal(2, starKill.CardIndices.Count);
+        Assert.Equal(0, starKill.CardIndices[0]);
+        Assert.Equal(2, starKill.CardIndices[1]);
+
+        // X-star card eats all stars, so it cannot combine with another star-cost card.
+        var xStarHand = new[]
+        {
+            new CardMath(0, 210, 1, false, true, 0, new[] { new CardVsEnemy(0, 15, false) }, StarCostsX: true),
+            new CardMath(1, 211, 1, false, true, 0, new[] { new CardVsEnemy(0, 8, false) }, StarCost: 1)
+        };
+        var xStarKill = CombatMathPolicy.KillOptions(new CombatMathInput(40, 0, 3, 0, enemy, xStarHand, Stars: 3))[0];
+        Assert.False(xStarKill.Killable, "X-star card cannot combine with a 1-star card.");
+        Assert.Equal(15, xStarKill.Damage);
+
+        // Regent excess energy paid with 2 stars per missing energy.
+        var excessHand = new[]
+        {
+            new CardMath(0, 215, 2, false, true, 0, new[] { new CardVsEnemy(0, 20, false) })
+        };
+        var cannotPay = CombatMathPolicy.KillOptions(new CombatMathInput(40, 0, 1, 0, enemy, excessHand, Stars: 2, CanPayExcessEnergyWithStars: false))[0];
+        Assert.False(cannotPay.Killable);
+        var canPay = CombatMathPolicy.KillOptions(new CombatMathInput(40, 0, 1, 0, enemy, excessHand, Stars: 2, CanPayExcessEnergyWithStars: true))[0];
+        Assert.True(canPay.Killable);
+        Assert.Equal(1, canPay.Energy);
+        Assert.Equal(2, canPay.Stars);
+
+        // Fool: two arrow-shooting cards cannot both fire when only 1 arrow is available.
+        var arrowHand = new[]
+        {
+            new CardMath(0, 220, 1, false, true, 0, new[] { new CardVsEnemy(0, 12, false) }, ArrowCost: 1),
+            new CardMath(1, 221, 1, false, true, 0, new[] { new CardVsEnemy(0, 12, false) }, ArrowCost: 1),
+            new CardMath(2, 222, 1, false, true, 0, new[] { new CardVsEnemy(0, 8, false) }, ArrowCost: 0)
+        };
+        var oneArrow = CombatMathPolicy.KillOptions(new CombatMathInput(40, 0, 3, 0, enemy, arrowHand, AvailableArrows: 1))[0];
+        Assert.True(oneArrow.Killable, "One shot (12) + one non-arrow strike (8) = 20 within 1 arrow.");
+        Assert.Equal(1, oneArrow.Arrows);
+        Assert.Equal(0, oneArrow.CardIndices[0]);
+        Assert.Equal(2, oneArrow.CardIndices[1]);
+
+        var onlyTwoShots = CombatMathPolicy.KillOptions(new CombatMathInput(40, 0, 3, 0, enemy, arrowHand.Take(2).ToArray(), AvailableArrows: 1))[0];
+        Assert.False(onlyTwoShots.Killable, "Cannot fire two arrow shots with only 1 available arrow.");
+        Assert.Equal(12, onlyTwoShots.Damage);
+    }
 }
