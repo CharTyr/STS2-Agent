@@ -329,7 +329,7 @@ internal static class McpStateSlimmerTests
 
         public SlimMcpBridge(string compact) => _compact = compact;
 
-        public Task<string?> GetScreenAsync(CancellationToken cancellationToken) => Task.FromResult<string?>("COMBAT");
+        public Task<string> GetScreenAsync(CancellationToken cancellationToken) => Task.FromResult("COMBAT");
         public Task<string> GetCompactStateJsonAsync(CancellationToken cancellationToken) => Task.FromResult(_compact);
         public Task<string> GetRawStateJsonAsync(CancellationToken cancellationToken) => Task.FromResult(_compact);
         public Task<string> GetAvailableActionsJsonAsync(CancellationToken cancellationToken) =>

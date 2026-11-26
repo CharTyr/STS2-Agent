@@ -7,3 +7,7 @@
 # picking either side (task state lives in task.json, not index.md). See
 # .trellis/spec/cli/backend/directory-structure.md for details.
 .trellis/workspace/*/journal-*.md merge=union
+
+# Keep POSIX shell scripts and container definitions LF across Windows and Linux checkouts.
+*.sh text eol=lf
+Dockerfile text eol=lf
