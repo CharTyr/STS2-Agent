@@ -103,9 +103,9 @@ internal static partial class GameStateService
             ascension_effects = BuildAscensionEffectPayloads(runState.AscensionLevel, runState.GameMode),
             game_mode = runState.GameMode.ToString().ToLowerInvariant(),
             // v0.113.0: dominion only ever applies under GameMode.Dread.
-            dominion_id = runState.Dominion?.Id.Entry,
-            is_custom_game = runState.IsCustomGame,
-            is_rotating_character = player.ExtraFields.IsPlayingRotatingCharacter,
+            dominion_id = GameApiCompatibility.DominionId(runState),
+            is_custom_game = GameApiCompatibility.IsCustomGame(runState),
+            is_rotating_character = GameApiCompatibility.IsPlayingRotatingCharacter(player.ExtraFields),
             floor = runState.TotalFloor,
             current_hp = player.Creature.CurrentHp,
             max_hp = player.Creature.MaxHp,
@@ -323,8 +323,8 @@ internal static partial class GameStateService
             .Select(level => new AscensionEffectPayload
             {
                 id = $"LEVEL_{level:D2}",
-                name = AscensionHelper.GetTitle(level, gameMode).GetFormattedText(),
-                description = AscensionHelper.GetDescription(level, gameMode).GetFormattedText()
+                name = GameApiCompatibility.GetAscensionTitle(level, gameMode).GetFormattedText(),
+                description = GameApiCompatibility.GetAscensionDescription(level, gameMode).GetFormattedText()
             })
             .ToArray();
     }

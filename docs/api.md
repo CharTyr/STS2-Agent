@@ -538,7 +538,7 @@ Fool 角色的第二资源：出牌消耗箭矢，箭矢射出后可回收。其
 | `index` | number | 箭矢槽序号 |
 | `status` | string | `retrieved`（已取回可射）/ `away`（已射出）/ `destroyed`（已损毁） |
 | `available` | bool | `status == "retrieved"`，本回合是否可射出 |
-| `destroy_after_impaled` | bool | v0.113.0：这支箭射出后会损毁而非飞回 |
+| `destroy_after_impaled` | bool | 旧箭矢损毁标记，当前支持的游戏版本固定为 `false` |
 
 #### `combat.player.melody`
 
@@ -551,7 +551,7 @@ Fool 的旋律系统（v0.113.0+）：旋律牌带 `Wah` / `Cho` / `Ki` 标签�
 | `cho_played` | bool | 本回合是否已打出带 `Cho` 标签的牌 |
 | `ki_played` | bool | 本回合是否已打出带 `Ki` 标签的牌 |
 | `melodies_this_turn` | number | 本回合已触发的不同旋律标签数（0–3） |
-| `melody_cards_this_turn` | number | 本回合打出的旋律牌数（多标签牌只计一次） |
+| `melody_cards_this_turn` | number | 本回合当前玩家已完成的旋律牌出牌次数，每次多标签出牌也只计一次 |
 
 #### `combat.player.pets[]`
 

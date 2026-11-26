@@ -20,7 +20,7 @@ internal static class CombatDiagnosticsContractTests
         // The snapshot suppresses a shot with no arrow, while the native result stays available
         // to callers that deliberately want to play the card for its other effects.
         Assert.Contains(
-            "varmissingArrow=card.Tags.Contains(CardTag.Shoot)&&!ArrowCmd.PlayerHasAnyArrows(card.Owner)",
+            "varmissingArrow=GameApiCompatibility.ShootsArrow(card)&&GameApiCompatibility.AvailableArrows(card.Owner)==0",
             handBody,
             StringComparison.Ordinal);
         Assert.Contains("playable=targetSupported&&canPlay&&!missingArrow", handBody, StringComparison.Ordinal);
@@ -63,6 +63,17 @@ internal static class CombatDiagnosticsContractTests
         Assert.Contains("hand_in_card_selection=gate.HandInCardSelection", stateSource, StringComparison.Ordinal);
         Assert.Contains("action_readiness=BuildCombatActionReadinessPayload", combatBody, StringComparison.Ordinal);
         Assert.Contains("action_readiness=combat.action_readiness", agentCombatBody, StringComparison.Ordinal);
+    }
+
+    public static void FoolResourcesAvoidRemovedGameMembers()
+    {
+        var source = AgentSourceFixture.ReadStateService();
+        var combatBody = WithoutWhitespace(MethodBody(source, "BuildCombatPayload"));
+        var compactBody = WithoutWhitespace(MethodBody(source, "BuildAgentCombatPayload"));
+
+        Assert.Contains("arrows=GameApiCompatibility.BuildArrows(me.PlayerCombatState)", combatBody, StringComparison.Ordinal);
+        Assert.Contains("melody=GameApiCompatibility.BuildMelody(me,combatState)", combatBody, StringComparison.Ordinal);
+        Assert.Contains("combat.player.melody.melody_cards_this_turn", compactBody, StringComparison.Ordinal);
     }
 
     public static void PlayCardTimeoutCancelsNativeGameAction()
@@ -164,7 +175,7 @@ internal static class CombatDiagnosticsContractTests
         Assert.Contains("enemiesisnot[varenemy]", body, StringComparison.Ordinal);
         Assert.Contains("Hook.ShouldStopCombatFromEnding(combat)", body, StringComparison.Ordinal);
         Assert.Contains("Math.Max(0,damage-enemy.Block)", body, StringComparison.Ordinal);
-        Assert.Contains("HpLossHookPhase.AfterOsty", body, StringComparison.Ordinal);
+        Assert.Contains("GameApiCompatibility.AfterOsty", body, StringComparison.Ordinal);
         Assert.Contains("hpLost>=enemy.CurrentHp&&Hook.ShouldDie(run,combat,enemy,out_)", body, StringComparison.Ordinal);
     }
 
@@ -172,8 +183,8 @@ internal static class CombatDiagnosticsContractTests
     {
         var body = WithoutWhitespace(MethodBody(AgentSourceFixture.ReadStateService(), "PreviewCardAgainstEnemies"));
 
-        Assert.Contains("card.Tags.Contains(CardTag.Shoot)", body, StringComparison.Ordinal);
-        Assert.Contains("hits=ArrowCmd.GetAvailableArrowCount(card.Owner)==1?known:null", body, StringComparison.Ordinal);
+        Assert.Contains("GameApiCompatibility.ShootsArrow(card)", body, StringComparison.Ordinal);
+        Assert.Contains("hits=GameApiCompatibility.AvailableArrows(card.Owner)==1?known:null", body, StringComparison.Ordinal);
         Assert.Contains("else{hits=known*(1+replayCount);}", body, StringComparison.Ordinal);
     }
 

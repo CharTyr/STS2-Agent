@@ -1,5 +1,13 @@
 # Changelog
 
+## Unreleased
+
+## 0.19.6
+
+### Fixed
+
+- 同一份 Mod 支持 Steam 正式版 v0.111.1 和 public beta v0.114.0，恢复 HTTP 和 MCP 状态读取及卡牌升级预览。测试版保留愚者的箭矢和旋律牌计数。
+
 ## 0.19.5
 
 ### Fixed

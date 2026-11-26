@@ -115,8 +115,8 @@ internal static partial class GameStateService
             potions = inventory.PotionEntries.Select((entry, index) => BuildShopPotionPayload(entry, index, inventory.Player)).ToArray(),
             card_removal = BuildShopCardRemovalPayload(inventory.CardRemovalEntry),
             // v0.113.0: a Blitz merchant stocks choices (BlitzEntries), never gold items.
-            is_blitz = inventory.IsBlitzShop,
-            blitz_choices_remaining = inventory.IsBlitzShop ? inventory.BlitzChoicesRemaining : null,
+            is_blitz = GameApiCompatibility.IsBlitzShop(inventory),
+            blitz_choices_remaining = GameApiCompatibility.IsBlitzShop(inventory) ? GameApiCompatibility.RemainingBlitzChoices(inventory) : null,
             blitz_entries = GetMerchantBlitzEntries(currentScreen)
                 .Select((entry, index) => BuildShopBlitzEntryPayload(entry, index))
                 .ToArray()
@@ -124,26 +124,16 @@ internal static partial class GameStateService
     }
 
     /// <summary>The Blitz merchant's choice entries in slot order; empty on a standard shop.</summary>
-    public static IReadOnlyList<BlitzMerchantEntry> GetMerchantBlitzEntries(IScreenContext? currentScreen)
+    public static IReadOnlyList<MerchantEntry> GetMerchantBlitzEntries(IScreenContext? currentScreen)
     {
         var inventoryScreen = GetMerchantInventoryScreen(currentScreen);
         var inventory = inventoryScreen?.Inventory ?? GetMerchantRoom(currentScreen)?.Inventory?.Inventory;
-        return inventory?.BlitzEntries ?? (IReadOnlyList<BlitzMerchantEntry>)Array.Empty<BlitzMerchantEntry>();
+        return GameApiCompatibility.ReadBlitzEntries(inventory);
     }
 
-    private static ShopBlitzEntryPayload BuildShopBlitzEntryPayload(BlitzMerchantEntry entry, int index)
+    private static ShopBlitzEntryPayload BuildShopBlitzEntryPayload(MerchantEntry entry, int index)
     {
-        return new ShopBlitzEntryPayload
-        {
-            index = index,
-            entry_type = entry.MerchantEntryType.ToString(),
-            name = entry.Title.GetFormattedText() ?? string.Empty,
-            description = entry.Description.GetFormattedText() ?? string.Empty,
-            status = entry.Status.ToString().ToLowerInvariant(),
-            is_stocked = entry.IsStocked,
-            is_cursed = entry.IsCursed,
-            is_rare = entry.IsRare
-        };
+        return GameApiCompatibility.BuildBlitzEntry(entry, index);
     }
 
     private static ShopCardPayload BuildShopCardPayload(MerchantCardEntry entry, int index, string category)

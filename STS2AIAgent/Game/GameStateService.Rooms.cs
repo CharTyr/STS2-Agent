@@ -877,28 +877,21 @@ internal static partial class GameStateService
     }
 
     /// <summary>
-    /// v0.113.0: the singleplayer submenu carries one NSubmenuButton per run-config mode, each wired
-    /// to its own Open*Screen method. Returns the usable button plus the fallback open method for
-    /// <c>open_character_select</c>'s `mode` param; a null button means the mode is epoch-gated on
-    /// this profile (caller refuses rather than calling the open method around the gate).
+    /// Returns the usable button for a run mode present on the loaded game and current profile.
     /// </summary>
-    public static (NButton? Button, StringName OpenMethod) GetSingleplayerModeButton(NSingleplayerSubmenu submenu, string mode)
+    public static NButton? GetSingleplayerModeButton(NSingleplayerSubmenu submenu, string mode)
     {
-        var (buttonName, openMethod) = mode switch
+        var button = mode switch
         {
-            "blitz" => ("%BlitzButton", NSingleplayerSubmenu.MethodName.OpenBlitzScreen),
-            "dread" => ("%DreadButton", NSingleplayerSubmenu.MethodName.OpenDreadScreen),
-            "custom" => ("%CustomRunButton", NSingleplayerSubmenu.MethodName.OpenCustomScreen),
-            _ => (null, NSingleplayerSubmenu.MethodName.OpenCharacterSelect)
+            "blitz" => submenu.GetNodeOrNull<NButton>("%BlitzButton"),
+            "dread" => submenu.GetNodeOrNull<NButton>("%DreadButton"),
+            "custom" => submenu.GetNodeOrNull<NButton>("%CustomRunButton") ?? submenu.GetNodeOrNull<NButton>("CustomRunButton"),
+            _ => GetSingleplayerStandardButton(submenu)
         };
 
-        NButton? button = mode == "standard"
-            ? GetSingleplayerStandardButton(submenu)
-            : submenu.GetNodeOrNull<NButton>(buttonName!);
-        var usable = button != null && GodotObject.IsInstanceValid(button) && button.IsEnabled && button.IsVisibleInTree()
+        return button != null && GodotObject.IsInstanceValid(button) && button.IsEnabled && button.IsVisibleInTree()
             ? button
             : null;
-        return (usable, openMethod);
     }
 
     public static NButton? GetSingleplayerStandardButton(NSingleplayerSubmenu submenu)

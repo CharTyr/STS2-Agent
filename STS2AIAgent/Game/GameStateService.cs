@@ -38,12 +38,10 @@ using MegaCrit.Sts2.Core.Nodes.GodotExtensions;
 using MegaCrit.Sts2.Core.Nodes.Rewards;
 using MegaCrit.Sts2.Core.Nodes.Rooms;
 using MegaCrit.Sts2.Core.Nodes.Screens;
-using MegaCrit.Sts2.Core.Nodes.Screens.Blitz;
 using MegaCrit.Sts2.Core.Nodes.Screens.CardLibrary;
 using MegaCrit.Sts2.Core.Nodes.Screens.CardSelection;
 using MegaCrit.Sts2.Core.Nodes.Screens.CharacterSelect;
 using MegaCrit.Sts2.Core.Nodes.Screens.CustomRun;
-using MegaCrit.Sts2.Core.Nodes.Screens.Dread;
 using MegaCrit.Sts2.Core.Nodes.Screens.FeedbackScreen;
 using MegaCrit.Sts2.Core.Nodes.Screens.GameOverScreen;
 using MegaCrit.Sts2.Core.Nodes.Screens.InspectScreens;
@@ -1047,6 +1045,11 @@ internal static partial class GameStateService
             return "COMBAT";
         }
 
+        if (GameApiCompatibility.ExtraRunMode(currentScreen) != null)
+        {
+            return "CHARACTER_SELECT";
+        }
+
         return currentScreen switch
         {
             NGameOverScreen => "GAME_OVER",
@@ -1061,7 +1064,7 @@ internal static partial class GameStateService
             NEventRoom => "EVENT",
             NCombatRoom => "COMBAT",
             NMapScreen or NMapRoom => "MAP",
-            NCharacterSelectScreen or NBlitzScreen or NDreadScreen or NCustomRunScreen => "CHARACTER_SELECT",
+            NCharacterSelectScreen or NCustomRunScreen => "CHARACTER_SELECT",
             NMultiplayerLoadGameScreen => "MULTIPLAYER_LOAD",
             NChooseABundleSelectionScreen => "BUNDLE_SELECTION",
             NCapstoneSubmenuStack => "CAPSTONE_SELECTION",

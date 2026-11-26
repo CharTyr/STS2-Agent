@@ -114,9 +114,9 @@ internal static class SandpitSafetyTests
         var data = File.ReadAllText(Path.Combine(root, "STS2AIAgent/Game/GameDataExportService.cs"));
         var preview = AgentSourceFixture.MethodBody(data, "BuildCardUpgradePreview");
         Assert.Contains("ModelDb.GetById<CardModel>(card.Id).ToMutable()", preview);
-        Assert.Contains("upgraded.UpgradeInternal()", preview);
+        Assert.Contains("upgrade(upgraded)", preview);
         Assert.Contains("upgraded.EnergyCost.GetWithModifiers", preview);
-        Assert.False(preview.Contains("card.UpgradeInternal()"));
+        Assert.False(preview.Contains("upgrade(card)"));
         Assert.Contains("BuildCardDynamicValuePayloads(upgraded, detachedCopy: true)", preview);
         var values = AgentSourceFixture.MethodBody(data, "BuildCardDynamicValuePayloads");
         Assert.Contains("detachedCopy ? card.DynamicVars : card.DynamicVars.Clone(card)", values);

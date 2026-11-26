@@ -1,10 +1,16 @@
 from __future__ import annotations
 
 import importlib.util
+import hashlib
+import json
 import sys
 import unittest
+import zipfile
+from argparse import Namespace
+from io import BytesIO
 from pathlib import Path
 from typing import Any
+from unittest.mock import Mock, patch
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 VALIDATION_SCRIPT = REPO_ROOT / "scripts" / "run_sts2_validation.py"
@@ -20,6 +26,68 @@ def load_validation_module() -> Any:
     sys.modules[spec.name] = module
     spec.loader.exec_module(module)
     return module
+
+
+class ReleaseSmokeTests(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls) -> None:
+        cls.validation = load_validation_module()
+
+    def test_identity_checks_versions_and_owned_pid(self) -> None:
+        args = Namespace(expected_game_version="0.114.0", expected_mod_version="0.19.5", expected_process_id=42)
+        expected = {"game_version": "v0.114.0", "mod_version": "0.19.5", "process_id": 42}
+        self.validation.check_release_identity(expected, args)
+        for key, wrong in (("game_version", "v0.113.1"), ("mod_version", "0.19.4"), ("process_id", 43)):
+            with self.subTest(key=key), self.assertRaisesRegex(self.validation.ValidationError, key):
+                self.validation.check_release_identity({**expected, key: wrong}, args)
+
+    def test_upgrade_preview_requires_real_first_upgrade(self) -> None:
+        client = Mock()
+        card = {"id": "STRIKE_IRONCLAD", "upgrade": {"status": "available", "upgrade_level": 1}}
+        client.request.return_value = {"data": [card]}
+        self.assertEqual(self.validation.check_card_upgrade_preview(client), {"card": "STRIKE_IRONCLAD", "upgrade_level": 1})
+        card["upgrade"] = {"status": "unavailable", "reason": "upgrade_preview_failed"}
+        with self.assertRaisesRegex(self.validation.ValidationError, "upgrade_preview_failed"):
+            self.validation.check_card_upgrade_preview(client)
+
+    def test_native_mcp_fails_when_raw_tool_returns_error(self) -> None:
+        def respond(req: Any, **_: Any) -> BytesIO:
+            call = json.loads(req.data)
+            if call["method"] == "initialize":
+                result = {"protocolVersion": "2025-03-26"}
+            else:
+                self.assertEqual(req.get_header("Mcp-session-id"), "release-session")
+                if call["method"] == "notifications/initialized":
+                    return BytesIO()
+                if call["params"]["name"] == "get_raw_game_state":
+                    result = {"isError": True}
+                else:
+                    result = {"content": [{"text": '{"screen":"MAIN_MENU"}'}]}
+            response = BytesIO(json.dumps({"id": call["id"], "result": result}).encode())
+            response.headers = {"Mcp-Session-Id": "release-session"}
+            return response
+
+        client = self.validation.ApiClient()
+        with patch.object(self.validation.request, "urlopen", side_effect=respond):
+            with self.assertRaisesRegex(self.validation.ValidationError, "get_raw_game_state"):
+                self.validation.check_native_mcp_state(client, "MAIN_MENU")
+
+    def test_packaged_dll_must_match_the_live_tested_bytes(self) -> None:
+        path = REPO_ROOT / "scripts" / "check_release_package.py"
+        spec = importlib.util.spec_from_file_location("release_package_under_test", path)
+        self.assertIsNotNone(spec)
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+
+        tested_dll = b"tested DLL"
+        artifact = BytesIO()
+        with zipfile.ZipFile(artifact, "w") as archive:
+            archive.writestr("mod/STS2AIAgent.dll", tested_dll)
+        with zipfile.ZipFile(artifact) as archive:
+            reader = module._ZipReader(archive)
+            module._check_release_dll(reader, hashlib.sha256(tested_dll).hexdigest().upper())
+            with self.assertRaisesRegex(module.PackageCheckError, "differs from the tested DLL"):
+                module._check_release_dll(reader, hashlib.sha256(b"other DLL").hexdigest())
 
 
 class LocalCombatActionWindowTests(unittest.TestCase):

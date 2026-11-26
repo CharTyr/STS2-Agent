@@ -252,20 +252,20 @@ internal static partial class GameStateService
             var passive = lightning.PassiveVal;
             var damage = Hook.ModifyDamage(run, combat, enemy, player, passive, props,
                 null, null, ModifyDamageHookType.All, CardPreviewMode.Normal, out _);
-            if (Hook.ModifyPreBlockDamageTarget(combat, enemy, passive, props, player) != null)
+            if (GameApiCompatibility.RedirectsPreBlockDamage(combat, enemy, passive, props, player))
             {
                 return false;
             }
 
             var unblocked = Hook.ModifyHpLost(run, combat, enemy, Math.Max(0, damage - enemy.Block),
-                props, player, null, HpLossHookPhase.BeforeOsty, out _);
+                props, player, null, GameApiCompatibility.BeforeOsty, out _);
             if (Hook.ModifyUnblockedDamageTarget(combat, enemy, unblocked, props, player) != enemy)
             {
                 return false;
             }
 
             var hpLost = Hook.ModifyHpLost(run, combat, enemy, unblocked,
-                props, player, null, HpLossHookPhase.AfterOsty, out _);
+                props, player, null, GameApiCompatibility.AfterOsty, out _);
             return hpLost >= enemy.CurrentHp && Hook.ShouldDie(run, combat, enemy, out _);
         }
         catch (Exception)

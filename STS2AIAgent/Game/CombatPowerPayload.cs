@@ -32,7 +32,7 @@ internal sealed class CombatArrowPayload
 
     public bool available { get; init; }
 
-    /// <summary>v0.113.0: impaled arrows marked to break rather than fly back.</summary>
+    /// <summary>Legacy wire field, false in the supported game builds.</summary>
     public bool destroy_after_impaled { get; init; }
 }
 
