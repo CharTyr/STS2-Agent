@@ -1,5 +1,5 @@
 # STS2 AI Agent：当前状态页
-> **当前发布：v0.19.5（2026-11-22）**。游戏需要 v0.113.0 或以上。[GitHub Release](https://github.com/CharTyr/STS2-Agent/releases/tag/v0.19.5) 已发布，[Steam 工坊](https://steamcommunity.com/sharedfiles/filedetails/?id=3796486050) 已公开更新。v0.113.1 隔离实机通过最终包加载检查。详见[发布记录](history/release-v0.19.5_2026-11-22.md)。
+> **当前发布 v0.19.6（2026-11-26）**。支持 Steam 正式版 v0.111.1 和公测版 v0.114.0。两个版本均通过同一份最终 DLL 的隔离实机验收。[GitHub Release](https://github.com/CharTyr/STS2-Agent/releases/tag/v0.19.6) · [Steam 工坊](https://steamcommunity.com/sharedfiles/filedetails/?id=3796486050) · [发布记录](history/release-v0.19.6_2026-11-26.md)
 > 下方各版本的发布、工坊与实机数据保留其原始日期，作为历史证据。
 
 旧路线图见 [history/PRODUCT_ROADMAP_2026-09-05.md](history/PRODUCT_ROADMAP_2026-09-05.md)（历史），旧交付原文见 [history/PRODUCT_PLAN_CURRENT_2026-09-07.md](history/PRODUCT_PLAN_CURRENT_2026-09-07.md) 和 [history/COOP_DELIVERY_2026-09-07.md](history/COOP_DELIVERY_2026-09-07.md)。本页不继承历史文档中的审批、工作树或测试前执行约束。
