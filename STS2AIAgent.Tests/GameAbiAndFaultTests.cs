@@ -1,3 +1,5 @@
+using Microsoft.CodeAnalysis;
+using Microsoft.CodeAnalysis.CSharp;
 using STS2AIAgent.Game;
 
 namespace STS2AIAgent.Tests;
@@ -54,7 +56,6 @@ internal static class GameAbiAndFaultTests
 
     public static void AbiAuditorDetectsValidAndMissingReflectedEntriesOffline()
     {
-        // Audit our own test assembly against itself: zero game DLLs needed in CI.
         var testDll = typeof(GameAbiAndFaultTests).Assembly.Location;
         var dir = Path.GetDirectoryName(testDll)!;
         var selfAsm = Path.GetFileNameWithoutExtension(testDll);
@@ -71,12 +72,162 @@ internal static class GameAbiAndFaultTests
 
         var brokenRegistry = """
             new(typeof(StateSectionFaultTracker), "_renamedField", MemberKind.Field, false, "broken"),
+            new(typeof(StateSectionFaultTracker), "_gate", MemberKind.Field, true, "wrong staticness"),
             new(typeof(NonExistentGameScreen), "_items", MemberKind.Field, false, "missing type"),
             """;
         var badReport = GameAbiAuditor.Audit(testDll, dir, brokenRegistry, new[] { selfAsm });
-        Assert.False(badReport.Ok, "Missing reflected field and type must fail the audit.");
-        Assert.Equal(2, badReport.MissingReflected.Count);
+        Assert.False(badReport.Ok, "Missing field, wrong staticness, and missing type must fail the audit.");
+        Assert.Equal(3, badReport.MissingReflected.Count);
         Assert.True(badReport.MissingReflected.Any(item => item.Contains("_renamedField", StringComparison.Ordinal)));
+        Assert.True(badReport.MissingReflected.Any(item => item.Contains("_gate", StringComparison.Ordinal)));
         Assert.True(badReport.MissingReflected.Any(item => item.Contains("NonExistentGameScreen", StringComparison.Ordinal)));
+    }
+
+    public static void AbiAuditorCatchesRealCrossAssemblyPropertySignatureVisibilityAndStaticBreaks()
+    {
+        var tempDir = Path.Combine(Path.GetTempPath(), "sts2-abi-test-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(tempDir);
+        try
+        {
+            var targetPath = Path.Combine(tempDir, "FakeGame.dll");
+            var consumerPath = Path.Combine(tempDir, "FakeMod.dll");
+
+            var baselineSource = """
+                namespace FakeNs;
+                public class FakeCard
+                {
+                    public int PublicScore;
+                    public string Title => "Strike";
+                    public int Compute(int value) => value + 1;
+                }
+                """;
+            CompileToDll("FakeGame", baselineSource, targetPath);
+
+            var consumerSource = """
+                using FakeNs;
+                namespace FakeMod;
+                public static class Runner
+                {
+                    public static int Run()
+                    {
+                        var card = new FakeCard();
+                        return card.Title.Length + card.PublicScore + card.Compute(5);
+                    }
+                }
+                """;
+            CompileToDll("FakeMod", consumerSource, consumerPath, targetPath);
+
+            var registry = """
+                new(typeof(FakeCard), "Compute", MemberKind.Method, false, "compute"),
+                """;
+            var pass = GameAbiAuditor.Audit(consumerPath, tempDir, registry, new[] { "FakeGame" });
+            Assert.True(pass.Ok, "Baseline consumer against matching FakeGame must pass.");
+            Assert.True(pass.CheckedTypes >= 1, "Must check cross-assembly TypeReferences.");
+            Assert.True(pass.CheckedMembers >= 4, "Must check .ctor, get_Title, Compute, and PublicScore.");
+
+            // 1. Delete Title property getter — previously masked by external-base wildcard.
+            CompileToDll("FakeGame", """
+                namespace FakeNs;
+                public class FakeCard
+                {
+                    public int PublicScore;
+                    public int Compute(int value) => value + 1;
+                }
+                """, targetPath);
+            var missingGetter = GameAbiAuditor.Audit(consumerPath, tempDir, null, new[] { "FakeGame" });
+            Assert.False(missingGetter.Ok, "Deleting a property getter on a game class must fail ABI audit.");
+            Assert.True(missingGetter.MissingMembers.Any(m => m.Contains("get_Title", StringComparison.Ordinal)));
+
+            // 2. Change parameter type Compute(int) -> Compute(string).
+            CompileToDll("FakeGame", """
+                namespace FakeNs;
+                public class FakeCard
+                {
+                    public int PublicScore;
+                    public string Title => "Strike";
+                    public int Compute(string value) => value.Length;
+                }
+                """, targetPath);
+            var changedParam = GameAbiAuditor.Audit(consumerPath, tempDir, null, new[] { "FakeGame" });
+            Assert.False(changedParam.Ok, "Changing a method parameter type must fail ABI audit.");
+            Assert.True(changedParam.MissingMembers.Any(m => m.Contains("Compute", StringComparison.Ordinal)));
+
+            // 3. Narrow visibility Public -> internal.
+            CompileToDll("FakeGame", """
+                namespace FakeNs;
+                public class FakeCard
+                {
+                    public int PublicScore;
+                    public string Title => "Strike";
+                    internal int Compute(int value) => value + 1;
+                }
+                """, targetPath);
+            var madeInternal = GameAbiAuditor.Audit(consumerPath, tempDir, null, new[] { "FakeGame" });
+            Assert.False(madeInternal.Ok, "Narrowing a referenced method to internal must fail ABI audit.");
+
+            // 4. Flip instance -> static.
+            CompileToDll("FakeGame", """
+                namespace FakeNs;
+                public class FakeCard
+                {
+                    public int PublicScore;
+                    public string Title => "Strike";
+                    public static int Compute(int value) => value + 1;
+                }
+                """, targetPath);
+            var flippedStatic = GameAbiAuditor.Audit(consumerPath, tempDir, null, new[] { "FakeGame" });
+            Assert.False(flippedStatic.Ok, "Flipping an instance method to static must fail ABI audit.");
+
+            // 5. Add a second overload Compute(int, int) -> breaks reflected unique-overload lookup.
+            CompileToDll("FakeGame", """
+                namespace FakeNs;
+                public class FakeCard
+                {
+                    public int PublicScore;
+                    public string Title => "Strike";
+                    public int Compute(int value) => value + 1;
+                    public int Compute(int a, int b) => a + b;
+                }
+                """, targetPath);
+            var ambiguousReflected = GameAbiAuditor.Audit(consumerPath, tempDir, registry, new[] { "FakeGame" });
+            Assert.False(ambiguousReflected.Ok, "Adding a second overload must fail reflected unique-method audit.");
+            Assert.True(ambiguousReflected.MissingReflected.Any(m => m.Contains("Compute", StringComparison.Ordinal)));
+        }
+        finally
+        {
+            if (Directory.Exists(tempDir))
+            {
+                Directory.Delete(tempDir, recursive: true);
+            }
+        }
+    }
+
+    private static void CompileToDll(string assemblyName, string source, string outputPath, params string[] extraReferences)
+    {
+        var refs = new List<MetadataReference>();
+        if (AppContext.GetData("TRUSTED_PLATFORM_ASSEMBLIES") is string tpa)
+        {
+            foreach (var entry in tpa.Split(Path.PathSeparator, StringSplitOptions.RemoveEmptyEntries))
+            {
+                var name = Path.GetFileNameWithoutExtension(entry);
+                if (name is "System.Private.CoreLib" or "System.Runtime" && File.Exists(entry))
+                {
+                    refs.Add(MetadataReference.CreateFromFile(entry));
+                }
+            }
+        }
+
+        foreach (var extra in extraReferences)
+        {
+            refs.Add(MetadataReference.CreateFromFile(extra));
+        }
+
+        var compilation = CSharpCompilation.Create(
+            assemblyName,
+            new[] { CSharpSyntaxTree.ParseText(source) },
+            refs,
+            new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary));
+        var emit = compilation.Emit(outputPath);
+        Assert.True(emit.Success, "Fixture compilation failed: " + string.Join("; ", emit.Diagnostics));
     }
 }

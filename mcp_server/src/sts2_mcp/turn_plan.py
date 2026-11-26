@@ -179,7 +179,7 @@ def diverged(plan_time: dict | str | None, current: dict | str | None) -> str | 
     if plan_cids and any(
         (c := _read_uint(card, "cid")) is not None
         and c not in plan_cids
-        and _read_bool(card, "playable") is not False
+        and (_read_bool(card, "playable") is not False or _is_harmful_unplayable_card(card))
         for card in _hand(now)
     ):
         return STOP_NEW_CARDS
@@ -351,6 +351,15 @@ def _player_hp(root: dict) -> int | None:
     hp = _read_string(player, "hp") if isinstance(player, dict) else None
     slash = -1 if hp is None else hp.find("/")
     return _parse_int_text(hp[:slash], _INT32_MIN, _INT32_MAX) if slash > 0 else None
+
+_HARMFUL_UNPLAYABLE_CARD_IDS = frozenset({
+    "BAD_LUCK", "BURN", "DEBT", "DECAY", "DOUBT", "INFECTION",
+    "NORMALITY", "REGRET", "SHAME", "VOID", "WITHER",
+})
+
+def _is_harmful_unplayable_card(card: dict) -> bool:
+    card_id = _read_string(card, "card_id")
+    return card_id is not None and card_id.upper() in _HARMFUL_UNPLAYABLE_CARD_IDS
 
 def _read_string(parent: dict, name: str) -> str | None:
     value = parent.get(name)

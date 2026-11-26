@@ -30,7 +30,7 @@
 
 ## 2. 验证体系与剩余边界
 
-- **离线契约**：C# 核心单测（`STS2AIAgent.Tests`，1,192 项，含体量棘轮、反射注册表、离线 ABI 审计、动作面与代码地图新鲜度）、Python MCP 单元测试（`mcp_server/tests`，466 项，含原生/Python 工具双向对齐与脚本可移植性）、12 项静态验证闸门（`scripts/check_verification_gates.py`）。
+- **离线契约**：C# 核心单测（`STS2AIAgent.Tests`，1,193 项，含体量棘轮、反射注册表、离线 ABI 审计、动作面与代码地图新鲜度）、Python MCP 单元测试（`mcp_server/tests`，466 项，含原生/Python 工具双向对齐与脚本可移植性）、12 项静态验证闸门（`scripts/check_verification_gates.py`）。
 - **发版双版本门禁**：`scripts/package-release.ps1` 与 `scripts/package-steam-workshop.ps1` 强制调用 `scripts/test-release-compatibility.ps1`，使用同一份最终 DLL 在最低支持版本与目标版本两个真实游戏副本上跑隔离冒烟。流程见 [docs/release-readiness.md](docs/release-readiness.md)。
 - **已知后置与未覆盖边界**（不构成当前阻塞，后续按需补测，详情见 [docs/live-validation-checklist.md](docs/live-validation-checklist.md)）：
   1. 3–4 人真实在线联机局尚未实机测试。

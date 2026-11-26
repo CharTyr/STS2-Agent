@@ -52,9 +52,10 @@ internal static class PlayStylePresetPolicy
                 settings.TurnPlansEnabled = true;
                 settings.CombatMathEnabled = true;
                 settings.VisionMode = AgentSettings.VisionOnDemand;
+                settings.HudMode = AgentSettings.HudFull;
                 settings.RunJournalEnabled = true;
                 settings.SpectatorHighlightMs = 400;
-                settings.MaxOutputTokens = 16384;
+                settings.MaxOutputTokens = AgentSettings.DefaultMaxOutputTokens;
                 settings.EnsureValidShape();
                 return true;
 
@@ -95,8 +96,9 @@ internal static class PlayStylePresetPolicy
 
         if (settings.TurboMode == AgentSettings.TurboFast
             && settings.VisionMode == AgentSettings.VisionOnDemand
+            && settings.HudMode == AgentSettings.HudFull
             && settings.SpectatorHighlightMs == 400
-            && settings.MaxOutputTokens == 16384)
+            && settings.MaxOutputTokens == AgentSettings.DefaultMaxOutputTokens)
         {
             return Push;
         }

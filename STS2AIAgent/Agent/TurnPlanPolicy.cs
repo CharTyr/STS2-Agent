@@ -239,11 +239,13 @@ internal static class TurnPlanPolicy
             }
 
             var planCids = Hand(plan).Select(card => ReadUInt(card, "cid")).Where(cid => cid != null).ToHashSet();
-            // Newly drawn cards only invalidate a plan when at least one of them may be playable
-            // (playable == true or absent/unknown -> fail closed). Unplayable draws (e.g. 0 energy
-            // left or an unplayable Status) cannot improve remaining steps and should not waste an LLM turn.
+            // Newly drawn cards only invalidate a plan when at least one is playable/unknown OR
+            // carries a harmful unplayable side-effect (turn-end damage/debuff, draw energy loss,
+            // or play-count cap such as Burn/Regret/BadLuck/Void/Normality). Benign unplayable
+            // draws (e.g. Wound/Dazed or 0-energy leftovers) should not waste an LLM turn.
             if (planCids.Count > 0 && Hand(current).Any(card =>
-                    ReadUInt(card, "cid") is { } cid && !planCids.Contains(cid) && ReadBool(card, "playable") != false))
+                    ReadUInt(card, "cid") is { } cid && !planCids.Contains(cid)
+                    && (ReadBool(card, "playable") != false || IsHarmfulUnplayableCard(card))))
             {
                 return TurnPlanStopReasons.NewCards;
             }
@@ -496,6 +498,15 @@ internal static class TurnPlanPolicy
         var slash = hp?.IndexOf('/') ?? -1;
         return slash > 0 && int.TryParse(hp![..slash].Trim(), out var value) ? value : null;
     }
+
+    private static readonly HashSet<string> HarmfulUnplayableCardIds = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "BAD_LUCK", "BURN", "DEBT", "DECAY", "DOUBT", "INFECTION",
+        "NORMALITY", "REGRET", "SHAME", "VOID", "WITHER"
+    };
+
+    private static bool IsHarmfulUnplayableCard(JsonElement card) =>
+        ReadString(card, "card_id") is { Length: > 0 } cardId && HarmfulUnplayableCardIds.Contains(cardId);
 
     private static bool IsObject(JsonElement parent, string name) =>
         parent.ValueKind == JsonValueKind.Object && parent.TryGetProperty(name, out var value) && value.ValueKind == JsonValueKind.Object;

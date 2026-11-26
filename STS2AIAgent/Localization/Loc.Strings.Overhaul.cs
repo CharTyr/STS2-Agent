@@ -26,6 +26,7 @@ internal static partial class Loc
         map["地图上只有一条路可走。"] = "The map offers a single path.";
         map["奖励里没有需要取舍的项目，全部领取并继续。"] = "Nothing in the rewards needs a choice; take them all and continue.";
         map["先领取金币或遗物；选卡留给模型。"] = "Take the gold or relic first; the card pick is left to the model.";
+        map["先领取空槽可装下的药水；其余奖励留给模型。"] = "Take the potion that fits an open slot; the rest stays with the model.";
         map["事件只剩一个可选项。"] = "The event has a single option left.";
         map["只有一个可选项。"] = "There is a single option.";
         map["休息点只有一个可用选项。"] = "The rest site has a single available option.";
@@ -79,9 +80,11 @@ internal static partial class Loc
         map["例如：优先精简牌库、Act 1 血量健康尽量打精英、不盲拿高费牌…"] = "e.g. Keep the deck lean, fight Act 1 elites when healthy, avoid clunky high-cost duplicates...";
         map["保存偏好"] = "Save notes";
         map["清空偏好"] = "Clear notes";
-        map["一键预设：省钱速通（极速+关闭截图+4k输出上限）、均衡游玩（推荐默认）、冲层观战（快速+短暂出牌高亮停顿+16k输出上限）；不会改动你的端点或密钥。\n游戏速度：AI 自动游玩时把游戏自带的动画速度调快，暂停或停止后恢复你原来的设置；联机时最多用「快速」。不会改写你的游戏设置文件。\n小事自动处理：只剩一个选择、确认教学弹窗、无牌可出时结束回合这类不用判断的步骤，直接完成，不花模型请求。选牌、路线、商店、事件、药水永远交给模型。\n整回合规划：战斗中模型一次给出整回合的出牌顺序，Mod 每一步都用最新局面核对，局面一变就停下重新问。\n战斗算术：把来袭伤害、需要多少格挡、每张牌对每个敌人的真实伤害和能否斩杀算好交给模型。\n截图「按需」：只在局面看不懂或上一步出错时才附截图，更省更快。\n游戏画面提示与出牌前高亮停顿：在游戏画面上显示 AI 要出的牌、目标和理由；开启短暂/观战停顿可在极速模式下看清每一张出牌。\n跨局风格偏好：长期生效的打法备注，放在静态前缀中不影响提示词缓存。"] =
-            "One-click presets: Economy (Instant + no screenshots + 4k output cap), Balanced (recommended default), Push & Watch (Fast + brief pre-play highlight dwell + 16k output cap); never modifies endpoints or keys.\nGame speed: while the AI plays, the game's own animation speed is raised; pausing or stopping restores your setting. Co-op uses Fast at most. Your game settings file is never rewritten.\nForced moves: steps with no real choice — a single option, a tutorial popup, ending a turn with nothing playable — are done at once without a model request. Card picks, routes, shops, events and potions always go to the model.\nWhole-turn plans: in combat the model gives the whole turn's card order at once; the mod checks every step against the live game and asks again as soon as something changes.\nCombat math: incoming damage, block needed, each card's real damage on each enemy and lethal are computed for the model.\nScreenshots “When needed”: only when the screen is unclear or the last step failed — cheaper and faster.\nOn-screen hints & pre-play highlight dwell: show the card, target and reason the AI is about to play; Brief/Spectator dwell lets you read every play even at high speed.\nCross-run playstyle notes: persistent preferences placed in the static prefix so prompt caching stays warm.";
+        map["一键预设：省钱速通（极速+关闭截图+4k输出上限）、均衡游玩（推荐默认）、冲层观战（快速+完整画面提示+短暂出牌高亮停顿+8k输出上限）；不会改动你的端点或密钥。\n游戏速度：AI 自动游玩时把游戏自带的动画速度调快，暂停或停止后恢复你原来的设置；联机时最多用「快速」。不会改写你的游戏设置文件。\n小事自动处理：只剩一个选择、确认教学弹窗、无牌可出时结束回合这类不用判断的步骤，直接完成，不花模型请求。选牌、路线、商店、事件、药水永远交给模型。\n整回合规划：战斗中模型一次给出整回合的出牌顺序，Mod 每一步都用最新局面核对，局面一变就停下重新问。\n战斗算术：把来袭伤害、需要多少格挡、每张牌对每个敌人的真实伤害和能否斩杀算好交给模型。\n截图「按需」：只在局面看不懂或上一步出错时才附截图，更省更快。\n游戏画面提示与出牌前高亮停顿：在游戏画面上显示 AI 要出的牌、目标和理由；开启短暂/观战停顿可在高倍速下看清每一张出牌。\n跨局风格偏好：长期生效的打法备注（最多 400 字），放在静态前缀中不影响提示词缓存。"] =
+            "One-click presets: Economy (Instant + no screenshots + 4k output cap), Balanced (recommended default), Push & Watch (Fast + Full HUD + brief pre-play highlight dwell + 8k output cap); never modifies endpoints or keys.\nGame speed: while the AI plays, the game's own animation speed is raised; pausing or stopping restores your setting. Co-op uses Fast at most. Your game settings file is never rewritten.\nForced moves: steps with no real choice — a single option, a tutorial popup, ending a turn with nothing playable — are done at once without a model request. Card picks, routes, shops, events and potions always go to the model.\nWhole-turn plans: in combat the model gives the whole turn's card order at once; the mod checks every step against the live game and asks again as soon as something changes.\nCombat math: incoming damage, block needed, each card's real damage on each enemy and lethal are computed for the model.\nScreenshots “When needed”: only when the screen is unclear or the last step failed — cheaper and faster.\nOn-screen hints & pre-play highlight dwell: show the card, target and reason the AI is about to play; Brief/Spectator dwell lets you read every play even at high speed.\nCross-run playstyle notes: persistent preferences (up to 400 chars) placed in the static prefix so prompt caching stays warm.";
         // Co-op quick tactical commands (Multiplayer/TeamQuickCommands.cs, Ui/AgentOverlayHost.Pages.cs).
+        map["队友请求本回合一起集火 enemy_index {0}。在保证存活的前提下，优先把伤害集中到它身上以尽快击杀。"] =
+            "Your teammate asked to focus fire enemy_index {0} together this turn. Prioritize dealing damage to that target to finish it quickly while staying safe.";
         map["聊天不会替你出牌，也不会恢复已暂停的队友。\n你的建议和快捷战术指令会作为队友下一次决策的参考。"] =
             "Chat will not play for you or resume a paused teammate.\nYour messages and quick tactical commands guide your teammate's next decision.";
         map["我打 0 号（你打其他）"] = "I'll hit #0 (split fire)";
@@ -97,10 +100,10 @@ internal static partial class Loc
         map["请前往服务商后台充值、检查配额，或切换其他可用端点。"] = "Top up your balance, check provider quota, or switch to another endpoint.";
         map["{0} 拒绝了当前地区或代理出口（403）。"] = "{0} blocked the current region or proxy exit (403).";
         map["请切换支持的代理地区，或改用支持直连的服务商端点。"] = "Switch to a supported proxy region or use a provider available in your region.";
-        map["{0} / {1} 不支持当前工具调用格式（400）。"] = "{0} / {1} rejected OpenAI tool calling (400).";
+        map["{0} / {1} 不支持当前工具调用格式（{2}）。"] = "{0} / {1} rejected OpenAI tool calling ({2}).";
         map["建议更换支持 OpenAI Tool Calling 的模型（如 gpt-4o / deepseek-chat / claude / gemini）。"] = "Switch to a model that supports OpenAI tool calling (e.g. gpt-4o, deepseek-chat, claude, gemini).";
-        map["{0} / {1} 拒绝了长度参数（400）。"] = "{0} / {1} rejected the token length parameter (400).";
-        map["请调低「单次输出上限」，或检查该服务商是否兼容标准 OpenAI 接口。"] = "Lower the per-response output token cap or check OpenAI API compatibility.";
+        map["{0} / {1} 拒绝了长度参数（{2}）。"] = "{0} / {1} rejected the token length parameter ({2}).";
+        map["可尝试切换为「省钱速通」预设以降低单次输出上限，或检查该服务商是否兼容标准 OpenAI 接口。"] = "Try switching to the Economy preset for a lower output token cap, or check OpenAI API compatibility.";
         map["请检查该端点的 API Key 是否填写正确且未过期。"] = "Check that this endpoint's API key is correct and has not expired.";
         map["连接 {0} 时发生 TLS/代理握手错误。"] = "TLS or proxy handshake failed while connecting to {0}.";
         map["请检查系统代理、VPN 节点与 HTTPS 证书设置。"] = "Check your system proxy, VPN node, and HTTPS certificate settings.";

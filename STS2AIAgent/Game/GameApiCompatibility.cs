@@ -32,7 +32,7 @@ internal static class GameApiCompatibility
     private static readonly PropertyInfo? ArrowAvailable = PublicProperty(ArrowType, "IsAvailable");
     private static readonly PropertyInfo? BaseArrowSlots = PublicProperty(typeof(CharacterModel), "BaseArrowSlotCount");
     private static readonly Func<Player, int>? ReadArrowCount =
-        Method(ArrowCommands, "GetAvailableArrowCount", true, [typeof(Player)])?.CreateDelegate<Func<Player, int>>();
+        TryCreateDelegate<Func<Player, int>>(Method(ArrowCommands, "GetAvailableArrowCount", true, [typeof(Player)]));
     private static readonly Func<Player, bool>? PlayedWah = ReadMelodyFlag("PlayedWahThisTurn");
     private static readonly Func<Player, bool>? PlayedCho = ReadMelodyFlag("PlayedChoThisTurn");
     private static readonly Func<Player, bool>? PlayedKi = ReadMelodyFlag("PlayedKiThisTurn");
@@ -78,13 +78,13 @@ internal static class GameApiCompatibility
 
     private static readonly MethodInfo? ProceedRewards = Method(typeof(RunManager), "ProceedFromTerminalRewardsScreen", false, Type.EmptyTypes);
     private static readonly Func<ICombatState, Creature, decimal, ValueProp, Creature, Creature?>? PreBlockTarget =
-        Method(typeof(Hook), "ModifyPreBlockDamageTarget", true,
-            [typeof(ICombatState), typeof(Creature), typeof(decimal), typeof(ValueProp), typeof(Creature)])
-        ?.CreateDelegate<Func<ICombatState, Creature, decimal, ValueProp, Creature, Creature?>>();
+        TryCreateDelegate<Func<ICombatState, Creature, decimal, ValueProp, Creature, Creature?>>(
+            Method(typeof(Hook), "ModifyPreBlockDamageTarget", true,
+                [typeof(ICombatState), typeof(Creature), typeof(decimal), typeof(ValueProp), typeof(Creature)]));
 
     // C# inlines enum values. Resolve the names on the loaded game for the phases that moved.
-    public static readonly HpLossHookPhase BeforeOsty = Enum.Parse<HpLossHookPhase>(nameof(HpLossHookPhase.BeforeOsty));
-    public static readonly HpLossHookPhase AfterOsty = Enum.Parse<HpLossHookPhase>(nameof(HpLossHookPhase.AfterOsty));
+    public static readonly HpLossHookPhase BeforeOsty = ParseHookPhase(nameof(HpLossHookPhase.BeforeOsty), HpLossHookPhase.BeforeOsty);
+    public static readonly HpLossHookPhase AfterOsty = ParseHookPhase(nameof(HpLossHookPhase.AfterOsty), HpLossHookPhase.AfterOsty);
 
     public static CombatArrowPayload[] BuildArrows(PlayerCombatState combat)
     {
@@ -211,7 +211,8 @@ internal static class GameApiCompatibility
 
         var arrows = ArrowType == null
             ? new CapabilityStatus("fool_arrows", "not_in_branch", null, null)
-            : Arrows != null && ArrowStatus != null && ArrowAvailable != null && ReadArrowCount != null && ShootTag != null
+            : Arrows != null && ArrowStatus != null && ArrowAvailable != null && BaseArrowSlots != null
+                && ReadArrowCount != null && ShootTag != null
                 ? new CapabilityStatus("fool_arrows", "available", "PlayerCombatState.Arrows", null)
                 : new CapabilityStatus("fool_arrows", "missing", "ArrowSlot", "Fool ArrowSlot type exists, but one or more arrow members failed to bind.");
 
@@ -225,8 +226,13 @@ internal static class GameApiCompatibility
             ? new CapabilityStatus("blitz_dread_modes", "not_in_branch", null, null)
             : BlitzScreen != null && DreadScreen != null && BlitzLobby != null && DreadLobby != null
                 && BlitzShop != null && BlitzChoices != null && BlitzEntries != null
+                && BlitzEntryType != null && BlitzEntryKind != null && BlitzEntryTitle != null
+                && BlitzEntryDescription != null && BlitzEntryStatus != null
+                && BlitzEntryCursed != null && BlitzEntryRare != null
+                && RotatingCharacter != null && BlitzAscension != null && RotatingDread != null
+                && Dominion != null && CustomRun != null && PlayingRotating != null
                 ? new CapabilityStatus("blitz_dread_modes", "available", "NBlitzScreen/NDreadScreen", null)
-                : new CapabilityStatus("blitz_dread_modes", "missing", "NBlitzScreen/NDreadScreen", "Blitz/Dread screens partially present, but lobby or Blitz shop properties failed to bind.");
+                : new CapabilityStatus("blitz_dread_modes", "missing", "NBlitzScreen/NDreadScreen", "Blitz/Dread screens partially present, but lobby, Dread, or Blitz shop members failed to bind.");
 
         var preBlock = PreBlockTarget != null
             ? new CapabilityStatus("pre_block_damage_redirect", "available", "Hook.ModifyPreBlockDamageTarget", null)
@@ -238,23 +244,42 @@ internal static class GameApiCompatibility
     internal static bool HasMissingBindings => BuildHealthBindings().Any(item => item.status == "missing");
 
     private static bool HasAscensionMethod(string name) =>
-        Method(typeof(AscensionHelper), name, true, [typeof(int), typeof(GameMode)]) != null
-        || Method(typeof(AscensionHelper), name, true, [typeof(int)]) != null;
+        TryCreateDelegate<Func<int, GameMode, LocString>>(Method(typeof(AscensionHelper), name, true, [typeof(int), typeof(GameMode)])) != null
+        || TryCreateDelegate<Func<int, LocString>>(Method(typeof(AscensionHelper), name, true, [typeof(int)])) != null;
 
     private static CardTag? FindTag(string name) => Enum.TryParse<CardTag>(name, out var tag) ? tag : null;
 
+    private static HpLossHookPhase ParseHookPhase(string name, HpLossHookPhase fallback) =>
+        Enum.TryParse<HpLossHookPhase>(name, out var parsed) ? parsed : fallback;
+
+    private static TDelegate? TryCreateDelegate<TDelegate>(MethodInfo? method) where TDelegate : Delegate
+    {
+        if (method == null)
+        {
+            return null;
+        }
+
+        try
+        {
+            return method.CreateDelegate<TDelegate>();
+        }
+        catch (ArgumentException)
+        {
+            return null;
+        }
+    }
+
     private static Func<Player, bool>? ReadMelodyFlag(string name) =>
-        Method(MelodyCommands, name, true, [typeof(Player)])?.CreateDelegate<Func<Player, bool>>();
+        TryCreateDelegate<Func<Player, bool>>(Method(MelodyCommands, name, true, [typeof(Player)]));
 
     private static Func<int, GameMode, LocString> BindAscensionText(string name)
     {
         var type = typeof(AscensionHelper);
-        if (Method(type, name, true, [typeof(int), typeof(GameMode)]) is { } current)
+        if (TryCreateDelegate<Func<int, GameMode, LocString>>(Method(type, name, true, [typeof(int), typeof(GameMode)])) is { } current)
         {
-            return current.CreateDelegate<Func<int, GameMode, LocString>>();
+            return current;
         }
-        var legacy = Method(type, name, true, [typeof(int)])
-            ?.CreateDelegate<Func<int, LocString>>();
+        var legacy = TryCreateDelegate<Func<int, LocString>>(Method(type, name, true, [typeof(int)]));
         return (level, _) => (legacy ?? throw new MissingMethodException(type.Name, name))(level);
     }
 

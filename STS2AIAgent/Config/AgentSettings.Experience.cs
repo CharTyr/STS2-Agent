@@ -121,17 +121,39 @@ internal sealed partial class AgentSettings
         PlayerPreferences = NormalizePreferences(PlayerPreferences);
     }
 
-    private static string NormalizePreferences(string? value)
+    internal static string NormalizePreferences(string? value)
     {
         if (string.IsNullOrWhiteSpace(value))
         {
             return string.Empty;
         }
 
-        var normalized = value.Replace("\r\n", "\n").Replace('\r', '\n').Trim();
-        return normalized.Length <= MaxPlayerPreferencesLength
-            ? normalized
-            : normalized[..MaxPlayerPreferencesLength].TrimEnd();
+        var normalized = value.Replace("\r\n", "\n").Replace('\r', '\n');
+        var cleaned = new System.Text.StringBuilder(Math.Min(normalized.Length, MaxPlayerPreferencesLength + 16));
+        foreach (var ch in normalized)
+        {
+            if (char.IsControl(ch) && ch is not '\n' and not '\t')
+            {
+                continue;
+            }
+
+            cleaned.Append(ch);
+        }
+
+        var trimmed = cleaned.ToString().Trim();
+        if (trimmed.Length <= MaxPlayerPreferencesLength)
+        {
+            return trimmed;
+        }
+
+        var cap = MaxPlayerPreferencesLength;
+        // Avoid splitting a UTF-16 surrogate pair (e.g. emoji or supplementary CJK) at the cap boundary.
+        if (cap > 0 && char.IsHighSurrogate(trimmed[cap - 1]))
+        {
+            cap--;
+        }
+
+        return trimmed[..cap].TrimEnd();
     }
 
     private static string NormalizeChoice(string? value, string fallback, params string[] allowed)

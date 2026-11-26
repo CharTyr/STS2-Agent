@@ -867,8 +867,18 @@ internal sealed partial class AgentLoop
             try { _reportIntent?.Invoke(LiveIntent.Create(argumentsJson, compactJson, DateTimeOffset.UtcNow)); }
             catch (Exception) { }
             var currentSettings = _settings();
+            uint? expectedCardCid = action == "play_card"
+                ? (ReadInt(args, "card_cid") is >= 0 and var explicitCid
+                    ? (uint)explicitCid
+                    : cardIndex is >= 0 ? ReadCardCidAtIndex(compactJson, cardIndex.Value) : null)
+                : null;
+            var expectedPotionId = action == "use_potion" && optionIndex is >= 0
+                ? ReadPotionIdAtIndex(compactJson, optionIndex.Value)
+                : null;
             if (currentSettings.SpectatorHighlightMs > 0
-                && !string.Equals(currentSettings.HudMode, AgentSettings.HudOff, StringComparison.Ordinal)
+                && string.Equals(currentSettings.HudMode, AgentSettings.HudFull, StringComparison.Ordinal)
+                && !InstanceRole.IsCompanion
+                && !string.Equals(mode, "chat", StringComparison.Ordinal)
                 && action is "play_card" or "use_potion")
             {
                 var dwellMs = Math.Clamp(currentSettings.SpectatorHighlightMs, 0, AgentSettings.MaxSpectatorHighlightMs);
@@ -889,9 +899,12 @@ internal sealed partial class AgentLoop
                 {
                     if (_settings().NonCombatOnlyEnabled && NonCombatOnlyPolicy.IsCombatSnapshot(latest))
                         throw new NonCombatOnlyYieldException();
-                    if (action == "play_card" && ReadInt(args, "card_cid") is >= 0 and var expectedCid
-                        && TurnPlanPolicy.FindCardIndex(latest, (uint)expectedCid) != cardIndex)
+                    if (action == "play_card" && expectedCardCid is { } expectedCid
+                        && TurnPlanPolicy.FindCardIndex(latest, expectedCid) != cardIndex)
                         throw new ApiException(409, "invalid_target", "The card moved before dispatch; read state again.");
+                    if (action == "use_potion" && expectedPotionId != null && optionIndex is >= 0
+                        && !string.Equals(ReadPotionIdAtIndex(latest, optionIndex.Value), expectedPotionId, StringComparison.Ordinal))
+                        throw new ApiException(409, "invalid_target", "The potion slot changed before dispatch; read state again.");
                     ValidateSandpitDispatch(latest, action, cardIndex, requireSandpitEscape);
                 });
             if (AgentErrorEnvelope.TryReadError(result, out var bridgeError))

@@ -16,7 +16,7 @@ Two consequences of that split are worth knowing:
 
 Read `map.nodes[]` for the whole graph and `map.options[]` for what may be picked now. `options[].i` is the `choose_map_node` argument; `nodes[]` is for planning ahead. Raw `/state` calls that list `available_nodes` and that index `index`.
 
-1. **Health is the budget.** Compare the two numbers in `run.hp` (`"current/max"`) before anything else. Above roughly 65%, `Elite` nodes are the best value on the map: they pay a relic and more gold than a normal fight. Below roughly 45%, take `Rest` over `Elite` and prefer the path with fewer forced fights even if it costs a chest.
+1. **Health is the budget.** Compare `run.hp` (`"current/max"`) first. In Act 1 above ~70% HP, `Elite` nodes pay strong relic/gold value; in Acts 2-3 elites hit harder, so take them only when the deck has answers. Below ~45%, prefer `Rest` and fewer forced fights even if it costs a chest.
 2. **Do not enter an `Elite` you cannot read.** If an act boss is known and the deck still has no answer to it, an `Elite` that does not fix that is a coin flip. Take `Shop` or `Event` instead when both are on offer.
 3. **`Rest` before the boss is worth more than `Rest` early.** A rest node in the last row before `map.boss_node` can be spent on the boss; one in row 2 usually cannot. When both are reachable, take the later one.
 4. **`Shop` is worth a detour when `run.gold` is above roughly 250**, because that is where card removal (`shop.remove.price`) becomes affordable alongside a purchase. Below that, a shop you walk past costs nothing.

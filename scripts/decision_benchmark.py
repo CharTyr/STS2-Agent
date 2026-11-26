@@ -451,6 +451,7 @@ def _validate_plan_expectation(case_id: str, expectation: Expectation, state: Ma
             _entry_index(card)
             for card in hand
             if isinstance(card, Mapping)
+            and card.get("playable") is not False
             and (cell := _vs_cell(card, enemy)) is not None
             and cell.get("kills") is True
         ]
@@ -475,7 +476,7 @@ def _validate_plan_expectation(case_id: str, expectation: Expectation, state: Ma
             )
         best_saving = 0
         for card in hand:
-            if not isinstance(card, Mapping):
+            if not isinstance(card, Mapping) or card.get("playable") is False:
                 continue
             best_saving = max(best_saving, _card_block(card))
             for cell in card.get("vs") or []:
@@ -590,6 +591,8 @@ def _answered_card(answer: Mapping[str, Any], state: Mapping[str, Any]) -> Mappi
 def _score_plan(expectation: Expectation, answer: Mapping[str, Any], state: Mapping[str, Any]) -> tuple[bool, str]:
     """Score one plan constraint against the answered single action and the frame's own numbers."""
     card = _answered_card(answer, state)
+    if card is not None and card.get("playable") is False:
+        return False, "the answered card is marked playable=false and cannot be played"
     target = answer.get("target_index")
     threat = _threat(state)
 

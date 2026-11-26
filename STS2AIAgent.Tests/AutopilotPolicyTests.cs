@@ -83,6 +83,14 @@ internal static class AutopilotPolicyTests
         Assert.Equal("claim_reward", openPotionRow.Action, "A claimable potion with an open belt slot is claimed before asking the model to pick a card.");
         Assert.Equal(1, openPotionRow.OptionIndex);
         Assert.Equal("reward_claim_safe", openPotionRow.RuleId);
+
+        var twoPotionsOneSlot = Decide("""{"screen":"REWARD","available_actions":["claim_reward","collect_rewards_and_proceed"],"run":{"potions":[{"i":0,"potion_id":"FIRE_POTION"},{"i":1,"potion_id":null}]},"reward":{"rewards":[{"i":0,"line":"Potion: 力量药水","claimable":true},{"i":1,"line":"Potion: 敏捷药水","claimable":true}],"cards":[]}}""");
+        Assert.Equal("claim_reward", twoPotionsOneSlot.Action, "Two potions with only one open slot must claim one at a time rather than bulk-proceeding past the second.");
+        Assert.Equal(0, twoPotionsOneSlot.OptionIndex);
+
+        var specialCardRow = Decide("""{"screen":"REWARD","available_actions":["claim_reward","collect_rewards_and_proceed"],"reward":{"rewards":[{"i":0,"line":"SpecialCard: 选择特殊牌","claimable":true},{"i":1,"line":"Gold: 获得 25 金币","claimable":true}],"cards":[]}}""");
+        Assert.Equal("claim_reward", specialCardRow.Action, "SpecialCard rows require model choice and must not trigger collect_rewards_and_proceed.");
+        Assert.Equal(1, specialCardRow.OptionIndex);
     }
 
     public static void SingleOptionScreensAreResolved()
@@ -108,15 +116,17 @@ internal static class AutopilotPolicyTests
         Assert.Equal("close_main_menu_submenu", patchNotes.Action);
         Assert.Equal("patch_notes_close", patchNotes.RuleId);
 
-        var forcedCombatCard = Decide("""{"screen":"CARD_SELECTION","in_combat":true,"available_actions":["select_deck_card"],"selection":{"min":1,"max":1,"selected":0,"confirm":false,"cards":[{"i":0,"line":"Strike"}]}}""");
+        var forcedCombatCard = Decide("""{"screen":"CARD_SELECTION","in_combat":true,"available_actions":["select_deck_card"],"selection":{"kind":"combat_hand_select","min":1,"max":1,"selected":0,"confirm":false,"cards":[{"i":0,"line":"Strike"}]}}""");
         Assert.Equal("select_deck_card", forcedCombatCard.Action);
         Assert.Equal(0, forcedCombatCard.OptionIndex);
         Assert.Equal("combat_card_selection_single", forcedCombatCard.RuleId);
-        Assert.False(Decide("""{"screen":"CARD_SELECTION","in_combat":true,"available_actions":["select_deck_card"],"selection":{"min":1,"max":1,"selected":0,"confirm":false,"cards":[{"i":0},{"i":1}]}}""").ShouldAct,
+        Assert.False(Decide("""{"screen":"CARD_SELECTION","in_combat":true,"available_actions":["select_deck_card"],"selection":{"kind":"choose_card_select","min":1,"max":1,"selected":0,"confirm":false,"cards":[{"i":0,"line":"Strike"}]}}""").ShouldAct,
+            "choose_card_select can offer a Skip button not reflected in min and stays with the model.");
+        Assert.False(Decide("""{"screen":"CARD_SELECTION","in_combat":true,"available_actions":["select_deck_card"],"selection":{"kind":"combat_hand_select","min":1,"max":1,"selected":0,"confirm":false,"cards":[{"i":0},{"i":1}]}}""").ShouldAct,
             "Two cards to pick from is a real choice.");
-        Assert.False(Decide("""{"screen":"CARD_SELECTION","in_combat":true,"available_actions":["select_deck_card"],"selection":{"min":0,"max":1,"selected":0,"confirm":false,"cards":[{"i":0}]}}""").ShouldAct,
+        Assert.False(Decide("""{"screen":"CARD_SELECTION","in_combat":true,"available_actions":["select_deck_card"],"selection":{"kind":"combat_hand_select","min":0,"max":1,"selected":0,"confirm":false,"cards":[{"i":0}]}}""").ShouldAct,
             "An optional 0-to-1 pick is a real choice.");
-        Assert.False(Decide("""{"screen":"CARD_SELECTION","in_combat":false,"available_actions":["select_deck_card"],"selection":{"min":1,"max":1,"selected":0,"confirm":false,"cards":[{"i":0}]}}""").ShouldAct,
+        Assert.False(Decide("""{"screen":"CARD_SELECTION","in_combat":false,"available_actions":["select_deck_card"],"selection":{"kind":"combat_hand_select","min":1,"max":1,"selected":0,"confirm":false,"cards":[{"i":0}]}}""").ShouldAct,
             "Out-of-combat deck selection stays with the model.");
     }
 

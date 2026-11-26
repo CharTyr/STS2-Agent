@@ -213,6 +213,7 @@ steamcmd +login <你的账号> +app_info_update 1 +app_info_print 2868840 +quit 
 - `scripts/check-cloud-dev.sh` — 三层能力报告 + CI 对齐的离线/双版本编译检查
 - `scripts/pack-game-assemblies.ps1` — 有游戏的 Windows 机器上提取最小程序集与元数据压缩包
 - `scripts/unpack-game-assemblies.sh` — 云机校验解包（支持 `--as-min`、`--slot`、`--decompile`）
+- `scripts/check-game-abi.ps1` / `scripts/check-game-abi.sh` — 离线 ECMA-335 ABI、反射成员与跨分支能力审计包装脚本
 - `.devcontainer/` — 固化 L0 工具链的容器配置（自动解包工作区 `build/game-assemblies/`）
 - [build-and-env.md](build-and-env.md) — 构建、部署与环境变量总表
 - [project-map.md](project-map.md) — 仓库架构与代码地图

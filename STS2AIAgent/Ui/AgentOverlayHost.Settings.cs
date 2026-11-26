@@ -387,6 +387,9 @@ internal sealed partial class AgentOverlayHost
         _conversationCombo = null;
         _visionCombo = null;
         _maxTokensEdit = _maxRequestsEdit = _llmTimeoutEdit = _minDecisionIntervalEdit = _hotkeyEdit = null;
+        _experienceCard = null;
+        _playerPreferencesEdit = null;
+        _economyPresetButton = _balancedPresetButton = _pushPresetButton = null;
         _modelTestButtons.Clear();
         _modelTestBadges.Clear();
         _endpointEditors.Clear();
@@ -834,6 +837,11 @@ internal sealed partial class AgentOverlayHost
             SettingsInput.TryParseOptionalIntervalSeconds(_minDecisionIntervalEdit.Text, out var minInterval))
         {
             current.MinDecisionIntervalSeconds = minInterval;
+        }
+
+        if (_playerPreferencesEdit != null)
+        {
+            current.PlayerPreferences = _playerPreferencesEdit.Text;
         }
 
         ModelRoleProbe.InvalidateMismatched(current);

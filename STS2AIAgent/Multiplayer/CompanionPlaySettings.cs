@@ -104,6 +104,8 @@ internal sealed class CompanionPlaySettings
         settings.MaxOutputTokens = MaxOutputTokens;
         settings.MinDecisionIntervalSeconds = MinDecisionIntervalSeconds;
         settings.PlayerPreferences = PlayerPreferences ?? string.Empty;
+        // Spectator dwell is host-HUD-only; explicitly clear any value inherited from a seeded host config.
+        settings.SpectatorHighlightMs = 0;
         settings.EnsureValidShape();
     }
 }

@@ -196,9 +196,17 @@ internal static class AutopilotPolicy
         var rows = Array(reward, "rewards").ToList();
         var cardsPending = ReadBool(reward, "pending_card_choice") == true || Array(reward, "cards").Any();
         var fullBeltPotion = rows.Any(row => RowType(row) == "potion" && ReadBool(row, "claimable") == false);
-        var unopenedCard = rows.Any(row => RowType(row) == "card" && ReadBool(row, "claimable") == true);
+        var needsChoiceRow = rows.Any(row =>
+            ReadBool(row, "claimable") == true
+            && RowType(row) is "card" or "specialcard" or "removecard" or "linkedrewardset");
+        var claimablePotions = rows.Count(row => RowType(row) == "potion" && ReadBool(row, "claimable") == true);
+        var allPotionsFit = claimablePotions == 0 || CountOpenPotionSlots(root) switch
+        {
+            { } open => claimablePotions <= open,
+            null => claimablePotions == 1
+        };
 
-        if (Has(actions, "collect_rewards_and_proceed") && !cardsPending && !fullBeltPotion && !unopenedCard)
+        if (Has(actions, "collect_rewards_and_proceed") && !cardsPending && !fullBeltPotion && !needsChoiceRow && allPotionsFit)
         {
             return new AutopilotDecision("collect_rewards_and_proceed", null, "reward_collect_all", null);
         }
@@ -217,6 +225,25 @@ internal static class AutopilotPolicy
         return null;
     }
 
+    private static int? CountOpenPotionSlots(JsonElement root)
+    {
+        if (Object(root, "run") is not { } run || !run.TryGetProperty("potions", out var potions) || potions.ValueKind != JsonValueKind.Array)
+        {
+            return null;
+        }
+
+        var open = 0;
+        foreach (var slot in potions.EnumerateArray())
+        {
+            if (slot.ValueKind == JsonValueKind.Object && ReadString(slot, "potion_id") == null)
+            {
+                open++;
+            }
+        }
+
+        return open;
+    }
+
     private static AutopilotDecision? SingleOption(JsonElement root, string screen, IReadOnlyList<string> actions, bool inCombat)
     {
         switch (screen)
@@ -225,6 +252,14 @@ internal static class AutopilotPolicy
                 return new AutopilotDecision("close_main_menu_submenu", null, "patch_notes_close", null);
             case "CARD_SELECTION" when inCombat && Has(actions, "select_deck_card") && Object(root, "selection") is { } selection:
             {
+                // Restrict to non-skippable combat selection screens (exclude choose_card_select,
+                // where NChooseACardSelectionScreen may expose a Skip button not reflected in min).
+                var kind = ReadString(selection, "kind");
+                if (kind is not ("combat_hand_select" or "combat_hand_upgrade_select" or "deck_card_select"))
+                {
+                    return null;
+                }
+
                 var min = ReadInt(selection, "min");
                 var max = ReadInt(selection, "max");
                 var selected = ReadInt(selection, "selected");

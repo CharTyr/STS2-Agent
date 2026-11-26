@@ -162,7 +162,7 @@ internal static partial class GameStateService
             modal = modal,
             game_over = gameOver,
             AvailableActionDescriptors = availableActionDescriptors,
-            agent_view = BuildAgentViewPayload(
+            agent_view = GuardStateSection("agent_view", () => BuildAgentViewPayload(
                 screen,
                 inCombat,
                 session,
@@ -190,7 +190,7 @@ internal static partial class GameStateService
                 capstone,
                 unlock,
                 modal,
-                gameOver)
+                gameOver))
         };
 
         var slowBuild = StateBuildTiming.Instance.Record(buildTimer.Elapsed.TotalMilliseconds, screen, DateTime.UtcNow);
@@ -801,7 +801,7 @@ internal static partial class GameStateService
             });
         }
 
-        var gameOver = BuildGameOverPayload(currentScreen, runState) ?? new GameOverPayload();
+        var gameOver = GuardStateSection("game_over", () => BuildGameOverPayload(currentScreen, runState)) ?? new GameOverPayload();
         if (gameOver.waiting_for_other_players)
         {
             descriptors.Add(new ActionDescriptor

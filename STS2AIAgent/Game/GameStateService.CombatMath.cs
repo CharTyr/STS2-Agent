@@ -208,7 +208,7 @@ internal static partial class GameStateService
                 arrowCost));
         }
 
-        var (orbBlock, orbDamage) = ReadEndOfTurnOrbEffects(localPlayer?.PlayerCombatState);
+        var (orbBlock, orbDamage) = ReadEndOfTurnOrbEffects(combatState, localPlayer);
         var availableArrows = combat.player.arrows.Count(arrow => arrow.available);
         var canPayExcessEnergyWithStars = localPlayer != null && SafeReadExcessEnergyWithStars(combatState, localPlayer);
         var input = new CombatMathInput(
@@ -241,7 +241,7 @@ internal static partial class GameStateService
             end_of_turn_orb_block = threat.EndOfTurnOrbBlock,
             end_of_turn_orb_damage = threat.EndOfTurnOrbDamage,
             per_enemy = threat.PerEnemy.Select(enemy => new { i = enemy.Index, incoming = enemy.Incoming, hits = enemy.Hits }).ToArray(),
-            max_block = new { block = block.Block, energy = block.Energy, cids = block.CardCids, cards = block.CardIndices },
+            max_block = new { block = block.Block, energy = block.Energy, stars = block.Stars, arrows = block.Arrows, cids = block.CardCids, cards = block.CardIndices },
             kill_options = kills.Select(option => new
             {
                 enemy = option.EnemyIndex,
@@ -249,6 +249,8 @@ internal static partial class GameStateService
                 cids = option.CardCids,
                 cards = option.CardIndices,
                 energy = option.Energy,
+                stars = option.Stars,
+                arrows = option.Arrows,
                 damage = option.Damage,
                 overkill = option.Overkill
             }).ToArray(),
@@ -338,6 +340,11 @@ internal static partial class GameStateService
         return cells;
     }
 
+    // v0.114+ migrated multi-hit attacks to HitCountVar; remaining RepeatVars on attacks
+    // (e.g. IceLance channeling 3 Frost orbs, HeirloomHammer cloning) are non-hit repeats.
+    private static readonly bool GameUsesHitCountVar =
+        typeof(DynamicVar).Assembly.GetType("MegaCrit.Sts2.Core.Localization.DynamicVars.HitCountVar") != null;
+
     private static int? ReadHitCount(CardModel card, DynamicVarSet preview)
     {
         if (preview.TryGetValue("CalculatedHits", out var calculatedHits))
@@ -354,7 +361,7 @@ internal static partial class GameStateService
             return Math.Max(0, (int)hitCount.PreviewValue);
         }
 
-        if (card.Type == CardType.Attack && preview.TryGetValue("Repeat", out var repeat))
+        if (!GameUsesHitCountVar && card.Type == CardType.Attack && preview.TryGetValue("Repeat", out var repeat))
         {
             return Math.Max(0, (int)repeat.PreviewValue);
         }
@@ -377,32 +384,91 @@ internal static partial class GameStateService
         "RepeatShot", "Spite", "WahBlast", "Whirlwind"
     };
 
-    private static (int OrbBlock, int OrbDamage) ReadEndOfTurnOrbEffects(PlayerCombatState? playerCombatState)
+    private static (int OrbBlock, int OrbDamage) ReadEndOfTurnOrbEffects(ICombatState? combatState, Player? localPlayer)
     {
+        var playerCombatState = localPlayer?.PlayerCombatState;
         if (playerCombatState == null)
         {
             return (0, 0);
         }
 
+        var playerCreature = localPlayer?.Creature;
+        var hittableEnemyCount = combatState is CombatState concreteCombat ? Math.Max(1, concreteCombat.HittableEnemies.Count) : 1;
         var block = 0;
         var damage = 0;
         foreach (var orb in playerCombatState.OrbQueue.Orbs)
         {
+            var triggers = SafeReadOrbPassiveTriggerCount(combatState, orb);
+            if (triggers <= 0)
+            {
+                continue;
+            }
+
             switch (orb)
             {
                 case FrostOrb frost:
-                    block += Math.Max(0, (int)frost.PassiveVal);
+                {
+                    var perTrigger = SafeReadUnpoweredOrbBlock(combatState, playerCreature, frost.PassiveVal);
+                    block += perTrigger * triggers;
                     break;
+                }
                 case LightningOrb lightning:
-                    damage += Math.Max(0, (int)lightning.PassiveVal);
+                    damage += Math.Max(0, (int)lightning.PassiveVal) * triggers;
                     break;
                 case GlassOrb glass:
-                    damage += Math.Max(0, (int)glass.PassiveVal);
+                {
+                    var current = Math.Max(0, (int)glass.PassiveVal);
+                    for (var step = 0; step < triggers; step++)
+                    {
+                        damage += Math.Max(0, current - step) * hittableEnemyCount;
+                    }
+
                     break;
+                }
             }
         }
 
         return (block, damage);
+    }
+
+    private static int SafeReadOrbPassiveTriggerCount(ICombatState? combatState, OrbModel orb)
+    {
+        if (combatState == null)
+        {
+            return 1;
+        }
+
+        try
+        {
+            return Math.Max(0, Hook.ModifyOrbPassiveTriggerCount(combatState, orb, 1, out _));
+        }
+        catch (Exception)
+        {
+            return 1;
+        }
+    }
+
+    private static int SafeReadUnpoweredOrbBlock(ICombatState? combatState, Creature? target, decimal rawBlock)
+    {
+        if (rawBlock <= 0m)
+        {
+            return 0;
+        }
+
+        if (combatState == null || target == null)
+        {
+            return Math.Max(0, (int)rawBlock);
+        }
+
+        try
+        {
+            var modified = Hook.ModifyBlock(combatState, target, rawBlock, ValueProp.Unpowered, null, null, out _);
+            return Math.Max(0, (int)modified);
+        }
+        catch (Exception)
+        {
+            return Math.Max(0, (int)rawBlock);
+        }
     }
 
     private static bool SafeReadExcessEnergyWithStars(CombatState combatState, Player player)

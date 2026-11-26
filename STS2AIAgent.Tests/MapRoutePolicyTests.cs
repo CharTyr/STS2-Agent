@@ -103,6 +103,8 @@ internal static class MapRoutePolicyTests
             actThree.Options[0].Score < actTwo.Options[0].Score,
             "the elite door cannot score better in Act 3 than Act 2");
         Assert.Equal(1, actThree.Recommended, "Act 3 elite risk pushes even a healthy fork toward the safer door");
+        Assert.Contains("elite risk", actThree.Options[0].Why, StringComparison.Ordinal);
+        Assert.Contains("elite for rewards", actOne.Options[0].Why, StringComparison.Ordinal);
     }
 
     /// <summary>Two doors with the same numbers recommend neither: a false preference is worse.</summary>

@@ -483,14 +483,16 @@ internal sealed partial class AgentOverlayHost
         if (text.Length == 0 || AgentRuntime.Instance.TeamMessagePending) return;
         if (_teamInput != null) _teamInput.Text = "";
         await AgentRuntime.Instance.SendTeamMessageAsync(text, CancellationToken.None);
-        await GameThread.InvokeAsync(RefreshDynamic);
+        try { await GameThread.InvokeAsync(RefreshDynamic); }
+        catch (InvalidOperationException) { }
     }
 
     private async Task SendQuickTeamCommandAsync(TeamQuickCommand command)
     {
         if (AgentRuntime.Instance.TeamMessagePending) return;
         await AgentRuntime.Instance.SendTeamMessageAsync(command.Message, command.Intent, CancellationToken.None);
-        await GameThread.InvokeAsync(RefreshDynamic);
+        try { await GameThread.InvokeAsync(RefreshDynamic); }
+        catch (InvalidOperationException) { }
     }
 
     /// <summary>

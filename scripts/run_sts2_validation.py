@@ -2043,10 +2043,32 @@ def suite_patch_check(args: argparse.Namespace) -> dict[str, Any]:
         wait_until_main_menu_ready(client, attempts=args.poll_attempts, delay_ms=args.poll_delay_ms)
     compatibility = data.get("compatibility") or {}
     missing = list(compatibility.get("missing_members") or [])
-    if missing or (release_smoke and (data.get("status") != "ready" or compatibility.get("reflected_members_missing") != 0)):
+    missing_bindings = [
+        item for item in (compatibility.get("api_bindings") or [])
+        if isinstance(item, dict) and item.get("status") == "missing"
+    ]
+    active_faults = [
+        item for item in (compatibility.get("state_builder_faults") or [])
+        if isinstance(item, dict) and item.get("active") is True
+    ]
+    if missing:
         raise ValidationError(
             "reflected game members are missing, so this game build is not supported by this mod: "
             + json.dumps(missing, ensure_ascii=False)
+        )
+    if missing_bindings:
+        raise ValidationError(
+            "API capability bindings are missing in this game build: "
+            + json.dumps(missing_bindings, ensure_ascii=False)
+        )
+    if active_faults:
+        raise ValidationError(
+            "state builder sections reported active faults on /health: "
+            + json.dumps(active_faults, ensure_ascii=False)
+        )
+    if release_smoke and (data.get("status") != "ready" or compatibility.get("reflected_members_missing") != 0):
+        raise ValidationError(
+            f"/health status is {data.get('status')!r} (expected 'ready') during release smoke."
         )
 
     deep_load = suite_mod_load(
@@ -2093,12 +2115,28 @@ def suite_patch_check(args: argparse.Namespace) -> dict[str, Any]:
             client, attempts=args.poll_attempts, delay_ms=args.poll_delay_ms,
         )
 
+    post_health = client.request("GET", "/health")
+    client._require_ok(post_health, "GET /health (post-check)")
+    post_data = post_health["data"]
+    post_compat = post_data.get("compatibility") or {}
+    post_faults = [
+        item for item in (post_compat.get("state_builder_faults") or [])
+        if isinstance(item, dict) and item.get("active") is True
+    ]
+    if post_faults:
+        raise ValidationError(
+            "state builder sections faulted during patch-check probing: "
+            + json.dumps(post_faults, ensure_ascii=False)
+        )
+
     return {
-        "mod_version": data.get("mod_version"),
-        "game_version": data.get("game_version"),
-        "status": data.get("status"),
-        "reflected_members_checked": compatibility.get("reflected_members_checked"),
-        "reflected_members_missing": compatibility.get("reflected_members_missing"),
+        "mod_version": post_data.get("mod_version"),
+        "game_version": post_data.get("game_version"),
+        "status": post_data.get("status"),
+        "reflected_members_checked": post_compat.get("reflected_members_checked"),
+        "reflected_members_missing": post_compat.get("reflected_members_missing"),
+        "api_bindings_missing": len(missing_bindings),
+        "state_builder_faults_active": len(post_faults),
         "deep_load": deep_load,
         "invariants": invariants,
         "action_surface_replay": replay,

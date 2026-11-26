@@ -604,13 +604,14 @@ internal static class Router
                 AgentRuntime.Instance.DualStatus,
                 dualLaunchOutcome == DualLaunchOutcome.Idle ? null : dualLaunchOutcome.ToString(),
                 AgentRuntime.Instance.TeamControlStatus);
+        var (healthStatus, healthCompatibility) = ReflectedGameMembers.BuildHealthSnapshot();
         return new
         {
             service = ServiceName,
             mod_version = ModVersion,
             protocol_version = ProtocolVersion,
             game_version = ReleaseInfoManager.Instance.ReleaseInfo?.Version ?? "unknown",
-            status = ReflectedGameMembers.ResolveStatus(),
+            status = healthStatus,
             api_host = HttpServer.Instance.Host,
             api_port = HttpServer.Instance.Port,
             process_id = Environment.ProcessId,
@@ -630,7 +631,7 @@ internal static class Router
             dual_status = roleData.dual_status,
             dual_launch_outcome = roleData.dual_launch_outcome,
             team_control_status = roleData.team_control_status,
-            compatibility = ReflectedGameMembers.BuildHealthSection(),
+            compatibility = healthCompatibility,
             state_build = StateBuildTiming.Instance.Snapshot(),
             turbo = TurboController.Snapshot(AgentRuntime.Instance.Settings.TurboMode),
             // Additive: the last finished run's facts, or null until a GAME_OVER frame is observed.

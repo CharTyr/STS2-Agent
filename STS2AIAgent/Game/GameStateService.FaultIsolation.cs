@@ -17,10 +17,16 @@ internal static partial class GameStateService
         try
         {
             var value = build();
-            SectionFaults.RecordSuccess(section);
+            // Only clear an active fault once this section actually builds a live payload again;
+            // early-returning null on unrelated screens must not mask a still-broken screen reader.
+            if (value != null)
+            {
+                SectionFaults.RecordSuccess(section);
+            }
+
             return value;
         }
-        catch (Exception ex)
+        catch (Exception ex) when (ex is not OperationCanceledException and not OutOfMemoryException)
         {
             if (SectionFaults.RecordFault(section, ex, DateTimeOffset.UtcNow))
             {

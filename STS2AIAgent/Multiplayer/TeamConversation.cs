@@ -126,6 +126,13 @@ internal sealed class TeamConversation
             return null;
         }
 
+        if (string.Equals(intent.type, TeamIntent.TargetAnnounce, StringComparison.Ordinal))
+        {
+            return Loc.T(
+                "队友请求本回合一起集火 enemy_index {0}。在保证存活的前提下，优先把伤害集中到它身上以尽快击杀。",
+                enemyIndex);
+        }
+
         return Loc.T(
             "队友本回合在打 enemy_index {0}。除非那个敌人已经必死或只剩最后一击，不要把伤害再倾泻在它身上；优先选另一个目标，避免两人重复集火把伤害溢出掉。",
             enemyIndex);

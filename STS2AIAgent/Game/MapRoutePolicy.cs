@@ -149,6 +149,7 @@ internal static class MapRoutePolicy
             var unknowns = Range(tallies, tally => tally.Unknowns);
             var combats = Range(tallies, tally => tally.Combats);
             var treasures = Range(tallies, tally => tally.Treasures);
+            var eliteWeight = EliteWeight(hpPercent, act);
             var score = Score(elites, rests, shops, unknowns, combats, treasures, hpPercent, input.Gold, act);
             options.Add(new MapRouteOption(
                 start.Index,
@@ -159,7 +160,7 @@ internal static class MapRoutePolicy
                 combats,
                 treasures,
                 score,
-                Explain(elites, rests, shops, unknowns, score, hpPercent)));
+                Explain(elites, rests, shops, unknowns, score, hpPercent, act, eliteWeight)));
         }
 
         if (options.Count < 2)
@@ -300,6 +301,13 @@ internal static class MapRoutePolicy
         return tallies.Count == 0 ? new MapRouteRange(0, 0) : new MapRouteRange(min, max);
     }
 
+    private static int EliteWeight(int hpPercent, int act) =>
+        hpPercent < LowHpPercent
+            ? -ElitePenaltyLowHp * act
+            : hpPercent < MidHpPercent
+                ? -ElitePenaltyMidHp * act
+                : EliteRewardHighHp - EliteRiskHighHp * act;
+
     private static int Score(
         MapRouteRange elites,
         MapRouteRange rests,
@@ -311,11 +319,7 @@ internal static class MapRoutePolicy
         int gold,
         int act)
     {
-        var eliteWeight = hpPercent < LowHpPercent
-            ? -ElitePenaltyLowHp * act
-            : hpPercent < MidHpPercent
-                ? -ElitePenaltyMidHp * act
-                : EliteRewardHighHp - EliteRiskHighHp * act;
+        var eliteWeight = EliteWeight(hpPercent, act);
         var restWeight = RestWeight + (hpPercent < LowHpPercent ? LowHpRestBonus : 0);
         var shopWeight = gold >= FundedShopGold ? FundedShopWeight : ShopWeight;
 
@@ -340,7 +344,9 @@ internal static class MapRoutePolicy
         MapRouteRange shops,
         MapRouteRange unknowns,
         int score,
-        int hpPercent)
+        int hpPercent,
+        int act,
+        int eliteWeight)
     {
         var parts = new List<string>();
         if (elites.Max == 0)
@@ -351,9 +357,13 @@ internal static class MapRoutePolicy
         {
             parts.Add($"{elites} elite at {hpPercent}% HP");
         }
-        else
+        else if (eliteWeight > 0)
         {
             parts.Add($"{elites} elite for rewards");
+        }
+        else
+        {
+            parts.Add($"{elites} elite risk (Act {act})");
         }
 
         if (rests.Max > 0)

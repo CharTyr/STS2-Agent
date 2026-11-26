@@ -381,11 +381,12 @@ internal static class ReflectedMemberRegistryTests
         // Assert.True rather than Assert.Contains: the haystack is a whole flattened source file,
         // and a failure that prints it is a failure nobody reads.
         Assert.True(
-            router.Contains("status=ReflectedGameMembers.ResolveStatus()", StringComparison.Ordinal),
-            "GET /health must derive status from ReflectedGameMembers.ResolveStatus().");
+            router.Contains("ReflectedGameMembers.BuildHealthSnapshot()", StringComparison.Ordinal)
+            && router.Contains("status=healthStatus", StringComparison.Ordinal),
+            "GET /health must derive status from ReflectedGameMembers.BuildHealthSnapshot().");
         Assert.True(
-            router.Contains("compatibility=ReflectedGameMembers.BuildHealthSection()", StringComparison.Ordinal),
-            "GET /health must report the compatibility probe, or a missing game member stays invisible.");
+            router.Contains("compatibility=healthCompatibility", StringComparison.Ordinal),
+            "GET /health must report the compatibility probe from the same snapshot, or a missing game member stays invisible.");
         Assert.False(
             router.Contains("status=\"ready\"", StringComparison.Ordinal),
             "GET /health must not hard-code its own status. A field that can never be wrong can "

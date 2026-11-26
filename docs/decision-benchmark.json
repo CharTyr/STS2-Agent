@@ -1363,7 +1363,7 @@
             "block": 0,
             "energy": 2,
             "arrows": [
-              "impaled"
+              "away"
             ],
             "available_arrows": 0
           },
@@ -1371,8 +1371,9 @@
             {
               "i": 0,
               "cid": 301,
-              "card_id": "TWIN_SHOT",
+              "card_id": "FOOLISH_SHOT",
               "playable": false,
+              "why": "not_enough_arrows",
               "unplayable_reason": "not_enough_arrows",
               "energy_cost": 1,
               "targets": [
@@ -1809,8 +1810,11 @@
             {
               "i": 0,
               "entry_type": "Relic",
-              "name": "Bag of Preparation",
-              "stocked": true
+              "name": "Relic",
+              "available": true,
+              "status": "available",
+              "cursed": false,
+              "rare": false
             }
           ]
         }

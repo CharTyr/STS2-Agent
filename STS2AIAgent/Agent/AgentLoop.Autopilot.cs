@@ -95,7 +95,9 @@ internal sealed partial class AgentLoop
         "combat_no_moves" => Loc.T("没有能打出的牌，也没有能用的药水，结束回合。"),
         "map_single_path" => Loc.T("地图上只有一条路可走。"),
         "reward_collect_all" => Loc.T("奖励里没有需要取舍的项目，全部领取并继续。"),
-        "reward_claim_safe" => Loc.T("先领取金币或遗物；选卡留给模型。"),
+        "reward_claim_safe" => decision.Detail == "potion"
+            ? Loc.T("先领取空槽可装下的药水；其余奖励留给模型。")
+            : Loc.T("先领取金币或遗物；选卡留给模型。"),
         "event_single_option" => Loc.T("事件只剩一个可选项。"),
         "capstone_single_option" => Loc.T("只有一个可选项。"),
         "rest_single_option" => Loc.T("休息点只有一个可用选项。"),

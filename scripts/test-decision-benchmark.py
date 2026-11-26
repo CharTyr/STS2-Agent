@@ -218,12 +218,98 @@ class DecisionBenchmarkTests(unittest.TestCase):
         secret = "sk-super-secret-token-999"
 
         def boom(_case_id: str, _messages: list[dict[str, str]]) -> dict:
-            raise RuntimeError(f"gateway echoed {secret}")
+            raise RuntimeError(f"gateway echoed Bearer {secret} and https://user:pw@api.example/v1?api_key=abc123")
 
-        report = eval_runner.evaluate_suite(self.suite, model="err-model", api_key=secret, max_requests=1, requester=boom)
+        report = eval_runner.evaluate_suite(self.suite, model="err-model", api_key=secret + "\n", max_requests=1, requester=boom)
         dumped = json.dumps(report)
         self.assertNotIn(secret, dumped)
+        self.assertNotIn("user:pw", dumped)
+        self.assertNotIn("abc123", dumped)
         self.assertIn("[REDACTED]", dumped)
+        self.assertIsNone(report["avg_latency_ms"])
+
+    def test_eval_runner_does_not_leak_case_id_or_title_in_prompt(self) -> None:
+        strategy, playbooks = eval_runner._load_guidance_tables()
+        for case in self.suite.cases:
+            msgs = eval_runner.build_case_messages(case, strategy, playbooks)
+            user_content = msgs[1]["content"]
+            self.assertNotIn(case.id, user_content)
+            self.assertNotIn(case.title, user_content)
+
+    def test_parse_model_answer_handles_think_blocks_prose_fences_dict_and_list_content(self) -> None:
+        # <think> containing JSON braces + uppercase JSON fence
+        resp_think = {
+            "choices": [{
+                "message": {
+                    "content": '<think>Inspecting {"hp": 50} first</think>\n```JSON\n{"action":"play_card","card_index":1,"target_index":0}\n```'
+                }
+            }]
+        }
+        parsed = eval_runner.parse_model_answer("c1", resp_think)
+        self.assertEqual(parsed, {"case_id": "c1", "action": "play_card", "option_index": 1, "target_index": 0})
+
+        # Ollama/LM Studio dict tool_calls arguments
+        resp_dict = {
+            "choices": [{
+                "message": {
+                    "tool_calls": [{"function": {"name": "act", "arguments": {"action": "end_turn"}}}]
+                }
+            }]
+        }
+        self.assertEqual(eval_runner.parse_model_answer("c2", resp_dict), {"case_id": "c2", "action": "end_turn"})
+
+        # List-of-blocks content with quoted state JSON before final answer
+        resp_blocks = {
+            "choices": [{
+                "message": {
+                    "content": [
+                        {"type": "text", "text": 'State quote: {"screen":"COMBAT"}'},
+                        {"type": "text", "text": 'Final answer: {"action":"use_potion","option_index":0}'},
+                    ]
+                }
+            }]
+        }
+        self.assertEqual(eval_runner.parse_model_answer("c3", resp_blocks), {"case_id": "c3", "action": "use_potion", "option_index": 0})
+
+    def test_compare_reports_handles_duplicate_models_none_latency_and_subset_mismatch(self) -> None:
+        r1 = {
+            "model": "same-model",
+            "requests_sent": 2,
+            "prompt_tokens": 100,
+            "completion_tokens": 10,
+            "avg_latency_ms": 200.0,
+            "score": {"score_percent": 50.0, "earned_points": 1.0, "available_points": 2.0, "answered_cases": 1, "total_cases": 2,
+                      "cases": [{"case_id": "a", "earned_points": 1.0}, {"case_id": "b", "earned_points": 0.0}]},
+        }
+        r2 = {
+            "model": "same-model",
+            "requests_sent": 1,
+            "prompt_tokens": 0,
+            "completion_tokens": 0,
+            "avg_latency_ms": None,
+            "error_count": 1,
+            "score": {"score_percent": 50.0, "earned_points": 1.0, "available_points": 2.0, "answered_cases": 1, "total_cases": 1,
+                      "cases": [{"case_id": "a", "earned_points": 1.0}]},
+        }
+        cmp = eval_runner.compare_reports([r2, r1])
+        self.assertEqual([m["model"] for m in cmp["models"]], ["same-model #2", "same-model"])
+        self.assertTrue(cmp["case_coverage_mismatch"])
+        self.assertEqual([d["case_id"] for d in cmp["disagreements"]], ["b"])
+        md = eval_runner.render_comparison_markdown(cmp)
+        self.assertIn("n/a", md)
+        self.assertIn("Warning:", md)
+
+    def test_score_plan_rejects_unplayable_card(self) -> None:
+        exp = benchmark.Expectation(id="p", kind="plan", points=1.0, must_kill_enemy=0)
+        state = {
+            "combat": {
+                "hand": [{"i": 0, "playable": False, "vs": [{"enemy": 0, "kills": True, "damage": 99}]}],
+                "enemies": [{"i": 0}],
+            }
+        }
+        passed, msg = benchmark._score_plan(exp, {"action": "play_card", "option_index": 0, "target_index": 0}, state)
+        self.assertFalse(passed)
+        self.assertIn("playable=false", msg)
 
 
 if __name__ == "__main__":
