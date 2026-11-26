@@ -69,6 +69,7 @@ internal sealed partial class AgentSettings
     public int? MaxOutputTokens { get; set; } = DefaultMaxOutputTokens;
 
     public const int DefaultMaxOutputTokens = 8192;
+    public const int MaxMaxOutputTokens = 1_000_000;
 
     /// <summary>
     /// Optional minimum wall-clock interval in seconds between consecutive primary play-model requests (#234).
@@ -110,6 +111,10 @@ internal sealed partial class AgentSettings
         if (MaxOutputTokens is <= 0)
         {
             MaxOutputTokens = null;
+        }
+        else if (MaxOutputTokens is > MaxMaxOutputTokens)
+        {
+            MaxOutputTokens = MaxMaxOutputTokens;
         }
         var roundedInterval = MinDecisionIntervalSeconds is { } interval
             && double.IsFinite(interval)

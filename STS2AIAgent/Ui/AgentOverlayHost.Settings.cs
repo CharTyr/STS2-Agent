@@ -386,9 +386,10 @@ internal sealed partial class AgentOverlayHost
         _quickDirty = false;
         _conversationCombo = null;
         _visionCombo = null;
-        _maxTokensEdit = _maxRequestsEdit = _llmTimeoutEdit = _minDecisionIntervalEdit = _hotkeyEdit = null;
+        _maxTokensEdit = _maxRequestsEdit = _maxOutputTokensEdit = _llmTimeoutEdit = _minDecisionIntervalEdit = _hotkeyEdit = null;
         _experienceCard = null;
         _playerPreferencesEdit = null;
+        _playerPreferencesCounter = null;
         _economyPresetButton = _balancedPresetButton = _pushPresetButton = null;
         _modelTestButtons.Clear();
         _modelTestBadges.Clear();
@@ -497,6 +498,9 @@ internal sealed partial class AgentOverlayHost
             WatchLine(_maxRequestsEdit);
             advanced.Add(Labeled(Loc.T("Token 上限"), _maxTokensEdit));
             advanced.Add(Labeled(Loc.T("请求上限"), _maxRequestsEdit));
+            _maxOutputTokensEdit = UiFactory.Line(settings.MaxOutputTokens?.ToString() ?? "", Loc.T("默认 8192（留空或0不限）"));
+            WatchLine(_maxOutputTokensEdit);
+            advanced.Add(Labeled(Loc.T("单次输出上限"), _maxOutputTokensEdit));
             _llmTimeoutEdit = UiFactory.Line(settings.LlmRequestTimeoutSeconds?.ToString() ?? "", Loc.T("默认 600 秒"));
             WatchLine(_llmTimeoutEdit);
             advanced.Add(Labeled(Loc.T("请求超时（秒）"), _llmTimeoutEdit));
@@ -536,6 +540,7 @@ internal sealed partial class AgentOverlayHost
             _hotkeyEdit = null;
             _maxTokensEdit = null;
             _maxRequestsEdit = null;
+            _maxOutputTokensEdit = null;
             _llmTimeoutEdit = null;
             _minDecisionIntervalEdit = null;
             _budgetHint = null;
@@ -822,6 +827,21 @@ internal sealed partial class AgentOverlayHost
                     out var budgetError))
             {
                 _budgetInputError = budgetError;
+            }
+        }
+
+        if (_maxOutputTokensEdit != null)
+        {
+            var rawOutputCap = _maxOutputTokensEdit.Text.Trim();
+            if (rawOutputCap.Length == 0)
+            {
+                current.MaxOutputTokens = null;
+            }
+            else if (int.TryParse(rawOutputCap, out var outputTokens))
+            {
+                current.MaxOutputTokens = outputTokens > 0
+                    ? Math.Min(outputTokens, AgentSettings.MaxMaxOutputTokens)
+                    : null;
             }
         }
 

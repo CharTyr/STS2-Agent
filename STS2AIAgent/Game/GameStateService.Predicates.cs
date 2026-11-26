@@ -518,6 +518,18 @@ internal static partial class GameStateService
             return false;
         }
 
+        // Once a run-lobby screen has started embarking (or its local seat is ready, or all lobby
+        // buttons have been torn down during scene transition), popping the submenu either crashes
+        // the in-flight singleplayer run (`State is already set.`) or exposes a bogus lone action
+        // during asset preload.
+        if (GetRunLobbyScreen(currentScreen) != null
+            && (RunManager.Instance.IsInProgress
+                || (GetRunLobby(currentScreen) is { } runLobby && runLobby.LocalPlayer.isReady)
+                || (!CanSelectCharacter(currentScreen) && !CanEmbark(currentScreen) && !CanUnready(currentScreen))))
+        {
+            return false;
+        }
+
         var submenuStack = GetSubmenuStack(submenu);
         return submenuStack != null && submenuStack.SubmenusOpen;
     }

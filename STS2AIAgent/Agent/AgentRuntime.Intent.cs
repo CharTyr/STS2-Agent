@@ -6,8 +6,10 @@ internal sealed partial class AgentRuntime
 {
     private LiveIntent? _currentIntent;
     private string _intentPlanPreview = "";
+    private bool _inSpectatorDwell;
     public LiveIntent? CurrentIntent { get { lock (_gate) return _currentIntent; } }
     public string IntentPlanPreview { get { lock (_gate) return _intentPlanPreview; } }
+    public bool InSpectatorDwell { get { lock (_gate) return _inSpectatorDwell; } }
 
     private void ReportIntent(LiveIntent intent)
     {
@@ -19,9 +21,26 @@ internal sealed partial class AgentRuntime
         RaiseChanged();
     }
 
+    private void ReportSpectatorDwell(bool active)
+    {
+        lock (_gate)
+        {
+            _inSpectatorDwell = active;
+        }
+        RaiseChanged();
+    }
+
     private void ClearIntent()
     {
-        lock (_gate) { _currentIntent = null; _intentPlanPreview = ""; }
+        lock (_gate) { _currentIntent = null; _intentPlanPreview = ""; _inSpectatorDwell = false; }
+    }
+
+    public void InterceptAndPause()
+    {
+        ClearIntent();
+        StopAutoPlay();
+        SetStatus(Loc.T("已拦截本次出牌并暂停，请由你接管。"));
+        NoteEvent(Status);
     }
 
     public string StallHintText(string? screen)

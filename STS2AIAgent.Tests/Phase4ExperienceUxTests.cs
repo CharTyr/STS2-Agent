@@ -50,10 +50,12 @@ internal static class Phase4ExperienceUxTests
     {
         var host = AgentSettings.CreateDefault();
         host.SpectatorHighlightMs = 99999;
+        host.MaxOutputTokens = 5_000_000;
         // Include control characters and a UTF-16 surrogate pair straddling the 400-char cap.
         host.PlayerPreferences = "  \0\x07" + new string('a', AgentSettings.MaxPlayerPreferencesLength - 1) + "😀extra  ";
         host.EnsureValidShape();
         Assert.Equal(AgentSettings.MaxSpectatorHighlightMs, host.SpectatorHighlightMs);
+        Assert.Equal(AgentSettings.MaxMaxOutputTokens, host.MaxOutputTokens);
         Assert.False(host.PlayerPreferences.Contains('\0'));
         Assert.False(host.PlayerPreferences.Contains('\x07'));
         Assert.True(host.PlayerPreferences.Length <= AgentSettings.MaxPlayerPreferencesLength);
@@ -100,6 +102,20 @@ internal static class Phase4ExperienceUxTests
         Assert.Contains("一起集火 enemy_index 0", togetherCtx);
         Assert.False(togetherCtx.Contains("不要把伤害再倾泻", StringComparison.Ordinal),
             "Focus-together quick command must NOT tell the AI teammate to avoid enemy 0.");
+
+        // Dynamic target selection: skip dead / unhittable enemies and pick the first standing hittable index.
+        Assert.Equal(0, TeamQuickCommands.ResolveTargetEnemyIndex(null));
+        Assert.Equal(2, TeamQuickCommands.ResolveTargetEnemyIndex(new[] { (0, false, false), (1, true, false), (2, true, true) }));
+        Assert.Equal(1, TeamQuickCommands.ResolveTargetEnemyIndex(new[] { (0, false, false), (1, true, false) }));
+        Assert.Equal(0, TeamQuickCommands.ResolveTargetEnemyIndex(new[] { (0, false, false) }));
+
+        var shifted = TeamQuickCommands.BuildAll(2);
+        var shiftedFocus = shifted.First(c => c.Id == "focus_0");
+        var shiftedTarget = shifted.First(c => c.Id == "target_0");
+        Assert.Equal(2, shiftedFocus.Intent!.enemy_index);
+        Assert.Equal(2, shiftedTarget.Intent!.enemy_index);
+        Assert.Contains("2", shiftedFocus.Label);
+        Assert.Contains("2", shiftedTarget.Label);
     }
 
     public static void ModelProbeClassifiesActionableTroubleshootingCases()
@@ -205,8 +221,153 @@ internal static class Phase4ExperienceUxTests
         Assert.True(threwDrift, "Dwell validateState must reject a card that shifted index during spectator dwell.");
     }
 
+    public static async Task SpectatorDwellInterceptCancelsBeforeDispatch()
+    {
+        var stateJson = """
+            {"screen":"COMBAT","in_combat":true,"turn":1,"available_actions":["play_card","end_turn"],
+             "combat":{"action_readiness":{"can_use_combat_actions":true},"player":{"hp":"70/80","block":0,"energy":3},
+                       "hand":[{"i":0,"cid":10,"line":"Strike","playable":true,"targets":[0]}],
+                       "enemies":[{"i":0,"hp":"20/20","alive":true,"hittable":true}]},
+             "run":{"potions":[]}}
+            """;
+        var actionsJson = """[{"name":"play_card","requires_index":true,"requires_target":true},{"name":"end_turn"}]""";
+        var snapshotJson = $"{{\"state\":{stateJson},\"available_actions\":{actionsJson}}}";
+
+        var settings = AgentSettings.CreateDefault();
+        settings.AutopilotEnabled = false;
+        settings.TurnPlansEnabled = false;
+        settings.SpectatorHighlightMs = 600;
+        settings.HudMode = AgentSettings.HudFull;
+
+        var bridge = new FakeBridge(stateJson, actionsJson, snapshotJson);
+        var llm = new FakeLlmFactory(_ => new LlmCompletion
+        {
+            ToolCalls = new List<LlmToolCall>
+            {
+                new() { Id = "tc1", Name = "act", ArgumentsJson = """{"action":"play_card","card_index":0,"target_index":0,"reason":"test intercept"}""" }
+            }
+        });
+
+        using var cts = new CancellationTokenSource();
+        var dwellTransitions = new List<bool>();
+        var loop = new AgentLoop(bridge, llm, () => settings, reportSpectatorDwell: active =>
+        {
+            dwellTransitions.Add(active);
+            if (active) cts.Cancel();
+        });
+
+        var canceled = false;
+        try
+        {
+            await loop.PlayOnceAsync(cts.Token);
+        }
+        catch (OperationCanceledException)
+        {
+            canceled = true;
+        }
+
+        Assert.True(canceled, "Canceling during spectator dwell must abort the turn cleanly.");
+        Assert.Equal(0, bridge.ActCalls, "Intercepting during spectator dwell must abort BEFORE ActAsync executes.");
+        Assert.Equal(2, dwellTransitions.Count);
+        Assert.True(dwellTransitions[0]);
+        Assert.False(dwellTransitions[1]);
+    }
+
+    public static async Task TurnPlanTailAutoEndsTurnOnlyWhenSafeAndNoMovesLeft()
+    {
+        const string initial = """
+            {"screen":"COMBAT","in_combat":true,"turn":1,"available_actions":["play_card","end_turn"],
+             "combat":{"action_readiness":{"can_use_combat_actions":true},"player":{"hp":"70/80","block":0,"energy":2},
+                       "hand":[{"i":0,"cid":11,"line":"Strike","playable":true,"targets":[0]},{"i":1,"cid":12,"line":"Defend","playable":true,"targets":[]}],
+                       "enemies":[{"i":0,"hp":"20/20","alive":true,"hittable":true}]},
+             "run":{"potions":[]}}
+            """;
+        const string afterCard1 = """
+            {"screen":"COMBAT","in_combat":true,"turn":1,"available_actions":["play_card","end_turn"],
+             "combat":{"action_readiness":{"can_use_combat_actions":true},"player":{"hp":"70/80","block":0,"energy":1},
+                       "hand":[{"i":0,"cid":12,"line":"Defend","playable":true,"targets":[]}],
+                       "enemies":[{"i":0,"hp":"14/20","alive":true,"hittable":true}]},
+             "run":{"potions":[]}}
+            """;
+        const string afterCard2NoMoves = """
+            {"screen":"COMBAT","in_combat":true,"turn":1,"available_actions":["end_turn"],
+             "combat":{"action_readiness":{"can_use_combat_actions":true},"end_turn_will_kill_player":false,"player":{"hp":"70/80","block":5,"energy":0},
+                       "hand":[{"i":0,"cid":13,"line":"Bash","playable":false,"targets":[0]}],
+                       "enemies":[{"i":0,"hp":"14/20","alive":true,"hittable":true}]},
+             "run":{"potions":[]}}
+            """;
+        const string afterEndTurn = """
+            {"screen":"COMBAT","in_combat":true,"turn":2,"available_actions":["play_card","end_turn"],
+             "combat":{"action_readiness":{"can_use_combat_actions":true},"player":{"hp":"70/80","block":0,"energy":3},
+                       "hand":[],"enemies":[{"i":0,"hp":"14/20","alive":true,"hittable":true}]},
+             "run":{"potions":[]}}
+            """;
+        const string afterCard2Lethal = """
+            {"screen":"COMBAT","in_combat":true,"turn":1,"available_actions":["end_turn"],
+             "combat":{"action_readiness":{"can_use_combat_actions":true},"end_turn_will_kill_player":true,"player":{"hp":"5/80","block":0,"energy":0},
+                       "hand":[],"enemies":[{"i":0,"hp":"14/20","alive":true,"hittable":true}]},
+             "run":{"potions":[]}}
+            """;
+        const string actions = """[{"name":"play_card","requires_index":true,"requires_target":false},{"name":"end_turn"}]""";
+        const string twoCardPlan = """{"action":"play_card","card_cid":11,"target_index":0,"reason":"hit","then":[{"action":"play_card","card_cid":12,"reason":"block"}]}""";
+
+        var settings = AgentSettings.CreateDefault();
+        settings.AutopilotEnabled = true;
+        settings.TurnPlansEnabled = true;
+        settings.SpectatorHighlightMs = 0;
+
+        // Safe empty hand after plan -> auto-appends end_turn at 0 extra LLM requests.
+        var safeBridge = new SequencedBridge(actions, initial, afterCard1, afterCard2NoMoves, afterEndTurn);
+        var llm = new FakeLlmFactory(_ => new LlmCompletion
+        {
+            ToolCalls = new List<LlmToolCall> { new() { Id = "p1", Name = "act", ArgumentsJson = twoCardPlan } }
+        });
+        var safeResult = await new AgentLoop(safeBridge, llm, () => settings).PlayOnceAsync(CancellationToken.None);
+        Assert.Equal(1, safeResult.RequestsSpent);
+        Assert.Equal(3, safeBridge.ActCalls);
+        Assert.Equal("end_turn", safeResult.Acted);
+        Assert.Equal(3, safeResult.PlanSteps!.Count);
+        Assert.Equal(3, safeResult.PlanSize);
+        Assert.Equal(TurnPlanStopReasons.Completed, safeResult.PlanStopReason);
+
+        // Lethal end_turn after plan -> must NOT auto-end turn.
+        var lethalBridge = new SequencedBridge(actions, initial, afterCard1, afterCard2Lethal);
+        var lethalResult = await new AgentLoop(lethalBridge, llm, () => settings).PlayOnceAsync(CancellationToken.None);
+        Assert.Equal(1, lethalResult.RequestsSpent);
+        Assert.Equal(2, lethalBridge.ActCalls);
+        Assert.Equal("play_card", lethalResult.Acted);
+        Assert.Equal(2, lethalResult.PlanSteps!.Count);
+        Assert.Equal(TurnPlanStopReasons.Completed, lethalResult.PlanStopReason);
+    }
+
+    private sealed class SequencedBridge(string actions, params string[] states) : IGameBridge
+    {
+        private int _index;
+        public int ActCalls { get; private set; }
+        private string Current => states[Math.Min(_index, states.Length - 1)];
+        public Task<string> GetCompactStateJsonAsync(CancellationToken cancellationToken) => Task.FromResult(Current);
+        public Task<string> GetRawStateJsonAsync(CancellationToken cancellationToken) => Task.FromResult(Current);
+        public Task<string> GetAvailableActionsJsonAsync(CancellationToken cancellationToken) => Task.FromResult(actions);
+        public Task<string> GetActionSnapshotJsonAsync(CancellationToken cancellationToken) => Task.FromResult($"{{\"state\":{Current},\"available_actions\":{actions}}}");
+        public Task<string> GetScreenAsync(CancellationToken cancellationToken) => Task.FromResult("COMBAT");
+        public Task<bool> WaitUntilActionableAsync(TimeSpan timeout, CancellationToken cancellationToken) => Task.FromResult(true);
+        public Task<string> GetGameDataItemJsonAsync(string collection, string itemId, CancellationToken cancellationToken) => Task.FromResult("{}");
+        public Task<string> GetGameDataItemsJsonAsync(string collection, IReadOnlyList<string> itemIds, CancellationToken cancellationToken) => Task.FromResult("{}");
+        public Task<string> GetRelevantGameDataJsonAsync(string collection, IReadOnlyList<string> itemIds, CancellationToken cancellationToken) => Task.FromResult("{}");
+        public Task<string> ActAsync(string action, int? cardIndex, int? targetIndex, int? optionIndex, int? x, int? y, string? tool, CancellationToken cancellationToken, bool rawState = false, Action<string>? validateState = null, string? mode = null)
+        {
+            validateState?.Invoke(Current);
+            ActCalls++;
+            if (_index + 1 < states.Length) _index++;
+            return Task.FromResult("""{"status":"completed","stable":true}""");
+        }
+        public Task<byte[]?> CaptureScreenshotJpegAsync(CancellationToken cancellationToken) => Task.FromResult<byte[]?>(null);
+        public Task<string> GetRunIdAsync(CancellationToken cancellationToken) => Task.FromResult("run_phase4_seq");
+    }
+
     private sealed class FakeBridge(string state, string actions, string snapshot, Action<Action<string>?>? onValidate = null) : IGameBridge
     {
+        public int ActCalls { get; private set; }
         public Task<string> GetCompactStateJsonAsync(CancellationToken cancellationToken) => Task.FromResult(state);
         public Task<string> GetRawStateJsonAsync(CancellationToken cancellationToken) => Task.FromResult(state);
         public Task<string> GetAvailableActionsJsonAsync(CancellationToken cancellationToken) => Task.FromResult(actions);
@@ -218,6 +379,7 @@ internal static class Phase4ExperienceUxTests
         public Task<string> GetRelevantGameDataJsonAsync(string collection, IReadOnlyList<string> itemIds, CancellationToken cancellationToken) => Task.FromResult("{}");
         public Task<string> ActAsync(string action, int? cardIndex, int? targetIndex, int? optionIndex, int? x, int? y, string? tool, CancellationToken cancellationToken, bool rawState = false, Action<string>? validateState = null, string? mode = null)
         {
+            ActCalls++;
             onValidate?.Invoke(validateState);
             return Task.FromResult("""{"status":"completed","stable":true}""");
         }

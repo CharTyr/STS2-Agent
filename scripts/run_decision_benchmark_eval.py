@@ -329,6 +329,7 @@ def _http_chat_completion(
     headers = {
         "Content-Type": "application/json",
         "Accept": "application/json",
+        "User-Agent": "STS2AIAgent-Eval/1.0",
     }
     if clean_key:
         headers["Authorization"] = f"Bearer {clean_key}"

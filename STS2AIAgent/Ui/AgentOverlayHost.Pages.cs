@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using Godot;
+using MegaCrit.Sts2.Core.Combat;
 using MegaCrit.Sts2.Core.Logging;
 using STS2AIAgent.Agent;
 using STS2AIAgent.Config;
@@ -42,6 +43,8 @@ internal sealed partial class AgentOverlayHost
     /// <summary>The team chat's redraw-only-on-change wrapper. See <see cref="RichLog"/>.</summary>
     private RichLog? _teamChatView;
     private readonly List<Button> _teamQuickButtons = new();
+    private IReadOnlyList<TeamQuickCommand> _teamQuickCommands = Array.Empty<TeamQuickCommand>();
+    private int _teamQuickTargetEnemyIndex = -1;
     private UiFactory.ButtonKind? _teammateLiveTone;
 
     /// <summary>The play page's solo/multiplayer sections and the switch that swaps between them.</summary>
@@ -160,6 +163,8 @@ internal sealed partial class AgentOverlayHost
         _soloNext = UiFactory.Wrapped("", UiFactory.FontCaption, muted: false);
         _soloNext.Visible = false;
         _playToggle = UiFactory.Button(Loc.T("开始自动游玩"), TogglePlay, UiFactory.ButtonKind.Primary);
+        _interceptButton = UiFactory.Button(Loc.T("拦截本次出牌并暂停"), () => AgentRuntime.Instance.InterceptAndPause(), UiFactory.ButtonKind.Danger);
+        _interceptButton.Visible = false;
         _stepButton = UiFactory.Button(Loc.T("单步"), () => _ = AgentRuntime.Instance.StepOnceAsync(CancellationToken.None));
         _soloResetButton = UiFactory.Button(Loc.T(SessionBudgetLimits.ResetStatsActionLabel), ResetSessionStatsFromUi);
         _soloResetButton.Visible = false;
@@ -169,6 +174,7 @@ internal sealed partial class AgentOverlayHost
         // button while autoplay owns the turn so the pause control gets the full card width.
         var playControls = UiFactory.Column();
         playControls.AddChild(_soloResetButton);
+        playControls.AddChild(_interceptButton);
         playControls.AddChild(_playToggle);
         playControls.AddChild(_stepButton);
         section.AddChild(HelpCard.Build(
@@ -402,17 +408,18 @@ internal sealed partial class AgentOverlayHost
         _teamSend = UiFactory.Button(Loc.T("发送"), () => _ = SendTeamMessageAsync(), UiFactory.ButtonKind.Primary);
         _teamStatus = UiFactory.Wrapped(AgentRuntime.Instance.TeamStatus, UiFactory.FontCaption);
         _teamQuickButtons.Clear();
-        var quickCommands = TeamQuickCommands.BuildAll();
+        _teamQuickTargetEnemyIndex = 0;
+        _teamQuickCommands = TeamQuickCommands.BuildAll(0);
         var quickBox = UiFactory.Column();
-        for (var i = 0; i < quickCommands.Count; i += 2)
+        for (var i = 0; i < _teamQuickCommands.Count; i += 2)
         {
-            var left = quickCommands[i];
-            var leftButton = UiFactory.Button(left.Label, () => _ = SendQuickTeamCommandAsync(left), UiFactory.ButtonKind.Ghost);
+            var leftSlot = i;
+            var leftButton = UiFactory.Button(_teamQuickCommands[leftSlot].Label, () => _ = SendQuickTeamCommandAtSlotAsync(leftSlot), UiFactory.ButtonKind.Ghost);
             _teamQuickButtons.Add(leftButton);
-            if (i + 1 < quickCommands.Count)
+            if (i + 1 < _teamQuickCommands.Count)
             {
-                var right = quickCommands[i + 1];
-                var rightButton = UiFactory.Button(right.Label, () => _ = SendQuickTeamCommandAsync(right), UiFactory.ButtonKind.Ghost);
+                var rightSlot = i + 1;
+                var rightButton = UiFactory.Button(_teamQuickCommands[rightSlot].Label, () => _ = SendQuickTeamCommandAtSlotAsync(rightSlot), UiFactory.ButtonKind.Ghost);
                 _teamQuickButtons.Add(rightButton);
                 quickBox.AddChild(UiFactory.Row(leftButton, rightButton));
             }
@@ -669,6 +676,11 @@ internal sealed partial class AgentOverlayHost
                 AgentRuntime.Instance.SessionRequests);
         }
 
+        if (_interceptButton != null)
+        {
+            _interceptButton.Visible = playing && AgentRuntime.Instance.InSpectatorDwell;
+        }
+
         if (_playToggle != null)
         {
             // After a stop the next-step line says "继续游玩", so the button it points at says it too.
@@ -757,6 +769,7 @@ internal sealed partial class AgentOverlayHost
 
         if (_teamSend != null)
         {
+            RefreshTeamQuickTargets();
             var teamBusy = AgentRuntime.Instance.TeamMessagePending || AgentRuntime.Instance.DualLaunching || InstanceRole.IsCompanion;
             _teamSend.Disabled = teamBusy;
             _teamSend.Text = AgentRuntime.Instance.TeamMessagePending ? Loc.T("等待回复…") : Loc.T("发送");
@@ -856,6 +869,44 @@ internal sealed partial class AgentOverlayHost
         if (_mcpConfigEdit != null && _mcpConfigEdit.Text != mcpConfig)
         {
             _mcpConfigEdit.Text = mcpConfig;
+        }
+    }
+
+    private Task SendQuickTeamCommandAtSlotAsync(int slot)
+    {
+        RefreshTeamQuickTargets();
+        return slot >= 0 && slot < _teamQuickCommands.Count
+            ? SendQuickTeamCommandAsync(_teamQuickCommands[slot])
+            : Task.CompletedTask;
+    }
+
+    private void RefreshTeamQuickTargets()
+    {
+        var targetIndex = 0;
+        try
+        {
+            var combatState = CombatManager.Instance?.DebugOnlyGetState();
+            if (combatState?.Enemies != null)
+            {
+                targetIndex = TeamQuickCommands.ResolveTargetEnemyIndex(
+                    combatState.Enemies.Select((enemy, index) => (index, enemy.IsAlive, enemy.IsHittable)));
+            }
+        }
+        catch (Exception)
+        {
+            targetIndex = 0;
+        }
+
+        if (targetIndex == _teamQuickTargetEnemyIndex)
+        {
+            return;
+        }
+
+        _teamQuickTargetEnemyIndex = targetIndex;
+        _teamQuickCommands = TeamQuickCommands.BuildAll(targetIndex);
+        for (var i = 0; i < _teamQuickButtons.Count && i < _teamQuickCommands.Count; i++)
+        {
+            _teamQuickButtons[i].Text = _teamQuickCommands[i].Label;
         }
     }
 

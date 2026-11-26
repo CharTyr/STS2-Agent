@@ -79,7 +79,7 @@ files, so it cannot quietly go stale the way it did between ADR 0001 and the spl
 | [GameStateService.cs](../../../STS2AIAgent/Game/GameStateService.cs) | 1,398 |
 | [GameStateService.Payloads.cs](../../../STS2AIAgent/Game/GameStateService.Payloads.cs) | 1,339 |
 | [GameStateService.AgentView.cs](../../../STS2AIAgent/Game/GameStateService.AgentView.cs) | 1,324 |
-| [AgentRuntime.cs](../../../STS2AIAgent/Agent/AgentRuntime.cs) | 1,281 |
+| [AgentRuntime.cs](../../../STS2AIAgent/Agent/AgentRuntime.cs) | 1,283 |
 | [GameActionService.cs](../../../STS2AIAgent/Game/GameActionService.cs) | 1,191 |
 | [GameActionService.Rooms.cs](../../../STS2AIAgent/Game/GameActionService.Rooms.cs) | 1,148 |
 
