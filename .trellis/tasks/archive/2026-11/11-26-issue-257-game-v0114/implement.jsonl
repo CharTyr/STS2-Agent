@@ -1,0 +1,4 @@
+{"_example": "Fill with {\"file\": \"<path>\", \"reason\": \"<why>\"}. Put spec/research files only — no code paths. Run `python .trellis/scripts/get_context.py --mode packages` to list available specs. Delete this line once real entries are added."}
+{"file": ".trellis/spec/mod/index.md", "reason": "Mod development and validation"}
+{"file": ".trellis/spec/mod/game-actions.md", "reason": "Combat state fields and compatibility"}
+{"file": ".trellis/spec/mod/architecture.md", "reason": "Game boundary and reflection registry"}

@@ -6,7 +6,7 @@
 
 ## 已确认的证据
 
-- 游戏 v0.113.1 跑到 [Mod 启动入口](../../../STS2AIAgent/ModEntry.cs) 后，Windows `HttpListener.Start()` 报 native error 6，原入口因此没走完。
+- 游戏 v0.113.1 跑到 [Mod 启动入口](../../../../../STS2AIAgent/ModEntry.cs) 后，Windows `HttpListener.Start()` 报 native error 6，原入口因此没走完。
 - 同一个最小程序，`.NET 9.0.20` 下直接运行生成的 EXE 连续报 error 6；`dotnet` 加载同一 DLL 成功，同端口的普通回环 TCP 监听也成功。因此不能归咎于所有 .NET 9，也没有证据归咎于代理。
 - 同一测试 EXE 里 `HttpListener` 报 error 6 后，走普通回环 TCP 的 Kestrel 能启动并让一个真实 HTTP 客户端读到测试 `/health`，连续复测通过。这个探针没有加载游戏；能否随 Mod 打包并在游戏进程内加载仍要实证。
 

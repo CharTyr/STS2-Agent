@@ -11,7 +11,7 @@
 > a mod source or MCP module is missing from this map, or when the map names a path that no longer
 > exists. They don't catch outdated prose, so skim the sections you touched.
 >
-> Snapshot: 2026-11-13, `dev` on game v0.113.0. Deeper references: [api.md](api.md) (HTTP contract),
+> Snapshot: 2026-11-26, `dev` on v0.19.6 (game v0.111.1 stable + v0.114.0 public beta). Deeper references: [api.md](api.md) (HTTP contract),
 > [ADR 0001](adr/0001-single-action-surface.md) (one action surface),
 > [ADR 0002](adr/0002-two-mcp-surfaces.md) (two MCP surfaces), `.trellis/spec/` (coding specs),
 > `AGENTS.md` (build/test/release commands; local, gitignored), `.trellis/spec/index.md`.
@@ -578,7 +578,7 @@ most nine follow-ups and stop before unknown draw/choice outcomes.
 - `STS2AIAgent/Server/InstanceEndpointFile.cs` — publish and remove PID/role/port hints for local MCP discovery.
 - `mcp_server/src/sts2_mcp/discovery.py` — validate local endpoint hints against /health and resolve a role or PID without guessing an ambiguous instance.
 
-## 12. Experience overhaul (compact v13, unreleased)
+## 12. Experience overhaul (compact v13, released in v0.18.0)
 
 The turn first uses the cheap actionable probe, then a fresh compact frame. Sandpit safety runs before Autopilot; queued player guidance yields to the model. The model can name a first `act` plus nine `then` steps. Each step checks fresh state, stable card identity, divergence and cancellation through the existing single-action lease. Only the first decision row carries the request cost. Unknown outcomes are terminal and never replayed. Live intent is display-only and does not enter saved prompts or logs.
 
