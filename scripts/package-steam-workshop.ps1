@@ -7,7 +7,10 @@ param(
     [string]$PublishedFileId = "0",
     [ValidateSet("public", "friends", "private", "unlisted")]
     [string]$Visibility = "private",
-    [string]$ChangeNote = "Initial Workshop upload"
+    [string]$ChangeNote = "Initial Workshop upload",
+    [string]$MinimumGameRoot = "",
+    [string]$TargetGameRoot = "",
+    [string]$TargetGameVersion = ""
 )
 
 $ErrorActionPreference = "Stop"
@@ -91,6 +94,9 @@ function Write-Utf8NoBomFile {
 }
 
 $ProjectRoot = Resolve-ProjectRoot -InputRoot $ProjectRoot
+if (-not $MinimumGameRoot -or -not $TargetGameRoot -or -not $TargetGameVersion) {
+    throw "Workshop packaging requires -MinimumGameRoot, -TargetGameRoot, and -TargetGameVersion."
+}
 if ([string]::IsNullOrWhiteSpace($OutputRoot)) {
     $OutputRoot = Join-Path $ProjectRoot "build/steam-workshop"
 }
@@ -127,6 +133,7 @@ $buildArgs = @(
     "-File", $buildScript,
     "-ProjectRoot", $ProjectRoot,
     "-Configuration", $Configuration,
+    "-GameRoot", $TargetGameRoot,
     "-SkipInstall"
 )
 if (-not [string]::IsNullOrWhiteSpace($GodotExe)) {
@@ -166,6 +173,11 @@ $workshopManifest = Get-Content -LiteralPath (Join-Path $contentDirectory "$($ma
 Assert-EqualValue -Name "Workshop manifest ID" -Expected $manifest.id -Actual $workshopManifest.id
 Assert-EqualValue -Name "Workshop manifest version" -Expected $manifest.version -Actual $workshopManifest.version
 
+$gate = Join-Path $ProjectRoot "scripts/test-release-compatibility.ps1"
+$compatibilityReport = Join-Path $releaseDirectory "release-compatibility.json"
+& $gate -ArtifactDirectory $contentDirectory -MinimumGameRoot $MinimumGameRoot `
+    -TargetGameRoot $TargetGameRoot -TargetGameVersion $TargetGameVersion -ReportPath $compatibilityReport | Out-Null
+
 $vdfScript = Join-Path $ProjectRoot "scripts/new-steam-workshop-vdf.ps1"
 $vdfPath = Join-Path $releaseDirectory "steam-workshop.vdf"
 & $vdfScript -ContentFolder $contentDirectory -PreviewFile $previewJpgPath -OutputPath $vdfPath -PublishedFileId $PublishedFileId -Visibility $Visibility -ChangeNote $ChangeNote
@@ -204,5 +216,6 @@ Write-BuildFingerprint `
 Write-Host "[steam-workshop] Content folder: $contentDirectory"
 
 Write-Host "[steam-workshop] Upload VDF: $vdfPath"
+Write-Host "[steam-workshop] Compatibility report: $compatibilityReport"
 Write-Host "[steam-workshop] ModUploader workspace: $releaseDirectory"
 Write-Host "[steam-workshop] After upload, paste Simplified Chinese listing from: $chineseDescriptionPath"

@@ -153,7 +153,11 @@ function Resolve-Sts2Executable {
     if ([string]::IsNullOrWhiteSpace($GameRoot)) {
         $GameRoot = Resolve-Sts2GameRoot
     }
+    return (Get-Sts2ExecutableInRoot -GameRoot $GameRoot)
+}
 
+function Get-Sts2ExecutableInRoot {
+    param([Parameter(Mandatory = $true)][string]$GameRoot)
     foreach ($name in @("SlayTheSpire2.exe", "Slay the Spire 2.exe")) {
         $candidate = Join-Path $GameRoot $name
         if (Test-Path -LiteralPath $candidate) {
@@ -162,6 +166,49 @@ function Resolve-Sts2Executable {
     }
 
     return (Join-Path $GameRoot "SlayTheSpire2.exe")
+}
+
+function Resolve-Sts2DataDir {
+    param(
+        [string]$Explicit = "",
+        [string]$GameRoot = ""
+    )
+    foreach ($candidate in @($Explicit, $env:STS2_DATA_DIR)) {
+        if (-not [string]::IsNullOrWhiteSpace($candidate)) {
+            return $candidate
+        }
+    }
+    if ([string]::IsNullOrWhiteSpace($GameRoot)) {
+        $GameRoot = Resolve-Sts2GameRoot
+    }
+    return (Join-Path $GameRoot "data_sts2_windows_x86_64")
+}
+
+function Get-Sts2ReleaseInfo {
+    param([Parameter(Mandatory = $true)][string]$GameRoot)
+    $path = Join-Path $GameRoot "release_info.json"
+    if (Test-Path -LiteralPath $path -PathType Leaf) {
+        return (Get-Content -LiteralPath $path -Raw -Encoding UTF8 | ConvertFrom-Json)
+    }
+    return $null
+}
+
+function Get-Sts2BuildReferenceArgument {
+    param(
+        [string]$DataDir = "",
+        [string]$GameRoot = ""
+    )
+    $resolved = Resolve-Sts2DataDir -Explicit $DataDir -GameRoot $GameRoot
+    foreach ($name in @("sts2.dll", "GodotSharp.dll", "0Harmony.dll")) {
+        if (-not (Test-Path -LiteralPath (Join-Path $resolved $name) -PathType Leaf)) {
+            throw "Game reference '$name' not found in '$resolved'. Set -DataDir or STS2_DATA_DIR, or select the game with -GameRoot."
+        }
+    }
+    $resolved = (Resolve-Path -LiteralPath $resolved).Path
+    $release = Get-Sts2ReleaseInfo -GameRoot (Split-Path -Parent $resolved)
+    $hash = (Get-FileHash -LiteralPath (Join-Path $resolved "sts2.dll")).Hash
+    Write-Host "[sts2 references] $resolved (game=$($release.version), sts2.dll SHA256=$hash)"
+    return "-p:Sts2DataDir=$resolved"
 }
 
 function Resolve-Sts2AppManifest {

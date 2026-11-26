@@ -10,6 +10,7 @@ so a source-tree check cannot be reported as a package check.
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import posixpath
 import re
@@ -35,6 +36,8 @@ SOURCE_FILES = (
     # build-mod.ps1 dot-sources this on its first line, so a checkout without it cannot build.
     "scripts/lib-sts2-paths.ps1",
     "scripts/package-release.ps1",
+    "scripts/package-steam-workshop.ps1",
+    "scripts/test-release-compatibility.ps1",
     "scripts/start-mcp-stdio.ps1",
     "scripts/start-mcp-network.ps1",
     "scripts/test-mcp-tool-profile.ps1",
@@ -81,6 +84,9 @@ class ArtifactReader(Protocol):
     def read_text(self, relative_path: str) -> str:
         ...
 
+    def read_bytes(self, relative_path: str) -> bytes:
+        ...
+
 
 def _normalise_relative_path(path: str) -> str:
     normalised = path.replace("\\", "/")
@@ -109,6 +115,9 @@ class _DirectoryReader:
             raise PackageCheckError(
                 f"artifact file '{relative_path}' cannot be read: {exc}"
             ) from exc
+
+    def read_bytes(self, relative_path: str) -> bytes:
+        return self._path(relative_path).read_bytes()
 
 
 class _ZipReader:
@@ -139,6 +148,9 @@ class _ZipReader:
             raise PackageCheckError(
                 f"artifact file '{relative_path}' cannot be read: {exc}"
             ) from exc
+
+    def read_bytes(self, relative_path: str) -> bytes:
+        return self.archive.read(self._raw_names[_normalise_relative_path(relative_path)])
 
 
 def _iter_markdown_targets(text: str) -> Iterable[str]:
@@ -313,11 +325,19 @@ def _check_artifact_reader(reader: ArtifactReader, label: str) -> None:
         _check_document_links(reader, document_path)
 
 
-def _check_artifact(artifact: Path) -> None:
+def _check_release_dll(reader: ArtifactReader, expected_hash: str | None) -> None:
+    if expected_hash is None:
+        return
+    actual = hashlib.sha256(reader.read_bytes("mod/STS2AIAgent.dll")).hexdigest()
+    if actual != expected_hash.lower():
+        raise PackageCheckError(f"packaged DLL SHA256 {actual} differs from the tested DLL {expected_hash}")
+
+
+def _check_artifact(artifact: Path, expected_hash: str | None = None) -> None:
     if artifact.is_dir():
-        _check_artifact_reader(
-            _DirectoryReader(artifact), f"release directory '{artifact}'"
-        )
+        reader = _DirectoryReader(artifact)
+        _check_artifact_reader(reader, f"release directory '{artifact}'")
+        _check_release_dll(reader, expected_hash)
         return
 
     if not artifact.is_file():
@@ -329,7 +349,9 @@ def _check_artifact(artifact: Path) -> None:
                 raise PackageCheckError(
                     f"zip artifact '{artifact}' contains a corrupt member: {bad_member}"
                 )
-            _check_artifact_reader(_ZipReader(archive), f"zip artifact '{artifact}'")
+            reader = _ZipReader(archive)
+            _check_artifact_reader(reader, f"zip artifact '{artifact}'")
+            _check_release_dll(reader, expected_hash)
     except zipfile.BadZipFile as exc:
         raise PackageCheckError(
             f"artifact is not a readable zip file: {artifact}"
@@ -354,18 +376,24 @@ def _build_parser() -> argparse.ArgumentParser:
         type=Path,
         help="release directory or .zip file to inspect as a real artifact",
     )
+    parser.add_argument("--dll-sha256", help="require the packaged DLL to match the live-tested SHA256")
     return parser
 
 
 def main(argv: list[str] | None = None) -> int:
-    args = _build_parser().parse_args(argv)
+    parser = _build_parser()
+    args = parser.parse_args(argv)
+    if args.dll_sha256 is not None and (
+        args.artifact is None or not re.fullmatch(r"[0-9a-fA-F]{64}", args.dll_sha256)
+    ):
+        parser.error("--dll-sha256 requires --artifact and a 64-digit hexadecimal hash")
     try:
         if args.source_root is not None:
             _check_source_root(args.source_root.resolve())
             print(f"[source] Packaging source contract checks passed: {args.source_root}")
         else:
             artifact = args.artifact.resolve()
-            _check_artifact(artifact)
+            _check_artifact(artifact, args.dll_sha256)
             print(f"[artifact] Release artifact checks passed: {artifact}")
     except PackageCheckError as exc:
         print(f"release package check failed: {exc}", file=sys.stderr)

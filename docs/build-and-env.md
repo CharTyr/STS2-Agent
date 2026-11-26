@@ -35,6 +35,7 @@
 说明：
 
 - `STS2AIAgent.csproj` 支持从 `STS2_DATA_DIR` 读取数据目录。
+- Windows 的 `build-mod.ps1` 和 `preflight-release.ps1` 按 `-DataDir` → `STS2_DATA_DIR` → 已解析游戏根目录下的程序集目录选择引用。构建时输出实际路径、可读取的游戏版本及 `sts2.dll` 的 SHA-256。需要指定另一份编译参考时直接传 `-DataDir`。
 - `scripts/` 下需要游戏的脚本（`build-mod.ps1`、`start-game-session.ps1`、`test-mod-load.ps1`、`test-debug-console-gating.ps1`）按同一顺序解析路径：**命令行参数 → 上面的环境变量 → 探测 → 约定俗成的 Steam 默认路径**，Windows 侧的共享实现在 `scripts/lib-sts2-paths.ps1`。
 - Windows 侧的探测会读注册表里的 Steam 安装位置，再顺着 `libraryfolders.vdf` 枚举所有 Steam 库，所以换盘符、第二个库里装的游戏都能自动找到；只有探测全部落空时才回落到约定俗成的默认安装路径。
  - POSIX 侧（`scripts/lib-sts2-paths.sh`，由 `scripts/lib-sts2.sh` 引入）用同一顺序解析，共用 `STS2_GAME_ROOT`、`STS2_EXE_PATH`、`STS2_APP_MANIFEST` 三个变量名（`STS2_STEAM_EXE` 只有 Windows 侧读）。探测覆盖 macOS 与 Linux 的约定 Steam 根目录，并读取每个安装的 `libraryfolders.vdf`，所以第二个库里装的游戏同样能找到；只有全部落空时才回落到约定路径。

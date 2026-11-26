@@ -54,8 +54,9 @@ For MCP server changes:
 2. Validate release candidates from `dev`.
 3. Open a `dev -> main` pull request.
 4. Merge to `main` after final review.
-5. Rename `## Unreleased` to the version being released, bump the five version files, and tag and
-   publish from `main`.
+5. Include the release version in the PR to `main`. Rename the released changelog section, update
+   the five version files and the `mod_version` example in `docs/api.md`, then regenerate
+   `docs/openapi.json` with `python scripts/api_schema.py`. Tag and publish from the merged commit.
 6. Keep the `build-fingerprint.json` each packaging run writes: it is what the release record cites.
 
 ### Why `## Unreleased` is not optional

@@ -296,11 +296,11 @@ internal static partial class GameStateService
                 var replayCount = card.GetEnchantedReplayCount();
                 if (hits is { } known && replayCount > 0)
                 {
-                    if (card.Tags.Contains(CardTag.Shoot))
+                    if (GameApiCompatibility.ShootsArrow(card))
                     {
                         // Each replay needs a fresh arrow. With more than one arrow, on-play
                         // changes such as spent Aim can make the later damage differ.
-                        hits = ArrowCmd.GetAvailableArrowCount(card.Owner) == 1 ? known : null;
+                        hits = GameApiCompatibility.AvailableArrows(card.Owner) == 1 ? known : null;
                     }
                     else
                     {

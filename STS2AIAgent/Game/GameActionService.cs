@@ -417,10 +417,11 @@ internal static partial class GameActionService
 
             try
             {
-                // v0.113.0 split the old async ProceedFromTerminalRewardsScreen into a sync
-                // fire-and-forget (this call) plus an awaitable ...Async twin. The drain keeps
-                // fire-and-forget: the bounded WaitForRewardFlowExitAsync below is the deadline.
-                RunManager.Instance.ProceedFromTerminalRewardsScreen();
+                // Stable returns a task, while the beta starts the transition synchronously.
+                if (GameApiCompatibility.ProceedTerminalRewards(RunManager.Instance) is { } proceedTask)
+                {
+                    ObserveBackgroundTask(proceedTask, "resolve_rewards");
+                }
             }
             catch (Exception ex)
             {

@@ -38,12 +38,10 @@ using MegaCrit.Sts2.Core.Nodes.GodotExtensions;
 using MegaCrit.Sts2.Core.Nodes.Rewards;
 using MegaCrit.Sts2.Core.Nodes.Rooms;
 using MegaCrit.Sts2.Core.Nodes.Screens;
-using MegaCrit.Sts2.Core.Nodes.Screens.Blitz;
 using MegaCrit.Sts2.Core.Nodes.Screens.CardLibrary;
 using MegaCrit.Sts2.Core.Nodes.Screens.CardSelection;
 using MegaCrit.Sts2.Core.Nodes.Screens.CharacterSelect;
 using MegaCrit.Sts2.Core.Nodes.Screens.CustomRun;
-using MegaCrit.Sts2.Core.Nodes.Screens.Dread;
 using MegaCrit.Sts2.Core.Nodes.Screens.FeedbackScreen;
 using MegaCrit.Sts2.Core.Nodes.Screens.GameOverScreen;
 using MegaCrit.Sts2.Core.Nodes.Screens.InspectScreens;
@@ -327,9 +325,9 @@ internal static partial class GameStateService
             is_ready = player.isReady,
             // v0.113.0 split the single ascension cap into per-mode caps; the legacy
             // field keeps reporting the Standard cap, the Blitz cap is additive.
-            max_multiplayer_ascension_unlocked = player.maxStandardAscension,
-            max_blitz_ascension = player.maxBlitzAscension,
-            is_rotating_dread = player.isRotatingDread
+            max_multiplayer_ascension_unlocked = GameApiCompatibility.MaxStandardAscension(player),
+            max_blitz_ascension = GameApiCompatibility.MaxBlitzAscension(player),
+            is_rotating_dread = GameApiCompatibility.IsRotatingDread(player)
         };
     }
 
@@ -389,14 +387,7 @@ internal static partial class GameStateService
     /// </summary>
     public static NSubmenu? GetRunLobbyScreen(IScreenContext? currentScreen)
     {
-        return currentScreen switch
-        {
-            NCharacterSelectScreen screen => screen,
-            NBlitzScreen screen => screen,
-            NDreadScreen screen => screen,
-            NCustomRunScreen screen => screen,
-            _ => null
-        };
+        return RunLobbyScreenMode(currentScreen) != null ? currentScreen as NSubmenu : null;
     }
 
     /// <summary>The mode identifier of a run-lobby screen, for payloads that need to say which flow is open.</summary>
@@ -405,10 +396,8 @@ internal static partial class GameStateService
         return currentScreen switch
         {
             NCharacterSelectScreen => "standard",
-            NBlitzScreen => "blitz",
-            NDreadScreen => "dread",
             NCustomRunScreen => "custom",
-            _ => null
+            _ => GameApiCompatibility.ExtraRunMode(currentScreen)
         };
     }
 
@@ -418,10 +407,8 @@ internal static partial class GameStateService
         return currentScreen switch
         {
             NCharacterSelectScreen screen => screen.Lobby,
-            NBlitzScreen screen => screen.Lobby,
-            NDreadScreen screen => screen.Lobby,
             NCustomRunScreen screen => screen.Lobby,
-            _ => null
+            _ => GameApiCompatibility.ExtraRunLobby(currentScreen)
         };
     }
 

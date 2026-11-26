@@ -162,6 +162,7 @@ internal static class TestRunner
         yield return ("UpgradePreview.GenerationFailure", () => Task.Run(CardUpgradePreviewPolicyTests.GenerationFailureIsNotReportedAsMaxLevel));
         yield return ("UpgradePreview.LevelLookupFailure", () => Task.Run(CardUpgradePreviewPolicyTests.LevelLookupFailureIsAlsoUnavailable));
         yield return ("UpgradePreview.AvailableMetadata", () => Task.Run(CardUpgradePreviewPolicyTests.AvailableResultPreservesTheGeneratedMetadata));
+        yield return ("UpgradePreview.MissingSignature", () => Task.Run(CardUpgradePreviewPolicyTests.MissingGeneratorKeepsUnavailableDistinctFromMaxLevel));
         foreach (var test in AuditRegressionTests.All()) yield return test;
         foreach (var test in AuditRemediationJevTests.All()) yield return test;
         foreach (var test in AuditRemediationSessionTests.All()) yield return test;
@@ -526,6 +527,7 @@ internal static class TestRunner
         yield return ("CombatDiagnostics.DamageOverTimeRisks", () => Task.Run(CombatDiagnosticsContractTests.LethalRisksIncludeDamageOverTime));
         yield return ("CombatDiagnostics.LightningBeforeDoom", () => Task.Run(CombatDiagnosticsContractTests.LightningCanWinBeforeDoom));
         yield return ("CombatDiagnostics.ShootingReplays", () => Task.Run(CombatDiagnosticsContractTests.ShootingReplaysRespectAvailableArrows));
+        yield return ("CombatDiagnostics.FoolResourceCompatibility", () => Task.Run(CombatDiagnosticsContractTests.FoolResourcesAvoidRemovedGameMembers));
         yield return ("ProfileSelection.NativeSwitch", () => Task.Run(ProfileSelectionContractTests.NativeProfileIdentityAndSwitchAreWiredEndToEnd));
         yield return ("DecisionLog.BoundsAndRedacts", () => Task.Run(DecisionLogTests.Record_RedactsBoundsAndKeepsNewest));
         yield return ("DecisionLog.OptionalMetrics", () => Task.Run(DecisionLogTests.Record_CarriesOptionalMetricsWithoutChangingPlainEntries));
@@ -1024,6 +1026,10 @@ internal static class TestRunner
         yield return ("AbandonRun.RefusesRatherThanClickingBlind", () => Task.Run(AbandonRunContractTests.AbandonRunRefusesRatherThanClickingBlind));
         yield return ("ReflectedMembers.DeclaredWinsOverBaseOverload", () => Task.Run(ReflectedMemberResolverTests.ADeclaredMethodIsFoundDespiteAPublicBaseMethodOfTheSameName));
         yield return ("ReflectedMembers.ResolverNeverThrows", () => Task.Run(ReflectedMemberResolverTests.AmbiguityAndInheritanceResolveToNothingInsteadOfThrowing));
+        yield return ("ReflectedMembers.ExactSignature", () => Task.Run(ReflectedMemberResolverTests.AnExactSignatureSelectsOnlyTheRequestedOverload));
+        yield return ("ReflectedMembers.CurrentCardUpgrade", () => Task.Run(ReflectedMemberResolverTests.CardUpgraderInvokesCurrentSignatureWithOldDefault));
+        yield return ("ReflectedMembers.LegacyCardUpgrade", () => Task.Run(ReflectedMemberResolverTests.CardUpgraderInvokesLegacySignature));
+        yield return ("ReflectedMembers.UnknownCardUpgrade", () => Task.Run(ReflectedMemberResolverTests.CardUpgraderRefusesUnknownSignatures));
         yield return ("ReflectedMembers.StaticnessIsPartOfLookup", () => Task.Run(ReflectedMemberResolverTests.StaticnessIsPartOfTheLookup));
         yield return ("ReflectedMembers.RegistryUsesResolver", () => Task.Run(ReflectedMemberResolverTests.TheRegistryResolvesThroughTheResolver));
         yield return ("FastHost.NewGameStandardNonCustom", () => Task.Run(FastHostCompatibilityTests.NewGameHostsStandardNonCustomOnce));

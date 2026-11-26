@@ -1,11 +1,14 @@
 param(
     [string]$ProjectRoot = "",
-    [string]$Configuration = "Release"
+    [string]$Configuration = "Release",
+    [string]$GameRoot = "",
+    [string]$DataDir = ""
 )
 
 $ErrorActionPreference = "Stop"
 $scriptRoot = $PSScriptRoot
 . (Join-Path $scriptRoot "lib-checked-native.ps1")
+. (Join-Path $scriptRoot "lib-sts2-paths.ps1")
 
 function Resolve-ProjectRoot {
     param([string]$InputRoot)
@@ -69,7 +72,8 @@ $requiredDocs = @(
 )
 
 Invoke-Step -Name "Build mod project ($Configuration)" -Action {
-    Invoke-CheckedNative -FilePath "dotnet" -Arguments @("build", $modProject, "-c", $Configuration)
+    $referenceArgument = Get-Sts2BuildReferenceArgument -DataDir $DataDir -GameRoot $GameRoot
+    Invoke-CheckedNative -FilePath "dotnet" -Arguments @("build", $modProject, "-c", $Configuration, $referenceArgument)
 }
 
 Invoke-Step -Name "Compile Python sources" -Action {

@@ -24,7 +24,7 @@ If you used to copy this mod into the game folder by hand, delete those files an
 
 The overlay has a decision log on **Play**: it lists each action the AI took, why, where it came from, and what that step spent. The main window also shows the teammate's live health, block, energy and hand size once you have teamed up.
 
-Requires Slay the Spire 2 v0.113.0 or later. Use Steam's public-beta branch for v0.113.x.
+Supports Slay the Spire 2 v0.111.1 on Steam's stable branch and v0.114.0 on public-beta.
 
 ---
 
@@ -63,7 +63,7 @@ Requires Slay the Spire 2 v0.113.0 or later. Use Steam's public-beta branch for 
 
 如果以前手动放过这个 Mod，请删掉那些文件，只保留工坊订阅。
 
-需要《杀戮尖塔 2》v0.113.0 或以上。Steam 的 public-beta 分支提供 v0.113.x。
+支持 Steam 正式版《杀戮尖塔 2》v0.111.1 和 public-beta 公测版 v0.114.0。
 
 New installs have a visible 1,500-request auto-play limit (about one full run); 0 or empty means unlimited. Tests also call your provider. Request/token counts are not a bill. Proactive chat is off by default.
 

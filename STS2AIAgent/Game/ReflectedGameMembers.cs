@@ -1,4 +1,5 @@
 using System.Reflection;
+using MegaCrit.Sts2.Core.Debug;
 using MegaCrit.Sts2.Core.Helpers;
 using MegaCrit.Sts2.Core.Logging;
 using MegaCrit.Sts2.Core.Multiplayer.Game.Lobby;
@@ -161,6 +162,7 @@ internal static class ReflectedGameMembers
     internal static IReadOnlyList<Probe> Probes =>
         Resolved.Value.Values
             .Select(resolved => new Probe(resolved.Entry.Id, resolved.Entry.Feature, resolved.Member != null))
+            .Append(new Probe(ReflectedMemberResolver.CardUpgradeSignatures, "card upgrade preview", GameDataExportService.HasCardUpgrader))
             .ToArray();
 
     /// <summary>Entries the game no longer declares. Empty is the healthy answer.</summary>
@@ -193,9 +195,10 @@ internal static class ReflectedGameMembers
             return;
         }
 
+        var version = ReleaseInfoManager.Instance.ReleaseInfo?.Version ?? "unknown";
         foreach (var probe in missing)
         {
-            Log.Warn($"[STS2AIAgent] Compatibility: {probe.Id} is missing in this game build; {probe.Feature} will fall back to defaults.");
+            Log.Warn($"[STS2AIAgent] Compatibility: {probe.Id} is missing in game {version}; {probe.Feature} will fall back to defaults.");
         }
 
         Log.Warn($"[STS2AIAgent] Compatibility: {missing.Count} of {Probes.Count} reflected game members are missing. GET /health reports status \"degraded\".");

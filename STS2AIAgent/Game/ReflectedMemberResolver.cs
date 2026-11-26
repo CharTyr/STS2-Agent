@@ -27,8 +27,33 @@ internal static class ReflectedMemberResolver
     public static MethodInfo? Method(Type declaringType, string name, bool isStatic) =>
         Guarded(() => declaringType.GetMethod(name, Flags(isStatic)));
 
+    public static MethodInfo? Method(Type declaringType, string name, bool isStatic, Type[] parameterTypes) =>
+        Guarded(() => declaringType.GetMethod(
+            name, genericParameterCount: 0, Flags(isStatic) | BindingFlags.ExactBinding,
+            binder: null, types: parameterTypes, modifiers: null));
+
     public static PropertyInfo? Property(Type declaringType, string name, bool isStatic) =>
         Guarded(() => declaringType.GetProperty(name, Flags(isStatic)));
+
+    public const string CardUpgradeSignatures = "CardModel.UpgradeInternal(bool) or CardModel.UpgradeInternal()";
+
+    public static Action<TCard>? ResolveCardUpgrader<TCard>() where TCard : class
+    {
+        var model = typeof(TCard);
+        const string name = "UpgradeInternal";
+        // Keep the original default when v0.114.0's optional silent flag is present.
+        var current = Method(model, name, isStatic: false, [typeof(bool)]);
+        if (current is { IsPublic: true } && current.ReturnType == typeof(void))
+        {
+            var upgrade = current.CreateDelegate<Action<TCard, bool>>();
+            return card => upgrade(card, false);
+        }
+
+        var legacy = Method(model, name, isStatic: false, Type.EmptyTypes);
+        return legacy is { IsPublic: true } && legacy.ReturnType == typeof(void)
+            ? legacy.CreateDelegate<Action<TCard>>()
+            : null;
+    }
 
     /// <summary>Invokes one known public FastHost signature; false means no compatible method was found.</summary>
     /// <remarks>Invocation failures propagate. Once hosting has been attempted, do not try another overload.</remarks>
