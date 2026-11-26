@@ -78,6 +78,11 @@ internal static class AutopilotPolicyTests
         Assert.Equal("claim_reward", cardRow.Action, "The gold is still claimed while the card row waits for the model.");
         Assert.Equal(1, cardRow.OptionIndex);
         Assert.Equal("reward_claim_safe", cardRow.RuleId);
+
+        var openPotionRow = Decide("""{"screen":"REWARD","available_actions":["claim_reward","collect_rewards_and_proceed"],"reward":{"rewards":[{"i":0,"line":"Card: 选择一张卡牌","claimable":true},{"i":1,"line":"Potion: 获得火焰药水","claimable":true}],"cards":[]}}""");
+        Assert.Equal("claim_reward", openPotionRow.Action, "A claimable potion with an open belt slot is claimed before asking the model to pick a card.");
+        Assert.Equal(1, openPotionRow.OptionIndex);
+        Assert.Equal("reward_claim_safe", openPotionRow.RuleId);
     }
 
     public static void SingleOptionScreensAreResolved()
@@ -98,6 +103,21 @@ internal static class AutopilotPolicyTests
         Assert.False(Decide("""{"screen":"CHEST","available_actions":["choose_treasure_relic"],"chest":{"opened":true,"relics":[{"i":0},{"i":1},{"i":2}]}}""").ShouldAct);
 
         Assert.Equal("capstone_single_option", Decide("""{"screen":"CAPSTONE_SELECTION","available_actions":["choose_capstone_option"],"capstone":{"options":[{"i":3}]}}""").RuleId);
+
+        var patchNotes = Decide("""{"screen":"PATCH_NOTES","available_actions":["close_main_menu_submenu"]}""");
+        Assert.Equal("close_main_menu_submenu", patchNotes.Action);
+        Assert.Equal("patch_notes_close", patchNotes.RuleId);
+
+        var forcedCombatCard = Decide("""{"screen":"CARD_SELECTION","in_combat":true,"available_actions":["select_deck_card"],"selection":{"min":1,"max":1,"selected":0,"confirm":false,"cards":[{"i":0,"line":"Strike"}]}}""");
+        Assert.Equal("select_deck_card", forcedCombatCard.Action);
+        Assert.Equal(0, forcedCombatCard.OptionIndex);
+        Assert.Equal("combat_card_selection_single", forcedCombatCard.RuleId);
+        Assert.False(Decide("""{"screen":"CARD_SELECTION","in_combat":true,"available_actions":["select_deck_card"],"selection":{"min":1,"max":1,"selected":0,"confirm":false,"cards":[{"i":0},{"i":1}]}}""").ShouldAct,
+            "Two cards to pick from is a real choice.");
+        Assert.False(Decide("""{"screen":"CARD_SELECTION","in_combat":true,"available_actions":["select_deck_card"],"selection":{"min":0,"max":1,"selected":0,"confirm":false,"cards":[{"i":0}]}}""").ShouldAct,
+            "An optional 0-to-1 pick is a real choice.");
+        Assert.False(Decide("""{"screen":"CARD_SELECTION","in_combat":false,"available_actions":["select_deck_card"],"selection":{"min":1,"max":1,"selected":0,"confirm":false,"cards":[{"i":0}]}}""").ShouldAct,
+            "Out-of-combat deck selection stays with the model.");
     }
 
     public static void ModalsAreConfirmedOnlyWhenThereIsNoCancel()

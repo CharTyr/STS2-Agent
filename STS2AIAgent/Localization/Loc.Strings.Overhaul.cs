@@ -31,6 +31,8 @@ internal static partial class Loc
         map["休息点只有一个可用选项。"] = "The rest site has a single available option.";
         map["宝箱里只有一件遗物。"] = "The chest holds a single relic.";
         map["打开宝箱。"] = "Open the chest.";
+        map["关闭更新日志。"] = "Close the patch notes.";
+        map["战斗中只剩一张可选牌，直接选择。"] = "Only one card can be chosen in combat; select it directly.";
         map["当前只有一个可执行的操作。"] = "Only one action is possible.";
 
         // Recovery (Agent/AutoPlayRecovery.cs).

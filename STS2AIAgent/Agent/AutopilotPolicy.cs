@@ -88,7 +88,7 @@ internal static class AutopilotPolicy
                 ?? Combat(root, screen, actions)
                 ?? Map(root, screen, actions)
                 ?? Reward(root, screen, actions)
-                ?? SingleOption(root, screen, actions)
+                ?? SingleOption(root, screen, actions, inCombat)
                 ?? LastActionStanding(actions)
                 ?? AutopilotDecision.None;
         }
@@ -205,8 +205,9 @@ internal static class AutopilotPolicy
 
         if (Has(actions, "claim_reward"))
         {
-            // Gold and relic rows have no downside; card rows and potion rows are choices.
-            var safe = rows.FirstOrDefault(row => ReadBool(row, "claimable") == true && RowType(row) is "gold" or "relic");
+            // Gold, relic and open-slot potion rows (claimable == true) have no downside; card
+            // rows and full-belt potions (claimable == false) stay with the model.
+            var safe = rows.FirstOrDefault(row => ReadBool(row, "claimable") == true && RowType(row) is "gold" or "relic" or "potion");
             if (safe.ValueKind == JsonValueKind.Object && ReadInt(safe, "i") is { } index)
             {
                 return new AutopilotDecision("claim_reward", index, "reward_claim_safe", RowType(safe));
@@ -216,10 +217,27 @@ internal static class AutopilotPolicy
         return null;
     }
 
-    private static AutopilotDecision? SingleOption(JsonElement root, string screen, IReadOnlyList<string> actions)
+    private static AutopilotDecision? SingleOption(JsonElement root, string screen, IReadOnlyList<string> actions, bool inCombat)
     {
         switch (screen)
         {
+            case "PATCH_NOTES" when Has(actions, "close_main_menu_submenu"):
+                return new AutopilotDecision("close_main_menu_submenu", null, "patch_notes_close", null);
+            case "CARD_SELECTION" when inCombat && Has(actions, "select_deck_card") && Object(root, "selection") is { } selection:
+            {
+                var min = ReadInt(selection, "min");
+                var max = ReadInt(selection, "max");
+                var selected = ReadInt(selection, "selected");
+                var canConfirm = ReadBool(selection, "confirm") == true;
+                var cards = Array(selection, "cards").ToList();
+                if (min == 1 && max == 1 && selected == 0 && !canConfirm && cards.Count == 1
+                    && ReadInt(cards[0], "i") is { } index)
+                {
+                    return new AutopilotDecision("select_deck_card", index, "combat_card_selection_single", null);
+                }
+
+                return null;
+            }
             case "EVENT" when Has(actions, "choose_event_option") && Object(root, "event") is { } eventPayload:
             {
                 var open = Array(eventPayload, "options").Where(option => ReadBool(option, "locked") != true).ToList();

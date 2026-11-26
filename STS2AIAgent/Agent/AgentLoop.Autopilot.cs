@@ -101,6 +101,8 @@ internal sealed partial class AgentLoop
         "rest_single_option" => Loc.T("休息点只有一个可用选项。"),
         "chest_single_relic" => Loc.T("宝箱里只有一件遗物。"),
         "chest_open" => Loc.T("打开宝箱。"),
+        "patch_notes_close" => Loc.T("关闭更新日志。"),
+        "combat_card_selection_single" => Loc.T("战斗中只剩一张可选牌，直接选择。"),
         _ => Loc.T("当前只有一个可执行的操作。")
     };
 }

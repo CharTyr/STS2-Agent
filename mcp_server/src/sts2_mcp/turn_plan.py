@@ -177,7 +177,10 @@ def diverged(plan_time: dict | str | None, current: dict | str | None) -> str | 
         return STOP_TURN_CHANGED
     plan_cids = {c for c in (_read_uint(card, "cid") for card in _hand(plan)) if c is not None}
     if plan_cids and any(
-        (c := _read_uint(card, "cid")) is not None and c not in plan_cids for card in _hand(now)
+        (c := _read_uint(card, "cid")) is not None
+        and c not in plan_cids
+        and _read_bool(card, "playable") is not False
+        for card in _hand(now)
     ):
         return STOP_NEW_CARDS
     before, after = _player_hp(plan), _player_hp(now)

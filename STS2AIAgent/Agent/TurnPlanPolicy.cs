@@ -239,7 +239,11 @@ internal static class TurnPlanPolicy
             }
 
             var planCids = Hand(plan).Select(card => ReadUInt(card, "cid")).Where(cid => cid != null).ToHashSet();
-            if (planCids.Count > 0 && Hand(current).Any(card => ReadUInt(card, "cid") is { } cid && !planCids.Contains(cid)))
+            // Newly drawn cards only invalidate a plan when at least one of them may be playable
+            // (playable == true or absent/unknown -> fail closed). Unplayable draws (e.g. 0 energy
+            // left or an unplayable Status) cannot improve remaining steps and should not waste an LLM turn.
+            if (planCids.Count > 0 && Hand(current).Any(card =>
+                    ReadUInt(card, "cid") is { } cid && !planCids.Contains(cid) && ReadBool(card, "playable") != false))
             {
                 return TurnPlanStopReasons.NewCards;
             }
